@@ -18,10 +18,10 @@ fn run(repo: &str, args: &[&str]) -> String {
 
 fn create(repo: &str, id: &str, refines: Option<&str>) {
     let mut args = vec![
-        "requirements",
-        "create",
-        "--id",
         id,
+        "create",
+        "--type",
+        "requirement",
         "--statement",
         "The system is safe.",
     ];

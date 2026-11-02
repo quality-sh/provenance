@@ -82,10 +82,10 @@ fn repository() -> tempfile::TempDir {
     json(
         repo,
         &[
-            "requirements",
-            "create",
-            "--id",
             "req_a",
+            "create",
+            "--type",
+            "requirement",
             "--statement",
             "A discussion has one parent.",
         ],

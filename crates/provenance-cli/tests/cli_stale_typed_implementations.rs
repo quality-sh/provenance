@@ -81,15 +81,18 @@ fn apply_binding(repo: &Path) {
     });
     provenance()
         .args([
+            "api",
             "authoring-changes",
-            "create",
+            "--method",
+            "post",
+            "--input",
+            "-",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
             "--format",
             "json",
-            "--stdin",
         ])
         .write_stdin(serde_json::to_vec(&input).unwrap())
         .assert()
@@ -99,12 +102,14 @@ fn apply_binding(repo: &Path) {
 fn stale(repo: &Path, base: &str, head: &str) -> Vec<Value> {
     let output = provenance()
         .args([
+            "api",
             "rules",
-            "stale",
-            "--base",
-            base,
-            "--head",
-            head,
+            "--query",
+            "query=stale",
+            "--query",
+            &format!("base={}", base),
+            "--query",
+            &format!("head={}", head),
             "--repo",
             repo.to_str().unwrap(),
             "--scope",

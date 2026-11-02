@@ -21,10 +21,10 @@ fn nested(repo: &str) {
         &["--refines", "req_m_middle"],
     );
     json_output(&[
-        "topics",
-        "create",
-        "--id",
         "topic_leaf",
+        "create",
+        "--type",
+        "topic",
         "--requirement-id",
         "req_z_leaf",
         "--title",
@@ -35,10 +35,10 @@ fn nested(repo: &str) {
         "json",
     ]);
     json_output(&[
-        "questions",
-        "create",
-        "--id",
         "question_leaf",
+        "create",
+        "--type",
+        "question",
         "--topic-id",
         "topic_leaf",
         "--question",
@@ -100,10 +100,10 @@ fn nested_rule_and_question_open_the_leaf_document() {
     let (_directory, repo) = initialized_repo();
     nested(&repo);
     json_output(&[
-        "rules",
-        "create",
-        "--id",
         "rule_leaf",
+        "create",
+        "--type",
+        "rule",
         "--requirement-id",
         "req_z_leaf",
         "--statement",
@@ -128,10 +128,10 @@ fn nested_write_returns_a_link_without_a_warning() {
     let output = host
         .cli()
         .args([
-            "rules",
-            "create",
-            "--id",
             "rule_write",
+            "create",
+            "--type",
+            "rule",
             "--requirement-id",
             "req_z_leaf",
             "--statement",
@@ -171,10 +171,10 @@ fn equal_distances_use_the_lowest_id_regardless_of_creation_order() {
     create(std::path::Path::new(&repo), "req_a", "requirement", &[]);
     provenance()
         .args([
-            "rules",
-            "create",
-            "--id",
             "rule_shared",
+            "create",
+            "--type",
+            "rule",
             "--requirement-id",
             "req_z",
             "--requirement-id",
@@ -201,10 +201,10 @@ fn equal_distances_use_the_lowest_id_regardless_of_creation_order() {
 fn a_source_cited_only_by_a_deep_leaf_gets_a_link() {
     let (_directory, repo) = initialized_repo();
     json_output(&[
-        "sources",
-        "create",
-        "--id",
         "source_leaf",
+        "create",
+        "--type",
+        "source",
         "--name",
         "Task evidence",
         "--source-type",
@@ -232,7 +232,6 @@ fn a_source_cited_only_by_a_deep_leaf_gets_a_link() {
         "json",
     ]);
     json_output(&[
-        "requirements",
         "req_12",
         "update",
         "--repo",
@@ -282,10 +281,10 @@ fn a_nested_resolution_opens_the_leaf_document() {
     let (_directory, repo) = initialized_repo();
     nested(&repo);
     json_output(&[
-        "resolutions",
-        "create",
-        "--id",
         "res_leaf",
+        "create",
+        "--type",
+        "resolution",
         "--title",
         "Keep task evidence",
         "--position",

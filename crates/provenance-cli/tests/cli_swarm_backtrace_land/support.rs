@@ -22,14 +22,14 @@ pub fn create_source(repo: &str) {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "sources",
+            "source_codebase",
             "create",
+            "--type",
+            "source",
             "--repo",
             repo,
             "--scope",
             "default",
-            "--id",
-            "source_codebase",
             "--name",
             "Example @ abc1234",
             "--source-type",

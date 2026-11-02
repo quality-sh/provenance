@@ -29,12 +29,12 @@ fn catalog_refuses_a_repeated_scalar_before_a_write() {
     let (_directory, path) = repo();
     provenance()
         .args([
-            "sources",
+            "source_duplicate",
             "create",
+            "--type",
+            "source",
             "--repo",
             &path,
-            "--id",
-            "source_duplicate",
             "--name",
             "First",
             "--name",
@@ -44,7 +44,7 @@ fn catalog_refuses_a_repeated_scalar_before_a_write() {
         .code(2)
         .stderr(contains("--name"));
     let listed = provenance()
-        .args(["sources", "list", "--repo", &path])
+        .args(["api", "sources", "--repo", &path])
         .output()
         .unwrap();
     assert!(listed.status.success());
@@ -113,12 +113,20 @@ fn body_flag_and_stdin_conflict_before_a_write() {
     let (_directory, path) = repo();
     provenance()
         .args([
-            "sources", "create", "--repo", &path, "--name", "Flag", "--stdin",
+            "source_stdin",
+            "create",
+            "--type",
+            "source",
+            "--repo",
+            &path,
+            "--name",
+            "Flag",
+            "--stdin",
         ])
-        .write_stdin(r#"{"id":"source_stdin","name":"Body"}"#)
+        .write_stdin(r#"{"name":"Body"}"#)
         .assert()
         .code(2)
-        .stderr(contains("--stdin"));
+        .stderr(contains("stdin"));
 }
 
 #[test]
@@ -160,20 +168,22 @@ fn command_keywords_are_refused_as_record_ids_on_both_cli_write_forms() {
     let (_directory, path) = repo();
     provenance()
         .args([
-            "sources", "create", "--repo", &path, "--id", "search", "--name", "Search",
+            "search", "create", "--type", "source", "--repo", &path, "--name", "Search",
         ])
         .assert()
         .failure()
         .stderr(contains("reserved record ID search"));
     provenance()
         .args([
-            "sources", "create", "--repo", &path, "--id", "api", "--name", "Api",
+            "api", "create", "--type", "source", "--repo", &path, "--name", "Api",
         ])
         .assert()
         .failure()
         .stderr(contains("reserved record ID api"));
     provenance()
-        .args(["sources", "create", "--repo", &path, "--stdin"])
+        .args([
+            "api", "sources", "--method", "post", "--input", "-", "--repo", &path,
+        ])
         .write_stdin(r#"{"id":"check","name":"Check"}"#)
         .assert()
         .failure()
@@ -198,14 +208,9 @@ fn end_of_options_allows_an_option_shaped_target() {
     let (_directory, path) = repo();
     provenance()
         .args([
-            "sources",
-            "create",
-            "--repo",
-            &path,
-            "--id=--source",
-            "--name",
-            "Flagged",
+            "api", "sources", "--method", "post", "--input", "-", "--repo", &path,
         ])
+        .write_stdin(r#"{"id":"--source","name":"Flagged"}"#)
         .assert()
         .success();
     let output = provenance()

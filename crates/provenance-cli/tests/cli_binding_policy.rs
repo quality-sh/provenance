@@ -31,14 +31,14 @@ fn init_repo() -> tempfile::TempDir {
     run(
         directory.path(),
         &[
-            "requirements",
+            "req_anchor",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             directory.path().to_str().unwrap(),
             "--scope",
             "default",
-            "--id",
-            "req_anchor",
             "--statement",
             "The anchor requirement holds",
         ],
@@ -49,13 +49,16 @@ fn init_repo() -> tempfile::TempDir {
 fn create_rule(repo: &Path, id: &str, status: &str) {
     provenance()
         .args([
+            "api",
             "rules",
-            "create",
+            "--method",
+            "post",
+            "--input",
+            "-",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
-            "--stdin",
         ])
         .current_dir(repo)
         .write_stdin(

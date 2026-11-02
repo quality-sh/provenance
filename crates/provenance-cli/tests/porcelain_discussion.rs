@@ -38,12 +38,12 @@ fn repo_with_requirement() -> tempfile::TempDir {
         ".",
     ]);
     success(&[
-        "requirements",
+        "req_a",
         "create",
+        "--type",
+        "requirement",
         "--repo",
         repo,
-        "--id",
-        "req_a",
         "--statement",
         "A discussion has one parent.",
     ]);
@@ -62,9 +62,8 @@ fn repo_with_requirement() -> tempfile::TempDir {
     let keyword_record = json(&["discussions", "get", "--repo", repo, "--format", "json"]);
     assert_eq!(keyword_record["record"]["id"], "discussions");
     let member = json(&[
-        "requirements",
-        "discussions",
-        "get",
+        "api",
+        "requirements/discussions",
         "--repo",
         repo,
         "--format",
@@ -101,12 +100,12 @@ fn discussion_words_are_reserved_for_new_records() {
     ]);
     for word in ["discussions", "discussion", "discuss", "reply"] {
         let output = run(&[
-            "requirements",
+            word,
             "create",
+            "--type",
+            "requirement",
             "--repo",
             repo,
-            "--id",
-            word,
             "--statement",
             "A new record cannot use a command word.",
         ]);
@@ -160,12 +159,12 @@ fn target_status_uses_the_selected_record_contract() {
         ".",
     ]);
     success(&[
-        "requirements",
+        "req_status",
         "create",
+        "--type",
+        "requirement",
         "--repo",
         repo,
-        "--id",
-        "req_status",
         "--statement",
         "A record has its own lifecycle.",
     ]);

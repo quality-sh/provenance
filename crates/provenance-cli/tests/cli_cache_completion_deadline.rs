@@ -27,7 +27,9 @@ fn a_held_close_lock_fails_the_read_naming_the_stage() {
         ),
     ] {
         provenance()
-            .args([collection, "create", "--repo", &repo, "--stdin"])
+            .args([
+                "api", collection, "--method", "post", "--input", "-", "--repo", &repo,
+            ])
             .write_stdin(body.to_string())
             .assert()
             .success();
@@ -45,7 +47,7 @@ fn a_held_close_lock_fails_the_read_naming_the_stage() {
     lock.lock_exclusive().unwrap();
 
     let mut command = provenance();
-    command.args(["topics", "topic_deadline", "get", "--repo", &repo]);
+    command.args(["api", "topics/topic_deadline", "--repo", &repo]);
     let started = Instant::now();
     let output = command.output().unwrap();
     let elapsed = started.elapsed();

@@ -228,14 +228,14 @@ fn ready_to_submit(repo: &str) {
     let (_, proposal) = pending_submission(repo);
     json_stdin_output(
         &[
-            "requirements",
-            "req_flow",
-            "submissions",
-            &proposal,
-            "withdraw",
+            "api",
+            &format!("requirements/req_flow/submissions/{}/withdraw", proposal),
+            "--method",
+            "post",
+            "--input",
+            "-",
             "--repo",
             repo,
-            "--stdin",
             "--format",
             "json",
         ],
@@ -267,7 +267,6 @@ fn update_returns_the_review_link() {
     let host = local_host(&repo);
     let updated = json_stdin_output(
         &[
-            "requirements",
             "req_flow",
             "update",
             "--repo",
@@ -292,14 +291,14 @@ fn withdraw_returns_the_review_link() {
     let host = local_host(&repo);
     let withdrawn = json_stdin_output(
         &[
-            "requirements",
-            "req_flow",
-            "submissions",
-            &proposal,
-            "withdraw",
+            "api",
+            &format!("requirements/req_flow/submissions/{}/withdraw", proposal),
+            "--method",
+            "post",
+            "--input",
+            "-",
             "--repo",
             &repo,
-            "--stdin",
             "--format",
             "json",
         ],
@@ -343,14 +342,14 @@ fn decide_returns_the_review_link() {
     let host = local_host(&repo);
     let decided = json_stdin_output(
         &[
-            "requirements",
-            "req_flow",
-            "submissions",
-            &proposal,
-            "decide",
+            "api",
+            &format!("requirements/req_flow/submissions/{}/decide", proposal),
+            "--method",
+            "post",
+            "--input",
+            "-",
             "--repo",
             &repo,
-            "--stdin",
             "--format",
             "json",
         ],

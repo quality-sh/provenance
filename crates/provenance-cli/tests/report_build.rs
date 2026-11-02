@@ -45,14 +45,14 @@ fn provenance(repo: &Path) -> Command {
 fn create_requirement(repo: &Path, id: &str, statement: &str) {
     provenance(repo)
         .args([
-            "requirements",
+            id,
             "create",
+            "--type",
+            "requirement",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
-            "--id",
-            id,
             "--statement",
             statement,
         ])
@@ -63,14 +63,14 @@ fn create_requirement(repo: &Path, id: &str, statement: &str) {
 fn create_rule(repo: &Path, id: &str, requirement: &str, statement: &str, status: Option<&str>) {
     let mut command = provenance(repo);
     command.args([
-        "rules",
+        id,
         "create",
+        "--type",
+        "rule",
         "--repo",
         repo.to_str().unwrap(),
         "--scope",
         "default",
-        "--id",
-        id,
         "--requirement-id",
         requirement,
         "--statement",

@@ -13,14 +13,14 @@ fn reject_pending(repo: &str, id: &str, created: &Value) {
         .unwrap();
     provenance()
         .args([
-            "requirements",
-            id,
-            "submissions",
-            proposal,
-            "decide",
+            "api",
+            &format!("requirements/{}/submissions/{}/decide", id, proposal),
+            "--method",
+            "post",
+            "--input",
+            "-",
             "--repo",
             repo,
-            "--stdin",
         ])
         .write_stdin(
             json!({
@@ -165,7 +165,6 @@ fn invalid_if_match_names_the_edit_etag_form() {
 
     provenance()
         .args([
-            "requirements",
             "req_etag",
             "update",
             "--repo",
@@ -246,12 +245,12 @@ fn repo_with_archived_rule() -> (tempfile::TempDir, String) {
     create_requirement(&repo, "req_terminal");
     for (id, status) in [("rule_active", "active"), ("rule_archived", "archived")] {
         let mut args = vec![
-            "rules",
+            id,
             "create",
+            "--type",
+            "rule",
             "--repo",
             &repo,
-            "--id",
-            id,
             "--statement",
             "The system keeps terminal records available on request.",
             "--requirement-id",
@@ -287,7 +286,7 @@ fn collection_hides_terminal_records_by_default() {
     let (_directory, repo) = repo_with_archived_rule();
 
     let listed =
-        json_output(provenance().args(["rules", "list", "--repo", &repo, "--format", "json"]));
+        json_output(provenance().args(["api", "rules", "--repo", &repo, "--format", "json"]));
     let ids = record_ids(&listed);
     assert_eq!(ids, ["rule_active"]);
 }
@@ -298,12 +297,14 @@ fn named_query_hides_terminal_records_by_default() {
     let (_directory, repo) = repo_with_archived_rule();
 
     let searched = json_output(provenance().args([
+        "api",
         "rules",
-        "search",
+        "--query",
+        "query=search",
         "--repo",
         &repo,
-        "--text",
-        "terminal records",
+        "--query",
+        "text=terminal records",
         "--format",
         "json",
     ]));
@@ -318,14 +319,16 @@ fn named_query_without_terminal_parameter_runs_without_the_default() {
 
     provenance()
         .args([
+            "api",
             "rules",
-            "stale",
+            "--query",
+            "query=stale",
             "--repo",
             &repo,
-            "--base",
-            "missing-base",
-            "--head",
-            "missing-head",
+            "--query",
+            "base=missing-base",
+            "--query",
+            "head=missing-head",
         ])
         .assert()
         .failure()
@@ -338,10 +341,8 @@ fn document_hides_terminal_records_by_default() {
     let (_directory, repo) = repo_with_archived_rule();
 
     let document = json_output(provenance().args([
-        "requirements",
-        "req_terminal",
-        "document",
-        "get",
+        "api",
+        "requirements/req_terminal/document",
         "--repo",
         &repo,
         "--format",
@@ -362,12 +363,12 @@ fn document_hides_terminal_records_by_default() {
 fn collection_includes_terminal_records_on_request() {
     let (_directory, repo) = repo_with_archived_rule();
     let included = json_output(provenance().args([
+        "api",
         "rules",
-        "list",
         "--repo",
         &repo,
-        "--exclude-terminal",
-        "false",
+        "--query",
+        "exclude_terminal=false",
         "--format",
         "json",
     ]));

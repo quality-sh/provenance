@@ -16,11 +16,14 @@ fn check_statement(repo: &Path, index_directory: &Path, statement: &str) -> Valu
         .env("PROVENANCE_STE100_INDEX_DIR", index_directory)
         .write_stdin(serde_json::json!({"statement": statement}).to_string())
         .args([
+            "api",
             "statement-checks",
-            "create",
+            "--method",
+            "post",
+            "--input",
+            "-",
             "--repo",
             repo.to_str().unwrap(),
-            "--stdin",
             "--format",
             "json",
         ])
@@ -81,14 +84,14 @@ fn rule_preflight_matches_the_typed_write_for_the_trial_statement() {
     let output = provenance()
         .env("PROVENANCE_STE100_INDEX_DIR", &index_directory)
         .args([
-            "rules",
+            "rule_trial",
             "create",
+            "--type",
+            "rule",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
-            "--id",
-            "rule_trial",
             "--requirement-id",
             "req_anchor",
             "--statement",

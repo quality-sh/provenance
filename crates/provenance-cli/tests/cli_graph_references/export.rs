@@ -36,14 +36,14 @@ fn exported_document_verifies_itself_away_from_its_repository() {
     let temp = committed_store();
     provenance(temp.path())
         .args([
-            "sources",
+            "source_policy",
             "create",
+            "--type",
+            "source",
             "--repo",
             ".",
             "--scope",
             "default",
-            "--id",
-            "source_policy",
             "--name",
             "Retention policy",
         ])
@@ -181,14 +181,14 @@ fn collaboration_claims_do_not_change_digest_or_appear_in_exact_export() {
     .unwrap();
     provenance(temp.path())
         .args([
-            "requirements",
+            "req_claims",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             ".",
             "--scope",
             "default",
-            "--id",
-            "req_claims",
             "--statement",
             "Claims are collaboration metadata",
         ])
@@ -196,14 +196,14 @@ fn collaboration_claims_do_not_change_digest_or_appear_in_exact_export() {
         .success();
     provenance(temp.path())
         .args([
-            "topics",
+            "topic_claims",
             "create",
+            "--type",
+            "topic",
             "--repo",
             ".",
             "--scope",
             "default",
-            "--id",
-            "topic_claims",
             "--requirement-id",
             "req_claims",
             "--title",
@@ -217,7 +217,6 @@ fn collaboration_claims_do_not_change_digest_or_appear_in_exact_export() {
 
     provenance(temp.path())
         .args([
-            "topics",
             "topic_claims",
             "claim",
             "--repo",
@@ -264,14 +263,14 @@ fn implementation_binding_travels_in_the_exact_graph_and_changes_its_digest() {
     let temp = committed_store();
     provenance(temp.path())
         .args([
-            "requirements",
+            "req_runtime",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             ".",
             "--scope",
             "default",
-            "--id",
-            "req_runtime",
             "--statement",
             "Accepted workflows start",
         ])
@@ -279,14 +278,14 @@ fn implementation_binding_travels_in_the_exact_graph_and_changes_its_digest() {
         .success();
     provenance(temp.path())
         .args([
-            "rules",
+            "rule_runtime",
             "create",
+            "--type",
+            "rule",
             "--repo",
             ".",
             "--scope",
             "default",
-            "--id",
-            "rule_runtime",
             "--requirement-id",
             "req_runtime",
             "--statement",

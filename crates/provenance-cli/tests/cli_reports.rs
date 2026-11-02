@@ -20,14 +20,14 @@ fn seed_repo() -> (tempfile::TempDir, String) {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "sources",
+            "source_schads",
             "create",
+            "--type",
+            "source",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--id",
-            "source_schads",
             "--name",
             "SCHADS Award",
         ])
@@ -36,14 +36,14 @@ fn seed_repo() -> (tempfile::TempDir, String) {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "domains",
+            "domain_payroll",
             "create",
+            "--type",
+            "domain",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--id",
-            "domain_payroll",
             "--name",
             "Payroll",
         ])
@@ -52,14 +52,14 @@ fn seed_repo() -> (tempfile::TempDir, String) {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "requirements",
+            "req_schads_overtime",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--id",
-            "req_schads_overtime",
             "--statement",
             "Overtime must follow SCHADS thresholds",
             "--domain-id",
@@ -80,7 +80,6 @@ fn seed_repo() -> (tempfile::TempDir, String) {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "requirements",
             "req_schads_overtime",
             "update",
             "--repo",
@@ -97,16 +96,16 @@ fn seed_repo() -> (tempfile::TempDir, String) {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "resolutions",
+            "res_schads_overtime",
             "create",
+            "--type",
+            "resolution",
             "--status",
             "approved",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--id",
-            "res_schads_overtime",
             "--title",
             "Overtime interpretation",
             "--requirement-id",
@@ -121,14 +120,14 @@ fn seed_repo() -> (tempfile::TempDir, String) {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "rules",
+            "rule_schads_pay_001",
             "create",
+            "--type",
+            "rule",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--id",
-            "rule_schads_pay_001",
             "--requirement-id",
             "req_schads_overtime",
             "--resolution-id",
@@ -156,9 +155,10 @@ fn cli_reports_emit_json_shapes_for_impact_health_and_orphans() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "sources",
-            "source_schads",
-            "impact",
+            "api",
+            "sources/source_schads",
+            "--query",
+            "query=impact",
             "--repo",
             &repo,
             "--scope",

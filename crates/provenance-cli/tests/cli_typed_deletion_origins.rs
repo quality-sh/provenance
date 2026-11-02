@@ -10,7 +10,12 @@ fn provenance(repo: &Path, args: &[&str], input: Option<Value>) -> Value {
         .args(args)
         .args(["--repo", repo.to_str().unwrap(), "--format", "json"]);
     if let Some(input) = input {
-        command.arg("--stdin").write_stdin(input.to_string());
+        let body = if args.first() == Some(&"api") {
+            ["--input", "-"].as_slice()
+        } else {
+            ["--stdin"].as_slice()
+        };
+        command.args(body).write_stdin(input.to_string());
     }
     let output = command.output().unwrap();
     assert!(
@@ -46,7 +51,12 @@ fn rule_files(repo: &Path) -> Vec<(std::path::PathBuf, Vec<u8>)> {
 fn start(repo: &Path, source: &str) -> Value {
     let started = provenance(
         repo,
-        &["sources", source, "discussions", "create"],
+        &[
+            "api",
+            &format!("sources/{}/discussions", source),
+            "--method",
+            "post",
+        ],
         Some(json!({
             "actor":"reviewer", "declared_by":"spec://fx", "role":"user", "body":"A concern."
         })),
@@ -75,7 +85,7 @@ fn only_the_origins_that_cite_a_deleted_discussion_are_removed() {
     let kept_source = json!({"key":"kept", "name":"Kept", "kind":"policy"});
     let applied = provenance(
         repo,
-        &["authoring-changes", "create"],
+        &["api", "authoring-changes", "--method", "post"],
         Some(spec(&json!([
             {"key":"src", "name":"Original", "kind":"policy"}, kept_source
         ]))),
@@ -96,7 +106,7 @@ fn only_the_origins_that_cite_a_deleted_discussion_are_removed() {
     for (requirement, started) in [("req_from_talk", &deleted), ("req_from_kept", &surviving)] {
         let created = provenance(
             repo,
-            &["requirements", "create"],
+            &["api", "requirements", "--method", "post"],
             Some(json!({
                 "actor":"reviewer", "id":requirement, "statement":"The host stops.",
                 "status":"active", "depends_on":[], "supersedes":[], "origin":origin(started)
@@ -107,10 +117,10 @@ fn only_the_origins_that_cite_a_deleted_discussion_are_removed() {
     provenance(
         repo,
         &[
-            "rules",
-            "create",
-            "--id",
             "rule_from_kept",
+            "create",
+            "--type",
+            "rule",
             "--requirement-id",
             "req_from_kept",
             "--statement",
@@ -126,17 +136,17 @@ fn only_the_origins_that_cite_a_deleted_discussion_are_removed() {
 
     let applied = provenance(
         repo,
-        &["authoring-changes", "create"],
+        &["api", "authoring-changes", "--method", "post"],
         Some(spec(&json!([kept_source]))),
     );
 
     assert_eq!(applied["data"]["deleted"], 1, "{applied}");
-    let cleared = provenance(repo, &["requirements", "req_from_talk", "get"], None);
+    let cleared = provenance(repo, &["api", "requirements/req_from_talk"], None);
     assert_eq!(cleared["data"]["origin_thread"], Value::Null, "{cleared}");
     assert_eq!(cleared["data"]["origin_message"], Value::Null, "{cleared}");
     for path in [
-        ["requirements", "req_from_kept", "get"],
-        ["rules", "rule_from_kept", "get"],
+        ["api", "requirements/req_from_kept"],
+        ["api", "rules/rule_from_kept"],
     ] {
         let kept = provenance(repo, &path, None);
         assert_eq!(

@@ -62,8 +62,8 @@ fn incoming_synthesis_requires_and_supports_asserting_an_existing_proposal() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
+            "api",
             "proposals",
-            "list",
             "--repo",
             &repo,
             "--scope",

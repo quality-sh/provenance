@@ -28,12 +28,12 @@ fn recovery_reads_survive_process_exit_and_claim_conflict() {
         ("question_research", "research"),
     ] {
         provenance(&[
-            "questions",
+            id,
             "create",
+            "--type",
+            "question",
             "--repo",
             &repo,
-            "--id",
-            id,
             "--topic-id",
             "topic_overtime",
             "--question",
@@ -42,19 +42,9 @@ fn recovery_reads_survive_process_exit_and_claim_conflict() {
             method,
         ])
         .success();
-        provenance(&[
-            "questions",
-            id,
-            "claim",
-            "--repo",
-            &repo,
-            "--actor",
-            "agent-one",
-        ])
-        .success();
+        provenance(&[id, "claim", "--repo", &repo, "--actor", "agent-one"]).success();
     }
     provenance(&[
-        "topics",
         "topic_overtime",
         "claim",
         "--repo",
@@ -66,20 +56,8 @@ fn recovery_reads_survive_process_exit_and_claim_conflict() {
 
     for conflict in [false, true] {
         if conflict {
-            for (collection, id) in [
-                ("topics", "topic_overtime"),
-                ("questions", "question_grill"),
-            ] {
-                provenance(&[
-                    collection,
-                    id,
-                    "claim",
-                    "--repo",
-                    &repo,
-                    "--actor",
-                    "agent-two",
-                ])
-                .failure();
+            for id in ["topic_overtime", "question_grill"] {
+                provenance(&[id, "claim", "--repo", &repo, "--actor", "agent-two"]).failure();
             }
         }
         let topic = recovery_record(&repo, "topics", "topic_overtime");
@@ -99,7 +77,8 @@ fn recovery_reads_survive_process_exit_and_claim_conflict() {
 }
 
 fn recovery_record(repo: &str, collection: &str, id: &str) -> serde_json::Value {
-    let output = provenance(&[collection, id, "get", "--repo", repo, "--format", "json"])
+    let path = format!("{collection}/{id}");
+    let output = provenance(&["api", &path, "--repo", repo, "--format", "json"])
         .success()
         .get_output()
         .stdout
@@ -117,12 +96,12 @@ fn cli_shaping_actions_and_requirement_patch_share_the_catalog() {
     create_topic(&repo);
 
     provenance(&[
-        "questions",
+        "question_threshold",
         "create",
+        "--type",
+        "question",
         "--repo",
         &repo,
-        "--id",
-        "question_threshold",
         "--topic-id",
         "topic_overtime",
         "--question",
@@ -133,7 +112,6 @@ fn cli_shaping_actions_and_requirement_patch_share_the_catalog() {
     .success();
 
     provenance(&[
-        "questions",
         "question_threshold",
         "claim",
         "--repo",
@@ -144,7 +122,6 @@ fn cli_shaping_actions_and_requirement_patch_share_the_catalog() {
     .success()
     .stdout(contains(r#""claimed_by": "agent-one""#));
     provenance(&[
-        "questions",
         "question_threshold",
         "answer",
         "--repo",
@@ -156,7 +133,6 @@ fn cli_shaping_actions_and_requirement_patch_share_the_catalog() {
     .stdout(contains(r#""status": "answered""#));
 
     provenance(&[
-        "topics",
         "topic_overtime",
         "claim",
         "--repo",
@@ -165,9 +141,16 @@ fn cli_shaping_actions_and_requirement_patch_share_the_catalog() {
         "agent-one",
     ])
     .success();
-    provenance(&["topics", "topic_overtime", "close", "--repo", &repo])
-        .success()
-        .stdout(contains(r#""status": "closed""#));
+    provenance(&[
+        "api",
+        "topics/topic_overtime/close",
+        "--method",
+        "post",
+        "--repo",
+        &repo,
+    ])
+    .success()
+    .stdout(contains(r#""status": "closed""#));
 
     let store = provenance_store::repository::Repository::open(&repo, "default")
         .unwrap()
@@ -181,7 +164,6 @@ fn cli_shaping_actions_and_requirement_patch_share_the_catalog() {
         .etag;
     provenance_stdin(
         &[
-            "requirements",
             "req_overtime",
             "update",
             "--repo",

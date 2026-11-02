@@ -29,14 +29,14 @@ fn cli_creates_and_exports_enriched_sources_and_resolutions() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "sources",
+            "source_sah_2025",
             "create",
+            "--type",
+            "source",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--id",
-            "source_sah_2025",
             "--name",
             "Support at Home 2025",
             "--source-type",
@@ -47,8 +47,8 @@ fn cli_creates_and_exports_enriched_sources_and_resolutions() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "sources", "create", "--repo", &repo, "--scope", "default", "--stdin", "--format",
-            "json",
+            "api", "sources", "--method", "post", "--input", "-", "--repo", &repo, "--scope",
+            "default", "--format", "json",
         ])
         .write_stdin(
             serde_json::json!({
@@ -100,14 +100,14 @@ fn cli_creates_and_exports_enriched_sources_and_resolutions() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "requirements",
+            "req_sah",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--id",
-            "req_sah",
             "--statement",
             "Support at Home shall be traceable",
             "--format",
@@ -118,14 +118,14 @@ fn cli_creates_and_exports_enriched_sources_and_resolutions() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "resolutions",
+            "res_sah_2025",
             "create",
+            "--type",
+            "resolution",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--id",
-            "res_sah_2025",
             "--title",
             "SAH extraction, revised",
             "--requirement-id",
@@ -142,13 +142,16 @@ fn cli_creates_and_exports_enriched_sources_and_resolutions() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
+            "api",
             "resolutions",
-            "create",
+            "--method",
+            "post",
+            "--input",
+            "-",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--stdin",
             "--format",
             "json",
         ])
@@ -223,14 +226,14 @@ fn cli_rejects_invalid_source_commit_pin() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "sources",
+            "source_codebase",
             "create",
+            "--type",
+            "source",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--id",
-            "source_codebase",
             "--name",
             "Codebase",
             "--source-type",
@@ -258,14 +261,14 @@ fn cli_rejects_a_resolution_input_with_a_blank_reference() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "requirements",
+            "req_sah",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--id",
-            "req_sah",
             "--statement",
             "SAH applies",
         ])
@@ -274,13 +277,16 @@ fn cli_rejects_a_resolution_input_with_a_blank_reference() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
+            "api",
             "resolutions",
-            "create",
+            "--method",
+            "post",
+            "--input",
+            "-",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--stdin",
             "--format",
             "json",
         ])

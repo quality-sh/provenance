@@ -57,7 +57,9 @@ fn reviewed_records() -> (tempfile::TempDir, String) {
         ),
     ] {
         provenance()
-            .args([collection, "create", "--repo", &repo, "--stdin"])
+            .args([
+                "api", collection, "--method", "post", "--input", "-", "--repo", &repo,
+            ])
             .write_stdin(body.to_string())
             .assert()
             .success();

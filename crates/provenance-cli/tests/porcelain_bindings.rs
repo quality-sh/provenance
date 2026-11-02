@@ -420,12 +420,12 @@ fn cli_readable_get_includes_the_record_view_context_and_bounds() {
         .success();
     provenance()
         .args([
-            "requirements",
+            "req_readable",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             &repo,
-            "--id",
-            "req_readable",
             "--statement",
             "Readable output identifies the selected record.",
         ])
@@ -433,12 +433,12 @@ fn cli_readable_get_includes_the_record_view_context_and_bounds() {
         .success();
     provenance()
         .args([
-            "rules",
+            "rule_readable",
             "create",
+            "--type",
+            "rule",
             "--repo",
             &repo,
-            "--id",
-            "rule_readable",
             "--requirement-id",
             "req_readable",
             "--statement",

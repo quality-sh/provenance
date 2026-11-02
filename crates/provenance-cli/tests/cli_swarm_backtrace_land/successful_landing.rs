@@ -54,8 +54,8 @@ fn swarm_backtrace_land_writes_run_dir_outputs_end_to_end() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
+            "api",
             "proposals",
-            "list",
             "--repo",
             &repo,
             "--scope",

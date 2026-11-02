@@ -61,14 +61,14 @@ fn repo_with_rule(status: &str) -> tempfile::TempDir {
         .success();
     provenance(repo)
         .args([
-            "requirements",
+            "req_anchor",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
-            "--id",
-            "req_anchor",
             "--statement",
             "The anchor requirement holds",
         ])
@@ -76,14 +76,14 @@ fn repo_with_rule(status: &str) -> tempfile::TempDir {
         .success();
     provenance(repo)
         .args([
-            "rules",
+            "rule_anchor",
             "create",
+            "--type",
+            "rule",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
-            "--id",
-            "rule_anchor",
             "--requirement-id",
             "req_anchor",
             "--statement",

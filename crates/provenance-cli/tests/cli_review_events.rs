@@ -103,14 +103,14 @@ fn unrelated_scope_cache_and_equal_content_do_not_invalidate() {
     let mut socket = Socket::connect(&host);
     socket.frame();
     let output = review_host_support::waits::output(host.cli().args([
-        "sources",
+        "source_other",
         "create",
+        "--type",
+        "source",
         "--repo",
         repo.path().to_str().unwrap(),
         "--scope",
         "other",
-        "--id",
-        "source_other",
         "--name",
         "Other",
     ]));
@@ -186,12 +186,12 @@ async fn rename_burst_is_coherent_and_failed_cli_preparation_is_quiet() {
     let read: Value = serde_json::from_str(&read).unwrap();
     assert_eq!(read["data"]["name"], "Final");
     let output = review_host_support::waits::output(host.cli().args([
-        "sources",
+        "source_one",
         "create",
+        "--type",
+        "source",
         "--repo",
         repo.path().to_str().unwrap(),
-        "--id",
-        "source_one",
         "--name",
         "Duplicate",
     ]));

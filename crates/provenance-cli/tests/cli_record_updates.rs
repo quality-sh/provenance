@@ -21,14 +21,14 @@ fn source_update_uses_the_local_writer_and_explicit_clears() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "sources",
+            "source_one",
             "create",
+            "--type",
+            "source",
             "--repo",
             repo,
             "--scope",
             "default",
-            "--id",
-            "source_one",
             "--name",
             "Policy",
             "--url",
@@ -39,7 +39,6 @@ fn source_update_uses_the_local_writer_and_explicit_clears() {
     let output = Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "sources",
             "source_one",
             "update",
             "--repo",
@@ -64,7 +63,6 @@ fn source_update_uses_the_local_writer_and_explicit_clears() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "sources",
             "source_one",
             "update",
             "--repo",

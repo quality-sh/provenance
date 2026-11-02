@@ -206,14 +206,14 @@ fn a_write_beside_a_hand_edited_record_is_refused_and_changes_nothing() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "requirements",
+            "req_penalty_rates",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             repo.as_str(),
             "--scope",
             "default",
-            "--id",
-            "req_penalty_rates",
             "--statement",
             "Penalty rates apply on public holidays",
             "--format",
@@ -238,14 +238,14 @@ fn create_requirement(repo: &str, id: &str, statement: &str) {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "requirements",
+            id,
             "create",
+            "--type",
+            "requirement",
             "--repo",
             repo,
             "--scope",
             "default",
-            "--id",
-            id,
             "--statement",
             statement,
             "--format",

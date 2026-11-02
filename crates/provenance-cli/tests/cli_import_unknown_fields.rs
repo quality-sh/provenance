@@ -26,14 +26,14 @@ fn create_source(repo: &Path, id: &str) {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "sources",
+            id,
             "create",
+            "--type",
+            "source",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
-            "--id",
-            id,
             "--name",
             "Policy",
             "--source-type",

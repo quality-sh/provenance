@@ -19,28 +19,28 @@ fn init(repo: &Path, scope: &str) {
 /// A requirement, a topic under it, and one question under the topic.
 fn shaping_records(repo: &str, scope: &str) {
     json(provenance().args([
-        "requirements",
+        "req_a",
         "create",
+        "--type",
+        "requirement",
         "--repo",
         repo,
         "--scope",
         scope,
-        "--id",
-        "req_a",
         "--statement",
         "The system records topics.",
         "--format",
         "json",
     ]));
     json(provenance().args([
-        "topics",
+        "topic_open",
         "create",
+        "--type",
+        "topic",
         "--repo",
         repo,
         "--scope",
         scope,
-        "--id",
-        "topic_open",
         "--requirement-id",
         "req_a",
         "--title",
@@ -49,14 +49,14 @@ fn shaping_records(repo: &str, scope: &str) {
         "json",
     ]));
     json(provenance().args([
-        "questions",
+        "q_one",
         "create",
+        "--type",
+        "question",
         "--repo",
         repo,
         "--scope",
         scope,
-        "--id",
-        "q_one",
         "--topic-id",
         "topic_open",
         "--question",
@@ -163,7 +163,6 @@ fn a_question_update_without_the_header_reports_it_as_required() {
 
     provenance()
         .args([
-            "questions",
             "q_one",
             "update",
             "--repo",

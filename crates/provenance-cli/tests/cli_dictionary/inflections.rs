@@ -28,11 +28,14 @@ fn rule_one_one_words(repo: &Path, index_directory: &Path, statement: &str) -> V
         .env("PROVENANCE_STE100_INDEX_DIR", index_directory)
         .write_stdin(serde_json::json!({"statement": statement}).to_string())
         .args([
+            "api",
             "statement-checks",
-            "create",
+            "--method",
+            "post",
+            "--input",
+            "-",
             "--repo",
             repo.to_str().unwrap(),
-            "--stdin",
             "--format",
             "json",
         ])

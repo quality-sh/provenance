@@ -24,26 +24,26 @@ fn planning_first_repo() -> tempfile::TempDir {
         ".",
     ]);
     provenance(&[
-        "sources",
+        "source_finance_policy",
         "create",
+        "--type",
+        "source",
         "--repo",
         &repo,
         "--scope",
         "default",
-        "--id",
-        "source_finance_policy",
         "--name",
         "Finance Policy v3, section 4.2",
     ]);
     provenance(&[
-        "requirements",
+        "req_second_approver",
         "create",
+        "--type",
+        "requirement",
         "--repo",
         &repo,
         "--scope",
         "default",
-        "--id",
-        "req_second_approver",
         "--statement",
         "Expenses above the delegated authority limit need second-approver sign-off",
     ]);
@@ -59,7 +59,6 @@ fn planning_first_repo() -> tempfile::TempDir {
         .etag;
     provenance_stdin(
         &[
-            "requirements",
             "req_second_approver",
             "update",
             "--repo",
@@ -73,14 +72,14 @@ fn planning_first_repo() -> tempfile::TempDir {
         r#"{"relationships":{"cites":[{"source_id":"source_finance_policy"}]}}"#,
     );
     provenance(&[
-        "rules",
+        "rule_second_approver",
         "create",
+        "--type",
+        "rule",
         "--repo",
         &repo,
         "--scope",
         "default",
-        "--id",
-        "rule_second_approver",
         "--requirement-id",
         "req_second_approver",
         "--statement",

@@ -20,10 +20,10 @@ fn seed(repo: &str) {
     run(
         repo,
         &[
-            "requirements",
-            "create",
-            "--id",
             "req_search",
+            "create",
+            "--type",
+            "requirement",
             "--statement",
             "The system is safe.",
         ],
@@ -31,10 +31,10 @@ fn seed(repo: &str) {
     run(
         repo,
         &[
-            "rules",
-            "create",
-            "--id",
             "rule_search",
+            "create",
+            "--type",
+            "rule",
             "--requirement-id",
             "req_search",
             "--statement",
@@ -48,10 +48,10 @@ fn seed(repo: &str) {
     run(
         repo,
         &[
-            "topics",
-            "create",
-            "--id",
             "topic_search",
+            "create",
+            "--type",
+            "topic",
             "--requirement-id",
             "req_search",
             "--title",
@@ -61,10 +61,10 @@ fn seed(repo: &str) {
     run(
         repo,
         &[
-            "questions",
-            "create",
-            "--id",
             "question_search",
+            "create",
+            "--type",
+            "question",
             "--topic-id",
             "topic_search",
             "--question",

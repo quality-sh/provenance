@@ -26,7 +26,7 @@ fn init() -> (tempfile::TempDir, String) {
 fn create_source(repo: &str, id: &str) {
     provenance()
         .args([
-            "sources", "create", "--repo", repo, "--id", id, "--name", id,
+            id, "create", "--type", "source", "--repo", repo, "--name", id,
         ])
         .assert()
         .success();
@@ -65,12 +65,12 @@ fn one_argument_can_contain_spaces_and_punctuation() {
     let (_directory, repo) = init();
     let output = provenance()
         .args([
-            "sources",
+            "source_draft_policy",
             "create",
+            "--type",
+            "source",
             "--repo",
             &repo,
-            "--id",
-            "source_draft_policy",
             "--name",
             "[Draft] policy",
             "--format",

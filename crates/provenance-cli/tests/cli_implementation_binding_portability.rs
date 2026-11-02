@@ -68,14 +68,14 @@ fn init(repo: &Path) {
 fn create_rule(repo: &Path, id: &str) {
     provenance()
         .args([
-            "rules",
+            id,
             "create",
+            "--type",
+            "rule",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
-            "--id",
-            id,
             "--requirement-id",
             "req_workflows",
             "--statement",

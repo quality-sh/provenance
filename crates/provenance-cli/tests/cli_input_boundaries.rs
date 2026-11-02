@@ -39,10 +39,10 @@ fn fixture() -> tempfile::TempDir {
     command(
         repo,
         &[
-            "requirements",
-            "create",
-            "--id",
             "req_parent",
+            "create",
+            "--type",
+            "requirement",
             "--statement",
             "The system records one parent.",
         ],
@@ -142,7 +142,7 @@ fn free_string_array_items_preserve_json_looking_text() {
     assert_eq!(created["data"]["open_questions"], json!(["null"]));
     let stored = output(&mut command(
         repo,
-        &["contributions", "contrib_literals", "get"],
+        &["api", "contributions/contrib_literals"],
     ));
     assert_eq!(stored["data"]["risks"], json!(["[]", "{}"]));
 }

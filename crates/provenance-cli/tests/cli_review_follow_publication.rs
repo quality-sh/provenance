@@ -253,9 +253,8 @@ fn changed_root_membership_removes_the_record_from_the_bound_document() {
         .to_string()
         .contains("rule_follow"));
     let output = waits::output(host.cli().args([
-        "rules",
-        "rule_follow",
-        "get",
+        "api",
+        "rules/rule_follow",
         "--format",
         "json",
         "--repo",

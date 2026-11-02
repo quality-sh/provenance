@@ -25,13 +25,16 @@ fn create(repo: &str, id: &str, dependencies: Option<Value>) -> Value {
     }
     let output = provenance_stdin(
         &[
+            "api",
             "questions",
-            "create",
+            "--method",
+            "post",
+            "--input",
+            "-",
             "--repo",
             repo,
             "--scope",
             "default",
-            "--stdin",
             "--format",
             "json",
         ],
@@ -84,7 +87,6 @@ fn readiness_matches_answered_prerequisite_oracle_after_restart() {
     assert_eq!(state["ready_ids"], json!(["question_a", "question_b"]));
     assert_eq!(state["complete"], true);
     provenance(&[
-        "questions",
         "question_a",
         "answer",
         "--repo",
@@ -99,7 +101,6 @@ fn readiness_matches_answered_prerequisite_oracle_after_restart() {
     assert_matches_oracle(&repo, &state);
     assert_eq!(state["ready_ids"], json!(["question_b"]));
     provenance(&[
-        "questions",
         "question_b",
         "answer",
         "--repo",
@@ -195,7 +196,6 @@ fn dependencies_replace_clear_and_reject_without_publication() {
         let etag = current["data"]["edit"]["etag"].as_str().unwrap();
         provenance_stdin(
             &[
-                "questions",
                 "question_b",
                 "update",
                 "--repo",
@@ -238,7 +238,6 @@ fn human_blocked_archived_and_closed_states_are_not_ready() {
     assert_eq!(summary(&repo, &[])["ready_ids"], json!([]));
     update(&repo, "questions", "question_b", &json!({"depends_on":[]}));
     provenance(&[
-        "questions",
         "question_b",
         "claim",
         "--repo",
@@ -250,7 +249,6 @@ fn human_blocked_archived_and_closed_states_are_not_ready() {
     ])
     .success();
     provenance(&[
-        "questions",
         "question_b",
         "claim",
         "--repo",
@@ -262,7 +260,6 @@ fn human_blocked_archived_and_closed_states_are_not_ready() {
     ])
     .failure();
     provenance(&[
-        "topics",
         "topic_overtime",
         "claim",
         "--repo",
@@ -292,7 +289,8 @@ fn cross_topic_prerequisites_are_rejected_before_write() {
     let (_dir, repo) = setup();
     provenance_stdin(
         &[
-            "topics", "create", "--repo", &repo, "--scope", "default", "--stdin",
+            "api", "topics", "--method", "post", "--input", "-", "--repo", &repo, "--scope",
+            "default",
         ],
         &json!({"id":"topic_other","requirement_id":"req_overtime",
         "title":"Another threshold"})
@@ -301,13 +299,16 @@ fn cross_topic_prerequisites_are_rejected_before_write() {
     .success();
     provenance_stdin(
         &[
+            "api",
             "questions",
-            "create",
+            "--method",
+            "post",
+            "--input",
+            "-",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--stdin",
         ],
         &json!({"id":"question_other","topic_id":"topic_other",
         "question":"Which rate?","resolution_method":"grill"})
@@ -316,13 +317,16 @@ fn cross_topic_prerequisites_are_rejected_before_write() {
     .success();
     let result = provenance_stdin(
         &[
+            "api",
             "questions",
-            "create",
+            "--method",
+            "post",
+            "--input",
+            "-",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--stdin",
         ],
         &json!({"id":"question_local",
         "topic_id":"topic_overtime","question":"Which rate?","resolution_method":"grill",
@@ -332,9 +336,8 @@ fn cross_topic_prerequisites_are_rejected_before_write() {
     .failure();
     assert!(String::from_utf8_lossy(&result.get_output().stderr).contains("invalid_update"));
     provenance(&[
-        "questions",
-        "question_local",
-        "get",
+        "api",
+        "questions/question_local",
         "--repo",
         &repo,
         "--scope",
@@ -352,7 +355,6 @@ fn existing_error_precedence_and_failed_write_state() {
     let etag = before["data"]["edit"]["etag"].as_str().unwrap();
     let result = provenance_stdin(
         &[
-            "questions",
             "question_a",
             "update",
             "--repo",

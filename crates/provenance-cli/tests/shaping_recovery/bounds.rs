@@ -17,15 +17,7 @@ fn summary_has_a_byte_bound_when_claims_are_large() {
     ] {
         create(&repo, id, None);
         let claim = [
-            "questions",
-            id,
-            "claim",
-            "--repo",
-            &repo,
-            "--scope",
-            "default",
-            "--actor",
-            &actor,
+            id, "claim", "--repo", &repo, "--scope", "default", "--actor", &actor,
         ];
         provenance(&claim).success();
         claimed += get(&repo, "questions", id)["data"]["claimed_by"]

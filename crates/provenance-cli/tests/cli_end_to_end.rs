@@ -227,14 +227,14 @@ fn create_graph(repo: &str) {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "sources",
+            "source_schads",
             "create",
+            "--type",
+            "source",
             "--repo",
             repo,
             "--scope",
             "default",
-            "--id",
-            "source_schads",
             "--name",
             "SCHADS Award",
             "--format",

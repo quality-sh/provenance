@@ -74,14 +74,14 @@ fn init(repo: &str) {
 
 fn create_domain(repo: &str) {
     provenance(&[
-        "domains",
+        "domain_payroll",
         "create",
+        "--type",
+        "domain",
         "--repo",
         repo,
         "--scope",
         "default",
-        "--id",
-        "domain_payroll",
         "--name",
         "Payroll",
         "--description",
@@ -98,14 +98,14 @@ fn create_domain(repo: &str) {
 
 fn create_requirement(repo: &str) {
     provenance(&[
-        "requirements",
+        "req_overtime",
         "create",
+        "--type",
+        "requirement",
         "--repo",
         repo,
         "--scope",
         "default",
-        "--id",
-        "req_overtime",
         "--statement",
         "Overtime must be traceable",
         "--status",
@@ -121,14 +121,14 @@ fn create_requirement(repo: &str) {
 
 fn create_rule(repo: &str) {
     provenance(&[
-        "rules",
+        "rule_overtime",
         "create",
+        "--type",
+        "rule",
         "--repo",
         repo,
         "--scope",
         "default",
-        "--id",
-        "rule_overtime",
         "--requirement-id",
         "req_overtime",
         "--statement",
@@ -148,12 +148,12 @@ fn verify_materialized_lists(repo: &str) {
         .success()
         .stdout(contains(r#""records_loaded""#));
     provenance(&[
-        "domains", "list", "--repo", repo, "--scope", "default", "--format", "json",
+        "api", "domains", "--repo", repo, "--scope", "default", "--format", "json",
     ])
     .success()
     .stdout(contains("domain_payroll"));
     provenance(&[
-        "rules", "list", "--repo", repo, "--scope", "default", "--format", "json",
+        "api", "rules", "--repo", repo, "--scope", "default", "--format", "json",
     ])
     .success()
     .stdout(contains("rule_overtime"));

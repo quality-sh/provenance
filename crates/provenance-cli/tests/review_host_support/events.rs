@@ -130,12 +130,12 @@ pub fn source_before_host(root: &Path, id: &str) {
 
 fn source_with(mut command: std::process::Command, root: &Path, id: &str) {
     command.args([
-        "sources",
+        id,
         "create",
+        "--type",
+        "source",
         "--repo",
         root.to_str().unwrap(),
-        "--id",
-        id,
         "--name",
         id,
     ]);

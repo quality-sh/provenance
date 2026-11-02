@@ -139,12 +139,12 @@ fn graph_check_rejects_duplicate_rows_of_the_same_kind_id_and_scope() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "requirements",
+            "req_duplicate_row",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             repo,
-            "--id",
-            "req_duplicate_row",
             "--statement",
             "The graph rejects duplicate stored rows.",
         ])
@@ -206,12 +206,12 @@ fn cli_binding_check_reports_absence_without_running_or_failing_project_tests() 
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "requirements",
+            "req_unbound",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             directory.path().to_str().unwrap(),
-            "--id",
-            "req_unbound",
             "--statement",
             "The system keeps the record.",
         ])
@@ -220,12 +220,12 @@ fn cli_binding_check_reports_absence_without_running_or_failing_project_tests() 
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "rules",
+            "rule_unbound",
             "create",
+            "--type",
+            "rule",
             "--repo",
             directory.path().to_str().unwrap(),
-            "--id",
-            "rule_unbound",
             "--requirement-id",
             "req_unbound",
             "--statement",

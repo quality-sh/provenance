@@ -21,14 +21,14 @@ fn setup() -> tempfile::TempDir {
     create_source_and_requirement(repo);
     create_topic(repo);
     provenance(&[
-        "resolutions",
+        "res_rust_with_neglect",
         "create",
+        "--type",
+        "resolution",
         "--repo",
         repo,
         "--scope",
         "default",
-        "--id",
-        "res_rust_with_neglect",
         "--requirement-id",
         "req_overtime",
         "--title",
@@ -42,14 +42,14 @@ fn setup() -> tempfile::TempDir {
     ])
     .success();
     provenance(&[
-        "questions",
+        "question_rust",
         "create",
+        "--type",
+        "question",
         "--repo",
         repo,
         "--scope",
         "default",
-        "--id",
-        "question_rust",
         "--topic-id",
         "topic_overtime",
         "--question",
@@ -63,14 +63,14 @@ fn setup() -> tempfile::TempDir {
 
 fn rule(repo: &str, status: Option<&str>) -> assert_cmd::assert::Assert {
     let mut args = vec![
-        "rules",
+        "rule_robot_rusts",
         "create",
+        "--type",
+        "rule",
         "--repo",
         repo,
         "--scope",
         "default",
-        "--id",
-        "rule_robot_rusts",
         "--requirement-id",
         "req_overtime",
         "--resolution-id",
@@ -110,7 +110,6 @@ fn an_answer_citing_a_proposed_resolution_is_told_what_to_do() {
     let repo = dir.path().to_str().unwrap();
     let answer = |extra: &[&str]| {
         let mut args = vec![
-            "questions",
             "question_rust",
             "answer",
             "--repo",
@@ -141,14 +140,14 @@ fn a_create_citing_a_missing_resolution_is_refused_as_a_missing_reference() {
     let dir = setup();
     let repo = dir.path().to_str().unwrap();
     provenance(&[
-        "rules",
+        "rule_robot_rusts",
         "create",
+        "--type",
+        "rule",
         "--repo",
         repo,
         "--scope",
         "default",
-        "--id",
-        "rule_robot_rusts",
         "--requirement-id",
         "req_overtime",
         "--resolution-id",

@@ -115,14 +115,14 @@ fn create_source(repo: &std::path::Path, scope: &str, id: &str) {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "sources",
+            id,
             "create",
+            "--type",
+            "source",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             scope,
-            "--id",
-            id,
             "--name",
             id,
             "--source-type",

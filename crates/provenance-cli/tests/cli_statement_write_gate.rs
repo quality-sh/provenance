@@ -50,14 +50,14 @@ fn requirement_creation_rejects_a_deterministic_violation_without_writing_the_re
 
     provenance()
         .args([
-            "requirements",
+            "req_rejected",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             repo.path().to_str().unwrap(),
             "--scope",
             "default",
-            "--id",
-            "req_rejected",
             "--statement",
             "Stop; then continue",
         ])
@@ -80,14 +80,14 @@ fn rule_creation_rejects_a_deterministic_violation_without_writing_the_record() 
     let repo = initialized_repo();
     provenance()
         .args([
-            "requirements",
+            "req_anchor",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             repo.path().to_str().unwrap(),
             "--scope",
             "default",
-            "--id",
-            "req_anchor",
             "--statement",
             "The anchor requirement holds",
         ])
@@ -96,14 +96,14 @@ fn rule_creation_rejects_a_deterministic_violation_without_writing_the_record() 
 
     provenance()
         .args([
-            "rules",
+            "rule_rejected",
             "create",
+            "--type",
+            "rule",
             "--repo",
             repo.path().to_str().unwrap(),
             "--scope",
             "default",
-            "--id",
-            "rule_rejected",
             "--requirement-id",
             "req_anchor",
             "--statement",
@@ -124,8 +124,8 @@ fn rule_creation_rejects_a_deterministic_violation_without_writing_the_record() 
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
+            "api",
             "rules",
-            "list",
             "--repo",
             repo.path().to_str().unwrap(),
             "--scope",

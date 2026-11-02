@@ -56,14 +56,14 @@ pub fn create_requirement(
     provenance()
         .env("PROVENANCE_STE100_INDEX_DIR", index_directory)
         .args([
-            "requirements",
+            id,
             "create",
+            "--type",
+            "requirement",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
-            "--id",
-            id,
             "--statement",
             statement,
             "--format",

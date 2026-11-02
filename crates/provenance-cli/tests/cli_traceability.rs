@@ -23,14 +23,14 @@ fn cli_traceability_chain_reports_rule_upstream_nodes_and_gaps() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "sources",
+            "source_schads",
             "create",
+            "--type",
+            "source",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--id",
-            "source_schads",
             "--name",
             "SCHADS Award",
         ])
@@ -39,14 +39,14 @@ fn cli_traceability_chain_reports_rule_upstream_nodes_and_gaps() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "domains",
+            "domain_payroll",
             "create",
+            "--type",
+            "domain",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--id",
-            "domain_payroll",
             "--name",
             "Payroll",
         ])
@@ -55,14 +55,14 @@ fn cli_traceability_chain_reports_rule_upstream_nodes_and_gaps() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "requirements",
+            "req_schads_overtime",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--id",
-            "req_schads_overtime",
             "--statement",
             "Overtime must follow SCHADS thresholds",
             "--domain-id",
@@ -83,7 +83,6 @@ fn cli_traceability_chain_reports_rule_upstream_nodes_and_gaps() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "requirements",
             "req_schads_overtime",
             "update",
             "--repo",
@@ -100,16 +99,16 @@ fn cli_traceability_chain_reports_rule_upstream_nodes_and_gaps() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "resolutions",
+            "res_schads_overtime",
             "create",
+            "--type",
+            "resolution",
             "--status",
             "approved",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--id",
-            "res_schads_overtime",
             "--title",
             "Overtime interpretation",
             "--requirement-id",
@@ -124,14 +123,14 @@ fn cli_traceability_chain_reports_rule_upstream_nodes_and_gaps() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "rules",
+            "rule_schads_pay_001",
             "create",
+            "--type",
+            "rule",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--id",
-            "rule_schads_pay_001",
             "--requirement-id",
             "req_schads_overtime",
             "--resolution-id",
@@ -150,14 +149,14 @@ fn cli_traceability_chain_reports_rule_upstream_nodes_and_gaps() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "sources",
+            "source_unrelated",
             "create",
+            "--type",
+            "source",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--id",
-            "source_unrelated",
             "--name",
             "Unrelated Award",
         ])
@@ -166,14 +165,14 @@ fn cli_traceability_chain_reports_rule_upstream_nodes_and_gaps() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "requirements",
+            "req_unrelated",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--id",
-            "req_unrelated",
             "--statement",
             "Leave accrues monthly",
             "--domain-id",
@@ -194,7 +193,6 @@ fn cli_traceability_chain_reports_rule_upstream_nodes_and_gaps() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "requirements",
             "req_unrelated",
             "update",
             "--repo",

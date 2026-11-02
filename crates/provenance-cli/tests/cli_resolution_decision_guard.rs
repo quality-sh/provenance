@@ -15,14 +15,14 @@ fn setup() -> tempfile::TempDir {
     create_source_and_requirement(repo);
     create_topic(repo);
     provenance(&[
-        "resolutions",
+        "res_code_scores_health",
         "create",
+        "--type",
+        "resolution",
         "--repo",
         repo,
         "--scope",
         "default",
-        "--id",
-        "res_code_scores_health",
         "--requirement-id",
         "req_overtime",
         "--title",
@@ -36,14 +36,14 @@ fn setup() -> tempfile::TempDir {
     ])
     .success();
     provenance(&[
-        "questions",
+        "question_code_scores_health",
         "create",
+        "--type",
+        "question",
         "--repo",
         repo,
         "--scope",
         "default",
-        "--id",
-        "question_code_scores_health",
         "--topic-id",
         "topic_overtime",
         "--question",
@@ -60,7 +60,6 @@ fn cli_answer_refuses_proposed_resolution_and_keeps_question_open() {
     let dir = setup();
     let repo = dir.path().to_str().unwrap();
     let result = provenance(&[
-        "questions",
         "question_code_scores_health",
         "answer",
         "--repo",
@@ -87,9 +86,8 @@ fn cli_answer_refuses_proposed_resolution_and_keeps_question_open() {
         .code(1)
         .stderr(contains(r#""kind":"resolution_not_approved""#));
     provenance(&[
-        "questions",
-        "question_code_scores_health",
-        "get",
+        "api",
+        "questions/question_code_scores_health",
         "--repo",
         repo,
         "--scope",
@@ -105,9 +103,7 @@ fn cli_answer_refuses_proposed_resolution_and_keeps_question_open() {
 fn cli_active_rule_refuses_proposed_resolution() {
     let dir = setup();
     let repo = dir.path().to_str().unwrap();
-    provenance_stdin(&[
-        "rules", "create", "--repo", repo, "--scope", "default", "--stdin",
-    ], r#"{"id":"rule_code_scores_health","statement":"Code scores affect health.","status":"active","severity":"high","requirement_ids":["req_overtime"],"resolution_ids":["res_code_scores_health"]}"#)
+    provenance_stdin(&["api", "rules", "--method", "post", "--input", "-", "--repo", repo, "--scope", "default"], r#"{"id":"rule_code_scores_health","statement":"Code scores affect health.","status":"active","severity":"high","requirement_ids":["req_overtime"],"resolution_ids":["res_code_scores_health"]}"#)
         .failure().code(1).stderr(contains(r#""kind":"resolution_not_approved""#));
 }
 
@@ -143,7 +139,6 @@ fn cli_answer_checks_existing_resolution_link() {
     )
     .success();
     provenance(&[
-        "questions",
         "question_code_scores_health",
         "answer",
         "--repo",
@@ -163,14 +158,14 @@ fn cli_answered_question_creation_refuses_proposed_resolution() {
     let dir = setup();
     let repo = dir.path().to_str().unwrap();
     provenance(&[
-        "questions",
+        "question_daily_health_budget",
         "create",
+        "--type",
+        "question",
         "--repo",
         repo,
         "--scope",
         "default",
-        "--id",
-        "question_daily_health_budget",
         "--topic-id",
         "topic_overtime",
         "--question",
@@ -194,7 +189,6 @@ fn cli_answered_question_edit_refuses_proposed_resolution() {
     let dir = setup();
     let repo = dir.path().to_str().unwrap();
     provenance(&[
-        "questions",
         "question_code_scores_health",
         "answer",
         "--repo",
@@ -220,9 +214,7 @@ fn cli_answered_question_edit_refuses_proposed_resolution() {
 fn cli_active_rule_edit_refuses_proposed_resolution() {
     let dir = setup();
     let repo = dir.path().to_str().unwrap();
-    provenance_stdin(&[
-        "rules", "create", "--repo", repo, "--scope", "default", "--stdin",
-    ], r#"{"id":"rule_code_scores_health","statement":"Code scores affect health.","status":"draft","severity":"high","requirement_ids":["req_overtime"],"resolution_ids":["res_code_scores_health"]}"#).success();
+    provenance_stdin(&["api", "rules", "--method", "post", "--input", "-", "--repo", repo, "--scope", "default"], r#"{"id":"rule_code_scores_health","statement":"Code scores affect health.","status":"draft","severity":"high","requirement_ids":["req_overtime"],"resolution_ids":["res_code_scores_health"]}"#).success();
     edit(
         repo,
         "rules",
@@ -233,9 +225,8 @@ fn cli_active_rule_edit_refuses_proposed_resolution() {
     .code(1)
     .stderr(contains(r#""kind":"resolution_not_approved""#));
     provenance(&[
-        "rules",
-        "rule_code_scores_health",
-        "get",
+        "api",
+        "rules/rule_code_scores_health",
         "--repo",
         repo,
         "--scope",
@@ -259,7 +250,6 @@ fn cli_approved_resolution_allows_answer_and_active_rule() {
     )
     .success();
     provenance(&[
-        "questions",
         "question_code_scores_health",
         "answer",
         "--repo",
@@ -275,9 +265,7 @@ fn cli_approved_resolution_allows_answer_and_active_rule() {
     ])
     .success()
     .stdout(contains(r#""status": "answered""#));
-    provenance_stdin(&[
-        "rules", "create", "--repo", repo, "--scope", "default", "--stdin",
-    ], r#"{"id":"rule_code_scores_health","statement":"Code scores affect health.","status":"active","severity":"high","requirement_ids":["req_overtime"],"resolution_ids":["res_code_scores_health"]}"#).success();
+    provenance_stdin(&["api", "rules", "--method", "post", "--input", "-", "--repo", repo, "--scope", "default"], r#"{"id":"rule_code_scores_health","statement":"Code scores affect health.","status":"active","severity":"high","requirement_ids":["req_overtime"],"resolution_ids":["res_code_scores_health"]}"#).success();
 }
 
 #[test]
@@ -292,7 +280,6 @@ fn cli_resolution_cannot_lose_approval_while_it_answers_a_question() {
     )
     .success();
     provenance(&[
-        "questions",
         "question_code_scores_health",
         "answer",
         "--repo",
@@ -408,7 +395,6 @@ fn cli_answer_refuses_each_unapproved_resolution_status() {
         let patch = serde_json::json!({"status":status}).to_string();
         edit(repo, "resolutions", "res_code_scores_health", &patch).success();
         provenance(&[
-            "questions",
             "question_code_scores_health",
             "answer",
             "--repo",
@@ -437,9 +423,7 @@ fn cli_resolution_cannot_lose_approval_while_it_produces_an_active_rule() {
         r#"{"status":"approved"}"#,
     )
     .success();
-    provenance_stdin(&[
-        "rules", "create", "--repo", repo, "--scope", "default", "--stdin",
-    ], r#"{"id":"rule_code_scores_health","statement":"Code scores affect health.","status":"active","severity":"high","requirement_ids":["req_overtime"],"resolution_ids":["res_code_scores_health"]}"#).success();
+    provenance_stdin(&["api", "rules", "--method", "post", "--input", "-", "--repo", repo, "--scope", "default"], r#"{"id":"rule_code_scores_health","statement":"Code scores affect health.","status":"active","severity":"high","requirement_ids":["req_overtime"],"resolution_ids":["res_code_scores_health"]}"#).success();
     edit(
         repo,
         "resolutions",

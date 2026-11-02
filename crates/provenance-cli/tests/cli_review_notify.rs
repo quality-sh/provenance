@@ -266,10 +266,8 @@ fn rapid_page_writes_replay_to_final_state() {
     };
     let mut command = setup.host.cli();
     command.args([
-        "requirements",
-        "req_notify",
-        "document",
-        "get",
+        "api",
+        "requirements/req_notify/document",
         "--format",
         "json",
     ]);

@@ -23,14 +23,14 @@ fn cli_source_requirement_slice_materializes_and_reads_graph() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "sources",
+            "source_schads",
             "create",
+            "--type",
+            "source",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--id",
-            "source_schads",
             "--name",
             "SCHADS Award",
             "--source-type",
@@ -45,14 +45,14 @@ fn cli_source_requirement_slice_materializes_and_reads_graph() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "requirements",
+            "req_schads_overtime",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--id",
-            "req_schads_overtime",
             "--statement",
             "Overtime must follow SCHADS thresholds",
             "--format",
@@ -73,7 +73,6 @@ fn cli_source_requirement_slice_materializes_and_reads_graph() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "requirements",
             "req_schads_overtime",
             "update",
             "--repo",
@@ -92,7 +91,6 @@ fn cli_source_requirement_slice_materializes_and_reads_graph() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "requirements",
             "req_schads_overtime",
             "update",
             "--repo",
