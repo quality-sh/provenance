@@ -57,6 +57,15 @@ pub struct SearchArgs {
     /// Include archived and other terminal records.
     #[arg(long)]
     pub include_terminal: bool,
+    /// Return the Rules bound in this repository-relative source file.
+    #[arg(long, allow_hyphen_values = true)]
+    pub file: Option<String>,
+    /// Put the Rules bound to this symbol first; needs --file.
+    #[arg(long, allow_hyphen_values = true)]
+    pub symbol: Option<String>,
+    /// Put the Rules bound at this line first; needs --file.
+    #[arg(long)]
+    pub line: Option<usize>,
 }
 
 #[derive(Parser)]
