@@ -14,6 +14,7 @@ pub(super) const AUTHORING_ACTOR: &str = "authoring";
 
 impl StateStore {
     /// Opens the review submission of a new record in the same write.
+    #[rule("rule_native_create_opens_review_submission")]
     pub(super) fn open_creation_submission(
         &self,
         created: &ReviewRecord,
@@ -90,7 +91,6 @@ impl StateStore {
             revises: None,
         };
         check_request_size(&input)?;
-        crate::test_probes::at("automatic_submission_before_commit")?;
         let path = shards::proposal_cards_path(&self.layout, record.scope_id());
         self.permitting(&[&path], "*", |store| store.commit_submission(input))?;
         Ok(())

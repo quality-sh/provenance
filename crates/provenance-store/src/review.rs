@@ -71,8 +71,6 @@ pub use decision_input::{
     DecideRecordReview, ReviewFeedback, SubmitRecordReview, WithdrawRecordReview,
 };
 mod automatic_submission;
-#[cfg(test)]
-mod automatic_submission_tests;
 mod decision;
 mod decision_reads;
 mod decision_state;

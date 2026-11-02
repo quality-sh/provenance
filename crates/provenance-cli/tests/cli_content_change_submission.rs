@@ -10,7 +10,7 @@ mod support {
 }
 use support::record_review::{
     accept_current, create_resolution, create_rule, current_submission, data, decide,
-    guarded_update, read,
+    guarded_update, read, submissions,
 };
 use support::review_paths::{create_requirement, init, json_output, provenance};
 
@@ -112,6 +112,7 @@ fn content_change_back_to_the_accepted_content_opens_no_submission() {
         &["--statement", "The system keeps each stored record."],
     );
     assert!(!read(&repo, "rules", "rule_a")["decision"]["pending"].is_null());
+    let before = submissions(&repo, "rule", "rule_a");
 
     guarded_update(
         &repo,
@@ -123,6 +124,38 @@ fn content_change_back_to_the_accepted_content_opens_no_submission() {
     let after = read(&repo, "rules", "rule_a");
     assert!(after["decision"]["pending"].is_null(), "{after}");
     assert!(!after["decision"]["current_acceptance"].is_null());
+    assert_eq!(submissions(&repo, "rule", "rule_a"), before);
+}
+
+/// Runs the porcelain update of one record, without an edit guard.
+fn porcelain_update(repo: &str, id: &str, change: &[&str]) {
+    let mut args = vec![id, "update"];
+    args.extend(change);
+    data(repo, &args);
+}
+
+#[test]
+#[verifies("rule_content_change_opens_review_submission", examples)]
+fn porcelain_updates_open_one_submission_for_each_new_content() {
+    let (_directory, repo) = init();
+    accepted_active_rule(&repo);
+    let accepted = submissions(&repo, "rule", "rule_a");
+
+    porcelain_update(
+        &repo,
+        "rule_a",
+        &["--statement", "The system keeps each stored record."],
+    );
+    assert_eq!(submissions(&repo, "rule", "rule_a"), accepted + 1);
+    assert_pending_at_current_revision(&read(&repo, "rules", "rule_a"), "active");
+
+    // The same content again adds nothing.
+    porcelain_update(
+        &repo,
+        "rule_a",
+        &["--statement", "The system keeps each stored record."],
+    );
+    assert_eq!(submissions(&repo, "rule", "rule_a"), accepted + 1);
 }
 
 #[test]
@@ -147,7 +180,7 @@ fn position_change_to_an_accepted_resolution_opens_a_pending_submission() {
 }
 
 #[test]
-#[verifies("rule_content_change_opens_review_submission", examples)]
+#[verifies("rule_native_create_opens_review_submission", examples)]
 fn creating_a_rule_or_resolution_in_review_opens_its_pending_submission() {
     let (_directory, repo) = init();
     create_requirement(&repo, "req_a");
