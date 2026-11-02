@@ -359,3 +359,62 @@ fn a_word_with_only_unapproved_entries_stays_unapproved_in_any_position() {
         ["bfrobnicate"]
     );
 }
+
+fn rule_one_one_words_with_names(text: &str, technical_names: &[&str]) -> Vec<String> {
+    let names: Vec<String> = technical_names
+        .iter()
+        .map(|name| (*name).to_owned())
+        .collect();
+    check_descriptive_with_dictionary(text, &fixture_dictionary(), &names)
+        .findings
+        .into_iter()
+        .filter(|finding| finding.rule == RuleNumber::OneOne)
+        .map(|finding| text[finding.span.start..finding.span.end].to_owned())
+        .collect()
+}
+
+#[test]
+#[verifies("rule_ste_technical_names_accepted", examples)]
+fn a_technical_name_accepts_its_regular_inflections() {
+    for text in [
+        "Bzorps stay here.",
+        "The bzorps's door opens.",
+        "The registry bzaps the command.",
+        "The registry bzapped the command.",
+        "The registry is bzapping the command.",
+        "The registry bzorplies the command.",
+        "The registry bzorplied the command.",
+    ] {
+        assert_eq!(
+            rule_one_one_words_with_names(text, &["bzorp", "bzap", "bzorply"]),
+            Vec::<String>::new(),
+            "text: {text}"
+        );
+    }
+}
+
+#[test]
+#[verifies("rule_ste_technical_names_accepted", examples)]
+fn the_last_word_of_a_technical_phrase_accepts_its_plural() {
+    assert_eq!(
+        rule_one_one_words_with_names("The aagood bzorps stay.", &["aagood bzorp"]),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        rule_one_one_words_with_names("The bzorps aagood stay.", &["bzorp aagood"]),
+        ["bzorps"]
+    );
+}
+
+#[test]
+#[verifies("rule_ste_technical_names_accepted", examples)]
+fn an_unrelated_unapproved_word_still_gives_a_finding_next_to_an_inflected_name() {
+    assert_eq!(
+        rule_one_one_words_with_names("The bzorps and the bbbad stay.", &["bzorp"]),
+        ["bbbad"]
+    );
+    assert_eq!(
+        rule_one_one_words_with_names("The registry bfrobnicates the bzorps.", &["bzorp"]),
+        ["bfrobnicates"]
+    );
+}

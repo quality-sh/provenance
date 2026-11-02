@@ -55,7 +55,9 @@ pub fn classify(
 
 /// Finds each listed technical name in the text, independent of the
 /// dictionary phrases. A name matches with the dictionary folding: case, the
-/// spaces between words, and a possessive "'s" on the last word.
+/// spaces between words, and a possessive "'s" on the last word. The last
+/// word also matches its regular inflections: the plural of a technical noun
+/// and the regular verb forms of a technical verb.
 #[rule("rule_ste_technical_names_accepted")]
 pub fn technical_name_spans(text: &str, technical_names: &[String]) -> Vec<Span> {
     let names: Vec<Vec<String>> = technical_names
@@ -91,7 +93,11 @@ fn name_matches(text: &str, tokens: &[Token], position: usize, words: &[String])
         let token = &tokens[position + offset];
         let last = offset + 1 == words.len();
         let folded_matches = token.folded == *word
-            || (last && token.folded.strip_suffix("\u{27}s") == Some(word.as_str()));
+            || (last
+                && (token.folded.strip_suffix("\u{27}s") == Some(word.as_str())
+                    || inflection::base_candidates(&token.folded)
+                        .iter()
+                        .any(|(base, _)| base == word)));
         let gap_is_space = offset == 0
             || text[tokens[position + offset - 1].end..token.start]
                 .chars()
