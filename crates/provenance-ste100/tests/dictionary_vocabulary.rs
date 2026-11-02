@@ -73,6 +73,10 @@ fn fixture_dictionary() -> DictionaryImport {
                 DictionaryStatus::Approved,
             ),
             verb("ccfull", &["ccfull"], DictionaryStatus::Unapproved),
+            noun("bzax", &["bzax"], DictionaryStatus::Unapproved),
+            verb("bglint", &["bglint"], DictionaryStatus::Unapproved),
+            noun("bzas", &["bzas"], DictionaryStatus::Unapproved),
+            noun("q", &["q"], DictionaryStatus::Unapproved),
         ],
     }
 }
@@ -268,6 +272,25 @@ fn the_plural_of_an_unapproved_noun_produces_a_finding() {
 
 #[test]
 #[verifies("rule_ste_dictionary_inflected_unapproved_form", examples)]
+fn an_es_plural_and_a_plain_past_produce_findings() {
+    assert_eq!(rule_one_one_words("Bzaxes stay here."), ["Bzaxes"]);
+    assert_eq!(
+        rule_one_one_words("The registry bglinted the command."),
+        ["bglinted"]
+    );
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_inflected_unapproved_form", examples)]
+fn a_double_s_or_a_one_letter_base_is_not_an_inflection() {
+    assert_eq!(rule_one_one_words("The bzass stays."), Vec::<String>::new());
+    assert_eq!(rule_one_one_words("The qs stay."), Vec::<String>::new());
+    assert_eq!(rule_one_one_words("The bzas stays."), ["bzas"]);
+    assert_eq!(rule_one_one_words("The q stays."), ["q"]);
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_inflected_unapproved_form", examples)]
 fn the_plural_of_an_approved_noun_is_approved() {
     assert_eq!(
         category_of("The aawidgets stay.", "aawidgets"),
@@ -343,6 +366,29 @@ fn an_unsettled_word_class_stays_uncertain() {
         ("The tank is ccfull.", "ccfull"),
         ("Ccfull the tank.", "Ccfull"),
     ] {
+        assert_eq!(
+            category_of(text, word),
+            VocabularyCategory::Uncertain,
+            "text: {text}"
+        );
+    }
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_sentence_word_class", examples)]
+fn an_ambiguous_cue_leaves_a_noun_use_uncertain() {
+    for (text, word) in [
+        ("The unit has ccpair.", "ccpair"),
+        ("It is ccpair.", "ccpair"),
+        ("Ccpair of the unit is stable.", "Ccpair"),
+        ("Ccpair in the tank is stable.", "Ccpair"),
+        ("Connect the cable to ccpair.", "ccpair"),
+    ] {
+        assert_eq!(
+            rule_one_one_words(text),
+            Vec::<String>::new(),
+            "text: {text}"
+        );
         assert_eq!(
             category_of(text, word),
             VocabularyCategory::Uncertain,
