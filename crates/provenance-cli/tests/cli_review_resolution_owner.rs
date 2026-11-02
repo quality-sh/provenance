@@ -50,6 +50,7 @@ fn resolution_owner_can_submit_through_the_host() {
     let repo = repository_with_actors(&["reviewer"]);
     create_resolution(repo.path(), Some("shaping_agent"));
     let host = start(repo.path());
+    withdraw_created(&host, Some("shaping_agent"));
     let before = read(&host);
     let (status, result) = submit(&host, Some("shaping_agent"));
     assert_eq!(status, 200, "{result}");
@@ -76,10 +77,24 @@ fn wrong_resolution_submission_owner_leaves_the_record_unchanged() {
     assert_eq!(read(&host), before);
 }
 
+/// The submission that the Resolution create opened.
 fn pending(host: &Host) -> String {
-    let (status, result) = submit(host, Some("shaping_agent"));
+    read(host)["decision"]["pending"]["proposal_id"]
+        .as_str()
+        .unwrap()
+        .to_owned()
+}
+
+/// Withdraws the submission that the Resolution create opened.
+fn withdraw_created(host: &Host, owner: Option<&str>) -> String {
+    let proposal = pending(host);
+    let (status, result) = post(
+        host,
+        &format!("/resolutions/res_reject/submissions/{proposal}/withdraw"),
+        &json!({"actor":"shaping_agent", "declared_by":owner, "reason":"Submit it again."}),
+    );
     assert_eq!(status, 200, "{result}");
-    result["data"]["proposal_id"].as_str().unwrap().to_owned()
+    proposal
 }
 
 /// Implementation aid: the same owner check applies to withdrawal through the real host.
@@ -150,6 +165,7 @@ fn unowned_resolution_can_submit_and_withdraw_without_an_owner() {
     let repo = repository_with_actors(&["reviewer"]);
     create_resolution(repo.path(), None);
     let host = start(repo.path());
+    let created = withdraw_created(&host, None);
     let (status, result) = submit(&host, None);
     assert_eq!(status, 200, "{result}");
     let proposal = result["data"]["proposal_id"].as_str().unwrap();
@@ -161,5 +177,7 @@ fn unowned_resolution_can_submit_and_withdraw_without_an_owner() {
     assert_eq!(status, 200, "{result}");
     let after = read(&host);
     assert!(after["decision"]["pending"].is_null());
-    assert_eq!(after["decision"]["withdrawn"], json!([proposal]));
+    let withdrawn = after["decision"]["withdrawn"].as_array().unwrap();
+    assert_eq!(withdrawn.len(), 2);
+    assert!(withdrawn.contains(&json!(created)) && withdrawn.contains(&json!(proposal)));
 }

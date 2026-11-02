@@ -5,7 +5,7 @@ mod review_host_support;
 
 use provenance_macros::verifies;
 use review_host_support::{
-    events::{source, Socket},
+    events::{source, without_submissions, Socket},
     repository, request, response, start, Host,
 };
 use serde_json::{json, Value};
@@ -59,7 +59,7 @@ fn a_repeated_discussion_status_sends_no_change_event() {
     let next = socket.frame();
     assert_eq!(next["type"], "changed", "{next}");
     assert_eq!(
-        next["scopes"],
+        without_submissions(&next["scopes"]),
         json!([{"scope":"default", "records":[{"kind":"source", "id":"source_after"}], "families":["source"]}])
     );
     socket.quiet();

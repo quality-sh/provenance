@@ -7,7 +7,7 @@ mod support {
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 use support::records::Repository;
-use support::resource_http::{call, call_with_headers, host};
+use support::resource_http::{call, host};
 
 const PARENT: &str = "/requirements/req_shared/discussions";
 
@@ -88,39 +88,14 @@ async fn typed_spec_apply_deletes_the_discussions_of_the_records_it_deletes() {
     .await;
     assert_eq!(status, 200, "{applied}");
     let (source, requirement) = (resource_id(&applied, "src"), resource_id(&applied, "drop"));
-    // The Resolution is deleted by cascade with its Requirement.
-    let (status, created) = call(
-        &host,
-        "POST",
-        "/resolutions",
-        Some(json!({"data":{
-            "id":"res_drop", "title":"Stop", "requirement_ids":[requirement],
-            "position":"The host stops.", "rationale":"The host stops.",
-            "status":"proposed", "supersedes":[], "inputs":[]
-        }})),
-    )
-    .await;
-    assert_eq!(status, 200, "{created}");
-    start(
-        &host,
-        &format!("/sources/{source}/discussions"),
-        json!("spec://fx"),
-    )
-    .await;
-    let on_resolution = start(&host, "/resolutions/res_drop/discussions", Value::Null).await;
-    let resolve = json!({"data":{"actor":"reviewer", "declared_by":null, "status":"resolved"}});
-    let (status, resolved) = call_with_headers(
-        &host,
-        "PATCH",
-        &format!(
-            "/resolutions/res_drop/discussions/{}",
-            on_resolution["discussion_id"].as_str().unwrap()
-        ),
-        Some(resolve),
-        &[("if-match", "\"1\"")],
-    )
-    .await;
-    assert_eq!(status, 200, "{resolved}");
+    // A native create opens a review submission, and typed-spec apply does not
+    // delete a record that has one, so this graph holds typed records only.
+    for parent in [
+        format!("/sources/{source}"),
+        format!("/requirements/{requirement}"),
+    ] {
+        start(&host, &format!("{parent}/discussions"), json!("spec://fx")).await;
+    }
     let other = start(&host, PARENT, Value::Null).await;
 
     let (status, applied) = call(
@@ -131,12 +106,11 @@ async fn typed_spec_apply_deletes_the_discussions_of_the_records_it_deletes() {
     )
     .await;
     assert_eq!(status, 200, "{applied}");
-    assert_eq!(applied["data"]["deleted"], 3, "{applied}");
-    assert_eq!(
-        applied["data"]["cascade"],
-        json!([{"id":"res_drop", "kind":"resolution", "state":"deleted"}])
-    );
-    for path in [format!("/sources/{source}"), "/resolutions/res_drop".into()] {
+    assert_eq!(applied["data"]["deleted"], 2, "{applied}");
+    for path in [
+        format!("/sources/{source}"),
+        format!("/requirements/{requirement}"),
+    ] {
         let (status, read) = call(&host, "GET", &path, None).await;
         assert_eq!(status, 404, "{path}: {read}");
     }

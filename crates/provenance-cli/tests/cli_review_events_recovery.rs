@@ -3,7 +3,7 @@ mod review_host_support;
 
 use provenance_store::layout::ProvenanceLayout;
 use review_host_support::{
-    events::{source, source_before_host, Socket},
+    events::{source, source_before_host, without_submissions, Socket},
     repository, request, response, start,
 };
 use serde_json::Value;
@@ -134,7 +134,7 @@ async fn failed_snapshot_resets_disconnects_and_recovers_on_a_file_event() {
     );
     source(&host, repo.path(), "source_after_repair");
     assert_eq!(
-        recovered.frame()["scopes"][0]["records"][0]["id"],
+        without_submissions(&recovered.frame()["scopes"])[0]["records"][0]["id"],
         "source_after_repair"
     );
 }
@@ -179,7 +179,7 @@ async fn removed_state_resets_then_replacement_reattaches_to_current_records() {
     );
     source(&host, repo.path(), "source_after_replacement");
     assert_eq!(
-        recovered.frame()["scopes"][0]["records"][0]["id"],
+        without_submissions(&recovered.frame()["scopes"])[0]["records"][0]["id"],
         "source_after_replacement"
     );
 }

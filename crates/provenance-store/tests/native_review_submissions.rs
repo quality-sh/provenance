@@ -142,7 +142,7 @@ fn accept_current(store: &StateStore, scope: &ScopeId, kind: NodeType, record: &
         .unwrap();
 }
 
-fn update_rule(store: &StateStore, change: Value) -> anyhow::Result<provenance_core::Rule> {
+fn update_rule(store: &StateStore, change: &Value) -> anyhow::Result<provenance_core::Rule> {
     let mut request = json!({"scope_id":"default", "id":"rule_a"});
     request
         .as_object_mut()
@@ -222,13 +222,13 @@ fn content_change_to_a_never_submitted_rule_opens_one_submission() {
     assert_eq!(submissions(&store, &scope, NodeType::Rule, "rule_a"), 0);
 
     let owner = json!("spec://storage");
-    update_rule(&store, json!({"declared_by":owner, "status":"active"})).unwrap();
+    update_rule(&store, &json!({"declared_by":owner, "status":"active"})).unwrap();
     assert_eq!(submissions(&store, &scope, NodeType::Rule, "rule_a"), 0);
 
     let guard = etag(&store, &scope, NodeType::Rule, "rule_a");
     update_rule(
         &store,
-        json!({"declared_by":owner, "expected_etag":guard,
+        &json!({"declared_by":owner, "expected_etag":guard,
                "statement":"The system keeps each stored record."}),
     )
     .unwrap();
@@ -238,7 +238,7 @@ fn content_change_to_a_never_submitted_rule_opens_one_submission() {
 
     update_rule(
         &store,
-        json!({"declared_by":owner, "statement":"The system keeps each stored record."}),
+        &json!({"declared_by":owner, "statement":"The system keeps each stored record."}),
     )
     .unwrap();
     assert_eq!(submissions(&store, &scope, NodeType::Rule, "rule_a"), 1);
@@ -321,7 +321,7 @@ fn two_guarded_rule_writes_with_one_etag_publish_one_change_and_one_submission()
             let (store, guard, barrier) = (&store, &guard, &barrier);
             threads.spawn(move || {
                 barrier.wait();
-                update_rule(store, json!({"expected_etag":guard, "statement":text}))
+                update_rule(store, &json!({"expected_etag":guard, "statement":text}))
             })
         });
         writers.map(|writer| writer.join().unwrap())
