@@ -66,6 +66,13 @@ fn fixture_dictionary() -> DictionaryImport {
             noun("CCWINS", &["CCWINS"], DictionaryStatus::Approved),
             noun("CCPAIR", &["CCPAIR"], DictionaryStatus::Approved),
             verb("ccpair", &["ccpair"], DictionaryStatus::Unapproved),
+            entry(
+                "CCFULL",
+                &["CCFULL"],
+                PartOfSpeech::Adjective,
+                DictionaryStatus::Approved,
+            ),
+            verb("ccfull", &["ccfull"], DictionaryStatus::Unapproved),
         ],
     }
 }
@@ -332,6 +339,9 @@ fn an_unsettled_word_class_stays_uncertain() {
         ("The bbbad ccpair stays.", "ccpair"),
         ("Stop, ccpair here.", "ccpair"),
         ("The ccboth is open.", "ccboth"),
+        ("Ccpair output stops.", "Ccpair"),
+        ("The tank is ccfull.", "ccfull"),
+        ("Ccfull the tank.", "Ccfull"),
     ] {
         assert_eq!(
             category_of(text, word),

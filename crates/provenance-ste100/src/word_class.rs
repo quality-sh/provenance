@@ -42,8 +42,9 @@ const AUXILIARY_CUES: &[&str] = &[
 
 /// Guesses the word class of the token at `position` from the word before it.
 ///
-/// A token at the start of a sentence is an imperative verb, except for a
-/// form that ends in "s". The guess is `None` when no cue settles it.
+/// A token at the start of a sentence is an imperative verb when an article,
+/// a determiner or a preposition follows it, except for a form that ends in
+/// "s". The guess is `None` when no cue settles it.
 #[rule("rule_ste_dictionary_sentence_word_class")]
 pub fn guess(
     text: &str,
@@ -62,7 +63,11 @@ pub fn guess(
 
     if first_in_sentence {
         let determinate = sentence.is_some_and(|sentence| !sentence.indeterminate);
-        return (determinate && !ends_in_s).then_some(WordClass::Verb);
+        let object_follows = tokens.get(position + 1).is_some_and(|next| {
+            text[token.end..next.start].chars().all(char::is_whitespace)
+                && NOUN_CUES.contains(&next.folded.as_str())
+        });
+        return (determinate && !ends_in_s && object_follows).then_some(WordClass::Verb);
     }
     let prior = prior?;
     if !text[prior.end..token.start]

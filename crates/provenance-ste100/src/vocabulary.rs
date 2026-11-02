@@ -286,14 +286,17 @@ fn derives(ending: Inflection, (part_of_speech, status): EntryMatch) -> bool {
 }
 
 /// Gives the category of a word. When the word has approved and unapproved
-/// entries, the word class from the sentence picks the entries. A word class
-/// with no entry, or no word class, leaves the word uncertain.
+/// entries, and each entry is a noun or a verb, the word class from the
+/// sentence picks the entries. Otherwise the word stays uncertain.
 fn settle(
     matches: &[EntryMatch],
     guess: impl FnOnce() -> Option<word_class::WordClass>,
 ) -> VocabularyCategory {
     let category = status_category(matches);
-    if category != VocabularyCategory::Uncertain {
+    let noun_or_verb = matches.iter().all(|(part_of_speech, _)| {
+        matches!(part_of_speech, PartOfSpeech::Noun | PartOfSpeech::Verb)
+    });
+    if category != VocabularyCategory::Uncertain || !noun_or_verb {
         return category;
     }
     let Some(class) = guess() else {
