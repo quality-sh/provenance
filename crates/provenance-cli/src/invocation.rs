@@ -2,11 +2,11 @@ use crate::{catalog_cli, cli::Cli, handlers};
 use clap::{CommandFactory as _, FromArgMatches as _, Parser as _};
 use provenance_cli::porcelain;
 use provenance_cli::repo_context::RepoContext;
-use provenance_core::protocol::{SearchQuery, QUERY_DEFAULT_LIMIT};
-use provenance_core::{NodeType, SDK_PROTOCOL_VERSION};
+use provenance_core::NodeType;
 use provenance_macros::rule;
 use provenance_porcelain::action::{validate_target, Action};
 use provenance_porcelain::get::View;
+use provenance_porcelain::search::SearchInput;
 
 mod api;
 mod discussion;
@@ -287,17 +287,21 @@ impl SearchArgs {
             .ok_or_else(|| {
                 anyhow::anyhow!("the root search query does not declare exclude_terminal")
             })?;
-        let query = SearchQuery {
-            protocol_version: Some(SDK_PROTOCOL_VERSION),
-            cursor: self.cursor,
-            exclude_terminal: if self.include_terminal {
-                crate::read_policy::exclude_terminal(true)
-            } else {
-                default_exclude_terminal
-            },
+        // A file search returns every bound Rule, so only a text search takes the default.
+        let exclude_terminal = if self.include_terminal {
+            Some(crate::read_policy::exclude_terminal(true))
+        } else {
+            self.file.is_none().then_some(default_exclude_terminal)
+        };
+        let query = SearchInput {
             text: self.text,
             node_types: self.kind,
-            limit: self.limit.unwrap_or(QUERY_DEFAULT_LIMIT),
+            exclude_terminal,
+            cursor: self.cursor,
+            limit: self.limit,
+            file: self.file,
+            symbol: self.symbol,
+            line: self.line,
         };
         porcelain::dispatch_search(
             &self.common.repo,

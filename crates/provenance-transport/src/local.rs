@@ -88,6 +88,7 @@ impl HostAccess for LocalRepository {
         [
             <catalog::ResolveRecord as catalog::Operation>::NAME,
             <catalog::Search as catalog::Operation>::NAME,
+            <catalog::ResolveSymbol as catalog::Operation>::NAME,
             <catalog::Trace as catalog::Operation>::NAME,
             <catalog::Impact as catalog::Operation>::NAME,
             <catalog::GetReviewedResource as catalog::Operation>::NAME,

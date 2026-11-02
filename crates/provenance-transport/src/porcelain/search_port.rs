@@ -1,8 +1,8 @@
 use provenance_core::{
-    protocol::{failure::OperationError, SearchQuery},
+    protocol::{failure::OperationError, ResolveSymbolQuery, SearchQuery},
     NodeType,
 };
-use provenance_porcelain::search::{PortFuture, SearchError, SearchPort};
+use provenance_porcelain::search::{PortFuture, SearchError, SearchPort, SymbolFuture};
 use provenance_store::operations::catalog::{self, Operation as _};
 
 /// The canonical typed search operation with host kind grants applied.
@@ -38,6 +38,18 @@ impl SearchPort for HostSearchPort {
                 .map_err(|error| operation_error(&error))
         })
     }
+
+    fn resolve_symbol(&self, request: ResolveSymbolQuery) -> SymbolFuture<'_> {
+        Box::pin(async move {
+            if !permitted_node_types(&self.host).contains(&NodeType::Rule) {
+                return Err(SearchError::AccessDenied);
+            }
+            self.host
+                .invoke::<catalog::ResolveSymbol>(request, crate::Invocation::native())
+                .await
+                .map_err(|error| operation_error(&error))
+        })
+    }
 }
 
 fn permitted_node_types(host: &crate::StatementHost) -> Vec<NodeType> {
@@ -61,9 +73,10 @@ fn permitted_node_types(host: &crate::StatementHost) -> Vec<NodeType> {
         })
 }
 
-fn operation_error(
-    error: &OperationError<<catalog::Search as catalog::Operation>::Failure>,
-) -> SearchError {
+fn operation_error<F>(error: &OperationError<F>) -> SearchError
+where
+    OperationError<F>: std::fmt::Display + serde::Serialize,
+{
     let message = error.to_string();
     let detail =
         serde_json::to_value(error).unwrap_or_else(|_| serde_json::json!({"kind":"internal"}));

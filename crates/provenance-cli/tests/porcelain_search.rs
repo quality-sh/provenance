@@ -240,3 +240,198 @@ fn search_help_is_available_without_a_repository() {
         assert!(help.contains(option), "{help}");
     }
 }
+
+fn rule(repo: &str, id: &str, statement: &str, status: &str) {
+    success(&[
+        "rules",
+        "create",
+        "--repo",
+        repo,
+        "--id",
+        id,
+        "--requirement-id",
+        "req_search",
+        "--statement",
+        statement,
+        "--status",
+        status,
+        "--severity",
+        "medium",
+    ]);
+}
+
+/// A repository with two Rules bound in `code.rs`: one to `pay`, one to `other`.
+fn seed_code(repo: &str) {
+    seed(repo);
+    rule(
+        repo,
+        "rule_pay",
+        "Pay overtime after the threshold.",
+        "active",
+    );
+    rule(repo, "rule_other", "Other pay rule.", "deprecated");
+    std::fs::write(
+        std::path::Path::new(repo).join("code.rs"),
+        concat!(
+            "#[rule(\"rule_other\")]\n",
+            "fn other() {}\n",
+            "#[rule(\"rule_pay\")]\n",
+            "fn pay() {}\n",
+            "#[verifies(\"rule_pay\", examples)]\n",
+            "fn checks_pay() {}\n",
+        ),
+    )
+    .unwrap();
+}
+
+fn file_search(repo: &str, extra: &[&str]) -> Value {
+    let mut arguments = vec!["search", "--repo", repo, "--file", "code.rs"];
+    arguments.extend_from_slice(extra);
+    arguments.extend_from_slice(&["--format", "json"]);
+    json(&arguments)
+}
+
+#[test]
+#[verifies("rule_search_file_returns_bound_rules", examples)]
+fn file_search_returns_bound_rules_symbol_first_like_resolve_symbol() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_str().unwrap();
+    seed_code(repo);
+
+    let page = file_search(repo, &["--symbol", "pay"]);
+    assert_eq!(ids(&page), ["rule_pay", "rule_other"]);
+    assert_eq!(page["operation"], "resolve-symbol");
+    assert!(page["stamp"].is_object());
+    assert_eq!(page["file"], "code.rs");
+    assert_eq!(page["symbol"], "pay");
+    assert_eq!(page["limit"], 50);
+    assert_eq!(page["has_more"], false);
+
+    let resolved = json(&[
+        "rules",
+        "resolve-symbol",
+        "--repo",
+        repo,
+        "--file",
+        "code.rs",
+        "--symbol",
+        "pay",
+        "--format",
+        "json",
+    ]);
+    let data = &resolved["data"];
+    assert_eq!(page["nodes"], data["items"]);
+    assert_eq!(page["matches"], data["matches"]);
+    assert_eq!(page["file"], data["file"]);
+    assert_eq!(page["symbol"], data["symbol"]);
+
+    let readable = String::from_utf8(
+        success(&[
+            "search", "--repo", repo, "--file", "code.rs", "--symbol", "pay",
+        ])
+        .stdout,
+    )
+    .unwrap();
+    assert!(
+        readable
+            .starts_with("search: 2 returned for code.rs symbol pay\n- rule rule_pay · active\n"),
+        "{readable}"
+    );
+    assert!(
+        readable.contains("  · implementation line 3 pay (symbol match)\n"),
+        "{readable}"
+    );
+    assert!(
+        readable.contains("  · verification line 5 checks_pay examples (file match)\n"),
+        "{readable}"
+    );
+    assert!(
+        readable.contains("- rule rule_other · deprecated\n"),
+        "{readable}"
+    );
+
+    let terminal = file_search(repo, &["--symbol", "pay", "--include-terminal"]);
+    assert_eq!(terminal["nodes"], page["nodes"]);
+}
+
+#[test]
+#[verifies("rule_search_file_returns_bound_rules", examples)]
+#[verifies("rule_porcelain_output_reports_bounds", examples)]
+fn file_search_pages_continue_with_the_cursor() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_str().unwrap();
+    seed_code(repo);
+
+    let first = file_search(repo, &["--symbol", "pay", "--limit", "1"]);
+    assert_eq!(ids(&first), ["rule_pay"]);
+    assert_eq!(first["has_more"], true);
+    let cursor = first["next_cursor"].as_str().unwrap();
+    let second = file_search(
+        repo,
+        &["--symbol", "pay", "--limit", "1", "--cursor", cursor],
+    );
+    assert_eq!(ids(&second), ["rule_other"]);
+    assert_eq!(second["has_more"], false);
+}
+
+#[test]
+#[verifies("rule_search_file_refuses_other_filters", examples)]
+fn file_search_refuses_other_filters_and_a_symbol_without_a_file() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_str().unwrap();
+    seed_code(repo);
+
+    for (arguments, field) in [
+        (&["--file", "code.rs", "--text", "pay"][..], "text"),
+        (
+            &["--file", "code.rs", "--kind", "requirement"][..],
+            "node_types",
+        ),
+        (&["--symbol", "pay"][..], "symbol"),
+        (&["--kind", "rule", "--line", "3"][..], "line"),
+    ] {
+        let mut command = vec!["search", "--repo", repo];
+        command.extend_from_slice(arguments);
+        let output = run(&command);
+        assert!(!output.status.success(), "{arguments:?}");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains(&format!("{field}: ")), "{stderr}");
+        assert!(
+            stderr.contains("provenance search --file <path>"),
+            "{stderr}"
+        );
+    }
+}
+
+// Unbound characterization test: no Rule states that code lookup keeps the text
+// search output the same. This test keeps the existing JSON keys of text search.
+#[test]
+fn text_search_json_has_no_code_lookup_fields() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_str().unwrap();
+    seed(repo);
+
+    let page = json(&[
+        "search", "--repo", repo, "--text", "shared", "--format", "json",
+    ]);
+    let mut keys = page
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect::<Vec<_>>();
+    keys.sort_unstable();
+    assert_eq!(
+        keys,
+        [
+            "has_more",
+            "limit",
+            "next_cursor",
+            "nodes",
+            "operation",
+            "protocol_version",
+            "stamp"
+        ]
+    );
+    assert_eq!(page["operation"], "search");
+}

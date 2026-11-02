@@ -1,5 +1,8 @@
 use assert_cmd::Command;
 use provenance_macros::verifies;
+use provenance_porcelain::check::{
+    BindingContext, BindingPolicy, Category, CategoryRun, CheckInput, PortFuture, Refusal,
+};
 use serde_json::json;
 use std::sync::Arc;
 
@@ -8,31 +11,23 @@ fn provenance() -> Command {
 }
 
 fn init_with_source(repo: &str) {
+    let init = "init --scope default --path-prefix . --path";
     provenance()
-        .args([
-            "init",
-            "--path",
-            repo,
-            "--scope",
-            "default",
-            "--path-prefix",
-            ".",
-        ])
+        .args(init.split(' '))
+        .arg(repo)
         .assert()
         .success();
-    provenance()
-        .args([
-            "sources",
-            "create",
-            "--repo",
-            repo,
-            "--id",
-            "source_live_inventory",
-            "--name",
-            "Live inventory",
-        ])
-        .assert()
-        .success();
+    let create = "sources create --id source_live_inventory --name";
+    let mut cli = provenance();
+    cli.args(create.split(' ')).arg("Live inventory");
+    cli.args(["--repo", repo]).assert().success();
+}
+
+/// The MCP host that the CLI builds for one local repository.
+fn local_host(path: &std::path::Path) -> provenance_transport::StatementHost {
+    let repository = provenance_store::repository::Repository::open(path, "default").unwrap();
+    let access = provenance_store::operations::LocalRepository::bind(repository, "native");
+    provenance_transport::StatementHost::with_access(Arc::new(access.unwrap()))
 }
 
 async fn assert_get_readable(
@@ -92,35 +87,25 @@ async fn assert_check_readable(
 struct EmptyCheckPort;
 
 impl provenance_porcelain::check::CheckPort for EmptyCheckPort {
-    fn run<'a>(
-        &'a self,
-        category: provenance_porcelain::check::Category,
-        _: Option<&'a str>,
-    ) -> provenance_porcelain::check::PortFuture<'a> {
+    fn run<'a>(&'a self, category: Category, _: Option<&'a str>) -> PortFuture<'a> {
         Box::pin(async move {
             Ok(match category {
-                provenance_porcelain::check::Category::Graph => {
-                    provenance_porcelain::check::CategoryRun::Graph {
-                        findings: Vec::new(),
-                        refusal: provenance_porcelain::check::Refusal::None,
-                    }
-                }
-                provenance_porcelain::check::Category::Statements => {
-                    provenance_porcelain::check::CategoryRun::Statements {
-                        findings: Vec::new(),
-                        context: None,
-                        refusal: provenance_porcelain::check::Refusal::None,
-                    }
-                }
-                provenance_porcelain::check::Category::Bindings => {
-                    provenance_porcelain::check::CategoryRun::Bindings {
-                        findings: Vec::new(),
-                        context: provenance_porcelain::check::BindingContext {
-                            policy: provenance_porcelain::check::BindingPolicy::Warning,
-                        },
-                        refusal: provenance_porcelain::check::Refusal::None,
-                    }
-                }
+                Category::Graph => CategoryRun::Graph {
+                    findings: Vec::new(),
+                    refusal: Refusal::None,
+                },
+                Category::Statements => CategoryRun::Statements {
+                    findings: Vec::new(),
+                    context: None,
+                    refusal: Refusal::None,
+                },
+                Category::Bindings => CategoryRun::Bindings {
+                    findings: Vec::new(),
+                    context: BindingContext {
+                        policy: BindingPolicy::Warning,
+                    },
+                    refusal: Refusal::None,
+                },
             })
         })
     }
@@ -133,13 +118,7 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_string_lossy().into_owned();
     init_with_source(&repo);
-    let access = provenance_store::operations::LocalRepository::bind(
-        provenance_store::repository::Repository::open(directory.path(), "default").unwrap(),
-        "native",
-    )
-    .unwrap();
-    let host = provenance_transport::StatementHost::with_access(Arc::new(access))
-        .with_check_port(Arc::new(EmptyCheckPort));
+    let host = local_host(directory.path()).with_check_port(Arc::new(EmptyCheckPort));
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
@@ -244,12 +223,7 @@ async fn mcp_get_failures_are_the_cli_json_refusals() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_string_lossy().into_owned();
     init_with_source(&repo);
-    let access = provenance_store::operations::LocalRepository::bind(
-        provenance_store::repository::Repository::open(directory.path(), "default").unwrap(),
-        "native",
-    )
-    .unwrap();
-    let host = provenance_transport::StatementHost::with_access(Arc::new(access));
+    let host = local_host(directory.path());
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
@@ -278,11 +252,93 @@ async fn mcp_get_failures_are_the_cli_json_refusals() {
     server.await.unwrap().cancel().await.unwrap();
 }
 
+/// Runs the CLI on `repo` with the arguments in `command`, split on spaces, then `extra`.
+fn cli(repo: &str, command: &str, extra: &[&str]) -> std::process::Output {
+    let mut cli = provenance();
+    cli.args(command.split(' '))
+        .args(extra)
+        .args(["--repo", repo]);
+    cli.output().unwrap()
+}
+
+/// A repository where `code.rs` binds `rule_pay` to `pay` and `rule_other` to `other`.
+fn init_with_bound_code(repo: &str) {
+    init_with_source(repo);
+    let statement = ["--statement", "Shared needle requirement."];
+    let created = cli(repo, "requirements create --id req_pay", &statement);
+    assert!(created.status.success());
+    for (id, statement, status) in [
+        ("rule_pay", "Pay overtime after the threshold.", "active"),
+        ("rule_other", "Other pay rule.", "deprecated"),
+    ] {
+        let command = format!(
+            "rules create --id {id} --requirement-id req_pay --severity medium --status {status}"
+        );
+        let created = cli(repo, &command, &["--statement", statement]);
+        assert!(created.status.success());
+    }
+    let code = "#[rule(\"rule_other\")]\nfn other() {}\n#[rule(\"rule_pay\")]\nfn pay() {}\n#[verifies(\"rule_pay\", examples)]\nfn checks_pay() {}\n";
+    std::fs::write(std::path::Path::new(repo).join("code.rs"), code).unwrap();
+}
+
+#[tokio::test]
+#[verifies("rule_search_file_same_on_cli_and_mcp", examples)]
+async fn cli_and_mcp_file_search_return_the_same_result() {
+    use rmcp::{model::CallToolRequestParams, ServiceExt as _};
+
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_string_lossy().into_owned();
+    init_with_bound_code(&repo);
+    let host = local_host(directory.path());
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+    let tools = client.list_all_tools().await.unwrap();
+    let search = tools.iter().find(|tool| tool.name == "search").unwrap();
+    for field in ["file", "symbol", "line"] {
+        assert!(search.input_schema["properties"][field].is_object());
+    }
+    // The search schemas are generated as JSON Schema 2020-12 and sent without `$schema`.
+    let output = json!(search.output_schema.as_ref().unwrap());
+    let validator = jsonschema::draft202012::new(&output).unwrap();
+    let call = |arguments: serde_json::Value| {
+        let arguments = arguments.as_object().unwrap().clone();
+        client.call_tool(CallToolRequestParams::new("search").with_arguments(arguments))
+    };
+
+    let lookup = "search --file code.rs --symbol pay";
+    let cli_json = cli(&repo, lookup, &["--format", "json"]);
+    assert!(cli_json.status.success());
+    let cli_json: serde_json::Value = serde_json::from_slice(&cli_json.stdout).unwrap();
+    let cli_text = cli(&repo, lookup, &[]);
+    let mcp = call(json!({"file":"code.rs","symbol":"pay"})).await;
+    let mcp = mcp.unwrap();
+    assert_ne!(mcp.is_error, Some(true), "{mcp:?}");
+    let structured = mcp.structured_content.as_ref().unwrap();
+    assert_eq!(&cli_json, structured);
+    assert_eq!(cli_json["nodes"][0]["id"], "rule_pay");
+    assert!(validator.is_valid(structured), "{structured}");
+    let cli_text = String::from_utf8(cli_text.stdout).unwrap();
+    assert_eq!(cli_text.trim_end(), mcp.content[0].as_text().unwrap().text);
+
+    let cli_refusal = cli(&repo, "search --symbol pay", &[]);
+    assert!(!cli_refusal.status.success());
+    let mcp_refusal = call(json!({"symbol":"pay"})).await.unwrap();
+    assert_eq!(mcp_refusal.is_error, Some(true), "{mcp_refusal:?}");
+    let error = &mcp_refusal.structured_content.as_ref().unwrap()["error"];
+    let message = error["message"].as_str().unwrap();
+    assert!(message.contains("search --file <path>"), "{message}");
+    let cli_message = String::from_utf8(cli_refusal.stderr).unwrap();
+    assert_eq!(cli_message.trim_end(), format!("Error: {message}"));
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}
+
 #[test]
 #[verifies("rule_porcelain_check_selector_union", examples)]
 fn live_cli_and_mcp_check_selectors_keep_shared_semantics() {
     let cli = provenance_cli::porcelain::check_input_from_selectors(true, false, true, None);
-    let mcp: provenance_porcelain::check::CheckInput = serde_json::from_value(json!({
+    let mcp: CheckInput = serde_json::from_value(json!({
         "categories": ["graph", "bindings"]
     }))
     .unwrap();
@@ -300,14 +356,10 @@ fn live_cli_and_mcp_check_statement_fields_produce_the_same_input() {
         false,
         Some(statement.to_owned()),
     );
-    let mcp: provenance_porcelain::check::CheckInput =
-        serde_json::from_value(json!({"statement": statement})).unwrap();
+    let mcp: CheckInput = serde_json::from_value(json!({"statement": statement})).unwrap();
 
     assert_eq!(cli, mcp);
-    assert_eq!(
-        cli.categories(),
-        [provenance_porcelain::check::Category::Statements]
-    );
+    assert_eq!(cli.categories(), [Category::Statements]);
 }
 
 #[test]

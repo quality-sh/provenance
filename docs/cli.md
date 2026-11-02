@@ -42,7 +42,7 @@ provenance <collection> list
 provenance <collection> create [scalar flags | --stdin]
 provenance <collection> search --text <text> [--limit <count>] [--cursor <cursor>]
 provenance rules stale --base <commit> [--head <commit>]
-provenance rules resolve-symbol --file <path> [--symbol <name>] [--line <line>]
+provenance search --file <path> [--symbol <name>] [--line <line>]
 ```
 
 The writable collections are `sources`, `requirements`, `resolutions`,

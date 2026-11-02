@@ -93,23 +93,11 @@ pub(crate) fn search_is_available(host: &crate::StatementHost) -> bool {
 }
 
 pub(crate) fn search_tool() -> rmcp::model::Tool {
-    use provenance_store::operations::catalog;
-    let mut input = provenance_contract::operation_request_schema::<catalog::Search>();
-    input.as_object_mut().map(|object| object.remove("$schema"));
-    if let Some(properties) = input.get_mut("properties").and_then(Value::as_object_mut) {
-        properties.remove("protocol_version");
-        if let Some(exclude_terminal) = properties.get_mut("exclude_terminal") {
-            exclude_terminal["default"] = Value::Bool(true);
-        }
-    }
-    if let Some(required) = input.get_mut("required").and_then(Value::as_array_mut) {
-        required.retain(|field| field != "protocol_version");
-    }
     crate::mcp_surface::tool(
         "search",
         provenance_porcelain::guidance::SEARCH_DESCRIPTION,
-        input,
-        provenance_contract::operation_success_schema::<catalog::Search>(),
+        provenance_porcelain::search::input_schema(),
+        provenance_porcelain::search::output_schema(),
         crate::mcp_surface::SchemaDeclaration::Remove,
     )
 }
@@ -179,25 +167,22 @@ pub(crate) async fn call_get(
 }
 
 /// Returns compact readable content and the canonical structured search result.
+#[provenance_macros::rule("rule_search_file_same_on_cli_and_mcp")]
 pub(crate) async fn call_search(
     host: &crate::StatementHost,
-    mut arguments: serde_json::Map<String, Value>,
+    arguments: serde_json::Map<String, Value>,
 ) -> CallToolResult {
-    arguments
-        .entry("exclude_terminal")
-        .or_insert(Value::Bool(true));
-    let Ok(mut request) =
-        serde_json::from_value::<provenance_core::protocol::SearchQuery>(Value::Object(arguments))
-    else {
+    let Ok(input) = serde_json::from_value::<provenance_porcelain::search::SearchInput>(
+        Value::Object(arguments),
+    ) else {
         return get_error("invalid_options", "unsupported search options");
     };
-    request.protocol_version = Some(provenance_core::SDK_PROTOCOL_VERSION);
     let service = host.porcelain().search();
-    match service.search(request).await {
-        Ok(response) => {
-            let summary = provenance_porcelain::search::render_readable(&response);
+    match service.search(input).await {
+        Ok(outcome) => {
+            let summary = provenance_porcelain::search::render_readable(&outcome);
             let mut result = CallToolResult::structured(
-                serde_json::to_value(response).expect("search result is JSON"),
+                serde_json::to_value(outcome).expect("search result is JSON"),
             );
             result.content = vec![ContentBlock::text(summary)];
             result
@@ -211,6 +196,9 @@ fn search_error(error: &provenance_porcelain::search::SearchError) -> CallToolRe
     let detail = match error {
         SearchError::InvalidOptions { .. } => serde_json::json!({
             "kind":"invalid_input", "field":null, "reason":"invalid_value"
+        }),
+        SearchError::InvalidCodeLookup { field, .. } => serde_json::json!({
+            "kind":"invalid_input", "field":format!("request.{field}"), "reason":"invalid_value"
         }),
         SearchError::AccessDenied => serde_json::json!({"kind":"access_denied"}),
         SearchError::Operation { detail, .. } => detail.clone(),
