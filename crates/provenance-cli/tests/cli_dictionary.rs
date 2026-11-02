@@ -6,6 +6,8 @@ mod import_command;
 mod missing_index;
 #[path = "cli_dictionary/status.rs"]
 mod status;
+#[path = "cli_dictionary/supplied_statement.rs"]
+mod supplied_statement;
 #[path = "cli_dictionary/support.rs"]
 mod support;
 #[path = "cli_dictionary/technical_names.rs"]
