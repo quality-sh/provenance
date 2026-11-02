@@ -1,8 +1,9 @@
 use provenance_macros::verifies;
+use provenance_porcelain::check::{
+    BindingContext, BindingPolicy, Category, CategoryRun, CheckPort, Finding, PortFuture, Refusal,
+};
 use serde_json::json;
-use std::sync::Arc;
-#[cfg(feature = "test-fixture")]
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "test-fixture")]
 #[allow(dead_code)]
@@ -289,34 +290,41 @@ async fn mcp_get_keeps_permitted_kinds_without_probing_forbidden_kinds() {
 
 struct CheckFixturePort;
 
-impl provenance_porcelain::check::CheckPort for CheckFixturePort {
-    fn run<'a>(
-        &'a self,
-        category: provenance_porcelain::check::Category,
-        _: Option<&'a str>,
-    ) -> provenance_porcelain::check::PortFuture<'a> {
+impl CheckPort for CheckFixturePort {
+    fn run<'a>(&'a self, category: Category, _: Option<&'a str>) -> PortFuture<'a> {
         Box::pin(async move {
             let findings = match category {
-                provenance_porcelain::check::Category::Statements => {
-                    vec![provenance_porcelain::check::Finding::new(
-                        "statement finding",
-                    )]
-                }
-                provenance_porcelain::check::Category::Graph
-                | provenance_porcelain::check::Category::Bindings => Vec::new(),
+                Category::Statements => vec![Finding::new("statement finding")],
+                Category::Graph | Category::Bindings => Vec::new(),
             };
             Ok(category_run(category, findings))
         })
     }
 }
 
-const fn category_run(
-    category: provenance_porcelain::check::Category,
-    findings: Vec<provenance_porcelain::check::Finding>,
-) -> provenance_porcelain::check::CategoryRun {
-    use provenance_porcelain::check::{
-        BindingContext, BindingPolicy, Category, CategoryRun, Refusal,
-    };
+/// Records each supplied statement with the scope the host bound.
+struct StatementRecordingPort(Arc<Mutex<Vec<(String, Option<String>)>>>);
+
+impl CheckPort for StatementRecordingPort {
+    fn run<'a>(&'a self, category: Category, _: Option<&'a str>) -> PortFuture<'a> {
+        Box::pin(async move { Ok(category_run(category, Vec::new())) })
+    }
+
+    fn check_statement<'a>(&'a self, statement: &'a str, scope: Option<&'a str>) -> PortFuture<'a> {
+        self.0
+            .lock()
+            .unwrap()
+            .push((statement.to_owned(), scope.map(str::to_owned)));
+        Box::pin(async move {
+            Ok(category_run(
+                Category::Statements,
+                vec![Finding::new("supplied statement finding")],
+            ))
+        })
+    }
+}
+
+const fn category_run(category: Category, findings: Vec<Finding>) -> CategoryRun {
     match category {
         Category::Graph => CategoryRun::Graph {
             findings,
@@ -392,6 +400,115 @@ async fn mcp_check_uses_its_separately_injected_port() {
     server.await.unwrap().cancel().await.unwrap();
 }
 
+#[tokio::test]
+#[verifies("rule_porcelain_check_statement_field_shared", examples)]
+async fn mcp_check_takes_a_statement_and_refuses_the_cli_only_options() {
+    use rmcp::{model::CallToolRequestParams, ServiceExt as _};
+
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let host = provenance_transport::StatementHost::default()
+        .with_check_port(Arc::new(StatementRecordingPort(seen.clone())));
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+    let call = |arguments: serde_json::Value| {
+        CallToolRequestParams::new("check").with_arguments(arguments.as_object().unwrap().clone())
+    };
+
+    let tools = client.list_all_tools().await.unwrap();
+    let check = tools.iter().find(|tool| tool.name == "check").unwrap();
+    assert!(check.input_schema["properties"]["statement"].is_object());
+    assert!(check.description.as_deref().unwrap().contains("statement"));
+    let alone = client
+        .call_tool(call(json!({"statement": "The pump stops."})))
+        .await
+        .unwrap();
+    let with_graph = client
+        .call_tool(call(
+            json!({"statement": "The pump stops.", "categories": ["graph"]}),
+        ))
+        .await
+        .unwrap();
+
+    assert_ne!(alone.is_error, Some(true));
+    let categories = &alone.structured_content.as_ref().unwrap()["categories"];
+    assert_eq!(categories.as_array().unwrap().len(), 1);
+    assert_eq!(categories[0]["category"], "statements");
+    assert_eq!(
+        categories[0]["findings"][0]["message"],
+        "supplied statement finding"
+    );
+    let categories = &with_graph.structured_content.as_ref().unwrap()["categories"];
+    assert_eq!(categories[0]["category"], "graph");
+    assert_eq!(categories[1]["category"], "statements");
+    assert_eq!(
+        *seen.lock().unwrap(),
+        vec![
+            ("The pump stops.".to_owned(), None),
+            ("The pump stops.".to_owned(), None),
+        ]
+    );
+    for arguments in [
+        json!({"statement": "The pump stops.", "strict": true}),
+        json!({"statement": "The pump stops.", "base": "HEAD"}),
+        json!({"statement": "The pump stops.", "scope": "default"}),
+    ] {
+        let refused = client.call_tool(call(arguments.clone())).await.unwrap();
+        assert_eq!(refused.is_error, Some(true), "{arguments}");
+        assert_eq!(
+            refused.structured_content.unwrap()["error"]["kind"],
+            "invalid_options",
+            "{arguments}"
+        );
+    }
+    assert_eq!(
+        seen.lock().unwrap().len(),
+        2,
+        "a refused call reaches no port"
+    );
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}
+
+#[tokio::test]
+#[verifies("rule_porcelain_check_unavailable", examples)]
+async fn mcp_check_with_a_statement_is_unavailable_on_a_port_without_that_check() {
+    use rmcp::{model::CallToolRequestParams, ServiceExt as _};
+
+    let host =
+        provenance_transport::StatementHost::default().with_check_port(Arc::new(CheckFixturePort));
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+
+    let result = client
+        .call_tool(
+            CallToolRequestParams::new("check").with_arguments(
+                json!({"statement": "The pump stops."})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ),
+        )
+        .await
+        .unwrap();
+
+    assert_ne!(result.is_error, Some(true));
+    let category = &result.structured_content.as_ref().unwrap()["categories"][0];
+    assert_eq!(category["status"], "unavailable");
+    assert_eq!(
+        category["unavailable_reason"],
+        "this host does not check a supplied statement"
+    );
+    assert!(result.content[0]
+        .as_text()
+        .unwrap()
+        .text
+        .contains("statements: unavailable"));
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}
+
 #[cfg(feature = "test-fixture")]
 #[tokio::test]
 async fn mcp_regular_graph_work_executes_a_record_command() {
@@ -421,12 +538,8 @@ async fn mcp_regular_graph_work_executes_a_record_command() {
 struct ScopeRecordingPort(Arc<Mutex<Option<String>>>);
 
 #[cfg(feature = "test-fixture")]
-impl provenance_porcelain::check::CheckPort for ScopeRecordingPort {
-    fn run<'a>(
-        &'a self,
-        category: provenance_porcelain::check::Category,
-        scope: Option<&'a str>,
-    ) -> provenance_porcelain::check::PortFuture<'a> {
+impl CheckPort for ScopeRecordingPort {
+    fn run<'a>(&'a self, category: Category, scope: Option<&'a str>) -> PortFuture<'a> {
         *self.0.lock().unwrap() = scope.map(str::to_owned);
         Box::pin(async move { Ok(category_run(category, Vec::new())) })
     }
@@ -451,6 +564,40 @@ async fn mcp_check_binds_the_host_scope_into_the_check_port() {
         .unwrap();
 
     assert_eq!(seen.lock().unwrap().as_deref(), Some("default"));
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}
+
+#[cfg(feature = "test-fixture")]
+#[tokio::test]
+#[verifies("rule_porcelain_check_statement_field_shared", examples)]
+async fn mcp_check_binds_the_host_scope_into_the_supplied_statement_check() {
+    use rmcp::{model::CallToolRequestParams, ServiceExt as _};
+
+    let repository = support::records::Repository::new("The shared graph is readable.");
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let host = support::resource_http::host(&repository, false)
+        .with_check_port(Arc::new(StatementRecordingPort(seen.clone())));
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+
+    client
+        .call_tool(
+            CallToolRequestParams::new("check").with_arguments(
+                json!({"statement": "The pump stops."})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *seen.lock().unwrap(),
+        vec![("The pump stops.".to_owned(), Some("default".to_owned()))]
+    );
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }
