@@ -9,7 +9,7 @@ export const shareLinks = defineSpec("share-links")
       .from(source("sharing-policy").document("docs/sharing-policy.md"))
       .rules(
         rule("expiry")
-          .statement("Share links must expire in 30 days")
+          .statement("Share URLs must expire in 30 days")
           .implementedBy(createShareLink),
       ),
   )

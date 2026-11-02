@@ -183,7 +183,7 @@ export function installed<const Spec extends string>(
   source: SourceDeclaration<Spec, "guide">,
 ): RequirementDeclaration<Spec, "installed"> {
   return author.requirement("installed")
-    .statement("The packed SDK exposes spec-bound TypeScript declarations")
+    .statement("The installed SDK has spec-bound TypeScript declarations")
     .description("Exercises emitted fluent metadata types")
     .from(source);
 }
@@ -265,11 +265,11 @@ await spec.handles.invocation.verify("packed-install", () => undefined, {
 const typedSpec = defineSpec("packed-implemented-by")
   .requirements(
     requirement("typed-implementation")
-      .statement("Installed typed specs keep their code links")
+      .statement("Installed typed specs keep their code addresses")
       .from(source("packed-guide").name("Packed guide").document("README.md"))
       .rules(
         rule("typed-start")
-          .statement("Installed typed specs resolve imported production implementations")
+          .statement("Installed typed specs resolve imported production code")
           .implementedBy(startWorkflow),
         rule("typed-runner")
           .statement("Installed typed specs resolve imported production classes")
