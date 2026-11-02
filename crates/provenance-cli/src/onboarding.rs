@@ -15,7 +15,7 @@ it in the same change.
   tense: its states, what changes them, what the person sees, and one example.
   History goes on the record's thread. Unknowns go in fog or a Question.
 - Before a graph write, run
-  `{command} statement-checks create --statement "<statement>" --format json`. A clean report covers only the
+  `{command} check --statement "<statement>" --format json`. A clean report covers only the
   ASD-STE100 Issue 9 checks that Provenance implements. It does not prove full
   conformance.
 - Run `{command} --version` before the first graph write of a session. If the

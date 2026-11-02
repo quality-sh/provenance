@@ -281,13 +281,33 @@ async fn mcp_get_failures_are_the_cli_json_refusals() {
 #[test]
 #[verifies("rule_porcelain_check_selector_union", examples)]
 fn live_cli_and_mcp_check_selectors_keep_shared_semantics() {
-    let cli = provenance_cli::porcelain::check_input_from_selectors(true, false, true);
+    let cli = provenance_cli::porcelain::check_input_from_selectors(true, false, true, None);
     let mcp: provenance_porcelain::check::CheckInput = serde_json::from_value(json!({
         "categories": ["graph", "bindings"]
     }))
     .unwrap();
 
     assert_eq!(cli.categories(), mcp.categories());
+}
+
+#[test]
+#[verifies("rule_porcelain_check_statement_field_shared", examples)]
+fn live_cli_and_mcp_check_statement_fields_produce_the_same_input() {
+    let statement = "The pump stops.";
+    let cli = provenance_cli::porcelain::check_input_from_selectors(
+        false,
+        false,
+        false,
+        Some(statement.to_owned()),
+    );
+    let mcp: provenance_porcelain::check::CheckInput =
+        serde_json::from_value(json!({"statement": statement})).unwrap();
+
+    assert_eq!(cli, mcp);
+    assert_eq!(
+        cli.categories(),
+        [provenance_porcelain::check::Category::Statements]
+    );
 }
 
 #[test]

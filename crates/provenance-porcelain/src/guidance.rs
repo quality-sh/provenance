@@ -7,8 +7,8 @@ use std::fmt::Write;
 pub const GET_DESCRIPTION: &str =
     "Read one repository record by its repository-local ID. Select its record, children, grounding, or impact view.";
 pub const SEARCH_DESCRIPTION: &str = "Find records across the permitted kinds in the bound scope.";
-pub const CHECK_DESCRIPTION: &str =
-    "Check graph validity, statement quality, and binding coverage.";
+pub const CHECK_DESCRIPTION: &str = "Check graph validity, statement quality, and binding \
+     coverage. Give a statement to check that text with the project dictionary before a write.";
 
 /// The same domain text in structured CLI output and native MCP instructions.
 #[derive(Clone, Debug, Serialize, schemars::JsonSchema)]

@@ -95,6 +95,9 @@ pub enum Command {
         /// Compare Git HEAD with this commit instead of its first parent.
         #[arg(long, requires = "strict")]
         base: Option<String>,
+        /// Check this statement instead of the committed statements.
+        #[arg(long, conflicts_with = "base")]
+        statement: Option<String>,
         /// Run only graph validity checks. Combine with other check selectors.
         #[arg(long)]
         graph: bool,

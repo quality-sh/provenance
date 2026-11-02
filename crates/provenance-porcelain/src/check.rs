@@ -20,7 +20,12 @@ impl Category {
     pub const ALL: [Self; 3] = [Self::Graph, Self::Statements, Self::Bindings];
 }
 
-/// The categories selected for one check.
+/// The categories selected for one check, and the statement it examines in
+/// place of the committed statements.
+///
+/// The CLI builds this request from its flags and the MCP tool deserializes
+/// it, so both surfaces take the one `statement` field.
+#[rule("rule_porcelain_check_statement_field_shared")]
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CheckInput {
@@ -31,6 +36,9 @@ pub struct CheckInput {
     )]
     #[schemars(extend("uniqueItems" = true))]
     selectors: Vec<Category>,
+    /// Check this statement instead of the committed statements.
+    #[serde(default)]
+    statement: Option<String>,
     #[serde(skip)]
     scope: Option<String>,
 }
@@ -236,11 +244,22 @@ pub type PortFuture<'a> = Pin<Box<dyn Future<Output = Result<CategoryRun, String
 /// Category computations supplied by a repository-aware caller.
 pub trait CheckPort: Send + Sync {
     fn run<'a>(&'a self, category: Category, scope: Option<&'a str>) -> PortFuture<'a>;
+
+    /// Run the statements category over one supplied statement. A host that
+    /// does not implement this leaves the category unavailable.
+    fn check_statement<'a>(&'a self, statement: &'a str, scope: Option<&'a str>) -> PortFuture<'a> {
+        let _ = (statement, scope);
+        Box::pin(async { Err("this host does not check a supplied statement".to_owned()) })
+    }
 }
 
 impl CheckPort for Arc<dyn CheckPort> {
     fn run<'a>(&'a self, category: Category, scope: Option<&'a str>) -> PortFuture<'a> {
         self.as_ref().run(category, scope)
+    }
+
+    fn check_statement<'a>(&'a self, statement: &'a str, scope: Option<&'a str>) -> PortFuture<'a> {
+        self.as_ref().check_statement(statement, scope)
     }
 }
 
@@ -252,8 +271,16 @@ impl CheckInput {
         selectors.dedup();
         Self {
             selectors,
+            statement: None,
             scope: None,
         }
+    }
+
+    /// Check this statement instead of the committed statements.
+    #[must_use]
+    pub fn with_statement(mut self, statement: impl Into<String>) -> Self {
+        self.statement = Some(statement.into());
+        self
     }
 
     /// Bind a trusted host-selected scope to this request.
@@ -263,13 +290,20 @@ impl CheckInput {
         self
     }
 
-    /// Return selected categories, or all categories when none were selected.
-    pub fn categories(&self) -> &[Category] {
-        if self.selectors.is_empty() {
-            &Category::ALL
-        } else {
-            &self.selectors
+    /// Return the categories to run, in run order. A bare check selects all.
+    /// A supplied statement selects the statements category, and the
+    /// selectors add to it.
+    pub fn categories(&self) -> Vec<Category> {
+        let mut categories = match (self.selectors.is_empty(), &self.statement) {
+            (false, _) => self.selectors.clone(),
+            (true, Some(_)) => Vec::new(),
+            (true, None) => Category::ALL.to_vec(),
+        };
+        if self.statement.is_some() && !categories.contains(&Category::Statements) {
+            categories.push(Category::Statements);
+            categories.sort_unstable();
         }
+        categories
     }
 }
 
@@ -321,15 +355,24 @@ pub fn render_readable(outcome: &CheckOutcome) -> String {
 }
 
 impl<P: CheckPort> crate::Porcelain<P> {
-    /// Run selected categories and keep each semantic result separate.
+    /// Run selected categories and keep each semantic result separate. A
+    /// supplied statement takes the place of the committed statements.
     #[rule("rule_porcelain_check_defaults_all")]
     #[rule("rule_porcelain_check_selector_union")]
     #[rule("rule_porcelain_check_categories")]
     #[rule("rule_porcelain_check_unavailable")]
+    #[rule("rule_porcelain_check_supplied_statement_selects_statements")]
     pub async fn check(&self, input: CheckInput) -> CheckOutcome {
+        let scope = input.scope.as_deref();
         let mut categories = Vec::new();
-        for &category in input.categories() {
-            let report = match self.port.run(category, input.scope.as_deref()).await {
+        for category in input.categories() {
+            let run = match (category, input.statement.as_deref()) {
+                (Category::Statements, Some(statement)) => {
+                    self.port.check_statement(statement, scope).await
+                }
+                _ => self.port.run(category, scope).await,
+            };
+            let report = match run {
                 Ok(run) => CategoryReport::from_run(run),
                 Err(reason) => CategoryReport::unavailable(category, reason),
             };

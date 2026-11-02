@@ -57,6 +57,7 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             repo,
             strict,
             base,
+            statement,
             graph,
             statements,
             bindings,
@@ -66,6 +67,7 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
                 graph,
                 statements,
                 bindings,
+                statement,
             };
             let context = provenance_cli::repo_context::RepoContext::new(repo, "default");
             check::check(context, strict, base, format.is_some(), selectors).await
