@@ -123,14 +123,6 @@ fn insert(
     Ok(())
 }
 
-pub(super) fn augment(
-    command: Command,
-    definitions: impl IntoIterator<Item = &'static Definition>,
-    static_flags: &[&str],
-) -> anyhow::Result<Command> {
-    augment_with_overrides(command, definitions, static_flags, &[])
-}
-
 pub(super) fn augment_with_overrides(
     mut command: Command,
     definitions: impl IntoIterator<Item = &'static Definition>,

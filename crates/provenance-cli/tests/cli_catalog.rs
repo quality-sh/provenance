@@ -28,7 +28,7 @@ fn init() -> (tempfile::TempDir, String) {
 fn create_source(repo: &str, id: &str) {
     provenance()
         .args([
-            "sources", "create", "--repo", repo, "--id", id, "--name", id,
+            id, "create", "--type", "source", "--repo", repo, "--name", id,
         ])
         .assert()
         .success();
@@ -41,13 +41,16 @@ fn create_verification_run(repo: &str, rule: &str, key: &str) {
     std::fs::write(path, "// verifies the rule\n").unwrap();
     provenance()
         .args([
-            "verification-runs",
-            "begin-verification",
+            "api",
+            "verification-runs/begin-verification",
+            "--method",
+            "post",
+            "--input",
+            "-",
             "--repo",
             repo,
             "--scope",
             "default",
-            "--stdin",
         ])
         .write_stdin(
             json!({
@@ -64,14 +67,16 @@ fn create_verification_run(repo: &str, rule: &str, key: &str) {
 }
 
 #[test]
-fn collection_commands_use_resource_addresses_and_response_envelopes() {
+fn api_commands_use_resource_addresses_and_response_envelopes() {
     let (_directory, repo) = init();
     let source = json!({
         "id":"source_catalog", "name":"Catalog source",
         "source_type":"document", "supersedes":[]
     });
     let created = provenance()
-        .args(["sources", "create", "--repo", &repo, "--stdin"])
+        .args([
+            "api", "sources", "--method", "post", "--input", "-", "--repo", &repo,
+        ])
         .write_stdin(source.to_string())
         .output()
         .unwrap();
@@ -85,7 +90,7 @@ fn collection_commands_use_resource_addresses_and_response_envelopes() {
     assert_eq!(created["meta"], json!({}));
 
     let listed = provenance()
-        .args(["--repo", &repo, "sources", "list", "--format", "json"])
+        .args(["--repo", &repo, "api", "sources", "--format", "json"])
         .output()
         .unwrap();
     assert!(
@@ -95,12 +100,6 @@ fn collection_commands_use_resource_addresses_and_response_envelopes() {
     );
     let listed: Value = serde_json::from_slice(&listed.stdout).unwrap();
     assert_eq!(listed["data"]["items"][0]["id"], "source_catalog");
-
-    provenance()
-        .args(["sources", "--help"])
-        .assert()
-        .success()
-        .stdout(contains("sources list"));
 }
 
 #[test]
@@ -108,12 +107,12 @@ fn rich_and_scalar_body_inputs_follow_one_rule() {
     let (_directory, repo) = init();
     provenance()
         .args([
-            "domains",
+            "domain_catalog",
             "create",
+            "--type",
+            "domain",
             "--repo",
             &repo,
-            "--id",
-            "domain_catalog",
             "--name",
             "Catalog",
         ])
@@ -121,12 +120,12 @@ fn rich_and_scalar_body_inputs_follow_one_rule() {
         .success();
     provenance()
         .args([
-            "sources",
+            "source_bad",
             "create",
+            "--type",
+            "source",
             "--repo",
             &repo,
-            "--id",
-            "source_bad",
             "--name",
             "Bad",
             "--source-type",
@@ -142,16 +141,16 @@ fn rich_and_scalar_body_inputs_follow_one_rule() {
 }
 
 #[test]
-fn bodyless_list_filters_are_query_parameters() {
+fn api_list_filters_are_query_parameters() {
     let (_directory, repo) = init();
     provenance()
         .args([
-            "requirements",
+            "req_catalog",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             &repo,
-            "--id",
-            "req_catalog",
             "--statement",
             "The system records verification evidence.",
         ])
@@ -159,7 +158,9 @@ fn bodyless_list_filters_are_query_parameters() {
         .success();
     for rule in ["rule_catalog_a", "rule_catalog_b"] {
         provenance()
-            .args(["rules", "create", "--repo", &repo, "--stdin"])
+            .args([
+                "api", "rules", "--method", "post", "--input", "-", "--repo", &repo,
+            ])
             .write_stdin(
                 json!({
                     "id": rule,
@@ -178,14 +179,14 @@ fn bodyless_list_filters_are_query_parameters() {
 
     let output = provenance()
         .args([
+            "api",
             "verification-runs",
-            "list",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--rule",
-            "rule_catalog_b",
+            "--query",
+            "rule=rule_catalog_b",
             "--format",
             "json",
         ])
@@ -203,14 +204,14 @@ fn bodyless_list_filters_are_query_parameters() {
 }
 
 #[test]
-fn collection_lists_accept_the_returned_cursor() {
+fn api_lists_accept_the_returned_cursor() {
     let (_directory, repo) = init();
     create_source(&repo, "source_catalog_a");
     create_source(&repo, "source_catalog_b");
 
     let first = provenance()
         .args([
-            "sources", "list", "--repo", &repo, "--limit", "1", "--format", "json",
+            "api", "sources", "--repo", &repo, "--query", "limit=1", "--format", "json",
         ])
         .output()
         .unwrap();
@@ -220,7 +221,15 @@ fn collection_lists_accept_the_returned_cursor() {
 
     let second = provenance()
         .args([
-            "sources", "list", "--repo", &repo, "--limit", "1", "--cursor", cursor, "--format",
+            "api",
+            "sources",
+            "--repo",
+            &repo,
+            "--query",
+            "limit=1",
+            "--query",
+            &format!("cursor={}", cursor),
+            "--format",
             "json",
         ])
         .output()
@@ -239,13 +248,13 @@ fn collection_lists_accept_the_returned_cursor() {
 }
 
 #[test]
-fn collection_cursors_refuse_a_changed_page_limit() {
+fn api_cursors_refuse_a_changed_page_limit() {
     let (_directory, repo) = init();
     create_source(&repo, "source_cursor_a");
     create_source(&repo, "source_cursor_b");
     let first = provenance()
         .args([
-            "sources", "list", "--repo", &repo, "--limit", "1", "--format", "json",
+            "api", "sources", "--repo", &repo, "--query", "limit=1", "--format", "json",
         ])
         .output()
         .unwrap();
@@ -255,7 +264,15 @@ fn collection_cursors_refuse_a_changed_page_limit() {
 
     provenance()
         .args([
-            "sources", "list", "--repo", &repo, "--limit", "2", "--cursor", cursor, "--format",
+            "api",
+            "sources",
+            "--repo",
+            &repo,
+            "--query",
+            "limit=2",
+            "--query",
+            &format!("cursor={}", cursor),
+            "--format",
             "json",
         ])
         .assert()
@@ -264,14 +281,13 @@ fn collection_cursors_refuse_a_changed_page_limit() {
 }
 
 #[test]
-fn collection_member_actions_follow_the_id_then_action_grammar() {
+fn record_updates_and_api_reads_address_one_member() {
     let (_directory, repo) = init();
     create_source(&repo, "source_action_one");
     create_source(&repo, "source_action_two");
 
     let updated = provenance()
         .args([
-            "sources",
             "source_action_one",
             "update",
             "--repo",
@@ -294,9 +310,8 @@ fn collection_member_actions_follow_the_id_then_action_grammar() {
 
     let read = provenance()
         .args([
-            "sources",
-            "source_action_two",
-            "get",
+            "api",
+            "sources/source_action_two",
             "--repo",
             &repo,
             "--format",
@@ -314,16 +329,16 @@ fn collection_member_actions_follow_the_id_then_action_grammar() {
 }
 
 #[test]
-fn array_query_flags_use_the_registered_wire_encoding() {
+fn api_neighbors_query_filters_relations() {
     let (_directory, repo) = init();
     provenance()
         .args([
-            "domains",
+            "domain_filter",
             "create",
+            "--type",
+            "domain",
             "--repo",
             &repo,
-            "--id",
-            "domain_filter",
             "--name",
             "Filter domain",
         ])
@@ -331,12 +346,12 @@ fn array_query_flags_use_the_registered_wire_encoding() {
         .success();
     provenance()
         .args([
-            "requirements",
+            "req_filter",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             &repo,
-            "--id",
-            "req_filter",
             "--statement",
             "The system stores records.",
             "--domain-id",
@@ -347,15 +362,16 @@ fn array_query_flags_use_the_registered_wire_encoding() {
 
     let output = provenance()
         .args([
-            "requirements",
-            "req_filter",
-            "neighbors",
+            "api",
+            "requirements/req_filter",
+            "--query",
+            "query=neighbors",
             "--repo",
             &repo,
-            "--relations",
-            "domain_id",
-            "--limit",
-            "20",
+            "--query",
+            "relations=domain_id",
+            "--query",
+            "limit=20",
             "--format",
             "json",
         ])
@@ -373,38 +389,16 @@ fn array_query_flags_use_the_registered_wire_encoding() {
 }
 
 #[test]
-fn member_reads_return_usage_status_for_unknown_options() {
-    let (_directory, repo) = init();
-    create_source(&repo, "source_catalog_member");
-
-    provenance()
-        .args([
-            "sources",
-            "source_catalog_member",
-            "get",
-            "--repo",
-            &repo,
-            "--stray",
-            "value",
-            "--format",
-            "json",
-        ])
-        .assert()
-        .code(2)
-        .stderr(contains("unexpected argument '--stray'"));
-}
-
-#[test]
 fn scalar_flags_follow_the_declared_body_field_type() {
     let (_directory, repo) = init();
     let output = provenance()
         .args([
-            "sources",
+            "source_numeric_name",
             "create",
+            "--type",
+            "source",
             "--repo",
             &repo,
-            "--id",
-            "source_numeric_name",
             "--name",
             "123",
             "--url",
@@ -422,25 +416,6 @@ fn scalar_flags_follow_the_declared_body_field_type() {
     let output: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(output["data"]["name"], "123");
     assert_eq!(output["data"]["url"], "true");
-}
-
-#[test]
-fn query_words_win_over_member_ids() {
-    let (_directory, repo) = init();
-    provenance()
-        .args([
-            "rules",
-            "stale",
-            "--repo",
-            &repo,
-            "--base",
-            "missing-base",
-            "--head",
-            "missing-head",
-        ])
-        .assert()
-        .failure()
-        .stderr(contains("git_unavailable"));
 }
 
 #[path = "cli_catalog/aliases.rs"]

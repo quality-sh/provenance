@@ -37,7 +37,7 @@ fn output(command: &mut Command) -> Value {
 fn create_source(repo: &str, id: &str) {
     provenance()
         .args([
-            "sources", "create", "--repo", repo, "--id", id, "--name", id,
+            id, "create", "--type", "source", "--repo", repo, "--name", id,
         ])
         .assert()
         .success();
@@ -45,12 +45,12 @@ fn create_source(repo: &str, id: &str) {
 
 fn create_requirement(repo: &str, id: &str) -> Value {
     output(provenance().args([
-        "requirements",
+        id,
         "create",
+        "--type",
+        "requirement",
         "--repo",
         repo,
-        "--id",
-        id,
         "--statement",
         &format!("The system records {id}."),
     ]))
@@ -63,12 +63,12 @@ fn repeated_array_flags_equal_the_canonical_json_request() {
     create_source(&repo, "source_old_b");
 
     let flags = output(provenance().args([
-        "sources",
+        "source_flags",
         "create",
+        "--type",
+        "source",
         "--repo",
         &repo,
-        "--id",
-        "source_flags",
         "--name",
         "Flags",
         "--supersedes",
@@ -78,7 +78,9 @@ fn repeated_array_flags_equal_the_canonical_json_request() {
     ]));
     let stdin = output(
         provenance()
-            .args(["sources", "create", "--repo", &repo, "--stdin"])
+            .args([
+                "api", "sources", "--method", "post", "--input", "-", "--repo", &repo,
+            ])
             .write_stdin(
                 json!({
                     "id": "source_stdin",
@@ -106,8 +108,10 @@ fn canonical_json_flags_express_empty_arrays_and_nested_deltas() {
     let owner = output(
         provenance()
             .args([
-                "requirements",
+                "req_owner",
                 "create",
+                "--type",
+                "requirement",
                 "--repo",
                 &repo,
                 "--stdin",
@@ -117,18 +121,13 @@ fn canonical_json_flags_express_empty_arrays_and_nested_deltas() {
                 "[]",
             ])
             .write_stdin(
-                json!({
-                    "id": "req_owner",
-                    "statement": "The system records the first statement."
-                })
-                .to_string(),
+                json!({"statement": "The system records the first statement."}).to_string(),
             ),
     );
     assert_eq!(owner["data"]["description"], "Created from mixed input");
     assert!(owner["data"]["depends_on"].is_null());
 
     let with_delta = output(provenance().args([
-        "requirements",
         "req_owner",
         "update",
         "--repo",
@@ -147,7 +146,6 @@ fn canonical_json_flags_express_empty_arrays_and_nested_deltas() {
     assert_eq!(with_delta["data"]["depends_on"], json!(["req_target_a"]));
 
     let full_set = output(provenance().args([
-        "requirements",
         "req_owner",
         "update",
         "--repo",
@@ -160,7 +158,6 @@ fn canonical_json_flags_express_empty_arrays_and_nested_deltas() {
     assert_eq!(full_set["data"]["depends_on"], json!(["req_target_b"]));
 
     let removed = output(provenance().args([
-        "requirements",
         "req_owner",
         "update",
         "--repo",
@@ -177,18 +174,17 @@ fn canonical_json_flags_express_empty_arrays_and_nested_deltas() {
 fn scalar_strings_keep_json_like_and_option_like_text() {
     let (_directory, repo) = init();
     let source = output(provenance().args([
-        "sources",
+        "source_literals",
         "create",
+        "--type",
+        "source",
         "--repo",
         &repo,
-        "--id",
-        "source_literals",
         "--name",
         "[Draft] policy",
         "--url",
         "null",
-        "--reference",
-        "--help",
+        "--reference=--help",
     ]));
 
     assert_eq!(source["data"]["name"], "[Draft] policy");
@@ -200,19 +196,18 @@ fn scalar_strings_keep_json_like_and_option_like_text() {
 fn json_null_is_distinct_from_the_scalar_string_null() {
     let (_directory, repo) = init();
     let created = output(provenance().args([
-        "requirements",
+        "req_null",
         "create",
+        "--type",
+        "requirement",
         "--repo",
         &repo,
-        "--id",
-        "req_null",
         "--statement",
         "The system records nullable input.",
         "--description",
         "Initial",
     ]));
     let literal = output(provenance().args([
-        "requirements",
         "req_null",
         "update",
         "--repo",
@@ -225,7 +220,6 @@ fn json_null_is_distinct_from_the_scalar_string_null() {
     assert_eq!(literal["data"]["description"], "null");
 
     let cleared = output(provenance().args([
-        "requirements",
         "req_null",
         "update",
         "--repo",
@@ -245,12 +239,12 @@ fn repeated_alias_items_accumulate_but_competing_spellings_fail() {
     create_requirement(&repo, "req_alias_b");
 
     let rule = output(provenance().args([
-        "rules",
+        "rule_alias",
         "create",
+        "--type",
+        "rule",
         "--repo",
         &repo,
-        "--id",
-        "rule_alias",
         "--statement",
         "The system records alias input.",
         "--requirement-id",
@@ -266,12 +260,12 @@ fn repeated_alias_items_accumulate_but_competing_spellings_fail() {
     );
 
     let canonical_json = output(provenance().args([
-        "rules",
+        "rule_canonical_json",
         "create",
+        "--type",
+        "rule",
         "--repo",
         &repo,
-        "--id",
-        "rule_canonical_json",
         "--statement",
         "The system records canonical JSON input.",
         "--requirement-ids-json",
@@ -286,12 +280,12 @@ fn repeated_alias_items_accumulate_but_competing_spellings_fail() {
 
     provenance()
         .args([
-            "rules",
+            "rule_collision",
             "create",
+            "--type",
+            "rule",
             "--repo",
             &repo,
-            "--id",
-            "rule_collision",
             "--statement",
             "The system rejects competing spellings.",
             "--requirement-id",
@@ -313,12 +307,12 @@ fn conflicting_body_sources_are_rejected_without_overwrite() {
     let (_directory, repo) = init();
     provenance()
         .args([
-            "sources",
+            "source_duplicate",
             "create",
+            "--type",
+            "source",
             "--repo",
             &repo,
-            "--id",
-            "source_duplicate",
             "--name",
             "First",
             "--name",
@@ -332,12 +326,12 @@ fn conflicting_body_sources_are_rejected_without_overwrite() {
 
     provenance()
         .args([
-            "sources",
+            "source_competing",
             "create",
+            "--type",
+            "source",
             "--repo",
             &repo,
-            "--id",
-            "source_competing",
             "--name",
             "Competing",
             "--supersedes",
@@ -353,15 +347,17 @@ fn conflicting_body_sources_are_rejected_without_overwrite() {
 
     provenance()
         .args([
-            "sources",
+            "source_stdin_collision",
             "create",
+            "--type",
+            "source",
             "--repo",
             &repo,
             "--stdin",
             "--name",
             "Flag name",
         ])
-        .write_stdin(r#"{"id":"source_stdin_collision","name":"Stdin name"}"#)
+        .write_stdin(r#"{"name":"Stdin name"}"#)
         .assert()
         .failure()
         .stderr(contains("stdin field name conflicts with --name"));
@@ -372,12 +368,12 @@ fn malformed_or_schema_invalid_json_flags_are_rejected() {
     let (_directory, repo) = init();
     provenance()
         .args([
-            "sources",
+            "source_malformed",
             "create",
+            "--type",
+            "source",
             "--repo",
             &repo,
-            "--id",
-            "source_malformed",
             "--name",
             "Malformed",
             "--supersedes-json",
@@ -389,12 +385,12 @@ fn malformed_or_schema_invalid_json_flags_are_rejected() {
 
     provenance()
         .args([
-            "sources",
+            "source_wrong_shape",
             "create",
+            "--type",
+            "source",
             "--repo",
             &repo,
-            "--id",
-            "source_wrong_shape",
             "--name",
             "Wrong shape",
             "--supersedes-json",
@@ -412,7 +408,6 @@ fn existing_header_preconditions_remain_required() {
 
     provenance()
         .args([
-            "requirements",
             "req_precondition",
             "update",
             "--repo",

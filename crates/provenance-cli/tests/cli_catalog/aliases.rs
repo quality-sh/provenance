@@ -5,19 +5,21 @@ fn question_update_method_alias_is_resolved_before_schema_validation() {
     let (_directory, repo) = init();
     provenance()
         .args([
-            "requirements",
+            "req_question_alias",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             &repo,
-            "--id",
-            "req_question_alias",
             "--statement",
             "The system records a question.",
         ])
         .assert()
         .success();
     provenance()
-        .args(["topics", "create", "--repo", &repo, "--stdin"])
+        .args([
+            "api", "topics", "--method", "post", "--input", "-", "--repo", &repo,
+        ])
         .write_stdin(
             json!({
                 "id":"topic_question_alias", "requirement_id":"req_question_alias",
@@ -29,12 +31,12 @@ fn question_update_method_alias_is_resolved_before_schema_validation() {
         .success();
     provenance()
         .args([
-            "questions",
+            "question_alias",
             "create",
+            "--type",
+            "question",
             "--repo",
             &repo,
-            "--id",
-            "question_alias",
             "--topic-id",
             "topic_question_alias",
             "--question",
@@ -46,9 +48,8 @@ fn question_update_method_alias_is_resolved_before_schema_validation() {
         .success();
     let current = provenance()
         .args([
-            "questions",
-            "question_alias",
-            "get",
+            "api",
+            "questions/question_alias",
             "--repo",
             &repo,
             "--format",
@@ -60,7 +61,6 @@ fn question_update_method_alias_is_resolved_before_schema_validation() {
     let etag = current["data"]["edit"]["etag"].as_str().unwrap();
     let output = provenance()
         .args([
-            "questions",
             "question_alias",
             "update",
             "--repo",
