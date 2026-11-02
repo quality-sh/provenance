@@ -23,6 +23,10 @@ pub const UNAPPROVED_VERB: &str = "bfrobnicate";
 /// A made-up unapproved noun from the synthetic fixture.
 pub const UNAPPROVED_NOUN: &str = "bzorp";
 
+/// A made-up spelling with an approved noun entry and an unapproved verb
+/// entry in the synthetic fixture.
+pub const NOUN_AND_VERB_WORD: &str = "accboth";
+
 pub fn provenance() -> Command {
     Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
 }
@@ -127,8 +131,13 @@ fn alpha_suffix(index: usize) -> String {
 }
 
 fn approved_entry(index: usize) -> FixtureEntry {
+    let headword = if index + 1 == APPROVED_TABLE_ROWS {
+        NOUN_AND_VERB_WORD.to_uppercase()
+    } else {
+        format!("AAPPROVED{}", alpha_suffix(index).to_uppercase())
+    };
     FixtureEntry {
-        word: format!("AAPPROVED{} (n)", alpha_suffix(index).to_uppercase()),
+        word: format!("{headword} (n)"),
         meaning: "A meaning".to_owned(),
         ste: "USE THE ITEM.".to_owned(),
         non_ste: String::new(),
@@ -138,10 +147,11 @@ fn approved_entry(index: usize) -> FixtureEntry {
 fn unapproved_entry(index: usize) -> FixtureEntry {
     let (headword, part_of_speech) = match index {
         0 => ("attach".to_owned(), "n"),
+        1 => (NOUN_AND_VERB_WORD.to_owned(), "v"),
         index if index + 1 == UNAPPROVED_TABLE_ROWS => ("claim".to_owned(), "n"),
         index if index + 2 == UNAPPROVED_TABLE_ROWS => (UNAPPROVED_NOUN.to_owned(), "n"),
         index if index + 3 == UNAPPROVED_TABLE_ROWS => (UNAPPROVED_VERB.to_owned(), "v"),
-        index => (format!("bunapproved{}", alpha_suffix(index - 1)), "n"),
+        index => (format!("bunapproved{}", alpha_suffix(index - 2)), "n"),
     };
     FixtureEntry {
         word: format!("{headword} ({part_of_speech})"),

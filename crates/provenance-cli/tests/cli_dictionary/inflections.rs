@@ -1,6 +1,6 @@
 use crate::support::{
-    create_requirement, imported_dictionary, init, provenance, write_reference, UNAPPROVED_NOUN,
-    UNAPPROVED_VERB,
+    create_requirement, imported_dictionary, init, provenance, write_reference, NOUN_AND_VERB_WORD,
+    UNAPPROVED_NOUN, UNAPPROVED_VERB,
 };
 use provenance_macros::verifies;
 use provenance_ste100::store_dictionary_index;
@@ -104,8 +104,79 @@ fn strict_check_reports_an_inflected_unapproved_verb_in_a_committed_requirement(
     git(&repo, &["add", "."]);
     git(&repo, &["commit", "-m", "initial candidate"]);
 
+    let findings = strict_statement_findings(&repo, &index_directory);
+    let finding = &findings[0]["detail"];
+    assert_eq!(finding["id"], "req_inflected");
+    assert_eq!(finding["rule"], "1.1");
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_sentence_word_class", examples)]
+fn the_preflight_settles_a_noun_and_verb_spelling_from_the_sentence() {
+    let (_scratch, repo, index_directory) = setup(false);
+    write_reference(&repo, imported_dictionary());
+    let word = NOUN_AND_VERB_WORD;
+    let capitalized = format!("{}{}", word[..1].to_uppercase(), &word[1..]);
+    for (statement, rejected) in [
+        (format!("The {word} is open."), None),
+        (
+            format!("{capitalized} the panel."),
+            Some(capitalized.clone()),
+        ),
+        (format!("It {word}s the panel."), Some(format!("{word}s"))),
+        (format!("{capitalized}s stay here."), None),
+    ] {
+        assert_eq!(
+            rule_one_one_words(&repo, &index_directory, &statement),
+            rejected.into_iter().collect::<Vec<_>>(),
+            "statement: {statement}"
+        );
+    }
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_sentence_word_class", examples)]
+#[verifies("rule_ste_strict_committed_statement_gate", examples)]
+fn strict_check_reports_a_noun_and_verb_spelling_in_a_verb_position() {
+    let (_scratch, repo, index_directory) = setup(true);
+    create_requirement(
+        &repo,
+        &index_directory,
+        "req_noun",
+        &format!("The {NOUN_AND_VERB_WORD} is open."),
+    )
+    .status
+    .success()
+    .then_some(())
+    .expect("the statement is accepted before the project reference exists");
+    create_requirement(
+        &repo,
+        &index_directory,
+        "req_verb",
+        &format!("It {NOUN_AND_VERB_WORD}s the panel."),
+    )
+    .status
+    .success()
+    .then_some(())
+    .expect("the statement is accepted before the project reference exists");
+    write_reference(&repo, imported_dictionary());
+    git(&repo, &["add", "."]);
+    git(&repo, &["commit", "-m", "initial candidate"]);
+
+    let findings = strict_statement_findings(&repo, &index_directory);
+
+    let ids: Vec<&str> = findings
+        .iter()
+        .map(|finding| finding["detail"]["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(ids, ["req_verb"], "findings: {findings:?}");
+    assert_eq!(findings[0]["detail"]["rule"], "1.1");
+}
+
+/// Runs the strict check, which must fail, and returns its statement findings.
+fn strict_statement_findings(repo: &Path, index_directory: &Path) -> Vec<Value> {
     let output = provenance()
-        .env("PROVENANCE_STE100_INDEX_DIR", &index_directory)
+        .env("PROVENANCE_STE100_INDEX_DIR", index_directory)
         .args([
             "check",
             "--repo",
@@ -116,7 +187,6 @@ fn strict_check_reports_an_inflected_unapproved_verb_in_a_committed_requirement(
         ])
         .output()
         .unwrap();
-
     assert!(!output.status.success());
     let report: Value = serde_json::from_slice(&output.stdout).unwrap();
     let statements = report["categories"]
@@ -124,11 +194,10 @@ fn strict_check_reports_an_inflected_unapproved_verb_in_a_committed_requirement(
         .unwrap()
         .iter()
         .find(|category| category["category"] == "statements")
-        .unwrap();
+        .unwrap()
+        .clone();
     assert_eq!(statements["status"], "findings");
-    let finding = &statements["findings"][0]["detail"];
-    assert_eq!(finding["id"], "req_inflected");
-    assert_eq!(finding["rule"], "1.1");
+    statements["findings"].as_array().unwrap().clone()
 }
 
 fn git(repo: &Path, arguments: &[&str]) {

@@ -64,6 +64,8 @@ fn fixture_dictionary() -> DictionaryImport {
             ),
             verb("ccwin", &["ccwin"], DictionaryStatus::Unapproved),
             noun("CCWINS", &["CCWINS"], DictionaryStatus::Approved),
+            noun("CCPAIR", &["CCPAIR"], DictionaryStatus::Approved),
+            verb("ccpair", &["ccpair"], DictionaryStatus::Unapproved),
         ],
     }
 }
@@ -285,5 +287,65 @@ fn a_printed_form_wins_over_a_derived_form() {
     assert_eq!(
         category_of("The ccwins stay.", "ccwins"),
         VocabularyCategory::Approved
+    );
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_sentence_word_class", examples)]
+fn a_noun_position_picks_the_approved_noun_entry() {
+    for text in [
+        "The ccpair is open.",
+        "The unit's ccpair is open.",
+        "Stop with ccpair here.",
+        "The ccpairs stay.",
+    ] {
+        assert_eq!(
+            rule_one_one_words(text),
+            Vec::<String>::new(),
+            "text: {text}"
+        );
+    }
+    assert_eq!(
+        category_of("The ccpair is open.", "ccpair"),
+        VocabularyCategory::Approved
+    );
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_sentence_word_class", examples)]
+fn a_verb_position_picks_the_unapproved_verb_entry() {
+    for (text, word) in [
+        ("Ccpair the panel.", "Ccpair"),
+        ("It ccpairs the panel.", "ccpairs"),
+        ("You must ccpair the panel.", "ccpair"),
+        ("Make sure to ccpair the panel.", "ccpair"),
+    ] {
+        assert_eq!(rule_one_one_words(text), [word], "text: {text}");
+    }
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_sentence_word_class", examples)]
+fn an_unsettled_word_class_stays_uncertain() {
+    for (text, word) in [
+        ("Ccpairs stay here.", "Ccpairs"),
+        ("The bbbad ccpair stays.", "ccpair"),
+        ("Stop, ccpair here.", "ccpair"),
+        ("The ccboth is open.", "ccboth"),
+    ] {
+        assert_eq!(
+            category_of(text, word),
+            VocabularyCategory::Uncertain,
+            "text: {text}"
+        );
+    }
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_unapproved_word", examples)]
+fn a_word_with_only_unapproved_entries_stays_unapproved_in_any_position() {
+    assert_eq!(
+        rule_one_one_words("The bfrobnicate shows it."),
+        ["bfrobnicate"]
     );
 }

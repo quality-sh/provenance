@@ -4,6 +4,8 @@ use provenance_macros::rule;
 
 use crate::inflection::{self, Inflection};
 use crate::protected_spans::ProtectedSpans;
+use crate::sentence;
+use crate::word_class;
 use crate::{DictionaryImport, DictionaryStatus, PartOfSpeech, Span, VocabularyCategory, WordUse};
 
 /// Classifies each word or phrase by dictionary membership only.
@@ -15,6 +17,7 @@ pub fn classify(
 ) -> Vec<WordUse> {
     let index = VocabularyIndex::build(dictionary);
     let tokens = scan_tokens(text);
+    let sentences = sentence::scan(text, protected);
     let mut uses = Vec::new();
     let mut position = 0;
 
@@ -40,7 +43,9 @@ pub fn classify(
                 start: token.start,
                 end: token.end,
             },
-            category: index.word_category(&token.folded),
+            category: settle(&index.word_matches(&token.folded), || {
+                word_class::guess(text, &tokens, position, &sentences)
+            }),
         });
         position += 1;
     }
@@ -95,10 +100,10 @@ fn name_matches(text: &str, tokens: &[Token], position: usize, words: &[String])
     })
 }
 
-struct Token {
-    start: usize,
-    end: usize,
-    folded: String,
+pub struct Token {
+    pub start: usize,
+    pub end: usize,
+    pub folded: String,
     identifier: bool,
 }
 
@@ -194,10 +199,6 @@ impl VocabularyIndex {
         index
     }
 
-    fn word_category(&self, folded: &str) -> VocabularyCategory {
-        status_category(&self.word_matches(folded))
-    }
-
     /// Gives the entries that a token can stand for. A printed form wins.
     /// Otherwise a regular ending is removed: a verb ending matches only an
     /// unapproved verb, and a plural matches a noun of either status.
@@ -282,6 +283,32 @@ fn phrase_matches(
 fn derives(ending: Inflection, (part_of_speech, status): EntryMatch) -> bool {
     part_of_speech == ending.part_of_speech()
         && (ending == Inflection::Plural || status == DictionaryStatus::Unapproved)
+}
+
+/// Gives the category of a word. When the word has approved and unapproved
+/// entries, the word class from the sentence picks the entries. A word class
+/// with no entry, or no word class, leaves the word uncertain.
+fn settle(
+    matches: &[EntryMatch],
+    guess: impl FnOnce() -> Option<word_class::WordClass>,
+) -> VocabularyCategory {
+    let category = status_category(matches);
+    if category != VocabularyCategory::Uncertain {
+        return category;
+    }
+    let Some(class) = guess() else {
+        return category;
+    };
+    let picked: Vec<EntryMatch> = matches
+        .iter()
+        .copied()
+        .filter(|(part_of_speech, _)| *part_of_speech == class.part_of_speech())
+        .collect();
+    if picked.is_empty() {
+        category
+    } else {
+        status_category(&picked)
+    }
 }
 
 fn status_category(matches: &[EntryMatch]) -> VocabularyCategory {
