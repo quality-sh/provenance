@@ -49,27 +49,6 @@ fn document(source_name: &str, rule_statement: &str) -> TypedSpecInput {
     }
 }
 
-/// Rejects the pending submission of the record, so the record has a
-/// decided submission.
-fn reject_pending(store: &crate::state_store::StateStore, kind: NodeType, id: &str) {
-    let scope = provenance_core::ScopeId::new("default").unwrap();
-    let id = provenance_core::StableId::new(id).unwrap();
-    let pending = store
-        .record_decision_state(&scope, kind, &id)
-        .unwrap()
-        .pending;
-    store
-        .decide_record_review(
-            serde_json::from_value(serde_json::json!({
-                "scope_id":scope, "actor":{"identity_type":"human","id":"reviewer"},
-                "proposal_id":pending.unwrap().proposal_id, "decision":"rejected",
-                "rationale":"The text is not clear."
-            }))
-            .unwrap(),
-        )
-        .unwrap();
-}
-
 fn assert_deletion_conflict(error: anyhow::Error, kind: NodeType, id: &str) {
     let error = WriteError(error);
     assert!(matches!(
@@ -83,7 +62,7 @@ fn assert_deletion_conflict(error: anyhow::Error, kind: NodeType, id: &str) {
 }
 
 #[test]
-fn empty_typed_replacement_refuses_decided_source_deletion() {
+fn empty_typed_replacement_refuses_enrolled_source_deletion() {
     let (_temp, store, scope) = initialized_store();
     let mut input = document("Policy A", "The system retains A.");
     input.requirements.clear();
@@ -112,7 +91,6 @@ fn empty_typed_replacement_refuses_decided_source_deletion() {
             .unwrap(),
         )
         .unwrap();
-    reject_pending(&store, NodeType::Source, "source_typed_history");
     input.sources.clear();
 
     let error = store.apply_typed_spec(&scope, input).unwrap_err();
@@ -121,7 +99,7 @@ fn empty_typed_replacement_refuses_decided_source_deletion() {
 }
 
 #[test]
-fn empty_typed_rule_replacement_refuses_decided_rule_deletion() {
+fn empty_typed_rule_replacement_refuses_enrolled_rule_deletion() {
     let (_temp, store, scope) = initialized_store();
     let mut input = document("Policy A", "The system retains A.");
     store.apply_typed_spec(&scope, input.clone()).unwrap();
@@ -137,7 +115,6 @@ fn empty_typed_rule_replacement_refuses_decided_rule_deletion() {
         )
         .unwrap();
     // The native content edit opened the review submission.
-    reject_pending(&store, NodeType::Rule, "rule_typed_history");
     input.rules.clear();
 
     let error = store.apply_typed_spec(&scope, input).unwrap_err();

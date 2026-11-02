@@ -101,26 +101,6 @@ fn submit_for_review(store: &StateStore, scope: &ScopeId, kind: NodeType, id: &S
     })).unwrap()).unwrap();
 }
 
-/// Submits the stored record and records a rejection of that submission, so
-/// the record has a decided submission.
-fn reject_for_review(store: &StateStore, scope: &ScopeId, kind: NodeType, id: &StableId) {
-    submit_for_review(store, scope, kind, id);
-    let pending = store
-        .record_decision_state(scope, kind, id)
-        .unwrap()
-        .pending;
-    store
-        .decide_record_review(
-            serde_json::from_value(serde_json::json!({
-                "scope_id":scope, "actor":{"identity_type":"human","id":"reviewer"},
-                "proposal_id":pending.unwrap().proposal_id, "decision":"rejected",
-                "rationale":"The text is not clear."
-            }))
-            .unwrap(),
-        )
-        .unwrap();
-}
-
 /// The stored record of one kind and id, without its record stamps.
 fn content(
     store: &StateStore,
@@ -274,8 +254,6 @@ fn typed_omission_refuses_enrolled_deletion() {
     );
     store.apply_typed_spec(&scope, input).unwrap();
     let records = submitted_typed_records(&store, &scope);
-    // The Source has a decided submission; the other records have pending ones.
-    reject_for_review(&store, &scope, NodeType::Source, &records[0].1);
     let before = std::fs::read(shards::requirements_path(&store.layout, &scope)).unwrap();
     let empty = TypedSpecInput {
         schema_version: SUPPORTED_SCHEMA_VERSION.0,

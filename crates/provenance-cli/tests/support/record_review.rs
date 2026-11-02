@@ -136,16 +136,3 @@ pub fn accept_current(repo: &str, collection: &str, kind: &str, id: &str) -> Str
     decide(repo, collection, kind, id, &proposal, true);
     proposal
 }
-
-/// The number of review submissions stored for one record, read through
-/// the Proposal list.
-pub fn submissions(repo: &str, kind: &str, id: &str) -> usize {
-    let key = format!("review:{kind}:{id}:");
-    let listed = data(repo, &["proposals", "list", "--limit", "100"]);
-    listed["items"]
-        .as_array()
-        .unwrap_or_else(|| panic!("no Proposal list: {listed}"))
-        .iter()
-        .filter(|proposal| proposal.to_string().contains(&key))
-        .count()
-}
