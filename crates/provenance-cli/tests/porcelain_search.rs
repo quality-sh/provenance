@@ -403,6 +403,8 @@ fn file_search_refuses_other_filters_and_a_symbol_without_a_file() {
     }
 }
 
+// Unbound characterization test: no Rule states that code lookup keeps the text
+// search output the same. This test keeps the existing JSON keys of text search.
 #[test]
 fn text_search_json_has_no_code_lookup_fields() {
     let directory = tempfile::tempdir().unwrap();
