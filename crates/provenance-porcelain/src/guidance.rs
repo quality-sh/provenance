@@ -6,7 +6,7 @@ use std::fmt::Write;
 
 pub const GET_DESCRIPTION: &str =
     "Read one repository record by its repository-local ID. Select its record, children, grounding, or impact view.";
-pub const SEARCH_DESCRIPTION: &str = "Find records across the permitted kinds in the bound scope.";
+pub const SEARCH_DESCRIPTION: &str = "Find records across the permitted kinds in the bound scope, or the Rules bound to a source file and symbol.";
 pub const CHECK_DESCRIPTION: &str =
     "Check graph validity, statement quality, and binding coverage.";
 

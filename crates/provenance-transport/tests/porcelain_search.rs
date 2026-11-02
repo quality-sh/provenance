@@ -421,3 +421,49 @@ async fn mcp_search_shows_each_record_lifecycle() {
         .contains("rule rule_shared · archived"));
     session.close().await;
 }
+
+#[tokio::test]
+#[verifies("rule_search_file_refuses_other_filters", examples)]
+async fn mcp_file_search_needs_the_rule_grant_and_a_file() {
+    let repository = Repository::new("The shared graph is searchable.");
+    let host = StatementHost::with_fixture_access(access(&repository));
+    let session = Session::start(host).await;
+    let client = &session.client;
+    let tools = client.list_all_tools().await.unwrap();
+    let tool = tools.iter().find(|tool| tool.name == "search").unwrap();
+    for field in ["file", "symbol", "line"] {
+        assert!(
+            tool.input_schema["properties"][field].is_object(),
+            "{field}"
+        );
+    }
+    for (arguments, field) in [
+        (json!({"symbol":"pay"}), "request.symbol"),
+        (json!({"line":3}), "request.line"),
+        (json!({"file":"code.rs","text":"pay"}), "request.text"),
+    ] {
+        let result = call(client, "search", arguments.clone()).await;
+        assert_eq!(result.is_error, Some(true), "{arguments}");
+        let error = &result.structured_content.as_ref().unwrap()["error"];
+        assert_eq!(error["kind"], "invalid_input", "{arguments}");
+        assert_eq!(error["field"], field, "{arguments}");
+        assert!(
+            error["message"]
+                .as_str()
+                .unwrap()
+                .contains("provenance search --file <path>"),
+            "{error}"
+        );
+    }
+    session.close().await;
+
+    let restricted = access(&repository).deny_operation("list-rules");
+    let session = Session::start(StatementHost::with_fixture_access(restricted)).await;
+    let denied = call(&session.client, "search", json!({"file":"code.rs"})).await;
+    assert_eq!(denied.is_error, Some(true), "{denied:?}");
+    assert_eq!(
+        denied.structured_content.as_ref().unwrap()["error"]["kind"],
+        "access_denied"
+    );
+    session.close().await;
+}

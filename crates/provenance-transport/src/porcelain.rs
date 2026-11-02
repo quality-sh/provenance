@@ -93,23 +93,11 @@ pub(crate) fn search_is_available(host: &crate::StatementHost) -> bool {
 }
 
 pub(crate) fn search_tool() -> rmcp::model::Tool {
-    use provenance_store::operations::catalog;
-    let mut input = provenance_contract::operation_request_schema::<catalog::Search>();
-    input.as_object_mut().map(|object| object.remove("$schema"));
-    if let Some(properties) = input.get_mut("properties").and_then(Value::as_object_mut) {
-        properties.remove("protocol_version");
-        if let Some(exclude_terminal) = properties.get_mut("exclude_terminal") {
-            exclude_terminal["default"] = Value::Bool(true);
-        }
-    }
-    if let Some(required) = input.get_mut("required").and_then(Value::as_array_mut) {
-        required.retain(|field| field != "protocol_version");
-    }
     crate::mcp_surface::tool(
         "search",
         provenance_porcelain::guidance::SEARCH_DESCRIPTION,
-        input,
-        provenance_contract::operation_success_schema::<catalog::Search>(),
+        provenance_porcelain::search::input_schema(),
+        provenance_porcelain::search::output_schema(),
         crate::mcp_surface::SchemaDeclaration::Remove,
     )
 }
@@ -179,6 +167,7 @@ pub(crate) async fn call_get(
 }
 
 /// Returns compact readable content and the canonical structured search result.
+#[provenance_macros::rule("rule_search_file_same_on_cli_and_mcp")]
 pub(crate) async fn call_search(
     host: &crate::StatementHost,
     arguments: serde_json::Map<String, Value>,

@@ -15,7 +15,7 @@ land everything as
 ## Ground rules
 
 Before you call code redundant or delete tests, run
-`provenance rules resolve-symbol --file <path>` on the file.
+`provenance search --file <path>` on the file.
 
 1. **Proposals only.** Every candidate lands with `promotion_state=proposed` — never as
    an active requirement, never pre-accepted. Extracted claims describe *current
