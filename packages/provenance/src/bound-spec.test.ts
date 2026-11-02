@@ -111,7 +111,7 @@ test("a spec-bound Rule is its own immutable verification handle", async () => {
     .from(policy);
   const expiry = sharing
     .rule("expiry")
-    .statement("Share links expire in 30 days");
+    .statement("Share URLs expire in 30 days");
   const spec = provenance.build(sharing.rules(expiry));
 
   assert.equal(Object.isFrozen(expiry), true);
@@ -324,7 +324,7 @@ test("a spec-scoped Rule materializes once for several Requirements", async () =
   const expiry = provenance.rule("expiry").statement("Authenticated access expires");
   const sharing = provenance
     .requirement("sharing")
-    .statement("Share links are time bounded")
+    .statement("Share URLs are time bounded")
     .from(policy)
     .rules(expiry);
   const sessions = provenance
@@ -418,7 +418,7 @@ test("equal requirement-local Rule keys keep distinct addresses", async () => {
   const provenance = defineSpec("lifecycles");
   const sharing = provenance.requirement("sharing").statement("Shares expire");
   const sessions = provenance.requirement("sessions").statement("Sessions expire");
-  const shareExpiry = sharing.rule("expiry").statement("Share links expire");
+  const shareExpiry = sharing.rule("expiry").statement("Share URLs expire");
   const sessionExpiry = sessions.rule("expiry").statement("Sessions expire");
 
   const result = await apply(
@@ -441,7 +441,7 @@ test("a requirement rejects another Requirement's local Rule", () => {
   const provenance = defineSpec("lifecycles");
   const sharing = provenance.requirement("sharing").statement("Shares expire");
   const sessions = provenance.requirement("sessions").statement("Sessions expire");
-  const expiry = sharing.rule("expiry").statement("Share links expire");
+  const expiry = sharing.rule("expiry").statement("Share URLs expire");
 
   assert.throws(
     () => sessions.rules(expiry as never),
@@ -452,7 +452,7 @@ test("a requirement rejects another Requirement's local Rule", () => {
 test("a local Rule attaches to another immutable snapshot of its Requirement", () => {
   const provenance = defineSpec("lifecycles");
   const sharingDraft = provenance.requirement("sharing");
-  const expiry = sharingDraft.rule("expiry").statement("Share links expire");
+  const expiry = sharingDraft.rule("expiry").statement("Share URLs expire");
   const sharing = sharingDraft.statement("Shares expire");
 
   assert.doesNotThrow(() => provenance.build(sharing.rules(expiry)));
@@ -461,8 +461,8 @@ test("a local Rule attaches to another immutable snapshot of its Requirement", (
 test("a local Rule rejects another Requirement declaration with the same key", () => {
   const provenance = defineSpec("lifecycles");
   const first = provenance.requirement("sharing").statement("Shares expire");
-  const second = provenance.requirement("sharing").statement("Links are time bounded");
-  const expiry = first.rule("expiry").statement("Share links expire");
+  const second = provenance.requirement("sharing").statement("URLs are time bounded");
+  const expiry = first.rule("expiry").statement("Share URLs expire");
 
   assert.throws(
     () => second.rules(expiry),
@@ -474,7 +474,7 @@ test("separate spec-scoped Rule declarations cannot claim one address", () => {
   const provenance = defineSpec("lifecycles");
   const sharing = provenance.requirement("sharing").statement("Shares expire");
   const sessions = provenance.requirement("sessions").statement("Sessions expire");
-  const shareExpiry = provenance.rule("expiry").statement("Share links expire");
+  const shareExpiry = provenance.rule("expiry").statement("Share URLs expire");
   const sessionExpiry = provenance.rule("expiry").statement("Sessions expire");
 
   assert.throws(
@@ -505,7 +505,7 @@ test("one Requirement cannot contain shared and local Rules with the same key", 
   const provenance = defineSpec("lifecycles");
   const sharing = provenance.requirement("sharing").statement("Shares expire");
   const shared = provenance.rule("expiry").statement("Authenticated access expires");
-  const local = sharing.rule("expiry").statement("Share links expire");
+  const local = sharing.rule("expiry").statement("Share URLs expire");
 
   assert.throws(
     () => provenance.build(sharing.rules(shared, local)),
@@ -531,7 +531,7 @@ test("spec-bound verify rejects an unapplied Rule before running its callback", 
   writeFileSync(join(repo, "tests/share-links.test.ts"), "// verification fixture\n");
   const provenance = defineSpec("unapplied");
   const sharing = provenance.requirement("sharing").statement("Shares expire");
-  const expiry = sharing.rule("expiry").statement("Share links expire");
+  const expiry = sharing.rule("expiry").statement("Share URLs expire");
   provenance.build(sharing.rules(expiry));
   let called = false;
 
@@ -555,7 +555,7 @@ test("spec-bound verify records failure and rethrows the callback error", async 
   writeFileSync(join(repo, "tests/share-links.test.ts"), "// verification fixture\n");
   const provenance = defineSpec("failed-verification");
   const sharing = provenance.requirement("sharing").statement("Shares expire");
-  const expiry = sharing.rule("expiry").statement("Share links expire");
+  const expiry = sharing.rule("expiry").statement("Share URLs expire");
   await apply(provenance.build(sharing.rules(expiry)));
   const failure = new Error("bound expiry assertion failed");
 
@@ -598,7 +598,7 @@ test("relation fields on spec-bound declarations reach the written records", asy
     .resolutions("res_seed");
   const refined = provenance
     .requirement("child")
-    .statement("Share links are controlled")
+    .statement("Share URLs are controlled")
     .from(policy)
     .refines(parent)
     .dependsOn(parent)
@@ -637,7 +637,7 @@ test("a spec-bound requirement keeps both parents it refines", async () => {
   const sharing = provenance.requirement("sharing").statement("Sharing is controlled").from(policy);
   const child = provenance
     .requirement("child")
-    .statement("Share links are controlled")
+    .statement("Share URLs are controlled")
     .from(policy)
     .refines(access)
     .refines(sharing)

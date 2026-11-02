@@ -85,7 +85,7 @@ function declareFixture(settings: Parameters<typeof configure>[0]) {
     sources: [linear],
   });
   const expiry = sharing.rule("expiry", {
-    statement: "Share links expire in 30 days",
+    statement: "Share URLs expire in 30 days",
   });
   return { expiry, sharing };
 }
@@ -154,7 +154,7 @@ test("verify sends the same durable binding key on repeated runs", async (t) => 
     });
     return {
       expiry: sharing.rule("expiry", {
-        statement: "Share links expire in 30 days",
+        statement: "Share URLs expire in 30 days",
       }),
     };
   });
@@ -205,7 +205,7 @@ test("verify sends distinct durable binding keys from one test file", async (t) 
     });
     return {
       expiry: sharing.rule("expiry", {
-        statement: "Share links expire in 30 days",
+        statement: "Share URLs expire in 30 days",
       }),
     };
   });
@@ -245,7 +245,7 @@ test("plan sends the finalized spec to the read-only HTTP operation", async (t) 
     });
     return {
       expiry: sharing.rule("expiry", {
-        statement: "Share links expire in 14 days",
+        statement: "Share URLs expire in 14 days",
       }),
     };
   });
@@ -258,7 +258,7 @@ test("plan sends the finalized spec to the read-only HTTP operation", async (t) 
     {
       key: "expiry",
       requirement: "sharing",
-      statement: "Share links expire in 14 days",
+      statement: "Share URLs expire in 14 days",
     },
   ]);
 });
@@ -280,7 +280,7 @@ test("typed declarations reconcile to canonical Provenance records", async (t) =
     "--id",
     expiry.id,
   ]) as { statement: string; declared_by: string };
-  assert.equal(rule.statement, "Share links expire in 30 days");
+  assert.equal(rule.statement, "Share URLs expire in 30 days");
   assert.equal(rule.declared_by, "spec://typescript/share-links");
 });
 
@@ -328,7 +328,7 @@ test("omitted declarations are deleted and later recreated with the same ids", a
     });
     return {
       expiry: sharing.rule("expiry", {
-        statement: "Share links expire in 30 days",
+        statement: "Share URLs expire in 30 days",
       }),
     };
   });
@@ -356,7 +356,7 @@ test("equal local rule keys under different requirements reconcile separately", 
     statement: "Users can share the documents",
   });
   const shareLinkExpiry = sharing.rule("expiry", {
-    statement: "Share links expire in 30 days",
+    statement: "Share URLs expire in 30 days",
   });
   const sessions = requirement("sessions", {
     statement: "User sessions are time bounded",
@@ -379,7 +379,7 @@ test("defineSpec finalizes pure builders into immutable hierarchical handles", (
     });
     escapedRequirement = sharing;
     const shareLinkExpiry = sharing.rule("expiry", {
-      statement: "Share links expire in 30 days",
+      statement: "Share URLs expire in 30 days",
     });
     const sessions = requirement("sessions", {
       statement: "User sessions are time bounded",
@@ -426,7 +426,7 @@ test("immutable rule handles verify through an applied declaration address", asy
       statement: "Users can share the documents",
     });
     const expiry = sharing.rule("expiry", {
-      statement: "Share links expire in 30 days",
+      statement: "Share URLs expire in 30 days",
     });
     return { sharing, expiry };
   });
@@ -476,7 +476,7 @@ test("reapplying an address reuses the canonical id already assigned by Rust", a
       });
       const expiry = sharing.rule("expiry", {
         id,
-        statement: "Share links expire in 30 days",
+        statement: "Share URLs expire in 30 days",
       });
       return { sharing, expiry };
     });
@@ -554,7 +554,7 @@ function shareLinksSpec() {
     });
     return {
       expiry: sharing.rule("expiry", {
-        statement: "Share links expire in 30 days",
+        statement: "Share URLs expire in 30 days",
       }),
     };
   });
@@ -594,7 +594,7 @@ test("verify fails before applying when the stack holds no frames", async (t) =>
   const sharing = requirement("sharing", {
     statement: "Users can share the documents",
   });
-  const expiry = sharing.rule("expiry", { statement: "Share links expire in 30 days" });
+  const expiry = sharing.rule("expiry", { statement: "Share URLs expire in 30 days" });
   let called = false;
 
   const pending = whileStackIs("Error", () =>
