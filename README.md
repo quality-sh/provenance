@@ -70,7 +70,7 @@ continues to work.
 npx --yes @quality-sh/create-provenance
 
 # put something in the graph
-npx provenance requirements create --scope default --id req_exports \
+npx provenance req_exports create --type requirement --scope default \
   --statement "The system must complete each export in one minute."
 
 # see where things stand
@@ -87,11 +87,11 @@ npx provenance prime
 | `provenance graph <requirement>` | Show the neighbourhood of a requirement |
 | `provenance graph-reference issue\|show\|verify\|exact-export` | Hand off an immutable pinned graph |
 | `provenance traceability <rule>` | Walk a Rule back to its Requirement and any producing Resolution |
-| `provenance proposals list --scope default --exclude-terminal true` | List proposals that do not have a terminal disposition |
+| `provenance api proposals --scope default --query exclude_terminal=true` | List proposals that do not have a terminal disposition |
 | `provenance review` | Serve the review page for the working-copy graph on a local host |
 | `provenance coverage scan --path . --validate-rules` | Check bindings and report active Rules with no implementation or verification |
-| `provenance check --statement "<statement>" --format json` / `provenance authoring-changes create --stdin` / `provenance verification-runs list` | ASD-STE100 statement preflight, typed desired state, and callback evidence protocol |
-| `provenance rules stale --base main` | Report Rules with evidence paths that changed after `main` |
+| `provenance check --statement "<statement>" --format json` / `provenance api authoring-changes --method post --input -` / `provenance api verification-runs` | ASD-STE100 statement preflight, typed desired state, and callback evidence protocol |
+| `provenance api rules --query query=stale --query base=main` | Report Rules with evidence paths that changed after `main` |
 | `provenance skills install` | Install the bundled agent skills (`provenance-shaping`, `provenance-fork-tournament`, `provenance-swarm-backtrace`, `provenance-grounded-writing`) |
 
 The repository uses the `skills/<name>/SKILL.md` layout, so the bundled skills can also

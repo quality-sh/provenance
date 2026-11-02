@@ -24,15 +24,15 @@ function fixture() {
   const repo = mkdtempSync(join(tmpdir(), 'shaping-score-'));
   const init = spawnSync(binary, ['init', '--path', repo, '--scope', 'default'], { encoding: 'utf8' });
   assert.equal(init.status, 0, init.stderr);
-  cli(repo, ['requirements', 'create', '--stdin'], { id: 'req_pay', statement: 'The system calculates overtime pay.' });
-  cli(repo, ['topics', 'create', '--stdin'], { id: 'topic_pay', requirement_id: 'req_pay', title: 'Overtime pay' });
+  cli(repo, ['api', 'requirements', '--method', 'post', '--input', '-'], { id: 'req_pay', statement: 'The system calculates overtime pay.' });
+  cli(repo, ['api', 'topics', '--method', 'post', '--input', '-'], { id: 'topic_pay', requirement_id: 'req_pay', title: 'Overtime pay' });
   for (const id of ['question_threshold', 'question_rate']) {
-    cli(repo, ['questions', 'create', '--stdin'], { id, topic_id: 'topic_pay', question: 'Which value applies?', resolution_method: 'grill' });
+    cli(repo, ['api', 'questions', '--method', 'post', '--input', '-'], { id, topic_id: 'topic_pay', question: 'Which value applies?', resolution_method: 'grill' });
   }
   return repo;
 }
 function snapshot(repo) {
-  return ['question_threshold', 'question_rate'].map(id => cli(repo, ['questions', id, 'get']));
+  return ['question_threshold', 'question_rate'].map(id => cli(repo, ['api', `questions/${id}`]));
 }
 
 // Implementation aid: evaluate prerequisite order from real public CLI writes.
@@ -40,7 +40,7 @@ test('a saved dependent answer before its prerequisite is a violation', async ()
   const repo = fixture();
   try {
     const before = snapshot(repo);
-    cli(repo, ['questions', 'question_rate', 'answer', '--answer', 'The rate is 30 dollars.']);
+    cli(repo, ['question_rate', 'answer', '--answer', 'The rate is 30 dollars.']);
     const after = snapshot(repo);
     const result = score([{ before, after }], {
       dependencies: { question_rate: ['question_threshold'] },
@@ -56,9 +56,9 @@ test('a prerequisite answered in an earlier turn permits the dependent answer', 
   const repo = fixture();
   try {
     const before = snapshot(repo);
-    cli(repo, ['questions', 'question_threshold', 'answer', '--answer', 'The threshold is 38 hours.']);
+    cli(repo, ['question_threshold', 'answer', '--answer', 'The threshold is 38 hours.']);
     const middle = snapshot(repo);
-    cli(repo, ['questions', 'question_rate', 'answer', '--answer', 'The rate is 30 dollars.']);
+    cli(repo, ['question_rate', 'answer', '--answer', 'The rate is 30 dollars.']);
     const after = snapshot(repo);
     const result = score([{ before, after: middle }, { before: middle, after }], {
       dependencies: { question_rate: ['question_threshold'] },

@@ -26,7 +26,7 @@ it in the same change.
   TypeScript project, update the `@quality-sh/provenance` development dependency
   with the package manager.
 - Plan: `{command} prime --quiet`
-- New obligation: `{command} rules create --scope {selected_scope} --id rule_<slug> --requirement-id <req> --statement "<testable clause>"`
+- New obligation: `{command} rule_<slug> create --type rule --scope {selected_scope} --requirement-id <req> --statement "<testable clause>"`
 - Annotate implementation with `rule`, tests with `verifies`. Annotations move
   with code.
 - Change a Requirement, Rule, or Resolution with a guarded record update.
@@ -53,7 +53,7 @@ it in the same change.
   `{command} review --repo . --repository-id local --scope {selected_scope} --detach`.
   It opens the page in their browser.
 - Before you hand off, read a Requirement and every record under it in order, as a
-  builder would: `{command} requirements <requirement-id> document get --scope {selected_scope} --format json`.
+  builder would: `{command} api requirements/<requirement-id>/document --scope {selected_scope} --format json`.
 - Read the decision and review feedback with `{command} <record-id> --scope {selected_scope} --view review`.
   Copy `review.edit.etag` unchanged to `--if-match` on the next guarded update.
   If feedback is truncated, use the continuation commands in the review view.
@@ -75,13 +75,13 @@ it in the same change.
   accepted that content. Revise or withdraw a rejected candidate that no later
   submission replaced. To end a pending review without a replacement, withdraw it.
 - A Question or Topic update needs the current etag. Read it with
-  `{command} questions <question_id> get --scope {selected_scope} --format json` or
-  `{command} topics <topic_id> get --scope {selected_scope} --format json` and pass
-  `data.edit.etag` unchanged as `--if-match`.
+  `{command} <question_id> --scope {selected_scope} --view review --format json` or
+  `{command} <topic_id> --scope {selected_scope} --view review --format json` and pass
+  `review.edit.etag` unchanged as `--if-match`.
 - To drop a Question or Topic, archive it with its commit evidence. Archiving a
   Topic also archives its Questions. Discussion history stays readable:
-  `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | {command} questions <question_id> update --scope {selected_scope} --if-match <etag> --stdin --format json`
-  `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | {command} topics <topic_id> update --scope {selected_scope} --if-match <etag> --stdin --format json`
+  `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | {command} api questions/<question_id> --method patch --header "If-Match: <etag>" --input - --scope {selected_scope} --format json`
+  `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | {command} api topics/<topic_id> --method patch --header "If-Match: <etag>" --input - --scope {selected_scope} --format json`
 - Merge a pull request that archives records with a merge commit. A squash or
   rebase merge drops the commit that the archive names.
 - Write graph state only through the Provenance CLI or SDK. Do not edit

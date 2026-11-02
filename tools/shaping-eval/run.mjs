@@ -31,12 +31,13 @@ async function checked(executable, args, cwd) {
   return result.stdout;
 }
 const cli = (workspace, args) => checked(process.env.PROVENANCE_BIN ?? 'provenance', [...args, '--format', 'json'], workspace);
-async function create(workspace, collection, fields) {
+async function create(workspace, type, { id, ...fields }) {
   if (fields.statement) {
-    const report = JSON.parse(await cli(workspace, ['statement-checks', 'create', '--statement', fields.statement]));
-    if (report.data.findings.some(f => f.kind === 'violation')) throw new Error(JSON.stringify(report));
+    const report = JSON.parse(await cli(workspace, ['check', '--statement', fields.statement]));
+    const findings = report.categories.flatMap(category => category.findings);
+    if (findings.some(f => f.detail?.kind === 'violation')) throw new Error(JSON.stringify(report));
   }
-  const args = [collection, 'create'];
+  const args = [id, 'create', '--type', type];
   for (const [key, value] of Object.entries(fields)) args.push(`--${key.replaceAll('_', '-')}-json`, JSON.stringify(value));
   return cli(workspace, args);
 }
@@ -57,15 +58,15 @@ export async function prepare(workspace, { variant }) {
     ? await checked('git', ['show', `${baseCommit}:docs/shaping.md`], root)
     : await readFile(join(root, 'docs/shaping.md'), 'utf8');
   await writeFile(join(workspace, 'docs/shaping.md'), shapingDoc);
-  await create(workspace, 'sources', { id: 'src_owner_brief', name: 'Owner brief, health negative control', source_type: 'project_artifact', reference: 'session.json:negativeControl' });
+  await create(workspace, 'source', { id: 'src_owner_brief', name: 'Owner brief, health negative control', source_type: 'project_artifact', reference: 'session.json:negativeControl' });
   for (const [id, statement, refines] of [
     ['req_robot', 'The robot supports personal work goals.'],
     ['req_tasks', 'The robot rewards completed tasks.', 'req_robot'],
     ['req_health', 'The robot loses health when goals are neglected.', 'req_robot'],
     ['req_appearance', 'The robot has a friendly appearance.', 'req_robot'],
-  ]) await create(workspace, 'requirements', { id, statement, ...(refines ? { refines: [refines] } : {}) });
-  await create(workspace, 'resolutions', { id: 'res_negative_control', title: 'Health floor', requirement_ids: ['req_health'], position: 'Use a zero health floor.', context: 'Health cannot express a value below zero.', rationale: 'A zero floor prevents negative health. A negative floor would require a separate meaning.', status: 'proposed' });
-  await create(workspace, 'rules', { id: 'rule_negative_control', requirement_ids: ['req_health'], resolution_ids: ['res_negative_control'], statement: 'Health cannot decrease below 0.', source_document: 'Owner brief, health negative control', source_section: 'The owner requires a zero health floor independently of the proposed Resolution.', status: 'active' });
+  ]) await create(workspace, 'requirement', { id, statement, ...(refines ? { refines: [refines] } : {}) });
+  await create(workspace, 'resolution', { id: 'res_negative_control', title: 'Health floor', requirement_ids: ['req_health'], position: 'Use a zero health floor.', context: 'Health cannot express a value below zero.', rationale: 'A zero floor prevents negative health. A negative floor would require a separate meaning.', status: 'proposed' });
+  await create(workspace, 'rule', { id: 'rule_negative_control', requirement_ids: ['req_health'], resolution_ids: ['res_negative_control'], statement: 'Health cannot decrease below 0.', source_document: 'Owner brief, health negative control', source_section: 'The owner requires a zero health floor independently of the proposed Resolution.', status: 'active' });
 }
 
 export async function snapshot(workspace) {
@@ -74,7 +75,7 @@ export async function snapshot(workspace) {
     graph[collection] = [];
     let cursor;
     do {
-      const result = JSON.parse(await cli(workspace, [collection, 'list', '--limit', '200', ...(cursor ? ['--cursor', cursor] : [])]));
+      const result = JSON.parse(await cli(workspace, ['api', collection, '--query', 'limit=200', ...(cursor ? ['--query', `cursor=${cursor}`] : [])]));
       graph[collection].push(...result.data.items);
       cursor = result.meta.has_more ? result.meta.next_cursor : null;
       if (result.meta.has_more && !cursor) throw new Error('Missing continuation cursor');

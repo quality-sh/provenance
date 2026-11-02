@@ -149,29 +149,24 @@ fn step_arguments(sandbox: &Path) -> Vec<StepSpec> {
         ),
         spec("prime", &["prime", "--repo", ".", "--scope", "default"]),
         spec(
-            "requirements create",
+            "requirement create",
             &[
-                "requirements",
+                REQUIREMENT_ID,
                 "create",
+                "--type",
+                "requirement",
                 "--repo",
                 ".",
                 "--scope",
                 "default",
-                "--id",
-                REQUIREMENT_ID,
                 "--statement",
                 STATEMENT,
             ],
         ),
-        StepSpec {
-            label: "statement-checks create",
-            args: vec![
-                "statement-checks".to_owned(),
-                "create".to_owned(),
-                "--stdin".to_owned(),
-            ],
-            stdin: Some(serde_json::json!({ "statement": STATEMENT }).to_string()),
-        },
+        spec(
+            "statement check",
+            &["check", "--repo", ".", "--statement", STATEMENT],
+        ),
         spec("check", &["check", "--repo", "."]),
         spec(
             "coverage scan",

@@ -12,6 +12,11 @@ export function cli(binary, repo, args, input) {
   return JSON.parse(result.stdout);
 }
 
+/** Creates one record through the api command; the body carries the record ID. */
+export function create(binary, repo, collection, body) {
+  return cli(binary, repo, ['api', collection, '--method', 'post', '--input', '-'], body);
+}
+
 /** Reads a guidance file from the working tree, or from `commit` when one is given. */
 function guidanceFile(root, relative, commit) {
   if (!commit) return readFileSync(join(root, relative));
@@ -34,21 +39,21 @@ export function prepareFixture(binary, repo, scenario, candidate, guidanceCommit
       writeFileSync(destination, guidanceFile(root, relative, guidanceCommit));
     }
   }
-  cli(binary, repo, ['sources', 'create', '--stdin'], {
+  create(binary, repo, 'sources', {
     id: 'source_pay_policy', name: 'Overtime example policy', source_type: 'project_artifact',
     reference: '.scenario/policy.txt: the weekly threshold is 38 hours; the owner chooses the rate and presentation.',
   });
   // The anchor has a parent, so a view rooted at the anchor hides where it belongs.
-  cli(binary, repo, ['requirements', 'create', '--stdin'], { id: scenario.anchor_parent, statement: 'The system supports payroll for one owner.' });
-  cli(binary, repo, ['requirements', 'create', '--stdin'], { id: 'req_pay', statement: 'The system calculates overtime pay.', refines: [scenario.anchor_parent] });
-  cli(binary, repo, ['topics', 'create', '--stdin'], { id: 'topic_pay', requirement_id: 'req_pay', title: 'Overtime pay' });
+  create(binary, repo, 'requirements', { id: scenario.anchor_parent, statement: 'The system supports payroll for one owner.' });
+  create(binary, repo, 'requirements', { id: 'req_pay', statement: 'The system calculates overtime pay.', refines: [scenario.anchor_parent] });
+  create(binary, repo, 'topics', { id: 'topic_pay', requirement_id: 'req_pay', title: 'Overtime pay' });
   for (const question of scenario.questions) {
     const input = { id: question.id, topic_id: 'topic_pay', question: question.text, resolution_method: question.method };
     if (candidate) input.depends_on = scenario.dependencies[question.id] ?? [];
-    cli(binary, repo, ['questions', 'create', '--stdin'], input);
+    create(binary, repo, 'questions', input);
   }
-  cli(binary, repo, ['topics', 'topic_pay', 'claim', '--actor', 'eval-writer']);
-  cli(binary, repo, ['questions', 'question_delivery', 'claim', '--actor', 'other-worker']);
+  cli(binary, repo, ['topic_pay', 'claim', '--actor', 'eval-writer']);
+  cli(binary, repo, ['question_delivery', 'claim', '--actor', 'other-worker']);
   mkdirSync(join(repo, '.scenario'), { recursive: true });
   writeFileSync(join(repo, '.scenario', 'policy.txt'), 'Overtime applies after 38 hours in one week. The owner chooses the hourly rate and output format.\n');
   writeFileSync(join(repo, 'AGENTS.md'), `Read .agents/skills/provenance-shaping/SKILL.md in this repository for the shaping workflow. Use ${binary} for every Provenance command. Use actor eval-writer. Keep all work in this repository. Do not publish, send messages, or push.\n`);
@@ -58,7 +63,7 @@ export function prepareFixture(binary, repo, scenario, candidate, guidanceCommit
 export function readGraph(binary, repo) {
   const graph = {};
   for (const kind of ['topics', 'questions', 'requirements', 'resolutions', 'sources', 'rules', 'boundaries']) {
-    const result = cli(binary, repo, [kind, 'list', '--exclude-terminal', 'false']);
+    const result = cli(binary, repo, ['api', kind, '--query', 'exclude_terminal=false']);
     if (result.meta?.has_more) throw new Error(`Incomplete ${kind} evidence`);
     graph[kind] = result.data.items ?? result.data;
     if (!Array.isArray(graph[kind])) throw new Error(`Unexpected ${kind} list response`);
@@ -75,7 +80,7 @@ export function readReview(binary, repo, graph) {
       const review = cli(binary, repo, [record.id, 'get', '--view', 'review']).review?.decision;
       const entry = { kind, id: record.id, pending: !!review?.pending, decisions: review?.decisions?.length ?? 0 };
       if (kind === 'resolutions') {
-        entry.impact_rules = (cli(binary, repo, ['resolutions', record.id, 'impact']).data.affected_rules ?? []).map(rule => rule.id);
+        entry.impact_rules = (cli(binary, repo, ['api', `resolutions/${record.id}`, '--query', 'query=impact']).data.affected_rules ?? []).map(rule => rule.id);
         entry.spawned = graph.requirements.filter(requirement => requirement.spawned_by === record.id).map(requirement => requirement.id);
       }
       records.push(entry);

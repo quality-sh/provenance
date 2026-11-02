@@ -139,20 +139,46 @@ fn check_help(command: &str, repo: &Path) -> Result<(), String> {
         .map(|word| word.trim_end_matches(['.', ',', ')', '`']))
         .filter(|option| !matches!(*option, "--repo" | "--scope" | "--format" | "--quiet"))
         .collect::<BTreeSet<_>>();
-    let output = provenance()
-        .current_dir(repo)
-        .args(address)
-        .arg("--help")
-        .output()
-        .map_err(|error| error.to_string())?;
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).trim().to_owned());
-    }
-    let help = String::from_utf8_lossy(&output.stdout);
-    for option in options {
-        if !help.contains(option) {
-            return Err(format!("option {option} is absent from operation help"));
+    // A record command lists its body fields only for one record type. A
+    // placeholder id names no record, so try the help of each record type.
+    let record_types = match words.iter().position(|word| *word == "--type") {
+        Some(index) => vec![words.get(index + 1).copied()],
+        None if address.len() == 2 => std::iter::once(None)
+            .chain(RECORD_TYPES.into_iter().map(Some))
+            .collect(),
+        None => vec![None],
+    };
+    let mut last_error = String::new();
+    for record_type in record_types {
+        let mut help_command = provenance();
+        help_command.current_dir(repo).args(address);
+        if let Some(record_type) = record_type {
+            help_command.args(["--type", record_type]);
+        }
+        let output = help_command
+            .arg("--help")
+            .output()
+            .map_err(|error| error.to_string())?;
+        if !output.status.success() {
+            last_error = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+            continue;
+        }
+        let help = String::from_utf8_lossy(&output.stdout);
+        match options.iter().find(|option| !help.contains(**option)) {
+            Some(option) => last_error = format!("option {option} is absent from operation help"),
+            None => return Ok(()),
         }
     }
-    Ok(())
+    Err(last_error)
 }
+
+const RECORD_TYPES: [&str; 8] = [
+    "source",
+    "requirement",
+    "resolution",
+    "rule",
+    "topic",
+    "question",
+    "domain",
+    "boundary",
+];

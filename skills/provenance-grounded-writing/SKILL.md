@@ -1,6 +1,6 @@
 ---
 name: provenance-grounded-writing
-description: Write specific, evidence-grounded statements and behaviour descriptions for requirements, rules, sources, resolutions, and boundaries — not generic capability language or meeting minutes. Use before calling `requirements create`, `rules create`, `sources create`, `resolutions create`, or `boundaries create`, especially for a root or mid-level requirement, a statement merging several candidates, or a resolution's position and rationale.
+description: Write specific, evidence-grounded statements and behaviour descriptions for requirements, rules, sources, resolutions, and boundaries — not generic capability language or meeting minutes. Use before calling `<id> create` for a requirement, rule, source, resolution, or boundary, especially for a root or mid-level requirement, a statement merging several candidates, or a resolution's position and rationale.
 ---
 
 # Grounded writing
@@ -50,7 +50,7 @@ reports rather than hiding.
   ("identity," "reporting," "comms")? Categories aren't requirements.
 - **Evidence.** Is there a real locator for the claim — a source clause or a place in the
   code — or is it explicitly provisional? For graph grounding, add a citation with
-  `requirements <id> update --relationships-json <json> --if-match <etag>`; otherwise gap
+  `<requirement_id> update --relationships-json <json> --if-match <etag>`; otherwise gap
   reporting emits `missing_source_refs`. `fog`
   is unstructured text attached to a Requirement, while `unsupported` / `exploratory`
   mark ideation evidence or speculation. The CLI reports grounding gaps; it does not
@@ -108,8 +108,7 @@ Source — bad: name "Finance policy", reference "internal doc" — no way to fi
 Good:
 
 ```sh
-provenance sources create --scope <scope> \
-  --id source_finance_policy_v3 \
+provenance source_finance_policy_v3 create --type source --scope <scope> \
   --name "Finance Policy v3 (2026 revision), section 4.2" \
   --source-type policy \
   --reference "confluence:FIN-204#delegated-authority" \
@@ -136,8 +135,7 @@ for an agent-created Rule. When a person ratifies the Rule, pass `--status activ
 agent command keeps the `draft` default:
 
 ```sh
-provenance rules create --scope <scope> \
-  --id rule_exp_apr_003 \
+provenance rule_exp_apr_003 create --type rule --scope <scope> \
   --requirement-id <requirement_id> \
   --statement "An expense strictly above the submitting employee's delegated authority limit needs a second approver" \
   --severity high \

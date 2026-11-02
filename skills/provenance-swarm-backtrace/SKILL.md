@@ -53,8 +53,7 @@ run concurrently). Stage 3 is a genuine barrier — it needs every extractor's o
 - Create the codebase Source, commit-pinned:
 
   ```sh
-  provenance sources create --scope <scope> \
-    --id source_codebase_<repo-slug>_<short-sha> \
+  provenance source_codebase_<repo-slug>_<short-sha> create --type source --scope <scope> \
     --name "<repo> @ <short-sha>" \
     --source-type system_state \
     --reference "git:<repo>@<full-sha>" \
@@ -279,6 +278,6 @@ The backtrace's output *feeds* the shaping loop; it does not finish anything. Te
 human how many proposals landed, what's contested, and what surprised the refuters. Bring
 forward only a small set that is already contested or conflicting and blocks a decision.
 The CLI has no standalone proposal-surface command. Claiming a Topic returns proposals in
-its explicit territory. For diff-driven work, use `provenance proposals list` and inspect
+its explicit territory. For diff-driven work, use `provenance api proposals` and inspect
 the explicit evidence paths. Do not infer territory from titles or graph proximity. Do not
 ask the human to dispose of the complete output, and do not create dispositions yourself.

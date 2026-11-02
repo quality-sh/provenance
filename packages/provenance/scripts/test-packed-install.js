@@ -238,8 +238,8 @@ execFileSync(process.execPath, [
   "-p", join(application, "tsconfig.json"),
 ], { cwd: application, stdio: "pipe" });
 execFileSync(process.execPath, [join(application, ".compiled", "rule-bindings.js")], { cwd: application, stdio: "pipe" });
-provenance(["requirements", "create", "--scope", "default", "--id", "req_packed_consumer_overtime", "--statement", "Hours above 38 are paid as overtime.", "--format", "json"], application);
-provenance(["rules", "create", "--scope", "default", "--id", "rule_packed_consumer_overtime", "--requirement-id", "req_packed_consumer_overtime", "--statement", "Hours above 38 receive overtime pay.", "--format", "json"], application);
+provenance(["req_packed_consumer_overtime", "create", "--type", "requirement", "--scope", "default", "--statement", "Hours above 38 are paid as overtime.", "--format", "json"], application);
+provenance(["rule_packed_consumer_overtime", "create", "--type", "rule", "--scope", "default", "--requirement-id", "req_packed_consumer_overtime", "--statement", "Hours above 38 receive overtime pay.", "--format", "json"], application);
 assertPackedConsumerScan(provenance(["coverage", "scan", "--path", "rule-bindings.ts", "--scope", "default", "--validate-rules", "--strict", "--format", "json"], application));
 writeFileSync(join(application, "verify.mjs"), `
 import { apply, defineSpec, plan, requirement, rule, source } from "@quality-sh/provenance";
@@ -312,7 +312,7 @@ try {
   });
 } finally { await fixture.close(); }
 const { data: { items: runs } } = JSON.parse(execFileSync(localEngine, [
-  "verification-runs", "list", "--repo", application, "--scope", "default", "--format", "json",
+  "api", "verification-runs", "--repo", application, "--scope", "default", "--format", "json",
 ], { encoding: "utf8" }));
 assert.equal(runs.length, 2);
 assert.deepEqual(runs.map(({ status }) => status), ["passed", "passed"]);

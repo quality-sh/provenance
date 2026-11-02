@@ -11,8 +11,8 @@ From this directory, with the Rust CLI and the `test-fixture` host built:
 npm install
 ../../target/debug/provenance init --path . --scope default --path-prefix .
 npm test
-../../target/debug/provenance rules list --format json
-../../target/debug/provenance verification-runs list --format json
+../../target/debug/provenance api rules --format json
+../../target/debug/provenance api verification-runs --format json
 ```
 
 `npm test` compiles the app. Its harness starts the source-checkout HTTP fixture

@@ -225,7 +225,7 @@ function assertPreflightAndWriteGate(project, environment, npmCli) {
     npmCli,
     project,
     environment,
-    ["statement-checks", "create", "--stdin", "--format", "json"],
+    ["api", "statement-checks", "--method", "post", "--input", "-", "--format", "json"],
     JSON.stringify({ statement: "Stop; wait." }),
   );
   assert.equal(preflight.status, 0, preflight.stderr);
@@ -238,10 +238,9 @@ function assertPreflightAndWriteGate(project, environment, npmCli) {
   );
   const beforeWrite = existsSync(shard) ? readFileSync(shard, "utf8") : undefined;
   const rejected = runProvenance(npmCli, project, environment, [
-    "requirements", "create",
+    "req_rejected_by_dictionary", "create", "--type", "requirement",
     "--repo", ".",
     "--scope", "default",
-    "--id", "req_rejected_by_dictionary",
     "--statement", rejectedStatement,
     "--format", "json",
   ]);
@@ -258,10 +257,9 @@ function assertStrictCommittedEditGate(project, environment, npmCli, version) {
   git(project, ["config", "user.email", "packed@example.test"]);
   git(project, ["config", "user.name", "Packed release gate"]);
   const created = runProvenance(npmCli, project, environment, [
-    "requirements", "create",
+    "req_packed_manual_edit", "create", "--type", "requirement",
     "--repo", ".",
     "--scope", "default",
-    "--id", "req_packed_manual_edit",
     "--statement", "Install the cover.",
     "--format", "json",
   ]);

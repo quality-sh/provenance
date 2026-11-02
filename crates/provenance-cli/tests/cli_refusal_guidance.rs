@@ -86,10 +86,7 @@ fn ownership_refusal_for_a_manual_record_omits_owner_handoff() {
     assert!(error.contains("omit --declared-by"), "{error}");
     assert!(!error.contains("ask the owner"), "{error}");
     assert!(!error.contains("no declared_by owner"), "{error}");
-    let after = json(
-        repo,
-        &["requirements", "req_owner", "get", "--format", "json"],
-    );
+    let after = json(repo, &["api", "requirements/req_owner", "--format", "json"]);
     assert_eq!(after["data"]["edit"], before["data"]["edit"]);
 }
 
@@ -145,24 +142,26 @@ fn submit_after_guarded_update_names_the_pending_review_and_withdrawal() {
         "{error}"
     );
     let withdraw = format!(
-        "provenance requirements req_pending submissions {pending} withdraw --actor <actor>"
+        "provenance api requirements/req_pending/submissions/{pending}/withdraw --method post --input -"
     );
     assert!(error.contains(&withdraw), "{error}");
+    assert!(error.contains(r#"'{"actor":"<actor>"}'"#), "{error}");
     let after = json(
         repo,
-        &["requirements", "req_pending", "get", "--format", "json"],
+        &["api", "requirements/req_pending", "--format", "json"],
     );
     assert_eq!(after["data"]["decision"], updated["data"]["decision"]);
+    let body = std::path::Path::new(repo).join("withdraw.json");
+    std::fs::write(&body, r#"{"actor":"agent"}"#).unwrap();
     json(
         repo,
         &[
-            "requirements",
-            "req_pending",
-            "submissions",
-            pending,
-            "withdraw",
-            "--actor",
-            "agent",
+            "api",
+            &format!("requirements/req_pending/submissions/{pending}/withdraw"),
+            "--method",
+            "post",
+            "--input",
+            body.to_str().unwrap(),
             "--format",
             "json",
         ],

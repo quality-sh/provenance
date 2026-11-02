@@ -1111,16 +1111,16 @@ jobs:
             PROVENANCE_REPO="$fixture_repo" \
             PROVENANCE_VERIFICATION_OWNER="ci://rust-example" \
             cargo test)
-          rule_id=$(target/debug/provenance rules list \
+          rule_id=$(target/debug/provenance api rules \
             --repo "$fixture_repo" --scope default --format json \
             | jq -er '.data.items | select(length == 1) | .[0].id')
-          target/debug/provenance rules "$rule_id" get \
+          target/debug/provenance api "rules/$rule_id" \
             --repo "$fixture_repo" --scope default --format json
-          target/debug/provenance verification-runs list \
-            --repo "$fixture_repo" --scope default --rule "$rule_id" --format json \
+          target/debug/provenance api verification-runs \
+            --repo "$fixture_repo" --scope default --query "rule=$rule_id" --format json \
             | jq -e '.data.items | length == 1 and .[0].status == "passed"'
-          target/debug/provenance verification-bindings list \
-            --repo "$fixture_repo" --scope default --rule "$rule_id" --format json \
+          target/debug/provenance api verification-bindings \
+            --repo "$fixture_repo" --scope default --query "rule=$rule_id" --format json \
             | jq -e '.data.items | length == 1 and .[0].file == "tests/share_links.rs"'
 
   typescript-sdk:
@@ -1197,16 +1197,16 @@ jobs:
           PROVENANCE_SPEC_OWNER="spec://typescript/share-links" \
           PROVENANCE_VERIFICATION_OWNER="ci://typescript-example" \
           npm test --prefix examples/typescript-sdk
-          rule_id=$(target/debug/provenance rules list \
+          rule_id=$(target/debug/provenance api rules \
             --repo "$fixture_repo" --scope default --format json \
             | jq -er '.data.items | select(length == 1) | .[0].id')
-          target/debug/provenance rules "$rule_id" get \
+          target/debug/provenance api "rules/$rule_id" \
             --repo "$fixture_repo" --scope default --format json
-          target/debug/provenance verification-runs list \
-            --repo "$fixture_repo" --scope default --rule "$rule_id" --format json \
+          target/debug/provenance api verification-runs \
+            --repo "$fixture_repo" --scope default --query "rule=$rule_id" --format json \
             | jq -e '.data.items | length == 1 and .[0].status == "passed"'
-          target/debug/provenance verification-bindings list \
-            --repo "$fixture_repo" --scope default --rule "$rule_id" --format json \
+          target/debug/provenance api verification-bindings \
+            --repo "$fixture_repo" --scope default --query "rule=$rule_id" --format json \
             | jq -e '.data.items | length == 1 and .[0].file == "dist/share-links.test.js"'
 
   # One job, six managers: each smoke is seconds long, and six matrix legs

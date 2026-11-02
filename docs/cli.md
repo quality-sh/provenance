@@ -25,31 +25,36 @@ Repeat `--disposition-actor-id` to permit more than one reviewer. Use
 `--clear-disposition-actors` to remove all reviewers. If the reviewer list is
 empty, `provenance review` permits reads but not review decisions.
 
-## Resource commands
+## Record commands and the api command
 
-The CLI derives its resource dialect from the operation catalog. The same
-catalog defines HTTP routes, MCP tools, OpenAPI operations, and generated
-clients.
+The CLI reads and changes one record with the record ID as the first word.
+Plumbing operations of the catalog have no commands of their own: call them
+with `provenance api <path>`. The same catalog defines HTTP routes, the MCP
+`api` tool, OpenAPI operations, and generated clients.
 
 Global `--repo`, `--scope`, and `--format` flags can occur before or after the
-resource words. Catalog commands support JSON output. The default repository
-is the current directory. The default scope is `default`.
+command words. The default repository is the current directory. The default
+scope is `default`.
 
-The collection commands are:
+A record command uses the record ID:
 
 ```text
-provenance <collection> list
-provenance <collection> create [scalar flags | --stdin]
-provenance <collection> search --text <text> [--limit <count>] [--cursor <cursor>]
-provenance rules stale --base <commit> [--head <commit>]
-provenance search --file <path> [--symbol <name>] [--line <line>]
+provenance <id> create --type <kind> [scalar flags | --stdin]
+provenance <id> get [--view record|children|grounding|impact|review]
+provenance <id> update [scalar flags | --stdin] [--if-match <etag>]
+provenance <id> answer|claim|release|submit [flags]
+provenance <id> discussions|discuss
+provenance search --text <text> | --kind <kind> | --file <path> [--symbol <name>] [--line <line>]
+provenance check --statement "<statement>"
 ```
 
-The writable collections are `sources`, `requirements`, `resolutions`,
-`rules`, `domains`, `boundaries`, `topics`, `questions`, `contributions`,
-`synthesis-packets`, and `proposals`. The catalog also exposes reads for
-`verification-runs`, `verification-bindings`, `discussion-containers`,
-`messages`, `assertions`, and `dispositions`.
+`provenance <id> create --type <kind> --help` lists the fields that one record
+type accepts. The record types are `source`, `requirement`, `resolution`,
+`rule`, `topic`, `question`, `domain`, and `boundary`.
+
+A word that names an API collection, such as `rules` in `provenance rules list`,
+is not a command. The CLI refuses it with a usage error and shows
+`provenance --help`.
 
 Rule creation defaults to `draft` in the CLI and in catalog operations. Pass
 `--status active` only when a person ratifies the Rule. Coverage reports do not
@@ -57,29 +62,18 @@ produce active-Rule absence findings for a draft Rule.
 
 A typed specification cannot set a Rule status, so apply creates each new
 specification Rule as `draft`. To make a specification Rule active, a person
-changes its status with `provenance rules <id> update --status active
+changes its status with `provenance <id> update --status active
 --declared-by <owner> --if-match <etag>`. A later apply keeps that status. If a
 Rule declaration changes its key or moves to a different Requirement, apply
 creates a new `draft` Rule and deletes the old Rule. A move between a
 Requirement and the shared specification context keeps the Rule and its status
 when apply finds one existing Rule.
 
-Collection lists and root search hide archived and other terminal records by
-default. Use `--exclude-terminal false` on a collection list or
-`--include-terminal` on root search to include them.
-
-A member uses its ID in the command address:
-
-```text
-provenance <collection> <id> get
-provenance <collection> <id> update [scalar flags | --stdin]
-provenance <collection> <id> trace [--direction in|out|both] [--max-depth <count>]
-provenance <collection> <id> neighbors [--direction in|out|both] [--limit <count>]
-provenance <collection> <id> impact
-```
+Search hides archived and other terminal records by default. Use
+`--include-terminal` to include them.
 
 Read the current review decision, the rejection comment, and bounded Discussion
-messages without the collection name:
+messages:
 
 ```sh
 provenance <record-id> get --view review
@@ -94,52 +88,49 @@ For one bounded view across record kinds, use the target-first read:
 ```text
 provenance <id> get --view children --depth <count>
 ```
+
 Examples:
 
 ```sh
-provenance --repo . --scope default sources list
-printf '%s' '{"id":"source_policy","name":"Policy","source_type":"document","supersedes":[]}' |
-  provenance sources create --stdin
-provenance rules search --text "time bounded" --limit 20
-provenance rules rule_shared trace --direction out --max-depth 2
-provenance topics topic_open claim --actor agent-a
-provenance topics topic_open release --actor agent-a
-provenance questions question_open answer --answer "Use the guarded path."
+printf '%s' '{"name":"Policy","source_type":"document","supersedes":[]}' |
+  provenance source_policy create --type source --stdin
+provenance search --text "time bounded" --kind rule --limit 20
+provenance topic_open claim --actor agent-a
+provenance topic_open release --actor agent-a
+provenance question_open answer --answer "Use the guarded path."
 ```
 
-Parent-owned resources keep their parent address:
+Other catalog routes take their path, method, and body through `api`:
 
 ```sh
-provenance requirements req_review document get --limit 50
-provenance requirements req_review history get
-provenance requirements req_review history entry_1 evidence before get --field statement
-provenance requirements req_review submit --stdin
-provenance requirements req_review submissions proposal_review decide --stdin
-provenance sources source_policy discussions get
-provenance sources source_policy discussions create --stdin
-provenance sources source_policy discussions discussion_1 messages create \
-  --if-match '"1"' --stdin
-provenance proposals proposal_1 assertions create --stdin
-provenance verification-runs begin-verification --stdin
-provenance verification-runs run_1 complete-verification --status passed
+provenance api sources
+provenance api rules --query query=stale --query base=main
+provenance api requirements/req_review/document --query limit=50
+provenance api requirements/req_review/history
+provenance api rules/rule_shared --query query=trace --query direction=out
+provenance api proposals/proposal_1/assertions --method post --input assertion.json
+provenance api verification-runs/run_1/complete-verification --method post --input result.json
 ```
 
-Scalar body fields use flags. The CLI converts Boolean, integer, floating-point,
-null, and string values to their catalog types, and a string-typed field keeps
-the exact text it receives. A field backed by an array accepts one item per
-use, so repeated flags build the array. A `--<field>-json` flag carries one
-whole JSON value for a field, such as `--supersedes-json '[]'`; a JSON null
-clears the field where the schema allows null, while a plain flag on a
-string-typed field always supplies text. Arrays and objects can also come from one JSON object on
-standard input with `--stdin`, which fills only the body fields that no flag
-assigned and refuses a field that a flag already set. Path identity comes from
-the command address. Query parameters and `If-Match` controls use the flags
-that the catalog declares. Every review record update takes its guard as
-`--if-match`, which must contain `data.edit.etag` from the latest member read,
-unchanged. Requirement, Topic, and Question updates require it. Source, Rule,
-Resolution, Domain, and Boundary updates accept it, and write without a check
-when it is absent. No update accepts the guard as an `--expected-etag` flag or
-as an `expected_etag` body field.
+`--input` reads the JSON body from a file, or from standard input with `-`. The
+body is the data object without the `{"data": ...}` wrapper. `--query` and
+`--header` take `name=value` and `Name: value`.
+
+Scalar body fields of a record command use flags. The CLI converts Boolean,
+integer, floating-point, null, and string values to their catalog types, and a
+string-typed field keeps the exact text it receives. A field backed by an array
+accepts one item per use, so repeated flags build the array. A
+`--<field>-json` flag carries one whole JSON value for a field, such as
+`--supersedes-json '[]'`; a JSON null clears the field where the schema allows
+null, while a plain flag on a string-typed field always supplies text. Arrays
+and objects can also come from one JSON object on standard input with
+`--stdin`, which fills only the body fields that no flag assigned and refuses a
+field that a flag already set. Every review record update takes its guard as
+`--if-match`, which must contain `review.edit.etag` from the latest review
+read, unchanged. Requirement, Topic, and Question updates require it. Source,
+Rule, Resolution, Domain, and Boundary updates accept it, and write without a
+check when it is absent. No update accepts the guard as an `--expected-etag`
+flag or as an `expected_etag` body field.
 
 `provenance api` shows at most 50 routes by default. Use `--filter <text>` to
 select routes or `--limit <number>` to increase the bound. Use `--format json`
@@ -148,7 +139,7 @@ only when you need all request and response schemas.
 Every catalog result uses `{data,meta}` or `{error,meta}`. Lists put their
 records in `data.items`.
 
-With `--format json`, a catalog route, `provenance api`, a record read, search,
+With `--format json`, `provenance api`, a record read, search,
 or action, and a Discussion command print a refusal from the operation as one
 `{error,meta}` object. The object is the only line on standard error, it has no
 prefix, and the command exits with code 1. When the CLI knows the next command

@@ -11,7 +11,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
 /** Writes records into the fixture repository before the host starts. */
 export interface FixtureRepository {
-  /** Runs `<collection> create --stdin` with the body. */
+  /** Creates one record with `api <collection> --method post`; the body carries the record ID. */
   create(collection: string, body: object): void;
 }
 
@@ -53,7 +53,7 @@ export async function withFixtureHost<T>(
     });
     seed({
       create(collection, body) {
-        execFileSync(binary, [collection, 'create', '--repo', repository, '--scope', 'default', '--stdin'], {
+        execFileSync(binary, ['api', collection, '--method', 'post', '--input', '-', '--repo', repository, '--scope', 'default'], {
           cwd: work, encoding: 'utf8', timeout: 30_000, env, input: JSON.stringify(body),
         });
       },

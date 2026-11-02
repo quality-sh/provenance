@@ -99,11 +99,14 @@ fn fork_tournament_skill_documents_the_assertable_winner_lifecycle() {
     ));
 
     assert!(skill.contains("provenance schema show proposal --format json"));
-    assert!(skill.contains("provenance proposals prop_<question>_<winner_slot> assertions create"));
-    assert!(skill.contains("--id assertion_<question>_<winner_slot>"));
-    assert!(skill.contains("--supporting-claim-ids claim_<question>_<winner_slot>"));
-    assert!(skill.contains("provenance proposals prop_<question>_<slot> dispositions create"));
-    assert!(skill.contains("--canonical-artifact-json"));
+    assert!(skill.contains(
+        "provenance api proposals/prop_<question>_<winner_slot>/assertions --method post"
+    ));
+    assert!(skill.contains(r#""id":"assertion_<question>_<winner_slot>""#));
+    assert!(skill.contains(r#""supporting_claim_ids":["claim_<question>_<winner_slot>"]"#));
+    assert!(skill
+        .contains("provenance api proposals/prop_<question>_<slot>/dispositions --method post"));
+    assert!(skill.contains(r#""canonical_artifact":"#));
 }
 
 #[test]
@@ -279,8 +282,8 @@ fn graph_read_reports_missing_skills_and_install_command() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
+            "api",
             "questions",
-            "list",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
@@ -297,8 +300,8 @@ fn graph_read_reports_missing_skills_and_install_command() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
+            "api",
             "questions",
-            "list",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
@@ -326,8 +329,8 @@ fn install_status_uses_canonical_agents_skill_files_as_source_of_truth() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
+            "api",
             "questions",
-            "list",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
@@ -350,8 +353,8 @@ fn shaping_and_ideation_commands_emit_suppressible_skill_install_hint() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
+            "api",
             "questions",
-            "list",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
@@ -368,8 +371,8 @@ fn shaping_and_ideation_commands_emit_suppressible_skill_install_hint() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
+            "api",
             "proposals",
-            "list",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
@@ -387,8 +390,8 @@ fn shaping_and_ideation_commands_emit_suppressible_skill_install_hint() {
         .unwrap()
         .args([
             "--quiet",
+            "api",
             "questions",
-            "list",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
