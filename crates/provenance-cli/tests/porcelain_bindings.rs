@@ -291,6 +291,26 @@ fn live_cli_and_mcp_check_selectors_keep_shared_semantics() {
 }
 
 #[test]
+#[verifies("rule_porcelain_check_statement_field_shared", examples)]
+fn live_cli_and_mcp_check_statement_fields_produce_the_same_input() {
+    let statement = "The pump stops.";
+    let cli = provenance_cli::porcelain::check_input_from_selectors(
+        false,
+        false,
+        false,
+        Some(statement.to_owned()),
+    );
+    let mcp: provenance_porcelain::check::CheckInput =
+        serde_json::from_value(json!({"statement": statement})).unwrap();
+
+    assert_eq!(cli, mcp);
+    assert_eq!(
+        cli.categories(),
+        [provenance_porcelain::check::Category::Statements]
+    );
+}
+
+#[test]
 #[verifies("rule_porcelain_cli_readable_json", examples)]
 fn readable_get_warns_when_the_record_or_view_is_stale() {
     let record = serde_json::from_value(json!({
