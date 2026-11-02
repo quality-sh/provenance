@@ -3,7 +3,6 @@ use crate::operations::catalog::{
     self, ContextResolver, ExecutionNeeds, PreparedContext, PreparedRead, RequestedContext,
 };
 use crate::operations::{queries, read_policy::ReadPolicy};
-use crate::review::SubmitRecordReview;
 use crate::state_store::{
     CreateQuestionInput, CreateResolutionInput, CreateRuleInput, CreateTopicInput,
     EditQuestionInput, StateStore, UpdateTopicInput,
@@ -144,35 +143,6 @@ fn seed_archived_shaping_records(store: &StateStore, scope: &ScopeId) {
                 links: Vec::new(),
                 resolution_id: None,
                 contradicts: None,
-            })
-            .unwrap();
-    }
-    for (kind, id) in [
-        (NodeType::Topic, "topic_archived"),
-        (NodeType::Question, "question_archived_one"),
-        (NodeType::Question, "question_archived_two"),
-    ] {
-        let id = sid(id);
-        let revision = store
-            .record_decision_state(scope, kind, &id)
-            .unwrap()
-            .current_revision
-            .unwrap();
-        store
-            .submit_record_review(SubmitRecordReview {
-                scope_id: scope.clone(),
-                actor: "author".into(),
-                record_kind: kind,
-                record_id: id,
-                declared_by: None,
-                title: "Review archive candidate".into(),
-                summary: "Review this shaping record.".into(),
-                confidence: None,
-                source_ids: Vec::new(),
-                evidence_references: Vec::new(),
-                builds_on: Vec::new(),
-                expected_revision: Some(revision),
-                revises: None,
             })
             .unwrap();
     }

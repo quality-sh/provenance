@@ -4,7 +4,7 @@ use provenance_core::{
 };
 use provenance_store::{
     layout::ProvenanceLayout,
-    review::{DecideRecordReview, ReviewFeedback, SubmitRecordReview},
+    review::{DecideRecordReview, ReviewFeedback},
     state_store::{
         CreateBoundaryInput, CreateDomainInput, CreateQuestionInput, CreateRequirementInput,
         CreateResolutionInput, CreateRuleInput, CreateSourceInput, CreateTopicInput,
@@ -253,25 +253,10 @@ fn run_review_cycle(kind: NodeType) {
     let created = store
         .record_decision_state(&scope, kind, &record_id)
         .unwrap();
-    assert!(created.pending.is_none());
+    // The create opened the first submission in the same write.
     let first_revision = created.current_revision.unwrap();
-    let first = store
-        .submit_record_review(SubmitRecordReview {
-            scope_id: scope.clone(),
-            actor: "author".into(),
-            record_kind: kind,
-            record_id: record_id.clone(),
-            declared_by: None,
-            title: "Review Policy A".into(),
-            summary: "Review the source definition.".into(),
-            confidence: None,
-            source_ids: Vec::new(),
-            evidence_references: Vec::new(),
-            builds_on: Vec::new(),
-            expected_revision: Some(first_revision.clone()),
-            revises: None,
-        })
-        .unwrap();
+    let first = created.pending.unwrap();
+    assert_eq!(first.revision, first_revision);
     let rejected = store
         .decide_record_review(DecideRecordReview {
             scope_id: scope.clone(),
@@ -352,26 +337,11 @@ fn pending_classification_review(
 ) -> (tempfile::TempDir, StateStore, ScopeId, StableId) {
     let (temp, store, scope) = fixture();
     let record_id = create_record(&store, kind);
-    let current_revision = store
+    // The create opened the submission.
+    let proposal = store
         .record_decision_state(&scope, kind, &record_id)
         .unwrap()
-        .current_revision;
-    let proposal = store
-        .submit_record_review(SubmitRecordReview {
-            scope_id: scope.clone(),
-            actor: "author".into(),
-            record_kind: kind,
-            record_id,
-            declared_by: None,
-            title: "Review classification".into(),
-            summary: "Review the classification.".into(),
-            confidence: None,
-            source_ids: Vec::new(),
-            evidence_references: Vec::new(),
-            builds_on: Vec::new(),
-            expected_revision: current_revision,
-            revises: None,
-        })
+        .pending
         .unwrap()
         .proposal_id;
     (temp, store, scope, proposal)

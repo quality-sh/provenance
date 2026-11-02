@@ -1,23 +1,27 @@
-//! Automatic review submissions for enrolled graph record writes.
+//! Automatic review submissions for graph record writes.
 
-use super::{
-    classifier,
-    decision_state::{check_request_size, CycleFacts},
-    SubmitRecordReview,
-};
+use super::{classifier, decision_state::check_request_size, SubmitRecordReview};
 use crate::{shards, state_store::StateStore};
-use provenance_core::{review::ReviewRecord, NodeType};
+use provenance_core::review::ReviewRecord;
 use provenance_macros::rule;
 
 /// The submission actor of a server write that names no actor.
 pub(super) const AUTHORING_ACTOR: &str = "authoring";
 
 impl StateStore {
+    /// Opens the review submission of a new record in the same write.
+    pub(super) fn open_creation_submission(
+        &self,
+        created: &ReviewRecord,
+        actor: &str,
+    ) -> anyhow::Result<()> {
+        let revision = classifier::review_revision(created.kind(), created)?;
+        self.commit_automatic_submission(created, actor, &revision)
+    }
+
     /// Opens the review submission of a content change in the same write.
-    ///
-    /// A Requirement is always in review. A record of another kind is in
-    /// review after its first submission. A lifecycle-only change keeps the
-    /// review revision and opens no submission.
+    /// A lifecycle-only change keeps the review revision and opens no
+    /// submission.
     pub(super) fn open_content_change_submission(
         &self,
         before: &ReviewRecord,
@@ -27,11 +31,6 @@ impl StateStore {
         let kind = after.kind();
         let revision = classifier::review_revision(kind, after)?;
         if classifier::review_revision(kind, before)? == revision {
-            return Ok(());
-        }
-        if kind != NodeType::Requirement
-            && !CycleFacts::validated(self, after.scope_id())?.has_submissions(kind, after.id())
-        {
             return Ok(());
         }
         self.commit_automatic_submission(after, actor, &revision)

@@ -113,22 +113,3 @@ fn resolution_lifecycle_change_after_acceptance_opens_no_submission() {
         before["decision"]["current_acceptance"]
     );
 }
-
-#[test]
-fn content_change_to_a_never_submitted_rule_opens_no_submission() {
-    let (_directory, repo) = init();
-    create_requirement(&repo, "req_a");
-    create_rule(&repo, "rule_a", "req_a");
-
-    guarded_update(
-        &repo,
-        "rules",
-        "rule_a",
-        &["--statement", "The system keeps each stored record."],
-    );
-
-    let after = read(&repo, "rules", "rule_a");
-    assert_eq!(after["statement"], "The system keeps each stored record.");
-    assert!(after["decision"]["pending"].is_null());
-    assert_eq!(after["decision"]["decisions"], serde_json::json!([]));
-}

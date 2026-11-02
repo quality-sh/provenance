@@ -55,8 +55,7 @@ impl NativeRecordBatch<'_> {
     }
 
     /// Like [`Self::mutate_one`], but `mutate` also gets the store that holds
-    /// the staged section. A content change to a record in review opens its
-    /// review submission in the same staged write.
+    /// the staged section.
     fn mutate_one_with_store<T: GraphRecord>(
         &self,
         path: &Utf8Path,
@@ -67,13 +66,6 @@ impl NativeRecordBatch<'_> {
             let result = mutate(held, records)?;
             Ok((result.clone(), Some(result.id().clone())))
         })?;
-        for (before, after) in &changes {
-            self.store.open_content_change_submission(
-                &before.clone().into(),
-                &after.clone().into(),
-                AUTHORING_ACTOR,
-            )?;
-        }
         Ok(changes
             .into_iter()
             .map(|(_, after)| after)
@@ -93,6 +85,8 @@ impl NativeRecordBatch<'_> {
         .map(|_| ())
     }
 
+    /// Writes one section. Each content change opens its review submission
+    /// in the same staged write.
     fn write<T, R>(
         &self,
         path: &Utf8Path,
@@ -102,7 +96,7 @@ impl NativeRecordBatch<'_> {
     where
         T: GraphRecord,
     {
-        self.store.permitting(&[path], "*", |store| {
+        let (result, changes) = self.store.permitting(&[path], "*", |store| {
             let (result, changes) =
                 store.mutate_jsonl_records_with_store(path, |held, records: &mut Vec<T>| {
                     let before = records.clone();
@@ -127,7 +121,15 @@ impl NativeRecordBatch<'_> {
                 store.validate_graph_scope(review.scope_id())?;
             }
             Ok((result, changes))
-        })
+        })?;
+        for (before, after) in &changes {
+            self.store.open_content_change_submission(
+                &before.clone().into(),
+                &after.clone().into(),
+                AUTHORING_ACTOR,
+            )?;
+        }
+        Ok((result, changes))
     }
 }
 

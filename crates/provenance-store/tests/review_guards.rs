@@ -98,13 +98,7 @@ fn create(store: &StateStore, kind: NodeType) -> serde_json::Value {
             }
         }
     }.unwrap();
-    if kind != NodeType::Requirement {
-        store.submit_record_review(input(json!({
-            "scope_id":"default","actor":"author","record_kind":kind,"record_id":value["id"],
-            "title":"Review the record","summary":"Review the stored text.","declared_by":null,
-            "source_ids":[],"evidence_references":[],"builds_on":[],"expected_revision":null,"revises":null
-        }))).unwrap();
-    }
+    // The create opened the review submission, so the guard applies.
     value
 }
 

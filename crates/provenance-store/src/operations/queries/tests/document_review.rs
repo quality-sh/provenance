@@ -101,12 +101,14 @@ fn create_document_records(store: &StateStore, scope: &ScopeId) -> Vec<(NodeType
     ]
 }
 
+/// The pending submission of the current revision. A create opens one;
+/// this submits the current revision when none is pending.
 fn submit(store: &StateStore, scope: &ScopeId, kind: NodeType, id: &StableId) -> StableId {
-    let revision = store
-        .record_decision_state(scope, kind, id)
-        .unwrap()
-        .current_revision
-        .unwrap();
+    let state = store.record_decision_state(scope, kind, id).unwrap();
+    if let Some(pending) = state.pending {
+        return pending.proposal_id;
+    }
+    let revision = state.current_revision.unwrap();
     store
         .submit_record_review(SubmitRecordReview {
             scope_id: scope.clone(),

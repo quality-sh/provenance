@@ -49,6 +49,8 @@ impl StateStore {
         })
     }
 
+    /// Creates one native record and opens its review submission in the same
+    /// write.
     pub(crate) fn create_native_record<T: GraphRecord>(
         &self,
         path: &Utf8Path,
@@ -60,7 +62,9 @@ impl StateStore {
         self.with_repository_publication(|held| {
             with_record_state(held, RecordStamp::resolved(stamp), |staged| {
                 let staged_path = staged.layout.root().join(&relative);
-                staged.permitting(&[&staged_path], id.as_str(), write)
+                let created = staged.permitting(&[&staged_path], id.as_str(), write)?;
+                staged.open_creation_submission(&created.clone().into(), AUTHORING_ACTOR)?;
+                Ok(created)
             })
         })
     }
