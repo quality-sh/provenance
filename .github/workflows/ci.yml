@@ -537,13 +537,22 @@ jobs:
           read -ra packages <<< "$TEST_PACKAGES"
           echo "Packages: $TEST_PACKAGES"
           echo "Tests: $TEST_FILTER"
+          # Print memory, swap, disk and the largest processes every 30
+          # seconds. When the runner runs out of memory it shuts down and the
+          # failure step below does not run, so these lines are the record.
+          (
+            while sleep 30; do
+              echo "SAMPLE $(date -u +%T) $(free -m | awk '/Mem:/{printf "mem_used=%s avail=%s", $3, $7} /Swap:/{printf " swap_used=%s", $3}') $(df -BM --output=avail / | tail -1 | tr -d ' ' | sed 's/^/disk_avail=/') top=$(ps -eo rss=,args= --sort=-rss | head -4 | awk '{n=$2; sub(".*/", "", n); t=""; for (i=3; i<=NF; i++) { if ($i == "--crate-name") n=n"/"$(i+1); if ($i == "--test") t="/test" } printf "%s%s:%dM,", n, t, $1/1024}')"
+            done
+          ) &
+          sampler=$!
+          trap 'kill $sampler 2>/dev/null' EXIT
           # Host lifecycle tests kill instrumented children. llvm-profdata reports
           # each corrupt profile path and merges the remaining valid profiles.
           # Test failures still fail this command; an entirely invalid set fails too.
           cargo llvm-cov nextest "${packages[@]}" --all-features --no-fail-fast --lcov --failure-mode all --output-path target/crap/lcov.info -E "($TEST_FILTER) & not ($COMPILE_FAIL_TESTS)"
-      # The coverage step has stopped with exit code 143 (SIGTERM) during a
-      # compile that printed nothing. These facts show if the runner ran out
-      # of memory.
+      # These facts show if the runner ran out of memory. When the runner
+      # itself shuts down, this step does not run; read the SAMPLE lines.
       - name: Show memory facts after a failed test run
         if: failure() && runner.os == 'Linux'
         run: |
