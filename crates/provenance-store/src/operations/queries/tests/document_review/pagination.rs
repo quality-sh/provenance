@@ -31,18 +31,12 @@ async fn document_pages_keep_membership_and_whole_totals() {
         let page = read(&root, cursor).await.unwrap();
         assert_eq!(
             page["review_totals"],
-            json!({"pending":1,"accepted":0,"rejected":0})
+            json!({"pending":6,"accepted":0,"rejected":0})
         );
         let entry = &page["entries"][0];
         let id = entry["node"]["id"].as_str().unwrap();
-        assert_eq!(
-            entry["review"]["outcome"],
-            if id == "req_overtime" {
-                json!("pending")
-            } else {
-                Value::Null
-            }
-        );
+        // Each create opened a submission.
+        assert_eq!(entry["review"]["outcome"], "pending", "{id}");
         found.push((entry["kind"].as_str().unwrap().to_owned(), id.to_owned()));
         cursor = page["next_cursor"].as_str().map(str::to_owned);
         if cursor.is_none() {

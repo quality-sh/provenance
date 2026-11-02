@@ -77,8 +77,17 @@ fn document(source_name: &str, requirement: &str, rule: &str) -> TypedSpecInput 
     }
 }
 
-/// Submits the stored record through the public review operation.
+/// Submits the stored record through the public review operation, unless a
+/// native create already opened its submission.
 fn submit_for_review(store: &StateStore, scope: &ScopeId, kind: NodeType, id: &StableId) {
+    if store
+        .record_decision_state(scope, kind, id)
+        .unwrap()
+        .pending
+        .is_some()
+    {
+        return;
+    }
     let record = review_families::record(store, scope, kind, id).unwrap();
     let value = serde_json::to_value(record).unwrap();
     let declared_by = ["declared_by", "made_by", "claimed_by"]

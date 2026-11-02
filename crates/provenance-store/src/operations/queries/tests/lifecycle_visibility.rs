@@ -348,7 +348,7 @@ async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals
     .unwrap();
     assert_eq!(
         serde_json::to_value(unfiltered_document.result).unwrap()["review_totals"],
-        json!({"pending":4,"accepted":0,"rejected":0})
+        json!({"pending":5,"accepted":0,"rejected":0})
     );
 
     let document = queries::read_document(
@@ -372,7 +372,7 @@ async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals
     }));
     assert_eq!(
         document["review_totals"],
-        json!({"pending":1,"accepted":0,"rejected":0})
+        json!({"pending":2,"accepted":0,"rejected":0})
     );
 }
 

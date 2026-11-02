@@ -22,7 +22,7 @@ async fn document_filter_hides_rejected_new_records_and_keeps_accepted_records()
     assert_eq!(review(&full, "rule_policy")["outcome"], "rejected");
     assert_eq!(
         full["review_totals"],
-        json!({"pending":1,"accepted":0,"rejected":1})
+        json!({"pending":5,"accepted":0,"rejected":1})
     );
     let filtered = page(&root, 50, true).await;
     assert!(!filtered["entries"]
@@ -32,7 +32,7 @@ async fn document_filter_hides_rejected_new_records_and_keeps_accepted_records()
         .any(|e| e["node"]["id"] == "rule_policy"));
     assert_eq!(
         filtered["review_totals"],
-        json!({"pending":1,"accepted":0,"rejected":0})
+        json!({"pending":5,"accepted":0,"rejected":0})
     );
     let id = sid("resolution_policy");
     let proposal = submit(&store, &scope, NodeType::Resolution, &id);
@@ -61,7 +61,7 @@ async fn document_filter_hides_rejected_new_records_and_keeps_accepted_records()
     );
     assert_eq!(
         filtered["review_totals"],
-        json!({"pending":1,"accepted":0,"rejected":1})
+        json!({"pending":4,"accepted":0,"rejected":1})
     );
 }
 
@@ -112,6 +112,6 @@ async fn document_distinguishes_decisions_within_each_family() {
     }
     assert_eq!(
         result["review_totals"],
-        json!({"pending":1,"accepted":2,"rejected":2})
+        json!({"pending":4,"accepted":2,"rejected":2})
     );
 }

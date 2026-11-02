@@ -312,7 +312,6 @@ fn two_guarded_rule_writes_with_one_etag_publish_one_change_and_one_submission()
     let (_temp, store, scope) = fixture();
     requirement(&store, "req_a", &[]);
     rule(&store, "rule_a", "active", &["req_a"]);
-    accept_current(&store, &scope, NodeType::Rule, "rule_a");
     let before = submissions(&store, &scope, NodeType::Rule, "rule_a");
     let guard = etag(&store, &scope, NodeType::Rule, "rule_a");
     let barrier = std::sync::Barrier::new(2);

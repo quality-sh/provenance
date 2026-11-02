@@ -5,6 +5,10 @@ use crate::{shards, state_store::StateStore};
 use provenance_core::review::ReviewRecord;
 use provenance_macros::rule;
 
+/// The longest summary an automatic submission copies from the record, so the
+/// submission of a record at the read budget stays inside the budget.
+const SUMMARY_CHARS: usize = 1000;
+
 /// The submission actor of a server write that names no actor.
 pub(super) const AUTHORING_ACTOR: &str = "authoring";
 
@@ -64,7 +68,9 @@ impl StateStore {
             .into_iter()
             .find_map(|field| value.get(field).and_then(serde_json::Value::as_str))
             .unwrap_or_else(|| record.id().as_str())
-            .to_owned();
+            .chars()
+            .take(SUMMARY_CHARS)
+            .collect::<String>();
         let input = SubmitRecordReview {
             scope_id: record.scope_id().clone(),
             actor: actor.to_owned(),
