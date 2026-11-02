@@ -1,7 +1,7 @@
 //! Canonical staged writer for one or more native graph record changes.
 
 use crate::{
-    review::publication::with_record_state,
+    review::{automatic_submission::AUTHORING_ACTOR, publication::with_record_state},
     state_store::{
         read_budget::ensure_slice_within_read_budget, record_stamps::GraphRecord, RecordStamp,
         StateStore,
@@ -55,7 +55,8 @@ impl NativeRecordBatch<'_> {
     }
 
     /// Like [`Self::mutate_one`], but `mutate` also gets the store that holds
-    /// the staged section.
+    /// the staged section. A content change to a record in review opens its
+    /// review submission in the same staged write.
     fn mutate_one_with_store<T: GraphRecord>(
         &self,
         path: &Utf8Path,
@@ -66,6 +67,13 @@ impl NativeRecordBatch<'_> {
             let result = mutate(held, records)?;
             Ok((result.clone(), Some(result.id().clone())))
         })?;
+        for (before, after) in &changes {
+            self.store.open_content_change_submission(
+                &before.clone().into(),
+                &after.clone().into(),
+                AUTHORING_ACTOR,
+            )?;
+        }
         Ok(changes
             .into_iter()
             .map(|(_, after)| after)

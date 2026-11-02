@@ -30,7 +30,9 @@ it in the same change.
 - Annotate implementation with `rule`, tests with `verifies`. Annotations move
   with code.
 - Change a Requirement, Rule, or Resolution with a guarded record update.
-  A content change opens a review submission unless a reviewer accepted that content.
+  A content change to a record in review opens a review submission, unless a reviewer
+  accepted that content. A Requirement is in review when you create it. Another
+  record enters review when you first submit it.
   Git supplies record history and change evidence. Proposal, Disposition, Withdrawal,
   and Discussion records hold review state.
 - When a session starts to write records, start or reuse the review host:
