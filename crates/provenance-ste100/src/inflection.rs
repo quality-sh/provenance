@@ -129,13 +129,16 @@ mod tests {
         assert!(has("zorping", "zorp", Inflection::PresentParticiple));
         assert!(has("gliming", "glime", Inflection::PresentParticiple));
         assert!(has("frobbing", "frob", Inflection::PresentParticiple));
-        assert!(base_candidates("zorp's").is_empty());
+        assert_eq!(
+            base_candidates("zorp's"),
+            Vec::<(String, Inflection)>::new()
+        );
         assert!(has("zorps's", "zorp", Inflection::Plural));
     }
 
     #[test]
     fn a_double_s_and_a_short_base_give_no_candidate() {
         assert!(!has("zass", "zas", Inflection::Plural));
-        assert!(base_candidates("as").is_empty());
+        assert_eq!(base_candidates("as"), Vec::<(String, Inflection)>::new());
     }
 }
