@@ -18,7 +18,6 @@ impl StateStore {
     /// A Requirement is always in review. A record of another kind is in
     /// review after its first submission. A lifecycle-only change keeps the
     /// review revision and opens no submission.
-    #[rule("rule_content_change_opens_review_submission")]
     pub(super) fn open_content_change_submission(
         &self,
         before: &ReviewRecord,
