@@ -393,7 +393,11 @@ async fn cli_and_mcp_file_search_return_the_same_result() {
     let structured = mcp.structured_content.as_ref().unwrap();
     assert_eq!(&cli_json, structured);
     assert_eq!(cli_json["nodes"][0]["id"], "rule_pay");
-    assert!(validator.is_valid(structured), "{structured}");
+    let errors = validator
+        .iter_errors(structured)
+        .map(|error| format!("{} at {}", error, error.instance_path()))
+        .collect::<Vec<_>>();
+    assert!(errors.is_empty(), "{errors:?}");
     assert_eq!(
         String::from_utf8(cli_text.stdout).unwrap().trim_end(),
         mcp.content[0].as_text().unwrap().text
