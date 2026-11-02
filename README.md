@@ -90,7 +90,7 @@ npx provenance prime
 | `provenance proposals list --scope default --exclude-terminal true` | List proposals that do not have a terminal disposition |
 | `provenance review` | Serve the review page for the working-copy graph on a local host |
 | `provenance coverage scan --path . --validate-rules` | Check bindings and report active Rules with no implementation or verification |
-| `provenance statement-checks create --stdin` / `provenance authoring-changes create --stdin` / `provenance verification-runs list` | ASD-STE100 statement preflight, typed desired state, and callback evidence protocol |
+| `provenance check --statement "<statement>" --format json` / `provenance authoring-changes create --stdin` / `provenance verification-runs list` | ASD-STE100 statement preflight, typed desired state, and callback evidence protocol |
 | `provenance rules stale --base main` | Report Rules with evidence paths that changed after `main` |
 | `provenance skills install` | Install the bundled agent skills (`provenance-shaping`, `provenance-fork-tournament`, `provenance-swarm-backtrace`, `provenance-grounded-writing`) |
 
