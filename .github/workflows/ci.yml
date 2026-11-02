@@ -537,6 +537,14 @@ jobs:
           read -ra packages <<< "$TEST_PACKAGES"
           echo "Packages: $TEST_PACKAGES"
           echo "Tests: $TEST_FILTER"
+          # Diagnostic: print memory, swap and disk every 15 seconds.
+          (
+            while sleep 15; do
+              echo "SAMPLE $(date -u +%T) $(free -m | awk '/Mem:/{printf "mem_used=%s avail=%s", $3, $7} /Swap:/{printf " swap_used=%s", $3}') $(df -BM --output=avail / | tail -1 | tr -d ' ' | sed 's/^/disk_avail=/') top=$(ps -eo rss=,comm= --sort=-rss | head -4 | awk '{printf "%s:%dM,", $2, $1/1024}')"
+            done
+          ) &
+          sampler=$!
+          trap 'kill $sampler 2>/dev/null' EXIT
           # Host lifecycle tests kill instrumented children. llvm-profdata reports
           # each corrupt profile path and merges the remaining valid profiles.
           # Test failures still fail this command; an entirely invalid set fails too.
