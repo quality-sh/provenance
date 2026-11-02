@@ -55,7 +55,7 @@ pub fn guess(
     let ends_in_s = token.folded.ends_with('s');
     let sentence = sentences
         .iter()
-        .find(|sentence| sentence.start <= token.start && token.start < sentence.end);
+        .find(|sentence| (sentence.start..sentence.end).contains(&token.start));
     let prior = position.checked_sub(1).map(|prior| &tokens[prior]);
     let first_in_sentence =
         prior.is_none_or(|prior| sentence.is_some_and(|sentence| prior.start < sentence.start));
