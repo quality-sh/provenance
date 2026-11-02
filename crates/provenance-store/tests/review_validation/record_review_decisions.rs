@@ -290,25 +290,11 @@ fn run_review_cycle(kind: NodeType) {
     let revised = store
         .record_decision_state(&scope, kind, &record_id)
         .unwrap();
-    assert!(revised.pending.is_none());
+    // The content change opens the next submission in the same write.
     let second_revision = revised.current_revision.unwrap();
-    let second = store
-        .submit_record_review(SubmitRecordReview {
-            scope_id: scope.clone(),
-            actor: "author".into(),
-            record_kind: kind,
-            record_id: record_id.clone(),
-            declared_by: None,
-            title: "Review the revised record".into(),
-            summary: "Review the precise record text.".into(),
-            confidence: None,
-            source_ids: Vec::new(),
-            evidence_references: Vec::new(),
-            builds_on: Vec::new(),
-            expected_revision: Some(second_revision.clone()),
-            revises: Some(first.proposal_id),
-        })
-        .unwrap();
+    let pending = revised.pending.unwrap();
+    assert_eq!(pending.revision, second_revision);
+    let second = pending.proposal_id;
     assert_ne!(second_revision, first_revision);
 
     let before_approval = record_value(&store, &scope, kind, &record_id);
@@ -316,7 +302,7 @@ fn run_review_cycle(kind: NodeType) {
         .decide_record_review(DecideRecordReview {
             scope_id: scope.clone(),
             actor: reviewer(),
-            proposal_id: second.proposal_id.clone(),
+            proposal_id: second.clone(),
             decision: DispositionDecision::Accepted,
             rationale: None,
             canonical_artifact: Some(provenance_core::CanonicalArtifact {
@@ -341,7 +327,7 @@ fn run_review_cycle(kind: NodeType) {
     assert_eq!(decided.decisions[1].revision, Some(second_revision));
     assert_eq!(
         decided.current_acceptance.unwrap().disposition.proposal_id,
-        second.proposal_id
+        second
     );
     assert_eq!(decided.withdrawn, [] as [provenance_core::StableId; 0]);
 }
