@@ -48,7 +48,7 @@ fn check(repo: &Path, index_directory: &Path, statement: &str, extra: &[&str]) -
         .unwrap()
 }
 
-fn report(output: &Output) -> Value {
+fn check_report(output: &Output) -> Value {
     serde_json::from_slice(&output.stdout).unwrap_or_else(|error| {
         panic!(
             "stdout must be the check report: {error}: {}",
@@ -77,7 +77,7 @@ fn an_unapproved_word_gives_a_rule_one_one_finding_with_the_ste100_detail() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let report = report(&output);
+    let report = check_report(&output);
     let statements = statements_category(&report);
     assert_eq!(statements["status"], "findings", "{report}");
     assert_eq!(statements["context"], Value::Null, "{report}");
@@ -110,7 +110,7 @@ fn a_listed_technical_name_and_a_clean_statement_pass() {
         let output = check(&repo, &index_directory, &statement, &["--format", "json"]);
 
         assert!(output.status.success(), "{statement}");
-        let report = report(&output);
+        let report = check_report(&output);
         let statements = statements_category(&report);
         assert_eq!(statements["status"], "passed", "{statement}: {report}");
         assert_eq!(statements["findings"], Value::Array(Vec::new()), "{report}");
@@ -161,7 +161,7 @@ fn a_missing_index_warns_first_and_is_unavailable_in_strict_mode() {
     );
 
     assert!(warned.status.success());
-    let report = report(&warned);
+    let report = check_report(&warned);
     let findings = statements_category(&report)["findings"].as_array().unwrap();
     assert_eq!(findings.len(), 2, "{report}");
     assert!(
@@ -175,7 +175,7 @@ fn a_missing_index_warns_first_and_is_unavailable_in_strict_mode() {
     assert_eq!(findings[1]["detail"]["rule"], "8.1", "{report}");
 
     assert_eq!(strict.status.code(), Some(1));
-    let report = report(&strict);
+    let report = check_report(&strict);
     let statements = statements_category(&report);
     assert_eq!(statements["status"], "unavailable", "{report}");
     assert!(
@@ -200,7 +200,7 @@ fn an_uninitialized_repository_is_unavailable() {
     );
 
     assert_eq!(output.status.code(), Some(1));
-    let report = report(&output);
+    let report = check_report(&output);
     let statements = statements_category(&report);
     assert_eq!(statements["status"], "unavailable", "{report}");
     assert!(
@@ -248,13 +248,13 @@ fn a_supplied_statement_replaces_the_changed_committed_statements() {
         &["--format", "json"],
     );
 
-    let report = report(&committed);
+    let report = check_report(&committed);
     assert_eq!(
         statements_category(&report)["findings"][0]["detail"]["id"],
         "req_changed",
         "the committed check sees the changed record: {report}"
     );
-    let report = report(&supplied);
+    let report = check_report(&supplied);
     assert_eq!(statements_category(&report)["status"], "passed", "{report}");
 }
 
@@ -307,7 +307,7 @@ fn the_check_findings_equal_the_rule_write_refusal() {
         .unwrap();
 
     assert!(checked.status.success());
-    let report = report(&checked);
+    let report = check_report(&checked);
     let details = statements_category(&report)["findings"]
         .as_array()
         .unwrap()
