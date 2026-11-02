@@ -276,7 +276,7 @@ fn run_review_cycle(kind: NodeType) {
         .decide_record_review(DecideRecordReview {
             scope_id: scope.clone(),
             actor: reviewer(),
-            proposal_id: first.proposal_id.clone(),
+            proposal_id: first.proposal_id,
             decision: DispositionDecision::Rejected,
             rationale: Some("The source name is not precise.".into()),
             canonical_artifact: None,
