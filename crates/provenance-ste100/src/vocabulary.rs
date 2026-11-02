@@ -1,9 +1,10 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use provenance_macros::rule;
 
+use crate::inflection::{self, Inflection};
 use crate::protected_spans::ProtectedSpans;
-use crate::{DictionaryImport, DictionaryStatus, Span, VocabularyCategory, WordUse};
+use crate::{DictionaryImport, DictionaryStatus, PartOfSpeech, Span, VocabularyCategory, WordUse};
 
 /// Classifies each word or phrase by dictionary membership only.
 #[rule("rule_ste_dictionary_finding_categories")]
@@ -153,17 +154,18 @@ struct PhraseMatch {
     category: VocabularyCategory,
 }
 
+/// One dictionary entry that a token can stand for.
+type EntryMatch = (PartOfSpeech, DictionaryStatus);
+
 struct VocabularyIndex {
-    approved_words: HashSet<String>,
-    unapproved_words: HashSet<String>,
+    words: HashMap<String, Vec<EntryMatch>>,
     phrases: HashMap<String, Vec<(Vec<String>, DictionaryStatus)>>,
 }
 
 impl VocabularyIndex {
     fn build(dictionary: &DictionaryImport) -> Self {
         let mut index = Self {
-            approved_words: HashSet::new(),
-            unapproved_words: HashSet::new(),
+            words: HashMap::new(),
             phrases: HashMap::new(),
         };
         for entry in &dictionary.entries {
@@ -173,7 +175,11 @@ impl VocabularyIndex {
                 match words.as_slice() {
                     [] => {}
                     [word] => {
-                        index.word_set_mut(entry.status).insert(word.clone());
+                        let matches = index.words.entry(word.clone()).or_default();
+                        let found = (entry.part_of_speech, entry.status);
+                        if !matches.contains(&found) {
+                            matches.push(found);
+                        }
                     }
                     [first, ..] => {
                         index
@@ -188,23 +194,36 @@ impl VocabularyIndex {
         index
     }
 
-    const fn word_set_mut(&mut self, status: DictionaryStatus) -> &mut HashSet<String> {
-        match status {
-            DictionaryStatus::Approved => &mut self.approved_words,
-            DictionaryStatus::Unapproved => &mut self.unapproved_words,
-        }
+    fn word_category(&self, folded: &str) -> VocabularyCategory {
+        status_category(&self.word_matches(folded))
     }
 
-    fn word_category(&self, folded: &str) -> VocabularyCategory {
+    /// Gives the entries that a token can stand for. A printed form wins.
+    /// Otherwise a regular ending is removed: a verb ending matches only an
+    /// unapproved verb, and a plural matches a noun of either status.
+    fn word_matches(&self, folded: &str) -> Vec<EntryMatch> {
         let base = folded.strip_suffix("\u{27}s").unwrap_or(folded);
-        let candidates = [folded, base];
-        let approved = candidates
+        let printed: Vec<EntryMatch> = [folded, base]
             .iter()
-            .any(|candidate| self.approved_words.contains(*candidate));
-        let unapproved = candidates
-            .iter()
-            .any(|candidate| self.unapproved_words.contains(*candidate));
-        category_of(approved, unapproved)
+            .filter_map(|candidate| self.words.get(*candidate))
+            .flatten()
+            .copied()
+            .collect();
+        if !printed.is_empty() {
+            return printed;
+        }
+        inflection::base_candidates(folded)
+            .into_iter()
+            .filter_map(|(candidate, ending)| {
+                self.words.get(&candidate).map(|matches| (matches, ending))
+            })
+            .flat_map(|(matches, ending)| {
+                matches
+                    .iter()
+                    .copied()
+                    .filter(move |found| derives(ending, *found))
+            })
+            .collect()
     }
 
     fn longest_phrase(
@@ -258,6 +277,22 @@ fn phrase_matches(
         }
     }
     true
+}
+
+fn derives(ending: Inflection, (part_of_speech, status): EntryMatch) -> bool {
+    part_of_speech == ending.part_of_speech()
+        && (ending == Inflection::Plural || status == DictionaryStatus::Unapproved)
+}
+
+fn status_category(matches: &[EntryMatch]) -> VocabularyCategory {
+    category_of(
+        matches
+            .iter()
+            .any(|(_, status)| *status == DictionaryStatus::Approved),
+        matches
+            .iter()
+            .any(|(_, status)| *status == DictionaryStatus::Unapproved),
+    )
 }
 
 const fn category_of(approved: bool, unapproved: bool) -> VocabularyCategory {

@@ -16,6 +16,13 @@ pub const UNAPPROVED_TABLE_ROWS: usize = 1_318;
 /// and no underscore, so the vocabulary check treats it as prose.
 pub const UNAPPROVED_WORD: &str = "bunapprovedaaa";
 
+/// A made-up unapproved verb from the synthetic fixture. The dictionary
+/// prints only its base form.
+pub const UNAPPROVED_VERB: &str = "bfrobnicate";
+
+/// A made-up unapproved noun from the synthetic fixture.
+pub const UNAPPROVED_NOUN: &str = "bzorp";
+
 pub fn provenance() -> Command {
     Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
 }
@@ -129,13 +136,15 @@ fn approved_entry(index: usize) -> FixtureEntry {
 }
 
 fn unapproved_entry(index: usize) -> FixtureEntry {
-    let headword = match index {
-        0 => "attach".to_owned(),
-        index if index + 1 == UNAPPROVED_TABLE_ROWS => "claim".to_owned(),
-        index => format!("bunapproved{}", alpha_suffix(index - 1)),
+    let (headword, part_of_speech) = match index {
+        0 => ("attach".to_owned(), "n"),
+        index if index + 1 == UNAPPROVED_TABLE_ROWS => ("claim".to_owned(), "n"),
+        index if index + 2 == UNAPPROVED_TABLE_ROWS => (UNAPPROVED_NOUN.to_owned(), "n"),
+        index if index + 3 == UNAPPROVED_TABLE_ROWS => (UNAPPROVED_VERB.to_owned(), "v"),
+        index => (format!("bunapproved{}", alpha_suffix(index - 1)), "n"),
     };
     FixtureEntry {
-        word: format!("{headword} (n)"),
+        word: format!("{headword} ({part_of_speech})"),
         meaning: "ITEM (n)".to_owned(),
         ste: "USE THE ITEM.".to_owned(),
         non_ste: format!("Use the {headword} item."),

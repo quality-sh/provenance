@@ -5,6 +5,7 @@
 
 mod contracted_verbs;
 mod dictionary;
+mod inflection;
 mod paragraph;
 mod protected_spans;
 mod vocabulary;

@@ -2,6 +2,8 @@
 mod gate;
 #[path = "cli_dictionary/import_command.rs"]
 mod import_command;
+#[path = "cli_dictionary/inflections.rs"]
+mod inflections;
 #[path = "cli_dictionary/missing_index.rs"]
 mod missing_index;
 #[path = "cli_dictionary/status.rs"]

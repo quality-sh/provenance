@@ -5,16 +5,29 @@ use provenance_ste100::{
     StandardIssue, VocabularyCategory,
 };
 
-fn entry(headword: &str, forms: &[&str], status: DictionaryStatus) -> DictionaryEntry {
+fn entry(
+    headword: &str,
+    forms: &[&str],
+    part_of_speech: PartOfSpeech,
+    status: DictionaryStatus,
+) -> DictionaryEntry {
     DictionaryEntry {
         headword: headword.to_owned(),
         word_forms: forms.iter().map(|form| (*form).to_owned()).collect(),
-        part_of_speech: PartOfSpeech::Noun,
+        part_of_speech,
         status,
         approved_meaning_or_alternatives: "A meaning".to_owned(),
         ste_example: "USE THE ITEM.".to_owned(),
         non_ste_example: None,
     }
+}
+
+fn noun(headword: &str, forms: &[&str], status: DictionaryStatus) -> DictionaryEntry {
+    entry(headword, forms, PartOfSpeech::Noun, status)
+}
+
+fn verb(headword: &str, forms: &[&str], status: DictionaryStatus) -> DictionaryEntry {
+    entry(headword, forms, PartOfSpeech::Verb, status)
 }
 
 fn fixture_dictionary() -> DictionaryImport {
@@ -26,15 +39,31 @@ fn fixture_dictionary() -> DictionaryImport {
             extractor_version: "test".to_owned(),
         },
         entries: vec![
-            entry("AAGOOD", &["AAGOOD", "AAGOODS"], DictionaryStatus::Approved),
-            entry("bbbad", &["bbbad"], DictionaryStatus::Unapproved),
-            entry(
+            noun("AAGOOD", &["AAGOOD", "AAGOODS"], DictionaryStatus::Approved),
+            noun("bbbad", &["bbbad"], DictionaryStatus::Unapproved),
+            noun(
                 "bb far from",
                 &["bb far from"],
                 DictionaryStatus::Unapproved,
             ),
-            entry("CCBOTH", &["CCBOTH"], DictionaryStatus::Approved),
-            entry("ccboth", &["ccboth"], DictionaryStatus::Unapproved),
+            noun("CCBOTH", &["CCBOTH"], DictionaryStatus::Approved),
+            noun("ccboth", &["ccboth"], DictionaryStatus::Unapproved),
+            verb(
+                "bfrobnicate",
+                &["bfrobnicate"],
+                DictionaryStatus::Unapproved,
+            ),
+            verb("bzap", &["bzap"], DictionaryStatus::Unapproved),
+            verb("bzorply", &["bzorply"], DictionaryStatus::Unapproved),
+            noun("bzorp", &["bzorp"], DictionaryStatus::Unapproved),
+            noun("AAWIDGET", &["AAWIDGET"], DictionaryStatus::Approved),
+            verb(
+                "AAMOVE",
+                &["AAMOVE", "AAMOVES", "AAMOVED"],
+                DictionaryStatus::Approved,
+            ),
+            verb("ccwin", &["ccwin"], DictionaryStatus::Unapproved),
+            noun("CCWINS", &["CCWINS"], DictionaryStatus::Approved),
         ],
     }
 }
@@ -170,4 +199,91 @@ fn the_data_free_checks_still_run_with_a_dictionary() {
 
     assert_eq!(report.findings.len(), 1, "findings: {:?}", report.findings);
     assert_eq!(report.findings[0].rule, RuleNumber::EightOne);
+}
+
+fn categories(text: &str) -> Vec<(String, VocabularyCategory)> {
+    classify_vocabulary(text, &fixture_dictionary())
+        .into_iter()
+        .map(|word_use| {
+            (
+                text[word_use.span.start..word_use.span.end].to_owned(),
+                word_use.category,
+            )
+        })
+        .collect()
+}
+
+fn category_of(text: &str, word: &str) -> VocabularyCategory {
+    categories(text)
+        .into_iter()
+        .find(|(found, _)| found == word)
+        .unwrap_or_else(|| panic!("{word} must be classified in {text}"))
+        .1
+}
+
+fn rule_one_one_words(text: &str) -> Vec<String> {
+    check_descriptive_with_dictionary(text, &fixture_dictionary(), &[])
+        .findings
+        .into_iter()
+        .filter(|finding| finding.rule == RuleNumber::OneOne)
+        .map(|finding| text[finding.span.start..finding.span.end].to_owned())
+        .collect()
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_inflected_unapproved_form", examples)]
+fn each_regular_inflection_of_an_unapproved_verb_produces_a_finding() {
+    for (text, word) in [
+        ("The registry bfrobnicates the command.", "bfrobnicates"),
+        ("The registry bfrobnicated the command.", "bfrobnicated"),
+        (
+            "The registry is bfrobnicating the command.",
+            "bfrobnicating",
+        ),
+        ("The registry bzaps the command.", "bzaps"),
+        ("The registry bzapped the command.", "bzapped"),
+        ("The registry is bzapping the command.", "bzapping"),
+        ("The registry bzorplies the command.", "bzorplies"),
+        ("The registry bzorplied the command.", "bzorplied"),
+    ] {
+        assert_eq!(rule_one_one_words(text), [word], "text: {text}");
+    }
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_inflected_unapproved_form", examples)]
+fn the_plural_of_an_unapproved_noun_produces_a_finding() {
+    assert_eq!(rule_one_one_words("Bzorps stay here."), ["Bzorps"]);
+    assert_eq!(rule_one_one_words("The bzorps's door opens."), ["bzorps's"]);
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_inflected_unapproved_form", examples)]
+fn the_plural_of_an_approved_noun_is_approved() {
+    assert_eq!(
+        category_of("The aawidgets stay.", "aawidgets"),
+        VocabularyCategory::Approved
+    );
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_inflected_unapproved_form", examples)]
+fn an_approved_verb_keeps_only_its_printed_forms() {
+    assert_eq!(
+        category_of("The unit aamoved.", "aamoved"),
+        VocabularyCategory::Approved
+    );
+    assert_eq!(
+        category_of("The unit is aamoving.", "aamoving"),
+        VocabularyCategory::Unknown
+    );
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_inflected_unapproved_form", examples)]
+fn a_printed_form_wins_over_a_derived_form() {
+    assert_eq!(
+        category_of("The ccwins stay.", "ccwins"),
+        VocabularyCategory::Approved
+    );
 }
