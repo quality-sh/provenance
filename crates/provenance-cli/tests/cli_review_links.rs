@@ -229,7 +229,7 @@ fn ready_to_submit(repo: &str) {
     json_stdin_output(
         &[
             "api",
-            &format!("requirements/req_flow/submissions/{}/withdraw", proposal),
+            &format!("requirements/req_flow/submissions/{proposal}/withdraw"),
             "--method",
             "post",
             "--input",
@@ -292,7 +292,7 @@ fn withdraw_returns_the_review_link() {
     let withdrawn = json_stdin_output(
         &[
             "api",
-            &format!("requirements/req_flow/submissions/{}/withdraw", proposal),
+            &format!("requirements/req_flow/submissions/{proposal}/withdraw"),
             "--method",
             "post",
             "--input",
@@ -343,7 +343,7 @@ fn decide_returns_the_review_link() {
     let decided = json_stdin_output(
         &[
             "api",
-            &format!("requirements/req_flow/submissions/{}/decide", proposal),
+            &format!("requirements/req_flow/submissions/{proposal}/decide"),
             "--method",
             "post",
             "--input",

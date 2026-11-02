@@ -13,7 +13,7 @@ fn question_etag(repo: &str, id: &str) -> String {
         .unwrap()
         .args([
             "api",
-            &format!("questions/{}", id),
+            &format!("questions/{id}"),
             "--repo",
             repo,
             "--scope",

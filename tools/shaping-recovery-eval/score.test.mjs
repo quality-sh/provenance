@@ -24,10 +24,10 @@ function fixture() {
   const repo = mkdtempSync(join(tmpdir(), 'shaping-score-'));
   const init = spawnSync(binary, ['init', '--path', repo, '--scope', 'default'], { encoding: 'utf8' });
   assert.equal(init.status, 0, init.stderr);
-  cli(repo, ['api', 'requirements', '--method', 'post', '--input', '-'], { id: 'req_pay', statement: 'The system calculates overtime pay.' });
-  cli(repo, ['api', 'topics', '--method', 'post', '--input', '-'], { id: 'topic_pay', requirement_id: 'req_pay', title: 'Overtime pay' });
+  cli(repo, ['req_pay', 'create', '--type', 'requirement', '--stdin'], { statement: 'The system calculates overtime pay.' });
+  cli(repo, ['topic_pay', 'create', '--type', 'topic', '--stdin'], { requirement_id: 'req_pay', title: 'Overtime pay' });
   for (const id of ['question_threshold', 'question_rate']) {
-    cli(repo, ['api', 'questions', '--method', 'post', '--input', '-'], { id, topic_id: 'topic_pay', question: 'Which value applies?', resolution_method: 'grill' });
+    cli(repo, [id, 'create', '--type', 'question', '--stdin'], { topic_id: 'topic_pay', question: 'Which value applies?', resolution_method: 'grill' });
   }
   return repo;
 }

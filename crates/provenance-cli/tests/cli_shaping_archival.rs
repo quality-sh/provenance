@@ -139,7 +139,7 @@ fn archiving_a_topic_archives_all_of_its_questions_in_one_update() {
     let topic = archive(repo, "topics", "topic_archive");
     assert_eq!(topic["data"]["status"], "archived");
     for id in ["question_one", "question_two"] {
-        let question = run(repo, &["api", &format!("questions/{}", id)]);
+        let question = run(repo, &["api", &format!("questions/{id}")]);
         assert_eq!(question["data"]["status"], "archived");
         assert_eq!(
             question["data"]["archived_in_commit"]["commit"],

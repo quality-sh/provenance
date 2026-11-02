@@ -209,11 +209,7 @@ fn a_thread_with_sequential_and_random_message_ids_is_deleted() {
 
     assert_eq!(applied["data"]["deleted"], 1, "{applied}");
     for requirement in ["req_from_sequential", "req_from_random"] {
-        let cleared = provenance(
-            repo,
-            &["api", &format!("requirements/{}", requirement)],
-            None,
-        );
+        let cleared = provenance(repo, &["api", &format!("requirements/{requirement}")], None);
         assert_eq!(cleared["data"]["origin_thread"], Value::Null, "{cleared}");
         assert_eq!(cleared["data"]["origin_message"], Value::Null, "{cleared}");
     }

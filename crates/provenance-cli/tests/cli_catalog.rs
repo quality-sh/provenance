@@ -228,7 +228,7 @@ fn api_lists_accept_the_returned_cursor() {
             "--query",
             "limit=1",
             "--query",
-            &format!("cursor={}", cursor),
+            &format!("cursor={cursor}"),
             "--format",
             "json",
         ])
@@ -271,7 +271,7 @@ fn api_cursors_refuse_a_changed_page_limit() {
             "--query",
             "limit=2",
             "--query",
-            &format!("cursor={}", cursor),
+            &format!("cursor={cursor}"),
             "--format",
             "json",
         ])

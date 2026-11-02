@@ -12,9 +12,10 @@ export function cli(binary, repo, args, input) {
   return JSON.parse(result.stdout);
 }
 
-/** Creates one record through the api command; the body carries the record ID. */
-export function create(binary, repo, collection, body) {
-  return cli(binary, repo, ['api', collection, '--method', 'post', '--input', '-'], body);
+/** Creates one record with `<id> create --type <kind> --stdin`; `id` names the record. */
+export function create(binary, repo, collection, { id, ...fields }) {
+  const type = collection === 'boundaries' ? 'boundary' : collection.replace(/s$/, '');
+  return cli(binary, repo, [id, 'create', '--type', type, '--stdin'], fields);
 }
 
 /** Reads a guidance file from the working tree, or from `commit` when one is given. */

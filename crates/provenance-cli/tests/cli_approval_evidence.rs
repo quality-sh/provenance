@@ -70,7 +70,7 @@ fn incomplete_approval_reports_missing_evidence_and_keeps_submission_pending() {
         repo,
         &[
             "api",
-            &format!("requirements/req_review/submissions/{}/decide", proposal),
+            &format!("requirements/req_review/submissions/{proposal}/decide"),
             "--method",
             "post",
         ],
@@ -102,7 +102,7 @@ fn incomplete_approval_reports_missing_evidence_and_keeps_submission_pending() {
         repo,
         &[
             "api",
-            &format!("requirements/req_review/submissions/{}/decide", proposal),
+            &format!("requirements/req_review/submissions/{proposal}/decide"),
             "--method",
             "post",
         ],

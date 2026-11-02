@@ -14,7 +14,7 @@ fn reject_pending(repo: &str, id: &str, created: &Value) {
     provenance()
         .args([
             "api",
-            &format!("requirements/{}/submissions/{}/decide", id, proposal),
+            &format!("requirements/{id}/submissions/{proposal}/decide"),
             "--method",
             "post",
             "--input",

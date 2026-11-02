@@ -53,7 +53,7 @@ fn start(repo: &Path, source: &str) -> Value {
         repo,
         &[
             "api",
-            &format!("sources/{}/discussions", source),
+            &format!("sources/{source}/discussions"),
             "--method",
             "post",
         ],
