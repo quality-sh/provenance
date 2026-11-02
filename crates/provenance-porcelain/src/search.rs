@@ -244,13 +244,14 @@ pub fn output_schema() -> Value {
 pub fn render_readable(outcome: &SearchOutcome) -> String {
     let response = &outcome.response;
     let result = &response.result;
-    let mut heading = format!("search: {} returned", result.nodes.len());
-    if let Some(file) = &outcome.file {
-        heading.push_str(&format!(" for {file}"));
-        if let Some(symbol) = &outcome.symbol {
-            heading.push_str(&format!(" symbol {symbol}"));
-        }
-    }
+    let lookup = outcome.file.as_ref().map_or_else(String::new, |file| {
+        let symbol = outcome
+            .symbol
+            .as_ref()
+            .map_or_else(String::new, |symbol| format!(" symbol {symbol}"));
+        format!(" for {file}{symbol}")
+    });
+    let heading = format!("search: {} returned{lookup}", result.nodes.len());
     let mut lines = vec![heading];
     for node in &result.nodes {
         lines.push(format!(
