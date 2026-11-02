@@ -45,7 +45,7 @@ async fn document_filter_hides_rejected_new_records_and_keeps_accepted_records()
         DispositionDecision::Accepted,
     );
     revise(&store, NodeType::Resolution, &id);
-    let proposal = submit(&store, &scope, NodeType::Resolution, &id);
+    let proposal = pending(&store, &scope, NodeType::Resolution, &id);
     decide(
         &store,
         &scope,

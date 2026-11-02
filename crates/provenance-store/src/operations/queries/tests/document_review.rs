@@ -127,6 +127,16 @@ fn submit(store: &StateStore, scope: &ScopeId, kind: NodeType, id: &StableId) ->
         .proposal_id
 }
 
+/// The submission that a write opened on the current revision of a record.
+fn pending(store: &StateStore, scope: &ScopeId, kind: NodeType, id: &StableId) -> StableId {
+    store
+        .record_decision_state(scope, kind, id)
+        .unwrap()
+        .pending
+        .unwrap()
+        .proposal_id
+}
+
 fn decide(
     store: &StateStore,
     scope: &ScopeId,
@@ -250,12 +260,7 @@ async fn document_reports_each_reviewable_kind_through_the_full_decision_cycle()
         let initial = page(&root, 50, false).await;
         let first = if kind == NodeType::Requirement {
             assert_eq!(review(&initial, id.as_str())["outcome"], "pending");
-            store
-                .record_decision_state(&scope, kind, &id)
-                .unwrap()
-                .pending
-                .unwrap()
-                .proposal_id
+            pending(&store, &scope, kind, &id)
         } else {
             assert_eq!(review(&initial, id.as_str())["outcome"], Value::Null);
             submit(&store, &scope, kind, &id)
@@ -279,16 +284,7 @@ async fn document_reports_each_reviewable_kind_through_the_full_decision_cycle()
         assert_eq!(review(&accepted, id.as_str())["outcome"], "accepted");
 
         revise(&store, kind, &id);
-        let second = if kind == NodeType::Requirement {
-            store
-                .record_decision_state(&scope, kind, &id)
-                .unwrap()
-                .pending
-                .unwrap()
-                .proposal_id
-        } else {
-            submit(&store, &scope, kind, &id)
-        };
+        let second = pending(&store, &scope, kind, &id);
         decide(
             &store,
             &scope,

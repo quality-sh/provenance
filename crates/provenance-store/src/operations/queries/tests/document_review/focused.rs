@@ -2,6 +2,7 @@ use super::*;
 
 #[tokio::test]
 #[provenance_macros::verifies("rule_content_change_requires_new_review", examples)]
+#[provenance_macros::verifies("rule_content_change_opens_review_submission", examples)]
 async fn document_revision_clears_the_prior_outcome_for_each_reviewable_kind() {
     let (dir, store, scope) = seeded_store();
     allow_reviewer(&store);
@@ -10,12 +11,7 @@ async fn document_revision_clears_the_prior_outcome_for_each_reviewable_kind() {
 
     for (kind, id) in records {
         let proposal = if kind == NodeType::Requirement {
-            store
-                .record_decision_state(&scope, kind, &id)
-                .unwrap()
-                .pending
-                .unwrap()
-                .proposal_id
+            pending(&store, &scope, kind, &id)
         } else {
             submit(&store, &scope, kind, &id)
         };
@@ -30,12 +26,11 @@ async fn document_revision_clears_the_prior_outcome_for_each_reviewable_kind() {
         revise(&store, kind, &id);
 
         let revised = page(&root, 50, false).await;
-        let expected = if kind == NodeType::Requirement {
-            json!("pending")
-        } else {
-            Value::Null
-        };
-        assert_eq!(review(&revised, id.as_str())["outcome"], expected);
+        assert_eq!(
+            review(&revised, id.as_str())["outcome"],
+            "pending",
+            "{kind:?}"
+        );
     }
 }
 
