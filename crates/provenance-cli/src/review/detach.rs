@@ -79,7 +79,7 @@ pub fn run(options: &super::Options) -> anyhow::Result<()> {
     let mut launch = url.clone();
     launch.set_fragment(Some(&format!(
         "launch={}",
-        crate::review_link::issue_launch_code(&host)?
+        provenance_review::issue_launch_code(&host)?
     )));
     let (review_url, opened) = match crate::browser::open_or_print(&launch, options.no_open) {
         crate::browser::Opening::Opened => (url.to_string(), true),
@@ -133,7 +133,7 @@ fn start(
                 .with_context(|| format!("cannot replace the review host log {}", log.display()))
         }
     }
-    let log_file = crate::owner_file::create(&log)
+    let log_file = provenance_review::owner_file::create(&log)
         .with_context(|| format!("cannot create the review host log {}", log.display()))?;
     let executable = std::env::current_exe().context("cannot find the provenance executable")?;
     let mut command = Command::new(executable);
@@ -247,7 +247,7 @@ fn start_lock(key: &str) -> anyhow::Result<std::fs::File> {
 
 /// The owner-only per-user cache directory for detached host logs and locks.
 fn host_directory() -> anyhow::Result<PathBuf> {
-    let directory = crate::user_cache::cache_directory()
+    let directory = provenance_store::user_cache::cache_directory()
         .context("cannot find the per-user cache directory")?
         .join("provenance")
         .join("review-host");

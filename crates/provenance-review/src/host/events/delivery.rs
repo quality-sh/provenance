@@ -9,7 +9,7 @@ use super::{
     stream::{revision_changed, Follower},
     subscribers::{Subscribers, Subscription},
 };
-use provenance_cli::repo_context::RepoContext;
+use crate::RepositoryScope;
 use provenance_macros::rule;
 use provenance_porcelain::get::{Notify, NotifyClient, Registration};
 use serde::Deserialize;
@@ -46,7 +46,7 @@ pub(super) struct Deliveries {
 
 struct Inner {
     root: PathBuf,
-    context: RepoContext,
+    place: RepositoryScope,
     epoch: String,
     codex_home: Option<PathBuf>,
     subscribers: Subscribers,
@@ -70,7 +70,7 @@ struct Target {
 impl Deliveries {
     pub fn new(root: &Path, scope: &str, epoch: &str, subscribers: Subscribers) -> Self {
         let root = dunce::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
-        let context = RepoContext::new(
+        let place = RepositoryScope::new(
             camino::Utf8PathBuf::from_path_buf(root.clone())
                 .unwrap_or_else(|path| path.to_string_lossy().into_owned().into()),
             scope,
@@ -78,9 +78,9 @@ impl Deliveries {
         Self {
             inner: Arc::new(Inner {
                 root,
-                context,
+                place,
                 epoch: epoch.to_owned(),
-                codex_home: provenance_cli::notify::codex_home(),
+                codex_home: crate::notify::codex_home(),
                 subscribers,
                 threads: Mutex::new(HashMap::new()),
             }),
@@ -135,7 +135,7 @@ impl Deliveries {
         let ready = subscription.ready.clone();
         let (_, at) = ready.position();
         let frames = follower
-            .start(&inner.context, &target.root, target.limit, &ready, || {
+            .start(&inner.place, &target.root, target.limit, &ready, || {
                 inner.subscribers.native_sequence() != at
             })
             .await
@@ -193,7 +193,7 @@ impl Inner {
     /// Returns the repository ID after the host identity, thread and Codex home checks.
     #[rule("rule_review_notify_checks_target")]
     async fn check(&self, request: &DeliveryRequest) -> Result<String, Refusal> {
-        if request.scope != self.context.scope {
+        if request.scope != self.place.scope {
             return Err(Refusal::input(
                 "scope",
                 "the review host serves another scope",
@@ -206,7 +206,7 @@ impl Inner {
             ));
         }
         let root = self.root.clone();
-        let scope = self.context.scope.clone();
+        let scope = self.place.scope.clone();
         let own = tokio::task::spawn_blocking(move || {
             provenance_transport::local_host::discover(&root, &scope)
         })
@@ -242,7 +242,7 @@ impl Inner {
     async fn queue(&self, target: &Target, frame: &OutputFrame) -> anyhow::Result<()> {
         let selection = Selection {
             repository: &target.repository,
-            scope: &self.context.scope,
+            scope: &self.place.scope,
             root: &target.root,
         };
         let message = envelope::message(&selection, frame)?;
@@ -329,11 +329,11 @@ async fn read(
     frame: &Frame,
 ) -> Result<Vec<OutputFrame>, OutputFrame> {
     let mut read = follower
-        .step(&inner.context, &target.root, target.limit, frame)
+        .step(&inner.place, &target.root, target.limit, frame)
         .await;
     if read.is_err() {
         read = follower
-            .step(&inner.context, &target.root, target.limit, frame)
+            .step(&inner.place, &target.root, target.limit, frame)
             .await;
     }
     read.map_err(|error| {

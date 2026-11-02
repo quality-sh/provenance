@@ -256,16 +256,18 @@ segment is also refused. The operation router matches this path shape for any
 first segment. For example, `assets/operations/app.js` is refused at build time.
 
 Without an explicit asset directory, the build uses
-`crates/provenance-cli/review-assets-generated` when that directory exists.
+`crates/provenance-review/review-assets-generated` when that directory exists.
 CI and release preparation compose the pinned renderer and host into this
-directory. Cargo packages include these assets for installation from source.
+directory. The `provenance-review` package includes these assets for
+installation from source.
 If neither input exists, the binary embeds
-`crates/provenance-cli/review-assets/index.html`. This page states that the review
+`crates/provenance-review/review-assets/index.html`. This page states that the review
 bundle is unavailable. It contains no review records, fixture data, or simulated
 mutations. This fallback is not the review UI. Builds that need the supplied
 renderer must first run the [application build](../tools/review-host/README.md).
-The CLI's production dependency `provenance-transport` is included in the Cargo
-release order before the CLI. It uses the shared workspace release version.
+The CLI's production dependencies `provenance-transport` and `provenance-review`
+are included in the Cargo release order before the CLI. They use the shared
+workspace release version.
 
 The asset entry is `/index.html`, also served at `/`. Relative local dependencies
 retain their paths. No repository file is served. Only `GET` and `HEAD` requests
@@ -375,7 +377,7 @@ and [data-layer contract](https://github.com/quality-sh/provenance-web/blob/3778
 After the build dependencies are ready, prepare the application and build:
 
 ```sh
-node tools/review-host/prepare.ts crates/provenance-cli/review-assets-generated
+node tools/review-host/prepare.ts crates/provenance-review/review-assets-generated
 cargo build --locked -p provenance-cli --bin provenance
 ```
 

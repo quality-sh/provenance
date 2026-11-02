@@ -1,0 +1,44 @@
+[package]
+name = "provenance-review"
+version.workspace = true
+edition.workspace = true
+description = "Internal part of Provenance for the review host, review links and the review page bundle"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+publish.workspace = true
+# The composed review page bundle is prepared before packaging and is not tracked.
+# Run node tools/review-host/prepare.ts crates/provenance-review/review-assets-generated before Cargo collects package files.
+include = ["src/**", "build.rs", "build/**", "review-assets/**", "review-assets-generated/**", "tests/**", "Cargo.toml", "README.md"]
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+axum = { workspace = true, features = ["ws"] }
+camino.workspace = true
+dunce.workspace = true
+futures-util = "0.3"
+jsonschema.workspace = true
+notify = { version = "8.2.0", default-features = false, features = ["macos_fsevent"] }
+provenance-core.workspace = true
+provenance-macros.workspace = true
+provenance-porcelain.workspace = true
+provenance-store.workspace = true
+provenance-transport = { path = "../provenance-transport", version = "0.3.2" }
+serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["io-util", "sync", "time"] }
+tokio-tungstenite = "0.24"
+ureq.workspace = true
+url.workspace = true
+uuid.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_System_Threading", "Win32_System_SystemServices"] }
+
+[dev-dependencies]
+provenance-transport = { path = "../provenance-transport", version = "0.3.2", features = ["test-fixture"] }
+tempfile.workspace = true

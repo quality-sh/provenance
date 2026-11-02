@@ -11,15 +11,15 @@ mod invocation;
 mod legacy_cleanup;
 mod onboarding;
 mod output;
-mod owner_file;
 mod read_policy;
 use provenance_cli::{repo_context, store};
+#[cfg(windows)]
+use provenance_review::owner_file;
 mod review;
 mod review_link;
 mod reviewer;
 mod skills;
 mod ste_onboarding;
-mod user_cache;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

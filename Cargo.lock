@@ -2435,7 +2435,6 @@ dependencies = [
  "dunce",
  "flate2",
  "fs2",
- "futures-util",
  "hex",
  "jsonschema",
  "notify",
@@ -2447,6 +2446,7 @@ dependencies = [
  "provenance-macros",
  "provenance-porcelain",
  "provenance-report",
+ "provenance-review",
  "provenance-scanner",
  "provenance-ste100",
  "provenance-store",
@@ -2463,7 +2463,6 @@ dependencies = [
  "tar",
  "tempfile",
  "tokio",
- "tokio-tungstenite 0.24.0",
  "ureq",
  "url",
  "uuid",
@@ -2578,6 +2577,33 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "provenance-review"
+version = "0.3.2"
+dependencies = [
+ "anyhow",
+ "axum",
+ "camino",
+ "dunce",
+ "futures-util",
+ "jsonschema",
+ "notify",
+ "provenance-core",
+ "provenance-macros",
+ "provenance-porcelain",
+ "provenance-store",
+ "provenance-transport",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-tungstenite 0.24.0",
+ "ureq",
+ "url",
+ "uuid",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

@@ -301,7 +301,7 @@ fn asset_directory() -> Option<PathBuf> {
         return Some(PathBuf::from(directory));
     }
     Some(
-        crate::user_cache::cache_directory()?
+        provenance_store::user_cache::cache_directory()?
             .join("provenance")
             .join("ste100-assets"),
     )

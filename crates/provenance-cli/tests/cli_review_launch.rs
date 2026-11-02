@@ -2,7 +2,7 @@
 mod review_host_support;
 
 use provenance_macros::verifies;
-use provenance_transport::local_host::LAUNCH_CODE_ROUTE;
+use provenance_review::LAUNCH_CODE_ROUTE;
 use review_host_support::{launch_code, redeem, repository, request, response, start, Host};
 use serde_json::{json, Value};
 use std::path::Path;

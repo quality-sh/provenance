@@ -1,7 +1,7 @@
 //! Current document reconciliation, using the canonical bounded document read.
 use super::frames::Frame;
 use super::output::{Continuity, Document, OutputFrame};
-use provenance_cli::repo_context::RepoContext;
+use crate::RepositoryScope;
 use provenance_core::protocol::{read_failure::ReadFailure, ReadDocumentQuery};
 use provenance_macros::rule;
 use provenance_store::operations::{queries, read_policy::ReadPolicy};
@@ -9,7 +9,7 @@ use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Default)]
-pub(in crate::review) struct Baseline {
+pub(in crate::host) struct Baseline {
     records: BTreeMap<String, Value>,
     initialized: bool,
 }
@@ -19,7 +19,7 @@ impl Baseline {
     #[rule("rule_review_follow_reset")]
     pub async fn reconcile(
         &mut self,
-        context: &RepoContext,
+        place: &RepositoryScope,
         root: &str,
         limit: usize,
         position: (&str, u64),
@@ -30,7 +30,7 @@ impl Baseline {
         let mut cursor = None;
         let mut current = BTreeMap::new();
         let mut ordered = Vec::new();
-        let repository = context.open()?;
+        let repository = place.open()?;
         loop {
             let page = queries::read_document(
                 &repository,
@@ -115,7 +115,7 @@ impl Baseline {
 
 /// The client state of one review subscription: the delivered baseline and the last host
 /// position. The CLI follow stream and the host delivery task use the same step.
-pub(in crate::review) struct Follower {
+pub(in crate::host) struct Follower {
     baseline: Baseline,
     epoch: String,
     sequence: u64,
@@ -140,7 +140,7 @@ impl Follower {
     /// Reads current state for one host frame and returns the frames to deliver.
     pub async fn step(
         &mut self,
-        context: &RepoContext,
+        place: &RepositoryScope,
         root: &str,
         limit: usize,
         frame: &Frame,
@@ -162,7 +162,7 @@ impl Follower {
             Frame::Reviewed { scopes, .. } => Some(
                 scopes
                     .iter()
-                    .filter(|scope| scope.scope == context.scope)
+                    .filter(|scope| scope.scope == place.scope)
                     .flat_map(|scope| scope.records.iter().map(|record| record.id.clone()))
                     .collect::<BTreeSet<_>>(),
             ),
@@ -171,7 +171,7 @@ impl Follower {
         let position = (self.epoch.as_str(), self.sequence);
         let frames = self
             .baseline
-            .reconcile(context, root, limit, position, reset, selected.as_ref())
+            .reconcile(place, root, limit, position, reset, selected.as_ref())
             .await?;
         self.initialized = true;
         Ok(frames)
@@ -187,7 +187,7 @@ impl Follower {
     #[rule("rule_review_notify_consistent_start")]
     pub async fn start(
         &mut self,
-        context: &RepoContext,
+        place: &RepositoryScope,
         root: &str,
         limit: usize,
         ready: &Frame,
@@ -195,7 +195,7 @@ impl Follower {
     ) -> anyhow::Result<Vec<OutputFrame>> {
         for _ in 0..3 {
             *self = Self::new(&self.epoch);
-            if let Ok(frames) = self.step(context, root, limit, ready).await {
+            if let Ok(frames) = self.step(place, root, limit, ready).await {
                 if !moved() {
                     return Ok(frames);
                 }
@@ -211,7 +211,7 @@ impl Follower {
             self.initialized = true;
             read = self
                 .baseline
-                .reconcile(context, root, limit, (epoch, sequence), true, None)
+                .reconcile(place, root, limit, (epoch, sequence), true, None)
                 .await;
             if !read.as_ref().is_err_and(revision_changed) {
                 break;
@@ -225,7 +225,7 @@ impl Follower {
 const RESET_READS: usize = 3;
 
 /// A page write between two pages of one read makes the later page refuse.
-pub(in crate::review) fn revision_changed(error: &anyhow::Error) -> bool {
+pub(in crate::host) fn revision_changed(error: &anyhow::Error) -> bool {
     error.downcast_ref::<ReadFailure>() == Some(&ReadFailure::CursorRevisionChanged)
 }
 

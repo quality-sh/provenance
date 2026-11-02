@@ -29,7 +29,7 @@ node tools/operation-codegen/ensure-generated.mjs
 npm ci --prefix packages/provenance
 npm run build --prefix packages/provenance
 npm ci --prefix tools/review-host
-node tools/review-host/prepare.ts crates/provenance-cli/review-assets-generated
+node tools/review-host/prepare.ts crates/provenance-review/review-assets-generated
 cargo build -p provenance-cli --bin provenance
 ```
 
@@ -70,7 +70,7 @@ tests and its one small browser smoke test of built assets.
 
 CI composes the application once and supplies the same output to each native
 build. Release builds use this path for both tag and build-only manual runs.
-The Rust package includes `review-assets-generated`, so a Cargo install can
+The `provenance-review` package includes `review-assets-generated`, so a Cargo install can
 embed the application without downloading it at build time. Git ignores these
 files, and the source-control check rejects them if they are staged.
 A source checkout without generated assets uses the committed unavailable page.
@@ -92,8 +92,8 @@ and the repository must hold one result. CI runs this check on the Linux CLI.
 
 ```sh
 node --test tools/review-host/*.test.ts
-node tools/review-host/verify-native.ts /absolute/provenance crates/provenance-cli/review-assets-generated packages/provenance
-node tools/review-host/verify-renderer-reads.ts /absolute/provenance crates/provenance-cli/review-assets-generated packages/provenance
+node tools/review-host/verify-native.ts /absolute/provenance crates/provenance-review/review-assets-generated packages/provenance
+node tools/review-host/verify-renderer-reads.ts /absolute/provenance crates/provenance-review/review-assets-generated packages/provenance
 node tools/review-host/verify-review-writes.ts /absolute/provenance packages/provenance
 node tools/review-host/verify-page-session.ts /absolute/provenance
 ```
