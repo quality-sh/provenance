@@ -304,7 +304,7 @@ test("requirement source order stays unchanged after apply", async (t) => {
     });
     return {
       behavior: behavior.rule("observable", {
-        statement: "The accepted behavior remains observable",
+        statement: "The accepted behavior stays observable",
       }),
     };
   });

@@ -73,7 +73,7 @@ const requirementData = (id: string, statement: string) => ({
  *  declarations that name a resolution by canonical id. */
 function seedResolution(repo: string, status = "approved"): void {
   catalogWrite(repo, ["requirements", "create"], requirementData(
-    "req_seed", "The seed requirement stands",
+    "req_seed", "The seed requirement holds",
   ));
   catalogWrite(repo, ["resolutions", "create"], {
     id: "res_seed", title: "Seed decision", requirement_ids: ["req_seed"],
@@ -193,7 +193,7 @@ test("spec-bound declarations serialize exact unowned adoption targets", async (
     .requirement("ordinary")
     .adoptUnowned("req_old")
     .id("req_existing")
-    .statement("Ordinary identity selection needs no adoption")
+    .statement("Adoption is not necessary for ordinary identity selection")
     .from(policy.id("source_existing"))
     .rules(enforcement.id("rule_existing"));
   await apply(provenance.build(ordinary));
@@ -587,10 +587,10 @@ test("relation fields on spec-bound declarations reach the written records", asy
   const provenance = defineSpec("relations");
   const older = provenance.source("policy-2024").document("docs/policy-2024.md");
   const policy = provenance.source("policy").document("docs/policy.md").supersedes(older);
-  const parent = provenance.requirement("parent").statement("Access is governed").from(policy);
+  const parent = provenance.requirement("parent").statement("Access is controlled").from(policy);
   const retired = provenance
     .requirement("retired")
-    .statement("Access was governed loosely")
+    .statement("Access was controlled loosely")
     .from(older);
   const decision = provenance
     .rule("decision")
@@ -598,7 +598,7 @@ test("relation fields on spec-bound declarations reach the written records", asy
     .resolutions("res_seed");
   const refined = provenance
     .requirement("child")
-    .statement("Share links are governed")
+    .statement("Share links are controlled")
     .from(policy)
     .refines(parent)
     .dependsOn(parent)
@@ -633,11 +633,11 @@ test("a spec-bound requirement keeps both parents it refines", async () => {
   configure({ ...await fixtureSettings(repo), owner: "spec://typescript/bound-parents" });
   const provenance = defineSpec("parents");
   const policy = provenance.source("policy").document("docs/policy.md");
-  const access = provenance.requirement("access").statement("Access is governed").from(policy);
-  const sharing = provenance.requirement("sharing").statement("Sharing is governed").from(policy);
+  const access = provenance.requirement("access").statement("Access is controlled").from(policy);
+  const sharing = provenance.requirement("sharing").statement("Sharing is controlled").from(policy);
   const child = provenance
     .requirement("child")
-    .statement("Share links are governed")
+    .statement("Share links are controlled")
     .from(policy)
     .refines(access)
     .refines(sharing)
@@ -652,8 +652,8 @@ test("a spec-bound requirement keeps both parents it refines", async () => {
 
 test("a spec-bound relation to a requirement outside the build is refused", () => {
   const provenance = defineSpec("relations");
-  const parent = provenance.requirement("parent").statement("Access is governed");
-  const child = provenance.requirement("child").statement("Shares are governed").refines(parent);
+  const parent = provenance.requirement("parent").statement("Access is controlled");
+  const child = provenance.requirement("child").statement("Shares are controlled").refines(parent);
   assert.throws(
     () => provenance.build(child),
     /Requirement `child` names Requirement `parent` not included in the spec/,
@@ -666,7 +666,7 @@ test("a spec Rule that cites a proposed Resolution is written as draft", async (
   configure({ ...await fixtureSettings(repo), owner: "spec://typescript/proposed-resolution" });
   seedResolution(repo, "proposed");
   const provenance = defineSpec("proposed-resolution");
-  const parent = provenance.requirement("parent").statement("Access is governed");
+  const parent = provenance.requirement("parent").statement("Access is controlled");
   const decision = provenance.rule("decision")
     .statement("Access follows the seed decision").resolutions("res_seed");
 
@@ -684,7 +684,7 @@ test("an active spec Rule reports the store refusal for a proposed Resolution", 
   const owner = "spec://typescript/refused-resolution";
   configure({ ...await fixtureSettings(repo), owner });
   const provenance = defineSpec("refused-resolution");
-  const parent = provenance.requirement("parent").statement("Access is governed");
+  const parent = provenance.requirement("parent").statement("Access is controlled");
   const draft = provenance.rule("decision").statement("Access follows the seed decision");
   const result = await apply(provenance.build(parent.rules(draft)));
   const id = result.resources.find((resource) => resource.kind === "rule")!.id;
@@ -718,7 +718,7 @@ test("an SDK release of an unclaimed Topic gives the store reason", async () => 
   const repo = repository();
   const settings = await fixtureSettings(repo);
   catalogWrite(repo, ["requirements", "create"], requirementData(
-    "req_shared", "The shared requirement stands",
+    "req_shared", "The shared requirement holds",
   ));
   catalogWrite(repo, ["topics", "create"], {
     id: "topic_shared", requirement_id: "req_shared", title: "Shared topic", status: "open", links: [],

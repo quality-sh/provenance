@@ -78,7 +78,7 @@ function catalogCreate(
  *  declarations that name a resolution by canonical id. */
 function seedResolution(repo: string): void {
   catalogCreate(repo, "requirements", {
-    actor: "sdk-test", id: "req_seed", statement: "The seed requirement stands",
+    actor: "sdk-test", id: "req_seed", statement: "The seed requirement holds",
     status: "discovery", depends_on: [], supersedes: [],
   });
   catalogCreate(repo, "resolutions", {
@@ -558,13 +558,13 @@ test("relation fields on fluent declarations reach the written records", async (
   seedResolution(repo);
   const older = source("policy-2024").document("docs/policy-2024.md");
   const policy = source("policy").document("docs/policy.md").supersedes(older);
-  const parent = requirement("parent").statement("Access is governed").from(policy);
-  const retired = requirement("retired").statement("Access was governed loosely").from(older);
+  const parent = requirement("parent").statement("Access is controlled").from(policy);
+  const retired = requirement("retired").statement("Access was controlled loosely").from(older);
   const decision = rule("decision")
     .statement("Access follows the seed decision")
     .resolutions("res_seed");
   const refined = requirement("child")
-    .statement("Share links are governed")
+    .statement("Share links are controlled")
     .from(policy)
     .refines(parent)
     .dependsOn(parent)
@@ -602,10 +602,10 @@ test("a fluent requirement keeps both parents it refines", async () => {
   const repo = repository();
   configure({ ...await fixtureSettings(repo), owner: "spec://typescript/fluent-parents" });
   const policy = source("policy").document("docs/policy.md");
-  const access = requirement("access").statement("Access is governed").from(policy);
-  const sharing = requirement("sharing").statement("Sharing is governed").from(policy);
+  const access = requirement("access").statement("Access is controlled").from(policy);
+  const sharing = requirement("sharing").statement("Sharing is controlled").from(policy);
   const child = requirement("child")
-    .statement("Share links are governed")
+    .statement("Share links are controlled")
     .from(policy)
     .refines(access)
     .refines(sharing)
@@ -621,8 +621,8 @@ test("a fluent requirement keeps both parents it refines", async () => {
 });
 
 test("a fluent relation to a requirement outside the build is refused", () => {
-  const parent = requirement("parent").statement("Access is governed");
-  const child = requirement("child").statement("Shares are governed").refines(parent);
+  const parent = requirement("parent").statement("Access is controlled");
+  const child = requirement("child").statement("Shares are controlled").refines(parent);
   assert.throws(
     () => defineSpec("relations").requirements(child).build(),
     /Requirement `child` names Requirement `parent` not included in the spec/,
