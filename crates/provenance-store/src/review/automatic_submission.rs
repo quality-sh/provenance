@@ -1,11 +1,46 @@
-//! Automatic review submissions for enrolled graph record writes.
+//! Automatic review submissions for graph record writes.
 
-use super::{decision_state::check_request_size, SubmitRecordReview};
+use super::{classifier, decision_state::check_request_size, SubmitRecordReview};
 use crate::{shards, state_store::StateStore};
 use provenance_core::review::ReviewRecord;
 use provenance_macros::rule;
 
+/// The longest summary an automatic submission copies from the record, so the
+/// submission of a record at the read budget stays inside the budget.
+const SUMMARY_CHARS: usize = 1000;
+
+/// The submission actor of a server write that names no actor.
+pub(super) const AUTHORING_ACTOR: &str = "authoring";
+
 impl StateStore {
+    /// Opens the review submission of a new record in the same write.
+    #[rule("rule_native_create_opens_review_submission")]
+    pub(super) fn open_creation_submission(
+        &self,
+        created: &ReviewRecord,
+        actor: &str,
+    ) -> anyhow::Result<()> {
+        let revision = classifier::review_revision(created.kind(), created)?;
+        self.commit_automatic_submission(created, actor, &revision)
+    }
+
+    /// Opens the review submission of a content change in the same write.
+    /// A lifecycle-only change keeps the review revision and opens no
+    /// submission.
+    pub(super) fn open_content_change_submission(
+        &self,
+        before: &ReviewRecord,
+        after: &ReviewRecord,
+        actor: &str,
+    ) -> anyhow::Result<()> {
+        let kind = after.kind();
+        let revision = classifier::review_revision(kind, after)?;
+        if classifier::review_revision(kind, before)? == revision {
+            return Ok(());
+        }
+        self.commit_automatic_submission(after, actor, &revision)
+    }
+
     /// Binds a server-created review submission to a new content revision in the
     /// same write, unless that revision is already pending or accepted.
     #[rule("rule_content_change_opens_review_submission")]
@@ -34,7 +69,9 @@ impl StateStore {
             .into_iter()
             .find_map(|field| value.get(field).and_then(serde_json::Value::as_str))
             .unwrap_or_else(|| record.id().as_str())
-            .to_owned();
+            .chars()
+            .take(SUMMARY_CHARS)
+            .collect::<String>();
         let input = SubmitRecordReview {
             scope_id: record.scope_id().clone(),
             actor: actor.to_owned(),

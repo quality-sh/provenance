@@ -166,19 +166,14 @@ parent Requirement
 ### Every record goes to review
 
 Submit every record that the session creates for review at once, so each one has its own
-Approve control on the page. Requirement create opens its review submission by itself.
-Rule, Resolution, Boundary and Source create do not. Submit each of these immediately
-after you create it:
+Approve control on the page. A create command submits the new record by itself: Requirement,
+Rule, Resolution, Boundary and Source create all open the review submission in the same
+write. Do not run `submit` after a create command; the record already has a pending
+submission, so `submit` refuses.
 
-```sh
-provenance <record_id> submit --scope <scope> --actor <actor> \
-  --title "<short name of the record>" --summary "<what the record says>" \
-  --builds-on-json '[]' --evidence-references-json '[]' --source-ids-json '[]' \
-  --format json
-```
-
-Then check that `provenance <record_id> get --view review --scope <scope> --format json`
-shows `review.decision.pending`. A guarded update of a record submits the new revision by
+After each create command, check that
+`provenance <record_id> get --view review --scope <scope> --format json` shows
+`review.decision.pending`. A guarded update of a record submits the new revision by
 itself. Do not approve a record; approval stays with the person.
 
 ## Mode 1: Chart
@@ -446,7 +441,7 @@ provenance requirements <relevant_requirement_id> discussions create --scope <sc
   --format json
 ```
 
-For a decision that settles a Question, run these commands in this order. Then submit
+For a decision that settles a Question, run these commands in this order. Then check
 each record as "Every record goes to review" says.
 
 ```sh

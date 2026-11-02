@@ -167,3 +167,19 @@ pub fn connect_when_available(host: &Host) -> Socket {
         std::thread::sleep(Duration::from_millis(25));
     }
 }
+
+/// The changed scopes of a frame without the review submissions that each
+/// create opens in the same write.
+#[allow(dead_code)]
+pub fn without_submissions(scopes: &Value) -> Value {
+    let mut scopes = scopes.clone();
+    for scope in scopes.as_array_mut().into_iter().flatten() {
+        if let Some(records) = scope["records"].as_array_mut() {
+            records.retain(|record| record["kind"] != "proposal_cards");
+        }
+        if let Some(families) = scope["families"].as_array_mut() {
+            families.retain(|family| family != "proposal_cards");
+        }
+    }
+    scopes
+}

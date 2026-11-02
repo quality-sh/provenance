@@ -186,7 +186,11 @@ fn saved_page_writes_report_added_changed_and_unchanged_records() {
             )
             .await;
             assert_eq!(created["data"]["id"], "rule_saved");
-            assert_notification(&notifications, &[("rule", "rule_saved")]);
+            // The create and the content change each open a review submission.
+            assert_notification(
+                &notifications,
+                &[("proposal_cards", "*"), ("rule", "rule_saved")],
+            );
 
             let changed = page_call(
                 &host,
@@ -198,7 +202,10 @@ fn saved_page_writes_report_added_changed_and_unchanged_records() {
             )
             .await;
             assert_eq!(changed["data"]["statement"], "The changed write succeeds.");
-            assert_notification(&notifications, &[("rule", "rule_saved")]);
+            assert_notification(
+                &notifications,
+                &[("proposal_cards", "*"), ("rule", "rule_saved")],
+            );
 
             page_call(
                 &host,
@@ -267,7 +274,11 @@ fn assert_notification(notifications: &Notifications, expected: &[(&str, &str)])
             scope
                 .records
                 .iter()
-                .map(|record| (record.kind.as_str(), record.id.as_str())),
+                .map(|record| match record.kind.as_str() {
+                    // A review submission has a server-made id.
+                    "proposal_cards" => ("proposal_cards", "*"),
+                    kind => (kind, record.id.as_str()),
+                }),
         );
     }
     actual.sort_unstable();
@@ -346,7 +357,7 @@ fn page_changes_report_removed_records_after_scope_replacement() {
         let after = with_publication_guard(&repo.open(), ReviewStateSnapshot::read).unwrap();
         assert_notification(
             &Mutex::new(vec![Ok(after.page_changes_since(&before))]),
-            &[("source", "source_removed")],
+            &[("proposal_cards", "*"), ("source", "source_removed")],
         );
         assert_notification(&Mutex::new(vec![Ok(after.page_changes_since(&after))]), &[]);
     });

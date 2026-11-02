@@ -1,6 +1,7 @@
 //! Legacy Requirement authoring routed through guarded review writes.
 
 use super::{
+    automatic_submission::AUTHORING_ACTOR,
     input::{CitesEdit, ListEdit, RequirementRelations, SaveRequirement, SingleEdit},
     CreateReviewRequirement,
 };
@@ -14,8 +15,6 @@ use crate::{
 };
 use camino::Utf8Path;
 use provenance_core::{review::ReviewRecord, Requirement, ScopeId, SourceReference, StableId};
-
-const AUTHORING_ACTOR: &str = "authoring";
 
 impl StateStore {
     pub(crate) fn replace_native_records<T: GraphRecord>(
@@ -50,6 +49,8 @@ impl StateStore {
         })
     }
 
+    /// Creates one native record and opens its review submission in the same
+    /// write.
     pub(crate) fn create_native_record<T: GraphRecord>(
         &self,
         path: &Utf8Path,
@@ -61,7 +62,9 @@ impl StateStore {
         self.with_repository_publication(|held| {
             with_record_state(held, RecordStamp::resolved(stamp), |staged| {
                 let staged_path = staged.layout.root().join(&relative);
-                staged.permitting(&[&staged_path], id.as_str(), write)
+                let created = staged.permitting(&[&staged_path], id.as_str(), write)?;
+                staged.open_creation_submission(&created.clone().into(), AUTHORING_ACTOR)?;
+                Ok(created)
             })
         })
     }
