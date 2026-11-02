@@ -21,8 +21,15 @@ use axum::{
     Json,
 };
 use provenance_core::protocol::failure::{FailureEnvelope, OperationFailure};
+use provenance_macros::rule;
 use provenance_porcelain::check::CheckPort;
-use provenance_store::{operations::LocalRepository, repository::Repository};
+use provenance_store::{
+    operations::{
+        read_policy::{FreshnessPolicy, ReadPolicy},
+        LocalRepository,
+    },
+    repository::Repository,
+};
 use provenance_transport::{
     local_host::{LocalHostIdentity, LocalHostRegistration, IDENTITY_ROUTE},
     HttpCredential, LocalAccess, StatementHost,
@@ -103,8 +110,8 @@ pub struct StartedHost {
     _registration: LocalHostRegistration,
 }
 
-/// Binds the loopback listener, opens the repository, starts the live events and announces
-/// the host. The host answers requests from this point.
+/// Binds the loopback listener, opens the repository, brings the projection up to date,
+/// starts the live events and announces the host. The host answers requests from this point.
 pub async fn start(options: HostOptions) -> anyhow::Result<StartedHost> {
     let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, options.port))
         .await
@@ -112,6 +119,7 @@ pub async fn start(options: HostOptions) -> anyhow::Result<StartedHost> {
     let address = listener.local_addr()?;
     let token = launch::secret();
     let (repository, binding, access) = repository_access(&options, &token, address)?;
+    prepare_projection(&repository).await;
     let canonical_repo = repository.working_tree().as_std_path().to_path_buf();
     let has_reviewer = !binding.disposition_actor_ids()?.is_empty();
     if !has_reviewer {
@@ -297,6 +305,19 @@ fn review_router(
             (access, codes.clone(), format!("ws://{address}")),
             protect_origin,
         ))
+}
+
+/// Runs the catch-up pass that the first page read would otherwise run, so that read builds
+/// nothing. Each read still runs its own pass and finds state changes on disk. A failed pass
+/// does not stop the host: the read that runs the pass again reports the failure. Under a
+/// freshness policy other than catch-up, reads do not write the projection, so the host does
+/// not write it either.
+#[rule("rule_review_host_prepares_projection_at_start")]
+async fn prepare_projection(repository: &Repository) {
+    let policy = ReadPolicy::resolve(repository.settings(), None);
+    if policy.freshness == FreshnessPolicy::CatchUp {
+        let _ = provenance_store::cache::catch_up_state(repository).await;
+    }
 }
 
 /// The opened repository, its alias binding and the caller credential, built separately.

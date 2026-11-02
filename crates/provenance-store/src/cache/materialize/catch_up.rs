@@ -40,10 +40,14 @@ pub struct CatchUpReport {
 pub async fn catch_up_state(repository: &Repository) -> anyhow::Result<CatchUpReport> {
     let guard = publication::publication_guard(repository).await?;
     let connection = open_cache(repository.layout()).await?;
-    let report = catch_up_with_guard(&guard, connection.pool()).await;
-    // The connection completes before the report, whatever the pass did.
+    let report = match catch_up_with_guard(&guard, connection.pool()).await {
+        Ok(report) => report,
+        Err(error) => return Err(connection.close_reporting(error).await),
+    };
+    // As on the read path, writers do not wait for the close.
+    drop(guard);
     connection.close().await?;
-    report
+    Ok(report)
 }
 
 /// One catch-up pass on the caller's pool, for a caller that holds the
