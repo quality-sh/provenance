@@ -15,8 +15,11 @@ mod support {
     pub mod resource_http;
 }
 
+/// Each supplied statement, with the scope the host bound.
+type SeenStatements = Arc<Mutex<Vec<(String, Option<String>)>>>;
+
 /// Records each supplied statement with the scope the host bound.
-struct StatementRecordingPort(Arc<Mutex<Vec<(String, Option<String>)>>>);
+struct StatementRecordingPort(SeenStatements);
 
 impl CheckPort for StatementRecordingPort {
     fn run<'a>(&'a self, category: Category, _: Option<&'a str>) -> PortFuture<'a> {
@@ -59,7 +62,10 @@ const fn category_run(category: Category, findings: Vec<Finding>) -> CategoryRun
 }
 
 fn check_call(arguments: serde_json::Value) -> CallToolRequestParams {
-    CallToolRequestParams::new("check").with_arguments(arguments.as_object().unwrap().clone())
+    let serde_json::Value::Object(arguments) = arguments else {
+        panic!("check arguments must be a JSON object");
+    };
+    CallToolRequestParams::new("check").with_arguments(arguments)
 }
 
 #[tokio::test]
