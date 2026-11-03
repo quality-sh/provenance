@@ -13,6 +13,7 @@ pub mod check;
 pub mod discussion;
 pub mod get;
 pub mod guidance;
+pub mod registry;
 pub mod search;
 
 /// Shared Porcelain capabilities over a caller-supplied operation port.
