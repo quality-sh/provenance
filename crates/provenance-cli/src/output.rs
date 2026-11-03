@@ -13,7 +13,7 @@ pub enum OutputFormat {
 
 /// The one format a command without a human renderer renders. The flag
 /// stays, so scripts that pass `--format json` keep working.
-#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+#[derive(Debug, Clone, Copy)]
 pub enum JsonFormat {
     Json,
 }

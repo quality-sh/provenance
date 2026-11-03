@@ -98,38 +98,49 @@ fn parse_catalog_limit(value: &str) -> Result<usize, String> {
 }
 
 /// Adds one word command to `root` under its words, as `provenance <words...>` shows it.
-/// The first of two words is a group that needs one of its commands.
+/// Each word before the last is a group that needs one of its commands.
 pub fn add_subcommand(root: Command, command: registry::Command) -> Command {
     let declaration = command.declaration();
     let CliForm::Words(words) = declaration.cli_form else {
         panic!("{} is not a word command", declaration.name);
     };
-    let (word, group) = words.split_last().expect("a word command has a word");
+    let (word, groups) = words.split_last().expect("a word command has a word");
     let mut leaf = Command::new(*word)
         .hide(declaration.hidden)
         .args(args(&declaration));
     if !declaration.description.is_empty() {
         leaf = leaf.about(declaration.description);
     }
-    match group {
-        [] => root.subcommand(leaf),
-        [group] if root.find_subcommand(group).is_some() => {
-            root.mut_subcommand(*group, |parent| parent.subcommand(leaf))
-        }
-        [group] => root.subcommand(
+    add_under(root, groups, groups, leaf)
+}
+
+/// Adds `leaf` under the `rest` of the group words, creating each missing group.
+fn add_under(
+    parent: Command,
+    groups: &[&'static str],
+    rest: &[&'static str],
+    leaf: Command,
+) -> Command {
+    let Some((group, rest)) = rest.split_first() else {
+        return parent.subcommand(leaf);
+    };
+    let path = groups[..groups.len() - rest.len()].join(" ");
+    let parent = if parent.find_subcommand(group).is_some() {
+        parent
+    } else {
+        parent.subcommand(
             Command::new(*group)
                 .about(
                     registry::GROUP_DESCRIPTIONS
                         .iter()
-                        .find(|(word, _)| word == group)
+                        .find(|(words, _)| *words == path)
                         .map(|(_, description)| *description),
                 )
                 .subcommand_required(true)
-                .arg_required_else_help(true)
-                .subcommand(leaf),
-        ),
-        _ => panic!("{} has more than two words", declaration.name),
-    }
+                .arg_required_else_help(true),
+        )
+    };
+    parent.mut_subcommand(*group, |child| add_under(child, groups, rest, leaf))
 }
 
 /// The words of the selected subcommands and the matches of the last one.
