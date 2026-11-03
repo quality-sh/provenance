@@ -63,7 +63,8 @@
     ],
     "provenance-transport": [
       "provenance-cli",
-      "provenance-review"
+      "provenance-review",
+      "rmcp"
     ],
     "provenance-review": [
       "provenance-cli",
@@ -100,8 +101,8 @@
       "dev-dependencies": [
         "jsonschema",
         "notify",
+        "provenance-mcp",
         "provenance-transport",
-        "rmcp",
         "tempfile"
       ]
     },
@@ -151,6 +152,28 @@
       "dependencies": [],
       "dev-dependencies": [
         "provenance-scanner"
+      ]
+    },
+    "provenance-mcp": {
+      "dependencies": [
+        "provenance-contract",
+        "provenance-core",
+        "provenance-macros",
+        "provenance-porcelain",
+        "provenance-transport",
+        "rmcp",
+        "tokio"
+      ],
+      "dev-dependencies": [
+        "axum",
+        "jsonschema",
+        "provenance-core",
+        "provenance-macros",
+        "provenance-porcelain",
+        "provenance-store",
+        "tempfile",
+        "tokio",
+        "tower"
       ]
     },
     "provenance-porcelain": {
@@ -263,7 +286,6 @@
         "provenance-macros",
         "provenance-porcelain",
         "provenance-store",
-        "rmcp",
         "tempfile",
         "tokio",
         "tokio-util",

@@ -7,7 +7,9 @@ use std::sync::Mutex;
 #[cfg(feature = "test-fixture")]
 #[allow(dead_code)]
 mod support {
+    #[path = "../../../provenance-transport/tests/support/records.rs"]
     pub mod records;
+    #[path = "../../../provenance-transport/tests/support/resource_http.rs"]
     pub mod resource_http;
 }
 
@@ -59,7 +61,8 @@ async fn mcp_get_runs_through_the_composed_service() {
     let host = support::resource_http::host(&repository, false);
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server_host = host.clone();
-    let server = tokio::spawn(async move { server_host.serve_mcp(server_io).await.unwrap() });
+    let server =
+        tokio::spawn(async move { provenance_mcp::serve(server_host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();
@@ -96,7 +99,7 @@ async fn mcp_get_readable_content_includes_related_records_and_bounds() {
     let repository = support::records::Repository::new("The shared graph is readable.");
     let host = support::resource_http::host(&repository, false);
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
 
     let result = client
@@ -131,7 +134,7 @@ async fn mcp_get_rejects_an_unknown_returned_kind() {
     let repository = support::records::Repository::new("The shared graph is readable.");
     let host = support::resource_http::host(&repository, false);
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
 
     let result = client
@@ -233,7 +236,7 @@ async fn mcp_get_keeps_permitted_kinds_without_probing_forbidden_kinds() {
     }
     let host = provenance_transport::StatementHost::with_fixture_access(access);
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
 
     assert!(client
@@ -347,7 +350,8 @@ async fn mcp_check_uses_its_separately_injected_port() {
         provenance_transport::StatementHost::default().with_check_port(Arc::new(CheckFixturePort));
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server_host = host.clone();
-    let server = tokio::spawn(async move { server_host.serve_mcp(server_io).await.unwrap() });
+    let server =
+        tokio::spawn(async move { provenance_mcp::serve(server_host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();
@@ -400,7 +404,7 @@ async fn mcp_regular_graph_work_executes_a_record_command() {
     let repository = support::records::Repository::new("The shared graph is readable.");
     let host = support::resource_http::host(&repository, false);
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
 
     let result = client
@@ -445,7 +449,7 @@ async fn mcp_check_binds_the_host_scope_into_the_check_port() {
     let host = support::resource_http::host(&repository, false)
         .with_check_port(Arc::new(ScopeRecordingPort(seen.clone())));
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
 
     client

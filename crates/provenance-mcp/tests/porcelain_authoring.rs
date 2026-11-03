@@ -1,8 +1,11 @@
 #![cfg(feature = "test-fixture")]
 
+#[allow(dead_code)]
 mod support {
+    #[path = "../../../provenance-transport/tests/support/records.rs"]
     pub mod records;
     #[allow(dead_code)]
+    #[path = "../../../provenance-transport/tests/support/resource_http.rs"]
     pub mod resource_http;
 }
 
@@ -32,7 +35,7 @@ async fn mcp_target_first_authoring_publishes_target_and_type_schemas() {
     let repository = Repository::new("The shared graph is readable.");
     let host = support::resource_http::host(&repository, true);
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();
@@ -59,7 +62,7 @@ async fn mcp_target_first_source_create_and_update_keep_structured_targets() {
     let repository = Repository::new("The shared graph is readable.");
     let host = support::resource_http::host(&repository, true);
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
 
     let created = call(
@@ -114,7 +117,7 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
     let repository = Repository::new("The shared graph is readable.");
     let host = support::resource_http::host(&repository, true);
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
 
     let requirement = call(
@@ -226,7 +229,7 @@ async fn mcp_target_first_requirement_submit_uses_the_target() {
         .unwrap();
     let host = support::resource_http::host(&repository, true);
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
 
     let submitted = call(
@@ -273,7 +276,7 @@ async fn mcp_named_actions_infer_kinds_and_refuse_invalid_targets() {
     repository.all_kinds();
     let host = support::resource_http::host(&repository, true);
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
 
     let claimed = call(
@@ -347,7 +350,7 @@ async fn mcp_authoring_does_not_expose_or_run_hidden_operations() {
     repository.all_kinds();
     let host = support::resource_http::host(&repository, false);
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();

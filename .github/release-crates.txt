@@ -9,5 +9,6 @@ provenance-sdk
 provenance-http-client
 provenance-contract
 provenance-transport
+provenance-mcp
 provenance-review
 provenance-cli

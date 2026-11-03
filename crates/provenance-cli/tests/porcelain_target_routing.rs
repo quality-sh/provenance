@@ -1,11 +1,11 @@
 mod porcelain_authoring_support;
 
 use provenance_macros::verifies;
+use provenance_mcp::Client;
 use provenance_store::operations::catalog::{
     ContextResolver, ExecutionNeeds, PreparedContext, RequestedContext,
 };
 use provenance_transport::{HostAccess, StatementHost};
-use rmcp::ServiceExt as _;
 use serde_json::json;
 use std::{collections::BTreeSet, sync::Arc};
 
@@ -61,15 +61,14 @@ async fn target_first_action_names_match_on_the_live_cli_and_mcp_surfaces() {
 
     let host = StatementHost::with_access(Arc::new(AdvertiseAll));
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
-    let client = ().serve(client_io).await.unwrap();
-    let tools = client.list_all_tools().await.unwrap();
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
+    let client = Client::connect(client_io).await.unwrap();
+    let tools = client.tools().await;
     let mcp = tools
         .iter()
         .filter_map(|tool| {
-            expected
-                .contains(tool.name.as_ref())
-                .then_some(tool.name.as_ref())
+            let name = tool["name"].as_str().unwrap();
+            expected.get(name).copied()
         })
         .collect::<BTreeSet<_>>();
 
