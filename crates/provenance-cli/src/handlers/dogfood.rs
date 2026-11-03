@@ -9,7 +9,7 @@
 //! - Capture must not fail on missing context: absent session env or a
 //!   non-git cwd degrade to nulls, never to errors.
 
-use crate::cli::{Cli, DogfoodCategory, DogfoodCommand, DogfoodSeverity};
+use crate::cli::{DogfoodCategory, DogfoodCommand, DogfoodSeverity};
 use crate::output;
 use anyhow::Context;
 use camino::Utf8PathBuf;
@@ -242,9 +242,9 @@ fn read_spool() -> anyhow::Result<Vec<Note>> {
 }
 
 /// Surfaces are the CLI's own top-level subcommand names plus "general",
-/// derived from clap so the set never drifts from the actual command tree.
+/// read from the root parser so the set never drifts from the actual command tree.
 fn valid_surfaces() -> Vec<String> {
-    let mut surfaces: Vec<String> = <Cli as clap::CommandFactory>::command()
+    let mut surfaces: Vec<String> = crate::invocation::root_command()
         .get_subcommands()
         .map(|command| command.get_name().to_string())
         .collect();
