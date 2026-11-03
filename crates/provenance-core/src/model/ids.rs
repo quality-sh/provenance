@@ -111,6 +111,7 @@ pub const RESERVED_RECORD_IDS: &[&str] = &[
     "init",
     "list",
     "materialize",
+    "mcp",
     "merge-jsonl",
     "messages",
     "neighbors",
