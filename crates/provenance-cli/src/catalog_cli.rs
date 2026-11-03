@@ -1,6 +1,6 @@
 //! CLI dispatch of record actions over the registered resource catalog.
 use crate::invocation::{grammar, GlobalContext};
-use clap::{parser::ValueSource, Arg, ArgMatches, Command};
+use clap::{parser::ValueSource, ArgMatches, Command};
 use provenance_contract::TargetAction;
 use provenance_porcelain::action::Action;
 
@@ -23,19 +23,7 @@ pub fn target_command() -> anyhow::Result<Command> {
         .map(|(_, definition)| definition)
         .collect::<Vec<_>>();
     let command = fields::augment_with_overrides(
-        grammar::target_command()
-            .arg(
-                Arg::new("replace_parent")
-                    .long("replace-parent")
-                    .requires("with_parent")
-                    .help("Replace this Requirement parent and preserve its other parents"),
-            )
-            .arg(
-                Arg::new("with_parent")
-                    .long("with-parent")
-                    .requires("replace_parent")
-                    .help("Add this parent before the selected parent is removed"),
-            ),
+        grammar::target_command(),
         definitions,
         &COMMON
             .iter()
@@ -54,7 +42,7 @@ pub fn target_command() -> anyhow::Result<Command> {
             .collect::<Vec<_>>(),
         &[],
     )?;
-    fields::augment_schemas(
+    crate::registry_cli::augment_schemas(
         command,
         provenance_porcelain::action::Action::DISCUSSION
             .map(provenance_porcelain::discussion::input_schema),

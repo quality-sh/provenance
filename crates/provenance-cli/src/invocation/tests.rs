@@ -1,23 +1,25 @@
-use crate::cli::Cli;
-use clap::{CommandFactory as _, Parser as _};
 use provenance_core::RESERVED_RECORD_IDS;
+use provenance_porcelain::registry::{CliForm, Command};
 use provenance_porcelain::{action::Action, get::View};
 
 #[test]
 fn reserved_ids_cover_declared_root_commands_collections_and_actions() {
-    for command in Cli::command().get_subcommands() {
+    for command in super::root_command().get_subcommands() {
         assert!(
             RESERVED_RECORD_IDS.contains(&command.get_name()),
             "root command {} is not reserved",
             command.get_name()
         );
     }
-    for word in super::grammar::RootWord::ALL {
-        assert!(
-            RESERVED_RECORD_IDS.contains(&word.as_str()),
-            "root word {} is not reserved",
-            word.as_str()
-        );
+    for command in Command::ALL {
+        if let CliForm::Words([word, ..]) | CliForm::WordsAndTarget([word, ..]) =
+            command.declaration().cli_form
+        {
+            assert!(
+                RESERVED_RECORD_IDS.contains(word),
+                "root word {word} is not reserved"
+            );
+        }
     }
     assert!(RESERVED_RECORD_IDS.contains(&"get"));
     for action in Action::ALL {
@@ -73,7 +75,8 @@ fn discussion_flags_follow_the_typed_input_contracts() {
 fn target_grammar_uses_shared_action_and_view_values() {
     for action in Action::ALL {
         assert!(
-            super::grammar::TargetArgs::try_parse_from(["provenance", "req_live", action.as_str()])
+            super::grammar::target_command()
+                .try_get_matches_from(["provenance", "req_live", action.as_str()])
                 .is_ok(),
             "{}",
             action.as_str()
@@ -81,29 +84,19 @@ fn target_grammar_uses_shared_action_and_view_values() {
     }
     for view in View::ALL {
         assert!(
-            super::grammar::TargetArgs::try_parse_from([
-                "provenance",
-                "req_live",
-                "get",
-                "--view",
-                view.as_str()
-            ])
-            .is_ok(),
+            super::grammar::target_command()
+                .try_get_matches_from(["provenance", "req_live", "get", "--view", view.as_str()])
+                .is_ok(),
             "{}",
             view.as_str()
         );
     }
-    assert!(
-        super::grammar::TargetArgs::try_parse_from(["provenance", "req_live", "invented"]).is_err()
-    );
-    assert!(super::grammar::TargetArgs::try_parse_from([
-        "provenance",
-        "req_live",
-        "get",
-        "--view",
-        "invented"
-    ])
-    .is_err());
+    assert!(super::grammar::target_command()
+        .try_get_matches_from(["provenance", "req_live", "invented"])
+        .is_err());
+    assert!(super::grammar::target_command()
+        .try_get_matches_from(["provenance", "req_live", "get", "--view", "invented"])
+        .is_err());
 }
 
 #[test]
