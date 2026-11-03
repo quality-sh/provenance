@@ -2,7 +2,8 @@
 //! and render reports.
 
 use super::{
-    json_format_flag, CliForm, Declaration, Flag, FlagKind, FlagValue, Input, REPO, SCOPE,
+    json_format_flag, CliForm, Declaration, Flag, FlagKind, FlagValue, Input, Interface, Presence,
+    REPO, SCOPE,
 };
 use serde::Deserialize;
 
@@ -17,6 +18,36 @@ pub enum WorkspaceCommand {
     ReportRender,
     ReportBuild,
     Review,
+}
+
+impl WorkspaceCommand {
+    /// Whether `interface` shows this command. Each interface has one exhaustive match.
+    pub(super) const fn presence(self, interface: Interface) -> Presence {
+        match interface {
+            Interface::Cli => match self {
+                Self::DocsCheck
+                | Self::DocsServe
+                | Self::SkillsList
+                | Self::SkillsShow
+                | Self::SkillsInstall
+                | Self::ReportRender
+                | Self::ReportBuild
+                | Self::Review => Presence::Present,
+            },
+            Interface::Mcp => match self {
+                Self::DocsCheck
+                | Self::DocsServe
+                | Self::SkillsList
+                | Self::SkillsShow
+                | Self::SkillsInstall
+                | Self::ReportRender
+                | Self::ReportBuild
+                | Self::Review => Presence::Absent {
+                    reason: "the command works on files and hosts on the local machine",
+                },
+            },
+        }
+    }
 }
 
 const JSON_FORMAT: Flag = json_format_flag(Some("json"));

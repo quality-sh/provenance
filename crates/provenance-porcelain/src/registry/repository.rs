@@ -1,7 +1,10 @@
 //! Declarations of the CLI-only commands that set up, export, import, merge, and check
 //! repository files.
 
-use super::{json_format_flag, CliForm, Declaration, Flag, FlagKind, Input, Relation, REPO, SCOPE};
+use super::{
+    json_format_flag, CliForm, Declaration, Flag, FlagKind, Input, Interface, Presence, Relation,
+    REPO, SCOPE,
+};
 use serde::Deserialize;
 
 /// One CLI-only repository command.
@@ -17,6 +20,40 @@ pub enum RepositoryCommand {
     SchemaShow,
     DictionaryImport,
     DictionaryStatus,
+}
+
+impl RepositoryCommand {
+    /// Whether `interface` shows this command. Each interface has one exhaustive match.
+    pub(super) const fn presence(self, interface: Interface) -> Presence {
+        match interface {
+            Interface::Cli => match self {
+                Self::Init
+                | Self::CargoInit
+                | Self::Materialize
+                | Self::Export
+                | Self::Import
+                | Self::MergeJsonl
+                | Self::Validate
+                | Self::SchemaShow
+                | Self::DictionaryImport
+                | Self::DictionaryStatus => Presence::Present,
+            },
+            Interface::Mcp => match self {
+                Self::Init
+                | Self::CargoInit
+                | Self::Materialize
+                | Self::Export
+                | Self::Import
+                | Self::MergeJsonl
+                | Self::Validate
+                | Self::SchemaShow
+                | Self::DictionaryImport
+                | Self::DictionaryStatus => Presence::Absent {
+                    reason: "the command changes or reads repository files on the local machine",
+                },
+            },
+        }
+    }
 }
 
 const STE_PDF_HELP: &str =

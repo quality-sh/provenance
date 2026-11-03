@@ -1,7 +1,10 @@
 //! Declarations of the CLI-only commands that read the graph, scan bindings, pin graph
 //! references, and land swarm backtraces.
 
-use super::{json_format_flag, CliForm, Declaration, Flag, FlagKind, Input, Relation, REPO, SCOPE};
+use super::{
+    json_format_flag, CliForm, Declaration, Flag, FlagKind, Input, Interface, Presence, Relation,
+    REPO, SCOPE,
+};
 use serde::Deserialize;
 
 /// One CLI-only graph command.
@@ -18,6 +21,42 @@ pub enum GraphCommand {
     ReferenceVerify,
     ReferenceExactExport,
     SwarmBacktraceLand,
+}
+
+impl GraphCommand {
+    /// Whether `interface` shows this command. Each interface has one exhaustive match.
+    pub(super) const fn presence(self, interface: Interface) -> Presence {
+        match interface {
+            Interface::Cli => match self {
+                Self::Graph
+                | Self::Traceability
+                | Self::Gaps
+                | Self::Health
+                | Self::Orphans
+                | Self::CoverageScan
+                | Self::ReferenceIssue
+                | Self::ReferenceShow
+                | Self::ReferenceVerify
+                | Self::ReferenceExactExport
+                | Self::SwarmBacktraceLand => Presence::Present,
+            },
+            Interface::Mcp => match self {
+                Self::Graph
+                | Self::Traceability
+                | Self::Gaps
+                | Self::Health
+                | Self::Orphans
+                | Self::CoverageScan
+                | Self::ReferenceIssue
+                | Self::ReferenceShow
+                | Self::ReferenceVerify
+                | Self::ReferenceExactExport
+                | Self::SwarmBacktraceLand => Presence::Absent {
+                    reason: "MCP clients read the graph through get, search, and api",
+                },
+            },
+        }
+    }
 }
 
 const JSON_FORMAT: Flag = json_format_flag(Some("json"));
