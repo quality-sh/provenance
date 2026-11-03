@@ -6,11 +6,6 @@ Provenance is a tool for building requirements traceability, from source to requ
 
 [![Demo of Provenance: project documents become a graph of Requirements and Rules, the agent asks questions, the person approves each Rule in the review pane, the Rules become tickets, rule and verifies annotations link the code to the Rules, and the coverage scan reports what is implemented, what is verified, and the gaps](https://raw.githubusercontent.com/quality-sh/provenance/main/docs/media/demo-preview.webp)](https://raw.githubusercontent.com/quality-sh/provenance/main/docs/media/demo.mp4)
 
-ASD-STE100 is owned by ASD and maintained by STEMG. Provenance implements its
-own checks against the standard and makes no affiliation, endorsement,
-certification, or compliance claim. See the notice section in
-[LICENSE](LICENSE).
-
 ### Installation
 
 Install and initialize Provenance in a TypeScript project:
@@ -112,3 +107,8 @@ these files. See [bundled skill preparation](tools/skills/README.md).
 - [TypeScript SDK POC](docs/typescript-sdk-poc.md), typed declarations, Node verification, and findings
 
 Licensed under BUSL-1.1.
+
+ASD-STE100 is owned by ASD and maintained by STEMG. Provenance implements its
+own checks against the standard and makes no affiliation, endorsement,
+certification, or compliance claim. See the notice section in
+[LICENSE](LICENSE).
