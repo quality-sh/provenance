@@ -4,10 +4,7 @@ Never lose the *why* behind your decisions.
 
 Provenance is a tool for building requirements traceability, from source to requirement to rule. A Rule is an atomic behavioural obligation that can exist before its implementation; `#[rule("rule_id")]` binds production code to it, and `#[verifies("rule_id", method)]` binds evidence.
 
-ASD-STE100 is owned by ASD and maintained by STEMG. Provenance implements its
-own checks against the standard and makes no affiliation, endorsement,
-certification, or compliance claim. See the notice section in
-[LICENSE](LICENSE).
+[![Demo of Provenance: project documents become a graph of Requirements and Rules, the agent asks questions, the person approves each Rule in the review pane, the Rules become tickets, rule and verifies annotations link the code to the Rules, and the coverage scan reports what is implemented, what is verified, and the gaps](https://raw.githubusercontent.com/quality-sh/provenance/main/docs/media/demo-preview.webp)](https://raw.githubusercontent.com/quality-sh/provenance/main/docs/media/demo.mp4)
 
 ### Installation
 
@@ -88,14 +85,14 @@ npx provenance prime
 | `provenance graph-reference issue\|show\|verify\|exact-export` | Hand off an immutable pinned graph |
 | `provenance traceability <rule>` | Walk a Rule back to its Requirement and any producing Resolution |
 | `provenance api proposals --scope default --query exclude_terminal=true` | List proposals that do not have a terminal disposition |
-| `provenance review` | Serve the review page for the working-copy graph on a local host |
+| `provenance review --repo . --repository-id local --scope default` | Serve the review page for the working-copy graph on a local host |
 | `provenance coverage scan --path . --validate-rules` | Check bindings and report active Rules with no implementation or verification |
-| `provenance check --statement "<statement>" --format json` / `provenance api authoring-changes --method post --input -` / `provenance api verification-runs` | ASD-STE100 statement preflight, typed desired state, and callback evidence protocol |
+| `provenance statement-checks create --statement "<statement>" --format json` / `provenance api authoring-changes --method post --input -` / `provenance api verification-runs` | ASD-STE100 statement preflight, typed desired state, and callback evidence protocol |
 | `provenance api rules --query query=stale --query base=main` | Report Rules with evidence paths that changed after `main` |
 | `provenance skills install` | Install the bundled agent skills (`provenance-shaping`, `provenance-fork-tournament`, `provenance-swarm-backtrace`, `provenance-grounded-writing`) |
 
 The repository uses the `skills/<name>/SKILL.md` layout, so the bundled skills can also
-be installed through the skills.sh ecosystem with `npx skills add <owner/repo>`.
+be installed through the skills.sh ecosystem with `npx skills add quality-sh/provenance`.
 
 Each bundled skill has one tracked source in `skills/`. Crate-local copies are
 package outputs. Before Cargo package or publish commands, run
@@ -110,3 +107,8 @@ these files. See [bundled skill preparation](tools/skills/README.md).
 - [TypeScript SDK POC](docs/typescript-sdk-poc.md), typed declarations, Node verification, and findings
 
 Licensed under BUSL-1.1.
+
+ASD-STE100 is owned by ASD and maintained by STEMG. Provenance implements its
+own checks against the standard and makes no affiliation, endorsement,
+certification, or compliance claim. See the notice section in
+[LICENSE](LICENSE).
