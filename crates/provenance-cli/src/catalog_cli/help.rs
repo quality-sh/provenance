@@ -12,6 +12,9 @@ pub(super) fn target(
 ) -> anyhow::Result<()> {
     use crate::invocation::grammar::TargetVerb;
 
+    if let Some(description) = action.and_then(description) {
+        command = command.about(description);
+    }
     if let Some(TargetVerb::Action(action)) = action {
         if provenance_contract::TargetAction::RECORD.contains(&action) {
             let needs_type = action == provenance_contract::TargetAction::Create && kind.is_none();
@@ -57,6 +60,17 @@ pub(super) fn target(
     }
     println!("{}", command.render_help());
     Ok(())
+}
+
+/// The registry description of the selected target action, which MCP also shows.
+fn description(action: crate::invocation::grammar::TargetVerb) -> Option<&'static str> {
+    use crate::invocation::grammar::TargetVerb;
+    let name = match action {
+        TargetVerb::Get => "get",
+        TargetVerb::Action(action) => action.as_str(),
+    };
+    provenance_porcelain::registry::Command::find_target_action(name)
+        .map(|command| command.declaration().description)
 }
 
 /// Discussion action help lists the typed input fields of that action and

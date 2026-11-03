@@ -19,6 +19,8 @@ use grammar::{
 use provenance_porcelain::registry::{self, CheckCliInput, Interface, PrimeInput};
 
 #[cfg(test)]
+mod surface_tests;
+#[cfg(test)]
 mod tests;
 
 /// One command selected from a declared grammar.
