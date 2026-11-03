@@ -186,6 +186,7 @@ fn workspace_commands_are_registry_commands() {
         &["report", "render"],
         &["report", "build"],
         &["review"],
+        &["mcp"],
     ]);
 }
 

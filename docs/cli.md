@@ -166,7 +166,7 @@ repository, render a report, manage the host, or perform another product task:
 
 - `init`, `check`, and `docs`
 - `graph`, `traceability`, `coverage`, `gaps`, `health`, `orphans`, and `prime`
-- `review`
+- `review` and `mcp`
 - `import`, `export`, and `materialize`
 - `swarm-backtrace`
 - `skills`, `schema`, and `validate`
@@ -184,6 +184,35 @@ return a nonzero exit status.
 The review host binds one repository, one scope, and one credential to each
 connection. See [review-host.md](review-host.md). Import and export operate on a
 complete scope. They remain separate from resource writes.
+
+## MCP server
+
+`provenance mcp --repo <repository> --scope <scope>` starts an MCP server on
+standard input and output. The server opens the same repository and scope as the
+CLI commands. The default repository is the current directory, and the default
+scope is `default`. The server gives the porcelain tools: `get`, `search`, `api`,
+`check`, and the record actions. The tools can write records. A record that the
+CLI writes is available to the MCP tools in the same session, and a record that
+an MCP tool writes is available to the CLI.
+
+The server stops when standard input closes. A write that started before then
+completes before the process stops. If the repository has no Provenance graph,
+the command writes the refusal to standard error and stops with a nonzero exit
+status.
+
+To add the server to an MCP client, give the client the command and its
+arguments. For example, a client that reads an `mcpServers` object:
+
+```json
+{
+  "mcpServers": {
+    "provenance": {
+      "command": "provenance",
+      "args": ["mcp", "--repo", "/path/to/repository"]
+    }
+  }
+}
+```
 
 ## Repairing a duplicate Message ID
 

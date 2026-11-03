@@ -6,7 +6,7 @@ use provenance_core::StableId;
 use provenance_porcelain::registry::{
     self, CargoInitInput, CoverageScanInput, DictionaryImportInput, DictionaryStatusInput,
     DocsCheckInput, DocsServeInput, ExportInput, GraphCommand, GraphReadInput, ImportInput,
-    InitInput, MaterializeInput, MergeJsonlInput, ReferenceInput, ReferenceIssueInput,
+    InitInput, MaterializeInput, McpInput, MergeJsonlInput, ReferenceInput, ReferenceIssueInput,
     ReportBuildInput, ReportRenderInput, RepositoryCommand, RequirementGraphInput, ReviewInput,
     SchemaShowInput, SkillsInstallInput, SkillsListInput, SkillsShowInput, SwarmBacktraceLandInput,
     TraceabilityInput, ValidateInput, WorkspaceCommand,
@@ -23,6 +23,7 @@ mod dogfood;
 mod export;
 mod graph_reference;
 mod import;
+mod mcp;
 mod merge_jsonl;
 mod prime;
 mod repo;
@@ -329,6 +330,7 @@ pub(super) enum WorkspaceInput {
     ReportRender(ReportRenderInput),
     ReportBuild(ReportBuildInput),
     Review(ReviewInput),
+    Mcp(McpInput),
 }
 
 impl WorkspaceInput {
@@ -353,6 +355,7 @@ impl WorkspaceInput {
             WorkspaceCommand::ReportRender => read!(ReportRender),
             WorkspaceCommand::ReportBuild => read!(ReportBuild),
             WorkspaceCommand::Review => read!(Review),
+            WorkspaceCommand::Mcp => read!(Mcp),
         })
     }
 }
@@ -417,6 +420,7 @@ pub(super) async fn workspace_command(input: WorkspaceInput) -> anyhow::Result<(
             })
             .await
         }
+        WorkspaceInput::Mcp(input) => mcp::handle(input).await,
     }
 }
 

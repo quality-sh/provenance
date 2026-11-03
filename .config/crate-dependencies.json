@@ -87,6 +87,7 @@
         "provenance-contract",
         "provenance-core",
         "provenance-macros",
+        "provenance-mcp",
         "provenance-porcelain",
         "provenance-report",
         "provenance-review",
@@ -107,7 +108,8 @@
         "notify",
         "provenance-mcp",
         "provenance-transport",
-        "tempfile"
+        "tempfile",
+        "tokio"
       ]
     },
     "provenance-codegen": {

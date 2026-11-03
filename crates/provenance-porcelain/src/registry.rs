@@ -26,7 +26,7 @@ pub use repository::{
     ValidateInput,
 };
 pub use workspace::{
-    DocsCheckInput, DocsServeInput, ReportBuildInput, ReportRenderInput, ReviewInput,
+    DocsCheckInput, DocsServeInput, McpInput, ReportBuildInput, ReportRenderInput, ReviewInput,
     SkillsInstallInput, SkillsListInput, SkillsShowInput, WorkspaceCommand,
 };
 
@@ -335,6 +335,7 @@ impl Command {
         Self::Workspace(WorkspaceCommand::ReportRender),
         Self::Workspace(WorkspaceCommand::ReportBuild),
         Self::Workspace(WorkspaceCommand::Review),
+        Self::Workspace(WorkspaceCommand::Mcp),
         Self::Dogfood(DogfoodCommand::Note),
         Self::Dogfood(DogfoodCommand::List),
         Self::Dogfood(DogfoodCommand::Report),
