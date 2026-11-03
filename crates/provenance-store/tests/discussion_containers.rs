@@ -41,6 +41,7 @@ fn closed_containers_refuse_reply_and_reopening_without_reactivation() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_thread_siblings_archived", examples)]
 fn reply_reconciles_siblings_but_cannot_move_a_losing_discussion() {
     let (temp, store) = fixture();
     let a = start(&store, "a");
@@ -132,6 +133,7 @@ fn direct_message_append_cannot_bypass_enrolled_membership() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_thread_siblings_archived", examples)]
 fn resolving_a_discussion_leaves_all_container_statuses_unchanged() {
     let (temp, store) = fixture();
     let a = start(&store, "a");
