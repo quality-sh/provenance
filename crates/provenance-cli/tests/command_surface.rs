@@ -7,7 +7,7 @@ mod support {
 }
 
 use provenance_macros::verifies;
-use provenance_porcelain::registry::{Command, Input, Interface, Presence};
+use provenance_porcelain::registry::{CliForm, Command, Input, Interface, Presence};
 use serde_json::Value;
 use std::collections::BTreeSet;
 use support::surface::{help, tools, words};
@@ -20,24 +20,33 @@ fn properties(schema: &Value) -> BTreeSet<String> {
 }
 
 /// The CLI help and the MCP tool of each command on both interfaces show one description.
+/// A target action shows it in the help of the target-first form.
 #[tokio::test]
 #[verifies("rule_command_description_same_on_cli_and_mcp", examples)]
 async fn porcelain_commands_show_one_description() {
-    let (repo, _) = support::review_paths::init();
+    let (repo, path) = support::review_paths::init();
     let tools = tools(repo.path()).await;
     for command in Command::ALL {
-        let (Some(words), true) = (words(*command), command.is_present(Interface::Mcp)) else {
+        if !command.is_present(Interface::Mcp) || !command.is_present(Interface::Cli) {
             continue;
-        };
+        }
         let declaration = command.declaration();
         let tool = &tools[declaration.name];
         assert_eq!(tool["description"], declaration.description, "{command:?}");
-        let help = help(words);
-        assert!(
-            help.contains(declaration.description),
-            "provenance {} --help does not show the MCP description:\n{help}",
-            words.join(" ")
-        );
+        let target_form = ["req_surface", declaration.name, "--repo", path.as_str()];
+        let forms: Vec<&[&str]> = match declaration.cli_form {
+            CliForm::Words(words) => vec![words],
+            CliForm::WordsAndTarget(words) => vec![words, &target_form],
+            CliForm::Target => vec![&target_form],
+        };
+        for words in forms {
+            let help = help(words);
+            assert!(
+                help.contains(declaration.description),
+                "provenance {} --help does not show the MCP description:\n{help}",
+                words.join(" ")
+            );
+        }
     }
 }
 
