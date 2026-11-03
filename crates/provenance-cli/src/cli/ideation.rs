@@ -1,23 +1,16 @@
-use crate::output::JsonFormat;
 use camino::Utf8PathBuf;
-use clap::{Subcommand, ValueEnum};
 use provenance_cli::repo_context::RepoContext;
 
-#[derive(Subcommand)]
+/// The `provenance swarm-backtrace land` inputs.
 pub enum SwarmBacktraceCommand {
     Land {
-        #[command(flatten)]
         context: RepoContext,
-        #[arg(long)]
         run_dir: Utf8PathBuf,
-        #[arg(long)]
         replace: bool,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
     },
 }
 
-#[derive(Debug, Clone, Copy, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IdeationArtifactKind {
     Contribution,
     SynthesisPacket,
@@ -29,6 +22,16 @@ pub enum IdeationArtifactKind {
 }
 
 impl IdeationArtifactKind {
+    pub const ALL: [Self; 7] = [
+        Self::Contribution,
+        Self::SynthesisPacket,
+        Self::Proposal,
+        Self::Assertion,
+        Self::Disposition,
+        Self::GraphReference,
+        Self::GraphReferenceExport,
+    ];
+
     pub const fn name(self) -> &'static str {
         match self {
             Self::Contribution => "contribution",
@@ -40,13 +43,15 @@ impl IdeationArtifactKind {
             Self::GraphReferenceExport => "graph-reference-export",
         }
     }
+
+    /// The artifact kind with this name.
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|kind| kind.name() == name)
+    }
 }
 
-#[derive(Clone, Copy, Subcommand)]
+/// The `provenance schema show` input.
+#[derive(Clone, Copy)]
 pub enum SchemaCommand {
-    Show {
-        artifact: IdeationArtifactKind,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
+    Show { artifact: IdeationArtifactKind },
 }
