@@ -1,43 +1,28 @@
-use crate::output::{JsonFormat, ReportFormat};
+use crate::output::ReportFormat;
 use camino::Utf8PathBuf;
-use clap::Subcommand;
 
-#[derive(Subcommand)]
+/// One `provenance docs` command and its inputs.
 pub enum DocsCommand {
     Check {
-        #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
     },
     Serve {
-        #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
-        #[arg(long, default_value = "127.0.0.1")]
         host: String,
-        #[arg(long, default_value_t = 5174)]
         port: u16,
     },
 }
 
-#[derive(Subcommand)]
+/// One `provenance skills` command and its inputs.
 pub enum SkillsCommand {
-    List {
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
+    List,
     Show {
         name: String,
     },
     Install {
-        #[arg(long)]
         global: bool,
-        #[arg(long)]
         copy: bool,
-        #[arg(long)]
         force: bool,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
     },
 }
 

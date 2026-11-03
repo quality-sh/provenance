@@ -301,6 +301,7 @@ pub(super) fn declaration(command: Command) -> Declaration {
         Command::Action(action) => action_declaration(action),
         Command::Repository(command) => super::repository::declaration(command),
         Command::Graph(command) => super::graph::declaration(command),
+        Command::Workspace(command) => super::workspace::declaration(command),
     }
 }
 

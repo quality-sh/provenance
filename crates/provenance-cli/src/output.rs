@@ -20,7 +20,7 @@ pub enum JsonFormat {
 
 /// JSON for the machine, or one command's Markdown report for the reader.
 /// The Markdown arm names a real renderer.
-#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+#[derive(Debug, Clone, Copy)]
 pub enum ReportFormat {
     Json,
     Markdown,
@@ -44,6 +44,17 @@ impl JsonFormat {
     /// The format that one `--format` value names.
     pub fn from_flag(value: &str) -> Option<Self> {
         (value == "json").then_some(Self::Json)
+    }
+}
+
+impl ReportFormat {
+    /// The format that one `--format` value names.
+    pub fn from_flag(value: &str) -> Option<Self> {
+        match value {
+            "json" => Some(Self::Json),
+            "markdown" => Some(Self::Markdown),
+            _ => None,
+        }
     }
 }
 
