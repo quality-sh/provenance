@@ -4,6 +4,8 @@ Never lose the *why* behind your decisions.
 
 Provenance is a tool for building requirements traceability, from source to requirement to rule. A Rule is an atomic behavioural obligation that can exist before its implementation; `#[rule("rule_id")]` binds production code to it, and `#[verifies("rule_id", method)]` binds evidence.
 
+[![Demo of Provenance: project documents become a graph of Requirements and Rules, the agent asks questions, the person approves each Rule in the review pane, the Rules become tickets, rule and verifies annotations link the code to the Rules, and the coverage scan reports what is implemented, what is verified, and the gaps](https://raw.githubusercontent.com/quality-sh/provenance/main/docs/media/demo-preview.webp)](https://raw.githubusercontent.com/quality-sh/provenance/main/docs/media/demo.mp4)
+
 ASD-STE100 is owned by ASD and maintained by STEMG. Provenance implements its
 own checks against the standard and makes no affiliation, endorsement,
 certification, or compliance claim. See the notice section in
