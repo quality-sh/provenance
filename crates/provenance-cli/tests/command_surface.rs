@@ -163,3 +163,19 @@ fn graph_read_commands_are_registry_commands() {
         &["swarm-backtrace", "land"],
     ]);
 }
+
+/// The workspace commands come from the registry, and their help shows each declared flag.
+#[test]
+#[verifies("rule_porcelain_interface_shows_recorded_commands", examples)]
+fn workspace_commands_are_registry_commands() {
+    assert_cli_only_registry_commands(&[
+        &["docs", "check"],
+        &["docs", "serve"],
+        &["skills", "list"],
+        &["skills", "show"],
+        &["skills", "install"],
+        &["report", "render"],
+        &["report", "build"],
+        &["review"],
+    ]);
+}
