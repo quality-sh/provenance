@@ -100,35 +100,16 @@ async fn registry_commands_appear_on_both_interfaces() {
     }
 }
 
-/// The registry command that `provenance <words...>` selects, and its help.
-fn registry_command(words: &[&str]) -> (Command, String) {
-    let command = Command::find(Interface::Cli, words)
-        .unwrap_or_else(|| panic!("provenance {} is not a registry command", words.join(" ")));
-    (command, help(words))
-}
-
-/// The repository commands come from the registry, and their help shows each declared flag.
-#[test]
-#[verifies("rule_porcelain_interface_shows_recorded_commands", examples)]
-fn repository_commands_are_registry_commands() {
-    let commands: &[&[&str]] = &[
-        &["init"],
-        &["__cargo-init"],
-        &["materialize"],
-        &["export"],
-        &["import"],
-        &["merge-jsonl"],
-        &["validate"],
-        &["schema", "show"],
-        &["dictionary", "import"],
-        &["dictionary", "status"],
-    ];
+/// Each of `commands` is a CLI-only registry command, and its help shows each declared flag.
+fn assert_cli_only_registry_commands(commands: &[&[&str]]) {
     for words in commands {
-        let (command, help) = registry_command(words);
+        let command = Command::find(Interface::Cli, words)
+            .unwrap_or_else(|| panic!("provenance {} is not a registry command", words.join(" ")));
         assert!(
             !command.is_present(Interface::Mcp),
             "{command:?} is CLI-only"
         );
+        let help = help(words);
         for flag in command
             .declaration()
             .flags
@@ -144,4 +125,41 @@ fn repository_commands_are_registry_commands() {
             }
         }
     }
+}
+
+/// The repository commands come from the registry, and their help shows each declared flag.
+#[test]
+#[verifies("rule_porcelain_interface_shows_recorded_commands", examples)]
+fn repository_commands_are_registry_commands() {
+    assert_cli_only_registry_commands(&[
+        &["init"],
+        &["__cargo-init"],
+        &["materialize"],
+        &["export"],
+        &["import"],
+        &["merge-jsonl"],
+        &["validate"],
+        &["schema", "show"],
+        &["dictionary", "import"],
+        &["dictionary", "status"],
+    ]);
+}
+
+/// The graph read commands come from the registry, and their help shows each declared flag.
+#[test]
+#[verifies("rule_porcelain_interface_shows_recorded_commands", examples)]
+fn graph_read_commands_are_registry_commands() {
+    assert_cli_only_registry_commands(&[
+        &["graph"],
+        &["traceability"],
+        &["gaps"],
+        &["health"],
+        &["orphans"],
+        &["coverage", "scan"],
+        &["graph-reference", "issue"],
+        &["graph-reference", "show"],
+        &["graph-reference", "verify"],
+        &["graph-reference", "exact-export"],
+        &["swarm-backtrace", "land"],
+    ]);
 }
