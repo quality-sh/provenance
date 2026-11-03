@@ -2,7 +2,7 @@ use super::GlobalContext;
 use crate::output::JsonFormat;
 use clap::{
     builder::{PossibleValuesParser, TypedValueParser},
-    ArgAction, ArgMatches, Args, Command, CommandFactory, FromArgMatches, Parser,
+    Arg, ArgAction, ArgMatches, Command,
 };
 use provenance_cli::porcelain;
 use provenance_cli::repo_context::RepoContext;
@@ -10,26 +10,28 @@ use provenance_core::NodeType;
 use provenance_porcelain::action::Action;
 use provenance_porcelain::registry::{self, CliForm};
 
-// Shared options for the Porcelain and catalog grammars.
-#[derive(Args)]
-#[group(skip)]
+/// The shared options of the porcelain and catalog grammars, read from the registry's
+/// global flags.
 pub struct Common {
-    #[arg(long, global = true, default_value = ".", allow_hyphen_values = true)]
     pub repo: String,
-    #[arg(
-        long,
-        global = true,
-        default_value = "default",
-        allow_hyphen_values = true
-    )]
     pub scope: String,
-    #[arg(long, global = true, value_enum)]
     pub format: Option<JsonFormat>,
-    #[arg(long, global = true)]
     pub quiet: bool,
 }
 
 impl Common {
+    pub fn from_matches(matches: &ArgMatches) -> Self {
+        let text = |name: &str| matches.get_one::<String>(name).cloned().unwrap_or_default();
+        Self {
+            repo: text("repo"),
+            scope: text("scope"),
+            format: matches
+                .get_one::<String>("format")
+                .and_then(|format| JsonFormat::from_flag(format)),
+            quiet: matches.get_flag("quiet"),
+        }
+    }
+
     pub fn context(&self) -> GlobalContext {
         GlobalContext {
             repo: RepoContext::new(&self.repo, &self.scope),
@@ -58,7 +60,7 @@ pub struct SearchArgs {
 impl SearchArgs {
     pub fn from_matches(matches: &ArgMatches) -> Self {
         Self {
-            common: Common::from_arg_matches(matches).unwrap_or_else(|error| error.exit()),
+            common: Common::from_matches(matches),
             text: matches.get_one::<String>("text").cloned(),
             cursor: matches.get_one::<String>("cursor").cloned(),
             kind: kinds(matches),
@@ -80,13 +82,21 @@ fn kinds(matches: &ArgMatches) -> Vec<NodeType> {
         .collect()
 }
 
-#[derive(Args)]
+/// The `provenance discussions` flags, read from the discussions parser.
 pub struct DiscussionsArgs {
     pub discussion_id: Option<String>,
-    #[arg(value_parser = ["get"])]
     pub action: Option<String>,
-    #[command(flatten)]
     pub common: Common,
+}
+
+impl DiscussionsArgs {
+    pub fn from_matches(matches: &ArgMatches) -> Self {
+        Self {
+            discussion_id: matches.get_one::<String>("discussion_id").cloned(),
+            action: matches.get_one::<String>("action").cloned(),
+            common: Common::from_matches(matches),
+        }
+    }
 }
 
 /// The api flags, read from the registry-rendered api parser.
@@ -113,7 +123,7 @@ impl ApiArgs {
                 .collect()
         };
         Self {
-            common: Common::from_arg_matches(matches).unwrap_or_else(|error| error.exit()),
+            common: Common::from_matches(matches),
             path: matches.get_one::<String>("path").cloned(),
             method: matches
                 .get_one::<provenance_porcelain::api::ApiMethod>("method")
@@ -125,15 +135,6 @@ impl ApiArgs {
             limit: matches.get_one::<usize>("limit").copied(),
         }
     }
-}
-
-#[derive(Parser)]
-#[command(name = "provenance", about = "List or read addressed Discussions")]
-pub(super) struct DiscussionsCommand {
-    #[arg(value_parser = ["discussions"])]
-    pub command: String,
-    #[command(flatten)]
-    pub args: DiscussionsArgs,
 }
 
 /// The target, its action, and the get flags, read from the target parser.
@@ -222,7 +223,7 @@ fn target_declarations() -> impl Iterator<Item = registry::Declaration> {
 impl TargetArgs {
     pub fn from_matches(matches: &ArgMatches) -> Self {
         let mut args = Self {
-            common: Common::from_arg_matches(matches).unwrap_or_else(|error| error.exit()),
+            common: Common::from_matches(matches),
             target: matches
                 .get_one::<String>("target")
                 .cloned()
@@ -250,7 +251,7 @@ impl TargetArgs {
 
 /// Find the first command word using only the declared shared option arity.
 pub(super) fn command_word(arguments: &[String]) -> Option<&str> {
-    let common = Common::augment_args(Command::new("provenance"));
+    let common = crate::registry_cli::with_global_flags(Command::new("provenance"));
     positional_word(arguments, &common, 1)
 }
 
@@ -291,11 +292,11 @@ pub(super) fn positional_word<'a>(
 
 /// The target parser: the target, its action, and the flags of every target command.
 pub fn target_command() -> Command {
-    let mut command = Common::augment_args(Command::new("provenance"))
+    let mut command = crate::registry_cli::with_global_flags(Command::new("provenance"))
         .about("Read or change one record")
-        .arg(clap::Arg::new("target").required(true).value_name("TARGET"))
+        .arg(Arg::new("target").required(true).value_name("TARGET"))
         .arg(
-            clap::Arg::new("action")
+            Arg::new("action")
                 .value_parser(target_actions())
                 .value_name("ACTION"),
         );
@@ -315,12 +316,26 @@ pub fn target_command() -> Command {
 }
 
 pub fn discussions_command() -> anyhow::Result<Command> {
-    crate::registry_cli::augment_schemas(
-        DiscussionsCommand::command().about(
+    let command = Command::new("provenance")
+        .about(
             registry::Command::Action(Action::Discussions)
                 .declaration()
                 .description,
-        ),
+        )
+        .arg(
+            Arg::new("command")
+                .required(true)
+                .value_name("COMMAND")
+                .value_parser(["discussions"]),
+        )
+        .arg(Arg::new("discussion_id").value_name("DISCUSSION_ID"))
+        .arg(
+            Arg::new("action")
+                .value_name("ACTION")
+                .value_parser(["get"]),
+        );
+    crate::registry_cli::augment_schemas(
+        crate::registry_cli::with_global_flags(command),
         [
             provenance_porcelain::discussion::input_schema(Action::Discussions),
             provenance_porcelain::discussion::input_schema(Action::Discussion),
