@@ -1,4 +1,8 @@
 {
+  "interface_crates": {
+    "clap": "provenance-cli",
+    "rmcp": "provenance-mcp"
+  },
   "host_crates": [
     "axum",
     "clap",

@@ -179,3 +179,54 @@ fn workspace_commands_are_registry_commands() {
         &["review"],
     ]);
 }
+
+/// The command names that `provenance <words...> --help` lists, without `help`.
+fn listed_commands(words: &[&str]) -> Vec<String> {
+    help(words)
+        .replace("provenance.exe", "provenance")
+        .lines()
+        .skip_while(|line| *line != "Commands:")
+        .skip(1)
+        .take_while(|line| !line.trim().is_empty())
+        .filter_map(|line| line.split_whitespace().next().map(str::to_owned))
+        .filter(|name| name != "help")
+        .collect()
+}
+
+/// Each command that the CLI help lists is a registry command that the CLI shows, or a
+/// group of such commands.
+#[test]
+#[verifies("rule_porcelain_registry_defines_commands", exhaustion)]
+fn every_cli_command_is_a_registry_command() {
+    let mut groups = vec![Vec::<String>::new()];
+    while let Some(group) = groups.pop() {
+        let group_words = group.iter().map(String::as_str).collect::<Vec<_>>();
+        for name in listed_commands(&group_words) {
+            let mut path = group.clone();
+            path.push(name);
+            let words = path.iter().map(String::as_str).collect::<Vec<_>>();
+            if Command::find(Interface::Cli, &words).is_some() {
+                continue;
+            }
+            assert!(
+                !listed_commands(&words).is_empty(),
+                "provenance {} is not a registry command",
+                words.join(" ")
+            );
+            groups.push(path);
+        }
+    }
+}
+
+/// Each tool that a served host lists is a registry command that MCP shows.
+#[tokio::test]
+#[verifies("rule_porcelain_registry_defines_commands", exhaustion)]
+async fn every_mcp_tool_is_a_registry_command() {
+    let (repo, _) = support::review_paths::init();
+    for name in tools(repo.path()).await.keys() {
+        assert!(
+            Command::find(Interface::Mcp, &[name.as_str()]).is_some(),
+            "MCP tool {name} is not a registry command"
+        );
+    }
+}
