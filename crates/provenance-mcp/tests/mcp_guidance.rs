@@ -7,7 +7,7 @@ use rmcp::ServiceExt as _;
 async fn initialization_teaches_domain_without_a_prime_tool() {
     let host = StatementHost::default();
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
     let info = client.peer_info().unwrap();
     let instructions = info.instructions.as_deref().expect("server instructions");

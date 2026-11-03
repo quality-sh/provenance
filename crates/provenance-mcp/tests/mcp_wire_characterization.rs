@@ -6,8 +6,11 @@
 //! library's client.
 #![cfg(feature = "test-fixture")]
 
+#[allow(dead_code)]
 mod support {
+    #[path = "../../../provenance-transport/tests/support/check_port.rs"]
     pub mod check_port;
+    #[path = "../../../provenance-transport/tests/support/records.rs"]
     pub mod records;
 }
 
@@ -51,7 +54,7 @@ impl Wire {
     fn start(host: StatementHost) -> Self {
         let (client_io, server_io) = tokio::io::duplex(1024 * 1024);
         tokio::spawn(async move {
-            let running = host.serve_mcp(server_io).await.unwrap();
+            let running = provenance_mcp::serve(host, server_io).await.unwrap();
             let _ = running.waiting().await;
         });
         let (reader, writer) = tokio::io::split(client_io);
@@ -227,5 +230,69 @@ async fn typed_refusal_and_unknown_tool_keep_their_shape() {
             "id":3,
             "error":{"code":-32601,"message":"Unknown tool"}
         })
+    );
+}
+
+/// The error object that each tool returns for an input field it does not accept,
+/// then the error object for an oversized input.
+fn refusals() -> Vec<(&'static str, Value)> {
+    let read = json!({"kind":"invalid_input","message":"unsupported read options","reason":"invalid_value"});
+    let options = |message: &str| json!({"kind":"invalid_options","message":message});
+    let discussion = json!({
+        "field":null,"kind":"invalid_input","message":"unsupported action options","reason":"invalid_value"
+    });
+    vec![
+        ("get", read),
+        ("search", options("unsupported search options")),
+        (
+            "api",
+            json!({"field":"unknown_field","kind":"invalid_input","reason":"invalid_value"}),
+        ),
+        ("check", options("unsupported check options")),
+        ("create", options("unsupported action options")),
+        ("update", options("unsupported action options")),
+        ("answer", options("unsupported action options")),
+        ("claim", options("unsupported action options")),
+        ("release", options("unsupported action options")),
+        ("submit", options("unsupported action options")),
+        ("discussions", discussion.clone()),
+        ("discussion", discussion.clone()),
+        ("discuss", discussion.clone()),
+        ("reply", discussion),
+        (
+            "too_large",
+            json!({"field":null,"kind":"invalid_input","reason":"too_large"}),
+        ),
+    ]
+}
+
+#[tokio::test]
+async fn each_tool_refusal_keeps_its_text() {
+    let repository = Repository::new("The shared graph is readable.");
+    let mut wire = Wire::start(full_host(&repository));
+    wire.initialize("2025-06-18").await;
+    let oversized = "x".repeat(provenance_transport::MAX_BODY_BYTES + 1);
+    for (label, error) in refusals() {
+        let call = if label == "too_large" {
+            json!({"name":"get","arguments":{"id":oversized}})
+        } else {
+            json!({"name":label,"arguments":{"unknown_field":1}})
+        };
+        let response = wire.request("tools/call", call).await;
+        let envelope = json!({"error":error,"meta":{}});
+        assert_eq!(
+            response["result"],
+            json!({
+                "content":[{"type":"text","text":envelope.to_string()}],
+                "isError":true,
+                "structuredContent":envelope
+            }),
+            "{label}"
+        );
+    }
+    assert_eq!(
+        refusals().len(),
+        PORCELAIN_TOOL_NAMES.len() + 1,
+        "one refusal per tool and one oversized input"
     );
 }

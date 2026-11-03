@@ -1,68 +1,45 @@
-use crate::output::{JsonFormat, ReportFormat};
+use crate::output::ReportFormat;
 use camino::Utf8PathBuf;
-use clap::Subcommand;
 
-#[derive(Subcommand)]
+/// One `provenance docs` command and its inputs.
 pub enum DocsCommand {
     Check {
-        #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
     },
     Serve {
-        #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
-        #[arg(long, default_value = "127.0.0.1")]
         host: String,
-        #[arg(long, default_value_t = 5174)]
         port: u16,
     },
 }
 
-#[derive(Subcommand)]
+/// One `provenance skills` command and its inputs.
 pub enum SkillsCommand {
-    List {
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
+    List,
     Show {
         name: String,
     },
     Install {
-        #[arg(long)]
         global: bool,
-        #[arg(long)]
         copy: bool,
-        #[arg(long)]
         force: bool,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
     },
 }
 
-#[derive(Subcommand)]
+/// The `provenance coverage scan` inputs.
 pub enum CoverageCommand {
     Scan {
-        #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
-        #[arg(long)]
         path: Utf8PathBuf,
-        #[arg(long, default_value = "default")]
         scope: String,
         /// JSON report from an earlier scan whose evidence anchors should be
         /// resolved against this scan.
-        #[arg(long)]
         baseline: Option<Utf8PathBuf>,
-        #[arg(long)]
         validate_rules: bool,
         /// Exit non-zero when the report contains any warnings. The report is
         /// still printed first.
-        #[arg(long)]
         strict: bool,
-        #[arg(long, value_enum, default_value_t = ReportFormat::Markdown)]
         format: ReportFormat,
-        #[arg(long)]
         output: Option<Utf8PathBuf>,
     },
 }

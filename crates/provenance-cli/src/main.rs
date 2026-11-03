@@ -12,6 +12,7 @@ mod legacy_cleanup;
 mod onboarding;
 mod output;
 mod read_policy;
+mod registry_cli;
 use provenance_cli::{repo_context, store};
 #[cfg(windows)]
 use provenance_review::owner_file;

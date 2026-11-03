@@ -76,7 +76,7 @@ fn legacy_state_options_leave_guidance_unchanged() {
 
 #[tokio::test]
 async fn cli_and_mcp_share_the_same_guidance() {
-    use rmcp::ServiceExt as _;
+    use provenance_mcp::Client;
 
     let repo = tempfile::tempdir().unwrap();
     let text = prime(repo.path(), &[]);
@@ -90,13 +90,10 @@ async fn cli_and_mcp_share_the_same_guidance() {
             .local_host()
             .unwrap();
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
-    let client = ().serve(client_io).await.unwrap();
-    assert_eq!(
-        client.peer_info().unwrap().instructions.as_deref(),
-        Some(text.trim_end())
-    );
-    let tools = client.list_all_tools().await.unwrap();
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
+    let client = Client::connect(client_io).await.unwrap();
+    assert_eq!(client.instructions().as_deref(), Some(text.trim_end()));
+    let tools = client.tools().await;
     for name in [
         "get",
         "search",
@@ -106,14 +103,14 @@ async fn cli_and_mcp_share_the_same_guidance() {
         "discuss",
         "reply",
     ] {
-        let tool = tools.iter().find(|tool| tool.name == name).unwrap();
-        let description = tool.description.as_deref().unwrap();
+        let tool = tools.iter().find(|tool| tool["name"] == name).unwrap();
+        let description = tool["description"].as_str().unwrap();
         assert!(
             text.contains(description),
             "shared description missing: {name}"
         );
     }
-    assert!(tools.iter().all(|tool| tool.name != "prime"));
+    assert!(tools.iter().all(|tool| tool["name"] != "prime"));
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }

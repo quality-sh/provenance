@@ -3,6 +3,7 @@ members = [
     "crates/provenance-cli",
     "crates/provenance-core",
     "crates/provenance-macros",
+    "crates/provenance-mcp",
     "crates/provenance-porcelain",
     "crates/provenance-scanner",
     "crates/provenance-sdk",
@@ -92,6 +93,7 @@ predicates = "3.1"
 provenance-contract = { path = "crates/provenance-contract", version = "0.3.2" }
 provenance-core = { path = "crates/provenance-core", version = "0.3.2" }
 provenance-macros = { path = "crates/provenance-macros", version = "0.3.2" }
+provenance-mcp = { path = "crates/provenance-mcp", version = "0.3.2" }
 provenance-porcelain = { path = "crates/provenance-porcelain", version = "0.3.2" }
 provenance-report = { path = "crates/provenance-report", version = "0.3.2" }
 provenance-review = { path = "crates/provenance-review", version = "0.3.2" }

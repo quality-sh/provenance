@@ -1,14 +1,9 @@
 //! Domain guidance shared by CLI output and MCP discovery.
 
-use crate::action::{self, Action};
+use crate::action::Action;
+use crate::registry::Command;
 use serde::Serialize;
 use std::fmt::Write;
-
-pub const GET_DESCRIPTION: &str =
-    "Read one repository record by its repository-local ID. Select its record, children, grounding, or impact view.";
-pub const SEARCH_DESCRIPTION: &str = "Find records across the permitted kinds in the bound scope, or the Rules bound to a source file and symbol.";
-pub const CHECK_DESCRIPTION: &str = "Check graph validity, statement quality, and binding \
-     coverage. Give a statement to check that text with the project dictionary before a write.";
 
 /// The same domain text in structured CLI output and native MCP instructions.
 #[derive(Clone, Debug, Serialize, schemars::JsonSchema)]
@@ -46,22 +41,18 @@ Available actions depend on the selected surface and its access. Use CLI help or
 - `provenance search --text <text> --scope <scope> --format json`\n\
 - `provenance <id> get --view children --depth <N> --scope <scope> --format json`\n\n",
     );
-    for (name, description) in [
-        ("get", GET_DESCRIPTION),
-        ("search", SEARCH_DESCRIPTION),
-        ("check", CHECK_DESCRIPTION),
-        ("api", crate::api::API_DESCRIPTION),
-    ] {
-        writeln!(text, "- {name}: {description}").expect("writing to a String cannot fail");
-    }
-    for action in Action::RECORD.into_iter().chain(Action::DISCUSSION) {
-        writeln!(
-            text,
-            "- {}: {}",
-            action.as_str(),
-            action::description(action)
-        )
-        .expect("writing to a String cannot fail");
+    let commands = [Command::Get, Command::Search, Command::Check, Command::Api]
+        .into_iter()
+        .chain(
+            Action::RECORD
+                .into_iter()
+                .chain(Action::DISCUSSION)
+                .map(Command::Action),
+        );
+    for command in commands {
+        let declaration = command.declaration();
+        writeln!(text, "- {}: {}", declaration.name, declaration.description)
+            .expect("writing to a String cannot fail");
     }
     text.pop();
     Guidance { guidance: text }

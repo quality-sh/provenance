@@ -1,6 +1,8 @@
 #![cfg(feature = "test-fixture")]
 
+#[allow(dead_code)]
 mod support {
+    #[path = "../../../provenance-transport/tests/support/records.rs"]
     pub mod records;
 }
 
@@ -170,7 +172,7 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
     let repository = Repository::new("A requirement has discussions.");
     let host = StatementHost::with_fixture_access(access(&repository));
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
     let tools = client.list_all_tools().await.unwrap();
     assert_tools(&tools);
@@ -275,7 +277,7 @@ async fn reply_grant_does_not_admit_start() {
         access(&repository).deny_operation("requirements-create-discussion"),
     );
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
     let names = client
         .list_all_tools()
@@ -345,7 +347,7 @@ async fn denied_parent_grant_is_applied_before_discussion_page_selection() {
             .deny_operation("sources-create-discussion-message"),
     );
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
     let denied = call(
         &client,

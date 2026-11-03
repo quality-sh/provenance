@@ -17,6 +17,8 @@ const POLICY_FILE: &str = ".config/crate-dependencies.json";
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Policy {
+    /// Each interface crate, such as clap, with the one workspace crate that can depend on it.
+    interface_crates: BTreeMap<String, String>,
     host_crates: BTreeSet<String>,
     /// Normal and build edges that no entry can allow. A row can name a crate
     /// that is not a member yet.
@@ -141,6 +143,31 @@ fn forbidden_refusals(policy: &Policy) -> Vec<String> {
     refusals
 }
 
+/// Returns each edge, of any kind and from any workspace crate, to an interface crate from a
+/// crate that does not own that interface.
+#[rule("rule_interface_crates_own_clap_and_rmcp")]
+fn interface_refusals(policy: &Policy, metadata: &Value) -> Vec<String> {
+    let packages = metadata["packages"]
+        .as_array()
+        .expect("metadata packages are an array");
+    let mut refusals = BTreeSet::new();
+    for package in packages {
+        let name = package["name"].as_str().expect("package name is text");
+        for edge in edges(package) {
+            let Some(owner) = policy.interface_crates.get(edge.dependency) else {
+                continue;
+            };
+            if owner != name {
+                refusals.insert(format!(
+                    "{name} has a {} dependency on {}; only {owner} can depend on {}",
+                    edge.kind, edge.dependency, edge.dependency
+                ));
+            }
+        }
+    }
+    refusals.into_iter().collect()
+}
+
 fn read_policy() -> Policy {
     let policy = fs::read_to_string(workspace_root().join(POLICY_FILE)).expect("read policy");
     serde_json::from_str(&policy).expect("parse policy")
@@ -180,8 +207,17 @@ fn policy_allows_no_forbidden_edge() {
     assert!(refusals.is_empty(), "{}", refusals.join("\n"));
 }
 
+#[test]
+#[verifies("rule_interface_crates_own_clap_and_rmcp", exhaustion)]
+fn only_the_interface_crates_use_clap_and_rmcp() {
+    let refusals = interface_refusals(&read_policy(), &workspace_metadata());
+
+    assert!(refusals.is_empty(), "{}", refusals.join("\n"));
+}
+
 fn fixture_policy() -> Value {
     json!({
+        "interface_crates": { "clap": "provenance-cli", "rmcp": "provenance-mcp" },
         "host_crates": ["fs2", "rustix", "tempfile", "tokio", "windows-sys"],
         "forbidden": {
             "provenance-core": ["provenance-store", "tokio"],
@@ -200,7 +236,9 @@ fn fixture_policy() -> Value {
             "provenance-report": {
                 "dependencies": ["provenance-core", "provenance-store"],
                 "dev-dependencies": []
-            }
+            },
+            "provenance-cli": { "dependencies": [], "dev-dependencies": [] },
+            "provenance-mcp": { "dependencies": [], "dev-dependencies": [] }
         }
     })
 }
@@ -366,6 +404,21 @@ fn allowed_edge_missing_from_metadata_is_refused() {
         [
             ".config/crate-dependencies.json allows provenance-core to have tokio in \
           dependencies, but that edge does not exist"
+        ]
+    );
+}
+
+#[test]
+#[verifies("rule_interface_crates_own_clap_and_rmcp", examples)]
+fn second_interface_crate_is_refused() {
+    let policy = serde_json::from_value(fixture_policy()).unwrap();
+
+    assert_eq!(
+        interface_refusals(&policy, &fixture_metadata()),
+        [
+            "provenance-report has a normal dependency on clap; only provenance-cli can depend \
+             on clap",
+            "provenance-store has a dev dependency on rmcp; only provenance-mcp can depend on rmcp",
         ]
     );
 }

@@ -2,34 +2,36 @@ use super::GlobalContext;
 use crate::output::JsonFormat;
 use clap::{
     builder::{PossibleValuesParser, TypedValueParser},
-    ArgAction, ArgMatches, Args, Command, CommandFactory, FromArgMatches, Parser,
+    Arg, ArgAction, ArgMatches, Command,
 };
 use provenance_cli::porcelain;
 use provenance_cli::repo_context::RepoContext;
 use provenance_core::NodeType;
 use provenance_porcelain::action::Action;
-use provenance_porcelain::get::View;
+use provenance_porcelain::registry::{self, CliForm};
 
-// Shared options for the Porcelain and catalog grammars.
-#[derive(Args)]
-#[group(skip)]
+/// The shared options of the porcelain and catalog grammars, read from the registry's
+/// global flags.
 pub struct Common {
-    #[arg(long, global = true, default_value = ".", allow_hyphen_values = true)]
     pub repo: String,
-    #[arg(
-        long,
-        global = true,
-        default_value = "default",
-        allow_hyphen_values = true
-    )]
     pub scope: String,
-    #[arg(long, global = true, value_enum)]
     pub format: Option<JsonFormat>,
-    #[arg(long, global = true)]
     pub quiet: bool,
 }
 
 impl Common {
+    pub fn from_matches(matches: &ArgMatches) -> Self {
+        let text = |name: &str| matches.get_one::<String>(name).cloned().unwrap_or_default();
+        Self {
+            repo: text("repo"),
+            scope: text("scope"),
+            format: matches
+                .get_one::<String>("format")
+                .and_then(|format| JsonFormat::from_flag(format)),
+            quiet: matches.get_flag("quiet"),
+        }
+    }
+
     pub fn context(&self) -> GlobalContext {
         GlobalContext {
             repo: RepoContext::new(&self.repo, &self.scope),
@@ -42,155 +44,110 @@ impl Common {
     }
 }
 
-#[derive(Args)]
+/// The search flags, read from the registry-rendered search parser.
 pub struct SearchArgs {
-    #[command(flatten)]
     pub common: Common,
-    #[arg(long, allow_hyphen_values = true)]
     pub text: Option<String>,
-    #[arg(long, allow_hyphen_values = true)]
     pub cursor: Option<String>,
-    #[arg(long, value_parser = parse_kind, action = ArgAction::Append)]
     pub kind: Vec<NodeType>,
-    #[arg(long)]
     pub limit: Option<usize>,
-    /// Include archived and other terminal records.
-    #[arg(long)]
     pub include_terminal: bool,
-    /// Return the Rules bound in this repository-relative source file.
-    #[arg(long, allow_hyphen_values = true)]
     pub file: Option<String>,
-    /// Put the Rules bound to this symbol first; needs --file.
-    #[arg(long, allow_hyphen_values = true)]
     pub symbol: Option<String>,
-    /// Put the Rules bound at this line first; needs --file.
-    #[arg(long)]
     pub line: Option<usize>,
 }
 
-#[derive(Parser)]
-#[command(name = "provenance", about = "Search records in one scope")]
-pub(super) struct SearchCommand {
-    #[arg(value_parser = ["search"])]
-    pub command: String,
-    #[command(flatten)]
-    pub args: SearchArgs,
-}
-
-#[derive(Args)]
-pub struct DiscussionsArgs {
-    pub discussion_id: Option<String>,
-    #[arg(value_parser = ["get"])]
-    pub action: Option<String>,
-    #[command(flatten)]
-    pub common: Common,
-}
-
-#[derive(Args)]
-pub struct ApiArgs {
-    #[command(flatten)]
-    pub common: Common,
-    pub path: Option<String>,
-    #[arg(long, value_parser = parse_api_method)]
-    pub method: Option<provenance_porcelain::api::ApiMethod>,
-    /// Read the JSON body from this file, or from standard input with "-".
-    /// The body is the data object, without the HTTP {"data": ...} wrapper.
-    #[arg(long = "input", allow_hyphen_values = true)]
-    pub input: Option<String>,
-    #[arg(long = "header")]
-    pub headers: Vec<String>,
-    #[arg(long = "query")]
-    pub queries: Vec<String>,
-    /// Show only catalog routes whose method, path, or description contains this text.
-    #[arg(long, requires = "command")]
-    pub filter: Option<String>,
-    /// Show at most this many catalog routes. The default is 50.
-    #[arg(long, value_parser = parse_catalog_limit)]
-    pub limit: Option<usize>,
-}
-
-fn parse_catalog_limit(value: &str) -> Result<usize, String> {
-    let limit = value
-        .parse::<usize>()
-        .map_err(|_| "catalog limit must be a number from 1 through 200".to_owned())?;
-    if (1..=200).contains(&limit) {
-        Ok(limit)
-    } else {
-        Err("catalog limit must be a number from 1 through 200".to_owned())
-    }
-}
-
-fn parse_api_method(value: &str) -> Result<provenance_porcelain::api::ApiMethod, String> {
-    provenance_porcelain::api::ApiMethod::parse(value)
-        .ok_or_else(|| "unsupported method".to_owned())
-}
-
-/// Root words that select their own grammar before target-first parsing.
-/// They name commands, so no record ID may take them.
-#[derive(Clone, Copy)]
-pub enum RootWord {
-    Api,
-    Search,
-}
-
-impl RootWord {
-    pub const ALL: [Self; 2] = [Self::Api, Self::Search];
-
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Api => "api",
-            Self::Search => "search",
+impl SearchArgs {
+    pub fn from_matches(matches: &ArgMatches) -> Self {
+        Self {
+            common: Common::from_matches(matches),
+            text: matches.get_one::<String>("text").cloned(),
+            cursor: matches.get_one::<String>("cursor").cloned(),
+            kind: kinds(matches),
+            limit: matches.get_one::<usize>("limit").copied(),
+            include_terminal: matches.get_flag("include_terminal"),
+            file: matches.get_one::<String>("file").cloned(),
+            symbol: matches.get_one::<String>("symbol").cloned(),
+            line: matches.get_one::<usize>("line").copied(),
         }
     }
+}
 
-    pub fn parse(word: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|root| root.as_str() == word)
+fn kinds(matches: &ArgMatches) -> Vec<NodeType> {
+    matches
+        .get_many::<NodeType>("kind")
+        .into_iter()
+        .flatten()
+        .copied()
+        .collect()
+}
+
+/// The `provenance discussions` flags, read from the discussions parser.
+pub struct DiscussionsArgs {
+    pub discussion_id: Option<String>,
+    pub action: Option<String>,
+    pub common: Common,
+}
+
+impl DiscussionsArgs {
+    pub fn from_matches(matches: &ArgMatches) -> Self {
+        Self {
+            discussion_id: matches.get_one::<String>("discussion_id").cloned(),
+            action: matches.get_one::<String>("action").cloned(),
+            common: Common::from_matches(matches),
+        }
     }
 }
 
-#[derive(Parser)]
-#[command(
-    name = "provenance",
-    about = "Call one public API path or list the catalog routes"
-)]
-pub(super) struct ApiCommand {
-    #[arg(value_parser = ["api"])]
-    pub command: String,
-    #[command(flatten)]
-    pub args: ApiArgs,
+/// The api flags, read from the registry-rendered api parser.
+pub struct ApiArgs {
+    pub common: Common,
+    pub path: Option<String>,
+    pub method: Option<provenance_porcelain::api::ApiMethod>,
+    /// The JSON body source: a file, or standard input with "-".
+    pub input: Option<String>,
+    pub headers: Vec<String>,
+    pub queries: Vec<String>,
+    pub filter: Option<String>,
+    pub limit: Option<usize>,
 }
 
-#[derive(Parser)]
-#[command(name = "provenance", about = "List or read addressed Discussions")]
-pub(super) struct DiscussionsCommand {
-    #[arg(value_parser = ["discussions"])]
-    pub command: String,
-    #[command(flatten)]
-    pub args: DiscussionsArgs,
+impl ApiArgs {
+    pub fn from_matches(matches: &ArgMatches) -> Self {
+        let many = |name: &str| {
+            matches
+                .get_many::<String>(name)
+                .into_iter()
+                .flatten()
+                .cloned()
+                .collect()
+        };
+        Self {
+            common: Common::from_matches(matches),
+            path: matches.get_one::<String>("path").cloned(),
+            method: matches
+                .get_one::<provenance_porcelain::api::ApiMethod>("method")
+                .copied(),
+            input: matches.get_one::<String>("input").cloned(),
+            headers: many("header"),
+            queries: many("query"),
+            filter: matches.get_one::<String>("filter").cloned(),
+            limit: matches.get_one::<usize>("limit").copied(),
+        }
+    }
 }
 
-#[derive(Parser)]
-#[command(name = "provenance", about = "Read or change one record")]
+/// The target, its action, and the get flags, read from the target parser.
 pub struct TargetArgs {
-    #[command(flatten)]
     pub common: Common,
     pub target: String,
-    #[arg(value_parser = target_actions())]
     pub action: Option<TargetVerb>,
-    #[arg(long = "type", value_parser = parse_kind)]
     pub record_type: Option<NodeType>,
-    #[arg(long, value_parser = get_views())]
     pub view: Option<String>,
-    #[arg(long)]
     pub depth: Option<usize>,
-    #[arg(long, value_parser = parse_kind, action = ArgAction::Append)]
     pub kind: Vec<NodeType>,
-    #[arg(long)]
     pub limit: Option<usize>,
-    #[arg(skip)]
     pub delivery: Delivery,
-    #[arg(long)]
-    pub stdin: bool,
 }
 
 /// Selects the target read's delivery, while keeping CLI flag names unchanged.
@@ -240,22 +197,50 @@ pub(super) fn discussions_route(arguments: &[String], command: &Command) -> Disc
 }
 
 fn target_actions() -> impl TypedValueParser<Value = TargetVerb> {
-    PossibleValuesParser::new(std::iter::once("get").chain(Action::ALL.map(Action::as_str)))
+    PossibleValuesParser::new(target_words())
         .map(|word| TargetVerb::parse(&word).expect("declared target verb"))
 }
 
-fn get_views() -> PossibleValuesParser {
-    PossibleValuesParser::new(View::ALL.map(View::as_str))
+/// The registry commands that take a target, in registry order.
+fn target_words() -> Vec<&'static str> {
+    target_declarations()
+        .map(|declaration| declaration.name)
+        .collect()
+}
+
+fn target_declarations() -> impl Iterator<Item = registry::Declaration> {
+    registry::Command::ALL
+        .iter()
+        .map(|command| command.declaration())
+        .filter(|declaration| {
+            matches!(
+                declaration.cli_form,
+                CliForm::Target | CliForm::WordsAndTarget(_)
+            )
+        })
 }
 
 impl TargetArgs {
     pub fn from_matches(matches: &ArgMatches) -> Self {
-        let mut args = Self::from_arg_matches(matches).unwrap_or_else(|error| error.exit());
+        let mut args = Self {
+            common: Common::from_matches(matches),
+            target: matches
+                .get_one::<String>("target")
+                .cloned()
+                .unwrap_or_default(),
+            action: matches.get_one::<TargetVerb>("action").copied(),
+            record_type: matches.get_one::<NodeType>("record_type").copied(),
+            view: matches.get_one::<String>("view").cloned(),
+            depth: matches.get_one::<usize>("depth").copied(),
+            kind: kinds(matches),
+            limit: matches.get_one::<usize>("limit").copied(),
+            delivery: Delivery::Read,
+        };
         args.delivery = if matches.get_flag("follow") {
             Delivery::Follow
-        } else if matches.get_flag("review-link") {
+        } else if matches.get_flag("review_link") {
             Delivery::ReviewLink {
-                open: !matches.get_flag("no-open"),
+                open: !matches.get_flag("no_open"),
             }
         } else {
             Delivery::Read
@@ -264,13 +249,9 @@ impl TargetArgs {
     }
 }
 
-fn parse_kind(value: &str) -> Result<NodeType, String> {
-    NodeType::parse(value).map_err(|_| "unsupported record type".to_owned())
-}
-
 /// Find the first command word using only the declared shared option arity.
 pub(super) fn command_word(arguments: &[String]) -> Option<&str> {
-    let common = Common::augment_args(Command::new("provenance"));
+    let common = crate::registry_cli::with_global_flags(Command::new("provenance"));
     positional_word(arguments, &common, 1)
 }
 
@@ -309,51 +290,52 @@ pub(super) fn positional_word<'a>(
     None
 }
 
+/// The target parser: the target, its action, and the flags of every target command.
 pub fn target_command() -> Command {
-    TargetArgs::command()
+    let mut command = crate::registry_cli::with_global_flags(Command::new("provenance"))
+        .about("Read or change one record")
+        .arg(Arg::new("target").required(true).value_name("TARGET"))
         .arg(
-            clap::Arg::new("follow")
-                .long("follow")
-                .action(ArgAction::SetTrue)
-                .requires("view")
-                .conflicts_with("review-link")
-                .help("Stream the current review document and pushed changes as JSON lines."),
-        )
-        .arg(
-            clap::Arg::new("review-link")
-                .long("review-link")
-                .action(ArgAction::SetTrue)
-                .conflicts_with_all(["view", "depth", "kind", "limit"])
-                .help("Print a link to this record in the running review host."),
-        )
-        .arg(
-            clap::Arg::new("notify")
-                .long("notify")
-                .value_parser(["codex", "off"])
-                .requires("view")
-                .conflicts_with_all(["follow", "review-link"])
-                .help(
-                    "Queue review changes into a Codex thread, or end that registration with off.",
-                ),
-        )
-        .arg(
-            clap::Arg::new("thread")
-                .long("thread")
-                .requires("notify")
-                .help("The Codex thread UUID for --notify. The default is CODEX_THREAD_ID."),
-        )
-        .arg(
-            clap::Arg::new("no-open")
-                .long("no-open")
-                .action(ArgAction::SetTrue)
-                .requires("review-link")
-                .help("Print the review link and do not open it in a browser."),
-        )
+            Arg::new("action")
+                .value_parser(target_actions())
+                .value_name("ACTION"),
+        );
+    let mut declared = std::collections::BTreeSet::new();
+    for declaration in target_declarations() {
+        for (flag, arg) in declaration
+            .flags
+            .iter()
+            .zip(crate::registry_cli::args(&declaration))
+        {
+            if declared.insert(flag.field_id()) {
+                command = command.arg(arg);
+            }
+        }
+    }
+    command
 }
 
 pub fn discussions_command() -> anyhow::Result<Command> {
-    crate::catalog_cli::fields::augment_schemas(
-        DiscussionsCommand::command(),
+    let command = Command::new("provenance")
+        .about(
+            registry::Command::Action(Action::Discussions)
+                .declaration()
+                .description,
+        )
+        .arg(
+            Arg::new("command")
+                .required(true)
+                .value_name("COMMAND")
+                .value_parser(["discussions"]),
+        )
+        .arg(Arg::new("discussion_id").value_name("DISCUSSION_ID"))
+        .arg(
+            Arg::new("action")
+                .value_name("ACTION")
+                .value_parser(["get"]),
+        );
+    crate::registry_cli::augment_schemas(
+        crate::registry_cli::with_global_flags(command),
         [
             provenance_porcelain::discussion::input_schema(Action::Discussions),
             provenance_porcelain::discussion::input_schema(Action::Discussion),

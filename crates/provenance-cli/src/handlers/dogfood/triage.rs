@@ -13,21 +13,13 @@
 //! position in a filtered list can change an identifier.
 
 use super::{now_ms, read_spool, spool_dir, Note};
-use crate::cli::{DogfoodCategory, DogfoodSeverity, TriageCommand, TriageFilter};
+use crate::cli::{DogfoodCategory, DogfoodSeverity, TriageFilter};
 use crate::output;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::PathBuf;
-
-pub(super) fn handle(command: TriageCommand, quiet: bool) -> anyhow::Result<()> {
-    match command {
-        TriageCommand::Handle { id, reason } => set_state(&id, true, reason, quiet),
-        TriageCommand::Reopen { id } => set_state(&id, false, None, quiet),
-        TriageCommand::List { status, .. } => list(status),
-    }
-}
 
 /// One recorded state change for one note. Records are append-only; the
 /// newest record for a note id is its current state.
@@ -54,7 +46,7 @@ struct TriageView {
     summary: String,
 }
 
-fn set_state(
+pub(super) fn set_state(
     input: &str,
     handled: bool,
     reason: Option<String>,
@@ -75,7 +67,7 @@ fn set_state(
     Ok(())
 }
 
-fn list(filter: TriageFilter) -> anyhow::Result<()> {
+pub(super) fn list(filter: TriageFilter) -> anyhow::Result<()> {
     let notes = read_spool()?;
     let state = load_state()?;
     let mut views: Vec<TriageView> = notes.iter().map(|note| view(note, &state)).collect();

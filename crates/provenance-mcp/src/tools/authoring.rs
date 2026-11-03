@@ -1,21 +1,18 @@
 //! MCP schemas and result rendering for target-first authoring.
 
-use super::authoring::{description, render_readable, Action, ActionError};
 use provenance_contract::Definition;
 use provenance_core::NodeType;
 use provenance_macros::rule;
+use provenance_porcelain::action::render_readable;
+use provenance_porcelain::registry::Command;
+use provenance_transport::porcelain::{target_call, Action, ActionError};
+use provenance_transport::StatementHost;
 use rmcp::model::{CallToolResult, ContentBlock, Tool};
 use serde_json::{json, Map, Value};
 
-pub fn tools(host: &crate::StatementHost) -> Vec<Tool> {
-    Action::RECORD
-        .into_iter()
-        .filter_map(|action| tool(host, action))
-        .collect()
-}
-
-fn tool(host: &crate::StatementHost, action: Action) -> Option<Tool> {
-    let definitions = host.executable_target_definitions(action);
+/// The tool of one record action, when the host can run it on some record kind.
+pub fn tool(host: &StatementHost, action: Action) -> Option<Tool> {
+    let definitions = host.porcelain().executable_target_definitions(action);
     if definitions.is_empty() {
         return None;
     }
@@ -27,12 +24,13 @@ fn tool(host: &crate::StatementHost, action: Action) -> Option<Tool> {
             .collect(),
         "anyOf",
     );
-    Some(crate::mcp_surface::tool(
-        action.as_str(),
-        description(action),
+    let declaration = Command::Action(action).declaration();
+    Some(crate::surface::tool(
+        declaration.name,
+        declaration.description,
         input,
         output,
-        crate::mcp_surface::SchemaDeclaration::Keep,
+        crate::surface::SchemaDeclaration::Keep,
     ))
 }
 
@@ -173,7 +171,7 @@ fn rewrite_references(value: &mut Value, prefix: &str) {
 /// Reads the target ID from the structured MCP arguments.
 #[rule("rule_porcelain_mcp_target_argument")]
 pub async fn call(
-    host: &crate::StatementHost,
+    host: &StatementHost,
     action: Action,
     mut arguments: Map<String, Value>,
 ) -> CallToolResult {
@@ -197,9 +195,9 @@ pub async fn call(
         Err(error) => return action_error(&error),
     };
     let (data, query, headers) =
-        match crate::mcp::mcp_target_call(route.definition, &Value::Object(arguments), &target) {
+        match target_call(route.definition, &Value::Object(arguments), &target) {
             Ok(call) => call,
-            Err(failure) => return crate::mcp_surface::failure_result(failure),
+            Err(failure) => return crate::surface::failure_result(failure),
         };
     if !query.is_empty() {
         return action_error(&ActionError::InvalidOptions);
@@ -212,7 +210,7 @@ pub async fn call(
             ))];
             result
         }
-        Err(failure) => crate::mcp_surface::failure_result(failure),
+        Err(failure) => crate::surface::failure_result(failure),
     }
 }
 
@@ -229,5 +227,5 @@ fn action_error(error: &ActionError) -> CallToolResult {
     } else {
         error.to_string()
     };
-    crate::mcp_surface::detail_error(json!({"kind":kind,"message":message}))
+    crate::surface::detail_error(json!({"kind":kind,"message":message}))
 }

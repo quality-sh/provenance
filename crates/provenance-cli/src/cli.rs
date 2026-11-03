@@ -6,19 +6,29 @@ pub mod workspace;
 
 pub use ideation::{IdeationArtifactKind, SchemaCommand};
 
-use crate::output::{JsonFormat, OutputFormat, ReportFormat};
-use camino::Utf8PathBuf;
-use clap::{Parser, Subcommand, ValueEnum};
-use provenance_cli::repo_context::RepoContext;
+use clap::Parser;
 
-#[derive(Clone, Copy, Debug, Default, ValueEnum)]
+/// How the caller runs provenance, so init prints commands that the caller can run.
+#[derive(Clone, Copy, Debug, Default)]
 pub enum InvocationChannel {
     #[default]
     Native,
     Typescript,
 }
 
-#[derive(Clone, Copy, Debug, ValueEnum)]
+impl InvocationChannel {
+    /// The channel that one `--invocation-channel` value names.
+    pub fn from_flag(value: &str) -> Option<Self> {
+        match value {
+            "native" => Some(Self::Native),
+            "typescript" => Some(Self::Typescript),
+            _ => None,
+        }
+    }
+}
+
+/// The package manager that runs the TypeScript package.
+#[derive(Clone, Copy, Debug)]
 pub enum PackageManager {
     Npm,
     Pnpm,
@@ -28,10 +38,29 @@ pub enum PackageManager {
     Nub,
 }
 
+impl PackageManager {
+    /// The package manager that one `--package-manager` value names.
+    pub fn from_flag(value: &str) -> Option<Self> {
+        Some(match value {
+            "npm" => Self::Npm,
+            "pnpm" => Self::Pnpm,
+            "yarn" => Self::Yarn,
+            "bun" => Self::Bun,
+            "deno" => Self::Deno,
+            "nub" => Self::Nub,
+            _ => return None,
+        })
+    }
+}
+
+// The root parser. Every command under it comes from the registry. A doc comment here
+// would become the about line of `provenance --help`.
 #[derive(Parser)]
 #[command(
     name = "provenance",
     version,
+    subcommand_required = true,
+    arg_required_else_help = true,
     after_help = concat!(
         "Dynamic commands:\n",
         "  provenance api [PATH]\n",
@@ -46,296 +75,11 @@ pub struct Cli {
     /// the warning that this repository has no shaping skills installed.
     #[arg(long, global = true)]
     pub quiet: bool,
-    #[command(subcommand)]
-    pub command: Command,
-}
-
-#[derive(Subcommand)]
-pub enum Command {
-    /// Search records in one scope.
-    Search(crate::invocation::grammar::SearchArgs),
-    #[command(name = "__cargo-init", hide = true)]
-    CargoInit {
-        #[arg(long)]
-        package: Option<String>,
-        /// Import this local Issue 9 dictionary PDF instead of downloading the
-        /// official asset.
-        #[arg(long)]
-        ste_pdf: Option<Utf8PathBuf>,
-    },
-    Init {
-        #[arg(long, default_value = ".")]
-        path: Utf8PathBuf,
-        #[arg(long)]
-        scope: Option<String>,
-        #[arg(long, requires = "scope")]
-        path_prefix: Option<Utf8PathBuf>,
-        /// Repository-local actor ID allowed to attest proposal dispositions.
-        /// Repeat for multiple actors. On re-init, omission preserves the allowlist.
-        #[arg(long)]
-        disposition_actor_id: Vec<String>,
-        /// Empty the repository-local disposition actor allowlist.
-        #[arg(long, conflicts_with = "disposition_actor_id")]
-        clear_disposition_actors: bool,
-        /// Import this local Issue 9 dictionary PDF instead of downloading the
-        /// official asset.
-        #[arg(long)]
-        ste_pdf: Option<Utf8PathBuf>,
-        #[arg(long, value_enum, default_value_t, hide = true)]
-        invocation_channel: InvocationChannel,
-        #[arg(long, value_enum, hide = true)]
-        package_manager: Option<PackageManager>,
-    },
-    Check {
-        #[arg(long, default_value = ".")]
-        repo: Utf8PathBuf,
-        /// Reject findings in statements committed at Git HEAD.
-        #[arg(long)]
-        strict: bool,
-        /// Compare Git HEAD with this commit instead of its first parent.
-        #[arg(long, requires = "strict")]
-        base: Option<String>,
-        /// Check this statement instead of the committed statements.
-        #[arg(long, conflicts_with = "base")]
-        statement: Option<String>,
-        /// Run only graph validity checks. Combine with other check selectors.
-        #[arg(long)]
-        graph: bool,
-        /// Run only statement quality checks. Combine with other check selectors.
-        #[arg(long)]
-        statements: bool,
-        /// Run only repository-wide Rule binding checks.
-        #[arg(long)]
-        bindings: bool,
-        #[arg(long, value_enum)]
-        format: Option<JsonFormat>,
-    },
-    Docs {
-        #[command(subcommand)]
-        command: workspace::DocsCommand,
-    },
-    Dictionary {
-        #[command(subcommand)]
-        command: dictionary::DictionaryCommand,
-    },
-    /// Serve local review assets and authorized repository operations.
-    Review(crate::review::Options),
-    Materialize {
-        #[arg(long, default_value = ".")]
-        repo: Utf8PathBuf,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
-    GraphReference {
-        #[command(subcommand)]
-        command: graph::GraphReferenceCommand,
-    },
-    Graph {
-        requirement_id: String,
-        #[command(flatten)]
-        context: RepoContext,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
-    Traceability {
-        rule_id: String,
-        #[command(flatten)]
-        context: RepoContext,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
-    Gaps {
-        #[command(flatten)]
-        context: RepoContext,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
-    /// Introduce Provenance domain concepts and actions.
-    Prime {
-        /// Deprecated: accepted for compatibility; guidance does not use a repository.
-        #[arg(long, default_value = ".")]
-        repo: Utf8PathBuf,
-        /// Deprecated: accepted for compatibility; guidance does not use a scope.
-        #[arg(long, default_value = "default")]
-        scope: String,
-        #[arg(long, value_enum, default_value_t = ReportFormat::Markdown)]
-        format: ReportFormat,
-        /// Deprecated: accepted for compatibility; guidance does not include project threads.
-        #[arg(long)]
-        include_threads: bool,
-    },
-    Health {
-        #[command(flatten)]
-        context: RepoContext,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
-    Orphans {
-        #[command(flatten)]
-        context: RepoContext,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
-    Coverage {
-        #[command(subcommand)]
-        command: workspace::CoverageCommand,
-    },
-    /// Deterministic report rendering from a versioned report envelope.
-    Report {
-        #[command(subcommand)]
-        command: report::ReportCommand,
-    },
-    SwarmBacktrace {
-        #[command(subcommand)]
-        command: ideation::SwarmBacktraceCommand,
-    },
-    Skills {
-        #[command(subcommand)]
-        command: workspace::SkillsCommand,
-    },
-    Schema {
-        #[command(subcommand)]
-        command: ideation::SchemaCommand,
-    },
-    Validate {
-        artifact: ideation::IdeationArtifactKind,
-        #[arg(long)]
-        input: Utf8PathBuf,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
-    Export {
-        #[command(flatten)]
-        context: RepoContext,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
-        format: OutputFormat,
-        #[arg(long)]
-        output: Option<Utf8PathBuf>,
-    },
-    Import {
-        #[command(flatten)]
-        context: RepoContext,
-        #[arg(long)]
-        input: Utf8PathBuf,
-        #[arg(long)]
-        dry_run: bool,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
-    MergeJsonl {
-        base: Utf8PathBuf,
-        ours: Utf8PathBuf,
-        theirs: Utf8PathBuf,
-        #[arg(long)]
-        output: Option<Utf8PathBuf>,
-        /// Repository path the merged result belongs at. Git merge drivers get
-        /// three temporary files, so this is how the merge learns which record
-        /// type the file holds and which write-time checks to re-apply.
-        #[arg(long)]
-        path: Option<Utf8PathBuf>,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
-    /// Dev-build-only: record pain-point notes about provenance itself.
-    #[cfg(feature = "dogfood")]
-    Dogfood {
-        #[command(subcommand)]
-        command: DogfoodCommand,
-    },
-}
-
-/// Dev-build-only agent feedback about provenance itself. Notes are appended
-/// to a local spool; nothing ever leaves the machine.
-#[cfg(feature = "dogfood")]
-#[derive(Subcommand)]
-pub enum DogfoodCommand {
-    /// Record one pain-point note. Cheap by design: three enums and a sentence.
-    Note {
-        /// The part of provenance the note concerns: a subcommand name, or "general".
-        #[arg(long)]
-        surface: String,
-        #[arg(long, value_enum)]
-        category: DogfoodCategory,
-        /// Impact the pain had on the task at hand.
-        #[arg(long, value_enum)]
-        severity: DogfoodSeverity,
-        /// What you were trying to do, what happened, what you expected.
-        #[arg(long)]
-        detail: Option<String>,
-        #[arg(long)]
-        suggestion: Option<String>,
-        /// One-line summary of the pain point.
-        summary: String,
-    },
-    /// Print the local note spool.
-    List {
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
-    /// Aggregate the spool; optionally join session metadata supplied by a
-    /// sister system via the provenance-dogfood-enrichment/v1 contract.
-    Report {
-        /// Enrichment JSON conforming to provenance-dogfood-enrichment/v1
-        /// (a file path, or "-" for stdin).
-        #[arg(long)]
-        enrich: Option<Utf8PathBuf>,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
-    /// Dev-build-only triage of captured notes: mark them handled or reopen
-    /// them. State lives beside the spool; the capture history is never
-    /// rewritten.
-    Triage {
-        #[command(subcommand)]
-        command: TriageCommand,
-    },
-    /// Dev-build-only: try the whole first-run experience in a throwaway
-    /// sandbox. Serves the STE dictionary from loopback, records no note,
-    /// and touches nothing outside the sandbox.
-    Simulate {
-        /// Keep the sandbox directory after the run for inspection.
-        #[arg(long)]
-        keep: bool,
-        /// Create the sandbox inside this existing directory instead of the
-        /// system temp location.
-        #[arg(long)]
-        dir: Option<Utf8PathBuf>,
-    },
-}
-
-/// Dev-build-only triage state for captured notes. Every state change is an
-/// append to a sibling state file, so the note spool stays untouched.
-#[cfg(feature = "dogfood")]
-#[derive(Subcommand)]
-pub enum TriageCommand {
-    /// Mark one note handled.
-    Handle {
-        /// Note id, or an unambiguous prefix of one, as shown by
-        /// `provenance dogfood triage list`.
-        id: String,
-        /// Why the note is handled: a short reason or an issue reference.
-        #[arg(long)]
-        reason: Option<String>,
-    },
-    /// Return a handled note to the unhandled state.
-    Reopen {
-        /// Note id, or an unambiguous prefix of one, as shown by
-        /// `provenance dogfood triage list`.
-        id: String,
-    },
-    /// Show every captured note with its identifier and triage state.
-    List {
-        /// Only show notes in this triage state.
-        #[arg(long, value_enum, default_value_t = TriageFilter::All)]
-        status: TriageFilter,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
 }
 
 /// Which triage state a `dogfood triage list` view shows.
 #[cfg(feature = "dogfood")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TriageFilter {
     Unhandled,
     Handled,
@@ -343,17 +87,21 @@ pub enum TriageFilter {
 }
 
 #[cfg(feature = "dogfood")]
+impl TriageFilter {
+    /// The filter that one `--status` value names.
+    pub fn from_flag(value: &str) -> Option<Self> {
+        match value {
+            "unhandled" => Some(Self::Unhandled),
+            "handled" => Some(Self::Handled),
+            "all" => Some(Self::All),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(feature = "dogfood")]
 #[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    ValueEnum,
-    serde::Serialize,
-    serde::Deserialize,
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
 #[serde(rename_all = "kebab-case")]
 pub enum DogfoodCategory {
@@ -365,21 +113,28 @@ pub enum DogfoodCategory {
 }
 
 #[cfg(feature = "dogfood")]
+impl DogfoodCategory {
+    /// The category that one `--category` value names.
+    pub fn from_flag(value: &str) -> Option<Self> {
+        serde_json::from_value(serde_json::Value::String(value.to_owned())).ok()
+    }
+}
+
+#[cfg(feature = "dogfood")]
 #[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    ValueEnum,
-    serde::Serialize,
-    serde::Deserialize,
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
 #[serde(rename_all = "kebab-case")]
 pub enum DogfoodSeverity {
     Blocked,
     Workaround,
     Annoyance,
+}
+
+#[cfg(feature = "dogfood")]
+impl DogfoodSeverity {
+    /// The severity that one `--severity` value names.
+    pub fn from_flag(value: &str) -> Option<Self> {
+        serde_json::from_value(serde_json::Value::String(value.to_owned())).ok()
+    }
 }

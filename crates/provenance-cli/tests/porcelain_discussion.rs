@@ -119,7 +119,7 @@ fn discussion_help_and_errors_keep_the_discussion_grammar() {
     let help = success(&["discussions", "--help"]);
     let text = String::from_utf8(help.stdout).unwrap();
     assert!(
-        text.contains("List or read addressed Discussions"),
+        text.contains("List addressed Discussions in a scope or under a record."),
         "{text}"
     );
     let target_help = String::from_utf8(success(&["req_a", "reply", "--help"]).stdout).unwrap();
