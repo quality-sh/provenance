@@ -7,6 +7,7 @@ const REMOVED: &[(&[&str], &str)] = &[
     (&["gaps"], "provenance check --gaps"),
     (&["health"], "provenance check --gaps"),
     (&["orphans"], "provenance check --gaps"),
+    (&["coverage", "scan"], "provenance check --bindings"),
 ];
 
 /// Refuses a removed command and names the command that replaces it.

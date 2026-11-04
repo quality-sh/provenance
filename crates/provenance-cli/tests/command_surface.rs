@@ -161,7 +161,6 @@ fn graph_read_commands_are_registry_commands() {
     assert_cli_only_registry_commands(&[
         &["graph"],
         &["traceability"],
-        &["coverage", "scan"],
         &["graph-reference", "issue"],
         &["graph-reference", "show"],
         &["graph-reference", "verify"],

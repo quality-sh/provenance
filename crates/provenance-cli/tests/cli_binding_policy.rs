@@ -89,27 +89,29 @@ fn set_binding_policy(repo: &Path, severity: &str) {
 fn full_scan(repo: &Path) -> Command {
     let mut command = provenance();
     command.args([
-        "coverage",
-        "scan",
+        "check",
+        "--bindings",
         "--repo",
         repo.to_str().unwrap(),
         "--path",
         repo.to_str().unwrap(),
         "--scope",
         "default",
-        "--validate-rules",
         "--format",
         "json",
     ]);
     command
 }
 
+/// The bindings findings of a check report, as the scan warnings that they carry.
 fn warnings(stdout: &[u8]) -> Vec<Value> {
     let report: Value = serde_json::from_slice(stdout).unwrap();
-    report["warnings"]
+    report["categories"][0]["findings"]
         .as_array()
-        .expect("warnings array")
-        .clone()
+        .expect("findings array")
+        .iter()
+        .map(|finding| finding["detail"].clone())
+        .collect()
 }
 
 fn begin_verification(repo: &Path, rule: &str, key: &str, file: &str) {
@@ -271,14 +273,19 @@ fn the_error_policy_passes_for_a_deprecated_rule_without_current_bindings() {
 
 #[test]
 #[verifies("rule_binding_finding_uses_configured_severity", examples)]
+#[verifies("rule_check_strict_refuses_binding_warnings", examples)]
 fn strict_still_fails_on_every_warning_under_the_warning_policy() {
     let repo = init_repo();
     create_rule(repo.path(), "rule_uncovered", "active");
+    full_scan(repo.path()).assert().success();
 
     let output = full_scan(repo.path()).arg("--strict").output().unwrap();
 
-    assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("--strict"));
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("active rule `rule_uncovered` has no"),
+        "{output:?}"
+    );
 }
 
 #[test]

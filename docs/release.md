@@ -128,9 +128,9 @@ cargo build --release -p provenance-cli --features scanner
 ```
 
 Before a release, validate the Rust markers with
-`provenance coverage scan --repo . --path crates --scope default --validate-rules`.
+`provenance check --bindings --repo . --path crates --scope default`.
 The command also reports active Rules that have no implementation or verification site.
-Add `--strict` only when those warnings must stop the release.
+Add `--strict` only when those findings must stop the release.
 
 The binaries land at `target/release/provenance` and
 `target/release/cargo-provenance`. Users should commit `.provenance/state/` and

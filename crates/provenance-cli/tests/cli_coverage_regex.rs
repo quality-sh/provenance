@@ -28,26 +28,25 @@ fn scan(files: &[(&str, &str)]) -> Value {
 }
 
 fn scan_command(repo: &Path) -> Value {
-    let output = Command::cargo_bin("provenance")
+    let directory = tempfile::tempdir().unwrap();
+    let output = directory.path().join("report.json");
+    Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "coverage",
-            "scan",
+            "check",
+            "--bindings",
             "--repo",
             repo.to_str().unwrap(),
             "--path",
             repo.to_str().unwrap(),
             "--scope",
             "demo",
-            "--format",
-            "json",
+            "--output",
+            output.to_str().unwrap(),
         ])
         .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-    serde_json::from_slice(&output).unwrap()
+        .success();
+    serde_json::from_slice(&std::fs::read(output).unwrap()).unwrap()
 }
 
 #[test]
@@ -64,5 +63,20 @@ fn issue_442_finds_both_typescript_annotations() {
         ),
     ]);
     assert_eq!(report["total_annotations"], 2, "{report}");
-    assert_eq!(report["warnings"], serde_json::json!([]), "{report}");
+    let warnings = report["warnings"].as_array().unwrap();
+    // The regex literals give no parse warning.
+    assert!(
+        warnings.iter().all(|warning| warning["rule_id"] != ""),
+        "{report}"
+    );
+    // The bindings check always validates Rules, which `coverage scan` did only with
+    // --validate-rules: the Rule that the graph lacks is reported at each site.
+    assert_eq!(
+        warnings
+            .iter()
+            .filter(|warning| warning["message"] == "unknown rule id `rule_demo_a`")
+            .count(),
+        2,
+        "{report}"
+    );
 }

@@ -548,12 +548,12 @@ change the artifact's kind.
    verification anywhere.
 
    ```sh
-   provenance coverage scan --path . --scope <scope> --validate-rules --format json
+   provenance check --bindings --scope <scope> --format json
    ```
 
 Unimplemented and Unverified are **absence**, derived by that scan and never written into
-the record. How loudly a repo treats absence is its own dial: `--strict` makes any warning
-fail the command, and a repo that runs the scan without it is reporting, not gating.
+the record. How loudly a repo treats absence is its own dial: `--strict` makes any bindings
+finding fail the check, and a repo that runs the check without it is reporting, not gating.
 Neither setting is a reason to write a test that asserts nothing.
 
 #### `prototype`
@@ -699,9 +699,9 @@ Requirement, or decision that it disagrees with.
 **Implementation fidelity: does the code do what the Rule says?** Audit the code against
 the Rule.
 
-- `provenance coverage scan --path . --scope <scope> --validate-rules` reports an active
-  Rule that has no primary implementation as unimplemented. Only that canonical scan
-  derives the code-binding absence findings.
+- `provenance check --bindings --scope <scope>` reports an active Rule that has no
+  primary implementation as unimplemented. Only that canonical scan derives the
+  code-binding absence findings.
 - Unimplemented is absence. It is an ordinary state of a planned obligation.
 
 Prime and traceability are graph reads. They do not scan code, so they must not assert an
@@ -731,7 +731,7 @@ Before moving to the next question, verify the current answer has been handled:
 - each new record has a pending review submission ("Every record goes to review");
 - each precise atomic behavioural obligation is landed as a Rule; any known primary
   implementation and evidence carry `#[rule]` and `#[verifies]` bindings, and
-  `coverage scan --validate-rules` reports any remaining absence honestly;
+  `check --bindings` reports any remaining absence honestly;
 - boundaries/out-of-scope rejections are explicit;
 - source references and evidence are attached where they exist;
 - proposal definitions remain immutable `proposed` records; assertion lineage uses assertion

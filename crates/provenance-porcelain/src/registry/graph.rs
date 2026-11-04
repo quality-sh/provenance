@@ -1,4 +1,4 @@
-//! Declarations of the CLI-only commands that read the graph, scan bindings, pin graph
+//! Declarations of the CLI-only commands that read the graph, pin graph
 //! references, and land swarm backtraces.
 
 use super::{
@@ -12,7 +12,6 @@ use serde::Deserialize;
 pub enum GraphCommand {
     Graph,
     Traceability,
-    CoverageScan,
     ReferenceIssue,
     ReferenceShow,
     ReferenceVerify,
@@ -27,7 +26,6 @@ impl GraphCommand {
             Interface::Cli => match self {
                 Self::Graph
                 | Self::Traceability
-                | Self::CoverageScan
                 | Self::ReferenceIssue
                 | Self::ReferenceShow
                 | Self::ReferenceVerify
@@ -37,7 +35,6 @@ impl GraphCommand {
             Interface::Mcp => match self {
                 Self::Graph
                 | Self::Traceability
-                | Self::CoverageScan
                 | Self::ReferenceIssue
                 | Self::ReferenceShow
                 | Self::ReferenceVerify
@@ -64,25 +61,6 @@ const TRACEABILITY_FLAGS: &[Flag] = &[
     REPO,
     SCOPE,
     JSON_FORMAT,
-];
-
-const COVERAGE_SCAN_FLAGS: &[Flag] = &[
-    REPO,
-    Flag::new("path", FlagKind::Value).required(),
-    SCOPE,
-    Flag::new("baseline", FlagKind::Value).help(
-        "JSON report from an earlier scan whose evidence anchors should be resolved against \
-         this scan",
-    ),
-    Flag::new("validate-rules", FlagKind::Switch),
-    Flag::new("strict", FlagKind::Switch).help(
-        "Exit non-zero when the report contains any warnings. The report is still printed \
-         first",
-    ),
-    Flag::new("format", FlagKind::Value)
-        .values(&["json", "markdown"])
-        .default("markdown"),
-    Flag::new("output", FlagKind::Value),
 ];
 
 const REFERENCE_ISSUE_FLAGS: &[Flag] = &[
@@ -122,22 +100,6 @@ pub struct TraceabilityInput {
     pub repo: String,
     pub scope: String,
     pub format: String,
-}
-
-/// The `coverage scan` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct CoverageScanInput {
-    pub repo: String,
-    pub path: String,
-    pub scope: String,
-    pub baseline: Option<String>,
-    #[serde(default)]
-    pub validate_rules: bool,
-    #[serde(default)]
-    pub strict: bool,
-    pub format: String,
-    pub output: Option<String>,
 }
 
 /// The `graph-reference issue` input.
@@ -181,7 +143,6 @@ macro_rules! schema_fn {
 
 schema_fn!(requirement_graph_schema, RequirementGraphInput);
 schema_fn!(traceability_schema, TraceabilityInput);
-schema_fn!(coverage_scan_schema, CoverageScanInput);
 schema_fn!(reference_issue_schema, ReferenceIssueInput);
 schema_fn!(reference_schema, ReferenceInput);
 schema_fn!(swarm_backtrace_land_schema, SwarmBacktraceLandInput);
@@ -219,15 +180,6 @@ pub(super) fn declaration(command: GraphCommand) -> Declaration {
                 "",
                 traceability_schema,
                 TRACEABILITY_FLAGS,
-            )
-        },
-        GraphCommand::CoverageScan => Declaration {
-            name: "coverage scan",
-            ..cli_only(
-                &["coverage", "scan"],
-                "",
-                coverage_scan_schema,
-                COVERAGE_SCAN_FLAGS,
             )
         },
         GraphCommand::ReferenceIssue => Declaration {

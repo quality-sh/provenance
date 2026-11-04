@@ -77,15 +77,14 @@ fn coverage_rule_validation_refuses_a_unsupported_version_rule_row() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "coverage",
-            "scan",
+            "check",
+            "--bindings",
             "--repo",
             repo,
             "--path",
             source_dir.to_str().unwrap(),
             "--scope",
             "default",
-            "--validate-rules",
         ])
         .assert()
         .failure()

@@ -52,9 +52,10 @@ project. It does not approve a registry installation for a missing executable.
 ```sh
 npm ci
 npx --no provenance check --repo . --strict --base "$BASE_SHA" --format json
-npx --no provenance coverage scan --repo . --path . --scope default \
-  --validate-rules --strict --format json
 ```
+
+The check runs the graph, statement, and Rule binding checks. With `--strict`,
+every binding finding also fails the check.
 
 Set `BASE_SHA` to the target branch commit for a pull request. If `--base` is
 not present, strict statement checking compares Git HEAD with its first parent.

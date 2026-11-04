@@ -39,7 +39,7 @@ contract or capability?**
 
 Rules follow behavioural obligations, not code shape. Prose intent lives in the
 Requirement, the Rule, and any Resolution that produced it. A Rule without a primary
-implementation is Unimplemented—an ordinary state that `coverage scan --validate-rules`
+implementation is Unimplemented—an ordinary state that `check --bindings`
 reports rather than hiding.
 
 ## Four tests for a drafted statement

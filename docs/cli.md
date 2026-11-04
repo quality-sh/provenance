@@ -160,8 +160,7 @@ These errors stay text after `Error: ` and exit with code 1, also with
 - A graph that is not initialized, and a command that runs in a directory
   inside an initialized repository.
 - File and I/O errors.
-- Every error from a builtin command, such as `init`, `check`, `coverage scan`,
-  and `export`.
+- Every error from a builtin command, such as `init`, `check`, and `export`.
 
 A usage error prints clap's text and exits with code 2.
 
@@ -171,7 +170,7 @@ The following commands keep dedicated behavior because they operate on a
 repository, render a report, manage the host, or perform another product task:
 
 - `init`, `check`, and `docs`
-- `graph`, `traceability`, `coverage`, and `prime`
+- `graph`, `traceability`, and `prime`
 - `review` and `mcp`
 - `import`, `export`, and `materialize`
 - `swarm-backtrace`
@@ -180,7 +179,7 @@ repository, render a report, manage the host, or perform another product task:
 
 `provenance check --format json` reports diagnostics for new Requirement and
 Rule statements and for statements that differ from Git HEAD. Add `--strict`
-to reject findings in the committed candidate. Use `--base <commit>` to select
+to reject findings in the committed candidate and every bindings finding. Use `--base <commit>` to select
 the comparison base.
 
 `provenance check --gaps` also reports the unfinished parts of the graph and
@@ -193,9 +192,25 @@ without it, `check` reads every declared scope. `gaps`, `health`, and
 `orphans` were removed: they exit with code 1 and name
 `provenance check --gaps`.
 
-`provenance coverage scan --path . --scope default --validate-rules` scans Rule
-implementation and verification bindings. Add `--strict` to make warnings
-return a nonzero exit status.
+`provenance check --bindings` scans Rule implementation and verification
+bindings in every scope, with Rule validation. The configured severity in
+`.provenance/settings.json` decides which findings fail the check: `error`
+fails it for the governed findings, `warning` only reports them. `--strict`
+fails it for every bindings finding. These options apply only to the bindings
+check, and `check` refuses them without it:
+
+- `--path <path>` scans the files below the path. The default is the
+  repository root. A path that does not cover a scope reports no absence
+  findings for that scope.
+- `--baseline <file>` resolves evidence anchors against an earlier scan report.
+  It needs `--scope`.
+- `--output <file>` writes the scan report of the selected scope to the file,
+  in the report shape of the removed `coverage scan`. It needs `--scope`.
+  `--output-format markdown` writes the Markdown report; the default is JSON.
+  Standard output keeps the check report.
+
+`coverage scan` was removed: it exits with code 1 and names
+`provenance check --bindings`.
 
 The review host binds one repository, one scope, and one credential to each
 connection. See [review-host.md](review-host.md). Import and export operate on a
@@ -272,7 +287,7 @@ inspect installed skills, scan code, or update a cache.
 The default output is Markdown. `provenance prime --format json` returns an
 object with a `guidance` string that contains the same text. This replaces the
 former project-state JSON fields, including `rules`, `requirements`, `threads`,
-and `skills`. Use resource reads for project records and `coverage scan` for
+and `skills`. Use resource reads for project records and `check --bindings` for
 code bindings. The SDK prime state query keeps its existing contract.
 
 The old `--repo`, `--scope`, and `--include-threads` options remain accepted for

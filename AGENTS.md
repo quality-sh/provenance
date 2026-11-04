@@ -182,11 +182,11 @@ Both attributes come from `provenance-macros` (`use provenance_macros::rule;`,
 compile time; what they buy is a symbol the scanner finds and refactors carry along.
 
 Unimplemented and Unverified are **absence**, derived and never stored.
-`provenance coverage scan --path . --scope default --validate-rules` reports them,
-along with bindings that cite unknown Rule ids and a second primary implementation
-claiming one id. Verification requires a known Rule, not an implementation binding.
-Adding `--strict` makes any warning a non-zero exit; how strictly CI runs the scan is a
-per-repo dial, not a property of a Rule.
+`provenance check --bindings --scope default` reports them, along with bindings that
+cite unknown Rule ids and a second primary implementation claiming one id. Verification
+requires a known Rule, not an implementation binding. Adding `--strict` makes any
+bindings finding a non-zero exit; how strictly CI runs the check is a per-repo dial, not
+a property of a Rule.
 
 The Rule record's `--source-document` and `--source-section` fields cite source
 material. They do not count as an implementation binding; code bindings come from
@@ -210,7 +210,7 @@ and verification binding. Lifecycle says whether the Rule is draft, under review
 deprecated, or archived; it does not say that code or evidence exists. Source evidence, a
 Requirement, a ratified Resolution, or explicit human ratification can ground the decision.
 `provenance traceability <rule_id>` reads the upstream graph chain. Implementation and
-verification are separate code bindings, evaluated only by the canonical coverage scan
+verification are separate code bindings, evaluated only by the canonical bindings check
 described above.
 
 `prime` explains the Provenance domain. `traceability` reads the graph. Neither scans

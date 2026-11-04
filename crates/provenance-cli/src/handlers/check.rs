@@ -4,22 +4,22 @@ use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ensure_supported_schema_version, Manifest};
 use provenance_macros::rule;
 use provenance_porcelain::check::{
-    BindingContext, BindingPolicy, Category, CategoryRun, CheckInput, CheckPort, Finding,
-    PortFuture, Refusal, Status,
+    Category, CategoryRun, CheckInput, CheckPort, Finding, PortFuture, Refusal, Status,
 };
 use provenance_store::dictionary_reference::{resolve_project_dictionary, DictionaryResolution};
 use provenance_store::layout::ProvenanceLayout;
 use provenance_store::repository::declared_scope;
-use provenance_store::settings::BindingFindingsSeverity;
 use provenance_store::state_store::StateStore;
 use std::collections::BTreeSet;
 
+mod bindings;
 mod gaps;
 mod index;
 mod references;
 mod scope;
 mod statement_report;
 
+pub use bindings::Options as BindingOptions;
 use index::CheckIndex;
 
 #[derive(Clone)]
@@ -28,6 +28,7 @@ pub(super) struct Selectors {
     pub statement: Option<String>,
     /// The one scope to check. Without it the check reads every declared scope.
     pub scope: Option<String>,
+    pub bindings: BindingOptions,
 }
 
 impl Selectors {
@@ -48,6 +49,7 @@ pub struct RepositoryCheckPort {
     context: RepoContext,
     strict: bool,
     base: Option<String>,
+    bindings: BindingOptions,
 }
 
 impl RepositoryCheckPort {
@@ -55,11 +57,12 @@ impl RepositoryCheckPort {
         Self::with_context(RepoContext::new(repo, "default"), strict, base)
     }
 
-    pub const fn with_context(context: RepoContext, strict: bool, base: Option<String>) -> Self {
+    pub fn with_context(context: RepoContext, strict: bool, base: Option<String>) -> Self {
         Self {
             context,
             strict,
             base,
+            bindings: BindingOptions::default(),
         }
     }
 
@@ -210,101 +213,6 @@ impl RepositoryCheckPort {
         };
         (findings, refusal)
     }
-
-    /// Finds missing code bindings without running project tests.
-    #[rule("rule_porcelain_coverage_does_not_run_tests")]
-    fn binding_run(&self, selected_scope: Option<&str>) -> Result<CategoryRun, String> {
-        provenance_store::layout::require_initialized_graph(&ProvenanceLayout::new(
-            &self.context.repo,
-        ))
-        .map_err(|error| format!("{:#}", initialization_hint(&self.context.repo, error)))?;
-        let scanned = provenance_scanner::scan_path_with_content(&self.context.repo)
-            .map_err(|error| format!("{error:#}"))?;
-        self.binding_run_from_scanned(selected_scope, &scanned)
-    }
-
-    /// Scans each selected scope through the repository opened for it.
-    fn binding_run_from_scanned(
-        &self,
-        selected_scope: Option<&str>,
-        scanned: &[provenance_scanner::FileScanWithContent],
-    ) -> Result<CategoryRun, String> {
-        let (warnings, governed_finding_count, policy) = self
-            .scan_selected_scopes(selected_scope, scanned)
-            .map_err(|error| format!("{error:#}"))?;
-        let severity = match policy {
-            provenance_store::settings::BindingFindingsSeverity::Warning => {
-                provenance_scanner::BindingFindingSeverity::Warning
-            }
-            provenance_store::settings::BindingFindingsSeverity::Error => {
-                provenance_scanner::BindingFindingSeverity::Error
-            }
-        };
-        let refusal = if provenance_scanner::binding_findings_fail(severity, governed_finding_count)
-        {
-            Refusal::Findings
-        } else {
-            Refusal::None
-        };
-        let findings = warnings
-            .into_iter()
-            .map(|warning| {
-                Finding::with_detail(
-                    &warning.message,
-                    serde_json::to_value(&warning).expect("coverage warning is JSON"),
-                )
-            })
-            .collect();
-        let policy = match policy {
-            provenance_store::settings::BindingFindingsSeverity::Warning => BindingPolicy::Warning,
-            provenance_store::settings::BindingFindingsSeverity::Error => BindingPolicy::Error,
-        };
-        Ok(CategoryRun::Bindings {
-            findings,
-            context: BindingContext { policy },
-            refusal,
-        })
-    }
-}
-
-impl RepositoryCheckPort {
-    fn scan_selected_scopes(
-        &self,
-        selected_scope: Option<&str>,
-        scanned: &[provenance_scanner::FileScanWithContent],
-    ) -> anyhow::Result<(
-        Vec<provenance_core::coverage::ValidationWarning>,
-        usize,
-        BindingFindingsSeverity,
-    )> {
-        let manifest = provenance_store::layout::with_initialized_graph(
-            &ProvenanceLayout::new(&self.context.repo),
-            Ok,
-        )?;
-        let scopes = match selected_scope {
-            Some(selected) => vec![declared_scope(&manifest, selected)?],
-            None => manifest.scopes.iter().collect(),
-        };
-        let mut warnings = Vec::new();
-        let mut governed_finding_count = 0;
-        let mut policy = BindingFindingsSeverity::default();
-        for scope in scopes {
-            let repository =
-                RepoContext::new(self.context.repo.clone(), scope.id.as_str()).open()?;
-            policy = repository.settings().coverage.binding_findings;
-            let outcome = super::coverage::coverage_scan_from_scanned(
-                &repository,
-                &self.context.repo,
-                &self.context.repo,
-                scope,
-                &manifest,
-                scanned,
-            )?;
-            governed_finding_count += outcome.governed_finding_count;
-            warnings.extend(outcome.scan.report.warnings);
-        }
-        Ok((warnings, governed_finding_count, policy))
-    }
 }
 
 impl CheckPort for RepositoryCheckPort {
@@ -352,10 +260,16 @@ pub(super) async fn check(
         )
         .map_err(|error| initialization_hint(&context.repo, error))?;
     }
+    let mut port = RepositoryCheckPort::with_context(context, strict, base);
+    port.bindings = selectors.bindings.clone();
     let input = selectors.input();
-    let service = provenance_porcelain::Porcelain::new(RepositoryCheckPort::with_context(
-        context, strict, base,
-    ));
+    if port.bindings.is_set() && !input.categories().contains(&Category::Bindings) {
+        anyhow::bail!(
+            "unsupported check options: --path, --baseline, --output, and --output-format \
+             apply only to the bindings check; add --bindings"
+        );
+    }
+    let service = provenance_porcelain::Porcelain::new(port);
     let report = service.check(input).await;
     if json {
         output::print_json(&report)?;

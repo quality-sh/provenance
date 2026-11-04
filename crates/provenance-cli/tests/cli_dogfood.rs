@@ -123,12 +123,12 @@ fn note_accepts_any_known_subcommand_as_surface() {
             "dogfood",
             "note",
             "--surface",
-            "coverage",
+            "check",
             "--category",
             "missing",
             "--severity",
             "workaround",
-            "coverage scan has no way to ignore vendored code",
+            "the bindings check has no way to ignore vendored code",
         ])
         .assert()
         .success();
@@ -215,7 +215,7 @@ fn report_groups_counts_by_surface_category_severity() {
     for (surface, category, severity, summary) in [
         ("prime", "friction", "annoyance", "a"),
         ("prime", "friction", "annoyance", "b"),
-        ("coverage", "missing", "blocked", "c"),
+        ("check", "missing", "blocked", "c"),
     ] {
         note_cmd(temp.path())
             .args([
@@ -250,11 +250,11 @@ fn report_groups_counts_by_surface_category_severity() {
     assert_eq!(prime["category"], "friction");
     assert_eq!(prime["severity"], "annoyance");
     assert_eq!(prime["count"], 2);
-    let coverage = counts
+    let check = counts
         .iter()
-        .find(|c| c["surface"] == "coverage")
-        .expect("coverage bucket");
-    assert_eq!(coverage["count"], 1);
+        .find(|c| c["surface"] == "check")
+        .expect("check bucket");
+    assert_eq!(check["count"], 1);
 }
 
 #[test]

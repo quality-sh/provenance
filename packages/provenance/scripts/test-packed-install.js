@@ -240,7 +240,9 @@ execFileSync(process.execPath, [
 execFileSync(process.execPath, [join(application, ".compiled", "rule-bindings.js")], { cwd: application, stdio: "pipe" });
 provenance(["req_packed_consumer_overtime", "create", "--type", "requirement", "--scope", "default", "--statement", "Hours above 38 are paid as overtime.", "--format", "json"], application);
 provenance(["rule_packed_consumer_overtime", "create", "--type", "rule", "--scope", "default", "--requirement-id", "req_packed_consumer_overtime", "--statement", "Hours above 38 receive overtime pay.", "--format", "json"], application);
-assertPackedConsumerScan(provenance(["coverage", "scan", "--path", "rule-bindings.ts", "--scope", "default", "--validate-rules", "--strict", "--format", "json"], application));
+const consumerScan = join(application, "..", "packed-consumer-scan.json");
+provenance(["check", "--bindings", "--path", "rule-bindings.ts", "--scope", "default", "--strict", "--output", consumerScan], application);
+assertPackedConsumerScan(readFileSync(consumerScan, "utf8"));
 writeFileSync(join(application, "verify.mjs"), `
 import { apply, defineSpec, plan, requirement, rule, source } from "@quality-sh/provenance";
 import { startWorkflow, WorkflowRunner } from "./runtime.mjs";

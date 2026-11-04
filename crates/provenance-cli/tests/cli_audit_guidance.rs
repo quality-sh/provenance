@@ -79,7 +79,7 @@ fn shaping_guidance_keeps_rule_facts_independent_and_scanning_explicit() {
         "{shaping}"
     );
     assert!(
-        prose.contains("provenance coverage scan --path . --scope <scope> --validate-rules"),
+        prose.contains("provenance check --bindings --scope <scope>"),
         "{shaping}"
     );
 }

@@ -97,7 +97,7 @@ const API_FLAGS: &[Flag] = &[
 const CHECK_FLAGS: &[Flag] = &[
     Flag::new("repo", FlagKind::Value).default("."),
     Flag::new("strict", FlagKind::Switch)
-        .help("Reject findings in statements committed at Git HEAD"),
+        .help("Reject findings in statements committed at Git HEAD, and every bindings finding"),
     Flag::new("base", FlagKind::Value)
         .help("Compare Git HEAD with this commit instead of its first parent"),
     Flag::new("statement", FlagKind::Value)
@@ -113,6 +113,18 @@ const CHECK_FLAGS: &[Flag] = &[
     ),
     Flag::new("scope", FlagKind::Value)
         .help("Check only this scope. The default is every declared scope"),
+    Flag::new("path", FlagKind::Value).help(
+        "Bindings check only: scan the files below this path. The default is the repository root",
+    ),
+    Flag::new("baseline", FlagKind::Value).help(
+        "Bindings check only: resolve evidence anchors against this earlier scan report. \
+         Needs --scope",
+    ),
+    Flag::new("output", FlagKind::Value).help(
+        "Bindings check only: write the scan report of the selected scope to this file. \
+         Needs --scope",
+    ),
+    Flag::new("output-format", FlagKind::Value).values(&["json", "markdown"]),
     Flag::new("format", FlagKind::Value).values(&["json"]),
 ];
 
@@ -189,7 +201,7 @@ pub enum CheckFormat {
 #[serde(deny_unknown_fields)]
 pub struct CheckCliInput {
     pub repo: String,
-    /// Reject findings in statements committed at Git HEAD.
+    /// Reject findings in statements committed at Git HEAD, and every bindings finding.
     #[serde(default)]
     pub strict: bool,
     /// Compare Git HEAD with this commit instead of its first parent.
@@ -210,7 +222,23 @@ pub struct CheckCliInput {
     pub gaps: bool,
     /// Check only this scope. The default is every declared scope.
     pub scope: Option<String>,
+    /// Bindings check only: scan the files below this path.
+    pub path: Option<String>,
+    /// Bindings check only: an earlier scan report. Needs `--scope`.
+    pub baseline: Option<String>,
+    /// Bindings check only: the file for the scan report of the selected scope.
+    pub output: Option<String>,
+    pub output_format: Option<ReportFileFormat>,
     pub format: Option<CheckFormat>,
+}
+
+/// The format of the bindings scan report file.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ReportFileFormat {
+    #[default]
+    Json,
+    Markdown,
 }
 
 impl CheckCliInput {
@@ -295,6 +323,9 @@ pub(super) fn declaration(command: Command) -> Declaration {
             relations: &[
                 Relation::Requires("base", "strict"),
                 Relation::Conflicts("statement", "base"),
+                Relation::Requires("baseline", "scope"),
+                Relation::Requires("output", "scope"),
+                Relation::Requires("output_format", "output"),
             ],
             hidden: false,
             flags: CHECK_FLAGS,

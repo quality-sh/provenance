@@ -1,6 +1,4 @@
-use crate::cli::workspace::CoverageCommand;
-use crate::output::{self, ReportFormat};
-use crate::repo_context::RepoContext;
+use crate::output::ReportFormat;
 use anyhow::Context;
 use camino::Utf8PathBuf;
 use provenance_core::{Manifest, Scope};
@@ -17,24 +15,6 @@ pub(super) struct CoverageScanOutcome {
     pub(super) governed_finding_count: usize,
 }
 
-fn coverage_scan_against(
-    repository: &Repository,
-    repo: &camino::Utf8Path,
-    path: &Utf8PathBuf,
-    scope: &Scope,
-    manifest: &Manifest,
-    validate_rules: bool,
-    baseline: Option<&camino::Utf8Path>,
-) -> anyhow::Result<CoverageScanOutcome> {
-    let scanned = provenance_scanner::scan_path_with_content(path)?;
-    let selection = Selection {
-        repository,
-        scope,
-        manifest,
-    };
-    coverage_scan_from_scanned_against(repo, path, &selection, validate_rules, &scanned, baseline)
-}
-
 pub(super) fn coverage_scan_from_scanned(
     repository: &Repository,
     repo: &camino::Utf8Path,
@@ -42,13 +22,23 @@ pub(super) fn coverage_scan_from_scanned(
     scope: &Scope,
     manifest: &Manifest,
     scanned: &[provenance_scanner::FileScanWithContent],
+    baseline: Option<&camino::Utf8Path>,
 ) -> anyhow::Result<CoverageScanOutcome> {
     let selection = Selection {
         repository,
         scope,
         manifest,
     };
-    coverage_scan_from_scanned_against(repo, path, &selection, true, scanned, None)
+    coverage_scan_from_scanned_against(repo, path, &selection, true, scanned, baseline)
+}
+
+/// The scan report of one scope as the `coverage scan` report file had it: JSON, or
+/// the Markdown report.
+pub(super) fn render_report(
+    format: ReportFormat,
+    scan: &provenance_core::coverage::CoverageScan,
+) -> anyhow::Result<String> {
+    render_coverage(format, scan)
 }
 
 /// The repository opened for the selected scope, the scope and the manifest
@@ -292,100 +282,6 @@ fn scan_commit(repo: &camino::Utf8Path, scans: &[provenance_scanner::FileScan]) 
     (status.status.success() && status.stdout.is_empty())
         .then(|| current_git_commit(repo).ok())
         .flatten()
-}
-
-/// Whether the configured policy turns the Rule binding findings into a
-/// refusal. Warning reports the findings and succeeds; error reports them
-/// and fails the command. Findings the policy does not govern never refuse
-/// here, and Rule severity metadata plays no part in the decision.
-fn binding_finding_refusal(
-    policy: provenance_store::settings::BindingFindingsSeverity,
-    governed: usize,
-) -> Option<String> {
-    let severity = match policy {
-        provenance_store::settings::BindingFindingsSeverity::Warning => {
-            provenance_scanner::BindingFindingSeverity::Warning
-        }
-        provenance_store::settings::BindingFindingsSeverity::Error => {
-            provenance_scanner::BindingFindingSeverity::Error
-        }
-    };
-    let refusing = provenance_scanner::binding_findings_fail(severity, governed);
-    refusing.then(|| {
-        format!(
-            "coverage scan found {governed} Rule binding finding(s); the repository \
-             configuration selects error"
-        )
-    })
-}
-
-pub(super) fn handle(command: CoverageCommand) -> anyhow::Result<()> {
-    match command {
-        CoverageCommand::Scan {
-            repo,
-            path,
-            scope,
-            baseline,
-            validate_rules,
-            strict,
-            format,
-            output,
-        } => {
-            let repository = RepoContext::new(repo.clone(), scope).open()?;
-            let manifest = repository.manifest()?;
-            let scope = manifest
-                .scopes
-                .iter()
-                .find(|declared| &declared.id == repository.scope())
-                .cloned()
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "the manifest no longer declares scope `{}`",
-                        repository.scope().as_str()
-                    )
-                })?;
-            let policy = repository.settings().coverage.binding_findings;
-            let outcome = if let Some(baseline) = baseline.as_deref() {
-                coverage_scan_against(
-                    &repository,
-                    &repo,
-                    &path,
-                    &scope,
-                    &manifest,
-                    validate_rules,
-                    Some(baseline),
-                )?
-            } else {
-                coverage_scan_against(
-                    &repository,
-                    &repo,
-                    &path,
-                    &scope,
-                    &manifest,
-                    validate_rules,
-                    None,
-                )?
-            };
-            if let Some(output_path) = output {
-                let rendered = render_coverage(format, &outcome.scan)?;
-                std::fs::write(output_path, rendered)?;
-            } else if matches!(format, ReportFormat::Markdown) {
-                print!("{}", render_coverage(format, &outcome.scan)?);
-            } else {
-                output::print_json(&outcome.scan)?;
-            }
-            if let Some(message) = binding_finding_refusal(policy, outcome.governed_finding_count) {
-                anyhow::bail!("{message}");
-            }
-            if strict && !outcome.scan.warnings.is_empty() {
-                anyhow::bail!(
-                    "coverage scan found {} warning(s); rerun without --strict to inspect",
-                    outcome.scan.warnings.len()
-                );
-            }
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]

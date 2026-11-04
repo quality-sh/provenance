@@ -9,25 +9,39 @@ use serde_json::Value;
 mod support {
     pub mod review_paths;
 }
-use support::review_paths::{init, provenance};
+use support::review_paths::{create_requirement, init, provenance};
 
-/// The coverage report for one source file, scanned without Rule
-/// validation.
+/// The coverage report for one source file. The bindings check always validates
+/// Rules, so the graph holds the draft Rule that the sources cite; the parse warnings
+/// do not depend on it.
 fn scan(source: &str) -> Value {
     let (directory, repo) = init();
+    create_requirement(&repo, "req_overtime");
+    provenance()
+        .args(["rule_overtime", "create", "--type", "rule", "--repo", &repo])
+        .args(["--requirement-id", "req_overtime"])
+        .args([
+            "--statement",
+            "The system pays overtime after the threshold.",
+        ])
+        .assert()
+        .success();
     let code = directory.path().join("src");
     std::fs::create_dir_all(&code).unwrap();
     std::fs::write(code.join("payroll.rs"), source).unwrap();
+    let report = directory.path().join("report.json");
     let output = provenance()
         .args([
-            "coverage",
-            "scan",
+            "check",
+            "--bindings",
             "--repo",
             &repo,
             "--path",
             code.to_str().unwrap(),
-            "--format",
-            "json",
+            "--scope",
+            "default",
+            "--output",
+            report.to_str().unwrap(),
         ])
         .output()
         .unwrap();
@@ -36,7 +50,7 @@ fn scan(source: &str) -> Value {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    serde_json::from_slice(&output.stdout).unwrap()
+    serde_json::from_slice(&std::fs::read(report).unwrap()).unwrap()
 }
 
 fn warnings(report: &Value) -> &Vec<Value> {

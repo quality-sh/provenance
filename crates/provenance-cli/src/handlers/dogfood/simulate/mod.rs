@@ -169,9 +169,16 @@ fn step_arguments(sandbox: &Path) -> Vec<StepSpec> {
         ),
         spec("check", &["check", "--repo", "."]),
         spec(
-            "coverage scan",
+            "bindings check",
             &[
-                "coverage", "scan", "--repo", ".", "--path", ".", "--scope", "default",
+                "check",
+                "--bindings",
+                "--repo",
+                ".",
+                "--path",
+                ".",
+                "--scope",
+                "default",
             ],
         ),
     ]

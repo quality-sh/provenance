@@ -8,15 +8,14 @@ use support::{create_rule, init_repo};
 fn strict_validating_scan(repo: &std::path::Path, source_dir: &std::path::Path) -> Command {
     let mut command = Command::cargo_bin("provenance").unwrap();
     command.args([
-        "coverage",
-        "scan",
+        "check",
+        "--bindings",
         "--repo",
         repo.to_str().unwrap(),
         "--path",
         source_dir.to_str().unwrap(),
         "--scope",
         "default",
-        "--validate-rules",
         "--strict",
         "--format",
         "json",
@@ -53,22 +52,28 @@ fn coverage_scan_reports_unknown_rule_warnings() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "coverage",
-            "scan",
+            "check",
+            "--bindings",
             "--repo",
             repo.to_str().unwrap(),
             "--path",
             source_dir.to_str().unwrap(),
             "--scope",
             "default",
-            "--validate-rules",
             "--format",
             "json",
+            "--output",
+            tmp.path().join("report.json").to_str().unwrap(),
         ])
         .assert()
         .success()
         .stdout(predicate::str::contains("UNKNOWN-RULE"))
-        .stdout(predicate::str::contains("total_annotations"));
+        .stdout(predicate::str::contains("\"categories\""))
+        .stdout(predicate::str::contains("total_annotations").not());
+    // The check report is on standard output; the scan report is only in the file.
+    let report = std::fs::read_to_string(tmp.path().join("report.json")).unwrap();
+    assert!(report.contains("total_annotations"), "{report}");
+    assert!(report.contains("UNKNOWN-RULE"), "{report}");
 }
 
 #[test]
@@ -101,15 +106,15 @@ fn coverage_scan_writes_markdown_output_file() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "coverage",
-            "scan",
+            "check",
+            "--bindings",
             "--repo",
             repo.to_str().unwrap(),
             "--path",
             source_dir.to_str().unwrap(),
             "--scope",
             "default",
-            "--format",
+            "--output-format",
             "markdown",
             "--output",
             output.to_str().unwrap(),
@@ -160,15 +165,15 @@ fn coverage_markdown_marks_verification_sites_outside_the_implementation_module(
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "coverage",
-            "scan",
+            "check",
+            "--bindings",
             "--repo",
             repo.to_str().unwrap(),
             "--path",
             source_dir.to_str().unwrap(),
             "--scope",
             "default",
-            "--format",
+            "--output-format",
             "markdown",
             "--output",
             output.to_str().unwrap(),
@@ -369,23 +374,23 @@ fn coverage_scan_warns_for_deprecated_marker_but_not_active_marker() {
     let output = Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "coverage",
-            "scan",
+            "check",
+            "--bindings",
             "--repo",
             repo.to_str().unwrap(),
             "--path",
             source_dir.to_str().unwrap(),
             "--scope",
             "default",
-            "--validate-rules",
-            "--format",
-            "json",
+            "--output",
+            tmp.path().join("report.json").to_str().unwrap(),
         ])
         .output()
         .unwrap();
 
     assert!(output.status.success());
-    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let report: Value =
+        serde_json::from_slice(&std::fs::read(tmp.path().join("report.json")).unwrap()).unwrap();
     let warnings = report["warnings"].as_array().unwrap();
     assert_eq!(warnings.len(), 3, "unexpected warnings: {warnings:#?}");
     assert!(warnings.iter().any(|warning| {
@@ -426,15 +431,14 @@ fn coverage_scan_strict_exits_non_zero_for_deprecated_marker() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "coverage",
-            "scan",
+            "check",
+            "--bindings",
             "--repo",
             repo.to_str().unwrap(),
             "--path",
             source_dir.to_str().unwrap(),
             "--scope",
             "default",
-            "--validate-rules",
             "--strict",
             "--format",
             "json",

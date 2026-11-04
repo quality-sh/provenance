@@ -158,24 +158,23 @@ fn planning_first_rule_is_grounded_before_code_exists() {
     );
 
     let coverage: Value = serde_json::from_str(&provenance(&[
-        "coverage",
-        "scan",
+        "check",
+        "--bindings",
         "--repo",
         &repo,
         "--path",
         &repo,
         "--scope",
         "default",
-        "--validate-rules",
         "--format",
         "json",
     ]))
     .unwrap();
-    let warnings = coverage["warnings"].as_array().unwrap();
+    let findings = coverage["categories"][0]["findings"].as_array().unwrap();
     assert!(
-        warnings
+        findings
             .iter()
-            .all(|warning| warning["rule_id"] != "rule_second_approver"),
+            .all(|finding| finding["detail"]["rule_id"] != "rule_second_approver"),
         "{coverage}"
     );
 }

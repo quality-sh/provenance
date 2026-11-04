@@ -86,7 +86,7 @@ npx provenance prime
 | `provenance traceability <rule>` | Walk a Rule back to its Requirement and any producing Resolution |
 | `provenance api proposals --scope default --query exclude_terminal=true` | List proposals that do not have a terminal disposition |
 | `provenance review --repo . --repository-id local --scope default` | Serve the review page for the working-copy graph on a local host |
-| `provenance coverage scan --path . --validate-rules` | Check bindings and report active Rules with no implementation or verification |
+| `provenance check --bindings` | Check bindings and report active Rules with no implementation or verification |
 | `provenance statement-checks create --statement "<statement>" --format json` / `provenance api authoring-changes --method post --input -` / `provenance api verification-runs` | ASD-STE100 statement preflight, typed desired state, and callback evidence protocol |
 | `provenance api rules --query query=stale --query base=main` | Report Rules with evidence paths that changed after `main` |
 | `provenance skills install` | Install the bundled agent skills (`provenance-shaping`, `provenance-fork-tournament`, `provenance-swarm-backtrace`, `provenance-grounded-writing`) |

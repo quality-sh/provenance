@@ -292,3 +292,36 @@ fn shallow_checkout_does_not_mistake_an_unavailable_parent_for_an_empty_base() {
     assert!(stderr.contains("first parent is not available. Fetch more Git history"));
     assert!(stderr.contains("does not identify a commit"));
 }
+
+/// A bare `check --strict --base` runs graph, statements, and bindings. Its statement
+/// result does not change, and a bindings finding under the warning severity now also
+/// refuses the check.
+#[test]
+#[verifies("rule_check_strict_refuses_binding_warnings", examples)]
+fn strict_base_check_refuses_a_warning_severity_bindings_finding() {
+    let directory = repository();
+    let repo = directory.path();
+    create_rule(repo, "rule_unbound", "Original rule");
+    let base = commit(repo, "base");
+    std::fs::write(repo.join("README.md"), "Unrelated candidate change.\n").unwrap();
+    commit(repo, "candidate");
+
+    let output = check_strict(repo, Some(&base));
+
+    assert_eq!(output.status.code(), Some(1));
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(statements(&report)["status"], "passed");
+    let bindings = report["categories"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|category| category["category"] == "bindings")
+        .unwrap();
+    assert_eq!(bindings["context"]["policy"], "warning");
+    assert!(
+        bindings["findings"]
+            .to_string()
+            .contains("active rule `rule_unbound` has no implementation"),
+        "{report}"
+    );
+}

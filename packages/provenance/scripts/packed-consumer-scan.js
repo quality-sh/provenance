@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+// The scan report file that `check --bindings --output` writes.
 export function assertPackedConsumerScan(output) {
   const report = JSON.parse(output);
   assert.deepEqual(report.warnings, []);
