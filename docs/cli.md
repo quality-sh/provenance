@@ -182,8 +182,8 @@ Rule statements and for statements that differ from Git HEAD. Add `--strict`
 to reject findings in the committed candidate and every bindings finding. Use `--base <commit>` to select
 the comparison base.
 
-`provenance check --gaps` also reports the unfinished parts of the graph and
-each Rule without a Source: one finding for each gap and one for each such
+`provenance check --gaps` runs only the gaps category. It reports the
+unfinished parts of the graph and each Rule without a Source: one finding for each gap and one for each such
 Rule. The graph counts of each scope are in the category context, also when
 there are no findings. These findings do not fail the check, also with
 `--strict`. A bare `check` does not run this category. MCP `check` takes

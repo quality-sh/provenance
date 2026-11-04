@@ -272,3 +272,77 @@ fn children_walks_down_and_trace_walks_up_from_a_requirement() {
     );
     assert!(!trace.contains(&"source_unrelated".to_owned()), "{trace:?}");
 }
+
+/// Creates a Resolution under `requirement` and a Rule that the Resolution produces.
+fn resolution_and_rule(repo: &str, requirement: &str, resolution: &str, rule: &str) {
+    cli(&[
+        resolution,
+        "create",
+        "--type",
+        "resolution",
+        "--status",
+        "approved",
+        "--repo",
+        repo,
+        "--title",
+        resolution,
+        "--requirement-id",
+        requirement,
+        "--position",
+        "Use the award threshold.",
+        "--rationale",
+        "The award clause sets the threshold.",
+    ]);
+    cli(&[
+        rule,
+        "create",
+        "--type",
+        "rule",
+        "--repo",
+        repo,
+        "--requirement-id",
+        requirement,
+        "--resolution-id",
+        resolution,
+        "--statement",
+        "Pay overtime after the award threshold.",
+        "--status",
+        "active",
+        "--severity",
+        "high",
+    ]);
+}
+
+/// The trace of a Rule that a Resolution produces contains the Resolution and its
+/// Source, and none of the records of the other chain: the case of the removed
+/// `traceability` command.
+#[test]
+#[verifies("rule_porcelain_get_has_grounding_impact", examples)]
+fn trace_of_a_rule_contains_its_resolution_and_source() {
+    let (_directory, repo) = chain();
+    resolution_and_rule(&repo, "req_overtime", "res_overtime", "rule_overtime_award");
+    resolution_and_rule(&repo, "req_unrelated", "res_unrelated", "rule_unrelated");
+    let output = cli(&[
+        "rule_overtime_award",
+        "trace",
+        "--depth",
+        "6",
+        "--repo",
+        &repo,
+        "--format",
+        "json",
+    ]);
+    let result: Value = serde_json::from_str(&output).unwrap();
+    let ids = related_ids(&result);
+    for id in ["res_overtime", "req_overtime", "source_award"] {
+        assert!(ids.contains(&id), "{id}: {ids:?}");
+    }
+    for id in [
+        "res_unrelated",
+        "rule_unrelated",
+        "req_unrelated",
+        "source_unrelated",
+    ] {
+        assert!(!ids.contains(&id), "{id}: {ids:?}");
+    }
+}

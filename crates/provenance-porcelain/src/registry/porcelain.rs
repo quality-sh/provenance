@@ -108,10 +108,12 @@ const CHECK_FLAGS: &[Flag] = &[
         .help("Run only graph validity checks. Combine with other check selectors"),
     Flag::new("statements", FlagKind::Switch)
         .help("Run only statement quality checks. Combine with other check selectors"),
-    Flag::new("bindings", FlagKind::Switch).help("Run only repository-wide Rule binding checks"),
+    Flag::new("bindings", FlagKind::Switch).help(
+        "Run only Rule binding checks. The scan covers the repository root; --path limits it",
+    ),
     Flag::new("gaps", FlagKind::Switch).help(
-        "Also report the unfinished parts of the graph and each Rule without a Source. These \
-         findings do not fail the check",
+        "Run only the gaps check: report the unfinished parts of the graph and each Rule \
+         without a Source. These findings do not fail the check",
     ),
     Flag::new("scope", FlagKind::Value)
         .help("Check only this scope. The default is every declared scope"),
@@ -216,10 +218,10 @@ pub struct CheckCliInput {
     /// Run only statement quality checks. Combine with other check selectors.
     #[serde(default)]
     pub statements: bool,
-    /// Run only repository-wide Rule binding checks.
+    /// Run only Rule binding checks. The scan covers the repository root; `path` limits it.
     #[serde(default)]
     pub bindings: bool,
-    /// Also report the unfinished parts of the graph and each Rule without a Source.
+    /// Run only the gaps check: the unfinished parts of the graph and each Rule without a Source.
     #[serde(default)]
     pub gaps: bool,
     /// Check only this scope. The default is every declared scope.
