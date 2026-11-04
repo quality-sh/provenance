@@ -26,12 +26,12 @@ async fn mcp_ownership_refusal_preserves_owner_and_guidance() {
         } else {
             "res_manual"
         };
-        let created = call(client, "create", json!({"target":target,"type":"resolution","data":{
+        let created = call(client, "change", json!({"action":"create","target":target,"type":"resolution","data":{
             "title":"Owner", "position":"Keep the owner.", "rationale":"The owner controls changes.",
             "made_by":owner, "supersedes":[], "requirement_ids":["req_shared"], "status":"proposed", "inputs":[]
         }})).await;
         assert_ne!(created.is_error, Some(true), "{created:?}");
-        let result = call(client, "submit", json!({"target":target,"data":{
+        let result = call(client, "change", json!({"action":"submit","target":target,"data":{
             "declared_by":"other", "actor":"agent", "title":"Review", "summary":"Review the record.",
             "source_ids":[], "evidence_references":[], "builds_on":[]
         }})).await;
@@ -73,8 +73,8 @@ async fn mcp_submit_names_all_missing_lists_before_store_checks() {
         }
         let result = call(
             client,
-            "submit",
-            json!({"target":"req_shared", "data":data}),
+            "change",
+            json!({"action":"submit","target":"req_shared", "data":data}),
         )
         .await;
         assert_eq!(result.is_error, Some(true), "{result:?}");

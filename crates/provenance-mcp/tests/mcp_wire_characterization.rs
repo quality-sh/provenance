@@ -23,7 +23,7 @@ use std::sync::Arc;
 use support::{check_port::FixtureCheckPort, records::Repository};
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader, DuplexStream, Lines};
 
-const TOOL_LIST_FNV1A: u64 = 2_990_280_557_961_012_988;
+const TOOL_LIST_FNV1A: u64 = 7_287_979_008_587_730_231;
 
 /// The porcelain tools, in list order. The list has no plumbing tools.
 const PORCELAIN_TOOL_NAMES: &[&str] = &[
@@ -32,12 +32,7 @@ const PORCELAIN_TOOL_NAMES: &[&str] = &[
     "api",
     "check",
     "trace",
-    "create",
-    "update",
-    "answer",
-    "claim",
-    "release",
-    "submit",
+    "change",
     "discussions",
     "discussion",
     "discuss",
@@ -251,12 +246,7 @@ fn refusals() -> Vec<(&'static str, Value)> {
         ),
         ("check", options("unsupported check options")),
         ("trace", read),
-        ("create", options("unsupported action options")),
-        ("update", options("unsupported action options")),
-        ("answer", options("unsupported action options")),
-        ("claim", options("unsupported action options")),
-        ("release", options("unsupported action options")),
-        ("submit", options("unsupported action options")),
+        ("change", options("unsupported action options")),
         ("discussions", discussion.clone()),
         ("discussion", discussion.clone()),
         ("discuss", discussion.clone()),

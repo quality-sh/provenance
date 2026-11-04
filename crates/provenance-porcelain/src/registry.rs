@@ -281,6 +281,8 @@ pub enum Command {
     /// The records above one record, up to its Sources: the get trace view as an action.
     Trace,
     Prime,
+    /// The MCP tool that runs one record action, selected by its action argument.
+    Change,
     Action(Action),
     Repository(RepositoryCommand),
     Graph(GraphCommand),
@@ -298,6 +300,7 @@ impl Command {
         Self::Check,
         Self::Trace,
         Self::Prime,
+        Self::Change,
         Self::Action(Action::Create),
         Self::Action(Action::Update),
         Self::Action(Action::Answer),
@@ -355,6 +358,9 @@ impl Command {
                 Self::Get | Self::Search | Self::Api | Self::Check | Self::Trace | Self::Prime => {
                     Presence::Present
                 }
+                Self::Change => Presence::Absent {
+                    reason: "the CLI takes each record action as a word after the target",
+                },
                 Self::Action(action) => match action {
                     Action::Create
                     | Action::Update
@@ -373,7 +379,7 @@ impl Command {
                 Self::Dogfood(command) => command.presence(interface),
             },
             Interface::Mcp => match self {
-                Self::Get | Self::Search | Self::Api | Self::Check | Self::Trace => {
+                Self::Get | Self::Search | Self::Api | Self::Check | Self::Trace | Self::Change => {
                     Presence::Present
                 }
                 Self::Prime => Presence::Absent {
@@ -385,11 +391,12 @@ impl Command {
                     | Action::Answer
                     | Action::Claim
                     | Action::Release
-                    | Action::Submit
-                    | Action::Discussions
-                    | Action::Discussion
-                    | Action::Discuss
-                    | Action::Reply => Presence::Present,
+                    | Action::Submit => Presence::Absent {
+                        reason: "MCP takes each record action as the action argument of change",
+                    },
+                    Action::Discussions | Action::Discussion | Action::Discuss | Action::Reply => {
+                        Presence::Present
+                    }
                 },
                 Self::Repository(command) => command.presence(interface),
                 Self::Graph(command) => command.presence(interface),
@@ -432,5 +439,40 @@ impl Command {
                 CliForm::Target | CliForm::WordsAndTarget(_)
             ) && command.declaration().name == name
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::porcelain::VIEWS;
+    use super::*;
+    use crate::get::View;
+
+    /// Implementation aid: the view values in the flag table are the get views.
+    #[test]
+    fn the_get_view_flag_lists_every_view() {
+        assert_eq!(VIEWS, View::ALL.map(View::as_str));
+    }
+
+    /// Implementation aid: the typed CLI inputs have one schema property for each flag.
+    #[test]
+    fn typed_cli_inputs_have_a_property_for_each_flag() {
+        for command in Command::ALL {
+            let declaration = command.declaration();
+            let Input::Typed(schema) = declaration.cli_input else {
+                continue;
+            };
+            let schema = schema();
+            let properties = schema["properties"].as_object().unwrap();
+            let mut fields = declaration
+                .flags
+                .iter()
+                .map(Flag::field_id)
+                .collect::<Vec<_>>();
+            fields.sort();
+            let mut names = properties.keys().cloned().collect::<Vec<_>>();
+            names.sort();
+            assert_eq!(fields, names, "{command:?}");
+        }
     }
 }

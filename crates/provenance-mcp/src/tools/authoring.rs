@@ -10,30 +10,60 @@ use provenance_transport::StatementHost;
 use rmcp::model::{CallToolResult, ContentBlock, Tool};
 use serde_json::{json, Map, Value};
 
-/// The tool of one record action, when the host can run it on some record kind.
-pub fn tool(host: &StatementHost, action: Action) -> Option<Tool> {
-    let definitions = host.porcelain().executable_target_definitions(action);
-    if definitions.is_empty() {
+/// The change tool: one branch for each record action that the host can run on some
+/// record kind. The action argument selects the branch, so a valid request matches
+/// exactly one branch; inside it, the record kind of the target selects the fields.
+#[rule("rule_mcp_one_tool_for_record_actions")]
+pub fn change_tool(host: &StatementHost) -> Option<Tool> {
+    let mut inputs = Vec::new();
+    let mut outputs = Vec::new();
+    for action in Action::RECORD {
+        let definitions = host.porcelain().executable_target_definitions(action);
+        if definitions.is_empty() {
+            continue;
+        }
+        inputs.push(input_schema(action, &definitions));
+        for (_, definition) in &definitions {
+            let output = definition.mcp_output_schema();
+            if !outputs.contains(&output) {
+                outputs.push(output);
+            }
+        }
+    }
+    if inputs.is_empty() {
         return None;
     }
-    let input = input_schema(action, &definitions);
-    let output = schema_union(
-        definitions
-            .iter()
-            .map(|(_, definition)| definition.mcp_output_schema())
-            .collect(),
-        "anyOf",
-    );
-    let declaration = Command::Action(action).declaration();
+    let declaration = Command::Change.declaration();
     Some(crate::surface::tool(
         declaration.name,
         declaration.description,
-        input,
-        output,
+        branch_union(inputs, "Action", "oneOf"),
+        // Results of different record kinds overlap: a Source record has every field
+        // that a Domain record needs. The tool output keeps the choice between a
+        // result and an error as `oneOf`.
+        branch_union(outputs, "Output", "anyOf"),
         crate::surface::SchemaDeclaration::Keep,
     ))
 }
 
+/// A union of the branches, with each branch's definitions held once at the root.
+fn branch_union(mut branches: Vec<Value>, prefix: &str, keyword: &str) -> Value {
+    if branches.len() == 1 {
+        return branches.pop().expect("one branch");
+    }
+    let mut definitions = Map::new();
+    for (index, branch) in branches.iter_mut().enumerate() {
+        namespace_definitions(branch, &format!("{prefix}{index}"), &mut definitions);
+    }
+    let mut schema = json!({ keyword: branches });
+    if !definitions.is_empty() {
+        schema["$defs"] = Value::Object(definitions);
+    }
+    schema
+}
+
+/// The input of one record action: one variant for each record kind, each with the
+/// action argument.
 fn input_schema(action: Action, definitions: &[(NodeType, &'static Definition)]) -> Value {
     let variants = definitions
         .iter()
@@ -74,14 +104,16 @@ fn input_schema(action: Action, definitions: &[(NodeType, &'static Definition)])
                     .expect("registered MCP required is an array")
                     .retain(|field| field != "id");
             }
-            object["properties"]
+            let properties = object["properties"]
                 .as_object_mut()
-                .expect("registered MCP properties are an object")
-                .insert("target".into(), json!({"type":"string","minLength":1}));
-            object["required"]
+                .expect("registered MCP properties are an object");
+            properties.insert("action".into(), json!({"const":action.as_str()}));
+            properties.insert("target".into(), json!({"type":"string","minLength":1}));
+            let required = object["required"]
                 .as_array_mut()
-                .expect("registered MCP required is an array")
-                .push(json!("target"));
+                .expect("registered MCP required is an array");
+            required.push(json!("action"));
+            required.push(json!("target"));
             remove_empty_data(object);
             schema
         })
@@ -165,6 +197,21 @@ fn rewrite_references(value: &mut Value, prefix: &str) {
             }
         }
         _ => {}
+    }
+}
+
+/// Runs the record action that the action argument of the change tool names.
+pub async fn call_change(
+    host: &StatementHost,
+    mut arguments: Map<String, Value>,
+) -> CallToolResult {
+    let action = arguments
+        .remove("action")
+        .and_then(|value| value.as_str().and_then(Action::parse))
+        .filter(|action| Action::RECORD.contains(action));
+    match action {
+        Some(action) => call(host, action, arguments).await,
+        None => action_error(&ActionError::InvalidOptions),
     }
 }
 

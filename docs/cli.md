@@ -232,7 +232,10 @@ complete scope. They remain separate from resource writes.
 standard input and output. The server opens the same repository and scope as the
 CLI commands. The default repository is the current directory, and the default
 scope is `default`. The server gives the porcelain tools: `get`, `search`, `api`,
-`check`, and the record actions. The tools can write records. A record that the
+`check`, `trace`, `change`, and the Discussion actions. `change` runs one record
+action: its `action` argument is `create`, `update`, `answer`, `claim`,
+`release`, or `submit`, with the same fields as the CLI action after the target.
+The tools can write records. A record that the
 CLI writes is available to the MCP tools in the same session, and a record that
 an MCP tool writes is available to the CLI.
 

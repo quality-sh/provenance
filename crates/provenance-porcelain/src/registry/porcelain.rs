@@ -16,9 +16,11 @@ const TRACE_DESCRIPTION: &str =
 const SEARCH_DESCRIPTION: &str = "Find records across the permitted kinds in the bound scope, or the Rules bound to a source file and symbol.";
 const CHECK_DESCRIPTION: &str = "Check graph validity, statement quality, and binding \
      coverage. Give a statement to check that text with the project dictionary before a write.";
+const CHANGE_DESCRIPTION: &str = "Run one record action on the target: create, update, \
+     answer, claim, release, or submit. The action argument selects it.";
 const PRIME_DESCRIPTION: &str = "Introduce Provenance domain concepts and actions.";
 
-const VIEWS: &[&str] = &["record", "children", "trace", "impact", "review"];
+pub(super) const VIEWS: &[&str] = &["record", "children", "trace", "impact", "review"];
 
 /// The get flags after the target, in help order.
 const GET_FLAGS: &[Flag] = &[
@@ -341,6 +343,17 @@ pub(super) fn declaration(command: Command) -> Declaration {
             hidden: false,
             flags: TRACE_FLAGS,
         },
+        Command::Change => Declaration {
+            name: "change",
+            description: CHANGE_DESCRIPTION,
+            cli_form: CliForm::Words(&["change"]),
+            cli_input: Input::None,
+            mcp_input: Input::None,
+            positional: &[],
+            relations: &[],
+            hidden: false,
+            flags: &[],
+        },
         Command::Prime => Declaration {
             name: "prime",
             description: PRIME_DESCRIPTION,
@@ -460,38 +473,5 @@ const fn action_declaration(action: Action) -> Declaration {
         relations,
         hidden: false,
         flags,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Implementation aid: the view values in the flag table are the get views.
-    #[test]
-    fn the_get_view_flag_lists_every_view() {
-        assert_eq!(VIEWS, View::ALL.map(View::as_str));
-    }
-
-    /// Implementation aid: the typed CLI inputs have one schema property for each flag.
-    #[test]
-    fn typed_cli_inputs_have_a_property_for_each_flag() {
-        for command in Command::ALL {
-            let declaration = command.declaration();
-            let Input::Typed(schema) = declaration.cli_input else {
-                continue;
-            };
-            let schema = schema();
-            let properties = schema["properties"].as_object().unwrap();
-            let mut fields = declaration
-                .flags
-                .iter()
-                .map(Flag::field_id)
-                .collect::<Vec<_>>();
-            fields.sort();
-            let mut names = properties.keys().cloned().collect::<Vec<_>>();
-            names.sort();
-            assert_eq!(fields, names, "{command:?}");
-        }
     }
 }

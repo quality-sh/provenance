@@ -97,7 +97,10 @@ impl Invocation {
                 return Ok(Self::parse_root(arguments));
             }
             Some(
-                registry::Command::Get | registry::Command::Trace | registry::Command::Action(_),
+                registry::Command::Get
+                | registry::Command::Trace
+                | registry::Command::Change
+                | registry::Command::Action(_),
             )
             | None => {}
         }

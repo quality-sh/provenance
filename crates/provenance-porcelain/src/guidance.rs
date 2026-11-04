@@ -47,6 +47,7 @@ Available actions depend on the selected surface and its access. Use CLI help or
         Command::Search,
         Command::Check,
         Command::Api,
+        Command::Change,
     ]
     .into_iter()
     .chain(

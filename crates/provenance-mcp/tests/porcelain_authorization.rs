@@ -43,6 +43,27 @@ async fn call(
         .unwrap()
 }
 
+/// The branch of the change input schema for `action`, as text, when the change tool
+/// lists that action.
+fn action_branch(tools: &[rmcp::model::Tool], action: &str) -> Option<String> {
+    let change = tools.iter().find(|tool| tool.name == "change")?;
+    let schema = Value::Object((*change.input_schema).clone());
+    let names = |branch: &Value| {
+        branch
+            .to_string()
+            .contains(&format!("{{\"const\":\"{action}\"}}"))
+    };
+    schema["oneOf"].as_array().map_or_else(
+        || names(&schema).then(|| schema.to_string()),
+        |branches| {
+            branches
+                .iter()
+                .find(|branch| names(branch))
+                .map(Value::to_string)
+        },
+    )
+}
+
 #[tokio::test]
 async fn non_create_schema_excludes_a_writable_but_unreadable_kind() {
     let repository = Repository::new("The shared graph is readable.");
@@ -54,15 +75,14 @@ async fn non_create_schema_excludes_a_writable_but_unreadable_kind() {
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();
-    let update = tools.iter().find(|tool| tool.name == "update").unwrap();
-    let schema = Value::Object((*update.input_schema).clone()).to_string();
+    let schema = action_branch(&tools, "update").unwrap();
     assert!(!schema.contains("source_type"), "{schema}");
     assert!(schema.contains("statement"), "{schema}");
 
     let unresolved = call(
         &client,
-        "update",
-        json!({"target":"source_shared","data":{"name":"Hidden source"}}),
+        "change",
+        json!({"action":"update","target":"source_shared","data":{"name":"Hidden source"}}),
     )
     .await;
     assert_eq!(unresolved.is_error, Some(true), "{unresolved:?}");
@@ -102,15 +122,14 @@ async fn non_create_schema_and_dispatch_deny_a_hidden_mutation() {
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();
-    let update = tools.iter().find(|tool| tool.name == "update").unwrap();
-    let schema = Value::Object((*update.input_schema).clone()).to_string();
+    let schema = action_branch(&tools, "update").unwrap();
     assert!(!schema.contains("source_type"), "{schema}");
     assert!(schema.contains("statement"), "{schema}");
 
     let denied = call(
         &client,
-        "update",
-        json!({"target":"source_shared","data":{"name":"Denied update"}}),
+        "change",
+        json!({"action":"update","target":"source_shared","data":{"name":"Denied update"}}),
     )
     .await;
     assert_eq!(denied.is_error, Some(true), "{denied:?}");
@@ -149,18 +168,16 @@ async fn no_resolvable_kind_hides_non_create_tools_but_keeps_create_executable()
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();
-    assert!(tools.iter().any(|tool| tool.name == "create"));
     for name in ["update", "answer", "claim", "release", "submit"] {
-        assert!(!tools.iter().any(|tool| tool.name == name), "{name}");
+        assert_eq!(action_branch(&tools, name), None, "{name}");
     }
-    let create = tools.iter().find(|tool| tool.name == "create").unwrap();
-    let schema = Value::Object((*create.input_schema).clone()).to_string();
+    let schema = action_branch(&tools, "create").unwrap();
     assert!(schema.contains("source_type"), "{schema}");
 
     let created = call(
         &client,
-        "create",
-        json!({
+        "change",
+        json!({"action":"create",
             "target":"source_without_read_access",
             "type":"source",
             "data":{
@@ -191,9 +208,9 @@ async fn hidden_resolver_hides_non_create_tools_without_hiding_create() {
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();
-    assert!(tools.iter().any(|tool| tool.name == "create"));
+    assert!(action_branch(&tools, "create").is_some());
     for name in ["update", "answer", "claim", "release", "submit"] {
-        assert!(!tools.iter().any(|tool| tool.name == name), "{name}");
+        assert_eq!(action_branch(&tools, name), None, "{name}");
     }
 
     client.cancel().await.unwrap();

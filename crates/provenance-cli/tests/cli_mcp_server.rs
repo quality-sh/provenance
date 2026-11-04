@@ -13,12 +13,7 @@ const PORCELAIN_TOOL_NAMES: &[&str] = &[
     "api",
     "check",
     "trace",
-    "create",
-    "update",
-    "answer",
-    "claim",
-    "release",
-    "submit",
+    "change",
     "discussions",
     "discussion",
     "discuss",
@@ -136,8 +131,8 @@ async fn mcp_serves_the_tools_of_the_cli_repository() {
 
     let created = client
         .call(
-            "create",
-            json!({"target":"source_made_over_mcp","type":"source","data":{"name":"Made over MCP","source_type":"policy","url":null,"supersedes":[]}}),
+            "change",
+            json!({"action":"create","target":"source_made_over_mcp","type":"source","data":{"name":"Made over MCP","source_type":"policy","url":null,"supersedes":[]}}),
         )
         .await;
     assert_ne!(created["isError"], json!(true), "{created}");
@@ -288,8 +283,8 @@ async fn mcp_and_cli_read_each_other_writes_in_one_session() {
     assert_eq!(text(&get), cli_get.trim_end());
 
     wire.call(
-        "update",
-        json!({"target":"source_made_by_cli",
+        "change",
+        json!({"action":"update","target":"source_made_by_cli",
                "data":{"name":"Renamed over MCP"}}),
     )
     .await;
@@ -307,7 +302,7 @@ async fn mcp_and_cli_read_each_other_writes_in_one_session() {
     // Close standard input before the create result is read: the started write completes.
     wire.send_request(
         "tools/call",
-        json!({"name":"create","arguments":{"target":"source_made_at_close","type":"source",
+        json!({"name":"change","arguments":{"action":"create","target":"source_made_at_close","type":"source",
                "data":{"name":"Made at close","source_type":"policy","url":null,"supersedes":[]}}}),
     )
     .await;

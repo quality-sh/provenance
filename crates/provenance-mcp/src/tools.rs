@@ -11,7 +11,7 @@ use serde_json::Value;
 mod api;
 mod authoring;
 pub use api::{call as call_api, tool as api_tool};
-pub use authoring::{call as call_authoring, tool as authoring_tool};
+pub use authoring::{call_change, change_tool};
 
 pub fn discussion_tool(action: Action) -> rmcp::model::Tool {
     let declaration = Command::Action(action).declaration();

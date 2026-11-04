@@ -99,7 +99,7 @@ async fn every_mcp_tool_family_uses_the_error_envelope() {
         ("get", "get", json!({"unknown":true})),
         ("search", "search", json!({"unknown":true})),
         ("api", "api", json!({"method":"post"})),
-        ("authoring", "create", json!({})),
+        ("authoring", "change", json!({"action":"create",})),
         ("discussion", "discussion", json!({})),
         ("check", "check", json!({"unknown":true})),
     ] {
@@ -122,8 +122,8 @@ async fn every_mcp_tool_family_uses_the_error_envelope() {
         ("api", "api", json!({})),
         (
             "authoring",
-            "create",
-            json!({
+            "change",
+            json!({"action":"create",
                 "target":"source_schema_success",
                 "type":"source",
                 "data":{

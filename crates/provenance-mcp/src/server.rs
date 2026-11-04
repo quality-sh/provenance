@@ -89,9 +89,15 @@ impl ServerHandler for Server {
             Some(Command::Action(action)) if Action::DISCUSSION.contains(&action) => {
                 call_discussion(host, action, arguments).await
             }
-            Some(Command::Action(action)) => call_authoring_action(host, action, arguments).await,
+            Some(Command::Change) => {
+                surface::admitted_call(host, arguments, |arguments| {
+                    tools::call_change(host, arguments)
+                })
+                .await
+            }
             Some(
-                Command::Get
+                Command::Action(_)
+                | Command::Get
                 | Command::Trace
                 | Command::Search
                 | Command::Api
@@ -115,15 +121,16 @@ fn tool(host: &StatementHost, command: Command) -> Option<rmcp::model::Tool> {
         Command::Search => porcelain.search_is_available().then(tools::search_tool),
         Command::Api => porcelain.api_is_available().then(tools::api_tool),
         Command::Check => host.check_port().is_some().then(tools::check_tool),
-        Command::Prime
+        Command::Action(action) if Action::DISCUSSION.contains(&action) => porcelain
+            .discussion_is_available(action)
+            .then(|| tools::discussion_tool(action)),
+        Command::Change => tools::change_tool(host),
+        Command::Action(_)
+        | Command::Prime
         | Command::Repository(_)
         | Command::Graph(_)
         | Command::Workspace(_)
         | Command::Dogfood(_) => None,
-        Command::Action(action) if Action::DISCUSSION.contains(&action) => porcelain
-            .discussion_is_available(action)
-            .then(|| tools::discussion_tool(action)),
-        Command::Action(action) => tools::authoring_tool(host, action),
     }
 }
 
@@ -171,17 +178,6 @@ async fn call_search(
 ) -> Result<CallToolResult, ErrorData> {
     surface::admitted_call(host, arguments, |arguments| {
         tools::call_search(host, arguments)
-    })
-    .await
-}
-
-async fn call_authoring_action(
-    host: &StatementHost,
-    action: Action,
-    arguments: Option<serde_json::Map<String, Value>>,
-) -> Result<CallToolResult, ErrorData> {
-    surface::admitted_call(host, arguments, |arguments| {
-        tools::call_authoring(host, action, arguments)
     })
     .await
 }
