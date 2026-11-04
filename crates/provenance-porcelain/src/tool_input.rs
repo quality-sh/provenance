@@ -230,14 +230,23 @@ impl ToolInput {
     }
 }
 
-/// One schema for a field that two actions declare. A field that only one of them
-/// lets be null keeps the schema that allows null; other differences become `anyOf`.
+/// One schema for a field that two actions declare. Schemas that differ only in a
+/// null choice or a description are one schema: it allows null when one of them does,
+/// and it keeps a description. Other differences become `anyOf`.
 fn merged(held: &Value, other: &Value) -> Value {
-    if held == other || without_null(other) == without_null(held) && allows_null(held) {
-        return held.clone();
-    }
-    if without_null(held) == without_null(other) {
-        return other.clone();
+    if shape(held) == shape(other) {
+        let mut kept = if allows_null(other) && !allows_null(held) {
+            other.clone()
+        } else {
+            held.clone()
+        };
+        let description = held.get("description").or_else(|| other.get("description"));
+        if let (Some(object), Some(description)) = (kept.as_object_mut(), description) {
+            object
+                .entry("description")
+                .or_insert_with(|| description.clone());
+        }
+        return kept;
     }
     let mut branches = match held.get("anyOf") {
         Some(Value::Array(branches))
@@ -251,6 +260,15 @@ fn merged(held: &Value, other: &Value) -> Value {
         branches.push(other.clone());
     }
     json!({"anyOf": branches})
+}
+
+/// The schema without its null choice and its description.
+fn shape(schema: &Value) -> Value {
+    let mut shape = without_null(schema);
+    if let Some(object) = shape.as_object_mut() {
+        object.remove("description");
+    }
+    shape
 }
 
 fn allows_null(schema: &Value) -> bool {

@@ -322,6 +322,15 @@ Claude Code does not use `readOnlyHint` to skip the request, so the allow rule
 is necessary also for the read tools. `provenance init` does not write client
 settings.
 
+Codex runs the read tools without a request, because their annotations mark
+them as read-only. To also allow `change`, add this to the Codex
+configuration:
+
+```toml
+[mcp_servers.provenance.tools.change]
+approval_mode = "approve"
+```
+
 ## Repairing a duplicate Message ID
 
 New Message IDs use `msg_` followed by a random UUID. An existing store can

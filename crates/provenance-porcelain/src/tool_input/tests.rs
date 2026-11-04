@@ -96,7 +96,7 @@ fn an_unknown_action_is_refused() {
 }
 
 #[test]
-fn different_field_schemas_become_any_of() {
+fn a_field_of_two_actions_has_one_schema() {
     assert_eq!(
         merged(&json!({"type": "string"}), &json!({"type": "object"})),
         json!({"anyOf": [{"type": "string"}, {"type": "object"}]})
@@ -107,5 +107,12 @@ fn different_field_schemas_become_any_of() {
             &json!({"anyOf": [{"$ref": "#/$defs/A"}, {"type": "null"}], "default": null})
         ),
         json!({"anyOf": [{"$ref": "#/$defs/A"}, {"type": "null"}], "default": null})
+    );
+    assert_eq!(
+        merged(
+            &json!({"type": "string", "description": "The record ID."}),
+            &json!({"type": "string"})
+        ),
+        json!({"type": "string", "description": "The record ID."})
     );
 }
