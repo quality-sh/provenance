@@ -57,7 +57,8 @@ pub fn tool(
     if matches!(schema_declaration, SchemaDeclaration::Remove) {
         input.as_object_mut().map(|schema| schema.remove("$schema"));
     }
-    let output = output_schema(output, schema_declaration);
+    let input = share_definitions(input);
+    let output = share_definitions(output_schema(output, schema_declaration));
     let mut tool = Tool::new(
         name,
         description,
@@ -96,6 +97,62 @@ fn output_schema(mut success: Value, schema_declaration: SchemaDeclaration) -> V
         Value::Array(vec![success.clone().into(), error_output_schema()]),
     );
     Value::Object(schema)
+}
+
+/// Holds each identical `$defs` entry once: the first name in order stays, and each
+/// reference to another name with the same schema points to it. A merge can make two
+/// more entries identical, so it repeats until no two entries are the same.
+fn share_definitions(mut schema: Value) -> Value {
+    loop {
+        let Some(Value::Object(definitions)) = schema.get("$defs") else {
+            return schema;
+        };
+        let mut kept: Vec<(&String, &Value)> = Vec::new();
+        let mut renamed = std::collections::BTreeMap::new();
+        for (name, definition) in definitions {
+            match kept.iter().find(|(_, candidate)| *candidate == definition) {
+                Some((first, _)) => {
+                    renamed.insert(format!("#/$defs/{name}"), format!("#/$defs/{first}"));
+                }
+                None => kept.push((name, definition)),
+            }
+        }
+        if renamed.is_empty() {
+            return schema;
+        }
+        let gone = renamed
+            .keys()
+            .map(|reference| reference.trim_start_matches("#/$defs/").to_owned())
+            .collect::<Vec<_>>();
+        rename_references(&mut schema, &renamed);
+        let definitions = schema["$defs"]
+            .as_object_mut()
+            .expect("the definitions are an object");
+        for name in gone {
+            definitions.remove(&name);
+        }
+    }
+}
+
+fn rename_references(value: &mut Value, renamed: &std::collections::BTreeMap<String, String>) {
+    match value {
+        Value::Object(object) => {
+            if let Some(Value::String(reference)) = object.get_mut("$ref") {
+                if let Some(target) = renamed.get(reference.as_str()) {
+                    reference.clone_from(target);
+                }
+            }
+            for child in object.values_mut() {
+                rename_references(child, renamed);
+            }
+        }
+        Value::Array(values) => {
+            for child in values {
+                rename_references(child, renamed);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn error_output_schema() -> Value {
