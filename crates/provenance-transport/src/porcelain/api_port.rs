@@ -169,3 +169,22 @@ pub(super) fn is_available(host: &crate::StatementHost) -> bool {
         .iter()
         .any(|definition| host.advertises(definition.name))
 }
+
+/// Whether the host advertises an operation that writes.
+pub(super) fn writes_are_available(host: &crate::StatementHost) -> bool {
+    provenance_contract::definitions()
+        .iter()
+        .any(|definition| definition.mutates() && host.advertises(definition.name))
+}
+
+/// Whether the route of one api call writes, or `None` when no route has that method
+/// and path.
+pub fn route_writes(method: ApiMethod, path: &str) -> Option<bool> {
+    let method = match method {
+        ApiMethod::Get => axum::http::Method::GET,
+        ApiMethod::Post => axum::http::Method::POST,
+        ApiMethod::Patch => axum::http::Method::PATCH,
+    };
+    let path = format!("/{}", path.strip_prefix('/').unwrap_or(path));
+    crate::routing::find(&method, &path).map(|matched| matched.definition.mutates())
+}

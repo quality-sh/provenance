@@ -347,11 +347,11 @@ async fn mcp_discussions_tool_starts_and_replies_and_the_cli_reads_it() {
         .unwrap();
     assert_eq!(
         discussions["annotations"],
-        json!({"readOnlyHint":false,"destructiveHint":false,"idempotentHint":false,"openWorldHint":false})
+        json!({"readOnlyHint":true,"openWorldHint":false})
     );
     let started = client
         .call(
-            "discussions",
+            "change",
             json!({"action":"discuss","parent":{"node_type":"requirement","node_id":"req_talk"},
                    "actor":"ben","role":"user","body":"Is the wording right?"}),
         )
@@ -364,7 +364,7 @@ async fn mcp_discussions_tool_starts_and_replies_and_the_cli_reads_it() {
     let version = started["structuredContent"]["receipt"]["version"].clone();
     let replied = client
         .call(
-            "discussions",
+            "change",
             json!({"action":"reply","discussion_id":id,"expected_version":version,
                    "actor":"agent","role":"assistant","body":"Yes, it is."}),
         )

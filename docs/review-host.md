@@ -626,9 +626,9 @@ provenance REQUIREMENT_ID --scope SCOPE --view review --notify codex --format js
 ```
 
 The thread is the value of `--thread`, else `CODEX_THREAD_ID`, which Codex sets
-for the commands that it runs. The MCP `get` tool takes the same `notify`
-argument, `{"client": "codex", "thread": "UUID"}`, and both surfaces call one
-operation. `--notify` needs `--view review` and cannot be used with `--follow`
+for the commands that it runs. On MCP, the `notify` action of the `change`
+tool takes the record ID as `target` and the same `notify` argument,
+`{"client": "codex", "thread": "UUID"}`, and both surfaces call one operation. `--notify` needs `--view review` and cannot be used with `--follow`
 or `--review-link`. With no host for the repository and scope, the command fails
 with `operation_failed` and the message "no review host is running for this
 repository and scope".

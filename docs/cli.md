@@ -30,7 +30,8 @@ empty, `provenance review` permits reads but not review decisions.
 The CLI reads and changes one record with the record ID as the first word.
 Plumbing operations of the catalog have no commands of their own: call them
 with `provenance api <path>`. The same catalog defines HTTP routes, the MCP
-`api` tool, OpenAPI operations, and generated clients.
+`api` tool and the `api` action of the MCP `change` tool, OpenAPI operations, and
+generated clients.
 
 Global `--repo`, `--scope`, and `--format` flags can occur before or after the
 command words. The default repository is the current directory. The default
@@ -231,16 +232,46 @@ complete scope. They remain separate from resource writes.
 `provenance mcp --repo <repository> --scope <scope>` starts an MCP server on
 standard input and output. The server opens the same repository and scope as the
 CLI commands. The default repository is the current directory, and the default
-scope is `default`. The server gives the porcelain tools: `get`, `search`, `api`,
-`check`, `trace`, `change`, and `discussions`. `change` runs one record
-action: its `action` argument is `create`, `update`, `answer`, `claim`,
-`release`, or `submit`, with the same fields as the CLI action after the target.
-`discussions` runs one Discussion action: its `action` argument is
-`discussions` (the default, a list), `discussion`, `discuss`, or `reply`. The
-`discussions` tool can write, so its annotations mark it as not read-only, not
-destructive, not idempotent, and closed-world. The tools can write records. A record that the
-CLI writes is available to the MCP tools in the same session, and a record that
-an MCP tool writes is available to the CLI.
+scope is `default`. The server uses MCP protocol 2026-07-28. A client of an
+older protocol, from 2024-11-05 through 2025-11-25, starts the session with
+`initialize`.
+
+The server gives seven tools. Six tools only read, and their annotations mark
+them as read-only and closed-world:
+
+- `get` reads one record in a view.
+- `search` finds records.
+- `trace` reads the records above one record, up to its Sources.
+- `check` checks the graph or one statement.
+- `discussions` lists Discussions (`action` is `discussions`, the default) or
+  reads one Discussion (`action` is `discussion`).
+- `api` lists the catalog routes, or calls one route that only reads.
+
+`change` is the only tool that writes. Its `action` argument selects the write:
+
+- `create`, `update`, `answer`, `claim`, `release`, or `submit` on the
+  `target` record, with the same fields as the CLI action after the target.
+- `discuss` starts a Discussion, and `reply` replies to one.
+- `notify` registers a client thread for the review changes of one record, as
+  `--notify` does on the CLI.
+- `api` calls one route that writes. The `request` field holds the fields of
+  the `api` tool.
+
+The annotations of `change` mark it as destructive, not idempotent, and
+open-world: an update can replace field values, remove list entries, and archive
+a record, a repeated `discuss` starts a new Discussion, and `notify` reaches a
+client thread outside the repository.
+
+Each tool input is one JSON object. The server refuses a call whose fields do
+not agree with its `action`. The refusal is a tool result with `isError: true`,
+and its error names the field: the field that the action needs, or the field
+that the action does not take. A `change` call without `data` gets the schema
+of `data` for that action and record kind in the refusal.
+
+A record that the CLI writes is available to the MCP tools in the same session,
+and a record that an MCP tool writes is available to the CLI. A write through
+MCP goes into the graph like a CLI write, and Provenance review approves the
+graph content.
 
 The server stops when standard input closes. A write that started before then
 completes before the process stops. If the repository has no Provenance graph,
@@ -260,6 +291,36 @@ arguments. For example, a client that reads an `mcpServers` object:
   }
 }
 ```
+
+### Allow rules for Claude Code
+
+Claude Code asks before each MCP tool call until a permission rule allows the
+tool. The tool name is `mcp__<server>__<tool>`, where `<server>` is the name in
+the client configuration. With the name `provenance`, put one of these lists in
+`permissions.allow` of a Claude Code settings file.
+
+To allow all tools, writes included:
+
+```json
+["mcp__provenance__*"]
+```
+
+To allow the read tools only, so that each write asks first:
+
+```json
+[
+  "mcp__provenance__get",
+  "mcp__provenance__search",
+  "mcp__provenance__trace",
+  "mcp__provenance__check",
+  "mcp__provenance__discussions",
+  "mcp__provenance__api"
+]
+```
+
+Claude Code does not use `readOnlyHint` to skip the request, so the allow rule
+is necessary also for the read tools. `provenance init` does not write client
+settings.
 
 ## Repairing a duplicate Message ID
 

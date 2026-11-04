@@ -1,5 +1,6 @@
 //! MCP lists only porcelain tools. A plumbing operation name is an unknown
-//! tool, and the api tool still reaches the operation.
+//! tool. The api tool reaches the operations that read, and the api action of
+//! change reaches the operations that write.
 #![cfg(feature = "test-fixture")]
 
 #[allow(dead_code)]
@@ -87,6 +88,39 @@ async fn no_plumbing_operation_name_is_a_listed_or_callable_tool() {
     assert_eq!(
         through_api.structured_content.unwrap()["data"]["id"],
         "source_shared"
+    );
+
+    // A route that writes goes through the api action of change, not the api tool.
+    let update = json!({"path":"sources/source_shared","method":"patch","body":{"name":"Renamed"}});
+    let call = |name: &str, arguments: serde_json::Value| {
+        client.call_tool(
+            CallToolRequestParams::new(name.to_owned())
+                .with_arguments(arguments.as_object().unwrap().clone()),
+        )
+    };
+    let refused = call("api", update.clone()).await.unwrap();
+    assert_eq!(refused.is_error, Some(true), "{refused:?}");
+    assert_eq!(
+        refused.structured_content.unwrap()["error"]["field"],
+        "path"
+    );
+    let written = call("change", json!({"action":"api","request":update}))
+        .await
+        .unwrap();
+    assert_ne!(written.is_error, Some(true), "{written:?}");
+    assert_eq!(
+        written.structured_content.unwrap()["data"]["name"],
+        "Renamed"
+    );
+    let read_through_change = call(
+        "change",
+        json!({"action":"api","request":{"path":"sources/source_shared"}}),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        read_through_change.structured_content.unwrap()["error"]["field"],
+        "request.path"
     );
 
     client.cancel().await.unwrap();

@@ -42,6 +42,22 @@ impl ApiSession {
             .unwrap()
     }
 
+    /// Make one api call that writes: the api action of the change tool.
+    #[allow(dead_code)]
+    pub async fn write(&self, request: Value) -> CallToolResult {
+        self.client
+            .call_tool(
+                CallToolRequestParams::new("change").with_arguments(
+                    serde_json::json!({"action": "api", "request": request})
+                        .as_object()
+                        .unwrap()
+                        .clone(),
+                ),
+            )
+            .await
+            .unwrap()
+    }
+
     /// The listed tools of the served host.
     #[allow(dead_code)]
     pub async fn tools(&self) -> Vec<Tool> {

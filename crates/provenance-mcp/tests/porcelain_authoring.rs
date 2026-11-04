@@ -7,86 +7,15 @@ mod support {
     #[allow(dead_code)]
     #[path = "../../../provenance-transport/tests/support/resource_http.rs"]
     pub mod resource_http;
+    pub mod schema_check;
 }
 
 use provenance_core::{ScopeId, StableId};
 use provenance_macros::verifies;
-use rmcp::{model::CallToolRequestParams, ServiceExt as _};
-use serde_json::{json, Value};
+use rmcp::ServiceExt as _;
+use serde_json::json;
 use support::records::Repository;
-
-/// Calls one tool. A successful change call also checks the emitted schemas: the
-/// request and the response each match exactly one branch of their `oneOf`.
-async fn call(
-    client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
-    name: &str,
-    arguments: Value,
-) -> rmcp::model::CallToolResult {
-    let result = client
-        .call_tool(
-            CallToolRequestParams::new(name.to_owned())
-                .with_arguments(arguments.as_object().unwrap().clone()),
-        )
-        .await
-        .unwrap();
-    if name == "change" && result.is_error != Some(true) {
-        let (input, output) = change_schemas(client).await;
-        assert_eq!(branches_matching(&input, &arguments), 1, "{arguments}");
-        let value = result.structured_content.as_ref().unwrap();
-        assert_eq!(branches_matching(&output, value), 1, "{value}");
-    }
-    result
-}
-
-/// The input and output schemas of the listed change tool.
-async fn change_schemas(
-    client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
-) -> (Value, Value) {
-    let tools = client.list_all_tools().await.unwrap();
-    let change = tools.iter().find(|tool| tool.name == "change").unwrap();
-    (
-        Value::Object((*change.input_schema).clone()),
-        Value::Object((*change.output_schema.clone().unwrap()).clone()),
-    )
-}
-
-/// The number of `oneOf` branches of `schema` that accept `value`, after the whole
-/// schema accepts it. A schema without `oneOf` is one branch.
-fn branches_matching(schema: &Value, value: &Value) -> usize {
-    let accepts = |schema: &Value| jsonschema::validator_for(schema).unwrap().is_valid(value);
-    if !accepts(schema) {
-        return 0;
-    }
-    let Some(branches) = schema["oneOf"].as_array() else {
-        return 1;
-    };
-    branches
-        .iter()
-        .filter(|branch| {
-            let mut branch = (*branch).clone();
-            branch["$defs"] = schema["$defs"].clone();
-            accepts(&branch)
-        })
-        .count()
-}
-
-/// The action names that the branches of the change input schema accept.
-fn branch_actions(schema: &Value) -> Vec<String> {
-    let mut actions = Vec::new();
-    let mut pending = vec![schema];
-    while let Some(schema) = pending.pop() {
-        if let Some(action) = schema["properties"]["action"]["const"].as_str() {
-            if !actions.contains(&action.to_owned()) {
-                actions.push(action.to_owned());
-            }
-        }
-        for keyword in ["oneOf", "anyOf"] {
-            pending.extend(schema[keyword].as_array().into_iter().flatten());
-        }
-    }
-    actions.sort();
-    actions
-}
+use support::schema_check::{call, schemas};
 
 #[tokio::test]
 #[verifies("rule_porcelain_mcp_target_argument", examples)]
@@ -101,23 +30,24 @@ async fn mcp_target_first_authoring_publishes_target_and_type_schemas() {
     for action in provenance_porcelain::action::Action::RECORD {
         assert!(!tools.iter().any(|tool| tool.name == action.as_str()));
     }
-    let (input, _) = change_schemas(&client).await;
-    let mut expected = provenance_porcelain::action::Action::RECORD
-        .map(|action| action.as_str().to_owned())
-        .to_vec();
-    expected.sort();
-    assert_eq!(branch_actions(&input), expected);
-    let create_schema = input["oneOf"]
+    let (input, _) = schemas(&client, "change").await;
+    let actions = input["properties"]["action"]["enum"].as_array().unwrap();
+    for action in provenance_porcelain::action::Action::RECORD {
+        assert!(actions.contains(&json!(action.as_str())), "{actions:?}");
+    }
+    assert_eq!(input["properties"]["target"]["type"], "string");
+    assert!(input["properties"]["type"]["enum"]
         .as_array()
         .unwrap()
-        .iter()
-        .find(|branch| branch_actions(branch) == ["create"])
-        .unwrap()
-        .clone();
-    assert!(create_schema.to_string().contains("source_type"));
-    assert!(create_schema.to_string().contains("refines"));
-    assert!(create_schema.to_string().contains("\"target\""));
-    assert!(create_schema.to_string().contains("\"type\""));
+        .contains(&json!("source")));
+    let create = call(
+        &client,
+        "change",
+        json!({"action":"create","target":"req_x","type":"requirement"}),
+    )
+    .await;
+    let schema = create.structured_content.unwrap()["error"]["schema"].to_string();
+    assert!(schema.contains("refines"), "{schema}");
 
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
@@ -435,38 +365,6 @@ async fn mcp_authoring_does_not_expose_or_run_hidden_operations() {
         hidden.structured_content.unwrap()["error"]["kind"],
         "access_denied"
     );
-
-    client.cancel().await.unwrap();
-    server.await.unwrap().cancel().await.unwrap();
-}
-
-/// A request without a required field, or with fields of another action or record
-/// kind, does not match the change input schema.
-#[tokio::test]
-#[verifies("rule_mcp_one_tool_for_record_actions", examples)]
-async fn change_input_schema_refuses_missing_fields_and_mismatched_branches() {
-    let repository = Repository::new("The shared graph is readable.");
-    repository.all_kinds();
-    let host = support::resource_http::host(&repository, true);
-    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
-    let client = ().serve(client_io).await.unwrap();
-    let (input, output) = change_schemas(&client).await;
-
-    let valid = json!({"action":"answer","target":"question_shared","data":{"answer":"Yes."}});
-    assert_eq!(branches_matching(&input, &valid), 1);
-    for invalid in [
-        json!({"action":"answer","data":{"answer":"Yes."}}),
-        json!({"target":"question_shared","data":{"answer":"Yes."}}),
-        json!({"action":"answer","target":"question_shared","type":"source","data":{"answer":"Yes."}}),
-        json!({"action":"create","target":"source_x","type":"source","data":{"statement":"No name."}}),
-        json!({"action":"invented","target":"question_shared"}),
-    ] {
-        assert_eq!(branches_matching(&input, &invalid), 0, "{invalid}");
-    }
-    assert!(output["oneOf"]
-        .as_array()
-        .is_some_and(|branches| branches.len() > 1));
 
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();

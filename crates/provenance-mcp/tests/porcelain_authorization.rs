@@ -43,25 +43,23 @@ async fn call(
         .unwrap()
 }
 
-/// The branch of the change input schema for `action`, as text, when the change tool
-/// lists that action.
-fn action_branch(tools: &[rmcp::model::Tool], action: &str) -> Option<String> {
-    let change = tools.iter().find(|tool| tool.name == "change")?;
-    let schema = Value::Object((*change.input_schema).clone());
-    let names = |branch: &Value| {
-        branch
-            .to_string()
-            .contains(&format!("{{\"const\":\"{action}\"}}"))
-    };
-    schema["oneOf"].as_array().map_or_else(
-        || names(&schema).then(|| schema.to_string()),
-        |branches| {
-            branches
-                .iter()
-                .find(|branch| names(branch))
-                .map(Value::to_string)
-        },
-    )
+/// Whether the change tool lists `action`.
+fn listed(tools: &[rmcp::model::Tool], action: &str) -> bool {
+    tools
+        .iter()
+        .find(|tool| tool.name == "change")
+        .and_then(|change| {
+            change.input_schema["properties"]["action"]["enum"]
+                .as_array()
+                .cloned()
+        })
+        .is_some_and(|actions| actions.contains(&json!(action)))
+}
+
+/// The record kinds that the create action of the change tool takes.
+fn create_kinds(tools: &[rmcp::model::Tool]) -> Value {
+    let change = tools.iter().find(|tool| tool.name == "change").unwrap();
+    change.input_schema["properties"]["type"]["enum"].clone()
 }
 
 #[tokio::test]
@@ -75,9 +73,7 @@ async fn non_create_schema_excludes_a_writable_but_unreadable_kind() {
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();
-    let schema = action_branch(&tools, "update").unwrap();
-    assert!(!schema.contains("source_type"), "{schema}");
-    assert!(schema.contains("statement"), "{schema}");
+    assert!(listed(&tools, "update"));
 
     let unresolved = call(
         &client,
@@ -93,12 +89,12 @@ async fn non_create_schema_excludes_a_writable_but_unreadable_kind() {
 
     let direct = call(
         &client,
-        "api",
-        json!({
+        "change",
+        json!({"action":"api", "request":{
             "path":"sources/source_shared",
             "method":"patch",
             "body":{"name":"Direct source update"}
-        }),
+        }}),
     )
     .await;
     assert_ne!(direct.is_error, Some(true), "{direct:?}");
@@ -122,9 +118,7 @@ async fn non_create_schema_and_dispatch_deny_a_hidden_mutation() {
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();
-    let schema = action_branch(&tools, "update").unwrap();
-    assert!(!schema.contains("source_type"), "{schema}");
-    assert!(schema.contains("statement"), "{schema}");
+    assert!(listed(&tools, "update"));
 
     let denied = call(
         &client,
@@ -169,10 +163,13 @@ async fn no_resolvable_kind_hides_non_create_tools_but_keeps_create_executable()
 
     let tools = client.list_all_tools().await.unwrap();
     for name in ["update", "answer", "claim", "release", "submit"] {
-        assert_eq!(action_branch(&tools, name), None, "{name}");
+        assert!(!listed(&tools, name), "{name}");
     }
-    let schema = action_branch(&tools, "create").unwrap();
-    assert!(schema.contains("source_type"), "{schema}");
+    assert!(listed(&tools, "create"));
+    assert!(create_kinds(&tools)
+        .as_array()
+        .unwrap()
+        .contains(&json!("source")));
 
     let created = call(
         &client,
@@ -208,9 +205,9 @@ async fn hidden_resolver_hides_non_create_tools_without_hiding_create() {
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();
-    assert!(action_branch(&tools, "create").is_some());
+    assert!(listed(&tools, "create"));
     for name in ["update", "answer", "claim", "release", "submit"] {
-        assert_eq!(action_branch(&tools, name), None, "{name}");
+        assert!(!listed(&tools, name), "{name}");
     }
 
     client.cancel().await.unwrap();

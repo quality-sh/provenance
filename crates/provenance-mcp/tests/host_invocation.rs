@@ -123,7 +123,7 @@ async fn a_typed_write_waiting_for_the_lock_does_not_delay_a_data_free_call() {
     let (host, mut control) = gated_host(&repo, true);
     let lock = HeldLock::hold(&repo);
     let session = Session::start(host.clone()).await;
-    let mut write = Box::pin(call(&session.client, "discussions", discuss()));
+    let mut write = Box::pin(call(&session.client, "change", discuss()));
     assert!(poll!(&mut write).is_pending());
     control.entered().await;
 
@@ -171,7 +171,7 @@ async fn shutdown_waits_for_a_typed_write() {
     let (host, mut control) = gated_host(&repo, true);
     let lock = HeldLock::hold(&repo);
     let session = Session::start(host.clone()).await;
-    let mut write = Box::pin(call(&session.client, "discussions", discuss()));
+    let mut write = Box::pin(call(&session.client, "change", discuss()));
     assert!(poll!(&mut write).is_pending());
     control.entered().await;
 
@@ -246,10 +246,12 @@ async fn a_request_decode_refusal_does_not_wait_for_a_work_slot() {
     let started = tokio::time::Instant::now();
     let refused = call(
         &session.client,
-        "api",
-        json!({"path":"requirements/req_shared/submit", "method":"post", "body":{
-            "actor":"agent", "declared_by":"other", "title":"Review", "summary":"Review the record."
-        }}),
+        "change",
+        json!({"action":"api", "request":{
+        "path":"requirements/req_shared/submit", "method":"post", "body":{
+            "actor":"agent", "declared_by":"other", "title":"Review",
+            "summary":"Review the record."
+        }}}),
     )
     .await;
     assert_eq!(started.elapsed(), Duration::ZERO);

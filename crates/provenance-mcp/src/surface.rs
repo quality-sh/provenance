@@ -3,11 +3,35 @@
 use provenance_core::protocol::{failure::ErasedFailure, ResponseMeta};
 use provenance_transport::{StatementHost, MAX_BODY_BYTES};
 use rmcp::{
-    model::{CallToolResult, Tool},
+    model::{CallToolResult, Tool, ToolAnnotations},
     ErrorData,
 };
 use serde_json::{Map, Value};
 use std::future::Future;
+
+/// What a tool does to the graph, which sets its annotations.
+#[derive(Clone, Copy)]
+pub enum Effect {
+    /// The tool only reads the repository graph.
+    Reads,
+    /// The tool writes. An update can replace field values, remove list entries, and
+    /// archive a record, so a write can discard data. A repeated discuss starts a new
+    /// Discussion. The notify action reaches a client thread outside the repository.
+    Writes,
+}
+
+impl Effect {
+    /// Read tools are read-only and closed-world; `change` is the one tool that writes.
+    #[provenance_macros::rule("rule_mcp_tools_read_or_write")]
+    fn annotations(self) -> ToolAnnotations {
+        match self {
+            Self::Reads => ToolAnnotations::from_raw(None, Some(true), None, None, Some(false)),
+            Self::Writes => {
+                ToolAnnotations::from_raw(None, Some(false), Some(true), Some(false), Some(true))
+            }
+        }
+    }
+}
 
 #[derive(Clone, Copy)]
 pub enum SchemaDeclaration {
@@ -50,6 +74,7 @@ where
 pub fn tool(
     name: &'static str,
     description: &'static str,
+    effect: Effect,
     mut input: Value,
     output: Value,
     schema_declaration: SchemaDeclaration,
@@ -74,6 +99,7 @@ pub fn tool(
             .clone()
             .into(),
     );
+    tool.annotations = Some(effect.annotations());
     tool
 }
 
@@ -92,6 +118,7 @@ fn output_schema(mut success: Value, schema_declaration: SchemaDeclaration) -> V
     if let Some(definitions) = definitions {
         schema.insert("$defs".to_owned(), definitions);
     }
+    schema.insert("type".to_owned(), Value::String("object".to_owned()));
     schema.insert(
         "oneOf".to_owned(),
         Value::Array(vec![success.clone().into(), error_output_schema()]),

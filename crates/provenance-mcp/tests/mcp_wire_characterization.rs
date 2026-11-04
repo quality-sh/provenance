@@ -23,7 +23,7 @@ use std::sync::Arc;
 use support::{check_port::FixtureCheckPort, records::Repository};
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader, DuplexStream, Lines};
 
-const TOOL_LIST_FNV1A: u64 = 7_246_614_148_096_915_953;
+const TOOL_LIST_FNV1A: u64 = 11_697_704_581_202_239_126;
 
 /// The porcelain tools, in list order. The list has no plumbing tools.
 const PORCELAIN_TOOL_NAMES: &[&str] = &[
@@ -298,7 +298,12 @@ fn refusals() -> Vec<(&'static str, Value)> {
     let read = json!({"kind":"invalid_input","message":"unsupported read options","reason":"invalid_value"});
     let options = |message: &str| json!({"kind":"invalid_options","message":message});
     let discussion = json!({
-        "field":null,"kind":"invalid_input","message":"unsupported action options","reason":"invalid_value"
+        "field":"unknown_field","kind":"invalid_input","reason":"unknown_field",
+        "message":"the discussions action does not take unknown_field; it takes: cursor, limit, parent, status"
+    });
+    let change = json!({
+        "field":"action","kind":"invalid_input","reason":"required",
+        "message":"give an action: create, update, answer, claim, release, submit, discuss, reply, api"
     });
     vec![
         ("get", read.clone()),
@@ -309,7 +314,7 @@ fn refusals() -> Vec<(&'static str, Value)> {
         ),
         ("check", options("unsupported check options")),
         ("trace", read),
-        ("change", options("unsupported action options")),
+        ("change", change),
         ("discussions", discussion),
         (
             "too_large",

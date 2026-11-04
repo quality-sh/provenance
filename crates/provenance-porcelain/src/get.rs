@@ -15,7 +15,10 @@ use std::{fmt::Display, future::Future, pin::Pin};
 mod shaping;
 mod wire;
 pub use shaping::{BlockedQuestion, BlockedReason, Claim, QuestionState, SessionSummary};
-pub use wire::{input_schema, output_schema, render_readable, trace_input_schema, TraceInput};
+pub use wire::{
+    input_schema, notify_input_schema, notify_output_schema, output_schema, render_readable,
+    trace_input_schema, NotifyInput, NotifyResult, TraceInput,
+};
 
 /// One future returned by an injected read port.
 pub type PortFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ReadError>> + Send + 'a>>;

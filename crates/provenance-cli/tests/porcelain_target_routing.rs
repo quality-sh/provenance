@@ -66,10 +66,10 @@ async fn target_first_action_names_match_on_the_live_cli_and_mcp_surfaces() {
     // MCP takes each record action as the action argument of the change tool.
     let tools = client.tools().await;
     let change = tools.iter().find(|tool| tool["name"] == "change").unwrap();
-    let schema = change["inputSchema"].to_string();
+    let actions = change["inputSchema"]["properties"]["action"]["enum"].clone();
     let mcp = expected
         .iter()
-        .filter(|action| schema.contains(&format!("{{\"const\":\"{action}\"}}")))
+        .filter(|action| actions.as_array().unwrap().contains(&json!(action)))
         .copied()
         .collect::<BTreeSet<_>>();
 

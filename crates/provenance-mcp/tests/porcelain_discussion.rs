@@ -4,6 +4,7 @@
 mod support {
     #[path = "../../../provenance-transport/tests/support/records.rs"]
     pub mod records;
+    pub mod schema_check;
 }
 
 use provenance_macros::verifies;
@@ -11,9 +12,10 @@ use provenance_transport::{
     fixture::{FixtureAccess, Target},
     StatementHost,
 };
-use rmcp::{model::CallToolRequestParams, ServiceExt as _};
-use serde_json::{json, Value};
+use rmcp::ServiceExt as _;
+use serde_json::json;
 use support::records::Repository;
+use support::schema_check::{call, compile};
 
 fn access(repository: &Repository) -> FixtureAccess {
     FixtureAccess::new(
@@ -29,81 +31,30 @@ fn access(repository: &Repository) -> FixtureAccess {
     .allow_writes()
 }
 
-/// Calls one tool. A successful discussions call also checks the emitted schemas: the
-/// request and the response each match exactly one branch of their `oneOf`.
-async fn call(
-    client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
-    name: &str,
-    args: Value,
-) -> rmcp::model::CallToolResult {
-    let result = client
-        .call_tool(
-            CallToolRequestParams::new(name.to_owned())
-                .with_arguments(args.as_object().unwrap().clone()),
-        )
-        .await
-        .unwrap();
-    if name == "discussions" && result.is_error != Some(true) {
-        let tools = client.list_all_tools().await.unwrap();
-        let tool = tools
-            .iter()
-            .find(|tool| tool.name == "discussions")
-            .unwrap();
-        let input = json!(tool.input_schema);
-        let output = json!(tool.output_schema.as_ref().unwrap());
-        assert_eq!(branches_matching(&input, &args), 1, "{args}");
-        let value = result.structured_content.as_ref().unwrap();
-        assert_eq!(branches_matching(&output, value), 1, "{value}");
-    }
-    result
-}
-
-/// The `oneOf` branches of `schema` that accept `value`, when `schema` accepts it.
-fn branches_matching(schema: &Value, value: &Value) -> usize {
-    let accepts = |schema: &Value| compile(schema).unwrap().is_valid(value);
-    if !accepts(schema) {
-        return 0;
-    }
-    schema["oneOf"].as_array().map_or(1, |branches| {
-        branches
-            .iter()
-            .filter(|branch| {
-                let mut branch = (*branch).clone();
-                branch["$defs"] = schema["$defs"].clone();
-                accepts(&branch)
-            })
-            .count()
-    })
-}
-
-/// MCP lists one discussions tool for the four Discussion actions. It can write, so
-/// its annotations say it is not read-only.
+/// MCP lists the discussions tool for the two Discussion reads and the change tool for
+/// the two Discussion writes. Only change writes.
 fn assert_tools(tools: &[rmcp::model::Tool]) {
     let names = tools
         .iter()
         .map(|tool| tool.name.to_string())
         .collect::<Vec<_>>();
-    assert!(names.contains(&"discussions".to_owned()), "{names:?}");
+    for name in ["discussions", "change"] {
+        assert!(names.contains(&name.to_owned()), "{names:?}");
+    }
     for name in ["discussion", "discuss", "reply"] {
         assert!(!names.contains(&name.to_owned()), "{names:?}");
     }
-    let tool = tools
-        .iter()
-        .find(|tool| tool.name == "discussions")
-        .unwrap();
-    compile(&json!(tool.input_schema)).unwrap();
-    compile(&json!(tool.output_schema.as_ref().unwrap())).unwrap();
-    let hints = [
-        "readOnlyHint",
-        "destructiveHint",
-        "idempotentHint",
-        "openWorldHint",
-    ];
-    let annotations = json!(tool.annotations);
-    assert!(
-        hints.iter().all(|hint| annotations[hint] == false),
-        "{annotations}"
+    let annotations = |name: &str| {
+        let tool = tools.iter().find(|tool| tool.name == name).unwrap();
+        compile(&json!(tool.input_schema));
+        compile(&json!(tool.output_schema.as_ref().unwrap()));
+        json!(tool.annotations)
+    };
+    assert_eq!(
+        annotations("discussions"),
+        json!({"readOnlyHint": true, "openWorldHint": false})
     );
+    assert_eq!(annotations("change")["readOnlyHint"], false);
 }
 
 fn assert_operation_page_metadata(
@@ -130,7 +81,7 @@ async fn assert_conversation_continuations(
 ) {
     let other = call(
         client,
-        "discussions",
+        "change",
         json!({"action":"discuss",
             "parent":{"node_type":"requirement","node_id":"req_shared"},
             "actor":"ben", "role":"user", "body":"Other root"
@@ -169,7 +120,7 @@ async fn assert_conversation_continuations(
     );
     let stale = call(
         client,
-        "discussions",
+        "change",
         json!({"action":"reply",
             "discussion_id":id, "actor":"ben",
             "expected_version":1, "role":"user", "body":"Stale message"
@@ -179,7 +130,7 @@ async fn assert_conversation_continuations(
     assert_eq!(stale.is_error, Some(true));
     let later = call(
         client,
-        "discussions",
+        "change",
         json!({"action":"reply",
             "discussion_id":id, "actor":"ben",
             "expected_version":2, "role":"user", "body":"Later message"
@@ -202,7 +153,7 @@ async fn assert_repeated_start_creates_new_discussion(
 ) {
     let repeated = call(
         client,
-        "discussions",
+        "change",
         json!({"action":"discuss",
             "parent":{"node_type":"requirement","node_id":"req_shared"},
             "actor":"ben", "role":"user", "body":"Opening text"
@@ -228,7 +179,7 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
 
     let started = call(
         &client,
-        "discussions",
+        "change",
         json!({"action":"discuss",
             "parent":{"node_type":"requirement","node_id":"req_shared"},
             "actor":"ben", "role":"user", "body":"Opening text"
@@ -237,18 +188,11 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
     .await;
     assert_ne!(started.is_error, Some(true), "{started:?}");
     let receipt = &started.structured_content.as_ref().unwrap()["receipt"];
-    let write_tool = tools
-        .iter()
-        .find(|tool| tool.name == "discussions")
-        .unwrap();
-    assert!(compile(&json!(write_tool.output_schema.as_ref().unwrap()))
-        .unwrap()
-        .is_valid(started.structured_content.as_ref().unwrap()));
     let id = receipt["discussion_id"].as_str().unwrap();
     assert_repeated_start_creates_new_discussion(&client, id).await;
     let changed_body = call(
         &client,
-        "discussions",
+        "change",
         json!({"action":"discuss",
             "parent":{"node_type":"requirement","node_id":"req_shared"},
             "actor":"ben", "role":"user", "body":"Changed"
@@ -265,13 +209,6 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
         list.structured_content.as_ref().unwrap()["status"],
         "active"
     );
-    let list_tool = tools
-        .iter()
-        .find(|tool| tool.name == "discussions")
-        .unwrap();
-    assert!(compile(&json!(list_tool.output_schema.as_ref().unwrap()))
-        .unwrap()
-        .is_valid(list.structured_content.as_ref().unwrap()));
     let entry = list.structured_content.as_ref().unwrap()["result"]["entries"]
         .as_array()
         .unwrap()
@@ -301,7 +238,7 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
     assert_operation_page_metadata(&list, &conversation);
     let replied = call(
         &client,
-        "discussions",
+        "change",
         json!({"action":"reply",
             "discussion_id":id, "actor":"ben",
             "expected_version":1, "role":"user", "body":"Second message"
@@ -344,7 +281,7 @@ async fn reply_grant_does_not_admit_start() {
         .any(|tool| tool.name == "discussions"));
     let denied = call(
         &client,
-        "discussions",
+        "change",
         json!({"action":"discuss",
             "parent":{"node_type":"requirement","node_id":"req_shared"},
             "actor":"ben", "role":"user", "body":"Denied start"
@@ -354,7 +291,7 @@ async fn reply_grant_does_not_admit_start() {
     assert_eq!(denied.is_error, Some(true));
     let reply = call(
         &client,
-        "discussions",
+        "change",
         json!({"action":"reply",
             "discussion_id":receipt.discussion_id, "actor":"ben",
             "expected_version":1, "role":"user", "body":"Permitted reply"
@@ -425,7 +362,7 @@ async fn denied_parent_grant_is_applied_before_discussion_page_selection() {
     assert_eq!(hidden.is_error, Some(true));
     let denied_reply = call(
         &client,
-        "discussions",
+        "change",
         json!({"action":"reply",
             "discussion_id":source.discussion_id, "actor":"ben",
             "expected_version":1, "role":"user", "body":"Denied"
@@ -444,54 +381,6 @@ async fn denied_parent_grant_is_applied_before_discussion_page_selection() {
         let invalid = call(&client, "discussions", json!({"limit":limit})).await;
         assert_eq!(invalid.is_error, Some(true));
     }
-    client.cancel().await.unwrap();
-    server.await.unwrap().cancel().await.unwrap();
-}
-
-/// Read a schema that has no `$schema` keyword as a Draft 7 document.
-fn compile(schema: &Value) -> Result<jsonschema::Validator, jsonschema::ValidationError<'static>> {
-    if schema.get("$schema").is_some() {
-        jsonschema::validator_for(schema)
-    } else {
-        jsonschema::draft7::new(schema)
-    }
-}
-
-/// A request without a required field, with an action that is not a Discussion
-/// action, or with the fields of another action does not match the discussions input.
-#[tokio::test]
-#[verifies("rule_mcp_one_tool_for_discussions", examples)]
-async fn discussions_input_schema_refuses_missing_fields_and_mismatched_branches() {
-    let repository = Repository::new("The shared graph is readable.");
-    let host = StatementHost::with_fixture_access(access(&repository));
-    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
-    let client = ().serve(client_io).await.unwrap();
-    let tools = client.list_all_tools().await.unwrap();
-    assert_tools(&tools);
-    let tool = tools
-        .iter()
-        .find(|tool| tool.name == "discussions")
-        .unwrap();
-    let input = json!(tool.input_schema);
-
-    for valid in [
-        json!({}),
-        json!({"action":"discussions","limit":5}),
-        json!({"action":"discussion","discussion_id":"d1"}),
-        json!({"action":"reply","discussion_id":"d1","expected_version":1,"actor":"ben","role":"user","body":"Yes."}),
-        json!({"action":"discuss","parent":{"node_type":"requirement","node_id":"req_shared"},"actor":"ben","role":"user","body":"Hi."}),
-    ] {
-        assert_eq!(branches_matching(&input, &valid), 1, "{valid}");
-    }
-    for invalid in [
-        json!({"action":"discussion"}),
-        json!({"action":"create","discussion_id":"d1"}),
-        json!({"action":"discussions","body":"Hi."}),
-    ] {
-        assert_eq!(branches_matching(&input, &invalid), 0, "{invalid}");
-    }
-
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }

@@ -1,101 +1,31 @@
-//! MCP tools for the shared Porcelain capabilities.
+//! MCP tools for the shared Porcelain capabilities. Each tool only reads or only writes:
+//! `change` is the one tool that writes.
 
+use crate::surface::{Effect, SchemaDeclaration};
 use provenance_porcelain::check::CheckInput;
 use provenance_porcelain::get::{GetInput, GetOutcome, ReadError, TraceInput};
 use provenance_porcelain::registry::Command;
-use provenance_transport::porcelain::{Action, ActionError};
 use provenance_transport::StatementHost;
 use rmcp::model::{CallToolResult, ContentBlock};
 use serde_json::Value;
 
 mod api;
 mod authoring;
+mod change;
+mod discussions;
+mod notify;
 pub use api::{call as call_api, tool as api_tool};
-pub use authoring::{call_change, change_tool};
-
-/// The discussions tool: the four Discussion actions, selected by the action argument.
-/// It can write, so it is not read-only; a repeated start makes a new Discussion.
-#[provenance_macros::rule("rule_mcp_one_tool_for_discussions")]
-pub fn discussions_tool() -> rmcp::model::Tool {
-    let declaration = Command::Action(Action::Discussions).declaration();
-    crate::surface::tool(
-        declaration.name,
-        declaration.description,
-        provenance_porcelain::discussion::tool_input_schema(),
-        provenance_porcelain::discussion::output_schema(),
-        crate::surface::SchemaDeclaration::Remove,
-    )
-    .with_annotations(rmcp::model::ToolAnnotations::from_raw(
-        None,
-        Some(false),
-        Some(false),
-        Some(false),
-        Some(false),
-    ))
-}
-
-/// The Discussion action that the action argument names; without it, the list.
-pub fn discussion_action(arguments: &mut serde_json::Map<String, Value>) -> Option<Action> {
-    match arguments.remove("action") {
-        None => Some(Action::Discussions),
-        Some(Value::String(word)) => {
-            Action::parse(&word).filter(|action| Action::DISCUSSION.contains(action))
-        }
-        Some(_) => None,
-    }
-}
-
-pub async fn call_discussion(
-    host: &StatementHost,
-    action: Action,
-    arguments: serde_json::Map<String, Value>,
-) -> CallToolResult {
-    let value = Value::Object(arguments);
-    let service = host.porcelain().discussion();
-    let outcome = service.execute_discussion(action, value).await;
-    match outcome {
-        Ok(outcome) => {
-            let readable = provenance_porcelain::discussion::render_readable(&outcome);
-            let mut result = CallToolResult::structured(
-                serde_json::to_value(outcome).expect("Discussion outcome is JSON"),
-            );
-            result.content = vec![ContentBlock::text(readable)];
-            result
-        }
-        Err(error) => discussion_error(&error),
-    }
-}
-
-/// The refusal for a discussions request whose action argument names no Discussion
-/// action.
-pub fn invalid_discussion_options() -> CallToolResult {
-    discussion_error(&ActionError::InvalidOptions)
-}
-
-fn discussion_error(error: &ActionError) -> CallToolResult {
-    let detail = match error {
-        ActionError::InvalidOptions => serde_json::json!({
-            "kind":"invalid_input", "field":null, "reason":"invalid_value"
-        }),
-        ActionError::AccessDenied => serde_json::json!({"kind":"access_denied"}),
-        ActionError::OperationDetail { detail, .. } => detail.clone(),
-        ActionError::NotFound => serde_json::json!({"kind":"not_found"}),
-        ActionError::AmbiguousIdentity => serde_json::json!({"kind":"ambiguous_identity"}),
-        ActionError::KindSelection => serde_json::json!({"kind":"invalid_options"}),
-        ActionError::Operation(message) => {
-            serde_json::json!({"kind":"operation_failed","message":message})
-        }
-    };
-    crate::surface::detail_error(with_message(detail, error.to_string()))
-}
+pub use change::{call as call_change, tool as change_tool};
+pub use discussions::{call as call_discussions, tool as discussions_tool};
 
 pub fn search_tool() -> rmcp::model::Tool {
     crate::surface::tool(
         Command::Search.declaration().name,
         Command::Search.declaration().description,
+        Effect::Reads,
         provenance_porcelain::search::input_schema(),
         provenance_porcelain::search::output_schema(),
-        crate::surface::SchemaDeclaration::Remove,
+        SchemaDeclaration::Remove,
     )
 }
 
@@ -103,9 +33,10 @@ pub fn get_tool() -> rmcp::model::Tool {
     crate::surface::tool(
         Command::Get.declaration().name,
         Command::Get.declaration().description,
+        Effect::Reads,
         provenance_porcelain::get::input_schema(),
         provenance_porcelain::get::output_schema(),
-        crate::surface::SchemaDeclaration::Keep,
+        SchemaDeclaration::Keep,
     )
 }
 
@@ -113,9 +44,10 @@ pub fn trace_tool() -> rmcp::model::Tool {
     crate::surface::tool(
         Command::Trace.declaration().name,
         Command::Trace.declaration().description,
+        Effect::Reads,
         provenance_porcelain::get::trace_input_schema(),
         provenance_porcelain::get::output_schema(),
-        crate::surface::SchemaDeclaration::Keep,
+        SchemaDeclaration::Keep,
     )
 }
 
@@ -123,9 +55,10 @@ pub fn check_tool() -> rmcp::model::Tool {
     crate::surface::tool(
         Command::Check.declaration().name,
         Command::Check.declaration().description,
+        Effect::Reads,
         provenance_porcelain::check::input_schema(),
         provenance_porcelain::check::output_schema(),
-        crate::surface::SchemaDeclaration::Keep,
+        SchemaDeclaration::Keep,
     )
 }
 
@@ -150,11 +83,20 @@ pub async fn call_check(
     result
 }
 
-/// Returns readable and structured MCP content for one get request.
+/// Returns readable and structured MCP content for one get request. MCP registers a
+/// client thread through the notify action of change, so get refuses the notify field.
 pub async fn call_get(
     host: &StatementHost,
     arguments: serde_json::Map<String, Value>,
 ) -> CallToolResult {
+    if arguments.contains_key("notify") {
+        return crate::surface::detail_error(serde_json::json!({
+            "kind": "invalid_input",
+            "field": "notify",
+            "reason": "unknown_field",
+            "message": "get only reads; register a client thread with the notify action of change",
+        }));
+    }
     let Ok(arguments) = serde_json::from_value::<GetInput>(Value::Object(arguments)) else {
         return crate::surface::envelope_error(&ReadError::InvalidOptions.failure());
     };

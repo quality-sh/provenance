@@ -395,9 +395,13 @@ impl Command {
                         reason: "MCP takes each record action as the action argument of change",
                     },
                     Action::Discussions => Presence::Present,
-                    Action::Discussion | Action::Discuss | Action::Reply => Presence::Absent {
-                        reason: "MCP takes each Discussion action as the action argument of \
+                    Action::Discussion => Presence::Absent {
+                        reason: "MCP reads one Discussion through the action argument of \
                                  discussions",
+                    },
+                    Action::Discuss | Action::Reply => Presence::Absent {
+                        reason: "MCP takes each Discussion write as the action argument of \
+                                 change",
                     },
                 },
                 Self::Repository(command) => command.presence(interface),

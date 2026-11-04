@@ -58,7 +58,7 @@ async fn api_selects_methods_bodies_and_headers_for_one_public_mutation() {
     .await;
 
     let created = session
-        .call(json!({
+        .write(json!({
             "path": "sources",
             "method": "post",
             "body": {"id": "source_api", "name": "Created by api", "source_type": "document", "supersedes": []}
@@ -132,7 +132,7 @@ async fn api_mutations_keep_the_operation_specific_preconditions() {
     .await;
 
     let created = session
-        .call(json!({
+        .write(json!({
             "path": "requirements",
             "method": "post",
             "body": {"id": "req_api", "statement": "One statement.", "actor": "api",
@@ -143,7 +143,7 @@ async fn api_mutations_keep_the_operation_specific_preconditions() {
 
     // update-requirement requires If-Match.
     let no_version = session
-        .call(json!({
+        .write(json!({
             "path": "requirements/req_shared",
             "method": "patch",
             "body": {"description": "One description."}
@@ -169,14 +169,14 @@ async fn api_mutations_keep_the_operation_specific_preconditions() {
         })
     };
 
-    let current = session.call(edit("Edited through api.")).await;
+    let current = session.write(edit("Edited through api.")).await;
     assert_ne!(current.is_error, Some(true), "{current:?}");
     assert_eq!(
         current.structured_content.as_ref().unwrap()["data"]["description"],
         "Edited through api."
     );
 
-    let stale = session.call(edit("A stale edit.")).await;
+    let stale = session.write(edit("A stale edit.")).await;
     let failure = refusal(&stale);
     assert_eq!(failure["kind"], "requirement_edit_conflict");
     assert_eq!(
@@ -231,7 +231,7 @@ async fn api_arguments_follow_the_http_router() {
     }
 
     let no_body = session
-        .call(json!({
+        .write(json!({
             "path": "sources",
             "method": "post"
         }))
