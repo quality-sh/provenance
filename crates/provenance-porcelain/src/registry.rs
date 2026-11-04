@@ -279,6 +279,8 @@ pub enum Command {
     Search,
     Api,
     Check,
+    /// The records above one record, up to its Sources: the get trace view as an action.
+    Trace,
     Prime,
     Action(Action),
     Repository(RepositoryCommand),
@@ -295,6 +297,7 @@ impl Command {
         Self::Search,
         Self::Api,
         Self::Check,
+        Self::Trace,
         Self::Prime,
         Self::Action(Action::Create),
         Self::Action(Action::Update),
@@ -356,7 +359,7 @@ impl Command {
     pub const fn presence(self, interface: Interface) -> Presence {
         match interface {
             Interface::Cli => match self {
-                Self::Get | Self::Search | Self::Api | Self::Check | Self::Prime => {
+                Self::Get | Self::Search | Self::Api | Self::Check | Self::Trace | Self::Prime => {
                     Presence::Present
                 }
                 Self::Action(action) => match action {
@@ -377,7 +380,9 @@ impl Command {
                 Self::Dogfood(command) => command.presence(interface),
             },
             Interface::Mcp => match self {
-                Self::Get | Self::Search | Self::Api | Self::Check => Presence::Present,
+                Self::Get | Self::Search | Self::Api | Self::Check | Self::Trace => {
+                    Presence::Present
+                }
                 Self::Prime => Presence::Absent {
                     reason: "MCP clients receive the same guidance as the initialize instructions",
                 },

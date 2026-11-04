@@ -40,6 +40,7 @@
     "stamp",
     "store",
     "thread",
+    "trace",
     "transport"
   ]
 }

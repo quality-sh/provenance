@@ -1,7 +1,7 @@
 //! MCP tools for the shared Porcelain capabilities.
 
 use provenance_porcelain::check::CheckInput;
-use provenance_porcelain::get::{GetInput, ReadError};
+use provenance_porcelain::get::{GetInput, GetOutcome, ReadError, TraceInput};
 use provenance_porcelain::registry::Command;
 use provenance_transport::porcelain::{Action, ActionError};
 use provenance_transport::StatementHost;
@@ -82,6 +82,16 @@ pub fn get_tool() -> rmcp::model::Tool {
     )
 }
 
+pub fn trace_tool() -> rmcp::model::Tool {
+    crate::surface::tool(
+        Command::Trace.declaration().name,
+        Command::Trace.declaration().description,
+        provenance_porcelain::get::trace_input_schema(),
+        provenance_porcelain::get::output_schema(),
+        crate::surface::SchemaDeclaration::Keep,
+    )
+}
+
 pub fn check_tool() -> rmcp::model::Tool {
     crate::surface::tool(
         Command::Check.declaration().name,
@@ -121,8 +131,22 @@ pub async fn call_get(
     let Ok(arguments) = serde_json::from_value::<GetInput>(Value::Object(arguments)) else {
         return crate::surface::envelope_error(&ReadError::InvalidOptions.failure());
     };
-    let service = host.porcelain().get();
-    match service.get(arguments).await {
+    get_result(host.porcelain().get().get(arguments).await)
+}
+
+/// Returns the same content as the get trace view for one trace request.
+pub async fn call_trace(
+    host: &StatementHost,
+    arguments: serde_json::Map<String, Value>,
+) -> CallToolResult {
+    let Ok(arguments) = serde_json::from_value::<TraceInput>(Value::Object(arguments)) else {
+        return crate::surface::envelope_error(&ReadError::InvalidOptions.failure());
+    };
+    get_result(host.porcelain().get().trace(arguments).await)
+}
+
+fn get_result(outcome: Result<GetOutcome, ReadError>) -> CallToolResult {
+    match outcome {
         Ok(outcome) => {
             let summary = provenance_porcelain::get::render_readable(&outcome)
                 .expect("get outcome is readable JSON");

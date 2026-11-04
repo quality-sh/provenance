@@ -66,6 +66,28 @@ fn tree(root: &Path, locked_path: &Path) -> BTreeMap<PathBuf, TreeEntry> {
     files
 }
 
+/// The get help gives the direction of the children and trace views, and the trace
+/// help shows the trace description.
+#[test]
+#[verifies("rule_get_help_names_view_direction", examples)]
+fn get_help_names_the_direction_of_each_walking_view() {
+    let (_directory, repo) = init_with_requirement();
+    let get = help(&repo, &["req_a", "get"]);
+    assert!(
+        get.contains("children view (records below this record)"),
+        "{get}"
+    );
+    assert!(
+        get.contains("trace view (records above this record, up to its Sources)"),
+        "{get}"
+    );
+    let trace = help(&repo, &["req_a", "trace"]);
+    assert!(
+        trace.contains("Read the records above this record, up to its Sources."),
+        "{trace}"
+    );
+}
+
 #[test]
 #[verifies("rule_create_help_accepted_fields", examples)]
 fn update_help_lists_only_the_fields_of_the_existing_record_type() {

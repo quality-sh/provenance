@@ -65,6 +65,12 @@ impl ServerHandler for Server {
             Some(Command::Get) if host.porcelain().get_is_available() => {
                 call_get(host, arguments).await
             }
+            Some(Command::Trace) if host.porcelain().get_is_available() => {
+                surface::admitted_call(host, arguments, |arguments| {
+                    tools::call_trace(host, arguments)
+                })
+                .await
+            }
             Some(Command::Search) if host.porcelain().search_is_available() => {
                 call_search(host, arguments).await
             }
@@ -86,6 +92,7 @@ impl ServerHandler for Server {
             Some(Command::Action(action)) => call_authoring_action(host, action, arguments).await,
             Some(
                 Command::Get
+                | Command::Trace
                 | Command::Search
                 | Command::Api
                 | Command::Prime
@@ -104,6 +111,7 @@ fn tool(host: &StatementHost, command: Command) -> Option<rmcp::model::Tool> {
     let porcelain = host.porcelain();
     match command {
         Command::Get => porcelain.get_is_available().then(tools::get_tool),
+        Command::Trace => porcelain.get_is_available().then(tools::trace_tool),
         Command::Search => porcelain.search_is_available().then(tools::search_tool),
         Command::Api => porcelain.api_is_available().then(tools::api_tool),
         Command::Check => host.check_port().is_some().then(tools::check_tool),

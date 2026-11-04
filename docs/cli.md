@@ -40,13 +40,19 @@ A record command uses the record ID:
 
 ```text
 provenance <id> create --type <kind> [scalar flags | --stdin]
-provenance <id> get [--view record|children|grounding|impact|review]
+provenance <id> get [--view record|children|trace|impact|review]
+provenance <id> trace [--depth <n>] [--kind <kind>] [--limit <n>]
 provenance <id> update [scalar flags | --stdin] [--if-match <etag>]
 provenance <id> answer|claim|release|submit [flags]
 provenance <id> discussions|discuss
 provenance search --text <text> | --kind <kind> | --file <path> [--symbol <name>] [--line <line>]
 provenance check --statement "<statement>"
 ```
+
+The `children` view gives the records below a record. The `trace` view gives
+the records above it, up to its Sources. `provenance <id> trace` gives the same
+records as `provenance <id> get --view trace`, and MCP has a `trace` tool and a
+`trace` view of the `get` tool.
 
 `provenance <id> create --type <kind> --help` lists the fields that one record
 type accepts. The record types are `source`, `requirement`, `resolution`,

@@ -8,14 +8,17 @@ use crate::get::View;
 use provenance_core::NodeType;
 use serde::Deserialize;
 
-const GET_DESCRIPTION: &str =
-    "Read one repository record by its repository-local ID. Select its record, children, grounding, or impact view.";
+const GET_DESCRIPTION: &str = "Read one repository record by its repository-local ID. Select \
+     its record view, children view (records below this record), trace view (records above this \
+     record, up to its Sources), impact view, or review view.";
+const TRACE_DESCRIPTION: &str =
+    "Read the records above this record, up to its Sources. The get trace view gives the same records.";
 const SEARCH_DESCRIPTION: &str = "Find records across the permitted kinds in the bound scope, or the Rules bound to a source file and symbol.";
 const CHECK_DESCRIPTION: &str = "Check graph validity, statement quality, and binding \
      coverage. Give a statement to check that text with the project dictionary before a write.";
 const PRIME_DESCRIPTION: &str = "Introduce Provenance domain concepts and actions.";
 
-const VIEWS: &[&str] = &["record", "children", "grounding", "impact", "review"];
+const VIEWS: &[&str] = &["record", "children", "trace", "impact", "review"];
 
 /// The get flags after the target, in help order.
 const GET_FLAGS: &[Flag] = &[
@@ -48,6 +51,13 @@ const GET_RELATIONS: &[Relation] = &[
     Relation::Conflicts("notify", "review_link"),
     Relation::Requires("thread", "notify"),
     Relation::Requires("no_open", "review_link"),
+];
+
+/// The trace flags after the target: the get traversal bounds.
+const TRACE_FLAGS: &[Flag] = &[
+    Flag::new("depth", FlagKind::Value).value(FlagValue::Count),
+    Flag::new("kind", FlagKind::Repeated).value(FlagValue::RecordKind),
+    Flag::new("limit", FlagKind::Value).value(FlagValue::Count),
 ];
 
 const SEARCH_FLAGS: &[Flag] = &[
@@ -240,17 +250,7 @@ fn prime_schema() -> serde_json::Value {
 
 pub(super) fn declaration(command: Command) -> Declaration {
     match command {
-        Command::Get => Declaration {
-            name: "get",
-            description: GET_DESCRIPTION,
-            cli_form: CliForm::Target,
-            cli_input: Input::Typed(get_cli_schema),
-            mcp_input: Input::Typed(crate::get::input_schema),
-            positional: &[],
-            relations: GET_RELATIONS,
-            hidden: false,
-            flags: GET_FLAGS,
-        },
+        Command::Get => get_declaration(),
         Command::Search => Declaration {
             name: "search",
             description: SEARCH_DESCRIPTION,
@@ -287,6 +287,17 @@ pub(super) fn declaration(command: Command) -> Declaration {
             hidden: false,
             flags: CHECK_FLAGS,
         },
+        Command::Trace => Declaration {
+            name: "trace",
+            description: TRACE_DESCRIPTION,
+            cli_form: CliForm::Target,
+            cli_input: Input::None,
+            mcp_input: Input::Typed(crate::get::trace_input_schema),
+            positional: &[],
+            relations: &[],
+            hidden: false,
+            flags: TRACE_FLAGS,
+        },
         Command::Prime => Declaration {
             name: "prime",
             description: PRIME_DESCRIPTION,
@@ -303,6 +314,23 @@ pub(super) fn declaration(command: Command) -> Declaration {
         Command::Graph(command) => super::graph::declaration(command),
         Command::Workspace(command) => super::workspace::declaration(command),
         Command::Dogfood(command) => super::dogfood::declaration(command),
+    }
+}
+
+/// The get declaration. Its description names the direction of each view that walks
+/// the graph, on the CLI help and the MCP tool.
+#[provenance_macros::rule("rule_get_help_names_view_direction")]
+const fn get_declaration() -> Declaration {
+    Declaration {
+        name: "get",
+        description: GET_DESCRIPTION,
+        cli_form: CliForm::Target,
+        cli_input: Input::Typed(get_cli_schema),
+        mcp_input: Input::Typed(crate::get::input_schema),
+        positional: &[],
+        relations: GET_RELATIONS,
+        hidden: false,
+        flags: GET_FLAGS,
     }
 }
 

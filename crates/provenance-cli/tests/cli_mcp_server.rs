@@ -12,6 +12,7 @@ const PORCELAIN_TOOL_NAMES: &[&str] = &[
     "search",
     "api",
     "check",
+    "trace",
     "create",
     "update",
     "answer",

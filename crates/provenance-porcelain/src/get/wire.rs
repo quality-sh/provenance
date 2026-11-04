@@ -6,7 +6,7 @@ use provenance_core::{
     Boundary, Domain, NodeType, Question, Requirement, Resolution, Rule, Source, StableId, Topic,
 };
 use schemars::generate::{Contract, SchemaSettings};
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 use serde_json::Value;
 
 /// A canonical record payload without the graph node's variant tag.
@@ -124,6 +124,37 @@ fn schema<T: schemars::JsonSchema>(contract: Contract) -> Value {
 /// The MCP get request schema is generated from the deserialized request.
 pub fn input_schema() -> Value {
     schema::<GetInput>(Contract::Deserialize)
+}
+
+/// The MCP trace request schema: the get request without a view or notify field.
+pub fn trace_input_schema() -> Value {
+    schema::<TraceInput>(Contract::Deserialize)
+}
+
+/// One trace request: the records above the target, up to its Sources.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TraceInput {
+    #[schemars(length(min = 1))]
+    pub target: String,
+    #[serde(default)]
+    #[schemars(range(min = 1))]
+    pub max_depth: Option<usize>,
+    #[serde(default)]
+    pub returned_kinds: Vec<NodeType>,
+    #[serde(default)]
+    #[schemars(range(min = 1))]
+    pub limit: Option<usize>,
+}
+
+impl From<TraceInput> for GetInput {
+    fn from(input: TraceInput) -> Self {
+        let mut get = Self::new(input.target, View::Trace);
+        get.max_depth = input.max_depth;
+        get.returned_kinds = input.returned_kinds;
+        get.limit = input.limit;
+        get
+    }
 }
 
 /// The MCP get result schema is generated from the serialized projection.

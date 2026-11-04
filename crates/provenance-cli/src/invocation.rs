@@ -91,7 +91,10 @@ impl Invocation {
             ) => {
                 return Ok(Self::parse_root(arguments));
             }
-            Some(registry::Command::Get | registry::Command::Action(_)) | None => {}
+            Some(
+                registry::Command::Get | registry::Command::Trace | registry::Command::Action(_),
+            )
+            | None => {}
         }
         if word == "discussions" {
             let target_command = catalog_cli::target_command()?;
@@ -203,6 +206,21 @@ impl Invocation {
         }
         let format = args.common.format();
         let context = args.common.context();
+        if args.action == Some(TargetVerb::Trace) {
+            catalog_cli::ensure_only_fields(&matches, &["kind", "depth", "limit"]);
+            let input = provenance_porcelain::get::TraceInput {
+                target: args.target,
+                max_depth: args.depth,
+                returned_kinds: args.kind,
+                limit: args.limit,
+            };
+            return Ok(Self::Get(GetInvocation {
+                context,
+                format,
+                input: input.into(),
+                delivery: Delivery::Read,
+            }));
+        }
         if matches!(args.action, None | Some(TargetVerb::Get)) {
             catalog_cli::ensure_only_fields(
                 &matches,
