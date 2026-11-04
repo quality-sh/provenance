@@ -169,7 +169,6 @@ pub async fn call(
 
 /// The refusal of a field that the record kind does not take, or of a field that it
 /// needs and the call does not give. The refusal gives the fields of the kind.
-#[rule("rule_mcp_refusal_names_field")]
 fn field_refusal(
     action: Action,
     kind: NodeType,
