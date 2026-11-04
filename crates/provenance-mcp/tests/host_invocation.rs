@@ -74,6 +74,7 @@ fn gated_host(repo: &Repository, open: bool) -> (StatementHost, Control) {
 
 fn discuss() -> serde_json::Value {
     json!({
+        "action":"discuss",
         "parent":{"node_type":"requirement","node_id":"req_shared"},
         "actor":"reviewer", "role":"user", "body":"Check the write."
     })
@@ -122,7 +123,7 @@ async fn a_typed_write_waiting_for_the_lock_does_not_delay_a_data_free_call() {
     let (host, mut control) = gated_host(&repo, true);
     let lock = HeldLock::hold(&repo);
     let session = Session::start(host.clone()).await;
-    let mut write = Box::pin(call(&session.client, "discuss", discuss()));
+    let mut write = Box::pin(call(&session.client, "discussions", discuss()));
     assert!(poll!(&mut write).is_pending());
     control.entered().await;
 
@@ -170,7 +171,7 @@ async fn shutdown_waits_for_a_typed_write() {
     let (host, mut control) = gated_host(&repo, true);
     let lock = HeldLock::hold(&repo);
     let session = Session::start(host.clone()).await;
-    let mut write = Box::pin(call(&session.client, "discuss", discuss()));
+    let mut write = Box::pin(call(&session.client, "discussions", discuss()));
     assert!(poll!(&mut write).is_pending());
     control.entered().await;
 

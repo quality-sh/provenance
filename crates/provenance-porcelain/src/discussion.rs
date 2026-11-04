@@ -25,6 +25,56 @@ pub fn input_schema(action: Action) -> serde_json::Value {
     serde_json::to_value(schema).expect("Discussion input schema is JSON")
 }
 
+/// The input of the MCP discussions tool: one branch for each Discussion action.
+///
+/// The CLI word is the action argument. Without the argument the tool lists
+/// Discussions, so a request matches exactly one branch.
+pub fn tool_input_schema() -> serde_json::Value {
+    let mut definitions = serde_json::Map::new();
+    let mut declaration = None;
+    let branches = Action::DISCUSSION
+        .into_iter()
+        .map(|action| {
+            let mut schema = input_schema(action);
+            let object = schema
+                .as_object_mut()
+                .expect("Discussion input schema is an object");
+            declaration = object.remove("$schema");
+            object.remove("title");
+            if let Some(Value::Object(shared)) = object.remove("$defs") {
+                // Each name is one Rust type, so the same name is the same schema.
+                definitions.extend(shared);
+            }
+            object
+                .entry("properties")
+                .or_insert_with(|| serde_json::json!({}))
+                .as_object_mut()
+                .expect("Discussion input properties are an object")
+                .insert(
+                    "action".into(),
+                    serde_json::json!({"const": action.as_str()}),
+                );
+            if action != Action::Discussions {
+                object
+                    .entry("required")
+                    .or_insert_with(|| serde_json::json!([]))
+                    .as_array_mut()
+                    .expect("Discussion input required is an array")
+                    .push(serde_json::json!("action"));
+            }
+            schema
+        })
+        .collect::<Vec<_>>();
+    let mut schema = serde_json::json!({"type": "object", "oneOf": branches});
+    if let Some(declaration) = declaration {
+        schema["$schema"] = declaration;
+    }
+    if !definitions.is_empty() {
+        schema["$defs"] = Value::Object(definitions);
+    }
+    schema
+}
+
 /// The target field names the record parent or the independent Discussion ID.
 pub fn target_field(action: Action) -> &'static str {
     match action {

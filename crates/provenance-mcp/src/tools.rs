@@ -13,15 +13,36 @@ mod authoring;
 pub use api::{call as call_api, tool as api_tool};
 pub use authoring::{call_change, change_tool};
 
-pub fn discussion_tool(action: Action) -> rmcp::model::Tool {
-    let declaration = Command::Action(action).declaration();
+/// The discussions tool: the four Discussion actions, selected by the action argument.
+/// It can write, so it is not read-only; a repeated start makes a new Discussion.
+#[provenance_macros::rule("rule_mcp_one_tool_for_discussions")]
+pub fn discussions_tool() -> rmcp::model::Tool {
+    let declaration = Command::Action(Action::Discussions).declaration();
     crate::surface::tool(
         declaration.name,
         declaration.description,
-        provenance_porcelain::discussion::input_schema(action),
+        provenance_porcelain::discussion::tool_input_schema(),
         provenance_porcelain::discussion::output_schema(),
         crate::surface::SchemaDeclaration::Remove,
     )
+    .with_annotations(rmcp::model::ToolAnnotations::from_raw(
+        None,
+        Some(false),
+        Some(false),
+        Some(false),
+        Some(false),
+    ))
+}
+
+/// The Discussion action that the action argument names; without it, the list.
+pub fn discussion_action(arguments: &mut serde_json::Map<String, Value>) -> Option<Action> {
+    match arguments.remove("action") {
+        None => Some(Action::Discussions),
+        Some(Value::String(word)) => {
+            Action::parse(&word).filter(|action| Action::DISCUSSION.contains(action))
+        }
+        Some(_) => None,
+    }
 }
 
 pub async fn call_discussion(
@@ -43,6 +64,12 @@ pub async fn call_discussion(
         }
         Err(error) => discussion_error(&error),
     }
+}
+
+/// The refusal for a discussions request whose action argument names no Discussion
+/// action.
+pub fn invalid_discussion_options() -> CallToolResult {
+    discussion_error(&ActionError::InvalidOptions)
 }
 
 fn discussion_error(error: &ActionError) -> CallToolResult {

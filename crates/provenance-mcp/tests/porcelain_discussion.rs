@@ -29,37 +29,81 @@ fn access(repository: &Repository) -> FixtureAccess {
     .allow_writes()
 }
 
+/// Calls one tool. A successful discussions call also checks the emitted schemas: the
+/// request and the response each match exactly one branch of their `oneOf`.
 async fn call(
     client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
     name: &str,
     args: Value,
 ) -> rmcp::model::CallToolResult {
-    client
+    let result = client
         .call_tool(
             CallToolRequestParams::new(name.to_owned())
                 .with_arguments(args.as_object().unwrap().clone()),
         )
         .await
-        .unwrap()
+        .unwrap();
+    if name == "discussions" && result.is_error != Some(true) {
+        let tools = client.list_all_tools().await.unwrap();
+        let tool = tools
+            .iter()
+            .find(|tool| tool.name == "discussions")
+            .unwrap();
+        let input = json!(tool.input_schema);
+        let output = json!(tool.output_schema.as_ref().unwrap());
+        assert_eq!(branches_matching(&input, &args), 1, "{args}");
+        let value = result.structured_content.as_ref().unwrap();
+        assert_eq!(branches_matching(&output, value), 1, "{value}");
+    }
+    result
 }
 
+/// The `oneOf` branches of `schema` that accept `value`, when `schema` accepts it.
+fn branches_matching(schema: &Value, value: &Value) -> usize {
+    let accepts = |schema: &Value| compile(schema).unwrap().is_valid(value);
+    if !accepts(schema) {
+        return 0;
+    }
+    schema["oneOf"].as_array().map_or(1, |branches| {
+        branches
+            .iter()
+            .filter(|branch| {
+                let mut branch = (*branch).clone();
+                branch["$defs"] = schema["$defs"].clone();
+                accepts(&branch)
+            })
+            .count()
+    })
+}
+
+/// MCP lists one discussions tool for the four Discussion actions. It can write, so
+/// its annotations say it is not read-only.
 fn assert_tools(tools: &[rmcp::model::Tool]) {
     let names = tools
         .iter()
         .map(|tool| tool.name.to_string())
         .collect::<Vec<_>>();
-    for name in ["discussions", "discussion", "discuss", "reply"] {
-        assert!(names.contains(&name.to_owned()), "{names:?}");
+    assert!(names.contains(&"discussions".to_owned()), "{names:?}");
+    for name in ["discussion", "discuss", "reply"] {
+        assert!(!names.contains(&name.to_owned()), "{names:?}");
     }
-    for tool in tools
+    let tool = tools
         .iter()
-        .filter(|tool| names.iter().any(|name| name == tool.name.as_ref()))
-    {
-        if ["discussions", "discussion", "discuss", "reply"].contains(&tool.name.as_ref()) {
-            compile(&json!(tool.input_schema)).unwrap();
-            compile(&json!(tool.output_schema.as_ref().unwrap())).unwrap();
-        }
-    }
+        .find(|tool| tool.name == "discussions")
+        .unwrap();
+    compile(&json!(tool.input_schema)).unwrap();
+    compile(&json!(tool.output_schema.as_ref().unwrap())).unwrap();
+    let hints = [
+        "readOnlyHint",
+        "destructiveHint",
+        "idempotentHint",
+        "openWorldHint",
+    ];
+    let annotations = json!(tool.annotations);
+    assert!(
+        hints.iter().all(|hint| annotations[hint] == false),
+        "{annotations}"
+    );
 }
 
 fn assert_operation_page_metadata(
@@ -86,8 +130,8 @@ async fn assert_conversation_continuations(
 ) {
     let other = call(
         client,
-        "discuss",
-        json!({
+        "discussions",
+        json!({"action":"discuss",
             "parent":{"node_type":"requirement","node_id":"req_shared"},
             "actor":"ben", "role":"user", "body":"Other root"
         }),
@@ -96,22 +140,27 @@ async fn assert_conversation_continuations(
     let other_id = other.structured_content.as_ref().unwrap()["receipt"]["discussion_id"]
         .as_str()
         .unwrap();
-    let first_page = call(client, "discussion", json!({"discussion_id":id,"limit":1})).await;
+    let first_page = call(
+        client,
+        "discussions",
+        json!({"action":"discussion","discussion_id":id,"limit":1}),
+    )
+    .await;
     let cursor = first_page.structured_content.as_ref().unwrap()["result"]["messages"]
         ["next_cursor"]
         .as_str()
         .unwrap();
     let wrong_selector = call(
         client,
-        "discussion",
-        json!({"discussion_id":other_id,"limit":1,"cursor":cursor}),
+        "discussions",
+        json!({"action":"discussion","discussion_id":other_id,"limit":1,"cursor":cursor}),
     )
     .await;
     assert_eq!(wrong_selector.is_error, Some(true));
     let next_page = call(
         client,
-        "discussion",
-        json!({"discussion_id":id,"limit":1,"cursor":cursor}),
+        "discussions",
+        json!({"action":"discussion","discussion_id":id,"limit":1,"cursor":cursor}),
     )
     .await;
     assert_eq!(
@@ -120,8 +169,8 @@ async fn assert_conversation_continuations(
     );
     let stale = call(
         client,
-        "reply",
-        json!({
+        "discussions",
+        json!({"action":"reply",
             "discussion_id":id, "actor":"ben",
             "expected_version":1, "role":"user", "body":"Stale message"
         }),
@@ -130,8 +179,8 @@ async fn assert_conversation_continuations(
     assert_eq!(stale.is_error, Some(true));
     let later = call(
         client,
-        "reply",
-        json!({
+        "discussions",
+        json!({"action":"reply",
             "discussion_id":id, "actor":"ben",
             "expected_version":2, "role":"user", "body":"Later message"
         }),
@@ -140,8 +189,8 @@ async fn assert_conversation_continuations(
     assert_ne!(later.is_error, Some(true), "{later:?}");
     let stale_cursor = call(
         client,
-        "discussion",
-        json!({"discussion_id":id,"limit":1,"cursor":cursor}),
+        "discussions",
+        json!({"action":"discussion","discussion_id":id,"limit":1,"cursor":cursor}),
     )
     .await;
     assert_eq!(stale_cursor.is_error, Some(true));
@@ -153,8 +202,8 @@ async fn assert_repeated_start_creates_new_discussion(
 ) {
     let repeated = call(
         client,
-        "discuss",
-        json!({
+        "discussions",
+        json!({"action":"discuss",
             "parent":{"node_type":"requirement","node_id":"req_shared"},
             "actor":"ben", "role":"user", "body":"Opening text"
         }),
@@ -179,8 +228,8 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
 
     let started = call(
         &client,
-        "discuss",
-        json!({
+        "discussions",
+        json!({"action":"discuss",
             "parent":{"node_type":"requirement","node_id":"req_shared"},
             "actor":"ben", "role":"user", "body":"Opening text"
         }),
@@ -188,7 +237,10 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
     .await;
     assert_ne!(started.is_error, Some(true), "{started:?}");
     let receipt = &started.structured_content.as_ref().unwrap()["receipt"];
-    let write_tool = tools.iter().find(|tool| tool.name == "discuss").unwrap();
+    let write_tool = tools
+        .iter()
+        .find(|tool| tool.name == "discussions")
+        .unwrap();
     assert!(compile(&json!(write_tool.output_schema.as_ref().unwrap()))
         .unwrap()
         .is_valid(started.structured_content.as_ref().unwrap()));
@@ -196,8 +248,8 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
     assert_repeated_start_creates_new_discussion(&client, id).await;
     let changed_body = call(
         &client,
-        "discuss",
-        json!({
+        "discussions",
+        json!({"action":"discuss",
             "parent":{"node_type":"requirement","node_id":"req_shared"},
             "actor":"ben", "role":"user", "body":"Changed"
         }),
@@ -236,7 +288,12 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
         "{readable}"
     );
 
-    let conversation = call(&client, "discussion", json!({"discussion_id":id})).await;
+    let conversation = call(
+        &client,
+        "discussions",
+        json!({"action":"discussion","discussion_id":id}),
+    )
+    .await;
     assert_eq!(
         conversation.structured_content.as_ref().unwrap()["result"]["head"]["version"],
         1
@@ -244,8 +301,8 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
     assert_operation_page_metadata(&list, &conversation);
     let replied = call(
         &client,
-        "reply",
-        json!({
+        "discussions",
+        json!({"action":"reply",
             "discussion_id":id, "actor":"ben",
             "expected_version":1, "role":"user", "body":"Second message"
         }),
@@ -279,19 +336,16 @@ async fn reply_grant_does_not_admit_start() {
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
-    let names = client
+    assert!(client
         .list_all_tools()
         .await
         .unwrap()
-        .into_iter()
-        .map(|tool| tool.name.to_string())
-        .collect::<Vec<_>>();
-    assert!(names.contains(&"discuss".to_owned()));
-    assert!(names.contains(&"reply".to_owned()));
+        .iter()
+        .any(|tool| tool.name == "discussions"));
     let denied = call(
         &client,
-        "discuss",
-        json!({
+        "discussions",
+        json!({"action":"discuss",
             "parent":{"node_type":"requirement","node_id":"req_shared"},
             "actor":"ben", "role":"user", "body":"Denied start"
         }),
@@ -300,8 +354,8 @@ async fn reply_grant_does_not_admit_start() {
     assert_eq!(denied.is_error, Some(true));
     let reply = call(
         &client,
-        "reply",
-        json!({
+        "discussions",
+        json!({"action":"reply",
             "discussion_id":receipt.discussion_id, "actor":"ben",
             "expected_version":1, "role":"user", "body":"Permitted reply"
         }),
@@ -364,15 +418,15 @@ async fn denied_parent_grant_is_applied_before_discussion_page_selection() {
     assert_eq!(page.structured_content.as_ref().unwrap()["has_more"], false);
     let hidden = call(
         &client,
-        "discussion",
-        json!({"discussion_id":source.discussion_id}),
+        "discussions",
+        json!({"action":"discussion","discussion_id":source.discussion_id}),
     )
     .await;
     assert_eq!(hidden.is_error, Some(true));
     let denied_reply = call(
         &client,
-        "reply",
-        json!({
+        "discussions",
+        json!({"action":"reply",
             "discussion_id":source.discussion_id, "actor":"ben",
             "expected_version":1, "role":"user", "body":"Denied"
         }),
@@ -401,4 +455,43 @@ fn compile(schema: &Value) -> Result<jsonschema::Validator, jsonschema::Validati
     } else {
         jsonschema::draft7::new(schema)
     }
+}
+
+/// A request without a required field, with an action that is not a Discussion
+/// action, or with the fields of another action does not match the discussions input.
+#[tokio::test]
+#[verifies("rule_mcp_one_tool_for_discussions", examples)]
+async fn discussions_input_schema_refuses_missing_fields_and_mismatched_branches() {
+    let repository = Repository::new("The shared graph is readable.");
+    let host = StatementHost::with_fixture_access(access(&repository));
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+    let tools = client.list_all_tools().await.unwrap();
+    assert_tools(&tools);
+    let tool = tools
+        .iter()
+        .find(|tool| tool.name == "discussions")
+        .unwrap();
+    let input = json!(tool.input_schema);
+
+    for valid in [
+        json!({}),
+        json!({"action":"discussions","limit":5}),
+        json!({"action":"discussion","discussion_id":"d1"}),
+        json!({"action":"reply","discussion_id":"d1","expected_version":1,"actor":"ben","role":"user","body":"Yes."}),
+        json!({"action":"discuss","parent":{"node_type":"requirement","node_id":"req_shared"},"actor":"ben","role":"user","body":"Hi."}),
+    ] {
+        assert_eq!(branches_matching(&input, &valid), 1, "{valid}");
+    }
+    for invalid in [
+        json!({"action":"discussion"}),
+        json!({"action":"create","discussion_id":"d1"}),
+        json!({"action":"discussions","body":"Hi."}),
+    ] {
+        assert_eq!(branches_matching(&input, &invalid), 0, "{invalid}");
+    }
+
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
 }

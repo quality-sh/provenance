@@ -435,7 +435,9 @@ const fn action_declaration(action: Action) -> Declaration {
             CliForm::Target,
         ),
         Action::Discussions => (
-            "List addressed Discussions in a scope or under a record.",
+            "List addressed Discussions in a scope or under a record. On MCP, the action \
+             argument also reads one Discussion (discussion), starts one (discuss), or \
+             replies to one (reply).",
             &[],
             &[],
             Input::Discussion(action),
@@ -468,7 +470,11 @@ const fn action_declaration(action: Action) -> Declaration {
         description,
         cli_form,
         cli_input: input,
-        mcp_input: input,
+        mcp_input: if matches!(action, Action::Discussions) {
+            Input::Typed(crate::discussion::tool_input_schema)
+        } else {
+            input
+        },
         positional: &[],
         relations,
         hidden: false,

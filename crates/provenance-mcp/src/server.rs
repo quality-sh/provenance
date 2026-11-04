@@ -86,9 +86,7 @@ impl ServerHandler for Server {
                 })
                 .await
             }
-            Some(Command::Action(action)) if Action::DISCUSSION.contains(&action) => {
-                call_discussion(host, action, arguments).await
-            }
+            Some(Command::Action(Action::Discussions)) => call_discussions(host, arguments).await,
             Some(Command::Change) => {
                 surface::admitted_call(host, arguments, |arguments| {
                     tools::call_change(host, arguments)
@@ -121,9 +119,10 @@ fn tool(host: &StatementHost, command: Command) -> Option<rmcp::model::Tool> {
         Command::Search => porcelain.search_is_available().then(tools::search_tool),
         Command::Api => porcelain.api_is_available().then(tools::api_tool),
         Command::Check => host.check_port().is_some().then(tools::check_tool),
-        Command::Action(action) if Action::DISCUSSION.contains(&action) => porcelain
-            .discussion_is_available(action)
-            .then(|| tools::discussion_tool(action)),
+        Command::Action(Action::Discussions) => Action::DISCUSSION
+            .into_iter()
+            .any(|action| porcelain.discussion_is_available(action))
+            .then(tools::discussions_tool),
         Command::Change => tools::change_tool(host),
         Command::Action(_)
         | Command::Prime
@@ -138,18 +137,21 @@ fn unknown_tool() -> ErrorData {
     ErrorData::new(ErrorCode::METHOD_NOT_FOUND, "Unknown tool", None)
 }
 
-async fn call_discussion(
+async fn call_discussions(
     host: &StatementHost,
-    action: Action,
-    arguments: Option<serde_json::Map<String, Value>>,
+    mut arguments: Option<serde_json::Map<String, Value>>,
 ) -> Result<CallToolResult, ErrorData> {
-    if !host.porcelain().discussion_is_available(action) {
-        return Err(unknown_tool());
+    let action = tools::discussion_action(arguments.get_or_insert_with(Default::default));
+    match action {
+        Some(action) if !host.porcelain().discussion_is_available(action) => Err(unknown_tool()),
+        Some(action) => {
+            surface::admitted_call(host, arguments, |arguments| {
+                tools::call_discussion(host, action, arguments)
+            })
+            .await
+        }
+        None => Ok(tools::invalid_discussion_options()),
     }
-    surface::admitted_call(host, arguments, |arguments| {
-        tools::call_discussion(host, action, arguments)
-    })
-    .await
 }
 
 async fn call_get(

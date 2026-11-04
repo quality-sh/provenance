@@ -100,7 +100,7 @@ async fn every_mcp_tool_family_uses_the_error_envelope() {
         ("search", "search", json!({"unknown":true})),
         ("api", "api", json!({"method":"post"})),
         ("authoring", "change", json!({"action":"create",})),
-        ("discussion", "discussion", json!({})),
+        ("discussion", "discussions", json!({"action":"discussion",})),
         ("check", "check", json!({"unknown":true})),
     ] {
         let result = call(&client, tool, arguments).await;
