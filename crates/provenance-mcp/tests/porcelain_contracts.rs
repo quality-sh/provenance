@@ -440,7 +440,7 @@ async fn assert_trace_tool_is_trace_view(
     let value = action.structured_content.as_ref().unwrap();
     assert!(output.is_valid(value));
     assert_eq!(value["view"], "trace");
-    assert!(!value["related"].as_array().unwrap().is_empty());
+    assert_ne!(value["related"].as_array().unwrap().len(), 0);
     assert_eq!(action.structured_content, view.structured_content);
     assert_eq!(action.content, view.content);
 }
