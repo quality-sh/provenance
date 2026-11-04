@@ -170,7 +170,7 @@ The following commands keep dedicated behavior because they operate on a
 repository, render a report, manage the host, or perform another product task:
 
 - `init`, `check`, and `docs`
-- `graph`, `traceability`, and `prime`
+- `prime`
 - `review` and `mcp`
 - `import`, `export`, and `materialize`
 - `swarm-backtrace`
@@ -210,7 +210,17 @@ check, and `check` refuses them without it:
   Standard output keeps the check report.
 
 `coverage scan` was removed: it exits with code 1 and names
-`provenance check --bindings`.
+`provenance check --bindings`. `graph` and `traceability` were removed the same
+way: they name `provenance <id> get --view children` and
+`provenance <id> trace`.
+
+`provenance help [command]` prints the same help as
+`provenance [command] --help`. Help does not show `merge-jsonl`, which Git runs
+as a merge driver; the command still runs.
+
+One Discussion is read with `provenance <discussion-id> discussion`.
+`provenance discussions` lists Discussions; `provenance discussions
+<discussion-id> get` was removed and names the discussion action.
 
 The review host binds one repository, one scope, and one credential to each
 connection. See [review-host.md](review-host.md). Import and export operate on a
@@ -271,7 +281,7 @@ To repair the store by hand:
    use the branch history to identify it before you change a reference.
 5. Review the diff. Run `provenance check --repo <repository>`, then
    `provenance discussions --repo <repository>` and
-   `provenance discussions <discussion-id> get --repo <repository>` for each
+   `provenance <discussion-id> discussion --repo <repository>` for each
    affected Discussion. Repeat the repair for any other duplicate ID that the
    reader reports. Commit the repaired shards when the checks pass.
 

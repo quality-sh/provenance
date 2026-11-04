@@ -209,11 +209,11 @@ Keep four facts independent: Rule lifecycle, decision grounding, implementation 
 and verification binding. Lifecycle says whether the Rule is draft, under review, active,
 deprecated, or archived; it does not say that code or evidence exists. Source evidence, a
 Requirement, a ratified Resolution, or explicit human ratification can ground the decision.
-`provenance traceability <rule_id>` reads the upstream graph chain. Implementation and
+`provenance <rule_id> trace` reads the upstream graph chain. Implementation and
 verification are separate code bindings, evaluated only by the canonical bindings check
 described above.
 
-`prime` explains the Provenance domain. `traceability` reads the graph. Neither scans
+`prime` explains the Provenance domain. `trace` reads the graph. Neither scans
 code. An active Rule can precede its implementation; absence of a binding in a graph
 view is not an implementation verdict. Never call a Rule invented, invalid, or unsupported
 because no code implements it. This repository plans first, so a Rule can be unimplemented

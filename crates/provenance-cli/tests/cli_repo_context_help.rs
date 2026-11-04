@@ -20,8 +20,6 @@ fn help(arguments: &[&str]) -> String {
 #[test]
 fn centralized_repository_context_keeps_command_help() {
     let commands: &[(&str, &[&str])] = &[
-        ("graph", &["graph", "requirement", "--help"]),
-        ("traceability", &["traceability", "rule", "--help"]),
         ("export", &["export", "--help"]),
         ("import", &["import", "--help"]),
         (

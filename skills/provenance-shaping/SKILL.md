@@ -93,16 +93,16 @@ by question; expensive methods claim one question and often stop at a phase boun
    provenance prime
    provenance search --kind rule --scope <scope> --format json
    provenance check --gaps --scope <scope> --format json
-   provenance graph <anchor_requirement_id> --scope <scope> --format json
-   provenance <anchor_requirement_id> get --scope <scope> --format json
+   provenance <anchor_requirement_id> get --view children --scope <scope> --format json
    provenance search --kind topic --scope <scope> --format json
    provenance search --kind question --scope <scope> --format json
    provenance search --kind boundary --scope <scope> --format json
    ```
 
 4. Treat the map as an index, not a store. Keep only gists in your working context and
-   zoom into the available graph and rule views with `provenance graph <requirement_id>`
-   and `provenance traceability <rule_id>`; use the shaping list commands above for their
+   zoom into the available graph and rule views with
+   `provenance <requirement_id> get --view children` (records below) and
+   `provenance <rule_id> trace` (records above); use the shaping list commands above for their
    full records. Refer to artifacts by meaningful names plus ids; never hand off bare ids.
 
 ## The tree is the spec
@@ -689,7 +689,7 @@ sources, the Requirement it refines, and the ratified decisions that produced it
 
 - The statement gives one atomic behavioural obligation.
 - Source evidence, a Requirement, a ratified Resolution, or recorded explicit human
-  ratification supports that statement. `provenance traceability <rule_id> --scope <scope>
+  ratification supports that statement. `provenance <rule_id> trace --scope <scope>
   --format json` prints the available upstream graph chain.
 - No ratified decision disagrees with it.
 
@@ -704,7 +704,7 @@ the Rule.
   code-binding absence findings.
 - Unimplemented is absence. It is an ordinary state of a planned obligation.
 
-Prime and traceability are graph reads. They do not scan code, so they must not assert an
+Prime and trace are graph reads. They do not scan code, so they must not assert an
 implementation or verification verdict. They can explain that an active Rule with no cited
 code evidence is allowed to be unimplemented; the canonical scanner must run before you
 report that derived state.

@@ -15,10 +15,7 @@ pub use dogfood::{
     DogfoodCommand, DogfoodListInput, DogfoodNoteInput, DogfoodReportInput, DogfoodSimulateInput,
     TriageHandleInput, TriageListInput, TriageReopenInput,
 };
-pub use graph::{
-    GraphCommand, ReferenceInput, ReferenceIssueInput, RequirementGraphInput,
-    SwarmBacktraceLandInput, TraceabilityInput,
-};
+pub use graph::{GraphCommand, ReferenceInput, ReferenceIssueInput, SwarmBacktraceLandInput};
 pub use porcelain::{
     CheckCliInput, CheckFormat, GetCliInput, PrimeFormat, PrimeInput, ReportFileFormat,
 };
@@ -321,8 +318,6 @@ impl Command {
         Self::Repository(RepositoryCommand::SchemaShow),
         Self::Repository(RepositoryCommand::DictionaryImport),
         Self::Repository(RepositoryCommand::DictionaryStatus),
-        Self::Graph(GraphCommand::Graph),
-        Self::Graph(GraphCommand::Traceability),
         Self::Graph(GraphCommand::ReferenceIssue),
         Self::Graph(GraphCommand::ReferenceShow),
         Self::Graph(GraphCommand::ReferenceVerify),

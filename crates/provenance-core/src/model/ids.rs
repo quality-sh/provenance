@@ -106,6 +106,7 @@ pub const RESERVED_RECORD_IDS: &[&str] = &[
     "graph",
     "graph-reference",
     "health",
+    "help",
     "impact",
     "import",
     "init",

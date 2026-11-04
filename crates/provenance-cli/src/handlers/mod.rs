@@ -2,14 +2,12 @@ use crate::cli;
 use crate::output::{self, JsonFormat, OutputFormat};
 use camino::Utf8PathBuf;
 use provenance_cli::repo_context::RepoContext;
-use provenance_core::StableId;
 use provenance_porcelain::registry::{
     self, CargoInitInput, DictionaryImportInput, DictionaryStatusInput, DocsCheckInput,
     DocsServeInput, ExportInput, GraphCommand, ImportInput, InitInput, MaterializeInput, McpInput,
     MergeJsonlInput, ReferenceInput, ReferenceIssueInput, ReportBuildInput, ReportRenderInput,
-    RepositoryCommand, RequirementGraphInput, ReviewInput, SchemaShowInput, SkillsInstallInput,
-    SkillsListInput, SkillsShowInput, SwarmBacktraceLandInput, TraceabilityInput, ValidateInput,
-    WorkspaceCommand,
+    RepositoryCommand, ReviewInput, SchemaShowInput, SkillsInstallInput, SkillsListInput,
+    SkillsShowInput, SwarmBacktraceLandInput, ValidateInput, WorkspaceCommand,
 };
 use provenance_store::cache;
 
@@ -210,8 +208,6 @@ pub(super) async fn repository_command(input: RepositoryInput, quiet: bool) -> a
 /// The typed input of one graph command, read from its declared flags.
 #[allow(clippy::redundant_pub_crate)]
 pub(super) enum GraphInput {
-    Graph(RequirementGraphInput),
-    Traceability(TraceabilityInput),
     ReferenceIssue(ReferenceIssueInput),
     ReferenceShow(ReferenceInput),
     ReferenceVerify(ReferenceInput),
@@ -233,8 +229,6 @@ impl GraphInput {
             };
         }
         Ok(match command {
-            GraphCommand::Graph => read!(Graph),
-            GraphCommand::Traceability => read!(Traceability),
             GraphCommand::ReferenceIssue => read!(ReferenceIssue),
             GraphCommand::ReferenceShow => read!(ReferenceShow),
             GraphCommand::ReferenceVerify => read!(ReferenceVerify),
@@ -250,18 +244,6 @@ pub(super) fn graph_command(input: GraphInput) -> anyhow::Result<()> {
     use cli::graph::GraphReferenceCommand;
     let reference = |input: ReferenceInput| (input.repo.into(), input.reference.into());
     match input {
-        GraphInput::Graph(input) => {
-            flag_value(&input.format, JsonFormat::from_flag)?;
-            let repository = RepoContext::new(input.repo, input.scope).open()?;
-            let id = StableId::new(input.requirement_id)?;
-            output::print_json(&cache::get_requirement_graph(&repository, &id)?)
-        }
-        GraphInput::Traceability(input) => {
-            flag_value(&input.format, JsonFormat::from_flag)?;
-            let repository = RepoContext::new(input.repo, input.scope).open()?;
-            let id = StableId::new(input.rule_id)?;
-            output::print_json(&cache::trace_rule(&repository, &id)?)
-        }
         GraphInput::ReferenceIssue(input) => {
             graph_reference::handle(GraphReferenceCommand::Issue {
                 context: RepoContext::new(input.repo, input.scope),

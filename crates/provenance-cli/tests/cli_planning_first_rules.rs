@@ -138,8 +138,10 @@ fn planning_first_rule_is_grounded_before_code_exists() {
     assert!(rule.get("implementation").is_none());
 
     let trace: Value = serde_json::from_str(&provenance(&[
-        "traceability",
         "rule_second_approver",
+        "trace",
+        "--depth",
+        "6",
         "--repo",
         &repo,
         "--scope",
@@ -149,11 +151,20 @@ fn planning_first_rule_is_grounded_before_code_exists() {
     ]))
     .unwrap();
 
-    assert!(trace.get("implementation").is_none());
-    assert_eq!(trace["requirements"][0]["id"], "req_second_approver");
-    assert_eq!(trace["sources"][0]["id"], "source_finance_policy");
+    let related = |kind: &str| -> Vec<&str> {
+        trace["related"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|record| record["kind"] == kind)
+            .map(|record| record["id"].as_str().unwrap())
+            .collect()
+    };
+    assert!(trace["record"]["value"].get("implementation").is_none());
+    assert_eq!(related("requirement"), ["req_second_approver"]);
+    assert_eq!(related("source"), ["source_finance_policy"]);
     assert!(
-        trace["resolutions"].as_array().unwrap().is_empty(),
+        related("resolution").is_empty(),
         "the rule cites no resolution, and none was invented for it"
     );
 

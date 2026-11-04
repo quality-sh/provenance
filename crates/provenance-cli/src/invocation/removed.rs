@@ -4,6 +4,8 @@ use provenance_macros::rule;
 
 /// The words of each removed command and the command that replaces it.
 const REMOVED: &[(&[&str], &str)] = &[
+    (&["graph"], "provenance <id> get --view children"),
+    (&["traceability"], "provenance <id> trace"),
     (&["gaps"], "provenance check --gaps"),
     (&["health"], "provenance check --gaps"),
     (&["orphans"], "provenance check --gaps"),

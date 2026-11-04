@@ -27,7 +27,6 @@ mod reporting_behavior;
 mod resolved_root_behavior;
 mod scope_locality_guard;
 mod stamp_catch_up;
-mod traceability_behavior;
 mod unit_digest_behavior;
 pub mod validation_version_behavior;
 mod wal_behavior;

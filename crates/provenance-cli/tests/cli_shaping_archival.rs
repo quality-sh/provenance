@@ -124,8 +124,7 @@ fn archiving_a_question_keeps_its_topic_and_discussion_history() {
         "open"
     );
     assert_eq!(
-        run(repo, &["discussions", discussion_id, "get"])["result"]["messages"]["entries"][0]
-            ["body"],
+        run(repo, &[discussion_id, "discussion"])["result"]["messages"]["entries"][0]["body"],
         "Keep this message."
     );
 }

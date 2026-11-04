@@ -13,6 +13,12 @@ const REMOVED: &[(&[&str], &str)] = &[
     (&["gaps"], "provenance check --gaps"),
     (&["health", "--scope", "default"], "provenance check --gaps"),
     (&["orphans", "--format", "json"], "provenance check --gaps"),
+    (
+        &["coverage", "scan", "--path", "."],
+        "provenance check --bindings",
+    ),
+    (&["graph", "req_a"], "provenance <id> get --view children"),
+    (&["traceability", "rule_a"], "provenance <id> trace"),
 ];
 
 #[test]
@@ -27,8 +33,8 @@ fn a_removed_command_names_its_replacement() {
             .code(1)
             .stdout(predicate::str::is_empty())
             .stderr(predicate::str::contains(format!(
-                "`provenance {}` was removed. Use `{replacement}`",
-                args[0]
-            )));
+                "was removed. Use `{replacement}`"
+            )))
+            .stderr(predicate::str::contains(format!("`provenance {}", args[0])));
     }
 }

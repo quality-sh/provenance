@@ -229,3 +229,46 @@ async fn mcp_trace_tool_matches_trace_view_and_cli() {
     client.cancel().await.unwrap();
     assert!(child.wait().await.unwrap().success());
 }
+
+/// The children view walks down from a Requirement and the trace view walks up from it:
+/// the cases of the removed `graph` and `traceability` commands.
+#[test]
+#[verifies("rule_porcelain_get_has_grounding_impact", examples)]
+fn children_walks_down_and_trace_walks_up_from_a_requirement() {
+    let (_directory, repo) = chain();
+    let ids = |view: &str| -> Vec<String> {
+        let output = cli(&[
+            "req_overtime",
+            "get",
+            "--view",
+            view,
+            "--depth",
+            "3",
+            "--repo",
+            &repo,
+            "--format",
+            "json",
+        ]);
+        let result: Value = serde_json::from_str(&output).unwrap();
+        related_ids(&result)
+            .into_iter()
+            .map(str::to_owned)
+            .collect()
+    };
+    let children = ids("children");
+    assert!(
+        children.contains(&"rule_overtime_pay".to_owned()),
+        "{children:?}"
+    );
+    assert!(
+        !children.contains(&"source_award".to_owned()),
+        "{children:?}"
+    );
+    let trace = ids("trace");
+    assert!(trace.contains(&"source_award".to_owned()), "{trace:?}");
+    assert!(
+        !trace.contains(&"rule_overtime_pay".to_owned()),
+        "{trace:?}"
+    );
+    assert!(!trace.contains(&"source_unrelated".to_owned()), "{trace:?}");
+}

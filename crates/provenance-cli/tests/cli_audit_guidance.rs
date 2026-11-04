@@ -75,7 +75,7 @@ fn shaping_guidance_keeps_rule_facts_independent_and_scanning_explicit() {
         "{shaping}"
     );
     assert!(
-        prose.contains("Prime and traceability are graph reads. They do not scan code"),
+        prose.contains("Prime and trace are graph reads. They do not scan code"),
         "{shaping}"
     );
     assert!(

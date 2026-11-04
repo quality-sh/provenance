@@ -67,6 +67,9 @@ impl Invocation {
     #[rule("rule_porcelain_get_is_default_action")]
     pub fn parse(arguments: Vec<String>) -> anyhow::Result<Self> {
         removed::refuse(&arguments)?;
+        if grammar::command_word(&arguments) == Some("help") {
+            return Self::parse(help_arguments(arguments));
+        }
         let Some(word) = grammar::command_word(&arguments) else {
             return Ok(Self::parse_root(arguments));
         };
@@ -428,6 +431,23 @@ pub fn root_command() -> clap::Command {
         ) && command.is_present(registry::Interface::Cli)
     }))
     .fold(Cli::command(), crate::registry_cli::add_subcommand)
+}
+
+/// `provenance help [words...]` as `provenance [words...] --help`, so both print the
+/// same help.
+#[rule("rule_cli_help_command_shows_help")]
+fn help_arguments(arguments: Vec<String>) -> Vec<String> {
+    let mut removed = false;
+    let mut arguments = arguments
+        .into_iter()
+        .filter(|argument| {
+            let help = !removed && argument == "help";
+            removed |= help;
+            !help
+        })
+        .collect::<Vec<_>>();
+    arguments.push("--help".to_owned());
+    arguments
 }
 
 /// Whether a word names an API collection, the first segment of a catalog path.
