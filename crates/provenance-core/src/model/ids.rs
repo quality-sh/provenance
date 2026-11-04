@@ -85,6 +85,7 @@ pub const RESERVED_RECORD_IDS: &[&str] = &[
     "authoring-plans",
     "begin-verification",
     "boundaries",
+    "change",
     "check",
     "claim",
     "complete-verification",
