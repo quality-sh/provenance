@@ -46,7 +46,7 @@ async fn no_plumbing_operation_name_is_a_listed_or_callable_tool() {
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();
-    assert_eq!(tools.len(), 14, "{tools:?}");
+    assert_eq!(tools.len(), 15, "{tools:?}");
     for definition in provenance_contract::definitions() {
         assert!(
             !tools.iter().any(|tool| tool.name == definition.name),

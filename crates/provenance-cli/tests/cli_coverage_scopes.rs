@@ -242,9 +242,10 @@ fn scope_reports_refuse_a_scope_the_manifest_does_not_declare() {
     let repo = directory.path();
     init(repo, "app", ".");
 
-    for command in ["gaps", "health", "orphans", "export"] {
+    for command in [&["check", "--gaps"][..], &["export"]] {
         provenance()
-            .args([command, "--repo", repo.to_str().unwrap(), "--scope", "nope"])
+            .args(command)
+            .args(["--repo", repo.to_str().unwrap(), "--scope", "nope"])
             .assert()
             .failure()
             .stdout(predicate::str::is_empty())
@@ -309,31 +310,33 @@ fn commands_in_a_subdirectory_name_the_enclosing_repository() {
 
 #[test]
 #[verifies("rule_operation_scope_is_the_opened_scope", examples)]
-fn gaps_and_health_read_only_the_selected_scope() {
+fn the_gaps_check_reads_only_the_selected_scope() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path();
     init(repo, "a", ".");
     init(repo, "b", "b");
     active_rule(repo, "a", "rule_a");
-    let report = |command: &str, scope: &str| -> Value {
+    let report = |scope: &str| -> Value {
         let output = provenance()
-            .args([command, "--repo", repo.to_str().unwrap(), "--scope", scope])
+            .args(["check", "--gaps", "--format", "json"])
+            .args(["--repo", repo.to_str().unwrap(), "--scope", scope])
             .output()
             .unwrap();
         assert!(
             output.status.success(),
-            "{command} {scope}: {}",
+            "{scope}: {}",
             String::from_utf8_lossy(&output.stderr)
         );
-        serde_json::from_slice(&output.stdout).unwrap()
+        let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+        report["categories"][0].clone()
     };
 
-    let health = report("health", "b");
-    assert_eq!(health["requirements"]["total"], 0, "{health}");
-    assert_eq!(health["rules"]["total"], 0, "{health}");
-    let gaps = report("gaps", "b");
-    assert!(!gaps.to_string().contains("req_a"), "{gaps}");
-    assert_eq!(report("health", "a")["rules"]["total"], 1);
-    let gaps = report("gaps", "a").to_string();
+    let b = report("b");
+    assert_eq!(b["context"]["scopes"][0]["requirements"], 0, "{b}");
+    assert_eq!(b["context"]["scopes"][0]["rules_total"], 0, "{b}");
+    assert!(!b["findings"].to_string().contains("req_a"), "{b}");
+    let a = report("a");
+    assert_eq!(a["context"]["scopes"][0]["rules_total"], 1);
+    let gaps = a["findings"].to_string();
     assert!(gaps.contains("req_a") || gaps.contains("rule_a"), "{gaps}");
 }

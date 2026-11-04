@@ -46,7 +46,8 @@ fn gaps_name_every_dangling_target_by_its_declaration() {
     let output = Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "gaps",
+            "check",
+            "--gaps",
             "--repo",
             dir.path().to_str().unwrap(),
             "--scope",
@@ -61,7 +62,13 @@ fn gaps_name_every_dangling_target_by_its_declaration() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let gaps: Vec<serde_json::Value> = serde_json::from_slice(&output.stdout).unwrap();
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let gaps: Vec<serde_json::Value> = report["categories"][0]["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|finding| finding["detail"].clone())
+        .collect();
     let dangling: Vec<(String, String, String)> = gaps
         .iter()
         .filter(|gap| gap["kind"] == "dangling_reference")

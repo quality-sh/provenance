@@ -66,12 +66,12 @@ fn requirement_shard(root: &Path) -> PathBuf {
 /// Gap entries of one kind, as `(node_id, related_node_id)`.
 fn gaps_of_kind(repo: &str, kind: &str) -> Vec<(String, String)> {
     let output: serde_json::Value =
-        serde_json::from_str(&run(repo, &["gaps", "--format", "json"])).unwrap();
-    let items = output.get("data").unwrap_or(&output);
-    items
+        serde_json::from_str(&run(repo, &["check", "--gaps", "--format", "json"])).unwrap();
+    output["categories"][0]["findings"]
         .as_array()
         .unwrap()
         .iter()
+        .map(|finding| &finding["detail"])
         .filter(|gap| gap["kind"] == kind)
         .map(|gap| {
             (

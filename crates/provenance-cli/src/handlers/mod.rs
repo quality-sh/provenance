@@ -5,8 +5,8 @@ use provenance_cli::repo_context::RepoContext;
 use provenance_core::StableId;
 use provenance_porcelain::registry::{
     self, CargoInitInput, CoverageScanInput, DictionaryImportInput, DictionaryStatusInput,
-    DocsCheckInput, DocsServeInput, ExportInput, GraphCommand, GraphReadInput, ImportInput,
-    InitInput, MaterializeInput, McpInput, MergeJsonlInput, ReferenceInput, ReferenceIssueInput,
+    DocsCheckInput, DocsServeInput, ExportInput, GraphCommand, ImportInput, InitInput,
+    MaterializeInput, McpInput, MergeJsonlInput, ReferenceInput, ReferenceIssueInput,
     ReportBuildInput, ReportRenderInput, RepositoryCommand, RequirementGraphInput, ReviewInput,
     SchemaShowInput, SkillsInstallInput, SkillsListInput, SkillsShowInput, SwarmBacktraceLandInput,
     TraceabilityInput, ValidateInput, WorkspaceCommand,
@@ -43,10 +43,9 @@ pub(super) async fn check_command(
     input: provenance_porcelain::registry::CheckCliInput,
 ) -> anyhow::Result<()> {
     let selectors = check::Selectors {
-        graph: input.graph,
-        statements: input.statements,
-        bindings: input.bindings,
+        categories: input.categories(),
         statement: input.statement,
+        scope: input.scope,
     };
     let context = provenance_cli::repo_context::RepoContext::new(input.repo.as_str(), "default");
     check::check(
@@ -202,9 +201,6 @@ pub(super) async fn repository_command(input: RepositoryInput, quiet: bool) -> a
 pub(super) enum GraphInput {
     Graph(RequirementGraphInput),
     Traceability(TraceabilityInput),
-    Gaps(GraphReadInput),
-    Health(GraphReadInput),
-    Orphans(GraphReadInput),
     CoverageScan(CoverageScanInput),
     ReferenceIssue(ReferenceIssueInput),
     ReferenceShow(ReferenceInput),
@@ -229,9 +225,6 @@ impl GraphInput {
         Ok(match command {
             GraphCommand::Graph => read!(Graph),
             GraphCommand::Traceability => read!(Traceability),
-            GraphCommand::Gaps => read!(Gaps),
-            GraphCommand::Health => read!(Health),
-            GraphCommand::Orphans => read!(Orphans),
             GraphCommand::CoverageScan => read!(CoverageScan),
             GraphCommand::ReferenceIssue => read!(ReferenceIssue),
             GraphCommand::ReferenceShow => read!(ReferenceShow),
@@ -246,10 +239,6 @@ impl GraphInput {
 #[allow(clippy::redundant_pub_crate)]
 pub(super) fn graph_command(input: GraphInput) -> anyhow::Result<()> {
     use cli::graph::GraphReferenceCommand;
-    let read = |input: GraphReadInput| {
-        flag_value(&input.format, JsonFormat::from_flag)?;
-        RepoContext::new(input.repo, input.scope).open()
-    };
     let reference = |input: ReferenceInput| (input.repo.into(), input.reference.into());
     match input {
         GraphInput::Graph(input) => {
@@ -264,9 +253,6 @@ pub(super) fn graph_command(input: GraphInput) -> anyhow::Result<()> {
             let id = StableId::new(input.rule_id)?;
             output::print_json(&cache::trace_rule(&repository, &id)?)
         }
-        GraphInput::Gaps(input) => output::print_json(&cache::find_gaps(&read(input)?)?),
-        GraphInput::Health(input) => output::print_json(&cache::coverage_health(&read(input)?)?),
-        GraphInput::Orphans(input) => output::print_json(&cache::orphan_rules(&read(input)?)?),
         GraphInput::CoverageScan(input) => {
             coverage::handle(cli::workspace::CoverageCommand::Scan {
                 repo: input.repo.into(),

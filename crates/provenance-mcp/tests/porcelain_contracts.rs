@@ -1,7 +1,7 @@
 use jsonschema::Validator;
 use provenance_porcelain::check::{
     BindingContext, BindingPolicy, Category, CategoryRun, CheckInput, CheckPort, Finding,
-    PortFuture, Refusal, StatementContext,
+    GapsContext, PortFuture, Refusal, ScopeCounts, StatementContext,
 };
 use serde_json::{json, Value};
 use std::sync::{
@@ -271,6 +271,23 @@ impl CheckPort for CategoryFixture {
                     },
                     refusal: Refusal::None,
                 },
+                Category::Gaps => CategoryRun::Gaps {
+                    findings: vec![Finding::with_detail(
+                        "default: rule `rule_a` has no producing Requirement with a Source",
+                        json!({"rule_id": "rule_a", "missing": ["source"]}),
+                    )],
+                    context: GapsContext {
+                        scopes: vec![ScopeCounts {
+                            scope_id: "default".into(),
+                            requirements: 1,
+                            source_linked_requirements: 0,
+                            resolved_requirements: 0,
+                            requirements_with_rules: 1,
+                            rules_total: 1,
+                            rules_with_complete_traceability: 0,
+                        }],
+                    },
+                },
             })
         })
     }
@@ -300,7 +317,7 @@ async fn emitted_check_contract_accepts_all_categories_contexts_and_unavailable_
     assert!(!input.is_valid(&json!({"extra":true})));
     assert!(!input.is_valid(&json!({"scope":"other"})));
 
-    let arguments = json!({});
+    let arguments = json!({"categories": Category::ALL});
     let result = client
         .call_tool(
             CallToolRequestParams::new("check")
@@ -319,7 +336,7 @@ async fn emitted_check_contract_accepts_all_categories_contexts_and_unavailable_
             .collect::<Vec<_>>()
     );
     let shared = provenance_porcelain::Porcelain::new(port.clone())
-        .check(CheckInput::default())
+        .check(CheckInput::new(Category::ALL))
         .await;
     assert_eq!(value, &serde_json::to_value(&shared).unwrap());
     assert_eq!(
@@ -339,6 +356,14 @@ async fn emitted_check_contract_accepts_all_categories_contexts_and_unavailable_
         json!([1, true])
     );
     assert_eq!(value["categories"][2]["context"]["policy"], "warning");
+    assert_eq!(value["categories"][3]["category"], "gaps");
+    assert_eq!(
+        value["categories"][3]["context"]["scopes"][0]["rules_total"],
+        1
+    );
+    let mut wrong_counts = value.clone();
+    wrong_counts["categories"][3]["context"]["scopes"][0]["rules_total"] = json!("one");
+    assert!(!output.is_valid(&wrong_counts));
 
     for (field, bad) in [
         ("category", json!("invented")),

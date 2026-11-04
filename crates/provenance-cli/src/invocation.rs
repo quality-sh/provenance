@@ -13,6 +13,7 @@ mod api;
 mod discussion;
 pub mod grammar;
 mod help_kind;
+mod removed;
 use grammar::{
     ApiArgs, Delivery, DiscussionsArgs, DiscussionsRoute, SearchArgs, TargetArgs, TargetVerb,
 };
@@ -65,6 +66,7 @@ impl Invocation {
     /// Uses get for an omitted action after excluding reserved command words.
     #[rule("rule_porcelain_get_is_default_action")]
     pub fn parse(arguments: Vec<String>) -> anyhow::Result<Self> {
+        removed::refuse(&arguments)?;
         let Some(word) = grammar::command_word(&arguments) else {
             return Ok(Self::parse_root(arguments));
         };

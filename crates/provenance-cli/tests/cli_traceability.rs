@@ -251,9 +251,9 @@ fn cli_traceability_chain_reports_rule_upstream_nodes_and_gaps() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "gaps", "--repo", &repo, "--scope", "default", "--format", "json",
+            "check", "--gaps", "--repo", &repo, "--scope", "default", "--format", "json",
         ])
         .assert()
         .success()
-        .stdout(predicates::str::contains("[]"));
+        .stdout(predicates::str::contains("\"status\": \"passed\""));
 }

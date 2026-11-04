@@ -107,6 +107,12 @@ const CHECK_FLAGS: &[Flag] = &[
     Flag::new("statements", FlagKind::Switch)
         .help("Run only statement quality checks. Combine with other check selectors"),
     Flag::new("bindings", FlagKind::Switch).help("Run only repository-wide Rule binding checks"),
+    Flag::new("gaps", FlagKind::Switch).help(
+        "Also report the unfinished parts of the graph and each Rule without a Source. These \
+         findings do not fail the check",
+    ),
+    Flag::new("scope", FlagKind::Value)
+        .help("Check only this scope. The default is every declared scope"),
     Flag::new("format", FlagKind::Value).values(&["json"]),
 ];
 
@@ -199,6 +205,11 @@ pub struct CheckCliInput {
     /// Run only repository-wide Rule binding checks.
     #[serde(default)]
     pub bindings: bool,
+    /// Also report the unfinished parts of the graph and each Rule without a Source.
+    #[serde(default)]
+    pub gaps: bool,
+    /// Check only this scope. The default is every declared scope.
+    pub scope: Option<String>,
     pub format: Option<CheckFormat>,
 }
 
@@ -211,6 +222,7 @@ impl CheckCliInput {
                 Category::Graph => self.graph,
                 Category::Statements => self.statements,
                 Category::Bindings => self.bindings,
+                Category::Gaps => self.gaps,
             })
             .collect()
     }

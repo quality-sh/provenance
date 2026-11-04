@@ -1,6 +1,7 @@
 use provenance_macros::verifies;
 use provenance_porcelain::check::{
-    BindingContext, BindingPolicy, Category, CategoryRun, CheckPort, Finding, PortFuture, Refusal,
+    BindingContext, BindingPolicy, Category, CategoryRun, CheckPort, Finding, GapsContext,
+    PortFuture, Refusal,
 };
 use rmcp::{model::CallToolRequestParams, ServiceExt as _};
 use serde_json::json;
@@ -60,6 +61,10 @@ const fn category_run(category: Category, findings: Vec<Finding>) -> CategoryRun
                 policy: BindingPolicy::Warning,
             },
             refusal: Refusal::None,
+        },
+        Category::Gaps => CategoryRun::Gaps {
+            findings,
+            context: GapsContext { scopes: Vec::new() },
         },
     }
 }

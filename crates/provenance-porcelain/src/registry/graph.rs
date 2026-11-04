@@ -12,9 +12,6 @@ use serde::Deserialize;
 pub enum GraphCommand {
     Graph,
     Traceability,
-    Gaps,
-    Health,
-    Orphans,
     CoverageScan,
     ReferenceIssue,
     ReferenceShow,
@@ -30,9 +27,6 @@ impl GraphCommand {
             Interface::Cli => match self {
                 Self::Graph
                 | Self::Traceability
-                | Self::Gaps
-                | Self::Health
-                | Self::Orphans
                 | Self::CoverageScan
                 | Self::ReferenceIssue
                 | Self::ReferenceShow
@@ -43,9 +37,6 @@ impl GraphCommand {
             Interface::Mcp => match self {
                 Self::Graph
                 | Self::Traceability
-                | Self::Gaps
-                | Self::Health
-                | Self::Orphans
                 | Self::CoverageScan
                 | Self::ReferenceIssue
                 | Self::ReferenceShow
@@ -74,8 +65,6 @@ const TRACEABILITY_FLAGS: &[Flag] = &[
     SCOPE,
     JSON_FORMAT,
 ];
-
-const READ_FLAGS: &[Flag] = &[REPO, SCOPE, JSON_FORMAT];
 
 const COVERAGE_SCAN_FLAGS: &[Flag] = &[
     REPO,
@@ -130,15 +119,6 @@ pub struct RequirementGraphInput {
 #[serde(deny_unknown_fields)]
 pub struct TraceabilityInput {
     pub rule_id: String,
-    pub repo: String,
-    pub scope: String,
-    pub format: String,
-}
-
-/// The `gaps`, `health`, and `orphans` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct GraphReadInput {
     pub repo: String,
     pub scope: String,
     pub format: String,
@@ -201,7 +181,6 @@ macro_rules! schema_fn {
 
 schema_fn!(requirement_graph_schema, RequirementGraphInput);
 schema_fn!(traceability_schema, TraceabilityInput);
-schema_fn!(graph_read_schema, GraphReadInput);
 schema_fn!(coverage_scan_schema, CoverageScanInput);
 schema_fn!(reference_issue_schema, ReferenceIssueInput);
 schema_fn!(reference_schema, ReferenceInput);
@@ -242,9 +221,6 @@ pub(super) fn declaration(command: GraphCommand) -> Declaration {
                 TRACEABILITY_FLAGS,
             )
         },
-        GraphCommand::Gaps => cli_only(&["gaps"], "", graph_read_schema, READ_FLAGS),
-        GraphCommand::Health => cli_only(&["health"], "", graph_read_schema, READ_FLAGS),
-        GraphCommand::Orphans => cli_only(&["orphans"], "", graph_read_schema, READ_FLAGS),
         GraphCommand::CoverageScan => Declaration {
             name: "coverage scan",
             ..cli_only(

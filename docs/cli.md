@@ -161,7 +161,7 @@ These errors stay text after `Error: ` and exit with code 1, also with
   inside an initialized repository.
 - File and I/O errors.
 - Every error from a builtin command, such as `init`, `check`, `coverage scan`,
-  `gaps`, `health`, `orphans`, and `export`.
+  and `export`.
 
 A usage error prints clap's text and exits with code 2.
 
@@ -171,7 +171,7 @@ The following commands keep dedicated behavior because they operate on a
 repository, render a report, manage the host, or perform another product task:
 
 - `init`, `check`, and `docs`
-- `graph`, `traceability`, `coverage`, `gaps`, `health`, `orphans`, and `prime`
+- `graph`, `traceability`, `coverage`, and `prime`
 - `review` and `mcp`
 - `import`, `export`, and `materialize`
 - `swarm-backtrace`
@@ -182,6 +182,16 @@ repository, render a report, manage the host, or perform another product task:
 Rule statements and for statements that differ from Git HEAD. Add `--strict`
 to reject findings in the committed candidate. Use `--base <commit>` to select
 the comparison base.
+
+`provenance check --gaps` also reports the unfinished parts of the graph and
+each Rule without a Source: one finding for each gap and one for each such
+Rule. The graph counts of each scope are in the category context, also when
+there are no findings. These findings do not fail the check, also with
+`--strict`. A bare `check` does not run this category. MCP `check` takes
+`gaps` in `categories`. `--scope <scope>` limits each category to one scope;
+without it, `check` reads every declared scope. `gaps`, `health`, and
+`orphans` were removed: they exit with code 1 and name
+`provenance check --gaps`.
 
 `provenance coverage scan --path . --scope default --validate-rules` scans Rule
 implementation and verification bindings. Add `--strict` to make warnings

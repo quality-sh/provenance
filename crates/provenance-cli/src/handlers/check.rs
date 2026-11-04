@@ -14,6 +14,7 @@ use provenance_store::settings::BindingFindingsSeverity;
 use provenance_store::state_store::StateStore;
 use std::collections::BTreeSet;
 
+mod gaps;
 mod index;
 mod references;
 mod scope;
@@ -23,20 +24,22 @@ use index::CheckIndex;
 
 #[derive(Clone)]
 pub(super) struct Selectors {
-    pub graph: bool,
-    pub statements: bool,
-    pub bindings: bool,
+    pub categories: Vec<Category>,
     pub statement: Option<String>,
+    /// The one scope to check. Without it the check reads every declared scope.
+    pub scope: Option<String>,
 }
 
 impl Selectors {
     fn input(self) -> CheckInput {
-        provenance_cli::porcelain::check_input_from_selectors(
-            self.graph,
-            self.statements,
-            self.bindings,
-            self.statement,
-        )
+        let input = self
+            .statement
+            .into_iter()
+            .fold(CheckInput::new(self.categories), CheckInput::with_statement);
+        match self.scope {
+            Some(scope) => input.in_scope(scope),
+            None => input,
+        }
     }
 }
 
@@ -65,6 +68,7 @@ impl RepositoryCheckPort {
             Category::Graph => self.graph_run(scope),
             Category::Statements => self.statement_run(scope),
             Category::Bindings => self.binding_run(scope),
+            Category::Gaps => gaps::run(&self.context.repo, scope),
         }
     }
 
@@ -340,6 +344,14 @@ pub(super) async fn check(
     json: bool,
     selectors: Selectors,
 ) -> anyhow::Result<()> {
+    if let Some(scope) = &selectors.scope {
+        // An undeclared scope refuses the whole check before any category runs.
+        provenance_store::layout::with_initialized_graph(
+            &ProvenanceLayout::new(&context.repo),
+            |manifest| Ok(declared_scope(&manifest, scope).map(|_| ())?),
+        )
+        .map_err(|error| initialization_hint(&context.repo, error))?;
+    }
     let input = selectors.input();
     let service = provenance_porcelain::Porcelain::new(RepositoryCheckPort::with_context(
         context, strict, base,

@@ -92,7 +92,7 @@ by question; expensive methods claim one question and often stop at a phase boun
    ```sh
    provenance prime
    provenance search --kind rule --scope <scope> --format json
-   provenance gaps --scope <scope> --format json
+   provenance check --gaps --scope <scope> --format json
    provenance graph <anchor_requirement_id> --scope <scope> --format json
    provenance <anchor_requirement_id> get --scope <scope> --format json
    provenance search --kind topic --scope <scope> --format json
@@ -272,7 +272,7 @@ frontier.
 ### 1. Prime
 
 Load the map with the commands from **Start every session**. `provenance prime`
-explains the domain. Use `provenance search --kind rule` for Rules and `provenance gaps` for
+explains the domain. Use `provenance search --kind rule` for Rules and `provenance check --gaps` for
 computed gaps. Load the anchor graph, fog, boundaries, topics, and questions with
 their separate commands. The
 shaping-focused subset of the computed graph frontier includes:

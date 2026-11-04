@@ -37,7 +37,7 @@ included. The target is not a relation row: it is not in the table above and
 does not enter the projection's `relations` table. A new contribution or
 synthesis packet must name a record that exists in its scope, or the write is
 refused. A stored target that names no record is reported
-by `provenance gaps` as a dangling reference (`contribution <id> target points
+by `provenance check --gaps` as a dangling reference (`contribution <id> target points
 at missing <kind> <id>`), and `provenance check` names it as one too. Neither
 refuses anything else: reads, catch-up, and later writes go through.
 

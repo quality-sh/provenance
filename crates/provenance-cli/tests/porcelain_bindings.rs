@@ -2,7 +2,8 @@ use assert_cmd::Command;
 use provenance_macros::verifies;
 use provenance_mcp::Client;
 use provenance_porcelain::check::{
-    BindingContext, BindingPolicy, Category, CategoryRun, CheckInput, PortFuture, Refusal,
+    BindingContext, BindingPolicy, Category, CategoryRun, CheckInput, GapsContext, PortFuture,
+    Refusal,
 };
 use serde_json::json;
 use std::sync::Arc;
@@ -80,6 +81,10 @@ impl provenance_porcelain::check::CheckPort for EmptyCheckPort {
                         policy: BindingPolicy::Warning,
                     },
                     refusal: Refusal::None,
+                },
+                Category::Gaps => CategoryRun::Gaps {
+                    findings: Vec::new(),
+                    context: GapsContext { scopes: Vec::new() },
                 },
             })
         })
