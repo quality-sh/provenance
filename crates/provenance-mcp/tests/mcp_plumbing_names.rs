@@ -63,8 +63,13 @@ async fn no_plumbing_operation_name_is_a_listed_or_callable_tool() {
         let rmcp::ServiceError::McpError(error) = refused else {
             panic!("{}: {refused:?}", definition.name);
         };
-        assert_eq!(error.code.0, -32601, "{}", definition.name);
-        assert_eq!(error.message, "Unknown tool", "{}", definition.name);
+        assert_eq!(error.code.0, -32602, "{}", definition.name);
+        assert_eq!(
+            error.message,
+            format!("Unknown tool: {}", definition.name),
+            "{}",
+            definition.name
+        );
     }
 
     let through_api = client

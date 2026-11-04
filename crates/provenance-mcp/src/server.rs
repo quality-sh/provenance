@@ -5,8 +5,8 @@ use provenance_porcelain::registry::{Command, Interface};
 use provenance_transport::{porcelain::Action, StatementHost};
 use rmcp::{
     model::{
-        CallToolRequestParams, CallToolResult, ErrorCode, ListToolsResult, PaginatedRequestParams,
-        ServerCapabilities, ServerInfo,
+        CallToolRequestParams, CallToolResponse, CallToolResult, ErrorCode, Implementation,
+        ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerConfig,
     },
     service::RequestContext,
     ErrorData, RoleServer, ServerHandler,
@@ -28,11 +28,10 @@ impl Server {
 impl ServerHandler for Server {
     /// Supplies shared domain guidance through native MCP instructions.
     #[provenance_macros::rule("rule_porcelain_mcp_guidance_native")]
-    fn get_info(&self) -> ServerInfo {
-        let mut info = ServerInfo::default();
-        info.capabilities = ServerCapabilities::builder().enable_tools().build();
-        info.instructions = Some(provenance_porcelain::guidance::guidance().guidance);
-        info
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
+            .with_server_info(Implementation::new("provenance", env!("CARGO_PKG_VERSION")))
+            .with_instructions(provenance_porcelain::guidance::guidance().guidance)
     }
 
     /// Lists the porcelain MCP tools in registry order.
@@ -58,55 +57,61 @@ impl ServerHandler for Server {
         &self,
         request: CallToolRequestParams,
         _: RequestContext<RoleServer>,
-    ) -> Result<CallToolResult, ErrorData> {
-        let host = &self.0;
-        let arguments = request.arguments;
-        match Command::find(Interface::Mcp, &[request.name.as_ref()]) {
-            Some(Command::Get) if host.porcelain().get_is_available() => {
-                call_get(host, arguments).await
-            }
-            Some(Command::Trace) if host.porcelain().get_is_available() => {
-                surface::admitted_call(host, arguments, |arguments| {
-                    tools::call_trace(host, arguments)
-                })
-                .await
-            }
-            Some(Command::Search) if host.porcelain().search_is_available() => {
-                call_search(host, arguments).await
-            }
-            Some(Command::Api) if host.porcelain().api_is_available() => {
-                call_api_tool(host, arguments).await
-            }
-            Some(Command::Check) => {
-                let Some(port) = host.check_port() else {
-                    return Err(unknown_tool());
-                };
-                surface::admitted_call(host, arguments, |arguments| {
-                    tools::call_check(host, port.clone(), arguments)
-                })
-                .await
-            }
-            Some(Command::Action(Action::Discussions)) => call_discussions(host, arguments).await,
-            Some(Command::Change) => {
-                surface::admitted_call(host, arguments, |arguments| {
-                    tools::call_change(host, arguments)
-                })
-                .await
-            }
-            Some(
-                Command::Action(_)
-                | Command::Get
-                | Command::Trace
-                | Command::Search
-                | Command::Api
-                | Command::Prime
-                | Command::Repository(_)
-                | Command::Graph(_)
-                | Command::Workspace(_)
-                | Command::Dogfood(_),
-            )
-            | None => Err(unknown_tool()),
+    ) -> Result<CallToolResponse, ErrorData> {
+        call_command(&self.0, request).await.map(Into::into)
+    }
+}
+
+async fn call_command(
+    host: &StatementHost,
+    request: CallToolRequestParams,
+) -> Result<CallToolResult, ErrorData> {
+    let arguments = request.arguments;
+    match Command::find(Interface::Mcp, &[request.name.as_ref()]) {
+        Some(Command::Get) if host.porcelain().get_is_available() => {
+            call_get(host, arguments).await
         }
+        Some(Command::Trace) if host.porcelain().get_is_available() => {
+            surface::admitted_call(host, arguments, |arguments| {
+                tools::call_trace(host, arguments)
+            })
+            .await
+        }
+        Some(Command::Search) if host.porcelain().search_is_available() => {
+            call_search(host, arguments).await
+        }
+        Some(Command::Api) if host.porcelain().api_is_available() => {
+            call_api_tool(host, arguments).await
+        }
+        Some(Command::Check) => {
+            let Some(port) = host.check_port() else {
+                return Err(unknown_tool(&request.name));
+            };
+            surface::admitted_call(host, arguments, |arguments| {
+                tools::call_check(host, port.clone(), arguments)
+            })
+            .await
+        }
+        Some(Command::Action(Action::Discussions)) => call_discussions(host, arguments).await,
+        Some(Command::Change) => {
+            surface::admitted_call(host, arguments, |arguments| {
+                tools::call_change(host, arguments)
+            })
+            .await
+        }
+        Some(
+            Command::Action(_)
+            | Command::Get
+            | Command::Trace
+            | Command::Search
+            | Command::Api
+            | Command::Prime
+            | Command::Repository(_)
+            | Command::Graph(_)
+            | Command::Workspace(_)
+            | Command::Dogfood(_),
+        )
+        | None => Err(unknown_tool(&request.name)),
     }
 }
 
@@ -133,8 +138,13 @@ fn tool(host: &StatementHost, command: Command) -> Option<rmcp::model::Tool> {
     }
 }
 
-fn unknown_tool() -> ErrorData {
-    ErrorData::new(ErrorCode::METHOD_NOT_FOUND, "Unknown tool", None)
+/// The protocol error for a tool name that the server does not list.
+fn unknown_tool(name: &str) -> ErrorData {
+    ErrorData::new(
+        ErrorCode::INVALID_PARAMS,
+        format!("Unknown tool: {name}"),
+        None,
+    )
 }
 
 async fn call_discussions(
@@ -143,7 +153,9 @@ async fn call_discussions(
 ) -> Result<CallToolResult, ErrorData> {
     let action = tools::discussion_action(arguments.get_or_insert_with(Default::default));
     match action {
-        Some(action) if !host.porcelain().discussion_is_available(action) => Err(unknown_tool()),
+        Some(action) if !host.porcelain().discussion_is_available(action) => {
+            Err(unknown_tool("discussions"))
+        }
         Some(action) => {
             surface::admitted_call(host, arguments, |arguments| {
                 tools::call_discussion(host, action, arguments)

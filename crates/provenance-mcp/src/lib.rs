@@ -44,10 +44,14 @@ pub async fn serve<T>(host: StatementHost, io: T) -> Result<Session, Box<ServeEr
 where
     T: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-    rmcp::ServiceExt::serve(Server::new(host), io::BoundedIo::new(io))
-        .await
-        .map(Session)
-        .map_err(Box::new)
+    // The session setup future is large, so it lives on the heap.
+    Box::pin(rmcp::ServiceExt::serve(
+        Server::new(host),
+        io::BoundedIo::new(io),
+    ))
+    .await
+    .map(Session)
+    .map_err(Box::new)
 }
 
 /// Serve a bounded MCP session for one host on standard input and output.

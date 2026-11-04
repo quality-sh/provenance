@@ -23,7 +23,7 @@ use std::sync::Arc;
 use support::{check_port::FixtureCheckPort, records::Repository};
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader, DuplexStream, Lines};
 
-const TOOL_LIST_FNV1A: u64 = 12_208_109_067_768_268_502;
+const TOOL_LIST_FNV1A: u64 = 7_246_614_148_096_915_953;
 
 /// The porcelain tools, in list order. The list has no plumbing tools.
 const PORCELAIN_TOOL_NAMES: &[&str] = &[
@@ -36,15 +36,34 @@ const PORCELAIN_TOOL_NAMES: &[&str] = &[
     "discussions",
 ];
 
+/// The request metadata of a 2026-07-28 client, which has no `initialize` handshake.
+fn request_meta() -> Value {
+    json!({
+        "io.modelcontextprotocol/protocolVersion":"2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities":{},
+        "io.modelcontextprotocol/clientInfo":{"name":"characterization","version":"0"}
+    })
+}
+
 /// One raw JSON-RPC peer connected to one served host.
 struct Wire {
     lines: Lines<BufReader<tokio::io::ReadHalf<DuplexStream>>>,
     writer: tokio::io::WriteHalf<DuplexStream>,
     next_id: u64,
+    /// The `_meta` that each request carries; none after an `initialize` handshake.
+    meta: Option<Value>,
 }
 
 impl Wire {
+    /// A 2026-07-28 peer: each request carries the protocol metadata.
     fn start(host: StatementHost) -> Self {
+        let mut wire = Self::bare(host);
+        wire.meta = Some(request_meta());
+        wire
+    }
+
+    /// A peer that sends each request without metadata.
+    fn bare(host: StatementHost) -> Self {
         let (client_io, server_io) = tokio::io::duplex(1024 * 1024);
         tokio::spawn(async move {
             let running = provenance_mcp::serve(host, server_io).await.unwrap();
@@ -55,6 +74,7 @@ impl Wire {
             lines: BufReader::new(reader).lines(),
             writer,
             next_id: 1,
+            meta: None,
         }
     }
 
@@ -66,9 +86,12 @@ impl Wire {
     }
 
     /// Send one request and return the whole response message.
-    async fn request(&mut self, method: &str, params: Value) -> Value {
+    async fn request(&mut self, method: &str, mut params: Value) -> Value {
         let id = self.next_id;
         self.next_id += 1;
+        if let Some(meta) = &self.meta {
+            params["_meta"] = meta.clone();
+        }
         self.send(&json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}))
             .await;
         let line = self.lines.next_line().await.unwrap().unwrap();
@@ -123,24 +146,47 @@ fn check_host() -> StatementHost {
     StatementHost::default().with_check_port(Arc::new(FixtureCheckPort))
 }
 
+fn server_info() -> Value {
+    json!({"name":"provenance","version":env!("CARGO_PKG_VERSION")})
+}
+
 #[tokio::test]
-async fn initialize_response_keeps_its_fields() {
-    for requested in ["2025-06-18", "2024-11-05"] {
-        let mut wire = Wire::start(StatementHost::default());
-        let mut result = wire.initialize(requested).await;
-        // The library reports its own package version here.
-        let version = result["serverInfo"]
-            .as_object_mut()
-            .unwrap()
-            .remove("version")
-            .unwrap();
-        assert_ne!(version.as_str().unwrap(), "");
+async fn discover_response_keeps_its_fields() {
+    let mut wire = Wire::start(StatementHost::default());
+    let response = wire.request("server/discover", json!({})).await;
+    assert_eq!(
+        response["result"],
+        json!({
+            "_meta":{"io.modelcontextprotocol/serverInfo":server_info()},
+            "cacheScope":"private",
+            "capabilities":{"tools":{}},
+            "instructions":provenance_porcelain::guidance::guidance().guidance,
+            "resultType":"complete",
+            "supportedVersions":["2024-11-05","2025-03-26","2025-06-18","2025-11-25","2026-07-28"],
+            "ttlMs":0
+        })
+    );
+}
+
+/// A client of an older protocol initializes; a request for 2026-07-28 or a later
+/// version through `initialize` gets the newest version that has the handshake.
+#[tokio::test]
+async fn initialize_negotiates_the_older_protocols() {
+    for (requested, agreed) in [
+        ("2025-11-25", "2025-11-25"),
+        ("2025-06-18", "2025-06-18"),
+        ("2024-11-05", "2024-11-05"),
+        ("2026-07-28", "2025-11-25"),
+        ("2099-01-01", "2025-11-25"),
+    ] {
+        let mut wire = Wire::bare(StatementHost::default());
+        let result = wire.initialize(requested).await;
         assert_eq!(
             result,
             json!({
-                "protocolVersion":requested,
+                "protocolVersion":agreed,
                 "capabilities":{"tools":{}},
-                "serverInfo":{"name":"rmcp"},
+                "serverInfo":server_info(),
                 "instructions":provenance_porcelain::guidance::guidance().guidance,
             }),
             "requested {requested}"
@@ -148,11 +194,25 @@ async fn initialize_response_keeps_its_fields() {
     }
 }
 
+/// Without `initialize`, each request must carry the protocol metadata.
+#[tokio::test]
+async fn a_request_without_metadata_or_handshake_is_refused() {
+    let mut wire = Wire::bare(check_host());
+    let response = wire.request("tools/list", json!({})).await;
+    assert_eq!(
+        response["error"],
+        json!({
+            "code":-32602,
+            "message":"request _meta is missing or has malformed required fields: \
+                io.modelcontextprotocol/protocolVersion, io.modelcontextprotocol/clientCapabilities"
+        })
+    );
+}
+
 #[tokio::test]
 async fn tool_list_keeps_its_names_order_and_schemas() {
     let repository = Repository::new("The shared graph is readable.");
     let mut wire = Wire::start(full_host(&repository));
-    wire.initialize("2025-06-18").await;
     let response = wire.request("tools/list", json!({})).await;
     let result = &response["result"];
     let names = result["tools"]
@@ -162,35 +222,40 @@ async fn tool_list_keeps_its_names_order_and_schemas() {
         .map(|tool| tool["name"].as_str().unwrap())
         .collect::<Vec<_>>();
     assert_eq!(names, PORCELAIN_TOOL_NAMES);
-    assert_eq!(fnv1a(&result.to_string()), TOOL_LIST_FNV1A);
+    assert_eq!(
+        (
+            &result["cacheScope"],
+            &result["resultType"],
+            &result["ttlMs"]
+        ),
+        (&json!("private"), &json!("complete"), &json!(0))
+    );
+    assert_eq!(fnv1a(&result["tools"].to_string()), TOOL_LIST_FNV1A);
 }
 
 #[tokio::test]
 async fn tool_call_result_keeps_its_shape() {
+    let call = json!({"name":"check","arguments":{"categories":["graph"]}});
+    let mut expected = json!({
+        "content":[{"type":"text","text":"graph: passed"}],
+        "isError":false,
+        "structuredContent":{
+            "categories":[{"category":"graph","status":"passed","findings":[]}]
+        }
+    });
+    let mut legacy = Wire::bare(check_host());
+    legacy.initialize("2025-06-18").await;
+    let response = legacy.request("tools/call", call.clone()).await;
+    assert_eq!(response["result"], expected, "2025-06-18");
     let mut wire = Wire::start(check_host());
-    wire.initialize("2025-06-18").await;
-    let response = wire
-        .request(
-            "tools/call",
-            json!({"name":"check","arguments":{"categories":["graph"]}}),
-        )
-        .await;
-    assert_eq!(
-        response["result"],
-        json!({
-            "content":[{"type":"text","text":"graph: passed"}],
-            "isError":false,
-            "structuredContent":{
-                "categories":[{"category":"graph","status":"passed","findings":[]}]
-            }
-        })
-    );
+    let response = wire.request("tools/call", call).await;
+    expected["resultType"] = json!("complete");
+    assert_eq!(response["result"], expected, "2026-07-28");
 }
 
 #[tokio::test]
 async fn typed_refusal_and_unknown_tool_keep_their_shape() {
     let mut wire = Wire::start(check_host());
-    wire.initialize("2025-06-18").await;
     let refusal = wire
         .request(
             "tools/call",
@@ -205,10 +270,11 @@ async fn typed_refusal_and_unknown_tool_keep_their_shape() {
         refusal,
         json!({
             "jsonrpc":"2.0",
-            "id":2,
+            "id":1,
             "result":{
                 "content":[{"type":"text","text":envelope.to_string()}],
                 "isError":true,
+                "resultType":"complete",
                 "structuredContent":envelope
             }
         })
@@ -220,8 +286,8 @@ async fn typed_refusal_and_unknown_tool_keep_their_shape() {
         unknown,
         json!({
             "jsonrpc":"2.0",
-            "id":3,
-            "error":{"code":-32601,"message":"Unknown tool"}
+            "id":2,
+            "error":{"code":-32602,"message":"Unknown tool: no-such-tool"}
         })
     );
 }
@@ -256,7 +322,6 @@ fn refusals() -> Vec<(&'static str, Value)> {
 async fn each_tool_refusal_keeps_its_text() {
     let repository = Repository::new("The shared graph is readable.");
     let mut wire = Wire::start(full_host(&repository));
-    wire.initialize("2025-06-18").await;
     let oversized = "x".repeat(provenance_transport::MAX_BODY_BYTES + 1);
     for (label, error) in refusals() {
         let call = if label == "too_large" {
@@ -271,6 +336,7 @@ async fn each_tool_refusal_keeps_its_text() {
             json!({
                 "content":[{"type":"text","text":envelope.to_string()}],
                 "isError":true,
+                "resultType":"complete",
                 "structuredContent":envelope
             }),
             "{label}"
