@@ -162,6 +162,7 @@
     },
     "provenance-mcp": {
       "dependencies": [
+        "jsonschema",
         "provenance-contract",
         "provenance-core",
         "provenance-macros",
@@ -172,7 +173,6 @@
       ],
       "dev-dependencies": [
         "axum",
-        "jsonschema",
         "provenance-core",
         "provenance-macros",
         "provenance-porcelain",

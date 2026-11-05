@@ -197,13 +197,27 @@ async fn mcp_get_failures_are_the_cli_json_refusals() {
     for (cli, arguments) in [
         ("source_missing get", json!({"target":"source_missing"})),
         ("source_live_inventory get --limit 5", limit),
-        ("source_live_inventory get --view children --depth 0", depth),
-        ("source_live_inventory get --limit 5", unknown),
     ] {
         let cli = cli_get_error(&repo, &cli.split(' ').collect::<Vec<_>>());
         let mcp = client.call("get", arguments.clone()).await;
         assert_eq!(mcp["isError"], true, "{arguments}");
         assert_eq!(mcp["structuredContent"]["error"], cli, "{arguments}");
+    }
+    // A value that the MCP input schema refuses gets the same kind, and MCP names the field.
+    for (cli, arguments, field) in [
+        (
+            "source_live_inventory get --view children --depth 0",
+            depth,
+            "max_depth",
+        ),
+        ("source_live_inventory get --limit 5", unknown, "unknown"),
+    ] {
+        let cli = cli_get_error(&repo, &cli.split(' ').collect::<Vec<_>>());
+        let mcp = client.call("get", arguments.clone()).await;
+        let error = &mcp["structuredContent"]["error"];
+        assert_eq!(mcp["isError"], true, "{arguments}");
+        assert_eq!(error["kind"], cli["kind"], "{arguments}");
+        assert_eq!(error["field"], field, "{arguments}");
     }
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();

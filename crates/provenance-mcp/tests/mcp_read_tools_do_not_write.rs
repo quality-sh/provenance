@@ -32,7 +32,7 @@ async fn routes(session: &Session) -> Vec<(String, String, bool)> {
     let routes = catalog["routes"]
         .as_array()
         .expect("the catalog lists routes");
-    assert!(!routes.is_empty());
+    assert_ne!(routes.len(), 0);
     routes
         .iter()
         .map(|route| {
@@ -208,7 +208,11 @@ async fn no_read_tool_changes_the_repository() {
     for (name, arguments) in read_calls() {
         support::schema_check::call(&session.client, name, arguments.clone()).await;
         let changed = changed(&before, &repository);
-        assert!(changed.is_empty(), "{name} {arguments} changed {changed:?}");
+        assert_eq!(
+            changed,
+            Vec::<std::path::PathBuf>::new(),
+            "{name} {arguments}"
+        );
         called.insert(name);
     }
     for (method, path, writes) in routes(&session).await {

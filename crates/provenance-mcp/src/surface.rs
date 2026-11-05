@@ -22,7 +22,7 @@ pub enum Effect {
 
 impl Effect {
     /// Read tools are read-only and closed-world; `change` is the one tool that writes.
-    #[provenance_macros::rule("rule_mcp_tools_read_or_write")]
+    /// The read tools also refuse each request that writes (`tools::read_only`).
     fn annotations(self) -> ToolAnnotations {
         match self {
             Self::Reads => ToolAnnotations::from_raw(None, Some(true), None, None, Some(false)),
