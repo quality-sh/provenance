@@ -108,16 +108,39 @@ async fn no_plumbing_operation_name_is_a_listed_or_callable_tool() {
         .await
         .unwrap();
     assert_eq!(read.structured_content.unwrap()["data"]["name"], "Renamed");
+
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}
+
+#[tokio::test]
+#[verifies("rule_porcelain_plumbing_only_through_api", examples)]
+async fn the_change_tool_has_no_api_action() {
+    let repository = Repository::new("The shared graph is readable.");
+    repository.all_kinds();
+    let host = full_host(&repository);
+    let (client_io, server_io) = tokio::io::duplex(1024 * 1024);
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+    let call = |name: &str, arguments: serde_json::Value| {
+        client.call_tool(
+            CallToolRequestParams::new(name.to_owned())
+                .with_arguments(arguments.as_object().unwrap().clone()),
+        )
+    };
+
+    // The change tool does not tell the client about an api action.
+    let tools = client.list_all_tools().await.unwrap();
+    let change = tools.iter().find(|tool| tool.name == "change").unwrap();
+    let description = change.description.as_deref().unwrap();
+    assert!(!description.contains("api"), "{description}");
+    let actions = &change.input_schema["properties"]["action"]["enum"];
     assert!(
-        repository
-            .bytes()
-            .values()
-            .any(|bytes| String::from_utf8_lossy(bytes).contains("\"name\":\"Renamed\"")),
-        "the stored graph holds the new name"
+        !actions.as_array().unwrap().contains(&json!("api")),
+        "{actions}"
     );
 
-    // The change tool has no api action: the call is refused, and the refusal names
-    // the action field.
+    // The change tool has no api action: the call is refused as an unknown action.
     let refused = call(
         "change",
         json!({"action":"api","request":{"path":"sources/source_shared","method":"patch",
@@ -128,8 +151,26 @@ async fn no_plumbing_operation_name_is_a_listed_or_callable_tool() {
     assert_eq!(refused.is_error, Some(true), "{refused:?}");
     let error = &refused.structured_content.unwrap()["error"];
     assert_eq!(
-        (&error["kind"], &error["field"]),
-        (&json!("invalid_input"), &json!("action")),
+        (&error["kind"], &error["field"], &error["reason"]),
+        (
+            &json!("invalid_input"),
+            &json!("action"),
+            &json!("invalid_value")
+        ),
+        "{error}"
+    );
+    let message = error["message"].as_str().unwrap();
+    let listed = message
+        .strip_prefix("unknown action api; the actions are: ")
+        .unwrap_or_else(|| panic!("{error}"));
+    assert_eq!(
+        listed.split(", ").collect::<Vec<_>>(),
+        actions
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|action| action.as_str().unwrap())
+            .collect::<Vec<_>>(),
         "{error}"
     );
 

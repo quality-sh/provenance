@@ -1,5 +1,5 @@
-//! The get tool refuses notify, and no call of a read tool, and no GET call of the api
-//! tool, changes the repository.
+//! The get tool refuses notify, and no call of a read tool, and no api tool call of a
+//! route that reads, changes the repository.
 #![cfg(feature = "test-fixture")]
 
 #[allow(dead_code)]
@@ -119,6 +119,16 @@ async fn get_refuses_notify_and_names_the_change_tool() {
     session.close().await;
 }
 
+/// The body of each api route that reads through POST.
+fn read_body(path: &str) -> Option<Value> {
+    match path {
+        "/statement-checks" => Some(json!({"statement": "The pump stops."})),
+        "/authoring-plans" => Some(json!({"schema_version": 2, "spec": "fx",
+            "declared_by": "spec://fx", "sources": [], "requirements": []})),
+        _ => None,
+    }
+}
+
 /// Each read tool with each of its fields set. Each call succeeds.
 fn read_calls(discussion_id: &Value) -> Vec<(&'static str, Value)> {
     let parent = json!({"node_type": "requirement", "node_id": "req_shared"});
@@ -211,13 +221,19 @@ async fn no_read_tool_changes_the_repository() {
         );
         called.insert(name);
     }
-    // The api tool writes, so only its GET calls are here: the catalog, and each GET
-    // route.
+    // The api tool also writes. Its annotations do not select the calls here: the
+    // operation of each route does. Each route that reads is called, also through POST.
+    let mut posts = Vec::new();
     for (method, path, writes) in routes(&session).await {
-        if writes || method != "get" {
+        if writes {
             continue;
         }
-        let arguments = json!({"method": method, "path": path});
+        let mut arguments = json!({"method": method, "path": path});
+        if method != "get" {
+            let body = read_body(&path).unwrap_or_else(|| panic!("{method} {path} has no body"));
+            arguments["body"] = body;
+            posts.push(path.clone());
+        }
         let result = support::schema_check::call(&session.client, "api", arguments.clone()).await;
         let value = result.structured_content.unwrap();
         // Each route reaches its service: it reads, or the record of a filled path
@@ -227,6 +243,8 @@ async fn no_read_tool_changes_the_repository() {
             "{arguments}: {value}"
         );
     }
+    posts.sort();
+    assert_eq!(posts, ["/authoring-plans", "/statement-checks"]);
     assert_eq!(
         changed(&before, &repository),
         Vec::<std::path::PathBuf>::new()
