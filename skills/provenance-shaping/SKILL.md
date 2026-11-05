@@ -92,17 +92,17 @@ by question; expensive methods claim one question and often stop at a phase boun
    ```sh
    provenance prime
    provenance search --kind rule --scope <scope> --format json
-   provenance gaps --scope <scope> --format json
-   provenance graph <anchor_requirement_id> --scope <scope> --format json
-   provenance <anchor_requirement_id> get --scope <scope> --format json
+   provenance check --gaps --scope <scope> --format json
+   provenance <anchor_requirement_id> get --view children --scope <scope> --format json
    provenance search --kind topic --scope <scope> --format json
    provenance search --kind question --scope <scope> --format json
    provenance search --kind boundary --scope <scope> --format json
    ```
 
 4. Treat the map as an index, not a store. Keep only gists in your working context and
-   zoom into the available graph and rule views with `provenance graph <requirement_id>`
-   and `provenance traceability <rule_id>`; use the shaping list commands above for their
+   zoom into the available graph and rule views with
+   `provenance <requirement_id> get --view children` (records below) and
+   `provenance <rule_id> trace` (records above); use the shaping list commands above for their
    full records. Refer to artifacts by meaningful names plus ids; never hand off bare ids.
 
 ## The tree is the spec
@@ -272,7 +272,7 @@ frontier.
 ### 1. Prime
 
 Load the map with the commands from **Start every session**. `provenance prime`
-explains the domain. Use `provenance search --kind rule` for Rules and `provenance gaps` for
+explains the domain. Use `provenance search --kind rule` for Rules and `provenance check --gaps` for
 computed gaps. Load the anchor graph, fog, boundaries, topics, and questions with
 their separate commands. The
 shaping-focused subset of the computed graph frontier includes:
@@ -548,12 +548,12 @@ change the artifact's kind.
    verification anywhere.
 
    ```sh
-   provenance coverage scan --path . --scope <scope> --validate-rules --format json
+   provenance check --bindings --scope <scope> --format json
    ```
 
 Unimplemented and Unverified are **absence**, derived by that scan and never written into
-the record. How loudly a repo treats absence is its own dial: `--strict` makes any warning
-fail the command, and a repo that runs the scan without it is reporting, not gating.
+the record. How loudly a repo treats absence is its own dial: `--strict` makes any bindings
+finding fail the check, and a repo that runs the check without it is reporting, not gating.
 Neither setting is a reason to write a test that asserts nothing.
 
 #### `prototype`
@@ -689,7 +689,7 @@ sources, the Requirement it refines, and the ratified decisions that produced it
 
 - The statement gives one atomic behavioural obligation.
 - Source evidence, a Requirement, a ratified Resolution, or recorded explicit human
-  ratification supports that statement. `provenance traceability <rule_id> --scope <scope>
+  ratification supports that statement. `provenance <rule_id> trace --scope <scope>
   --format json` prints the available upstream graph chain.
 - No ratified decision disagrees with it.
 
@@ -699,12 +699,12 @@ Requirement, or decision that it disagrees with.
 **Implementation fidelity: does the code do what the Rule says?** Audit the code against
 the Rule.
 
-- `provenance coverage scan --path . --scope <scope> --validate-rules` reports an active
-  Rule that has no primary implementation as unimplemented. Only that canonical scan
-  derives the code-binding absence findings.
+- `provenance check --bindings --scope <scope>` reports an active Rule that has no
+  primary implementation as unimplemented. Only that canonical scan derives the
+  code-binding absence findings.
 - Unimplemented is absence. It is an ordinary state of a planned obligation.
 
-Prime and traceability are graph reads. They do not scan code, so they must not assert an
+Prime and trace are graph reads. They do not scan code, so they must not assert an
 implementation or verification verdict. They can explain that an active Rule with no cited
 code evidence is allowed to be unimplemented; the canonical scanner must run before you
 report that derived state.
@@ -731,7 +731,7 @@ Before moving to the next question, verify the current answer has been handled:
 - each new record has a pending review submission ("Every record goes to review");
 - each precise atomic behavioural obligation is landed as a Rule; any known primary
   implementation and evidence carry `#[rule]` and `#[verifies]` bindings, and
-  `coverage scan --validate-rules` reports any remaining absence honestly;
+  `check --bindings` reports any remaining absence honestly;
 - boundaries/out-of-scope rejections are explicit;
 - source references and evidence are attached where they exist;
 - proposal definitions remain immutable `proposed` records; assertion lineage uses assertion

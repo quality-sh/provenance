@@ -51,21 +51,35 @@ fn active_rule(repo: &Path, scope: &str, rule: &str) {
         .success();
 }
 
+/// The scan report file of `scope`, beside the repository directory so that no scan
+/// reads it.
+fn report_file(repo: &Path, scope: &str) -> std::path::PathBuf {
+    let name = repo.file_name().unwrap().to_str().unwrap();
+    repo.with_file_name(format!("{name}-{scope}-report.json"))
+}
+
+/// The scan report that the last bindings check of `scope` wrote.
+fn report(repo: &Path, scope: &str) -> Value {
+    let path = report_file(repo, scope);
+    let report = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    std::fs::remove_file(path).unwrap();
+    report
+}
+
 fn strict_scan(repo: &Path, scope: &str) -> Command {
     let mut command = provenance();
     command.args([
-        "coverage",
-        "scan",
+        "check",
+        "--bindings",
         "--repo",
         repo.to_str().unwrap(),
         "--path",
         repo.to_str().unwrap(),
         "--scope",
         scope,
-        "--validate-rules",
         "--strict",
-        "--format",
-        "json",
+        "--output",
+        report_file(repo, scope).to_str().unwrap(),
     ]);
     command
 }
@@ -100,7 +114,7 @@ fn assert_each_scope_sees_only_its_own_bindings(repo: &Path, scopes: &[&str]) {
             "{scope}: {}",
             String::from_utf8_lossy(&output.stderr)
         );
-        let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+        let report = report(repo, scope);
         assert_eq!(report["warnings"], json!([]), "{scope}");
         assert_eq!(report["files_scanned"], 1, "{scope}");
     }
@@ -157,8 +171,10 @@ fn a_nested_scope_owns_its_files_and_the_outer_scope_does_not() {
     assert_each_scope_sees_only_its_own_bindings(directory.path(), &["outer", "inner"]);
 }
 
-// Implementation aid: a scan path outside the repository keeps its files in a `.` scope.
+/// The bindings check scans only the files below --path; a path outside the
+/// repository keeps its files in a `.` scope.
 #[test]
+#[verifies("rule_check_bindings_scans_selected_path", examples)]
 fn a_root_scope_keeps_scanned_files_outside_the_repository() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path();
@@ -175,16 +191,16 @@ fn a_root_scope_keeps_scanned_files_outside_the_repository() {
     for (scope, files) in [("root", 1), ("app", 0)] {
         let output = provenance()
             .args([
-                "coverage",
-                "scan",
+                "check",
+                "--bindings",
                 "--repo",
                 repo.to_str().unwrap(),
                 "--path",
                 outside.path().to_str().unwrap(),
                 "--scope",
                 scope,
-                "--format",
-                "json",
+                "--output",
+                report_file(repo, scope).to_str().unwrap(),
             ])
             .output()
             .unwrap();
@@ -193,9 +209,52 @@ fn a_root_scope_keeps_scanned_files_outside_the_repository() {
             "{scope}: {}",
             String::from_utf8_lossy(&output.stderr)
         );
-        let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+        let report = report(repo, scope);
         assert_eq!(report["files_scanned"], files, "{scope}: {report}");
     }
+}
+
+/// With --scope, the bindings check reports the findings of that scope only; without
+/// it, the findings of each declared scope.
+#[test]
+#[verifies("rule_check_scope_selects_category_records", examples)]
+fn the_bindings_check_reports_only_the_selected_scope() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path();
+    bound_scopes(repo, &[("alpha", "a"), ("beta", "b")]);
+    provenance()
+        .args([
+            "rule_beta_unbound",
+            "create",
+            "--type",
+            "rule",
+            "--status",
+            "active",
+        ])
+        .args(["--repo", repo.to_str().unwrap(), "--scope", "beta"])
+        .args([
+            "--requirement-id",
+            "req_beta",
+            "--statement",
+            "The system keeps topics.",
+        ])
+        .assert()
+        .success();
+    let findings = |scope: Option<&str>| -> String {
+        let mut command = provenance();
+        command.args(["check", "--bindings", "--format", "json"]);
+        command.args(["--repo", repo.to_str().unwrap()]);
+        if let Some(scope) = scope {
+            command.args(["--scope", scope]);
+        }
+        let output = command.output().unwrap();
+        assert!(output.status.success(), "{scope:?}: {output:?}");
+        let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+        report["categories"][0]["findings"].to_string()
+    };
+    assert!(!findings(Some("alpha")).contains("rule_beta_unbound"));
+    assert!(findings(Some("beta")).contains("rule_beta_unbound"));
+    assert!(findings(None).contains("rule_beta_unbound"));
 }
 
 #[test]
@@ -207,7 +266,7 @@ fn a_scope_whose_directory_is_absent_gets_a_warning_that_names_it() {
 
     let output = strict_scan(repo, "app").output().unwrap();
     assert_eq!(output.status.code(), Some(1));
-    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let report = report(repo, "app");
     let warnings = report["warnings"].as_array().unwrap();
     assert!(
         warnings.iter().any(|warning| warning["message"]
@@ -242,9 +301,10 @@ fn scope_reports_refuse_a_scope_the_manifest_does_not_declare() {
     let repo = directory.path();
     init(repo, "app", ".");
 
-    for command in ["gaps", "health", "orphans", "export"] {
+    for command in [&["check", "--gaps"][..], &["export"]] {
         provenance()
-            .args([command, "--repo", repo.to_str().unwrap(), "--scope", "nope"])
+            .args(command)
+            .args(["--repo", repo.to_str().unwrap(), "--scope", "nope"])
             .assert()
             .failure()
             .stdout(predicate::str::is_empty())
@@ -286,15 +346,7 @@ fn commands_in_a_subdirectory_name_the_enclosing_repository() {
         vec!["search", "--text", "topic"],
         vec!["req_a"],
         vec!["check", "--quiet"],
-        vec![
-            "coverage",
-            "scan",
-            "--path",
-            ".",
-            "--scope",
-            "default",
-            "--validate-rules",
-        ],
+        vec!["check", "--bindings", "--path", ".", "--scope", "default"],
     ] {
         provenance()
             .current_dir(&sub)
@@ -309,31 +361,33 @@ fn commands_in_a_subdirectory_name_the_enclosing_repository() {
 
 #[test]
 #[verifies("rule_operation_scope_is_the_opened_scope", examples)]
-fn gaps_and_health_read_only_the_selected_scope() {
+fn the_gaps_check_reads_only_the_selected_scope() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path();
     init(repo, "a", ".");
     init(repo, "b", "b");
     active_rule(repo, "a", "rule_a");
-    let report = |command: &str, scope: &str| -> Value {
+    let report = |scope: &str| -> Value {
         let output = provenance()
-            .args([command, "--repo", repo.to_str().unwrap(), "--scope", scope])
+            .args(["check", "--gaps", "--format", "json"])
+            .args(["--repo", repo.to_str().unwrap(), "--scope", scope])
             .output()
             .unwrap();
         assert!(
             output.status.success(),
-            "{command} {scope}: {}",
+            "{scope}: {}",
             String::from_utf8_lossy(&output.stderr)
         );
-        serde_json::from_slice(&output.stdout).unwrap()
+        let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+        report["categories"][0].clone()
     };
 
-    let health = report("health", "b");
-    assert_eq!(health["requirements"]["total"], 0, "{health}");
-    assert_eq!(health["rules"]["total"], 0, "{health}");
-    let gaps = report("gaps", "b");
-    assert!(!gaps.to_string().contains("req_a"), "{gaps}");
-    assert_eq!(report("health", "a")["rules"]["total"], 1);
-    let gaps = report("gaps", "a").to_string();
+    let b = report("b");
+    assert_eq!(b["context"]["scopes"][0]["requirements"], 0, "{b}");
+    assert_eq!(b["context"]["scopes"][0]["rules_total"], 0, "{b}");
+    assert!(!b["findings"].to_string().contains("req_a"), "{b}");
+    let a = report("a");
+    assert_eq!(a["context"]["scopes"][0]["rules_total"], 1);
+    let gaps = a["findings"].to_string();
     assert!(gaps.contains("req_a") || gaps.contains("rule_a"), "{gaps}");
 }

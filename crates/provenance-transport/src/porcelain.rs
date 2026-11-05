@@ -32,6 +32,11 @@ impl HostPorcelain<'_> {
         api_port::is_available(self.host)
     }
 
+    /// The host can register a client thread for review changes.
+    pub fn notify_is_available(&self) -> bool {
+        self.host.notify_port().is_some() && self.get_is_available()
+    }
+
     /// The host grants what one discussion action needs.
     pub fn discussion_is_available(&self, action: Action) -> bool {
         discussion_port::is_available(self.host, action)

@@ -41,14 +41,21 @@ Available actions depend on the selected surface and its access. Use CLI help or
 - `provenance search --text <text> --scope <scope> --format json`\n\
 - `provenance <id> get --view children --depth <N> --scope <scope> --format json`\n\n",
     );
-    let commands = [Command::Get, Command::Search, Command::Check, Command::Api]
-        .into_iter()
-        .chain(
-            Action::RECORD
-                .into_iter()
-                .chain(Action::DISCUSSION)
-                .map(Command::Action),
-        );
+    let commands = [
+        Command::Get,
+        Command::Trace,
+        Command::Search,
+        Command::Check,
+        Command::Api,
+        Command::Change,
+    ]
+    .into_iter()
+    .chain(
+        Action::RECORD
+            .into_iter()
+            .chain(Action::DISCUSSION)
+            .map(Command::Action),
+    );
     for command in commands {
         let declaration = command.declaration();
         writeln!(text, "- {}: {}", declaration.name, declaration.description)

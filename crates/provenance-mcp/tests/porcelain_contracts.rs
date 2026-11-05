@@ -1,7 +1,7 @@
 use jsonschema::Validator;
 use provenance_porcelain::check::{
     BindingContext, BindingPolicy, Category, CategoryRun, CheckInput, CheckPort, Finding,
-    PortFuture, Refusal, StatementContext,
+    GapsContext, PortFuture, Refusal, ScopeCounts, StatementContext,
 };
 use serde_json::{json, Value};
 use std::sync::{
@@ -99,6 +99,7 @@ fn assert_get_schema_edges(input: &Validator, output: &Validator, valid: &Value)
 
 #[cfg(feature = "test-fixture")]
 #[tokio::test]
+#[provenance_macros::verifies("rule_trace_action_matches_trace_view", examples)]
 async fn emitted_get_contract_accepts_each_live_view_and_rejects_wrong_payloads() {
     use provenance_porcelain::get::{GetInput, View};
     use rmcp::{model::CallToolRequestParams, ServiceExt as _};
@@ -120,7 +121,7 @@ async fn emitted_get_contract_accepts_each_live_view_and_rejects_wrong_payloads(
         .into_iter()
         .map(|view| {
             (
-                if view == View::Grounding {
+                if view == View::Trace {
                     "rule_shared"
                 } else {
                     "req_shared"
@@ -172,6 +173,7 @@ async fn emitted_get_contract_accepts_each_live_view_and_rejects_wrong_payloads(
         }
     }
 
+    assert_trace_tool_is_trace_view(&client, &tools).await;
     assert_get_schema_edges(&input, &output, &record_value.unwrap());
 
     client.cancel().await.unwrap();
@@ -269,6 +271,23 @@ impl CheckPort for CategoryFixture {
                     },
                     refusal: Refusal::None,
                 },
+                Category::Gaps => CategoryRun::Gaps {
+                    findings: vec![Finding::with_detail(
+                        "default: rule `rule_a` has no producing Requirement with a Source",
+                        json!({"rule_id": "rule_a", "missing": ["source"]}),
+                    )],
+                    context: GapsContext {
+                        scopes: vec![ScopeCounts {
+                            scope_id: "default".into(),
+                            requirements: 1,
+                            source_linked_requirements: 0,
+                            resolved_requirements: 0,
+                            requirements_with_rules: 1,
+                            rules_total: 1,
+                            rules_with_complete_traceability: 0,
+                        }],
+                    },
+                },
             })
         })
     }
@@ -298,7 +317,7 @@ async fn emitted_check_contract_accepts_all_categories_contexts_and_unavailable_
     assert!(!input.is_valid(&json!({"extra":true})));
     assert!(!input.is_valid(&json!({"scope":"other"})));
 
-    let arguments = json!({});
+    let arguments = json!({"categories": Category::ALL});
     let result = client
         .call_tool(
             CallToolRequestParams::new("check")
@@ -317,7 +336,7 @@ async fn emitted_check_contract_accepts_all_categories_contexts_and_unavailable_
             .collect::<Vec<_>>()
     );
     let shared = provenance_porcelain::Porcelain::new(port.clone())
-        .check(CheckInput::default())
+        .check(CheckInput::new(Category::ALL))
         .await;
     assert_eq!(value, &serde_json::to_value(&shared).unwrap());
     assert_eq!(
@@ -337,6 +356,14 @@ async fn emitted_check_contract_accepts_all_categories_contexts_and_unavailable_
         json!([1, true])
     );
     assert_eq!(value["categories"][2]["context"]["policy"], "warning");
+    assert_eq!(value["categories"][3]["category"], "gaps");
+    assert_eq!(
+        value["categories"][3]["context"]["scopes"][0]["rules_total"],
+        1
+    );
+    let mut wrong_counts = value.clone();
+    wrong_counts["categories"][3]["context"]["scopes"][0]["rules_total"] = json!("one");
+    assert!(!output.is_valid(&wrong_counts));
 
     for (field, bad) in [
         ("category", json!("invented")),
@@ -378,4 +405,42 @@ fn compile(schema: &Value) -> Result<Validator, jsonschema::ValidationError<'sta
     } else {
         jsonschema::draft7::new(schema)
     }
+}
+
+/// The MCP trace tool returns the same result as the get tool trace view, and both
+/// match the emitted trace schemas.
+#[cfg(feature = "test-fixture")]
+async fn assert_trace_tool_is_trace_view(
+    client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
+    tools: &[rmcp::model::Tool],
+) {
+    use rmcp::model::CallToolRequestParams;
+
+    let trace = tools.iter().find(|tool| tool.name == "trace").unwrap();
+    let input = validator(&json!(trace.input_schema));
+    let output = validator(&json!(trace.output_schema.as_ref().unwrap()));
+    let call = |name: &'static str, arguments: serde_json::Value| async move {
+        client
+            .call_tool(
+                CallToolRequestParams::new(name)
+                    .with_arguments(arguments.as_object().unwrap().clone()),
+            )
+            .await
+            .unwrap()
+    };
+    let arguments = json!({"target":"rule_shared", "max_depth":3});
+    assert!(input.is_valid(&arguments));
+    assert!(!input.is_valid(&json!({"target":"rule_shared", "view":"trace"})));
+    let action = call("trace", arguments).await;
+    let view = call(
+        "get",
+        json!({"target":"rule_shared", "view":"trace", "max_depth":3}),
+    )
+    .await;
+    let value = action.structured_content.as_ref().unwrap();
+    assert!(output.is_valid(value));
+    assert_eq!(value["view"], "trace");
+    assert_ne!(value["related"].as_array().unwrap().len(), 0);
+    assert_eq!(action.structured_content, view.structured_content);
+    assert_eq!(action.content, view.content);
 }

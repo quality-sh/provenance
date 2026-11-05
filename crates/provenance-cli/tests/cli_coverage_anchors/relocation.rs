@@ -205,30 +205,28 @@ fn relocation_ignores_absolute_vs_relative_path_spelling() {
          #[verifies(\"rule_anchor\", examples)]\nfn verifies_anchor() {}\n",
     )
     .unwrap();
-    let output = Command::cargo_bin("provenance")
+    let directory = tempfile::tempdir().unwrap();
+    let output = directory.path().join("report.json");
+    Command::cargo_bin("provenance")
         .unwrap()
         .current_dir(&fixture.repo)
         .args([
-            "coverage",
-            "scan",
+            "check",
+            "--bindings",
             "--repo",
             ".",
             "--path",
             "src/../src",
             "--scope",
             "default",
-            "--format",
-            "json",
             "--baseline",
             fixture.baseline.to_str().unwrap(),
-            "--validate-rules",
+            "--output",
+            output.to_str().unwrap(),
         ])
         .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-    let report: Value = serde_json::from_slice(&output).unwrap();
+        .success();
+    let report: Value = serde_json::from_slice(&std::fs::read(output).unwrap()).unwrap();
 
     let moved = binding(&report, "verifies_anchor", "moved");
     assert_eq!(moved["line"], 6);

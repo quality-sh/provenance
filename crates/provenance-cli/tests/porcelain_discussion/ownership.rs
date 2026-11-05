@@ -102,7 +102,7 @@ fn owned_requirement_discussions_require_the_owner_for_start_and_reply() {
             "{}",
             String::from_utf8_lossy(&output.stderr)
         );
-        let conversation = json(&["discussions", id, "get", "--repo", repo, "--format", "json"]);
+        let conversation = json(&[id, "discussion", "--repo", repo, "--format", "json"]);
         assert_eq!(conversation["result"]["head"]["version"], 1);
         assert_eq!(
             conversation["result"]["messages"]["entries"]
@@ -128,7 +128,7 @@ fn owned_requirement_discussions_require_the_owner_for_start_and_reply() {
         "json",
     ]);
     assert_eq!(reply["receipt"]["version"], 2);
-    let conversation = json(&["discussions", id, "get", "--repo", repo, "--format", "json"]);
+    let conversation = json(&[id, "discussion", "--repo", repo, "--format", "json"]);
     assert_eq!(
         conversation["result"]["messages"]["entries"]
             .as_array()

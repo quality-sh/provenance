@@ -45,13 +45,13 @@ fn interrupted_publication_is_recovered_by_health() {
     )
     .unwrap();
 
-    command(root, &["health"]).success();
+    command(root, &["check", "--gaps"]).success();
     assert!(state.join("manifest.json").is_file());
     assert!(!cache.join("import-publication.json").exists());
 }
 
 #[test]
-fn health_rejects_invalid_manifests() {
+fn gaps_check_rejects_invalid_manifests() {
     let unsupported = serde_json::json!({
         "schema_version": SUPPORTED_SCHEMA_VERSION.0 + 2,
         "scopes": []
@@ -65,14 +65,14 @@ fn health_rejects_invalid_manifests() {
         let state = directory.path().join(".provenance/state");
         std::fs::create_dir_all(&state).unwrap();
         std::fs::write(state.join("manifest.json"), content).unwrap();
-        command(directory.path(), &["health"])
+        command(directory.path(), &["check", "--gaps"])
             .failure()
             .stderr(contains(expected));
     }
 }
 
 #[test]
-fn health_rejects_a_manifest_without_scopes() {
+fn gaps_check_rejects_a_manifest_without_scopes() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
     let state = root.join(".provenance/state");
@@ -83,21 +83,24 @@ fn health_rejects_a_manifest_without_scopes() {
     )
     .unwrap();
 
-    command(root, &["health"])
+    command(root, &["check", "--gaps"])
         .failure()
         .stderr(contains("manifest must contain at least one scope"));
 
     write_manifest(root, SUPPORTED_SCHEMA_VERSION.0);
-    command(root, &["health"]).success();
+    command(root, &["check", "--gaps"]).success();
 }
 
 #[test]
-fn health_checks_repository_initialization_before_scope_validation() {
+fn gaps_check_checks_repository_initialization_before_scope_validation() {
     let directory = tempfile::tempdir().unwrap();
 
-    command(directory.path(), &["health", "--scope", "not valid"])
-        .failure()
-        .stderr(contains("provenance init"));
+    command(
+        directory.path(),
+        &["check", "--gaps", "--scope", "not valid"],
+    )
+    .failure()
+    .stderr(contains("provenance init"));
 }
 
 #[test]
@@ -109,7 +112,7 @@ fn stale_publication_lock_does_not_create_recovery_state() {
     let lock = locks.join("repository.publication.lock");
     std::fs::write(&lock, "existing lock").unwrap();
 
-    command(root, &["health"])
+    command(root, &["check", "--gaps"])
         .failure()
         .stderr(contains("provenance init"));
     assert_eq!(std::fs::read(&lock).unwrap(), b"existing lock");
@@ -121,7 +124,7 @@ fn stale_publication_lock_does_not_create_recovery_state() {
 fn a_manifest_directory_is_invalid_state() {
     let directory = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(directory.path().join(".provenance/state/manifest.json")).unwrap();
-    command(directory.path(), &["health"])
+    command(directory.path(), &["check", "--gaps"])
         .failure()
         .stderr(contains("manifest is not a file").and(contains("provenance init").not()));
 }
@@ -133,7 +136,7 @@ fn a_broken_manifest_link_is_invalid_state() {
     let state = directory.path().join(".provenance/state");
     std::fs::create_dir_all(&state).unwrap();
     std::os::unix::fs::symlink("missing.json", state.join("manifest.json")).unwrap();
-    command(directory.path(), &["health"])
+    command(directory.path(), &["check", "--gaps"])
         .failure()
         .stderr(contains("manifest is not a file").and(contains("provenance init").not()));
 }

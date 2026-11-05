@@ -31,7 +31,7 @@ impl ApiSession {
         Self { client, server }
     }
 
-    /// Call the api tool with structured arguments.
+    /// Call the api tool with structured arguments. A call can read or write.
     pub async fn call(&self, arguments: Value) -> CallToolResult {
         self.client
             .call_tool(

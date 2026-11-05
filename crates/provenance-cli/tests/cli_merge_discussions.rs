@@ -115,7 +115,7 @@ fn assert_readable(repo: &Path, ids: &[&str]) -> usize {
     );
     let mut message_ids = std::collections::BTreeSet::new();
     for id in ids {
-        let get = json(repo, &["discussions", id, "get"]);
+        let get = json(repo, &[id, "discussion"]);
         let head_ids = get["result"]["head"]["message_ids"].as_array().unwrap();
         let messages = get["result"]["messages"]["entries"].as_array().unwrap();
         assert_eq!(messages.len(), head_ids.len());

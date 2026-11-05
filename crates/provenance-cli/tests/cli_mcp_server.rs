@@ -12,16 +12,9 @@ const PORCELAIN_TOOL_NAMES: &[&str] = &[
     "search",
     "api",
     "check",
-    "create",
-    "update",
-    "answer",
-    "claim",
-    "release",
-    "submit",
+    "trace",
+    "change",
     "discussions",
-    "discussion",
-    "discuss",
-    "reply",
 ];
 
 fn binary() -> &'static std::path::Path {
@@ -135,8 +128,8 @@ async fn mcp_serves_the_tools_of_the_cli_repository() {
 
     let created = client
         .call(
-            "create",
-            json!({"target":"source_made_over_mcp","type":"source","data":{"name":"Made over MCP","source_type":"policy","url":null,"supersedes":[]}}),
+            "change",
+            json!({"action":"create","target":"source_made_over_mcp","type":"source","data":{"name":"Made over MCP","source_type":"policy","url":null,"supersedes":[]}}),
         )
         .await;
     assert_ne!(created["isError"], json!(true), "{created}");
@@ -287,8 +280,8 @@ async fn mcp_and_cli_read_each_other_writes_in_one_session() {
     assert_eq!(text(&get), cli_get.trim_end());
 
     wire.call(
-        "update",
-        json!({"target":"source_made_by_cli",
+        "change",
+        json!({"action":"update","target":"source_made_by_cli",
                "data":{"name":"Renamed over MCP"}}),
     )
     .await;
@@ -306,7 +299,7 @@ async fn mcp_and_cli_read_each_other_writes_in_one_session() {
     // Close standard input before the create result is read: the started write completes.
     wire.send_request(
         "tools/call",
-        json!({"name":"create","arguments":{"target":"source_made_at_close","type":"source",
+        json!({"name":"change","arguments":{"action":"create","target":"source_made_at_close","type":"source",
                "data":{"name":"Made at close","source_type":"policy","url":null,"supersedes":[]}}}),
     )
     .await;
@@ -323,4 +316,72 @@ async fn mcp_and_cli_read_each_other_writes_in_one_session() {
     ]);
     let made: Value = serde_json::from_str(&made).unwrap();
     assert_eq!(made["record"]["value"]["name"], "Made at close");
+}
+
+/// The discussions tool of a spawned `provenance mcp` lists its annotations, starts a
+/// Discussion and replies to it, and the CLI reads that Discussion with its one read form.
+#[tokio::test]
+#[verifies("rule_mcp_one_tool_for_discussions", examples)]
+#[verifies("rule_cli_one_discussion_read_form", examples)]
+async fn mcp_discussions_tool_starts_and_replies_and_the_cli_reads_it() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_str().unwrap().to_owned();
+    init_with_source(&repo);
+    cli(&[
+        "req_talk",
+        "create",
+        "--type",
+        "requirement",
+        "--repo",
+        &repo,
+        "--statement",
+        "The system keeps review feedback available.",
+    ]);
+    let server = Server::start(&repo).await;
+    let client = &server.client;
+
+    let tools = client.tools().await;
+    let discussions = tools
+        .iter()
+        .find(|tool| tool["name"] == "discussions")
+        .unwrap();
+    assert_eq!(
+        discussions["annotations"],
+        json!({"readOnlyHint":true,"openWorldHint":false})
+    );
+    let started = client
+        .call(
+            "change",
+            json!({"action":"discuss","parent":{"node_type":"requirement","node_id":"req_talk"},
+                   "actor":"ben","role":"user","body":"Is the wording right?"}),
+        )
+        .await;
+    assert_ne!(started["isError"], json!(true), "{started}");
+    let id = started["structuredContent"]["receipt"]["discussion_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let version = started["structuredContent"]["receipt"]["version"].clone();
+    let replied = client
+        .call(
+            "change",
+            json!({"action":"reply","discussion_id":id,"expected_version":version,
+                   "actor":"agent","role":"assistant","body":"Yes, it is."}),
+        )
+        .await;
+    assert_ne!(replied["isError"], json!(true), "{replied}");
+
+    let read: Value = serde_json::from_str(&cli(&[
+        &id,
+        "discussion",
+        "--repo",
+        &repo,
+        "--format",
+        "json",
+    ]))
+    .unwrap();
+    let text = read.to_string();
+    assert!(text.contains("Is the wording right?"), "{read}");
+    assert!(text.contains("Yes, it is."), "{read}");
+    server.close().await;
 }

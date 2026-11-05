@@ -15,6 +15,13 @@ use super::Direction;
 /// never invents a second vocabulary for a Requirement or a Rule. The
 /// `node_type` tag is the same word a relation row uses for its endpoints.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    feature = "schema",
+    schemars(
+        description = "One record as a query returns it. The node_type field names the \
+                            record kind, with the same word that a relation uses for its ends."
+    )
+)]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "node_type", rename_all = "snake_case")]
 pub enum GraphNode {

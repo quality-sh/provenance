@@ -115,8 +115,10 @@ fn cli_source_requirement_slice_materializes_and_reads_graph() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "graph",
             "req_schads_overtime",
+            "get",
+            "--view",
+            "trace",
             "--repo",
             &repo,
             "--scope",
@@ -130,7 +132,7 @@ fn cli_source_requirement_slice_materializes_and_reads_graph() {
 }
 
 #[test]
-fn cli_graph_preserves_enriched_v1_requirement_and_source_fields() {
+fn cli_trace_view_preserves_enriched_v1_requirement_and_source_fields() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().to_string_lossy().to_string();
 
@@ -170,7 +172,8 @@ fn cli_graph_preserves_enriched_v1_requirement_and_source_fields() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "graph", "req_sah", "--repo", &repo, "--scope", "default", "--format", "json",
+            "req_sah", "get", "--view", "trace", "--repo", &repo, "--scope", "default", "--format",
+            "json",
         ])
         .assert()
         .success()

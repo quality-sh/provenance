@@ -2,17 +2,8 @@ use crate::cache::gaps::{compute_gaps, GraphRecords};
 use crate::cache::GapItem;
 use crate::repository::Repository;
 use crate::state_store::StateStore;
-use provenance_core::model::relations::{related_nodes, RelationDirection, RelationRow};
-use provenance_core::{Message, NodeType, Requirement, Rule, Source, Thread};
-use std::collections::BTreeSet;
+use provenance_core::{Message, Rule, Thread};
 use std::fmt::Write;
-
-#[derive(Debug, serde::Serialize)]
-pub struct RequirementGraphView {
-    pub requirement: Requirement,
-    pub sources: Vec<Source>,
-    pub relations: Vec<RelationRow>,
-}
 
 #[derive(Debug, serde::Serialize)]
 pub struct PrimeThreadView {
@@ -97,66 +88,4 @@ pub fn render_prime_markdown(view: &PrimeContextView) -> String {
         }
     }
     out
-}
-
-pub fn get_requirement_graph(
-    repository: &Repository,
-    requirement_id: &provenance_core::StableId,
-) -> anyhow::Result<RequirementGraphView> {
-    let store = repository.store();
-    let scope = repository.scope();
-    store.with_repository_publication(|held| {
-        get_requirement_graph_locked(scope, requirement_id, held)
-    })
-}
-
-fn get_requirement_graph_locked(
-    scope: &provenance_core::ScopeId,
-    requirement_id: &provenance_core::StableId,
-    store: &StateStore,
-) -> anyhow::Result<RequirementGraphView> {
-    let records = GraphRecords::load(scope, store)?;
-    let requirement = records
-        .requirements
-        .iter()
-        .find(|requirement| requirement.id == *requirement_id)
-        .cloned()
-        .ok_or_else(|| anyhow::anyhow!("requirement not found"))?;
-    let source_ids: BTreeSet<_> = requirement
-        .source_refs
-        .iter()
-        .map(|reference| reference.source_id.as_str().to_string())
-        .collect();
-    let graph = records.graph(scope);
-    let front = graph.front();
-    let relations = related_nodes(&front, NodeType::Requirement, requirement_id)
-        .into_iter()
-        .map(|node| match node.direction {
-            RelationDirection::Out => RelationRow {
-                owner_type: NodeType::Requirement,
-                owner_id: requirement_id.clone(),
-                relation: node.relation.to_string(),
-                target_type: node.endpoint.node_type,
-                target_id: node.endpoint.id,
-            },
-            RelationDirection::In => RelationRow {
-                owner_type: node.endpoint.node_type,
-                owner_id: node.endpoint.id,
-                relation: node.relation.to_string(),
-                target_type: NodeType::Requirement,
-                target_id: requirement_id.clone(),
-            },
-        })
-        .collect();
-    let sources = records
-        .sources
-        .iter()
-        .filter(|source| source_ids.contains(source.id.as_str()))
-        .cloned()
-        .collect();
-    Ok(RequirementGraphView {
-        requirement,
-        sources,
-        relations,
-    })
 }

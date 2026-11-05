@@ -1,6 +1,7 @@
 use provenance_macros::verifies;
 use provenance_porcelain::check::{
-    BindingContext, BindingPolicy, Category, CategoryRun, CheckPort, Finding, PortFuture, Refusal,
+    BindingContext, BindingPolicy, Category, CategoryRun, CheckPort, Finding, GapsContext,
+    PortFuture, Refusal,
 };
 use rmcp::{model::CallToolRequestParams, ServiceExt as _};
 use serde_json::json;
@@ -61,6 +62,10 @@ const fn category_run(category: Category, findings: Vec<Finding>) -> CategoryRun
             },
             refusal: Refusal::None,
         },
+        Category::Gaps => CategoryRun::Gaps {
+            findings,
+            context: GapsContext { scopes: Vec::new() },
+        },
     }
 }
 
@@ -114,19 +119,33 @@ async fn mcp_check_takes_a_statement_and_refuses_the_cli_only_options() {
             ("The pump stops.".to_owned(), None),
         ]
     );
-    for arguments in [
-        json!({"statement": "The pump stops.", "strict": true}),
-        json!({"statement": "The pump stops.", "base": "HEAD"}),
-        json!({"statement": "The pump stops.", "scope": "default"}),
+    for (arguments, field) in [
+        (
+            json!({"statement": "The pump stops.", "strict": true}),
+            "strict",
+        ),
+        (
+            json!({"statement": "The pump stops.", "base": "HEAD"}),
+            "base",
+        ),
+        (
+            json!({"statement": "The pump stops.", "scope": "default"}),
+            "scope",
+        ),
     ] {
         let refused = client
             .call_tool(check_call(arguments.clone()))
             .await
             .unwrap();
         assert_eq!(refused.is_error, Some(true), "{arguments}");
+        let error = refused.structured_content.unwrap()["error"].clone();
         assert_eq!(
-            refused.structured_content.unwrap()["error"]["kind"],
-            "invalid_options",
+            (&error["kind"], &error["field"], &error["reason"]),
+            (
+                &json!("invalid_input"),
+                &json!(field),
+                &json!("unknown_field")
+            ),
             "{arguments}"
         );
     }

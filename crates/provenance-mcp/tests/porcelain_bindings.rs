@@ -306,7 +306,8 @@ impl provenance_porcelain::check::CheckPort for CheckFixturePort {
                     )]
                 }
                 provenance_porcelain::check::Category::Graph
-                | provenance_porcelain::check::Category::Bindings => Vec::new(),
+                | provenance_porcelain::check::Category::Bindings
+                | provenance_porcelain::check::Category::Gaps => Vec::new(),
             };
             Ok(category_run(category, findings))
         })
@@ -318,7 +319,7 @@ const fn category_run(
     findings: Vec<provenance_porcelain::check::Finding>,
 ) -> provenance_porcelain::check::CategoryRun {
     use provenance_porcelain::check::{
-        BindingContext, BindingPolicy, Category, CategoryRun, Refusal,
+        BindingContext, BindingPolicy, Category, CategoryRun, GapsContext, Refusal,
     };
     match category {
         Category::Graph => CategoryRun::Graph {
@@ -336,6 +337,10 @@ const fn category_run(
                 policy: BindingPolicy::Warning,
             },
             refusal: Refusal::None,
+        },
+        Category::Gaps => CategoryRun::Gaps {
+            findings,
+            context: GapsContext { scopes: Vec::new() },
         },
     }
 }

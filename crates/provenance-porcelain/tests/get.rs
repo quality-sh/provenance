@@ -2,7 +2,7 @@ use provenance_core::protocol::RecordResolution as CoreRecordResolution;
 use provenance_core::protocol::{GraphNode, ImpactResult, ResponseMeta, TracedNode};
 use provenance_macros::verifies;
 use provenance_porcelain::get::{
-    GetInput, GetPort, Impact, PortFuture, ReadError, RecordResolution, Traversal,
+    GetInput, GetPort, Impact, PortFuture, ReadError, RecordResolution, TraceInput, Traversal,
     TraversalRequest, View, ViewResult,
 };
 use provenance_porcelain::Porcelain;
@@ -197,8 +197,8 @@ async fn returned_kind_filter_does_not_limit_intermediate_traversal() {
 
 #[tokio::test]
 #[verifies("rule_porcelain_get_has_grounding_impact", examples)]
-async fn grounding_and_impact_are_identified_named_views() {
-    let grounding = Porcelain::new(FixturePort {
+async fn trace_and_impact_are_identified_named_views() {
+    let trace = Porcelain::new(FixturePort {
         record: node("rule_alpha", "rule"),
         traversed: vec![traced("req_alpha", "requirement", 1)],
         request: Arc::new(Mutex::new(None)),
@@ -209,7 +209,7 @@ async fn grounding_and_impact_are_identified_named_views() {
         resolves: Arc::new(Mutex::new(0)),
         impact_record: Arc::new(Mutex::new(None)),
     })
-    .get(GetInput::new("rule_alpha", View::Grounding))
+    .get(GetInput::new("rule_alpha", View::Trace))
     .await
     .unwrap();
     let impact = Porcelain::new(FixturePort {
@@ -227,8 +227,8 @@ async fn grounding_and_impact_are_identified_named_views() {
     .await
     .unwrap();
 
-    let ViewResult::Grounding(traversal) = grounding.result else {
-        panic!("grounding view")
+    let ViewResult::Trace(traversal) = trace.result else {
+        panic!("trace view")
     };
     assert_eq!(traversal.records[0].node.id().as_str(), "req_alpha");
     let ViewResult::Impact(impact) = impact.result else {
@@ -239,6 +239,60 @@ async fn grounding_and_impact_are_identified_named_views() {
         impact.response_metadata.unwrap().freshness_error.as_deref(),
         Some("catch-up failed")
     );
+}
+
+/// The trace action sends the same upward traversal as the get trace view and
+/// returns the same records.
+#[tokio::test]
+#[verifies("rule_trace_action_matches_trace_view", examples)]
+async fn trace_action_is_the_trace_view() {
+    let port = || FixturePort {
+        record: node("rule_alpha", "rule"),
+        traversed: vec![
+            traced("req_alpha", "requirement", 1),
+            traced("rule_alpha", "rule", 2),
+        ],
+        request: Arc::new(Mutex::new(None)),
+        impact: impact("rule_alpha", 50),
+        has_more: false,
+        continuation: None,
+        truncated: false,
+        resolves: Arc::new(Mutex::new(0)),
+        impact_record: Arc::new(Mutex::new(None)),
+    };
+    let (action_port, view_port) = (port(), port());
+    let mut view_input = GetInput::new("rule_alpha", View::Trace);
+    view_input.max_depth = Some(3);
+    view_input.returned_kinds = vec![provenance_core::NodeType::Requirement];
+    view_input.limit = Some(7);
+    let action = Porcelain::new(action_port.clone())
+        .trace(TraceInput {
+            target: "rule_alpha".into(),
+            max_depth: Some(3),
+            returned_kinds: vec![provenance_core::NodeType::Requirement],
+            limit: Some(7),
+        })
+        .await
+        .unwrap();
+    let view = Porcelain::new(view_port.clone())
+        .get(view_input)
+        .await
+        .unwrap();
+
+    assert_eq!(action.view(), View::Trace);
+    assert_eq!(
+        *action_port.request.lock().unwrap(),
+        *view_port.request.lock().unwrap()
+    );
+    let ids = |outcome: &provenance_porcelain::get::GetOutcome| {
+        outcome
+            .related()
+            .iter()
+            .map(|record| record.node.id().as_str().to_owned())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(ids(&action), ["req_alpha"]);
+    assert_eq!(ids(&action), ids(&view));
 }
 
 #[tokio::test]

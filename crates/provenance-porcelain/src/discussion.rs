@@ -25,6 +25,25 @@ pub fn input_schema(action: Action) -> serde_json::Value {
     serde_json::to_value(schema).expect("Discussion input schema is JSON")
 }
 
+/// The input of the MCP discussions tool: the two Discussion reads. The CLI word is
+/// the action argument; without it the tool lists Discussions.
+pub fn tool_input() -> crate::tool_input::ToolInput {
+    crate::tool_input::ToolInput::new(Some(Action::Discussions.as_str()))
+        .with_action(
+            Action::Discussions.as_str(),
+            input_schema(Action::Discussions),
+        )
+        .with_action(
+            Action::Discussion.as_str(),
+            input_schema(Action::Discussion),
+        )
+}
+
+/// The flat input schema of the MCP discussions tool.
+pub fn tool_input_schema() -> serde_json::Value {
+    tool_input().schema()
+}
+
 /// The target field names the record parent or the independent Discussion ID.
 pub fn target_field(action: Action) -> &'static str {
     match action {

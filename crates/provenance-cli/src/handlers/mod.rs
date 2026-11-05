@@ -2,14 +2,12 @@ use crate::cli;
 use crate::output::{self, JsonFormat, OutputFormat};
 use camino::Utf8PathBuf;
 use provenance_cli::repo_context::RepoContext;
-use provenance_core::StableId;
 use provenance_porcelain::registry::{
-    self, CargoInitInput, CoverageScanInput, DictionaryImportInput, DictionaryStatusInput,
-    DocsCheckInput, DocsServeInput, ExportInput, GraphCommand, GraphReadInput, ImportInput,
-    InitInput, MaterializeInput, McpInput, MergeJsonlInput, ReferenceInput, ReferenceIssueInput,
-    ReportBuildInput, ReportRenderInput, RepositoryCommand, RequirementGraphInput, ReviewInput,
-    SchemaShowInput, SkillsInstallInput, SkillsListInput, SkillsShowInput, SwarmBacktraceLandInput,
-    TraceabilityInput, ValidateInput, WorkspaceCommand,
+    self, CargoInitInput, DictionaryImportInput, DictionaryStatusInput, DocsCheckInput,
+    DocsServeInput, ExportInput, GraphCommand, ImportInput, InitInput, MaterializeInput, McpInput,
+    MergeJsonlInput, ReferenceInput, ReferenceIssueInput, ReportBuildInput, ReportRenderInput,
+    RepositoryCommand, ReviewInput, SchemaShowInput, SkillsInstallInput, SkillsListInput,
+    SkillsShowInput, SwarmBacktraceLandInput, ValidateInput, WorkspaceCommand,
 };
 use provenance_store::cache;
 
@@ -42,11 +40,21 @@ pub(super) use dogfood::{handle as dogfood_command, DogfoodInput};
 pub(super) async fn check_command(
     input: provenance_porcelain::registry::CheckCliInput,
 ) -> anyhow::Result<()> {
+    let output_format = match input.output_format.unwrap_or_default() {
+        registry::ReportFileFormat::Json => output::ReportFormat::Json,
+        registry::ReportFileFormat::Markdown => output::ReportFormat::Markdown,
+    };
     let selectors = check::Selectors {
-        graph: input.graph,
-        statements: input.statements,
-        bindings: input.bindings,
+        categories: input.categories(),
         statement: input.statement,
+        scope: input.scope,
+        bindings: check::BindingOptions {
+            path: input.path.map(Utf8PathBuf::from),
+            baseline: input.baseline.map(Utf8PathBuf::from),
+            output: input
+                .output
+                .map(|output| (Utf8PathBuf::from(output), output_format)),
+        },
     };
     let context = provenance_cli::repo_context::RepoContext::new(input.repo.as_str(), "default");
     check::check(
@@ -200,12 +208,6 @@ pub(super) async fn repository_command(input: RepositoryInput, quiet: bool) -> a
 /// The typed input of one graph command, read from its declared flags.
 #[allow(clippy::redundant_pub_crate)]
 pub(super) enum GraphInput {
-    Graph(RequirementGraphInput),
-    Traceability(TraceabilityInput),
-    Gaps(GraphReadInput),
-    Health(GraphReadInput),
-    Orphans(GraphReadInput),
-    CoverageScan(CoverageScanInput),
     ReferenceIssue(ReferenceIssueInput),
     ReferenceShow(ReferenceInput),
     ReferenceVerify(ReferenceInput),
@@ -227,12 +229,6 @@ impl GraphInput {
             };
         }
         Ok(match command {
-            GraphCommand::Graph => read!(Graph),
-            GraphCommand::Traceability => read!(Traceability),
-            GraphCommand::Gaps => read!(Gaps),
-            GraphCommand::Health => read!(Health),
-            GraphCommand::Orphans => read!(Orphans),
-            GraphCommand::CoverageScan => read!(CoverageScan),
             GraphCommand::ReferenceIssue => read!(ReferenceIssue),
             GraphCommand::ReferenceShow => read!(ReferenceShow),
             GraphCommand::ReferenceVerify => read!(ReferenceVerify),
@@ -246,39 +242,8 @@ impl GraphInput {
 #[allow(clippy::redundant_pub_crate)]
 pub(super) fn graph_command(input: GraphInput) -> anyhow::Result<()> {
     use cli::graph::GraphReferenceCommand;
-    let read = |input: GraphReadInput| {
-        flag_value(&input.format, JsonFormat::from_flag)?;
-        RepoContext::new(input.repo, input.scope).open()
-    };
     let reference = |input: ReferenceInput| (input.repo.into(), input.reference.into());
     match input {
-        GraphInput::Graph(input) => {
-            flag_value(&input.format, JsonFormat::from_flag)?;
-            let repository = RepoContext::new(input.repo, input.scope).open()?;
-            let id = StableId::new(input.requirement_id)?;
-            output::print_json(&cache::get_requirement_graph(&repository, &id)?)
-        }
-        GraphInput::Traceability(input) => {
-            flag_value(&input.format, JsonFormat::from_flag)?;
-            let repository = RepoContext::new(input.repo, input.scope).open()?;
-            let id = StableId::new(input.rule_id)?;
-            output::print_json(&cache::trace_rule(&repository, &id)?)
-        }
-        GraphInput::Gaps(input) => output::print_json(&cache::find_gaps(&read(input)?)?),
-        GraphInput::Health(input) => output::print_json(&cache::coverage_health(&read(input)?)?),
-        GraphInput::Orphans(input) => output::print_json(&cache::orphan_rules(&read(input)?)?),
-        GraphInput::CoverageScan(input) => {
-            coverage::handle(cli::workspace::CoverageCommand::Scan {
-                repo: input.repo.into(),
-                path: input.path.into(),
-                scope: input.scope,
-                baseline: input.baseline.map(Utf8PathBuf::from),
-                validate_rules: input.validate_rules,
-                strict: input.strict,
-                format: flag_value(&input.format, output::ReportFormat::from_flag)?,
-                output: input.output.map(Utf8PathBuf::from),
-            })
-        }
         GraphInput::ReferenceIssue(input) => {
             graph_reference::handle(GraphReferenceCommand::Issue {
                 context: RepoContext::new(input.repo, input.scope),
@@ -460,11 +425,8 @@ mod tests {
                             OutputFormat::from_flag(value).is_some()
                         }
                         "format"
-                            if *command == registry::Command::Graph(GraphCommand::CoverageScan)
-                                || *command
-                                    == registry::Command::Workspace(
-                                        WorkspaceCommand::ReportRender,
-                                    ) =>
+                            if *command
+                                == registry::Command::Workspace(WorkspaceCommand::ReportRender) =>
                         {
                             output::ReportFormat::from_flag(value).is_some()
                         }

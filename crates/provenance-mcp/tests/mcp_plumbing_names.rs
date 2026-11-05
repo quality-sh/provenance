@@ -1,5 +1,6 @@
 //! MCP lists only porcelain tools. A plumbing operation name is an unknown
-//! tool, and the api tool still reaches the operation.
+//! tool. The api tool reaches the catalog operations that read and that write, and
+//! the change tool has no api action.
 #![cfg(feature = "test-fixture")]
 
 #[allow(dead_code)]
@@ -46,7 +47,7 @@ async fn no_plumbing_operation_name_is_a_listed_or_callable_tool() {
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();
-    assert_eq!(tools.len(), 14, "{tools:?}");
+    assert_eq!(tools.len(), 7, "{tools:?}");
     for definition in provenance_contract::definitions() {
         assert!(
             !tools.iter().any(|tool| tool.name == definition.name),
@@ -63,8 +64,13 @@ async fn no_plumbing_operation_name_is_a_listed_or_callable_tool() {
         let rmcp::ServiceError::McpError(error) = refused else {
             panic!("{}: {refused:?}", definition.name);
         };
-        assert_eq!(error.code.0, -32601, "{}", definition.name);
-        assert_eq!(error.message, "Unknown tool", "{}", definition.name);
+        assert_eq!(error.code.0, -32602, "{}", definition.name);
+        assert_eq!(
+            error.message,
+            format!("Unknown tool: {}", definition.name),
+            "{}",
+            definition.name
+        );
     }
 
     let through_api = client
@@ -82,6 +88,90 @@ async fn no_plumbing_operation_name_is_a_listed_or_callable_tool() {
     assert_eq!(
         through_api.structured_content.unwrap()["data"]["id"],
         "source_shared"
+    );
+
+    // A route that writes goes through the api tool, as on the CLI.
+    let call = |name: &str, arguments: serde_json::Value| {
+        client.call_tool(
+            CallToolRequestParams::new(name.to_owned())
+                .with_arguments(arguments.as_object().unwrap().clone()),
+        )
+    };
+    let update = json!({"path":"sources/source_shared","method":"patch","body":{"name":"Renamed"}});
+    let written = call("api", update).await.unwrap();
+    assert_ne!(written.is_error, Some(true), "{written:?}");
+    assert_eq!(
+        written.structured_content.unwrap()["data"]["name"],
+        "Renamed"
+    );
+    let read = call("api", json!({"path":"sources/source_shared"}))
+        .await
+        .unwrap();
+    assert_eq!(read.structured_content.unwrap()["data"]["name"], "Renamed");
+
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}
+
+#[tokio::test]
+#[verifies("rule_porcelain_plumbing_only_through_api", examples)]
+async fn the_change_tool_has_no_api_action() {
+    let repository = Repository::new("The shared graph is readable.");
+    repository.all_kinds();
+    let host = full_host(&repository);
+    let (client_io, server_io) = tokio::io::duplex(1024 * 1024);
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+    let call = |name: &str, arguments: serde_json::Value| {
+        client.call_tool(
+            CallToolRequestParams::new(name.to_owned())
+                .with_arguments(arguments.as_object().unwrap().clone()),
+        )
+    };
+
+    // The change tool does not tell the client about an api action.
+    let tools = client.list_all_tools().await.unwrap();
+    let change = tools.iter().find(|tool| tool.name == "change").unwrap();
+    let description = change.description.as_deref().unwrap();
+    assert!(!description.contains("api"), "{description}");
+    let actions = &change.input_schema["properties"]["action"]["enum"];
+    assert!(
+        !actions.as_array().unwrap().contains(&json!("api")),
+        "{actions}"
+    );
+
+    // The change tool has no api action: the call is refused as an unknown action.
+    let refused = call(
+        "change",
+        json!({"action":"api","request":{"path":"sources/source_shared","method":"patch",
+               "body":{"name":"Refused"}}}),
+    )
+    .await
+    .unwrap();
+    assert_eq!(refused.is_error, Some(true), "{refused:?}");
+    let error = &refused.structured_content.unwrap()["error"];
+    assert_eq!(
+        (&error["kind"], &error["field"], &error["reason"]),
+        (
+            &json!("invalid_input"),
+            &json!("action"),
+            &json!("invalid_value")
+        ),
+        "{error}"
+    );
+    let message = error["message"].as_str().unwrap();
+    let listed = message
+        .strip_prefix("unknown action api; the actions are: ")
+        .unwrap_or_else(|| panic!("{error}"));
+    assert_eq!(
+        listed.split(", ").collect::<Vec<_>>(),
+        actions
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|action| action.as_str().unwrap())
+            .collect::<Vec<_>>(),
+        "{error}"
     );
 
     client.cancel().await.unwrap();

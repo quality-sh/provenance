@@ -12,7 +12,6 @@ pub(crate) mod projection_families;
 pub mod read;
 mod review_facts;
 pub(crate) mod review_families;
-mod traceability;
 
 pub(crate) use completion::CompletionTimedOut;
 pub(crate) use connection::permission_failure;
@@ -36,7 +35,6 @@ pub use projection_digest::{
 };
 pub use projection_families::ProjectionFamily;
 pub(crate) use projection_families::{BudgetKind, RecordFamily};
-pub use traceability::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct MaterializeReport {

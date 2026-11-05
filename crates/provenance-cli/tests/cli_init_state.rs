@@ -156,7 +156,7 @@ fn missing_manifest_gives_init_guidance_before_graph_reads_or_catalog_writes() {
     let temporary = tempfile::tempdir().unwrap();
     let root = temporary.path();
     for args in [
-        vec!["health"],
+        vec!["check", "--gaps"],
         vec!["search", "--text", "probe"],
         vec![
             "source_probe",

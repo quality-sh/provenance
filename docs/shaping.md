@@ -387,10 +387,10 @@ Six methods, and the word is the claim:
 The scan reads both:
 
 ```sh
-provenance coverage scan --path . --scope default --validate-rules
+provenance check --bindings --scope default
 ```
 
-`--validate-rules` loads the scope's Rules, so a binding citing an id no Rule has is
+The check loads the scope's Rules, so a binding citing an id no Rule has is
 reported, and so are active Rules with no implementation or no verification anywhere.
 Unimplemented and Unverified are not fields anyone writes. They are absence, worked out
 at scan time and thrown away after. A verification binding needs a known Rule, not an

@@ -153,8 +153,8 @@ themselves remain in `.provenance/state` and therefore appear in exports,
 traceability queries, checks, graph references, and the review page like
 records created by the existing CLI.
 
-The validating coverage scan consumes canonical typed bindings alongside
-scanner-discovered bindings. Runtime results remain separate and are queried
+The bindings check (`check --bindings`) consumes canonical typed bindings
+alongside scanner-discovered bindings. Runtime results remain separate and are queried
 with `verification-runs list`; durable relationships are queried with
 `verification-bindings list`. Stale analysis treats a changed typed verification
 path as disturbed evidence without executing the callback.

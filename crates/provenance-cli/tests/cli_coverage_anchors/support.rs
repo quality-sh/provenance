@@ -76,33 +76,39 @@ impl Fixture {
         self.scan_at(self.source.parent().unwrap(), baseline, validate_rules)
     }
 
+    /// The scan report of `check --bindings` at `path`. The check always validates
+    /// Rules, so `_validate_rules` no longer changes the report.
     pub fn scan_at(
         &self,
         path: &std::path::Path,
         baseline: Option<&std::path::Path>,
-        validate_rules: bool,
+        _validate_rules: bool,
     ) -> Value {
+        serde_json::from_slice(&self.report(path, baseline)).unwrap()
+    }
+
+    /// Runs `check --bindings --scope default` and returns its report file.
+    fn report(&self, path: &std::path::Path, baseline: Option<&std::path::Path>) -> Vec<u8> {
+        let directory = tempfile::tempdir().unwrap();
+        let output = directory.path().join("report.json");
         let mut command = Command::cargo_bin("provenance").unwrap();
         command.args([
-            "coverage",
-            "scan",
+            "check",
+            "--bindings",
             "--repo",
             self.repo.to_str().unwrap(),
             "--path",
             path.to_str().unwrap(),
             "--scope",
             "default",
-            "--format",
-            "json",
+            "--output",
+            output.to_str().unwrap(),
         ]);
         if let Some(baseline) = baseline {
             command.args(["--baseline", baseline.to_str().unwrap()]);
         }
-        if validate_rules {
-            command.arg("--validate-rules");
-        }
-        let output = command.assert().success().get_output().stdout.clone();
-        serde_json::from_slice(&output).unwrap()
+        command.assert().success();
+        std::fs::read(output).unwrap()
     }
 
     pub fn rescan(&self) -> Value {
@@ -110,23 +116,7 @@ impl Fixture {
     }
 
     pub fn scan_bytes(&self, baseline: &std::path::Path) -> Vec<u8> {
-        let mut command = Command::cargo_bin("provenance").unwrap();
-        command.args([
-            "coverage",
-            "scan",
-            "--repo",
-            self.repo.to_str().unwrap(),
-            "--path",
-            self.source.parent().unwrap().to_str().unwrap(),
-            "--scope",
-            "default",
-            "--format",
-            "json",
-            "--baseline",
-            baseline.to_str().unwrap(),
-            "--validate-rules",
-        ]);
-        command.assert().success().get_output().stdout.clone()
+        self.report(self.source.parent().unwrap(), Some(baseline))
     }
 }
 

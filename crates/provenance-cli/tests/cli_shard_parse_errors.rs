@@ -49,10 +49,11 @@ fn a_blank_shard_line_is_named_by_shard_and_line() {
     let stored = std::fs::read_to_string(&path).unwrap();
     std::fs::write(&path, format!("{stored}\n")).unwrap();
 
-    for command in ["check", "health"] {
+    for command in [&["check"][..], &["check", "--gaps"]] {
         Command::cargo_bin("provenance")
             .unwrap()
-            .args([command, "--repo", repo.as_str()])
+            .args(command)
+            .args(["--repo", repo.as_str()])
             .assert()
             .failure()
             .stderr(predicates::function::function(|text: &str| {

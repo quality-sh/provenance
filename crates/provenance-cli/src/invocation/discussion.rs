@@ -7,31 +7,29 @@ use provenance_porcelain::{
 };
 use serde_json::{json, Value};
 
+/// Lists the Discussions of a scope. One Discussion is read only with
+/// `provenance <discussion-id> discussion`.
+#[provenance_macros::rule("rule_cli_one_discussion_read_form")]
 pub async fn dispatch_root(
     args: DiscussionsArgs,
     matches: &clap::ArgMatches,
 ) -> anyhow::Result<()> {
-    let (action, target) = if let Some(id) = args.discussion_id {
-        anyhow::ensure!(
-            args.action.as_deref() == Some("get"),
-            "an addressed Discussion requires get"
+    if let Some(id) = args.discussion_id {
+        anyhow::bail!(
+            "`provenance discussions <discussion-id> get` was removed. Use \
+             `provenance {id} discussion`"
         );
-        (Action::Discussion, Some(StableId::new(id)?))
-    } else {
-        anyhow::ensure!(args.action.is_none(), "get requires a Discussion ID");
-        (Action::Discussions, None)
-    };
+    }
+    anyhow::ensure!(args.action.is_none(), "get requires a Discussion ID");
+    let action = Action::Discussions;
     let schema = discussion::input_schema(action);
-    let mut input = crate::catalog_cli::fields::schema_input(
+    let input = crate::catalog_cli::fields::schema_input(
         &schema,
         matches,
         &["parent", "discussion_id"],
         &[],
     )
     .unwrap_or_else(|error| crate::catalog_cli::usage_error(error));
-    if let Some(target) = target {
-        input.insert("discussion_id".into(), json!(target));
-    }
     let host = args.common.context().repo.local_host()?;
     let service = host.porcelain().discussion();
     let outcome = service

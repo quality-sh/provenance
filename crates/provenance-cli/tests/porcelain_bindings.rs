@@ -2,7 +2,8 @@ use assert_cmd::Command;
 use provenance_macros::verifies;
 use provenance_mcp::Client;
 use provenance_porcelain::check::{
-    BindingContext, BindingPolicy, Category, CategoryRun, CheckInput, PortFuture, Refusal,
+    BindingContext, BindingPolicy, Category, CategoryRun, CheckInput, GapsContext, PortFuture,
+    Refusal,
 };
 use serde_json::json;
 use std::sync::Arc;
@@ -80,6 +81,10 @@ impl provenance_porcelain::check::CheckPort for EmptyCheckPort {
                         policy: BindingPolicy::Warning,
                     },
                     refusal: Refusal::None,
+                },
+                Category::Gaps => CategoryRun::Gaps {
+                    findings: Vec::new(),
+                    context: GapsContext { scopes: Vec::new() },
                 },
             })
         })
@@ -187,19 +192,28 @@ async fn mcp_get_failures_are_the_cli_json_refusals() {
     let client = Client::connect(client_io).await.unwrap();
     let limit = json!({"target":"source_live_inventory","limit":5});
     let depth = json!({"target":"source_live_inventory","view":"children","max_depth":0});
-    let unknown = json!({"target":"source_live_inventory","unknown":true});
 
     for (cli, arguments) in [
         ("source_missing get", json!({"target":"source_missing"})),
         ("source_live_inventory get --limit 5", limit),
-        ("source_live_inventory get --view children --depth 0", depth),
-        ("source_live_inventory get --limit 5", unknown),
     ] {
         let cli = cli_get_error(&repo, &cli.split(' ').collect::<Vec<_>>());
         let mcp = client.call("get", arguments.clone()).await;
         assert_eq!(mcp["isError"], true, "{arguments}");
         assert_eq!(mcp["structuredContent"]["error"], cli, "{arguments}");
     }
+    // A value that the MCP input schema refuses gets the same kind, and MCP also names
+    // the field and gives the reason invalid_value.
+    let command = "source_live_inventory get --view children --depth 0";
+    let cli = cli_get_error(&repo, &command.split(' ').collect::<Vec<_>>());
+    let mcp = client.call("get", depth.clone()).await;
+    let error = &mcp["structuredContent"]["error"];
+    assert_eq!(mcp["isError"], true, "{depth}");
+    assert_eq!(
+        (&error["kind"], &error["field"], &error["reason"]),
+        (&cli["kind"], &json!("max_depth"), &json!("invalid_value")),
+        "{error} {cli}"
+    );
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }

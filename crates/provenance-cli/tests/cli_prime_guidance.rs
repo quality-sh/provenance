@@ -94,15 +94,7 @@ async fn cli_and_mcp_share_the_same_guidance() {
     let client = Client::connect(client_io).await.unwrap();
     assert_eq!(client.instructions().as_deref(), Some(text.trim_end()));
     let tools = client.tools().await;
-    for name in [
-        "get",
-        "search",
-        "create",
-        "update",
-        "discussion",
-        "discuss",
-        "reply",
-    ] {
+    for name in ["get", "search", "trace", "change", "discussions"] {
         let tool = tools.iter().find(|tool| tool["name"] == name).unwrap();
         let description = tool["description"].as_str().unwrap();
         assert!(

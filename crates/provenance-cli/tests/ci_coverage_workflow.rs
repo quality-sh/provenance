@@ -119,9 +119,9 @@ fn the_job_scans_the_whole_repository_under_the_configured_policy() {
     let full_scan = job
         .lines()
         .find(|line| {
-            line.contains("coverage scan")
+            line.contains("check --bindings")
                 && line.contains("--path .")
-                && line.contains("--validate-rules")
+                && line.contains("--output")
         })
         .expect("the job must run a whole-repository scan");
     assert!(

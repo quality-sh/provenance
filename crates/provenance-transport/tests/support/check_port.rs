@@ -1,5 +1,6 @@
 use provenance_porcelain::check::{
-    BindingContext, BindingPolicy, Category, CategoryRun, CheckPort, PortFuture, Refusal,
+    BindingContext, BindingPolicy, Category, CategoryRun, CheckPort, GapsContext, PortFuture,
+    Refusal,
 };
 
 pub struct FixtureCheckPort;
@@ -23,6 +24,10 @@ impl CheckPort for FixtureCheckPort {
                         policy: BindingPolicy::Warning,
                     },
                     refusal: Refusal::None,
+                },
+                Category::Gaps => CategoryRun::Gaps {
+                    findings: Vec::new(),
+                    context: GapsContext { scopes: Vec::new() },
                 },
             })
         })

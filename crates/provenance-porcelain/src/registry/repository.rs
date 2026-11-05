@@ -293,6 +293,7 @@ const fn cli_only(
     }
 }
 
+#[provenance_macros::rule("rule_cli_help_hides_program_commands")]
 pub(super) fn declaration(command: RepositoryCommand) -> Declaration {
     match command {
         RepositoryCommand::Init => Declaration {
@@ -319,8 +320,10 @@ pub(super) fn declaration(command: RepositoryCommand) -> Declaration {
         ),
         RepositoryCommand::Export => cli_only("export", &["export"], export_schema, EXPORT_FLAGS),
         RepositoryCommand::Import => cli_only("import", &["import"], import_schema, IMPORT_FLAGS),
+        // Git runs merge-jsonl as a merge driver, so help does not show it.
         RepositoryCommand::MergeJsonl => Declaration {
             positional: &["base", "ours", "theirs"],
+            hidden: true,
             ..cli_only(
                 "merge-jsonl",
                 &["merge-jsonl"],

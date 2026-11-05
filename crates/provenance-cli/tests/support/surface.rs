@@ -53,6 +53,10 @@ impl provenance_porcelain::check::CheckPort for EmptyCheckPort {
                     },
                     refusal: Refusal::None,
                 },
+                Category::Gaps => CategoryRun::Gaps {
+                    findings: Vec::new(),
+                    context: provenance_porcelain::check::GapsContext { scopes: Vec::new() },
+                },
             })
         })
     }

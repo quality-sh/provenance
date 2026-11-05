@@ -1,179 +1,103 @@
 //! The MCP server handler: lists and calls the porcelain tools of one statement host.
 
-use crate::{surface, tools};
-use provenance_porcelain::registry::{Command, Interface};
-use provenance_transport::{porcelain::Action, StatementHost};
+use crate::{listed::Table, surface};
+use provenance_transport::StatementHost;
 use rmcp::{
     model::{
-        CallToolRequestParams, CallToolResult, ErrorCode, ListToolsResult, PaginatedRequestParams,
-        ServerCapabilities, ServerInfo,
+        CallToolRequestParams, CallToolResponse, ErrorCode, Implementation, ListToolsResult,
+        MetaObject, PaginatedRequestParams, ServerCapabilities, ServerConfig,
     },
     service::RequestContext,
     ErrorData, RoleServer, ServerHandler,
 };
-use serde_json::Value;
 use std::future::Future;
+use std::sync::Arc;
 
 /// Serves the porcelain tools of one statement host through MCP.
 #[derive(Clone)]
-pub struct Server(StatementHost);
+pub struct Server {
+    host: StatementHost,
+    tools: Arc<Table>,
+}
 
 impl Server {
-    /// Serve the tools of one host.
-    pub const fn new(host: StatementHost) -> Self {
-        Self(host)
+    /// Serve the tools of one host. The tools and their input checks are made here,
+    /// once for the session.
+    pub fn new(host: StatementHost) -> Self {
+        let tools = Arc::new(Table::new(&host));
+        Self { host, tools }
     }
 }
 
 impl ServerHandler for Server {
     /// Supplies shared domain guidance through native MCP instructions.
     #[provenance_macros::rule("rule_porcelain_mcp_guidance_native")]
-    fn get_info(&self) -> ServerInfo {
-        let mut info = ServerInfo::default();
-        info.capabilities = ServerCapabilities::builder().enable_tools().build();
-        info.instructions = Some(provenance_porcelain::guidance::guidance().guidance);
-        info
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
+            .with_server_info(server_info())
+            .with_instructions(provenance_porcelain::guidance::guidance().guidance)
     }
 
     /// Lists the porcelain MCP tools in registry order.
     fn list_tools(
         &self,
         _: Option<PaginatedRequestParams>,
-        _: RequestContext<RoleServer>,
+        context: RequestContext<RoleServer>,
     ) -> impl Future<Output = Result<ListToolsResult, ErrorData>> + '_ {
-        let tools = Command::ALL
-            .iter()
-            .filter(|command| command.is_present(Interface::Mcp))
-            .filter_map(|command| tool(&self.0, *command))
-            .collect();
         std::future::ready(Ok(ListToolsResult {
-            tools,
+            tools: self.tools.tools(),
+            meta: result_meta(&context),
             ..Default::default()
         }))
     }
 
-    /// Calls one porcelain tool; plumbing operations are reachable only through the api tool.
+    /// Calls one listed tool. The api tool is the one tool that calls catalog operations
+    /// directly; it reads and writes, as the CLI api command does.
     #[provenance_macros::rule("rule_porcelain_plumbing_only_through_api")]
     async fn call_tool(
         &self,
         request: CallToolRequestParams,
-        _: RequestContext<RoleServer>,
-    ) -> Result<CallToolResult, ErrorData> {
-        let host = &self.0;
-        let arguments = request.arguments;
-        match Command::find(Interface::Mcp, &[request.name.as_ref()]) {
-            Some(Command::Get) if host.porcelain().get_is_available() => {
-                call_get(host, arguments).await
-            }
-            Some(Command::Search) if host.porcelain().search_is_available() => {
-                call_search(host, arguments).await
-            }
-            Some(Command::Api) if host.porcelain().api_is_available() => {
-                call_api_tool(host, arguments).await
-            }
-            Some(Command::Check) => {
-                let Some(port) = host.check_port() else {
-                    return Err(unknown_tool());
-                };
-                surface::admitted_call(host, arguments, |arguments| {
-                    tools::call_check(host, port.clone(), arguments)
-                })
-                .await
-            }
-            Some(Command::Action(action)) if Action::DISCUSSION.contains(&action) => {
-                call_discussion(host, action, arguments).await
-            }
-            Some(Command::Action(action)) => call_authoring_action(host, action, arguments).await,
-            Some(
-                Command::Get
-                | Command::Search
-                | Command::Api
-                | Command::Prime
-                | Command::Repository(_)
-                | Command::Graph(_)
-                | Command::Workspace(_)
-                | Command::Dogfood(_),
-            )
-            | None => Err(unknown_tool()),
-        }
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResponse, ErrorData> {
+        let Some(listed) = self.tools.find(&request.name) else {
+            return Err(unknown_tool(&request.name));
+        };
+        let mut result = surface::admitted_call(&self.host, request.arguments, |arguments| {
+            listed.call(&self.host, arguments)
+        })
+        .await?;
+        result.meta = result_meta(&context);
+        Ok(result.into())
     }
 }
 
-/// The tool of one registry command, when the host can run it.
-fn tool(host: &StatementHost, command: Command) -> Option<rmcp::model::Tool> {
-    let porcelain = host.porcelain();
-    match command {
-        Command::Get => porcelain.get_is_available().then(tools::get_tool),
-        Command::Search => porcelain.search_is_available().then(tools::search_tool),
-        Command::Api => porcelain.api_is_available().then(tools::api_tool),
-        Command::Check => host.check_port().is_some().then(tools::check_tool),
-        Command::Prime
-        | Command::Repository(_)
-        | Command::Graph(_)
-        | Command::Workspace(_)
-        | Command::Dogfood(_) => None,
-        Command::Action(action) if Action::DISCUSSION.contains(&action) => porcelain
-            .discussion_is_available(action)
-            .then(|| tools::discussion_tool(action)),
-        Command::Action(action) => tools::authoring_tool(host, action),
-    }
+fn server_info() -> Implementation {
+    Implementation::new("provenance", env!("CARGO_PKG_VERSION"))
 }
 
-fn unknown_tool() -> ErrorData {
-    ErrorData::new(ErrorCode::METHOD_NOT_FOUND, "Unknown tool", None)
-}
-
-async fn call_discussion(
-    host: &StatementHost,
-    action: Action,
-    arguments: Option<serde_json::Map<String, Value>>,
-) -> Result<CallToolResult, ErrorData> {
-    if !host.porcelain().discussion_is_available(action) {
-        return Err(unknown_tool());
-    }
-    surface::admitted_call(host, arguments, |arguments| {
-        tools::call_discussion(host, action, arguments)
+/// The result metadata of a 2026-07-28 session: the specification says that servers
+/// should give `io.modelcontextprotocol/serverInfo` on every response. A session that
+/// started with `initialize` has the server info from its handshake and keeps the
+/// result shape of its protocol.
+fn result_meta(context: &RequestContext<RoleServer>) -> Option<MetaObject> {
+    let stateless = context
+        .protocol_version()
+        .is_some_and(|version| !version.has_initialize());
+    stateless.then(|| {
+        let info = serde_json::to_value(server_info()).expect("server info is JSON");
+        let mut meta = MetaObject::default();
+        meta.0.insert(SERVER_INFO.to_owned(), info);
+        meta
     })
-    .await
 }
 
-async fn call_get(
-    host: &StatementHost,
-    arguments: Option<serde_json::Map<String, serde_json::Value>>,
-) -> Result<CallToolResult, ErrorData> {
-    surface::admitted_call(host, arguments, |arguments| {
-        tools::call_get(host, arguments)
-    })
-    .await
-}
+const SERVER_INFO: &str = "io.modelcontextprotocol/serverInfo";
 
-async fn call_api_tool(
-    host: &StatementHost,
-    arguments: Option<serde_json::Map<String, Value>>,
-) -> Result<CallToolResult, ErrorData> {
-    surface::admitted_call(host, arguments, |arguments| {
-        tools::call_api(host, Some(arguments))
-    })
-    .await
-}
-
-async fn call_search(
-    host: &StatementHost,
-    arguments: Option<serde_json::Map<String, serde_json::Value>>,
-) -> Result<CallToolResult, ErrorData> {
-    surface::admitted_call(host, arguments, |arguments| {
-        tools::call_search(host, arguments)
-    })
-    .await
-}
-
-async fn call_authoring_action(
-    host: &StatementHost,
-    action: Action,
-    arguments: Option<serde_json::Map<String, Value>>,
-) -> Result<CallToolResult, ErrorData> {
-    surface::admitted_call(host, arguments, |arguments| {
-        tools::call_authoring(host, action, arguments)
-    })
-    .await
+/// The protocol error for a tool name that the server does not list.
+fn unknown_tool(name: &str) -> ErrorData {
+    ErrorData::new(
+        ErrorCode::INVALID_PARAMS,
+        format!("Unknown tool: {name}"),
+        None,
+    )
 }

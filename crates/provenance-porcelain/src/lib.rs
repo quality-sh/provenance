@@ -15,6 +15,7 @@ pub mod get;
 pub mod guidance;
 pub mod registry;
 pub mod search;
+pub mod tool_input;
 
 /// Shared Porcelain capabilities over a caller-supplied operation port.
 #[derive(Clone, Debug)]

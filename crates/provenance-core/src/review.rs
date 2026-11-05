@@ -267,7 +267,7 @@ pub struct PendingSubmission {
 #[serde(deny_unknown_fields)]
 pub struct RecordedDecision {
     pub disposition: crate::DispositionRecord,
-    /// `None` for a legacy unbound disposition, which stays authoritative for
+    /// Null for a legacy unbound disposition, which stays authoritative for
     /// its own proposal without attesting the record's current contents.
     pub revision: Option<StableId>,
     pub feedback_message_id: Option<StableId>,

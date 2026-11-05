@@ -40,13 +40,19 @@ A record command uses the record ID:
 
 ```text
 provenance <id> create --type <kind> [scalar flags | --stdin]
-provenance <id> get [--view record|children|grounding|impact|review]
+provenance <id> get [--view record|children|trace|impact|review]
+provenance <id> trace [--depth <n>] [--kind <kind>] [--limit <n>]
 provenance <id> update [scalar flags | --stdin] [--if-match <etag>]
 provenance <id> answer|claim|release|submit [flags]
 provenance <id> discussions|discuss
 provenance search --text <text> | --kind <kind> | --file <path> [--symbol <name>] [--line <line>]
 provenance check --statement "<statement>"
 ```
+
+The `children` view gives the records below a record. The `trace` view gives
+the records above it, up to its Sources. `provenance <id> trace` gives the same
+records as `provenance <id> get --view trace`, and MCP has a `trace` tool and a
+`trace` view of the `get` tool.
 
 `provenance <id> create --type <kind> --help` lists the fields that one record
 type accepts. The record types are `source`, `requirement`, `resolution`,
@@ -154,8 +160,7 @@ These errors stay text after `Error: ` and exit with code 1, also with
 - A graph that is not initialized, and a command that runs in a directory
   inside an initialized repository.
 - File and I/O errors.
-- Every error from a builtin command, such as `init`, `check`, `coverage scan`,
-  `gaps`, `health`, `orphans`, and `export`.
+- Every error from a builtin command, such as `init`, `check`, and `export`.
 
 A usage error prints clap's text and exits with code 2.
 
@@ -165,7 +170,7 @@ The following commands keep dedicated behavior because they operate on a
 repository, render a report, manage the host, or perform another product task:
 
 - `init`, `check`, and `docs`
-- `graph`, `traceability`, `coverage`, `gaps`, `health`, `orphans`, and `prime`
+- `prime`
 - `review` and `mcp`
 - `import`, `export`, and `materialize`
 - `swarm-backtrace`
@@ -174,12 +179,48 @@ repository, render a report, manage the host, or perform another product task:
 
 `provenance check --format json` reports diagnostics for new Requirement and
 Rule statements and for statements that differ from Git HEAD. Add `--strict`
-to reject findings in the committed candidate. Use `--base <commit>` to select
+to reject findings in the committed candidate and every bindings finding. Use `--base <commit>` to select
 the comparison base.
 
-`provenance coverage scan --path . --scope default --validate-rules` scans Rule
-implementation and verification bindings. Add `--strict` to make warnings
-return a nonzero exit status.
+`provenance check --gaps` runs only the gaps category. It reports the
+unfinished parts of the graph and each Rule without a Source: one finding for each gap and one for each such
+Rule. The graph counts of each scope are in the category context, also when
+there are no findings. These findings do not fail the check, also with
+`--strict`. A bare `check` does not run this category. MCP `check` takes
+`gaps` in `categories`. `--scope <scope>` limits each category to one scope;
+without it, `check` reads every declared scope. `gaps`, `health`, and
+`orphans` were removed: they exit with code 1 and name
+`provenance check --gaps`.
+
+`provenance check --bindings` scans Rule implementation and verification
+bindings in every scope, with Rule validation. The configured severity in
+`.provenance/settings.json` decides which findings fail the check: `error`
+fails it for the governed findings, `warning` only reports them. `--strict`
+fails it for every bindings finding. These options apply only to the bindings
+check, and `check` refuses them without it:
+
+- `--path <path>` scans the files below the path. The default is the
+  repository root. A path that does not cover a scope reports no absence
+  findings for that scope.
+- `--baseline <file>` resolves evidence anchors against an earlier scan report.
+  It needs `--scope`.
+- `--output <file>` writes the scan report of the selected scope to the file,
+  in the report shape of the removed `coverage scan`. It needs `--scope`.
+  `--output-format markdown` writes the Markdown report; the default is JSON.
+  Standard output keeps the check report.
+
+`coverage scan` was removed: it exits with code 1 and names
+`provenance check --bindings`. `graph` and `traceability` were removed the same
+way: they name `provenance <id> get --view children` and
+`provenance <id> trace`.
+
+`provenance help [command]` prints the same help as
+`provenance [command] --help`. Help does not show `merge-jsonl`, which Git runs
+as a merge driver; the command still runs.
+
+One Discussion is read with `provenance <discussion-id> discussion`.
+`provenance discussions` lists Discussions; `provenance discussions
+<discussion-id> get` was removed and names the discussion action.
 
 The review host binds one repository, one scope, and one credential to each
 connection. See [review-host.md](review-host.md). Import and export operate on a
@@ -190,10 +231,49 @@ complete scope. They remain separate from resource writes.
 `provenance mcp --repo <repository> --scope <scope>` starts an MCP server on
 standard input and output. The server opens the same repository and scope as the
 CLI commands. The default repository is the current directory, and the default
-scope is `default`. The server gives the porcelain tools: `get`, `search`, `api`,
-`check`, and the record actions. The tools can write records. A record that the
-CLI writes is available to the MCP tools in the same session, and a record that
-an MCP tool writes is available to the CLI.
+scope is `default`. The server uses MCP protocol 2026-07-28. A client of an
+older protocol, from 2024-11-05 through 2025-11-25, starts the session with
+`initialize`.
+
+The server gives seven tools. Five tools only read, and their annotations mark
+them as read-only and closed-world:
+
+- `get` reads one record in a view.
+- `search` finds records.
+- `trace` reads the records above one record, up to its Sources.
+- `check` checks the graph or one statement.
+- `discussions` lists Discussions (`action` is `discussions`, the default) or
+  reads one Discussion (`action` is `discussion`).
+
+`change` writes. Its `action` argument selects the write:
+
+- `create`, `update`, `answer`, `claim`, `release`, or `submit` on the
+  `target` record, with the same fields as the CLI action after the target.
+- `discuss` starts a Discussion, and `reply` replies to one.
+- `notify` registers a client thread for the review changes of one record, as
+  `--notify` does on the CLI.
+
+The annotations of `change` mark it as destructive, not idempotent, and
+open-world: an update can replace field values, remove list entries, and archive
+a record, a repeated `discuss` starts a new Discussion, and `notify` reaches a
+client thread outside the repository.
+
+`api` is the plumbing tool. It reads and writes, as `provenance api` does: it
+lists the catalog routes when `path` is absent, or calls one route with its
+`method`, `query`, `headers`, and `body`. Its annotations mark it as
+destructive, not idempotent, and closed-world: a route can change or remove
+data in the repository.
+
+Each tool input is one JSON object. The server refuses a call whose fields do
+not agree with its `action`. The refusal is a tool result with `isError: true`,
+and its error names the field: the field that the action needs, or the field
+that the action does not take. A `change` call without `data` gets the schema
+of `data` for that action and record kind in the refusal.
+
+A record that the CLI writes is available to the MCP tools in the same session,
+and a record that an MCP tool writes is available to the CLI. A write through
+MCP goes into the graph like a CLI write, and Provenance review approves the
+graph content.
 
 The server stops when standard input closes. A write that started before then
 completes before the process stops. If the repository has no Provenance graph,
@@ -212,6 +292,47 @@ arguments. For example, a client that reads an `mcpServers` object:
     }
   }
 }
+```
+
+### Allow rules for Claude Code
+
+Claude Code asks before each MCP tool call until a permission rule allows the
+tool. The tool name is `mcp__<server>__<tool>`, where `<server>` is the name in
+the client configuration. With the name `provenance`, put one of these lists in
+`permissions.allow` of a Claude Code settings file.
+
+To allow all tools, writes included:
+
+```json
+["mcp__provenance__*"]
+```
+
+To allow the read tools only, so that each `change` and `api` call asks first:
+
+```json
+[
+  "mcp__provenance__get",
+  "mcp__provenance__search",
+  "mcp__provenance__trace",
+  "mcp__provenance__check",
+  "mcp__provenance__discussions"
+]
+```
+
+Claude Code does not use `readOnlyHint` to skip the request, so the allow rule
+is necessary also for the read tools. `provenance init` does not write client
+settings.
+
+Codex runs the read tools without a request, because their annotations mark
+them as read-only. To also allow `change` and `api`, add this to the Codex
+configuration:
+
+```toml
+[mcp_servers.provenance.tools.change]
+approval_mode = "approve"
+
+[mcp_servers.provenance.tools.api]
+approval_mode = "approve"
 ```
 
 ## Repairing a duplicate Message ID
@@ -240,7 +361,7 @@ To repair the store by hand:
    use the branch history to identify it before you change a reference.
 5. Review the diff. Run `provenance check --repo <repository>`, then
    `provenance discussions --repo <repository>` and
-   `provenance discussions <discussion-id> get --repo <repository>` for each
+   `provenance <discussion-id> discussion --repo <repository>` for each
    affected Discussion. Repeat the repair for any other duplicate ID that the
    reader reports. Commit the repaired shards when the checks pass.
 
@@ -256,7 +377,7 @@ inspect installed skills, scan code, or update a cache.
 The default output is Markdown. `provenance prime --format json` returns an
 object with a `guidance` string that contains the same text. This replaces the
 former project-state JSON fields, including `rules`, `requirements`, `threads`,
-and `skills`. Use resource reads for project records and `coverage scan` for
+and `skills`. Use resource reads for project records and `check --bindings` for
 code bindings. The SDK prime state query keeps its existing contract.
 
 The old `--repo`, `--scope`, and `--include-threads` options remain accepted for

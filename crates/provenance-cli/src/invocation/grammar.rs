@@ -164,15 +164,26 @@ pub enum Delivery {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TargetVerb {
     Get,
+    /// The get trace view as an action.
+    Trace,
     Action(Action),
 }
 
 impl TargetVerb {
     pub fn parse(word: &str) -> Option<Self> {
-        if word == "get" {
-            Some(Self::Get)
-        } else {
-            Action::parse(word).map(Self::Action)
+        match word {
+            "get" => Some(Self::Get),
+            "trace" => Some(Self::Trace),
+            _ => Action::parse(word).map(Self::Action),
+        }
+    }
+
+    /// The CLI word of this verb.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Get => "get",
+            Self::Trace => "trace",
+            Self::Action(action) => action.as_str(),
         }
     }
 }
@@ -187,7 +198,7 @@ pub(super) fn discussions_route(arguments: &[String], command: &Command) -> Disc
     let legacy = match positional_word(arguments, command, 2).and_then(TargetVerb::parse) {
         Some(TargetVerb::Get) => true,
         Some(TargetVerb::Action(action)) => Action::RECORD.contains(&action),
-        None => false,
+        Some(TargetVerb::Trace) | None => false,
     };
     if legacy {
         DiscussionsRoute::LegacyRecord

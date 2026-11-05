@@ -245,7 +245,6 @@ fn cli_binding_check_reports_absence_without_running_or_failing_project_tests() 
             "check",
             "--repo",
             ".",
-            "--strict",
             "--graph",
             "--bindings",
             "--format",
@@ -259,6 +258,16 @@ fn cli_binding_check_reports_absence_without_running_or_failing_project_tests() 
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
+    // --strict refuses every bindings finding, also under the warning severity.
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .current_dir(directory.path())
+        .args(["check", "--repo", ".", "--strict", "--bindings"])
+        .assert()
+        .code(1)
+        .stderr(predicates::str::contains(
+            "active rule `rule_unbound` has no verification",
+        ));
     assert!(!marker.exists());
     let report: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(report["categories"][0]["category"], "graph");
@@ -347,6 +356,47 @@ fn graph_selector_does_not_load_binding_policy() {
             directory.path().to_str().unwrap(),
             "--graph",
         ])
+        .assert()
+        .success();
+}
+
+/// A bindings option without the bindings check is refused and names --bindings.
+#[test]
+#[verifies("rule_check_bindings_scans_selected_path", examples)]
+fn binding_options_without_the_bindings_check_are_refused() {
+    let directory = tempfile::tempdir().unwrap();
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args(["init", "--path", directory.path().to_str().unwrap()])
+        .args(["--scope", "default", "--path-prefix", "."])
+        .assert()
+        .success();
+    let repo = directory.path().to_str().unwrap();
+    for args in [
+        &["check", "--gaps", "--path", "crates"][..],
+        &["check", "--graph", "--path", "."],
+        &[
+            "check",
+            "--statements",
+            "--scope",
+            "default",
+            "--output",
+            "report.json",
+        ],
+    ] {
+        Command::cargo_bin("provenance")
+            .unwrap()
+            .args(args)
+            .args(["--repo", repo])
+            .assert()
+            .code(1)
+            .stdout(predicates::str::is_empty())
+            .stderr(predicates::str::contains("add --bindings"));
+    }
+    assert!(!directory.path().join("report.json").exists());
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args(["check", "--path", ".", "--repo", repo])
         .assert()
         .success();
 }

@@ -247,6 +247,7 @@ fn resolve_second_discussion(directory: &tempfile::TempDir, second_id: &str) {
 
 #[test]
 #[verifies("rule_porcelain_discussion_targets", examples)]
+#[verifies("rule_cli_one_discussion_read_form", examples)]
 fn cli_discussion_actions_use_one_scope_and_preserve_discussion_identity() {
     let directory = repo_with_requirement();
     let repo = directory.path().to_str().unwrap();
@@ -309,8 +310,13 @@ fn cli_discussion_actions_use_one_scope_and_preserve_discussion_identity() {
     let invalid_status = run(&["req_a", "discussions", "--repo", repo, "--status", "draft"]);
     assert!(!invalid_status.status.success());
     assert!(String::from_utf8_lossy(&invalid_status.stderr).contains("status"));
-    let conversation = json(&["discussions", id, "get", "--repo", repo, "--format", "json"]);
+    let conversation = json(&[id, "discussion", "--repo", repo, "--format", "json"]);
     assert_eq!(conversation["result"]["head"]["version"], 1);
+    // One Discussion has one read form; the removed form names it.
+    let removed = run(&["discussions", id, "get", "--repo", repo]);
+    assert_eq!(removed.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&removed.stderr)
+        .contains(&format!("Use `provenance {id} discussion`")));
     let reply = json(&[
         id,
         "reply",

@@ -64,12 +64,7 @@ pub(super) fn target(
 
 /// The registry description of the selected target action, which MCP also shows.
 fn description(action: crate::invocation::grammar::TargetVerb) -> Option<&'static str> {
-    use crate::invocation::grammar::TargetVerb;
-    let name = match action {
-        TargetVerb::Get => "get",
-        TargetVerb::Action(action) => action.as_str(),
-    };
-    provenance_porcelain::registry::Command::find_target_action(name)
+    provenance_porcelain::registry::Command::find_target_action(action.name())
         .map(|command| command.declaration().description)
 }
 

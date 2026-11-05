@@ -6,11 +6,12 @@ use provenance_core::{
     Boundary, Domain, NodeType, Question, Requirement, Resolution, Rule, Source, StableId, Topic,
 };
 use schemars::generate::{Contract, SchemaSettings};
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 use serde_json::Value;
 
 /// A canonical record payload without the graph node's variant tag.
 #[derive(schemars::JsonSchema, Serialize)]
+#[schemars(description = "The record fields, without the node_type field.")]
 #[serde(untagged)]
 enum RecordData<'a> {
     Source(&'a Source),
@@ -121,9 +122,86 @@ fn schema<T: schemars::JsonSchema>(contract: Contract) -> Value {
     .expect("typed get schema is JSON")
 }
 
-/// The MCP get request schema is generated from the deserialized request.
+/// The MCP get request schema: the deserialized request without the notify field,
+/// because MCP registers a client thread through the notify action of change.
 pub fn input_schema() -> Value {
-    schema::<GetInput>(Contract::Deserialize)
+    let mut schema = schema::<GetInput>(Contract::Deserialize);
+    schema["properties"]
+        .as_object_mut()
+        .expect("get properties are an object")
+        .remove("notify");
+    let definitions = schema["$defs"]
+        .as_object_mut()
+        .expect("get definitions are an object");
+    definitions.remove("Notify");
+    definitions.remove("NotifyClient");
+    schema
+}
+
+/// The MCP notify request schema.
+pub fn notify_input_schema() -> Value {
+    schema::<NotifyInput>(Contract::Deserialize)
+}
+
+/// One notify request on MCP: the client thread to register for the review changes of
+/// one record.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct NotifyInput {
+    #[schemars(length(min = 1))]
+    pub target: String,
+    pub notify: super::Notify,
+}
+
+impl From<NotifyInput> for GetInput {
+    fn from(input: NotifyInput) -> Self {
+        let mut get = Self::new(input.target, View::Review);
+        get.notify = Some(input.notify);
+        get
+    }
+}
+
+/// The MCP notify result schema.
+pub fn notify_output_schema() -> Value {
+    schema::<NotifyResult>(Contract::Serialize)
+}
+
+/// The result of one notify request on MCP.
+#[derive(Clone, Debug, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct NotifyResult {
+    pub notify: super::Registration,
+}
+
+/// The MCP trace request schema: the get request without a view or notify field.
+pub fn trace_input_schema() -> Value {
+    schema::<TraceInput>(Contract::Deserialize)
+}
+
+/// One trace request: the records above the target, up to its Sources.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TraceInput {
+    #[schemars(length(min = 1))]
+    pub target: String,
+    #[serde(default)]
+    #[schemars(range(min = 1))]
+    pub max_depth: Option<usize>,
+    #[serde(default)]
+    pub returned_kinds: Vec<NodeType>,
+    #[serde(default)]
+    #[schemars(range(min = 1))]
+    pub limit: Option<usize>,
+}
+
+impl From<TraceInput> for GetInput {
+    fn from(input: TraceInput) -> Self {
+        let mut get = Self::new(input.target, View::Trace);
+        get.max_depth = input.max_depth;
+        get.returned_kinds = input.returned_kinds;
+        get.limit = input.limit;
+        get
+    }
 }
 
 /// The MCP get result schema is generated from the serialized projection.

@@ -86,9 +86,8 @@ it in the same change.
   rebase merge drops the commit that the archive names.
 - Write graph state only through the Provenance CLI or SDK. Do not edit
   `.provenance/state` directly.
-- Pre-commit: `{command} check --quiet` and
-  `{command} coverage scan --path . --scope {selected_scope} --validate-rules`.
-  Commit graph updates with the code.
+- Pre-commit: `{command} check --quiet`. It checks the graph, the statements, and
+  the Rule bindings. Commit graph updates with the code.
 - ASD owns ASD-STE100. STEMG maintains it. Use the official Issue 9 request page:
   https://www.asd-ste100.org/STE_downloads.html#article02-2l. Provenance names
   only its implemented checks and makes no compliance or endorsement claim."#;

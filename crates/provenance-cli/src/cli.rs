@@ -65,9 +65,10 @@ impl PackageManager {
         "Dynamic commands:\n",
         "  provenance api [PATH]\n",
         "  provenance api --filter <text>\n",
-        "  provenance <id> get --view children --depth <N>\n\n",
-        "Discussion actions: provenance discussions [<discussion-id> get], or provenance ",
-        "<record-id> discussions|discuss, or provenance <discussion-id> reply."
+        "  provenance <id> get --view children --depth <N>\n",
+        "  provenance <id> trace\n\n",
+        "Discussion actions: provenance discussions, or provenance <record-id> ",
+        "discussions|discuss, or provenance <discussion-id> discussion|reply."
     )
 )]
 pub struct Cli {

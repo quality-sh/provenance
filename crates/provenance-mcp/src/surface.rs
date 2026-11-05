@@ -3,11 +3,41 @@
 use provenance_core::protocol::{failure::ErasedFailure, ResponseMeta};
 use provenance_transport::{StatementHost, MAX_BODY_BYTES};
 use rmcp::{
-    model::{CallToolResult, Tool},
+    model::{CallToolResult, Tool, ToolAnnotations},
     ErrorData,
 };
 use serde_json::{Map, Value};
 use std::future::Future;
+
+/// What a tool does to the graph, which sets its annotations.
+#[derive(Clone, Copy)]
+pub enum Effect {
+    /// The tool only reads the repository graph.
+    Reads,
+    /// The tool writes. An update can replace field values, remove list entries, and
+    /// archive a record, so a write can discard data. A repeated discuss starts a new
+    /// Discussion. The notify action reaches a client thread outside the repository.
+    Writes,
+    /// The tool calls one API route, which can read, write, or remove. It writes only
+    /// the repository graph.
+    Plumbing,
+}
+
+impl Effect {
+    /// Read tools are read-only and closed-world. `change` and `api` are the tools that
+    /// write; only `change` reaches outside the repository.
+    fn annotations(self) -> ToolAnnotations {
+        match self {
+            Self::Reads => ToolAnnotations::from_raw(None, Some(true), None, None, Some(false)),
+            Self::Writes => {
+                ToolAnnotations::from_raw(None, Some(false), Some(true), Some(false), Some(true))
+            }
+            Self::Plumbing => {
+                ToolAnnotations::from_raw(None, Some(false), Some(true), Some(false), Some(false))
+            }
+        }
+    }
+}
 
 #[derive(Clone, Copy)]
 pub enum SchemaDeclaration {
@@ -50,6 +80,7 @@ where
 pub fn tool(
     name: &'static str,
     description: &'static str,
+    effect: Effect,
     mut input: Value,
     output: Value,
     schema_declaration: SchemaDeclaration,
@@ -57,7 +88,10 @@ pub fn tool(
     if matches!(schema_declaration, SchemaDeclaration::Remove) {
         input.as_object_mut().map(|schema| schema.remove("$schema"));
     }
-    let output = output_schema(output, schema_declaration);
+    let mut input = share_definitions(input);
+    let mut output = share_definitions(output_schema(output, schema_declaration));
+    crate::json_schema::to_2020_12(&mut input);
+    crate::json_schema::to_2020_12(&mut output);
     let mut tool = Tool::new(
         name,
         description,
@@ -73,6 +107,7 @@ pub fn tool(
             .clone()
             .into(),
     );
+    tool.annotations = Some(effect.annotations());
     tool
 }
 
@@ -91,11 +126,71 @@ fn output_schema(mut success: Value, schema_declaration: SchemaDeclaration) -> V
     if let Some(definitions) = definitions {
         schema.insert("$defs".to_owned(), definitions);
     }
-    schema.insert(
-        "oneOf".to_owned(),
-        Value::Array(vec![success.clone().into(), error_output_schema()]),
-    );
+    schema.insert("type".to_owned(), Value::String("object".to_owned()));
+    // A result schema that is only a `oneOf` gives its branches to the root `oneOf`.
+    let mut branches = match success.get("oneOf") {
+        Some(Value::Array(branches)) if success.len() == 1 => branches.clone(),
+        _ => vec![success.clone().into()],
+    };
+    branches.push(error_output_schema());
+    schema.insert("oneOf".to_owned(), Value::Array(branches));
     Value::Object(schema)
+}
+
+/// Holds each identical `$defs` entry once: the first name in order stays, and each
+/// reference to another name with the same schema points to it. A merge can make two
+/// more entries identical, so it repeats until no two entries are the same.
+fn share_definitions(mut schema: Value) -> Value {
+    loop {
+        let Some(Value::Object(definitions)) = schema.get("$defs") else {
+            return schema;
+        };
+        let mut kept: Vec<(&String, &Value)> = Vec::new();
+        let mut renamed = std::collections::BTreeMap::new();
+        for (name, definition) in definitions {
+            match kept.iter().find(|(_, candidate)| *candidate == definition) {
+                Some((first, _)) => {
+                    renamed.insert(format!("#/$defs/{name}"), format!("#/$defs/{first}"));
+                }
+                None => kept.push((name, definition)),
+            }
+        }
+        if renamed.is_empty() {
+            return schema;
+        }
+        let gone = renamed
+            .keys()
+            .map(|reference| reference.trim_start_matches("#/$defs/").to_owned())
+            .collect::<Vec<_>>();
+        rename_references(&mut schema, &renamed);
+        let definitions = schema["$defs"]
+            .as_object_mut()
+            .expect("the definitions are an object");
+        for name in gone {
+            definitions.remove(&name);
+        }
+    }
+}
+
+fn rename_references(value: &mut Value, renamed: &std::collections::BTreeMap<String, String>) {
+    match value {
+        Value::Object(object) => {
+            if let Some(Value::String(reference)) = object.get_mut("$ref") {
+                if let Some(target) = renamed.get(reference.as_str()) {
+                    reference.clone_from(target);
+                }
+            }
+            for child in object.values_mut() {
+                rename_references(child, renamed);
+            }
+        }
+        Value::Array(values) => {
+            for child in values {
+                rename_references(child, renamed);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn error_output_schema() -> Value {

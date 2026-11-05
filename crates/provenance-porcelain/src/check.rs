@@ -14,10 +14,15 @@ pub enum Category {
     Graph,
     Statements,
     Bindings,
+    /// The unfinished parts of the graph and the Rules without a Source. It runs only
+    /// when the caller selects it, and its findings never refuse the command.
+    Gaps,
 }
 
 impl Category {
-    pub const ALL: [Self; 3] = [Self::Graph, Self::Statements, Self::Bindings];
+    pub const ALL: [Self; 4] = [Self::Graph, Self::Statements, Self::Bindings, Self::Gaps];
+    /// The categories of a check that selects none.
+    pub const DEFAULT: [Self; 3] = [Self::Graph, Self::Statements, Self::Bindings];
 }
 
 /// The categories selected for one check, and the statement it examines in
@@ -27,6 +32,10 @@ impl Category {
 /// it, so both surfaces take the one `statement` field.
 #[rule("rule_porcelain_check_statement_field_shared")]
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, schemars::JsonSchema)]
+#[schemars(
+    description = "The categories to check, and a statement to check in place of the \
+                          committed statements."
+)]
 #[serde(deny_unknown_fields)]
 pub struct CheckInput {
     #[serde(
@@ -83,12 +92,33 @@ pub struct BindingContext {
     pub policy: BindingPolicy,
 }
 
+/// The graph counts of each scope that one gaps run read, also with zero findings.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct GapsContext {
+    pub scopes: Vec<ScopeCounts>,
+}
+
+/// The graph counts of one scope.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScopeCounts {
+    pub scope_id: String,
+    pub requirements: usize,
+    pub source_linked_requirements: usize,
+    pub resolved_requirements: usize,
+    pub requirements_with_rules: usize,
+    pub rules_total: usize,
+    pub rules_with_complete_traceability: usize,
+}
+
 /// Typed context emitted by category computations.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(untagged)]
 pub enum CategoryContext {
     Statements(StatementContext),
     Bindings(BindingContext),
+    Gaps(GapsContext),
 }
 
 /// Whether findings in one completed category refuse the command.
@@ -115,6 +145,11 @@ pub enum CategoryRun {
         findings: Vec<Finding>,
         context: BindingContext,
         refusal: Refusal,
+    },
+    /// Gaps findings never refuse, so the run has no refusal.
+    Gaps {
+        findings: Vec<Finding>,
+        context: GapsContext,
     },
 }
 
@@ -215,6 +250,12 @@ impl CategoryReport {
                 Some(CategoryContext::Bindings(context)),
                 refusal,
             ),
+            CategoryRun::Gaps { findings, context } => (
+                Category::Gaps,
+                findings,
+                Some(CategoryContext::Gaps(context)),
+                Refusal::None,
+            ),
         };
         let mut report = if findings.is_empty() {
             Self::passed(category)
@@ -290,14 +331,15 @@ impl CheckInput {
         self
     }
 
-    /// Return the categories to run, in run order. A bare check selects all.
+    /// Return the categories to run, in run order. A bare check selects the default
+    /// categories.
     /// A supplied statement selects the statements category, and the
     /// selectors add to it.
     pub fn categories(&self) -> Vec<Category> {
         let mut categories = match (self.selectors.is_empty(), &self.statement) {
             (false, _) => self.selectors.clone(),
             (true, Some(_)) => Vec::new(),
-            (true, None) => Category::ALL.to_vec(),
+            (true, None) => Category::DEFAULT.to_vec(),
         };
         if self.statement.is_some() && !categories.contains(&Category::Statements) {
             categories.push(Category::Statements);
@@ -362,6 +404,7 @@ impl<P: CheckPort> crate::Porcelain<P> {
     #[rule("rule_porcelain_check_categories")]
     #[rule("rule_porcelain_check_unavailable")]
     #[rule("rule_porcelain_check_supplied_statement_selects_statements")]
+    #[rule("rule_check_reports_gaps")]
     pub async fn check(&self, input: CheckInput) -> CheckOutcome {
         let scope = input.scope.as_deref();
         let mut categories = Vec::new();

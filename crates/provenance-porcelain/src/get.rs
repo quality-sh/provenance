@@ -15,7 +15,10 @@ use std::{fmt::Display, future::Future, pin::Pin};
 mod shaping;
 mod wire;
 pub use shaping::{BlockedQuestion, BlockedReason, Claim, QuestionState, SessionSummary};
-pub use wire::{input_schema, output_schema, render_readable};
+pub use wire::{
+    input_schema, notify_input_schema, notify_output_schema, output_schema, render_readable,
+    trace_input_schema, NotifyInput, NotifyResult, TraceInput,
+};
 
 /// One future returned by an injected read port.
 pub type PortFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ReadError>> + Send + 'a>>;
@@ -36,7 +39,7 @@ pub enum View {
     #[default]
     Record,
     Children,
-    Grounding,
+    Trace,
     Impact,
     Review,
 }
@@ -45,7 +48,7 @@ impl View {
     pub const ALL: [Self; 5] = [
         Self::Record,
         Self::Children,
-        Self::Grounding,
+        Self::Trace,
         Self::Impact,
         Self::Review,
     ];
@@ -54,7 +57,7 @@ impl View {
         match self {
             Self::Record => "record",
             Self::Children => "children",
-            Self::Grounding => "grounding",
+            Self::Trace => "trace",
             Self::Impact => "impact",
             Self::Review => "review",
         }
@@ -206,7 +209,7 @@ pub struct Review {
 pub enum ViewResult {
     Record,
     Children(Traversal),
-    Grounding(Traversal),
+    Trace(Traversal),
     Impact(Impact),
     Review(Box<Review>),
 }
@@ -216,7 +219,7 @@ impl ViewResult {
         match self {
             Self::Record => View::Record,
             Self::Children(_) => View::Children,
-            Self::Grounding(_) => View::Grounding,
+            Self::Trace(_) => View::Trace,
             Self::Impact(_) => View::Impact,
             Self::Review(_) => View::Review,
         }
@@ -224,7 +227,7 @@ impl ViewResult {
 
     pub fn related(&self) -> &[TracedNode] {
         match self {
-            Self::Children(traversal) | Self::Grounding(traversal) => &traversal.records,
+            Self::Children(traversal) | Self::Trace(traversal) => &traversal.records,
             Self::Record | Self::Impact(_) | Self::Review(_) => &[],
         }
     }
@@ -245,7 +248,7 @@ impl ViewResult {
 
     pub const fn bounds(&self) -> Option<&Bounds> {
         match self {
-            Self::Children(traversal) | Self::Grounding(traversal) => Some(&traversal.bounds),
+            Self::Children(traversal) | Self::Trace(traversal) => Some(&traversal.bounds),
             Self::Impact(impact) => Some(&impact.bounds),
             Self::Review(review) => Some(&review.bounds),
             Self::Record => None,
@@ -254,7 +257,7 @@ impl ViewResult {
 
     pub const fn metadata(&self) -> Option<&ResponseMeta> {
         match self {
-            Self::Children(traversal) | Self::Grounding(traversal) => {
+            Self::Children(traversal) | Self::Trace(traversal) => {
                 traversal.response_metadata.as_ref()
             }
             Self::Impact(impact) => impact.response_metadata.as_ref(),
@@ -398,7 +401,7 @@ impl<P: GetPort> crate::Porcelain<P> {
         let record_metadata = resolved.metadata;
         let result = match input.view {
             View::Record => ViewResult::Record,
-            View::Children | View::Grounding => {
+            View::Children | View::Trace => {
                 let mut traversal = self
                     .port
                     .traverse(TraversalRequest {
@@ -427,7 +430,7 @@ impl<P: GetPort> crate::Porcelain<P> {
                 if input.view == View::Children {
                     ViewResult::Children(traversal)
                 } else {
-                    ViewResult::Grounding(traversal)
+                    ViewResult::Trace(traversal)
                 }
             }
             View::Impact => {
@@ -454,6 +457,15 @@ impl<P: GetPort> crate::Porcelain<P> {
     }
 }
 
+impl<P: GetPort> crate::Porcelain<P> {
+    /// Walks upward from one record to its Sources: the get trace view without a view
+    /// selector.
+    #[rule("rule_trace_action_matches_trace_view")]
+    pub async fn trace(&self, input: TraceInput) -> Result<GetOutcome, ReadError> {
+        self.get(input.into()).await
+    }
+}
+
 fn validate(input: &GetInput) -> Result<(), ReadError> {
     if input.target.is_empty() {
         return Err(ReadError::InvalidOptions);
@@ -461,7 +473,7 @@ fn validate(input: &GetInput) -> Result<(), ReadError> {
     let has_traversal_options = input.max_depth.is_some() || !input.returned_kinds.is_empty();
     let unsupported = match input.view {
         View::Record => has_traversal_options || input.limit.is_some(),
-        View::Children | View::Grounding => false,
+        View::Children | View::Trace => false,
         View::Impact | View::Review => has_traversal_options,
     };
     let notify_refused = input

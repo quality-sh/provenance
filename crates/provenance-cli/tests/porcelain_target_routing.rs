@@ -63,13 +63,14 @@ async fn target_first_action_names_match_on_the_live_cli_and_mcp_surfaces() {
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = Client::connect(client_io).await.unwrap();
+    // MCP takes each record action as the action argument of the change tool.
     let tools = client.tools().await;
-    let mcp = tools
+    let change = tools.iter().find(|tool| tool["name"] == "change").unwrap();
+    let actions = change["inputSchema"]["properties"]["action"]["enum"].clone();
+    let mcp = expected
         .iter()
-        .filter_map(|tool| {
-            let name = tool["name"].as_str().unwrap();
-            expected.get(name).copied()
-        })
+        .filter(|action| actions.as_array().unwrap().contains(&json!(action)))
+        .copied()
         .collect::<BTreeSet<_>>();
 
     assert_eq!(cli, expected);

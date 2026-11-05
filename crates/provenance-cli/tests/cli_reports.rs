@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use predicates::prelude::PredicateBooleanExt;
 
 #[allow(clippy::too_many_lines)]
 fn seed_repo() -> (tempfile::TempDir, String) {
@@ -173,18 +174,13 @@ fn cli_reports_emit_json_shapes_for_impact_health_and_orphans() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "health", "--repo", &repo, "--scope", "default", "--format", "json",
+            "check", "--gaps", "--repo", &repo, "--scope", "default", "--format", "json",
         ])
         .assert()
         .success()
-        .stdout(predicates::str::contains("with_complete_traceability"))
-        .stdout(predicates::str::contains("source_linked_requirements"));
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args([
-            "orphans", "--repo", &repo, "--scope", "default", "--format", "json",
-        ])
-        .assert()
-        .success()
-        .stdout(predicates::str::contains("[]"));
+        .stdout(predicates::str::contains(
+            "rules_with_complete_traceability",
+        ))
+        .stdout(predicates::str::contains("source_linked_requirements"))
+        .stdout(predicates::str::contains("\"rule_id\"").not());
 }

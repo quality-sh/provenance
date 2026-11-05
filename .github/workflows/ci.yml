@@ -936,16 +936,16 @@ jobs:
           name: provenance-cli-x86_64-unknown-linux-gnu
           path: target/debug
       - run: chmod +x target/debug/provenance target/debug/existing-root-host-fixture
-      - run: target/debug/provenance coverage scan --repo . --path crates --scope default --validate-rules --strict
+      - run: target/debug/provenance check --bindings --repo . --path crates --scope default --strict
       - name: Validate initializer Rule bindings
-        run: target/debug/provenance coverage scan --repo . --path packages/create-provenance --scope default --validate-rules --strict
+        run: target/debug/provenance check --bindings --repo . --path packages/create-provenance --scope default --strict
       # The whole-repository scan is the only one that can claim absence, so
       # it follows the configured binding policy in .provenance/settings.json
       # instead of a blanket --strict: warning reports without failing, error
       # fails the job after the report is written.
       - name: Scan the whole repository for Rule binding findings
         run: |
-          target/debug/provenance coverage scan --repo . --path . --scope default --validate-rules --format json --output "$RUNNER_TEMP/provenance-coverage-report.json"
+          target/debug/provenance check --bindings --repo . --path . --scope default --output "$RUNNER_TEMP/provenance-coverage-report.json"
       # The graph check reports an archive commit that is not in the history
       # of HEAD. This checkout has the full history. On a pull request it is
       # the synthetic merge commit, which contains the branch commits. On a

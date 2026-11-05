@@ -7,27 +7,15 @@ mod support {
     #[allow(dead_code)]
     #[path = "../../../provenance-transport/tests/support/resource_http.rs"]
     pub mod resource_http;
+    pub mod schema_check;
 }
 
 use provenance_core::{ScopeId, StableId};
 use provenance_macros::verifies;
-use rmcp::{model::CallToolRequestParams, ServiceExt as _};
-use serde_json::{json, Value};
+use rmcp::ServiceExt as _;
+use serde_json::json;
 use support::records::Repository;
-
-async fn call(
-    client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
-    name: &str,
-    arguments: Value,
-) -> rmcp::model::CallToolResult {
-    client
-        .call_tool(
-            CallToolRequestParams::new(name.to_owned())
-                .with_arguments(arguments.as_object().unwrap().clone()),
-        )
-        .await
-        .unwrap()
-}
+use support::schema_check::{call, schemas};
 
 #[tokio::test]
 #[verifies("rule_porcelain_mcp_target_argument", examples)]
@@ -40,16 +28,26 @@ async fn mcp_target_first_authoring_publishes_target_and_type_schemas() {
 
     let tools = client.list_all_tools().await.unwrap();
     for action in provenance_porcelain::action::Action::RECORD {
-        let name = action.as_str();
-        let tool = tools.iter().find(|tool| tool.name == name).unwrap();
-        assert!(tool.output_schema.is_some(), "{name} output schema");
+        assert!(!tools.iter().any(|tool| tool.name == action.as_str()));
     }
-    let create = tools.iter().find(|tool| tool.name == "create").unwrap();
-    let create_schema = Value::Object((*create.input_schema).clone());
-    assert!(create_schema.to_string().contains("source_type"));
-    assert!(create_schema.to_string().contains("refines"));
-    assert!(create_schema.to_string().contains("\"target\""));
-    assert!(create_schema.to_string().contains("\"type\""));
+    let (input, _) = schemas(&client, "change").await;
+    let actions = input["properties"]["action"]["enum"].as_array().unwrap();
+    for action in provenance_porcelain::action::Action::RECORD {
+        assert!(actions.contains(&json!(action.as_str())), "{actions:?}");
+    }
+    assert_eq!(input["properties"]["target"]["type"], "string");
+    assert!(input["properties"]["type"]["enum"]
+        .as_array()
+        .unwrap()
+        .contains(&json!("source")));
+    let create = call(
+        &client,
+        "change",
+        json!({"action":"create","target":"req_x","type":"requirement"}),
+    )
+    .await;
+    let schema = create.structured_content.unwrap()["error"]["schema"].to_string();
+    assert!(schema.contains("refines"), "{schema}");
 
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
@@ -67,8 +65,8 @@ async fn mcp_target_first_source_create_and_update_keep_structured_targets() {
 
     let created = call(
         &client,
-        "create",
-        json!({
+        "change",
+        json!({"action":"create",
             "target":"source_mcp_target",
             "type":"source",
             "data":{
@@ -93,8 +91,8 @@ async fn mcp_target_first_source_create_and_update_keep_structured_targets() {
 
     let edited = call(
         &client,
-        "update",
-        json!({"target":"source_mcp_target","data":{"reference":"section 1","url":null}}),
+        "change",
+        json!({"action":"update","target":"source_mcp_target","data":{"reference":"section 1","url":null}}),
     )
     .await;
     assert_ne!(edited.is_error, Some(true), "{edited:?}");
@@ -122,8 +120,8 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
 
     let requirement = call(
         &client,
-        "create",
-        json!({
+        "change",
+        json!({"action":"create",
             "target":"req_mcp_target",
             "type":"requirement",
             "data":{
@@ -154,8 +152,8 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
 
     let dependency = call(
         &client,
-        "create",
-        json!({
+        "change",
+        json!({"action":"create",
             "target":"req_mcp_dependency",
             "type":"requirement",
             "data":{
@@ -172,8 +170,8 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
 
     let edited_requirement = call(
         &client,
-        "update",
-        json!({
+        "change",
+        json!({"action":"update",
             "target":"req_mcp_target",
             "if_match":requirement.structured_content.as_ref().unwrap()["data"]["edit"]["etag"],
             "data":{
@@ -234,8 +232,8 @@ async fn mcp_target_first_requirement_submit_uses_the_target() {
 
     let submitted = call(
         &client,
-        "submit",
-        json!({
+        "change",
+        json!({"action":"submit",
             "target":"req_shared",
             "data":{
                 "actor":"agent",
@@ -281,8 +279,8 @@ async fn mcp_named_actions_infer_kinds_and_refuse_invalid_targets() {
 
     let claimed = call(
         &client,
-        "claim",
-        json!({"target":"topic_shared","data":{"actor":"worker"}}),
+        "change",
+        json!({"action":"claim","target":"topic_shared","data":{"actor":"worker"}}),
     )
     .await;
     assert_ne!(claimed.is_error, Some(true), "{claimed:?}");
@@ -293,8 +291,8 @@ async fn mcp_named_actions_infer_kinds_and_refuse_invalid_targets() {
 
     let released = call(
         &client,
-        "release",
-        json!({"target":"topic_shared","data":{"actor":"worker"}}),
+        "change",
+        json!({"action":"release","target":"topic_shared","data":{"actor":"worker"}}),
     )
     .await;
     assert_ne!(released.is_error, Some(true), "{released:?}");
@@ -302,8 +300,8 @@ async fn mcp_named_actions_infer_kinds_and_refuse_invalid_targets() {
 
     let answered = call(
         &client,
-        "answer",
-        json!({"target":"question_shared","data":{"answer":"The shared answer."}}),
+        "change",
+        json!({"action":"answer","target":"question_shared","data":{"answer":"The shared answer."}}),
     )
     .await;
     assert_ne!(answered.is_error, Some(true), "{answered:?}");
@@ -314,16 +312,16 @@ async fn mcp_named_actions_infer_kinds_and_refuse_invalid_targets() {
 
     let invalid = call(
         &client,
-        "claim",
-        json!({"target":"question_shared","data":{"actor":"worker"}}),
+        "change",
+        json!({"action":"claim","target":"question_shared","data":{"actor":"worker"}}),
     )
     .await;
     assert_eq!(invalid.is_error, Some(true), "{invalid:?}");
 
     let missing = call(
         &client,
-        "update",
-        json!({"target":"record_missing","data":{"name":"Missing"}}),
+        "change",
+        json!({"action":"update","target":"record_missing","data":{"name":"Missing"}}),
     )
     .await;
     assert_eq!(missing.is_error, Some(true), "{missing:?}");
@@ -334,8 +332,8 @@ async fn mcp_named_actions_infer_kinds_and_refuse_invalid_targets() {
 
     let kind_selector = call(
         &client,
-        "update",
-        json!({"target":"source_shared","type":"invented","data":{"name":"Changed"}}),
+        "change",
+        json!({"action":"update","target":"source_shared","type":"invented","data":{"name":"Changed"}}),
     )
     .await;
     assert_eq!(kind_selector.is_error, Some(true), "{kind_selector:?}");
@@ -354,18 +352,22 @@ async fn mcp_authoring_does_not_expose_or_run_hidden_operations() {
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();
-    assert!(!tools.iter().any(|tool| tool.name == "create"));
+    assert!(!tools.iter().any(|tool| tool.name == "change"));
     assert!(!tools.iter().any(|tool| tool.name == "update"));
-    let hidden = call(
-        &client,
-        "update",
-        json!({"target":"source_shared","data":{"name":"Hidden"}}),
-    )
-    .await;
-    assert_eq!(hidden.is_error, Some(true), "{hidden:?}");
-    assert_eq!(
-        hidden.structured_content.unwrap()["error"]["kind"],
-        "access_denied"
+    let hidden = client
+        .call_tool(
+            rmcp::model::CallToolRequestParams::new("change").with_arguments(
+                json!({"action":"update","target":"source_shared","data":{"name":"Hidden"}})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ),
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        hidden.to_string().contains("Unknown tool: change"),
+        "{hidden}"
     );
 
     client.cancel().await.unwrap();

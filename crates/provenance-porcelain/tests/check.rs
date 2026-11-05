@@ -1,7 +1,8 @@
 use provenance_macros::verifies;
 use provenance_porcelain::check::{
     BindingContext, BindingPolicy, Category, CategoryContext, CategoryReport, CategoryRun,
-    CheckInput, CheckPort, Finding, PortFuture, Refusal, StatementContext, Status,
+    CheckInput, CheckPort, Finding, GapsContext, PortFuture, Refusal, ScopeCounts,
+    StatementContext, Status,
 };
 use provenance_porcelain::Porcelain;
 
@@ -25,6 +26,7 @@ impl CheckPort for FixturePort {
                 Category::Graph => vec![Finding::new("dangling requirement reference")],
                 Category::Statements => vec![Finding::new("statement uses an unapproved term")],
                 Category::Bindings => vec![Finding::new("active rule has no verification")],
+                Category::Gaps => vec![Finding::new("rule has no producing Requirement")],
             };
             Ok(match category {
                 Category::Graph => CategoryRun::Graph {
@@ -42,6 +44,10 @@ impl CheckPort for FixturePort {
                         policy: BindingPolicy::Warning,
                     },
                     refusal: Refusal::None,
+                },
+                Category::Gaps => CategoryRun::Gaps {
+                    findings,
+                    context: GapsContext { scopes: Vec::new() },
                 },
             })
         })
@@ -107,8 +113,8 @@ async fn a_category_that_cannot_run_is_unavailable_not_passed() {
 #[test]
 #[verifies("rule_porcelain_check_selector_union", exhaustion)]
 fn explicit_selectors_produce_their_union() {
-    let categories = [Category::Graph, Category::Statements, Category::Bindings];
-    for mask in 1_u8..8 {
+    let categories = Category::ALL;
+    for mask in 1_u8..16 {
         let selected = categories
             .into_iter()
             .enumerate()
@@ -263,4 +269,39 @@ fn category_run_keeps_typed_binding_policy_and_refusal_together() {
         panic!("binding context")
     };
     assert_eq!(context.policy, BindingPolicy::Error);
+}
+
+/// The gaps category runs only when selected, keeps its counts with zero findings, and
+/// its findings do not refuse the command.
+#[tokio::test]
+#[verifies("rule_check_reports_gaps", examples)]
+async fn gaps_is_selected_only_and_never_refuses() {
+    assert!(!CheckInput::default().categories().contains(&Category::Gaps));
+    let outcome = Porcelain::new(FixturePort)
+        .check(CheckInput::new([Category::Gaps]))
+        .await;
+    assert_eq!(outcome.categories.len(), 1);
+    assert_eq!(outcome.categories[0].status, Status::Findings);
+    assert!(!outcome.categories[0].refuses());
+
+    let counts = ScopeCounts {
+        scope_id: "default".into(),
+        requirements: 2,
+        source_linked_requirements: 1,
+        resolved_requirements: 0,
+        requirements_with_rules: 1,
+        rules_total: 1,
+        rules_with_complete_traceability: 1,
+    };
+    let passed = CategoryReport::from_run(CategoryRun::Gaps {
+        findings: Vec::new(),
+        context: GapsContext {
+            scopes: vec![counts],
+        },
+    });
+    assert_eq!(passed.status, Status::Passed);
+    assert_eq!(
+        serde_json::to_value(&passed).unwrap()["context"]["scopes"][0]["rules_total"],
+        1
+    );
 }
