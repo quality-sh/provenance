@@ -18,8 +18,8 @@ const CHECK_DESCRIPTION: &str = "Check graph validity, statement quality, and bi
      coverage. Give a statement to check that text with the project dictionary before a write.";
 const CHANGE_DESCRIPTION: &str = "Write to the graph. The action argument selects the \
      write: create, update, answer, claim, release, or submit on the target record; discuss or \
-     reply for a Discussion; notify to register a client thread for review changes; or api for \
-     an API call that writes. Omit data to get the data schema of the action and record kind.";
+     reply for a Discussion; or notify to register a client thread for review changes. Omit \
+     data to get the data schema of the action and record kind.";
 const PRIME_DESCRIPTION: &str = "Introduce Provenance domain concepts and actions.";
 
 pub(super) const VIEWS: &[&str] = &["record", "children", "trace", "impact", "review"];

@@ -30,8 +30,7 @@ empty, `provenance review` permits reads but not review decisions.
 The CLI reads and changes one record with the record ID as the first word.
 Plumbing operations of the catalog have no commands of their own: call them
 with `provenance api <path>`. The same catalog defines HTTP routes, the MCP
-`api` tool and the `api` action of the MCP `change` tool, OpenAPI operations, and
-generated clients.
+`api` tool, OpenAPI operations, and generated clients.
 
 Global `--repo`, `--scope`, and `--format` flags can occur before or after the
 command words. The default repository is the current directory. The default

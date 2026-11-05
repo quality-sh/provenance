@@ -1,4 +1,5 @@
-//! The change tool: every MCP write, selected by the action argument.
+//! The change tool: the record, Discussion, and notify writes, selected by the action
+//! argument.
 
 use super::{authoring, discussions, notify};
 
