@@ -5,8 +5,8 @@
 //!
 //! This library does not open a listener. The caller owns the stream that `serve` reads.
 
-#[cfg(feature = "client")]
 mod arguments;
+#[cfg(feature = "client")]
 mod client;
 mod io;
 mod json_schema;
