@@ -6,49 +6,21 @@
 mod support {
     #[path = "../../../provenance-transport/tests/support/check_port.rs"]
     pub mod check_port;
+    pub mod fixture_host;
+    pub mod mcp;
     #[path = "../../../provenance-transport/tests/support/records.rs"]
     pub mod records;
     pub mod schema_check;
 }
 
 use provenance_macros::verifies;
-use provenance_transport::{
-    fixture::{FixtureAccess, Target},
-    StatementHost,
-};
-use rmcp::ServiceExt as _;
 use serde_json::{json, Value};
-use std::sync::Arc;
+use support::mcp::Session;
 use support::records::Repository;
 use support::schema_check::{call, Client};
 
-fn host(repository: &Repository) -> StatementHost {
-    let access = FixtureAccess::new(
-        vec![Target {
-            id: "selected".into(),
-            root: repository.dir.path().to_path_buf(),
-        }],
-        vec![("selected".into(), "default".into())],
-        "fixture-secret",
-        "fixture.test",
-    )
-    .unwrap()
-    .allow_writes();
-    StatementHost::with_fixture_access(access)
-        .with_check_port(Arc::new(support::check_port::FixtureCheckPort))
-}
-
-async fn session(
-    repository: &Repository,
-) -> (Client, tokio::task::JoinHandle<provenance_mcp::Session>) {
-    let host = host(repository);
-    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move {
-        Box::pin(provenance_mcp::serve(host, server_io))
-            .await
-            .unwrap()
-    });
-    (().serve(client_io).await.unwrap(), server)
+async fn session(repository: &Repository) -> Session {
+    Session::start(support::fixture_host::full(repository)).await
 }
 
 /// The error object of a refused call.
@@ -70,7 +42,8 @@ async fn field(client: &Client, name: &str, arguments: Value) -> (Value, Value) 
 #[verifies("rule_mcp_tools_read_or_write", examples)]
 async fn each_tool_input_is_a_flat_object_and_only_change_writes() {
     let repository = Repository::new("The shared graph is readable.");
-    let (client, server) = session(&repository).await;
+    let session = session(&repository).await;
+    let client = &session.client;
     let tools = client.list_all_tools().await.unwrap();
     assert_eq!(tools.len(), 7);
     for tool in &tools {
@@ -97,8 +70,7 @@ async fn each_tool_input_is_a_flat_object_and_only_change_writes() {
             );
         }
     }
-    client.cancel().await.unwrap();
-    server.await.unwrap().cancel().await.unwrap();
+    session.close().await;
 }
 
 #[tokio::test]
@@ -106,9 +78,10 @@ async fn each_tool_input_is_a_flat_object_and_only_change_writes() {
 #[verifies("rule_mcp_refusal_names_field", examples)]
 async fn discussion_reads_and_writes_refuse_fields_of_another_action() {
     let repository = Repository::new("A requirement has discussions.");
-    let (client, server) = session(&repository).await;
+    let session = session(&repository).await;
+    let client = &session.client;
     let started = call(
-        &client,
+        client,
         "change",
         json!({"action":"discuss",
             "parent":{"node_type":"requirement","node_id":"req_shared"},
@@ -130,7 +103,7 @@ async fn discussion_reads_and_writes_refuse_fields_of_another_action() {
                           "actor":"ben","role":"user","body":"Yes."}),
         ),
     ] {
-        let result = call(&client, name, valid.clone()).await;
+        let result = call(client, name, valid.clone()).await;
         assert_ne!(result.is_error, Some(true), "{valid}: {result:?}");
     }
     for (name, invalid, expected) in [
@@ -166,13 +139,12 @@ async fn discussion_reads_and_writes_refuse_fields_of_another_action() {
         ),
     ] {
         assert_eq!(
-            field(&client, name, invalid.clone()).await,
+            field(client, name, invalid.clone()).await,
             (json!(expected.0), json!(expected.1)),
             "{invalid}"
         );
     }
-    client.cancel().await.unwrap();
-    server.await.unwrap().cancel().await.unwrap();
+    session.close().await;
 }
 
 #[tokio::test]
@@ -181,9 +153,10 @@ async fn discussion_reads_and_writes_refuse_fields_of_another_action() {
 async fn record_actions_refuse_missing_fields_and_other_record_kinds() {
     let repository = Repository::new("The shared graph is readable.");
     repository.all_kinds();
-    let (client, server) = session(&repository).await;
+    let session = session(&repository).await;
+    let client = &session.client;
     let answered = call(
-        &client,
+        client,
         "change",
         json!({"action":"answer","target":"question_shared","data":{"answer":"Yes."}}),
     )
@@ -221,13 +194,13 @@ async fn record_actions_refuse_missing_fields_and_other_record_kinds() {
         ),
     ] {
         assert_eq!(
-            field(&client, "change", invalid.clone()).await,
+            field(client, "change", invalid.clone()).await,
             (json!(expected.0), json!(expected.1)),
             "{invalid}"
         );
     }
     let answer = refused(
-        &client,
+        client,
         "change",
         json!({"action":"answer","target":"req_shared","data":{"answer":"Yes."}}),
     )
@@ -236,8 +209,7 @@ async fn record_actions_refuse_missing_fields_and_other_record_kinds() {
         answer["message"],
         "the answer action takes a record of kind: question"
     );
-    client.cancel().await.unwrap();
-    server.await.unwrap().cancel().await.unwrap();
+    session.close().await;
 }
 
 /// A call without data gets the data schema of the action and record kind.
@@ -246,9 +218,10 @@ async fn record_actions_refuse_missing_fields_and_other_record_kinds() {
 async fn a_refusal_without_data_gives_the_data_schema_of_the_record_kind() {
     let repository = Repository::new("The shared graph is readable.");
     repository.all_kinds();
-    let (client, server) = session(&repository).await;
+    let session = session(&repository).await;
+    let client = &session.client;
     let source = refused(
-        &client,
+        client,
         "change",
         json!({"action":"create","target":"source_x","type":"source"}),
     )
@@ -262,13 +235,12 @@ async fn a_refusal_without_data_gives_the_data_schema_of_the_record_kind() {
         .get("source_type")
         .is_some());
     let requirement = refused(
-        &client,
+        client,
         "change",
         json!({"action":"update","target":"req_shared"}),
     )
     .await;
     assert!(requirement["schema"].to_string().contains("refines"));
     support::schema_check::compile(&requirement["schema"]);
-    client.cancel().await.unwrap();
-    server.await.unwrap().cancel().await.unwrap();
+    session.close().await;
 }

@@ -7,9 +7,10 @@ use serde_json::Value;
 
 pub type Client = rmcp::service::RunningService<rmcp::RoleClient, ()>;
 
-/// Calls one tool and, when the server lists it, checks the request and the result
-/// against its schemas.
+/// Calls one listed tool and checks the request and the result against its schemas.
+/// A tool that tools/list does not have fails the test.
 pub async fn call(client: &Client, name: &str, arguments: Value) -> CallToolResult {
+    let (input, output) = schemas(client, name).await;
     let result = client
         .call_tool(
             CallToolRequestParams::new(name.to_owned())
@@ -17,15 +18,11 @@ pub async fn call(client: &Client, name: &str, arguments: Value) -> CallToolResu
         )
         .await
         .unwrap();
-    let tools = client.list_all_tools().await.unwrap();
-    if tools.iter().any(|tool| tool.name == name) {
-        let (input, output) = schemas(client, name).await;
-        if result.is_error != Some(true) {
-            assert!(compile(&input).is_valid(&arguments), "{name}: {arguments}");
-        }
-        let value = result.structured_content.as_ref().unwrap();
-        assert_eq!(branches_matching(&output, value), 1, "{name}: {value}");
+    if result.is_error != Some(true) {
+        assert!(compile(&input).is_valid(&arguments), "{name}: {arguments}");
     }
+    let value = result.structured_content.as_ref().unwrap();
+    assert_eq!(branches_matching(&output, value), 1, "{name}: {value}");
     result
 }
 
@@ -65,11 +62,16 @@ pub fn branches_matching(schema: &Value, value: &Value) -> usize {
         .count()
 }
 
-/// Read a schema that has no `$schema` keyword as a Draft 7 document.
+/// Read a schema as a JSON Schema 2020-12 document, the dialect that MCP gives a schema
+/// without `$schema`. Each format is an assertion, and a format that 2020-12 does not
+/// define makes the schema invalid.
 pub fn compile(schema: &Value) -> jsonschema::Validator {
-    if schema.get("$schema").is_some() {
-        jsonschema::validator_for(schema).unwrap()
-    } else {
-        jsonschema::draft7::new(schema).unwrap()
+    if let Some(dialect) = schema.get("$schema") {
+        assert_eq!(dialect, "https://json-schema.org/draft/2020-12/schema");
     }
+    jsonschema::draft202012::options()
+        .should_validate_formats(true)
+        .should_ignore_unknown_formats(false)
+        .build(schema)
+        .unwrap_or_else(|error| panic!("{error}: {schema}"))
 }

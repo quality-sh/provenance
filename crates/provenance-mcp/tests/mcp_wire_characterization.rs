@@ -230,6 +230,10 @@ async fn tool_list_keeps_its_names_order_and_schemas() {
         ),
         (&json!("private"), &json!("complete"), &json!(0))
     );
+    assert_eq!(
+        result["_meta"],
+        json!({"io.modelcontextprotocol/serverInfo":server_info()})
+    );
     assert_eq!(fnv1a(&result["tools"].to_string()), TOOL_LIST_FNV1A);
 }
 
@@ -250,7 +254,35 @@ async fn tool_call_result_keeps_its_shape() {
     let mut wire = Wire::start(check_host());
     let response = wire.request("tools/call", call).await;
     expected["resultType"] = json!("complete");
+    expected["_meta"] = json!({"io.modelcontextprotocol/serverInfo":server_info()});
     assert_eq!(response["result"], expected, "2026-07-28");
+}
+
+/// A tool that the host does not list gets the error of any unknown tool.
+#[tokio::test]
+async fn a_tool_that_the_host_does_not_list_is_unknown() {
+    let mut wire = Wire::start(check_host());
+    let listed = wire.request("tools/list", json!({})).await;
+    let names = listed["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|tool| tool["name"].clone())
+        .collect::<Vec<_>>();
+    assert_eq!(names, [json!("check")]);
+    for name in ["change", "get", "discussions", "api"] {
+        let response = wire
+            .request(
+                "tools/call",
+                json!({"name":name,"arguments":{"action":"create"}}),
+            )
+            .await;
+        assert_eq!(
+            response["error"],
+            json!({"code":-32602,"message":format!("Unknown tool: {name}")}),
+            "{name}"
+        );
+    }
 }
 
 #[tokio::test]
