@@ -5,18 +5,60 @@ use crate::surface::{Effect, SchemaDeclaration};
 use provenance_porcelain::check::CheckInput;
 use provenance_porcelain::get::{GetInput, GetOutcome, ReadError, TraceInput};
 use provenance_porcelain::registry::Command;
-use provenance_transport::StatementHost;
-use rmcp::model::{CallToolResult, ContentBlock};
-use serde_json::Value;
+use provenance_transport::{porcelain::Action, StatementHost};
+use rmcp::model::{CallToolResult, ContentBlock, Tool};
+use serde_json::{Map, Value};
 
 mod api;
 mod authoring;
 mod change;
 mod discussions;
 mod notify;
-pub use api::{call as call_api, tool as api_tool};
-pub use change::{call as call_change, tool as change_tool};
-pub use discussions::{call as call_discussions, tool as discussions_tool};
+mod read_only;
+pub use api::tool as api_tool;
+pub use change::tool as change_tool;
+pub use discussions::tool as discussions_tool;
+
+/// Runs one call of a listed tool. A read tool refuses a request that writes. Each
+/// tool checks the arguments against its listed input schema; a tool with an
+/// action argument first checks that the fields agree with the action.
+pub async fn call(
+    host: &StatementHost,
+    command: Command,
+    listed: &Tool,
+    mut arguments: Map<String, Value>,
+) -> CallToolResult {
+    let schema = Value::Object((*listed.input_schema).clone());
+    if command == Command::Api {
+        api::lowercase_method(&mut arguments);
+    }
+    if command == Command::Get {
+        if let Some(refused) = read_only::refusal(read_only::Read::Get(&arguments)) {
+            return refused;
+        }
+    }
+    match command {
+        Command::Change => return change::call(host, &schema, arguments).await,
+        Command::Action(Action::Discussions) => {
+            return discussions::call(host, &schema, arguments).await
+        }
+        _ => {}
+    }
+    if let Some(refused) = crate::arguments::refusal(&listed.name, &schema, &arguments) {
+        return crate::surface::detail_error(refused);
+    }
+    match command {
+        Command::Get => call_get(host, arguments).await,
+        Command::Trace => call_trace(host, arguments).await,
+        Command::Search => call_search(host, arguments).await,
+        Command::Api => api::call(host, arguments).await,
+        Command::Check => {
+            let port = host.check_port().expect("a listed check tool has a port");
+            call_check(host, port.clone(), arguments).await
+        }
+        _ => unreachable!("the server lists no other tool"),
+    }
+}
 
 pub fn search_tool() -> rmcp::model::Tool {
     crate::surface::tool(
@@ -62,10 +104,10 @@ pub fn check_tool() -> rmcp::model::Tool {
     )
 }
 
-pub async fn call_check(
+async fn call_check(
     host: &StatementHost,
     port: std::sync::Arc<dyn provenance_porcelain::check::CheckPort>,
-    arguments: serde_json::Map<String, Value>,
+    arguments: Map<String, Value>,
 ) -> CallToolResult {
     let Ok(arguments) = serde_json::from_value::<CheckInput>(Value::Object(arguments)) else {
         return get_error("invalid_options", "unsupported check options");
@@ -83,20 +125,8 @@ pub async fn call_check(
     result
 }
 
-/// Returns readable and structured MCP content for one get request. MCP registers a
-/// client thread through the notify action of change, so get refuses the notify field.
-pub async fn call_get(
-    host: &StatementHost,
-    arguments: serde_json::Map<String, Value>,
-) -> CallToolResult {
-    if arguments.contains_key("notify") {
-        return crate::surface::detail_error(serde_json::json!({
-            "kind": "invalid_input",
-            "field": "notify",
-            "reason": "unknown_field",
-            "message": "get only reads; register a client thread with the notify action of change",
-        }));
-    }
+/// Returns readable and structured MCP content for one get request.
+async fn call_get(host: &StatementHost, arguments: Map<String, Value>) -> CallToolResult {
     let Ok(arguments) = serde_json::from_value::<GetInput>(Value::Object(arguments)) else {
         return crate::surface::envelope_error(&ReadError::InvalidOptions.failure());
     };
@@ -104,10 +134,7 @@ pub async fn call_get(
 }
 
 /// Returns the same content as the get trace view for one trace request.
-pub async fn call_trace(
-    host: &StatementHost,
-    arguments: serde_json::Map<String, Value>,
-) -> CallToolResult {
+async fn call_trace(host: &StatementHost, arguments: Map<String, Value>) -> CallToolResult {
     let Ok(arguments) = serde_json::from_value::<TraceInput>(Value::Object(arguments)) else {
         return crate::surface::envelope_error(&ReadError::InvalidOptions.failure());
     };
@@ -131,10 +158,7 @@ fn get_result(outcome: Result<GetOutcome, ReadError>) -> CallToolResult {
 
 /// Returns compact readable content and the canonical structured search result.
 #[provenance_macros::rule("rule_search_file_same_on_cli_and_mcp")]
-pub async fn call_search(
-    host: &StatementHost,
-    arguments: serde_json::Map<String, Value>,
-) -> CallToolResult {
+async fn call_search(host: &StatementHost, arguments: Map<String, Value>) -> CallToolResult {
     let Ok(input) = serde_json::from_value::<provenance_porcelain::search::SearchInput>(
         Value::Object(arguments),
     ) else {

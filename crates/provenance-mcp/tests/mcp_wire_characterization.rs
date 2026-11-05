@@ -23,7 +23,7 @@ use std::sync::Arc;
 use support::{check_port::FixtureCheckPort, records::Repository};
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader, DuplexStream, Lines};
 
-const TOOL_LIST_FNV1A: u64 = 11_697_704_581_202_239_126;
+const TOOL_LIST_FNV1A: u64 = 1_215_015_661_522_857_765;
 
 /// The porcelain tools, in list order. The list has no plumbing tools.
 const PORCELAIN_TOOL_NAMES: &[&str] = &[
@@ -269,8 +269,8 @@ async fn a_tool_that_the_host_does_not_list_is_unknown() {
         .iter()
         .map(|tool| tool["name"].clone())
         .collect::<Vec<_>>();
-    assert_eq!(names, [json!("check")]);
-    for name in ["change", "get", "discussions", "api"] {
+    assert_eq!(names, [json!("api"), json!("check")]);
+    for name in ["change", "get", "discussions", "search", "trace"] {
         let response = wire
             .request(
                 "tools/call",
@@ -295,7 +295,8 @@ async fn typed_refusal_and_unknown_tool_keep_their_shape() {
         )
         .await;
     let envelope = json!({
-        "error":{"kind":"invalid_options","message":"unsupported check options"},
+        "error":{"field":"strict","kind":"invalid_input","reason":"unknown_field",
+                 "message":"check does not take strict; it takes: categories, statement"},
         "meta":{}
     });
     assert_eq!(
@@ -307,7 +308,8 @@ async fn typed_refusal_and_unknown_tool_keep_their_shape() {
                 "content":[{"type":"text","text":envelope.to_string()}],
                 "isError":true,
                 "resultType":"complete",
-                "structuredContent":envelope
+                "structuredContent":envelope,
+                "_meta":{"io.modelcontextprotocol/serverInfo":server_info()}
             }
         })
     );
@@ -327,8 +329,10 @@ async fn typed_refusal_and_unknown_tool_keep_their_shape() {
 /// The error object that each tool returns for an input field it does not accept,
 /// then the error object for an oversized input.
 fn refusals() -> Vec<(&'static str, Value)> {
-    let read = json!({"kind":"invalid_input","message":"unsupported read options","reason":"invalid_value"});
-    let options = |message: &str| json!({"kind":"invalid_options","message":message});
+    let unknown = |tool: &str, takes: &str| {
+        json!({"field":"unknown_field","kind":"invalid_input","reason":"unknown_field",
+               "message":format!("{tool} does not take unknown_field; it takes: {takes}")})
+    };
     let discussion = json!({
         "field":"unknown_field","kind":"invalid_input","reason":"unknown_field",
         "message":"the discussions action does not take unknown_field; it takes: cursor, limit, parent, status"
@@ -338,14 +342,23 @@ fn refusals() -> Vec<(&'static str, Value)> {
         "message":"give an action: create, update, answer, claim, release, submit, discuss, reply, api"
     });
     vec![
-        ("get", read.clone()),
-        ("search", options("unsupported search options")),
         (
-            "api",
-            json!({"field":"unknown_field","kind":"invalid_input","reason":"invalid_value"}),
+            "get",
+            unknown("get", "limit, max_depth, returned_kinds, target, view"),
         ),
-        ("check", options("unsupported check options")),
-        ("trace", read),
+        (
+            "search",
+            unknown(
+                "search",
+                "cursor, exclude_terminal, file, limit, line, node_types, symbol, text",
+            ),
+        ),
+        ("api", unknown("api", "body, headers, method, path, query")),
+        ("check", unknown("check", "categories, statement")),
+        (
+            "trace",
+            unknown("trace", "limit, max_depth, returned_kinds, target"),
+        ),
         ("change", change),
         ("discussions", discussion),
         (
@@ -374,7 +387,8 @@ async fn each_tool_refusal_keeps_its_text() {
                 "content":[{"type":"text","text":envelope.to_string()}],
                 "isError":true,
                 "resultType":"complete",
-                "structuredContent":envelope
+                "structuredContent":envelope,
+                "_meta":{"io.modelcontextprotocol/serverInfo":server_info()}
             }),
             "{label}"
         );

@@ -354,16 +354,20 @@ async fn mcp_authoring_does_not_expose_or_run_hidden_operations() {
     let tools = client.list_all_tools().await.unwrap();
     assert!(!tools.iter().any(|tool| tool.name == "change"));
     assert!(!tools.iter().any(|tool| tool.name == "update"));
-    let hidden = call(
-        &client,
-        "change",
-        json!({"action":"update","target":"source_shared","data":{"name":"Hidden"}}),
-    )
-    .await;
-    assert_eq!(hidden.is_error, Some(true), "{hidden:?}");
-    assert_eq!(
-        hidden.structured_content.unwrap()["error"]["kind"],
-        "access_denied"
+    let hidden = client
+        .call_tool(
+            rmcp::model::CallToolRequestParams::new("change").with_arguments(
+                json!({"action":"update","target":"source_shared","data":{"name":"Hidden"}})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ),
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        hidden.to_string().contains("Unknown tool: change"),
+        "{hidden}"
     );
 
     client.cancel().await.unwrap();

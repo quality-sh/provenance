@@ -6,12 +6,12 @@ use provenance_transport::{porcelain::Action, StatementHost};
 use rmcp::{
     model::{
         CallToolRequestParams, CallToolResponse, CallToolResult, ErrorCode, Implementation,
-        ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerConfig,
+        ListToolsResult, MetaObject, PaginatedRequestParams, ProtocolVersion, ServerCapabilities,
+        ServerConfig,
     },
     service::RequestContext,
     ErrorData, RoleServer, ServerHandler,
 };
-use serde_json::Value;
 use std::future::Future;
 
 /// Serves the porcelain tools of one statement host through MCP.
@@ -30,7 +30,7 @@ impl ServerHandler for Server {
     #[provenance_macros::rule("rule_porcelain_mcp_guidance_native")]
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
-            .with_server_info(Implementation::new("provenance", env!("CARGO_PKG_VERSION")))
+            .with_server_info(server_info())
             .with_instructions(provenance_porcelain::guidance::guidance().guidance)
     }
 
@@ -38,7 +38,7 @@ impl ServerHandler for Server {
     fn list_tools(
         &self,
         _: Option<PaginatedRequestParams>,
-        _: RequestContext<RoleServer>,
+        context: RequestContext<RoleServer>,
     ) -> impl Future<Output = Result<ListToolsResult, ErrorData>> + '_ {
         let tools = Command::ALL
             .iter()
@@ -47,6 +47,7 @@ impl ServerHandler for Server {
             .collect();
         std::future::ready(Ok(ListToolsResult {
             tools,
+            meta: result_meta(&context),
             ..Default::default()
         }))
     }
@@ -56,71 +57,51 @@ impl ServerHandler for Server {
     async fn call_tool(
         &self,
         request: CallToolRequestParams,
-        _: RequestContext<RoleServer>,
+        context: RequestContext<RoleServer>,
     ) -> Result<CallToolResponse, ErrorData> {
-        call_command(&self.0, request).await.map(Into::into)
+        let mut result = call_command(&self.0, request).await?;
+        result.meta = result_meta(&context);
+        Ok(result.into())
     }
 }
 
+fn server_info() -> Implementation {
+    Implementation::new("provenance", env!("CARGO_PKG_VERSION"))
+}
+
+/// The result metadata of a 2026-07-28 session: the specification says that servers
+/// should give `io.modelcontextprotocol/serverInfo` on every response. A session that
+/// started with `initialize` has the server info from its handshake and keeps the
+/// result shape of its protocol.
+fn result_meta(context: &RequestContext<RoleServer>) -> Option<MetaObject> {
+    let stateless = context
+        .protocol_version()
+        .is_some_and(|version| version.as_str() >= ProtocolVersion::V_2026_07_28.as_str());
+    stateless.then(|| {
+        let info = serde_json::to_value(server_info()).expect("server info is JSON");
+        let mut meta = MetaObject::default();
+        meta.0.insert(SERVER_INFO.to_owned(), info);
+        meta
+    })
+}
+
+const SERVER_INFO: &str = "io.modelcontextprotocol/serverInfo";
+
+/// Runs one call of a listed tool. A tool that this host does not list gets the same
+/// error as an unknown tool name.
 async fn call_command(
     host: &StatementHost,
     request: CallToolRequestParams,
 ) -> Result<CallToolResult, ErrorData> {
-    let arguments = request.arguments;
-    match Command::find(Interface::Mcp, &[request.name.as_ref()]) {
-        Some(Command::Get) if host.porcelain().get_is_available() => {
-            call_get(host, arguments).await
-        }
-        Some(Command::Trace) if host.porcelain().get_is_available() => {
-            surface::admitted_call(host, arguments, |arguments| {
-                tools::call_trace(host, arguments)
-            })
-            .await
-        }
-        Some(Command::Search) if host.porcelain().search_is_available() => {
-            call_search(host, arguments).await
-        }
-        Some(Command::Api) if host.porcelain().api_is_available() => {
-            call_api_tool(host, arguments).await
-        }
-        Some(Command::Check) => {
-            let Some(port) = host.check_port() else {
-                return Err(unknown_tool(&request.name));
-            };
-            surface::admitted_call(host, arguments, |arguments| {
-                tools::call_check(host, port.clone(), arguments)
-            })
-            .await
-        }
-        Some(Command::Action(Action::Discussions)) => {
-            if tools::discussions_tool(host).is_none() {
-                return Err(unknown_tool(&request.name));
-            }
-            surface::admitted_call(host, arguments, |arguments| {
-                tools::call_discussions(host, arguments)
-            })
-            .await
-        }
-        Some(Command::Change) => {
-            surface::admitted_call(host, arguments, |arguments| {
-                tools::call_change(host, arguments)
-            })
-            .await
-        }
-        Some(
-            Command::Action(_)
-            | Command::Get
-            | Command::Trace
-            | Command::Search
-            | Command::Api
-            | Command::Prime
-            | Command::Repository(_)
-            | Command::Graph(_)
-            | Command::Workspace(_)
-            | Command::Dogfood(_),
-        )
-        | None => Err(unknown_tool(&request.name)),
-    }
+    let listed = Command::find(Interface::Mcp, &[request.name.as_ref()])
+        .and_then(|command| Some((command, tool(host, command)?)));
+    let Some((command, listed)) = listed else {
+        return Err(unknown_tool(&request.name));
+    };
+    surface::admitted_call(host, request.arguments, |arguments| {
+        tools::call(host, command, &listed, arguments)
+    })
+    .await
 }
 
 /// The tool of one registry command, when the host can run it.
@@ -150,34 +131,4 @@ fn unknown_tool(name: &str) -> ErrorData {
         format!("Unknown tool: {name}"),
         None,
     )
-}
-
-async fn call_get(
-    host: &StatementHost,
-    arguments: Option<serde_json::Map<String, serde_json::Value>>,
-) -> Result<CallToolResult, ErrorData> {
-    surface::admitted_call(host, arguments, |arguments| {
-        tools::call_get(host, arguments)
-    })
-    .await
-}
-
-async fn call_api_tool(
-    host: &StatementHost,
-    arguments: Option<serde_json::Map<String, Value>>,
-) -> Result<CallToolResult, ErrorData> {
-    surface::admitted_call(host, arguments, |arguments| {
-        tools::call_api(host, Some(arguments))
-    })
-    .await
-}
-
-async fn call_search(
-    host: &StatementHost,
-    arguments: Option<serde_json::Map<String, serde_json::Value>>,
-) -> Result<CallToolResult, ErrorData> {
-    surface::admitted_call(host, arguments, |arguments| {
-        tools::call_search(host, arguments)
-    })
-    .await
 }

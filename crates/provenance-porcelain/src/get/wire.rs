@@ -11,6 +11,7 @@ use serde_json::Value;
 
 /// A canonical record payload without the graph node's variant tag.
 #[derive(schemars::JsonSchema, Serialize)]
+#[schemars(description = "The record fields, without the node_type field.")]
 #[serde(untagged)]
 enum RecordData<'a> {
     Source(&'a Source),

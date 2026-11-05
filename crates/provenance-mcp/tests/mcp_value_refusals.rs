@@ -24,14 +24,17 @@ async fn refused(session: &Session, name: &str, arguments: Value) -> Value {
     result.structured_content.unwrap()["error"].clone()
 }
 
-/// Each call, the field and reason of its refusal, and a text that its message has.
-fn cases() -> Vec<(
+/// One call, the field and reason of its refusal, and a text that its message has.
+type Case = (
     &'static str,
     Value,
     &'static str,
     &'static str,
     &'static str,
-)> {
+);
+
+/// The cases of the change tool.
+fn change_cases() -> Vec<Case> {
     let parent = json!({"node_type": "requirement", "node_id": "req_shared"});
     vec![
         (
@@ -65,6 +68,12 @@ fn cases() -> Vec<(
             "invalid_value",
             "object",
         ),
+    ]
+}
+
+/// The cases of the read tools.
+fn read_cases() -> Vec<Case> {
+    vec![
         (
             "discussions",
             json!({"limit": 500}),
@@ -160,7 +169,8 @@ async fn a_value_that_the_field_schema_does_not_allow_names_the_field_and_the_al
     let repository = Repository::new("A requirement has discussions.");
     repository.all_kinds();
     let session = Session::start(support::fixture_host::full(&repository)).await;
-    for (name, arguments, field, reason, allowed) in cases() {
+    for (name, arguments, field, reason, allowed) in change_cases().into_iter().chain(read_cases())
+    {
         let error = refused(&session, name, arguments.clone()).await;
         assert_eq!(
             (&error["kind"], &error["field"], &error["reason"]),

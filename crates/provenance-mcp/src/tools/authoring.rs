@@ -152,12 +152,21 @@ pub async fn call(
             Ok(call) => call,
             Err(failure) => return crate::surface::failure_result(failure),
         };
-    if !query.is_empty() {
-        return action_error(&ActionError::InvalidOptions);
+    if let Some(name) = query.keys().next() {
+        let message = format!(
+            "the {} action on a {} record does not take {name}",
+            action.as_str(),
+            route.kind.as_str()
+        );
+        return refusal(name, "unknown_field", &message);
     }
     match host.invoke_target(&route, data, headers).await {
         Ok(value) => {
-            let mut result = CallToolResult::structured(value.clone());
+            let mut structured = value.clone();
+            if let Some(object) = structured.as_object_mut() {
+                object.insert("type".into(), json!(route.kind.as_str()));
+            }
+            let mut result = CallToolResult::structured(structured);
             result.content = vec![ContentBlock::text(render_readable(
                 action, &target, route.kind, &value,
             ))];
@@ -198,6 +207,8 @@ fn field_refusal(
             .find(|name| arguments.get(*name).is_none_or(Value::is_null))?;
         (name.to_owned(), "required", format!("{on} needs {name}"))
     };
+    let mut schema = schema.clone();
+    crate::json_schema::to_2020_12(&mut schema);
     Some(crate::surface::detail_error(json!({
         "kind": "invalid_input",
         "field": field,

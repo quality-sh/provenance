@@ -34,6 +34,12 @@ pub struct SchemaVersion(pub u32);
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
 #[cfg_attr(feature = "schema", schemars(extend("pattern" = "^[a-z0-9_-]+$")))]
+#[cfg_attr(
+    feature = "schema",
+    schemars(
+        description = "A scope ID: lowercase ASCII letters, digits, underscores, and hyphens."
+    )
+)]
 #[verifies("rule_id_charset", construction)]
 pub struct ScopeId(String);
 
@@ -71,6 +77,12 @@ impl<'de> Deserialize<'de> for ScopeId {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
 #[cfg_attr(feature = "schema", schemars(extend("pattern" = "^[a-z0-9_-]+$")))]
+#[cfg_attr(
+    feature = "schema",
+    schemars(
+        description = "A record ID: lowercase ASCII letters, digits, underscores, and hyphens."
+    )
+)]
 #[verifies("rule_id_charset", construction)]
 pub struct StableId(String);
 

@@ -82,8 +82,10 @@ pub fn tool(
     if matches!(schema_declaration, SchemaDeclaration::Remove) {
         input.as_object_mut().map(|schema| schema.remove("$schema"));
     }
-    let input = share_definitions(input);
-    let output = share_definitions(output_schema(output, schema_declaration));
+    let mut input = share_definitions(input);
+    let mut output = share_definitions(output_schema(output, schema_declaration));
+    crate::json_schema::to_2020_12(&mut input);
+    crate::json_schema::to_2020_12(&mut output);
     let mut tool = Tool::new(
         name,
         description,
@@ -119,10 +121,13 @@ fn output_schema(mut success: Value, schema_declaration: SchemaDeclaration) -> V
         schema.insert("$defs".to_owned(), definitions);
     }
     schema.insert("type".to_owned(), Value::String("object".to_owned()));
-    schema.insert(
-        "oneOf".to_owned(),
-        Value::Array(vec![success.clone().into(), error_output_schema()]),
-    );
+    // A result schema that is only a `oneOf` gives its branches to the root `oneOf`.
+    let mut branches = match success.get("oneOf") {
+        Some(Value::Array(branches)) if success.len() == 1 => branches.clone(),
+        _ => vec![success.clone().into()],
+    };
+    branches.push(error_output_schema());
+    schema.insert("oneOf".to_owned(), Value::Array(branches));
     Value::Object(schema)
 }
 

@@ -162,6 +162,10 @@ pub struct ResolutionInput {
 /// a blank input cannot enter the graph through a file the way it can through
 /// a struct literal.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    feature = "schema",
+    schemars(description = "One input to a Resolution: its type, a reference, and a summary.")
+)]
 #[derive(Deserialize)]
 struct ResolutionInputFields {
     #[serde(alias = "inputType")]

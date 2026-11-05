@@ -16,12 +16,27 @@ mod support {
 use serde_json::{json, Value};
 use support::{mcp::Session, records::Repository};
 
+/// Withdraw the pending submission of the Requirement, so that a submit can run.
+fn withdraw_pending_submission(repository: &Repository) {
+    let store = repository.open().store();
+    let scope = provenance_core::ScopeId::new("default").unwrap();
+    let requirement = provenance_core::StableId::new("req_shared").unwrap();
+    let state = store
+        .requirement_decision_state(&scope, &requirement)
+        .unwrap();
+    let proposal = state.pending.unwrap().proposal_id;
+    let withdrawal = json!({"scope_id": "default", "actor": "agent", "proposal_id": proposal});
+    store
+        .withdraw_record_review(serde_json::from_value(withdrawal).unwrap())
+        .unwrap();
+}
+
 /// One call of each change action, and the record kind of a record result.
 fn calls() -> Vec<(Value, Option<&'static str>)> {
     vec![
         (
             json!({"action": "create", "target": "source_new", "type": "source",
-                   "data": {"name": "New source", "source_type": "document"}}),
+                   "data": {"name": "New source", "source_type": "document", "supersedes": []}}),
             Some("source"),
         ),
         (
@@ -30,27 +45,22 @@ fn calls() -> Vec<(Value, Option<&'static str>)> {
             Some("domain"),
         ),
         (
-            json!({"action": "update", "target": "topic_shared",
-                   "data": {"title": "Shared topic, renamed"}}),
-            Some("topic"),
-        ),
-        (
             json!({"action": "answer", "target": "question_shared",
                    "data": {"answer": "The shared record applies."}}),
             Some("question"),
         ),
         (
-            json!({"action": "claim", "target": "question_shared",
-                   "data": {"holder": "ben"}}),
-            Some("question"),
+            json!({"action": "claim", "target": "topic_shared", "data": {"actor": "ben"}}),
+            Some("topic"),
         ),
         (
-            json!({"action": "release", "target": "question_shared",
-                   "data": {"holder": "ben"}}),
-            Some("question"),
+            json!({"action": "release", "target": "topic_shared", "data": {"actor": "ben"}}),
+            Some("topic"),
         ),
         (
-            json!({"action": "submit", "target": "req_shared", "data": {"actor": "ben"}}),
+            json!({"action": "submit", "target": "req_shared",
+                   "data": {"actor": "ben", "title": "Shared", "summary": "Submit it.",
+                            "source_ids": [], "evidence_references": [], "builds_on": []}}),
             Some("requirement"),
         ),
         (
@@ -67,7 +77,7 @@ fn calls() -> Vec<(Value, Option<&'static str>)> {
         (
             json!({"action": "api", "request": {"method": "post", "path": "sources",
                    "body": {"id": "source_api", "name": "Api source",
-                            "source_type": "document"}}}),
+                            "source_type": "document", "supersedes": []}}}),
             None,
         ),
     ]
@@ -77,6 +87,7 @@ fn calls() -> Vec<(Value, Option<&'static str>)> {
 async fn each_change_result_matches_exactly_one_output_branch() {
     let repository = Repository::new("The shared graph is readable.");
     repository.all_kinds();
+    withdraw_pending_submission(&repository);
     let session = Session::start(support::fixture_host::full(&repository)).await;
     let (_, output) = support::schema_check::schemas(&session.client, "change").await;
     let text = output.to_string();
@@ -105,14 +116,36 @@ async fn each_change_result_matches_exactly_one_output_branch() {
     )
     .await;
     let id = started.structured_content.unwrap()["result"]["entries"][0]["discussion_id"].clone();
-    let reply = support::schema_check::call(
+    let read = support::mcp::call(
         &session.client,
-        "change",
-        json!({"action": "reply", "discussion_id": id, "expected_version": 1,
-               "actor": "ben", "role": "user", "body": "Yes."}),
+        "api",
+        json!({"path": "requirements/req_shared"}),
     )
     .await;
-    assert_eq!(reply.structured_content.unwrap()["action"], "reply");
+    let etag = read.structured_content.unwrap()["data"]["edit"]["etag"].clone();
+    for (arguments, kind) in [
+        (
+            json!({"action": "reply", "discussion_id": id, "expected_version": 1,
+                   "actor": "ben", "role": "user", "body": "Yes."}),
+            None,
+        ),
+        (
+            json!({"action": "update", "target": "req_shared", "if_match": etag,
+                   "data": {"actor": "ben", "statement": "The shared graph is readable by all."}}),
+            Some("requirement"),
+        ),
+    ] {
+        let result =
+            support::schema_check::call(&session.client, "change", arguments.clone()).await;
+        assert_ne!(result.is_error, Some(true), "{arguments}: {result:?}");
+        let value = result.structured_content.unwrap();
+        assert_eq!(value["action"], arguments["action"], "{value}");
+        assert_eq!(
+            value.get("type"),
+            kind.map(|kind| json!(kind)).as_ref(),
+            "{value}"
+        );
+    }
     session.close().await;
 }
 

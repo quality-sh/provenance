@@ -39,24 +39,32 @@ pub fn write_input_schema() -> Value {
     schema
 }
 
+/// The method of an api call in lower case, as the schema gives it: `method` in the api
+/// tool, `request.method` in the change tool.
+pub fn lowercase_method(arguments: &mut Map<String, Value>) {
+    let method = if arguments.get("request").is_some_and(Value::is_object) {
+        arguments
+            .get_mut("request")
+            .and_then(|request| request.get_mut("method"))
+    } else {
+        arguments.get_mut("method")
+    };
+    if let Some(Value::String(method)) = method {
+        method.make_ascii_lowercase();
+    }
+}
+
 /// Parse one api tool call's structured arguments and run the shared action,
 /// so MCP callers select the same paths, methods, and bodies as the CLI.
 #[provenance_macros::rule("rule_porcelain_mcp_api_arguments")]
-pub async fn call(
-    host: &StatementHost,
-    arguments: Option<serde_json::Map<String, Value>>,
-) -> CallToolResult {
-    let request = match request(arguments.unwrap_or_default()) {
+pub async fn call(host: &StatementHost, arguments: Map<String, Value>) -> CallToolResult {
+    let request = match request(arguments) {
         Ok(request) => request,
         Err(error) => return refused(&error),
     };
     if let ApiRequest::Invoke(input) = &request {
-        if route_writes(input.method, &input.path) == Some(true) {
-            return wrong_tool(
-                input,
-                "path",
-                "writes; call it with the change tool, action api",
-            );
+        if let Some(refused) = super::read_only::refusal(super::read_only::Read::Api(input)) {
+            return refused;
         }
     }
     execute(host, request).await
@@ -90,9 +98,7 @@ pub async fn call_write(host: &StatementHost, mut arguments: Map<String, Value>)
 }
 
 fn request(mut arguments: Map<String, Value>) -> Result<ApiRequest, ApiError> {
-    if let Some(Value::String(method)) = arguments.get_mut("method") {
-        method.make_ascii_lowercase();
-    }
+    lowercase_method(&mut arguments);
     let Ok(parsed) = serde_json::from_value::<ApiArguments>(Value::Object(arguments.clone()))
     else {
         return Err(ApiError::invalid_options(

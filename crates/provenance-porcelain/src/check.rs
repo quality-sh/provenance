@@ -32,6 +32,10 @@ impl Category {
 /// it, so both surfaces take the one `statement` field.
 #[rule("rule_porcelain_check_statement_field_shared")]
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, schemars::JsonSchema)]
+#[schemars(
+    description = "The categories to check, and a statement to check in place of the \
+                          committed statements."
+)]
 #[serde(deny_unknown_fields)]
 pub struct CheckInput {
     #[serde(

@@ -119,19 +119,33 @@ async fn mcp_check_takes_a_statement_and_refuses_the_cli_only_options() {
             ("The pump stops.".to_owned(), None),
         ]
     );
-    for arguments in [
-        json!({"statement": "The pump stops.", "strict": true}),
-        json!({"statement": "The pump stops.", "base": "HEAD"}),
-        json!({"statement": "The pump stops.", "scope": "default"}),
+    for (arguments, field) in [
+        (
+            json!({"statement": "The pump stops.", "strict": true}),
+            "strict",
+        ),
+        (
+            json!({"statement": "The pump stops.", "base": "HEAD"}),
+            "base",
+        ),
+        (
+            json!({"statement": "The pump stops.", "scope": "default"}),
+            "scope",
+        ),
     ] {
         let refused = client
             .call_tool(check_call(arguments.clone()))
             .await
             .unwrap();
         assert_eq!(refused.is_error, Some(true), "{arguments}");
+        let error = refused.structured_content.unwrap()["error"].clone();
         assert_eq!(
-            refused.structured_content.unwrap()["error"]["kind"],
-            "invalid_options",
+            (&error["kind"], &error["field"], &error["reason"]),
+            (
+                &json!("invalid_input"),
+                &json!(field),
+                &json!("unknown_field")
+            ),
             "{arguments}"
         );
     }

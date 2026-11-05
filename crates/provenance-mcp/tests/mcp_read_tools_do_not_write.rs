@@ -24,8 +24,9 @@ async fn refused(session: &Session, name: &str, arguments: Value) -> Value {
     result.structured_content.unwrap()["error"].clone()
 }
 
-/// The routes of the api catalog: method and path, with each path parameter filled.
-async fn routes(session: &Session) -> Vec<(String, String)> {
+/// The routes of the api catalog: method, path with each path parameter filled, and
+/// whether the registered operation of the route writes.
+async fn routes(session: &Session) -> Vec<(String, String, bool)> {
     let catalog = support::schema_check::call(&session.client, "api", json!({})).await;
     let catalog = catalog.structured_content.unwrap();
     let routes = catalog["routes"]
@@ -35,9 +36,18 @@ async fn routes(session: &Session) -> Vec<(String, String)> {
     routes
         .iter()
         .map(|route| {
-            let path = route["path"]
-                .as_str()
-                .unwrap()
+            let method = route["method"].as_str().unwrap().to_owned();
+            let template = route["path"].as_str().unwrap();
+            let writes = provenance_contract::definitions()
+                .iter()
+                .find(|definition| {
+                    definition.method.as_str() == method
+                        && definition.path.trim_start_matches('/')
+                            == template.trim_start_matches('/')
+                })
+                .unwrap_or_else(|| panic!("{method} {template} has no definition"))
+                .mutates();
+            let path = template
                 .split('/')
                 .map(|part| {
                     if part.starts_with('{') {
@@ -48,8 +58,24 @@ async fn routes(session: &Session) -> Vec<(String, String)> {
                 })
                 .collect::<Vec<_>>()
                 .join("/");
-            (route["method"].as_str().unwrap().to_owned(), path)
+            (method, path, writes)
         })
+        .collect()
+}
+
+/// The paths below the repository whose bytes differ. The projection cache is left out:
+/// a read can bring that derived copy of the store up to date.
+fn changed(
+    before: &std::collections::BTreeMap<std::path::PathBuf, Vec<u8>>,
+    repository: &Repository,
+) -> Vec<std::path::PathBuf> {
+    let after = repository.bytes();
+    after
+        .keys()
+        .chain(before.keys())
+        .filter(|path| !path.starts_with(".provenance/cache"))
+        .filter(|path| after.get(*path) != before.get(*path))
+        .cloned()
         .collect()
 }
 
@@ -75,7 +101,10 @@ async fn get_refuses_notify_and_names_the_change_tool() {
         error["message"].as_str().unwrap().contains("action notify"),
         "{error}"
     );
-    assert!(repository.bytes() == before);
+    assert_eq!(
+        changed(&before, &repository),
+        Vec::<std::path::PathBuf>::new()
+    );
     session.close().await;
 }
 
@@ -87,9 +116,9 @@ async fn api_refuses_each_route_that_writes_and_names_the_change_tool() {
     let session = Session::start(support::fixture_host::full(&repository)).await;
     let before = repository.bytes();
     let routes = routes(&session).await;
-    let writes = routes.iter().filter(|(method, _)| method != "get").count();
+    let writes = routes.iter().filter(|(_, _, writes)| *writes).count();
     assert!(writes > 10, "{routes:?}");
-    for (method, path) in &routes {
+    for (method, path, writes) in &routes {
         let result = support::schema_check::call(
             &session.client,
             "api",
@@ -100,17 +129,20 @@ async fn api_refuses_each_route_that_writes_and_names_the_change_tool() {
         let names_change = error["message"]
             .as_str()
             .is_some_and(|message| message.contains("call it with the change tool, action api"));
-        if method == "get" {
-            assert!(!names_change, "{method} {path}: {error}");
-        } else {
+        if *writes {
             assert_eq!(
                 (&error["field"], &error["reason"], names_change),
                 (&json!("path"), &json!("invalid_value"), true),
                 "{method} {path}: {error}"
             );
+        } else {
+            assert!(!names_change, "{method} {path}: {error}");
         }
     }
-    assert!(repository.bytes() == before);
+    assert_eq!(
+        changed(&before, &repository),
+        Vec::<std::path::PathBuf>::new()
+    );
     session.close().await;
 }
 
@@ -174,19 +206,21 @@ async fn no_read_tool_changes_the_repository() {
     let mut called = std::collections::BTreeSet::new();
     let before = repository.bytes();
     for (name, arguments) in read_calls() {
-        support::schema_check::call(&session.client, name, arguments).await;
-        assert!(
-            repository.bytes() == before,
-            "{name} changed the repository"
-        );
+        support::schema_check::call(&session.client, name, arguments.clone()).await;
+        let changed = changed(&before, &repository);
+        assert!(changed.is_empty(), "{name} {arguments} changed {changed:?}");
         called.insert(name);
     }
-    for (method, path) in routes(&session).await {
-        if method == "get" {
-            support::schema_check::call(&session.client, "api", json!({"path": path})).await;
+    for (method, path, writes) in routes(&session).await {
+        if !writes {
+            let arguments = json!({"method": method, "path": path, "body": {}});
+            support::schema_check::call(&session.client, "api", arguments).await;
         }
     }
-    assert!(repository.bytes() == before, "api changed the repository");
+    assert_eq!(
+        changed(&before, &repository),
+        Vec::<std::path::PathBuf>::new()
+    );
     let read_tools = tools
         .iter()
         .filter(|tool| tool.name != "change")

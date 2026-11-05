@@ -52,7 +52,7 @@ fn schema_has_property(document: &Value, schema: &Value, property: &str) -> bool
 fn path_parameters_carry_the_stable_id_pattern_across_families() {
     let (openapi, _) = provenance_codegen::documents();
     let stable_id = json!({
-        "description": "A stable artifact id. The inner `String` is private and `new` is the only way in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "description": "A record ID: lowercase ASCII letters, digits, underscores, and hyphens.",
         "pattern": "^[a-z0-9_-]+$",
         "type": "string",
     });
