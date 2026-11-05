@@ -17,7 +17,9 @@ impl InputCheck {
     /// Compile one input schema as JSON Schema 2020-12. Formats are not checked. A
     /// reference to a schema outside this document is refused, not fetched.
     pub fn new(schema: Value) -> Result<Self, ValidationError<'static>> {
-        let validator = jsonschema::draft202012::options().build(&schema)?;
+        let validator = jsonschema::draft202012::options()
+            .offline()
+            .build(&schema)?;
         Ok(Self { schema, validator })
     }
 
