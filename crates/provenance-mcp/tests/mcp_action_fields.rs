@@ -40,12 +40,15 @@ async fn field(client: &Client, name: &str, arguments: Value) -> (Value, Value) 
 #[tokio::test]
 #[verifies("rule_mcp_tool_inputs_are_flat_objects", examples)]
 #[verifies("rule_mcp_tools_read_or_write", examples)]
-async fn each_tool_input_is_a_flat_object_and_only_change_writes() {
+async fn each_tool_input_is_a_flat_object_and_only_change_and_api_write() {
     let repository = Repository::new("The shared graph is readable.");
     let session = session(&repository).await;
     let client = &session.client;
     let tools = client.list_all_tools().await.unwrap();
     assert_eq!(tools.len(), 7);
+    for name in ["change", "api"] {
+        assert!(tools.iter().any(|tool| tool.name == name), "{name}");
+    }
     for tool in &tools {
         let input = json!(tool.input_schema);
         let output = json!(tool.output_schema);
@@ -60,6 +63,12 @@ async fn each_tool_input_is_a_flat_object_and_only_change_writes() {
                 annotations,
                 json!({"readOnlyHint": false, "destructiveHint": true,
                        "idempotentHint": false, "openWorldHint": true})
+            );
+        } else if tool.name == "api" {
+            assert_eq!(
+                annotations,
+                json!({"readOnlyHint": false, "destructiveHint": true,
+                       "idempotentHint": false, "openWorldHint": false})
             );
         } else {
             assert_eq!(

@@ -246,12 +246,11 @@ async fn a_request_decode_refusal_does_not_wait_for_a_work_slot() {
     let started = tokio::time::Instant::now();
     let refused = call(
         &session.client,
-        "change",
-        json!({"action":"api", "request":{
-        "path":"requirements/req_shared/submit", "method":"post", "body":{
+        "api",
+        json!({"path":"requirements/req_shared/submit", "method":"post", "body":{
             "actor":"agent", "declared_by":"other", "title":"Review",
             "summary":"Review the record."
-        }}}),
+        }}),
     )
     .await;
     assert_eq!(started.elapsed(), Duration::ZERO);

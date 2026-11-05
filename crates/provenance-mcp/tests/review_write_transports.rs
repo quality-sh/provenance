@@ -107,7 +107,7 @@ async fn one_review_decision_has_one_result_through_http_mcp_and_the_native_stor
     let (mcp_repo, mcp_proposal) = pending().await;
     let session = ApiSession::start(write_host(&mcp_repo)).await;
     let result = session
-        .write(json!({"path": path(&mcp_proposal), "method": "post", "body": decision()}))
+        .call(json!({"path": path(&mcp_proposal), "method": "post", "body": decision()}))
         .await;
     assert_ne!(result.is_error, Some(true), "{result:?}");
     let mcp = result.structured_content.unwrap();

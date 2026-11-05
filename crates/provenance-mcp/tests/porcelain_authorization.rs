@@ -89,12 +89,12 @@ async fn non_create_schema_excludes_a_writable_but_unreadable_kind() {
 
     let direct = call(
         &client,
-        "change",
-        json!({"action":"api", "request":{
+        "api",
+        json!({
             "path":"sources/source_shared",
             "method":"patch",
             "body":{"name":"Direct source update"}
-        }}),
+        }),
     )
     .await;
     assert_ne!(direct.is_error, Some(true), "{direct:?}");

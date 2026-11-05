@@ -1,6 +1,6 @@
 //! MCP lists only porcelain tools. A plumbing operation name is an unknown
-//! tool. The api tool reaches the operations that read, and the api action of
-//! change reaches the operations that write.
+//! tool. The api tool reaches the catalog operations that read and that write, and
+//! the change tool has no api action.
 #![cfg(feature = "test-fixture")]
 
 #[allow(dead_code)]
@@ -90,37 +90,47 @@ async fn no_plumbing_operation_name_is_a_listed_or_callable_tool() {
         "source_shared"
     );
 
-    // A route that writes goes through the api action of change, not the api tool.
-    let update = json!({"path":"sources/source_shared","method":"patch","body":{"name":"Renamed"}});
+    // A route that writes goes through the api tool, as on the CLI.
     let call = |name: &str, arguments: serde_json::Value| {
         client.call_tool(
             CallToolRequestParams::new(name.to_owned())
                 .with_arguments(arguments.as_object().unwrap().clone()),
         )
     };
-    let refused = call("api", update.clone()).await.unwrap();
-    assert_eq!(refused.is_error, Some(true), "{refused:?}");
-    assert_eq!(
-        refused.structured_content.unwrap()["error"]["field"],
-        "path"
-    );
-    let written = call("change", json!({"action":"api","request":update}))
-        .await
-        .unwrap();
+    let update = json!({"path":"sources/source_shared","method":"patch","body":{"name":"Renamed"}});
+    let written = call("api", update).await.unwrap();
     assert_ne!(written.is_error, Some(true), "{written:?}");
     assert_eq!(
         written.structured_content.unwrap()["data"]["name"],
         "Renamed"
     );
-    let read_through_change = call(
+    let read = call("api", json!({"path":"sources/source_shared"}))
+        .await
+        .unwrap();
+    assert_eq!(read.structured_content.unwrap()["data"]["name"], "Renamed");
+    assert!(
+        repository
+            .bytes()
+            .values()
+            .any(|bytes| String::from_utf8_lossy(bytes).contains("\"name\":\"Renamed\"")),
+        "the stored graph holds the new name"
+    );
+
+    // The change tool has no api action: the call is refused, and the refusal names
+    // the action field.
+    let refused = call(
         "change",
-        json!({"action":"api","request":{"path":"sources/source_shared"}}),
+        json!({"action":"api","request":{"path":"sources/source_shared","method":"patch",
+               "body":{"name":"Refused"}}}),
     )
     .await
     .unwrap();
+    assert_eq!(refused.is_error, Some(true), "{refused:?}");
+    let error = &refused.structured_content.unwrap()["error"];
     assert_eq!(
-        read_through_change.structured_content.unwrap()["error"]["field"],
-        "request.path"
+        (&error["kind"], &error["field"]),
+        (&json!("invalid_input"), &json!("action")),
+        "{error}"
     );
 
     client.cancel().await.unwrap();

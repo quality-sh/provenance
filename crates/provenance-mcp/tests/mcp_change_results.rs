@@ -75,12 +75,6 @@ fn calls() -> Vec<(Value, Option<&'static str>)> {
                    "notify": {"client": "codex", "thread": "thread-1"}}),
             None,
         ),
-        (
-            json!({"action": "api", "request": {"method": "post", "path": "sources",
-                   "body": {"id": "source_api", "name": "Api source",
-                            "source_type": "document", "supersedes": []}}}),
-            None,
-        ),
     ]
 }
 

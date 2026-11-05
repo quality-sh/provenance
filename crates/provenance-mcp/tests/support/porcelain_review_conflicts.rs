@@ -9,7 +9,7 @@ async fn edit(session: &ApiSession, description: &str) -> (String, String) {
         .as_str()
         .unwrap();
     let saved = session
-        .write(json!({
+        .call(json!({
             "path":"requirements/req_shared", "method":"patch",
             "headers":{"If-Match":etag},
             "body":{"actor":"agent","description":description}
@@ -31,7 +31,7 @@ async fn edit(session: &ApiSession, description: &str) -> (String, String) {
 
 async fn submit(session: &ApiSession, revision: &str) -> CallToolResult {
     session
-        .write(json!({
+        .call(json!({
             "path":"requirements/req_shared/submit", "method":"post",
             "body":{"actor":"agent", "declared_by":null, "title":"Review", "summary":"Review it.",
                 "confidence":null, "source_ids":[], "evidence_references":[], "builds_on":[],
@@ -79,7 +79,7 @@ async fn terminal(session: &ApiSession, proposal: &str, action: &str) -> CallToo
         _ => json!({"actor":"agent","declared_by":null,"reason":null}),
     };
     session
-        .write(json!({"path":format!(
+        .call(json!({"path":format!(
         "requirements/req_shared/submissions/{proposal}/{action}"),
         "method":"post", "body":body}))
         .await

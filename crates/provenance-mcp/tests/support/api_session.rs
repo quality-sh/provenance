@@ -31,28 +31,12 @@ impl ApiSession {
         Self { client, server }
     }
 
-    /// Call the api tool with structured arguments.
+    /// Call the api tool with structured arguments. A call can read or write.
     pub async fn call(&self, arguments: Value) -> CallToolResult {
         self.client
             .call_tool(
                 CallToolRequestParams::new("api")
                     .with_arguments(arguments.as_object().unwrap().clone()),
-            )
-            .await
-            .unwrap()
-    }
-
-    /// Make one api call that writes: the api action of the change tool.
-    #[allow(dead_code)]
-    pub async fn write(&self, request: Value) -> CallToolResult {
-        self.client
-            .call_tool(
-                CallToolRequestParams::new("change").with_arguments(
-                    serde_json::json!({"action": "api", "request": request})
-                        .as_object()
-                        .unwrap()
-                        .clone(),
-                ),
             )
             .await
             .unwrap()

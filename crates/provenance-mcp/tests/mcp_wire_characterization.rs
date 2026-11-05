@@ -339,7 +339,7 @@ fn refusals() -> Vec<(&'static str, Value)> {
     });
     let change = json!({
         "field":"action","kind":"invalid_input","reason":"required",
-        "message":"give an action: create, update, answer, claim, release, submit, discuss, reply, api"
+        "message":"give an action: create, update, answer, claim, release, submit, discuss, reply"
     });
     vec![
         (

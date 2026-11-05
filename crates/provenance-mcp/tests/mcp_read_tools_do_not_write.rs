@@ -1,5 +1,5 @@
-//! The read tools refuse each request that writes, and no call of a read tool changes
-//! the repository.
+//! The get tool refuses notify, and no call of a read tool, and no GET call of the api
+//! tool, changes the repository.
 #![cfg(feature = "test-fixture")]
 
 #[allow(dead_code)]
@@ -119,54 +119,6 @@ async fn get_refuses_notify_and_names_the_change_tool() {
     session.close().await;
 }
 
-#[tokio::test]
-#[verifies("rule_mcp_tools_read_or_write", examples)]
-async fn api_refuses_each_route_that_writes_and_names_the_change_tool() {
-    let repository = Repository::new("The shared graph is readable.");
-    repository.all_kinds();
-    let session = Session::start(support::fixture_host::full(&repository)).await;
-    let before = repository.bytes();
-    let routes = routes(&session).await;
-    let writes = routes.iter().filter(|(_, _, writes)| *writes).count();
-    assert!(writes > 10, "{routes:?}");
-    for (method, path, writes) in &routes {
-        let result = support::schema_check::call(
-            &session.client,
-            "api",
-            json!({"method": method, "path": path, "body": {}}),
-        )
-        .await;
-        let error = &result.structured_content.unwrap()["error"];
-        let names_change = error["message"]
-            .as_str()
-            .is_some_and(|message| message.contains("call it with the change tool, action api"));
-        if *writes {
-            assert_eq!(
-                (&error["field"], &error["reason"], names_change),
-                (&json!("path"), &json!("invalid_value"), true),
-                "{method} {path}: {error}"
-            );
-        } else {
-            assert!(!names_change, "{method} {path}: {error}");
-        }
-    }
-    assert_eq!(
-        changed(&before, &repository),
-        Vec::<std::path::PathBuf>::new()
-    );
-    session.close().await;
-}
-
-/// The body of a read route that takes one.
-fn read_body(path: &str) -> Option<Value> {
-    match path {
-        "/statement-checks" => Some(json!({"statement": "The pump stops."})),
-        "/authoring-plans" => Some(json!({"schema_version": 2, "spec": "fx",
-            "declared_by": "spec://fx", "sources": [], "requirements": []})),
-        _ => None,
-    }
-}
-
 /// Each read tool with each of its fields set. Each call succeeds.
 fn read_calls(discussion_id: &Value) -> Vec<(&'static str, Value)> {
     let parent = json!({"node_type": "requirement", "node_id": "req_shared"});
@@ -214,12 +166,6 @@ fn read_calls(discussion_id: &Value) -> Vec<(&'static str, Value)> {
             "discussions",
             json!({"action": "discussion", "discussion_id": discussion_id, "limit": 5}),
         ),
-        (
-            "api",
-            json!({"method": "get", "path": "requirements/req_shared", "query": {},
-                   "headers": {}}),
-        ),
-        ("api", json!({})),
     ]);
     calls
 }
@@ -265,14 +211,13 @@ async fn no_read_tool_changes_the_repository() {
         );
         called.insert(name);
     }
+    // The api tool writes, so only its GET calls are here: the catalog, and each GET
+    // route.
     for (method, path, writes) in routes(&session).await {
-        if writes {
+        if writes || method != "get" {
             continue;
         }
-        let mut arguments = json!({"method": method, "path": path});
-        if let Some(body) = read_body(&path) {
-            arguments["body"] = body;
-        }
+        let arguments = json!({"method": method, "path": path});
         let result = support::schema_check::call(&session.client, "api", arguments.clone()).await;
         let value = result.structured_content.unwrap();
         // Each route reaches its service: it reads, or the record of a filled path
@@ -288,7 +233,7 @@ async fn no_read_tool_changes_the_repository() {
     );
     let read_tools = tools
         .iter()
-        .filter(|tool| tool.name != "change")
+        .filter(|tool| !["change", "api"].contains(&tool.name.as_ref()))
         .map(|tool| tool.name.as_ref())
         .collect::<std::collections::BTreeSet<_>>();
     assert_eq!(read_tools, called);
