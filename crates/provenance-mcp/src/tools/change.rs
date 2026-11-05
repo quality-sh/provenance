@@ -15,7 +15,7 @@ pub(super) const NOTIFY: &str = "notify";
 pub(super) const API: &str = "api";
 
 /// The actions that the host can run, with the fields of each action.
-fn input(host: &StatementHost) -> ToolInput {
+pub fn input(host: &StatementHost) -> ToolInput {
     let porcelain = host.porcelain();
     let mut input = ToolInput::new(None);
     for action in Action::RECORD {
@@ -48,8 +48,7 @@ pub fn is_action(word: &str) -> bool {
 }
 
 /// The change tool, when the host can run some write.
-pub fn tool(host: &StatementHost) -> Option<Tool> {
-    let input = input(host);
+pub fn tool(host: &StatementHost, input: &ToolInput) -> Option<Tool> {
     let actions = input.actions().collect::<Vec<_>>();
     if actions.is_empty() {
         return None;
@@ -65,30 +64,22 @@ pub fn tool(host: &StatementHost) -> Option<Tool> {
     ))
 }
 
-/// Runs the write that the action argument selects. The result names the action.
-pub async fn call(
-    host: &StatementHost,
-    schema: &Value,
-    mut arguments: Map<String, Value>,
-) -> CallToolResult {
-    let input = input(host);
-    // A write that this host does not grant is denied, not unknown.
-    if let Some(Value::String(word)) = arguments.get("action") {
-        if is_action(word) && !input.actions().any(|action| action == word) {
-            return crate::surface::detail_error(
-                json!({"kind": "access_denied", "message": "access denied"}),
-            );
-        }
-    }
-    api::lowercase_method(&mut arguments);
-    let given = arguments.clone();
-    let action = match input.select(&mut arguments) {
-        Ok(action) => action,
-        Err(refusal) => return crate::surface::detail_error(refusal.detail()),
+/// The refusal of a write that this host does not grant: it is denied, not unknown.
+pub fn refusal(input: &ToolInput, arguments: &Map<String, Value>) -> Option<CallToolResult> {
+    let Some(Value::String(word)) = arguments.get("action") else {
+        return None;
     };
-    if let Some(refused) = crate::arguments::refusal("change", schema, &given) {
-        return crate::surface::detail_error(refused);
-    }
+    (is_action(word) && !input.actions().any(|action| action == word)).then(|| {
+        crate::surface::detail_error(json!({"kind": "access_denied", "message": "access denied"}))
+    })
+}
+
+/// Runs the write that the action selects. The result names the action.
+pub async fn run(
+    host: &StatementHost,
+    action: &'static str,
+    arguments: Map<String, Value>,
+) -> CallToolResult {
     let mut result = match action {
         NOTIFY => notify::call(host, arguments).await,
         API => api::call_write(host, arguments).await,

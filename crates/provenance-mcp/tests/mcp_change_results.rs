@@ -13,6 +13,7 @@ mod support {
     pub mod schema_check;
 }
 
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 use support::{mcp::Session, records::Repository};
 
@@ -84,6 +85,7 @@ fn calls() -> Vec<(Value, Option<&'static str>)> {
 }
 
 #[tokio::test]
+#[verifies("rule_mcp_one_tool_for_record_actions", examples)]
 async fn each_change_result_matches_exactly_one_output_branch() {
     let repository = Repository::new("The shared graph is readable.");
     repository.all_kinds();
@@ -149,17 +151,45 @@ async fn each_change_result_matches_exactly_one_output_branch() {
     session.close().await;
 }
 
-/// No two branches of the change output accept one result: each branch has an action
-/// and a record kind that no other branch has.
+/// No two branches of the change output accept one result. The error branch takes
+/// only `error` and `meta`, and each result branch requires `action`, so no result
+/// matches the error branch. Each result branch requires `type` when it has one, and
+/// each pair of action and record kind is in one branch only.
 #[tokio::test]
+#[verifies("rule_mcp_one_tool_for_record_actions", examples)]
 async fn the_change_output_branches_have_distinct_discriminants() {
     let repository = Repository::new("The shared graph is readable.");
     repository.all_kinds();
     let session = Session::start(support::fixture_host::full(&repository)).await;
     let (_, output) = support::schema_check::schemas(&session.client, "change").await;
     let branches = output["oneOf"].as_array().unwrap();
+    let required = |branch: &Value, name: &str| {
+        branch["required"]
+            .as_array()
+            .is_some_and(|required| required.contains(&json!(name)))
+    };
+    let (errors, results): (Vec<_>, Vec<_>) = branches
+        .iter()
+        .partition(|branch| required(branch, "error"));
+    let [error] = errors.as_slice() else {
+        panic!("one error branch: {output}");
+    };
+    assert_eq!(error["additionalProperties"], json!(false), "{error}");
+    assert_eq!(
+        error["properties"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .collect::<Vec<_>>(),
+        ["error", "meta"],
+        "{error}"
+    );
+    assert_ne!(results.len(), 0, "{output}");
     let mut seen = std::collections::BTreeSet::new();
-    for branch in &branches[..branches.len() - 1] {
+    for branch in results {
+        assert!(required(branch, "action"), "{branch}");
+        let has_type = branch["properties"].get("type").is_some();
+        assert_eq!(required(branch, "type"), has_type, "{branch}");
         let values = |name: &str| -> Vec<Value> {
             let property = &branch["properties"][name];
             property["enum"]
@@ -168,11 +198,8 @@ async fn the_change_output_branches_have_distinct_discriminants() {
                 .or_else(|| property.get("const").map(|value| vec![value.clone()]))
                 .unwrap_or_else(|| vec![Value::Null])
         };
-        assert!(branch["required"]
-            .as_array()
-            .unwrap()
-            .contains(&json!("action")));
         for action in values("action") {
+            assert!(action.is_string(), "{branch}");
             for kind in values("type") {
                 assert!(
                     seen.insert((action.to_string(), kind.to_string())),

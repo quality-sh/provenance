@@ -7,14 +7,26 @@
 use jsonschema::{error::ValidationErrorKind, paths::LocationSegment, ValidationError};
 use serde_json::{json, Map, Value};
 
-/// The error object for the first argument that the input schema of `tool` refuses.
-pub fn refusal(tool: &str, schema: &Value, arguments: &Map<String, Value>) -> Option<Value> {
-    let validator = jsonschema::draft202012::options()
-        .build(schema)
-        .expect("a listed input schema compiles");
-    let instance = Value::Object(arguments.clone());
-    let error = validator.iter_errors(&instance).next()?.to_owned();
-    Some(describe(tool, schema, innermost(&error)))
+/// The input schema of one listed tool, compiled once when the server starts.
+pub struct InputCheck {
+    schema: Value,
+    validator: jsonschema::Validator,
+}
+
+impl InputCheck {
+    /// Compile one input schema as JSON Schema 2020-12. Formats are not checked. A
+    /// reference to a schema outside this document is refused, not fetched.
+    pub fn new(schema: Value) -> Result<Self, ValidationError<'static>> {
+        let validator = jsonschema::draft202012::options().build(&schema)?;
+        Ok(Self { schema, validator })
+    }
+
+    /// The error object for the first argument that the input schema of `tool` refuses.
+    pub fn refusal(&self, tool: &str, arguments: &Map<String, Value>) -> Option<Value> {
+        let instance = Value::Object(arguments.clone());
+        let error = self.validator.iter_errors(&instance).next()?.to_owned();
+        Some(describe(tool, &self.schema, innermost(&error)))
+    }
 }
 
 /// The error inside an `anyOf` or `oneOf` that tells the most: the error of the branch
@@ -221,4 +233,43 @@ fn type_name(schema: &Value) -> Option<String> {
         })
         .collect::<Vec<_>>();
     (!names.is_empty()).then(|| names.join(" or "))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::InputCheck;
+    use provenance_macros::verifies;
+    use std::io::{Read, Write};
+
+    /// A read tool reads only the local graph: an input schema with a reference to
+    /// another document does not compile, and the check opens no connection to fetch it.
+    #[test]
+    #[verifies("rule_mcp_tools_read_or_write", examples)]
+    fn a_reference_to_another_document_is_not_fetched() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let (connected, connections) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let mut stream = stream.unwrap();
+                connected.send(()).unwrap();
+                let mut request = [0; 4096];
+                let _ = stream.read(&mut request);
+                let _ = stream.write_all(
+                    b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\n\
+                      content-length: 2\r\nconnection: close\r\n\r\n{}",
+                );
+            }
+        });
+        let schema = serde_json::json!({
+            "type": "object",
+            "properties": {"field": {"$ref": format!("http://{address}/schema.json")}},
+        });
+        let compiled = InputCheck::new(schema);
+        assert!(compiled.is_err(), "the remote reference compiled");
+        assert!(
+            connections.try_recv().is_err(),
+            "the check opened a connection"
+        );
+    }
 }

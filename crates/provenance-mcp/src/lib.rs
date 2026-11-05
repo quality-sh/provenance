@@ -10,6 +10,7 @@ mod arguments;
 mod client;
 mod io;
 mod json_schema;
+mod listed;
 mod server;
 mod surface;
 mod tools;

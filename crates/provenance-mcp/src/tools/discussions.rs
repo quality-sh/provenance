@@ -27,33 +27,19 @@ pub fn tool(host: &StatementHost) -> Option<Tool> {
     })
 }
 
-/// Runs the Discussion read that the action argument selects. An action of the change
-/// tool gets a refusal that names the change tool.
-pub async fn call(
-    host: &StatementHost,
-    schema: &Value,
-    mut arguments: Map<String, Value>,
-) -> CallToolResult {
-    if let Some(Value::String(word)) = arguments.get("action") {
-        if super::change::is_action(word) {
-            return crate::surface::detail_error(serde_json::json!({
-                "kind": "invalid_input",
-                "field": "action",
-                "reason": "invalid_value",
-                "message": format!("{word} writes; call the change tool with action {word}"),
-            }));
-        }
-    }
-    let given = arguments.clone();
-    let selected = provenance_porcelain::discussion::tool_input().select(&mut arguments);
-    let action = match selected.map(|word| Action::parse(word).expect("a Discussion action")) {
-        Ok(action) => action,
-        Err(refusal) => return crate::surface::detail_error(refusal.detail()),
+/// The refusal of an action of the change tool: its message names the change tool.
+pub fn refusal(arguments: &Map<String, Value>) -> Option<CallToolResult> {
+    let Some(Value::String(word)) = arguments.get("action") else {
+        return None;
     };
-    if let Some(refused) = crate::arguments::refusal("discussions", schema, &given) {
-        return crate::surface::detail_error(refused);
-    }
-    run(host, action, arguments).await
+    super::change::is_action(word).then(|| {
+        crate::surface::detail_error(serde_json::json!({
+            "kind": "invalid_input",
+            "field": "action",
+            "reason": "invalid_value",
+            "message": format!("{word} writes; call the change tool with action {word}"),
+        }))
+    })
 }
 
 /// Runs one Discussion action with the fields of that action.

@@ -58,7 +58,7 @@ pub fn lowercase_method(arguments: &mut Map<String, Value>) {
 /// so MCP callers select the same paths, methods, and bodies as the CLI.
 #[provenance_macros::rule("rule_porcelain_mcp_api_arguments")]
 pub async fn call(host: &StatementHost, arguments: Map<String, Value>) -> CallToolResult {
-    let request = match request(arguments) {
+    let request = match request(&arguments) {
         Ok(request) => request,
         Err(error) => return refused(&error),
     };
@@ -75,7 +75,7 @@ pub async fn call_write(host: &StatementHost, mut arguments: Map<String, Value>)
     let Some(Value::Object(fields)) = arguments.remove("request") else {
         return refused(&ApiError::invalid_options(Some("request")));
     };
-    let request = match request(fields) {
+    let request = match request(&fields) {
         Ok(ApiRequest::Invoke(input)) => input,
         Ok(ApiRequest::Discover) => {
             return crate::surface::detail_error(json!({
@@ -97,12 +97,11 @@ pub async fn call_write(host: &StatementHost, mut arguments: Map<String, Value>)
     execute(host, ApiRequest::Invoke(request)).await
 }
 
-fn request(mut arguments: Map<String, Value>) -> Result<ApiRequest, ApiError> {
-    lowercase_method(&mut arguments);
+fn request(arguments: &Map<String, Value>) -> Result<ApiRequest, ApiError> {
     let Ok(parsed) = serde_json::from_value::<ApiArguments>(Value::Object(arguments.clone()))
     else {
         return Err(ApiError::invalid_options(
-            rejected_field(&arguments).as_deref(),
+            rejected_field(arguments).as_deref(),
         ));
     };
     ApiRequest::from(parsed)

@@ -50,7 +50,9 @@ async fn routes(session: &Session) -> Vec<(String, String, bool)> {
             let path = template
                 .split('/')
                 .map(|part| {
-                    if part.starts_with('{') {
+                    if part == "{side}" {
+                        "after"
+                    } else if part.starts_with('{') {
                         "req_shared"
                     } else {
                         part
@@ -63,8 +65,10 @@ async fn routes(session: &Session) -> Vec<(String, String, bool)> {
         .collect()
 }
 
-/// The paths below the repository whose bytes differ. The projection cache is left out:
-/// a read can bring that derived copy of the store up to date.
+/// The paths below the repository whose bytes differ. The projection database files
+/// are left out: a read can bring that derived copy of the store up to date. The lock
+/// files are left out: a read of verification runs takes a lock, and its file has no
+/// data.
 fn changed(
     before: &std::collections::BTreeMap<std::path::PathBuf, Vec<u8>>,
     repository: &Repository,
@@ -73,7 +77,14 @@ fn changed(
     after
         .keys()
         .chain(before.keys())
-        .filter(|path| !path.starts_with(".provenance/cache"))
+        .filter(|path| {
+            let projection = path.parent() == Some(std::path::Path::new(".provenance/cache"))
+                && path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with("provenance.db"));
+            !projection && !path.starts_with(".provenance/cache/locks")
+        })
         .filter(|path| after.get(*path) != before.get(*path))
         .cloned()
         .collect()
@@ -146,15 +157,32 @@ async fn api_refuses_each_route_that_writes_and_names_the_change_tool() {
     session.close().await;
 }
 
-/// Each read tool with each of its fields set.
-fn read_calls() -> Vec<(&'static str, Value)> {
+/// The body of a read route that takes one.
+fn read_body(path: &str) -> Option<Value> {
+    match path {
+        "/statement-checks" => Some(json!({"statement": "The pump stops."})),
+        "/authoring-plans" => Some(json!({"schema_version": 2, "spec": "fx",
+            "declared_by": "spec://fx", "sources": [], "requirements": []})),
+        _ => None,
+    }
+}
+
+/// Each read tool with each of its fields set. Each call succeeds.
+fn read_calls(discussion_id: &Value) -> Vec<(&'static str, Value)> {
     let parent = json!({"node_type": "requirement", "node_id": "req_shared"});
     let mut calls = Vec::new();
-    for view in ["record", "children", "trace", "impact", "review"] {
+    calls.push(("get", json!({"target": "req_shared", "view": "record"})));
+    for view in ["children", "trace"] {
         calls.push((
             "get",
             json!({"target": "req_shared", "view": view, "limit": 5, "max_depth": 2,
                    "returned_kinds": ["requirement", "source"]}),
+        ));
+    }
+    for view in ["impact", "review"] {
+        calls.push((
+            "get",
+            json!({"target": "req_shared", "view": view, "limit": 5}),
         ));
     }
     calls.extend([
@@ -184,7 +212,7 @@ fn read_calls() -> Vec<(&'static str, Value)> {
         ),
         (
             "discussions",
-            json!({"action": "discussion", "discussion_id": "discussion_x", "limit": 5}),
+            json!({"action": "discussion", "discussion_id": discussion_id, "limit": 5}),
         ),
         (
             "api",
@@ -196,6 +224,18 @@ fn read_calls() -> Vec<(&'static str, Value)> {
     calls
 }
 
+/// Start one Discussion on the shared Requirement and return its ID.
+async fn start_discussion(session: &Session) -> Value {
+    let arguments = json!({"action": "discuss",
+        "parent": {"node_type": "requirement", "node_id": "req_shared"},
+        "actor": "ben", "role": "user", "body": "Opening text"});
+    let started = support::schema_check::call(&session.client, "change", arguments).await;
+    assert_ne!(started.is_error, Some(true), "{started:?}");
+    let id = started.structured_content.unwrap()["receipt"]["discussion_id"].clone();
+    assert!(id.is_string(), "{id}");
+    id
+}
+
 #[tokio::test]
 #[verifies("rule_mcp_tools_read_or_write", examples)]
 async fn no_read_tool_changes_the_repository() {
@@ -203,10 +243,20 @@ async fn no_read_tool_changes_the_repository() {
     repository.all_kinds();
     let session = Session::start(support::fixture_host::full(&repository)).await;
     let tools = session.client.list_all_tools().await.unwrap();
+    let discussion_id = start_discussion(&session).await;
+    // The first paged read makes the cursor signing key of the repository; make it
+    // before the snapshot, so that the check covers every later file.
+    let first = json!({"text": "shared"});
+    support::schema_check::call(&session.client, "search", first).await;
     let mut called = std::collections::BTreeSet::new();
     let before = repository.bytes();
-    for (name, arguments) in read_calls() {
-        support::schema_check::call(&session.client, name, arguments.clone()).await;
+    for (name, arguments) in read_calls(&discussion_id) {
+        let result = support::schema_check::call(&session.client, name, arguments.clone()).await;
+        assert_ne!(
+            result.is_error,
+            Some(true),
+            "{name} {arguments}: {result:?}"
+        );
         let changed = changed(&before, &repository);
         assert_eq!(
             changed,
@@ -216,10 +266,21 @@ async fn no_read_tool_changes_the_repository() {
         called.insert(name);
     }
     for (method, path, writes) in routes(&session).await {
-        if !writes {
-            let arguments = json!({"method": method, "path": path, "body": {}});
-            support::schema_check::call(&session.client, "api", arguments).await;
+        if writes {
+            continue;
         }
+        let mut arguments = json!({"method": method, "path": path});
+        if let Some(body) = read_body(&path) {
+            arguments["body"] = body;
+        }
+        let result = support::schema_check::call(&session.client, "api", arguments.clone()).await;
+        let value = result.structured_content.unwrap();
+        // Each route reaches its service: it reads, or the record of a filled path
+        // parameter does not exist.
+        assert!(
+            result.is_error != Some(true) || value["error"]["kind"] == "resource_not_found",
+            "{arguments}: {value}"
+        );
     }
     assert_eq!(
         changed(&before, &repository),
