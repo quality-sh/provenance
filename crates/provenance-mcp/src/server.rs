@@ -51,7 +51,8 @@ impl ServerHandler for Server {
         }))
     }
 
-    /// Calls one porcelain tool; plumbing operations are reachable only through the api tool.
+    /// Calls one listed tool. The api tool is the one tool that calls catalog operations
+    /// directly; it reads and writes, as the CLI api command does.
     #[provenance_macros::rule("rule_porcelain_plumbing_only_through_api")]
     async fn call_tool(
         &self,

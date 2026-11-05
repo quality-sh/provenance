@@ -1,5 +1,5 @@
-//! MCP tools for the shared Porcelain capabilities. Each tool only reads or only writes:
-//! `change` is the one tool that writes.
+//! MCP tools for the shared Porcelain capabilities. `change` and the `api` plumbing tool
+//! write; each other tool only reads.
 
 use crate::surface::{Effect, SchemaDeclaration};
 use provenance_porcelain::check::CheckInput;
@@ -22,11 +22,7 @@ pub use change::{
 pub use discussions::{
     refusal as discussions_refusal, run as call_discussion, tool as discussions_tool,
 };
-
-/// The refusal of a get call that writes.
-pub fn get_refusal(arguments: &Map<String, Value>) -> Option<CallToolResult> {
-    read_only::refusal(read_only::Read::Get(arguments))
-}
+pub use read_only::get_refusal;
 
 pub fn search_tool() -> rmcp::model::Tool {
     crate::surface::tool(

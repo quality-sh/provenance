@@ -180,7 +180,7 @@ pub enum ApiOutcome {
 pub type ApiPortFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ApiError>> + Send + 'a>>;
 
 /// What one api tool call offers a host client.
-pub const API_DESCRIPTION: &str = "Call one public API path with an optional method, query, headers, and JSON body. The body is the data object, without the HTTP {\"data\": ...} wrapper. Omit the path to list the catalog routes with their methods, inputs, and response schemas. On MCP, this tool only reads; the change tool makes a call that writes (action api).";
+pub const API_DESCRIPTION: &str = "Call one public API path with an optional method, query, headers, and JSON body. The body is the data object, without the HTTP {\"data\": ...} wrapper. Omit the path to list the catalog routes with their methods, inputs, and response schemas.";
 
 /// How an api call carries its JSON body.
 pub const BODY_NOTE: &str =
@@ -195,14 +195,6 @@ pub trait ApiPort: Send + Sync {
 /// The typed input schema of one api tool call.
 pub fn input_schema() -> Value {
     serde_json::to_value(schemars::schema_for!(ApiArguments)).expect("api input schema is JSON")
-}
-
-/// The schema of one route answer: the data and metadata envelope.
-pub fn envelope_schema() -> Value {
-    serde_json::to_value(schemars::schema_for!(
-        provenance_core::protocol::SuccessEnvelope<Value>
-    ))
-    .expect("envelope schema is JSON")
 }
 
 /// The output schema covering both api answers.

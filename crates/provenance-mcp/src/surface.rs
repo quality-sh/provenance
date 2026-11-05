@@ -18,16 +18,22 @@ pub enum Effect {
     /// archive a record, so a write can discard data. A repeated discuss starts a new
     /// Discussion. The notify action reaches a client thread outside the repository.
     Writes,
+    /// The tool calls one API route, which can read, write, or remove. It writes only
+    /// the repository graph.
+    Plumbing,
 }
 
 impl Effect {
-    /// Read tools are read-only and closed-world; `change` is the one tool that writes.
-    /// The read tools also refuse each request that writes (`tools::read_only`).
+    /// Read tools are read-only and closed-world. `change` and `api` are the tools that
+    /// write; only `change` reaches outside the repository.
     fn annotations(self) -> ToolAnnotations {
         match self {
             Self::Reads => ToolAnnotations::from_raw(None, Some(true), None, None, Some(false)),
             Self::Writes => {
                 ToolAnnotations::from_raw(None, Some(false), Some(true), Some(false), Some(true))
+            }
+            Self::Plumbing => {
+                ToolAnnotations::from_raw(None, Some(false), Some(true), Some(false), Some(false))
             }
         }
     }

@@ -2,7 +2,7 @@
 //! result names its action, and a record result also names the record kind, so a
 //! result matches exactly one branch even where two result types have the same fields.
 
-use super::{API, NOTIFY};
+use super::NOTIFY;
 use provenance_transport::porcelain::Action;
 use provenance_transport::StatementHost;
 use rmcp::model::{CallToolResult, ContentBlock};
@@ -25,10 +25,6 @@ pub fn schema(host: &StatementHost, actions: &[&'static str]) -> Value {
     if actions.contains(&NOTIFY) {
         let schema = provenance_porcelain::get::notify_output_schema();
         branches.push(discriminated(schema, &[NOTIFY], None));
-    }
-    if actions.contains(&API) {
-        let schema = provenance_porcelain::api::envelope_schema();
-        branches.push(discriminated(schema, &[API], None));
     }
     one_of(branches)
 }

@@ -1,6 +1,6 @@
 //! The change tool: every MCP write, selected by the action argument.
 
-use super::{api, authoring, discussions, notify};
+use super::{authoring, discussions, notify};
 
 mod output;
 use crate::surface::{Effect, SchemaDeclaration};
@@ -12,7 +12,6 @@ use rmcp::model::{CallToolResult, Tool};
 use serde_json::{json, Map, Value};
 
 pub(super) const NOTIFY: &str = "notify";
-pub(super) const API: &str = "api";
 
 /// The actions that the host can run, with the fields of each action.
 pub fn input(host: &StatementHost) -> ToolInput {
@@ -34,9 +33,6 @@ pub fn input(host: &StatementHost) -> ToolInput {
     if porcelain.notify_is_available() {
         input = input.with_action(NOTIFY, provenance_porcelain::get::notify_input_schema());
     }
-    if porcelain.api_is_available() && porcelain.api_writes_are_available() {
-        input = input.with_action(API, api::write_input_schema());
-    }
     input
 }
 
@@ -44,7 +40,7 @@ pub fn input(host: &StatementHost) -> ToolInput {
 pub fn is_action(word: &str) -> bool {
     Action::parse(word).is_some_and(|action| {
         Action::RECORD.contains(&action) || matches!(action, Action::Discuss | Action::Reply)
-    }) || [NOTIFY, API].contains(&word)
+    }) || word == NOTIFY
 }
 
 /// The change tool, when the host can run some write.
@@ -82,7 +78,6 @@ pub async fn run(
 ) -> CallToolResult {
     let mut result = match action {
         NOTIFY => notify::call(host, arguments).await,
-        API => api::call_write(host, arguments).await,
         word => match Action::parse(word).expect("a change action is an Action") {
             action @ (Action::Discuss | Action::Reply) => {
                 discussions::run(host, action, arguments).await

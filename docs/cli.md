@@ -236,7 +236,7 @@ scope is `default`. The server uses MCP protocol 2026-07-28. A client of an
 older protocol, from 2024-11-05 through 2025-11-25, starts the session with
 `initialize`.
 
-The server gives seven tools. Six tools only read, and their annotations mark
+The server gives seven tools. Five tools only read, and their annotations mark
 them as read-only and closed-world:
 
 - `get` reads one record in a view.
@@ -245,22 +245,25 @@ them as read-only and closed-world:
 - `check` checks the graph or one statement.
 - `discussions` lists Discussions (`action` is `discussions`, the default) or
   reads one Discussion (`action` is `discussion`).
-- `api` lists the catalog routes, or calls one route that only reads.
 
-`change` is the only tool that writes. Its `action` argument selects the write:
+`change` writes. Its `action` argument selects the write:
 
 - `create`, `update`, `answer`, `claim`, `release`, or `submit` on the
   `target` record, with the same fields as the CLI action after the target.
 - `discuss` starts a Discussion, and `reply` replies to one.
 - `notify` registers a client thread for the review changes of one record, as
   `--notify` does on the CLI.
-- `api` calls one route that writes. The `request` field holds the fields of
-  the `api` tool.
 
 The annotations of `change` mark it as destructive, not idempotent, and
 open-world: an update can replace field values, remove list entries, and archive
 a record, a repeated `discuss` starts a new Discussion, and `notify` reaches a
 client thread outside the repository.
+
+`api` is the plumbing tool. It reads and writes, as `provenance api` does: it
+lists the catalog routes when `path` is absent, or calls one route with its
+`method`, `query`, `headers`, and `body`. Its annotations mark it as
+destructive, not idempotent, and closed-world: a route can change or remove
+data in the repository.
 
 Each tool input is one JSON object. The server refuses a call whose fields do
 not agree with its `action`. The refusal is a tool result with `isError: true`,
@@ -305,7 +308,7 @@ To allow all tools, writes included:
 ["mcp__provenance__*"]
 ```
 
-To allow the read tools only, so that each write asks first:
+To allow the read tools only, so that each `change` and `api` call asks first:
 
 ```json
 [
@@ -313,8 +316,7 @@ To allow the read tools only, so that each write asks first:
   "mcp__provenance__search",
   "mcp__provenance__trace",
   "mcp__provenance__check",
-  "mcp__provenance__discussions",
-  "mcp__provenance__api"
+  "mcp__provenance__discussions"
 ]
 ```
 
@@ -323,11 +325,14 @@ is necessary also for the read tools. `provenance init` does not write client
 settings.
 
 Codex runs the read tools without a request, because their annotations mark
-them as read-only. To also allow `change`, add this to the Codex
+them as read-only. To also allow `change` and `api`, add this to the Codex
 configuration:
 
 ```toml
 [mcp_servers.provenance.tools.change]
+approval_mode = "approve"
+
+[mcp_servers.provenance.tools.api]
 approval_mode = "approve"
 ```
 

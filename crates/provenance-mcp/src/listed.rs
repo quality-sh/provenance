@@ -155,7 +155,7 @@ impl Listed {
         if let Some(refused) = wrong_tool {
             return Err(refused);
         }
-        if matches!(self.runner, Runner::Api | Runner::Change(_)) {
+        if matches!(self.runner, Runner::Api) {
             tools::lowercase_method(&mut arguments);
         }
         let given = arguments.clone();
