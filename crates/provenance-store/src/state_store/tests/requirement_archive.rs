@@ -1,7 +1,7 @@
 use super::seeded_requirement_store;
 use crate::state_store::StateStore;
 use crate::write_error::{WriteError, WriteFailure};
-use provenance_core::{Requirement, ScopeId, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{Requirement, ScopeId};
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 
@@ -63,7 +63,7 @@ pub(super) fn append_rule(store: &StateStore, scope: &ScopeId, id: &str, parents
     append(
         &crate::shards::rules_path(&store.layout, scope),
         &json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope.as_str(),
+            "scope_id": scope.as_str(),
             "id": id, "statement": "The system is safe.", "status": "draft",
             "severity": "medium", "requirement_ids": parents, "resolution_ids": []
         }),
@@ -74,7 +74,7 @@ pub(super) fn append_requirement(store: &StateStore, scope: &ScopeId, id: &str, 
     append(
         &crate::shards::requirements_path(&store.layout, scope),
         &json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope.as_str(),
+            "scope_id": scope.as_str(),
             "id": id, "statement": "The system is safe.", "status": "active",
             "refines": parents
         }),

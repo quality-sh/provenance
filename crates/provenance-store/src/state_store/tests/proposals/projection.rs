@@ -1,6 +1,5 @@
 use super::{super::initialized_store, proposal_input};
 use crate::state_store::{CreateDispositionInput, ProposalCard, ProposalDemand, StateStore};
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
     DispositionActor, DispositionDecision, IdeationTarget, IdeationTargetType, IdentityType,
     PromotionState, ScopeId, StableId,
@@ -21,7 +20,6 @@ fn proposal_projection_rejects_unlisted_disposition_actor() {
     crate::jsonl::write_jsonl_atomic(
         &crate::shards::dispositions_path(&store.layout, &scope),
         &[provenance_core::DispositionRecord {
-            schema_version: provenance_core::SUPPORTED_SCHEMA_VERSION,
             scope_id: scope.clone(),
             id: StableId::new("disposition_overtime").unwrap(),
             proposal_id: StableId::new("proposal_overtime").unwrap(),
@@ -249,11 +247,11 @@ fn seed_proposal_ready_for_disposition(store: &StateStore, scope: &ScopeId) {
     std::fs::create_dir_all(requirement_path.parent().unwrap()).unwrap();
     std::fs::write(
         requirement_path,
-        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"req_overtime","statement":"Overtime","status":"active"}).to_string(),
+        serde_json::json!({"scope_id":"default","id":"req_overtime","statement":"Overtime","status":"active"}).to_string(),
     )
     .unwrap();
     let contribution: provenance_core::Contribution = serde_json::from_value(serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "contribution_overtime",
+        "scope_id": "default", "id": "contribution_overtime",
         "target": {"artifact_type": "requirement", "artifact_id": "req_overtime"},
         "participant_slot": "reviewer", "stance": "support", "strongest_finding": "Observed",
         "evidence_references": [{"reference_id": "evidence_overtime", "evidence_type": "source", "summary": "Pinned"}],
@@ -262,7 +260,7 @@ fn seed_proposal_ready_for_disposition(store: &StateStore, scope: &ScopeId) {
         "unsupported_recommendations": [], "uncertainty": {"level": "low", "rationale": "Direct"}, "open_questions": []
     })).unwrap();
     let mut synthesis: provenance_core::SynthesisPacket = serde_json::from_value(serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "synthesis_overtime",
+        "scope_id": "default", "id": "synthesis_overtime",
         "target": {"artifact_type": "requirement", "artifact_id": "req_overtime"}, "summary": "Adjudicated",
         "consensus": [], "contested_claims": [], "minority_objections": [],
         "evidence_gaps": [{"question": "Unverified", "needed_evidence_type": "source", "blocking_promotion": true}],
@@ -320,7 +318,6 @@ fn write_assertion(store: &StateStore, scope: &ScopeId) {
     crate::jsonl::write_jsonl_atomic(
         &crate::shards::assertion_records_path(&store.layout, scope),
         &[provenance_core::AssertionRecord {
-            schema_version: provenance_core::SUPPORTED_SCHEMA_VERSION,
             scope_id: scope.clone(),
             id: provenance_core::AssertionId::new("assertion_overtime").unwrap(),
             proposal_id: StableId::new("proposal_overtime").unwrap(),

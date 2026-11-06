@@ -34,7 +34,6 @@ fn commit(repo: &Utf8Path, message: &str) -> String {
 
 fn archived_rule(id: &str, commit: &str) -> String {
     serde_json::json!({
-        "schema_version": 3,
         "scope_id": "default",
         "id": id,
         "statement": "The fixture rule holds.",

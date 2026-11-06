@@ -42,37 +42,6 @@ fn legacy_partial_origins_keep_their_existing_crud_shapes() {
 }
 
 #[test]
-fn malformed_enrollment_keeps_the_existing_version_refusal_context() {
-    let (temp, store) = fixture();
-    let layout = ProvenanceLayout::new(camino::Utf8Path::from_path(temp.path()).unwrap());
-    for (path, kind) in [
-        (shards::threads_path(&layout, &scope()), "thread"),
-        (shards::messages_path(&layout, &scope()), "message"),
-    ] {
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(
-            &path,
-            format!("{{\"schema_version\":3,\"id\":\"{kind}_future\"}}\n"),
-        )
-        .unwrap();
-        let error = if kind == "thread" {
-            store.list_threads(&scope()).unwrap_err()
-        } else {
-            store.list_messages(&scope()).unwrap_err()
-        };
-        assert!(
-            format!("{error:#}").contains("has schema_version 3"),
-            "{error}"
-        );
-        assert!(
-            format!("{error:#}").contains(&format!("record {kind}_future")),
-            "{error}"
-        );
-        std::fs::remove_file(path).unwrap();
-    }
-}
-
-#[test]
 fn a_message_read_failure_prevents_legacy_thread_publication() {
     let (temp, store) = fixture();
     let layout = ProvenanceLayout::new(camino::Utf8Path::from_path(temp.path()).unwrap());

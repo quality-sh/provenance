@@ -6,9 +6,7 @@ use crate::state_store::{
     TypedSpecView,
 };
 use crate::write_error::{WriteError, WriteFailure};
-use provenance_core::{
-    Requirement, RequirementStatus, ScopeId, StableId, SUPPORTED_SCHEMA_VERSION,
-};
+use provenance_core::{Requirement, RequirementStatus, ScopeId, StableId};
 use provenance_macros::verifies;
 use serde_json::json;
 
@@ -16,7 +14,6 @@ const OWNER: &str = "spec://payroll";
 
 fn spec(requirements: &serde_json::Value) -> TypedSpecInput {
     serde_json::from_value(json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "payroll",
         "declared_by": OWNER,
         "sources": [{"key": "award", "name": "Award", "kind": "policy"}],
@@ -34,7 +31,6 @@ fn requirement(key: &str) -> serde_json::Value {
 fn an_omitted_owned_requirement_is_deleted_from_records_in_memory() {
     let scope = ScopeId::new("default").unwrap();
     let owned: Requirement = serde_json::from_value(json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "req_payroll_pay",
         "declared_by": OWNER,

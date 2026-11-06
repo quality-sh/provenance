@@ -2,7 +2,7 @@
 
 The operation catalog exposes edits to the fields of existing graph records.
 Native operation calls, the generated CLI dialect, and generated HTTP clients
-use the same Store writers. An update keeps the record ID, schema version,
+use the same Store writers. An update keeps the record ID,
 scope, declaration address, and creation origin. It does not write a new
 canonical record shape.
 

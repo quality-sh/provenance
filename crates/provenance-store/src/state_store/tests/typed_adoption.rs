@@ -9,7 +9,7 @@ use provenance_core::protocol::{
 };
 use provenance_core::{
     Requirement, RequirementStatus, ResolutionStatus, RuleSeverity, RuleStatus, ScopeId,
-    SourceReference, SourceType, StableId, SUPPORTED_SCHEMA_VERSION,
+    SourceReference, SourceType, StableId,
 };
 use provenance_macros::verifies;
 
@@ -82,7 +82,6 @@ fn document(
     adopt_unowned: Vec<TypedAdoptionTarget>,
 ) -> TypedSpecInput {
     TypedSpecInput {
-        schema_version: SUPPORTED_SCHEMA_VERSION.0,
         spec: "migration".to_string(),
         declared_by: owner.to_string(),
         adopt_unowned,

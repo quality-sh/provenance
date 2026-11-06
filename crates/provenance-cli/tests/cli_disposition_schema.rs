@@ -16,7 +16,6 @@ fn published_schema() -> Value {
 
 fn disposition(schema: &Value, decision: &str, rationale: Option<&str>) -> Value {
     let mut sample = json!({
-        "schema_version": schema["properties"]["schema_version"]["const"],
         "scope_id": "default",
         "id": "disposition_sample",
         "proposal_id": "proposal_candidate",

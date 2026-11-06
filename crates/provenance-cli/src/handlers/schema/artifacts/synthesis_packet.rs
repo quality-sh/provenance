@@ -6,7 +6,6 @@ pub(in crate::handlers::schema) fn schema() -> Value {
         "type": "object",
         "additionalProperties": false,
         "required": [
-            "schema_version",
             "scope_id",
             "id",
             "target",
@@ -21,7 +20,6 @@ pub(in crate::handlers::schema) fn schema() -> Value {
             "required_human_decisions"
         ],
         "properties": {
-            "schema_version": {"const": 1},
             "scope_id": {"$ref": "#/$defs/scopeId"},
             "id": {"$ref": "#/$defs/stableId"},
             "target": {"$ref": "#/$defs/ideationTarget"},

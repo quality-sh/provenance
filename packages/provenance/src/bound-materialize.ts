@@ -16,7 +16,6 @@ import {
   type SourceState,
 } from "./bound-declarations.js";
 import { registerSpec, type SpecHandle } from "./spec.js";
-import { STATE_SCHEMA_VERSION } from "./protocol.js";
 
 interface Collected<State> {
   readonly value: object;
@@ -180,7 +179,6 @@ function compileDocument(
       .map(({ state }) => ({ kind: "rule" as const, id: state.explicitId! })),
   ];
   return {
-    schema_version: STATE_SCHEMA_VERSION,
     spec,
     ...(adoptUnowned.length === 0 ? {} : { adopt_unowned: adoptUnowned }),
     sources: sourceRecords,

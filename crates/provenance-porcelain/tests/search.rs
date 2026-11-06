@@ -57,7 +57,7 @@ fn site(
 
 fn rule_node(id: &str, status: &str) -> GraphNode {
     node(serde_json::json!({
-        "node_type": "rule", "schema_version": 2, "scope_id": "default",
+        "node_type": "rule", "scope_id": "default",
         "id": id, "statement": format!("Statement of {id}."), "status": status,
         "severity": "medium", "requirement_ids": ["req_parent"]
     }))
@@ -208,12 +208,12 @@ fn readable_search_renders_records_continuation_and_freshness() {
     let page = response(
         vec![
             node(serde_json::json!({
-                "node_type": "requirement", "schema_version": 2, "scope_id": "default",
+                "node_type": "requirement", "scope_id": "default",
                 "id": "req_one", "statement": "First requirement statement.",
                 "status": "active"
             })),
             node(serde_json::json!({
-                "node_type": "source", "schema_version": 2, "scope_id": "default",
+                "node_type": "source", "scope_id": "default",
                 "id": "source_two", "name": "Source archive", "source_type": "document"
             })),
         ],

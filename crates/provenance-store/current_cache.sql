@@ -4,7 +4,7 @@ CREATE TABLE _cache_metadata (
 );
 
 CREATE TABLE sources (
-    schema_version INTEGER NOT NULL, scope_id TEXT NOT NULL, id TEXT NOT NULL,
+    scope_id TEXT NOT NULL, id TEXT NOT NULL,
     declared_by TEXT, declaration_address TEXT, name TEXT NOT NULL,
     source_type TEXT NOT NULL, url TEXT, reference TEXT, commit_pin TEXT,
     effective_date INTEGER, review_date INTEGER, supersedes TEXT NOT NULL,
@@ -14,7 +14,7 @@ CREATE TABLE sources (
 CREATE INDEX idx_sources_commit_pin ON sources(scope_id, commit_pin);
 
 CREATE TABLE requirements (
-    schema_version INTEGER NOT NULL, scope_id TEXT NOT NULL, id TEXT NOT NULL,
+    scope_id TEXT NOT NULL, id TEXT NOT NULL,
     declared_by TEXT, declaration_address TEXT, statement TEXT NOT NULL,
     description TEXT, fog TEXT, status TEXT NOT NULL, archived_in_commit TEXT, domain_id TEXT,
     source_refs TEXT NOT NULL, refines TEXT NOT NULL, depends_on TEXT NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE requirements (
 );
 
 CREATE TABLE resolutions (
-    schema_version INTEGER NOT NULL, scope_id TEXT NOT NULL, id TEXT NOT NULL,
+    scope_id TEXT NOT NULL, id TEXT NOT NULL,
     title TEXT NOT NULL, position TEXT NOT NULL, rationale TEXT NOT NULL,
     status TEXT NOT NULL, archived_in_commit TEXT, context TEXT, enforcement TEXT, confidence REAL,
     inputs TEXT NOT NULL, made_by TEXT, approved_by TEXT, approved_at INTEGER,
@@ -35,7 +35,7 @@ CREATE TABLE resolutions (
 CREATE INDEX idx_resolutions_status_review ON resolutions(scope_id, status, review_on);
 
 CREATE TABLE rules (
-    schema_version INTEGER NOT NULL, scope_id TEXT NOT NULL, id TEXT NOT NULL,
+    scope_id TEXT NOT NULL, id TEXT NOT NULL,
     declared_by TEXT, declaration_address TEXT, name TEXT, description TEXT,
     statement TEXT NOT NULL, status TEXT NOT NULL, severity TEXT NOT NULL,
     requirement_ids TEXT NOT NULL, resolution_ids TEXT NOT NULL,
@@ -46,14 +46,14 @@ CREATE TABLE rules (
 CREATE INDEX idx_rules_status_severity ON rules(scope_id, status, severity);
 
 CREATE TABLE boundaries (
-    schema_version INTEGER NOT NULL, scope_id TEXT NOT NULL, id TEXT NOT NULL,
+    scope_id TEXT NOT NULL, id TEXT NOT NULL,
     requirement_id TEXT NOT NULL, statement TEXT NOT NULL, source_ref TEXT,
     search_text TEXT NOT NULL, PRIMARY KEY (scope_id, id)
 );
 CREATE INDEX idx_boundaries_requirement ON boundaries(scope_id, requirement_id);
 
 CREATE TABLE topics (
-    schema_version INTEGER NOT NULL, scope_id TEXT NOT NULL, id TEXT NOT NULL,
+    scope_id TEXT NOT NULL, id TEXT NOT NULL,
     requirement_id TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL,
     archived_in_commit TEXT, claimed_by TEXT, claimed_at INTEGER, links TEXT NOT NULL,
     search_text TEXT NOT NULL, PRIMARY KEY (scope_id, id)
@@ -63,7 +63,7 @@ CREATE INDEX idx_topics_status ON topics(scope_id, status);
 CREATE INDEX idx_topics_claimed_by ON topics(scope_id, claimed_by);
 
 CREATE TABLE questions (
-    schema_version INTEGER NOT NULL, scope_id TEXT NOT NULL, id TEXT NOT NULL,
+    scope_id TEXT NOT NULL, id TEXT NOT NULL,
     topic_id TEXT NOT NULL, requirement_id TEXT NOT NULL, question TEXT NOT NULL,
     resolution_method TEXT NOT NULL, status TEXT NOT NULL, claimed_by TEXT,
     archived_in_commit TEXT, claimed_at INTEGER, answer TEXT, links TEXT NOT NULL, resolution_id TEXT,
@@ -75,21 +75,21 @@ CREATE INDEX idx_questions_status ON questions(scope_id, status);
 CREATE INDEX idx_questions_claimed_by ON questions(scope_id, claimed_by);
 
 CREATE TABLE domains (
-    schema_version INTEGER NOT NULL, scope_id TEXT NOT NULL, id TEXT NOT NULL,
+    scope_id TEXT NOT NULL, id TEXT NOT NULL,
     name TEXT NOT NULL, description TEXT, color TEXT, search_text TEXT NOT NULL,
     PRIMARY KEY (scope_id, id)
 );
 CREATE INDEX idx_domains_name ON domains(scope_id, name);
 
 CREATE TABLE implementation_bindings (
-    schema_version INTEGER NOT NULL, scope_id TEXT NOT NULL, id TEXT NOT NULL,
+    scope_id TEXT NOT NULL, id TEXT NOT NULL,
     rule_id TEXT NOT NULL, declared_by TEXT NOT NULL, file TEXT NOT NULL,
     symbol TEXT NOT NULL, PRIMARY KEY (scope_id, id)
 );
 CREATE INDEX idx_implementation_bindings_rule ON implementation_bindings(scope_id, rule_id);
 
 CREATE TABLE verification_bindings (
-    schema_version INTEGER NOT NULL, scope_id TEXT NOT NULL, id TEXT NOT NULL,
+    scope_id TEXT NOT NULL, id TEXT NOT NULL,
     rule_id TEXT NOT NULL, "key" TEXT NOT NULL, method TEXT NOT NULL,
     declared_by TEXT NOT NULL, file TEXT NOT NULL, symbol TEXT,
     PRIMARY KEY (scope_id, id)
@@ -97,7 +97,7 @@ CREATE TABLE verification_bindings (
 CREATE INDEX idx_verification_bindings_rule ON verification_bindings(scope_id, rule_id);
 
 CREATE TABLE requirement_reviews (
-    schema_version INTEGER NOT NULL, scope_id TEXT NOT NULL, id TEXT NOT NULL,
+    scope_id TEXT NOT NULL, id TEXT NOT NULL,
     rule_id TEXT NOT NULL, requirement_id TEXT NOT NULL, "field" TEXT NOT NULL,
     "before" TEXT NOT NULL, "after" TEXT NOT NULL, changed_at INTEGER NOT NULL,
     cleared_at INTEGER, cleared_by_run TEXT, PRIMARY KEY (scope_id, id)

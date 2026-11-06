@@ -9,7 +9,6 @@ fn discussion_has_no_schema_marker() {
     let (_temp, store) = fixture();
     let discussion = start(&store, "Name the stored records.");
     let stored = serde_json::to_value(discussion).unwrap();
-    assert!(stored.get("schema_version").is_none());
 }
 
 #[test]

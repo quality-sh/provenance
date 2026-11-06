@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use super::{
     lifecycle::AssertionId, IdeationEvidenceReference, IdeationTarget, PromotionState, ProposalType,
 };
-use crate::model::ids::{SchemaVersion, ScopeId, StableId};
+use crate::model::ids::{ScopeId, StableId};
 use crate::model::validation::deserialize_optional_confidence;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -23,7 +23,6 @@ pub struct ProposalTraceability {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct ProposalCard {
-    pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     #[serde(alias = "proposalId")]
     pub id: StableId,

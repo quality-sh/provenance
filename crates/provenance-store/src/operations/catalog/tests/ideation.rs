@@ -146,7 +146,7 @@ fn allow_actor(store: &StateStore, id: &str) {
 /// owns the proposal target and adjudicates the proposal.
 fn seed_blocked_evidence(store: &StateStore, scope: &ScopeId) {
     let contribution: provenance_core::Contribution = serde_json::from_value(json!({
-        "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default",
+        "scope_id": "default",
         "id": "contribution_overtime",
         "target": {"artifact_type": "requirement", "artifact_id": "req_overtime"},
         "participant_slot": "reviewer", "stance": "support", "strongest_finding": "Observed",
@@ -158,7 +158,7 @@ fn seed_blocked_evidence(store: &StateStore, scope: &ScopeId) {
     }))
     .unwrap();
     let synthesis: provenance_core::SynthesisPacket = serde_json::from_value(json!({
-        "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default",
+        "scope_id": "default",
         "id": "synthesis_overtime",
         "target": {"artifact_type": "requirement", "artifact_id": "req_overtime"},
         "summary": "Adjudicated",

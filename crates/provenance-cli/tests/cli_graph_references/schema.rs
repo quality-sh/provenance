@@ -1,5 +1,4 @@
 use super::*;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 use serde_json::json;
 
@@ -11,10 +10,6 @@ fn graph_reference_schemas_are_exposed() {
             .args(["schema", "show", artifact, "--format", "json"])
             .assert()
             .success()
-            .stdout(predicate::str::contains(format!(
-                "\"const\": {}",
-                SUPPORTED_SCHEMA_VERSION.0
-            )))
             .stdout(predicate::str::contains("additionalProperties"));
     }
     provenance(temp.path())
@@ -139,61 +134,9 @@ fn boundary_values(reference: &Value) -> Vec<(String, bool, Value)> {
     cases
 }
 
-/// The one boundary value where the replica cannot follow the runtime.
-///
-/// `schema_version: 1.0` is refused by the runtime, which reads the field into
-/// a `u32`. The published schema says `{"type": "integer", "const": 1}` and
-/// still accepts it: JSON Schema from draft 6 on has one number type, compares
-/// `const` by value, and counts any number with no fractional part as an
-/// integer, so `1.0` and `1` are the same instance to a conforming validator
-/// and no keyword can separate them. The divergence is therefore a property of
-/// the language, not a drift in the replica, and it is pinned here rather than
-/// left in the shared table, which requires the two sides to agree.
-///
-/// A holder that writes `1.0` passes the schema and is refused by this
-/// codebase. The runtime is the tighter side and it is the one that decides.
-#[test]
-#[verifies("rule_reference_wellformed", examples)]
-fn schema_version_float_is_where_the_replica_is_looser_than_the_runtime() {
-    let temp = committed_store();
-    let validator = reference_validator(temp.path());
-    let mut candidate = issue(temp.path(), &[]);
-    candidate["schema_version"] =
-        serde_json::from_str(&format!("{}.0", SUPPORTED_SCHEMA_VERSION.0)).unwrap();
-
-    assert!(
-        validator.is_valid(&candidate),
-        "JSON Schema cannot refuse 1.0 while accepting 1; if it now does, \
-         put the case back in the shared boundary table"
-    );
-    assert!(!runtime_accepts(
-        temp.path(),
-        "schema-version-float",
-        &candidate
-    ));
-}
-
 #[allow(clippy::too_many_lines)]
 fn field_boundaries() -> Vec<(String, bool, &'static str, Value)> {
     let single_fields: Vec<(&str, bool, &'static str, Value)> = vec![
-        (
-            "schema-version-below",
-            false,
-            "schema_version",
-            json!(SUPPORTED_SCHEMA_VERSION.0 - 1),
-        ),
-        (
-            "schema-version-above",
-            false,
-            "schema_version",
-            json!(SUPPORTED_SCHEMA_VERSION.0 + 1),
-        ),
-        (
-            "schema-version-string",
-            false,
-            "schema_version",
-            json!(SUPPORTED_SCHEMA_VERSION.0.to_string()),
-        ),
         (
             "store-path-trailing-slash",
             false,

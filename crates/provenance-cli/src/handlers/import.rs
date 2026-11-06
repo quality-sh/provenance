@@ -55,13 +55,6 @@ pub(super) fn import_scope(
         let held = guard.repository();
         let store = Store::new(held);
         store.ensure_review_portable(&scope_id)?;
-        anyhow::ensure!(
-            exported
-                .requirements
-                .iter()
-                .all(|r| r.schema_version == provenance_core::SUPPORTED_SCHEMA_VERSION),
-            "import cannot restore enrolled Requirements without their review history"
-        );
         let manifest = store.manifest()?;
         provenance_core::validate_ideation_aggregate(provenance_core::IdeationAggregate {
             legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
@@ -334,7 +327,6 @@ mod tests {
     #[test]
     fn import_refuses_an_unknown_record_field_instead_of_dropping_it() {
         let document = minimal_export(&json!({
-            "schema_version": 2,
             "scope_id": "default",
             "id": "source_one",
             "name": "Policy",
@@ -357,7 +349,6 @@ mod tests {
     #[test]
     fn import_accepts_a_supported_record_alias() {
         let document = minimal_export(&json!({
-            "schema_version": 2,
             "scope_id": "default",
             "id": "source_one",
             "name": "Policy",

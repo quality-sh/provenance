@@ -6,8 +6,6 @@ use super::{
 use crate::shards;
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
-use provenance_macros::rule;
 use serde::de::DeserializeOwned;
 
 /// What a reader does with fields its structs do not know.
@@ -18,15 +16,6 @@ enum Fields {
     /// Unknown fields are refused, so a pinned graph carries nothing extra.
     Closed,
 }
-
-const NO_NESTED_RECORDS: &[&str] = &[];
-const IDEATION_LANDING_RECORD_FIELDS: &[&str] = &[
-    "contributions",
-    "synthesis_packets",
-    "proposals",
-    "assertions",
-    "dispositions",
-];
 
 /// Names the shard and its line when a stored line is not one JSON record.
 ///
@@ -75,8 +64,7 @@ pub fn parse_line(
 /// Every reader in this module lands here: [`read_records`] carries the open
 /// families, the closed families and the aliased legacy dispositions;
 /// [`read_message_shard_lines`] carries messages. A family that does not pass
-/// through this function is not read at all, which is what makes the version
-/// guard below cover every record rather than the ones somebody remembered.
+/// through this function is not read at all.
 ///
 /// The caller has already turned the line into a [`serde_json::Value`],
 /// because some of them look at it first.
@@ -86,10 +74,8 @@ fn record_from_line<T: DeserializeOwned>(
     line: &str,
     value: serde_json::Value,
     fields: Fields,
-    nested_record_fields: &[&str],
 ) -> anyhow::Result<T> {
-    ensure_supported_record_version(path, line_number, &value)?;
-    ensure_supported_nested_record_versions(path, line_number, &value, nested_record_fields)?;
+    ensure_no_legacy_retirement(path, line_number, &value)?;
     match fields {
         Fields::Open => {
             serde_json::from_value(value).map_err(|error| located(path, line_number, &error))
@@ -102,84 +88,8 @@ fn record_from_line<T: DeserializeOwned>(
     }
 }
 
-/// Nothing is loaded from disk except at the schema version this build reads.
-///
-/// A stored record says which layout it was written in. A later version means
-/// a different layout: a field moved, dropped, or read with a new meaning.
-/// Serde would take such a record on whatever fields still line up and drop
-/// the rest without a word, so a hand-edited or newer-tool row would load as a
-/// record nobody here understood, and every answer computed from it would be
-/// quietly wrong.
-///
-/// The store therefore refuses it at the door, for every family it reads and
-/// not only the ideation ones: requirements, rules, sources, messages
-/// and the rest all pass [`record_from_line`]. The refusal names the file, the
-/// record if the line carries an id, and both versions, because the fix is to
-/// find that line and decide what it should say.
-///
-/// Every write is a read first: `mutate_jsonl_locked` loads the shard, hands
-/// the records to the caller, and writes the whole shard back, dropping any
-/// unrecognised field on the way out. That path therefore calls this same
-/// function, on the same raw JSON, before any record is built - see
-/// `crate::jsonl`. A write against a shard holding an unsupported row fails
-/// before the mutation runs, and the shard is left byte for byte as it was.
-///
-/// A record object with no `schema_version` makes no claim about its layout;
-/// there is nothing to compare, and its own deserializer says whether the
-/// field was required. The ideation landing reader applies the same check to
-/// the versioned records inside its unversioned batch envelope. The version is
-/// read from the raw JSON rather than from a struct because the struct is what
-/// we refuse to build until the version is known.
-#[rule("rule_reads_supported_version_only")]
-pub fn ensure_supported_record_version(
-    path: &Utf8Path,
-    line_number: usize,
-    value: &serde_json::Value,
-) -> anyhow::Result<()> {
-    ensure_no_legacy_retirement(path, line_number, value)?;
-    if value["schema_version"] == 3
-        && path.parent().and_then(Utf8Path::file_name) == Some("threads")
-        && if path.file_name() == Some("threads.jsonl") {
-            serde_json::from_value::<provenance_core::Thread>(value.clone()).is_ok()
-        } else {
-            serde_json::from_value::<provenance_core::Message>(value.clone()).is_ok()
-        }
-    {
-        let text = serde_json::to_string(value)?;
-        if path.file_name() == Some("threads.jsonl") {
-            deserialize_closed::<provenance_core::Thread>(&text)?;
-        } else {
-            deserialize_closed::<provenance_core::Message>(&text)?;
-        }
-        return Ok(());
-    }
-    let family = path
-        .parent()
-        .and_then(Utf8Path::file_name)
-        .and_then(crate::cache::review_families::by_directory);
-    if let (true, Some(family)) = (value["schema_version"] == 3, family) {
-        crate::cache::review_families::deserialize_record(family.kind, value).with_context(
-            || {
-                format!(
-                    "{path} line {line_number}: invalid enrolled {}",
-                    family.kind.as_str()
-                )
-            },
-        )?;
-        return Ok(());
-    }
-    let Some((id, version)) = first_unsupported_record(value) else {
-        return Ok(());
-    };
-    let record = id.map_or_else(|| "record".to_string(), |id| format!("record {id}"));
-    anyhow::bail!(
-        "{path} line {line_number}: {record} has schema_version {version}, \
-         but this build reads schema_version {} only",
-        SUPPORTED_SCHEMA_VERSION.0
-    )
-}
-
-fn ensure_no_legacy_retirement(
+/// Refuses a stored record that still holds the removed `retired` field.
+pub fn ensure_no_legacy_retirement(
     path: &Utf8Path,
     line_number: usize,
     value: &serde_json::Value,
@@ -200,79 +110,18 @@ fn ensure_no_legacy_retirement(
     )
 }
 
-fn first_unsupported_record(value: &serde_json::Value) -> Option<(Option<&str>, u64)> {
-    let record = value.as_object()?;
-    unsupported_object_version(record)
-}
-
-fn ensure_supported_nested_record_versions(
-    path: &Utf8Path,
-    line_number: usize,
-    value: &serde_json::Value,
-    fields: &[&str],
-) -> anyhow::Result<()> {
-    let unsupported = fields
-        .iter()
-        .filter_map(|field| value.get(*field).and_then(serde_json::Value::as_array))
-        .flatten()
-        .filter_map(serde_json::Value::as_object)
-        .find_map(unsupported_object_version);
-    let Some((id, version)) = unsupported else {
-        return Ok(());
-    };
-    let record = id.map_or_else(|| "record".to_string(), |id| format!("record {id}"));
-    anyhow::bail!(
-        "{path} line {line_number}: {record} has schema_version {version}, \
-         but this build reads schema_version {} only",
-        SUPPORTED_SCHEMA_VERSION.0
-    )
-}
-
-pub fn ensure_supported_ideation_landing_versions(
-    path: &Utf8Path,
-    line_number: usize,
-    value: &serde_json::Value,
-) -> anyhow::Result<()> {
-    ensure_supported_nested_record_versions(
-        path,
-        line_number,
-        value,
-        IDEATION_LANDING_RECORD_FIELDS,
-    )
-}
-
-fn unsupported_object_version(
-    record: &serde_json::Map<String, serde_json::Value>,
-) -> Option<(Option<&str>, u64)> {
-    let version = record
-        .get("schema_version")
-        .and_then(serde_json::Value::as_u64)?;
-    (version != u64::from(SUPPORTED_SCHEMA_VERSION.0)).then(|| {
-        (
-            record.get("id").and_then(serde_json::Value::as_str),
-            version,
-        )
-    })
-}
-
 /// How a reader turns the lines of one shard into records.
 struct Reading {
     fields: Fields,
     prepare: fn(&mut serde_json::Value),
-    nested: &'static [&'static str],
 }
 
 const OPEN: Reading = Reading {
     fields: Fields::Open,
     prepare: leave_as_written,
-    nested: NO_NESTED_RECORDS,
 };
 const CLOSED: Reading = Reading {
     fields: Fields::Closed,
-    ..OPEN
-};
-const LANDINGS: Reading = Reading {
-    nested: IDEATION_LANDING_RECORD_FIELDS,
     ..OPEN
 };
 const LEGACY_DISPOSITIONS: Reading = Reading {
@@ -300,7 +149,6 @@ fn read_records<T: DeserializeOwned>(
             line,
             value,
             reading.fields,
-            reading.nested,
         )?);
     }
     Ok(records)
@@ -332,13 +180,13 @@ pub(super) fn read_ideation_landings<T: DeserializeOwned>(
     store: &StateStore,
     path: &Utf8Path,
 ) -> anyhow::Result<Vec<T>> {
-    store.state_path_access(path, || read_records(store, path, &LANDINGS))
+    store.state_path_access(path, || read_records(store, path, &OPEN))
 }
 
 pub(super) fn read_ideation_landings_unlocked<T: DeserializeOwned>(
     path: &Utf8Path,
 ) -> anyhow::Result<Vec<T>> {
-    read_records(&disk(path), path, &LANDINGS)
+    read_records(&disk(path), path, &OPEN)
 }
 
 pub(super) fn read_legacy_dispositions(
@@ -412,14 +260,7 @@ fn read_message_shard_lines<T: DeserializeOwned>(
         for (index, line) in contents.lines().enumerate() {
             let value = parse_line(&path, index + 1, line)?;
             records.push((
-                record_from_line(
-                    &path,
-                    index + 1,
-                    line,
-                    value,
-                    Fields::Open,
-                    NO_NESTED_RECORDS,
-                )?,
+                record_from_line(&path, index + 1, line, value, Fields::Open)?,
                 ShardLine {
                     path: path.clone(),
                     line: index + 1,

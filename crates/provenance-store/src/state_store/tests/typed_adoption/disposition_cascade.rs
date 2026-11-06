@@ -1,5 +1,5 @@
 use super::{document, initialized_store};
-use provenance_core::{ScopeId, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::ScopeId;
 
 #[test]
 fn typed_spec_accepts_dispositions_for_each_surviving_canonical_kind() {
@@ -68,7 +68,6 @@ fn typed_spec_refuses_dispositions_for_each_missing_canonical_kind() {
 
 fn write_disposition(store: &crate::state_store::StateStore, scope: &ScopeId, artifact_type: &str) {
     let record = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": scope,
         "id": "disposition_artifact",
         "proposal_id": "proposal_artifact",
@@ -118,16 +117,15 @@ fn canonical_artifact_types() -> [&'static str; 8] {
 }
 
 fn canonical_records(scope: &str) -> [(&'static str, String); 8] {
-    let version = SUPPORTED_SCHEMA_VERSION.0;
     [
-        ("source", serde_json::json!({"schema_version":version,"scope_id":scope,"id":"artifact_test","name":"Test","source_type":"document","url":null}).to_string()),
-        ("requirement", serde_json::json!({"schema_version":version,"scope_id":scope,"id":"artifact_test","statement":"Test","status":"active"}).to_string()),
-        ("resolution", serde_json::json!({"schema_version":version,"scope_id":scope,"id":"artifact_test","title":"Test","position":"Test","rationale":"Test","status":"approved","inputs":[],"review_on":null}).to_string()),
-        ("rule", serde_json::json!({"schema_version":version,"scope_id":scope,"id":"artifact_test","statement":"Test","status":"draft","severity":"high"}).to_string()),
-        ("domain", serde_json::json!({"schema_version":version,"scope_id":scope,"id":"artifact_test","name":"Test"}).to_string()),
-        ("boundary", serde_json::json!({"schema_version":version,"scope_id":scope,"id":"artifact_test","requirement_id":"requirement_test","statement":"Test"}).to_string()),
-        ("topic", serde_json::json!({"schema_version":version,"scope_id":scope,"id":"artifact_test","requirement_id":"requirement_test","title":"Test","status":"open","links":[]}).to_string()),
-        ("question", serde_json::json!({"schema_version":version,"scope_id":scope,"id":"artifact_test","topic_id":"topic_test","requirement_id":"requirement_test","question":"Test?","resolution_method":"research","status":"open","links":[]}).to_string()),
+        ("source", serde_json::json!({"scope_id":scope,"id":"artifact_test","name":"Test","source_type":"document","url":null}).to_string()),
+        ("requirement", serde_json::json!({"scope_id":scope,"id":"artifact_test","statement":"Test","status":"active"}).to_string()),
+        ("resolution", serde_json::json!({"scope_id":scope,"id":"artifact_test","title":"Test","position":"Test","rationale":"Test","status":"approved","inputs":[],"review_on":null}).to_string()),
+        ("rule", serde_json::json!({"scope_id":scope,"id":"artifact_test","statement":"Test","status":"draft","severity":"high"}).to_string()),
+        ("domain", serde_json::json!({"scope_id":scope,"id":"artifact_test","name":"Test"}).to_string()),
+        ("boundary", serde_json::json!({"scope_id":scope,"id":"artifact_test","requirement_id":"requirement_test","statement":"Test"}).to_string()),
+        ("topic", serde_json::json!({"scope_id":scope,"id":"artifact_test","requirement_id":"requirement_test","title":"Test","status":"open","links":[]}).to_string()),
+        ("question", serde_json::json!({"scope_id":scope,"id":"artifact_test","topic_id":"topic_test","requirement_id":"requirement_test","question":"Test?","resolution_method":"research","status":"open","links":[]}).to_string()),
     ]
 }
 

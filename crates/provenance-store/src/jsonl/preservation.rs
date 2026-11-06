@@ -302,19 +302,17 @@ mod tests {
 
     #[test]
     fn collects_members_in_written_order_with_raw_bytes() {
-        let scan = top_level_members(
-            r#"{"schema_version":2, "id" : "one","note":"a,b:c}{[#","detail":{"known":1}}"#,
-        )
-        .unwrap();
+        let scan =
+            top_level_members(r#"{"id" : "one","note":"a,b:c}{[#","detail":{"known":1}}"#).unwrap();
         let names = scan
             .members
             .iter()
             .map(|member| member.name.as_str())
             .collect::<Vec<_>>();
-        assert_eq!(names, vec!["schema_version", "id", "note", "detail"]);
+        assert_eq!(names, vec!["id", "note", "detail"]);
         assert!(scan.repeated.is_none());
-        assert_eq!(scan.members[1].raw, r#""id" : "one""#);
-        assert_eq!(scan.members[2].raw, r#""note":"a,b:c}{[#""#);
+        assert_eq!(scan.members[0].raw, r#""id" : "one""#);
+        assert_eq!(scan.members[1].raw, r#""note":"a,b:c}{[#""#);
     }
 
     #[test]

@@ -52,7 +52,7 @@ async fn source_update_refusals_do_not_publish_any_field() {
 #[tokio::test]
 async fn direct_updates_do_not_take_over_typed_declarations() {
     let fixture = Fixture::new();
-    fixture.call("apply", json!({"schema_version":2,"spec":"fixture","declared_by":"spec://fixture","sources":[{"key":"policy","name":"Policy","kind":"policy"}],"requirements":[]})).await.unwrap();
+    fixture.call("apply", json!({"spec":"fixture","declared_by":"spec://fixture","sources":[{"key":"policy","name":"Policy","kind":"policy"}],"requirements":[]})).await.unwrap();
     let before = fixture.store.list_sources(&fixture.scope).unwrap();
     let error = fixture
         .call(
@@ -68,7 +68,7 @@ async fn direct_updates_do_not_take_over_typed_declarations() {
 #[tokio::test]
 async fn matching_owner_can_edit_metadata_without_moving_or_adopting_the_record() {
     let fixture = Fixture::new();
-    fixture.call("apply", json!({"schema_version":2,"spec":"fixture","declared_by":"spec://fixture","sources":[{"key":"policy","name":"Policy","kind":"policy"}],"requirements":[]})).await.unwrap();
+    fixture.call("apply", json!({"spec":"fixture","declared_by":"spec://fixture","sources":[{"key":"policy","name":"Policy","kind":"policy"}],"requirements":[]})).await.unwrap();
     let before = fixture
         .store
         .list_sources(&fixture.scope)
@@ -96,7 +96,7 @@ async fn matching_owner_can_edit_metadata_without_moving_or_adopting_the_record(
 
     assert_eq!(updated["commit_pin"], "abcdef0123456789");
     assert_eq!(fixture.store.list_sources(&fixture.scope).unwrap().len(), 1);
-    fixture.call("apply", json!({"schema_version":2,"spec":"fixture","declared_by":"spec://fixture","sources":[{"key":"policy","name":"Policy after apply","kind":"policy"}],"requirements":[]})).await.unwrap();
+    fixture.call("apply", json!({"spec":"fixture","declared_by":"spec://fixture","sources":[{"key":"policy","name":"Policy after apply","kind":"policy"}],"requirements":[]})).await.unwrap();
     let reapplied = fixture
         .store
         .list_sources(&fixture.scope)

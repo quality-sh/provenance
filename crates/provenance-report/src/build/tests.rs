@@ -2,7 +2,7 @@ use super::test_repo::{commit, init};
 use super::{build_envelope, BuildInput};
 use crate::envelope::{Comparison, SiteRole};
 use camino::{Utf8Path, Utf8PathBuf};
-use provenance_core::{Manifest, RepoPathPrefix, ScopeId, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{Manifest, RepoPathPrefix, ScopeId};
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 
@@ -29,7 +29,6 @@ pub(super) fn write_graph_with_statuses(repo: &Utf8Path, rules: &[(&str, &str)])
         &serde_json::to_string(&manifest).unwrap(),
     );
     let requirement = json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION,
         "scope_id": "default",
         "id": "req_anchor",
         "statement": "The report classifies missing evidence",
@@ -44,7 +43,6 @@ pub(super) fn write_graph_with_statuses(repo: &Utf8Path, rules: &[(&str, &str)])
         .iter()
         .map(|(id, status)| {
             let mut rule = json!({
-                "schema_version": SUPPORTED_SCHEMA_VERSION,
                 "scope_id": "default",
                 "id": id,
                 "statement": format!("The {id} behavior is present"),
@@ -68,7 +66,6 @@ pub(super) fn write_graph_with_statuses(repo: &Utf8Path, rules: &[(&str, &str)])
 
 pub(super) fn write_implementation_binding(repo: &Utf8Path, retired: Option<bool>) {
     let mut binding = json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION,
         "scope_id": "default",
         "id": "impl_anchor",
         "rule_id": "rule_anchor",

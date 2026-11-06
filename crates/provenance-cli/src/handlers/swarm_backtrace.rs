@@ -1,6 +1,4 @@
-use super::validate::{
-    validate_contribution_record, validate_proposal_card_record, validate_synthesis_packet_record,
-};
+use super::validate::{validate_contribution_record, validate_proposal_card_record};
 use crate::repo_context::RepoContext;
 use crate::{cli::ideation::SwarmBacktraceCommand, output, store::Store};
 use anyhow::Context;
@@ -85,7 +83,6 @@ fn land(context: &RepoContext, run_dir: &Utf8Path, replace: bool) -> anyhow::Res
         )?;
     }
     for synthesis_packet in &synthesis_packets {
-        validate_synthesis_packet_record(synthesis_packet)?;
         ensure_scope(
             &scope_id,
             &synthesis_packet.scope_id,

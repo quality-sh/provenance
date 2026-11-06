@@ -21,7 +21,6 @@ use provenance_core::{Boundary, Question, Requirement, Resolution, Rule, Source,
 use serde_json::Value;
 
 use super::CanonicalRecord;
-use crate::state_store::readers::ensure_supported_ideation_landing_versions;
 use crate::statement_analysis::{analyze_changed_statements, StatementDiagnostic};
 
 /// The record type a shard holds, read off the repository path of the file
@@ -121,8 +120,7 @@ impl ShardFamily {
 /// first record that fails.
 ///
 /// Each recognized family is deserialized as its record type and its
-/// required relations must be present; ideation landings are checked for
-/// supported nested schema versions. The merge handler also passes the
+/// required relations must be present. The merge handler also passes the
 /// ancestor and selected records of requirement and rule shards to
 /// [`changed_statement_diagnostics`] before it writes the result. Cross-record
 /// checks that need the whole graph - dangling references, cycles, scope
@@ -133,12 +131,6 @@ pub fn validate_merged_records(
     records: &[CanonicalRecord],
 ) -> anyhow::Result<()> {
     match ShardFamily::for_shard_path(shard_path) {
-        ShardFamily::IdeationLandings => {
-            for (index, record) in records.iter().enumerate() {
-                ensure_supported_ideation_landing_versions(shard_path, index + 1, record)?;
-            }
-            Ok(())
-        }
         ShardFamily::Sources => validate_typed_records::<Source>(records, "source"),
         ShardFamily::Requirements => validate_typed_records::<Requirement>(records, "requirement"),
         ShardFamily::Resolutions => validate_typed_records::<Resolution>(records, "resolution"),
@@ -146,7 +138,9 @@ pub fn validate_merged_records(
         ShardFamily::Topics => validate_typed_records::<Topic>(records, "topic"),
         ShardFamily::Questions => validate_typed_records::<Question>(records, "question"),
         ShardFamily::Boundaries => validate_typed_records::<Boundary>(records, "boundary"),
-        ShardFamily::Discussions | ShardFamily::Unrecognized => Ok(()),
+        ShardFamily::IdeationLandings | ShardFamily::Discussions | ShardFamily::Unrecognized => {
+            Ok(())
+        }
     }
 }
 
@@ -231,11 +225,9 @@ fn deserialize_records<T: serde::de::DeserializeOwned>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
     fn rule(id: &str, requirement_ids: &[&str]) -> Value {
         serde_json::json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": id,
             "statement": "The merged rule shall hold.",
@@ -247,7 +239,6 @@ mod tests {
 
     fn resolution(id: &str, requirement_ids: &[&str]) -> Value {
         serde_json::json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": id,
             "title": "Merged",
@@ -348,26 +339,5 @@ mod tests {
         let report = format!("{error:#}");
         assert!(report.contains("rule_truncated"), "{report}");
         assert!(report.contains("is not a rule record"), "{report}");
-    }
-
-    #[test]
-    fn rejects_an_unsupported_record_nested_in_a_merged_landing() {
-        let shard = Utf8Path::new(".provenance/state/scopes/default/ideation/landings.jsonl");
-        let landing = serde_json::json!({
-            "contributions": [{"schema_version": SUPPORTED_SCHEMA_VERSION.0 + 1, "id": "contribution_future"}]
-        });
-
-        let error = validate_merged_records(shard, &[landing])
-            .unwrap_err()
-            .to_string();
-
-        assert!(error.contains("record contribution_future"), "{error}");
-        assert!(
-            error.contains(&format!(
-                "schema_version {}",
-                SUPPORTED_SCHEMA_VERSION.0 + 1
-            )),
-            "{error}"
-        );
     }
 }

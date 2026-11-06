@@ -12,7 +12,7 @@ const responses = (success, failure) => ({
   200: { content: { 'application/json': { schema: reference(success) } } },
   400: { content: { 'application/json': { schema: reference(failure) } } },
 });
-const compatibility = { wire: 9, state: 2, review_journal: 1, read_derivation: 1 };
+const compatibility = { wire: 9, read_derivation: 1 };
 
 // An update with an optional If-Match header, the shape of the Rule, Source,
 // Resolution, Domain and Boundary updates.

@@ -6,7 +6,6 @@ use crate::shards;
 use provenance_core::{
     ensure_record_id_assignable, validate_optional_confidence_score, AssertionRecord,
     DispositionRecord, PromotionState, ProposalCard, ProposalType, ScopeId, StableId,
-    SUPPORTED_SCHEMA_VERSION,
 };
 use provenance_macros::rule;
 
@@ -28,7 +27,6 @@ impl StateStore {
         self.with_lifecycle_lock(&scope, |held| {
             let proposal = proposal_from_input(proposal)?;
             let assertion = AssertionRecord {
-                schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: assertion.scope_id,
                 id: assertion.id,
                 proposal_id: assertion.proposal_id,
@@ -93,7 +91,6 @@ impl StateStore {
                     || !decision_keys.contains(decision.decision_key.as_str())
             });
             let assertion = AssertionRecord {
-                schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: input.scope_id,
                 id: input.id,
                 proposal_id: input.proposal_id,
@@ -136,7 +133,6 @@ impl StateStore {
     fn write_assertion(&self, input: CreateAssertionInput) -> anyhow::Result<AssertionRecord> {
         ensure_record_id_assignable(input.id.as_str())?;
         let assertion = AssertionRecord {
-            schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: input.scope_id.clone(),
             id: input.id,
             proposal_id: input.proposal_id,
@@ -242,7 +238,6 @@ impl StateStore {
             external_action,
         } = input;
         let disposition = DispositionRecord {
-            schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: scope_id.clone(),
             id,
             proposal_id,
@@ -419,7 +414,6 @@ fn proposal_from_input(input: CreateProposalCardInput) -> anyhow::Result<Proposa
         | PromotionState::Deferred => {}
     }
     let proposal = ProposalCard {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: input.scope_id,
         id: input.id,
         proposal_key: input.proposal_key,

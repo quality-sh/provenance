@@ -1,5 +1,4 @@
 use assert_cmd::Command;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, io::Write, path::Path};
 
@@ -42,7 +41,6 @@ pub fn create_requirement(repo: &Path, id: &str, statement: &str) {
         file,
         "{}",
         json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": id,
             "statement": statement,
@@ -162,7 +160,6 @@ fn collect_files(root: &Path, current: &Path, files: &mut BTreeMap<String, Vec<u
 pub fn record(id: &str, statement: &str, kind: &str) -> String {
     let value = if kind == "requirement" {
         json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": id,
             "statement": statement,
@@ -170,7 +167,6 @@ pub fn record(id: &str, statement: &str, kind: &str) -> String {
         })
     } else {
         json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": id,
             "statement": statement,

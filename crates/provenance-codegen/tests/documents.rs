@@ -253,8 +253,5 @@ fn metadata_is_the_only_compatibility_advertisement() {
     let tuple = openapi
         .pointer(tuple_ref.strip_prefix('#').unwrap())
         .unwrap();
-    assert_eq!(
-        tuple["required"],
-        json!(["wire", "state", "review_journal", "read_derivation"])
-    );
+    assert_eq!(tuple["required"], json!(["wire", "read_derivation"]));
 }

@@ -1,5 +1,4 @@
 use assert_cmd::Command;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 #[path = "export_fixture_support/mod.rs"]
 mod export_fixture_support;
@@ -145,7 +144,6 @@ fn create_requirement(repo: &std::path::Path, scope: &str, id: &str) {
         serde_json::json!({
             "scope": scope,
             "requirements": [{
-                "schema_version": SUPPORTED_SCHEMA_VERSION.0,
                 "scope_id": scope,
                 "id": id,
                 "statement": id,
@@ -188,7 +186,7 @@ fn seed_stale_target_shards(repo: &std::path::Path) {
     std::fs::create_dir_all(scope.join("threads")).unwrap();
     std::fs::write(
         scope.join("threads/2025-01.jsonl"),
-        format!("{{\"schema_version\":{},\"scope_id\":\"default\",\"id\":\"message_stale\",\"thread_id\":\"thread_stale\",\"role\":\"user\",\"body\":\"stale\",\"created_at\":1}}\n", SUPPORTED_SCHEMA_VERSION.0),
+        "{\"scope_id\":\"default\",\"id\":\"message_stale\",\"thread_id\":\"thread_stale\",\"role\":\"user\",\"body\":\"stale\",\"created_at\":1}\n".to_string(),
     )
     .unwrap();
 }

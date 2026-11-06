@@ -28,19 +28,19 @@ impl Repository {
         for index in 0..2 {
             append(
                 shards::implementation_bindings_path(&self.layout, &scope),
-                &json!({"schema_version":2,"scope_id":"default","id":format!("implementation_fixture_{index}"),"rule_id":"rule_shared","declared_by":"fixture","file":"code.rs","symbol":"check"}),
+                &json!({"scope_id":"default","id":format!("implementation_fixture_{index}"),"rule_id":"rule_shared","declared_by":"fixture","file":"code.rs","symbol":"check"}),
             );
             append(
                 shards::verification_bindings_path(&self.layout, &scope),
-                &json!({"schema_version":2,"scope_id":"default","id":format!("binding_fixture_{index}"),"rule_id":"rule_shared","key":format!("fixture_{index}"),"method":"examples","declared_by":"fixture","file":"code.rs","symbol":"check"}),
+                &json!({"scope_id":"default","id":format!("binding_fixture_{index}"),"rule_id":"rule_shared","key":format!("fixture_{index}"),"method":"examples","declared_by":"fixture","file":"code.rs","symbol":"check"}),
             );
             append(
                 shards::requirement_reviews_path(&self.layout, &scope),
-                &json!({"schema_version":2,"scope_id":"default","id":format!("review_fixture_{index}"),"rule_id":"rule_shared","requirement_id":"req_shared","field":"statement","before":"Old text.","after":"New text.","changed_at":index}),
+                &json!({"scope_id":"default","id":format!("review_fixture_{index}"),"rule_id":"rule_shared","requirement_id":"req_shared","field":"statement","before":"Old text.","after":"New text.","changed_at":index}),
             );
             append(
                 self.layout.verification_runs_path(&scope),
-                &json!({"schema_version":2,"scope_id":"default","id":format!("run_fixture_{index}"),"binding_id":format!("binding_fixture_{index}"),"rule_id":"rule_shared","method":"examples","declared_by":"fixture","file":"code.rs","symbol":"check","status":"passed","started_at":index,"completed_at":index+1}),
+                &json!({"scope_id":"default","id":format!("run_fixture_{index}"),"binding_id":format!("binding_fixture_{index}"),"rule_id":"rule_shared","method":"examples","declared_by":"fixture","file":"code.rs","symbol":"check","status":"passed","started_at":index,"completed_at":index+1}),
             );
         }
         base

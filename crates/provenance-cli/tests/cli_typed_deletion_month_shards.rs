@@ -44,7 +44,7 @@ fn git(repo: &Path, args: &[&str]) {
 
 fn spec(sources: &Value, adopt: &Value) -> Value {
     json!({
-        "schema_version": 2, "spec": "fx", "declared_by": "spec://fx",
+        "spec": "fx", "declared_by": "spec://fx",
         "adopt_unowned": adopt, "sources": sources, "requirements": []
     })
 }
@@ -94,7 +94,7 @@ fn a_discussion_with_messages_in_an_earlier_month_shard_is_deleted() {
         format!(
             "{}\n",
             json!({
-                "schema_version":2, "scope_id":"default", "id":THREAD,
+                "scope_id":"default", "id":THREAD,
                 "parent":{"node_type":"source", "node_id":"source_legacy"},
                 "status":"active", "created_at":1
             })
@@ -107,7 +107,7 @@ fn a_discussion_with_messages_in_an_earlier_month_shard_is_deleted() {
         format!(
             "{}\n",
             json!({
-                "schema_version":2, "scope_id":"default", "id":"msg_legacy",
+                "scope_id":"default", "id":"msg_legacy",
                 "thread_id":THREAD, "role":"user", "body":"An earlier note.",
                 "created_at":1_789_814_529_628_u64
             })

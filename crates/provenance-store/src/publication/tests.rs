@@ -1,7 +1,6 @@
 use super::read_only::tests::{record_kind_repositories, scope};
 use super::*;
 use provenance_core::NodeType;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 
 #[test]
@@ -58,7 +57,6 @@ fn recovery_rejects_traversal_outside_import_transactions() {
     std::fs::write(
         layout.publication_marker_path(),
         serde_json::to_vec(&serde_json::json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "transaction_dir": layout.import_transactions_dir().join("../../../outside"),
             "phase": "published"
         }))
@@ -92,7 +90,6 @@ fn recovery_rejects_symlinked_import_transactions_outside_repository() {
     std::fs::write(
         layout.publication_marker_path(),
         serde_json::to_vec(&serde_json::json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "transaction_dir": transaction,
             "phase": "published"
         }))
@@ -125,7 +122,6 @@ fn recovery_rejects_symlinked_import_transactions_inside_repository() {
     std::fs::write(
         layout.publication_marker_path(),
         serde_json::to_vec(&serde_json::json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "transaction_dir": transaction,
             "phase": "published"
         }))
@@ -159,7 +155,6 @@ fn recovery_rejects_a_symlink_component_even_when_the_written_path_resolves_insi
     std::fs::write(
         layout.publication_marker_path(),
         serde_json::to_vec(&serde_json::json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "transaction_dir": written_transaction,
             "phase": "published"
         }))
@@ -191,7 +186,6 @@ fn recovery_clears_published_marker_when_transaction_is_missing() {
     std::fs::write(
         layout.publication_marker_path(),
         serde_json::to_vec(&serde_json::json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "transaction_dir": transaction,
             "phase": "published"
         }))
@@ -218,7 +212,6 @@ fn recovery_rejects_a_transaction_that_is_a_regular_file() {
     std::fs::write(
         layout.publication_marker_path(),
         serde_json::to_vec(&serde_json::json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "transaction_dir": transaction,
             "phase": "backup_created"
         }))
@@ -260,7 +253,6 @@ fn a_symlinked_cache_is_refused_before_recovery_runs() {
     std::fs::write(
         layout.publication_marker_path(),
         serde_json::to_vec(&serde_json::json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "transaction_dir": transaction,
             "phase": "backup_created"
         }))

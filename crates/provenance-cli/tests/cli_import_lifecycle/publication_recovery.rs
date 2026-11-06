@@ -1,5 +1,4 @@
 use super::support::{create_system_source, init_repo, provenance};
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 /// The macOS temp area sits behind `/var -> /private/var`, so a marker holds
 /// an absolute path whose spelling matches neither the relative written
@@ -147,7 +146,6 @@ fn write_publication_marker(repo: &std::path::Path, transaction: &std::path::Pat
     std::fs::write(
         repo.join(".provenance/cache/import-publication.json"),
         serde_json::to_vec(&serde_json::json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "transaction_dir": transaction,
             "phase": phase
         }))

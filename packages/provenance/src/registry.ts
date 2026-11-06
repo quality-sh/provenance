@@ -6,7 +6,6 @@ import type {
   SourceDeclaration,
   TypedSpecDocument,
 } from "./protocol.js";
-import { STATE_SCHEMA_VERSION } from "./protocol.js";
 
 interface IdentityReceiver {
   assignId(id: string): void;
@@ -47,7 +46,6 @@ export class DeclarationRegistry {
 
   document(owner: string): TypedSpecDocument {
     return {
-      schema_version: STATE_SCHEMA_VERSION,
       spec: "legacy",
       declared_by: owner,
       sources: this.sources,

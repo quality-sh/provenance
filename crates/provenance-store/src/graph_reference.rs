@@ -3,7 +3,6 @@ mod git;
 mod projection;
 
 use camino::Utf8Path;
-use provenance_core::{ensure_supported_schema_version, SchemaVersion, SUPPORTED_SCHEMA_VERSION};
 use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
 
@@ -26,7 +25,6 @@ pub struct ExternalCorrelation {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GraphReference {
-    pub schema_version: u32,
     pub reference_id: String,
     pub repository_id: String,
     pub store_path: String,
@@ -57,7 +55,6 @@ pub enum GraphReferenceError {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct GraphReferenceSummary {
-    pub schema_version: u32,
     pub operation: &'static str,
     pub reference: GraphReference,
     pub counts: GraphCounts,
@@ -65,7 +62,6 @@ pub struct GraphReferenceSummary {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Verification {
-    pub schema_version: u32,
     pub operation: &'static str,
     pub valid: bool,
     pub reference_id: String,
@@ -101,7 +97,7 @@ impl GraphReference {
     ///
     /// A reference is a claim about someone else's repository that its holder
     /// cannot check by reading it, so the shape of every field is fixed before
-    /// anything is resolved: schema version 1; a `grf1_` reference id and a
+    /// anything is resolved: a `grf1_` reference id and a
     /// `git1_` repository id, each carrying exactly 64 lowercase hexadecimal
     /// digits; the store path `.provenance/state` and no other; a scope id
     /// `ScopeId` accepts; a full 40- or 64-character lowercase hexadecimal
@@ -122,14 +118,6 @@ impl GraphReference {
     /// validates against; the two must reach the same verdict on every value.
     #[rule("rule_reference_wellformed")]
     fn validate(&self) -> Result<(), GraphReferenceError> {
-        if self.schema_version != SUPPORTED_SCHEMA_VERSION.0 {
-            return Err(GraphReferenceError::Incomplete {
-                detail: format!(
-                    "unsupported schema_version {}; expected {}",
-                    self.schema_version, SUPPORTED_SCHEMA_VERSION.0
-                ),
-            });
-        }
         validate_prefixed_hash("reference_id", &self.reference_id, "grf1_", 64)?;
         validate_prefixed_hash("repository_id", &self.repository_id, "git1_", 64)?;
         if self.store_path != STORE_PATH {
@@ -196,7 +184,6 @@ impl GraphReferences {
         let reference_id =
             reference_identity(&repository_id, STORE_PATH, scope, &commit, &graph_digest);
         Ok(GraphReference {
-            schema_version: SUPPORTED_SCHEMA_VERSION.0,
             reference_id,
             repository_id,
             store_path: STORE_PATH.to_string(),
@@ -213,7 +200,6 @@ impl GraphReferences {
     ) -> Result<GraphReferenceSummary, GraphReferenceError> {
         let graph = self.verify_and_load(reference)?;
         Ok(GraphReferenceSummary {
-            schema_version: SUPPORTED_SCHEMA_VERSION.0,
             operation: "show",
             reference: reference.clone(),
             counts: GraphCounts::from(&graph),
@@ -223,7 +209,6 @@ impl GraphReferences {
     pub fn verify(&self, reference: &GraphReference) -> Result<Verification, GraphReferenceError> {
         self.verify_and_load(reference)?;
         Ok(Verification {
-            schema_version: SUPPORTED_SCHEMA_VERSION.0,
             operation: "verify",
             valid: true,
             reference_id: reference.reference_id.clone(),
@@ -243,7 +228,6 @@ impl GraphReferences {
         reference: &GraphReference,
     ) -> Result<ExactExport, GraphReferenceError> {
         Ok(ExactExport {
-            schema_version: SUPPORTED_SCHEMA_VERSION.0,
             operation: "exact-export",
             reference_id: reference.reference_id.clone(),
             graph_digest: reference.graph_digest.clone(),
@@ -417,17 +401,4 @@ pub(super) fn incomplete(error: impl std::fmt::Display) -> GraphReferenceError {
 
 fn canonical_bytes<T: Serialize>(value: &T) -> Result<Vec<u8>, GraphReferenceError> {
     crate::canonical_digest::canonical_bytes(value).map_err(incomplete)
-}
-
-fn ensure_graph_schema_version(
-    kind: &str,
-    version: SchemaVersion,
-) -> Result<(), GraphReferenceError> {
-    let record_kind = kind.split_whitespace().next().unwrap_or(kind);
-    ensure_supported_schema_version(record_kind, version).map_err(|_| {
-        incomplete(format!(
-            "{kind} has unsupported schema_version {}; expected {}",
-            version.0, SUPPORTED_SCHEMA_VERSION.0
-        ))
-    })
 }

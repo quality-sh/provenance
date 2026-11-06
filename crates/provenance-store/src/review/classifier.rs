@@ -22,7 +22,6 @@ pub fn changed_fields<T: Serialize>(
                 .ok_or_else(|| anyhow::anyhow!("record does not serialize to an object"))?
                 .keys(),
         )
-        .filter(|name| name.as_str() != "schema_version")
         .cloned()
         .collect::<Vec<_>>();
     names.sort();
@@ -87,7 +86,7 @@ mod tests {
             let Some(lifecycle) = family
                 .lifecycle_fields
                 .iter()
-                .find(|field| !matches!(**field, "schema_version" | "scope_id" | "id"))
+                .find(|field| !matches!(**field, "scope_id" | "id"))
                 .copied()
             else {
                 continue;

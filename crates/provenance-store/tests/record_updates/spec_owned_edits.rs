@@ -29,7 +29,7 @@ fn assert_kept(after: &[String], untouched: &[String]) {
 #[provenance_macros::verifies("rule_porcelain_update_preserves_omissions", examples)]
 async fn owner_edit_of_one_declaration_keeps_the_other_declarations() {
     let fixture = Fixture::new();
-    let spec = json!({"schema_version":2,"spec":"fixture","declared_by":"spec://fixture",
+    let spec = json!({"spec":"fixture","declared_by":"spec://fixture",
         "requirements":[
             {"key":"save","statement":"The system saves the record."},
             {"key":"read","statement":"The system reads the record."}],

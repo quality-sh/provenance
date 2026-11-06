@@ -1,8 +1,8 @@
-use super::{ensure_graph_schema_version, incomplete, GraphReferenceError};
+use super::{incomplete, GraphReferenceError};
 use crate::repository::{OpenFailure, Repository};
 use crate::state_store::StateStore;
 use camino::Utf8Path;
-use provenance_core::{Scope, ScopeId, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{Scope, ScopeId};
 use provenance_macros::rule;
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
@@ -142,7 +142,6 @@ macro_rules! define_graph_projection {
         #[derive(Debug, Clone, PartialEq, Deserialize)]
         #[serde(deny_unknown_fields)]
         pub struct GraphExport {
-            pub schema_version: u32,
             pub scope: Scope,
             $(pub $export_field: Vec<$export_type>,)*
             $(#[serde(default)] pub $binding_field: Vec<$binding_type>,)*
@@ -150,11 +149,10 @@ macro_rules! define_graph_projection {
 
         impl Serialize for GraphExport {
             fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-                let field_count = 2
+                let field_count = 1
                     + count_fields!($($export_field)*)
                     + count_fields!($($binding_field)*);
                 let mut state = serializer.serialize_struct("GraphExport", field_count)?;
-                state.serialize_field("schema_version", &self.schema_version)?;
                 state.serialize_field("scope", &self.scope)?;
                 $(state.serialize_field(stringify!($export_field), &self.$export_field)?;)*
                 $(serialize_binding!(
@@ -191,7 +189,7 @@ macro_rules! define_graph_projection {
             scope_id: &ScopeId,
         ) -> Result<GraphExport, GraphReferenceError> {
             let scope = scope_id.as_str();
-            let (manifest_version, selected_scope) =
+            let selected_scope =
                 store.closed_manifest_scope(scope_id).map_err(|error| {
                     let detail = error.to_string();
                     if store.layout.manifest_path().exists() {
@@ -202,12 +200,10 @@ macro_rules! define_graph_projection {
                         }
                     }
                 })?;
-            ensure_graph_schema_version("manifest", manifest_version)?;
             let selected_scope = selected_scope.ok_or_else(|| GraphReferenceError::Missing {
                 detail: format!("scope '{scope}' is absent from the pinned manifest"),
             })?;
             let mut graph = GraphExport {
-                schema_version: SUPPORTED_SCHEMA_VERSION.0,
                 scope: selected_scope,
                 $($export_field: store.$export_closed(scope_id).map_err(incomplete)?,)*
                 $($binding_field: Vec::new(),)*
@@ -220,35 +216,11 @@ macro_rules! define_graph_projection {
                 graph, store, scope_id, implementation, $($binding_graph)+,
                 $binding_field, $binding_closed
             );)*
-            graph.validate_schema_versions()?;
             graph.validate_rule_archives()?;
             validate_scope_ownership(&graph, scope_id)?;
             strip_collaboration_fields(&mut graph);
             sort_records(&mut graph);
             Ok(graph)
-        }
-
-        impl GraphExport {
-            pub(super) fn validate_schema_versions(&self) -> Result<(), GraphReferenceError> {
-                macro_rules! require_supported {
-                    ($records:expr, $kind:expr) => {
-                        for record in $records {
-                            ensure_graph_schema_version(
-                                &format!("{} '{}'", $kind, record.id.as_str()),
-                                record.schema_version,
-                            )?;
-                        }
-                    };
-                }
-                $(require_supported!(&self.$export_field, graph_kind!($($export_graph)+));)*
-                $(validate_binding!(
-                    self, verification, $($binding_graph)+, $binding_field, require_supported
-                );)*
-                $(validate_binding!(
-                    self, implementation, $($binding_graph)+, $binding_field, require_supported
-                );)*
-                Ok(())
-            }
         }
 
         fn sort_records(graph: &mut GraphExport) {

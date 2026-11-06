@@ -1,5 +1,4 @@
 use assert_cmd::Command;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 #[test]
 #[allow(clippy::too_many_lines)]
@@ -155,12 +154,12 @@ fn cli_trace_view_preserves_enriched_v1_requirement_and_source_fields() {
     std::fs::create_dir_all(state.join("scopes/default/requirements")).unwrap();
     std::fs::write(
         state.join("scopes/default/sources/source.jsonl"),
-        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"source_sah","name":"Support at Home","source_type":"legislation","url":"https://example.test/sah","reference":"Department guidance"}).to_string(),
+        serde_json::json!({"scope_id":"default","id":"source_sah","name":"Support at Home","source_type":"legislation","url":"https://example.test/sah","reference":"Department guidance"}).to_string(),
     )
     .unwrap();
     std::fs::write(
         state.join("scopes/default/requirements/req.jsonl"),
-        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"req_sah","statement":"Support at Home shall be traceable","description":"Cloud import description","status":"discovery","source_refs":[{"source_id":"source_sah","clause":"Program overview"}]}).to_string(),
+        serde_json::json!({"scope_id":"default","id":"req_sah","statement":"Support at Home shall be traceable","description":"Cloud import description","status":"discovery","source_refs":[{"source_id":"source_sah","clause":"Program overview"}]}).to_string(),
     )
     .unwrap();
 

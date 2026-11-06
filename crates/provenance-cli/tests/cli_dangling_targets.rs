@@ -5,27 +5,26 @@
 
 use assert_cmd::Command;
 use predicates::str::contains;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use std::path::Path;
 
 fn requirements() -> String {
     [
-    serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"req_root","statement":"The root requirement","status":"active","source_refs":[{"source_id":"source_missing","clause":null}]}).to_string(),
-    serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"req_child","statement":"The child requirement","status":"active","refines":["req_missing"]}).to_string(),
+    serde_json::json!({"scope_id":"default","id":"req_root","statement":"The root requirement","status":"active","source_refs":[{"source_id":"source_missing","clause":null}]}).to_string(),
+    serde_json::json!({"scope_id":"default","id":"req_child","statement":"The child requirement","status":"active","refines":["req_missing"]}).to_string(),
     ]
     .join("\n")
 }
 
 fn rules() -> String {
-    serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"rule_root","statement":"The root rule","status":"active","severity":"high","requirement_ids":["req_root"],"resolution_ids":["res_missing"]}).to_string()
+    serde_json::json!({"scope_id":"default","id":"rule_root","statement":"The root rule","status":"active","severity":"high","requirement_ids":["req_root"],"resolution_ids":["res_missing"]}).to_string()
 }
 
 fn topics() -> String {
-    serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"topic_root","requirement_id":"req_root","title":"Root topic","status":"explored","links":[{"target_type":"rule","target_id":"rule_missing"}]}).to_string()
+    serde_json::json!({"scope_id":"default","id":"topic_root","requirement_id":"req_root","title":"Root topic","status":"explored","links":[{"target_type":"rule","target_id":"rule_missing"}]}).to_string()
 }
 
 fn threads() -> String {
-    serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"thread_orphan","parent":{"node_type":"requirement","node_id":"req_vanished"},"status":"active","created_at":1}).to_string()
+    serde_json::json!({"scope_id":"default","id":"thread_orphan","parent":{"node_type":"requirement","node_id":"req_vanished"},"status":"active","created_at":1}).to_string()
 }
 
 fn planted_repo() -> tempfile::TempDir {

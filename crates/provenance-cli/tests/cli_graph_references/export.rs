@@ -1,5 +1,4 @@
 use super::*;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 use provenance_store::graph_reference::{graph_digest, GraphExport};
 use serde_json::json;
@@ -113,7 +112,7 @@ fn exact_export_contains_only_canonical_graph_families() {
     std::fs::write(
         proposal_dir.join("proposal_cards.jsonl"),
         concat!(
-            "{\"schema_version\":1,\"scope_id\":\"default\",",
+            "{\"scope_id\":\"default\",",
             "\"id\":\"proposal_workflowd_123\",\"proposal_key\":\"workflowd-123\",",
             "\"proposal_type\":\"no_action\",\"title\":\"No graph change\",",
             "\"summary\":\"Collaboration-only proposal\",\"traceability\":{",
@@ -168,7 +167,6 @@ fn collaboration_claims_do_not_change_digest_or_appear_in_exact_export() {
         format!(
             "{}\n",
             json!({
-                "schema_version": SUPPORTED_SCHEMA_VERSION.0,
                 "scope_id": "default",
                 "id": "source_origin",
                 "name": "Origin metadata source",
@@ -305,14 +303,11 @@ fn implementation_binding_travels_in_the_exact_graph_and_changes_its_digest() {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(
         &path,
-        format!(
-            concat!(
-                "{{\"schema_version\":{},\"scope_id\":\"default\",",
-                "\"id\":\"implementation_binding_runtime\",\"rule_id\":\"rule_runtime\",",
-                "\"declared_by\":\"spec://typescript/workflows\",",
-                "\"file\":\"src/runtime.ts\",\"symbol\":\"startWorkflow\"}}\n"
-            ),
-            SUPPORTED_SCHEMA_VERSION.0
+        concat!(
+            "{\"scope_id\":\"default\",",
+            "\"id\":\"implementation_binding_runtime\",\"rule_id\":\"rule_runtime\",",
+            "\"declared_by\":\"spec://typescript/workflows\",",
+            "\"file\":\"src/runtime.ts\",\"symbol\":\"startWorkflow\"}\n"
         ),
     )
     .unwrap();

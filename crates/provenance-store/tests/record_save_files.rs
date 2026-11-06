@@ -30,7 +30,7 @@ fn create_and_update_every_kind(store: &StateStore, scope: &ScopeId) {
     store
         .apply_typed_spec(
             scope,
-            input(json!({"schema_version":2, "spec":"files", "declared_by":"spec://files",
+            input(json!({"spec":"files", "declared_by":"spec://files",
                 "requirements":[{"key":"base", "id":"req_files", "statement":"The system stores files."}]})),
         )
         .unwrap();

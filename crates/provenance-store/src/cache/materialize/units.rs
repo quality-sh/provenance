@@ -9,7 +9,7 @@ mod content;
 
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
-use provenance_core::{ensure_supported_schema_version, Manifest, ScopeId};
+use provenance_core::{Manifest, ScopeId};
 
 /// One hash unit. `name` is the key of its digest row.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,7 +52,6 @@ pub fn scope_ids(state_dir: &Utf8Path) -> anyhow::Result<Vec<ScopeId>> {
     let bytes = read_through_rename(&path)?;
     let manifest: Manifest =
         serde_json::from_slice(&bytes).with_context(|| format!("parse manifest {path}"))?;
-    ensure_supported_schema_version("manifest", manifest.schema_version)?;
     Ok(manifest.scopes.into_iter().map(|scope| scope.id).collect())
 }
 

@@ -7,7 +7,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test, { after } from "node:test";
-import { STATE_SCHEMA_VERSION } from "./protocol.js";
 
 import {
   apply,
@@ -173,7 +172,6 @@ test("top-level fluent declarations author source names and Requirement descript
 
   const request = recorder.requests().find(({ command }) => command === "apply");
   assert.deepEqual(request?.input, {
-    schema_version: STATE_SCHEMA_VERSION,
     spec: "fluent-metadata",
     declared_by: "spec://typescript/fluent-metadata",
     sources: [

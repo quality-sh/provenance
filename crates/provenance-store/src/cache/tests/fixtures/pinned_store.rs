@@ -13,7 +13,7 @@ use crate::state_store::{
 };
 use provenance_core::{
     ArtifactLink, ArtifactLinkTargetType, QuestionStatus, Requirement, RequirementStatus,
-    ResolutionMethod, ScopeId, SourceReference, SourceType, TopicStatus, SUPPORTED_SCHEMA_VERSION,
+    ResolutionMethod, ScopeId, SourceReference, SourceType, TopicStatus,
 };
 
 pub const LINKED_REQUIREMENT_ID: &str = "req_twin_record";
@@ -223,7 +223,6 @@ fn seed_shaping(store: &StateStore, scope: &ScopeId) {
 /// Bindings and reviews go in as raw shard lines, past the writers, in
 /// the shape the integration records serialize to.
 fn seed_integrations(layout: &ProvenanceLayout, scope: &ScopeId) {
-    let version = SUPPORTED_SCHEMA_VERSION.0;
     let scope_word = scope.as_str();
     let implementations = [
         ("bind_impl_a", "rule_overtime_001", "src/pay.rs", "pay"),
@@ -234,7 +233,7 @@ fn seed_integrations(layout: &ProvenanceLayout, scope: &ScopeId) {
         .iter()
         .map(|(id, rule, file, symbol)| {
             format!(
-                r#"{{"schema_version":{version},"scope_id":"{scope_word}","id":"{id}","rule_id":"{rule}","declared_by":"spec://pinned","file":"{file}","symbol":"{symbol}"}}"#
+                r#"{{"scope_id":"{scope_word}","id":"{id}","rule_id":"{rule}","declared_by":"spec://pinned","file":"{file}","symbol":"{symbol}"}}"#
             )
         })
         .collect();
@@ -273,7 +272,7 @@ fn seed_integrations(layout: &ProvenanceLayout, scope: &ScopeId) {
         .iter()
         .map(|(id, rule, key, file, symbol)| {
             format!(
-                r#"{{"schema_version":{version},"scope_id":"{scope_word}","id":"{id}","rule_id":"{rule}","key":"{key}","method":"examples","declared_by":"spec://pinned","file":"{file}","symbol":"{symbol}"}}"#
+                r#"{{"scope_id":"{scope_word}","id":"{id}","rule_id":"{rule}","key":"{key}","method":"examples","declared_by":"spec://pinned","file":"{file}","symbol":"{symbol}"}}"#
             )
         })
         .collect();
@@ -293,7 +292,7 @@ fn seed_integrations(layout: &ProvenanceLayout, scope: &ScopeId) {
         .iter()
         .map(|(id, rule, changed_at, cleared)| {
             format!(
-                r#"{{"schema_version":{version},"scope_id":"{scope_word}","id":"{id}","rule_id":"{rule}","requirement_id":"req_overtime","field":"statement","before":"Overtime","after":"Overtime pay","changed_at":{changed_at}{cleared}}}"#
+                r#"{{"scope_id":"{scope_word}","id":"{id}","rule_id":"{rule}","requirement_id":"req_overtime","field":"statement","before":"Overtime","after":"Overtime pay","changed_at":{changed_at}{cleared}}}"#
             )
         })
         .collect();

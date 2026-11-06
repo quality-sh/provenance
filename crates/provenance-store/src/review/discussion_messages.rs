@@ -7,7 +7,7 @@ use crate::repository::Repository;
 use provenance_core::{
     protocol::{read_failure::ReadFailure, Stamped},
     threads::{DiscussionMessagesPage, DiscussionMessagesQuery, DiscussionSelector},
-    Message, MessageRole, SchemaVersion, StableId,
+    Message, MessageRole, StableId,
 };
 
 pub async fn read_discussion_messages(
@@ -71,7 +71,6 @@ async fn message(
         row.ok_or(ReadFailure::ResourceNotFound)?;
     check_stored_size(size)?;
     Ok(Message {
-        schema_version: message_schema_version(&selector),
         scope_id: ctx.snapshot().scope().clone(),
         id: message_id,
         thread_id: StableId::new(thread)?,
@@ -126,13 +125,6 @@ fn selector_sql(selector: &DiscussionSelector) -> (&'static str, &str, &'static 
             "m.thread_id=? AND NOT EXISTS(SELECT 1 FROM discussions d, json_each(d.message_ids) e \
              WHERE d.scope_id=m.scope_id AND e.value=m.id)",
         ),
-    }
-}
-
-const fn message_schema_version(selector: &DiscussionSelector) -> SchemaVersion {
-    match selector {
-        DiscussionSelector::Discussion { .. } => provenance_core::review::REVIEW_SCHEMA_VERSION,
-        DiscussionSelector::Legacy { .. } => provenance_core::SUPPORTED_SCHEMA_VERSION,
     }
 }
 
@@ -217,7 +209,6 @@ async fn page_message(
     .await?;
     drop(tx);
     Ok(Message {
-        schema_version: message_schema_version(selector),
         scope_id: ctx.snapshot().scope().clone(),
         id: StableId::new(id)?,
         thread_id: StableId::new(thread)?,

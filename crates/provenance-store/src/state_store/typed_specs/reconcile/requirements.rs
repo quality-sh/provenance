@@ -1,7 +1,6 @@
 use provenance_core::authoring::addresses;
 use provenance_core::{
     DeclarationAddress, Requirement, RequirementStatus, ScopeId, SourceReference, StableId,
-    SUPPORTED_SCHEMA_VERSION,
 };
 
 use super::super::DesiredTypedIds;
@@ -58,7 +57,6 @@ impl DeclarationRecord for Requirement {
             archived_in_commit: None,
             created: None,
             updated: None,
-            schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: scope_id.clone(),
             id: id.clone(),
             declared_by: Some(owner.to_string()),

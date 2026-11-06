@@ -48,7 +48,6 @@ pub struct InfoRequest {}
 pub struct RepositoryInfo {
     pub engine_version: String,
     pub protocol_version: u32,
-    pub state_schema_version: u32,
     pub repository: String,
 }
 

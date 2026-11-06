@@ -1,4 +1,4 @@
-use provenance_core::{RequirementReview, ScopeId, StableId, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{RequirementReview, ScopeId, StableId};
 use provenance_macros::rule;
 use sha2::{Digest, Sha256};
 
@@ -151,7 +151,6 @@ impl RequirementReviewInput {
     fn into_record(self, scope: &ScopeId) -> anyhow::Result<RequirementReview> {
         let id = review_id(&self)?;
         Ok(RequirementReview {
-            schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: scope.clone(),
             id,
             rule_id: self.rule_id,

@@ -144,11 +144,11 @@ fn find(text: &str, id: &StableId) -> Option<Value> {
         .find(|value| value.get("id").and_then(Value::as_str) == Some(id.as_str()))
 }
 
-/// The record without its schema version and record stamps.
+/// The record without its record stamps.
 fn content(record: &Value) -> Value {
     let mut value = record.clone();
     if let Some(fields) = value.as_object_mut() {
-        for name in ["schema_version", "created", "updated"] {
+        for name in ["created", "updated"] {
             fields.remove(name);
         }
     }

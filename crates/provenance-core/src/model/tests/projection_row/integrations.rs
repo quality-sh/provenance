@@ -3,7 +3,6 @@ use crate::model::{
     ImplementationBinding, RequirementReview, ScopeId, StableId, VerificationBinding,
     VerificationMethod,
 };
-use crate::SUPPORTED_SCHEMA_VERSION;
 
 fn sid(value: &str) -> StableId {
     StableId::new(value).unwrap()
@@ -15,7 +14,6 @@ fn scope() -> ScopeId {
 
 fn filled_implementation_binding() -> ImplementationBinding {
     ImplementationBinding {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("bind_impl_a"),
         rule_id: sid("rule_overtime_001"),
@@ -32,7 +30,6 @@ fn bare_implementation_binding() -> ImplementationBinding {
 
 fn filled_verification_binding() -> VerificationBinding {
     VerificationBinding {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("bind_ver_a"),
         rule_id: sid("rule_overtime_001"),
@@ -54,7 +51,6 @@ fn bare_verification_binding() -> VerificationBinding {
 
 fn filled_review() -> RequirementReview {
     RequirementReview {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("review_a"),
         rule_id: sid("rule_overtime_001"),

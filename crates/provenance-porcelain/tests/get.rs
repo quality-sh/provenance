@@ -92,17 +92,17 @@ fn service() -> Porcelain<FixturePort> {
 fn node(id: &str, kind: &str) -> GraphNode {
     let value = match kind {
         "requirement" => json!({
-            "node_type": "requirement", "schema_version": 2, "scope_id": "default",
+            "node_type": "requirement", "scope_id": "default",
             "id": id, "statement": "Keep the interface clear.", "status": "active"
         }),
         "resolution" => json!({
-            "node_type": "resolution", "schema_version": 2, "scope_id": "default",
+            "node_type": "resolution", "scope_id": "default",
             "id": id, "title": "Decision", "position": "Use the typed graph.",
             "rationale": "One graph contract is enough.", "status": "draft",
             "inputs": [], "requirement_ids": [], "review_on": null
         }),
         "rule" => json!({
-            "node_type": "rule", "schema_version": 2, "scope_id": "default",
+            "node_type": "rule", "scope_id": "default",
             "id": id, "statement": "Keep the typed graph.", "status": "active",
             "severity": "high", "requirement_ids": []
         }),

@@ -1,10 +1,8 @@
-
 #[test]
 #[verifies("rule_proposal_authored_as_proposed", examples)]
 fn modern_proposal_cannot_select_asserted_or_terminal_state() {
     for state in ["asserted", "accepted", "rejected", "deferred"] {
         let proposal: crate::ProposalCard = serde_json::from_value(serde_json::json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": format!("proposal_{state}"),
             "proposal_key": state,
@@ -46,7 +44,6 @@ fn modern_proposal_cannot_embed_disposition_authority() {
 #[verifies("rule_proposal_lineage_acyclic", examples)]
 fn lineage_rejects_missing_immutable_assertion_id() {
     let proposal: crate::ProposalCard = serde_json::from_value(serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "proposal_child",
         "proposal_key": "child",
@@ -75,7 +72,10 @@ fn lineage_rejects_missing_immutable_assertion_id() {
     })
     .unwrap_err()
     .to_string();
-    assert!(error.contains("assertion_missing does not exist"), "{error}");
+    assert!(
+        error.contains("assertion_missing does not exist"),
+        "{error}"
+    );
 }
 
 #[test]
@@ -108,7 +108,7 @@ fn lineage_rejects_cycles_through_assertion_owners() {
 
 fn proposal_json(id: &str, builds_on: &str) -> serde_json::Value {
     serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": id,
+        "scope_id": "default", "id": id,
         "proposal_key": id, "proposal_type": "question", "title": id, "summary": id,
         "traceability": {
             "target": {"artifact_type": "requirement", "artifact_id": "req_a"},
@@ -120,7 +120,7 @@ fn proposal_json(id: &str, builds_on: &str) -> serde_json::Value {
 
 fn assertion_json(id: &str, proposal_id: &str) -> serde_json::Value {
     serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": id,
+        "scope_id": "default", "id": id,
         "proposal_id": proposal_id, "synthesis_packet_id": "synthesis_a",
         "supporting_claim_ids": []
     })
@@ -131,10 +131,8 @@ fn assertion_json(id: &str, proposal_id: &str) -> serde_json::Value {
 fn assertion_rejects_unsupported_and_exploratory_evidence() {
     for evidence_type in ["unsupported", "exploratory"] {
         let (mut contribution, synthesis, proposal, assertion) = lifecycle_fixture();
-        contribution["material_claims"][0]["evidence_type"] =
-            serde_json::json!(evidence_type);
-        contribution["evidence_references"][0]["evidence_type"] =
-            serde_json::json!(evidence_type);
+        contribution["material_claims"][0]["evidence_type"] = serde_json::json!(evidence_type);
+        contribution["evidence_references"][0]["evidence_type"] = serde_json::json!(evidence_type);
         let error = validate_fixture(contribution, synthesis, proposal, assertion)
             .unwrap_err()
             .to_string();
@@ -252,7 +250,7 @@ fn effective_state_is_derived_from_immutable_assertion_and_disposition() {
     let proposal: crate::ProposalCard = serde_json::from_value(proposal).unwrap();
     let assertion: crate::AssertionRecord = serde_json::from_value(assertion).unwrap();
     let disposition: crate::DispositionRecord = serde_json::from_value(serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "disposition_a",
+        "scope_id": "default", "id": "disposition_a",
         "proposal_id": "proposal_a", "decision": "accepted", "rationale": "Reviewed",
         "actor": {"identity_type": "human", "id": "reviewer"}
     }))
@@ -332,10 +330,11 @@ fn frozen_terminal_effective_state_ignores_lifecycle_records() {
     let proposal: crate::ProposalCard = serde_json::from_value(proposal).unwrap();
     let assertion: crate::AssertionRecord = serde_json::from_value(assertion).unwrap();
     let disposition: crate::DispositionRecord = serde_json::from_value(serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "disposition_forged",
+        "scope_id": "default", "id": "disposition_forged",
         "proposal_id": "proposal_a", "decision": "accepted", "rationale": "Forged",
         "actor": {"identity_type": "human", "id": "reviewer"}
-    })).unwrap();
+    }))
+    .unwrap();
     assert_eq!(
         crate::effective_proposal_state(&proposal, &[assertion], &[disposition]),
         crate::PromotionState::Rejected
@@ -370,7 +369,7 @@ fn lifecycle_fixture() -> (
     serde_json::Value,
 ) {
     let contribution = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "contribution_a",
+        "scope_id": "default", "id": "contribution_a",
         "target": {"artifact_type": "requirement", "artifact_id": "req_a"},
         "participant_slot": "extractor", "stance": "support", "strongest_finding": "Observed",
         "evidence_references": [{"reference_id": "evidence_a", "evidence_type": "source", "summary": "Pinned"}],
@@ -379,7 +378,7 @@ fn lifecycle_fixture() -> (
         "unsupported_recommendations": [], "uncertainty": {"level": "low", "rationale": "Direct"}, "open_questions": []
     });
     let synthesis = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "synthesis_a",
+        "scope_id": "default", "id": "synthesis_a",
         "target": {"artifact_type": "requirement", "artifact_id": "req_a"}, "summary": "Adjudicated",
         "consensus": [], "contested_claims": [], "minority_objections": [], "evidence_gaps": [],
         "unsupported_speculation": [], "open_questions": [],
@@ -387,13 +386,13 @@ fn lifecycle_fixture() -> (
         "required_human_decisions": []
     });
     let proposal = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "proposal_a", "proposal_key": "proposal-a",
+        "scope_id": "default", "id": "proposal_a", "proposal_key": "proposal-a",
         "proposal_type": "requirement_candidate", "title": "Candidate", "summary": "Candidate",
         "traceability": {"target": {"artifact_type": "requirement", "artifact_id": "req_a"}, "source_ids": [], "evidence_references": [], "supporting_claim_ids": ["claim_a"]},
         "promotion_state": "proposed"
     });
     let assertion = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "assertion_a", "proposal_id": "proposal_a",
+        "scope_id": "default", "id": "assertion_a", "proposal_id": "proposal_a",
         "synthesis_packet_id": "synthesis_a", "supporting_claim_ids": ["claim_a"]
     });
     (contribution, synthesis, proposal, assertion)

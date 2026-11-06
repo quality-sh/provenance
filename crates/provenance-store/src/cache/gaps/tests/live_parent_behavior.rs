@@ -2,7 +2,7 @@ use super::super::{compute_gaps, GapGraph, GapItem, GapKind};
 use super::fixtures::*;
 use provenance_core::{
     Boundary, NodeType, QuestionStatus, Requirement, RequirementStatus, Resolution,
-    ResolutionStatus, Rule, RuleStatus, ScopeId, TopicStatus, SUPPORTED_SCHEMA_VERSION,
+    ResolutionStatus, Rule, RuleStatus, ScopeId, TopicStatus,
 };
 use provenance_macros::verifies;
 
@@ -36,7 +36,7 @@ fn no_live_parent(gaps: &[GapItem]) -> Vec<(NodeType, &str, Option<&str>)> {
 
 fn boundary(id: &str, requirement_id: &str) -> Boundary {
     serde_json::from_value(serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": id,
+        "scope_id": "default", "id": id,
         "requirement_id": requirement_id, "statement": "Back pay is out of scope"
     }))
     .unwrap()

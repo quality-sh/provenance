@@ -18,7 +18,7 @@ pub fn fixture() -> (tempfile::TempDir, StateStore, ScopeId) {
     std::fs::create_dir_all(layout.state_dir()).unwrap();
     std::fs::write(
         layout.manifest_path(),
-        r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}],"disposition_actor_ids":["reviewer"]}"#,
+        r#"{"scopes":[{"id":"default","path_prefix":"."}],"disposition_actor_ids":["reviewer"]}"#,
     )
     .unwrap();
     let store = provenance_store::repository::Repository::open(root, "default")
@@ -175,7 +175,6 @@ pub fn status(store: &StateStore, scope: &ScopeId, kind: NodeType, record: &str)
 
 pub fn typed_rule() -> TypedSpecInput {
     input(json!({
-        "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
         "spec":"storage", "declared_by":"spec://storage", "adopt_unowned":[],
         "sources":[{"key":"policy","id":"source_a","name":"Policy","kind":"document"}],
         "requirements":[{"key":"storage","id":"req_a","statement":"The system stores records.",

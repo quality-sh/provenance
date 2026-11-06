@@ -27,7 +27,6 @@ pub fn create_source_and_requirement(repo: &str) {
             "scope": "default",
             "sources": [],
             "requirements": [{
-                "schema_version": 2,
                 "scope_id": "default",
                 "id": "req_overtime",
                 "statement": "Overtime must follow SCHADS thresholds",

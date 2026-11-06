@@ -9,7 +9,6 @@ use crate::operations::read_policy::{FreshnessPolicy, ReadPolicy};
 use crate::operations::reader;
 use crate::shards;
 use provenance_core::protocol::{ImpactQuery, ResolveSymbolQuery, SDK_PROTOCOL_VERSION};
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 use serde_json::json;
 
@@ -47,7 +46,6 @@ fn bind(store: &TestStore, id: &str, file: &str) {
     append_record(
         &shards::implementation_bindings_path(&store.layout(), &store.scope),
         &json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": store.scope.as_str(),
             "id": id,
             "rule_id": "rule_overtime",
@@ -62,7 +60,6 @@ fn verify(store: &TestStore, id: &str, file: &str) {
     append_record(
         &shards::verification_bindings_path(&store.layout(), &store.scope),
         &json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": store.scope.as_str(),
             "id": id,
             "rule_id": "rule_overtime",

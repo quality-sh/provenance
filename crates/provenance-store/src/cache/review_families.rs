@@ -205,7 +205,6 @@ mod tests {
     #[test]
     fn common_audit_fields_are_lifecycle_fields_when_present() {
         let common = [
-            "schema_version",
             "scope_id",
             "id",
             "created",

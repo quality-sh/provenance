@@ -9,7 +9,6 @@ SCOPE = "homepage-scale"
 
 def edge(kind, from_type, from_id, to_type, to_id):
     return {
-        "schema_version": 1,
         "scope_id": SCOPE,
         "id": f"edge_{kind}_{from_id}_{to_id}",
         "edge_type": kind,
@@ -27,7 +26,6 @@ def build_fixture():
         "Accessibility", "Platform",
     ]
     sources = [{
-        "schema_version": 1,
         "scope_id": SCOPE,
         "id": f"source_{i:02d}",
         "name": f"Policy source {i:02d}",
@@ -36,14 +34,12 @@ def build_fixture():
         "reference": f"Policy volume {i:02d}",
     } for i in range(7)]
     domains = [{
-        "schema_version": 1,
         "scope_id": SCOPE,
         "id": f"domain_{i:02d}",
         "name": name,
         "description": f"Requirements and controls for {name.lower()}.",
     } for i, name in enumerate(domain_names)]
     requirements = [{
-        "schema_version": 1,
         "scope_id": SCOPE,
         "id": f"req_{i:03d}",
         "statement": (
@@ -58,7 +54,6 @@ def build_fixture():
         }],
     } for i in range(228)]
     resolutions = [{
-        "schema_version": 1,
         "scope_id": SCOPE,
         "id": f"res_{i:03d}",
         "title": f"Implementation decision {i:03d}",
@@ -68,7 +63,6 @@ def build_fixture():
         "review_on": None,
     } for i in range(165)]
     rules = [{
-        "schema_version": 1,
         "scope_id": SCOPE,
         "id": f"rule_{i:03d}",
         "rule_code": f"CTRL-{i:03d}",

@@ -50,7 +50,7 @@ fn validate<T: JsonSchema>(contract: Contract, value: &Value) {
 #[test]
 fn legacy_and_current_proposal_json_roundtrips_without_new_fields() {
     let legacy = json!({
-        "schema_version": 2, "scope_id": "default", "proposalId": "proposal_old",
+        "scope_id": "default", "proposalId": "proposal_old",
         "proposalKey": "overtime", "proposalType": "requirement_candidate",
         "title": "Overtime", "summary": "Clarify overtime.",
         "traceability": {
@@ -79,7 +79,7 @@ fn legacy_and_current_proposal_json_roundtrips_without_new_fields() {
 #[test]
 fn disposition_json_keeps_absent_and_null_external_action_distinct() {
     let without_action = json!({
-        "schema_version": 2, "scope_id": "default", "id": "disposition_one",
+        "scope_id": "default", "id": "disposition_one",
         "proposal_id": "proposal_a", "decision": "rejected", "rationale": "Reviewed",
         "actor": {"identity_type": "human", "id": "reviewer"}
     });
@@ -96,7 +96,7 @@ fn disposition_json_keeps_absent_and_null_external_action_distinct() {
         "an explicit null external_action is not a stored disposition shape"
     );
     let with_action = json!({
-        "schema_version": 2, "scope_id": "default", "id": "disposition_two",
+        "scope_id": "default", "id": "disposition_two",
         "proposal_id": "proposal_a", "decision": "accepted", "rationale": "Accepted",
         "actor": {"identity_type": "human", "id": "reviewer", "name": "Reviewer"},
         "canonical_artifact": {"artifact_type": "requirement", "artifact_id": "req_a"},
@@ -108,7 +108,7 @@ fn disposition_json_keeps_absent_and_null_external_action_distinct() {
 #[test]
 fn assertion_json_roundtrips_with_legacy_claim_ids() {
     let assertion = json!({
-        "schema_version": 2, "scope_id": "default", "id": "assertion_a",
+        "scope_id": "default", "id": "assertion_a",
         "proposal_id": "proposal_a", "synthesis_packet_id": "synthesis_a",
         "supporting_claim_ids": ["claim_a", "claim_b"]
     });

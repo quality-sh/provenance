@@ -1,7 +1,6 @@
 use super::super::*;
 use super::fixtures::open;
 use super::fixtures::*;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 const PROJECTION_TABLES: [&str; 8] = [
     "implementation_bindings",
@@ -83,22 +82,19 @@ pub fn seed_integration_shards(layout: &crate::layout::ProvenanceLayout, scope: 
     write(
         crate::shards::implementation_bindings_path(layout, &scope_id),
         &format!(
-            r#"{{"schema_version":{version},"scope_id":"{scope}","id":"bind_impl_a","rule_id":"rule_schads_pay_001","declared_by":"agent","file":"src/pay.rs","symbol":"pay"}}"#,
-            version = SUPPORTED_SCHEMA_VERSION.0
+            r#"{{"scope_id":"{scope}","id":"bind_impl_a","rule_id":"rule_schads_pay_001","declared_by":"agent","file":"src/pay.rs","symbol":"pay"}}"#
         ),
     );
     write(
         crate::shards::verification_bindings_path(layout, &scope_id),
         &format!(
-            r#"{{"schema_version":{version},"scope_id":"{scope}","id":"bind_ver_a","rule_id":"rule_schads_pay_001","key":"pay_examples","method":"examples","declared_by":"agent","file":"tests/pay.rs","symbol":"pay_works"}}"#,
-            version = SUPPORTED_SCHEMA_VERSION.0
+            r#"{{"scope_id":"{scope}","id":"bind_ver_a","rule_id":"rule_schads_pay_001","key":"pay_examples","method":"examples","declared_by":"agent","file":"tests/pay.rs","symbol":"pay_works"}}"#
         ),
     );
     write(
         crate::shards::requirement_reviews_path(layout, &scope_id),
         &format!(
-            r#"{{"schema_version":{version},"scope_id":"{scope}","id":"review_a","rule_id":"rule_schads_pay_001","requirement_id":"req_schads_overtime","field":"statement","before":"Overtime","after":"Overtime pay","changed_at":1}}"#,
-            version = SUPPORTED_SCHEMA_VERSION.0
+            r#"{{"scope_id":"{scope}","id":"review_a","rule_id":"rule_schads_pay_001","requirement_id":"req_schads_overtime","field":"statement","before":"Overtime","after":"Overtime pay","changed_at":1}}"#
         ),
     );
 }

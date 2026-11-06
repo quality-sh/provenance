@@ -1,4 +1,3 @@
-use super::aggregate_validation::{ensure_supported_schema_version, ASSERTION_KIND};
 use super::{validate_assertion_intrinsic, AssertionRecord, IdeationAggregate};
 use crate::model::{
     disposition_requires_prior_assertion, Contribution, DispositionRecord, IdeationEvidenceType,
@@ -22,7 +21,6 @@ pub(super) fn validate_assertions(
 ) -> anyhow::Result<()> {
     let mut asserted_proposals = BTreeSet::new();
     for assertion in aggregate.assertions {
-        ensure_supported_schema_version(ASSERTION_KIND, assertion.schema_version)?;
         validate_assertion_intrinsic(assertion)?;
         let proposal = proposals
             .get(assertion.proposal_id.as_str())

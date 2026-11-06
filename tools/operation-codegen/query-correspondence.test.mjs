@@ -16,7 +16,7 @@ const parameter = (name, required, schema = { type: 'string' }) => ({
 const object = properties => ({ type: 'object', additionalProperties: false, required: Object.keys(properties), properties });
 const success = kind => object({ data: object({ kind: { type: 'string', const: kind } }), meta: object({}) });
 const failure = kind => object({ error: object({ kind: { type: 'string', const: kind } }), meta: object({}) });
-const compatibility = { wire: 2, state: 1, review_journal: 1, read_derivation: 1 };
+const compatibility = { wire: 2, read_derivation: 1 };
 
 const document = {
   paths: {
@@ -46,8 +46,8 @@ const document = {
   components: { schemas: {
     MetadataSuccess: object({ data: object({
       compatibility: object({
-        wire: { type: 'integer' }, state: { type: 'integer' },
-        review_journal: { type: 'integer' }, read_derivation: { type: 'integer' },
+        wire: { type: 'integer' },
+        read_derivation: { type: 'integer' },
       }),
       repository: { type: ['string', 'null'] }, scope: { type: ['string', 'null'] },
     }), meta: object({}) }),
@@ -68,7 +68,7 @@ optionalDirectionOperation['x-provenance-query-variants'][1].parameters
   .find(parameter => parameter.name === 'direction').required = false;
 
 test('Promise generation overloads selectors and validates the selected contracts', () => {
-  const source = typescriptClient(document, { wire: 2, state: 1, review_journal: 1, read_derivation: 1 });
+  const source = typescriptClient(document, { wire: 2, read_derivation: 1 });
   assert.match(source, /export type GetRuleBaseInput = \{ "id": string; "query"\?: undefined \}/);
   assert.match(source, /export type GetRuleTraceInput = \{ "id": string; "query": 'trace'; "direction": string \}/);
   assert.match(source, /async getRule\(call: \{ "id": string; "query"\?: 'trace'; "direction"\?: string \}/);
@@ -78,7 +78,7 @@ test('Promise generation overloads selectors and validates the selected contract
 });
 
 test('Rust generation uses a closed query input and decodes the selected result', () => {
-  const files = rustClientFiles(document, { wire: 2, state: 1, review_journal: 1, read_derivation: 1 });
+  const files = rustClientFiles(document, { wire: 2, read_derivation: 1 });
   const source = files['operations/get_rule.rs'];
   const operationFailures = files['operation_failures.rs'];
   assert.match(source, /pub enum GetRuleInput<'a>/);

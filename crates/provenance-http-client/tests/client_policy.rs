@@ -19,12 +19,11 @@ use std::{
 type Reply = Box<dyn FnOnce(&mut TcpStream) + Send>;
 
 fn metadata() -> String {
-    let (wire, state, review_journal, read_derivation) = COMPATIBILITY;
+    let (wire, read_derivation) = COMPATIBILITY;
     json!({
         "data": {
             "compatibility": {
-                "wire": wire, "state": state,
-                "review_journal": review_journal, "read_derivation": read_derivation
+                "wire": wire, "read_derivation": read_derivation
             },
             "package": {"name": "fixture", "version": "0"},
             "repository": "fixture", "scope": "default"

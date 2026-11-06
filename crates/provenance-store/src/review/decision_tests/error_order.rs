@@ -3,7 +3,7 @@
 //! Dispositions shard. The review state reads the Withdrawals first.
 use super::*;
 
-/// Writes one line of an unsupported schema version to each shard.
+/// Writes one line that holds the removed `retired` field to each shard.
 fn corrupt_withdrawals_and_dispositions(store: &StateStore) {
     let ideation = store.layout.state_dir().join("scopes/default/ideation");
     std::fs::create_dir_all(&ideation).unwrap();
@@ -13,7 +13,7 @@ fn corrupt_withdrawals_and_dispositions(store: &StateStore) {
     ] {
         std::fs::write(
             ideation.join(shard),
-            format!("{}\n", json!({"schema_version":999,"id":id})),
+            format!("{}\n", json!({"id":id,"retired":true})),
         )
         .unwrap();
     }

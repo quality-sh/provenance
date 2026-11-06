@@ -15,7 +15,7 @@ use provenance_core::{
         TypedSourceInput,
     },
     ArtifactLink, ArtifactLinkTargetType, NodeType, QuestionStatus, ResolutionMethod,
-    ResolutionStatus, ScopeId, SourceReference, StableId, TopicStatus, SUPPORTED_SCHEMA_VERSION,
+    ResolutionStatus, ScopeId, SourceReference, StableId, TopicStatus,
 };
 
 const OWNER: &str = "spec://review/typed";
@@ -26,7 +26,7 @@ fn fixture() -> (tempfile::TempDir, StateStore, ScopeId) {
     std::fs::create_dir_all(layout.state_dir()).unwrap();
     std::fs::write(
         layout.manifest_path(),
-        r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}]}"#,
+        r#"{"scopes":[{"id":"default","path_prefix":"."}]}"#,
     )
     .unwrap();
     (
@@ -38,7 +38,6 @@ fn fixture() -> (tempfile::TempDir, StateStore, ScopeId) {
 
 fn document(source_name: &str, requirement: &str, rule: &str) -> TypedSpecInput {
     TypedSpecInput {
-        schema_version: SUPPORTED_SCHEMA_VERSION.0,
         spec: "review".into(),
         declared_by: OWNER.into(),
         adopt_unowned: Vec::new(),
@@ -256,7 +255,6 @@ fn typed_omission_refuses_enrolled_deletion() {
     let records = submitted_typed_records(&store, &scope);
     let before = std::fs::read(shards::requirements_path(&store.layout, &scope)).unwrap();
     let empty = TypedSpecInput {
-        schema_version: SUPPORTED_SCHEMA_VERSION.0,
         spec: "review".into(),
         declared_by: OWNER.into(),
         adopt_unowned: Vec::new(),

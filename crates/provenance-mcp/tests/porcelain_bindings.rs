@@ -170,7 +170,7 @@ fn record_fixture_adds_a_scope_without_reusing_repository_ids() {
 #[verifies("rule_porcelain_mcp_readable_structured", examples)]
 fn mcp_readable_get_warns_when_the_record_or_view_is_stale() {
     let record = serde_json::from_value(json!({
-        "node_type": "requirement", "schema_version": 2, "scope_id": "default",
+        "node_type": "requirement", "scope_id": "default",
         "id": "req_stale", "statement": "Keep the graph typed.", "status": "active"
     }))
     .unwrap();

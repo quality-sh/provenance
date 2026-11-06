@@ -1,5 +1,4 @@
 use assert_cmd::Command;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 #[path = "export_fixture_support/mod.rs"]
 mod export_fixture_support;
@@ -112,7 +111,6 @@ fn import_export_roundtrip_preserves_enriched_v1_cloud_fields() {
         serde_json::json!({
           "scope": "default",
           "sources": [{
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": "source_sah",
             "name": "Support at Home",
@@ -121,7 +119,6 @@ fn import_export_roundtrip_preserves_enriched_v1_cloud_fields() {
             "reference": "Department guidance"
           }],
           "requirements": [{
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": "req_sah",
             "statement": "Support at Home shall be traceable",
@@ -130,7 +127,6 @@ fn import_export_roundtrip_preserves_enriched_v1_cloud_fields() {
             "source_refs": [{"source_id": "source_sah", "clause": "Program overview"}]
           }],
           "resolutions": [{
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": "res_sah",
             "title": "SAH extraction",
@@ -144,7 +140,6 @@ fn import_export_roundtrip_preserves_enriched_v1_cloud_fields() {
             "confidence": 0.91
           }],
           "rules": [{
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": "rule_sah_001",
             "name": "SAH rule",
@@ -196,10 +191,7 @@ fn import_export_roundtrip_preserves_enriched_v1_cloud_fields() {
         .success();
 
     let exported = std::fs::read_to_string(export_path).unwrap();
-    assert!(exported.contains(&format!(
-        r#""schema_version": {}"#,
-        SUPPORTED_SCHEMA_VERSION.0
-    )));
+    assert!(!exported.contains("schema_version"));
     assert!(exported.contains(r#""source_type": "legislation""#));
     assert!(exported.contains(r#""status": "discovery""#));
     assert!(exported.contains(r#""status": "draft""#));

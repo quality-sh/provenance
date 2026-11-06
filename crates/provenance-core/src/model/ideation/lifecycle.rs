@@ -1,7 +1,7 @@
 use super::{DispositionDecision, PromotionState, ProposalType};
 use crate::model::{
-    validate_optional_confidence_score, Contribution, DispositionRecord, ProposalCard,
-    SchemaVersion, ScopeId, StableId, SynthesisPacket,
+    validate_optional_confidence_score, Contribution, DispositionRecord, ProposalCard, ScopeId,
+    StableId, SynthesisPacket,
 };
 use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
@@ -12,9 +12,7 @@ mod assertion_validation;
 mod legacy_validation;
 mod lineage_validation;
 
-pub use aggregate_validation::{
-    ensure_supported_schema_version, validate_disposition_admissible, SUPPORTED_SCHEMA_VERSION,
-};
+pub use aggregate_validation::validate_disposition_admissible;
 pub use assertion_validation::packet_qualifies_proposal;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -40,7 +38,6 @@ impl AssertionId {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct AssertionRecord {
-    pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: AssertionId,
     pub proposal_id: StableId,
@@ -296,7 +293,7 @@ mod tests {
 
     fn proposal(id: &str) -> ProposalCard {
         serde_json::from_value(json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": id, "proposal_key": id,
+            "scope_id": "default", "id": id, "proposal_key": id,
             "proposal_type": "question", "title": id, "summary": id,
             "traceability": {
                 "target": {"artifact_type": "requirement", "artifact_id": "req_a"},
@@ -309,7 +306,7 @@ mod tests {
 
     fn assertion_for(proposal_id: &str) -> AssertionRecord {
         serde_json::from_value(json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default",
+            "scope_id": "default",
             "id": format!("assertion_{proposal_id}"), "proposal_id": proposal_id,
             "synthesis_packet_id": "synthesis_a", "supporting_claim_ids": ["claim_a"]
         }))
@@ -318,7 +315,7 @@ mod tests {
 
     fn disposition_for(proposal_id: &str, decision: &str) -> DispositionRecord {
         serde_json::from_value(json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default",
+            "scope_id": "default",
             "id": format!("disposition_{proposal_id}"), "proposal_id": proposal_id,
             "decision": decision, "rationale": "Reviewed",
             "actor": {"identity_type": "human", "id": "reviewer"}

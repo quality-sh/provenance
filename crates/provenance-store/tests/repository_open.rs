@@ -141,7 +141,6 @@ fn apply_through_the_handle_lands_in_the_selected_scope() {
     let (dir, layout) = two_scope_repository();
     let repository = Repository::open(dir.path(), "b").unwrap();
     let input: provenance_store::state_store::TypedSpecInput = serde_json::from_value(json!({
-        "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
         "spec": "scoped",
         "declared_by": "spec://rust",
         "requirements": [{"key": "sharing", "statement": "Users can share documentation"}]

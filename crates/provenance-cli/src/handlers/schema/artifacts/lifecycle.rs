@@ -5,9 +5,8 @@ pub(in crate::handlers::schema) fn assertion_schema() -> Value {
         "title": "Assertion",
         "type": "object",
         "additionalProperties": false,
-        "required": ["schema_version", "scope_id", "id", "proposal_id", "synthesis_packet_id", "supporting_claim_ids"],
+        "required": ["scope_id", "id", "proposal_id", "synthesis_packet_id", "supporting_claim_ids"],
         "properties": {
-            "schema_version": {"const": 1},
             "scope_id": {"$ref": "#/$defs/scopeId"},
             "id": {"$ref": "#/$defs/stableId"},
             "proposal_id": {"$ref": "#/$defs/stableId"},
@@ -22,7 +21,7 @@ pub(in crate::handlers::schema) fn disposition_schema() -> Value {
         "title": "Disposition",
         "type": "object",
         "additionalProperties": false,
-        "required": ["schema_version", "scope_id", "id", "proposal_id", "decision", "actor"],
+        "required": ["scope_id", "id", "proposal_id", "decision", "actor"],
         "allOf": [{
             "if": {"properties": {"decision": {"const": "rejected"}}},
             "then": {
@@ -31,7 +30,6 @@ pub(in crate::handlers::schema) fn disposition_schema() -> Value {
             }
         }],
         "properties": {
-            "schema_version": {"const": 1},
             "scope_id": {"$ref": "#/$defs/scopeId"},
             "id": {"$ref": "#/$defs/stableId"},
             "proposal_id": {"$ref": "#/$defs/stableId"},

@@ -5,15 +5,11 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct CompatibilityTuple {
     pub wire: u32,
-    pub state: u32,
-    pub review_journal: u32,
     pub read_derivation: u32,
 }
 
 pub const COMPATIBILITY: CompatibilityTuple = CompatibilityTuple {
     wire: super::SDK_PROTOCOL_VERSION,
-    state: crate::SUPPORTED_SCHEMA_VERSION.0,
-    review_journal: crate::review::REVIEW_SCHEMA_VERSION.0,
     read_derivation: 3,
 };
 

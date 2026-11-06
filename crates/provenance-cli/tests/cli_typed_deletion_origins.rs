@@ -28,7 +28,7 @@ fn provenance(repo: &Path, args: &[&str], input: Option<Value>) -> Value {
 
 fn spec(sources: &Value) -> Value {
     json!({
-        "schema_version": 2, "spec": "fx", "declared_by": "spec://fx",
+        "spec": "fx", "declared_by": "spec://fx",
         "sources": sources, "requirements": []
     })
 }

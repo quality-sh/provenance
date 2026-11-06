@@ -1,6 +1,5 @@
 use super::{super::initialized_store, proposal_input};
 use crate::state_store::CreateDispositionInput;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
     CanonicalArtifact, CanonicalArtifactType, DispositionActor, DispositionDecision,
     ExternalActionCorrelation, IdentityType, PromotionState, ScopeId, StableId,
@@ -112,12 +111,12 @@ fn direct_disposition_rejects_wrong_kind_and_wrong_scope_targets() {
         if artifact_id == "artifact_collision" {
             write_jsonl(
                 &state.join("scopes/default/requirements/req.jsonl"),
-                serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"artifact_collision","statement":"Collision","status":"active"}).to_string(),
+                serde_json::json!({"scope_id":"default","id":"artifact_collision","statement":"Collision","status":"active"}).to_string(),
             );
         } else {
             write_jsonl(
                 &state.join("scopes/other/requirements/req.jsonl"),
-                serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"other","id":"req_other","statement":"Other","status":"active"}).to_string(),
+                serde_json::json!({"scope_id":"other","id":"req_other","statement":"Other","status":"active"}).to_string(),
             );
         }
 
@@ -185,7 +184,7 @@ fn scope_validation_rejects_a_persisted_missing_canonical_artifact() {
         .unwrap();
     write_jsonl(
         &crate::shards::dispositions_path(&store.layout, &scope),
-        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"disposition_artifact","proposal_id":"proposal_artifact","decision":"rejected","rationale":"Reviewed","actor":{"identity_type":"human","id":"reviewer"},"canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_missing"}}).to_string(),
+        serde_json::json!({"scope_id":"default","id":"disposition_artifact","proposal_id":"proposal_artifact","decision":"rejected","rationale":"Reviewed","actor":{"identity_type":"human","id":"reviewer"},"canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_missing"}}).to_string(),
     );
 
     let error = store
@@ -215,11 +214,11 @@ fn scope_validation_rejects_a_misfiled_canonical_artifact() {
             .layout
             .state_dir()
             .join("scopes/default/requirements/req.jsonl"),
-        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"other","id":"artifact_misfiled","statement":"Misfiled","status":"active"}).to_string(),
+        serde_json::json!({"scope_id":"other","id":"artifact_misfiled","statement":"Misfiled","status":"active"}).to_string(),
     );
     write_jsonl(
         &crate::shards::dispositions_path(&store.layout, &scope),
-        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"disposition_artifact","proposal_id":"proposal_artifact","decision":"rejected","rationale":"Reviewed","actor":{"identity_type":"human","id":"reviewer"},"canonical_artifact":{"artifact_type":"requirement","artifact_id":"artifact_misfiled"}}).to_string(),
+        serde_json::json!({"scope_id":"default","id":"disposition_artifact","proposal_id":"proposal_artifact","decision":"rejected","rationale":"Reviewed","actor":{"identity_type":"human","id":"reviewer"},"canonical_artifact":{"artifact_type":"requirement","artifact_id":"artifact_misfiled"}}).to_string(),
     );
 
     let error = store
@@ -250,11 +249,11 @@ fn batch_rejects_a_misfiled_canonical_artifact_without_landing() {
             .layout
             .state_dir()
             .join("scopes/default/requirements/req.jsonl"),
-        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"other","id":"artifact_misfiled","statement":"Misfiled","status":"active"}).to_string(),
+        serde_json::json!({"scope_id":"other","id":"artifact_misfiled","statement":"Misfiled","status":"active"}).to_string(),
     );
     let batch = serde_json::from_value(serde_json::json!({
         "dispositions": [{
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "disposition_artifact",
+            "scope_id": "default", "id": "disposition_artifact",
             "proposal_id": "proposal_artifact", "decision": "rejected", "rationale": "Reviewed",
             "actor": {"identity_type": "human", "id": "reviewer"},
             "canonical_artifact": {"artifact_type": "requirement", "artifact_id": "artifact_misfiled"}
@@ -287,7 +286,7 @@ fn duplicate_disposition_cannot_mutate_frozen_external_action() {
             .layout
             .state_dir()
             .join("scopes/default/requirements/req.jsonl"),
-        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"req_existing","statement":"Existing","status":"active"}).to_string(),
+        serde_json::json!({"scope_id":"default","id":"req_existing","statement":"Existing","status":"active"}).to_string(),
     );
     store
         .create_proposal_card(proposal_input(
@@ -428,35 +427,35 @@ fn canonical_records(scope: &str) -> [(&'static str, String); 8] {
     [
         (
             "source",
-            serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":scope,"id":"artifact_test","name":"Test","source_type":"document","url":null}).to_string(),
+            serde_json::json!({"scope_id":scope,"id":"artifact_test","name":"Test","source_type":"document","url":null}).to_string(),
         ),
         (
             "requirement",
-            serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":scope,"id":"artifact_test","statement":"Test","status":"active"}).to_string(),
+            serde_json::json!({"scope_id":scope,"id":"artifact_test","statement":"Test","status":"active"}).to_string(),
         ),
         (
             "resolution",
-            serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":scope,"id":"artifact_test","title":"Test","position":"Test","rationale":"Test","status":"approved","inputs":[],"review_on":null}).to_string(),
+            serde_json::json!({"scope_id":scope,"id":"artifact_test","title":"Test","position":"Test","rationale":"Test","status":"approved","inputs":[],"review_on":null}).to_string(),
         ),
         (
             "rule",
-            serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":scope,"id":"artifact_test","statement":"Test","status":"draft","severity":"high"}).to_string(),
+            serde_json::json!({"scope_id":scope,"id":"artifact_test","statement":"Test","status":"draft","severity":"high"}).to_string(),
         ),
         (
             "domain",
-            serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":scope,"id":"artifact_test","name":"Test"}).to_string(),
+            serde_json::json!({"scope_id":scope,"id":"artifact_test","name":"Test"}).to_string(),
         ),
         (
             "boundary",
-            serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":scope,"id":"artifact_test","requirement_id":"requirement_test","statement":"Test"}).to_string(),
+            serde_json::json!({"scope_id":scope,"id":"artifact_test","requirement_id":"requirement_test","statement":"Test"}).to_string(),
         ),
         (
             "topic",
-            serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":scope,"id":"artifact_test","requirement_id":"requirement_test","title":"Test","status":"open","links":[]}).to_string(),
+            serde_json::json!({"scope_id":scope,"id":"artifact_test","requirement_id":"requirement_test","title":"Test","status":"open","links":[]}).to_string(),
         ),
         (
             "question",
-            serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":scope,"id":"artifact_test","topic_id":"topic_test","requirement_id":"requirement_test","question":"Test?","resolution_method":"research","status":"open","links":[]}).to_string(),
+            serde_json::json!({"scope_id":scope,"id":"artifact_test","topic_id":"topic_test","requirement_id":"requirement_test","question":"Test?","resolution_method":"research","status":"open","links":[]}).to_string(),
         ),
     ]
 }

@@ -55,7 +55,7 @@ fn discussion_keywords_share_the_target_action_declaration() {
 #[tokio::test]
 async fn parent_selection_uses_the_record_resolver() {
     let record: GraphNode = serde_json::from_value(serde_json::json!({
-        "node_type":"requirement", "schema_version":2, "scope_id":"default",
+        "node_type":"requirement", "scope_id":"default",
         "id":"req_live", "statement":"The target exists.", "status":"active"
     }))
     .unwrap();
@@ -105,7 +105,7 @@ async fn create_uses_declared_kind_without_resolving_a_record() {
 #[tokio::test]
 async fn existing_action_resolves_kind_and_preserves_missing_identity() {
     let record: GraphNode = serde_json::from_value(serde_json::json!({
-        "node_type":"requirement", "schema_version":2, "scope_id":"default",
+        "node_type":"requirement", "scope_id":"default",
         "id":"req_live", "statement":"The target exists.", "status":"active"
     }))
     .unwrap();
