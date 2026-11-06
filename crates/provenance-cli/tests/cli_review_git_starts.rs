@@ -124,43 +124,46 @@ fn review_host_starts_git_once_per_value_that_can_change() {
     assert_eq!(history(&host, "req_review"), edited);
     steps.record("history read after the restart");
 
+    assert_eq!(steps.seen, expected_starts());
+}
+
+/// The Git subcommands that each step of
+/// `review_host_starts_git_once_per_value_that_can_change` starts, in order.
+fn expected_starts() -> Vec<(&'static str, Vec<String>)> {
     let first_read = ["--version", "rev-parse", "log", "cat-file", "cat-file"];
     let reviewer_read = ["config", "config"];
-    assert_eq!(
-        steps.seen,
-        expected(&[
-            ("host start", &[]),
-            ("first page load", &reviewer_read),
-            ("four later page loads", &[]),
-            ("decision", &[]),
-            ("comment", &[]),
-            ("first edit", &["rev-parse"]),
-            ("second edit", &["rev-parse"]),
-            ("first history read", &first_read),
-            (
-                "two history reads at the same HEAD",
-                &["rev-parse", "rev-parse"]
-            ),
-            (
-                "history read after HEAD moves",
-                &["rev-parse", "log", "cat-file", "cat-file"]
-            ),
-            ("working tree edit", &["rev-parse"]),
-            ("history read after the working tree edit", &["rev-parse"]),
-            (
-                "history read of a second Requirement",
-                &["rev-parse", "cat-file"]
-            ),
-            (
-                "history read of the first Requirement again",
-                &["rev-parse", "cat-file"]
-            ),
-            ("configuration read after an identity change", &[]),
-            ("host restart", &[]),
-            ("configuration read after the restart", &reviewer_read),
-            ("history read after the restart", &first_read),
-        ])
-    );
+    expected(&[
+        ("host start", &[]),
+        ("first page load", &reviewer_read),
+        ("four later page loads", &[]),
+        ("decision", &[]),
+        ("comment", &[]),
+        ("first edit", &["rev-parse"]),
+        ("second edit", &["rev-parse"]),
+        ("first history read", &first_read),
+        (
+            "two history reads at the same HEAD",
+            &["rev-parse", "rev-parse"],
+        ),
+        (
+            "history read after HEAD moves",
+            &["rev-parse", "log", "cat-file", "cat-file"],
+        ),
+        ("working tree edit", &["rev-parse"]),
+        ("history read after the working tree edit", &["rev-parse"]),
+        (
+            "history read of a second Requirement",
+            &["rev-parse", "cat-file"],
+        ),
+        (
+            "history read of the first Requirement again",
+            &["rev-parse", "cat-file"],
+        ),
+        ("configuration read after an identity change", &[]),
+        ("host restart", &[]),
+        ("configuration read after the restart", &reviewer_read),
+        ("history read after the restart", &first_read),
+    ])
 }
 
 #[test]
