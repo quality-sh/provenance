@@ -12,9 +12,11 @@ pub const GLOBAL_OPTIONS: &[Field] = &[
     Field::switch("quiet"),
 ];
 
-/// The CLI's own options of get. They change what the terminal does with the answer,
-/// not the answer: `follow` keeps the command open and prints each new review document,
-/// and `no_open` prints the review link and does not open a browser.
+/// The CLI's own options of get.
+///
+/// They change what the terminal does with the answer, not the answer: `follow` keeps
+/// the command open and prints each new review document, and `no_open` prints the
+/// review link and does not open a browser.
 pub const GET_OPTIONS: &[Field] = &[
     Field::switch("follow")
         .doc("Stream the current review document and pushed changes as JSON lines."),

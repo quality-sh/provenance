@@ -7,7 +7,8 @@ use provenance_macros::rule;
 use provenance_porcelain::action::render_readable;
 use provenance_porcelain::registry::Command;
 use provenance_transport::porcelain::{
-    target_call, Action, ActionError, ParentReplacement, ReplacementError, TargetRoute,
+    replacement_call, target_call, Action, ActionError, ParentReplacement, ReplacementError,
+    TargetRoute,
 };
 use provenance_transport::StatementHost;
 use rmcp::model::{CallToolResult, ContentBlock};
@@ -226,11 +227,17 @@ pub async fn call(
     {
         return refusal(field, "invalid_value", &relation.message());
     }
-    let schema = needed_now(
+    let mut schema = needed_now(
         kind_schema(action, route.kind, route.definition),
         route.definition,
         &arguments,
     );
+    if replace_parent.is_some() {
+        // A replacement reads the record and guards each write with the ETag it read.
+        if let Some(required) = schema["required"].as_array_mut() {
+            required.retain(|name| name != "if_match");
+        }
+    }
     if let Some(refused) = field_refusal(action, route.kind, &schema, &arguments) {
         return refused;
     }
@@ -265,8 +272,14 @@ async fn write(
     request: &Value,
     (replace_parent, with_parent): (Option<Value>, Option<Value>),
 ) -> Result<(Result<Value, ErasedFailure>, Option<String>), CallToolResult> {
-    let (data, query, headers) = target_call(route.definition, request, &route.target)
-        .map_err(crate::surface::failure_result)?;
+    let replacing = replace_parent.is_some() || with_parent.is_some();
+    let split = if replacing {
+        replacement_call
+    } else {
+        target_call
+    };
+    let (data, query, headers) =
+        split(route.definition, request, &route.target).map_err(crate::surface::failure_result)?;
     if let Some(name) = query.keys().next() {
         let message = format!(
             "the {} action on a {} record does not take {name}",

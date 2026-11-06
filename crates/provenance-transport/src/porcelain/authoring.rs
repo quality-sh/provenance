@@ -107,6 +107,25 @@ pub fn target_call(
     value: &Value,
     target: &str,
 ) -> Result<(Value, BTreeMap<String, String>, HeaderMap), ErasedFailure> {
+    split_call(definition, value, target, true)
+}
+
+/// `target_call` for a parent replacement, which reads the record and guards each write
+/// with the ETag that it read when the call gives no `if_match`.
+pub fn replacement_call(
+    definition: &'static Definition,
+    value: &Value,
+    target: &str,
+) -> Result<(Value, BTreeMap<String, String>, HeaderMap), ErasedFailure> {
+    split_call(definition, value, target, false)
+}
+
+fn split_call(
+    definition: &'static Definition,
+    value: &Value,
+    target: &str,
+    guarded: bool,
+) -> Result<(Value, BTreeMap<String, String>, HeaderMap), ErasedFailure> {
     let mut path: BTreeMap<String, String> = definition
         .registration
         .request
@@ -139,7 +158,9 @@ pub fn target_call(
             parameter.name.to_owned()
         };
         let value = arguments.remove(&mcp_name);
-        if parameter.required && value.is_none() {
+        let guard =
+            parameter.location == "header" && parameter.name.eq_ignore_ascii_case("if-match");
+        if parameter.required && value.is_none() && (guarded || !guard) {
             return Err(invalid());
         }
         let Some(value) = value else { continue };

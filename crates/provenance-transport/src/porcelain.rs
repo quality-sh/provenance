@@ -8,7 +8,7 @@ mod host;
 mod parent_replacement;
 mod search_port;
 pub use api_port::HostApiPort;
-pub use authoring::{target_call, Action, ActionError, TargetRoute};
+pub use authoring::{replacement_call, target_call, Action, ActionError, TargetRoute};
 pub use discussion_port::HostDiscussionPort;
 pub use get_port::HostGetPort;
 pub use host::HostPorcelain;
