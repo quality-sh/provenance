@@ -25,7 +25,7 @@ fn scope() -> ScopeId {
 /// Commits the saved graph state and returns the commit id.
 fn commit(repo: &Repository) -> String {
     let git = |args: &[&str]| {
-        let output = std::process::Command::new("git")
+        let output = provenance_store::git_process::git()
             .args([
                 "-c",
                 "user.name=Reviewer",

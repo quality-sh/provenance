@@ -13,7 +13,7 @@ fn missing_promised_blob_never_starts_a_remote_helper() {
     let dir = tempfile::tempdir().unwrap();
     let root = Utf8Path::from_path(dir.path()).unwrap();
     let git = |args: &[&str]| {
-        let output = Command::new("git")
+        let output = crate::git_process::git()
             .args([
                 "-c",
                 "user.name=Fixture",
@@ -55,7 +55,7 @@ fn missing_promised_blob_never_starts_a_remote_helper() {
         "read attempted an implicit object fetch"
     );
     // Prove that this fixture would invoke the helper without the safe command seam.
-    let output = Command::new("git")
+    let output = crate::git_process::git()
         .args(["show", &format!("{head}:code.rs")])
         .current_dir(root)
         .output()

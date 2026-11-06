@@ -325,7 +325,7 @@ fn the_check_findings_equal_the_rule_write_refusal() {
 }
 
 fn git(repo: &Path, arguments: &[&str]) {
-    let output = std::process::Command::new("git")
+    let output = provenance_store::git_process::git()
         .current_dir(repo)
         .args(arguments)
         .output()

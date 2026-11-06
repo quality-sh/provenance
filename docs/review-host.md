@@ -289,9 +289,11 @@ authenticated request. It keeps the manifest order. If the manifest has no
 configured disposition actors, this field is an empty list. The response does
 not contain the bearer credential.
 
-`reviewer` identifies the person who runs the host. The host reads it for each
-authenticated request. `reviewer.actorId` is the value of the Git configuration
-key `provenance.reviewer`, read from the repository directory. Each person sets
+`reviewer` identifies the person who runs the host. The host reads it from Git
+at the first authenticated request and keeps it until the host stops. After a
+change to the Git configuration, restart the host. `reviewer.actorId` is the
+value of the Git configuration key `provenance.reviewer`, read from the
+repository directory. Each person sets
 this key in their own Git configuration, for example with
 `git config --global provenance.reviewer maintainer`. If the key is not set, the
 value is the Git identity: `user.email`, else `user.name`, converted to an actor

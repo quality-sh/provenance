@@ -10,7 +10,6 @@ use anyhow::Context;
 use camino::Utf8Path;
 use provenance_core::{Requirement, Resolution, Rule, ScopeId, Source};
 use std::collections::{BTreeMap, BTreeSet};
-use std::process::Command;
 
 #[cfg(test)]
 mod tests;
@@ -53,7 +52,7 @@ fn read_shard<T: serde::de::DeserializeOwned>(
     role: CommitRole,
 ) -> anyhow::Result<Option<Vec<T>>> {
     let path = format!(".provenance/state/scopes/{}/{}", scope.as_str(), shard);
-    let listing = Command::new("git")
+    let listing = provenance_store::git_process::git()
         .current_dir(repo)
         .args(["ls-tree", "--name-only", commit, "--", &path])
         .output()?;
@@ -66,7 +65,7 @@ fn read_shard<T: serde::de::DeserializeOwned>(
         return Ok(None);
     }
     let object = format!("{commit}:{path}");
-    let output = Command::new("git")
+    let output = provenance_store::git_process::git()
         .current_dir(repo)
         .args(["show", &object])
         .output()?;

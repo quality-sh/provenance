@@ -91,7 +91,7 @@ fn a_scan_of_ignored_source_files_has_no_commit_pin() {
 }
 
 fn run_git<const N: usize>(args: [&str; N]) {
-    let output = std::process::Command::new("git")
+    let output = provenance_store::git_process::git()
         .args(args)
         .output()
         .unwrap();
@@ -103,7 +103,7 @@ fn run_git<const N: usize>(args: [&str; N]) {
 }
 
 fn git_stdout<const N: usize>(args: [&str; N]) -> String {
-    let output = std::process::Command::new("git")
+    let output = provenance_store::git_process::git()
         .args(args)
         .output()
         .unwrap();

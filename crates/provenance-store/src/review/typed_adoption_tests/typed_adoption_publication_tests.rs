@@ -1,8 +1,7 @@
 use super::*;
-use std::process::Command;
 
 fn git(root: &std::path::Path, arguments: &[&str]) -> String {
-    let output = Command::new("git")
+    let output = crate::git_process::git()
         .args(arguments)
         .current_dir(root)
         .output()

@@ -1,9 +1,8 @@
 use super::support::Fixture;
 use serde_json::{json, Value};
-use std::process::Command;
 
 fn git(fixture: &Fixture, args: &[&str]) -> String {
-    let output = Command::new("git")
+    let output = provenance_store::git_process::git()
         .current_dir(fixture.dir.path())
         .args(args)
         .output()

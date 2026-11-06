@@ -70,7 +70,7 @@ fn commit_all(repo: &Path) {
             "start",
         ],
     ] {
-        let status = std::process::Command::new("git")
+        let status = provenance_store::git_process::git()
             .current_dir(repo)
             .args(args)
             .status()
