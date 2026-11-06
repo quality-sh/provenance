@@ -154,66 +154,65 @@ async fn run_repository(
         );
     };
     let arguments = Value::Object(arguments);
+    // The typed input of the command, its result, and the readable line of the result.
+    macro_rules! run {
+        ($method:ident, $render:path) => {
+            match serde_json::from_value(arguments) {
+                Ok(input) => match work.$method(input).await {
+                    Ok(output) => readable(
+                        serde_json::to_value(&output).expect("a repository result is JSON"),
+                        $render(&output),
+                    ),
+                    Err(error) => failed(&*error),
+                },
+                Err(error) => invalid(&error),
+            }
+        };
+    }
     match command {
-        Command::Repository(RepositoryCommand::Materialize) => match parsed(arguments) {
-            Ok(input) => done(work.materialize(input).await, materialize::render_readable),
-            Err(refused) => refused,
-        },
-        Command::Repository(RepositoryCommand::Import) => match parsed(arguments) {
-            Ok(input) => done(work.import(input).await, import::render_readable),
-            Err(refused) => refused,
-        },
-        Command::Repository(RepositoryCommand::DictionaryImport) => match parsed(arguments) {
-            Ok(input) => done(
-                work.dictionary_import(input).await,
-                dictionary::render_import_readable,
-            ),
-            Err(refused) => refused,
-        },
-        Command::Graph(GraphCommand::SwarmBacktraceLand) => match parsed(arguments) {
-            Ok(input) => done(
-                work.swarm_backtrace_land(input).await,
-                swarm_backtrace::render_readable,
-            ),
-            Err(refused) => refused,
-        },
+        Command::Repository(RepositoryCommand::Materialize) => {
+            run!(materialize, materialize::render_readable)
+        }
+        Command::Repository(RepositoryCommand::Import) => run!(import, import::render_readable),
+        Command::Repository(RepositoryCommand::DictionaryImport) => {
+            run!(dictionary_import, dictionary::render_import_readable)
+        }
+        Command::Graph(GraphCommand::SwarmBacktraceLand) => {
+            run!(swarm_backtrace_land, swarm_backtrace::render_readable)
+        }
         other => panic!("{other:?} is not a change action"),
     }
 }
 
-/// The typed input of one repository command, or the refusal that names the bad value.
-fn parsed<T: serde::de::DeserializeOwned>(arguments: Value) -> Result<T, CallToolResult> {
-    serde_json::from_value(arguments).map_err(|error| {
-        crate::surface::detail_error(json!({
-            "kind": "invalid_input",
-            "field": null,
-            "reason": "invalid_value",
-            "message": error.to_string(),
-        }))
-    })
+/// The refusal of arguments that do not give the typed input.
+fn invalid(error: &serde_json::Error) -> CallToolResult {
+    crate::surface::detail_error(json!({
+        "kind": "invalid_input",
+        "field": null,
+        "reason": "invalid_value",
+        "message": error.to_string(),
+    }))
 }
 
-/// The result of one repository command. A host refusal keeps its kind; each other
-/// failure is `operation_failed` with the reasons in its message.
-fn done<T: serde::Serialize>(
-    outcome: anyhow::Result<T>,
-    render: fn(&T) -> String,
-) -> CallToolResult {
-    match outcome {
-        Ok(output) => {
-            let mut result = CallToolResult::structured(
-                serde_json::to_value(&output).expect("a repository result is JSON"),
-            );
-            result.content = vec![rmcp::model::ContentBlock::text(render(&output))];
-            result
-        }
-        Err(error) => {
-            let mut detail = error.downcast_ref::<OperationFailure>().map_or_else(
-                || json!({"kind": "operation_failed"}),
-                |failure| serde_json::to_value(failure).expect("a failure is JSON"),
-            );
-            detail["message"] = json!(format!("{error:#}"));
-            crate::surface::detail_error(detail)
-        }
+fn readable(structured: Value, text: String) -> CallToolResult {
+    let mut result = CallToolResult::structured(structured);
+    result.content = vec![rmcp::model::ContentBlock::text(text)];
+    result
+}
+
+/// The failure of one repository command. A host refusal keeps its kind; each other
+/// failure is `operation_failed`. The message names each cause.
+fn failed(error: &(dyn std::error::Error + Send + Sync + 'static)) -> CallToolResult {
+    let mut detail = error.downcast_ref::<OperationFailure>().map_or_else(
+        || json!({"kind": "operation_failed"}),
+        |failure| serde_json::to_value(failure).expect("a failure is JSON"),
+    );
+    let mut message = error.to_string();
+    let mut cause = error.source();
+    while let Some(next) = cause {
+        message = format!("{message}: {next}");
+        cause = next.source();
     }
+    detail["message"] = json!(message);
+    crate::surface::detail_error(detail)
 }
