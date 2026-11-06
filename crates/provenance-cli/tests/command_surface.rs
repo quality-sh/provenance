@@ -162,7 +162,7 @@ async fn shared_commands_have_one_name_and_target_form() {
         }
         let tool = match place {
             Place::Tool => declaration.name,
-            Place::Action { tool } | Place::Category { tool } => tool,
+            Place::Action { tool } | Place::Category { tool } => *tool,
         };
         let properties = properties(&tools[tool]["inputSchema"]);
         let mcp_target = TARGET_FIELDS
