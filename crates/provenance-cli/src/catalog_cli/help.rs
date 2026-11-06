@@ -131,4 +131,4 @@ pub fn required_discussion_flags(
 }
 
 const QUESTION_GUIDANCE: &str =
-    "A question should be resolvable in one agent session;\notherwise it is fog or needs decomposition.";
+    "A question should be resolvable in one agent session;\notherwise split it into smaller Questions.";

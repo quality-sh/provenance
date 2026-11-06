@@ -270,7 +270,7 @@ fn root_skill_sources_are_checked_out_with_lf() {
         "provenance-swarm-backtrace",
     ] {
         let path = format!("skills/{skill}/SKILL.md");
-        let output = Command::new("git")
+        let output = provenance_store::git_process::git()
             .args(["check-attr", "eol", "--", &path])
             .current_dir(&workspace)
             .output()

@@ -288,7 +288,7 @@ fn file_url(path: &Path) -> String {
 }
 
 fn run_git(repo: &Path, arguments: &[&str]) {
-    assert!(StdCommand::new("git")
+    assert!(provenance_store::git_process::git()
         .args(arguments)
         .current_dir(repo)
         .status()

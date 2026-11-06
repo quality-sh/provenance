@@ -4,7 +4,7 @@ fn fixture() -> (tempfile::TempDir, String) {
     let dir = tempfile::tempdir().unwrap();
     let root = Utf8Path::from_path(dir.path()).unwrap();
     let git = |args: &[&str]| {
-        let output = Command::new("git")
+        let output = crate::git_process::git()
             .args([
                 "-c",
                 "user.name=Fixture",

@@ -110,7 +110,7 @@ fn init_guidance_says_what_a_description_holds() {
         "{agents}"
     );
     assert!(
-        prose.contains("History goes on the record's thread. Unknowns go in fog or a Question."),
+        prose.contains("History goes on the record's thread. Unknowns go in a Question."),
         "{agents}"
     );
     assert!(

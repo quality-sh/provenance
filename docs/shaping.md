@@ -6,44 +6,25 @@ This is the canonical statement of the shaping design. The beads that implement 
 (`provenance-d2t`, `provenance-y3o`, `provenance-ekd`, `provenance-kud`, `provenance-qho`)
 summarize parts of this document; where they diverge, this document wins.
 
-## Lineage
+## Credits
 
-The shape is a deliberate hybrid of three sources, each contributing a different layer:
+Appetite and no-gos come from Shape Up (Ryan Singer, basecamp.com/shapeup). The typed
+graph and its review gates come from Statesman Provenance, the Convex original. The turn
+structure with claims and handoffs is adapted from Matt Pocock's skills
+(github.com/mattpocock/skills). The loop continues past shaping into Rules, the functions
+that implement them, and the tests that verify them.
 
-| Layer | Source | Contributes | Silent on |
-|---|---|---|---|
-| **Judgment** — what does "shaped enough" mean? | Shape Up (Ryan Singer, basecamp.com/shapeup) | Appetite, no-gos, rabbit holes, fixed-time-variable-scope, shaping as distinct from building | Execution substrate, persistence |
-| **Memory** — what survives? | Statesman Provenance (the Convex original) | Typed graph, evidence discipline, promotion gates, traceability into code | Session mechanics |
-| **Execution** — how does a session run? | Wayfinder (Matt Pocock, github.com/mattpocock/skills) | Turn structure, fog of war, claim/handoff, method-typed units, map-as-index | Residue, evidence typing, "done" criteria |
-
-Each is strongest where the other two are silent. The hybrid also adds things none of the
-three have: a graph-computed frontier, fan-out landing, stance tournaments with
-empirically-grounded caveats, and a loop that continues past "shaped" into rules, the
-functions that carry them, and the tests that verify them.
-
-## The map
+## The anchor
 
 A shaping effort is anchored by a **requirement** — any requirement, at any depth.
 Requirements are recursive, so a feature-sized idea ("provenance docs shareable via a
 short-lived link"), a compliance program ("be SCHADS compliant"), and a sub-effort under
-either all get the identical loop. There is no separate map/epic/project concept.
+either all get the identical loop. There is no separate epic or project record.
 
-The map is an **index, not a store**. A session loads it low-res — the anchor requirement,
-decisions so far (resolutions, gisted one line each), the fog, and the frontier — and zooms
-into full artifact bodies on demand. An obligation lives in a Requirement or Rule. A choice among alternatives lives in
+A session first reads a summary: the anchor requirement, the decisions so far (Resolutions,
+one line each), the open Questions, and the gaps that `provenance check --gaps` reports. It
+reads full records only when it needs them. An obligation lives in a Requirement or Rule. A choice among alternatives lives in
 a Resolution. The session anchor does not determine where every new record belongs.
-
-### Fog of war
-
-The anchor requirement carries a deliberately **unstructured** fog section: the dim view of
-decisions and investigations you can tell are coming but cannot yet phrase sharply.
-
-The test: **question when the question can be stated precisely (even if blocked); fog when
-it can't.** Never pre-slice fog into question-sized pieces — one patch of fog may graduate
-into several questions, or none, once the frontier reaches it.
-
-Fog is the anti-over-modeling guard. A rich schema tempts agents into speculative
-node-minting; fog gives the not-yet-sharp a home that isn't forty premature Question nodes.
 
 ### The tree is the spec
 
@@ -51,7 +32,7 @@ The anchor's requirement tree is the product spec, and a developer must be able 
 from it without the chat. A statement is one obligation in one plain clause. A description
 says how the product behaves, in the present tense: its states, what moves it between them,
 what the person sees, and one example. History, the person's words, and the
-brief's words go on the record's thread. Unknowns go in fog or a Question, never in a list of
+brief's words go on the record's thread. Unknowns go in a Question, never in a list of
 open items inside a description; one closing `Open:` line may name them. A Question is answered only when the answer covers all of
 it; a partial answer lands what it settled and narrows the Question. Before each handoff the
 session reads the rendered tree as a builder would, and fixes what does not read as a spec.
@@ -65,35 +46,34 @@ ChatGPT desktop open the MCP document view. A plain CLI session runs `provenance
 --detach` without `--no-open`, so the system browser opens the page.
 
 The view shows the tree of the anchor's parent, so the anchor is inside that tree and is
-not a root. In Chart mode, the session opens the view of the parent first, then creates the
-anchor under that parent. There is one exception: an anchor with no parent. The session
+not a root. When the session creates a new anchor, it opens the view of the parent first, then
+creates the anchor under that parent. There is one exception: an anchor with no parent. The session
 creates that anchor first, then opens its own page. This is the only graph write before the
 view opens, and the only page that has the anchor as its root.
 
 The page stays open, and the person watches each record land after each answer. Every
 session ends with a handoff that gives the link again.
 
-### Chart
+### Start an anchor
 
-A loose idea arrives. One session's work — do **not** also resolve questions.
+A loose idea arrives. This is one session's work. Do **not** also resolve questions.
 
 1. Create (or select) the anchor requirement, in the order that "Invocation" gives.
-2. Grill to surface:
+2. Ask the person, one question at a time, to surface:
    - **Appetite** (Shape Up): how much time is this worth? Recorded up front, re-checked
      as requirements accumulate.
    - **Boundaries** (the no-gos): constraints on the solution space, each with a source
      ref where one exists (e.g. a privacy policy clause).
-   - **Fog**: everything sensed but not yet sharp.
    - **First questions**: each minted with a `resolution_method` (see below), sized to
      one agent session, ordered by `depends_on` where order matters.
 3. Handoff.
 
-### Work
+### Answer Questions
 
 The turn loop, against an anchor requirement:
 
-1. **Prime** — load the map low-res. The frontier is *computed from graph semantics*,
-   not hand-wired: requirements that cite no source, unresolved `contradicts` pairs,
+1. **Prime**: read the graph summary. `provenance check --gaps` computes the gaps from
+   the graph: requirements that cite no source, unresolved `contradicts` pairs,
    requirements that can't produce a rule, open questions and unexplored topics.
 2. **Recover before each turn** — at the start of every turn, read the full stored
    Topic and each Question that the turn will work on, before the first write or
@@ -127,8 +107,8 @@ The turn loop, against an anchor requirement:
    postpone an accepted decision. Preserve existing prerequisites and claims;
    if they prevent landing, report the blocker and the unlanded decision, then
    stop the interview. Expect fan-out (see below).
-5. **Graduate fog** the answers made sharp; update or kill questions the decisions
-   invalidated.
+5. **Add new Questions** for the unknowns that the answers made precise. Update or answer
+   the Questions that the decisions made invalid.
 6. **Stop and hand off** — the turn ends at the first stop condition:
    context budget nearing its threshold, human done, a fork/verify spawn
    (two-phase boundary), or the topic drained.
@@ -152,7 +132,7 @@ summary limit bound the read. An incomplete summary cannot authorize selection.
 
 ### Invariants
 
-"One question per session" is deliberately **not** the rule — grill turns are cheap to
+"One question per session" is deliberately **not** the rule: `grill` turns are cheap to
 continue and expensive to restart, and answers don't respect question boundaries. The
 real invariants:
 
@@ -161,7 +141,7 @@ real invariants:
    everything answered so far is already in the graph.
 2. The session never outruns its context budget.
 3. The agent never proceeds past a decision the human hasn't ratified.
-4. The map is consistent at handoff.
+4. The graph is consistent at handoff.
 
 ## Resolution methods
 
@@ -317,7 +297,7 @@ ported — skills and workflows own execution; only durable outputs enter state.
 
 ## Relationship to the swarm backtrace
 
-The backtrace (`provenance-qho`) is charting in reverse: agents partition an existing
+The backtrace (`provenance-qho`) is shaping in reverse: agents partition an existing
 codebase, extract candidate requirements ("what must be true for this code to be
 correct"), dedup keeping *all* evidence sites, and land everything as `proposed` — never
 `active` — with the codebase source carrying a validated `commit_pin`. Proposals and
@@ -415,8 +395,7 @@ realize.
 
 ## Beyond "shaped"
 
-Shape Up ends at the bet; wayfinder ends at "the way is clear." This loop continues:
+Shape Up ends at the bet. This loop continues:
 requirements are refined into Rules, resolutions record decisions that produce Rules,
 implementation bindings name where production code realizes them, tests say how they
 were verified, and the scan names each active Rule still missing either relationship.
-Fog to working code, one graph.

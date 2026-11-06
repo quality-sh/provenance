@@ -21,7 +21,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::process::Command as ProcessCommand;
 
 const ENRICHMENT_CONTRACT: &str = "provenance-dogfood-enrichment/v1";
 const SESSION_ENV_VARS: &[&str] = &[
@@ -351,7 +350,10 @@ fn hostname() -> String {
 }
 
 fn git_context(args: &[&str]) -> Option<String> {
-    let output = ProcessCommand::new("git").args(args).output().ok()?;
+    let output = provenance_store::git_process::git()
+        .args(args)
+        .output()
+        .ok()?;
     if !output.status.success() {
         return None;
     }

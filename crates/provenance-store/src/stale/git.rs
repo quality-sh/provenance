@@ -53,7 +53,7 @@ pub enum GitRefusal {
 
 /// Git control data and the executable are trusted; request environment overrides are removed.
 pub(crate) fn command(repo: &Utf8Path) -> Command {
-    let mut command = Command::new("git");
+    let mut command = crate::git_process::git();
     for (key, _) in std::env::vars_os() {
         if key
             .to_string_lossy()
@@ -79,14 +79,16 @@ pub(crate) fn command(repo: &Utf8Path) -> Command {
 /// modern git keeps that block and older git keeps working.
 fn no_lazy_fetch_supported() -> bool {
     static SUPPORTED: OnceLock<bool> = OnceLock::new();
-    *SUPPORTED.get_or_init(|| match Command::new("git").arg("--version").output() {
-        Ok(output) if output.status.success() => {
-            version_supports_no_lazy_fetch(&String::from_utf8_lossy(&output.stdout))
-        }
-        // If the version cannot be read, keep the flag: modern git must not
-        // lose it, and old git then fails loudly instead of fetching.
-        _ => true,
-    })
+    *SUPPORTED.get_or_init(
+        || match crate::git_process::git().arg("--version").output() {
+            Ok(output) if output.status.success() => {
+                version_supports_no_lazy_fetch(&String::from_utf8_lossy(&output.stdout))
+            }
+            // If the version cannot be read, keep the flag: modern git must not
+            // lose it, and old git then fails loudly instead of fetching.
+            _ => true,
+        },
+    )
 }
 
 fn version_supports_no_lazy_fetch(version: &str) -> bool {

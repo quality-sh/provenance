@@ -2,11 +2,10 @@
 //! include this file by path, so the crate keeps one copy.
 
 use std::path::Path;
-use std::process::Command;
 
 /// Run one Git command in `repo` and return its trimmed output.
 pub fn git(repo: &(impl AsRef<Path> + ?Sized), args: &[&str]) -> String {
-    let output = Command::new("git")
+    let output = provenance_store::git_process::git()
         .current_dir(repo)
         .args(args)
         .output()

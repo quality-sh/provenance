@@ -421,7 +421,7 @@ fn git_path(root: &Utf8Path, path: &Utf8Path) -> anyhow::Result<String> {
 
 /// Whether the working tree has no tracked or untracked changes.
 fn working_tree_is_clean(repo: &Utf8Path) -> anyhow::Result<bool> {
-    let output = std::process::Command::new("git")
+    let output = provenance_store::git_process::git()
         .current_dir(repo)
         .args(["status", "--porcelain", "--untracked-files=all"])
         .output()?;

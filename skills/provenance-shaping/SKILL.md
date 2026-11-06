@@ -1,6 +1,6 @@
 ---
 name: provenance-shaping
-description: Guide turn-based requirement shaping in Provenance. Use when a user brings a loose idea, asks to refine requirements, work through open shaping questions, graduate fog, or run the Chart/Work loop against an anchor requirement. Land every resolved decision immediately into the graph.
+description: Guide turn-based requirement shaping in Provenance. Use when a user brings a loose idea, asks to refine requirements, or asks to work through open shaping Questions against an anchor requirement. Land every resolved decision immediately into the graph.
 ---
 
 # Shaping
@@ -18,17 +18,17 @@ Before you call code redundant or delete tests, run
 
 1. **Land every decision as it resolves.** Never carry a resolved-but-unrecorded decision
    in conversation state.
-2. **Do not outrun context.** Stop before the map is too large to hand off accurately.
+2. **Do not outrun context.** Stop before the session state is too large to hand off accurately.
 3. **Do not proceed past unratified decisions.** If the human has not accepted the
    position, it is a Proposal, open Question, or `blocked_on_human` fork, not a decision.
-4. **Leave the map consistent at handoff.** Claims, fog, questions, and frontier must tell
-   the next session what to do without reconstructing your chat.
+4. **Leave the graph consistent at handoff.** Claims, Questions, and gaps must tell the
+   next session what to do without reconstructing your chat.
 5. **The tree reads as a spec.** At every handoff a developer can build from the anchor's
    requirement tree alone. See "The tree is the spec".
 6. **Read the stored state at the start of every turn.** "Recover before each turn" gives
    the reads.
 
-One question per session is **not** the invariant. Grill turns can drain a topic question
+One question per session is **not** the invariant. A `grill` turn can drain a topic question
 by question; expensive methods claim one question and often stop at a phase boundary.
 
 ## Start every session
@@ -46,8 +46,8 @@ by question; expensive methods claim one question and often stop at a phase boun
 
    The view shows the anchor inside the tree of its parent, not as a root. Open the page
    of the anchor's parent Requirement (the Requirement that the anchor refines). Never
-   open the page with the anchor as its root. In Chart mode, open the view of the parent
-   first, then create the anchor under that parent.
+   open the page with the anchor as its root. When you create a new anchor, open the view
+   of the parent first, then create the anchor under that parent.
 
    **Exception: an anchor with no parent.** Create that anchor first, then open its own
    page. This is the only graph write before the view opens. It is also the only page
@@ -87,7 +87,7 @@ by question; expensive methods claim one question and often stop at a phase boun
    a smaller tree. When you need a new link, get it for the same parent. The Provenance
    section of `AGENTS.md` gives the general host and link rules.
 
-3. Read the domain guidance, then load the low-resolution map:
+3. Read the domain guidance, then load a summary of the graph:
 
    ```sh
    provenance prime
@@ -99,9 +99,8 @@ by question; expensive methods claim one question and often stop at a phase boun
    provenance search --kind boundary --scope <scope> --format json
    ```
 
-4. Treat the map as an index, not a store. Keep only gists in your working context and
-   zoom into the available graph and rule views with
-   `provenance <requirement_id> get --view children` (records below) and
+4. Keep only one-line summaries of records in your working context. Read full records
+   with `provenance <requirement_id> get --view children` (records below) and
    `provenance <rule_id> trace` (records above); use the shaping list commands above for their
    full records. Refer to artifacts by meaningful names plus ids; never hand off bare ids.
 
@@ -116,8 +115,8 @@ it without the chat. Each part of a record holds one kind of content:
   who has not read the thread.
 - **Thread**: who said what. The person's words, the brief's words, and what changed go
   here, never in a description.
-- **Fog and Questions**: what is not decided. A description does not list open items or say
-  what remains to be shaped. Name an unknown in fog or mint a Question. A description may
+- **Questions**: what is not decided. A description does not list open items or say
+  what remains to be shaped. Create a Question for each unknown. A description may
   end with one `Open:` line that names them, so a builder knows where the spec stops.
 
 A Question is answered only when the answer covers all of it. If an answer settles part of
@@ -176,13 +175,13 @@ After each create command, check that
 `review.decision.pending`. A guarded update of a record submits the new revision by
 itself. Do not approve a record; approval stays with the person.
 
-## Mode 1: Chart
+## Mode 1: Start an anchor
 
-Use Chart when the user brings a loose idea: "I want provenance docs shareable via a
-short-lived link - how would that work?" Charting is one session's work. Do **not** also
-resolve the questions you create.
+Use this mode when the user brings a loose idea: "I want provenance docs shareable via a
+short-lived link - how would that work?" Starting an anchor is one session's work. Do
+**not** also resolve the questions you create.
 
-### Chart workflow
+### Start an anchor
 
 1. **Create or select the anchor requirement.** Any requirement at any depth can anchor a
    shaping effort.
@@ -198,9 +197,9 @@ resolve the questions you create.
 
    "Start every session" gives the order of the view and the anchor create.
 
-2. **Attach known sources to the anchor.** Requirements with no valid source reference
-   remain on the missing-source frontier, so add source references when evidence already
-   exists.
+2. **Attach known sources to the anchor.** `provenance check --gaps` reports each
+   Requirement with no valid source reference, so add source references when evidence
+   already exists.
 
    ```sh
    provenance <anchor_requirement_id> update --scope <scope> \
@@ -209,9 +208,9 @@ resolve the questions you create.
      --format json
    ```
 
-3. **Grill only enough to map the effort.** Surface appetite, no-gos, fog, and the first
-   sharp questions. Re-check appetite when the map gets bigger than the user's stated
-   appetite.
+3. **Ask the person only enough to set the scope of the effort.** Surface appetite,
+   no-gos, and the first sharp questions. Re-check appetite when the requirement tree gets
+   bigger than the user's stated appetite.
 
 4. **Record boundaries as no-gos, not silence.** Attach a source reference where one
    exists.
@@ -224,17 +223,7 @@ resolve the questions you create.
      --format json
    ```
 
-5. **Store fog as deliberately unstructured text.** Fog is the dim view of coming
-   decisions that cannot yet be stated precisely.
-
-   ```sh
-   provenance <anchor_requirement_id> update --scope <scope> \
-     --fog "<not-yet-sharp investigations and worries>" \
-     --if-match <etag> \
-     --format json
-   ```
-
-6. **Create topics and first questions.** Questions must be sized to one agent session and
+5. **Create topics and first questions.** Questions must be sized to one agent session and
    minted with the verb that resolves them: `grill`, `prototype`, `research`, `verify`, or
    `task`.
 
@@ -251,31 +240,31 @@ resolve the questions you create.
      --format json
    ```
 
-7. **Persist the charting thread.** Record the appetite, boundaries, fog, and question
+6. **Record the start on the thread.** Record the appetite, boundaries, and question
    rationale on the requirement thread.
 
    ```sh
    provenance <anchor_requirement_id> discuss --scope <scope> \
      --role assistant \
-     --body "CHART: appetite=<...>; boundaries=<...>; fog=<...>; first frontier=<...>" \
+     --body "START: appetite=<...>; boundaries=<...>; first questions=<...>" \
      --format json
    ```
 
-8. **Handoff.** End with copy-paste next commands. Include parallel lines only for
+7. **Handoff.** End with copy-paste next commands. Include parallel lines only for
    independent topics/questions.
 
-## Mode 2: Work
+## Mode 2: Answer Questions
 
-Use Work when an anchor requirement already exists and the session should advance the
-frontier.
+Use this mode when an anchor requirement already exists and the session should answer its
+open Questions and close its gaps.
 
 ### 1. Prime
 
-Load the map with the commands from **Start every session**. `provenance prime`
+Load the graph summary with the commands from **Start every session**. `provenance prime`
 explains the domain. Use `provenance search --kind rule` for Rules and `provenance check --gaps` for
-computed gaps. Load the anchor graph, fog, boundaries, topics, and questions with
+computed gaps. Load the anchor graph, boundaries, topics, and questions with
 their separate commands. The
-shaping-focused subset of the computed graph frontier includes:
+shaping-focused subset of the computed gaps includes:
 
 - requirements with no valid source reference;
 - unresolved `contradicts` pairs;
@@ -289,14 +278,14 @@ only when that obligation is precise; whether production code implements it is a
 separate question. An unimplemented Rule is an ordinary state and should remain visible
 as such rather than being replaced by a vague Rule merely to close the gap.
 
-Proposals are not part of the computed graph frontier and are not a batch-review inbox.
+Proposals are not part of the computed gaps and are not a batch-review inbox.
 Claiming a Topic atomically returns undisposed `proposed` and `asserted` proposals in its
 explicit territory. The CLI has no standalone proposal-surface command. For diff-driven
 work, use `provenance api proposals --scope <scope> --format json` and inspect explicit
 evidence paths. Do not infer territory from titles or graph proximity. Use a complete list
 only for a deliberately bounded set of proposals that jointly blocks the turn.
 
-Do not hand-wire a private frontier in chat. If the graph says a different thing than your
+Do not keep a private list of gaps in chat. If the graph says a different thing than your
 notes, fix the graph or trust the graph.
 
 ### 2. Claim
@@ -312,7 +301,7 @@ work so concurrent sessions skip what you are touching. A claim is a graph write
 | `verify` | single question | `provenance <question_id> claim --scope <scope> --actor <agent> --format json` |
 | `task` | single question | claim its open question if represented; there is no separate task record or task claim |
 
-If claim fails, do not work that item. Pick another frontier item or hand off that it is
+If claim fails, do not work that item. Pick another open item or hand off that it is
 already held.
 
 On a successful topic claim, inspect `surfaced_proposals` before resolving the first
@@ -354,7 +343,7 @@ selection and recover the missing records. Read the bounded summary with
 `provenance <topic_id> get --scope <scope> --view children --format json`. Use its
 ready IDs only when `shaping.complete` is true. Filtered, depth-limited, truncated,
 and unchecked reads are incomplete. Read all pages of the Topic and Question
-collections when you need the map; a partial page cannot establish that work is absent.
+collections when you need the full state; a partial page cannot establish that work is absent.
 Do not use conversation memory as a substitute for these reads.
 
 A Question is ready only when every ID in `depends_on` names an answered Question
@@ -410,7 +399,7 @@ sequence of commands.
 1. Read the Question's Topic and its Requirement. Select the lowest Requirement
    whose obligation the answer concerns. Read its children before selecting it.
    If the answer concerns a different child, use that child for the discussion and
-   new records. The session anchor is a map entry point, not the default parent.
+   new records. The session anchor is an entry point, not the default parent.
 2. Select only the records that the answer implies. "The shape of the tree" gives the
    records of a decision and of an accepted fact. A fact with no product obligation
    needs only a Question answer. In a Resolution, state the unresolved problem in
@@ -589,28 +578,13 @@ For human-world work, record the facts the task produced. Do not pretend the tas
 because instructions were given; land only completed facts, or leave the question open with
 the blocker in its thread.
 
-### 4. Graduate fog
+### 4. Add the new Questions
 
-After each landed answer, revisit fog on the anchor requirement.
-
-- Keep fog if it still cannot be stated precisely.
-- Create a Question when it can be stated precisely, even if blocked.
-- Delete fog the answer killed.
-- Do not pre-slice fog into speculative question nodes.
+After each landed answer, create a Question for each unknown that the answer made precise,
+even if it is blocked. Update or answer the Questions that the decision made invalid.
 
 ```sh
-provenance <anchor_requirement_id> update --scope <scope> \
-  --fog "<remaining fog only>" \
-  --if-match <etag> \
-  --format json
-
-# If no fog remains:
-provenance <anchor_requirement_id> update --scope <scope> \
-  --fog-json null \
-  --if-match <etag> \
-  --format json
-
-provenance question_<graduated_slug> create --type question --scope <scope> \
+provenance question_<new_slug> create --type question --scope <scope> \
   --topic-id <topic_id> \
   --question "<newly precise question>" \
   --method <grill|prototype|research|verify|task> \
@@ -660,7 +634,7 @@ Before final response:
    ```sh
    provenance <anchor_requirement_id> discuss --scope <scope> \
      --role assistant \
-     --body "HANDOFF: landed=<named artifacts>; remaining fog=<...>; frontier=<copy-paste commands>" \
+     --body "HANDOFF: landed=<named artifacts>; open questions=<...>; next=<copy-paste commands>" \
      --format json
    ```
 
@@ -740,7 +714,6 @@ Before moving to the next question, verify the current answer has been handled:
   actor ID. The ID is a repository-local audit attestation, not cryptographic identity. A
   canonical artifact must already exist under the exact scope and kind; correlate any external
   action with the generic system/scope/kind/key fields rather than workflow-specific metadata;
-- fog is updated;
 - invalidated questions are answered or updated; a thread note can document the change but
   does not change question status;
 - claims are cleared on answered questions and closed topics.

@@ -133,8 +133,8 @@ fn shaping_guidance_opens_the_requirements_view_before_the_first_question() {
          each answer.",
         "**Exception: an anchor with no parent.** Create that anchor first, then open its own \
          page. This is the only graph write before the view opens.",
-        "In Chart mode, open the view of the parent first, then create the anchor under that \
-         parent.",
+        "When you create a new anchor, open the view of the parent first, then create the \
+         anchor under that parent.",
     ] {
         assert!(prose.contains(text), "missing {text}\n{shaping}");
     }

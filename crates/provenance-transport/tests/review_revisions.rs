@@ -130,7 +130,7 @@ async fn accepted_text_returns_as_accepted() {
 
 fn commit(repo: &Repository) -> String {
     let git = |args: &[&str]| {
-        let output = std::process::Command::new("git")
+        let output = provenance_store::git_process::git()
             .args(args)
             .env("GIT_AUTHOR_NAME", "Reviewer")
             .env("GIT_AUTHOR_EMAIL", "reviewer@example.com")
