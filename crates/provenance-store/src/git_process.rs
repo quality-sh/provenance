@@ -30,6 +30,8 @@ fn without_window(mut command: Command) -> Command {
 
 #[cfg(test)]
 mod tests {
+    /// Implementation aid: no Rule states how Git starts. This checks that the command
+    /// from `git()` finds Git on `PATH` and gives its output.
     #[test]
     fn git_command_runs_git_and_returns_its_output() {
         let output = super::git().arg("--version").output().unwrap();
@@ -38,21 +40,59 @@ mod tests {
     }
 
     #[cfg(windows)]
+    const PROBE: &str = "PROVENANCE_CONSOLE_WINDOW_PROBE";
+
+    /// Implementation aid: no Rule states how Git starts (bead provenance-a5ru). A copy of
+    /// this test binary named `git.exe` is first on `PATH`, so `git()` starts the copy, and
+    /// the copy reports its console window. A child without the flag gets the console of
+    /// this process, or a new console with a window, so it reports a window.
+    #[cfg(windows)]
     #[test]
-    fn a_child_started_without_a_window_has_no_console_window() {
-        // GetConsoleWindow gives 0 in a console process that has no window.
-        let script = "(Add-Type -Name ConsoleWindow -PassThru -MemberDefinition \
-            '[DllImport(\"kernel32.dll\")] public static extern IntPtr GetConsoleWindow();')\
-            ::GetConsoleWindow()";
-        let output = super::without_window(std::process::Command::new("powershell"))
-            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+    fn git_starts_a_child_that_has_no_console_window() {
+        let directory = tempfile::tempdir().unwrap();
+        std::fs::copy(
+            std::env::current_exe().unwrap(),
+            directory.path().join("git.exe"),
+        )
+        .unwrap();
+        let output = super::git()
+            .env("PATH", directory.path())
+            .env(PROBE, "1")
+            .args([
+                "--exact",
+                "git_process::tests::report_console_window",
+                "--ignored",
+                "--nocapture",
+                "--test-threads=1",
+            ])
             .output()
             .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(
             output.status.success(),
-            "{}",
+            "{stdout}{}",
             String::from_utf8_lossy(&output.stderr)
         );
-        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "0");
+        assert!(stdout.contains("console window: none"), "{stdout}");
+    }
+
+    /// The child side of `git_starts_a_child_that_has_no_console_window`.
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "a child process of git_starts_a_child_that_has_no_console_window"]
+    fn report_console_window() {
+        if std::env::var_os(PROBE).is_none() {
+            return;
+        }
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn GetConsoleWindow() -> *mut std::ffi::c_void;
+        }
+        // SAFETY: GetConsoleWindow takes no arguments and only returns a handle.
+        let window = unsafe { GetConsoleWindow() };
+        println!(
+            "console window: {}",
+            if window.is_null() { "none" } else { "open" }
+        );
     }
 }
