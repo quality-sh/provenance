@@ -1,6 +1,7 @@
 //! Declarations of the commands that pin graph references and land swarm backtraces.
 
-use super::{json_format, Declaration, Field, Fields, Relation, REPO, SCOPE};
+use super::{Declaration, Field, Fields, Relation, REPO, SCOPE};
+use crate::swarm_backtrace::SwarmBacktraceLandInput;
 use serde::Deserialize;
 
 /// One graph command.
@@ -32,18 +33,6 @@ pub struct ReferenceInput {
     pub reference: String,
 }
 
-/// The `swarm-backtrace land` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct SwarmBacktraceLandInput {
-    pub repo: String,
-    pub scope: String,
-    pub run_dir: String,
-    #[serde(default)]
-    pub replace: bool,
-    pub format: String,
-}
-
 macro_rules! schema_fn {
     ($name:ident, $input:ty) => {
         fn $name() -> serde_json::Value {
@@ -55,8 +44,6 @@ macro_rules! schema_fn {
 schema_fn!(reference_issue_schema, ReferenceIssueInput);
 schema_fn!(reference_schema, ReferenceInput);
 schema_fn!(swarm_backtrace_land_schema, SwarmBacktraceLandInput);
-
-const JSON_FORMAT: Field = json_format(Some("json"));
 
 const REFERENCE_ISSUE_FIELDS: &[Field] = &[
     REPO,
@@ -70,11 +57,11 @@ const REFERENCE_ISSUE_FIELDS: &[Field] = &[
 const REFERENCE_FIELDS: &[Field] = &[REPO, Field::text("reference").required()];
 
 const SWARM_BACKTRACE_LAND_FIELDS: &[Field] = &[
-    REPO,
-    SCOPE,
-    Field::text("run_dir").required(),
-    Field::switch("replace"),
-    JSON_FORMAT,
+    Field::text("run_dir")
+        .required()
+        .doc("The swarm run directory: its extractors, refuters, contributions, and merge output."),
+    Field::switch("replace")
+        .doc("Replace the generated records that an earlier landing of this run wrote."),
 ];
 
 pub(super) const fn declaration(command: GraphCommand) -> Declaration {
@@ -106,6 +93,7 @@ pub(super) const fn declaration(command: GraphCommand) -> Declaration {
             "swarm-backtrace land",
             "",
             Fields::new(SWARM_BACKTRACE_LAND_FIELDS, swarm_backtrace_land_schema),
-        ),
+        )
+        .bound(),
     }
 }

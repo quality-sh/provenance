@@ -293,6 +293,7 @@
         "provenance-macros",
         "provenance-porcelain",
         "provenance-scanner",
+        "provenance-ste100",
         "provenance-store",
         "tempfile",
         "tokio",

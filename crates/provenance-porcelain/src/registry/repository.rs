@@ -2,6 +2,9 @@
 //! repository files.
 
 use super::{json_format, Declaration, Field, Fields, Relation, REPO, SCOPE};
+use crate::dictionary::DictionaryImportInput;
+use crate::import::ImportInput;
+use crate::materialize::MaterializeInput;
 use serde::Deserialize;
 
 /// One repository command.
@@ -43,14 +46,6 @@ pub struct CargoInitInput {
     pub ste_pdf: Option<String>,
 }
 
-/// The `materialize` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct MaterializeInput {
-    pub repo: String,
-    pub format: String,
-}
-
 /// The `export` input.
 #[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -59,18 +54,6 @@ pub struct ExportInput {
     pub scope: String,
     pub format: String,
     pub output: Option<String>,
-}
-
-/// The `import` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct ImportInput {
-    pub repo: String,
-    pub scope: String,
-    pub input: String,
-    #[serde(default)]
-    pub dry_run: bool,
-    pub format: String,
 }
 
 /// The `merge-jsonl` input.
@@ -102,15 +85,6 @@ pub struct SchemaShowInput {
     pub format: String,
 }
 
-/// The `dictionary import` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct DictionaryImportInput {
-    pub pdf: String,
-    pub repo: String,
-    pub format: String,
-}
-
 /// The `dictionary status` input.
 #[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -119,10 +93,18 @@ pub struct DictionaryStatusInput {
     pub format: String,
 }
 
+// An input without fields has an empty properties object, as each other input has.
 macro_rules! schema_fn {
     ($name:ident, $input:ty) => {
         fn $name() -> serde_json::Value {
-            serde_json::to_value(schemars::schema_for!($input)).expect("schema is JSON")
+            let mut schema =
+                serde_json::to_value(schemars::schema_for!($input)).expect("schema is JSON");
+            schema
+                .as_object_mut()
+                .expect("an input schema is an object")
+                .entry("properties")
+                .or_insert_with(|| serde_json::json!({}));
+            schema
         }
     };
 }
@@ -179,7 +161,7 @@ const CARGO_INIT_FIELDS: &[Field] = &[
     Field::text("ste_pdf").doc(STE_PDF_HELP),
 ];
 
-const MATERIALIZE_FIELDS: &[Field] = &[DEFAULT_REPO, JSON_FORMAT];
+const MATERIALIZE_FIELDS: &[Field] = &[];
 
 const EXPORT_FIELDS: &[Field] = &[
     REPO,
@@ -191,11 +173,10 @@ const EXPORT_FIELDS: &[Field] = &[
 ];
 
 const IMPORT_FIELDS: &[Field] = &[
-    REPO,
-    SCOPE,
-    Field::text("input").required(),
-    Field::switch("dry_run"),
-    JSON_FORMAT,
+    Field::text("input")
+        .required()
+        .doc("The scope export file to import: the JSON document that export writes."),
+    Field::switch("dry_run").doc("Run each check of the import and write nothing."),
 ];
 
 const MERGE_JSONL_FIELDS: &[Field] = &[
@@ -222,13 +203,9 @@ const SCHEMA_SHOW_FIELDS: &[Field] = &[
     JSON_FORMAT,
 ];
 
-const DICTIONARY_IMPORT_FIELDS: &[Field] = &[
-    Field::text("pdf")
-        .required()
-        .doc("Path to the local official Issue 9 PDF file"),
-    DEFAULT_REPO,
-    JSON_FORMAT,
-];
+const DICTIONARY_IMPORT_FIELDS: &[Field] = &[Field::text("pdf")
+    .required()
+    .doc("Path to the local official Issue 9 PDF file")];
 
 const DICTIONARY_STATUS_FIELDS: &[Field] = &[DEFAULT_REPO, JSON_FORMAT];
 
@@ -255,12 +232,13 @@ pub(super) const fn declaration(command: RepositoryCommand) -> Declaration {
             "materialize",
             "",
             Fields::new(MATERIALIZE_FIELDS, materialize_schema),
-        ),
+        )
+        .bound(),
         RepositoryCommand::Export => {
             Declaration::named("export", "", Fields::new(EXPORT_FIELDS, export_schema))
         }
         RepositoryCommand::Import => {
-            Declaration::named("import", "", Fields::new(IMPORT_FIELDS, import_schema))
+            Declaration::named("import", "", Fields::new(IMPORT_FIELDS, import_schema)).bound()
         }
         // Git runs merge-jsonl as a merge driver.
         RepositoryCommand::MergeJsonl => Declaration::named(
@@ -283,7 +261,8 @@ pub(super) const fn declaration(command: RepositoryCommand) -> Declaration {
             "dictionary import",
             "Import the ASD-STE100 Issue 9 dictionary from one local PDF file",
             Fields::new(DICTIONARY_IMPORT_FIELDS, dictionary_import_schema),
-        ),
+        )
+        .bound(),
         RepositoryCommand::DictionaryStatus => Declaration::named(
             "dictionary status",
             "Report the committed dictionary reference and the analyzer it selects",

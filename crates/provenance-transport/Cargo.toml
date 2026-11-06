@@ -26,10 +26,12 @@ provenance-macros.workspace = true
 provenance-porcelain.workspace = true
 provenance-contract.workspace = true
 provenance-scanner.workspace = true
+provenance-ste100.workspace = true
 provenance-store = { workspace = true, features = ["schema"] }
 pulldown-cmark.workspace = true
 serde_json.workspace = true
 serde.workspace = true
+serde_ignored.workspace = true
 ureq.workspace = true
 url.workspace = true
 uuid.workspace = true

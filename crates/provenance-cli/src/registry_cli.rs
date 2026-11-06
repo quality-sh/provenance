@@ -91,6 +91,7 @@ fn bound_options(declaration: &Declaration) -> Vec<Arg> {
 /// The repository and output options that a bound word command reads.
 pub struct BoundContext {
     pub repo: String,
+    pub scope: String,
     /// The caller asked for the JSON answer.
     pub json: bool,
 }
@@ -102,6 +103,10 @@ pub fn bound_context(matches: &ArgMatches) -> BoundContext {
             .get_one::<String>("repo")
             .cloned()
             .unwrap_or_else(|| ".".to_owned()),
+        scope: matches
+            .get_one::<String>("scope")
+            .cloned()
+            .unwrap_or_else(|| "default".to_owned()),
         json: matches.get_one::<String>("format").is_some(),
     }
 }

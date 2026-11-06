@@ -1,39 +1,33 @@
-use super::validate::{
-    validate_contribution_record, validate_proposal_card_record, validate_synthesis_packet_record,
-};
-use crate::{cli::ideation::SwarmBacktraceCommand, output};
+//! The swarm-backtrace land adapter: the records of one swarm run directory in one scope.
+
+use super::RepositoryPort;
+use crate::repository::RepoContext;
+use crate::snapshot::Store;
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{
-    packet_qualifies_proposal, AssertionRecord, Contribution, DispositionRecord, ProposalCard,
-    ScopeId, StableId, SynthesisPacket,
+    ensure_supported_schema_version as ensure_schema_version, packet_qualifies_proposal,
+    validate_optional_confidence_score, AssertionRecord, Contribution, DispositionRecord,
+    ProposalCard, ScopeId, StableId, SynthesisPacket,
 };
+use provenance_porcelain::swarm_backtrace::{
+    SwarmBacktraceLandInput, SwarmBacktraceLandOutput, SwarmBacktraceLandPort,
+};
+use provenance_porcelain::WorkFuture;
 use provenance_store::state_store::IdeationLandingBatch;
-use provenance_transport::repository::RepoContext;
-use provenance_transport::snapshot::Store;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::Value;
 use std::collections::BTreeSet;
 
-pub(super) fn handle(command: SwarmBacktraceCommand) -> anyhow::Result<()> {
-    match command {
-        SwarmBacktraceCommand::Land {
-            context,
-            run_dir,
-            replace,
-            ..
-        } => land(&context, &run_dir, replace),
-    }
-}
+impl SwarmBacktraceLandPort for RepositoryPort {
+    type Failure = anyhow::Error;
 
-#[derive(Serialize)]
-struct LandReport {
-    run_dir: String,
-    contributions: usize,
-    synthesis_packets: usize,
-    proposals: usize,
-    assertions: usize,
-    replace: bool,
+    fn swarm_backtrace_land(
+        &self,
+        input: SwarmBacktraceLandInput,
+    ) -> WorkFuture<'_, SwarmBacktraceLandOutput, anyhow::Error> {
+        Box::pin(async move { land(&self.context, Utf8Path::new(&input.run_dir), input.replace) })
+    }
 }
 
 #[derive(Deserialize)]
@@ -58,8 +52,12 @@ type MergeRecords = (
     Vec<DispositionRecord>,
 );
 
-fn land(context: &RepoContext, run_dir: &Utf8Path, replace: bool) -> anyhow::Result<()> {
-    anyhow::ensure!(run_dir.is_dir(), "--run-dir must be an existing directory");
+fn land(
+    context: &RepoContext,
+    run_dir: &Utf8Path,
+    replace: bool,
+) -> anyhow::Result<SwarmBacktraceLandOutput> {
+    anyhow::ensure!(run_dir.is_dir(), "run_dir must be an existing directory");
     let scope_id = context.scope_id()?;
     let contributions = read_contributions(run_dir)?;
     let (synthesis_packets, proposals, assertions, dispositions) = read_merge_outputs(run_dir)?;
@@ -142,7 +140,7 @@ fn land(context: &RepoContext, run_dir: &Utf8Path, replace: bool) -> anyhow::Res
         replace,
     )?;
 
-    output::print_json(&LandReport {
+    Ok(SwarmBacktraceLandOutput {
         run_dir: run_dir.to_string(),
         contributions: contribution_count,
         synthesis_packets: synthesis_count,
@@ -319,7 +317,7 @@ fn ensure_no_existing_ids<'existing, 'incoming>(
     for id in incoming_ids {
         anyhow::ensure!(
             !existing_ids.contains(id.as_str()),
-            "{artifact} {} already exists; rerun with --replace to replace generated records",
+            "{artifact} {} already exists; land again with replace to replace generated records",
             id.as_str()
         );
     }
@@ -343,5 +341,33 @@ fn ensure_scope(
         id.as_str(),
         expected.as_str()
     );
+    Ok(())
+}
+
+/// Checks the schema version and the confidence scores of one contribution.
+pub fn validate_contribution_record(contribution: &Contribution) -> anyhow::Result<()> {
+    ensure_schema_version("contribution", contribution.schema_version)?;
+    for claim in &contribution.material_claims {
+        validate_optional_confidence_score(claim.confidence).with_context(|| {
+            format!(
+                "material claim {} confidence is invalid",
+                claim.claim_id.as_str()
+            )
+        })?;
+    }
+    Ok(())
+}
+
+/// Checks the schema version of one synthesis packet.
+pub fn validate_synthesis_packet_record(synthesis_packet: &SynthesisPacket) -> anyhow::Result<()> {
+    ensure_schema_version("synthesis", synthesis_packet.schema_version)
+}
+
+/// Checks the schema version, the intrinsic rules, and the confidence of one proposal.
+pub fn validate_proposal_card_record(proposal: &ProposalCard) -> anyhow::Result<()> {
+    ensure_schema_version("proposal", proposal.schema_version)?;
+    provenance_core::validate_proposal_intrinsic(proposal)?;
+    validate_optional_confidence_score(proposal.confidence)
+        .with_context(|| format!("proposal {} confidence is invalid", proposal.id.as_str()))?;
     Ok(())
 }

@@ -1,5 +1,6 @@
 use crate::cli;
 use crate::output::{self, JsonFormat, OutputFormat};
+use crate::registry_cli::BoundContext;
 use camino::Utf8PathBuf;
 use provenance_cli::servers::{DocsServeInput, McpInput, ReviewInput, Server};
 use provenance_porcelain::registry::{
@@ -8,7 +9,8 @@ use provenance_porcelain::registry::{
     ReportBuildInput, ReportRenderInput, RepositoryCommand, SchemaShowInput, SkillsInstallInput,
     SkillsListInput, SkillsShowInput, SwarmBacktraceLandInput, ValidateInput, WorkspaceCommand,
 };
-use provenance_store::cache;
+use provenance_porcelain::Porcelain;
+use provenance_transport::porcelain::RepositoryPort;
 use provenance_transport::repository::RepoContext;
 
 mod cargo_init;
@@ -18,7 +20,6 @@ mod docs;
 mod dogfood;
 mod export;
 mod graph_reference;
-mod import;
 mod mcp;
 mod merge_jsonl;
 mod prime;
@@ -26,7 +27,6 @@ mod repo;
 mod report;
 mod schema;
 mod skills;
-mod swarm_backtrace;
 mod validate;
 
 #[cfg(feature = "dogfood")]
@@ -53,13 +53,13 @@ pub(super) fn prime_command(input: &registry::PrimeInput) -> anyhow::Result<()> 
 pub(super) enum RepositoryInput {
     Init(InitInput),
     CargoInit(CargoInitInput),
-    Materialize(MaterializeInput),
+    Materialize(MaterializeInput, BoundContext),
     Export(ExportInput),
-    Import(ImportInput),
+    Import(ImportInput, BoundContext),
     MergeJsonl(MergeJsonlInput),
     Validate(ValidateInput),
     SchemaShow(SchemaShowInput),
-    DictionaryImport(DictionaryImportInput),
+    DictionaryImport(DictionaryImportInput, BoundContext),
     DictionaryStatus(DictionaryStatusInput),
 }
 
@@ -75,17 +75,23 @@ impl RepositoryInput {
             ($variant:ident) => {
                 Self::$variant(crate::registry_cli::input(&declaration, matches)?)
             };
+            ($variant:ident, bound) => {
+                Self::$variant(
+                    crate::registry_cli::input(&declaration, matches)?,
+                    crate::registry_cli::bound_context(matches),
+                )
+            };
         }
         Ok(match command {
             RepositoryCommand::Init => read!(Init),
             RepositoryCommand::CargoInit => read!(CargoInit),
-            RepositoryCommand::Materialize => read!(Materialize),
+            RepositoryCommand::Materialize => read!(Materialize, bound),
             RepositoryCommand::Export => read!(Export),
-            RepositoryCommand::Import => read!(Import),
+            RepositoryCommand::Import => read!(Import, bound),
             RepositoryCommand::MergeJsonl => read!(MergeJsonl),
             RepositoryCommand::Validate => read!(Validate),
             RepositoryCommand::SchemaShow => read!(SchemaShow),
-            RepositoryCommand::DictionaryImport => read!(DictionaryImport),
+            RepositoryCommand::DictionaryImport => read!(DictionaryImport, bound),
             RepositoryCommand::DictionaryStatus => read!(DictionaryStatus),
         })
     }
@@ -120,23 +126,16 @@ pub(super) async fn repository_command(input: RepositoryInput, quiet: bool) -> a
             let ste_pdf = input.ste_pdf.map(Utf8PathBuf::from);
             run_blocking(move || cargo_init::handle(input.package.as_deref(), ste_pdf, quiet)).await
         }
-        RepositoryInput::Materialize(input) => {
-            flag_value(&input.format, JsonFormat::from_flag)?;
-            let repository = RepoContext::new(input.repo, "default").open()?;
-            output::print_json(&cache::materialize_state(&repository).await?)
+        RepositoryInput::Materialize(input, context) => {
+            output::print_json(&work(context).materialize(input).await?)
         }
         RepositoryInput::Export(input) => export::handle(
             &RepoContext::new(input.repo, input.scope),
             flag_value(&input.format, OutputFormat::from_flag)?,
             input.output.map(Utf8PathBuf::from),
         ),
-        RepositoryInput::Import(input) => {
-            flag_value(&input.format, JsonFormat::from_flag)?;
-            import::handle(
-                &RepoContext::new(input.repo, input.scope),
-                Utf8PathBuf::from(input.input),
-                input.dry_run,
-            )
+        RepositoryInput::Import(input, context) => {
+            output::print_json(&work(context).import(input).await?)
         }
         RepositoryInput::MergeJsonl(input) => {
             flag_value(&input.format, JsonFormat::from_flag)?;
@@ -162,20 +161,23 @@ pub(super) async fn repository_command(input: RepositoryInput, quiet: bool) -> a
                 artifact: artifact(&input.artifact)?,
             })
         }
-        RepositoryInput::DictionaryImport(input) => {
-            flag_value(&input.format, JsonFormat::from_flag)?;
-            dictionary::handle(cli::dictionary::DictionaryCommand::Import {
-                pdf: input.pdf.into(),
-                repo: input.repo.into(),
-            })
+        RepositoryInput::DictionaryImport(input, context) => {
+            output::print_json(&work(context).dictionary_import(input).await?)
         }
         RepositoryInput::DictionaryStatus(input) => {
             flag_value(&input.format, JsonFormat::from_flag)?;
-            dictionary::handle(cli::dictionary::DictionaryCommand::Status {
-                repo: input.repo.into(),
-            })
+            dictionary::status(camino::Utf8Path::new(&input.repo))
         }
     }
+}
+
+/// The repository commands on the repository and scope of the CLI options. Each prints
+/// the JSON result.
+fn work(context: BoundContext) -> Porcelain<RepositoryPort> {
+    Porcelain::new(RepositoryPort::new(RepoContext::new(
+        context.repo,
+        context.scope,
+    )))
 }
 
 /// The typed input of one graph command, read from its declared flags.
@@ -185,7 +187,7 @@ pub(super) enum GraphInput {
     ReferenceShow(ReferenceInput),
     ReferenceVerify(ReferenceInput),
     ReferenceExactExport(ReferenceInput),
-    SwarmBacktraceLand(SwarmBacktraceLandInput),
+    SwarmBacktraceLand(SwarmBacktraceLandInput, BoundContext),
 }
 
 impl GraphInput {
@@ -206,14 +208,17 @@ impl GraphInput {
             GraphCommand::ReferenceShow => read!(ReferenceShow),
             GraphCommand::ReferenceVerify => read!(ReferenceVerify),
             GraphCommand::ReferenceExactExport => read!(ReferenceExactExport),
-            GraphCommand::SwarmBacktraceLand => read!(SwarmBacktraceLand),
+            GraphCommand::SwarmBacktraceLand => Self::SwarmBacktraceLand(
+                crate::registry_cli::input(&declaration, matches)?,
+                crate::registry_cli::bound_context(matches),
+            ),
         })
     }
 }
 
-/// Runs one graph command on the calling thread.
+/// Runs one graph command.
 #[allow(clippy::redundant_pub_crate)]
-pub(super) fn graph_command(input: GraphInput) -> anyhow::Result<()> {
+pub(super) async fn graph_command(input: GraphInput) -> anyhow::Result<()> {
     use cli::graph::GraphReferenceCommand;
     let reference = |input: ReferenceInput| (input.repo.into(), input.reference.into());
     match input {
@@ -237,13 +242,8 @@ pub(super) fn graph_command(input: GraphInput) -> anyhow::Result<()> {
             let (repo, reference) = reference(input);
             graph_reference::handle(GraphReferenceCommand::ExactExport { repo, reference })
         }
-        GraphInput::SwarmBacktraceLand(input) => {
-            flag_value(&input.format, JsonFormat::from_flag)?;
-            swarm_backtrace::handle(cli::ideation::SwarmBacktraceCommand::Land {
-                context: RepoContext::new(input.repo, input.scope),
-                run_dir: input.run_dir.into(),
-                replace: input.replace,
-            })
+        GraphInput::SwarmBacktraceLand(input, context) => {
+            output::print_json(&work(context).swarm_backtrace_land(input).await?)
         }
     }
 }
