@@ -14,7 +14,7 @@ use serde_json::json;
 
 /// Runs one Git command as `author` in the fixture repository.
 fn git_as(temp: &tempfile::TempDir, author: &str, args: &[&str]) -> String {
-    let output = std::process::Command::new("git")
+    let output = provenance_store::git_process::git()
         .args([
             "-c",
             &format!("user.name={author}"),

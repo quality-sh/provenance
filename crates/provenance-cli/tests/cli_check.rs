@@ -404,7 +404,7 @@ fn strict_check_passes_when_the_referenced_index_is_present() {
 }
 
 pub(crate) fn git(repo: &Path, arguments: &[&str]) {
-    let output = std::process::Command::new("git")
+    let output = provenance_store::git_process::git()
         .current_dir(repo)
         .args(arguments)
         .output()

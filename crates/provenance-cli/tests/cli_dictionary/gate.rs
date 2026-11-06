@@ -253,7 +253,7 @@ fn strict_check_uses_the_imported_project_dictionary() {
 }
 
 fn git(repo: &std::path::Path, arguments: &[&str]) {
-    let output = std::process::Command::new("git")
+    let output = provenance_store::git_process::git()
         .current_dir(repo)
         .args(arguments)
         .output()

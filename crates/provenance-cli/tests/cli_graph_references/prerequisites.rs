@@ -34,13 +34,13 @@ fn exported_question_prerequisites_match_the_public_schema() {
         ])
         .assert()
         .success();
-    let status = std::process::Command::new("git")
+    let status = provenance_store::git_process::git()
         .current_dir(temp.path())
         .args(["add", ".provenance/state"])
         .status()
         .unwrap();
     assert!(status.success());
-    let status = std::process::Command::new("git")
+    let status = provenance_store::git_process::git()
         .current_dir(temp.path())
         .args(["commit", "-qm", "Save the prerequisite graph"])
         .status()

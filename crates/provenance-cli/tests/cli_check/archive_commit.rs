@@ -65,7 +65,7 @@ fn commit(repo: &Path, message: &str) -> String {
             message,
         ],
     );
-    let head = std::process::Command::new("git")
+    let head = provenance_store::git_process::git()
         .current_dir(repo)
         .args(["rev-parse", "HEAD"])
         .output()

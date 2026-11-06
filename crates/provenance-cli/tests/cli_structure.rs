@@ -81,7 +81,7 @@ fn workspace_root() -> PathBuf {
 }
 
 fn tracked_rust_files(workspace: &Path) -> Vec<String> {
-    let output = Command::new("git")
+    let output = provenance_store::git_process::git()
         .args([
             "-C",
             workspace.to_str().expect("workspace path is UTF-8"),

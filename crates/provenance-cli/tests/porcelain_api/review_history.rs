@@ -1,7 +1,7 @@
 use super::*;
 
 pub fn git(repo: &str, args: &[&str]) -> String {
-    let result = std::process::Command::new("git")
+    let result = provenance_store::git_process::git()
         .args([
             "-c",
             "user.name=Reviewer",

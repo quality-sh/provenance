@@ -86,7 +86,7 @@ fn exported_document_verifies_itself_away_from_its_repository() {
 #[test]
 fn explicit_commit_issues_from_pin_despite_relevant_staged_and_worktree_changes() {
     let temp = committed_store();
-    let head = std::process::Command::new("git")
+    let head = provenance_store::git_process::git()
         .args(["rev-parse", "HEAD"])
         .current_dir(temp.path())
         .output()
