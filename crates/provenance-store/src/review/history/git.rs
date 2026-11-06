@@ -6,20 +6,20 @@ use std::io::Write;
 use std::process::Stdio;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-/// The versions of one record file, read for one `HEAD`.
+/// The versions of one record file, read for one `HEAD` and one shallow boundary.
 struct ReadVersions {
     root: Utf8PathBuf,
     relative: String,
     prefix: String,
     head: String,
+    shallow: Option<Vec<u8>>,
     versions: Arc<Vec<FileVersion>>,
 }
 
 // The versions of the file of the last history read. The committed versions
-// change only when `HEAD` changes, so a new read of the same file at the same
-// `HEAD` starts one Git process. One file is kept, so the memory stays at the
-// size of one history read. A shallow clone that gets deeper while `HEAD`
-// stays the same shows the new commits after the next change of `HEAD`.
+// change only when `HEAD` or the shallow boundary changes, so a new read of the
+// same file at the same `HEAD` and boundary starts one Git process. One file is
+// kept, so the memory stays at the size of one history read.
 static LAST_READ: Mutex<Option<ReadVersions>> = Mutex::new(None);
 
 /// One commit that changed a record file, with the file text at that commit.
@@ -35,7 +35,7 @@ pub(super) struct FileVersion {
     pub(super) text: Option<String>,
 }
 
-/// Lists the commits reachable from `HEAD` that changed `path`, parents before
+/// Lists the commits reachable from `HEAD`, as one read resolves it, that changed `path`, parents before
 /// children.
 ///
 /// A directory outside Git, Git that cannot run, or a repository with no
@@ -44,24 +44,33 @@ pub(super) fn file_versions(
     root: &Utf8Path,
     path: &Utf8Path,
 ) -> anyhow::Result<Arc<Vec<FileVersion>>> {
-    let Some(Head { prefix, commit }) = repository_head(root) else {
+    let Some(Head {
+        prefix,
+        commit,
+        shallow,
+    }) = repository_head(root)
+    else {
         return Ok(Arc::default());
     };
     let relative = path.strip_prefix(root)?.as_str().replace('\\', "/");
     let last = lock(&LAST_READ);
-    if let Some(read) = last
-        .as_ref()
-        .filter(|read| read.root == root && read.relative == relative && read.head == commit)
-    {
+    if let Some(read) = last.as_ref().filter(|read| {
+        read.root == root
+            && read.relative == relative
+            && read.head == commit
+            && read.shallow == shallow
+    }) {
         return Ok(read.versions.clone());
     }
     drop(last);
-    let versions = Arc::new(read_file_versions(root, &prefix, &relative)?);
+    // `HEAD` can move after `repository_head`, so the read names the commit.
+    let versions = Arc::new(read_file_versions(root, &commit, &prefix, &relative)?);
     *lock(&LAST_READ) = Some(ReadVersions {
         root: root.to_owned(),
         relative,
         prefix,
         head: commit,
+        shallow,
         versions: versions.clone(),
     });
     Ok(versions)
@@ -69,6 +78,7 @@ pub(super) fn file_versions(
 
 fn read_file_versions(
     root: &Utf8Path,
+    head: &str,
     prefix: &str,
     relative: &str,
 ) -> anyhow::Result<Vec<FileVersion>> {
@@ -80,6 +90,7 @@ fn read_file_versions(
             "--topo-order",
             "--parents",
             "--format=%H%x1f%P%x1f%an%x1f%ct",
+            head,
             "--",
         ])
         .arg(relative)
@@ -132,17 +143,29 @@ fn blob_names(revisions: &[&str], prefix: &str, relative: &str) -> String {
     names
 }
 
-/// The path of `root` inside its work tree and the `HEAD` commit.
+/// The path of `root` inside its work tree, the `HEAD` commit, and the shallow
+/// boundary.
 struct Head {
     prefix: String,
     commit: String,
+    /// The text of the `shallow` file of the repository, or `None` when the
+    /// repository is complete. A fetch that makes a shallow clone deeper changes it.
+    shallow: Option<Vec<u8>>,
 }
 
-/// Reads the prefix and `HEAD` with one Git process. `None` when `root` is not
-/// in a Git work tree with a commit.
+/// Reads the prefix, `HEAD` and the Git directory with one Git process, then the
+/// shallow boundary from the Git directory. `None` when `root` is not in a Git work
+/// tree with a commit.
 fn repository_head(root: &Utf8Path) -> Option<Head> {
     let output = command(root)
-        .args(["rev-parse", "--show-prefix", "--verify", "--quiet", "HEAD"])
+        .args([
+            "rev-parse",
+            "--git-common-dir",
+            "--show-prefix",
+            "--verify",
+            "--quiet",
+            "HEAD",
+        ])
         .output()
         .ok()?;
     if !output.status.success() {
@@ -150,9 +173,15 @@ fn repository_head(root: &Utf8Path) -> Option<Head> {
     }
     let text = String::from_utf8(output.stdout).ok()?;
     let mut lines = text.lines();
+    // A relative Git directory is relative to `root`; `join` keeps an absolute one.
+    let shallow = std::fs::read(root.join(lines.next()?).join("shallow")).ok();
     let prefix = lines.next()?.to_owned();
     let commit = lines.next()?.to_owned();
-    Some(Head { prefix, commit })
+    Some(Head {
+        prefix,
+        commit,
+        shallow,
+    })
 }
 
 /// Reads each named blob through one `git cat-file --batch` process.
