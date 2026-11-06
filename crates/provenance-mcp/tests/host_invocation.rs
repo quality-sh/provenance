@@ -247,7 +247,7 @@ async fn a_request_decode_refusal_does_not_wait_for_a_work_slot() {
     let refused = call(
         &session.client,
         "api",
-        json!({"path":"requirements/req_shared/submit", "method":"post", "body":{
+        json!({"path":"requirements/req_shared/submit", "method":"post", "input":{
             "actor":"agent", "declared_by":"other", "title":"Review",
             "summary":"Review the record."
         }}),

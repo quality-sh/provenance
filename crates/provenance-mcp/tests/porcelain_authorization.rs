@@ -93,7 +93,7 @@ async fn non_create_schema_excludes_a_writable_but_unreadable_kind() {
         json!({
             "path":"sources/source_shared",
             "method":"patch",
-            "body":{"name":"Direct source update"}
+            "input":{"name":"Direct source update"}
         }),
     )
     .await;

@@ -108,7 +108,7 @@ async fn cli_and_mcp_notify_share_one_registration() {
     };
     let mcp = |notify: &'static str, thread: &str| {
         let arguments = json!({"action":"notify", "target":"req_notify",
-            "notify": {"client": notify, "thread": thread}});
+            "notify": notify, "thread": thread});
         let call = client.call("change", arguments);
         async move { call.await["structuredContent"].clone() }
     };

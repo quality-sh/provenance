@@ -239,7 +239,7 @@ async fn tool_list_keeps_its_names_order_and_schemas() {
 
 #[tokio::test]
 async fn tool_call_result_keeps_its_shape() {
-    let call = json!({"name":"check","arguments":{"categories":["graph"]}});
+    let call = json!({"name":"check","arguments":{"graph": true}});
     let mut expected = json!({
         "content":[{"type":"text","text":"graph: passed"}],
         "isError":false,
@@ -291,12 +291,14 @@ async fn typed_refusal_and_unknown_tool_keep_their_shape() {
     let refusal = wire
         .request(
             "tools/call",
-            json!({"name":"check","arguments":{"statement":"The pump stops.","strict":true}}),
+            json!({"name":"check","arguments":{"statement":"The pump stops.","categories":[]}}),
         )
         .await;
     let envelope = json!({
-        "error":{"field":"strict","kind":"invalid_input","reason":"unknown_field",
-                 "message":"check does not take strict; it takes: categories, statement"},
+        "error":{"field":"categories","kind":"invalid_input","reason":"unknown_field",
+                 "message":"check does not take categories; it takes: base, baseline, bindings, \
+                            docs, gaps, graph, output, output_format, path, scope, statement, \
+                            statements, strict"},
         "meta":{}
     });
     assert_eq!(
@@ -344,21 +346,31 @@ fn refusals() -> Vec<(&'static str, Value)> {
     vec![
         (
             "get",
-            unknown("get", "limit, max_depth, returned_kinds, target, view"),
+            unknown(
+                "get",
+                "depth, follow, kind, limit, no_open, review_link, target, view",
+            ),
         ),
         (
             "search",
             unknown(
                 "search",
-                "cursor, exclude_terminal, file, limit, line, node_types, symbol, text",
+                "cursor, file, include_terminal, kind, limit, line, symbol, text",
             ),
         ),
-        ("api", unknown("api", "body, headers, method, path, query")),
-        ("check", unknown("check", "categories, statement")),
         (
-            "trace",
-            unknown("trace", "limit, max_depth, returned_kinds, target"),
+            "api",
+            unknown("api", "filter, header, input, limit, method, path, query"),
         ),
+        (
+            "check",
+            unknown(
+                "check",
+                "base, baseline, bindings, docs, gaps, graph, output, output_format, path, \
+                 scope, statement, statements, strict",
+            ),
+        ),
+        ("trace", unknown("trace", "depth, kind, limit, target")),
         ("change", change),
         ("discussions", discussion),
         (
