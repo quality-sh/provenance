@@ -2,14 +2,14 @@
 //! children of registry commands, holds only the commands that the registry declares.
 
 use clap::Command;
+use provenance_cli::exposed;
 use provenance_macros::verifies;
-use provenance_porcelain::registry::{self, CliForm, Interface};
+use provenance_porcelain::registry::{self, CliForm};
 
 /// The paths below `root` that are neither a CLI registry command nor a group of them.
 fn undeclared_commands(root: &Command) -> Vec<String> {
-    let groups = registry::Command::ALL
+    let groups = exposed::EXPOSED
         .iter()
-        .filter(|command| command.is_present(Interface::Cli))
         .filter_map(|command| match command.declaration().cli_form {
             CliForm::Words(words) | CliForm::WordsAndTarget(words) => Some(words),
             CliForm::Target => None,
@@ -21,7 +21,7 @@ fn undeclared_commands(root: &Command) -> Vec<String> {
         for child in command.get_subcommands() {
             let mut words = path.clone();
             words.push(child.get_name());
-            let declared = registry::Command::find(Interface::Cli, &words).is_some();
+            let declared = exposed::find(&words).is_some();
             let group = groups
                 .iter()
                 .any(|selected| selected.len() > words.len() && selected.starts_with(&words));
@@ -46,7 +46,7 @@ fn undeclared_actions(target: &Command) -> Vec<String> {
         .map(|value| value.get_name().to_owned())
         .filter(|name| {
             registry::Command::find_target_action(name)
-                .is_none_or(|command| !command.is_present(Interface::Cli))
+                .is_none_or(|command| !exposed::shows(command))
         })
         .collect()
 }

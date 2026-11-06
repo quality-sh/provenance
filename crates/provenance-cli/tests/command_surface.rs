@@ -1,15 +1,17 @@
 //! The spawned binary's help and the MCP `tools/list` of a served host show the commands
-//! that the registry records, each with its declared flags or schema properties.
+//! that each consumer records, each with its declared flags or schema properties.
 
 mod support {
     pub mod review_paths;
     pub mod surface;
 }
 
+use provenance_cli::exposed as cli;
 use provenance_macros::verifies;
-use provenance_porcelain::registry::{CliForm, Command, Input, Interface, Presence};
+use provenance_mcp::exposed::{self as mcp, Place};
+use provenance_porcelain::registry::{CliForm, Command, Input};
 use serde_json::Value;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use support::surface::{help, tools, words};
 
 fn properties(schema: &Value) -> BTreeSet<String> {
@@ -26,10 +28,7 @@ fn properties(schema: &Value) -> BTreeSet<String> {
 async fn porcelain_commands_show_one_description() {
     let (repo, path) = support::review_paths::init();
     let tools = tools(repo.path()).await;
-    for command in Command::ALL {
-        if !command.is_present(Interface::Mcp) || !command.is_present(Interface::Cli) {
-            continue;
-        }
+    for command in mcp::tools().filter(|command| cli::shows(*command)) {
         let declaration = command.declaration();
         let tool = &tools[declaration.name];
         assert_eq!(tool["description"], declaration.description, "{command:?}");
@@ -50,43 +49,70 @@ async fn porcelain_commands_show_one_description() {
     }
 }
 
-/// Each command that the registry records on an interface appears there with its
-/// declared flags or schema properties, and an absent command does not appear.
+/// The place where MCP shows `command`, when MCP records it.
+fn mcp_place(command: Command) -> Option<Place> {
+    mcp::EXPOSED
+        .iter()
+        .find(|(recorded, _)| *recorded == command)
+        .map(|(_, place)| *place)
+}
+
+/// The values of one enum property of a listed tool.
+fn values<'a>(tools: &'a BTreeMap<String, Value>, tool: &str, property: &str) -> Vec<&'a str> {
+    let property = &tools[tool]["inputSchema"]["properties"][property];
+    property["enum"]
+        .as_array()
+        .or_else(|| property["items"]["enum"].as_array())
+        .map(|values| values.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default()
+}
+
+/// Whether MCP shows `name` as a tool or as a value of an action or categories argument.
+fn mcp_shows(tools: &BTreeMap<String, Value>, name: &str) -> bool {
+    tools.contains_key(name)
+        || tools.keys().any(|tool| {
+            values(tools, tool, "action").contains(&name)
+                || values(tools, tool, "categories").contains(&name)
+        })
+}
+
+/// Each command that a consumer records appears there with its declared flags or schema
+/// properties, and each other registry command does not appear there.
 #[tokio::test]
 #[verifies("rule_porcelain_interface_shows_recorded_commands", exhaustion)]
 async fn registry_commands_appear_on_both_interfaces() {
     let (repo, path) = support::review_paths::init();
     let tools = tools(repo.path()).await;
+    let root = listed_commands(&[]);
     for command in Command::ALL {
         let declaration = command.declaration();
-        match command.presence(Interface::Cli) {
-            Presence::Present => {
-                let help = words(*command).map_or_else(
-                    || help(&["req_surface", declaration.name, "--repo", &path]),
-                    help,
-                );
-                for flag in declaration.flags.iter().filter(|flag| !flag.hidden) {
-                    let shown = if flag.kind == provenance_porcelain::registry::FlagKind::Positional
-                    {
-                        let name = flag.field_id().to_uppercase();
-                        if flag.required {
-                            format!("<{name}>")
-                        } else {
-                            format!("[{name}]")
-                        }
+        if cli::shows(*command) {
+            let help = words(*command).map_or_else(
+                || help(&["req_surface", declaration.name, "--repo", &path]),
+                help,
+            );
+            for flag in declaration.flags.iter().filter(|flag| !flag.hidden) {
+                let shown = if flag.kind == provenance_porcelain::registry::FlagKind::Positional {
+                    let name = flag.field_id().to_uppercase();
+                    if flag.required {
+                        format!("<{name}>")
                     } else {
-                        format!("--{}", flag.name)
-                    };
-                    assert!(
-                        help.contains(&shown),
-                        "{command:?} help lacks {shown}:\n{help}"
-                    );
-                }
+                        format!("[{name}]")
+                    }
+                } else {
+                    format!("--{}", flag.name)
+                };
+                assert!(
+                    help.contains(&shown),
+                    "{command:?} help lacks {shown}:\n{help}"
+                );
             }
-            Presence::Absent { reason } => assert!(!reason.is_empty(), "{command:?}"),
+        } else {
+            let first = words(*command).expect("a CLI target action is on the CLI")[0];
+            assert!(!root.iter().any(|name| name == first), "{command:?}");
         }
-        match command.presence(Interface::Mcp) {
-            Presence::Present => {
+        match mcp_place(*command) {
+            Some(Place::Tool) => {
                 let tool = tools
                     .get(declaration.name)
                     .unwrap_or_else(|| panic!("tools/list lacks {}", declaration.name));
@@ -101,10 +127,43 @@ async fn registry_commands_appear_on_both_interfaces() {
                     assert_eq!(properties(&tool["inputSchema"]), expected, "{command:?}");
                 }
             }
-            Presence::Absent { reason } => {
-                assert!(!reason.is_empty(), "{command:?}");
-                assert!(!tools.contains_key(declaration.name), "{command:?}");
-            }
+            Some(Place::Action { tool }) => assert!(
+                values(&tools, tool, "action").contains(&declaration.name),
+                "{command:?} is not an action of {tool}"
+            ),
+            Some(Place::Category { tool }) => assert!(
+                values(&tools, tool, "categories").contains(&declaration.name),
+                "{command:?} is not a category of {tool}"
+            ),
+            None => assert!(!mcp_shows(&tools, declaration.name), "{command:?}"),
+        }
+    }
+}
+
+/// Each list holds each command at most once, and each MCP place names a listed tool.
+#[test]
+#[verifies("rule_porcelain_interface_records_each_command", exhaustion)]
+fn each_consumer_records_each_command_once() {
+    for command in Command::ALL {
+        assert!(
+            cli::EXPOSED.iter().filter(|held| *held == command).count() <= 1,
+            "{command:?}"
+        );
+        assert!(
+            mcp::EXPOSED
+                .iter()
+                .filter(|(held, _)| held == command)
+                .count()
+                <= 1,
+            "{command:?}"
+        );
+    }
+    let tools = mcp::tools()
+        .map(|command| command.declaration().name)
+        .collect::<Vec<_>>();
+    for (command, place) in mcp::EXPOSED {
+        if let Place::Action { tool } | Place::Category { tool } = place {
+            assert!(tools.contains(tool), "{command:?} names {tool}");
         }
     }
 }
@@ -112,12 +171,9 @@ async fn registry_commands_appear_on_both_interfaces() {
 /// Each of `commands` is a CLI-only registry command, and its help shows each declared flag.
 fn assert_cli_only_registry_commands(commands: &[&[&str]]) {
     for words in commands {
-        let command = Command::find(Interface::Cli, words)
+        let command = cli::find(words)
             .unwrap_or_else(|| panic!("provenance {} is not a registry command", words.join(" ")));
-        assert!(
-            !command.is_present(Interface::Mcp),
-            "{command:?} is CLI-only"
-        );
+        assert_eq!(mcp_place(command), None, "{command:?} is CLI-only");
         let help = help(words);
         for flag in command
             .declaration()
@@ -209,7 +265,7 @@ fn every_cli_command_is_a_registry_command() {
             let mut path = group.clone();
             path.push(name);
             let words = path.iter().map(String::as_str).collect::<Vec<_>>();
-            if Command::find(Interface::Cli, &words).is_some() {
+            if cli::find(&words).is_some() {
                 continue;
             }
             assert!(
@@ -222,14 +278,14 @@ fn every_cli_command_is_a_registry_command() {
     }
 }
 
-/// Each tool that a served host lists is a registry command that MCP shows.
+/// Each tool that a served host lists is a registry command that MCP records as a tool.
 #[tokio::test]
 #[verifies("rule_porcelain_registry_defines_commands", exhaustion)]
 async fn every_mcp_tool_is_a_registry_command() {
     let (repo, _) = support::review_paths::init();
     for name in tools(repo.path()).await.keys() {
         assert!(
-            Command::find(Interface::Mcp, &[name.as_str()]).is_some(),
+            Command::named(name).is_some_and(|command| mcp_place(command) == Some(Place::Tool)),
             "MCP tool {name} is not a registry command"
         );
     }

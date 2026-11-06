@@ -5,14 +5,14 @@
 use crate::arguments::InputCheck;
 use crate::tools;
 use provenance_porcelain::check::CheckPort;
-use provenance_porcelain::registry::{Command, Interface};
+use provenance_porcelain::registry::Command;
 use provenance_porcelain::tool_input::ToolInput;
 use provenance_transport::{porcelain::Action, StatementHost};
 use rmcp::model::{CallToolResult, Tool};
 use serde_json::{Map, Value};
 use std::sync::Arc;
 
-/// The tools of one host in registry order.
+/// The tools of one host in tools/list order.
 pub struct Table(Vec<Listed>);
 
 impl Table {
@@ -20,10 +20,8 @@ impl Table {
     /// stops the server start.
     pub fn new(host: &StatementHost) -> Self {
         Self(
-            Command::ALL
-                .iter()
-                .filter(|command| command.is_present(Interface::Mcp))
-                .filter_map(|command| Listed::new(host, *command))
+            crate::exposed::tools()
+                .filter_map(|command| Listed::new(host, command))
                 .collect(),
         )
     }

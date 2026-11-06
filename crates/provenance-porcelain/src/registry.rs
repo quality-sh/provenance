@@ -1,9 +1,8 @@
 //! One declaration for each command on the CLI and each MCP tool.
 //!
-//! A declaration names a command, describes it, and declares its inputs for each
-//! interface. It does no work: the handlers stay behind the existing ports. The CLI
-//! renders its parser from these declarations and the MCP server lists its tools
-//! from them.
+//! A declaration names a command, describes it, and declares its inputs. It does no
+//! work: the handlers stay behind the existing ports. Each consumer keeps its own list
+//! of the commands that it shows.
 
 mod dogfood;
 mod graph;
@@ -31,20 +30,6 @@ pub use workspace::{
 
 use crate::action::Action;
 use provenance_macros::rule;
-
-/// One interface that shows commands.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Interface {
-    Cli,
-    Mcp,
-}
-
-/// Whether an interface shows a command, with the reason when it does not.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Presence {
-    Present,
-    Absent { reason: &'static str },
-}
 
 /// The CLI words that select a command.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -270,7 +255,7 @@ pub struct Declaration {
     pub flags: &'static [Flag],
 }
 
-/// Every command on the CLI and every MCP tool.
+/// Every porcelain command.
 #[rule("rule_porcelain_registry_defines_commands")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Command {
@@ -287,12 +272,12 @@ pub enum Command {
     Repository(RepositoryCommand),
     Graph(GraphCommand),
     Workspace(WorkspaceCommand),
-    /// Dev-build-only commands. The CLI shows them only with the `dogfood` feature.
+    /// Dev-build-only commands.
     Dogfood(DogfoodCommand),
 }
 
 impl Command {
-    /// Every command, in MCP tool-list order.
+    /// Every command.
     pub const ALL: &'static [Self] = &[
         Self::Get,
         Self::Search,
@@ -349,92 +334,12 @@ impl Command {
         porcelain::declaration(self)
     }
 
-    /// Whether `interface` shows this command. Each interface has one exhaustive match,
-    /// so a new command does not compile until each interface records it.
-    #[rule("rule_porcelain_interface_records_each_command")]
-    pub const fn presence(self, interface: Interface) -> Presence {
-        match interface {
-            Interface::Cli => match self {
-                Self::Get | Self::Search | Self::Api | Self::Check | Self::Trace | Self::Prime => {
-                    Presence::Present
-                }
-                Self::Change => Presence::Absent {
-                    reason: "the CLI takes each record action as a word after the target",
-                },
-                Self::Action(action) => match action {
-                    Action::Create
-                    | Action::Update
-                    | Action::Answer
-                    | Action::Claim
-                    | Action::Release
-                    | Action::Submit
-                    | Action::Discussions
-                    | Action::Discussion
-                    | Action::Discuss
-                    | Action::Reply => Presence::Present,
-                },
-                Self::Repository(command) => command.presence(interface),
-                Self::Graph(command) => command.presence(interface),
-                Self::Workspace(command) => command.presence(interface),
-                Self::Dogfood(command) => command.presence(interface),
-            },
-            Interface::Mcp => match self {
-                Self::Get | Self::Search | Self::Api | Self::Check | Self::Trace | Self::Change => {
-                    Presence::Present
-                }
-                Self::Prime => Presence::Absent {
-                    reason: "MCP clients receive the same guidance as the initialize instructions",
-                },
-                Self::Action(action) => match action {
-                    Action::Create
-                    | Action::Update
-                    | Action::Answer
-                    | Action::Claim
-                    | Action::Release
-                    | Action::Submit => Presence::Absent {
-                        reason: "MCP takes each record action as the action argument of change",
-                    },
-                    Action::Discussions => Presence::Present,
-                    Action::Discussion => Presence::Absent {
-                        reason: "MCP reads one Discussion through the action argument of \
-                                 discussions",
-                    },
-                    Action::Discuss | Action::Reply => Presence::Absent {
-                        reason: "MCP takes each Discussion write as the action argument of \
-                                 change",
-                    },
-                },
-                Self::Repository(command) => command.presence(interface),
-                Self::Graph(command) => command.presence(interface),
-                Self::Workspace(command) => command.presence(interface),
-                Self::Dogfood(command) => command.presence(interface),
-            },
-        }
-    }
-
-    /// Whether `interface` shows this command.
-    pub const fn is_present(self, interface: Interface) -> bool {
-        matches!(self.presence(interface), Presence::Present)
-    }
-
-    /// The command that `words` select on `interface`. On the CLI, `words` are the root
-    /// words; on MCP, the one tool name. A target action is not found by its words.
-    pub fn find(interface: Interface, words: &[&str]) -> Option<Self> {
-        Self::ALL.iter().copied().find(|command| {
-            if !command.is_present(interface) {
-                return false;
-            }
-            let declaration = command.declaration();
-            match interface {
-                Interface::Mcp => words == [declaration.name],
-                Interface::Cli => match declaration.cli_form {
-                    CliForm::Words(selected) | CliForm::WordsAndTarget(selected) => {
-                        words == selected
-                    }
-                    CliForm::Target => false,
-                },
-            }
-        })
+    /// The command with this declaration name.
+    pub fn named(name: &str) -> Option<Self> {
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|command| command.declaration().name == name)
     }
 
     /// The target action with this CLI name.
@@ -458,6 +363,14 @@ mod tests {
     #[test]
     fn the_get_view_flag_lists_every_view() {
         assert_eq!(VIEWS, View::ALL.map(View::as_str));
+    }
+
+    /// Implementation aid: each command has its own declaration name.
+    #[test]
+    fn each_declaration_name_selects_its_command() {
+        for command in Command::ALL {
+            assert_eq!(Command::named(command.declaration().name), Some(*command));
+        }
     }
 
     /// Implementation aid: the typed CLI inputs have one schema property for each flag.

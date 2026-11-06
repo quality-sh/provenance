@@ -17,7 +17,8 @@ mod removed;
 use grammar::{
     ApiArgs, Delivery, DiscussionsArgs, DiscussionsRoute, SearchArgs, TargetArgs, TargetVerb,
 };
-use provenance_porcelain::registry::{self, CheckCliInput, Interface, PrimeInput};
+use provenance_cli::exposed;
+use provenance_porcelain::registry::{self, CheckCliInput, PrimeInput};
 
 #[cfg(test)]
 mod surface_tests;
@@ -73,7 +74,7 @@ impl Invocation {
         let Some(word) = grammar::command_word(&arguments) else {
             return Ok(Self::parse_root(arguments));
         };
-        match registry::Command::find(Interface::Cli, &[word]) {
+        match exposed::find(&[word]) {
             Some(registry::Command::Search) => {
                 let matches = crate::registry_cli::root_word_command(registry::Command::Search)
                     .try_get_matches_from(arguments)
@@ -138,7 +139,7 @@ impl Invocation {
             .try_get_matches_from(arguments)
             .unwrap_or_else(|error| error.exit());
         let (words, selected) = crate::registry_cli::selected(&matches);
-        match registry::Command::find(Interface::Cli, &words) {
+        match exposed::find(&words) {
             Some(registry::Command::Check) => Self::Check(
                 crate::registry_cli::input(&registry::Command::Check.declaration(), selected)
                     .unwrap_or_else(|error| catalog_cli::usage_error(error)),
@@ -431,7 +432,7 @@ pub fn root_command() -> clap::Command {
                 | registry::Command::Graph(_)
                 | registry::Command::Workspace(_)
                 | registry::Command::Dogfood(_)
-        ) && command.is_present(registry::Interface::Cli)
+        ) && exposed::shows(*command)
     }))
     .fold(Cli::command(), crate::registry_cli::add_subcommand)
 }

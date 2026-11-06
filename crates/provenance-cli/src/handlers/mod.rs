@@ -412,7 +412,7 @@ mod tests {
                     | registry::Command::Workspace(_)
                     | registry::Command::Dogfood(_)
             );
-            if !cli_only || !command.is_present(registry::Interface::Cli) {
+            if !cli_only || !provenance_cli::exposed::shows(*command) {
                 continue;
             }
             for flag in command.declaration().flags {

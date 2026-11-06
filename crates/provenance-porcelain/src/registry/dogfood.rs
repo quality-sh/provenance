@@ -1,7 +1,7 @@
 //! Declarations of the dev-build-only commands that record and triage pain-point notes
-//! about provenance itself. The registry lists them only with the `dogfood` feature.
+//! about provenance itself.
 
-use super::{json_format_flag, CliForm, Declaration, Flag, FlagKind, Input, Interface, Presence};
+use super::{json_format_flag, CliForm, Declaration, Flag, FlagKind, Input};
 use serde::Deserialize;
 
 /// One dev-build-only dogfood command.
@@ -14,42 +14,6 @@ pub enum DogfoodCommand {
     TriageReopen,
     TriageList,
     Simulate,
-}
-
-impl DogfoodCommand {
-    /// Whether `interface` shows this command. Each interface has one exhaustive match.
-    pub(super) const fn presence(self, interface: Interface) -> Presence {
-        match interface {
-            Interface::Cli => match self {
-                Self::Note
-                | Self::List
-                | Self::Report
-                | Self::TriageHandle
-                | Self::TriageReopen
-                | Self::TriageList
-                | Self::Simulate => {
-                    if cfg!(feature = "dogfood") {
-                        Presence::Present
-                    } else {
-                        Presence::Absent {
-                            reason: "only dev builds with the dogfood feature have the command",
-                        }
-                    }
-                }
-            },
-            Interface::Mcp => match self {
-                Self::Note
-                | Self::List
-                | Self::Report
-                | Self::TriageHandle
-                | Self::TriageReopen
-                | Self::TriageList
-                | Self::Simulate => Presence::Absent {
-                    reason: "the notes are about the CLI on the local machine",
-                },
-            },
-        }
-    }
 }
 
 const JSON_FORMAT: Flag = json_format_flag(Some("json"));
