@@ -111,7 +111,7 @@ pub fn target_call(
 }
 
 /// `target_call` for a parent replacement, which reads the record and guards each write
-/// with the ETag that it read when the call gives no `if_match`.
+/// with the `ETag` that it read when the call gives no `if_match`.
 pub fn replacement_call(
     definition: &'static Definition,
     value: &Value,
