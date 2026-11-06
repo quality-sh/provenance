@@ -14,7 +14,7 @@ fn published_schema() -> Value {
     schema
 }
 
-fn disposition(schema: &Value, decision: &str, rationale: Option<&str>) -> Value {
+fn disposition(decision: &str, rationale: Option<&str>) -> Value {
     let mut sample = json!({
         "scope_id": "default",
         "id": "disposition_sample",
@@ -33,10 +33,10 @@ fn published_disposition_schema_matches_rationale_rules() {
     let schema = published_schema();
     let validator = jsonschema::draft7::new(&schema).unwrap();
     for decision in ["accepted", "deferred"] {
-        assert!(validator.is_valid(&disposition(&schema, decision, None)));
+        assert!(validator.is_valid(&disposition(decision, None)));
     }
-    assert!(validator.is_valid(&disposition(&schema, "rejected", Some("Needs work."))));
+    assert!(validator.is_valid(&disposition("rejected", Some("Needs work."))));
     for rationale in [None, Some("  ")] {
-        assert!(!validator.is_valid(&disposition(&schema, "rejected", rationale)));
+        assert!(!validator.is_valid(&disposition("rejected", rationale)));
     }
 }
