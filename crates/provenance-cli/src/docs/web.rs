@@ -178,7 +178,18 @@ pub(super) fn router(site: DocsSite) -> Router {
     Router::new()
         .route("/assets/provenance-docs.css", get(stylesheet))
         .fallback(get(render_docs_page))
-        .with_state(Arc::new(site))
+        .with_state(Arc::new(Site(site)))
+}
+
+/// The docs site that the server renders.
+struct Site(DocsSite);
+
+impl std::ops::Deref for Site {
+    type Target = DocsSite;
+
+    fn deref(&self) -> &DocsSite {
+        &self.0
+    }
 }
 
 async fn stylesheet() -> impl IntoResponse {
@@ -188,7 +199,7 @@ async fn stylesheet() -> impl IntoResponse {
     )
 }
 
-async fn render_docs_page(State(site): State<Arc<DocsSite>>, uri: Uri) -> impl IntoResponse {
+async fn render_docs_page(State(site): State<Arc<Site>>, uri: Uri) -> impl IntoResponse {
     let path = uri.path().to_string();
     site.page_for_request_path(&path).map_or_else(
         || (StatusCode::NOT_FOUND, Html(site.render_not_found(&path))).into_response(),
@@ -196,7 +207,7 @@ async fn render_docs_page(State(site): State<Arc<DocsSite>>, uri: Uri) -> impl I
     )
 }
 
-impl DocsSite {
+impl Site {
     fn page_for_request_path(&self, path: &str) -> Option<&DocPage> {
         let route = normalize_request_route(path);
         self.page_by_route
