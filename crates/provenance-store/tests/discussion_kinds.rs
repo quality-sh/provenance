@@ -227,7 +227,7 @@ fn legacy_containers_stay_readable_beside_addressed_discussions() {
         .unwrap()
         .into_iter()
         .filter(|thread| thread.parent.node_id.as_str() == "question_award")
-        .collect::<Vec<_>>();
-    assert_eq!(containers.len(), 1);
+        .count();
+    assert_eq!(containers, 1);
     assert_eq!(store.list_messages(&scope()).unwrap().len(), 2);
 }

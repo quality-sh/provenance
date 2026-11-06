@@ -40,7 +40,7 @@ fn import_keeps_a_command_keyword_id_that_is_already_stored() {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(
         &path,
-        "{\"scope_id\":\"default\",\"id\":\"search\",\"name\":\"Existing\",\"source_type\":\"document\"}\n".to_string(),
+        "{\"scope_id\":\"default\",\"id\":\"search\",\"name\":\"Existing\",\"source_type\":\"document\"}\n",
     )
     .unwrap();
     let exported = dir.path().join("export.json");
@@ -260,17 +260,17 @@ fn check_rejects_a_misfiled_disposition_target() {
     std::fs::create_dir_all(scope.join("ideation")).unwrap();
     std::fs::write(
         scope.join("requirements/req.jsonl"),
-        "{\"scope_id\":\"other\",\"id\":\"req_misfiled\",\"statement\":\"Misfiled\",\"status\":\"active\"}\n".to_string(),
+        "{\"scope_id\":\"other\",\"id\":\"req_misfiled\",\"statement\":\"Misfiled\",\"status\":\"active\"}\n",
     )
     .unwrap();
     std::fs::write(
         scope.join("ideation/proposal_cards.jsonl"),
-        "{\"scope_id\":\"default\",\"id\":\"proposal_a\",\"proposal_key\":\"a\",\"proposal_type\":\"requirement_candidate\",\"title\":\"A\",\"summary\":\"A\",\"traceability\":{\"target\":{\"artifact_type\":\"requirement\",\"artifact_id\":\"req_misfiled\"},\"source_ids\":[],\"evidence_references\":[],\"supporting_claim_ids\":[]},\"promotion_state\":\"proposed\"}\n".to_string(),
+        "{\"scope_id\":\"default\",\"id\":\"proposal_a\",\"proposal_key\":\"a\",\"proposal_type\":\"requirement_candidate\",\"title\":\"A\",\"summary\":\"A\",\"traceability\":{\"target\":{\"artifact_type\":\"requirement\",\"artifact_id\":\"req_misfiled\"},\"source_ids\":[],\"evidence_references\":[],\"supporting_claim_ids\":[]},\"promotion_state\":\"proposed\"}\n",
     )
     .unwrap();
     std::fs::write(
         scope.join("ideation/dispositions.jsonl"),
-        "{\"scope_id\":\"default\",\"id\":\"disposition_a\",\"proposal_id\":\"proposal_a\",\"decision\":\"rejected\",\"rationale\":\"Reviewed\",\"actor\":{\"identity_type\":\"human\",\"id\":\"reviewer\"},\"canonical_artifact\":{\"artifact_type\":\"requirement\",\"artifact_id\":\"req_misfiled\"}}\n".to_string(),
+        "{\"scope_id\":\"default\",\"id\":\"disposition_a\",\"proposal_id\":\"proposal_a\",\"decision\":\"rejected\",\"rationale\":\"Reviewed\",\"actor\":{\"identity_type\":\"human\",\"id\":\"reviewer\"},\"canonical_artifact\":{\"artifact_type\":\"requirement\",\"artifact_id\":\"req_misfiled\"}}\n",
     )
     .unwrap();
 

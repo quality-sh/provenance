@@ -26,11 +26,10 @@ fn native_and_batch_writers_refuse_review_mutation_bypasses() {
         "decisions on review submissions go through the review seam",
     );
 
-    let mut batch_card = card;
     refused(
         store.land_ideation_batch(
             &super::scope(),
-            serde_json::from_value(json!({"proposals":[batch_card]})).unwrap(),
+            serde_json::from_value(json!({"proposals":[card]})).unwrap(),
             false,
         ),
         "batch writes cannot create review submissions",

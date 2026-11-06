@@ -49,13 +49,7 @@ fn init_with_requirements(repo: &std::path::Path, rows: &[&str]) {
         .success();
     let path = repo.join(".provenance/state/scopes/default/requirements/req.jsonl");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::write(
-        path,
-        rows.iter()
-            .map(|row| format!("{row}\n"))
-            .collect::<String>(),
-    )
-    .unwrap();
+    std::fs::write(path, rows.join("\n") + "\n").unwrap();
 }
 
 fn get(repo: &str, id: &str) -> assert_cmd::assert::Assert {

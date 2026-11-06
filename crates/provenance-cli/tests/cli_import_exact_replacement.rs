@@ -186,7 +186,7 @@ fn seed_stale_target_shards(repo: &std::path::Path) {
     std::fs::create_dir_all(scope.join("threads")).unwrap();
     std::fs::write(
         scope.join("threads/2025-01.jsonl"),
-        "{\"scope_id\":\"default\",\"id\":\"message_stale\",\"thread_id\":\"thread_stale\",\"role\":\"user\",\"body\":\"stale\",\"created_at\":1}\n".to_string(),
+        "{\"scope_id\":\"default\",\"id\":\"message_stale\",\"thread_id\":\"thread_stale\",\"role\":\"user\",\"body\":\"stale\",\"created_at\":1}\n",
     )
     .unwrap();
 }
