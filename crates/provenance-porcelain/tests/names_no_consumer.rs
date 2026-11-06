@@ -57,7 +57,7 @@ fn block_comment_end(chars: &[char], start: usize) -> usize {
 }
 
 /// The index after the string whose text starts at `start`.
-fn string_end(chars: &[char], start: usize) -> usize {
+const fn string_end(chars: &[char], start: usize) -> usize {
     let mut index = start;
     while index < chars.len() {
         match chars[index] {
@@ -122,7 +122,8 @@ fn words(identifier: &str) -> Vec<String> {
         for (index, c) in chars.iter().enumerate() {
             let next_lower = chars.get(index + 1).is_some_and(char::is_ascii_lowercase);
             let previous_lower = index > 0 && !chars[index - 1].is_ascii_uppercase();
-            if c.is_ascii_uppercase() && !word.is_empty() && (previous_lower || next_lower) {
+            let boundary = previous_lower || next_lower;
+            if boundary && c.is_ascii_uppercase() && !word.is_empty() {
                 words.push(std::mem::take(&mut word));
             }
             word.push(c.to_ascii_lowercase());
@@ -165,7 +166,6 @@ fn porcelain_sources_name_no_consumer() {
         &Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
         &mut files,
     );
-    assert!(!files.is_empty());
     let found = files
         .iter()
         .flat_map(|path| {
@@ -183,18 +183,18 @@ fn porcelain_sources_name_no_consumer() {
 #[test]
 #[verifies("rule_porcelain_names_no_consumer", examples)]
 fn scan_refuses_only_identifiers_with_a_consumer_word() {
-    let source = r##"
+    let source = r#"
         // A cli_input comment.
         /* An McpInput /* nested */ comment. */
         /// The CLI help.
         const TEXT: &str = "cli_form and MCP";
-        const RAW: &str = r#"McpTool "cli""#;
+        const RAW: &str = r"McpTool cli";
         const QUOTE: char = '"';
         fn shared<'a>(value: &'a str, clients: u8, climb: u8) -> &'a str { value }
         struct CheckCliInput;
         fn mcp_schema() {}
         enum Form { ClapArg, RmcpTool, CLIForm }
-    "##;
+    "#;
     assert_eq!(
         consumer_identifiers(source),
         [

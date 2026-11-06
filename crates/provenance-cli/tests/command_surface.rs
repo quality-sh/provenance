@@ -139,6 +139,43 @@ async fn registry_commands_appear_on_both_interfaces() {
     }
 }
 
+/// The MCP input fields that name the target record of a command.
+const TARGET_FIELDS: &[&str] = &["target", "parent", "discussion_id"];
+
+/// Each command that the CLI and MCP both show has its name on both, and takes a target
+/// record on MCP exactly when it takes one on the CLI.
+#[tokio::test]
+#[verifies("rule_shared_command_same_name_and_grammar", exhaustion)]
+async fn shared_commands_have_one_name_and_target_form() {
+    let (repo, path) = support::review_paths::init();
+    let tools = tools(repo.path()).await;
+    for (command, place) in mcp::EXPOSED
+        .iter()
+        .filter(|(command, _)| cli::shows(*command))
+    {
+        let declaration = command.declaration();
+        if declaration.grammar.takes_name() {
+            let words = declaration.words().collect::<Vec<_>>();
+            assert_eq!(cli::find(&words), Some(*command), "{command:?}");
+        } else {
+            help(&["req_surface", declaration.name, "--repo", &path]);
+        }
+        let tool = match place {
+            Place::Tool => declaration.name,
+            Place::Action { tool } | Place::Category { tool } => tool,
+        };
+        let properties = properties(&tools[tool]["inputSchema"]);
+        let mcp_target = TARGET_FIELDS
+            .iter()
+            .any(|field| properties.contains(*field));
+        assert_eq!(
+            mcp_target,
+            declaration.grammar.takes_target(),
+            "{command:?} target form"
+        );
+    }
+}
+
 /// How the help shows one flag.
 fn shown(flag: &Flag) -> String {
     if flag.kind == FlagKind::Positional {
