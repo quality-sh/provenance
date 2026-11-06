@@ -374,7 +374,6 @@ fn gen_corpus(rng: &mut Rng) -> Corpus {
     }
 
     let site = DocsSite {
-        source_root: "docs".to_string(),
         route_by_path: doc_pages
             .iter()
             .map(|page| (page.file_path.clone(), page.route.clone()))
@@ -391,6 +390,49 @@ fn gen_corpus(rng: &mut Rng) -> Corpus {
         published,
         pages,
     }
+}
+
+/// The site infers each page's route and title from its file, and uses README.md as
+/// the homepage when docs/index.md is absent.
+#[test]
+fn the_site_infers_routes_and_titles() {
+    let pages = |files: &[(&str, &str)]| {
+        let dir = tempfile::tempdir().unwrap();
+        for (file, markdown) in files {
+            let path = dir.path().join(file);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, markdown).unwrap();
+        }
+        DocsSite::load(dir.path())
+            .unwrap()
+            .pages
+            .into_iter()
+            .map(|page| (page.route, page.title, page.source_path))
+            .collect::<Vec<_>>()
+    };
+    let owned = |route: &str, title: &str, source: &str| {
+        (route.to_owned(), title.to_owned(), source.to_owned())
+    };
+    assert_eq!(
+        pages(&[
+            ("docs/index.md", "# Agent Handbook\n"),
+            ("docs/guide/install.md", "# Installation\n"),
+        ]),
+        [
+            owned("/", "Agent Handbook", "docs/index.md"),
+            owned("/guide/install/", "Installation", "docs/guide/install.md"),
+        ]
+    );
+    assert_eq!(
+        pages(&[
+            ("README.md", "# Project Handbook\n"),
+            ("docs/guide/install.md", "# Installation\n"),
+        ]),
+        [
+            owned("/", "Project Handbook", "README.md"),
+            owned("/guide/install/", "Installation", "docs/guide/install.md"),
+        ]
+    );
 }
 
 mod link_resolution;

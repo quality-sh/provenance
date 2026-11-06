@@ -1,11 +1,11 @@
 //! Prints and opens the reviewer-facing links that the review library builds.
 
 use anyhow::Context as _;
-use provenance_cli::repo_context::RepoContext;
 use provenance_macros::rule;
 use provenance_porcelain::get::{GetInput, View, NO_REVIEW_HOST};
 pub use provenance_review::AffectedReviewRecord;
 use provenance_review::{PageResult, ReviewLocation};
+use provenance_transport::repository::RepoContext;
 use serde::Serialize;
 use serde_json::Value;
 
@@ -25,14 +25,14 @@ pub async fn print(
     format: Option<provenance_cli::porcelain::OutputFormat>,
     no_open: bool,
 ) -> anyhow::Result<()> {
-    let host = context.local_host()?;
+    let host = provenance_cli::porcelain::local_host(context)?;
     let record = host
         .porcelain()
         .get()
         .get(GetInput::new(record_id, View::Record))
         .await?;
     let location = provenance_review::review_location(
-        &context.place(),
+        &provenance_cli::porcelain::place(context),
         &AffectedReviewRecord {
             kind: record.record.node_type(),
             id: record_id.to_owned(),
@@ -99,7 +99,9 @@ async fn try_annotate_write(
     affected: &AffectedReviewRecord,
     value: &mut Value,
 ) -> anyhow::Result<()> {
-    let Some(location) = provenance_review::review_location(&context.place(), affected).await?
+    let Some(location) =
+        provenance_review::review_location(&provenance_cli::porcelain::place(context), affected)
+            .await?
     else {
         return Ok(());
     };

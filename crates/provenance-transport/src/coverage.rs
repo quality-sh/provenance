@@ -1,4 +1,5 @@
-use crate::output::ReportFormat;
+//! The Rule binding scan of one scope, and its report file.
+
 use anyhow::Context;
 use camino::Utf8PathBuf;
 use provenance_core::{Manifest, Scope};
@@ -10,12 +11,31 @@ mod verification_state;
 use render::render_coverage;
 use verification_state::load_validation_state;
 
-pub(super) struct CoverageScanOutcome {
-    pub(super) scan: provenance_core::coverage::CoverageScan,
-    pub(super) governed_finding_count: usize,
+/// JSON for the machine, or one command's Markdown report for the reader.
+/// The Markdown arm names a real renderer.
+#[derive(Debug, Clone, Copy)]
+pub enum ReportFormat {
+    Json,
+    Markdown,
 }
 
-pub(super) fn coverage_scan_from_scanned(
+impl ReportFormat {
+    /// The format that one `--format` value names.
+    pub fn from_flag(value: &str) -> Option<Self> {
+        match value {
+            "json" => Some(Self::Json),
+            "markdown" => Some(Self::Markdown),
+            _ => None,
+        }
+    }
+}
+
+pub(crate) struct CoverageScanOutcome {
+    pub(crate) scan: provenance_core::coverage::CoverageScan,
+    pub(crate) governed_finding_count: usize,
+}
+
+pub(crate) fn coverage_scan_from_scanned(
     repository: &Repository,
     repo: &camino::Utf8Path,
     path: &Utf8PathBuf,
@@ -34,7 +54,7 @@ pub(super) fn coverage_scan_from_scanned(
 
 /// The scan report of one scope as the `coverage scan` report file had it: JSON, or
 /// the Markdown report.
-pub(super) fn render_report(
+pub(crate) fn render_report(
     format: ReportFormat,
     scan: &provenance_core::coverage::CoverageScan,
 ) -> anyhow::Result<String> {

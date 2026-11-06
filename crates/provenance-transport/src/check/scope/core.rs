@@ -1,8 +1,8 @@
-use crate::handlers::check::index::CheckIndex;
-use crate::handlers::check::references::{
+use crate::check::index::CheckIndex;
+use crate::check::references::{
     check_artifact_links, check_origin_references, check_scoped_reference,
 };
-use crate::store::GraphRecords;
+use crate::snapshot::GraphRecords;
 use provenance_core::model::relations::{declaration_of, kind_word, RelationOwner};
 use provenance_core::{
     Boundary, Domain, ImplementationBinding, Question, Requirement, Resolution, Rule, ScopeId,

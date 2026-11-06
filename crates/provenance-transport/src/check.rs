@@ -1,11 +1,11 @@
-use crate::output;
-use crate::repo_context::{initialization_hint, is_not_initialized, RepoContext};
+//! The repository adapter of the check command: each check category over the working
+//! tree and the graph of one repository.
+
+use crate::repository::{initialization_hint, is_not_initialized, RepoContext};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ensure_supported_schema_version, Manifest};
 use provenance_macros::rule;
-use provenance_porcelain::check::{
-    Category, CategoryRun, CheckInput, CheckPort, Finding, PortFuture, Refusal, Status,
-};
+use provenance_porcelain::check::{Category, CategoryRun, CheckPort, Finding, PortFuture, Refusal};
 use provenance_store::dictionary_reference::{resolve_project_dictionary, DictionaryResolution};
 use provenance_store::layout::ProvenanceLayout;
 use provenance_store::repository::declared_scope;
@@ -21,28 +21,6 @@ mod statement_report;
 
 pub use bindings::Options as BindingOptions;
 use index::CheckIndex;
-
-#[derive(Clone)]
-pub(super) struct Selectors {
-    pub categories: Vec<Category>,
-    pub statement: Option<String>,
-    /// The one scope to check. Without it the check reads every declared scope.
-    pub scope: Option<String>,
-    pub bindings: BindingOptions,
-}
-
-impl Selectors {
-    fn input(self) -> CheckInput {
-        let input = self
-            .statement
-            .into_iter()
-            .fold(CheckInput::new(self.categories), CheckInput::with_statement);
-        match self.scope {
-            Some(scope) => input.in_scope(scope),
-            None => input,
-        }
-    }
-}
 
 #[derive(Clone)]
 pub struct RepositoryCheckPort {
@@ -66,12 +44,20 @@ impl RepositoryCheckPort {
         }
     }
 
+    /// The path, baseline, and report file options of the bindings check.
+    #[must_use]
+    pub fn with_bindings(mut self, bindings: BindingOptions) -> Self {
+        self.bindings = bindings;
+        self
+    }
+
     fn compute(&self, category: Category, scope: Option<&str>) -> Result<CategoryRun, String> {
         match category {
             Category::Graph => self.graph_run(scope),
             Category::Statements => self.statement_run(scope),
             Category::Bindings => self.binding_run(scope),
             Category::Gaps => gaps::run(&self.context.repo, scope),
+            Category::Docs => crate::docs::run(self.context.repo.as_std_path()),
         }
     }
 
@@ -244,63 +230,16 @@ impl CheckPort for RepositoryCheckPort {
     }
 }
 
-#[rule("rule_ste_strict_committed_statement_gate")]
-pub(super) async fn check(
-    context: RepoContext,
-    strict: bool,
-    base: Option<String>,
-    json: bool,
-    selectors: Selectors,
-) -> anyhow::Result<()> {
-    if let Some(scope) = &selectors.scope {
-        // An undeclared scope refuses the whole check before any category runs.
-        provenance_store::layout::with_initialized_graph(
-            &ProvenanceLayout::new(&context.repo),
-            |manifest| Ok(declared_scope(&manifest, scope).map(|_| ())?),
-        )
-        .map_err(|error| initialization_hint(&context.repo, error))?;
-    }
-    let mut port = RepositoryCheckPort::with_context(context, strict, base);
-    port.bindings = selectors.bindings.clone();
-    let input = selectors.input();
-    if port.bindings.is_set() && !input.categories().contains(&Category::Bindings) {
-        anyhow::bail!(
-            "unsupported check options: --path, --baseline, --output, and --output-format \
-             apply only to the bindings check; add --bindings"
-        );
-    }
-    let service = provenance_porcelain::Porcelain::new(port);
-    let report = service.check(input).await;
-    if json {
-        output::print_json(&report)?;
-    } else {
-        println!("{}", provenance_cli::porcelain::render_check(&report));
-    }
-    if report
-        .categories
-        .iter()
-        .any(provenance_porcelain::check::CategoryReport::refuses)
-    {
-        let details = report
-            .categories
-            .iter()
-            .filter(|category| category.status != Status::Passed)
-            .flat_map(|category| {
-                category
-                    .findings
-                    .iter()
-                    .map(|finding| finding.message.as_str())
-                    .chain(category.unavailable_reason.as_deref())
-            })
-            .collect::<Vec<_>>()
-            .join("; ");
-        anyhow::bail!(details);
-    }
-    Ok(())
+/// Refuses a scope that the manifest does not declare, before any category runs.
+pub fn ensure_declared_scope(repo: &Utf8Path, scope: &str) -> anyhow::Result<()> {
+    provenance_store::layout::with_initialized_graph(&ProvenanceLayout::new(repo), |manifest| {
+        Ok(declared_scope(&manifest, scope).map(|_| ())?)
+    })
+    .map_err(|error| initialization_hint(repo, error))
 }
 
 /// Validates every scope of a staged repository.
-pub(super) fn validate_repository(store: &StateStore) -> anyhow::Result<()> {
+pub fn validate_repository(store: &StateStore) -> anyhow::Result<()> {
     store.with_repository_publication(|held| {
         let manifest = held.manifest()?;
         validate_locked(held, &manifest, true)
@@ -308,10 +247,7 @@ pub(super) fn validate_repository(store: &StateStore) -> anyhow::Result<()> {
 }
 
 /// Validates the state on disk against the manifest `init` plans to write.
-pub(super) fn validate_planned_manifest(
-    repo: &Utf8Path,
-    manifest: &Manifest,
-) -> anyhow::Result<()> {
+pub fn validate_planned_manifest(repo: &Utf8Path, manifest: &Manifest) -> anyhow::Result<()> {
     provenance_store::repository_init::validate_planned_manifest(
         &ProvenanceLayout::new(repo),
         manifest,
@@ -320,7 +256,7 @@ pub(super) fn validate_planned_manifest(
 }
 
 /// Finishes an interrupted publication before `init` reads the repository.
-pub(super) fn recover_before_init(repo: &Utf8Path) -> anyhow::Result<()> {
+pub fn recover_before_init(repo: &Utf8Path) -> anyhow::Result<()> {
     provenance_store::repository_init::recover_before_init(&ProvenanceLayout::new(repo))
 }
 

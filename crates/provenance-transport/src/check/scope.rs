@@ -1,5 +1,5 @@
 use super::index::CheckIndex;
-use crate::store::{snapshot, ScopeSnapshot};
+use crate::snapshot::{snapshot, ScopeSnapshot};
 use provenance_core::{Scope, ScopeId, StableId};
 use provenance_store::state_store::StateStore;
 use std::collections::BTreeSet;

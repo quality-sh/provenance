@@ -41,7 +41,6 @@ pub const EXPOSED: &[Command] = &[
     Command::Graph(GraphCommand::ReferenceVerify),
     Command::Graph(GraphCommand::ReferenceExactExport),
     Command::Graph(GraphCommand::SwarmBacktraceLand),
-    Command::Workspace(WorkspaceCommand::DocsCheck),
     Command::Workspace(WorkspaceCommand::SkillsList),
     Command::Workspace(WorkspaceCommand::SkillsShow),
     Command::Workspace(WorkspaceCommand::SkillsInstall),

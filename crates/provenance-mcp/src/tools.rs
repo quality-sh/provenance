@@ -68,15 +68,11 @@ pub fn check_tool() -> rmcp::model::Tool {
     )
 }
 
-pub async fn call_check(
-    host: &StatementHost,
-    port: std::sync::Arc<dyn provenance_porcelain::check::CheckPort>,
-    arguments: Map<String, Value>,
-) -> CallToolResult {
+pub async fn call_check(host: &StatementHost, arguments: Map<String, Value>) -> CallToolResult {
     let Ok(arguments) = serde_json::from_value::<CheckInput>(Value::Object(arguments)) else {
         return get_error("invalid_options", "unsupported check options");
     };
-    let service = host.porcelain().check(port);
+    let service = host.porcelain().check();
     let mut input = arguments;
     if let Some((_, scope)) = host.bound_identity() {
         input = input.in_scope(scope);

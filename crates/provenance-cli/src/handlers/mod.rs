@@ -1,21 +1,18 @@
 use crate::cli;
 use crate::output::{self, JsonFormat, OutputFormat};
 use camino::Utf8PathBuf;
-use provenance_cli::cli_form::{self, CheckCliInput, ReportFileFormat};
-use provenance_cli::repo_context::RepoContext;
+use provenance_cli::cli_form::{self, CheckCliInput};
 use provenance_cli::servers::{DocsServeInput, McpInput, ReviewInput, Server};
 use provenance_porcelain::registry::{
-    self, CargoInitInput, DictionaryImportInput, DictionaryStatusInput, DocsCheckInput,
-    ExportInput, GraphCommand, ImportInput, InitInput, MaterializeInput, MergeJsonlInput,
-    ReferenceInput, ReferenceIssueInput, ReportBuildInput, ReportRenderInput, RepositoryCommand,
-    SchemaShowInput, SkillsInstallInput, SkillsListInput, SkillsShowInput, SwarmBacktraceLandInput,
-    ValidateInput, WorkspaceCommand,
+    self, CargoInitInput, DictionaryImportInput, DictionaryStatusInput, ExportInput, GraphCommand,
+    ImportInput, InitInput, MaterializeInput, MergeJsonlInput, ReferenceInput, ReferenceIssueInput,
+    ReportBuildInput, ReportRenderInput, RepositoryCommand, SchemaShowInput, SkillsInstallInput,
+    SkillsListInput, SkillsShowInput, SwarmBacktraceLandInput, ValidateInput, WorkspaceCommand,
 };
 use provenance_store::cache;
+use provenance_transport::repository::RepoContext;
 
 mod cargo_init;
-pub mod check;
-mod coverage;
 mod dictionary;
 mod docs;
 #[cfg(feature = "dogfood")]
@@ -40,31 +37,7 @@ pub(super) use dogfood::{handle as dogfood_command, DogfoodInput};
 /// Runs the check command with the flags that its declaration names.
 #[allow(clippy::redundant_pub_crate)]
 pub(super) async fn check_command(input: CheckCliInput) -> anyhow::Result<()> {
-    let output_format = match input.output_format.unwrap_or_default() {
-        ReportFileFormat::Json => output::ReportFormat::Json,
-        ReportFileFormat::Markdown => output::ReportFormat::Markdown,
-    };
-    let selectors = check::Selectors {
-        categories: input.categories(),
-        statement: input.statement,
-        scope: input.scope,
-        bindings: check::BindingOptions {
-            path: input.path.map(Utf8PathBuf::from),
-            baseline: input.baseline.map(Utf8PathBuf::from),
-            output: input
-                .output
-                .map(|output| (Utf8PathBuf::from(output), output_format)),
-        },
-    };
-    let context = provenance_cli::repo_context::RepoContext::new(input.repo.as_str(), "default");
-    check::check(
-        context,
-        input.strict,
-        input.base,
-        input.format.is_some(),
-        selectors,
-    )
-    .await
+    provenance_cli::porcelain::dispatch_check(input).await
 }
 
 /// Prints the shared domain guidance.
@@ -285,7 +258,6 @@ fn artifact(value: &str) -> anyhow::Result<cli::IdeationArtifactKind> {
 /// The typed input of one workspace command, read from its declared flags.
 #[allow(clippy::redundant_pub_crate)]
 pub(super) enum WorkspaceInput {
-    DocsCheck(DocsCheckInput),
     SkillsList(SkillsListInput),
     SkillsShow(SkillsShowInput),
     SkillsInstall(SkillsInstallInput),
@@ -307,7 +279,6 @@ impl WorkspaceInput {
             };
         }
         Ok(match command {
-            WorkspaceCommand::DocsCheck => read!(DocsCheck),
             WorkspaceCommand::SkillsList => read!(SkillsList),
             WorkspaceCommand::SkillsShow => read!(SkillsShow),
             WorkspaceCommand::SkillsInstall => read!(SkillsInstall),
@@ -319,16 +290,9 @@ impl WorkspaceInput {
 
 /// Runs one workspace command.
 #[allow(clippy::redundant_pub_crate)]
-pub(super) async fn workspace_command(input: WorkspaceInput) -> anyhow::Result<()> {
-    use cli::{report::ReportCommand, workspace::DocsCommand, workspace::SkillsCommand};
+pub(super) fn workspace_command(input: WorkspaceInput) -> anyhow::Result<()> {
+    use cli::{report::ReportCommand, workspace::SkillsCommand};
     match input {
-        WorkspaceInput::DocsCheck(input) => {
-            flag_value(&input.format, JsonFormat::from_flag)?;
-            docs::handle(DocsCommand::Check {
-                repo: input.repo.into(),
-            })
-            .await
-        }
         WorkspaceInput::SkillsList(input) => {
             flag_value(&input.format, JsonFormat::from_flag)?;
             skills::handle(SkillsCommand::List)

@@ -1,4 +1,4 @@
-//! Declarations of the commands that check docs, install skills, and render reports.
+//! Declarations of the commands that install skills and render reports.
 
 use super::Declaration;
 use serde::Deserialize;
@@ -6,20 +6,11 @@ use serde::Deserialize;
 /// One workspace command.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WorkspaceCommand {
-    DocsCheck,
     SkillsList,
     SkillsShow,
     SkillsInstall,
     ReportRender,
     ReportBuild,
-}
-
-/// The `docs check` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct DocsCheckInput {
-    pub repo: String,
-    pub format: String,
 }
 
 /// The `skills list` input.
@@ -80,7 +71,6 @@ macro_rules! schema_fn {
     };
 }
 
-schema_fn!(docs_check_schema, DocsCheckInput);
 schema_fn!(skills_list_schema, SkillsListInput);
 schema_fn!(skills_show_schema, SkillsShowInput);
 schema_fn!(skills_install_schema, SkillsInstallInput);
@@ -89,7 +79,6 @@ schema_fn!(report_build_schema, ReportBuildInput);
 
 pub(super) const fn declaration(command: WorkspaceCommand) -> Declaration {
     match command {
-        WorkspaceCommand::DocsCheck => Declaration::named("docs check", "", docs_check_schema),
         WorkspaceCommand::SkillsList => Declaration::named("skills list", "", skills_list_schema),
         WorkspaceCommand::SkillsShow => Declaration::named("skills show", "", skills_show_schema),
         WorkspaceCommand::SkillsInstall => {

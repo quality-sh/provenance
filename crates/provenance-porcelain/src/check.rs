@@ -17,10 +17,19 @@ pub enum Category {
     /// The unfinished parts of the graph and the Rules without a Source. It runs only
     /// when the caller selects it, and its findings never refuse the command.
     Gaps,
+    /// The Markdown links of the docs site that name a page the site does not publish.
+    /// It runs only when the caller selects it.
+    Docs,
 }
 
 impl Category {
-    pub const ALL: [Self; 4] = [Self::Graph, Self::Statements, Self::Bindings, Self::Gaps];
+    pub const ALL: [Self; 5] = [
+        Self::Graph,
+        Self::Statements,
+        Self::Bindings,
+        Self::Gaps,
+        Self::Docs,
+    ];
     /// The categories of a check that selects none.
     pub const DEFAULT: [Self; 3] = [Self::Graph, Self::Statements, Self::Bindings];
 }
@@ -151,6 +160,10 @@ pub enum CategoryRun {
         findings: Vec<Finding>,
         context: GapsContext,
     },
+    Docs {
+        findings: Vec<Finding>,
+        refusal: Refusal,
+    },
 }
 
 impl Finding {
@@ -256,6 +269,7 @@ impl CategoryReport {
                 Some(CategoryContext::Gaps(context)),
                 Refusal::None,
             ),
+            CategoryRun::Docs { findings, refusal } => (Category::Docs, findings, None, refusal),
         };
         let mut report = if findings.is_empty() {
             Self::passed(category)

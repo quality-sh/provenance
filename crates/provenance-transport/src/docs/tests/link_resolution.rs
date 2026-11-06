@@ -113,7 +113,6 @@ fn a_site_gets_one_report_for_each_link_planted_broken() {
 /// destinations were read as links at all.
 fn one_page_site(markdown: &str) -> DocsSite {
     DocsSite {
-        source_root: "docs".to_string(),
         route_by_path: std::iter::once((PathBuf::from("/site/docs/index.md"), "/".to_string()))
             .collect(),
         page_by_route: std::iter::once(("/".to_string(), 0)).collect(),

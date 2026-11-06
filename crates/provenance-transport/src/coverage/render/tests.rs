@@ -3,7 +3,7 @@
 //! is written.
 
 use super::{render_coverage, OUTSIDE_IMPLEMENTATION_MODULE};
-use crate::output::ReportFormat;
+use crate::coverage::ReportFormat;
 use camino::Utf8PathBuf;
 use provenance_core::coverage::{
     AnchorState, AnnotationResult, BindingResult, CoverageReport, CoverageScan, ScannedFile,

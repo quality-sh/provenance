@@ -30,7 +30,7 @@ pub async fn dispatch_root(
         &[],
     )
     .unwrap_or_else(|error| crate::catalog_cli::usage_error(error));
-    let host = args.common.context().repo.local_host()?;
+    let host = provenance_cli::porcelain::local_host(&args.common.context().repo)?;
     let service = host.porcelain().discussion();
     let outcome = service
         .execute_discussion(action, Value::Object(input))
@@ -52,7 +52,7 @@ pub async fn dispatch_target(
     )
     .unwrap_or_else(|error| crate::catalog_cli::usage_error(error));
     let target = StableId::new(args.target)?;
-    let host = args.common.context().repo.local_host()?;
+    let host = provenance_cli::porcelain::local_host(&args.common.context().repo)?;
     let service = host.porcelain().discussion();
     let target_field = discussion::target_field(action);
     let identity = if target_field == "parent" {

@@ -25,30 +25,15 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
     if options.detach {
         return detach::run(&options);
     }
-    let root = match camino::Utf8PathBuf::from_path_buf(options.repo.clone()) {
-        Ok(root) => root,
-        // The repository refuses a root that is not UTF-8; its error is the one to report.
-        Err(path) => {
-            return Err(
-                match provenance_store::repository::Repository::open(&path, &options.scope) {
-                    Err(error) => anyhow::Error::new(error)
-                        .context("cannot configure review repository access"),
-                    Ok(_) => anyhow::anyhow!("repository path {} is not UTF-8", path.display()),
-                },
-            )
-        }
-    };
-    // The check port reads the canonical working tree, as the opened repository does.
-    let working_tree = dunce::canonicalize(&root)
-        .ok()
-        .and_then(|path| camino::Utf8PathBuf::from_path_buf(path).ok())
-        .unwrap_or_else(|| root.clone());
+    let root = provenance_transport::repository::utf8_root(options.repo.clone(), &options.scope)
+        .context("cannot configure review repository access")?;
+    let working_tree = provenance_transport::repository::working_tree(&root);
     let signals = ShutdownSignals::install()?;
     let host = provenance_review::start(HostOptions {
         place: RepositoryScope::new(root, options.scope),
         repository_id: options.repository_id,
         port: options.port,
-        check_port: Arc::new(crate::handlers::check::RepositoryCheckPort::new(
+        check_port: Arc::new(provenance_transport::check::RepositoryCheckPort::new(
             working_tree,
             false,
             None,

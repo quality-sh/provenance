@@ -1,8 +1,7 @@
 use super::validate::{
     validate_contribution_record, validate_proposal_card_record, validate_synthesis_packet_record,
 };
-use crate::repo_context::RepoContext;
-use crate::{cli::ideation::SwarmBacktraceCommand, output, store::Store};
+use crate::{cli::ideation::SwarmBacktraceCommand, output};
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{
@@ -10,6 +9,8 @@ use provenance_core::{
     ScopeId, StableId, SynthesisPacket,
 };
 use provenance_store::state_store::IdeationLandingBatch;
+use provenance_transport::repository::RepoContext;
+use provenance_transport::snapshot::Store;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeSet;

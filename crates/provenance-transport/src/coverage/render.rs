@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
-use crate::output::ReportFormat;
+use super::ReportFormat;
 use provenance_core::coverage::{CoverageReport, CoverageSite, SiteRole};
 
 /// Said of a verification site that lives in a different file from the

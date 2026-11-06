@@ -77,8 +77,9 @@ fn mcp_host_process() {
         .block_on(async move {
             let listener = tokio::net::UnixListener::bind(&socket).unwrap();
             let (stream, _) = listener.accept().await.unwrap();
-            let context = provenance_cli::repo_context::RepoContext::new(repo.as_str(), "default");
-            let host = context.local_host().unwrap();
+            let context =
+                provenance_transport::repository::RepoContext::new(repo.as_str(), "default");
+            let host = provenance_cli::porcelain::local_host(&context).unwrap();
             let _ = provenance_mcp::serve(host, stream)
                 .await
                 .unwrap()

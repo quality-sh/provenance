@@ -11,6 +11,9 @@ mod access;
 mod admission;
 #[cfg(test)]
 mod admission_tests;
+pub mod check;
+pub mod coverage;
+pub mod docs;
 mod execution;
 mod failure;
 #[cfg(feature = "test-fixture")]
@@ -20,8 +23,10 @@ mod invocation;
 mod local;
 pub mod local_host;
 pub mod porcelain;
+pub mod repository;
 mod review_page;
 mod routing;
+pub mod snapshot;
 pub use review_page::ReviewPageWrite;
 
 pub use access::{HostAccess, HttpCredential, OpenCredential};

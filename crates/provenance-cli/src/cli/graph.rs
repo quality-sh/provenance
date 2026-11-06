@@ -1,5 +1,5 @@
 use camino::Utf8PathBuf;
-use provenance_cli::repo_context::RepoContext;
+use provenance_transport::repository::RepoContext;
 
 /// One `provenance graph-reference` command and its inputs.
 pub enum GraphReferenceCommand {

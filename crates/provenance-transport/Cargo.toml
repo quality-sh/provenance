@@ -19,12 +19,15 @@ test-fixture = ["dep:tempfile", "provenance-store/test-fixture"]
 anyhow.workspace = true
 tempfile = { workspace = true, optional = true }
 axum.workspace = true
+camino.workspace = true
 fs2.workspace = true
 provenance-core.workspace = true
 provenance-macros.workspace = true
 provenance-porcelain.workspace = true
 provenance-contract.workspace = true
+provenance-scanner.workspace = true
 provenance-store = { workspace = true, features = ["schema"] }
+pulldown-cmark.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 ureq.workspace = true
@@ -33,6 +36,7 @@ uuid.workspace = true
 tokio-util = { version = "0.7", features = ["rt"] }
 tokio = { workspace = true, features = ["sync", "io-util", "io-std", "time"] }
 dunce.workspace = true
+walkdir.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

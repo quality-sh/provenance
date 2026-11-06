@@ -66,6 +66,10 @@ const fn category_run(category: Category, findings: Vec<Finding>) -> CategoryRun
             findings,
             context: GapsContext { scopes: Vec::new() },
         },
+        Category::Docs => CategoryRun::Docs {
+            findings,
+            refusal: Refusal::None,
+        },
     }
 }
 

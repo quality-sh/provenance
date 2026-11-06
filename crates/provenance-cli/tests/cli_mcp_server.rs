@@ -385,3 +385,35 @@ async fn mcp_discussions_tool_starts_and_replies_and_the_cli_reads_it() {
     assert!(text.contains("Yes, it is."), "{read}");
     server.close().await;
 }
+
+#[tokio::test]
+#[verifies("rule_docs_links_resolve", examples)]
+#[verifies("rule_mcp_command_uses_cli_repository", examples)]
+async fn mcp_check_docs_matches_the_cli_check_docs() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_str().unwrap().to_owned();
+    init_with_source(&repo);
+    std::fs::create_dir_all(directory.path().join("docs")).unwrap();
+    std::fs::write(
+        directory.path().join("docs/index.md"),
+        "# Handbook\n\nSee [Missing](missing.md).\n",
+    )
+    .unwrap();
+    let mut wire = Wire::start(&repo).await;
+    let result = wire
+        .request(
+            "tools/call",
+            json!({"name":"check","arguments":{"categories":["docs"]}}),
+        )
+        .await;
+    let output = provenance()
+        .args(["check", "--docs", "--repo", &repo, "--format", "json"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let cli: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(result["structuredContent"], cli);
+    let findings = cli["categories"][0]["findings"].as_array().unwrap();
+    assert_eq!(findings.len(), 1, "{cli}");
+    assert_eq!(findings[0]["detail"]["link"], "missing.md");
+}

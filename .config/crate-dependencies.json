@@ -292,11 +292,13 @@
         "provenance-core",
         "provenance-macros",
         "provenance-porcelain",
+        "provenance-scanner",
         "provenance-store",
         "tempfile",
         "tokio",
         "tokio-util",
-        "ureq"
+        "ureq",
+        "walkdir"
       ],
       "dev-dependencies": [
         "jsonschema",

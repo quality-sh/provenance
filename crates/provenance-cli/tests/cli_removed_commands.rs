@@ -19,6 +19,7 @@ const REMOVED: &[(&[&str], &str)] = &[
     ),
     (&["graph", "req_a"], "provenance <id> get --view children"),
     (&["traceability", "rule_a"], "provenance <id> trace"),
+    (&["docs", "check"], "provenance check --docs"),
 ];
 
 #[test]

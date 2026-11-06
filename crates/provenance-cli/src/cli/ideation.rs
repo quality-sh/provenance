@@ -1,5 +1,5 @@
 use camino::Utf8PathBuf;
-use provenance_cli::repo_context::RepoContext;
+use provenance_transport::repository::RepoContext;
 
 /// The `provenance swarm-backtrace land` inputs.
 pub enum SwarmBacktraceCommand {

@@ -2,12 +2,12 @@ pub use crate::registry_cli::root_command;
 use crate::{catalog_cli, handlers};
 use handlers::{GraphInput, RepositoryInput, ServerInput, WorkspaceInput};
 use provenance_cli::porcelain;
-use provenance_cli::repo_context::RepoContext;
 use provenance_core::NodeType;
 use provenance_macros::rule;
 use provenance_porcelain::action::{validate_target, Action};
 use provenance_porcelain::get::View;
 use provenance_porcelain::search::SearchInput;
+use provenance_transport::repository::RepoContext;
 
 mod api;
 mod discussion;
@@ -322,7 +322,7 @@ impl Invocation {
             Self::Prime(input) => handlers::prime_command(&input),
             Self::Repository(input, quiet) => handlers::repository_command(input, quiet).await,
             Self::Graph(input) => handlers::graph_command(input),
-            Self::Workspace(input) => handlers::workspace_command(input).await,
+            Self::Workspace(input) => handlers::workspace_command(input),
             Self::Server(input) => handlers::server_command(input).await,
             #[cfg(feature = "dogfood")]
             Self::Dogfood(input, quiet) => handlers::dogfood_command(input, quiet),
@@ -343,7 +343,7 @@ impl Invocation {
                         )
                     };
                     return provenance_review::follow(
-                        &invocation.context.repo.place(),
+                        &provenance_cli::porcelain::place(&invocation.context.repo),
                         invocation.input,
                         tokio::io::stdout(),
                         stop,

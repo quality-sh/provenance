@@ -1,6 +1,6 @@
 use super::OutputFormat;
-use crate::repo_context::RepoContext;
 use provenance_porcelain::api::{render_discovery_readable, ApiOutcome, ApiRequest};
+use provenance_transport::repository::RepoContext;
 
 /// Runs one API action with the selected context and applies discovery filters
 /// and limits before rendering.
@@ -15,7 +15,7 @@ pub async fn dispatch_api(
     filter: Option<&str>,
     limit: Option<usize>,
 ) -> anyhow::Result<()> {
-    let host = RepoContext::new(repo, scope).local_host()?;
+    let host = super::local_host(&RepoContext::new(repo, scope))?;
     let service = host.porcelain().api();
     match service.execute_api(request).await {
         Ok(ApiOutcome::Catalog(catalog)) => {

@@ -29,6 +29,10 @@ impl CheckPort for FixtureCheckPort {
                     findings: Vec::new(),
                     context: GapsContext { scopes: Vec::new() },
                 },
+                Category::Docs => CategoryRun::Docs {
+                    findings: Vec::new(),
+                    refusal: Refusal::None,
+                },
             })
         })
     }

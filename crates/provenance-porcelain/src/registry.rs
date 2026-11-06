@@ -22,8 +22,8 @@ pub use repository::{
     ValidateInput,
 };
 pub use workspace::{
-    DocsCheckInput, ReportBuildInput, ReportRenderInput, SkillsInstallInput, SkillsListInput,
-    SkillsShowInput, WorkspaceCommand,
+    ReportBuildInput, ReportRenderInput, SkillsInstallInput, SkillsListInput, SkillsShowInput,
+    WorkspaceCommand,
 };
 
 use crate::action::Action;
@@ -154,7 +154,6 @@ impl Command {
         Self::Graph(GraphCommand::ReferenceVerify),
         Self::Graph(GraphCommand::ReferenceExactExport),
         Self::Graph(GraphCommand::SwarmBacktraceLand),
-        Self::Workspace(WorkspaceCommand::DocsCheck),
         Self::Workspace(WorkspaceCommand::SkillsList),
         Self::Workspace(WorkspaceCommand::SkillsShow),
         Self::Workspace(WorkspaceCommand::SkillsInstall),

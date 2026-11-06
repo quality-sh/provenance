@@ -288,6 +288,10 @@ impl CheckPort for CategoryFixture {
                         }],
                     },
                 },
+                Category::Docs => CategoryRun::Docs {
+                    findings: Vec::new(),
+                    refusal: Refusal::None,
+                },
             })
         })
     }

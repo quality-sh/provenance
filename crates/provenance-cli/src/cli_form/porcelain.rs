@@ -103,6 +103,10 @@ const CHECK_FLAGS: &[Flag] = &[
         "Run only the gaps check: report the unfinished parts of the graph and each Rule \
          without a Source. These findings do not fail the check",
     ),
+    Flag::new("docs", FlagKind::Switch).help(
+        "Run only the docs check: report each Markdown link that names a page the docs site \
+         does not publish",
+    ),
     Flag::new("scope", FlagKind::Value)
         .help("Check only this scope. The default is every declared scope"),
     Flag::new("path", FlagKind::Value).help(
@@ -212,6 +216,9 @@ pub struct CheckCliInput {
     /// Run only the gaps check: the unfinished parts of the graph and each Rule without a Source.
     #[serde(default)]
     pub gaps: bool,
+    /// Run only the docs check: each Markdown link that names a page the docs site does not publish.
+    #[serde(default)]
+    pub docs: bool,
     /// Check only this scope. The default is every declared scope.
     pub scope: Option<String>,
     /// Bindings check only: scan the files below this path.
@@ -243,6 +250,7 @@ impl CheckCliInput {
                 Category::Statements => self.statements,
                 Category::Bindings => self.bindings,
                 Category::Gaps => self.gaps,
+                Category::Docs => self.docs,
             })
             .collect()
     }

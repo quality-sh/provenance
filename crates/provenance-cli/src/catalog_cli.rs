@@ -71,7 +71,7 @@ pub async fn dispatch_target(
             .unwrap_or_else(|error| usage_error(error));
     }
     let repo = context.repo.clone();
-    let host = repo.local_host()?;
+    let host = provenance_cli::porcelain::local_host(&repo)?;
     let route = host
         .target_route(action, &target, kind)
         .await
@@ -154,7 +154,7 @@ fn failure_with_guidance(
     failure: &provenance_core::protocol::failure::ErasedFailure,
     path: &str,
     target: Option<&str>,
-    context: &provenance_cli::repo_context::RepoContext,
+    context: &provenance_transport::repository::RepoContext,
 ) -> anyhow::Error {
     actionable_failure(
         failure,
@@ -166,7 +166,7 @@ fn failure_with_guidance(
 
 /// The `--scope` and `--repo` words that make a hinted command run against
 /// the caller's repository and scope. A default repository path stays implicit.
-fn context_options(context: Option<&provenance_cli::repo_context::RepoContext>) -> String {
+fn context_options(context: Option<&provenance_transport::repository::RepoContext>) -> String {
     let Some(context) = context else {
         return String::new();
     };
@@ -182,7 +182,7 @@ fn context_options(context: Option<&provenance_cli::repo_context::RepoContext>) 
 #[provenance_macros::rule("rule_review_refusal_names_read_command")]
 fn review_read_command(
     id: &str,
-    context: Option<&provenance_cli::repo_context::RepoContext>,
+    context: Option<&provenance_transport::repository::RepoContext>,
 ) -> String {
     format!("provenance {id} --view review{}", context_options(context))
 }
@@ -191,7 +191,7 @@ fn actionable_failure(
     failure: &provenance_core::protocol::failure::ErasedFailure,
     record_id: Option<&str>,
     collection: Option<&str>,
-    context: &provenance_cli::repo_context::RepoContext,
+    context: &provenance_transport::repository::RepoContext,
 ) -> anyhow::Error {
     let value = serde_json::to_value(failure).unwrap_or_default();
     let error = &value["error"];

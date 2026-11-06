@@ -6,10 +6,10 @@ use clap::{
 };
 use provenance_cli::cli_form::{self, CliDeclaration};
 use provenance_cli::porcelain;
-use provenance_cli::repo_context::RepoContext;
 use provenance_core::NodeType;
 use provenance_porcelain::action::Action;
 use provenance_porcelain::registry;
+use provenance_transport::repository::RepoContext;
 
 /// The shared options of the porcelain and catalog grammars, read from the registry's
 /// global flags.

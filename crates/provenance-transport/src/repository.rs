@@ -1,6 +1,43 @@
-use camino::Utf8PathBuf;
+//! Opens a local repository for one command, and the host that serves its porcelain.
+
+use crate::check::RepositoryCheckPort;
+use crate::StatementHost;
+use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{protocol::failure::OperationFailure, ScopeId};
 use provenance_store::repository::{OpenFailure, Repository};
+use std::sync::Arc;
+
+/// Opens the repository at `repo` for `scope` and returns the host with its check adapter.
+///
+/// An undeclared scope is a host refusal, so JSON callers get the refusal object. A
+/// directory inside an initialized repository gets the nested-repository refusal.
+pub fn open(repo: &Utf8Path, scope: &str) -> anyhow::Result<StatementHost> {
+    let repository = Repository::open(repo, scope).map_err(|error| match error {
+        OpenFailure::UnknownScope { .. } => anyhow::anyhow!(OperationFailure::from(error)),
+        other => initialization_hint(repo, open_failure(other)),
+    })?;
+    let repository = provenance_store::operations::LocalRepository::bind(repository, "native")
+        .map_err(|failure| anyhow::anyhow!(failure))?;
+    let check = RepositoryCheckPort::new(working_tree(repo), false, None);
+    Ok(StatementHost::with_access(Arc::new(repository)).with_check_port(Arc::new(check)))
+}
+
+/// The repository root as UTF-8. The repository refuses a root that is not UTF-8 first,
+/// so its open error is the one to report.
+pub fn utf8_root(path: std::path::PathBuf, scope: &str) -> anyhow::Result<Utf8PathBuf> {
+    Utf8PathBuf::from_path_buf(path).map_err(|path| match Repository::open(&path, scope) {
+        Err(error) => anyhow::Error::new(error),
+        Ok(_) => anyhow::anyhow!("repository path {} is not UTF-8", path.display()),
+    })
+}
+
+/// The canonical working tree, which the opened repository also reads.
+pub fn working_tree(repo: &Utf8Path) -> Utf8PathBuf {
+    dunce::canonicalize(repo)
+        .ok()
+        .and_then(|path| Utf8PathBuf::from_path_buf(path).ok())
+        .unwrap_or_else(|| repo.to_path_buf())
+}
 
 /// The repository root and scope that one command opens.
 #[derive(Clone, Debug)]
@@ -28,26 +65,9 @@ impl RepoContext {
         ScopeId::new(&self.scope)
     }
 
-    pub fn local_host(&self) -> anyhow::Result<provenance_transport::StatementHost> {
-        // An undeclared scope is a host refusal, so JSON callers get the refusal object.
-        let repository =
-            Repository::open(&self.repo, &self.scope).map_err(|error| match error {
-                OpenFailure::UnknownScope { .. } => anyhow::anyhow!(OperationFailure::from(error)),
-                other => initialization_hint(&self.repo, open_failure(other)),
-            })?;
-        let repository = provenance_store::operations::LocalRepository::bind(repository, "native")
-            .map_err(|failure| anyhow::anyhow!(failure))?;
-        Ok(
-            provenance_transport::StatementHost::with_access(std::sync::Arc::new(repository))
-                .with_notify_port(std::sync::Arc::new(provenance_review::HostNotifyPort::new(
-                    self.place(),
-                ))),
-        )
-    }
-
-    /// The repository root and scope as the review library names them.
-    pub fn place(&self) -> provenance_review::RepositoryScope {
-        provenance_review::RepositoryScope::new(self.repo.clone(), self.scope.clone())
+    /// The host of this repository and scope, with its check adapter.
+    pub fn host(&self) -> anyhow::Result<StatementHost> {
+        open(&self.repo, &self.scope)
     }
 }
 
@@ -95,7 +115,7 @@ pub fn is_not_initialized(error: &anyhow::Error) -> bool {
 /// Replaces a not-initialized refusal with the nested-repository refusal
 /// when an ancestor directory holds an initialized graph.
 #[provenance_macros::rule("rule_command_names_enclosing_repository")]
-pub fn initialization_hint(repo: &camino::Utf8Path, error: anyhow::Error) -> anyhow::Error {
+pub fn initialization_hint(repo: &Utf8Path, error: anyhow::Error) -> anyhow::Error {
     if error
         .downcast_ref::<provenance_store::layout::GraphNotInitialized>()
         .is_none()
@@ -112,7 +132,7 @@ pub fn initialization_hint(repo: &camino::Utf8Path, error: anyhow::Error) -> any
     .into()
 }
 
-fn enclosing_repository(repo: &camino::Utf8Path) -> Option<Utf8PathBuf> {
+fn enclosing_repository(repo: &Utf8Path) -> Option<Utf8PathBuf> {
     let here = dunce::canonicalize(repo.as_std_path()).ok()?;
     let here = Utf8PathBuf::from_path_buf(here).ok()?;
     here.ancestors()
@@ -125,5 +145,5 @@ fn enclosing_repository(repo: &camino::Utf8Path) -> Option<Utf8PathBuf> {
                 .as_std_path()
                 .is_file()
         })
-        .map(camino::Utf8Path::to_path_buf)
+        .map(Utf8Path::to_path_buf)
 }

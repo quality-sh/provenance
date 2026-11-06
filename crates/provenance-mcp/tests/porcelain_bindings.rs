@@ -307,7 +307,8 @@ impl provenance_porcelain::check::CheckPort for CheckFixturePort {
                 }
                 provenance_porcelain::check::Category::Graph
                 | provenance_porcelain::check::Category::Bindings
-                | provenance_porcelain::check::Category::Gaps => Vec::new(),
+                | provenance_porcelain::check::Category::Gaps
+                | provenance_porcelain::check::Category::Docs => Vec::new(),
             };
             Ok(category_run(category, findings))
         })
@@ -341,6 +342,10 @@ const fn category_run(
         Category::Gaps => CategoryRun::Gaps {
             findings,
             context: GapsContext { scopes: Vec::new() },
+        },
+        Category::Docs => CategoryRun::Docs {
+            findings,
+            refusal: Refusal::None,
         },
     }
 }

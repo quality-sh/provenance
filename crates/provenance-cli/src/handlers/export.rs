@@ -1,8 +1,8 @@
 use crate::output::OutputFormat;
-use crate::repo_context::RepoContext;
-use crate::store::{ScopeSnapshot, Store};
 use camino::Utf8PathBuf;
 use provenance_store::publication::with_publication_guard;
+use provenance_transport::repository::RepoContext;
+use provenance_transport::snapshot::{ScopeSnapshot, Store};
 use serde::Serialize;
 
 #[derive(Serialize, serde::Deserialize)]
@@ -71,7 +71,8 @@ fn export_context(context: &RepoContext) -> anyhow::Result<ScopeExport> {
     let scope_id = repository.scope().clone();
     with_publication_guard(&repository, |guard| {
         let held = Store::new(guard.repository());
-        let snapshot = crate::store::snapshot(&guard.repository().view()?, &scope_id)?;
+        let snapshot =
+            provenance_transport::snapshot::snapshot(&guard.repository().view()?, &scope_id)?;
         held.ensure_review_portable(&scope_id)?;
         held.validate_ideation_scope(&scope_id)?;
         held.validate_graph_scope(&scope_id)?;

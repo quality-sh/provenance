@@ -1,6 +1,6 @@
-use crate::handlers::check::index::CheckIndex;
-use crate::handlers::check::references::{check_scoped_reference, node_type_name};
-use crate::store::ScopeSnapshot;
+use crate::check::index::CheckIndex;
+use crate::check::references::{check_scoped_reference, node_type_name};
+use crate::snapshot::ScopeSnapshot;
 use provenance_core::{Message, ScopeId, Thread};
 use std::collections::BTreeSet;
 

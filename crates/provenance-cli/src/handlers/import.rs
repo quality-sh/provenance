@@ -1,7 +1,5 @@
 use super::export::ScopeExport;
 use crate::output;
-use crate::repo_context::RepoContext;
-use crate::store::{snapshot, ScopeSnapshot, Store};
 use camino::Utf8PathBuf;
 use provenance_core::ScopeId;
 use provenance_macros::rule;
@@ -14,6 +12,8 @@ use provenance_store::state_store::{
     StateStore, CONTRIBUTION_KIND, SYNTHESIS_KIND,
 };
 use provenance_store::statement_analysis::{analyze_changed_statements, violation_error};
+use provenance_transport::repository::RepoContext;
+use provenance_transport::snapshot::{snapshot, ScopeSnapshot, Store};
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -247,7 +247,7 @@ fn apply_import(
     let scope_id = repository.scope();
     repository.stage(dry_run, None, |staged| {
         staged.import_scope(scope_id, &scope_shards(exported))?;
-        super::check::validate_repository(staged)?;
+        provenance_transport::check::validate_repository(staged)?;
         ensure_changed_statements_are_clean(live, staged)
     })
 }

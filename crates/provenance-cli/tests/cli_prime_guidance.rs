@@ -85,10 +85,11 @@ async fn cli_and_mcp_share_the_same_guidance() {
         .args(["init", "--path", repo.path().to_str().unwrap()])
         .assert()
         .success();
-    let host =
-        provenance_cli::repo_context::RepoContext::new(repo.path().to_str().unwrap(), "default")
-            .local_host()
-            .unwrap();
+    let context = provenance_transport::repository::RepoContext::new(
+        repo.path().to_str().unwrap(),
+        "default",
+    );
+    let host = provenance_cli::porcelain::local_host(&context).unwrap();
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = Client::connect(client_io).await.unwrap();

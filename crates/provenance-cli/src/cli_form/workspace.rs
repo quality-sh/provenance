@@ -1,11 +1,9 @@
-//! The CLI grammar of the commands that check docs, install skills, and render reports.
+//! The CLI grammar of the commands that install skills and render reports.
 
 use super::{json_format_flag, CliForm, Flag, FlagKind, REPO, SCOPE};
 use provenance_porcelain::registry::WorkspaceCommand;
 
 const JSON_FORMAT: Flag = json_format_flag(Some("json"));
-
-const DOCS_CHECK_FLAGS: &[Flag] = &[REPO, JSON_FORMAT];
 
 const SKILLS_LIST_FLAGS: &[Flag] = &[JSON_FORMAT];
 
@@ -50,7 +48,6 @@ const REPORT_BUILD_FLAGS: &[Flag] = &[
 
 pub(super) const fn form(command: WorkspaceCommand) -> CliForm {
     match command {
-        WorkspaceCommand::DocsCheck => CliForm::new(DOCS_CHECK_FLAGS),
         WorkspaceCommand::SkillsList => CliForm::new(SKILLS_LIST_FLAGS),
         WorkspaceCommand::SkillsShow => CliForm::new(SKILLS_SHOW_FLAGS).positional(&["name"]),
         WorkspaceCommand::SkillsInstall => CliForm::new(SKILLS_INSTALL_FLAGS),

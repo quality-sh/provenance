@@ -2706,6 +2706,7 @@ version = "0.3.2"
 dependencies = [
  "anyhow",
  "axum",
+ "camino",
  "dunce",
  "fs2",
  "futures",
@@ -2714,8 +2715,10 @@ dependencies = [
  "provenance-core",
  "provenance-macros",
  "provenance-porcelain",
+ "provenance-scanner",
  "provenance-ste100",
  "provenance-store",
+ "pulldown-cmark",
  "serde",
  "serde_json",
  "sqlx",
@@ -2726,6 +2729,7 @@ dependencies = [
  "ureq",
  "url",
  "uuid",
+ "walkdir",
 ]
 
 [[package]]

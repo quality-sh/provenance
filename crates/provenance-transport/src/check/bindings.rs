@@ -2,8 +2,8 @@
 //! path, baseline, and report file options that `coverage scan` had.
 
 use super::RepositoryCheckPort;
-use crate::output::ReportFormat;
-use crate::repo_context::{initialization_hint, RepoContext};
+use crate::coverage::ReportFormat;
+use crate::repository::{initialization_hint, RepoContext};
 use camino::Utf8PathBuf;
 use provenance_macros::rule;
 use provenance_porcelain::check::{BindingContext, BindingPolicy, CategoryRun, Finding, Refusal};
@@ -125,7 +125,7 @@ impl RepositoryCheckPort {
             let repository =
                 RepoContext::new(self.context.repo.clone(), scope.id.as_str()).open()?;
             scan.policy = repository.settings().coverage.binding_findings;
-            let outcome = super::super::coverage::coverage_scan_from_scanned(
+            let outcome = crate::coverage::coverage_scan_from_scanned(
                 &repository,
                 &self.context.repo,
                 &path,
@@ -136,7 +136,7 @@ impl RepositoryCheckPort {
             )?;
             // The CLI takes --output only with --scope, so one scope writes the file.
             if let Some((output, format)) = &self.bindings.output {
-                let rendered = super::super::coverage::render_report(*format, &outcome.scan)?;
+                let rendered = crate::coverage::render_report(*format, &outcome.scan)?;
                 std::fs::write(output, rendered)?;
             }
             scan.governed_finding_count += outcome.governed_finding_count;

@@ -1,7 +1,7 @@
 //! The gaps check category: one finding for each unfinished part of the graph and one
 //! for each Rule without a Source, with the graph counts of each scope it reads.
 
-use crate::repo_context::{initialization_hint, RepoContext};
+use crate::repository::{initialization_hint, RepoContext};
 use camino::Utf8Path;
 use provenance_macros::rule;
 use provenance_porcelain::check::{CategoryRun, Finding, GapsContext, ScopeCounts};
