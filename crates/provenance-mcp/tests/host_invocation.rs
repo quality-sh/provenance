@@ -72,12 +72,34 @@ fn gated_host(repo: &Repository, open: bool) -> (StatementHost, Control) {
     (host, control)
 }
 
-fn discuss() -> serde_json::Value {
+/// A reply to a Discussion that the store starts on the shared Requirement. A reply
+/// names its Discussion, so the write needs no read of a target record first.
+fn reply(repo: &Repository) -> serde_json::Value {
+    let request = serde_json::from_value(json!({
+        "scope_id":"default", "actor":"reviewer", "declared_by":null,
+        "parent":{"node_type":"requirement","node_id":"req_shared"},
+        "action":{"kind":"start","role":"user","body":"Open the check."}
+    }))
+    .unwrap();
+    let started = repo.open().store().write_discussion(request).unwrap();
     json!({
-        "action":"discuss",
-        "target":"req_shared",
+        "action":"reply",
+        "target":started.discussion_id,
+        "expected_version":started.version,
         "actor":"reviewer", "role":"user", "body":"Check the write."
     })
+}
+
+/// The ID of the Message that one reply wrote.
+fn reply_message(written: &rmcp::model::CallToolResult) -> String {
+    written.structured_content.as_ref().unwrap()["receipt"]["message_ids"]
+        .as_array()
+        .unwrap()
+        .last()
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .to_owned()
 }
 
 async fn statement_check(host: &StatementHost) -> u16 {
@@ -121,12 +143,10 @@ fn discussion_exists(repo: &Repository, discussion_id: &str) -> bool {
 async fn a_typed_write_waiting_for_the_lock_does_not_delay_a_data_free_call() {
     let repo = Repository::new("The shared graph is readable.");
     let (host, mut control) = gated_host(&repo, true);
+    let arguments = reply(&repo);
     let lock = HeldLock::hold(&repo);
     let session = Session::start(host.clone()).await;
-    let mut write = Box::pin(call(&session.client, "change", discuss()));
-    assert!(poll!(&mut write).is_pending());
-    // The first entry reads the target record; the second is the write.
-    control.entered().await;
+    let mut write = Box::pin(call(&session.client, "change", arguments));
     assert!(poll!(&mut write).is_pending());
     control.entered().await;
 
@@ -135,11 +155,7 @@ async fn a_typed_write_waiting_for_the_lock_does_not_delay_a_data_free_call() {
     lock.release();
     let written = write.await;
     assert_ne!(written.is_error, Some(true), "{written:?}");
-    let discussion_id = written.structured_content.as_ref().unwrap()["receipt"]["discussion_id"]
-        .as_str()
-        .unwrap()
-        .to_owned();
-    assert!(discussion_exists(&repo, &discussion_id));
+    assert!(discussion_exists(&repo, &reply_message(&written)));
     session.close().await;
     host.shutdown().await;
 }
@@ -172,9 +188,10 @@ async fn a_slow_repository_preparation_does_not_delay_a_data_free_call() {
 async fn shutdown_waits_for_a_typed_write() {
     let repo = Repository::new("The shared graph is readable.");
     let (host, mut control) = gated_host(&repo, true);
+    let arguments = reply(&repo);
     let lock = HeldLock::hold(&repo);
     let session = Session::start(host.clone()).await;
-    let mut write = Box::pin(call(&session.client, "change", discuss()));
+    let mut write = Box::pin(call(&session.client, "change", arguments));
     assert!(poll!(&mut write).is_pending());
     control.entered().await;
 
@@ -188,11 +205,7 @@ async fn shutdown_waits_for_a_typed_write() {
     closing.await;
     let written = write.await;
     assert_ne!(written.is_error, Some(true), "{written:?}");
-    let discussion_id = written.structured_content.as_ref().unwrap()["receipt"]["discussion_id"]
-        .as_str()
-        .unwrap()
-        .to_owned();
-    assert!(discussion_exists(&repo, &discussion_id));
+    assert!(discussion_exists(&repo, &reply_message(&written)));
     session.close().await;
 }
 
