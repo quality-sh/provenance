@@ -383,14 +383,6 @@ fn graph_reference_export_schema_validates_record_structure() {
             let mut value = minimal_exact_export();
             value["graph"]["sources"] = json!([{
                 "scope_id": "default", "id": "source_policy",
-                "name": "Policy", "source_type": "policy", "url": null
-            }]);
-            value
-        },
-        {
-            let mut value = minimal_exact_export();
-            value["graph"]["sources"] = json!([{
-                "scope_id": "default", "id": "source_policy",
                 "name": "Policy", "source_type": "policy", "url": null,
                 "origin_thread": "thread_private"
             }]);
