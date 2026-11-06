@@ -134,7 +134,7 @@ fn copy_tree(source: &Utf8Path, destination: &Utf8Path) {
 /// every machine and the pinned file can hold it.
 pub fn git_commit(root: &Utf8Path, message: &str) -> Option<String> {
     let run = |args: &[&str]| {
-        std::process::Command::new("git")
+        crate::git_process::git()
             .args(args)
             .current_dir(root)
             .env("GIT_AUTHOR_DATE", "2026-01-01T00:00:00Z")

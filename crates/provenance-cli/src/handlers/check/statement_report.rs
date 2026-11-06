@@ -74,7 +74,7 @@ pub(super) fn committed_statement_context(
 }
 
 fn has_head(repo: &Utf8Path) -> anyhow::Result<bool> {
-    Ok(std::process::Command::new("git")
+    Ok(provenance_store::git_process::git()
         .current_dir(repo)
         .args(["rev-parse", "--verify", "HEAD"])
         .output()?
@@ -84,7 +84,7 @@ fn has_head(repo: &Utf8Path) -> anyhow::Result<bool> {
 
 fn resolve_commit(repo: &Utf8Path, revision: &str) -> anyhow::Result<String> {
     let commit = format!("{revision}^{{commit}}");
-    let output = std::process::Command::new("git")
+    let output = provenance_store::git_process::git()
         .current_dir(repo)
         .args(["rev-parse", "--verify", "--end-of-options", &commit])
         .output()?;
@@ -98,7 +98,7 @@ fn resolve_commit(repo: &Utf8Path, revision: &str) -> anyhow::Result<String> {
 
 #[rule("rule_ste_strict_initial_commit_base")]
 fn first_parent(repo: &Utf8Path, candidate: &str) -> anyhow::Result<Option<String>> {
-    let output = std::process::Command::new("git")
+    let output = provenance_store::git_process::git()
         .current_dir(repo)
         .args(["cat-file", "-p", candidate])
         .output()?;
@@ -179,7 +179,7 @@ fn read_commit_records<T: DeserializeOwned>(
         scope.as_str(),
         family_path
     );
-    let listing = std::process::Command::new("git")
+    let listing = provenance_store::git_process::git()
         .current_dir(repo)
         .args(["ls-tree", "--name-only", commit, "--", &path])
         .output()?;
@@ -192,7 +192,7 @@ fn read_commit_records<T: DeserializeOwned>(
         return Ok(Vec::new());
     }
     let object = format!("{commit}:{path}");
-    let output = std::process::Command::new("git")
+    let output = provenance_store::git_process::git()
         .current_dir(repo)
         .args(["show", &object])
         .output()?;

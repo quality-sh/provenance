@@ -52,8 +52,8 @@ fn embedded_skills_include_turn_based_provenance_shaping_skill() {
         .assert()
         .success()
         .stdout(predicate::str::contains("LAND-AS-YOU-GO"))
-        .stdout(predicate::str::contains("Chart"))
-        .stdout(predicate::str::contains("Work"));
+        .stdout(predicate::str::contains("Mode 1: Start an anchor"))
+        .stdout(predicate::str::contains("Mode 2: Answer Questions"));
 }
 
 #[test]

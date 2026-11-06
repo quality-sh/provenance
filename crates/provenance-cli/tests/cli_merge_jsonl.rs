@@ -133,7 +133,7 @@ fn a_conflicting_merge_fails_so_git_falls_back_to_a_conflict() {
 }
 
 fn git(repository: &Path, arguments: &[&str]) -> std::process::Output {
-    let output = std::process::Command::new("git")
+    let output = provenance_store::git_process::git()
         .current_dir(repository)
         .args(arguments)
         .output()
@@ -257,7 +257,7 @@ fn the_documented_driver_configuration_refuses_an_invalid_merge() {
         "ours",
     );
 
-    let merge = std::process::Command::new("git")
+    let merge = provenance_store::git_process::git()
         .current_dir(repository)
         .args(["merge", "theirs", "-m", "merge"])
         .output()

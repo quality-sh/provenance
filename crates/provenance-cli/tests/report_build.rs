@@ -7,10 +7,9 @@ use assert_cmd::Command;
 use provenance_macros::verifies;
 use serde_json::Value;
 use std::path::Path;
-use std::process::Command as ProcessCommand;
 
 fn git(repo: &Path, args: &[&str]) -> String {
-    let output = ProcessCommand::new("git")
+    let output = provenance_store::git_process::git()
         .arg("-C")
         .arg(repo)
         .args(args)

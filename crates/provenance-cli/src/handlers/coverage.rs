@@ -244,7 +244,7 @@ fn rule_evidence_warnings(
 }
 
 pub(super) fn current_git_commit(repo: &camino::Utf8Path) -> anyhow::Result<String> {
-    let output = std::process::Command::new("git")
+    let output = provenance_store::git_process::git()
         .args(["rev-parse", "HEAD"])
         .current_dir(repo)
         .output()?;
@@ -256,7 +256,7 @@ fn scan_commit(repo: &camino::Utf8Path, scans: &[provenance_scanner::FileScan]) 
     if scans.is_empty() {
         return current_git_commit(repo).ok();
     }
-    let mut command = std::process::Command::new("git");
+    let mut command = provenance_store::git_process::git();
     command
         .args([
             "status",

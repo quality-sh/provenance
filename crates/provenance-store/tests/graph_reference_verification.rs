@@ -35,7 +35,7 @@ const AUTHOR: [&str; 4] = [
 ];
 
 fn git(repo: &std::path::Path, args: &[&str]) -> String {
-    let output = std::process::Command::new("git")
+    let output = provenance_store::git_process::git()
         .args(args)
         .current_dir(repo)
         .output()

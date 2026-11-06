@@ -32,7 +32,7 @@ fn provenance(repo: &Path, args: &[&str], input: Option<Value>) -> Value {
 }
 
 fn git(repo: &Path, args: &[&str]) {
-    let output = std::process::Command::new("git")
+    let output = provenance_store::git_process::git()
         .args(args)
         .current_dir(repo)
         .output()

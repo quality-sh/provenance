@@ -11,7 +11,7 @@ use serde_json::json;
 
 fn git(repo: &std::path::Path, args: &[&str]) {
     assert!(
-        std::process::Command::new("git")
+        provenance_store::git_process::git()
             .args(args)
             .current_dir(repo)
             .status()
