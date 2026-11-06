@@ -106,7 +106,7 @@ pub fn action_input_schema() -> serde_json::Value {
 
 /// The field of the port request that the target fills: the record parent or the
 /// Discussion ID.
-const fn target_field(action: Action) -> &'static str {
+fn target_field(action: Action) -> &'static str {
     match action {
         Action::Discussions | Action::Discuss => "parent",
         Action::Discussion | Action::Reply => "discussion_id",

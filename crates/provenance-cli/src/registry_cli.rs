@@ -16,10 +16,12 @@ const STDIN: Field = Field::switch("stdin");
 
 /// The clap arguments of the declared fields, with their relations. A target field is a
 /// positional argument and each other field is a `--kebab-case` flag. A record or
-/// Discussion action also takes `--stdin` after its fields.
+/// Discussion action also takes `--stdin` after its fields, and a command with CLI options
+/// takes them after its fields.
 pub fn args(declaration: &Declaration) -> Vec<Arg> {
     let input = &declaration.input;
     let stdin = matches!(input, Input::RecordFields { .. } | Input::Discussion(_));
+    let (options, relations) = cli_options::command_options(declaration);
     input
         .fields()
         .iter()
@@ -27,6 +29,11 @@ pub fn args(declaration: &Declaration) -> Vec<Arg> {
             let positional = input.target().contains(&field.name);
             relate(arg(field, positional), field.name, input.relations())
         })
+        .chain(
+            options
+                .iter()
+                .map(|option| relate(arg(option, false), option.name, relations)),
+        )
         .chain(stdin.then(|| arg(&STDIN, false)))
         .collect()
 }

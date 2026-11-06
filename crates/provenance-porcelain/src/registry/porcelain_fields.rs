@@ -12,9 +12,7 @@ pub(super) const GET_FIELDS: &[Field] = &[
     DEPTH,
     KIND,
     LIMIT,
-    Field::switch("follow")
-        .doc("Stream the current review document and pushed changes as JSON lines."),
-    Field::switch("review_link").doc("Print a link to this record in the running review host."),
+    Field::switch("review_link").doc("Return a link to this record in the running review host."),
     Field::text("notify")
         .values(&["codex", "off"])
         .writes()
@@ -22,7 +20,6 @@ pub(super) const GET_FIELDS: &[Field] = &[
     Field::text("thread")
         .writes()
         .doc("The Codex thread UUID for notify."),
-    Field::switch("no_open").doc("Print the review link and do not open it in a browser."),
 ];
 
 const DEPTH: Field = Field::text("depth")
@@ -36,17 +33,13 @@ const LIMIT: Field = Field::text("limit")
     .doc("The page size. The default is 50.");
 
 pub(super) const GET_RELATIONS: &[Relation] = &[
-    Relation::Requires("follow", "view"),
-    Relation::Conflicts("follow", "review_link"),
     Relation::Conflicts("review_link", "view"),
     Relation::Conflicts("review_link", "depth"),
     Relation::Conflicts("review_link", "kind"),
     Relation::Conflicts("review_link", "limit"),
     Relation::Requires("notify", "view"),
-    Relation::Conflicts("notify", "follow"),
     Relation::Conflicts("notify", "review_link"),
     Relation::Requires("thread", "notify"),
-    Relation::Requires("no_open", "review_link"),
 ];
 
 /// The trace fields after the target: the get traversal bounds.

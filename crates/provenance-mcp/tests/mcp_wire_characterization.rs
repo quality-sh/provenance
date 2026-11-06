@@ -337,7 +337,7 @@ fn refusals() -> Vec<(&'static str, Value)> {
     };
     let discussion = json!({
         "field":"unknown_field","kind":"invalid_input","reason":"unknown_field",
-        "message":"the discussions action does not take unknown_field; it takes: cursor, limit, parent, status"
+        "message":"the discussions action does not take unknown_field; it takes: cursor, limit, status, target"
     });
     let change = json!({
         "field":"action","kind":"invalid_input","reason":"required",
@@ -348,7 +348,7 @@ fn refusals() -> Vec<(&'static str, Value)> {
             "get",
             unknown(
                 "get",
-                "depth, follow, kind, limit, no_open, review_link, target, view",
+                "depth, kind, limit, review_link, target, view",
             ),
         ),
         (

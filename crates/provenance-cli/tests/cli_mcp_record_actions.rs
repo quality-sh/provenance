@@ -1,5 +1,5 @@
-//! The change tool of a spawned `provenance mcp` and the CLI record actions take the same
-//! fields and store the same records.
+//! A spawned `provenance mcp` and the CLI take the same fields: the change tool and the
+//! CLI record actions store the same records, and get returns the same review link.
 
 use provenance_macros::verifies;
 use provenance_mcp::Client;
@@ -147,4 +147,47 @@ async fn the_change_tool_and_the_cli_store_the_same_records() {
         assert_eq!(stored(&by_cli, id), stored(&by_mcp, id), "{id}");
     }
     assert_eq!(stored(&by_mcp, "req_shared")["refines"], json!(["req_b"]));
+}
+
+/// Get with `review_link` returns the review link of the record on both surfaces. With no
+/// review host, both give the text that tells how to start one.
+#[tokio::test]
+#[verifies("rule_shared_command_same_name_and_grammar", examples)]
+async fn get_returns_the_same_review_link_on_both_surfaces() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_str().unwrap().to_owned();
+    init(&repo);
+    let statement = "The system stores records.";
+    cli(&[
+        "req_linked",
+        "create",
+        "--type",
+        "requirement",
+        "--statement",
+        statement,
+        "--repo",
+        &repo,
+    ]);
+    let by_cli: Value = serde_json::from_str(&cli(&[
+        "req_linked",
+        "get",
+        "--review-link",
+        "--no-open",
+        "--format",
+        "json",
+        "--repo",
+        &repo,
+    ]))
+    .unwrap();
+    let server = Server::start(&repo).await;
+    let by_mcp = server
+        .client
+        .call("get", json!({"target":"req_linked","review_link":true}))
+        .await;
+    server.close().await;
+    assert_ne!(by_mcp["isError"], json!(true), "{by_mcp}");
+    let link = &by_mcp["structuredContent"]["review_link"];
+    assert!(by_cli["message"].is_string(), "{by_cli}");
+    assert_eq!(link["review_url"], by_cli["review_url"], "{by_mcp}");
+    assert_eq!(link["message"], by_cli["message"], "{by_mcp}");
 }

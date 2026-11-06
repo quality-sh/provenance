@@ -13,9 +13,11 @@ use serde::{Deserialize, Serialize};
 use std::{fmt::Display, future::Future, pin::Pin};
 
 mod notify;
+mod review_link;
 mod shaping;
 mod wire;
 pub use notify::{Notify, NotifyClient, NotifyPort, Registration, NO_REVIEW_HOST};
+pub use review_link::{ReviewLink, ReviewLinkPort};
 pub use shaping::{BlockedQuestion, BlockedReason, Claim, QuestionState, SessionSummary};
 pub use wire::{
     input_schema, notify_input_schema, notify_output_schema, output_schema, render_readable,
@@ -89,16 +91,12 @@ pub struct GetInput {
     #[schemars(range(min = 1))]
     pub limit: Option<usize>,
     #[serde(default)]
-    pub follow: bool,
-    #[serde(default)]
     pub review_link: bool,
     #[serde(default)]
     pub notify: Option<NotifyClient>,
     #[serde(default)]
     #[schemars(length(min = 1))]
     pub thread: Option<String>,
-    #[serde(default)]
-    pub no_open: bool,
 }
 
 impl GetInput {
@@ -109,11 +107,9 @@ impl GetInput {
             depth: None,
             kind: Vec::new(),
             limit: None,
-            follow: false,
             review_link: false,
             notify: None,
             thread: None,
-            no_open: false,
         }
     }
 
@@ -191,12 +187,14 @@ pub enum ViewResult {
     Trace(Traversal),
     Impact(Impact),
     Review(Box<Review>),
+    /// The record view with the review link of the record.
+    ReviewLink(ReviewLink),
 }
 
 impl ViewResult {
     pub const fn view(&self) -> View {
         match self {
-            Self::Record => View::Record,
+            Self::Record | Self::ReviewLink(_) => View::Record,
             Self::Children(_) => View::Children,
             Self::Trace(_) => View::Trace,
             Self::Impact(_) => View::Impact,
@@ -207,7 +205,7 @@ impl ViewResult {
     pub fn related(&self) -> &[TracedNode] {
         match self {
             Self::Children(traversal) | Self::Trace(traversal) => &traversal.records,
-            Self::Record | Self::Impact(_) | Self::Review(_) => &[],
+            Self::Record | Self::ReviewLink(_) | Self::Impact(_) | Self::Review(_) => &[],
         }
     }
 
@@ -230,7 +228,7 @@ impl ViewResult {
             Self::Children(traversal) | Self::Trace(traversal) => Some(&traversal.bounds),
             Self::Impact(impact) => Some(&impact.bounds),
             Self::Review(review) => Some(&review.bounds),
-            Self::Record => None,
+            Self::Record | Self::ReviewLink(_) => None,
         }
     }
 
@@ -241,7 +239,7 @@ impl ViewResult {
             }
             Self::Impact(impact) => impact.response_metadata.as_ref(),
             Self::Review(review) => review.response_metadata.as_ref(),
-            Self::Record => None,
+            Self::Record | Self::ReviewLink(_) => None,
         }
     }
 }
@@ -357,6 +355,9 @@ pub trait GetPort: Send + Sync {
     ) -> PortFuture<'a, Registration> {
         Box::pin(async { Err(ReadError::Operation(NO_REVIEW_HOST.to_owned())) })
     }
+    fn review_link<'a>(&'a self, _record: &'a GraphNode) -> PortFuture<'a, ReviewLink> {
+        Box::pin(async { Err(ReadError::Operation(NO_REVIEW_HOST.to_owned())) })
+    }
 }
 
 impl<P: GetPort> crate::Porcelain<P> {
@@ -379,6 +380,9 @@ impl<P: GetPort> crate::Porcelain<P> {
         };
         let record_metadata = resolved.metadata;
         let result = match input.view {
+            View::Record if input.review_link => {
+                ViewResult::ReviewLink(self.port.review_link(&record).await?)
+            }
             View::Record => ViewResult::Record,
             View::Children | View::Trace => {
                 let mut traversal = self
@@ -458,12 +462,11 @@ fn validate(input: &GetInput) -> Result<(), ReadError> {
         Some(_) => input.view != View::Review || input.thread.as_deref().is_none_or(str::is_empty),
         None => input.thread.is_some(),
     };
-    // The follow and review link fields need a stream or the review host, so this read
-    // refuses them; a consumer that has them answers those fields before it reads.
-    let delivered = input.follow || input.review_link || input.no_open;
+    let review_link_refused = input.review_link
+        && (input.view != View::Record || input.limit.is_some() || input.notify.is_some());
     if unsupported
         || notify_refused
-        || delivered
+        || review_link_refused
         || input.depth == Some(0)
         || input.limit == Some(0)
     {

@@ -74,6 +74,8 @@ struct GetWire<'a> {
     view_metadata: Option<&'a ResponseMeta>,
     #[serde(skip_serializing_if = "Option::is_none")]
     notify: Option<&'a Registration>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    review_link: Option<&'a super::ReviewLink>,
 }
 
 impl GetOutcome {
@@ -102,6 +104,10 @@ impl GetOutcome {
             record_metadata: self.record_metadata.as_ref(),
             view_metadata: self.view_metadata(),
             notify: self.review().and_then(|review| review.notify.as_ref()),
+            review_link: match &self.result {
+                super::ViewResult::ReviewLink(link) => Some(link),
+                _ => None,
+            },
         }
     }
 }
@@ -255,6 +261,13 @@ pub fn render_readable(outcome: &GetOutcome) -> serde_json::Result<String> {
                 serde_json::to_string_pretty(notify)?
             ));
         }
+    }
+    if let super::ViewResult::ReviewLink(link) = &outcome.result {
+        sections.push(match (&link.review_url, &link.message) {
+            (Some(url), _) => format!("review link: {url}"),
+            (None, Some(message)) => format!("review link: none. {message}"),
+            (None, None) => "review link: none".to_owned(),
+        });
     }
     if let Some(bounds) = outcome.bounds() {
         sections.push(format!(

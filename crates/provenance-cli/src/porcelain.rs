@@ -43,11 +43,17 @@ pub fn check_input_from_selectors(
         .fold(CheckInput::new(categories), CheckInput::with_statement)
 }
 
-/// The host of one repository and scope, with the notify adapter of the review host.
+/// The host of one repository and scope, with the notify and review link adapters of
+/// the review host.
 pub fn local_host(context: &RepoContext) -> anyhow::Result<StatementHost> {
-    Ok(context.host()?.with_notify_port(std::sync::Arc::new(
-        provenance_review::HostNotifyPort::new(place(context)),
-    )))
+    Ok(context
+        .host()?
+        .with_notify_port(std::sync::Arc::new(provenance_review::HostNotifyPort::new(
+            place(context),
+        )))
+        .with_review_link_port(std::sync::Arc::new(
+            provenance_review::HostReviewLinkPort::new(place(context)),
+        )))
 }
 
 /// The repository root and scope as the review library names them.

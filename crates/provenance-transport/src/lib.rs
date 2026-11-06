@@ -51,6 +51,7 @@ pub struct StatementHost {
     credential: Option<Arc<dyn access::HttpCredential>>,
     check_port: Option<Arc<dyn provenance_porcelain::check::CheckPort>>,
     notify_port: Option<Arc<dyn provenance_porcelain::get::NotifyPort>>,
+    review_link_port: Option<Arc<dyn provenance_porcelain::get::ReviewLinkPort>>,
     ingress: Arc<Semaphore>,
     stopping: CancellationToken,
 }
@@ -64,6 +65,7 @@ impl Default for StatementHost {
             credential: Some(Arc::new(access::OpenCredential)),
             check_port: None,
             notify_port: None,
+            review_link_port: None,
             ingress: Arc::new(Semaphore::new(8)),
             stopping: CancellationToken::new(),
         }
@@ -124,6 +126,22 @@ impl StatementHost {
     ) -> Self {
         self.notify_port = Some(port);
         self
+    }
+
+    /// Inject the review host client used by the get `review_link` argument.
+    #[must_use]
+    pub fn with_review_link_port(
+        mut self,
+        port: Arc<dyn provenance_porcelain::get::ReviewLinkPort>,
+    ) -> Self {
+        self.review_link_port = Some(port);
+        self
+    }
+
+    pub(crate) fn review_link_port(
+        &self,
+    ) -> Option<&Arc<dyn provenance_porcelain::get::ReviewLinkPort>> {
+        self.review_link_port.as_ref()
     }
 
     pub(crate) fn notify_port(&self) -> Option<&Arc<dyn provenance_porcelain::get::NotifyPort>> {

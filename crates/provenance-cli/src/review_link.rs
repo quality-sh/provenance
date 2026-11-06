@@ -2,7 +2,7 @@
 
 use anyhow::Context as _;
 use provenance_macros::rule;
-use provenance_porcelain::get::{GetInput, View, NO_REVIEW_HOST};
+use provenance_porcelain::get::{GetInput, ReviewLink, View, ViewResult, NO_REVIEW_HOST};
 pub use provenance_review::AffectedReviewRecord;
 use provenance_review::{PageResult, ReviewLocation};
 use provenance_transport::repository::RepoContext;
@@ -26,11 +26,24 @@ pub async fn print(
     no_open: bool,
 ) -> anyhow::Result<()> {
     let host = provenance_cli::porcelain::local_host(context)?;
-    let record = host
-        .porcelain()
-        .get()
-        .get(GetInput::new(record_id, View::Record))
-        .await?;
+    let mut input = GetInput::new(record_id, View::Record);
+    input.review_link = true;
+    let record = host.porcelain().get().get(input).await?;
+    if let ViewResult::ReviewLink(ReviewLink {
+        review_url: None,
+        message,
+    }) = record.result
+    {
+        return print_output(
+            &LinkOutput {
+                review_url: None,
+                opened: None,
+                message,
+            },
+            format,
+        );
+    }
+    // The porcelain link is plain; opening the record needs its review location.
     let location = provenance_review::review_location(
         &provenance_cli::porcelain::place(context),
         &AffectedReviewRecord {
@@ -65,8 +78,15 @@ pub async fn print(
             message: Some(start_message(context)),
         },
     };
+    print_output(&output, format)
+}
+
+fn print_output(
+    output: &LinkOutput,
+    format: Option<provenance_cli::porcelain::OutputFormat>,
+) -> anyhow::Result<()> {
     if format == Some(provenance_cli::porcelain::OutputFormat::Json) {
-        crate::output::print_json(&output)
+        crate::output::print_json(output)
     } else {
         println!(
             "{}",
@@ -163,8 +183,5 @@ fn signed_out_output(plain: String, error: &anyhow::Error) -> LinkOutput {
 }
 
 fn start_message(context: &RepoContext) -> String {
-    format!(
-        "No review host is running. Start it with `provenance review --repo {} --repository-id local --scope {} --detach`.",
-        context.repo, context.scope
-    )
+    provenance_review::start_message(&provenance_cli::porcelain::place(context))
 }

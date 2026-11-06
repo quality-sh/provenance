@@ -20,7 +20,8 @@ pub mod reviewer;
 pub use assets::{bundle, serve};
 pub use host::{follow::follow, start, HostOptions, StartedHost, Startup};
 pub use link::{
-    issue_launch_code, review_location, AffectedReviewRecord, PageResult, ReviewLocation,
+    issue_launch_code, review_location, start_message, AffectedReviewRecord, HostReviewLinkPort,
+    PageResult, ReviewLocation,
 };
 pub use notify::HostNotifyPort;
 pub use repository::RepositoryScope;

@@ -8,7 +8,7 @@ use provenance_core::threads::{
 use provenance_core::{NodeType, StableId, SDK_PROTOCOL_VERSION};
 use provenance_porcelain::get::{
     Bounds, GetPort, Impact, Notify, PortFuture, ReadError, RecordResolution, Registration, Review,
-    Traversal, TraversalRequest, View, NO_REVIEW_HOST,
+    ReviewLink, Traversal, TraversalRequest, View, NO_REVIEW_HOST,
 };
 use provenance_store::operations::catalog::{self, Operation as _};
 
@@ -254,6 +254,16 @@ impl GetPort for HostGetPort {
     ) -> PortFuture<'a, Registration> {
         match self.host.notify_port() {
             Some(port) => port.register(root, limit, notify),
+            None => Box::pin(async { Err(ReadError::Operation(NO_REVIEW_HOST.to_owned())) }),
+        }
+    }
+
+    fn review_link<'a>(
+        &'a self,
+        record: &'a provenance_core::protocol::GraphNode,
+    ) -> PortFuture<'a, ReviewLink> {
+        match self.host.review_link_port() {
+            Some(port) => port.link(record.node_type(), record.id().as_str()),
             None => Box::pin(async { Err(ReadError::Operation(NO_REVIEW_HOST.to_owned())) }),
         }
     }
