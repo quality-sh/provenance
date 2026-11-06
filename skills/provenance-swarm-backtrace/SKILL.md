@@ -5,12 +5,13 @@ description: Reverse-engineer candidate requirements from an existing codebase w
 
 # Swarm backtrace
 
-Shaping in reverse (docs/shaping.md, "Relationship to the swarm backtrace" — canonical;
-where this file diverges, that document wins). Agents partition an existing codebase,
-extract candidates — *what must be true for this code to be correct*, and which function
-already decides it — dedup keeping **all** evidence sites, challenge every candidate, and
-land everything as
-`proposed` proposals with the codebase (pinned to a commit) as the source.
+This skill does shaping in reverse. The canonical procedure is in docs/shaping.md,
+"Relationship to the swarm backtrace". If this file and that document are different, obey
+that document. Agents partition an existing codebase and extract candidates. A candidate
+states *what must be true for this code to be correct* and names the function that already
+decides it. Agents then remove duplicate candidates but keep **all** evidence sites,
+challenge every candidate, and land everything as `proposed` proposals. The source of each
+proposal is the codebase, pinned to a commit.
 
 ## Ground rules
 
