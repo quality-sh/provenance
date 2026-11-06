@@ -3,14 +3,13 @@ use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::path::Path;
-use std::process::Command as ProcessCommand;
 
 fn provenance() -> Command {
     Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
 }
 
 fn git(repo: &Path, args: &[&str]) -> String {
-    let output = ProcessCommand::new("git")
+    let output = provenance_store::git_process::git()
         .arg("-C")
         .arg(repo)
         .args(args)

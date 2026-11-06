@@ -3,12 +3,11 @@ use crate::state_store::{ArchiveCommitGap, ArchiveCommitGapReason, StateStore};
 use camino::Utf8Path;
 use provenance_core::ScopeId;
 use provenance_macros::verifies;
-use std::process::Command;
 
 const UNKNOWN_COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
 
 fn git(repo: &Utf8Path, args: &[&str]) -> String {
-    let output = Command::new("git")
+    let output = crate::git_process::git()
         .current_dir(repo)
         .args([
             "-c",

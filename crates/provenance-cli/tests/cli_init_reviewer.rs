@@ -20,12 +20,12 @@ fn init_uses_the_normalized_git_email_as_the_reviewer() {
     let temporary = tempfile::tempdir().unwrap();
     let repo = temporary.path().join("repo");
     std::fs::create_dir(&repo).unwrap();
-    std::process::Command::new("git")
+    provenance_store::git_process::git()
         .args(["init", "--quiet"])
         .current_dir(&repo)
         .status()
         .unwrap();
-    std::process::Command::new("git")
+    provenance_store::git_process::git()
         .args(["config", "user.email", "Jane.Doe+Review@example.com"])
         .current_dir(&repo)
         .status()

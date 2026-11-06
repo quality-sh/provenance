@@ -129,6 +129,48 @@ fn no_git_identity_reports_no_reviewer() {
     assert!(config.get("reviewer").is_none(), "{config}");
 }
 
+#[test]
+#[verifies("rule_review_host_reports_reviewer", examples)]
+fn reviewer_set_after_a_request_that_found_none_is_reported_at_the_next_request() {
+    let repo = repository_with_actors(&["maintainer"]);
+    let (host, git) = start_as(repo.path(), "");
+    let config = review_config(&host);
+    assert!(config.get("reviewer").is_none(), "{config}");
+
+    std::fs::write(
+        git.path().join("gitconfig"),
+        "[provenance]\n\treviewer = maintainer\n",
+    )
+    .unwrap();
+    assert_eq!(
+        review_config(&host)["reviewer"],
+        json!({"actorId": "maintainer", "allowed": true})
+    );
+}
+
+#[test]
+#[verifies("rule_review_host_reports_reviewer", examples)]
+fn changed_reviewer_is_reported_after_the_host_restarts() {
+    let repo = repository_with_actors(&["maintainer", "visitor"]);
+    let (host, git) = start_as(repo.path(), "[provenance]\n\treviewer = maintainer\n");
+    let first = json!({"actorId": "maintainer", "allowed": true});
+    assert_eq!(review_config(&host)["reviewer"], first);
+
+    let global = git.path().join("gitconfig");
+    std::fs::write(&global, "[provenance]\n\treviewer = visitor\n").unwrap();
+    assert_eq!(review_config(&host)["reviewer"], first);
+    drop(host);
+
+    let mut command = review_command(repo.path());
+    command
+        .env("GIT_CONFIG_GLOBAL", &global)
+        .env("GIT_CONFIG_NOSYSTEM", "1");
+    assert_eq!(
+        review_config(&start_command(command))["reviewer"],
+        json!({"actorId": "visitor", "allowed": true})
+    );
+}
+
 fn decide(host: &Host, proposal: &str, actor_id: &str) -> ureq::Response {
     response(
         request(

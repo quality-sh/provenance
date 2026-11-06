@@ -49,7 +49,7 @@ pub fn save(store: &StateStore, fields: Value) -> SaveRequirement {
 /// Runs one Git command in the fixture repository with a fixed identity.
 #[allow(dead_code)]
 pub fn git(temp: &tempfile::TempDir, args: &[&str]) -> String {
-    let output = std::process::Command::new("git")
+    let output = provenance_store::git_process::git()
         .args([
             "-c",
             "user.name=Reviewer",

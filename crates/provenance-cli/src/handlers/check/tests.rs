@@ -231,7 +231,7 @@ async fn scoped_graph_check_ignores_archive_commits_in_other_scopes() {
             "Base",
         ],
     ] {
-        let status = std::process::Command::new("git")
+        let status = provenance_store::git_process::git()
             .current_dir(&repo)
             .args(arguments)
             .status()

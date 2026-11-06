@@ -12,7 +12,7 @@ fn prerequisite_change_changes_the_review_revision_and_history() {
         vec!["add", ".provenance/state"],
         vec!["commit", "-q", "-m", "Save the graph"],
     ] {
-        let output = std::process::Command::new("git")
+        let output = provenance_store::git_process::git()
             .current_dir(&repo)
             .args([
                 "-c",

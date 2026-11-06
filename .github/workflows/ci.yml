@@ -1500,7 +1500,8 @@ jobs:
           # intercepts TLS. Only this firewalled fetch turns the check off.
           CARGO_HTTP_CHECK_REVOKE: ${{ runner.os == 'Windows' && 'false' || 'true' }}
         run: sfw cargo fetch --locked
-      - run: cargo test --locked -p provenance-store --target ${{ matrix.target }} operations::files
+      # git_process::tests runs the Windows check that Git starts without a console window.
+      - run: cargo test --locked -p provenance-store --target ${{ matrix.target }} -- operations::files git_process::tests
 
   skills-install:
     timeout-minutes: 60

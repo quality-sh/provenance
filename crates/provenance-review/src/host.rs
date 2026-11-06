@@ -160,6 +160,7 @@ pub async fn start(options: HostOptions) -> anyhow::Result<StartedHost> {
         credential: access.clone(),
         repository: binding,
         path: repository.working_tree().to_path_buf(),
+        reviewer: Arc::default(),
         value: config,
     };
     let page_events = events.clone();
@@ -347,6 +348,10 @@ struct ReviewConfiguration {
     credential: Arc<LocalAccess>,
     repository: Arc<LocalRepository>,
     path: camino::Utf8PathBuf,
+    // The first reviewer that the host reads from the Git configuration stays until the
+    // host restarts, so a page load starts no Git. A read that finds no reviewer is not
+    // kept, so the next page load reads the configuration again.
+    reviewer: Arc<std::sync::OnceLock<String>>,
     value: Value,
 }
 
@@ -362,10 +367,17 @@ async fn configuration(
         Err(error) => return refusal(error),
     };
     let path = config.path.clone();
-    let reviewer = tokio::task::spawn_blocking(move || reviewer::review_actor_id(&path))
-        .await
-        .ok()
-        .flatten();
+    let cached = config.reviewer.clone();
+    let reviewer = tokio::task::spawn_blocking(move || {
+        if let Some(actor_id) = cached.get() {
+            return Some(actor_id.clone());
+        }
+        let actor_id = reviewer::review_actor_id(&path)?;
+        Some(cached.get_or_init(|| actor_id).clone())
+    })
+    .await
+    .ok()
+    .flatten();
     if let Some(actor_id) = reviewer {
         config.value["reviewer"] =
             json!({ "allowed": actor_ids.contains(&actor_id), "actorId": actor_id });

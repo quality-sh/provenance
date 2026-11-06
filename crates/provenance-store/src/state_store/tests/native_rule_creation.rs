@@ -1,14 +1,13 @@
 use super::initialized_store;
 use crate::state_store::{CreateRequirementInput, CreateRuleInput};
 use provenance_core::{RequirementStatus, RuleSeverity, RuleStatus, StableId};
-use std::process::Command;
 
 fn id(value: &str) -> StableId {
     StableId::new(value).unwrap()
 }
 
 fn git(root: &std::path::Path, args: &[&str]) {
-    let output = Command::new("git")
+    let output = crate::git_process::git()
         .arg("-C")
         .arg(root)
         .args(args)

@@ -22,7 +22,7 @@ fn json(repo: &Path, args: &[&str]) -> Value {
 }
 
 fn git(repo: &Path, args: &[&str]) -> std::process::Output {
-    std::process::Command::new("git")
+    provenance_store::git_process::git()
         .current_dir(repo)
         .args(args)
         .output()

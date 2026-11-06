@@ -29,7 +29,7 @@ fn note_inside_git_repo_records_repo_branch_and_commit() {
     let repo = temp.path().join("repo");
     std::fs::create_dir_all(&repo).unwrap();
     let git = |args: &[&str]| {
-        let status = std::process::Command::new("git")
+        let status = provenance_store::git_process::git()
             .args(args)
             .current_dir(&repo)
             .env("GIT_AUTHOR_NAME", "t")
