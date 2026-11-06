@@ -6,7 +6,7 @@ use predicates::prelude::PredicateBooleanExt;
 use predicates::str::contains;
 
 const PLAIN: &str = r#"{"scope_id":"default","id":"req_plain","statement":"Records have one stored format.","status":"active"}"#;
-const EXTENDED: &str = r#"{"scope_id":"default","id":"req_extended","statement":"Records hold only known fields.","status":"active","extension":{"owner":"newer-tool"}}"#;
+const EXTENDED: &str = r#"{"scope_id":"default","id":"req_extended","statement":"Records keep only known fields.","status":"active","extension":{"owner":"newer-tool"}}"#;
 
 #[test]
 fn a_record_without_a_format_field_reads() {
@@ -20,18 +20,19 @@ fn a_record_without_a_format_field_reads() {
         .stdout(contains("schema_version").not());
 }
 
-/// A graph record family holds only the fields of its record type, so the
-/// store refuses a stored line with a field that the type does not hold.
+/// An open family reader ignores a field that its record type does not hold:
+/// the record reads and the read output does not show the field.
 #[test]
-fn a_record_with_an_unknown_field_is_refused() {
+fn a_record_with_an_unknown_field_reads_without_that_field() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().to_str().unwrap();
     init_with_requirements(dir.path(), &[PLAIN, EXTENDED]);
 
-    get(repo, "req_plain")
-        .failure()
-        .stdout(contains("Records have one stored format.").not())
-        .stderr(contains("invalid requirement").or(contains("extension")));
+    get(repo, "req_extended")
+        .success()
+        .stdout(contains("Records keep only known fields."))
+        .stdout(contains("extension").not())
+        .stdout(contains("newer-tool").not());
 }
 
 fn init_with_requirements(repo: &std::path::Path, rows: &[&str]) {

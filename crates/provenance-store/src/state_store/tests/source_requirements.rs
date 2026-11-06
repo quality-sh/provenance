@@ -58,28 +58,6 @@ fn source_requirement_records_are_written_deterministically() {
 }
 
 #[test]
-fn canonical_state_readers_refuse_unknown_extension_fields() {
-    let (_dir, store, scope) = seeded_source_requirement_store();
-    let source_path = store
-        .layout
-        .scopes_dir()
-        .join(scope.as_str())
-        .join("sources/source.jsonl");
-    let source = std::fs::read_to_string(&source_path).unwrap();
-    std::fs::write(
-        source_path,
-        source.replace(
-            "\"name\":\"SCHADS Award\"",
-            "\"name\":\"SCHADS Award\",\"extension\":true",
-        ),
-    )
-    .unwrap();
-
-    let error = store.list_sources(&scope).unwrap_err().to_string();
-    assert!(error.contains("invalid source"), "{error}");
-}
-
-#[test]
 fn concurrent_source_creates_preserve_all_records() {
     let (_dir, store, scope) = initialized_store();
     let repository = crate::test_support::repository(&store.layout);

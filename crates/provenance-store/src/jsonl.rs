@@ -1,5 +1,5 @@
 use crate::publication::{protect_rows, WritePermissions};
-use crate::state_store::readers::{ensure_readable_record, located, parse_line};
+use crate::state_store::readers::{ensure_no_legacy_retirement, located, parse_line};
 use camino::Utf8Path;
 use fs2::FileExt;
 use serde::{de::DeserializeOwned, Serialize};
@@ -105,7 +105,7 @@ where
 /// The read a write is built on, guarded the same way an ordinary read is.
 ///
 /// A mutation rewrites the whole shard. Each raw line passes
-/// [`ensure_readable_record`](crate::state_store::readers::ensure_readable_record),
+/// [`ensure_no_legacy_retirement`](crate::state_store::readers::ensure_no_legacy_retirement),
 /// the same check the read choke point makes, before any record is built.
 ///
 /// The raw line stays with its typed record. An unchanged record keeps its
@@ -125,7 +125,7 @@ where
     let mut loaded = LoadedRecords::default();
     for (index, line) in contents.lines().enumerate() {
         let value = parse_line(path, index + 1, line)?;
-        ensure_readable_record(path, index + 1, &value)?;
+        ensure_no_legacy_retirement(path, index + 1, &value)?;
         let (record, raw) = RawRecord::deserialize(line, index + 1).map_err(|error| {
             match error.downcast::<serde_json::Error>() {
                 Ok(error) => located(path, index + 1, &error),

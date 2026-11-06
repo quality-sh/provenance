@@ -219,7 +219,7 @@ impl StateStore {
                 }
                 line_number += 1;
                 let value: serde_json::Value = serde_json::from_slice(&bytes)?;
-                crate::state_store::readers::ensure_readable_record(
+                crate::state_store::readers::ensure_no_legacy_retirement(
                     &path,
                     usize::try_from(line_number)?,
                     &value,
