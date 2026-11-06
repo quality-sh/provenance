@@ -163,7 +163,7 @@ async fn fill_messages(
             return Ok(Fill::Full);
         }
         check_stored_size(size)?;
-        let message = page_message(ctx, &query.selector, &id, created_at).await?;
+        let message = page_message(ctx, &id, created_at).await?;
         let size = DiscussionPageFill::record_size(&message)?;
         if page.over_budget(size) {
             return Ok(Fill::Full);
@@ -193,12 +193,7 @@ async fn message_keys(
 }
 
 /// Loads one message of the page by id.
-async fn page_message(
-    ctx: &ReadContext,
-    selector: &DiscussionSelector,
-    id: &str,
-    created_at: i64,
-) -> anyhow::Result<Message> {
+async fn page_message(ctx: &ReadContext, id: &str, created_at: i64) -> anyhow::Result<Message> {
     let mut tx = ctx.snapshot().connection().await;
     let (thread, role, body, metadata): (String, String, String, Option<String>) = sqlx::query_as(
         "SELECT thread_id,role,body,ai_metadata FROM messages WHERE scope_id=? AND id=?",

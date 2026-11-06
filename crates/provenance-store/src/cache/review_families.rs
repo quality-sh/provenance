@@ -169,13 +169,6 @@ pub fn by_directory(directory: &str) -> Option<&'static ReviewFamily> {
         .find(|family| family.directory == directory)
 }
 
-pub fn deserialize_record(
-    kind: NodeType,
-    value: &serde_json::Value,
-) -> anyhow::Result<ReviewRecord> {
-    ReviewRecord::deserialize_closed(kind, value)
-}
-
 #[cfg(test)]
 mod tests {
     use super::{by_kind, REVIEW_FAMILIES};
