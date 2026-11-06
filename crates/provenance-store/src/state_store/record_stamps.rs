@@ -144,7 +144,7 @@ impl StateStore {
         let working_tree = self
             .repository()
             .map_or_else(|| self.layout.root(), |identity| identity.working_tree());
-        let output = std::process::Command::new("git")
+        let output = crate::git_process::git()
             .args(["rev-parse", "HEAD"])
             .current_dir(working_tree)
             .output();

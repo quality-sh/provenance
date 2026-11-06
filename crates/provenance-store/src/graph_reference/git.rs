@@ -1,6 +1,5 @@
 use super::{incomplete, GraphReferenceError, STORE_PATH};
 use camino::{Utf8Path, Utf8PathBuf};
-use std::process::Command;
 
 #[derive(Clone, Copy)]
 pub(super) enum TreeSource<'a> {
@@ -125,7 +124,7 @@ impl GitRepository {
 }
 
 fn run_git(repo: &Utf8Path, args: &[&str]) -> Result<Vec<u8>, GraphReferenceError> {
-    let output = Command::new("git")
+    let output = crate::git_process::git()
         .arg("--no-replace-objects")
         .arg("-C")
         .arg(repo)

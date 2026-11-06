@@ -183,7 +183,7 @@ pub fn record(id: &str, statement: &str, kind: &str) -> String {
 }
 
 pub fn git(repo: &Path, arguments: &[&str]) -> std::process::Output {
-    let output = std::process::Command::new("git")
+    let output = provenance_store::git_process::git()
         .current_dir(repo)
         .args(arguments)
         .output()

@@ -200,7 +200,7 @@ fn strict_statement_findings(repo: &Path, index_directory: &Path) -> Vec<Value> 
 }
 
 fn git(repo: &Path, arguments: &[&str]) {
-    let output = std::process::Command::new("git")
+    let output = provenance_store::git_process::git()
         .current_dir(repo)
         .args(arguments)
         .output()

@@ -57,7 +57,7 @@ fn append(path: impl AsRef<std::path::Path>, value: &Value) {
     writeln!(file, "{value}").unwrap();
 }
 fn git(repo: &Repository, args: &[&str]) -> String {
-    let output = std::process::Command::new("git")
+    let output = provenance_store::git_process::git()
         .args([
             "-c",
             "user.name=Fixture",

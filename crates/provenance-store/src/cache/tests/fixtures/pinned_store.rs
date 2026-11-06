@@ -46,7 +46,7 @@ pub fn pinned_store_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
     let (dir, layout, scope) = empty_layout();
     // Start without HEAD before seeding, even when TMPDIR is inside a worktree.
     // Record stamps must not inherit the parent checkout's commit.
-    let initialized = std::process::Command::new("git")
+    let initialized = crate::git_process::git()
         .args(["init", "--quiet"])
         .current_dir(dir.path())
         .output()

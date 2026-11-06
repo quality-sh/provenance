@@ -23,7 +23,7 @@ fn git_config(path: &Utf8Path, key: &str) -> Option<String> {
         .ancestors()
         .find(|candidate| candidate.exists())
         .unwrap_or(path);
-    let output = std::process::Command::new("git")
+    let output = provenance_store::git_process::git()
         .current_dir(working_directory)
         .args(["config", "--get", key])
         .output()

@@ -17,7 +17,7 @@ fn git(repo: &Path, args: &[&str]) {
     if args.first() == Some(&"add") {
         export_fixture_support::make_default_scope_portable(repo);
     }
-    let status = std::process::Command::new("git")
+    let status = provenance_store::git_process::git()
         .args(args)
         .current_dir(repo)
         .status()

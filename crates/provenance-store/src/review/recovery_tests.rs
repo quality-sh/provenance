@@ -252,7 +252,7 @@ fn a_relationship_only_review_save_updates_the_record_stamp() {
     )
     .unwrap();
     let git = |args: &[&str]| {
-        let output = std::process::Command::new("git")
+        let output = crate::git_process::git()
             .current_dir(root)
             .args(args)
             .output()
