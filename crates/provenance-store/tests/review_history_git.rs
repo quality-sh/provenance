@@ -230,3 +230,44 @@ async fn merge_that_resolves_a_conflict_to_new_content_adds_one_version() {
     assert_eq!(versions[2].before.as_ref(), Some(&versions[1].id));
     assert_eq!(versions[2].changed_fields, ["statement"]);
 }
+
+#[tokio::test]
+#[verifies("rule_record_history_reads_git", examples)]
+async fn history_shows_the_older_commits_after_a_shallow_clone_gets_deeper() {
+    let (origin, store) = fixture();
+    let mut commits = vec![commit_all(&origin, "Create")];
+    for statement in [
+        "The system stores records for one year.",
+        "The system stores records for two years.",
+    ] {
+        store
+            .save_requirement(save(&store, json!({ "statement": statement })))
+            .unwrap();
+        commits.push(commit_all(&origin, statement));
+    }
+    let clone = tempfile::tempdir().unwrap();
+    let source = format!("file://{}", origin.path().display()).replace('\\', "/");
+    git(&clone, &["clone", "-q", "--depth", "1", &source, "."]);
+
+    let shallow = versions(&clone).await;
+    let ids = shallow.iter().map(|v| v.id.as_str()).collect::<Vec<_>>();
+    assert_eq!(ids, [commits[2].as_str()]);
+
+    // HEAD stays at the same commit. Only the shallow boundary moves.
+    git(&clone, &["fetch", "-q", "--deepen", "2"]);
+    assert_eq!(git(&clone, &["rev-parse", "HEAD"]), commits[2]);
+    let deeper = versions(&clone).await;
+    let ids = deeper.iter().map(|v| v.id.as_str()).collect::<Vec<_>>();
+    assert_eq!(ids, commits.iter().map(String::as_str).collect::<Vec<_>>());
+    assert_eq!(deeper[2].before.as_ref(), Some(&deeper[1].id));
+}
+
+/// Commits the whole graph directory, so that a clone holds a complete repository.
+fn commit_all(temp: &tempfile::TempDir, message: &str) -> String {
+    if !temp.path().join(".git").exists() {
+        git(temp, &["init", "-q"]);
+    }
+    git(temp, &["add", ".provenance"]);
+    git(temp, &["commit", "-q", "-m", message]);
+    git(temp, &["rev-parse", "HEAD"])
+}
