@@ -4,7 +4,7 @@ Options:
       --quiet            Drop the advisory notes commands print alongside their output, such as the warning that this repository has no shaping skills installed
       --repo <REPO>      [default: .]
       --scope <SCOPE>    [default: default]
-      --input <INPUT>    
-      --dry-run          
-      --format <FORMAT>  [default: json] [possible values: json]
+      --format <FORMAT>  [possible values: json]
+      --input <INPUT>    The scope export file to import: the JSON document that export writes.
+      --dry-run          Run each check of the import and write nothing.
   -h, --help             Print help

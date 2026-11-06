@@ -3,8 +3,9 @@ Import the ASD-STE100 Issue 9 dictionary from one local PDF file
 Usage: provenance dictionary import [OPTIONS] --pdf <PDF>
 
 Options:
-      --pdf <PDF>        Path to the local official Issue 9 PDF file
       --quiet            Drop the advisory notes commands print alongside their output, such as the warning that this repository has no shaping skills installed
       --repo <REPO>      [default: .]
-      --format <FORMAT>  [default: json] [possible values: json]
+      --scope <SCOPE>    [default: default]
+      --format <FORMAT>  [possible values: json]
+      --pdf <PDF>        Path to the local official Issue 9 PDF file
   -h, --help             Print help

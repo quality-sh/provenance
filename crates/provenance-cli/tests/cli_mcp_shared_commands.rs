@@ -18,7 +18,7 @@ use std::path::Path;
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _};
 
-/// The JSON result of one CLI command that succeeds.
+/// The JSON result of one CLI command that succeeds, or null when it prints nothing.
 fn cli(index: &Path, args: &[&str]) -> Value {
     let output = assert_cmd::Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
         .env("PROVENANCE_STE100_INDEX_DIR", index)
@@ -30,6 +30,9 @@ fn cli(index: &Path, args: &[&str]) -> Value {
         "{args:?}: {}",
         String::from_utf8_lossy(&output.stderr)
     );
+    if output.stdout.is_empty() {
+        return Value::Null;
+    }
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
@@ -130,10 +133,11 @@ async fn repository_actions_give_the_cli_result_on_mcp() {
         .each_ref()
         .map(|directory| directory.path().to_str().unwrap().to_owned());
     let indexes = [tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap()];
-    let [cli_index, mcp_index] = indexes.each_ref().map(|directory| directory.path());
+    let [cli_index, mcp_index] = indexes.each_ref().map(tempfile::TempDir::path);
     for repo in [&by_cli, &by_mcp] {
         support::init_repo(repo);
         support::create_source(repo);
+        export_fixture_support::make_default_scope_portable(repo);
     }
     let files = tempfile::tempdir().unwrap();
     let export = files.path().join("export.json");
