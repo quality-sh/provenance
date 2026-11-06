@@ -202,9 +202,17 @@ pub fn add_subcommand(root: Command, declaration: Declaration) -> Command {
         panic!("{} is not a word command", declaration.name);
     };
     let (word, groups) = words.split_last().expect("a word command has a word");
+    // The root already gives some options to each command after it.
+    let options = bound_options(&declaration)
+        .into_iter()
+        .filter(|option| {
+            root.get_arguments()
+                .all(|arg| arg.get_id() != option.get_id())
+        })
+        .collect::<Vec<_>>();
     let mut leaf = Command::new(*word)
         .hide(declaration.internal)
-        .args(bound_options(&declaration))
+        .args(options)
         .args(args(&declaration));
     if !declaration.description.is_empty() {
         leaf = leaf.about(declaration.description);

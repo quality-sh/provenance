@@ -125,11 +125,7 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
     );
     let check_name = tools
         .iter()
-        .find(|tool| {
-            tool["inputSchema"]["properties"]
-                .get("categories")
-                .is_some()
-        })
+        .find(|tool| tool["inputSchema"]["properties"].get("graph").is_some())
         .unwrap()["name"]
         .as_str()
         .unwrap()
@@ -213,7 +209,7 @@ async fn mcp_get_failures_are_the_cli_json_refusals() {
     assert_eq!(mcp["isError"], true, "{depth}");
     assert_eq!(
         (&error["kind"], &error["field"], &error["reason"]),
-        (&cli["kind"], &json!("max_depth"), &json!("invalid_value")),
+        (&cli["kind"], &json!("depth"), &json!("invalid_value")),
         "{error} {cli}"
     );
     client.cancel().await.unwrap();

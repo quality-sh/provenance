@@ -98,7 +98,7 @@ impl ActionInput {
     }
 
     /// The flat input schema. Each field description names the actions that take it.
-    #[provenance_macros::rule("rule_mcp_action_inputs_are_flat_objects")]
+    #[provenance_macros::rule("rule_mcp_tool_inputs_are_flat_objects")]
     pub fn schema(&self) -> Value {
         let mut properties = Map::new();
         properties.insert(

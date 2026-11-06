@@ -1,40 +1,87 @@
 {
   "$defs": {
-    "Category": {
-      "description": "A distinct repository check category.",
-      "oneOf": [
-        {
-          "enum": [
-            "graph",
-            "statements",
-            "bindings"
-          ],
-          "type": "string"
-        },
-        {
-          "const": "gaps",
-          "description": "The unfinished parts of the graph and the Rules without a Source. It runs only\nwhen the caller selects it, and its findings never refuse the command.",
-          "type": "string"
-        },
-        {
-          "const": "docs",
-          "description": "The Markdown links of the docs site that name a page the site does not publish.\nIt runs only when the caller selects it.",
-          "type": "string"
-        }
-      ]
+    "ReportFileFormat": {
+      "description": "The format of the bindings scan report file.",
+      "enum": [
+        "json",
+        "markdown"
+      ],
+      "type": "string"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "The categories to check, and a statement to check in place of the committed statements.",
+  "description": "One check request. Each switch field selects one category; a check that selects\nnone runs the default categories.",
   "properties": {
-    "categories": {
-      "default": [],
-      "items": {
-        "$ref": "#/$defs/Category"
-      },
-      "type": "array",
-      "uniqueItems": true
+    "base": {
+      "default": null,
+      "description": "Compare Git HEAD with this commit instead of its first parent.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "baseline": {
+      "default": null,
+      "description": "Bindings check only: resolve evidence anchors against this earlier scan report. Needs scope.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "bindings": {
+      "default": false,
+      "description": "Run only Rule binding checks. The scan covers the repository root; path limits it.",
+      "type": "boolean"
+    },
+    "docs": {
+      "default": false,
+      "description": "Run only the docs check: report each Markdown link that names a page the docs site does not publish.",
+      "type": "boolean"
+    },
+    "gaps": {
+      "default": false,
+      "description": "Run only the gaps check: report the unfinished parts of the graph and each Rule without a Source. These findings do not fail the check.",
+      "type": "boolean"
+    },
+    "graph": {
+      "default": false,
+      "description": "Run only graph validity checks. Combine with other check selectors.",
+      "type": "boolean"
+    },
+    "output": {
+      "default": null,
+      "description": "Bindings check only: write the scan report of the selected scope to this file. Needs scope.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "output_format": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReportFileFormat"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "path": {
+      "default": null,
+      "description": "Bindings check only: scan the files below this path. The default is the repository root.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "scope": {
+      "default": null,
+      "description": "Check only this scope. The default is every scope that the caller can read.",
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "statement": {
       "default": null,
@@ -43,6 +90,16 @@
         "string",
         "null"
       ]
+    },
+    "statements": {
+      "default": false,
+      "description": "Run only statement quality checks. Combine with other check selectors.",
+      "type": "boolean"
+    },
+    "strict": {
+      "default": false,
+      "description": "Reject findings in statements committed at Git HEAD, and every bindings finding.",
+      "type": "boolean"
     }
   },
   "title": "CheckInput",

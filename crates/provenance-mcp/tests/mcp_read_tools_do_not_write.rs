@@ -231,7 +231,7 @@ async fn no_read_tool_changes_the_repository() {
         let mut arguments = json!({"method": method, "path": path});
         if method != "get" {
             let body = read_body(&path).unwrap_or_else(|| panic!("{method} {path} has no body"));
-            arguments["body"] = body;
+            arguments["input"] = body;
             posts.push(path.clone());
         }
         let result = support::schema_check::call(&session.client, "api", arguments.clone()).await;

@@ -250,10 +250,16 @@ mod tests {
             let Some(schema) = fields.schema else {
                 continue;
             };
+            let target = command
+                .declaration()
+                .grammar
+                .takes_target()
+                .then_some("target");
             let mut names = fields
                 .fields
                 .iter()
                 .map(|field| field.name)
+                .chain(target)
                 .collect::<Vec<_>>();
             names.sort_unstable();
             let schema = schema();

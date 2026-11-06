@@ -4,7 +4,7 @@ Usage: provenance [OPTIONS] <COMMAND> [PATH]
 
 Arguments:
   <COMMAND>  [possible values: api]
-  [PATH]     
+  [PATH]     The public API path. Without a path, the catalog routes show.
 
 Options:
       --repo <REPO>      [default: .]
@@ -12,9 +12,9 @@ Options:
       --format <FORMAT>  [possible values: json]
       --quiet            
       --method <METHOD>  
-      --input <INPUT>    Read the JSON body from this file, or from standard input with "-". The body is the data object, without the HTTP {"data": ...} wrapper
-      --header <HEADER>  
-      --query <QUERY>    
-      --filter <FILTER>  Show only catalog routes whose method, path, or description contains this text
-      --limit <LIMIT>    Show at most this many catalog routes. The default is 50
+      --input <INPUT>    The JSON body: the data object, without the HTTP {"data": ...} wrapper. Give a JSON file, or "-" for standard input.
+      --header <HEADER>  A request header, as NAME: VALUE.
+      --query <QUERY>    A query parameter, as NAME=VALUE.
+      --filter <FILTER>  Show only catalog routes whose method, path, or description contains this text.
+      --limit <LIMIT>    Show at most this many catalog routes.
   -h, --help             Print help

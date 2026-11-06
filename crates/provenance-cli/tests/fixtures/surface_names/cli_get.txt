@@ -18,11 +18,11 @@ Options:
       --view <VIEW>
           [possible values: record, children, trace, impact, review]
       --depth <DEPTH>
-          
+          The number of levels to walk. The default is 1.
       --kind <KIND>
-          
+          Record kinds to return.
       --limit <LIMIT>
-          
+          The page size. The default is 50.
       --follow
           Stream the current review document and pushed changes as JSON lines.
       --review-link
@@ -30,7 +30,7 @@ Options:
       --notify <NOTIFY>
           Queue review changes into a Codex thread, or end that registration with off. [possible values: codex, off]
       --thread <THREAD>
-          The Codex thread UUID for --notify. The default is CODEX_THREAD_ID.
+          The Codex thread UUID for notify.
       --no-open
           Print the review link and do not open it in a browser.
       --type <TYPE>

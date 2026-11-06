@@ -263,7 +263,7 @@ async fn api_refuses_a_get_body_before_the_port() {
     let error = service.execute_api(request).await.unwrap_err();
 
     assert_eq!(error.kind, ApiErrorKind::InvalidOptions);
-    assert_eq!(error.failure["error"]["field"], "body");
+    assert_eq!(error.failure["error"]["field"], "input");
     assert!(port.seen.lock().unwrap().is_none());
 }
 
