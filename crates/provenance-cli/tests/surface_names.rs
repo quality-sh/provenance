@@ -14,7 +14,15 @@ use support::surface::{help, tools};
 
 /// The argument lists whose help each pin holds, by pin name.
 const HELP: &[(&str, &[&str])] = &[
-    ("root", &[]),
+    // The dev-build-only dogfood group shows in the root help of a dogfood build.
+    (
+        if cfg!(feature = "dogfood") {
+            "root_dogfood"
+        } else {
+            "root"
+        },
+        &[],
+    ),
     ("get", &["record_x", "get"]),
     ("trace", &["record_x", "trace"]),
     ("create", &["record_x", "create"]),
