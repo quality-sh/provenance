@@ -13,7 +13,7 @@ it in the same change.
   Requirement or Rule statement.
 - A Requirement or Rule description says how the product behaves, in the present
   tense: its states, what changes them, what the person sees, and one example.
-  History goes on the record's thread. Unknowns go in fog or a Question.
+  History goes on the record's thread. Unknowns go in a Question.
 - Before a graph write, run
   `{command} check --statement "<statement>" --format json`. A clean report covers only the
   ASD-STE100 Issue 9 checks that Provenance implements. It does not prove full

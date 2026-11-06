@@ -51,9 +51,8 @@ reports rather than hiding.
 - **Evidence.** Is there a real locator for the claim — a source clause or a place in the
   code — or is it explicitly provisional? For graph grounding, add a citation with
   `<requirement_id> update --relationships-json <json> --if-match <etag>`; otherwise gap
-  reporting emits `missing_source_refs`. `fog`
-  is unstructured text attached to a Requirement, while `unsupported` / `exploratory`
-  mark ideation evidence or speculation. The CLI reports grounding gaps; it does not
+  reporting emits `missing_source_refs`. `unsupported` / `exploratory` mark ideation
+  evidence or speculation. The CLI reports grounding gaps; it does not
   prevent an ungrounded Requirement or Rule from being active. A Rule's
   `--source-document` and `--source-section` cite source material; they do not count as
   an implementation binding. Implementation bindings come from scanner-recognized
@@ -72,7 +71,7 @@ A description says how the product behaves, in the present tense: its states, wh
 between them, what the person sees, and one example. Write it for a builder who
 has not read the conversation. It does not retell the brief, does not say who confirmed
 what, and does not list what remains to be shaped. History goes on the record's thread;
-unknowns go in fog or a Question. One closing `Open:` line may name them. For other record
+unknowns go in a Question. One closing `Open:` line may name them. For other record
 types, use their context fields, such as a resolution's `--rationale` or `--context`.
 
 Write for whoever reads it next — another agent, a developer, or a non-technical

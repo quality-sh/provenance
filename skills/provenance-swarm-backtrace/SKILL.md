@@ -5,7 +5,7 @@ description: Reverse-engineer candidate requirements from an existing codebase w
 
 # Swarm backtrace
 
-Charting in reverse (docs/shaping.md, "Relationship to the swarm backtrace" — canonical;
+Shaping in reverse (docs/shaping.md, "Relationship to the swarm backtrace" — canonical;
 where this file diverges, that document wins). Agents partition an existing codebase,
 extract candidates — *what must be true for this code to be correct*, and which function
 already decides it — dedup keeping **all** evidence sites, challenge every candidate, and

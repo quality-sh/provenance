@@ -21,12 +21,12 @@ Run a tournament only when **all three** hold:
    forecloses the others.
 2. **Expensive to reverse** — later work will build on the choice; unwinding it means
    unwinding that work.
-3. **Preference unknowable without artifacts** — if a grill question would settle it,
-   grill instead. The tournament exists for the case where the human can only *react*,
+3. **Preference unknowable without artifacts** — if a `grill` question would settle it,
+   ask that question instead. The tournament exists for the case where the human can only *react*,
    not *specify*.
 
 A tournament fires at forks — **never a standing committee** on everything. If you are
-reaching for it twice in one topic, you are probably under-grilling.
+reaching for it twice in one topic, you probably did not ask the person enough questions.
 
 ## Choosing N
 
@@ -118,13 +118,13 @@ provenance <question_id> claim --scope <scope> \
     ```
 
 5. **END THE SESSION.** The fork spawn is a two-phase boundary — a stop condition in the
-   Work loop (docs/shaping.md, "Work", step 5). Do not present the artifacts in the same
+   turn loop (docs/shaping.md, "Answer Questions", step 6). Do not present the artifacts in the same
    session that produced them, and never proceed past the decision: the human hasn't
    ratified anything yet (invariant 3). Hand off.
 
 ## Phase 2 — turn N+1 (human disposal)
 
-The promotion gate, with a clock. This is a grill-shaped turn against the artifacts.
+The promotion gate, with a clock. The person answers one question at a time about the artifacts.
 
 1. **Present** — `provenance api proposals --scope <scope> --format json`; show each
    manifesto + artifact side by side. Lead with the contested claims from the synthesis
@@ -182,7 +182,7 @@ The promotion gate, with a clock. This is a grill-shaped turn against the artifa
    This flips each proposal's `promotion_state` — no separate update step.
 
 7. **Fan out** as any resolution does (docs/shaping.md, "Landing fan-out"): requirements
-   spawned, fog graduated, rules only where a rule is real. Then continue the turn loop or
+   spawned, new Questions created, rules only where a rule is real. Then continue the turn loop or
    hand off.
 
    A tournament settles **direction**, which is often broader than one atomic behavioural
