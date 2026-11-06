@@ -87,7 +87,7 @@ fn discussion_help(
                 .collect::<BTreeSet<_>>()
         })
         .unwrap_or_default();
-    let required = required_discussion_flags(&schema, action);
+    let required = required_discussion_flags(&schema);
     let mut allowed = super::COMMON
         .iter()
         .copied()
@@ -104,10 +104,7 @@ fn discussion_help(
 
 /// The flags a Discussion action needs on the command line: the required
 /// schema fields that neither the target nor a CLI default supplies.
-pub fn required_discussion_flags(
-    schema: &Value,
-    action: provenance_porcelain::action::Action,
-) -> BTreeSet<String> {
+pub fn required_discussion_flags(schema: &Value) -> BTreeSet<String> {
     let supplied = ["target", "actor", "role"];
     schema
         .get("required")

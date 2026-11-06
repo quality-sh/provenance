@@ -88,7 +88,7 @@ fn print(
 /// A Discussion action that lacks a required option is a usage error, so
 /// the shell sees exit code 2 and the flag name, not a host refusal.
 fn ensure_required_flags(schema: &Value, action: Action, input: &serde_json::Map<String, Value>) {
-    let missing = crate::catalog_cli::required_discussion_flags(schema, action)
+    let missing = crate::catalog_cli::required_discussion_flags(schema)
         .into_iter()
         .filter(|flag| !input.contains_key(&flag.replace('-', "_")))
         .collect::<Vec<_>>();
