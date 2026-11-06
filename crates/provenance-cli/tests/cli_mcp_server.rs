@@ -178,11 +178,24 @@ fn mcp_refuses_a_repository_without_a_graph() {
 
 /// One spawned `provenance mcp` process that the test speaks raw JSON-RPC to, so that it can
 /// close standard input before it reads a result.
+///
+/// Each line that the server writes on standard output must be one JSON-RPC message.
 struct Wire {
     child: tokio::process::Child,
     stdin: Option<tokio::process::ChildStdin>,
     lines: tokio::io::Lines<tokio::io::BufReader<tokio::process::ChildStdout>>,
     next_id: u64,
+}
+
+/// One standard output line of the server, which must be one JSON-RPC 2.0 message.
+fn json_rpc(line: &str) -> Value {
+    let message: Value = serde_json::from_str(line)
+        .unwrap_or_else(|error| panic!("stdout line is not JSON ({error}): {line}"));
+    assert_eq!(
+        message["jsonrpc"], "2.0",
+        "stdout line is not JSON-RPC: {line}"
+    );
+    message
 }
 
 impl Wire {
@@ -238,7 +251,7 @@ impl Wire {
         let id = self.send_request(method, params).await;
         loop {
             let line = self.lines.next_line().await.unwrap().unwrap();
-            let mut message: Value = serde_json::from_str(&line).unwrap();
+            let mut message = json_rpc(&line);
             if message["id"] == json!(id) {
                 return message["result"].take();
             }
@@ -257,6 +270,7 @@ impl Wire {
 #[tokio::test]
 #[verifies("rule_mcp_and_cli_read_each_other_writes", examples)]
 #[verifies("rule_host_shutdown_completes_started_work", examples)]
+#[verifies("rule_mcp_command_output_only_in_result", examples)]
 async fn mcp_and_cli_read_each_other_writes_in_one_session() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_str().unwrap().to_owned();
@@ -304,6 +318,11 @@ async fn mcp_and_cli_read_each_other_writes_in_one_session() {
     )
     .await;
     drop(wire.stdin.take());
+    // The create result and nothing else follow on standard output.
+    use tokio::io::AsyncBufReadExt as _;
+    while let Some(line) = wire.lines.next_line().await.unwrap() {
+        json_rpc(&line);
+    }
     let status = wire.child.wait().await.unwrap();
     assert!(status.success(), "{status}");
     let made = cli(&[
