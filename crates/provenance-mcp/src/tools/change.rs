@@ -5,8 +5,8 @@ use super::{authoring, discussions, notify};
 
 mod output;
 use crate::surface::{Effect, SchemaDeclaration};
+use provenance_porcelain::action_input::ActionInput;
 use provenance_porcelain::registry::Command;
-use provenance_porcelain::tool_input::ToolInput;
 use provenance_transport::porcelain::Action;
 use provenance_transport::StatementHost;
 use rmcp::model::{CallToolResult, Tool};
@@ -15,9 +15,9 @@ use serde_json::{json, Map, Value};
 pub(super) const NOTIFY: &str = "notify";
 
 /// The actions that the host can run, with the fields of each action.
-pub fn input(host: &StatementHost) -> ToolInput {
+pub fn input(host: &StatementHost) -> ActionInput {
     let porcelain = host.porcelain();
-    let mut input = ToolInput::new(None);
+    let mut input = ActionInput::new(None);
     for action in Action::RECORD {
         if let Some(schema) = authoring::action_schema(host, action) {
             input = input.with_action(action.as_str(), schema);
@@ -45,7 +45,7 @@ pub fn is_action(word: &str) -> bool {
 }
 
 /// The change tool, when the host can run some write.
-pub fn tool(host: &StatementHost, input: &ToolInput) -> Option<Tool> {
+pub fn tool(host: &StatementHost, input: &ActionInput) -> Option<Tool> {
     let actions = input.actions().collect::<Vec<_>>();
     if actions.is_empty() {
         return None;
@@ -62,7 +62,7 @@ pub fn tool(host: &StatementHost, input: &ToolInput) -> Option<Tool> {
 }
 
 /// The refusal of a write that this host does not grant: it is denied, not unknown.
-pub fn refusal(input: &ToolInput, arguments: &Map<String, Value>) -> Option<CallToolResult> {
+pub fn refusal(input: &ActionInput, arguments: &Map<String, Value>) -> Option<CallToolResult> {
     let Some(Value::String(word)) = arguments.get("action") else {
         return None;
     };

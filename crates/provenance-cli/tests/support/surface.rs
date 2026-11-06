@@ -1,7 +1,6 @@
 //! Reads the two command surfaces from outside: the help of the spawned binary and the
 //! MCP `tools/list` of a served host.
 
-use provenance_cli::cli_form;
 use provenance_mcp::Client;
 use provenance_porcelain::check::{Category, CategoryRun, PortFuture, Refusal};
 use provenance_porcelain::registry;
@@ -25,7 +24,7 @@ pub fn help(words: &[&str]) -> String {
 
 /// The words that select one CLI word command.
 pub fn words(command: registry::Command) -> Option<Vec<&'static str>> {
-    cli_form::declaration(command).words()
+    provenance_cli::cli_options::words(&command.declaration())
 }
 
 /// A check port that finds nothing, so a served host lists the check tool.

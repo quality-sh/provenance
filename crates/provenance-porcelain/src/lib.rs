@@ -8,6 +8,7 @@
 //! Record actions use catalog registrations. Discussion actions use typed inputs.
 
 pub mod action;
+pub mod action_input;
 pub mod api;
 pub mod check;
 pub mod discussion;
@@ -15,7 +16,6 @@ pub mod get;
 pub mod guidance;
 pub mod registry;
 pub mod search;
-pub mod tool_input;
 
 /// Shared Porcelain capabilities over a caller-supplied operation port.
 #[derive(Clone, Debug)]

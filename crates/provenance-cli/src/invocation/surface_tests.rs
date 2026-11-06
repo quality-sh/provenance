@@ -4,7 +4,7 @@
 
 use clap::Command;
 use provenance_cli::servers::{Server, SERVERS};
-use provenance_cli::{cli_form, exposed};
+use provenance_cli::{cli_options, exposed};
 use provenance_macros::verifies;
 use provenance_porcelain::registry;
 
@@ -13,11 +13,11 @@ use provenance_porcelain::registry;
 fn undeclared_commands(root: &Command) -> Vec<String> {
     let groups = exposed::EXPOSED
         .iter()
-        .filter_map(|command| cli_form::declaration(*command).words())
+        .filter_map(|command| cli_options::words(&command.declaration()))
         .chain(
             SERVERS
                 .iter()
-                .filter_map(|server| server.declaration().words()),
+                .filter_map(|server| cli_options::words(&server.declaration())),
         )
         .collect::<Vec<_>>();
     let mut undeclared = Vec::new();

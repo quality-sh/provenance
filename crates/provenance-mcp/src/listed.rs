@@ -4,8 +4,8 @@
 
 use crate::arguments::InputCheck;
 use crate::tools;
+use provenance_porcelain::action_input::ActionInput;
 use provenance_porcelain::registry::Command;
-use provenance_porcelain::tool_input::ToolInput;
 use provenance_transport::{porcelain::Action, StatementHost};
 use rmcp::model::{CallToolResult, Tool};
 use serde_json::{Map, Value};
@@ -50,8 +50,8 @@ enum Runner {
     Search,
     Api,
     Check,
-    Discussions(ToolInput),
-    Change(ToolInput),
+    Discussions(ActionInput),
+    Change(ActionInput),
 }
 
 /// One call after its input checks: the tool, and the action that the call selected.
@@ -92,7 +92,7 @@ impl Listed {
             ),
             Command::Action(Action::Discussions) => (
                 tools::discussions_tool(host)?,
-                Runner::Discussions(provenance_porcelain::discussion::tool_input()),
+                Runner::Discussions(provenance_porcelain::discussion::action_input()),
             ),
             Command::Change => {
                 let input = tools::change_input(host);
@@ -155,7 +155,7 @@ impl Listed {
             tools::lowercase_method(&mut arguments);
         }
         let given = arguments.clone();
-        let select = |input: &ToolInput, arguments: &mut Map<String, Value>| {
+        let select = |input: &ActionInput, arguments: &mut Map<String, Value>| {
             input
                 .select(arguments)
                 .map_err(|refusal| crate::surface::detail_error(refusal.detail()))

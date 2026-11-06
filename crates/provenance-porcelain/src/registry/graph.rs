@@ -1,6 +1,6 @@
 //! Declarations of the commands that pin graph references and land swarm backtraces.
 
-use super::Declaration;
+use super::{json_format, Declaration, Field, Fields, Relation, REPO, SCOPE};
 use serde::Deserialize;
 
 /// One graph command.
@@ -56,30 +56,56 @@ schema_fn!(reference_issue_schema, ReferenceIssueInput);
 schema_fn!(reference_schema, ReferenceInput);
 schema_fn!(swarm_backtrace_land_schema, SwarmBacktraceLandInput);
 
+const JSON_FORMAT: Field = json_format(Some("json"));
+
+const REFERENCE_ISSUE_FIELDS: &[Field] = &[
+    REPO,
+    SCOPE,
+    Field::text("commit")
+        .doc("Git revision to pin. When omitted, clean relevant state at HEAD is required"),
+    Field::text("correlation_system"),
+    Field::text("correlation_key"),
+];
+
+const REFERENCE_FIELDS: &[Field] = &[REPO, Field::text("reference").required()];
+
+const SWARM_BACKTRACE_LAND_FIELDS: &[Field] = &[
+    REPO,
+    SCOPE,
+    Field::text("run_dir").required(),
+    Field::switch("replace"),
+    JSON_FORMAT,
+];
+
 pub(super) const fn declaration(command: GraphCommand) -> Declaration {
     match command {
         GraphCommand::ReferenceIssue => Declaration::named(
             "graph-reference issue",
             "Issue an immutable reference after canonical graph state is committed",
-            reference_issue_schema,
+            Fields::new(REFERENCE_ISSUE_FIELDS, reference_issue_schema).relations(&[
+                Relation::Requires("correlation_system", "correlation_key"),
+                Relation::Requires("correlation_key", "correlation_system"),
+            ]),
         ),
         GraphCommand::ReferenceShow => Declaration::named(
             "graph-reference show",
             "Show metadata and graph-family counts from a pinned reference",
-            reference_schema,
+            Fields::new(REFERENCE_FIELDS, reference_schema),
         ),
         GraphCommand::ReferenceVerify => Declaration::named(
             "graph-reference verify",
             "Verify identity and graph content at the pinned Git revision",
-            reference_schema,
+            Fields::new(REFERENCE_FIELDS, reference_schema),
         ),
         GraphCommand::ReferenceExactExport => Declaration::named(
             "graph-reference exact-export",
             "Export the canonical graph reconstructed from the pinned Git revision",
-            reference_schema,
+            Fields::new(REFERENCE_FIELDS, reference_schema),
         ),
-        GraphCommand::SwarmBacktraceLand => {
-            Declaration::named("swarm-backtrace land", "", swarm_backtrace_land_schema)
-        }
+        GraphCommand::SwarmBacktraceLand => Declaration::named(
+            "swarm-backtrace land",
+            "",
+            Fields::new(SWARM_BACKTRACE_LAND_FIELDS, swarm_backtrace_land_schema),
+        ),
     }
 }

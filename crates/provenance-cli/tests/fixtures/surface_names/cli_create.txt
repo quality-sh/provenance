@@ -7,13 +7,13 @@ Arguments:
   [ACTION]  [possible values: get, trace, create, update, answer, claim, release, submit, discussions, discussion, discuss, reply]
 
 Options:
-      --repo <REPO>         [default: .]
-      --scope <SCOPE>       [default: default]
-      --format <FORMAT>     [possible values: json]
-      --quiet               
-      --type <RECORD_TYPE>  
-      --stdin               
-  -h, --help                Print help
+      --repo <REPO>      [default: .]
+      --scope <SCOPE>    [default: default]
+      --format <FORMAT>  [possible values: json]
+      --quiet            
+      --type <TYPE>      
+      --stdin            
+  -h, --help             Print help
 
 Select a record type to see its accepted fields:
   provenance <id> create --type <kind> --help

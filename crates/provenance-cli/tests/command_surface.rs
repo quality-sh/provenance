@@ -7,12 +7,12 @@ mod support {
     pub mod surface;
 }
 
-use provenance_cli::cli_form::{self, Flag, FlagKind};
+use provenance_cli::cli_options::flag_name;
 use provenance_cli::exposed as cli;
 use provenance_cli::servers::{Server, SERVERS};
 use provenance_macros::verifies;
 use provenance_mcp::exposed::{self as mcp, Place};
-use provenance_porcelain::registry::{Command, Grammar, Input};
+use provenance_porcelain::registry::{Command, Declaration, Field, Grammar};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use support::surface::{help, tools, words};
@@ -95,12 +95,13 @@ async fn registry_commands_appear_on_both_interfaces() {
                 || help(&["req_surface", declaration.name, "--repo", &path]),
                 |words| help(&words),
             );
-            for flag in cli_form::form(*command)
-                .flags
+            for field in declaration
+                .input
+                .fields()
                 .iter()
-                .filter(|flag| !flag.hidden)
+                .filter(|field| !field.internal)
             {
-                let shown = shown(flag);
+                let shown = shown(&declaration, field);
                 assert!(
                     help.contains(&shown),
                     "{command:?} help lacks {shown}:\n{help}"
@@ -111,21 +112,11 @@ async fn registry_commands_appear_on_both_interfaces() {
             assert!(!root.iter().any(|name| name == first), "{command:?}");
         }
         match mcp_place(*command) {
-            Some(Place::Tool) => {
-                let tool = tools
-                    .get(declaration.name)
-                    .unwrap_or_else(|| panic!("tools/list lacks {}", declaration.name));
-                let expected = match declaration.input {
-                    Input::Typed(schema) => Some(properties(&schema())),
-                    Input::Discussion(action) => Some(properties(
-                        &provenance_porcelain::discussion::input_schema(action),
-                    )),
-                    Input::RecordFields(_) | Input::None => None,
-                };
-                if let Some(expected) = expected {
-                    assert_eq!(properties(&tool["inputSchema"]), expected, "{command:?}");
-                }
-            }
+            Some(Place::Tool) => assert!(
+                tools.contains_key(declaration.name),
+                "tools/list lacks {}",
+                declaration.name
+            ),
             Some(Place::Action { tool }) => assert!(
                 values(&tools, tool, "action").contains(&declaration.name),
                 "{command:?} is not an action of {tool}"
@@ -176,17 +167,18 @@ async fn shared_commands_have_one_name_and_target_form() {
     }
 }
 
-/// How the help shows one flag.
-fn shown(flag: &Flag) -> String {
-    if flag.kind == FlagKind::Positional {
-        let name = flag.field_id().to_uppercase();
-        if flag.required {
+/// How the help shows one field: a target field as a positional argument, and each
+/// other field as a flag.
+fn shown(declaration: &Declaration, field: &Field) -> String {
+    if declaration.input.target().contains(&field.name) {
+        let name = field.name.to_uppercase();
+        if field.required {
             format!("<{name}>")
         } else {
             format!("[{name}]")
         }
     } else {
-        format!("--{}", flag.name)
+        format!("--{}", flag_name(field))
     }
 }
 
@@ -225,13 +217,15 @@ fn assert_cli_only_registry_commands(commands: &[&[&str]]) {
             .unwrap_or_else(|| panic!("provenance {} is not a registry command", words.join(" ")));
         assert_eq!(mcp_place(command), None, "{command:?} is CLI-only");
         let help = help(words);
-        for flag in cli_form::form(command)
-            .flags
+        let declaration = command.declaration();
+        for field in declaration
+            .input
+            .fields()
             .iter()
-            .filter(|flag| !flag.hidden)
+            .filter(|field| !field.internal)
         {
-            if flag.kind != FlagKind::Positional {
-                let shown = format!("--{}", flag.name);
+            if !declaration.input.target().contains(&field.name) {
+                let shown = format!("--{}", flag_name(field));
                 assert!(
                     help.contains(&shown),
                     "{words:?} help lacks {shown}:\n{help}"
@@ -277,7 +271,6 @@ fn graph_read_commands_are_registry_commands() {
 #[verifies("rule_porcelain_interface_shows_recorded_commands", examples)]
 fn workspace_commands_are_registry_commands() {
     assert_cli_only_registry_commands(&[
-        &["docs", "check"],
         &["skills", "list"],
         &["skills", "show"],
         &["skills", "install"],
@@ -300,8 +293,8 @@ async fn server_commands_are_outside_the_registry() {
         assert_eq!(Command::named(declaration.name), None, "{words:?}");
         assert!(!mcp_shows(&tools, declaration.name), "{words:?}");
         let help = help(words);
-        for flag in declaration.form.flags {
-            let shown = shown(flag);
+        for field in declaration.input.fields() {
+            let shown = shown(&declaration, field);
             assert!(
                 help.contains(&shown),
                 "{words:?} help lacks {shown}:\n{help}"

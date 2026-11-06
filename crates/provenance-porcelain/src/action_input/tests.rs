@@ -2,8 +2,8 @@
 
 use super::*;
 
-fn input() -> ToolInput {
-    ToolInput::new(Some("list"))
+fn input() -> ActionInput {
+    ActionInput::new(Some("list"))
         .with_action(
             "list",
             json!({"properties": {"parent": {"type": ["string", "null"]}}}),
@@ -77,7 +77,7 @@ fn a_missing_field_is_refused_by_name() {
 
 #[test]
 fn an_unknown_action_is_refused() {
-    let refusal = ToolInput::new(None)
+    let refusal = ActionInput::new(None)
         .with_action("list", json!({}))
         .select(&mut arguments(&json!({"action": "stop"})))
         .unwrap_err();
@@ -85,7 +85,7 @@ fn an_unknown_action_is_refused() {
         refusal.message,
         "unknown action stop; the actions are: list"
     );
-    let refusal = ToolInput::new(None)
+    let refusal = ActionInput::new(None)
         .with_action("list", json!({}))
         .select(&mut Map::new())
         .unwrap_err();

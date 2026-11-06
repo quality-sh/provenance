@@ -11,7 +11,7 @@ Options:
       --scope <SCOPE>                                      [default: default]
       --format <FORMAT>                                    [possible values: json]
       --quiet                                              
-      --type <RECORD_TYPE>                                 
+      --type <TYPE>                                        
       --stdin                                              
       --name <name>                                        
       --origin-message <origin-message>                    
