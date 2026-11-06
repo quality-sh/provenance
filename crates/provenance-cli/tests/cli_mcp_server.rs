@@ -319,7 +319,6 @@ async fn mcp_and_cli_read_each_other_writes_in_one_session() {
     .await;
     drop(wire.stdin.take());
     // The create result and nothing else follow on standard output.
-    use tokio::io::AsyncBufReadExt as _;
     while let Some(line) = wire.lines.next_line().await.unwrap() {
         json_rpc(&line);
     }
