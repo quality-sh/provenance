@@ -75,7 +75,7 @@ fn record_from_line<T: DeserializeOwned>(
     value: serde_json::Value,
     fields: Fields,
 ) -> anyhow::Result<T> {
-    ensure_no_legacy_retirement(path, line_number, &value)?;
+    ensure_readable_record(path, line_number, &value)?;
     match fields {
         Fields::Open => {
             serde_json::from_value(value).map_err(|error| located(path, line_number, &error))
@@ -88,8 +88,31 @@ fn record_from_line<T: DeserializeOwned>(
     }
 }
 
+/// Checks one stored line before it becomes a record.
+///
+/// A line in a graph record family must hold only the fields of its record
+/// type, so an unknown field is refused and not dropped. The read path, the
+/// read that every write is built on, and the merge driver call this on the
+/// same raw JSON.
+pub fn ensure_readable_record(
+    path: &Utf8Path,
+    line_number: usize,
+    value: &serde_json::Value,
+) -> anyhow::Result<()> {
+    ensure_no_legacy_retirement(path, line_number, value)?;
+    let kind = crate::cache::ProjectionFamily::ALL
+        .into_iter()
+        .find(|family| path.ends_with(family.shard_suffix()))
+        .and_then(crate::cache::ProjectionFamily::node_type);
+    if let Some(kind) = kind {
+        provenance_core::review::ReviewRecord::deserialize_closed(kind, value)
+            .with_context(|| format!("{path} line {line_number}: invalid {}", kind.as_str()))?;
+    }
+    Ok(())
+}
+
 /// Refuses a stored record that still holds the removed `retired` field.
-pub fn ensure_no_legacy_retirement(
+fn ensure_no_legacy_retirement(
     path: &Utf8Path,
     line_number: usize,
     value: &serde_json::Value,

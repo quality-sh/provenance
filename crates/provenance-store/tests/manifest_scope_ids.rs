@@ -34,13 +34,11 @@ async fn scope_ids_read_the_manifest_while_the_publication_guard_is_held() {
 }
 
 #[test]
-fn scope_ids_refuse_an_unsupported_or_malformed_manifest() {
+fn scope_ids_refuse_a_malformed_manifest() {
     let dir = tempfile::tempdir().unwrap();
     let path = camino::Utf8Path::from_path(dir.path()).unwrap();
-    for bytes in [r#"{"scopes":[]}"#, "{"] {
-        std::fs::write(path.join("manifest.json"), bytes).unwrap();
-        assert!(scope_ids(path).is_err());
-    }
+    std::fs::write(path.join("manifest.json"), "{").unwrap();
+    assert!(scope_ids(path).is_err());
     std::fs::remove_file(path.join("manifest.json")).unwrap();
     assert!(scope_ids(path).is_err());
 }

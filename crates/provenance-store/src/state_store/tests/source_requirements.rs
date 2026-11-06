@@ -58,7 +58,7 @@ fn source_requirement_records_are_written_deterministically() {
 }
 
 #[test]
-fn enrolled_canonical_state_readers_refuse_unknown_extension_fields() {
+fn canonical_state_readers_refuse_unknown_extension_fields() {
     let (_dir, store, scope) = seeded_source_requirement_store();
     let source_path = store
         .layout
@@ -76,7 +76,7 @@ fn enrolled_canonical_state_readers_refuse_unknown_extension_fields() {
     .unwrap();
 
     let error = store.list_sources(&scope).unwrap_err().to_string();
-    assert!(error.contains("invalid enrolled source"), "{error}");
+    assert!(error.contains("invalid source"), "{error}");
 }
 
 #[test]

@@ -1,4 +1,4 @@
-use crate::state_store::readers::ensure_no_legacy_retirement;
+use crate::state_store::readers::ensure_readable_record;
 use provenance_macros::rule;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -99,7 +99,7 @@ pub fn read_jsonl_rows_for_shard(
         }
         let record = serde_json::from_str(line)?;
         // Errors name the logical shard, but line numbers come from Git's temporary input file.
-        ensure_no_legacy_retirement(shard_path, index + 1, &record)?;
+        ensure_readable_record(shard_path, index + 1, &record)?;
         rows.push(StoredRow {
             line: line.to_owned(),
             record,
