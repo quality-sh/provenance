@@ -105,8 +105,14 @@ pub fn ensure_readable_record(
         .find(|family| path.ends_with(family.shard_suffix()))
         .and_then(crate::cache::ProjectionFamily::node_type);
     if let Some(kind) = kind {
-        provenance_core::review::ReviewRecord::deserialize_closed(kind, value)
-            .with_context(|| format!("{path} line {line_number}: invalid {}", kind.as_str()))?;
+        provenance_core::review::ReviewRecord::deserialize_closed(kind, value).map_err(
+            |error| {
+                anyhow::anyhow!(
+                    "{path} line {line_number}: invalid {}: {error:#}",
+                    kind.as_str()
+                )
+            },
+        )?;
     }
     Ok(())
 }
