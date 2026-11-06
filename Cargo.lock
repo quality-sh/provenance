@@ -2446,6 +2446,7 @@ dependencies = [
  "pulldown-cmark",
  "remove_dir_all",
  "rustix",
+ "schemars 1.2.2",
  "semver",
  "serde",
  "serde_ignored",

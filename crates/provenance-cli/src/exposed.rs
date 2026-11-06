@@ -4,9 +4,7 @@ use provenance_macros::rule;
 use provenance_porcelain::action::Action;
 #[cfg(feature = "dogfood")]
 use provenance_porcelain::registry::DogfoodCommand;
-use provenance_porcelain::registry::{
-    CliForm, Command, GraphCommand, RepositoryCommand, WorkspaceCommand,
-};
+use provenance_porcelain::registry::{Command, GraphCommand, RepositoryCommand, WorkspaceCommand};
 
 /// Each porcelain command that the CLI shows, in registry order. The dogfood commands
 /// are only in builds with the `dogfood` feature.
@@ -44,14 +42,11 @@ pub const EXPOSED: &[Command] = &[
     Command::Graph(GraphCommand::ReferenceExactExport),
     Command::Graph(GraphCommand::SwarmBacktraceLand),
     Command::Workspace(WorkspaceCommand::DocsCheck),
-    Command::Workspace(WorkspaceCommand::DocsServe),
     Command::Workspace(WorkspaceCommand::SkillsList),
     Command::Workspace(WorkspaceCommand::SkillsShow),
     Command::Workspace(WorkspaceCommand::SkillsInstall),
     Command::Workspace(WorkspaceCommand::ReportRender),
     Command::Workspace(WorkspaceCommand::ReportBuild),
-    Command::Workspace(WorkspaceCommand::Review),
-    Command::Workspace(WorkspaceCommand::Mcp),
     #[cfg(feature = "dogfood")]
     Command::Dogfood(DogfoodCommand::Note),
     #[cfg(feature = "dogfood")]
@@ -73,14 +68,12 @@ pub fn shows(command: Command) -> bool {
     EXPOSED.contains(&command)
 }
 
-/// The command that the CLI root words select. A target action is not found by its
-/// words.
+/// The porcelain command that the CLI root words select. A target action is not found
+/// by its words.
 pub fn find(words: &[&str]) -> Option<Command> {
-    EXPOSED
-        .iter()
-        .copied()
-        .find(|command| match command.declaration().cli_form {
-            CliForm::Words(selected) | CliForm::WordsAndTarget(selected) => words == selected,
-            CliForm::Target => false,
-        })
+    EXPOSED.iter().copied().find(|command| {
+        crate::cli_form::declaration(*command)
+            .words()
+            .is_some_and(|selected| selected == words)
+    })
 }

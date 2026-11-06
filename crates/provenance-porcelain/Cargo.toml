@@ -12,10 +12,6 @@ publish.workspace = true
 [lints]
 workspace = true
 
-[features]
-# Lists the dev-only dogfood commands in the registry. Never enable in release builds.
-dogfood = []
-
 [dependencies]
 provenance-core = { workspace = true, features = ["schema"] }
 provenance-macros.workspace = true

@@ -4,11 +4,12 @@ use clap::{
     builder::{PossibleValuesParser, TypedValueParser},
     Arg, ArgAction, ArgMatches, Command,
 };
+use provenance_cli::cli_form::{self, CliDeclaration};
 use provenance_cli::porcelain;
 use provenance_cli::repo_context::RepoContext;
 use provenance_core::NodeType;
 use provenance_porcelain::action::Action;
-use provenance_porcelain::registry::{self, CliForm};
+use provenance_porcelain::registry;
 
 /// The shared options of the porcelain and catalog grammars, read from the registry's
 /// global flags.
@@ -219,16 +220,11 @@ fn target_words() -> Vec<&'static str> {
         .collect()
 }
 
-fn target_declarations() -> impl Iterator<Item = registry::Declaration> {
+fn target_declarations() -> impl Iterator<Item = CliDeclaration> {
     registry::Command::ALL
         .iter()
-        .map(|command| command.declaration())
-        .filter(|declaration| {
-            matches!(
-                declaration.cli_form,
-                CliForm::Target | CliForm::WordsAndTarget(_)
-            )
-        })
+        .map(|command| cli_form::declaration(*command))
+        .filter(|declaration| declaration.grammar.takes_target())
 }
 
 impl TargetArgs {
@@ -314,6 +310,7 @@ pub fn target_command() -> Command {
     let mut declared = std::collections::BTreeSet::new();
     for declaration in target_declarations() {
         for (flag, arg) in declaration
+            .form
             .flags
             .iter()
             .zip(crate::registry_cli::args(&declaration))

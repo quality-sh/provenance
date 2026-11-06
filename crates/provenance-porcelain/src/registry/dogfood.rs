@@ -1,7 +1,7 @@
 //! Declarations of the dev-build-only commands that record and triage pain-point notes
 //! about provenance itself.
 
-use super::{json_format_flag, CliForm, Declaration, Flag, FlagKind, Input};
+use super::Declaration;
 use serde::Deserialize;
 
 /// One dev-build-only dogfood command.
@@ -15,68 +15,6 @@ pub enum DogfoodCommand {
     TriageList,
     Simulate,
 }
-
-const JSON_FORMAT: Flag = json_format_flag(Some("json"));
-
-const NOTE_ID_HELP: &str =
-    "Note id, or an unambiguous prefix of one, as shown by `provenance dogfood triage list`";
-
-const NOTE_FLAGS: &[Flag] = &[
-    Flag::new("surface", FlagKind::Value)
-        .required()
-        .help("The part of provenance the note concerns: a subcommand name, or \"general\""),
-    Flag::new("category", FlagKind::Value)
-        .values(&["friction", "confusion", "missing", "bug", "idea"])
-        .required(),
-    Flag::new("severity", FlagKind::Value)
-        .values(&["blocked", "workaround", "annoyance"])
-        .required()
-        .help("Impact the pain had on the task at hand"),
-    Flag::new("detail", FlagKind::Value)
-        .help("What you were trying to do, what happened, what you expected"),
-    Flag::new("suggestion", FlagKind::Value),
-    Flag::new("summary", FlagKind::Positional)
-        .required()
-        .help("One-line summary of the pain point"),
-];
-
-const LIST_FLAGS: &[Flag] = &[JSON_FORMAT];
-
-const REPORT_FLAGS: &[Flag] = &[
-    Flag::new("enrich", FlagKind::Value).help(
-        "Enrichment JSON conforming to provenance-dogfood-enrichment/v1 (a file path, or \"-\" \
-         for stdin)",
-    ),
-    JSON_FORMAT,
-];
-
-const TRIAGE_HANDLE_FLAGS: &[Flag] = &[
-    Flag::new("id", FlagKind::Positional)
-        .required()
-        .help(NOTE_ID_HELP),
-    Flag::new("reason", FlagKind::Value)
-        .help("Why the note is handled: a short reason or an issue reference"),
-];
-
-const TRIAGE_REOPEN_FLAGS: &[Flag] = &[Flag::new("id", FlagKind::Positional)
-    .required()
-    .help(NOTE_ID_HELP)];
-
-const TRIAGE_LIST_FLAGS: &[Flag] = &[
-    Flag::new("status", FlagKind::Value)
-        .values(&["unhandled", "handled", "all"])
-        .default("all")
-        .help("Only show notes in this triage state"),
-    JSON_FORMAT,
-];
-
-const SIMULATE_FLAGS: &[Flag] = &[
-    Flag::new("keep", FlagKind::Switch)
-        .help("Keep the sandbox directory after the run for inspection"),
-    Flag::new("dir", FlagKind::Value).help(
-        "Create the sandbox inside this existing directory instead of the system temp location",
-    ),
-];
 
 /// The `dogfood note` input.
 #[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
@@ -153,89 +91,43 @@ schema_fn!(triage_reopen_schema, TriageReopenInput);
 schema_fn!(triage_list_schema, TriageListInput);
 schema_fn!(simulate_schema, DogfoodSimulateInput);
 
-/// A shown CLI-only command without flag relations.
-const fn cli_only(
-    name: &'static str,
-    words: &'static [&'static str],
-    description: &'static str,
-    schema: fn() -> serde_json::Value,
-    flags: &'static [Flag],
-) -> Declaration {
-    Declaration {
-        name,
-        description,
-        cli_form: CliForm::Words(words),
-        cli_input: Input::Typed(schema),
-        mcp_input: Input::None,
-        positional: &[],
-        relations: &[],
-        hidden: false,
-        flags,
-    }
-}
-
-pub(super) fn declaration(command: DogfoodCommand) -> Declaration {
+pub(super) const fn declaration(command: DogfoodCommand) -> Declaration {
     match command {
-        DogfoodCommand::Note => Declaration {
-            positional: &["summary"],
-            ..cli_only(
-                "dogfood note",
-                &["dogfood", "note"],
-                "Record one pain-point note. Cheap by design: three enums and a sentence",
-                note_schema,
-                NOTE_FLAGS,
-            )
-        },
-        DogfoodCommand::List => cli_only(
-            "dogfood list",
-            &["dogfood", "list"],
-            "Print the local note spool",
-            list_schema,
-            LIST_FLAGS,
+        DogfoodCommand::Note => Declaration::named(
+            "dogfood note",
+            "Record one pain-point note. Cheap by design: three enums and a sentence",
+            note_schema,
         ),
-        DogfoodCommand::Report => cli_only(
+        DogfoodCommand::List => {
+            Declaration::named("dogfood list", "Print the local note spool", list_schema)
+        }
+        DogfoodCommand::Report => Declaration::named(
             "dogfood report",
-            &["dogfood", "report"],
             "Aggregate the spool; optionally join session metadata supplied by a sister system \
              via the provenance-dogfood-enrichment/v1 contract",
             report_schema,
-            REPORT_FLAGS,
         ),
-        DogfoodCommand::TriageHandle => Declaration {
-            positional: &["id"],
-            ..cli_only(
-                "dogfood triage handle",
-                &["dogfood", "triage", "handle"],
-                "Mark one note handled",
-                triage_handle_schema,
-                TRIAGE_HANDLE_FLAGS,
-            )
-        },
-        DogfoodCommand::TriageReopen => Declaration {
-            positional: &["id"],
-            ..cli_only(
-                "dogfood triage reopen",
-                &["dogfood", "triage", "reopen"],
-                "Return a handled note to the unhandled state",
-                triage_reopen_schema,
-                TRIAGE_REOPEN_FLAGS,
-            )
-        },
-        DogfoodCommand::TriageList => cli_only(
+        DogfoodCommand::TriageHandle => Declaration::named(
+            "dogfood triage handle",
+            "Mark one note handled",
+            triage_handle_schema,
+        ),
+        DogfoodCommand::TriageReopen => Declaration::named(
+            "dogfood triage reopen",
+            "Return a handled note to the unhandled state",
+            triage_reopen_schema,
+        ),
+        DogfoodCommand::TriageList => Declaration::named(
             "dogfood triage list",
-            &["dogfood", "triage", "list"],
             "Show every captured note with its identifier and triage state",
             triage_list_schema,
-            TRIAGE_LIST_FLAGS,
         ),
-        DogfoodCommand::Simulate => cli_only(
+        DogfoodCommand::Simulate => Declaration::named(
             "dogfood simulate",
-            &["dogfood", "simulate"],
             "Dev-build-only: try the whole first-run experience in a throwaway sandbox. Serves \
              the STE dictionary from loopback, records no note, and touches nothing outside the \
              sandbox",
             simulate_schema,
-            SIMULATE_FLAGS,
         ),
     }
 }

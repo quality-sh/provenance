@@ -1,21 +1,24 @@
-//! Renders the clap parser of each registry command from its declaration.
+//! Renders the clap parser of each CLI command from its declaration.
 
+use clap::CommandFactory as _;
 use clap::{
     builder::{PossibleValuesParser, ValueParser},
     Arg, ArgAction, ArgMatches, Command,
 };
-use provenance_porcelain::registry::{
-    self, CliForm, Declaration, Flag, FlagKind, FlagValue, Relation,
+use provenance_cli::cli_form::{
+    self, CliDeclaration, Flag, FlagKind, FlagValue, Relation, GLOBAL_FLAGS, GROUP_DESCRIPTIONS,
 };
+use provenance_porcelain::registry;
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
 
 /// The clap arguments of the declared flags, with their relations.
-pub fn args(declaration: &Declaration) -> Vec<Arg> {
+pub fn args(declaration: &CliDeclaration) -> Vec<Arg> {
     declaration
+        .form
         .flags
         .iter()
-        .map(|flag| relate(arg(flag), &flag.field_id(), declaration.relations))
+        .map(|flag| relate(arg(flag), &flag.field_id(), declaration.form.relations))
         .collect()
 }
 
@@ -47,7 +50,7 @@ fn arg(flag: &Flag) -> Arg {
 
 /// The command with the shared repository options that the porcelain parsers take.
 pub fn with_global_flags(command: Command) -> Command {
-    command.args(registry::GLOBAL_FLAGS.iter().map(arg))
+    command.args(GLOBAL_FLAGS.iter().map(arg))
 }
 
 fn value_parser(flag: &Flag) -> ValueParser {
@@ -97,16 +100,53 @@ fn parse_catalog_limit(value: &str) -> Result<usize, String> {
     }
 }
 
+/// The root parser: the built-in commands and the word commands that it lists. The
+/// server commands follow the workspace commands.
+pub fn root_command() -> clap::Command {
+    let listed = |command: &&registry::Command| {
+        provenance_cli::exposed::shows(**command)
+            && matches!(
+                command,
+                registry::Command::Repository(_)
+                    | registry::Command::Graph(_)
+                    | registry::Command::Workspace(_)
+            )
+    };
+    let dogfood = |command: &&registry::Command| {
+        provenance_cli::exposed::shows(**command)
+            && matches!(command, registry::Command::Dogfood(_))
+    };
+    [
+        registry::Command::Search,
+        registry::Command::Check,
+        registry::Command::Prime,
+    ]
+    .iter()
+    .chain(registry::Command::ALL.iter().filter(listed))
+    .map(|command| cli_form::declaration(*command))
+    .chain(
+        provenance_cli::servers::SERVERS
+            .iter()
+            .map(|server| server.declaration()),
+    )
+    .chain(
+        registry::Command::ALL
+            .iter()
+            .filter(dogfood)
+            .map(|command| cli_form::declaration(*command)),
+    )
+    .fold(crate::cli::Cli::command(), add_subcommand)
+}
+
 /// Adds one word command to `root` under its words, as `provenance <words...>` shows it.
 /// Each word before the last is a group that needs one of its commands.
-pub fn add_subcommand(root: Command, command: registry::Command) -> Command {
-    let declaration = command.declaration();
-    let CliForm::Words(words) = declaration.cli_form else {
+pub fn add_subcommand(root: Command, declaration: CliDeclaration) -> Command {
+    let Some(words) = declaration.words() else {
         panic!("{} is not a word command", declaration.name);
     };
     let (word, groups) = words.split_last().expect("a word command has a word");
     let mut leaf = Command::new(*word)
-        .hide(declaration.hidden)
+        .hide(declaration.form.hidden)
         .args(args(&declaration));
     if !declaration.description.is_empty() {
         leaf = leaf.about(declaration.description);
@@ -131,7 +171,7 @@ fn add_under(
         parent.subcommand(
             Command::new(*group)
                 .about(
-                    registry::GROUP_DESCRIPTIONS
+                    GROUP_DESCRIPTIONS
                         .iter()
                         .find(|(words, _)| *words == path)
                         .map(|(_, description)| *description),
@@ -156,9 +196,9 @@ pub fn selected(matches: &ArgMatches) -> (Vec<&str>, &ArgMatches) {
 
 /// The root parser of one word command that reads the shared repository options, as
 /// `provenance search` and `provenance api` read them.
-pub fn root_word_command(command: registry::Command) -> Command {
-    let declaration = command.declaration();
-    let CliForm::Words(words) = declaration.cli_form else {
+pub fn root_word_command(command: provenance_porcelain::registry::Command) -> Command {
+    let declaration = cli_form::declaration(command);
+    let Some(words) = declaration.words() else {
         panic!("{} is not a word command", declaration.name);
     };
     let word = Arg::new("command")
@@ -173,11 +213,11 @@ pub fn root_word_command(command: registry::Command) -> Command {
 
 /// Reads a typed input from the declared flags of one command.
 pub fn input<T: serde::de::DeserializeOwned>(
-    declaration: &Declaration,
+    declaration: &CliDeclaration,
     matches: &ArgMatches,
 ) -> anyhow::Result<T> {
     let mut object = Map::new();
-    for flag in declaration.flags {
+    for flag in declaration.form.flags {
         let id = flag.field_id();
         let value = match (flag.kind, flag.value) {
             (FlagKind::Switch, _) => Some(Value::Bool(matches.get_flag(&id))),

@@ -1,6 +1,6 @@
-use crate::{catalog_cli, cli::Cli, handlers};
-use clap::CommandFactory as _;
-use handlers::{GraphInput, RepositoryInput, WorkspaceInput};
+pub use crate::registry_cli::root_command;
+use crate::{catalog_cli, handlers};
+use handlers::{GraphInput, RepositoryInput, ServerInput, WorkspaceInput};
 use provenance_cli::porcelain;
 use provenance_cli::repo_context::RepoContext;
 use provenance_core::NodeType;
@@ -17,8 +17,10 @@ mod removed;
 use grammar::{
     ApiArgs, Delivery, DiscussionsArgs, DiscussionsRoute, SearchArgs, TargetArgs, TargetVerb,
 };
+use provenance_cli::cli_form::{self, CheckCliInput};
 use provenance_cli::exposed;
-use provenance_porcelain::registry::{self, CheckCliInput, PrimeInput};
+use provenance_cli::servers::Server;
+use provenance_porcelain::registry::{self, PrimeInput};
 
 #[cfg(test)]
 mod surface_tests;
@@ -32,6 +34,7 @@ pub enum Invocation {
     Repository(RepositoryInput, bool),
     Graph(GraphInput),
     Workspace(WorkspaceInput),
+    Server(ServerInput),
     #[cfg(feature = "dogfood")]
     Dogfood(handlers::DogfoodInput, bool),
     Api(ApiArgs),
@@ -139,14 +142,26 @@ impl Invocation {
             .try_get_matches_from(arguments)
             .unwrap_or_else(|error| error.exit());
         let (words, selected) = crate::registry_cli::selected(&matches);
+        if let Some(server) = Server::find(&words) {
+            return Self::Server(
+                ServerInput::from_matches(server, selected)
+                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
+            );
+        }
         match exposed::find(&words) {
             Some(registry::Command::Check) => Self::Check(
-                crate::registry_cli::input(&registry::Command::Check.declaration(), selected)
-                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
+                crate::registry_cli::input(
+                    &cli_form::declaration(registry::Command::Check),
+                    selected,
+                )
+                .unwrap_or_else(|error| catalog_cli::usage_error(error)),
             ),
             Some(registry::Command::Prime) => Self::Prime(
-                crate::registry_cli::input(&registry::Command::Prime.declaration(), selected)
-                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
+                crate::registry_cli::input(
+                    &cli_form::declaration(registry::Command::Prime),
+                    selected,
+                )
+                .unwrap_or_else(|error| catalog_cli::usage_error(error)),
             ),
             Some(registry::Command::Repository(command)) => Self::Repository(
                 RepositoryInput::from_matches(command, selected)
@@ -287,7 +302,8 @@ impl Invocation {
             | Self::Prime(_)
             | Self::Repository(..)
             | Self::Graph(_)
-            | Self::Workspace(_) => None,
+            | Self::Workspace(_)
+            | Self::Server(_) => None,
             #[cfg(feature = "dogfood")]
             Self::Dogfood(..) => None,
             Self::Api(args) => args.common.format(),
@@ -307,6 +323,7 @@ impl Invocation {
             Self::Repository(input, quiet) => handlers::repository_command(input, quiet).await,
             Self::Graph(input) => handlers::graph_command(input),
             Self::Workspace(input) => handlers::workspace_command(input).await,
+            Self::Server(input) => handlers::server_command(input).await,
             #[cfg(feature = "dogfood")]
             Self::Dogfood(input, quiet) => handlers::dogfood_command(input, quiet),
             Self::Api(args) => api::dispatch(args).await,
@@ -415,26 +432,6 @@ impl TargetInvocation {
         )
         .await
     }
-}
-
-/// The root parser: the built-in commands and the word commands that it lists.
-pub fn root_command() -> clap::Command {
-    [
-        registry::Command::Search,
-        registry::Command::Check,
-        registry::Command::Prime,
-    ]
-    .into_iter()
-    .chain(registry::Command::ALL.iter().copied().filter(|command| {
-        matches!(
-            command,
-            registry::Command::Repository(_)
-                | registry::Command::Graph(_)
-                | registry::Command::Workspace(_)
-                | registry::Command::Dogfood(_)
-        ) && exposed::shows(*command)
-    }))
-    .fold(Cli::command(), crate::registry_cli::add_subcommand)
 }
 
 /// `provenance help [words...]` as `provenance [words...] --help`, so both print the

@@ -1,19 +1,24 @@
 //! The full CLI parser surface, including hidden commands, target actions and the
-//! children of registry commands, holds only the commands that the registry declares.
+//! children of registry commands, holds only the commands that the registry declares
+//! and the three server commands.
 
 use clap::Command;
-use provenance_cli::exposed;
+use provenance_cli::servers::{Server, SERVERS};
+use provenance_cli::{cli_form, exposed};
 use provenance_macros::verifies;
-use provenance_porcelain::registry::{self, CliForm};
+use provenance_porcelain::registry;
 
-/// The paths below `root` that are neither a CLI registry command nor a group of them.
+/// The paths below `root` that are neither a CLI registry command, a server command,
+/// nor a group of them.
 fn undeclared_commands(root: &Command) -> Vec<String> {
     let groups = exposed::EXPOSED
         .iter()
-        .filter_map(|command| match command.declaration().cli_form {
-            CliForm::Words(words) | CliForm::WordsAndTarget(words) => Some(words),
-            CliForm::Target => None,
-        })
+        .filter_map(|command| cli_form::declaration(*command).words())
+        .chain(
+            SERVERS
+                .iter()
+                .filter_map(|server| server.declaration().words()),
+        )
         .collect::<Vec<_>>();
     let mut undeclared = Vec::new();
     let mut pending = vec![(Vec::<&str>::new(), root)];
@@ -21,7 +26,7 @@ fn undeclared_commands(root: &Command) -> Vec<String> {
         for child in command.get_subcommands() {
             let mut words = path.clone();
             words.push(child.get_name());
-            let declared = exposed::find(&words).is_some();
+            let declared = exposed::find(&words).is_some() || Server::find(&words).is_some();
             let group = groups
                 .iter()
                 .any(|selected| selected.len() > words.len() && selected.starts_with(&words));
@@ -64,6 +69,30 @@ fn every_parser_command_is_a_registry_command() {
         undeclared_actions(&crate::catalog_cli::target_command().unwrap()),
         Vec::<String>::new()
     );
+}
+
+/// The parser commands outside the registry are exactly the three server commands.
+#[test]
+#[verifies("rule_porcelain_registry_defines_commands", exhaustion)]
+fn the_parser_commands_outside_the_registry_are_the_servers() {
+    let root = super::root_command();
+    let mut outside = Vec::new();
+    let mut pending = vec![(Vec::<&str>::new(), &root)];
+    while let Some((path, command)) = pending.pop() {
+        for child in command.get_subcommands() {
+            let mut words = path.clone();
+            words.push(child.get_name());
+            if let Some(server) = Server::find(&words) {
+                outside.push(server);
+            }
+            pending.push((words, child));
+        }
+    }
+    outside.sort_by_key(|server| server.declaration().name);
+    assert_eq!(outside, [Server::DocsServe, Server::Mcp, Server::Review]);
+    for server in SERVERS {
+        assert_eq!(registry::Command::named(server.declaration().name), None);
+    }
 }
 
 /// The surface check rejects an undeclared hidden command, an undeclared child of a

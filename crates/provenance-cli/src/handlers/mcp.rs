@@ -3,7 +3,7 @@
 use crate::handlers::check::RepositoryCheckPort;
 use camino::Utf8PathBuf;
 use provenance_cli::repo_context::RepoContext;
-use provenance_porcelain::registry::McpInput;
+use provenance_cli::servers::McpInput;
 use std::sync::Arc;
 
 /// Serves the MCP tools for the repository and scope that the CLI commands open, until

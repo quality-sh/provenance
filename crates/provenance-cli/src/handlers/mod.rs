@@ -1,13 +1,15 @@
 use crate::cli;
 use crate::output::{self, JsonFormat, OutputFormat};
 use camino::Utf8PathBuf;
+use provenance_cli::cli_form::{self, CheckCliInput, ReportFileFormat};
 use provenance_cli::repo_context::RepoContext;
+use provenance_cli::servers::{DocsServeInput, McpInput, ReviewInput, Server};
 use provenance_porcelain::registry::{
     self, CargoInitInput, DictionaryImportInput, DictionaryStatusInput, DocsCheckInput,
-    DocsServeInput, ExportInput, GraphCommand, ImportInput, InitInput, MaterializeInput, McpInput,
-    MergeJsonlInput, ReferenceInput, ReferenceIssueInput, ReportBuildInput, ReportRenderInput,
-    RepositoryCommand, ReviewInput, SchemaShowInput, SkillsInstallInput, SkillsListInput,
-    SkillsShowInput, SwarmBacktraceLandInput, ValidateInput, WorkspaceCommand,
+    ExportInput, GraphCommand, ImportInput, InitInput, MaterializeInput, MergeJsonlInput,
+    ReferenceInput, ReferenceIssueInput, ReportBuildInput, ReportRenderInput, RepositoryCommand,
+    SchemaShowInput, SkillsInstallInput, SkillsListInput, SkillsShowInput, SwarmBacktraceLandInput,
+    ValidateInput, WorkspaceCommand,
 };
 use provenance_store::cache;
 
@@ -37,12 +39,10 @@ pub(super) use dogfood::{handle as dogfood_command, DogfoodInput};
 
 /// Runs the check command with the flags that its declaration names.
 #[allow(clippy::redundant_pub_crate)]
-pub(super) async fn check_command(
-    input: provenance_porcelain::registry::CheckCliInput,
-) -> anyhow::Result<()> {
+pub(super) async fn check_command(input: CheckCliInput) -> anyhow::Result<()> {
     let output_format = match input.output_format.unwrap_or_default() {
-        registry::ReportFileFormat::Json => output::ReportFormat::Json,
-        registry::ReportFileFormat::Markdown => output::ReportFormat::Markdown,
+        ReportFileFormat::Json => output::ReportFormat::Json,
+        ReportFileFormat::Markdown => output::ReportFormat::Markdown,
     };
     let selectors = check::Selectors {
         categories: input.categories(),
@@ -69,9 +69,7 @@ pub(super) async fn check_command(
 
 /// Prints the shared domain guidance.
 #[allow(clippy::redundant_pub_crate)]
-pub(super) fn prime_command(
-    input: &provenance_porcelain::registry::PrimeInput,
-) -> anyhow::Result<()> {
+pub(super) fn prime_command(input: &registry::PrimeInput) -> anyhow::Result<()> {
     prime::handle(input.format)
 }
 
@@ -97,7 +95,7 @@ impl RepositoryInput {
         command: RepositoryCommand,
         matches: &clap::ArgMatches,
     ) -> anyhow::Result<Self> {
-        let declaration = registry::Command::Repository(command).declaration();
+        let declaration = cli_form::declaration(registry::Command::Repository(command));
         macro_rules! read {
             ($variant:ident) => {
                 Self::$variant(crate::registry_cli::input(&declaration, matches)?)
@@ -222,7 +220,7 @@ impl GraphInput {
         command: GraphCommand,
         matches: &clap::ArgMatches,
     ) -> anyhow::Result<Self> {
-        let declaration = registry::Command::Graph(command).declaration();
+        let declaration = cli_form::declaration(registry::Command::Graph(command));
         macro_rules! read {
             ($variant:ident) => {
                 Self::$variant(crate::registry_cli::input(&declaration, matches)?)
@@ -288,14 +286,11 @@ fn artifact(value: &str) -> anyhow::Result<cli::IdeationArtifactKind> {
 #[allow(clippy::redundant_pub_crate)]
 pub(super) enum WorkspaceInput {
     DocsCheck(DocsCheckInput),
-    DocsServe(DocsServeInput),
     SkillsList(SkillsListInput),
     SkillsShow(SkillsShowInput),
     SkillsInstall(SkillsInstallInput),
     ReportRender(ReportRenderInput),
     ReportBuild(ReportBuildInput),
-    Review(ReviewInput),
-    Mcp(McpInput),
 }
 
 impl WorkspaceInput {
@@ -305,7 +300,7 @@ impl WorkspaceInput {
         command: WorkspaceCommand,
         matches: &clap::ArgMatches,
     ) -> anyhow::Result<Self> {
-        let declaration = registry::Command::Workspace(command).declaration();
+        let declaration = cli_form::declaration(registry::Command::Workspace(command));
         macro_rules! read {
             ($variant:ident) => {
                 Self::$variant(crate::registry_cli::input(&declaration, matches)?)
@@ -313,14 +308,11 @@ impl WorkspaceInput {
         }
         Ok(match command {
             WorkspaceCommand::DocsCheck => read!(DocsCheck),
-            WorkspaceCommand::DocsServe => read!(DocsServe),
             WorkspaceCommand::SkillsList => read!(SkillsList),
             WorkspaceCommand::SkillsShow => read!(SkillsShow),
             WorkspaceCommand::SkillsInstall => read!(SkillsInstall),
             WorkspaceCommand::ReportRender => read!(ReportRender),
             WorkspaceCommand::ReportBuild => read!(ReportBuild),
-            WorkspaceCommand::Review => read!(Review),
-            WorkspaceCommand::Mcp => read!(Mcp),
         })
     }
 }
@@ -334,14 +326,6 @@ pub(super) async fn workspace_command(input: WorkspaceInput) -> anyhow::Result<(
             flag_value(&input.format, JsonFormat::from_flag)?;
             docs::handle(DocsCommand::Check {
                 repo: input.repo.into(),
-            })
-            .await
-        }
-        WorkspaceInput::DocsServe(input) => {
-            docs::handle(DocsCommand::Serve {
-                repo: input.repo.into(),
-                host: input.host,
-                port: input.port,
             })
             .await
         }
@@ -374,7 +358,44 @@ pub(super) async fn workspace_command(input: WorkspaceInput) -> anyhow::Result<(
             path: input.path.map(Utf8PathBuf::from),
             output: input.output.map(Utf8PathBuf::from),
         }),
-        WorkspaceInput::Review(input) => {
+    }
+}
+
+/// The typed input of one server command, read from its declared flags.
+#[allow(clippy::redundant_pub_crate)]
+pub(super) enum ServerInput {
+    DocsServe(DocsServeInput),
+    Review(ReviewInput),
+    Mcp(McpInput),
+}
+
+impl ServerInput {
+    /// Reads the input of `server` from the matches of its parser.
+    #[allow(clippy::redundant_pub_crate)]
+    pub(super) fn from_matches(server: Server, matches: &clap::ArgMatches) -> anyhow::Result<Self> {
+        let declaration = server.declaration();
+        let input = |matches| crate::registry_cli::input(&declaration, matches);
+        Ok(match server {
+            Server::DocsServe => Self::DocsServe(input(matches)?),
+            Server::Review => Self::Review(input(matches)?),
+            Server::Mcp => Self::Mcp(input(matches)?),
+        })
+    }
+}
+
+/// Runs one server command until it stops.
+#[allow(clippy::redundant_pub_crate)]
+pub(super) async fn server_command(input: ServerInput) -> anyhow::Result<()> {
+    match input {
+        ServerInput::DocsServe(input) => {
+            docs::handle(cli::workspace::DocsCommand::Serve {
+                repo: input.repo.into(),
+                host: input.host,
+                port: input.port,
+            })
+            .await
+        }
+        ServerInput::Review(input) => {
             crate::review::run(crate::review::Options {
                 repo: input.repo.into(),
                 repository_id: input.repository_id,
@@ -385,7 +406,7 @@ pub(super) async fn workspace_command(input: WorkspaceInput) -> anyhow::Result<(
             })
             .await
         }
-        WorkspaceInput::Mcp(input) => mcp::handle(input).await,
+        ServerInput::Mcp(input) => mcp::handle(input).await,
     }
 }
 
@@ -415,7 +436,7 @@ mod tests {
             if !cli_only || !provenance_cli::exposed::shows(*command) {
                 continue;
             }
-            for flag in command.declaration().flags {
+            for flag in cli_form::form(*command).flags {
                 for value in flag.values {
                     let converts = match flag.name {
                         "format"

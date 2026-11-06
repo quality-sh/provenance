@@ -1,10 +1,9 @@
-//! Declarations of the CLI-only commands that pin graph
-//! references, and land swarm backtraces.
+//! Declarations of the commands that pin graph references and land swarm backtraces.
 
-use super::{json_format_flag, CliForm, Declaration, Flag, FlagKind, Input, Relation, REPO, SCOPE};
+use super::Declaration;
 use serde::Deserialize;
 
-/// One CLI-only graph command.
+/// One graph command.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum GraphCommand {
     ReferenceIssue,
@@ -13,27 +12,6 @@ pub enum GraphCommand {
     ReferenceExactExport,
     SwarmBacktraceLand,
 }
-
-const JSON_FORMAT: Flag = json_format_flag(Some("json"));
-
-const REFERENCE_ISSUE_FLAGS: &[Flag] = &[
-    REPO,
-    SCOPE,
-    Flag::new("commit", FlagKind::Value)
-        .help("Git revision to pin. When omitted, clean relevant state at HEAD is required"),
-    Flag::new("correlation-system", FlagKind::Value),
-    Flag::new("correlation-key", FlagKind::Value),
-];
-
-const REFERENCE_FLAGS: &[Flag] = &[REPO, Flag::new("reference", FlagKind::Value).required()];
-
-const SWARM_BACKTRACE_LAND_FLAGS: &[Flag] = &[
-    REPO,
-    SCOPE,
-    Flag::new("run-dir", FlagKind::Value).required(),
-    Flag::new("replace", FlagKind::Switch),
-    JSON_FORMAT,
-];
 
 /// The `graph-reference issue` input.
 #[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
@@ -78,76 +56,30 @@ schema_fn!(reference_issue_schema, ReferenceIssueInput);
 schema_fn!(reference_schema, ReferenceInput);
 schema_fn!(swarm_backtrace_land_schema, SwarmBacktraceLandInput);
 
-/// A shown CLI-only command without flag relations.
-const fn cli_only(
-    words: &'static [&'static str],
-    description: &'static str,
-    schema: fn() -> serde_json::Value,
-    flags: &'static [Flag],
-) -> Declaration {
-    Declaration {
-        name: words[words.len() - 1],
-        description,
-        cli_form: CliForm::Words(words),
-        cli_input: Input::Typed(schema),
-        mcp_input: Input::None,
-        positional: &[],
-        relations: &[],
-        hidden: false,
-        flags,
-    }
-}
-
-pub(super) fn declaration(command: GraphCommand) -> Declaration {
+pub(super) const fn declaration(command: GraphCommand) -> Declaration {
     match command {
-        GraphCommand::ReferenceIssue => Declaration {
-            name: "graph-reference issue",
-            relations: &[
-                Relation::Requires("correlation_system", "correlation_key"),
-                Relation::Requires("correlation_key", "correlation_system"),
-            ],
-            ..cli_only(
-                &["graph-reference", "issue"],
-                "Issue an immutable reference after canonical graph state is committed",
-                reference_issue_schema,
-                REFERENCE_ISSUE_FLAGS,
-            )
-        },
-        GraphCommand::ReferenceShow => Declaration {
-            name: "graph-reference show",
-            ..cli_only(
-                &["graph-reference", "show"],
-                "Show metadata and graph-family counts from a pinned reference",
-                reference_schema,
-                REFERENCE_FLAGS,
-            )
-        },
-        GraphCommand::ReferenceVerify => Declaration {
-            name: "graph-reference verify",
-            ..cli_only(
-                &["graph-reference", "verify"],
-                "Verify identity and graph content at the pinned Git revision",
-                reference_schema,
-                REFERENCE_FLAGS,
-            )
-        },
-        GraphCommand::ReferenceExactExport => Declaration {
-            name: "graph-reference exact-export",
-            ..cli_only(
-                &["graph-reference", "exact-export"],
-                "Export the canonical graph reconstructed from the pinned Git revision",
-                reference_schema,
-                REFERENCE_FLAGS,
-            )
-        },
-        GraphCommand::SwarmBacktraceLand => Declaration {
-            name: "swarm-backtrace land",
-            ..cli_only(
-                &["swarm-backtrace", "land"],
-                "",
-                swarm_backtrace_land_schema,
-                SWARM_BACKTRACE_LAND_FLAGS,
-            )
-        },
+        GraphCommand::ReferenceIssue => Declaration::named(
+            "graph-reference issue",
+            "Issue an immutable reference after canonical graph state is committed",
+            reference_issue_schema,
+        ),
+        GraphCommand::ReferenceShow => Declaration::named(
+            "graph-reference show",
+            "Show metadata and graph-family counts from a pinned reference",
+            reference_schema,
+        ),
+        GraphCommand::ReferenceVerify => Declaration::named(
+            "graph-reference verify",
+            "Verify identity and graph content at the pinned Git revision",
+            reference_schema,
+        ),
+        GraphCommand::ReferenceExactExport => Declaration::named(
+            "graph-reference exact-export",
+            "Export the canonical graph reconstructed from the pinned Git revision",
+            reference_schema,
+        ),
+        GraphCommand::SwarmBacktraceLand => {
+            Declaration::named("swarm-backtrace land", "", swarm_backtrace_land_schema)
+        }
     }
 }

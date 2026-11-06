@@ -1,8 +1,8 @@
-//! One declaration for each command on the CLI and each MCP tool.
+//! One declaration for each porcelain command.
 //!
-//! A declaration names a command, describes it, and declares its inputs. It does no
+//! A declaration names a command, describes it, and declares its input. It does no
 //! work: the handlers stay behind the existing ports. Each consumer keeps its own list
-//! of the commands that it shows.
+//! of the commands that it shows, and its own grammar for them.
 
 mod dogfood;
 mod graph;
@@ -15,34 +15,44 @@ pub use dogfood::{
     TriageHandleInput, TriageListInput, TriageReopenInput,
 };
 pub use graph::{GraphCommand, ReferenceInput, ReferenceIssueInput, SwarmBacktraceLandInput};
-pub use porcelain::{
-    CheckCliInput, CheckFormat, GetCliInput, PrimeFormat, PrimeInput, ReportFileFormat,
-};
+pub use porcelain::{PrimeFormat, PrimeInput};
 pub use repository::{
     CargoInitInput, DictionaryImportInput, DictionaryStatusInput, ExportInput, ImportInput,
     InitInput, MaterializeInput, MergeJsonlInput, RepositoryCommand, SchemaShowInput,
     ValidateInput,
 };
 pub use workspace::{
-    DocsCheckInput, DocsServeInput, McpInput, ReportBuildInput, ReportRenderInput, ReviewInput,
-    SkillsInstallInput, SkillsListInput, SkillsShowInput, WorkspaceCommand,
+    DocsCheckInput, ReportBuildInput, ReportRenderInput, SkillsInstallInput, SkillsListInput,
+    SkillsShowInput, WorkspaceCommand,
 };
 
 use crate::action::Action;
 use provenance_macros::rule;
 
-/// The CLI words that select a command.
+/// Whether a command takes a target record before its name.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CliForm {
-    /// `provenance <words...>`.
-    Words(&'static [&'static str]),
-    /// `provenance <target> <name>`.
+pub enum Grammar {
+    /// The command is selected by the words of its name.
+    Name,
+    /// The command acts on one target record.
     Target,
-    /// Both the words and the target form.
-    WordsAndTarget(&'static [&'static str]),
+    /// The command is selected by its name, or acts on one target record.
+    NameAndTarget,
 }
 
-/// The input of a command on one interface.
+impl Grammar {
+    /// Whether the command can act on a target record.
+    pub const fn takes_target(self) -> bool {
+        matches!(self, Self::Target | Self::NameAndTarget)
+    }
+
+    /// Whether the words of the name select the command.
+    pub const fn takes_name(self) -> bool {
+        matches!(self, Self::Name | Self::NameAndTarget)
+    }
+}
+
+/// The input of a command.
 #[derive(Clone, Copy, Debug)]
 pub enum Input {
     /// A typed input, given as its JSON Schema.
@@ -54,205 +64,38 @@ pub enum Input {
     None,
 }
 
-/// A relation between two CLI flags of one command, by input field name.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Relation {
-    /// The first flag needs the second flag.
-    Requires(&'static str, &'static str),
-    /// The two flags cannot be given together.
-    Conflicts(&'static str, &'static str),
-}
-
-/// How a CLI flag takes its value.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum FlagKind {
-    /// `--name` without a value.
-    Switch,
-    /// `--name <value>`, at most once.
-    Value,
-    /// `--name <value>`, zero or more times.
-    Repeated,
-    /// A value by position.
-    Positional,
-}
-
-/// The value type of a CLI flag, so the CLI refuses a bad value before the command runs.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum FlagValue {
-    Text,
-    /// A whole number from zero.
-    Count,
-    /// One record kind.
-    RecordKind,
-    /// One api method.
-    ApiMethod,
-    /// An api catalog page size from 1 through 200.
-    CatalogLimit,
-    /// A TCP port number.
-    Port,
-}
-
-/// One CLI flag of a command, in the order that help shows it.
-///
-/// The JSON Schema of a typed input does not keep field order or the CLI-only facts
-/// below, so each command declares its flags here.
-// Each bool is one independent CLI fact of the flag.
-#[allow(clippy::struct_excessive_bools)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Flag {
-    /// The CLI flag name, without `--`.
+/// What one command is. It holds no handler and names no consumer: each consumer
+/// keeps its own grammar for the command.
+#[rule("rule_porcelain_names_no_consumer")]
+#[derive(Clone, Copy, Debug)]
+pub struct Declaration {
+    /// The name. Its words select the command when its grammar takes a name.
     pub name: &'static str,
-    /// The input field, when it is not the name with `_` for `-`.
-    pub field_name: Option<&'static str>,
-    pub kind: FlagKind,
-    pub value: FlagValue,
-    pub help: Option<&'static str>,
-    pub default: Option<&'static str>,
-    /// The accepted values, when the flag takes one of a fixed set.
-    pub values: &'static [&'static str],
-    /// The value can start with `-`.
-    pub hyphen_values: bool,
-    pub hidden: bool,
-    /// The command refuses to run without this flag.
-    pub required: bool,
-    /// The subcommands after this flag also take it.
-    pub global: bool,
+    /// The description. An empty description shows no about line.
+    pub description: &'static str,
+    pub grammar: Grammar,
+    pub input: Input,
 }
 
-impl Flag {
-    /// A flag with no help, default, or value set.
-    pub const fn new(name: &'static str, kind: FlagKind) -> Self {
+impl Declaration {
+    /// A command selected by its name, with a typed input.
+    pub(crate) const fn named(
+        name: &'static str,
+        description: &'static str,
+        schema: fn() -> serde_json::Value,
+    ) -> Self {
         Self {
             name,
-            field_name: None,
-            kind,
-            value: FlagValue::Text,
-            help: None,
-            default: None,
-            values: &[],
-            hyphen_values: false,
-            hidden: false,
-            required: false,
-            global: false,
+            description,
+            grammar: Grammar::Name,
+            input: Input::Typed(schema),
         }
     }
 
-    #[must_use]
-    pub const fn hidden(mut self) -> Self {
-        self.hidden = true;
-        self
+    /// The words of the name.
+    pub fn words(&self) -> impl Iterator<Item = &'static str> {
+        self.name.split(' ')
     }
-
-    #[must_use]
-    pub const fn required(mut self) -> Self {
-        self.required = true;
-        self
-    }
-
-    #[must_use]
-    pub const fn global(mut self) -> Self {
-        self.global = true;
-        self
-    }
-
-    #[must_use]
-    pub const fn value(mut self, value: FlagValue) -> Self {
-        self.value = value;
-        self
-    }
-
-    #[must_use]
-    pub const fn help(mut self, help: &'static str) -> Self {
-        self.help = Some(help);
-        self
-    }
-
-    #[must_use]
-    pub const fn default(mut self, default: &'static str) -> Self {
-        self.default = Some(default);
-        self
-    }
-
-    #[must_use]
-    pub const fn values(mut self, values: &'static [&'static str]) -> Self {
-        self.values = values;
-        self
-    }
-
-    #[must_use]
-    pub const fn hyphen_values(mut self) -> Self {
-        self.hyphen_values = true;
-        self
-    }
-
-    #[must_use]
-    pub const fn field(mut self, field: &'static str) -> Self {
-        self.field_name = Some(field);
-        self
-    }
-
-    /// The input field name. It is also the CLI argument ID.
-    pub fn field_id(&self) -> String {
-        self.field_name
-            .map_or_else(|| self.name.replace('-', "_"), str::to_owned)
-    }
-}
-
-const REPO: Flag = Flag::new("repo", FlagKind::Value).default(".");
-const SCOPE: Flag = Flag::new("scope", FlagKind::Value).default("default");
-
-/// The description of each CLI command group that has one, by its words.
-pub const GROUP_DESCRIPTIONS: &[(&str, &str)] = &[
-    (
-        "report",
-        "Deterministic report rendering from a versioned report envelope",
-    ),
-    (
-        "dogfood",
-        "Dev-build-only: record pain-point notes about provenance itself",
-    ),
-    (
-        "dogfood triage",
-        "Dev-build-only triage of captured notes: mark them handled or reopen them. State \
-         lives beside the spool; the capture history is never rewritten",
-    ),
-];
-
-/// The repository options that the porcelain commands and the commands after them take.
-pub const GLOBAL_FLAGS: &[Flag] = &[
-    REPO.hyphen_values().global(),
-    SCOPE.hyphen_values().global(),
-    json_format_flag(None).global(),
-    Flag::new("quiet", FlagKind::Switch).global(),
-];
-
-/// The repository and scope that a command opens.
-pub const REPO_FLAGS: &[Flag] = &[REPO, SCOPE];
-
-/// The `--format` flag of a command that renders only JSON.
-pub const fn json_format_flag(default: Option<&'static str>) -> Flag {
-    let flag = Flag::new("format", FlagKind::Value).values(&["json"]);
-    match default {
-        Some(default) => flag.default(default),
-        None => flag,
-    }
-}
-
-/// What one command is on each interface. It holds no handler.
-#[derive(Clone, Copy, Debug)]
-pub struct Declaration {
-    pub name: &'static str,
-    /// The description. An empty description shows no about line in the CLI help.
-    pub description: &'static str,
-    pub cli_form: CliForm,
-    pub cli_input: Input,
-    pub mcp_input: Input,
-    /// The input fields that the CLI reads by position, in order.
-    pub positional: &'static [&'static str],
-    pub relations: &'static [Relation],
-    pub hidden: bool,
-    /// The CLI flags, in help order.
-    pub flags: &'static [Flag],
 }
 
 /// Every porcelain command.
@@ -312,14 +155,11 @@ impl Command {
         Self::Graph(GraphCommand::ReferenceExactExport),
         Self::Graph(GraphCommand::SwarmBacktraceLand),
         Self::Workspace(WorkspaceCommand::DocsCheck),
-        Self::Workspace(WorkspaceCommand::DocsServe),
         Self::Workspace(WorkspaceCommand::SkillsList),
         Self::Workspace(WorkspaceCommand::SkillsShow),
         Self::Workspace(WorkspaceCommand::SkillsInstall),
         Self::Workspace(WorkspaceCommand::ReportRender),
         Self::Workspace(WorkspaceCommand::ReportBuild),
-        Self::Workspace(WorkspaceCommand::Review),
-        Self::Workspace(WorkspaceCommand::Mcp),
         Self::Dogfood(DogfoodCommand::Note),
         Self::Dogfood(DogfoodCommand::List),
         Self::Dogfood(DogfoodCommand::Report),
@@ -342,56 +182,24 @@ impl Command {
             .find(|command| command.declaration().name == name)
     }
 
-    /// The target action with this CLI name.
+    /// The command with this name that acts on a target record.
     pub fn find_target_action(name: &str) -> Option<Self> {
         Self::ALL.iter().copied().find(|command| {
-            matches!(
-                command.declaration().cli_form,
-                CliForm::Target | CliForm::WordsAndTarget(_)
-            ) && command.declaration().name == name
+            let declaration = command.declaration();
+            declaration.grammar.takes_target() && declaration.name == name
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::porcelain::VIEWS;
     use super::*;
-    use crate::get::View;
-
-    /// Implementation aid: the view values in the flag table are the get views.
-    #[test]
-    fn the_get_view_flag_lists_every_view() {
-        assert_eq!(VIEWS, View::ALL.map(View::as_str));
-    }
 
     /// Implementation aid: each command has its own declaration name.
     #[test]
     fn each_declaration_name_selects_its_command() {
         for command in Command::ALL {
             assert_eq!(Command::named(command.declaration().name), Some(*command));
-        }
-    }
-
-    /// Implementation aid: the typed CLI inputs have one schema property for each flag.
-    #[test]
-    fn typed_cli_inputs_have_a_property_for_each_flag() {
-        for command in Command::ALL {
-            let declaration = command.declaration();
-            let Input::Typed(schema) = declaration.cli_input else {
-                continue;
-            };
-            let schema = schema();
-            let properties = schema["properties"].as_object().unwrap();
-            let mut fields = declaration
-                .flags
-                .iter()
-                .map(Flag::field_id)
-                .collect::<Vec<_>>();
-            fields.sort();
-            let mut names = properties.keys().cloned().collect::<Vec<_>>();
-            names.sort();
-            assert_eq!(fields, names, "{command:?}");
         }
     }
 }

@@ -1,15 +1,18 @@
 //! The spawned binary's help and the MCP `tools/list` of a served host show the commands
-//! that each consumer records, each with its declared flags or schema properties.
+//! that each consumer records, each with its declared flags or schema properties. The
+//! three server commands are the only CLI commands outside the registry.
 
 mod support {
     pub mod review_paths;
     pub mod surface;
 }
 
+use provenance_cli::cli_form::{self, Flag, FlagKind};
 use provenance_cli::exposed as cli;
+use provenance_cli::servers::{Server, SERVERS};
 use provenance_macros::verifies;
 use provenance_mcp::exposed::{self as mcp, Place};
-use provenance_porcelain::registry::{CliForm, Command, Input};
+use provenance_porcelain::registry::{Command, Grammar, Input};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use support::surface::{help, tools, words};
@@ -33,10 +36,11 @@ async fn porcelain_commands_show_one_description() {
         let tool = &tools[declaration.name];
         assert_eq!(tool["description"], declaration.description, "{command:?}");
         let target_form = ["req_surface", declaration.name, "--repo", path.as_str()];
-        let forms: Vec<&[&str]> = match declaration.cli_form {
-            CliForm::Words(words) => vec![words],
-            CliForm::WordsAndTarget(words) => vec![words, &target_form],
-            CliForm::Target => vec![&target_form],
+        let words = declaration.words().collect::<Vec<_>>();
+        let forms: Vec<&[&str]> = match declaration.grammar {
+            Grammar::Name => vec![&words],
+            Grammar::NameAndTarget => vec![&words, &target_form],
+            Grammar::Target => vec![&target_form],
         };
         for words in forms {
             let help = help(words);
@@ -89,19 +93,14 @@ async fn registry_commands_appear_on_both_interfaces() {
         if cli::shows(*command) {
             let help = words(*command).map_or_else(
                 || help(&["req_surface", declaration.name, "--repo", &path]),
-                help,
+                |words| help(&words),
             );
-            for flag in declaration.flags.iter().filter(|flag| !flag.hidden) {
-                let shown = if flag.kind == provenance_porcelain::registry::FlagKind::Positional {
-                    let name = flag.field_id().to_uppercase();
-                    if flag.required {
-                        format!("<{name}>")
-                    } else {
-                        format!("[{name}]")
-                    }
-                } else {
-                    format!("--{}", flag.name)
-                };
+            for flag in cli_form::form(*command)
+                .flags
+                .iter()
+                .filter(|flag| !flag.hidden)
+            {
+                let shown = shown(flag);
                 assert!(
                     help.contains(&shown),
                     "{command:?} help lacks {shown}:\n{help}"
@@ -116,7 +115,7 @@ async fn registry_commands_appear_on_both_interfaces() {
                 let tool = tools
                     .get(declaration.name)
                     .unwrap_or_else(|| panic!("tools/list lacks {}", declaration.name));
-                let expected = match declaration.mcp_input {
+                let expected = match declaration.input {
                     Input::Typed(schema) => Some(properties(&schema())),
                     Input::Discussion(action) => Some(properties(
                         &provenance_porcelain::discussion::input_schema(action),
@@ -137,6 +136,20 @@ async fn registry_commands_appear_on_both_interfaces() {
             ),
             None => assert!(!mcp_shows(&tools, declaration.name), "{command:?}"),
         }
+    }
+}
+
+/// How the help shows one flag.
+fn shown(flag: &Flag) -> String {
+    if flag.kind == FlagKind::Positional {
+        let name = flag.field_id().to_uppercase();
+        if flag.required {
+            format!("<{name}>")
+        } else {
+            format!("[{name}]")
+        }
+    } else {
+        format!("--{}", flag.name)
     }
 }
 
@@ -175,13 +188,12 @@ fn assert_cli_only_registry_commands(commands: &[&[&str]]) {
             .unwrap_or_else(|| panic!("provenance {} is not a registry command", words.join(" ")));
         assert_eq!(mcp_place(command), None, "{command:?} is CLI-only");
         let help = help(words);
-        for flag in command
-            .declaration()
+        for flag in cli_form::form(command)
             .flags
             .iter()
             .filter(|flag| !flag.hidden)
         {
-            if flag.kind != provenance_porcelain::registry::FlagKind::Positional {
+            if flag.kind != FlagKind::Positional {
                 let shown = format!("--{}", flag.name);
                 assert!(
                     help.contains(&shown),
@@ -229,15 +241,36 @@ fn graph_read_commands_are_registry_commands() {
 fn workspace_commands_are_registry_commands() {
     assert_cli_only_registry_commands(&[
         &["docs", "check"],
-        &["docs", "serve"],
         &["skills", "list"],
         &["skills", "show"],
         &["skills", "install"],
         &["report", "render"],
         &["report", "build"],
-        &["review"],
-        &["mcp"],
     ]);
+}
+
+/// The three server commands are CLI commands outside the registry. MCP does not show
+/// them, and their help shows each declared flag.
+#[tokio::test]
+#[verifies("rule_porcelain_registry_defines_commands", examples)]
+async fn server_commands_are_outside_the_registry() {
+    let (repo, _) = support::review_paths::init();
+    let tools = tools(repo.path()).await;
+    for words in [&["docs", "serve"][..], &["review"], &["mcp"]] {
+        let server = Server::find(words).unwrap_or_else(|| panic!("{words:?} is not a server"));
+        let declaration = server.declaration();
+        assert_eq!(cli::find(words), None, "{words:?}");
+        assert_eq!(Command::named(declaration.name), None, "{words:?}");
+        assert!(!mcp_shows(&tools, declaration.name), "{words:?}");
+        let help = help(words);
+        for flag in declaration.form.flags {
+            let shown = shown(flag);
+            assert!(
+                help.contains(&shown),
+                "{words:?} help lacks {shown}:\n{help}"
+            );
+        }
+    }
 }
 
 /// The command names that `provenance <words...> --help` lists, without `help`.
@@ -253,11 +286,13 @@ fn listed_commands(words: &[&str]) -> Vec<String> {
         .collect()
 }
 
-/// Each command that the CLI help lists is a registry command that the CLI shows, or a
-/// group of such commands.
+/// Each command that the CLI help lists is a registry command that the CLI shows, one
+/// of the three server commands, or a group of such commands. Each server command is
+/// listed.
 #[test]
 #[verifies("rule_porcelain_registry_defines_commands", exhaustion)]
 fn every_cli_command_is_a_registry_command() {
+    let mut servers = Vec::new();
     let mut groups = vec![Vec::<String>::new()];
     while let Some(group) = groups.pop() {
         let group_words = group.iter().map(String::as_str).collect::<Vec<_>>();
@@ -268,6 +303,10 @@ fn every_cli_command_is_a_registry_command() {
             if cli::find(&words).is_some() {
                 continue;
             }
+            if let Some(server) = Server::find(&words) {
+                servers.push(server);
+                continue;
+            }
             assert!(
                 !listed_commands(&words).is_empty(),
                 "provenance {} is not a registry command",
@@ -276,6 +315,10 @@ fn every_cli_command_is_a_registry_command() {
             groups.push(path);
         }
     }
+    servers.sort_by_key(|server| server.declaration().name);
+    let mut expected = SERVERS.to_vec();
+    expected.sort_by_key(|server| server.declaration().name);
+    assert_eq!(servers, expected);
 }
 
 /// Each tool that a served host lists is a registry command that MCP records as a tool.
