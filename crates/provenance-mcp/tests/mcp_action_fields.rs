@@ -191,10 +191,6 @@ async fn record_actions_refuse_missing_fields_and_other_record_kinds() {
             ("type", "invalid_value"),
         ),
         (
-            json!({"action":"update","target":"source_shared"}),
-            ("data", "required"),
-        ),
-        (
             json!({"action":"create","target":"req_x","type":"requirement","body":"Hi."}),
             ("body", "unknown_field"),
         ),
@@ -218,10 +214,10 @@ async fn record_actions_refuse_missing_fields_and_other_record_kinds() {
     session.close().await;
 }
 
-/// A call without data gets the data schema of the action and record kind.
+/// A call without the record fields gets the field schema of the action and record kind.
 #[tokio::test]
 #[verifies("rule_mcp_refusal_names_field", examples)]
-async fn a_refusal_without_data_gives_the_data_schema_of_the_record_kind() {
+async fn a_refusal_without_record_fields_gives_the_schema_of_the_record_kind() {
     let repository = Repository::new("The shared graph is readable.");
     repository.all_kinds();
     let session = session(&repository).await;
@@ -232,14 +228,12 @@ async fn a_refusal_without_data_gives_the_data_schema_of_the_record_kind() {
         json!({"action":"create","target":"source_x","type":"source"}),
     )
     .await;
-    assert_eq!(source["field"], "data");
+    assert_eq!(source["field"], "name");
     assert_eq!(
         source["message"],
-        "the create action on a source record needs data"
+        "the create action on a source record needs name"
     );
-    assert!(source["schema"]["properties"]["data"]["properties"]
-        .get("source_type")
-        .is_some());
+    assert!(source["schema"]["properties"].get("source_type").is_some());
     let requirement = refused(
         client,
         "change",

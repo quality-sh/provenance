@@ -8,39 +8,6 @@
         "all"
       ],
       "type": "string"
-    },
-    "NodeType": {
-      "enum": [
-        "source",
-        "requirement",
-        "resolution",
-        "rule",
-        "topic",
-        "question",
-        "domain",
-        "boundary"
-      ],
-      "type": "string"
-    },
-    "StableId": {
-      "description": "A record ID: lowercase ASCII letters, digits, underscores, and hyphens.",
-      "pattern": "^[a-z0-9_-]+$",
-      "type": "string"
-    },
-    "ThreadParent": {
-      "properties": {
-        "node_id": {
-          "$ref": "#/$defs/StableId"
-        },
-        "node_type": {
-          "$ref": "#/$defs/NodeType"
-        }
-      },
-      "required": [
-        "node_type",
-        "node_id"
-      ],
-      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -60,10 +27,6 @@
         "null"
       ]
     },
-    "discussion_id": {
-      "$ref": "#/$defs/StableId",
-      "description": "Actions: discussion."
-    },
     "limit": {
       "description": "Actions: discussions, discussion.",
       "maximum": 200,
@@ -73,21 +36,15 @@
         "null"
       ]
     },
-    "parent": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/ThreadParent"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "description": "Actions: discussions."
-    },
     "status": {
       "$ref": "#/$defs/DiscussionStatusFilter",
       "default": "active",
       "description": "Actions: discussions."
+    },
+    "target": {
+      "description": "List the Discussions under this record. Without it, the Discussions of the scope show. Actions: discussions, discussion.",
+      "minLength": 1,
+      "type": "string"
     }
   },
   "required": [],

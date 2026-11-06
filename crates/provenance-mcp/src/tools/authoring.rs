@@ -130,6 +130,24 @@ fn kind_schema(action: Action, kind: NodeType, definition: &Definition) -> Value
     schema
 }
 
+/// The schema whose required list the call must meet now. A call without record fields
+/// must give each required argument, and a refusal gives the schema of the kind. A call
+/// with record fields goes to the operation, which names all the missing fields at once.
+fn needed_now(mut schema: Value, definition: &Definition, arguments: &Map<String, Value>) -> Value {
+    let declared = definition.arguments().unwrap_or_default();
+    let body = |name: &str| {
+        declared
+            .iter()
+            .any(|argument| argument.name == name && argument.body_field().is_some())
+    };
+    if arguments.keys().any(|name| body(name)) {
+        if let Some(required) = schema["required"].as_array_mut() {
+            required.retain(|name| name.as_str().is_some_and(|name| !body(name)));
+        }
+    }
+    schema
+}
+
 /// The request arguments of one call: the body arguments go into `data`, and the
 /// parameters stay. An alias of an array field gives one item of it.
 fn request_arguments(
@@ -208,7 +226,11 @@ pub async fn call(
     {
         return refusal(field, "invalid_value", &relation.message());
     }
-    let schema = kind_schema(action, route.kind, route.definition);
+    let schema = needed_now(
+        kind_schema(action, route.kind, route.definition),
+        route.definition,
+        &arguments,
+    );
     if let Some(refused) = field_refusal(action, route.kind, &schema, &arguments) {
         return refused;
     }

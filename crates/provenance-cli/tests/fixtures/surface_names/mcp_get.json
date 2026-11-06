@@ -46,11 +46,6 @@
         "null"
       ]
     },
-    "follow": {
-      "default": false,
-      "description": "Stream the current review document and pushed changes as JSON lines.",
-      "type": "boolean"
-    },
     "kind": {
       "default": [],
       "description": "Record kinds to return.",
@@ -68,14 +63,9 @@
         "null"
       ]
     },
-    "no_open": {
-      "default": false,
-      "description": "Print the review link and do not open it in a browser.",
-      "type": "boolean"
-    },
     "review_link": {
       "default": false,
-      "description": "Print a link to this record in the running review host.",
+      "description": "Return a link to this record in the running review host.",
       "type": "boolean"
     },
     "target": {

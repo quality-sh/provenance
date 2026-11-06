@@ -342,6 +342,6 @@ pub fn discussions_command() -> anyhow::Result<Command> {
             provenance_porcelain::discussion::input_schema(Action::Discussions),
             provenance_porcelain::discussion::input_schema(Action::Discussion),
         ],
-        &["parent", "discussion_id"],
+        &["target"],
     )
 }

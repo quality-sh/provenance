@@ -182,15 +182,11 @@ impl provenance_porcelain::get::ReviewLinkPort for HostReviewLinkPort {
                         "record {id} is not in a Requirement review document"
                     ))
                 })?;
-            Ok(match location.plain_link() {
-                Some(plain) => ReviewLink {
-                    review_url: Some(plain.into()),
-                    message: None,
-                },
-                None => ReviewLink {
-                    review_url: None,
-                    message: Some(start_message(&self.place)),
-                },
+            let review_url = location.plain_link().map(String::from);
+            let message = review_url.is_none().then(|| start_message(&self.place));
+            Ok(ReviewLink {
+                review_url,
+                message,
             })
         })
     }

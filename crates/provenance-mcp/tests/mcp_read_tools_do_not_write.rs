@@ -131,7 +131,6 @@ fn read_body(path: &str) -> Option<Value> {
 
 /// Each read tool with each of its fields set. Each call succeeds.
 fn read_calls(discussion_id: &Value) -> Vec<(&'static str, Value)> {
-    let parent = json!({"node_type": "requirement", "node_id": "req_shared"});
     let mut calls = Vec::new();
     calls.push(("get", json!({"target": "req_shared", "view": "record"})));
     for view in ["children", "trace"] {
@@ -170,7 +169,7 @@ fn read_calls(discussion_id: &Value) -> Vec<(&'static str, Value)> {
         ),
         (
             "discussions",
-            json!({"action": "discussions", "parent": parent, "status": "all", "limit": 5}),
+            json!({"action": "discussions", "target": "req_shared", "status": "all", "limit": 5}),
         ),
         (
             "discussions",

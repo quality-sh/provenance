@@ -119,8 +119,9 @@ async fn the_change_tool_and_the_cli_store_the_same_records() {
     }
     let server = Server::start(&by_mcp).await;
     for id in ids {
+        // The CLI fills these create fields with its own defaults; MCP takes them as given.
         let arguments = json!({"action":"create","target":id,"type":"requirement",
-            "statement":statement});
+            "statement":statement,"actor":"cli","status":"active","depends_on":[],"supersedes":[]});
         let created = server.client.call("change", arguments).await;
         assert_ne!(created["isError"], json!(true), "{created}");
     }

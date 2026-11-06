@@ -51,7 +51,7 @@ fn discussion_flags_follow_the_typed_input_contracts() {
     for action in Action::DISCUSSION {
         let schema = provenance_porcelain::discussion::input_schema(action);
         for field in schema["properties"].as_object().unwrap().keys() {
-            if ["parent", "discussion_id", "declared_by"].contains(&field.as_str()) {
+            if ["target", "declared_by"].contains(&field.as_str()) {
                 continue;
             }
             let flag = field.replace('_', "-");
@@ -69,7 +69,7 @@ fn discussion_flags_follow_the_typed_input_contracts() {
     for action in [Action::Discussions, Action::Discussion] {
         let schema = provenance_porcelain::discussion::input_schema(action);
         for field in schema["properties"].as_object().unwrap().keys() {
-            if ["parent", "discussion_id"].contains(&field.as_str()) {
+            if field == "target" {
                 continue;
             }
             let flag = field.replace('_', "-");

@@ -262,7 +262,7 @@ async fn reply_grant_does_not_admit_start() {
     let request = serde_json::from_value(json!({
         "scope_id":"default", "actor":"ben",
         "declared_by":null,
-        "target":"req_shared",
+        "parent":{"node_type":"requirement","node_id":"req_shared"},
         "action":{"kind":"start","role":"user","body":"Opening text"}
     }))
     .unwrap();

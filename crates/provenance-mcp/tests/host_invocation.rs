@@ -125,6 +125,9 @@ async fn a_typed_write_waiting_for_the_lock_does_not_delay_a_data_free_call() {
     let session = Session::start(host.clone()).await;
     let mut write = Box::pin(call(&session.client, "change", discuss()));
     assert!(poll!(&mut write).is_pending());
+    // The first entry reads the target record; the second is the write.
+    control.entered().await;
+    assert!(poll!(&mut write).is_pending());
     control.entered().await;
 
     assert_statement_check_answers(&host).await;
