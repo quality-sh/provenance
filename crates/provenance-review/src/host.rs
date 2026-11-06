@@ -348,9 +348,10 @@ struct ReviewConfiguration {
     credential: Arc<LocalAccess>,
     repository: Arc<LocalRepository>,
     path: camino::Utf8PathBuf,
-    // The reviewer is read from the Git configuration once per host process, so a
-    // page load starts no Git. A changed identity takes effect when the host restarts.
-    reviewer: Arc<std::sync::OnceLock<Option<String>>>,
+    // The first reviewer that the host reads from the Git configuration stays until the
+    // host restarts, so a page load starts no Git. A read that finds no reviewer is not
+    // kept, so the next page load reads the configuration again.
+    reviewer: Arc<std::sync::OnceLock<String>>,
     value: Value,
 }
 
@@ -368,9 +369,11 @@ async fn configuration(
     let path = config.path.clone();
     let cached = config.reviewer.clone();
     let reviewer = tokio::task::spawn_blocking(move || {
-        cached
-            .get_or_init(|| reviewer::review_actor_id(&path))
-            .clone()
+        if let Some(actor_id) = cached.get() {
+            return Some(actor_id.clone());
+        }
+        let actor_id = reviewer::review_actor_id(&path)?;
+        Some(cached.get_or_init(|| actor_id).clone())
     })
     .await
     .ok()

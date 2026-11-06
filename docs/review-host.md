@@ -290,8 +290,9 @@ configured disposition actors, this field is an empty list. The response does
 not contain the bearer credential.
 
 `reviewer` identifies the person who runs the host. The host reads it from Git
-at the first authenticated request and keeps it until the host stops. After a
-change to the Git configuration, restart the host. `reviewer.actorId` is the
+at the first authenticated request that finds a reviewer, and keeps it until the
+host stops. While Git gives no reviewer, the host reads Git again at each
+request. After a change to a reviewer that the host has, restart the host. `reviewer.actorId` is the
 value of the Git configuration key `provenance.reviewer`, read from the
 repository directory. Each person sets
 this key in their own Git configuration, for example with
