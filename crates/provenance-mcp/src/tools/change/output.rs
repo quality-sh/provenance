@@ -160,7 +160,7 @@ fn hold_definitions(branch: &mut Value, prefix: &str, held: &mut Map<String, Val
     };
     let mut names = definitions
         .keys()
-        .map(|name| (name.clone(), name.clone()))
+        .map(|name| (name.clone(), json!(name)))
         .collect::<Map<String, Value>>();
     let renamed = loop {
         let renamed = definitions
