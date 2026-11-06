@@ -1,12 +1,13 @@
 //! The record actions of the change tool: their fields, and their calls by target.
 
 use provenance_contract::{ArgumentPlace, Definition};
+use provenance_core::protocol::failure::ErasedFailure;
 use provenance_core::NodeType;
 use provenance_macros::rule;
 use provenance_porcelain::action::render_readable;
 use provenance_porcelain::registry::Command;
 use provenance_transport::porcelain::{
-    target_call, Action, ActionError, ParentReplacement, ReplacementError,
+    target_call, Action, ActionError, ParentReplacement, ReplacementError, TargetRoute,
 };
 use provenance_transport::StatementHost;
 use rmcp::model::{CallToolResult, ContentBlock};
@@ -215,52 +216,12 @@ pub async fn call(
         Ok(request) => request,
         Err(refused) => return refused,
     };
-    let (data, query, headers) = match target_call(route.definition, &request, &target) {
-        Ok(call) => call,
-        Err(failure) => return crate::surface::failure_result(failure),
-    };
-    if let Some(name) = query.keys().next() {
-        let message = format!(
-            "the {} action on a {} record does not take {name}",
-            action.as_str(),
-            route.kind.as_str()
-        );
-        return refusal(name, "unknown_field", &message);
-    }
-    let (written, note) = match (&replace_parent, &with_parent) {
-        (Some(Value::String(old)), Some(Value::String(new))) => {
-            let parents = ParentReplacement {
-                replace_parent: old,
-                with_parent: new,
-            };
-            match host.replace_parent(&route, data, headers, parents).await {
-                Ok(replaced) => {
-                    let note = (!replaced.changed)
-                        .then(|| format!("{new} replaced {old} already; nothing changed\n\n"));
-                    (Ok(replaced.record), note)
-                }
-                Err(ReplacementError::Failure(failure)) => (Err(failure), None),
-                Err(ReplacementError::Invalid(message)) => {
-                    return refusal("replace_parent", "invalid_value", &message)
-                }
-                Err(ReplacementError::Unchanged(message)) => {
-                    return crate::surface::detail_error(
-                        json!({"kind": "operation_failed", "message": message}),
-                    )
-                }
-            }
-        }
-        (None, None) => (host.invoke_target(&route, data, headers).await, None),
-        _ => {
-            return refusal(
-                "replace_parent",
-                "invalid_value",
-                "the parents are record IDs",
-            )
-        }
+    let written = match write(host, &route, &request, (replace_parent, with_parent)).await {
+        Ok(written) => written,
+        Err(refused) => return refused,
     };
     match written {
-        Ok(value) => {
+        (Ok(value), note) => {
             let mut structured = value.clone();
             if let Some(object) = structured.as_object_mut() {
                 object.insert("type".into(), json!(route.kind.as_str()));
@@ -270,7 +231,55 @@ pub async fn call(
             result.content = vec![ContentBlock::text(note.unwrap_or_default() + &readable)];
             result
         }
-        Err(failure) => crate::surface::failure_result(failure),
+        (Err(failure), _) => crate::surface::failure_result(failure),
+    }
+}
+
+/// The written record, or the failure of the write, and a note for the reader. With
+/// both parent fields, the write replaces one Requirement parent.
+async fn write(
+    host: &StatementHost,
+    route: &TargetRoute,
+    request: &Value,
+    (replace_parent, with_parent): (Option<Value>, Option<Value>),
+) -> Result<(Result<Value, ErasedFailure>, Option<String>), CallToolResult> {
+    let (data, query, headers) = target_call(route.definition, request, &route.target)
+        .map_err(crate::surface::failure_result)?;
+    if let Some(name) = query.keys().next() {
+        let message = format!(
+            "the {} action on a {} record does not take {name}",
+            route.action.as_str(),
+            route.kind.as_str()
+        );
+        return Err(refusal(name, "unknown_field", &message));
+    }
+    match (&replace_parent, &with_parent) {
+        (Some(Value::String(old)), Some(Value::String(new))) => {
+            let parents = ParentReplacement {
+                replace_parent: old,
+                with_parent: new,
+            };
+            match host.replace_parent(route, data, headers, parents).await {
+                Ok(replaced) => {
+                    let note = (!replaced.changed)
+                        .then(|| format!("{new} replaced {old} already; nothing changed\n\n"));
+                    Ok((Ok(replaced.record), note))
+                }
+                Err(ReplacementError::Failure(failure)) => Ok((Err(failure), None)),
+                Err(ReplacementError::Invalid(message)) => {
+                    Err(refusal("replace_parent", "invalid_value", &message))
+                }
+                Err(ReplacementError::Unchanged(message)) => Err(crate::surface::detail_error(
+                    json!({"kind": "operation_failed", "message": message}),
+                )),
+            }
+        }
+        (None, None) => Ok((host.invoke_target(route, data, headers).await, None)),
+        _ => Err(refusal(
+            "replace_parent",
+            "invalid_value",
+            "the parents are record IDs",
+        )),
     }
 }
 
