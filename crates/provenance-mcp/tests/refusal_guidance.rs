@@ -26,22 +26,21 @@ async fn mcp_ownership_refusal_preserves_owner_and_guidance() {
         } else {
             "res_manual"
         };
-        let created = call(client, "change", json!({"action":"create","target":target,"type":"resolution","data":{
-            "title":"Owner", "position":"Keep the owner.", "rationale":"The owner controls changes.",
-            "made_by":owner, "supersedes":[], "requirement_ids":["req_shared"], "status":"proposed", "inputs":[]
-        }})).await;
+        let created = call(client, "change", json!({"action":"create","target":target,"type":"resolution","title":"Owner", "position":"Keep the owner.", "rationale":"The owner controls changes.",
+            "made_by":owner, "supersedes":[], "requirement_ids":["req_shared"], "status":"proposed", "inputs":[]})).await;
         assert_ne!(created.is_error, Some(true), "{created:?}");
-        let result = call(client, "change", json!({"action":"submit","target":target,"data":{
-            "declared_by":"other", "actor":"agent", "title":"Review", "summary":"Review the record.",
-            "source_ids":[], "evidence_references":[], "builds_on":[]
-        }})).await;
+        let result = call(client, "change", json!({"action":"submit","target":target,"declared_by":"other", "actor":"agent", "title":"Review", "summary":"Review the record.",
+            "source_ids":[], "evidence_references":[], "builds_on":[]})).await;
         assert_eq!(result.is_error, Some(true), "{result:?}");
         let error = &result.structured_content.as_ref().unwrap()["error"];
         assert_eq!(error["kind"], "record_ownership_conflict");
         assert_eq!(error["owner"], json!(owner));
         let message = error["message"].as_str().unwrap();
         assert!(message.contains("--declared-by"), "{message}");
-        assert!(message.contains("data.declared_by"), "{message}");
+        assert!(
+            message.contains("MCP declared_by") || message.contains("MCP: omit declared_by"),
+            "{message}"
+        );
         assert!(message.contains("ownership"), "{message}");
         if let Some(owner) = owner {
             assert!(
@@ -67,16 +66,11 @@ async fn mcp_submit_names_all_missing_lists_before_store_checks() {
     let client = &session.client;
     let fields = ["source_ids", "evidence_references", "builds_on"];
     for supplied in 0..3 {
-        let mut data = json!({"actor":"agent", "declared_by":"other", "title":"Review", "summary":"Review the record."});
+        let mut data = json!({"action":"submit", "target":"req_shared", "actor":"agent", "declared_by":"other", "title":"Review", "summary":"Review the record."});
         for field in &fields[..supplied] {
             data[*field] = json!([]);
         }
-        let result = call(
-            client,
-            "change",
-            json!({"action":"submit","target":"req_shared", "data":data}),
-        )
-        .await;
+        let result = call(client, "change", data).await;
         assert_eq!(result.is_error, Some(true), "{result:?}");
         let error = &result.structured_content.as_ref().unwrap()["error"];
         assert_eq!(error["kind"], "invalid_input");

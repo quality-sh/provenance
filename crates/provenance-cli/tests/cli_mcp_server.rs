@@ -129,7 +129,7 @@ async fn mcp_serves_the_tools_of_the_cli_repository() {
     let created = client
         .call(
             "change",
-            json!({"action":"create","target":"source_made_over_mcp","type":"source","data":{"name":"Made over MCP","source_type":"policy","url":null,"supersedes":[]}}),
+            json!({"action":"create","target":"source_made_over_mcp","type":"source","name":"Made over MCP","source_type":"policy","url":null,"supersedes":[]}),
         )
         .await;
     assert_ne!(created["isError"], json!(true), "{created}");
@@ -282,7 +282,7 @@ async fn mcp_and_cli_read_each_other_writes_in_one_session() {
     wire.call(
         "change",
         json!({"action":"update","target":"source_made_by_cli",
-               "data":{"name":"Renamed over MCP"}}),
+               "name":"Renamed over MCP"}),
     )
     .await;
     let read = cli(&[
@@ -300,7 +300,7 @@ async fn mcp_and_cli_read_each_other_writes_in_one_session() {
     wire.send_request(
         "tools/call",
         json!({"name":"change","arguments":{"action":"create","target":"source_made_at_close","type":"source",
-               "data":{"name":"Made at close","source_type":"policy","url":null,"supersedes":[]}}}),
+               "name":"Made at close","source_type":"policy","url":null,"supersedes":[]}}),
     )
     .await;
     drop(wire.stdin.take());
@@ -352,7 +352,7 @@ async fn mcp_discussions_tool_starts_and_replies_and_the_cli_reads_it() {
     let started = client
         .call(
             "change",
-            json!({"action":"discuss","parent":{"node_type":"requirement","node_id":"req_talk"},
+            json!({"action":"discuss","target":"req_talk",
                    "actor":"ben","role":"user","body":"Is the wording right?"}),
         )
         .await;
@@ -365,7 +365,7 @@ async fn mcp_discussions_tool_starts_and_replies_and_the_cli_reads_it() {
     let replied = client
         .call(
             "change",
-            json!({"action":"reply","discussion_id":id,"expected_version":version,
+            json!({"action":"reply","target":id,"expected_version":version,
                    "actor":"agent","role":"assistant","body":"Yes, it is."}),
         )
         .await;

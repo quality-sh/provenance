@@ -78,7 +78,7 @@ async fn non_create_schema_excludes_a_writable_but_unreadable_kind() {
     let unresolved = call(
         &client,
         "change",
-        json!({"action":"update","target":"source_shared","data":{"name":"Hidden source"}}),
+        json!({"action":"update","target":"source_shared","name":"Hidden source"}),
     )
     .await;
     assert_eq!(unresolved.is_error, Some(true), "{unresolved:?}");
@@ -123,7 +123,7 @@ async fn non_create_schema_and_dispatch_deny_a_hidden_mutation() {
     let denied = call(
         &client,
         "change",
-        json!({"action":"update","target":"source_shared","data":{"name":"Denied update"}}),
+        json!({"action":"update","target":"source_shared","name":"Denied update"}),
     )
     .await;
     assert_eq!(denied.is_error, Some(true), "{denied:?}");
@@ -177,11 +177,9 @@ async fn no_resolvable_kind_hides_non_create_tools_but_keeps_create_executable()
         json!({"action":"create",
             "target":"source_without_read_access",
             "type":"source",
-            "data":{
-                "name":"Write-only source",
+            "name":"Write-only source",
                 "source_type":"policy",
                 "supersedes":[]
-            }
         }),
     )
     .await;

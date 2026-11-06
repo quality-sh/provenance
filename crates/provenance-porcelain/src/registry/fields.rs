@@ -141,6 +141,31 @@ pub enum Relation {
     Conflicts(&'static str, &'static str),
 }
 
+impl Relation {
+    /// The field that breaks this relation when the `given` fields are given, and the
+    /// other field of the relation.
+    pub fn broken_by(&self, given: impl Fn(&str) -> bool) -> Option<(&'static str, &'static str)> {
+        match *self {
+            Self::Requires(first, second) => {
+                (given(first) && !given(second)).then_some((first, second))
+            }
+            Self::Conflicts(first, second) => {
+                (given(first) && given(second)).then_some((second, first))
+            }
+        }
+    }
+
+    /// The text of a broken relation.
+    pub fn message(&self) -> String {
+        match *self {
+            Self::Requires(first, second) => format!("{first} needs {second}"),
+            Self::Conflicts(first, second) => {
+                format!("{first} and {second} cannot be given together")
+            }
+        }
+    }
+}
+
 /// The input of a command as fields.
 ///
 /// It holds their order, the fields that name the target of the command, the relations

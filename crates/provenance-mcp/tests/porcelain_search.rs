@@ -299,7 +299,7 @@ async fn update_status(
     target: &str,
     status: &str,
 ) {
-    let mut arguments = json!({"action":"update","target":target,"data":{"status":status}});
+    let mut arguments = json!({"action":"update","target":target,"status":status});
     if let Some(collection) = match target {
         "question_shared" => Some("questions"),
         "topic_shared" => Some("topics"),
@@ -347,14 +347,12 @@ async fn mcp_search_shows_each_record_lifecycle() {
         ),
     ] {
         let updated = client
-            .call_tool(
-                CallToolRequestParams::new("change").with_arguments(
-                    json!({"action":action,"target":target,"data":data})
-                        .as_object()
-                        .unwrap()
-                        .clone(),
-                ),
-            )
+            .call_tool(CallToolRequestParams::new("change").with_arguments({
+                let mut arguments = data.as_object().unwrap().clone();
+                arguments.insert("action".into(), json!(action));
+                arguments.insert("target".into(), json!(target));
+                arguments
+            }))
             .await
             .unwrap();
         assert_ne!(updated.is_error, Some(true), "{updated:?}");
@@ -392,10 +390,8 @@ async fn mcp_search_shows_each_record_lifecycle() {
         .call_tool(
             CallToolRequestParams::new("change").with_arguments(
                 json!({
-                    "action":"update", "target":"rule_shared", "data":{
-                        "status":"archived",
+                    "action":"update", "target":"rule_shared", "status":"archived",
                         "archived_in_commit":{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
-                    }
                 })
                 .as_object()
                 .unwrap()

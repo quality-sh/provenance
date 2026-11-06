@@ -75,11 +75,7 @@ fn discussion_help(
     action: provenance_porcelain::action::Action,
 ) -> clap::Command {
     let schema = provenance_porcelain::discussion::input_schema(action);
-    let bound = [
-        provenance_porcelain::discussion::target_field(action),
-        "parent",
-        "discussion_id",
-    ];
+    let bound = ["target"];
     let properties = schema
         .get("properties")
         .and_then(Value::as_object)
@@ -112,13 +108,7 @@ pub fn required_discussion_flags(
     schema: &Value,
     action: provenance_porcelain::action::Action,
 ) -> BTreeSet<String> {
-    let supplied = [
-        provenance_porcelain::discussion::target_field(action),
-        "parent",
-        "discussion_id",
-        "actor",
-        "role",
-    ];
+    let supplied = ["target", "actor", "role"];
     schema
         .get("required")
         .and_then(Value::as_array)

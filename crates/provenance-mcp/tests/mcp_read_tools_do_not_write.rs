@@ -174,7 +174,7 @@ fn read_calls(discussion_id: &Value) -> Vec<(&'static str, Value)> {
         ),
         (
             "discussions",
-            json!({"action": "discussion", "discussion_id": discussion_id, "limit": 5}),
+            json!({"action": "discussion", "target": discussion_id, "limit": 5}),
         ),
     ]);
     calls
@@ -183,7 +183,7 @@ fn read_calls(discussion_id: &Value) -> Vec<(&'static str, Value)> {
 /// Start one Discussion on the shared Requirement and return its ID.
 async fn start_discussion(session: &Session) -> Value {
     let arguments = json!({"action": "discuss",
-        "parent": {"node_type": "requirement", "node_id": "req_shared"},
+        "target": "req_shared",
         "actor": "ben", "role": "user", "body": "Opening text"});
     let started = support::schema_check::call(&session.client, "change", arguments).await;
     assert_ne!(started.is_error, Some(true), "{started:?}");

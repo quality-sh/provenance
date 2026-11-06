@@ -93,7 +93,7 @@ async fn discussion_reads_and_writes_refuse_fields_of_another_action() {
         client,
         "change",
         json!({"action":"discuss",
-            "parent":{"node_type":"requirement","node_id":"req_shared"},
+            "target":"req_shared",
             "actor":"ben", "role":"user", "body":"Opening text"}),
     )
     .await;
@@ -102,13 +102,10 @@ async fn discussion_reads_and_writes_refuse_fields_of_another_action() {
     for (name, valid) in [
         ("discussions", json!({})),
         ("discussions", json!({"action":"discussions","limit":5})),
-        (
-            "discussions",
-            json!({"action":"discussion","discussion_id":id}),
-        ),
+        ("discussions", json!({"action":"discussion","target":id})),
         (
             "change",
-            json!({"action":"reply","discussion_id":id,"expected_version":1,
+            json!({"action":"reply","target":id,"expected_version":1,
                           "actor":"ben","role":"user","body":"Yes."}),
         ),
     ] {
@@ -119,7 +116,7 @@ async fn discussion_reads_and_writes_refuse_fields_of_another_action() {
         (
             "discussions",
             json!({"action":"discussion"}),
-            ("discussion_id", "required"),
+            ("target", "required"),
         ),
         (
             "discussions",
@@ -133,18 +130,18 @@ async fn discussion_reads_and_writes_refuse_fields_of_another_action() {
         ),
         (
             "discussions",
-            json!({"action":"reply","discussion_id":id}),
+            json!({"action":"reply","target":id}),
             ("action", "invalid_value"),
         ),
         (
             "change",
-            json!({"action":"reply","discussion_id":id}),
+            json!({"action":"reply","target":id}),
             ("actor", "required"),
         ),
         (
             "change",
-            json!({"action":"discuss","discussion_id":id,"actor":"ben","role":"user","body":"Hi."}),
-            ("discussion_id", "unknown_field"),
+            json!({"action":"discuss","target":id,"actor":"ben","role":"user","body":"Hi.","expected_version":1}),
+            ("expected_version", "unknown_field"),
         ),
     ] {
         assert_eq!(
@@ -167,7 +164,7 @@ async fn record_actions_refuse_missing_fields_and_other_record_kinds() {
     let answered = call(
         client,
         "change",
-        json!({"action":"answer","target":"question_shared","data":{"answer":"Yes."}}),
+        json!({"action":"answer","target":"question_shared","answer":"Yes."}),
     )
     .await;
     assert_ne!(answered.is_error, Some(true), "{answered:?}");
@@ -178,19 +175,19 @@ async fn record_actions_refuse_missing_fields_and_other_record_kinds() {
             ("action", "invalid_value"),
         ),
         (
-            json!({"action":"answer","data":{"answer":"Yes."}}),
+            json!({"action":"answer","answer":"Yes."}),
             ("target", "required"),
         ),
         (
-            json!({"action":"answer","target":"question_shared","type":"source","data":{}}),
+            json!({"action":"answer","target":"question_shared","type":"source",}),
             ("type", "unknown_field"),
         ),
         (
-            json!({"action":"answer","target":"req_shared","data":{"answer":"Yes."}}),
+            json!({"action":"answer","target":"req_shared","answer":"Yes."}),
             ("target", "invalid_value"),
         ),
         (
-            json!({"action":"create","target":"source_x","type":"invented","data":{}}),
+            json!({"action":"create","target":"source_x","type":"invented",}),
             ("type", "invalid_value"),
         ),
         (
@@ -211,7 +208,7 @@ async fn record_actions_refuse_missing_fields_and_other_record_kinds() {
     let answer = refused(
         client,
         "change",
-        json!({"action":"answer","target":"req_shared","data":{"answer":"Yes."}}),
+        json!({"action":"answer","target":"req_shared","answer":"Yes."}),
     )
     .await;
     assert_eq!(

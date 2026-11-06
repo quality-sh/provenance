@@ -13,7 +13,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{future::Future, pin::Pin};
 
-/// Input JSON schema for one named Discussion action.
+/// The input schema of one Discussion action. The `target` field names the record
+/// above the Discussion, or the Discussion itself; `discussion_request` puts it in the
+/// field of the port request.
 pub fn input_schema(action: Action) -> serde_json::Value {
     let schema = match action {
         Action::Discussions => schemars::schema_for!(ListInput),
@@ -22,7 +24,65 @@ pub fn input_schema(action: Action) -> serde_json::Value {
         Action::Reply => schemars::schema_for!(ReplyInput),
         _ => unreachable!("record actions use registered operation schemas"),
     };
-    serde_json::to_value(schema).expect("Discussion input schema is JSON")
+    let mut schema = serde_json::to_value(schema).expect("Discussion input schema is JSON");
+    let field = target_field(action);
+    let properties = schema["properties"]
+        .as_object_mut()
+        .expect("a Discussion input has properties");
+    properties.remove(field);
+    properties.insert(
+        "target".into(),
+        serde_json::json!({"type": "string", "minLength": 1, "description": target_doc(action)}),
+    );
+    if let Some(required) = schema["required"].as_array_mut() {
+        for name in required.iter_mut().filter(|name| *name == field) {
+            *name = "target".into();
+        }
+    }
+    remove_unused_definitions(&mut schema);
+    schema
+}
+
+const fn target_doc(action: Action) -> &'static str {
+    match action {
+        Action::Discussions => {
+            "List the Discussions under this record. Without it, the Discussions of the scope show."
+        }
+        Action::Discuss => "The record to start the Discussion under.",
+        _ => "The Discussion ID.",
+    }
+}
+
+/// Removes each definition that no other part of the schema refers to.
+fn remove_unused_definitions(schema: &mut Value) {
+    loop {
+        let Some(definitions) = schema.get("$defs").and_then(Value::as_object).cloned() else {
+            return;
+        };
+        let unused = definitions
+            .keys()
+            .filter(|name| {
+                let mut rest = schema.clone();
+                rest["$defs"]
+                    .as_object_mut()
+                    .expect("definitions")
+                    .remove(*name);
+                !rest.to_string().contains(&format!("\"#/$defs/{name}\""))
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        if unused.is_empty() {
+            return;
+        }
+        let object = schema.as_object_mut().expect("a schema is an object");
+        let held = object["$defs"].as_object_mut().expect("definitions");
+        for name in unused {
+            held.remove(&name);
+        }
+        if held.is_empty() {
+            object.remove("$defs");
+        }
+    }
 }
 
 /// The input of the MCP discussions tool: the two Discussion reads. The CLI word is
@@ -44,8 +104,9 @@ pub fn action_input_schema() -> serde_json::Value {
     action_input().schema()
 }
 
-/// The target field names the record parent or the independent Discussion ID.
-pub fn target_field(action: Action) -> &'static str {
+/// The field of the port request that the target fills: the record parent or the
+/// Discussion ID.
+const fn target_field(action: Action) -> &'static str {
     match action {
         Action::Discussions | Action::Discuss => "parent",
         Action::Discussion | Action::Reply => "discussion_id",
@@ -224,6 +285,32 @@ impl<P: DiscussionPort> crate::Porcelain<P> {
         Ok(DiscussionOutcome::Written {
             receipt: self.port.reply(input).await?,
         })
+    }
+}
+
+impl<P: crate::get::GetPort> crate::Porcelain<P> {
+    /// The port request of one Discussion action: the `target` field becomes the record
+    /// parent or the Discussion ID.
+    pub async fn discussion_request(
+        &self,
+        action: Action,
+        mut arguments: serde_json::Map<String, Value>,
+    ) -> Result<Value, ActionError> {
+        let target = match arguments.remove("target") {
+            None if action == Action::Discussions => None,
+            Some(Value::String(target)) if !target.is_empty() => Some(target),
+            _ => return Err(ActionError::InvalidOptions),
+        };
+        if let Some(target) = target {
+            let identity = if target_field(action) == "parent" {
+                serde_json::to_value(self.select_parent(&target).await?).expect("a parent is JSON")
+            } else {
+                let id = StableId::new(&target).map_err(|_| ActionError::InvalidOptions)?;
+                serde_json::to_value(id).expect("an ID is JSON")
+            };
+            arguments.insert(target_field(action).into(), identity);
+        }
+        Ok(Value::Object(arguments))
     }
 }
 

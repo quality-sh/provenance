@@ -223,6 +223,51 @@ async fn cli_flags_and_mcp_properties_come_from_one_field_list() {
     assert!(compared > 30, "only {compared} commands have a typed input");
 }
 
+/// Each record action and each Discussion action takes the same fields on the CLI and on
+/// MCP. The CLI shows a field as `--kebab-case`, and MCP as the `snake_case` property of
+/// the tool of the action. `--stdin` and each `--<field>-json` flag are the CLI way to
+/// give a whole JSON value; MCP arguments are JSON already.
+#[tokio::test]
+#[verifies("rule_shared_command_same_name_and_grammar", exhaustion)]
+async fn record_and_discussion_actions_take_the_same_fields() {
+    use provenance_porcelain::action::Action;
+    let (repo, _) = support::review_paths::init();
+    let tools = tools(repo.path()).await;
+    let cli_options = ["repo", "scope", "format", "quiet", "help", "stdin"];
+    let mut compared = 0;
+    for action in Action::RECORD.into_iter().chain(Action::DISCUSSION) {
+        let word = action.as_str();
+        let tool = if matches!(action, Action::Discussions | Action::Discussion) {
+            "discussions"
+        } else {
+            "change"
+        };
+        let target = if matches!(action, Action::Discussion | Action::Reply) {
+            "discussion_x"
+        } else {
+            "record_x"
+        };
+        let helps = if action == Action::Create {
+            provenance_contract::target_definitions(action)
+                .map(|(kind, _)| help(&[target, word, "--type", kind.as_str()]))
+                .collect::<Vec<_>>()
+        } else {
+            vec![help(&[target, word])]
+        };
+        let mut cli = helps
+            .iter()
+            .flat_map(|text| support::surface::flags(text))
+            .filter(|flag| !cli_options.contains(&flag.as_str()))
+            .map(|flag| flag.trim_end_matches("-json").replace('-', "_"))
+            .collect::<BTreeSet<_>>();
+        cli.insert("target".into());
+        let mcp = support::surface::action_properties(&tools[tool], word);
+        assert_eq!(cli, mcp, "{word}");
+        compared += 1;
+    }
+    assert_eq!(compared, 10);
+}
+
 /// How the help shows one field: a target field as a positional argument, and each
 /// other field as a flag.
 fn shown(declaration: &Declaration, field: &Field) -> String {

@@ -75,7 +75,7 @@ fn gated_host(repo: &Repository, open: bool) -> (StatementHost, Control) {
 fn discuss() -> serde_json::Value {
     json!({
         "action":"discuss",
-        "parent":{"node_type":"requirement","node_id":"req_shared"},
+        "target":"req_shared",
         "actor":"reviewer", "role":"user", "body":"Check the write."
     })
 }

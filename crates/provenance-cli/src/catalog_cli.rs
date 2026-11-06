@@ -3,12 +3,12 @@ use crate::invocation::{grammar, GlobalContext};
 use clap::{parser::ValueSource, ArgMatches, Command};
 use provenance_contract::TargetAction;
 use provenance_porcelain::action::Action;
+use provenance_transport::porcelain::ReplacementError;
 
 pub mod fields;
 mod help;
 mod input;
 mod input_guard;
-mod parent_replacement;
 pub mod refusal;
 mod statement_warning;
 
@@ -46,7 +46,7 @@ pub fn target_command() -> anyhow::Result<Command> {
         command,
         provenance_porcelain::action::Action::DISCUSSION
             .map(provenance_porcelain::discussion::input_schema),
-        &["parent", "discussion_id", "declared_by"],
+        &["target", "declared_by"],
     )
 }
 
@@ -95,31 +95,33 @@ pub async fn dispatch_target(
     }
     let writes_statement = statement_warning::has_statement(&data);
     let replacement = matches.get_one::<String>("replace_parent");
+    let guidance = |failure: &provenance_core::protocol::failure::ErasedFailure| {
+        failure_with_guidance(failure, &route.path, Some(&target), &context.repo)
+    };
     let result = if let Some(old) = replacement {
-        anyhow::ensure!(
-            action == Action::Update && route.kind == provenance_core::NodeType::Requirement,
-            "parent replacement requires a Requirement update"
-        );
-        parent_replacement::replace(
-            &host,
-            &route.path,
-            data,
-            headers,
-            (
-                old,
-                matches
-                    .get_one::<String>("with_parent")
-                    .expect("paired parent options"),
-            ),
-            |failure| failure_with_guidance(failure, &route.path, Some(&target), &context.repo),
-        )
-        .await
+        let parents = provenance_transport::porcelain::ParentReplacement {
+            replace_parent: old,
+            with_parent: matches
+                .get_one::<String>("with_parent")
+                .expect("paired parent options"),
+        };
+        match host.replace_parent(&route, data, headers, parents).await {
+            Ok(replaced) => {
+                if !replaced.changed {
+                    eprintln!(
+                        "{} replaced {} already; nothing changed",
+                        parents.with_parent, parents.replace_parent
+                    );
+                }
+                Ok(replaced.record)
+            }
+            Err(ReplacementError::Failure(failure)) => Err(guidance(&failure)),
+            Err(error) => Err(anyhow::Error::new(error)),
+        }
     } else {
         host.invoke_target(&route, data, headers)
             .await
-            .map_err(|failure| {
-                failure_with_guidance(&failure, &route.path, Some(&target), &context.repo)
-            })
+            .map_err(|failure| guidance(&failure))
     };
     let json = format == Some(provenance_cli::porcelain::OutputFormat::Json);
     let mut value = match result {

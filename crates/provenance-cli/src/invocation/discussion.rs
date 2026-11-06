@@ -23,17 +23,18 @@ pub async fn dispatch_root(
     anyhow::ensure!(args.action.is_none(), "get requires a Discussion ID");
     let action = Action::Discussions;
     let schema = discussion::input_schema(action);
-    let input = crate::catalog_cli::fields::schema_input(
-        &schema,
-        matches,
-        &["parent", "discussion_id"],
-        &[],
-    )
-    .unwrap_or_else(|error| crate::catalog_cli::usage_error(error));
+    let input = crate::catalog_cli::fields::schema_input(&schema, matches, &["target"], &[])
+        .unwrap_or_else(|error| crate::catalog_cli::usage_error(error));
     let host = provenance_cli::porcelain::local_host(&args.common.context().repo)?;
-    let service = host.porcelain().discussion();
-    let outcome = service
-        .execute_discussion(action, Value::Object(input))
+    let request = host
+        .porcelain()
+        .get()
+        .discussion_request(action, input)
+        .await?;
+    let outcome = host
+        .porcelain()
+        .discussion()
+        .execute_discussion(action, request)
         .await?;
     print(&outcome, args.common.format())
 }
@@ -44,32 +45,27 @@ pub async fn dispatch_target(
     matches: &clap::ArgMatches,
 ) -> anyhow::Result<()> {
     let schema = discussion::input_schema(action);
-    let mut input = crate::catalog_cli::fields::schema_input(
-        &schema,
-        matches,
-        &["parent", "discussion_id"],
-        &["limit"],
-    )
-    .unwrap_or_else(|error| crate::catalog_cli::usage_error(error));
+    let mut input =
+        crate::catalog_cli::fields::schema_input(&schema, matches, &["target"], &["limit"])
+            .unwrap_or_else(|error| crate::catalog_cli::usage_error(error));
     let target = StableId::new(args.target)?;
-    let host = provenance_cli::porcelain::local_host(&args.common.context().repo)?;
-    let service = host.porcelain().discussion();
-    let target_field = discussion::target_field(action);
-    let identity = if target_field == "parent" {
-        let resolver = host.porcelain().get();
-        serde_json::to_value(resolver.select_parent(target.as_str()).await?)?
-    } else {
-        json!(target)
-    };
-    input.insert(target_field.into(), identity);
+    input.insert("target".into(), json!(target));
     for (field, value) in [("actor", "cli"), ("role", "user")] {
         if schema["properties"].get(field).is_some() {
             input.entry(field).or_insert_with(|| json!(value));
         }
     }
+    let host = provenance_cli::porcelain::local_host(&args.common.context().repo)?;
+    let request = host
+        .porcelain()
+        .get()
+        .discussion_request(action, input.clone())
+        .await?;
     ensure_required_flags(&schema, action, &input);
-    let outcome = service
-        .execute_discussion(action, Value::Object(input))
+    let outcome = host
+        .porcelain()
+        .discussion()
+        .execute_discussion(action, request)
         .await?;
     print(&outcome, args.common.format())
 }

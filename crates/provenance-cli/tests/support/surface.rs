@@ -90,3 +90,36 @@ pub async fn tools(repo: &std::path::Path) -> BTreeMap<String, Value> {
     server.await.unwrap().cancel().await.unwrap();
     tools
 }
+
+/// The long flag names in one help text, without the leading hyphens.
+pub fn flags(help: &str) -> std::collections::BTreeSet<String> {
+    help.lines()
+        .filter_map(|line| {
+            let line = line.trim_start().trim_start_matches("-h, ");
+            let name = line.strip_prefix("--")?;
+            Some(name.split([' ', '\t']).next().unwrap_or(name).to_owned())
+        })
+        .collect()
+}
+
+/// The properties of one listed tool that one action of the tool takes. Each property
+/// description ends with the actions that take the property.
+pub fn action_properties(tool: &Value, action: &str) -> std::collections::BTreeSet<String> {
+    tool["inputSchema"]["properties"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .filter(|(_, property)| {
+            property["description"]
+                .as_str()
+                .and_then(|text| text.rsplit_once("Actions: "))
+                .is_some_and(|(_, actions)| {
+                    actions
+                        .trim_end_matches('.')
+                        .split(", ")
+                        .any(|name| name == action)
+                })
+        })
+        .map(|(name, _)| name.clone())
+        .collect()
+}

@@ -5,12 +5,14 @@ pub(crate) mod authoring;
 mod discussion_port;
 mod get_port;
 mod host;
+mod parent_replacement;
 mod search_port;
 pub use api_port::HostApiPort;
 pub use authoring::{target_call, Action, ActionError, TargetRoute};
 pub use discussion_port::HostDiscussionPort;
 pub use get_port::HostGetPort;
 pub use host::HostPorcelain;
+pub use parent_replacement::{ParentReplacement, Replaced, ReplacementError};
 pub use search_port::HostSearchPort;
 
 use provenance_contract::Definition;
