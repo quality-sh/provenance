@@ -374,11 +374,15 @@ impl ServerInput {
     #[allow(clippy::redundant_pub_crate)]
     pub(super) fn from_matches(server: Server, matches: &clap::ArgMatches) -> anyhow::Result<Self> {
         let declaration = server.declaration();
-        let input = |matches| crate::registry_cli::input(&declaration, matches);
+        macro_rules! read {
+            ($variant:ident) => {
+                Self::$variant(crate::registry_cli::input(&declaration, matches)?)
+            };
+        }
         Ok(match server {
-            Server::DocsServe => Self::DocsServe(input(matches)?),
-            Server::Review => Self::Review(input(matches)?),
-            Server::Mcp => Self::Mcp(input(matches)?),
+            Server::DocsServe => read!(DocsServe),
+            Server::Review => read!(Review),
+            Server::Mcp => read!(Mcp),
         })
     }
 }
