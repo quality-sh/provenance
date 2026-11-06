@@ -1,0 +1,14 @@
+Build a report envelope from a real repository at a named base and head
+
+Usage: provenance report build [OPTIONS] --base <BASE> --head <HEAD> --repository <REPOSITORY>
+
+Options:
+      --quiet                    Drop the advisory notes commands print alongside their output, such as the warning that this repository has no shaping skills installed
+      --repo <REPO>              [default: .]
+      --base <BASE>              Older endpoint of the comparison range
+      --head <HEAD>              Newer endpoint of the comparison range
+      --repository <REPOSITORY>  Repository identity in `owner/name` form for report links
+      --scope <SCOPE>            [default: default]
+      --path <PATH>              Scan this path instead of the repository root; a partial scan is recorded as incomplete
+      --output <OUTPUT>          Write the envelope JSON to this file instead of standard output
+  -h, --help                     Print help

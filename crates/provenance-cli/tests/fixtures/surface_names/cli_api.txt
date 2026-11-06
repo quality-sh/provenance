@@ -1,0 +1,20 @@
+Call one public API path with an optional method, query, headers, and JSON body. The body is the data object, without the HTTP {"data": ...} wrapper. Omit the path to list the catalog routes with their methods, inputs, and response schemas.
+
+Usage: provenance [OPTIONS] <COMMAND> [PATH]
+
+Arguments:
+  <COMMAND>  [possible values: api]
+  [PATH]     
+
+Options:
+      --repo <REPO>      [default: .]
+      --scope <SCOPE>    [default: default]
+      --format <FORMAT>  [possible values: json]
+      --quiet            
+      --method <METHOD>  
+      --input <INPUT>    Read the JSON body from this file, or from standard input with "-". The body is the data object, without the HTTP {"data": ...} wrapper
+      --header <HEADER>  
+      --query <QUERY>    
+      --filter <FILTER>  Show only catalog routes whose method, path, or description contains this text
+      --limit <LIMIT>    Show at most this many catalog routes. The default is 50
+  -h, --help             Print help

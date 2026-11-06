@@ -1,0 +1,13 @@
+Usage: provenance merge-jsonl [OPTIONS] <BASE> <OURS> <THEIRS>
+
+Arguments:
+  <BASE>    
+  <OURS>    
+  <THEIRS>  
+
+Options:
+      --output <OUTPUT>  
+      --quiet            Drop the advisory notes commands print alongside their output, such as the warning that this repository has no shaping skills installed
+      --path <PATH>      Repository path the merged result belongs at. Git merge drivers get three temporary files, so this is how the merge learns which record type the file holds and which write-time checks to re-apply
+      --format <FORMAT>  [default: json] [possible values: json]
+  -h, --help             Print help

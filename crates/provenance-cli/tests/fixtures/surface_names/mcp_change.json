@@ -1,0 +1,125 @@
+{
+  "$defs": {
+    "MessageRole": {
+      "enum": [
+        "user",
+        "assistant",
+        "system"
+      ],
+      "type": "string"
+    },
+    "NodeType": {
+      "enum": [
+        "source",
+        "requirement",
+        "resolution",
+        "rule",
+        "topic",
+        "question",
+        "domain",
+        "boundary"
+      ],
+      "type": "string"
+    },
+    "StableId": {
+      "description": "A record ID: lowercase ASCII letters, digits, underscores, and hyphens.",
+      "pattern": "^[a-z0-9_-]+$",
+      "type": "string"
+    },
+    "ThreadParent": {
+      "properties": {
+        "node_id": {
+          "$ref": "#/$defs/StableId"
+        },
+        "node_type": {
+          "$ref": "#/$defs/NodeType"
+        }
+      },
+      "required": [
+        "node_type",
+        "node_id"
+      ],
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "action": {
+      "enum": [
+        "create",
+        "update",
+        "answer",
+        "claim",
+        "release",
+        "submit",
+        "discuss",
+        "reply"
+      ],
+      "type": "string"
+    },
+    "actor": {
+      "description": "Actions: discuss, reply.",
+      "type": "string"
+    },
+    "body": {
+      "description": "Actions: discuss, reply.",
+      "type": "string"
+    },
+    "data": {
+      "description": "The record fields. Omit data to get their schema for the action and record kind. Actions: create, update, answer, claim, release, submit.",
+      "type": "object"
+    },
+    "declared_by": {
+      "description": "Actions: discuss, reply.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "discussion_id": {
+      "$ref": "#/$defs/StableId",
+      "description": "Actions: reply."
+    },
+    "expected_version": {
+      "description": "Actions: reply.",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "if_match": {
+      "description": "Actions: update.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "parent": {
+      "$ref": "#/$defs/ThreadParent",
+      "description": "Actions: discuss."
+    },
+    "role": {
+      "$ref": "#/$defs/MessageRole",
+      "description": "Actions: discuss, reply."
+    },
+    "target": {
+      "description": "The record ID. Actions: create, update, answer, claim, release, submit.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "type": {
+      "description": "The record kind. Actions: create.",
+      "enum": [
+        "source",
+        "requirement",
+        "resolution",
+        "rule",
+        "domain",
+        "boundary",
+        "topic",
+        "question"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "action"
+  ],
+  "type": "object"
+}

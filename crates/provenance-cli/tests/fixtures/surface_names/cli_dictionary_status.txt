@@ -1,0 +1,9 @@
+Report the committed dictionary reference and the analyzer it selects
+
+Usage: provenance dictionary status [OPTIONS]
+
+Options:
+      --quiet            Drop the advisory notes commands print alongside their output, such as the warning that this repository has no shaping skills installed
+      --repo <REPO>      [default: .]
+      --format <FORMAT>  [default: json] [possible values: json]
+  -h, --help             Print help

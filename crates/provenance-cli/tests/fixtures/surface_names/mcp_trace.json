@@ -1,0 +1,54 @@
+{
+  "$defs": {
+    "NodeType": {
+      "enum": [
+        "source",
+        "requirement",
+        "resolution",
+        "rule",
+        "topic",
+        "question",
+        "domain",
+        "boundary"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "One trace request: the records above the target, up to its Sources.",
+  "properties": {
+    "limit": {
+      "default": null,
+      "minimum": 1,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "max_depth": {
+      "default": null,
+      "minimum": 1,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "returned_kinds": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/NodeType"
+      },
+      "type": "array"
+    },
+    "target": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "target"
+  ],
+  "title": "TraceInput",
+  "type": "object"
+}

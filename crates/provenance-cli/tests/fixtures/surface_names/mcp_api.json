@@ -1,0 +1,59 @@
+{
+  "$defs": {
+    "ApiMethod": {
+      "description": "One HTTP method a public route supports.",
+      "enum": [
+        "get",
+        "post",
+        "patch"
+      ],
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The structured arguments one api call accepts on every surface.",
+  "properties": {
+    "body": {
+      "additionalProperties": true,
+      "default": null,
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "headers": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "type": "object"
+    },
+    "method": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ApiMethod"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "path": {
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "query": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "type": "object"
+    }
+  },
+  "title": "ApiArguments",
+  "type": "object"
+}

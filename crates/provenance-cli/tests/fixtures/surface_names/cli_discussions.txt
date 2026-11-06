@@ -1,0 +1,19 @@
+List addressed Discussions in a scope or under a record. On MCP, the action argument also reads one Discussion (discussion), and the change tool starts one (discuss) or replies to one (reply).
+
+Usage: provenance [OPTIONS] [TARGET] [ACTION]
+
+Arguments:
+  [TARGET]  
+  [ACTION]  [possible values: get, trace, create, update, answer, claim, release, submit, discussions, discussion, discuss, reply]
+
+Options:
+      --repo <REPO>      [default: .]
+      --scope <SCOPE>    [default: default]
+      --format <FORMAT>  [possible values: json]
+      --quiet            
+      --limit <LIMIT>    
+      --stdin            
+      --status <status>  
+      --cursor <cursor>  
+  -h, --help             Print help
+

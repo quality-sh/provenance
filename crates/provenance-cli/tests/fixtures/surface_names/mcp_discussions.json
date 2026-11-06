@@ -1,0 +1,95 @@
+{
+  "$defs": {
+    "DiscussionStatusFilter": {
+      "description": "The status selection for an addressed Discussion list.",
+      "enum": [
+        "active",
+        "resolved",
+        "all"
+      ],
+      "type": "string"
+    },
+    "NodeType": {
+      "enum": [
+        "source",
+        "requirement",
+        "resolution",
+        "rule",
+        "topic",
+        "question",
+        "domain",
+        "boundary"
+      ],
+      "type": "string"
+    },
+    "StableId": {
+      "description": "A record ID: lowercase ASCII letters, digits, underscores, and hyphens.",
+      "pattern": "^[a-z0-9_-]+$",
+      "type": "string"
+    },
+    "ThreadParent": {
+      "properties": {
+        "node_id": {
+          "$ref": "#/$defs/StableId"
+        },
+        "node_type": {
+          "$ref": "#/$defs/NodeType"
+        }
+      },
+      "required": [
+        "node_type",
+        "node_id"
+      ],
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "action": {
+      "default": "discussions",
+      "enum": [
+        "discussions",
+        "discussion"
+      ],
+      "type": "string"
+    },
+    "cursor": {
+      "description": "Actions: discussions, discussion.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "discussion_id": {
+      "$ref": "#/$defs/StableId",
+      "description": "Actions: discussion."
+    },
+    "limit": {
+      "description": "Actions: discussions, discussion.",
+      "maximum": 200,
+      "minimum": 1,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "parent": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ThreadParent"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Actions: discussions."
+    },
+    "status": {
+      "$ref": "#/$defs/DiscussionStatusFilter",
+      "default": "active",
+      "description": "Actions: discussions."
+    }
+  },
+  "required": [],
+  "type": "object"
+}

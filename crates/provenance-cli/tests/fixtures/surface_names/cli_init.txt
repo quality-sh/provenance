@@ -1,0 +1,19 @@
+Usage: provenance init [OPTIONS]
+
+Options:
+      --path <PATH>
+          [default: .]
+      --quiet
+          Drop the advisory notes commands print alongside their output, such as the warning that this repository has no shaping skills installed
+      --scope <SCOPE>
+          
+      --path-prefix <PATH_PREFIX>
+          
+      --disposition-actor-id <DISPOSITION_ACTOR_ID>
+          Repository-local actor ID allowed to attest proposal dispositions. Repeat for multiple actors. On re-init, omission preserves the allowlist
+      --clear-disposition-actors
+          Empty the repository-local disposition actor allowlist
+      --ste-pdf <STE_PDF>
+          Import this local Issue 9 dictionary PDF instead of downloading the official asset
+  -h, --help
+          Print help

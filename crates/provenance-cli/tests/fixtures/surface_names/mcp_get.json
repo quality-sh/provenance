@@ -1,0 +1,69 @@
+{
+  "$defs": {
+    "NodeType": {
+      "enum": [
+        "source",
+        "requirement",
+        "resolution",
+        "rule",
+        "topic",
+        "question",
+        "domain",
+        "boundary"
+      ],
+      "type": "string"
+    },
+    "View": {
+      "description": "The named view selected for a known record.",
+      "enum": [
+        "record",
+        "children",
+        "trace",
+        "impact",
+        "review"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "One semantic known-record request.",
+  "properties": {
+    "limit": {
+      "default": null,
+      "minimum": 1,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "max_depth": {
+      "default": null,
+      "minimum": 1,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "returned_kinds": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/NodeType"
+      },
+      "type": "array"
+    },
+    "target": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "view": {
+      "$ref": "#/$defs/View",
+      "default": "record"
+    }
+  },
+  "required": [
+    "target"
+  ],
+  "title": "GetInput",
+  "type": "object"
+}

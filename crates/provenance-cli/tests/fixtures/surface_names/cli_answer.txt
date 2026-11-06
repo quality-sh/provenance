@@ -1,0 +1,20 @@
+Answer the target Question.
+
+Usage: provenance [OPTIONS] <TARGET> [ACTION]
+
+Arguments:
+  <TARGET>  
+  [ACTION]  [possible values: get, trace, create, update, answer, claim, release, submit, discussions, discussion, discuss, reply]
+
+Options:
+      --repo <REPO>                              [default: .]
+      --scope <SCOPE>                            [default: default]
+      --format <FORMAT>                          [possible values: json]
+      --quiet                                    
+      --stdin                                    
+      --resolution-id <resolution-id>            
+      --answer <answer>                          
+      --answer-json <answer-json>                
+      --resolution-id-json <resolution-id-json>  
+  -h, --help                                     Print help
+

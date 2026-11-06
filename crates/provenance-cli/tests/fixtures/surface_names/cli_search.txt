@@ -1,0 +1,21 @@
+Find records across the permitted kinds in the bound scope, or the Rules bound to a source file and symbol.
+
+Usage: provenance [OPTIONS] <COMMAND>
+
+Arguments:
+  <COMMAND>  [possible values: search]
+
+Options:
+      --repo <REPO>       [default: .]
+      --scope <SCOPE>     [default: default]
+      --format <FORMAT>   [possible values: json]
+      --quiet             
+      --text <TEXT>       
+      --cursor <CURSOR>   
+      --kind <KIND>       
+      --limit <LIMIT>     
+      --include-terminal  Include archived and other terminal records
+      --file <FILE>       Return the Rules bound in this repository-relative source file
+      --symbol <SYMBOL>   Put the Rules bound to this symbol first; needs --file
+      --line <LINE>       Put the Rules bound at this line first; needs --file
+  -h, --help              Print help

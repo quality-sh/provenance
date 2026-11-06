@@ -1,0 +1,20 @@
+Start a Discussion under the target record.
+
+Usage: provenance [OPTIONS] --body <body> [TARGET] [ACTION]
+
+Arguments:
+  [TARGET]  
+  [ACTION]  [possible values: get, trace, create, update, answer, claim, release, submit, discussions, discussion, discuss, reply]
+
+Options:
+      --repo <REPO>                [default: .]
+      --scope <SCOPE>              [default: default]
+      --format <FORMAT>            [possible values: json]
+      --quiet                      
+      --stdin                      
+      --actor <actor>              
+      --declared-by <declared-by>  
+      --body <body>                
+      --role <role>                
+  -h, --help                       Print help
+

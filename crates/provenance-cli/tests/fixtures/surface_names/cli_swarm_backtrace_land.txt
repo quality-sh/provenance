@@ -1,0 +1,10 @@
+Usage: provenance swarm-backtrace land [OPTIONS] --run-dir <RUN_DIR>
+
+Options:
+      --quiet              Drop the advisory notes commands print alongside their output, such as the warning that this repository has no shaping skills installed
+      --repo <REPO>        [default: .]
+      --scope <SCOPE>      [default: default]
+      --run-dir <RUN_DIR>  
+      --replace            
+      --format <FORMAT>    [default: json] [possible values: json]
+  -h, --help               Print help

@@ -1,0 +1,282 @@
+Read the records above this record, up to its Sources. The get trace view gives the same records.
+
+Usage: provenance [OPTIONS] <TARGET> [ACTION]
+
+Arguments:
+  <TARGET>  
+  [ACTION]  [possible values: get, trace, create, update, answer, claim, release, submit, discussions, discussion, discuss, reply]
+
+Options:
+      --repo <REPO>
+          [default: .]
+      --scope <SCOPE>
+          [default: default]
+      --format <FORMAT>
+          [possible values: json]
+      --quiet
+          
+      --view <VIEW>
+          [possible values: record, children, trace, impact, review]
+      --depth <DEPTH>
+          
+      --kind <KIND>
+          
+      --limit <LIMIT>
+          
+      --follow
+          Stream the current review document and pushed changes as JSON lines.
+      --review-link
+          Print a link to this record in the running review host.
+      --notify <NOTIFY>
+          Queue review changes into a Codex thread, or end that registration with off. [possible values: codex, off]
+      --thread <THREAD>
+          The Codex thread UUID for --notify. The default is CODEX_THREAD_ID.
+      --no-open
+          Print the review link and do not open it in a browser.
+      --type <RECORD_TYPE>
+          
+      --stdin
+          
+      --replace-parent <REPLACE_PARENT>
+          Replace this Requirement parent and preserve its other parents
+      --with-parent <WITH_PARENT>
+          Add this parent before the selected parent is removed
+      --commit-pin <commit-pin>
+          
+      --effective-date <effective-date>
+          
+      --id <id>
+          
+      --name <name>
+          
+      --origin-message <origin-message>
+          
+      --origin-thread <origin-thread>
+          
+      --reference <reference>
+          
+      --review-date <review-date>
+          
+      --source-type <source-type>
+          
+      --supersedes <supersedes>
+          
+      --url <url>
+          
+      --actor <actor>
+          
+      --depends-on <depends-on>
+          
+      --description <description>
+          
+      --domain-id <domain-id>
+          
+      --origin <origin>
+          
+      --refines <refines>
+          
+      --spawned-by <spawned-by>
+          
+      --statement <statement>
+          
+      --status <status>
+          
+      --approved-at <approved-at>
+          
+      --approved-by <approved-by>
+          
+      --confidence <confidence>
+          
+      --context <context>
+          
+      --enforcement <enforcement>
+          
+      --inputs <inputs>
+          
+      --made-by <made-by>
+          
+      --position <position>
+          
+      --rationale <rationale>
+          
+      --requirement-ids <requirement-ids>
+          
+      --title <title>
+          
+      --requirement-id <requirement-id>
+          
+      --archived-in-commit <archived-in-commit>
+          
+      --resolution-ids <resolution-ids>
+          
+      --severity <severity>
+          
+      --source-document <source-document>
+          
+      --source-section <source-section>
+          
+      --resolution-id <resolution-id>
+          
+      --color <color>
+          
+      --source-ref <source-ref>
+          
+      --links <links>
+          
+      --answer <answer>
+          
+      --contradicts <contradicts>
+          
+      --question <question>
+          
+      --resolution-method <resolution-method>
+          
+      --topic-id <topic-id>
+          
+      --method <method>
+          
+      --if-match <if-match>
+          
+      --declared-by <declared-by>
+          
+      --fog <fog>
+          
+      --relationships <relationships>
+          
+      --review-on <review-on>
+          
+      --builds-on <builds-on>
+          
+      --evidence-references <evidence-references>
+          
+      --expected-revision <expected-revision>
+          
+      --revises <revises>
+          
+      --source-ids <source-ids>
+          
+      --summary <summary>
+          
+      --actor-json <actor-json>
+          
+      --answer-json <answer-json>
+          
+      --approved-at-json <approved-at-json>
+          
+      --approved-by-json <approved-by-json>
+          
+      --archived-in-commit-json <archived-in-commit-json>
+          
+      --builds-on-json <builds-on-json>
+          
+      --color-json <color-json>
+          
+      --commit-pin-json <commit-pin-json>
+          
+      --confidence-json <confidence-json>
+          
+      --context-json <context-json>
+          
+      --contradicts-json <contradicts-json>
+          
+      --declared-by-json <declared-by-json>
+          
+      --depends-on-json <depends-on-json>
+          
+      --description-json <description-json>
+          
+      --domain-id-json <domain-id-json>
+          
+      --effective-date-json <effective-date-json>
+          
+      --enforcement-json <enforcement-json>
+          
+      --evidence-references-json <evidence-references-json>
+          
+      --expected-revision-json <expected-revision-json>
+          
+      --fog-json <fog-json>
+          
+      --id-json <id-json>
+          
+      --inputs-json <inputs-json>
+          
+      --links-json <links-json>
+          
+      --made-by-json <made-by-json>
+          
+      --name-json <name-json>
+          
+      --origin-json <origin-json>
+          
+      --origin-message-json <origin-message-json>
+          
+      --origin-thread-json <origin-thread-json>
+          
+      --position-json <position-json>
+          
+      --question-json <question-json>
+          
+      --rationale-json <rationale-json>
+          
+      --reference-json <reference-json>
+          
+      --refines-json <refines-json>
+          
+      --relationships-json <relationships-json>
+          
+      --requirement-id-json <requirement-id-json>
+          
+      --requirement-ids-json <requirement-ids-json>
+          
+      --resolution-id-json <resolution-id-json>
+          
+      --resolution-ids-json <resolution-ids-json>
+          
+      --resolution-method-json <resolution-method-json>
+          
+      --review-date-json <review-date-json>
+          
+      --review-on-json <review-on-json>
+          
+      --revises-json <revises-json>
+          
+      --severity-json <severity-json>
+          
+      --source-document-json <source-document-json>
+          
+      --source-ids-json <source-ids-json>
+          
+      --source-ref-json <source-ref-json>
+          
+      --source-section-json <source-section-json>
+          
+      --source-type-json <source-type-json>
+          
+      --spawned-by-json <spawned-by-json>
+          
+      --statement-json <statement-json>
+          
+      --status-json <status-json>
+          
+      --summary-json <summary-json>
+          
+      --supersedes-json <supersedes-json>
+          
+      --title-json <title-json>
+          
+      --topic-id-json <topic-id-json>
+          
+      --url-json <url-json>
+          
+      --cursor <cursor>
+          
+      --body <body>
+          
+      --role <role>
+          
+      --expected-version <expected-version>
+          
+  -h, --help
+          Print help
+

@@ -1,0 +1,18 @@
+Claim the target Topic.
+
+Usage: provenance [OPTIONS] <TARGET> [ACTION]
+
+Arguments:
+  <TARGET>  
+  [ACTION]  [possible values: get, trace, create, update, answer, claim, release, submit, discussions, discussion, discuss, reply]
+
+Options:
+      --repo <REPO>              [default: .]
+      --scope <SCOPE>            [default: default]
+      --format <FORMAT>          [possible values: json]
+      --quiet                    
+      --stdin                    
+      --actor <actor>            
+      --actor-json <actor-json>  
+  -h, --help                     Print help
+

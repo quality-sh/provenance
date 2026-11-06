@@ -1,0 +1,9 @@
+Export the canonical graph reconstructed from the pinned Git revision
+
+Usage: provenance graph-reference exact-export [OPTIONS] --reference <REFERENCE>
+
+Options:
+      --quiet                  Drop the advisory notes commands print alongside their output, such as the warning that this repository has no shaping skills installed
+      --repo <REPO>            [default: .]
+      --reference <REFERENCE>  
+  -h, --help                   Print help

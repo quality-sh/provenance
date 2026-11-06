@@ -1,0 +1,50 @@
+{
+  "$defs": {
+    "Category": {
+      "description": "A distinct repository check category.",
+      "oneOf": [
+        {
+          "enum": [
+            "graph",
+            "statements",
+            "bindings"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "gaps",
+          "description": "The unfinished parts of the graph and the Rules without a Source. It runs only\nwhen the caller selects it, and its findings never refuse the command.",
+          "type": "string"
+        },
+        {
+          "const": "docs",
+          "description": "The Markdown links of the docs site that name a page the site does not publish.\nIt runs only when the caller selects it.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The categories to check, and a statement to check in place of the committed statements.",
+  "properties": {
+    "categories": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Category"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "statement": {
+      "default": null,
+      "description": "Check this statement instead of the committed statements.",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "title": "CheckInput",
+  "type": "object"
+}

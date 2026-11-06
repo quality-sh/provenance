@@ -1,0 +1,90 @@
+{
+  "$defs": {
+    "NodeType": {
+      "enum": [
+        "source",
+        "requirement",
+        "resolution",
+        "rule",
+        "topic",
+        "question",
+        "domain",
+        "boundary"
+      ],
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The one search request read by the CLI flags and the MCP tool.",
+  "properties": {
+    "cursor": {
+      "default": null,
+      "description": "The continuation from an earlier page of the same search.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "exclude_terminal": {
+      "default": null,
+      "description": "Omit terminal records. A text search sets true when omitted; a file search\nreturns every bound Rule and refuses true.",
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "file": {
+      "default": null,
+      "description": "A repository-relative source file. Returns the Rules bound in that file.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "limit": {
+      "default": null,
+      "description": "The page size.",
+      "maximum": 200,
+      "minimum": 1,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "line": {
+      "default": null,
+      "description": "A line in the file. Rules bound at that line come first.",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "node_types": {
+      "default": [],
+      "description": "Record kinds to return.",
+      "items": {
+        "$ref": "#/$defs/NodeType"
+      },
+      "type": "array"
+    },
+    "symbol": {
+      "default": null,
+      "description": "A symbol in the file. Rules bound to that symbol come first.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "text": {
+      "default": null,
+      "description": "Text to find in record ids and text.",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "title": "SearchInput",
+  "type": "object"
+}

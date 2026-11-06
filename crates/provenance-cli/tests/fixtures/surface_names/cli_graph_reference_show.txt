@@ -1,0 +1,9 @@
+Show metadata and graph-family counts from a pinned reference
+
+Usage: provenance graph-reference show [OPTIONS] --reference <REFERENCE>
+
+Options:
+      --quiet                  Drop the advisory notes commands print alongside their output, such as the warning that this repository has no shaping skills installed
+      --repo <REPO>            [default: .]
+      --reference <REFERENCE>  
+  -h, --help                   Print help

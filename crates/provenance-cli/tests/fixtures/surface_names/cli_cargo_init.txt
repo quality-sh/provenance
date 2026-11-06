@@ -1,0 +1,7 @@
+Usage: provenance __cargo-init [OPTIONS]
+
+Options:
+      --package <PACKAGE>  
+      --quiet              Drop the advisory notes commands print alongside their output, such as the warning that this repository has no shaping skills installed
+      --ste-pdf <STE_PDF>  Import this local Issue 9 dictionary PDF instead of downloading the official asset
+  -h, --help               Print help
