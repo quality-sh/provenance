@@ -271,3 +271,28 @@ fn commit_all(temp: &tempfile::TempDir, message: &str) -> String {
     git(temp, &["commit", "-q", "-m", message]);
     git(temp, &["rev-parse", "HEAD"])
 }
+
+#[tokio::test]
+#[verifies("rule_record_history_reads_git", examples)]
+async fn history_reads_of_two_repositories_list_the_commits_of_each() {
+    let (first, _first_store) = fixture();
+    let first_created = commit_state(&first, "Create");
+    let (second, second_store) = fixture();
+    let second_created = commit_state(&second, "Create");
+    second_store
+        .save_requirement(save(
+            &second_store,
+            json!({"statement":"The system stores records for one year."}),
+        ))
+        .unwrap();
+    let second_changed = commit_state(&second, "Change");
+
+    for _ in 0..2 {
+        let ids = versions(&first).await;
+        let ids = ids.iter().map(|v| v.id.as_str()).collect::<Vec<_>>();
+        assert_eq!(ids, [first_created.as_str()]);
+        let ids = versions(&second).await;
+        let ids = ids.iter().map(|v| v.id.as_str()).collect::<Vec<_>>();
+        assert_eq!(ids, [second_created.as_str(), second_changed.as_str()]);
+    }
+}
