@@ -11,5 +11,5 @@ fn cli_questions_create_help_includes_sizing_guidance() {
         .stdout(contains(
             "A question should be resolvable in one agent session",
         ))
-        .stdout(contains("otherwise it is fog or needs decomposition"));
+        .stdout(contains("otherwise split it into smaller Questions"));
 }
