@@ -156,7 +156,7 @@ fn binding_check_reads_a_scope_published_after_the_code_scan() {
         std::fs::write(
             rules,
             concat!(
-                r#"{"schema_version":2,"scope_id":"second","id":"rule_second","statement":"The system keeps the record.","status":"active","severity":"medium","requirement_ids":[]}"#,
+                r#"{"scope_id":"second","id":"rule_second","statement":"The system keeps the record.","status":"active","severity":"medium","requirement_ids":[]}"#,
                 "\n"
             ),
         )?;
@@ -253,7 +253,6 @@ async fn scoped_graph_check_ignores_archive_commits_in_other_scopes() {
     )
     .unwrap();
     let rule = serde_json::json!({
-        "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "beta",
         "id": "rule_beta",
         "requirement_id": "req_beta",

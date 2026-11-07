@@ -81,10 +81,10 @@ fn write_dependent_records(base: &std::path::Path, removed: &str, retained: &str
         base.join("resolutions/res.jsonl"),
         format!(
             "{}\n{}\n",
-            json!({"schema_version": 2,"scope_id":"default","id":"res_shared",
+            json!({"scope_id":"default","id":"res_shared",
             "title":"Shared decision","position":"Expire sessions","rationale":"Limit access",
             "status":"draft","requirement_ids":[removed,retained],"review_on":null}),
-            json!({"schema_version": 2,"scope_id":"default","id":"res_removed",
+            json!({"scope_id":"default","id":"res_removed",
             "title":"Removed decision","position":"Expire links","rationale":"Limit access",
             "status":"draft","requirement_ids":[removed],"review_on":null})
         ),
@@ -95,10 +95,10 @@ fn write_dependent_records(base: &std::path::Path, removed: &str, retained: &str
         base.join("topics/topic.jsonl"),
         format!(
             "{}\n{}\n",
-            json!({"schema_version": 2,"scope_id":"default","id":"topic_removed",
+            json!({"scope_id":"default","id":"topic_removed",
             "requirement_id":removed,"title":"Removed topic","status":"open",
             "links":[]}),
-            json!({"schema_version": 2,"scope_id":"default","id":"topic_retained",
+            json!({"scope_id":"default","id":"topic_retained",
             "requirement_id":retained,"title":"Retained topic","status":"open",
             "links":[
                 {"target_type":"requirement","target_id":removed},
@@ -113,13 +113,13 @@ fn write_dependent_records(base: &std::path::Path, removed: &str, retained: &str
         base.join("questions/question.jsonl"),
         format!(
             "{}\n{}\n{}\n",
-            json!({"schema_version": 2,"scope_id":"default","id":"question_removed",
+            json!({"scope_id":"default","id":"question_removed",
             "topic_id":"topic_retained","requirement_id":removed,
             "question":"Removed?","resolution_method":"research","status":"open"}),
-            json!({"schema_version": 2,"scope_id":"default","id":"question_topic_removed",
+            json!({"scope_id":"default","id":"question_topic_removed",
             "topic_id":"topic_removed","requirement_id":retained,
             "question":"Also removed?","resolution_method":"research","status":"open"}),
-            json!({"schema_version": 2,"scope_id":"default","id":"question_retained",
+            json!({"scope_id":"default","id":"question_retained",
             "topic_id":"topic_retained","requirement_id":retained,
             "question":"Retained?","resolution_method":"research","status":"open",
             "contradicts":removed,"resolution_id":"res_removed","links":[
@@ -145,7 +145,7 @@ fn a_disposition_refuses_canonical_deletion_before_any_shard_write() {
         base.join("ideation/dispositions.jsonl"),
         format!(
             "{}\n",
-            json!({"schema_version": 2,"scope_id":"default","id":"disposition_keep",
+            json!({"scope_id":"default","id":"disposition_keep",
             "proposal_id":"proposal_keep","decision":"rejected","rationale":"Keep it",
             "actor":{"identity_type":"human","id":"reviewer"},
             "canonical_artifact":{"artifact_type":"requirement","artifact_id":requirement}})

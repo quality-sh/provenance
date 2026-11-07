@@ -62,7 +62,6 @@ fn seed_external_metadata(store: &StateStore, scope: &ScopeId) {
 
 fn adoption_input() -> TypedSpecInput {
     TypedSpecInput {
-        schema_version: SUPPORTED_SCHEMA_VERSION.0,
         spec: "migration".to_string(),
         declared_by: OWNER.to_string(),
         adopt_unowned: vec![

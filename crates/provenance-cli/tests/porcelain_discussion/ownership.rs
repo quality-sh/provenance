@@ -19,7 +19,7 @@ fn repo_with_owned_requirement() -> tempfile::TempDir {
             "scope": "default",
             "sources": [],
             "requirements": [{
-                "schema_version": 2, "scope_id": "default", "id": "req_owned",
+                "scope_id": "default", "id": "req_owned",
                 "statement": "The record has one owner.", "status": "discovery",
                 "declared_by": "spec://owner"
             }],

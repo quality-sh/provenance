@@ -1,5 +1,4 @@
 use assert_cmd::Command;
-use provenance_core::{review::REVIEW_SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSION};
 use provenance_macros::verifies;
 use serde_json::Value;
 
@@ -114,28 +113,6 @@ fn init_rerun_without_manifest_flags_preserves_every_manifest_field() {
     assert_eq!(read_manifest(&repo), original);
 }
 
-/// A future manifest is refused outright, not preserved: the guard-all-reads
-/// ruling covers init like every other read, so re-init never rewrites a
-/// manifest this build cannot understand.
-#[test]
-fn init_rerun_refuses_a_future_manifest_version() {
-    let temp = tempfile::tempdir().unwrap();
-    let repo = temp.path().join("repo");
-    init(&repo, &["--scope", "default"]).success();
-    let mut original = read_manifest(&repo);
-    original["schema_version"] = serde_json::json!(REVIEW_SCHEMA_VERSION.0 + 1);
-    write_manifest(&repo, &original);
-
-    init(&repo, &[])
-        .failure()
-        .stderr(predicates::str::contains(format!(
-            "schema_version must be {}",
-            SUPPORTED_SCHEMA_VERSION.0
-        )));
-
-    assert_eq!(read_manifest(&repo), original);
-}
-
 #[test]
 fn init_rerun_with_actor_flag_updates_only_the_allowlist() {
     let temp = tempfile::tempdir().unwrap();
@@ -210,19 +187,19 @@ fn planned_actor_change_is_rejected_without_managed_file_writes() {
     std::fs::create_dir_all(&ideation).unwrap();
     std::fs::write(
         ideation.join("proposal_cards.jsonl"),
-        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"proposal_a","proposal_key":"a","proposal_type":"requirement_candidate","title":"A","summary":"A","traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_anchor"},"source_ids":[],"evidence_references":[],"supporting_claim_ids":[]},"promotion_state":"proposed"}).to_string(),
+        serde_json::json!({"scope_id":"default","id":"proposal_a","proposal_key":"a","proposal_type":"requirement_candidate","title":"A","summary":"A","traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_anchor"},"source_ids":[],"evidence_references":[],"supporting_claim_ids":[]},"promotion_state":"proposed"}).to_string(),
     )
     .unwrap();
     std::fs::write(
         ideation.join("dispositions.jsonl"),
-        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"disposition_a","proposal_id":"proposal_a","decision":"rejected","rationale":"Reviewed","actor":{"identity_type":"human","id":"reviewer"}}).to_string(),
+        serde_json::json!({"scope_id":"default","id":"disposition_a","proposal_id":"proposal_a","decision":"rejected","rationale":"Reviewed","actor":{"identity_type":"human","id":"reviewer"}}).to_string(),
     )
     .unwrap();
     let requirements = repo.join(".provenance/state/scopes/default/requirements");
     std::fs::create_dir_all(&requirements).unwrap();
     std::fs::write(
         requirements.join("req.jsonl"),
-        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"req_anchor","statement":"Anchor","status":"active"}).to_string(),
+        serde_json::json!({"scope_id":"default","id":"req_anchor","statement":"Anchor","status":"active"}).to_string(),
     )
     .unwrap();
     let manifest = std::fs::read(repo.join(".provenance/state/manifest.json")).unwrap();
@@ -263,7 +240,6 @@ fn init_recovers_interrupted_publication_before_classifying_the_repository() {
     std::fs::write(
         repo.join(".provenance/cache/import-publication.json"),
         serde_json::to_vec(&serde_json::json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "transaction_dir": transaction,
             "phase": "backup_created"
         }))

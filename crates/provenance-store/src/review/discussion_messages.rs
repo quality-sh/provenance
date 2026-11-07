@@ -7,7 +7,7 @@ use crate::repository::Repository;
 use provenance_core::{
     protocol::{read_failure::ReadFailure, Stamped},
     threads::{DiscussionMessagesPage, DiscussionMessagesQuery, DiscussionSelector},
-    Message, MessageRole, SchemaVersion, StableId,
+    Message, MessageRole, StableId,
 };
 
 pub async fn read_discussion_messages(
@@ -71,7 +71,6 @@ async fn message(
         row.ok_or(ReadFailure::ResourceNotFound)?;
     check_stored_size(size)?;
     Ok(Message {
-        schema_version: message_schema_version(&selector),
         scope_id: ctx.snapshot().scope().clone(),
         id: message_id,
         thread_id: StableId::new(thread)?,
@@ -129,13 +128,6 @@ fn selector_sql(selector: &DiscussionSelector) -> (&'static str, &str, &'static 
     }
 }
 
-const fn message_schema_version(selector: &DiscussionSelector) -> SchemaVersion {
-    match selector {
-        DiscussionSelector::Discussion { .. } => provenance_core::review::REVIEW_SCHEMA_VERSION,
-        DiscussionSelector::Legacy { .. } => provenance_core::SUPPORTED_SCHEMA_VERSION,
-    }
-}
-
 /// Refuses a discussion or a legacy thread that the parent does not hold.
 async fn check_address(ctx: &ReadContext, query: &DiscussionMessagesQuery) -> anyhow::Result<()> {
     let (address_sql, address_id) = match &query.selector {
@@ -171,7 +163,7 @@ async fn fill_messages(
             return Ok(Fill::Full);
         }
         check_stored_size(size)?;
-        let message = page_message(ctx, &query.selector, &id, created_at).await?;
+        let message = page_message(ctx, &id, created_at).await?;
         let size = DiscussionPageFill::record_size(&message)?;
         if page.over_budget(size) {
             return Ok(Fill::Full);
@@ -201,12 +193,7 @@ async fn message_keys(
 }
 
 /// Loads one message of the page by id.
-async fn page_message(
-    ctx: &ReadContext,
-    selector: &DiscussionSelector,
-    id: &str,
-    created_at: i64,
-) -> anyhow::Result<Message> {
+async fn page_message(ctx: &ReadContext, id: &str, created_at: i64) -> anyhow::Result<Message> {
     let mut tx = ctx.snapshot().connection().await;
     let (thread, role, body, metadata): (String, String, String, Option<String>) = sqlx::query_as(
         "SELECT thread_id,role,body,ai_metadata FROM messages WHERE scope_id=? AND id=?",
@@ -217,7 +204,6 @@ async fn page_message(
     .await?;
     drop(tx);
     Ok(Message {
-        schema_version: message_schema_version(selector),
         scope_id: ctx.snapshot().scope().clone(),
         id: StableId::new(id)?,
         thread_id: StableId::new(thread)?,

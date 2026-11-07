@@ -3,7 +3,6 @@ use crate::model::{
     ArchivedStamp, ArtifactLink, ArtifactLinkTargetType, Boundary, Domain, Question,
     QuestionStatus, ResolutionMethod, ScopeId, SourceReference, StableId, Topic, TopicStatus,
 };
-use crate::SUPPORTED_SCHEMA_VERSION;
 
 fn sid(value: &str) -> StableId {
     StableId::new(value).unwrap()
@@ -28,7 +27,6 @@ fn links() -> Vec<ArtifactLink> {
 
 fn filled_boundary() -> Boundary {
     Boundary {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("boundary_no_backpay"),
         requirement_id: sid("req_overtime"),
@@ -42,7 +40,6 @@ fn filled_boundary() -> Boundary {
 
 fn bare_boundary() -> Boundary {
     Boundary {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("boundary_bare"),
         requirement_id: sid("req_overtime"),
@@ -53,7 +50,6 @@ fn bare_boundary() -> Boundary {
 
 fn filled_topic() -> Topic {
     Topic {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("topic_rates"),
         requirement_id: sid("req_overtime"),
@@ -71,7 +67,6 @@ fn filled_topic() -> Topic {
 
 fn bare_topic() -> Topic {
     Topic {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("topic_bare"),
         requirement_id: sid("req_overtime"),
@@ -87,7 +82,6 @@ fn bare_topic() -> Topic {
 fn filled_question() -> Question {
     Question {
         depends_on: Vec::new(),
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("question_threshold"),
         topic_id: sid("topic_rates"),
@@ -111,7 +105,6 @@ fn filled_question() -> Question {
 fn bare_question() -> Question {
     Question {
         depends_on: Vec::new(),
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("question_bare"),
         topic_id: sid("topic_rates"),
@@ -131,7 +124,6 @@ fn bare_question() -> Question {
 
 fn filled_domain() -> Domain {
     Domain {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("domain_payroll"),
         name: "Payroll".into(),
@@ -142,7 +134,6 @@ fn filled_domain() -> Domain {
 
 fn bare_domain() -> Domain {
     Domain {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("domain_bare"),
         name: "Bare".into(),

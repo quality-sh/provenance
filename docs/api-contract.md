@@ -217,8 +217,9 @@ after a rejection creates the replacement submission.
 
 ## 6. Compatibility tuple and gate
 
-One authoritative compatibility tuple contains `wire`, `state`,
-`review_journal`, and `read_derivation`. `/metadata` is its sole public
+One authoritative compatibility tuple contains `wire` and `read_derivation`.
+Stored records carry no format field, so the tuple has no state member.
+`/metadata` is its sole public
 advertisement. Generated constants derive from that one definition. A client
 supports exactly one tuple and refuses a mismatch at connection.
 

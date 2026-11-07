@@ -10,7 +10,6 @@ use super::fixtures::open;
 use super::fixtures::*;
 use super::projection_digest_sensitivity::{aggregate_layout, change_one_record};
 use crate::state_store::IdeationLandingBatch;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 /// Every family gets its own invalidation between materialize and catch-up,
 /// and each must equal a fresh rebuild.
@@ -46,7 +45,7 @@ async fn a_second_scope_is_swept_and_stays_equivalent() {
         &requirements,
         format!(
             "{}\n",
-            serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "second",
+            serde_json::json!({"scope_id": "second",
                 "id": "req_second", "statement": "Second", "status": "active"})
         ),
     )
@@ -63,7 +62,7 @@ async fn a_second_scope_is_swept_and_stays_equivalent() {
         &requirements,
         format!(
             "{}\n",
-            serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "second",
+            serde_json::json!({"scope_id": "second",
                 "id": "req_second", "statement": "Second, restated", "status": "active"})
         ),
     )
@@ -79,7 +78,7 @@ async fn a_landed_ideation_batch_reaches_the_projection_through_catch_up() {
     let store = crate::test_support::store(&layout);
     let batch: IdeationLandingBatch = serde_json::from_value(serde_json::json!({
         "contributions": [{
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope.as_str(), "id": "contribution_landed",
+            "scope_id": scope.as_str(), "id": "contribution_landed",
             "target": {"artifact_type": "requirement", "artifact_id": "req_schads_overtime"},
             "participant_slot": "slot_a", "stance": "support",
             "strongest_finding": "Landed", "evidence_references": [], "material_claims": [],
@@ -107,7 +106,7 @@ async fn a_second_month_message_shard_is_covered_by_the_sweep() {
         crate::shards::threads_path(&layout, &scope),
         format!(
             "{}\n",
-            serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope.as_str(),
+            serde_json::json!({"scope_id": scope.as_str(),
                 "id": "thread_a",
                 "parent": {"node_type": "requirement", "node_id": "req_schads_overtime"},
                 "status": "active", "created_at": 1})
@@ -120,7 +119,7 @@ async fn a_second_month_message_shard_is_covered_by_the_sweep() {
         threads_dir.join("2026-08.jsonl"),
         format!(
             "{}\n",
-            serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope.as_str(),
+            serde_json::json!({"scope_id": scope.as_str(),
                 "id": "message_late", "thread_id": "thread_a", "role": "user",
                 "body": "Late month", "created_at": 2})
         ),

@@ -5,7 +5,7 @@ const ideationDir = root => join(root, '.provenance/state/scopes/default/ideatio
 
 async function seedEvidence(root) {
   const contribution = {
-    schema_version: 2, scope_id: 'default', id: 'contribution_ts',
+    scope_id: 'default', id: 'contribution_ts',
     target: { artifact_type: 'requirement', artifact_id: 'req_overtime' },
     participant_slot: 'reviewer', stance: 'support', strongest_finding: 'Observed',
     evidence_references: [{ reference_id: 'evidence_ts', evidence_type: 'source', summary: 'Pinned' }],
@@ -15,7 +15,7 @@ async function seedEvidence(root) {
     open_questions: [],
   };
   const packet = {
-    schema_version: 2, scope_id: 'default', id: 'synthesis_ts',
+    scope_id: 'default', id: 'synthesis_ts',
     target: { artifact_type: 'requirement', artifact_id: 'req_overtime' },
     summary: 'Adjudicated', consensus: [], contested_claims: [], minority_objections: [],
     evidence_gaps: [], unsupported_speculation: [], open_questions: [],
@@ -33,7 +33,7 @@ async function seedEvidence(root) {
 async function seedLargeProposals(root) {
   const summary = 'x'.repeat(850_000);
   const records = Array.from({ length: 20 }, (_, index) => ({
-    schema_version: 2, scope_id: 'default', id: `proposal_large_${String(index).padStart(2, '0')}`,
+    scope_id: 'default', id: `proposal_large_${String(index).padStart(2, '0')}`,
     proposal_key: `large-${index}`, proposal_type: 'requirement_candidate',
     title: `Large proposal ${index}`, summary,
     traceability: {

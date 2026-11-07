@@ -1,7 +1,7 @@
 use provenance_macros::{ProjectionRow, Relations};
 use serde::{Deserialize, Serialize};
 
-use super::ids::{SchemaVersion, ScopeId, StableId};
+use super::ids::{ScopeId, StableId};
 use super::validation::{
     deserialize_optional_commit_pin, deserialize_optional_confidence,
     validate_resolution_input_content,
@@ -17,7 +17,6 @@ pub use kinds::{
 #[derive(Debug, Clone, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
 #[table("sources")]
 pub struct Source {
-    pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -88,7 +87,6 @@ pub struct SourceReference {
 ]))))]
 #[table("requirements")]
 pub struct Requirement {
-    pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -195,7 +193,6 @@ impl TryFrom<ResolutionInputFields> for ResolutionInput {
 ]))))]
 #[table("resolutions")]
 pub struct Resolution {
-    pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -265,7 +262,6 @@ pub struct Resolution {
 ]))))]
 #[table("rules")]
 pub struct Rule {
-    pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
     #[serde(default, skip_serializing_if = "Option::is_none")]

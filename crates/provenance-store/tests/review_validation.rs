@@ -32,7 +32,6 @@ fn relationship_sets_are_normalized_and_classified_without_lifecycle_changes() {
     // Use the existing create input, whose arrays are explicit.
     other["depends_on"] = json!([]);
     other["supersedes"] = json!([]);
-    other.as_object_mut().unwrap().remove("schema_version");
     store
         .create_requirement(serde_json::from_value(other).unwrap())
         .unwrap();
@@ -54,7 +53,7 @@ fn enrolled_scope_refuses_lossy_portability() {
     std::fs::create_dir_all(empty_layout.state_dir()).unwrap();
     std::fs::write(
         empty_layout.manifest_path(),
-        r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}]}"#,
+        r#"{"scopes":[{"id":"default","path_prefix":"."}]}"#,
     )
     .unwrap();
     assert!(
@@ -110,7 +109,7 @@ fn statement_edits_keep_existing_verification_review_behavior() {
 #[test]
 fn typed_apply_submits_enrolled_changes_and_publishes_other_shards() {
     let (_temp, store) = fixture();
-    let spec = json!({"schema_version":2,"spec":"fixture","declared_by":"spec://fixture",
+    let spec = json!({"spec":"fixture","declared_by":"spec://fixture",
         "requirements":[{"key":"a","statement":"The system stores records."}],"sources":[{"key":"source","name":"Original","kind":"policy"}]});
     store
         .apply_typed_spec(&scope(), serde_json::from_value(spec.clone()).unwrap())

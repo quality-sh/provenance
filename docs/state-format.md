@@ -1,10 +1,10 @@
 # State Format
 
-`.provenance/state/` is the canonical store. Records are newline-delimited JSON with stable string `id` fields, `schema_version`, and deterministic ordering by primary key inside each shard.
+`.provenance/state/` is the canonical store. Records are newline-delimited JSON with stable string `id` fields and deterministic ordering by primary key inside each shard.
 
 Scopes live in `manifest.json`; shard paths derive from scope IDs. Cache files and volatile fields are forbidden in state shards.
 
-Schema version `2` includes the local graph fields plus imported/cloud review metadata. Optional fields are omitted when absent, but preserved when present: domain grouping for root requirements, requirement descriptions and source references, source references/clauses/effective/review dates/commit pins/supersession lists, draft/review statuses, resolution context/enforcement/confidence/input references/actor approval/supersession lists, resolved thread status, rule name/severity/status and source-document citations, proposal confidence, and material-claim confidence.
+A record has one format and carries no format field. A reader ignores a field that its record type does not hold, and the pinned graph of a graph reference refuses that field. The format includes the local graph fields plus imported/cloud review metadata. Optional fields are omitted when absent, but preserved when present: domain grouping for root requirements, requirement descriptions and source references, source references/clauses/effective/review dates/commit pins/supersession lists, draft/review statuses, resolution context/enforcement/confidence/input references/actor approval/supersession lists, resolved thread status, rule name/severity/status and source-document citations, proposal confidence, and material-claim confidence.
 
 Relations between records are fields on the record that makes the claim. No
 shard stores a relation row; every reverse lookup, gap, walk, and projection

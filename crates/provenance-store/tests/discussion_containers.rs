@@ -46,7 +46,6 @@ fn reply_reconciles_siblings_but_cannot_move_a_losing_discussion() {
     let a = start(&store, "a");
     replace_threads(&store, &temp, |threads| {
         let mut sibling = threads[0].clone();
-        sibling.schema_version = provenance_core::SUPPORTED_SCHEMA_VERSION;
         sibling.id = provenance_core::StableId::new("later").unwrap();
         sibling.created_at += 1;
         threads.push(sibling);
@@ -64,7 +63,6 @@ fn reply_reconciles_siblings_but_cannot_move_a_losing_discussion() {
     );
     replace_threads(&store, &temp, |threads| {
         let mut older = threads[0].clone();
-        older.schema_version = provenance_core::SUPPORTED_SCHEMA_VERSION;
         older.id = provenance_core::StableId::new("older").unwrap();
         older.status = ThreadStatus::Active;
         older.created_at = -1;
@@ -117,7 +115,6 @@ fn direct_message_append_cannot_bypass_enrolled_membership() {
     let mut messages = store.list_messages(&scope()).unwrap();
     let mut bypass = messages[0].clone();
     bypass.id = provenance_core::StableId::new("bypass").unwrap();
-    bypass.schema_version = provenance_core::SUPPORTED_SCHEMA_VERSION;
     messages.push(bypass);
     assert!(provenance_store::jsonl::write_jsonl_atomic(
         &shards::messages_path(&layout, &scope()),
@@ -137,7 +134,6 @@ fn resolving_a_discussion_leaves_all_container_statuses_unchanged() {
     let a = start(&store, "a");
     replace_threads(&store, &temp, |threads| {
         let mut later = threads[0].clone();
-        later.schema_version = provenance_core::SUPPORTED_SCHEMA_VERSION;
         later.id = provenance_core::StableId::new("later").unwrap();
         later.created_at += 1;
         threads.push(later);

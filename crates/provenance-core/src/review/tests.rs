@@ -7,7 +7,6 @@ use serde_json::json;
 #[test]
 fn closed_record_read_refuses_unknown_fields() {
     let mut value = json!({
-        "schema_version": 3,
         "scope_id": "default",
         "id": "source_a",
         "name": "Policy",

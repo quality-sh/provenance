@@ -1,6 +1,4 @@
-use crate::state_store::readers::{
-    ensure_supported_ideation_landing_versions, ensure_supported_record_version,
-};
+use crate::state_store::readers::ensure_no_legacy_retirement;
 use provenance_macros::rule;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -101,10 +99,7 @@ pub fn read_jsonl_rows_for_shard(
         }
         let record = serde_json::from_str(line)?;
         // Errors name the logical shard, but line numbers come from Git's temporary input file.
-        ensure_supported_record_version(shard_path, index + 1, &record)?;
-        if ShardFamily::for_shard_path(shard_path) == ShardFamily::IdeationLandings {
-            ensure_supported_ideation_landing_versions(shard_path, index + 1, &record)?;
-        }
+        ensure_no_legacy_retirement(shard_path, index + 1, &record)?;
         rows.push(StoredRow {
             line: line.to_owned(),
             record,

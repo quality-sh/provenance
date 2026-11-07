@@ -3,7 +3,7 @@ use provenance_macros::{rule, ProjectionRow};
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 use std::{fmt, str::FromStr};
 
-use super::{SchemaVersion, ScopeId, StableId};
+use super::{ScopeId, StableId};
 
 /// How a verification binding supports its Rule.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -107,7 +107,6 @@ impl VerificationRunStatus {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VerificationRun {
-    pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -135,7 +134,6 @@ pub struct VerificationRun {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ProjectionRow)]
 #[table("verification_bindings")]
 pub struct VerificationBinding {
-    pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
     pub rule_id: StableId,
@@ -157,7 +155,6 @@ pub struct VerificationBinding {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ProjectionRow)]
 #[table("requirement_reviews")]
 pub struct RequirementReview {
-    pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
     pub rule_id: StableId,
@@ -178,7 +175,6 @@ pub struct RequirementReview {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ProjectionRow)]
 #[table("implementation_bindings")]
 pub struct ImplementationBinding {
-    pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
     pub rule_id: StableId,

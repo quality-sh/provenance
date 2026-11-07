@@ -179,7 +179,6 @@ fn append_verification_binding(
     crate::cache::tests::fixtures::append_record(
         &path,
         &json!({
-            "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION,
             "scope_id": scope.as_str(),
             "id": "verification_large",
             "rule_id": "rule_overtime",

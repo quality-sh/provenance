@@ -23,11 +23,6 @@ fn is_well_formed_id(value: &str) -> bool {
             .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_' || ch == '-')
 }
 
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct SchemaVersion(pub u32);
-
 /// A scope id. The inner `String` is private and `new` is the only way in, so
 /// every `ScopeId` in existence satisfies [`is_well_formed_id`].
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

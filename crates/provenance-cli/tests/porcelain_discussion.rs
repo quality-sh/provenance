@@ -53,7 +53,6 @@ fn repo_with_requirement() -> tempfile::TempDir {
     let content = std::fs::read_to_string(&path).unwrap();
     let mut legacy: Value = serde_json::from_str(content.lines().next().unwrap()).unwrap();
     legacy["id"] = Value::String("discussions".into());
-    legacy["schema_version"] = Value::from(2);
     std::fs::write(
         path,
         format!("{}\n{content}", serde_json::to_string(&legacy).unwrap()),

@@ -356,7 +356,6 @@ async fn lifecycle_filter_applies_to_each_record_without_hiding_visible_children
     append_record(
         &crate::shards::threads_path(&store.layout, &scope),
         &json!({
-            "schema_version": 2,
             "scope_id": "default",
             "id": "thread_hidden_parent",
             "parent": {"node_type": "resolution", "node_id": "res_hidden_parent"},
@@ -370,7 +369,6 @@ async fn lifecycle_filter_applies_to_each_record_without_hiding_visible_children
             .state_dir()
             .join("scopes/default/threads/2026-09.jsonl"),
         &json!({
-            "schema_version": 2,
             "scope_id": "default",
             "id": "message_hidden_parent",
             "thread_id": "thread_hidden_parent",

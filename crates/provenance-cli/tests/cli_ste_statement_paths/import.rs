@@ -2,7 +2,6 @@ use super::support::{
     create_requirement, create_rule, diagnostic, error_json, export, init, provenance,
     provenance_tree, write_json, REQUIREMENTS_SHARD,
 };
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::path::Path;
@@ -35,7 +34,6 @@ fn candidate(repo: &Path, path: &Path, statement: &str) {
         }
     }
     value["rules"] = json!([{
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "rule_changed",
         "statement": statement,
@@ -43,7 +41,6 @@ fn candidate(repo: &Path, path: &Path, statement: &str) {
         "severity": "high",
         "requirement_ids": ["req_changed"]
     }, {
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "rule_added",
         "statement": statement,
@@ -103,7 +100,6 @@ fn import_allows_clean_changes_and_unchanged_legacy_invalid_statements() {
     let mut value = export(&repo, &directory.path().join("legacy.json"));
     value["requirements"][0]["description"] = json!("Unrelated metadata");
     value["rules"] = json!([{
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "rule_clean",
         "statement": "A clean rule",

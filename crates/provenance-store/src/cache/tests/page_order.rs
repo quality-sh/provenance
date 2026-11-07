@@ -147,7 +147,6 @@ async fn id_pages_return_every_id_in_order() {
         append_record(
             &crate::shards::threads_path(&layout, &scope),
             &json!({
-                "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION,
                 "scope_id": scope.as_str(),
                 "id": format!("thread_page_{index:02}"),
                 "parent": {"node_type": "requirement", "node_id": "req_schads_overtime"},

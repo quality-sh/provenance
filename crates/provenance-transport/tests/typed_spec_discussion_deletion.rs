@@ -26,7 +26,7 @@ async fn start(
 
 fn spec(sources: &Value, requirements: &Value) -> Value {
     json!({"data":{
-        "schema_version":2, "spec":"fx", "declared_by":"spec://fx",
+        "spec":"fx", "declared_by":"spec://fx",
         "sources":sources, "requirements":requirements
     }})
 }

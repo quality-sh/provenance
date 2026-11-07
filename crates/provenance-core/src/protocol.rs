@@ -63,7 +63,6 @@ pub const TRACE_MAX_DEPTH: usize = 10;
 pub struct EngineInfo {
     pub engine_version: String,
     pub protocol_version: u32,
-    pub state_schema_version: u32,
     #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub repository: Utf8PathBuf,
 }

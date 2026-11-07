@@ -6,7 +6,6 @@
 
 use crate::state_store::proposal_surfaces::surfacing_reasons;
 use crate::state_store::{ProposalDemand, ProposalSurfaceReason};
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
     IdeationEvidenceReference, IdeationEvidenceType, IdeationTarget, IdeationTargetType,
     PromotionState, ProposalCard, ProposalTraceability, ProposalType, ScopeId, StableId,
@@ -95,7 +94,6 @@ impl Case {
 
     fn proposal(&self, promotion_state: PromotionState) -> ProposalCard {
         ProposalCard {
-            schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: ScopeId::new("default").unwrap(),
             id: StableId::new("proposal_generated").unwrap(),
             proposal_key: "generated".into(),

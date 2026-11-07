@@ -9,7 +9,7 @@ use crate::state_store::{
 };
 use provenance_core::{
     ContributionStance, IdeationTarget, IdeationTargetType, ScopeId, StableId, UncertaintyLevel,
-    UncertaintyRating, SUPPORTED_SCHEMA_VERSION,
+    UncertaintyRating,
 };
 use provenance_macros::verifies;
 
@@ -171,7 +171,7 @@ fn a_boundary_target_is_checked_like_the_other_kinds() {
 fn a_landed_batch_naming_a_missing_target_is_refused() {
     let (_dir, store, scope) = seeded_requirement_store();
     let contribution = serde_json::from_value(serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "contrib_landed",
+        "scope_id": "default", "id": "contrib_landed",
         "target": {"artifact_type": "requirement", "artifact_id": "req_gone"},
         "participant_slot": "reviewer", "stance": "support", "strongest_finding": "Observed",
         "evidence_references": [], "material_claims": [], "risks": [], "objections": [],
@@ -180,7 +180,7 @@ fn a_landed_batch_naming_a_missing_target_is_refused() {
     }))
     .unwrap();
     let synthesis_packet = serde_json::from_value(serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "synth_landed",
+        "scope_id": "default", "id": "synth_landed",
         "target": {"artifact_type": "question", "artifact_id": "question_gone"},
         "summary": "Adjudicated", "consensus": [], "contested_claims": [],
         "minority_objections": [], "evidence_gaps": [], "unsupported_speculation": [],
@@ -229,7 +229,7 @@ fn a_rewrite_that_keeps_an_old_dangling_target_is_not_refused() {
     crate::cache::tests::fixtures::append_record(
         &crate::shards::contributions_path(&store.layout, &scope),
         &serde_json::json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "contrib_old",
+            "scope_id": "default", "id": "contrib_old",
             "target": {"artifact_type": "requirement", "artifact_id": "req_gone"},
             "participant_slot": "reviewer", "stance": "support", "strongest_finding": "Observed",
             "evidence_references": [], "material_claims": [], "risks": [], "objections": [],

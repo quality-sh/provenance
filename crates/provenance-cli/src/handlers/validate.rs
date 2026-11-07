@@ -1,16 +1,12 @@
 use crate::{cli::ideation::IdeationArtifactKind, output};
 use anyhow::Context;
 use camino::Utf8Path;
-// Validating one artifact file asks the same question the ideation aggregate
-// asks of a whole scope, so it is the same function: the rule lives in
-// `provenance-core` and the message names the record kind.
 use provenance_core::{
-    ensure_supported_schema_version as ensure_schema_version, AssertionRecord, Contribution,
-    DispositionRecord, ProposalCard, SynthesisPacket,
+    AssertionRecord, Contribution, DispositionRecord, ProposalCard, SynthesisPacket,
 };
 use provenance_store::graph_reference::{ExactExport, GraphReference};
 use provenance_transport::porcelain::{
-    validate_contribution_record, validate_proposal_card_record, validate_synthesis_packet_record,
+    validate_contribution_record, validate_proposal_card_record,
 };
 use serde::Serialize;
 
@@ -41,8 +37,7 @@ pub(super) fn validate_file(
             validate_contribution_record(&contribution)?;
         }
         IdeationArtifactKind::SynthesisPacket => {
-            let synthesis_packet: SynthesisPacket = serde_json::from_str(&json)?;
-            validate_synthesis_packet_record(&synthesis_packet)?;
+            let _: SynthesisPacket = serde_json::from_str(&json)?;
         }
         IdeationArtifactKind::Proposal => {
             let proposal: ProposalCard = serde_json::from_str(&json)?;
@@ -50,12 +45,10 @@ pub(super) fn validate_file(
         }
         IdeationArtifactKind::Assertion => {
             let assertion: AssertionRecord = serde_json::from_str(&json)?;
-            ensure_schema_version("assertion", assertion.schema_version)?;
             provenance_core::validate_assertion_intrinsic(&assertion)?;
         }
         IdeationArtifactKind::Disposition => {
             let disposition: DispositionRecord = serde_json::from_str(&json)?;
-            ensure_schema_version("disposition", disposition.schema_version)?;
             provenance_core::validate_disposition_intrinsic(&disposition)?;
         }
         IdeationArtifactKind::GraphReference => {

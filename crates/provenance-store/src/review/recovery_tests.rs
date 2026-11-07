@@ -33,7 +33,7 @@ fn fixture() -> tempfile::TempDir {
     std::fs::create_dir_all(layout.state_dir()).unwrap();
     std::fs::write(
         layout.manifest_path(),
-        r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}]}"#,
+        r#"{"scopes":[{"id":"default","path_prefix":"."}]}"#,
     )
     .unwrap();
     let store = open(root);
@@ -248,7 +248,7 @@ fn a_relationship_only_review_save_updates_the_record_stamp() {
     std::fs::create_dir_all(layout.state_dir()).unwrap();
     std::fs::write(
         layout.manifest_path(),
-        r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}]}"#,
+        r#"{"scopes":[{"id":"default","path_prefix":"."}]}"#,
     )
     .unwrap();
     let git = |args: &[&str]| {

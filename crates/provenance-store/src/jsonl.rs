@@ -1,5 +1,5 @@
 use crate::publication::{protect_rows, WritePermissions};
-use crate::state_store::readers::{ensure_supported_record_version, located, parse_line};
+use crate::state_store::readers::{ensure_no_legacy_retirement, located, parse_line};
 use camino::Utf8Path;
 use fs2::FileExt;
 use serde::{de::DeserializeOwned, Serialize};
@@ -104,10 +104,9 @@ where
 
 /// The read a write is built on, guarded the same way an ordinary read is.
 ///
-/// A mutation rewrites the whole shard. The version is read from the raw JSON
-/// and judged by
-/// [`ensure_supported_record_version`](crate::state_store::readers::ensure_supported_record_version),
-/// the same function the read choke point calls, before any record is built.
+/// A mutation rewrites the whole shard. Each raw line passes
+/// [`ensure_no_legacy_retirement`](crate::state_store::readers::ensure_no_legacy_retirement),
+/// the same check the read choke point makes, before any record is built.
 ///
 /// The raw line stays with its typed record. An unchanged record keeps its
 /// raw line when the shard is saved, so the stored JSON line content that
@@ -126,7 +125,7 @@ where
     let mut loaded = LoadedRecords::default();
     for (index, line) in contents.lines().enumerate() {
         let value = parse_line(path, index + 1, line)?;
-        ensure_supported_record_version(path, index + 1, &value)?;
+        ensure_no_legacy_retirement(path, index + 1, &value)?;
         let (record, raw) = RawRecord::deserialize(line, index + 1).map_err(|error| {
             match error.downcast::<serde_json::Error>() {
                 Ok(error) => located(path, index + 1, &error),
@@ -232,7 +231,6 @@ mod tests {
 
     #[derive(Deserialize, Serialize)]
     struct NestedRecord {
-        schema_version: u32,
         id: String,
         detail: Detail,
     }
@@ -255,12 +253,11 @@ mod tests {
         let root = camino::Utf8Path::from_path(dir.path()).unwrap();
         let path = root.join("records.jsonl");
         let side = root.join("side.jsonl");
-        let original = b"{\"schema_version\":2,\"id\":\"original\"}\n";
+        let original = b"{\"id\":\"original\"}\n";
         std::fs::write(&path, original).unwrap();
-        std::fs::write(&side, "{\"schema_version\":2,\"id\":\"stored\"}\n").unwrap();
+        std::fs::write(&side, "{\"id\":\"stored\"}\n").unwrap();
         let rows = crate::merge::read_jsonl_rows(&side).unwrap();
         let records = [serde_json::json!({
-            "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
             "id": "not-stored"
         })];
 
@@ -302,13 +299,14 @@ mod tests {
             &path,
             &root.join("records.lock"),
             |records: &mut Vec<serde_json::Value>| {
-                records.push(serde_json::json!({"schema_version":provenance_core::SUPPORTED_SCHEMA_VERSION.0,"id":"one"}));
+                records.push(serde_json::json!({"id":"one"}));
                 // A directory at the destination makes the real atomic replacement fail.
                 std::fs::create_dir(&path)?;
                 mutation_completed = true;
                 Ok(())
             },
-        ).unwrap_err();
+        )
+        .unwrap_err();
         assert!(mutation_completed);
         let publication = error.downcast_ref::<PublicationStarted>().unwrap();
         assert!(publication
@@ -327,7 +325,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let root = camino::Utf8Path::from_path(dir.path()).unwrap();
         let path = root.join("records.jsonl");
-        write_jsonl_atomic(&path, &[serde_json::json!({"schema_version":provenance_core::SUPPORTED_SCHEMA_VERSION.0,"id":"one"})]).unwrap();
+        write_jsonl_atomic(&path, &[serde_json::json!({"id":"one"})]).unwrap();
         let before = std::fs::read(&path).unwrap();
         let error = mutate_jsonl_locked(
             &path,
@@ -355,8 +353,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let root = camino::Utf8Path::from_path(dir.path()).unwrap();
         let path = root.join("records.jsonl");
-        let existing =
-            "  {\"id\":\"one\",\"detail\":{\"extension\":true,\"known\":\"value\"},\"schema_version\":2}  ";
+        let existing = "  {\"id\":\"one\",\"detail\":{\"extension\":true,\"known\":\"value\"}}  ";
         std::fs::write(&path, format!("{existing}\n")).unwrap();
 
         mutate_jsonl_locked(
@@ -364,7 +361,6 @@ mod tests {
             &root.join("records.lock"),
             |records: &mut Vec<NestedRecord>| {
                 records.push(NestedRecord {
-                    schema_version: provenance_core::SUPPORTED_SCHEMA_VERSION.0,
                     id: "two".into(),
                     detail: Detail {
                         known: "new".into(),
@@ -377,9 +373,7 @@ mod tests {
 
         assert_eq!(
             std::fs::read_to_string(path).unwrap(),
-            format!(
-                "{existing}\n{{\"schema_version\":2,\"id\":\"two\",\"detail\":{{\"known\":\"new\"}}}}\n"
-            )
+            format!("{existing}\n{{\"id\":\"two\",\"detail\":{{\"known\":\"new\"}}}}\n")
         );
     }
 
@@ -390,7 +384,7 @@ mod tests {
         let path = root.join("records.jsonl");
         std::fs::write(
             &path,
-            "{\"schema_version\":2,\"id\":\"one\",\"detail\":{\"known\":\"value\"},\"extension\":true}\n",
+            "{\"id\":\"one\",\"detail\":{\"known\":\"value\"},\"extension\":true}\n",
         )
         .unwrap();
 
@@ -406,7 +400,7 @@ mod tests {
 
         assert_eq!(
             std::fs::read_to_string(path).unwrap(),
-            "{\"schema_version\":2,\"id\":\"one\",\"detail\":{\"known\":\"changed\"},\"extension\":true}\n"
+            "{\"id\":\"one\",\"detail\":{\"known\":\"changed\"},\"extension\":true}\n"
         );
     }
 
@@ -417,7 +411,7 @@ mod tests {
         let path = root.join("records.jsonl");
         std::fs::write(
             &path,
-            "{\"schema_version\":2,\"id\":\"one\",\"detail\":{\"known\":\"value\",\"extension\":true}}\n",
+            "{\"id\":\"one\",\"detail\":{\"known\":\"value\",\"extension\":true}}\n",
         )
         .unwrap();
         let before = std::fs::read(&path).unwrap();
@@ -444,7 +438,7 @@ mod tests {
         let path = root.join("records.jsonl");
         std::fs::write(
             &path,
-            "{\"schema_version\":2,\"id\":\"one\",\"detail\":{\"known\":\"value\"},\"extension\":1,\"extension\":2}\n",
+            "{\"id\":\"one\",\"detail\":{\"known\":\"value\"},\"extension\":1,\"extension\":2}\n",
         )
         .unwrap();
         let before = std::fs::read(&path).unwrap();
@@ -462,35 +456,6 @@ mod tests {
 
         assert!(message.contains("repeated top-level member"), "{message}");
         assert!(message.contains("extension"), "{message}");
-        assert_eq!(std::fs::read(path).unwrap(), before);
-    }
-
-    #[test]
-    fn unsupported_version_refusal_precedes_mutation_and_keeps_the_shard() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = camino::Utf8Path::from_path(dir.path()).unwrap();
-        let path = root.join("records.jsonl");
-        let future = provenance_core::SUPPORTED_SCHEMA_VERSION.0 + 1;
-        std::fs::write(
-            &path,
-            format!("{{\"schema_version\":{future},\"id\":\"one\"}}\n"),
-        )
-        .unwrap();
-        let before = std::fs::read(&path).unwrap();
-        let mut mutation_ran = false;
-
-        let error = mutate_jsonl_locked(
-            &path,
-            &root.join("records.lock"),
-            |_: &mut Vec<NestedRecord>| {
-                mutation_ran = true;
-                Ok(())
-            },
-        )
-        .unwrap_err();
-
-        assert!(error.to_string().contains("has schema_version"));
-        assert!(!mutation_ran);
         assert_eq!(std::fs::read(path).unwrap(), before);
     }
 }

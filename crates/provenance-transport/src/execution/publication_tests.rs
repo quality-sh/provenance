@@ -7,7 +7,6 @@ use tokio::sync::oneshot;
 
 fn apply(context: PreparedContext, runtime: &tokio::runtime::Handle) {
     let input = serde_json::from_value(serde_json::json!({
-        "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
         "spec": "execution",
         "declared_by": "spec://execution",
         "requirements": [{"key":"saved", "statement":"The request preserves the saved graph."}]

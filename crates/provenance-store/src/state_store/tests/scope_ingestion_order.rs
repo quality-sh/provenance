@@ -4,7 +4,6 @@ use provenance_core::{Thread, VerificationBinding};
 
 fn thread(id: &str, text: &str) -> Thread {
     serde_json::from_value(serde_json::json!({
-        "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": id,
         "parent": { "node_type": "requirement", "node_id": text },
@@ -16,7 +15,6 @@ fn thread(id: &str, text: &str) -> Thread {
 
 fn verification_binding(id: &str, file: &str) -> VerificationBinding {
     serde_json::from_value(serde_json::json!({
-        "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": id,
         "rule_id": "rule_anchor",

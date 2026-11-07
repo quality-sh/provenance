@@ -1,5 +1,4 @@
 use super::support::{export_scope, import_scope, init_repo, write_json};
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 #[test]
 fn forged_terminal_import_fails_without_changing_live_scope() {
@@ -11,7 +10,7 @@ fn forged_terminal_import_fails_without_changing_live_scope() {
     let before = std::fs::read(&baseline).unwrap();
     let mut forged: serde_json::Value = serde_json::from_slice(&before).unwrap();
     forged["proposal_cards"] = serde_json::json!([{
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "proposal_forged",
+        "scope_id": "default", "id": "proposal_forged",
         "proposal_key": "forged", "proposal_type": "requirement_candidate",
         "title": "Forged", "summary": "Forged terminal ingress",
         "traceability": {
@@ -41,10 +40,7 @@ fn import_keeps_a_command_keyword_id_that_is_already_stored() {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(
         &path,
-        format!(
-            "{{\"schema_version\":{},\"scope_id\":\"default\",\"id\":\"search\",\"name\":\"Existing\",\"source_type\":\"document\"}}\n",
-            SUPPORTED_SCHEMA_VERSION.0
-        ),
+        "{\"scope_id\":\"default\",\"id\":\"search\",\"name\":\"Existing\",\"source_type\":\"document\"}\n",
     )
     .unwrap();
     let exported = dir.path().join("export.json");
@@ -67,7 +63,7 @@ fn import_refuses_cross_kind_keyword_reuse_without_changing_live_state() {
     let source_path = repo.join(".provenance/state/scopes/default/sources/source.jsonl");
     std::fs::create_dir_all(source_path.parent().unwrap()).unwrap();
     let source = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default",
+        "scope_id": "default",
         "id": "search", "name": "Existing", "source_type": "document"
     });
     std::fs::write(&source_path, format!("{source}\n")).unwrap();
@@ -77,7 +73,7 @@ fn import_refuses_cross_kind_keyword_reuse_without_changing_live_state() {
     let mut replacement: serde_json::Value = serde_json::from_slice(&before).unwrap();
     replacement["sources"] = serde_json::json!([]);
     replacement["requirements"] = serde_json::json!([{
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default",
+        "scope_id": "default",
         "id": "search", "statement": "The requirement exists.", "status": "active"
     }]);
     let input = dir.path().join("replacement.json");
@@ -118,7 +114,7 @@ fn import_preserves_a_keyword_contribution_from_a_landing() {
     let landing_path = repo.join(".provenance/state/scopes/default/ideation/landings.jsonl");
     std::fs::create_dir_all(landing_path.parent().unwrap()).unwrap();
     let contribution = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "search",
+        "scope_id": "default", "id": "search",
         "target": {"artifact_type": "source", "artifact_id": "source_anchor"},
         "participant_slot": "reviewer", "stance": "support", "strongest_finding": "Evidence",
         "evidence_references": [], "material_claims": [], "risks": [], "objections": [],
@@ -159,7 +155,7 @@ fn late_scope_validation_failure_is_atomic() {
     let before = std::fs::read(&baseline).unwrap();
     let mut invalid: serde_json::Value = serde_json::from_slice(&before).unwrap();
     invalid["rules"] = serde_json::json!([{
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "rule_invalid",
+        "scope_id": "default", "id": "rule_invalid",
         "statement": "A rule naming a requirement that is not there.", "status": "active",
         "severity": "high", "requirement_ids": ["req_missing"]
     }]);
@@ -188,18 +184,18 @@ fn missing_disposition_canonical_artifact_import_is_atomic() {
     let before = std::fs::read(&baseline).unwrap();
     let mut invalid: serde_json::Value = serde_json::from_slice(&before).unwrap();
     invalid["sources"] = serde_json::json!([{
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "source_anchor",
+        "scope_id": "default", "id": "source_anchor",
         "name": "Anchor", "source_type": "document"
     }]);
     invalid["proposal_cards"] = serde_json::json!([{
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "proposal_a",
+        "scope_id": "default", "id": "proposal_a",
         "proposal_key": "a", "proposal_type": "source_gap", "title": "A", "summary": "A",
         "traceability": {"target": {"artifact_type": "source", "artifact_id": "source_anchor"},
             "source_ids": [], "evidence_references": [], "supporting_claim_ids": []},
         "promotion_state": "proposed"
     }]);
     invalid["dispositions"] = serde_json::json!([{
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "disposition_a",
+        "scope_id": "default", "id": "disposition_a",
         "proposal_id": "proposal_a", "decision": "rejected", "rationale": "Reviewed",
         "actor": {"identity_type": "human", "id": "reviewer"},
         "canonical_artifact": {"artifact_type": "requirement", "artifact_id": "req_missing"}
@@ -228,18 +224,18 @@ fn misfiled_disposition_canonical_artifact_import_is_atomic() {
     let before = std::fs::read(&baseline).unwrap();
     let mut invalid: serde_json::Value = serde_json::from_slice(&before).unwrap();
     invalid["requirements"] = serde_json::json!([{
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "other", "id": "req_misfiled",
+        "scope_id": "other", "id": "req_misfiled",
         "statement": "Misfiled", "status": "active"
     }]);
     invalid["proposal_cards"] = serde_json::json!([{
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "proposal_a",
+        "scope_id": "default", "id": "proposal_a",
         "proposal_key": "a", "proposal_type": "requirement_candidate", "title": "A", "summary": "A",
         "traceability": {"target": {"artifact_type": "requirement", "artifact_id": "req_misfiled"},
             "source_ids": [], "evidence_references": [], "supporting_claim_ids": []},
         "promotion_state": "proposed"
     }]);
     invalid["dispositions"] = serde_json::json!([{
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "disposition_a",
+        "scope_id": "default", "id": "disposition_a",
         "proposal_id": "proposal_a", "decision": "rejected", "rationale": "Reviewed",
         "actor": {"identity_type": "human", "id": "reviewer"},
         "canonical_artifact": {"artifact_type": "requirement", "artifact_id": "req_misfiled"}
@@ -264,17 +260,17 @@ fn check_rejects_a_misfiled_disposition_target() {
     std::fs::create_dir_all(scope.join("ideation")).unwrap();
     std::fs::write(
         scope.join("requirements/req.jsonl"),
-        format!("{{\"schema_version\":{},\"scope_id\":\"other\",\"id\":\"req_misfiled\",\"statement\":\"Misfiled\",\"status\":\"active\"}}\n", SUPPORTED_SCHEMA_VERSION.0),
+        "{\"scope_id\":\"other\",\"id\":\"req_misfiled\",\"statement\":\"Misfiled\",\"status\":\"active\"}\n",
     )
     .unwrap();
     std::fs::write(
         scope.join("ideation/proposal_cards.jsonl"),
-        format!("{{\"schema_version\":{},\"scope_id\":\"default\",\"id\":\"proposal_a\",\"proposal_key\":\"a\",\"proposal_type\":\"requirement_candidate\",\"title\":\"A\",\"summary\":\"A\",\"traceability\":{{\"target\":{{\"artifact_type\":\"requirement\",\"artifact_id\":\"req_misfiled\"}},\"source_ids\":[],\"evidence_references\":[],\"supporting_claim_ids\":[]}},\"promotion_state\":\"proposed\"}}\n", SUPPORTED_SCHEMA_VERSION.0),
+        "{\"scope_id\":\"default\",\"id\":\"proposal_a\",\"proposal_key\":\"a\",\"proposal_type\":\"requirement_candidate\",\"title\":\"A\",\"summary\":\"A\",\"traceability\":{\"target\":{\"artifact_type\":\"requirement\",\"artifact_id\":\"req_misfiled\"},\"source_ids\":[],\"evidence_references\":[],\"supporting_claim_ids\":[]},\"promotion_state\":\"proposed\"}\n",
     )
     .unwrap();
     std::fs::write(
         scope.join("ideation/dispositions.jsonl"),
-        format!("{{\"schema_version\":{},\"scope_id\":\"default\",\"id\":\"disposition_a\",\"proposal_id\":\"proposal_a\",\"decision\":\"rejected\",\"rationale\":\"Reviewed\",\"actor\":{{\"identity_type\":\"human\",\"id\":\"reviewer\"}},\"canonical_artifact\":{{\"artifact_type\":\"requirement\",\"artifact_id\":\"req_misfiled\"}}}}\n", SUPPORTED_SCHEMA_VERSION.0),
+        "{\"scope_id\":\"default\",\"id\":\"disposition_a\",\"proposal_id\":\"proposal_a\",\"decision\":\"rejected\",\"rationale\":\"Reviewed\",\"actor\":{\"identity_type\":\"human\",\"id\":\"reviewer\"},\"canonical_artifact\":{\"artifact_type\":\"requirement\",\"artifact_id\":\"req_misfiled\"}}\n",
     )
     .unwrap();
 

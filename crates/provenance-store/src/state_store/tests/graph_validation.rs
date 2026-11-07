@@ -2,7 +2,6 @@ use super::seeded_requirement_store;
 use crate::state_store::validate_relations;
 use provenance_core::model::relations::RecordFront;
 use provenance_core::ScopeId;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 /// Appends one record the writers would refuse, the way a hand edit does.
 fn append(path: &camino::Utf8Path, record: &serde_json::Value) {
@@ -15,7 +14,6 @@ fn append(path: &camino::Utf8Path, record: &serde_json::Value) {
 
 fn requirement(scope: &ScopeId, id: &str, refines: &str) -> serde_json::Value {
     serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": scope.as_str(),
         "id": id,
         "statement": format!("{id} statement"),
@@ -36,7 +34,6 @@ fn a_rule_with_no_requirement_is_refused_by_the_validator() {
     append(
         &crate::shards::rules_path(&store.layout, &scope),
         &serde_json::json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": scope.as_str(),
             "id": "rule_bare",
             "statement": "A rule with no requirement",
@@ -59,7 +56,6 @@ fn rule_readers_refuse_an_archive_stamp_on_a_live_rule() {
     append(
         &crate::shards::rules_path(&store.layout, &scope),
         &serde_json::json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": scope.as_str(),
             "id": "rule_bad_archive",
             "statement": "The rule remains active.",
@@ -84,7 +80,6 @@ fn a_resolution_with_no_requirement_is_refused_by_the_validator() {
     append(
         &crate::shards::resolutions_path(&store.layout, &scope),
         &serde_json::json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": scope.as_str(),
             "id": "res_bare",
             "title": "Bare",
@@ -119,7 +114,6 @@ fn a_refines_cycle_in_state_is_refused_by_the_validator() {
 
 fn resolution(scope: &ScopeId, id: &str, supersedes: &str) -> serde_json::Value {
     serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": scope.as_str(),
         "id": id,
         "title": id,
@@ -148,7 +142,6 @@ fn a_mutual_supersession_between_two_resolutions_is_refused_by_the_validator() {
 
 fn source(scope: &ScopeId, id: &str, supersedes: &str) -> serde_json::Value {
     serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": scope.as_str(),
         "id": id,
         "name": id,
@@ -208,7 +201,6 @@ fn a_refines_cycle_in_held_records_is_refused_with_the_state_text() {
 #[test]
 fn a_held_rule_with_no_requirement_is_refused_with_the_state_text() {
     let rules: [provenance_core::Rule; 1] = [serde_json::from_value(serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "rule_bare",
         "statement": "A rule with no requirement",

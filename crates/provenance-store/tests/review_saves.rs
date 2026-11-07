@@ -93,8 +93,7 @@ fn enrollment_preserves_frozen_legacy_proposal_bytes() {
     );
     let path = provenance_store::shards::proposal_cards_path(&layout, &scope());
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    let legacy =
-        b"{\"schema_version\":2,\"id\":\"old_proposal\",\"promotion_state\":\"accepted\"}\n";
+    let legacy = b"{\"id\":\"old_proposal\",\"promotion_state\":\"accepted\"}\n";
     std::fs::write(&path, legacy).unwrap();
     store.save_requirement(save(&store, json!({}))).unwrap();
     assert_eq!(std::fs::read(path).unwrap(), legacy);

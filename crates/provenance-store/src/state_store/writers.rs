@@ -1,10 +1,7 @@
 use super::{CreateRequirementInput, CreateSourceInput, StateStore};
 use crate::shards;
 use crate::write_error::{SourceFailure, WriteFailure};
-use provenance_core::{
-    review::REVIEW_SCHEMA_VERSION, validate_optional_commit_pin, NodeType, Requirement, Source,
-    StableId, SUPPORTED_SCHEMA_VERSION,
-};
+use provenance_core::{validate_optional_commit_pin, NodeType, Requirement, Source, StableId};
 
 impl StateStore {
     pub fn create_source(&self, input: CreateSourceInput) -> anyhow::Result<Source> {
@@ -46,7 +43,6 @@ impl StateStore {
             let source = Source {
                 created: None,
                 updated: None,
-                schema_version: REVIEW_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
                 id,
                 declared_by: None,
@@ -117,7 +113,6 @@ impl StateStore {
                 archived_in_commit: None,
                 created: None,
                 updated: None,
-                schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
                 id,
                 declared_by: None,

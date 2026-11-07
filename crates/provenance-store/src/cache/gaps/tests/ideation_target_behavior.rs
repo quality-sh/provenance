@@ -9,14 +9,13 @@ use crate::state_store::CreateContributionInput;
 use provenance_core::{
     Boundary, Contribution, ContributionStance, IdeationTarget, IdeationTargetType, NodeType,
     ScopeId, StableId, SynthesisPacket, UncertaintyLevel, UncertaintyRating,
-    SUPPORTED_SCHEMA_VERSION,
 };
 use provenance_macros::verifies;
 use serde_json::json;
 
 fn contribution_json(id: &str, kind: &str, target_id: &str) -> serde_json::Value {
     json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": id,
+        "scope_id": "default", "id": id,
         "target": {"artifact_type": kind, "artifact_id": target_id},
         "participant_slot": "reviewer", "stance": "support", "strongest_finding": "Observed",
         "evidence_references": [], "material_claims": [], "risks": [], "objections": [],
@@ -27,7 +26,7 @@ fn contribution_json(id: &str, kind: &str, target_id: &str) -> serde_json::Value
 
 fn synthesis_json(id: &str, kind: &str, target_id: &str) -> serde_json::Value {
     json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": id,
+        "scope_id": "default", "id": id,
         "target": {"artifact_type": kind, "artifact_id": target_id}, "summary": "Adjudicated",
         "consensus": [], "contested_claims": [], "minority_objections": [], "evidence_gaps": [],
         "unsupported_speculation": [], "open_questions": [], "suggested_artifacts": [],
@@ -45,7 +44,7 @@ fn synthesis_packet(id: &str, kind: &str, target_id: &str) -> SynthesisPacket {
 
 fn boundary(id: &str) -> Boundary {
     serde_json::from_value(json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": id,
+        "scope_id": "default", "id": id,
         "requirement_id": "req_overtime", "statement": "Back pay is out of scope"
     }))
     .unwrap()

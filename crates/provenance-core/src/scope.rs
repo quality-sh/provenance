@@ -101,12 +101,10 @@ fn normal_components(path: &Utf8Path) -> Vec<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::SUPPORTED_SCHEMA_VERSION;
     use crate::{RepoPathPrefix, Scope};
 
     fn manifest_with_scopes(scopes: &[(&str, &str)]) -> Manifest {
         Manifest {
-            schema_version: SUPPORTED_SCHEMA_VERSION,
             scopes: scopes
                 .iter()
                 .map(|(id, prefix)| Scope {

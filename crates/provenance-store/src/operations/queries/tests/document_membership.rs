@@ -47,7 +47,7 @@ async fn discussion_pages_preserve_independent_threads_and_logical_order() {
         append_record(
             &crate::shards::threads_path(&store.layout, &scope),
             &json!({
-            "schema_version":2,"scope_id":"default","id":id,
+            "scope_id":"default","id":id,
             "parent":{"node_type":"requirement","node_id":"req_overtime"},"status":status,"created_at":counter}),
         );
     }
@@ -58,7 +58,7 @@ async fn discussion_pages_preserve_independent_threads_and_logical_order() {
     for i in 0..205 {
         append_record(
             &path,
-            &json!({"schema_version":2,"scope_id":"default","id":format!("msg_{i:03}"),
+            &json!({"scope_id":"default","id":format!("msg_{i:03}"),
             "thread_id":if i%2==0 {"thread_later"} else {"thread_earlier"},"role":"user", "body":"Saved discussion",
             "created_at":i/2,"ai_metadata":{"logical":true}}),
         );
@@ -82,7 +82,7 @@ async fn discussion_pages_preserve_independent_threads_and_logical_order() {
             < (p[1]["created_at"].as_i64(), p[1]["id"].as_str())));
     append_record(
         &path,
-        &json!({"schema_version":2,"scope_id":"default","id":"msg_new",
+        &json!({"scope_id":"default","id":"msg_new",
         "thread_id":"thread_earlier","role":"user","body":"New revision","created_at":200}),
     );
     assert!(page(&root, "req_overtime", first["next_cursor"].clone())
@@ -117,7 +117,6 @@ async fn byte_limited_pages_continue_without_truncating_canonical_records() {
     let (dir, store, scope) = seeded_store();
     let path = crate::shards::requirements_path(&store.layout, &scope);
     let mut record = json!(store.list_requirements(&scope).unwrap()[0]);
-    record["schema_version"] = json!(2);
     record["description"] = json!("x".repeat(40_000));
     for i in 0..35 {
         record["id"] = json!(format!("req_bytes_{i:03}"));

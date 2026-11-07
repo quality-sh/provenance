@@ -1,9 +1,6 @@
 //! Native review evidence types. Review does not change record lifecycle.
-use crate::SchemaVersion;
 
 mod review_serde;
-
-pub const REVIEW_SCHEMA_VERSION: SchemaVersion = SchemaVersion(3);
 
 use crate::{NodeType, ScopeId, StableId};
 use serde::{Deserialize, Serialize};

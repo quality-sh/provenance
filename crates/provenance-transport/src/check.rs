@@ -4,7 +4,7 @@
 use crate::coverage::ReportFormat;
 use crate::repository::{initialization_hint, is_not_initialized, RepoContext};
 use camino::{Utf8Path, Utf8PathBuf};
-use provenance_core::{ensure_supported_schema_version, Manifest};
+use provenance_core::Manifest;
 use provenance_macros::rule;
 use provenance_porcelain::check::{
     Category, CategoryRun, CheckInput, CheckPort, Finding, PortFuture, Refusal, ReportFileFormat,
@@ -328,7 +328,6 @@ fn validate_locked(
     manifest: &Manifest,
     repository_wide: bool,
 ) -> anyhow::Result<()> {
-    ensure_supported_schema_version("manifest", manifest.schema_version)?;
     manifest.ensure_has_scopes()?;
     let manifest_scopes: BTreeSet<_> = manifest
         .scopes

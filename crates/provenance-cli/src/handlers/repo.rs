@@ -358,10 +358,8 @@ fn read_manifest(layout: &ProvenanceLayout) -> anyhow::Result<Option<Manifest>> 
 }
 
 fn parse_manifest(bytes: &[u8], path: &std::path::Path) -> anyhow::Result<Manifest> {
-    let manifest = serde_json::from_slice::<Manifest>(bytes)
-        .with_context(|| format!("failed to parse manifest {}", path.display()))?;
-    provenance_core::ensure_supported_schema_version("manifest", manifest.schema_version)?;
-    Ok(manifest)
+    serde_json::from_slice::<Manifest>(bytes)
+        .with_context(|| format!("failed to parse manifest {}", path.display()))
 }
 
 #[cfg(test)]

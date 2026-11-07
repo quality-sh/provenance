@@ -10,7 +10,7 @@ use crate::operations::read_policy::{FreshnessPolicy, ReadPolicy};
 use crate::operations::reader;
 use crate::state_store::{CreateRuleInput, StateStore};
 use provenance_core::protocol::{ImpactQuery, StaleQuery, Stamp, SDK_PROTOCOL_VERSION};
-use provenance_core::{RuleSeverity, RuleStatus, ScopeId, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{RuleSeverity, RuleStatus, ScopeId};
 use serde_json::json;
 
 fn store_with_rule() -> TestStore {
@@ -104,7 +104,6 @@ async fn an_appended_run_moves_evidence_and_not_the_stamp() {
     append_record(
         &store.layout().verification_runs_path(&store.scope),
         &json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": store.scope.as_str(),
             "id": "run_late",
             "rule_id": "rule_overtime",

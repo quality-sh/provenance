@@ -32,10 +32,9 @@ pub use ideation::dispositions::{
 };
 pub use ideation::legacy_audit::is_shipped_legacy_disposition_audit;
 pub use ideation::lifecycle::{
-    effective_proposal_state, ensure_supported_schema_version, packet_qualifies_proposal,
-    validate_assertion_intrinsic, validate_disposition_admissible, validate_ideation_aggregate,
-    validate_proposal_intrinsic, Assertion, AssertionId, AssertionRecord, IdeationAggregate,
-    LegacyProposalPolicy, SUPPORTED_SCHEMA_VERSION,
+    effective_proposal_state, packet_qualifies_proposal, validate_assertion_intrinsic,
+    validate_disposition_admissible, validate_ideation_aggregate, validate_proposal_intrinsic,
+    Assertion, AssertionId, AssertionRecord, IdeationAggregate, LegacyProposalPolicy,
 };
 pub use ideation::proposals::{
     Proposal, ProposalCard, ProposalTraceability, RecordRevisionBinding,
@@ -51,7 +50,7 @@ pub use ideation::{
     IdeationTargetType, IdentityType, PromotionState, ProposalType, SpeculationMarker,
     UncertaintyLevel,
 };
-pub use ids::{ensure_record_id_assignable, SchemaVersion, ScopeId, StableId, RESERVED_RECORD_IDS};
+pub use ids::{ensure_record_id_assignable, ScopeId, StableId, RESERVED_RECORD_IDS};
 pub use integrations::{
     DeclarationAddress, ImplementationBinding, RequirementReview, VerificationBinding,
     VerificationMethod, VerificationRun, VerificationRunStatus,

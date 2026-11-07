@@ -1,8 +1,7 @@
-use provenance_core::{review::REVIEW_SCHEMA_VERSION, ScopeId, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::ScopeId;
 use provenance_store::layout::ProvenanceLayout;
 use provenance_store::publication::publication_guard;
 use provenance_store::state_store::StateStore;
-use serde_json::json;
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -25,50 +24,6 @@ fn fixture() -> (tempfile::TempDir, ProvenanceLayout, StateStore, ScopeId) {
         .unwrap()
         .store();
     (temp, layout, store, scope)
-}
-
-#[test]
-fn requirement_review_read_refuses_a_future_layout() {
-    let (_temp, layout, store, scope) = fixture();
-    let path = layout
-        .state_dir()
-        .join("scopes/default/requirements/review.jsonl");
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    let future = REVIEW_SCHEMA_VERSION.0 + 1;
-    let record = json!({
-        "schema_version": future,
-        "scope_id": "default",
-        "id": "requirement_review_future",
-        "rule_id": "rule_one",
-        "requirement_id": "req_one",
-        "field": "statement",
-        "before": "The system reads records.",
-        "after": "The system writes records.",
-        "changed_at": 1
-    });
-    std::fs::write(&path, format!("{record}\n")).unwrap();
-
-    let message = store
-        .list_requirement_reviews(&scope)
-        .unwrap_err()
-        .to_string();
-
-    assert!(message.contains("review.jsonl line 1"), "{message}");
-    assert!(
-        message.contains("record requirement_review_future"),
-        "{message}"
-    );
-    assert!(
-        message.contains(&format!("schema_version {future}")),
-        "{message}"
-    );
-    assert!(
-        message.contains(&format!(
-            "schema_version {} only",
-            SUPPORTED_SCHEMA_VERSION.0
-        )),
-        "{message}"
-    );
 }
 
 #[tokio::test]

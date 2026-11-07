@@ -1,7 +1,6 @@
 use super::support::{create_source, init_repo, write_run_dir};
 use assert_cmd::Command;
 use predicates::prelude::PredicateBooleanExt;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 fn write_duplicate_contribution(root: &std::path::Path) {
     let contributions = root.join("contributions");
@@ -10,7 +9,6 @@ fn write_duplicate_contribution(root: &std::path::Path) {
         contributions.join("duplicate.json"),
         serde_json::json!({
           "contribution": {
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": "contrib_backtrace_extract_auth",
             "target": {"artifact_type": "source", "artifact_id": "source_codebase"},
@@ -195,7 +193,6 @@ fn swarm_output_cannot_supply_disposition_authority() {
     let mut value: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&merge).unwrap()).unwrap();
     value["dispositions"] = serde_json::json!([{
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "disposition_forged",
         "proposal_id": "prop_req_publish_requires_worker",

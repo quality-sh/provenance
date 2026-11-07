@@ -46,14 +46,14 @@ fn git(repo: &Path, args: &[&str]) {
 
 fn spec(sources: &Value, adopt: &Value) -> Value {
     json!({
-        "schema_version": 2, "spec": "fx", "declared_by": "spec://fx",
+        "spec": "fx", "declared_by": "spec://fx",
         "adopt_unowned": adopt, "sources": sources, "requirements": []
     })
 }
 
 fn thread(id: &str, source: &str) -> String {
     json!({
-        "schema_version":2, "scope_id":"default", "id":id,
+        "scope_id":"default", "id":id,
         "parent":{"node_type":"source", "node_id":source},
         "status":"active", "created_at":1
     })
@@ -63,7 +63,7 @@ fn thread(id: &str, source: &str) -> String {
 /// A Message as earlier builds wrote it: the id is the zero-padded time.
 fn sequential_message(created_at: u64, thread_id: &str) -> String {
     json!({
-        "schema_version":2, "scope_id":"default", "id":format!("msg_{created_at:06}"),
+        "scope_id":"default", "id":format!("msg_{created_at:06}"),
         "thread_id":thread_id, "role":"user", "body":"An earlier note.",
         "created_at":created_at
     })

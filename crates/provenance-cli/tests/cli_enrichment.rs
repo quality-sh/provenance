@@ -1,5 +1,4 @@
 use assert_cmd::Command;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 
 #[path = "export_fixture_support/mod.rs"]
@@ -330,7 +329,6 @@ fn cli_rejects_an_imported_resolution_input_with_a_blank_summary() {
         serde_json::json!({
             "scope": "default",
             "sources": [{
-                "schema_version": SUPPORTED_SCHEMA_VERSION.0,
                 "scope_id": "default",
                 "id": "source_sah",
                 "name": "Support at Home",
@@ -339,14 +337,12 @@ fn cli_rejects_an_imported_resolution_input_with_a_blank_summary() {
                 "reference": "Department guidance"
             }],
             "requirements": [{
-                "schema_version": SUPPORTED_SCHEMA_VERSION.0,
                 "scope_id": "default",
                 "id": "req_sah",
                 "statement": "SAH applies",
                 "status": "discovery"
             }],
             "resolutions": [{
-                "schema_version": SUPPORTED_SCHEMA_VERSION.0,
                 "scope_id": "default",
                 "id": "res_sah",
                 "title": "SAH extraction",

@@ -91,7 +91,6 @@ async fn document_reads_all_saved_records_and_marks_failed_catch_up() {
     assert_eq!(first["requirements"].as_array().unwrap().len(), 1);
     let mut child =
         serde_json::to_value(store.list_requirements(&scope).unwrap()[0].clone()).unwrap();
-    child["schema_version"] = json!(2);
     child["refines"] = json!(["req_overtime"]);
     let path = crate::shards::requirements_path(&store.layout, &scope);
     for i in 0..205 {
@@ -237,18 +236,17 @@ async fn document_keeps_graph_and_discussions_at_one_revision_during_publication
             assert_eq!(ctx.snapshot().table::<provenance_core::Requirement>().count().await?, 1);
             let path = crate::shards::requirements_path(&layout, &write_scope);
             let mut child: Value = serde_json::from_str(std::fs::read_to_string(&path)?.lines().next().unwrap())?;
-            child["schema_version"] = json!(2);
             child["id"] = json!("req_concurrent");
             child["refines"] = json!(["req_overtime"]);
             crate::cache::tests::fixtures::append_record(&path, &child);
             for (id, status, counter) in [("thread_one", "resolved", 1), ("thread_two", "active", 2)] {
                 crate::cache::tests::fixtures::append_record(&crate::shards::threads_path(&layout, &write_scope), &json!({
-                    "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION, "scope_id": "default", "id": id,
+                    "scope_id": "default", "id": id,
                     "parent": {"node_type":"requirement","node_id":"req_concurrent"}, "status":status, "created_at":counter
                 }));
                 let message_path = layout.state_dir().join("scopes/default/threads/2026-09.jsonl");
                 crate::cache::tests::fixtures::append_record(&message_path, &json!({
-                    "schema_version":provenance_core::SUPPORTED_SCHEMA_VERSION, "scope_id":"default", "id":format!("msg_{counter}"),
+                    "scope_id":"default", "id":format!("msg_{counter}"),
                     "thread_id":id,"role":"user","body":format!("Discussion {counter}"),"created_at":counter,
                     "ai_metadata":{"order":"logical"}
                 }));
@@ -289,7 +287,6 @@ async fn document_page_requires_continuation_and_excludes_other_roots() {
     let (dir, store, scope) = seeded_store();
     let path = crate::shards::requirements_path(&store.layout, &scope);
     let mut child = json!(store.list_requirements(&scope).unwrap()[0]);
-    child["schema_version"] = json!(2);
     for i in 0..205 {
         child["id"] = json!(format!("req_aaa_{i:03}"));
         child["refines"] = json!(["req_overtime"]);

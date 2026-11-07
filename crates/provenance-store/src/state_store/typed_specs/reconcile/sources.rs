@@ -1,7 +1,5 @@
 use provenance_core::authoring::addresses;
-use provenance_core::{
-    DeclarationAddress, ScopeId, Source, SourceType, StableId, SUPPORTED_SCHEMA_VERSION,
-};
+use provenance_core::{DeclarationAddress, ScopeId, Source, SourceType, StableId};
 
 use super::super::DesiredTypedIds;
 use super::changes::{changed, DeclarationRecord};
@@ -48,7 +46,6 @@ impl DeclarationRecord for Source {
         let mut source = Self {
             created: None,
             updated: None,
-            schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: scope_id.clone(),
             id: id.clone(),
             declared_by: Some(owner.to_string()),

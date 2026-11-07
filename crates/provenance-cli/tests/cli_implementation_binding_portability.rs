@@ -1,6 +1,5 @@
 use assert_cmd::Command;
 use predicates::str::contains;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde_json::{json, Value};
 use std::path::Path;
 
@@ -34,7 +33,6 @@ fn init(repo: &Path) {
         json!({
             "scope": "default",
             "requirements": [{
-                "schema_version": SUPPORTED_SCHEMA_VERSION.0,
                 "scope_id": "default",
                 "id": "req_workflows",
                 "statement": "Accepted workflows start",
@@ -89,7 +87,6 @@ fn create_rule(repo: &Path, id: &str) {
 
 fn binding(id: &str, rule_id: &str) -> Value {
     json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": id,
         "rule_id": rule_id,
@@ -201,17 +198,7 @@ fn scope_import_defaults_an_omitted_implementation_binding_family_to_empty() {
 
 #[test]
 fn check_rejects_invalid_implementation_binding_rows() {
-    let future_version = format!("schema_version {}", SUPPORTED_SCHEMA_VERSION.0 + 1);
     let cases = [
-        (
-            "unsupported schema",
-            vec![{
-                let mut record = binding("implementation_binding_start", "rule_start");
-                record["schema_version"] = json!(SUPPORTED_SCHEMA_VERSION.0 + 1);
-                record
-            }],
-            future_version.as_str(),
-        ),
         (
             "wrong scope",
             vec![{
@@ -304,7 +291,6 @@ fn check_rejects_a_platform_specific_verification_path() {
         .join(".provenance/state/scopes/default/verifications/binding.jsonl");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     let record = json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "verification_binding_start",
         "rule_id": "rule_start",

@@ -4,7 +4,6 @@ use super::projection_stamp_behavior::seed_integration_shards;
 use crate::layout::ProvenanceLayout;
 use crate::state_store::StateStore;
 use provenance_core::ScopeId;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde_json::json;
 
 /// One fresh record for the family, as the JSON its shard holds.
@@ -15,51 +14,51 @@ pub(super) fn fresh_record(family: ProjectionFamily, scope: &str) -> serde_json:
     let target = json!({"artifact_type": "requirement", "artifact_id": "req_schads_overtime"});
     match family.family_name() {
         "sources" => {
-            json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope, "id": "source_new",
+            json!({"scope_id": scope, "id": "source_new",
             "name": "New", "source_type": "policy", "url": null})
         }
         "domains" => {
-            json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope, "id": "domain_new",
+            json!({"scope_id": scope, "id": "domain_new",
             "name": "New"})
         }
         "requirements" => {
-            json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope, "id": "req_new",
+            json!({"scope_id": scope, "id": "req_new",
             "statement": "New", "status": "active"})
         }
         "boundaries" => {
-            json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope, "id": "boundary_new",
+            json!({"scope_id": scope, "id": "boundary_new",
             "requirement_id": "req_schads_overtime", "statement": "New"})
         }
         "topics" => {
-            json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope, "id": "topic_new",
+            json!({"scope_id": scope, "id": "topic_new",
             "requirement_id": "req_schads_overtime", "title": "New", "status": "open"})
         }
         "questions" => {
-            json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope, "id": "question_new",
+            json!({"scope_id": scope, "id": "question_new",
             "topic_id": "topic_new", "requirement_id": "req_schads_overtime",
             "question": "New?", "resolution_method": "grill", "status": "open"})
         }
         "resolutions" => {
-            json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope, "id": "res_new",
+            json!({"scope_id": scope, "id": "res_new",
             "title": "New", "position": "P", "rationale": "R", "status": "proposed",
             "requirement_ids": ["req_schads_overtime"]})
         }
         "rules" => {
-            json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope, "id": "rule_new",
+            json!({"scope_id": scope, "id": "rule_new",
             "statement": "New", "status": "active", "severity": "high",
             "requirement_ids": ["req_schads_overtime"]})
         }
         "threads" => {
-            json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope, "id": "thread_new",
+            json!({"scope_id": scope, "id": "thread_new",
             "parent": {"node_type": "requirement", "node_id": "req_schads_overtime"},
             "status": "active", "created_at": 1})
         }
         "messages" => {
-            json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope, "id": "message_new",
+            json!({"scope_id": scope, "id": "message_new",
             "thread_id": "thread_new", "role": "user", "body": "New", "created_at": 1})
         }
         "contributions" => {
-            json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope, "id": "contribution_new",
+            json!({"scope_id": scope, "id": "contribution_new",
             "target": target, "participant_slot": "slot_a", "stance": "support",
             "strongest_finding": "F", "evidence_references": [], "material_claims": [],
             "risks": [], "objections": [], "challenges": [], "suggested_artifact_changes": [],
@@ -67,13 +66,13 @@ pub(super) fn fresh_record(family: ProjectionFamily, scope: &str) -> serde_json:
             "uncertainty": {"level": "low", "rationale": "R"}, "open_questions": []})
         }
         "synthesis_packets" => {
-            json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope, "id": "packet_new",
+            json!({"scope_id": scope, "id": "packet_new",
             "target": target, "summary": "S", "consensus": [], "contested_claims": [],
             "minority_objections": [], "evidence_gaps": [], "unsupported_speculation": [],
             "open_questions": [], "suggested_artifacts": [], "required_human_decisions": []})
         }
         "proposal_cards" => {
-            json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope, "id": "proposal_new",
+            json!({"scope_id": scope, "id": "proposal_new",
             "proposal_key": "key_new", "proposal_type": "requirement_candidate",
             "title": "T", "summary": "S",
             "traceability": {"target": target, "source_ids": [],
@@ -81,27 +80,27 @@ pub(super) fn fresh_record(family: ProjectionFamily, scope: &str) -> serde_json:
             "promotion_state": "proposed"})
         }
         "assertion_records" => {
-            json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope, "id": "assertion_new",
+            json!({"scope_id": scope, "id": "assertion_new",
             "proposal_id": "proposal_new", "synthesis_packet_id": "packet_new",
             "supporting_claim_ids": ["claim_a"]})
         }
         "dispositions" => {
-            json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope, "id": "disposition_new",
+            json!({"scope_id": scope, "id": "disposition_new",
             "proposal_id": "proposal_new", "decision": "rejected", "rationale": "R",
             "actor": {"identity_type": "human", "id": "reviewer"}})
         }
         "implementation_bindings" => {
-            json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope,
+            json!({"scope_id": scope,
             "id": "bind_impl_new", "rule_id": "rule_schads_pay_001", "declared_by": "agent",
             "file": "src/new.rs", "symbol": "new"})
         }
         "verification_bindings" => {
-            json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope,
+            json!({"scope_id": scope,
             "id": "bind_ver_new", "rule_id": "rule_schads_pay_001", "key": "key_new",
             "method": "examples", "declared_by": "agent", "file": "tests/new.rs"})
         }
         "requirement_reviews" => {
-            json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope,
+            json!({"scope_id": scope,
             "id": "review_new", "rule_id": "rule_schads_pay_001",
             "requirement_id": "req_schads_overtime", "field": "statement",
             "before": "Old", "after": "New", "changed_at": 2})
@@ -135,7 +134,7 @@ pub(super) fn aggregate_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeI
     };
     seed(
         ProjectionFamily::Contributions,
-        json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope_name, "id": "contribution_base",
+        json!({"scope_id": scope_name, "id": "contribution_base",
             "target": {"artifact_type": "requirement", "artifact_id": "req_schads_overtime"},
             "participant_slot": "reviewer", "stance": "support",
             "strongest_finding": "Observed",
@@ -149,7 +148,7 @@ pub(super) fn aggregate_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeI
     );
     seed(
         ProjectionFamily::SynthesisPackets,
-        json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope_name, "id": "packet_base",
+        json!({"scope_id": scope_name, "id": "packet_base",
             "target": {"artifact_type": "requirement", "artifact_id": "req_schads_overtime"},
             "summary": "Adjudicated", "consensus": [], "contested_claims": [],
             "minority_objections": [], "evidence_gaps": [], "unsupported_speculation": [],
@@ -161,7 +160,7 @@ pub(super) fn aggregate_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeI
     );
     seed(
         ProjectionFamily::ProposalCards,
-        json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope_name, "id": "proposal_base",
+        json!({"scope_id": scope_name, "id": "proposal_base",
             "proposal_key": "base", "proposal_type": "requirement_candidate",
             "title": "Base", "summary": "Base",
             "traceability": {"target": {"artifact_type": "requirement",
@@ -171,13 +170,13 @@ pub(super) fn aggregate_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeI
     );
     seed(
         ProjectionFamily::AssertionRecords,
-        json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope_name, "id": "assertion_base",
+        json!({"scope_id": scope_name, "id": "assertion_base",
             "proposal_id": "proposal_base", "synthesis_packet_id": "packet_base",
             "supporting_claim_ids": ["claim_base"]}),
     );
     seed(
         ProjectionFamily::Dispositions,
-        json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope_name, "id": "disposition_base",
+        json!({"scope_id": scope_name, "id": "disposition_base",
             "proposal_id": "proposal_base", "decision": "deferred",
             "rationale": "Deferred for now",
             "actor": {"identity_type": "human", "id": "reviewer"}}),

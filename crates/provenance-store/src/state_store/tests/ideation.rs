@@ -3,7 +3,6 @@ use crate::state_store::{
     CreateContributionInput, CreateSynthesisPacketInput, IdeationLandingBatch,
 };
 use crate::write_error::{WriteError, WriteFailure};
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
     Contribution, ContributionStance, IdeationTarget, IdeationTargetType, StableId,
     SynthesisPacket, UncertaintyLevel, UncertaintyRating,
@@ -20,7 +19,7 @@ fn landing_refuses_oversized_records_of_every_kind_before_publication() {
     let mut synthesis = serde_json::to_value(synthesis_packet(&scope, "small")).unwrap();
     synthesis["summary"] = serde_json::json!(oversized);
     let proposal = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "proposal_large",
+        "scope_id": "default", "id": "proposal_large",
         "proposal_key": "proposal-large", "proposal_type": "requirement_candidate",
         "title": "Large", "summary": oversized,
         "traceability": {"target": {"artifact_type": "requirement", "artifact_id": "req_overtime"},
@@ -28,12 +27,12 @@ fn landing_refuses_oversized_records_of_every_kind_before_publication() {
         "promotion_state": "proposed"
     });
     let assertion = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "assertion_large",
+        "scope_id": "default", "id": "assertion_large",
         "proposal_id": "proposal_large", "synthesis_packet_id": "synthesis_large",
         "supporting_claim_ids": (0..16000).map(|i| format!("claim_{i:04}_{}", "x".repeat(64))).collect::<Vec<_>>()
     });
     let disposition = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "disposition_large",
+        "scope_id": "default", "id": "disposition_large",
         "proposal_id": "proposal_large", "decision": "rejected", "rationale": oversized,
         "actor": {"identity_type": "human", "id": "ben"}
     });
@@ -169,7 +168,7 @@ fn invalid_lifecycle_batch_is_rejected_without_partial_writes() {
     let batch: crate::state_store::IdeationLandingBatch =
         serde_json::from_value(serde_json::json!({
             "contributions": [{
-                "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "contribution_a",
+                "scope_id": "default", "id": "contribution_a",
                 "target": {"artifact_type": "requirement", "artifact_id": "req_a"},
                 "participant_slot": "extractor", "stance": "support", "strongest_finding": "Observed",
                 "evidence_references": [], "material_claims": [], "risks": [], "objections": [],
@@ -179,7 +178,7 @@ fn invalid_lifecycle_batch_is_rejected_without_partial_writes() {
             "synthesis_packets": [],
             "proposals": [],
             "assertions": [{
-                "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "assertion_bad",
+                "scope_id": "default", "id": "assertion_bad",
                 "proposal_id": "proposal_missing", "synthesis_packet_id": "synthesis_missing",
                 "supporting_claim_ids": []
             }],
@@ -335,7 +334,7 @@ fn direct_replacement_cannot_retarget_asserted_evidence() {
     let (_dir, store, scope) = seeded_requirement_store();
     let batch: IdeationLandingBatch = serde_json::from_value(serde_json::json!({
         "contributions": [{
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "contribution_landed",
+            "scope_id": "default", "id": "contribution_landed",
             "target": {"artifact_type": "requirement", "artifact_id": "req_overtime"},
             "participant_slot": "reviewer", "stance": "support", "strongest_finding": "Observed",
             "evidence_references": [{"reference_id": "evidence_a", "evidence_type": "source", "summary": "Pinned"}],
@@ -344,7 +343,7 @@ fn direct_replacement_cannot_retarget_asserted_evidence() {
             "unsupported_recommendations": [], "uncertainty": {"level": "low", "rationale": "Direct"}, "open_questions": []
         }],
         "synthesis_packets": [{
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "synthesis_landed",
+            "scope_id": "default", "id": "synthesis_landed",
             "target": {"artifact_type": "requirement", "artifact_id": "req_overtime"}, "summary": "Adjudicated",
             "consensus": [], "contested_claims": [], "minority_objections": [], "evidence_gaps": [],
             "unsupported_speculation": [], "open_questions": [],
@@ -352,13 +351,13 @@ fn direct_replacement_cannot_retarget_asserted_evidence() {
             "required_human_decisions": []
         }],
         "proposals": [{
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "proposal_a", "proposal_key": "proposal-a",
+            "scope_id": "default", "id": "proposal_a", "proposal_key": "proposal-a",
             "proposal_type": "requirement_candidate", "title": "Candidate", "summary": "Candidate",
             "traceability": {"target": {"artifact_type": "requirement", "artifact_id": "req_overtime"}, "source_ids": [], "evidence_references": [], "supporting_claim_ids": ["claim_a"]},
             "promotion_state": "proposed"
         }],
         "assertions": [{
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "assertion_a", "proposal_id": "proposal_a",
+            "scope_id": "default", "id": "assertion_a", "proposal_id": "proposal_a",
             "synthesis_packet_id": "synthesis_landed", "supporting_claim_ids": ["claim_a"]
         }],
         "dispositions": []
@@ -412,7 +411,6 @@ fn contribution_input(scope: &provenance_core::ScopeId, finding: &str) -> Create
 fn contribution(scope: &provenance_core::ScopeId, finding: &str) -> Contribution {
     let input = contribution_input(scope, finding);
     Contribution {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: input.scope_id,
         id: input.id,
         target: input.target,
@@ -451,7 +449,6 @@ fn synthesis_input(scope: &provenance_core::ScopeId, summary: &str) -> CreateSyn
 fn synthesis_packet(scope: &provenance_core::ScopeId, summary: &str) -> SynthesisPacket {
     let input = synthesis_input(scope, summary);
     SynthesisPacket {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: input.scope_id,
         id: input.id,
         target: input.target,

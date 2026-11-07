@@ -58,7 +58,14 @@ fn representative_state_copy_and_save_cost() {
             std::fs::create_dir(&path).unwrap();
             let text = "evidence".repeat(2048);
             for index in 0..added {
-                std::fs::write(path.join(format!("{index}.json")), serde_json::to_vec(&json!({"schema_version":3,"record":{"id":format!("req_{index}"),"description":text}})).unwrap()).unwrap();
+                std::fs::write(
+                    path.join(format!("{index}.json")),
+                    serde_json::to_vec(
+                        &json!({"record":{"id":format!("req_{index}"),"description":text}}),
+                    )
+                    .unwrap(),
+                )
+                .unwrap();
             }
         }
         let (files, bytes) = size(&layout.state_dir());

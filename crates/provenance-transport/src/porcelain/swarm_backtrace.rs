@@ -6,9 +6,8 @@ use crate::snapshot::Store;
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{
-    ensure_supported_schema_version as ensure_schema_version, packet_qualifies_proposal,
-    validate_optional_confidence_score, AssertionRecord, Contribution, DispositionRecord,
-    ProposalCard, ScopeId, StableId, SynthesisPacket,
+    packet_qualifies_proposal, validate_optional_confidence_score, AssertionRecord, Contribution,
+    DispositionRecord, ProposalCard, ScopeId, StableId, SynthesisPacket,
 };
 use provenance_porcelain::swarm_backtrace::{
     SwarmBacktraceLandInput, SwarmBacktraceLandOutput, SwarmBacktraceLandPort,
@@ -84,7 +83,6 @@ fn land(
         )?;
     }
     for synthesis_packet in &synthesis_packets {
-        validate_synthesis_packet_record(synthesis_packet)?;
         ensure_scope(
             &scope_id,
             &synthesis_packet.scope_id,
@@ -344,9 +342,8 @@ fn ensure_scope(
     Ok(())
 }
 
-/// Checks the schema version and the confidence scores of one contribution.
+/// Checks the confidence scores of one contribution.
 pub fn validate_contribution_record(contribution: &Contribution) -> anyhow::Result<()> {
-    ensure_schema_version("contribution", contribution.schema_version)?;
     for claim in &contribution.material_claims {
         validate_optional_confidence_score(claim.confidence).with_context(|| {
             format!(
@@ -358,14 +355,8 @@ pub fn validate_contribution_record(contribution: &Contribution) -> anyhow::Resu
     Ok(())
 }
 
-/// Checks the schema version of one synthesis packet.
-pub fn validate_synthesis_packet_record(synthesis_packet: &SynthesisPacket) -> anyhow::Result<()> {
-    ensure_schema_version("synthesis", synthesis_packet.schema_version)
-}
-
-/// Checks the schema version, the intrinsic rules, and the confidence of one proposal.
+/// Checks the intrinsic rules and the confidence of one proposal.
 pub fn validate_proposal_card_record(proposal: &ProposalCard) -> anyhow::Result<()> {
-    ensure_schema_version("proposal", proposal.schema_version)?;
     provenance_core::validate_proposal_intrinsic(proposal)?;
     validate_optional_confidence_score(proposal.confidence)
         .with_context(|| format!("proposal {} confidence is invalid", proposal.id.as_str()))?;

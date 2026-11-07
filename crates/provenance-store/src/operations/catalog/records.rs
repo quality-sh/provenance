@@ -140,7 +140,6 @@ impl Operation for Info {
             Ok(RepositoryInfo {
                 engine_version: info.engine_version,
                 protocol_version: info.protocol_version,
-                state_schema_version: info.state_schema_version,
                 repository: context.requested_target,
             })
         })

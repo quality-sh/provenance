@@ -54,12 +54,12 @@ fn stored_spelling(requirement: &str) -> String {
         "{{\"id\":\"rule_shared\",\"requirement_ids\":[\"{requirement}\"],\
          \"severity\":\"high\",  \"status\":\"active\",\
          \"statement\":\"The rule_shared rule shall hold.\",\
-         \"scope_id\":\"default\",\"schema_version\":2}}\n"
+         \"scope_id\":\"default\"}}\n"
     )
 }
 
 fn added_rule() -> String {
-    "{\"schema_version\":2,\"scope_id\":\"default\",\"id\":\"rule_added\",\
+    "{\"scope_id\":\"default\",\"id\":\"rule_added\",\
       \"statement\":\"The rule_added rule shall hold.\",\"status\":\"active\",\
       \"severity\":\"high\",\"requirement_ids\":[\"req_theirs\"]}\n"
         .to_string()

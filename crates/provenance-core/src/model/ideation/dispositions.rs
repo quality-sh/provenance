@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::{CanonicalArtifactType, DispositionDecision, IdentityType};
-use crate::model::ids::{SchemaVersion, ScopeId, StableId};
+use crate::model::ids::{ScopeId, StableId};
 
 /// An approval lacks the evidence required for acceptance.
 #[derive(Debug, thiserror::Error)]
@@ -56,7 +56,6 @@ pub struct ExternalActionCorrelation {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct DispositionRecord {
-    pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
     pub proposal_id: StableId,

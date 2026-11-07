@@ -66,7 +66,7 @@ async fn metadata_carries_the_tuple_in_an_envelope() {
     assert_eq!(
         value["data"]["compatibility"],
         json!({
-            "wire": 9, "state": 2, "review_journal": 3, "read_derivation": 3
+            "wire": 9, "read_derivation": 3
         })
     );
     // No contract digest: the tuple, the package identity, and the bound

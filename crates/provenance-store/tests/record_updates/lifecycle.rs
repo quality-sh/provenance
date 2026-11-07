@@ -185,7 +185,7 @@ async fn typed_reapply_at_a_new_head_preserves_stamps_and_detects_real_changes()
     let fixture = Fixture::new();
     git(&fixture, &["init", "--quiet"]);
     let first = commit(&fixture);
-    let mut spec = json!({"schema_version":2,"spec":"fixture","declared_by":"spec://fixture",
+    let mut spec = json!({"spec":"fixture","declared_by":"spec://fixture",
         "sources":[{"key":"policy","name":"Policy","kind":"policy"}],
         "requirements":[{"key":"ready","statement":"The system is ready."}],
         "rules":[{"key":"ready","requirement":"ready","statement":"The system is ready."}]});

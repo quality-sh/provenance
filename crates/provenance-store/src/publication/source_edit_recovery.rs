@@ -13,7 +13,6 @@ use crate::{
     },
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use provenance_core::{ensure_supported_schema_version, SchemaVersion};
 use sha2::{Digest as _, Sha256};
 
 pub(super) fn recover_pending_source_edit(layout: &ProvenanceLayout) -> anyhow::Result<()> {
@@ -22,10 +21,6 @@ pub(super) fn recover_pending_source_edit(layout: &ProvenanceLayout) -> anyhow::
         return clean_unmarked_transactions(layout);
     }
     let mut marker: SourceEditMarker = serde_json::from_slice(&std::fs::read(&marker_path)?)?;
-    ensure_supported_schema_version(
-        "source-edit publication marker",
-        SchemaVersion(marker.schema_version),
-    )?;
     validate_marker_leaves(&marker)?;
     recover_marked_source_edit(layout, &marker_path, &mut marker)
 }

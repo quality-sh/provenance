@@ -33,7 +33,7 @@ const document = () => ({
   },
 });
 
-const compatibility = { wire: 9, state: 2, review_journal: 1, read_derivation: 1 };
+const compatibility = { wire: 9, read_derivation: 1 };
 
 test('declared parameter enums render as closed TypeScript unions', () => {
   const source = typescriptClient(document(), compatibility);

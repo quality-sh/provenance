@@ -9,7 +9,6 @@ use crate::validate_disposition_intrinsic;
 #[allow(clippy::too_many_lines)]
 fn ideation_output_records_roundtrip_without_schema_bump() {
     let contribution = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "contrib_reviewer_001",
         "target": {"artifact_type": "requirement", "artifact_id": "req_overtime"},
@@ -48,7 +47,6 @@ fn ideation_output_records_roundtrip_without_schema_bump() {
         "open_questions": ["Does the agreement override SCHADS?"]
     });
     let synthesis = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "synth_overtime_001",
         "target": {"artifact_type": "requirement", "artifact_id": "req_overtime"},
@@ -94,7 +92,6 @@ fn ideation_output_records_roundtrip_without_schema_bump() {
         }]
     });
     let proposal = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "proposal_overtime_traceability",
         "proposal_key": "req-overtime-traceability",
@@ -117,7 +114,6 @@ fn ideation_output_records_roundtrip_without_schema_bump() {
         "promotion_state": "proposed"
     });
     let decision = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "decision_overtime_traceability",
         "proposal_id": "proposal_overtime_traceability",
@@ -132,7 +128,6 @@ fn ideation_output_records_roundtrip_without_schema_bump() {
     let proposal: ProposalCard = serde_json::from_value(proposal).unwrap();
     let decision: DispositionRecord = serde_json::from_value(decision).unwrap();
 
-    assert_eq!(contribution.schema_version, SUPPORTED_SCHEMA_VERSION);
     assert_eq!(
         contribution.evidence_references[0].file_path.as_deref(),
         Some("src/payroll/overtime.rs")
@@ -145,10 +140,6 @@ fn ideation_output_records_roundtrip_without_schema_bump() {
     assert_eq!(proposal.promotion_state, PromotionState::Proposed);
     assert_eq!(decision.decision, DispositionDecision::Accepted);
 
-    assert_eq!(
-        serde_json::to_value(&contribution).unwrap()["schema_version"],
-        SUPPORTED_SCHEMA_VERSION.0
-    );
     assert_eq!(
         serde_json::to_value(&contribution).unwrap()["material_claims"][0]["confidence"],
         0.87
@@ -178,7 +169,6 @@ fn confidence_scores_must_be_in_unit_interval() {
         "confidence": 1.01
     });
     let proposal = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "proposal_overtime_traceability",
         "proposal_key": "req-overtime-traceability",
@@ -209,7 +199,6 @@ fn confidence_scores_must_be_in_unit_interval() {
 #[allow(clippy::too_many_lines)]
 fn schema_v1_camel_case_ideation_records_remain_readable() {
     let contribution = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "contrib_reviewer_001",
         "target": {"artifactType": "requirement", "artifactId": "req_overtime"},
@@ -243,7 +232,6 @@ fn schema_v1_camel_case_ideation_records_remain_readable() {
         "openQuestions": []
     });
     let synthesis = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "synth_overtime_001",
         "target": {"artifactType": "requirement", "artifactId": "req_overtime"},
@@ -289,7 +277,6 @@ fn schema_v1_camel_case_ideation_records_remain_readable() {
         }]
     });
     let proposal = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "proposalId": "proposal_overtime_traceability",
         "proposalKey": "req-overtime-traceability",
@@ -325,7 +312,6 @@ fn schema_v1_camel_case_ideation_records_remain_readable() {
 #[test]
 fn public_disposition_model_rejects_legacy_persisted_field_names() {
     let decision = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "promotionDecisionId": "decision_overtime_traceability",
         "proposalId": "proposal_overtime_traceability",
@@ -349,7 +335,6 @@ fn public_disposition_model_rejects_legacy_persisted_field_names() {
 fn accepted_and_deferred_dispositions_allow_no_rationale() {
     for decision in ["accepted", "deferred"] {
         let disposition: DispositionRecord = serde_json::from_value(serde_json::json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": format!("disposition_{decision}"),
             "proposal_id": "proposal_a",
@@ -366,7 +351,6 @@ fn accepted_and_deferred_dispositions_allow_no_rationale() {
 fn rejected_dispositions_require_a_nonempty_rationale() {
     for rationale in [None, Some(""), Some("   ")] {
         let mut value = serde_json::json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": "disposition_rejected",
             "proposal_id": "proposal_a",

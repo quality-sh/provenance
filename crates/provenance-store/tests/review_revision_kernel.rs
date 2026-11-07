@@ -1,13 +1,12 @@
 //! The review revision classifier over records held in memory, with no store.
 
-use provenance_core::{NodeType, Requirement, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{NodeType, Requirement};
 use provenance_macros::verifies;
 use provenance_store::review::{changed_fields, changes_revision, content_digest, review_revision};
 use serde_json::json;
 
 fn requirement(statement: &str, status: &str) -> Requirement {
     serde_json::from_value(json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "req_overtime",
         "statement": statement,

@@ -281,7 +281,7 @@ unknown path gets 404 `unknown_operation`, and another method on an asset gets
 The host reserves `/review-config` for authenticated runtime configuration:
 
 ```json
-{"endpoint":"http://127.0.0.1:PORT","repositoryId":"A","scope":"default","reviewer":{"actorId":"maintainer","allowed":true},"dispositionActorIds":["maintainer"],"compatibility":{"wire":9,"state":2,"review_journal":3,"read_derivation":3},"sdkVersion":"0.3.2"}
+{"endpoint":"http://127.0.0.1:PORT","repositoryId":"A","scope":"default","reviewer":{"actorId":"maintainer","allowed":true},"dispositionActorIds":["maintainer"],"compatibility":{"wire":9,"read_derivation":3},"sdkVersion":"0.3.2"}
 ```
 
 The host reads `dispositionActorIds` from the repository manifest for each
@@ -359,14 +359,14 @@ pages over local HTTP, but it renders the Markdown in `docs/`, not the graph.
 The pin in [`tools/review-assets.json`](../tools/review-assets.json) identifies:
 
 - Source repository: `quality-sh/provenance-web`.
-- Merged commit: `4882efe9ae98654e951403ebb2c290058b4502f9` (PR 77).
-- Validated author commit: `4882efe9ae98654e951403ebb2c290058b4502f9`.
-- Successful [Review assets run 41568079887](https://github.com/quality-sh/provenance-web/actions/runs/41568079887).
+- Merged commit: `dc61fdbfe49c7a97c8fcec19e0b17aa4b2350b0d` (PR 80).
+- Validated author commit: `dc61fdbfe49c7a97c8fcec19e0b17aa4b2350b0d`.
+- Successful [Review assets run 42311735696](https://github.com/quality-sh/provenance-web/actions/runs/42311735696).
 - Archive: `provenance-review.tar.gz`.
-- Public [archive download](https://github.com/quality-sh/provenance/releases/download/renderer-4882efe9ae98/provenance-review.tar.gz).
-- SHA-256: `cdb052801734ef78fa7d41fabb65dbb6d7c480a153ead9cb89f30c5192a65ee7`.
-- Archive size: 2,889,140 bytes.
-- Page JavaScript bundle size: 729,340 bytes.
+- Public [archive download](https://github.com/quality-sh/provenance/releases/download/renderer-dc61fdbfe49c/provenance-review.tar.gz).
+- SHA-256: `5c25526979f70333a3d59cdb629ab858d2ebb6f54551e8c98bcd3cc1c9a940b4`.
+- Archive size: 2,902,229 bytes.
+- Page JavaScript bundle size: 709,409 bytes.
 
 The upstream entry is `src/browser/main.tsx`; `vite.review.config.ts` builds
 `dist-review`. `scripts/package-review.mjs` archives that directory with stable
@@ -374,8 +374,8 @@ metadata and emits a checksum sidecar. The archive includes `review.js`,
 `review.css`, local fonts under `assets/`, the empty `index.html`,
 `build-info.json`, and `licenses/provenance.txt`. Its renderer contains the
 generated Effect client, but it does not contain a configured application. See the merged
-[browser contract](https://github.com/quality-sh/provenance-web/blob/4882efe9ae98654e951403ebb2c290058b4502f9/src/browser/main.tsx)
-and [data-layer contract](https://github.com/quality-sh/provenance-web/blob/4882efe9ae98654e951403ebb2c290058b4502f9/docs/review-data-layer.md).
+[browser contract](https://github.com/quality-sh/provenance-web/blob/dc61fdbfe49c7a97c8fcec19e0b17aa4b2350b0d/src/browser/main.tsx)
+and [data-layer contract](https://github.com/quality-sh/provenance-web/blob/dc61fdbfe49c7a97c8fcec19e0b17aa4b2350b0d/docs/review-data-layer.md).
 
 After the build dependencies are ready, prepare the application and build:
 

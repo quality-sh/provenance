@@ -1,4 +1,3 @@
-use crate::write_error::{SourceFailure, WriteFailure};
 mod adoption;
 mod cascade;
 mod decision;
@@ -11,9 +10,7 @@ mod view;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use provenance_core::{
-    DeclarationAddress, ImplementationBinding, Rule, ScopeId, StableId, SUPPORTED_SCHEMA_VERSION,
-};
+use provenance_core::{DeclarationAddress, ImplementationBinding, Rule, ScopeId, StableId};
 use provenance_macros::rule;
 
 use super::requirement_reviews;
@@ -136,15 +133,6 @@ impl StateStore {
         scope_id: &ScopeId,
         input: &TypedSpecInput,
     ) -> anyhow::Result<()> {
-        if input.schema_version != SUPPORTED_SCHEMA_VERSION.0 {
-            return Err(SourceFailure::wrap(
-                WriteFailure::SchemaVersion,
-                anyhow::anyhow!(
-                    "typed spec schema_version must be {}",
-                    SUPPORTED_SCHEMA_VERSION.0
-                ),
-            ));
-        }
         crate::write_error::ensure!(
             InvalidDeclaration,
             !input.declared_by.trim().is_empty(),

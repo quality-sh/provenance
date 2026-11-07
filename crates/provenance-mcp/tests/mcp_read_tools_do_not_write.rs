@@ -123,7 +123,7 @@ async fn get_refuses_notify_and_names_the_change_tool() {
 fn read_body(path: &str) -> Option<Value> {
     match path {
         "/statement-checks" => Some(json!({"statement": "The pump stops."})),
-        "/authoring-plans" => Some(json!({"schema_version": 2, "spec": "fx",
+        "/authoring-plans" => Some(json!({"spec": "fx",
             "declared_by": "spec://fx", "sources": [], "requirements": []})),
         _ => None,
     }

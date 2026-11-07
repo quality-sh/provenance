@@ -7,7 +7,7 @@ export async function checkWrites({ HttpClient, OperationError }, fixture) {
     repository: 'fixture', scope: 'default',
   });
   const document = {
-    schema_version: 2, spec: 'typescript', declared_by: 'fixture-ts',
+    spec: 'typescript', declared_by: 'fixture-ts',
     requirements: [{ key: 'ready', statement: 'The system is prepared.' }],
     rules: [{ key: 'ready', requirement: 'ready', statement: 'The system is prepared.' }],
   };

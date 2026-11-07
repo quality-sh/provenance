@@ -54,16 +54,12 @@ fn run_requests_and_results_use_the_real_wire_types() {
     let complete = json!({"run":"run_a","status":"passed"});
     serde_json::from_value::<CompleteVerificationInput>(complete.clone()).unwrap();
     validate::<CompleteVerificationInput>(Contract::Deserialize, &complete);
-    round_trip::<VerificationRun>(
-        &json!({"schema_version":1,"scope_id":"default","id":"run_a",
+    round_trip::<VerificationRun>(&json!({"scope_id":"default","id":"run_a",
         "rule_id":"rule_a","binding_id":"binding_a","method":"examples",
-        "declared_by":"test","status":"running","started_at":1}),
-    );
-    round_trip::<VerificationBinding>(
-        &json!({"schema_version":1,"scope_id":"default","id":"binding_a",
+        "declared_by":"test","status":"running","started_at":1}));
+    round_trip::<VerificationBinding>(&json!({"scope_id":"default","id":"binding_a",
         "rule_id":"rule_a","key":"example","method":"examples","declared_by":"test",
-        "file":"src/lib.rs"}),
-    );
+        "file":"src/lib.rs"}));
 }
 
 #[test]
@@ -123,7 +119,7 @@ fn rule_contract_requires_the_archive_permalink_and_validates_stamps() {
         .build(&schema)
         .unwrap();
     let mut rule = json!({
-        "schema_version":2, "scope_id":"default", "id":"rule_one",
+        "scope_id":"default", "id":"rule_one",
         "statement":"The system saves records.", "status":"draft", "severity":"medium",
         "requirement_ids":["req_one"]
     });

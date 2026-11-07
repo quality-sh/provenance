@@ -1,4 +1,4 @@
-use provenance_core::{StableId, VerificationBinding, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{StableId, VerificationBinding};
 use provenance_macros::rule;
 use sha2::{Digest, Sha256};
 
@@ -66,7 +66,6 @@ impl StateStore {
 
         let id = binding_id(&input)?;
         let binding = VerificationBinding {
-            schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: input.scope_id.clone(),
             id: id.clone(),
             rule_id: input.rule_id,

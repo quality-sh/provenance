@@ -84,8 +84,6 @@ async fn create_keeps_every_unrelated_source_row_byte_for_byte() {
         .await
         .unwrap();
     let mut records = parsed_rows(&fixture, "sources", "source.jsonl");
-    records[0]["schema_version"] = json!(2);
-    records[1]["schema_version"] = json!(2);
     records[0]["created"] = json!({"commit":COMMIT,"at":AT});
     records[0]["updated"] = json!({"commit":COMMIT,"at":AT});
     records[0]["sourceType"] = records[0]
@@ -118,7 +116,6 @@ async fn create_keeps_a_row_with_repeated_unknown_members_exactly() {
     let fixture = Fixture::new();
     fixture.source().await;
     let mut record = parsed_rows(&fixture, "sources", "source.jsonl").remove(0);
-    record["schema_version"] = json!(2);
     record["created"] = json!({"commit":COMMIT,"at":AT});
     record["updated"] = json!({"commit":COMMIT,"at":AT});
     let mut raw = serde_json::to_string(&record).unwrap();
@@ -164,7 +161,6 @@ async fn resolution_create_keeps_unrelated_superseded_by_exactly() {
     });
     fixture.call("create-resolution", old).await.unwrap();
     let mut record = parsed_rows(&fixture, "resolutions", "res.jsonl").remove(0);
-    record["schema_version"] = json!(2);
     record["superseded_by"] = json!("resolution_future");
     let expected = padded(&record);
     write_rows(
@@ -205,7 +201,6 @@ async fn source_reference_edit_keeps_an_unrelated_requirement_exactly() {
         .await
         .unwrap();
     let mut records = parsed_rows(&fixture, "requirements", "req.jsonl");
-    records[0]["schema_version"] = json!(2);
     records[0]["created"] = json!({"commit":COMMIT,"at":AT});
     records[0]["updated"] = json!({"commit":COMMIT,"at":AT});
     records[0]["source_refs"] = json!([{"source_id":"source_one","clause":"section 1"}]);
@@ -243,7 +238,6 @@ async fn target_edit_keeps_top_level_unknown_data_and_accepts_aliases() {
     let fixture = Fixture::new();
     fixture.source().await;
     let mut record = parsed_rows(&fixture, "sources", "source.jsonl").remove(0);
-    record["schema_version"] = json!(2);
     record["sourceType"] = record
         .as_object_mut()
         .unwrap()
@@ -295,7 +289,6 @@ async fn target_edit_with_nested_unknown_data_is_refused_without_publication() {
         .await
         .unwrap();
     let mut record = parsed_rows(&fixture, "boundaries", "boundary.jsonl").remove(0);
-    record["schema_version"] = json!(2);
     record["created"] = json!({"commit":COMMIT,"at":AT});
     // The same edit without the nested unknown must go through, so the
     // refusal below is about the nested field and not the row layout.

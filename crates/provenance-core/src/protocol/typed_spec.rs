@@ -19,7 +19,6 @@ use crate::model::DeclarationAddress;
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct TypedSpecInput {
-    pub schema_version: u32,
     pub spec: String,
     pub declared_by: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

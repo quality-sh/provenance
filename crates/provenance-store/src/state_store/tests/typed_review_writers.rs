@@ -5,12 +5,11 @@ use crate::{
 };
 use provenance_core::{
     protocol::{TypedRequirementInput, TypedRuleInput, TypedSourceInput},
-    NodeType, SUPPORTED_SCHEMA_VERSION,
+    NodeType,
 };
 
 fn document(source_name: &str, rule_statement: &str) -> TypedSpecInput {
     TypedSpecInput {
-        schema_version: SUPPORTED_SCHEMA_VERSION.0,
         spec: "review-history".into(),
         declared_by: "spec://review/history".into(),
         adopt_unowned: Vec::new(),

@@ -5,15 +5,12 @@
 //! reference can defer to Git this document has to carry.
 
 use super::{
-    ensure_graph_schema_version, incomplete, mismatch, projection, validate_prefixed_hash,
-    GraphExport, GraphReferenceError,
+    incomplete, mismatch, projection, validate_prefixed_hash, GraphExport, GraphReferenceError,
 };
-use provenance_core::{SchemaVersion, SUPPORTED_SCHEMA_VERSION};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ExactExport {
-    pub schema_version: u32,
     pub operation: &'static str,
     pub reference_id: String,
     pub graph_digest: String,
@@ -81,15 +78,13 @@ impl ExactExport {
     /// digest the reference names, and the id names where it came from.
     ///
     /// Shape is settled before the digest is taken. Families the projection
-    /// cannot hold, record schema versions it does not support, collaboration
-    /// state that should not have travelled, and records belonging to another
+    /// cannot hold, collaboration state that should not have travelled, and records belonging to another
     /// scope are refused first, so a document that is not a legal pinned graph
     /// is reported as that and not as a hash that failed to match.
     pub fn from_json(bytes: &[u8]) -> Result<Self, GraphReferenceError> {
         #[derive(Deserialize)]
         #[serde(deny_unknown_fields)]
         struct Document {
-            schema_version: u32,
             operation: String,
             reference_id: String,
             graph_digest: String,
@@ -107,7 +102,6 @@ impl ExactExport {
         if let Some(path) = unknown {
             return Err(incomplete(format!("unknown field `{path}`")));
         }
-        ensure_graph_schema_version("exact export", SchemaVersion(document.schema_version))?;
         if document.operation != "exact-export" {
             return Err(GraphReferenceError::Incomplete {
                 detail: "exact export operation must be 'exact-export'".into(),
@@ -115,8 +109,6 @@ impl ExactExport {
         }
         validate_prefixed_hash("reference_id", &document.reference_id, "grf1_", 64)?;
         validate_prefixed_hash("graph_digest", &document.graph_digest, "sha256:", 64)?;
-        ensure_graph_schema_version("graph", SchemaVersion(document.graph.schema_version))?;
-        document.graph.validate_schema_versions()?;
         document.graph.validate_rule_archives()?;
         document.graph.validate_no_collaboration_fields()?;
         projection::validate_scope_ownership(&document.graph, &document.graph.scope.id)?;
@@ -125,7 +117,6 @@ impl ExactExport {
             return mismatch("graph_digest", &document.graph_digest, &graph_digest);
         }
         Ok(Self {
-            schema_version: SUPPORTED_SCHEMA_VERSION.0,
             operation: "exact-export",
             reference_id: document.reference_id,
             graph_digest,
@@ -141,19 +132,17 @@ mod tests {
     #[test]
     fn exact_export_refuses_an_archive_inconsistent_rule() {
         let graph = serde_json::json!({
-            "schema_version": 2,
             "scope": {"id":"default","path_prefix":"."},
             "sources": [], "domains": [], "requirements": [], "boundaries": [],
             "topics": [], "questions": [], "resolutions": [],
             "rules": [{
-                "schema_version": 2, "scope_id": "default", "id": "rule_bad_archive",
+                "scope_id": "default", "id": "rule_bad_archive",
                 "statement": "The rule remains active.", "status": "active",
                 "archived_in_commit": {"commit": "a".repeat(40)}, "severity": "high"
             }]
         });
         let decoded: GraphExport = serde_json::from_value(graph.clone()).unwrap();
         let document = serde_json::json!({
-            "schema_version": 2,
             "operation": "exact-export",
             "reference_id": format!("grf1_{}", "a".repeat(64)),
             "graph_digest": graph_digest(&decoded).unwrap(),

@@ -87,7 +87,7 @@ fn evidence_output_requires_nullable_stale_and_emitted_cut_flags() {
 #[test]
 /// Implementation aid: this checks omission semantics in the generated typed specification.
 fn typed_spec_uses_real_input_and_output_omissions() {
-    let input = json!({"schema_version":1,"spec":"x","declared_by":"test","rules":[
+    let input = json!({"spec":"x","declared_by":"test","rules":[
         {"key":"a","statement":"The system works.","implementation":{"file":"src/a.rs","symbol":"a"}}
     ]});
     let decoded: TypedSpecInput = serde_json::from_value(input.clone()).unwrap();
@@ -161,7 +161,7 @@ fn flattened_response_schema_matches_serialized_envelope() {
 /// Implementation aid: this checks the generated tagged union against serialization.
 fn tagged_graph_node_schema_matches_real_serde_variant() {
     use provenance_core::protocol::GraphNode;
-    let value = json!({"node_type":"domain","schema_version":1,"scope_id":"default",
+    let value = json!({"node_type":"domain","scope_id":"default",
         "id":"domain_a","name":"A"});
     let decoded: GraphNode = serde_json::from_value(value.clone()).unwrap();
     assert!(valid(&schema::<GraphNode>(Contract::Deserialize), &value));

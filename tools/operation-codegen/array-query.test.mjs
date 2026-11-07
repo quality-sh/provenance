@@ -16,7 +16,7 @@ test('generated clients type and encode array query parameters', () => {
       400: { content: { 'application/json': { schema: schema('FixtureFailure') } } },
     },
   } } } };
-  const compatibility = { wire: 9, state: 2, review_journal: 1, read_derivation: 1 };
+  const compatibility = { wire: 9, read_derivation: 1 };
   const typescript = typescriptClient(document, compatibility);
   const rust = Object.values(rustClientFiles(document, compatibility)).join('\n');
   assert.match(typescript, /"relations"\?: string\[\]/);
@@ -39,7 +39,7 @@ test('array items of a declared enum keep the closed element type', () => {
       400: { content: { 'application/json': { schema: schema('FixtureFailure') } } },
     },
   } } } };
-  const compatibility = { wire: 9, state: 2, review_journal: 1, read_derivation: 1 };
+  const compatibility = { wire: 9, read_derivation: 1 };
   const typescript = typescriptClient(document, compatibility);
   const rust = Object.values(rustClientFiles(document, compatibility)).join('\n');
   assert.match(typescript, /"relations"\?: \('out' \| 'in' \| 'both'\)\[\]/);

@@ -107,7 +107,7 @@ async fn invalid_requirement_edits_leave_statements_and_reviews_unchanged() {
 #[tokio::test]
 async fn owned_requirement_and_rule_updates_preserve_declaration_identity() {
     let fixture = Fixture::new();
-    let spec = json!({"schema_version":2,"spec":"fixture","declared_by":"spec://fixture",
+    let spec = json!({"spec":"fixture","declared_by":"spec://fixture",
         "requirements":[{"key":"ready","statement":"The system is ready."}],
         "rules":[{"key":"ready","requirement":"ready","statement":"The system is ready."}]});
     fixture.call("apply", spec.clone()).await.unwrap();

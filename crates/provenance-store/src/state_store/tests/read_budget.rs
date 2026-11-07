@@ -16,7 +16,7 @@ use provenance_core::model::ProjectionRow;
 use provenance_core::protocol::failure::OperationFailure;
 use provenance_core::{
     Message, MessageRole, NodeType, ResolutionStatus, ScopeId, Source, SourceType, StableId,
-    Thread, ThreadParent, ThreadStatus, SUPPORTED_SCHEMA_VERSION,
+    Thread, ThreadParent, ThreadStatus,
 };
 use provenance_macros::verifies;
 use serde_json::json;
@@ -54,7 +54,6 @@ impl ContextResolver for Target {
 
 pub(super) fn blank_source(scope: &ScopeId, id: &str) -> Source {
     Source {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: StableId::new(id).unwrap(),
         created: None,
@@ -290,7 +289,6 @@ async fn oversized_message_write_is_refused_and_persists_nothing() {
     // The UUID identity and millisecond write time determine the encoded size.
     // The accepted message lands exactly at the message read budget.
     let base = ReadBudget::read_bytes(&Message {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: StableId::new(format!("msg_{}", uuid::Uuid::new_v4())).unwrap(),
         thread_id: thread,
@@ -349,7 +347,6 @@ fn oversized_post_refuses_before_creating_or_archiving_threads() {
 
     let first = store.post_thread_message(post("small".into())).unwrap();
     let sibling = Thread {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: StableId::new("thread_sibling").unwrap(),
         parent: parent.clone(),

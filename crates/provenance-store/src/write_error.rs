@@ -18,7 +18,6 @@ pub enum WriteFailure {
         reason: InvalidInputReason,
     },
     AccessDenied,
-    SchemaVersion,
     AlreadyExists,
     InvalidCommitPin,
     ScopeMismatch,

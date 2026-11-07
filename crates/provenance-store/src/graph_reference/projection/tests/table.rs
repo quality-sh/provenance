@@ -2,7 +2,7 @@ use crate::cache::ProjectionFamily;
 
 use super::{
     all_families, graph_in_scope, implementation_binding_record, verification_binding_record,
-    GraphReferenceError, ScopeId, SUPPORTED_SCHEMA_VERSION,
+    GraphReferenceError, ScopeId,
 };
 
 fn repository_with_bindings(
@@ -15,7 +15,7 @@ fn repository_with_bindings(
     std::fs::create_dir_all(layout.state_dir()).unwrap();
     std::fs::write(
         layout.manifest_path(),
-        r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}]}"#,
+        r#"{"scopes":[{"id":"default","path_prefix":"."}]}"#,
     )
     .unwrap();
     let scope = ScopeId::new("default").unwrap();
@@ -47,26 +47,6 @@ fn graph_export_contains_each_table_field() {
             );
         }
     }
-}
-
-#[test]
-fn schema_validation_checks_verification_bindings_before_implementation_bindings() {
-    let scope = ScopeId::new("default").unwrap();
-    let mut verification = verification_binding_record(&scope);
-    let mut implementation = implementation_binding_record(&scope);
-    let unsupported = provenance_core::SchemaVersion(SUPPORTED_SCHEMA_VERSION.0 + 1);
-    verification.schema_version = unsupported;
-    implementation.schema_version = unsupported;
-    let directory = repository_with_bindings(&verification, &implementation);
-    let root = camino::Utf8Path::from_path(directory.path()).unwrap();
-
-    let GraphReferenceError::Incomplete { detail } =
-        super::load_projection(root, "default").unwrap_err()
-    else {
-        panic!("unsupported binding schemas must make the graph incomplete");
-    };
-    assert!(detail.contains(verification.id.as_str()), "{detail}");
-    assert!(!detail.contains(implementation.id.as_str()), "{detail}");
 }
 
 #[test]

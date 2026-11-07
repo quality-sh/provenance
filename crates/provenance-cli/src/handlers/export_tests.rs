@@ -1,12 +1,9 @@
 use super::{render_export, ScopeExport};
 use crate::output::OutputFormat;
-use provenance_core::{
-    NodeType, ScopeId, StableId, Thread, ThreadParent, ThreadStatus, SUPPORTED_SCHEMA_VERSION,
-};
+use provenance_core::{NodeType, ScopeId, StableId, Thread, ThreadParent, ThreadStatus};
 
 fn thread(id: &str) -> Thread {
     Thread {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: ScopeId::new("default").unwrap(),
         id: StableId::new(id).unwrap(),
         parent: ThreadParent {
