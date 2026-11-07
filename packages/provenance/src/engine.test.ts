@@ -40,8 +40,7 @@ async function recordingHost(initialVersion: number = PROTOCOL_VERSION, reposito
   return { endpoint: `http://127.0.0.1:${address.port}`, requests, repair() { version = PROTOCOL_VERSION; }, async close() { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); } };
 }
 
-// @provenance verification: examples
-// @provenance rule: rule_sdk_protocol_handshake
+// Implementation aid: rule_sdk_protocol_handshake is archived. The handshake stays until provenance-u9mg removes it.
 async function rejectsIncompatibleHostBeforeOperation(): Promise<void> {
   const host = await recordingHost(8);
   try {

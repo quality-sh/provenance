@@ -2,10 +2,9 @@ use super::support::{
     export_scope, import_scope, init_repo, init_repo_with_actors, provenance, shipped_repo,
     write_json,
 };
-use provenance_macros::verifies;
 
+// Implementation aid: rule_legacy_shard_frozen is archived. The legacy shard gate stays until provenance-u9mg removes it.
 #[test]
-#[verifies("rule_legacy_shard_frozen", examples)]
 /// This test covers the export, import, validation, and materialization flow.
 fn shipped_legacy_export_imports_when_legacy_statements_are_already_canonical() {
     let dir = tempfile::tempdir().unwrap();
@@ -42,8 +41,8 @@ fn seed_statement_shards(source: &std::path::Path, destination: &std::path::Path
     }
 }
 
+// Implementation aid: rule_legacy_terminal_proposals_frozen is archived. The import check stays until provenance-u9mg removes it.
 #[test]
-#[verifies("rule_legacy_terminal_proposals_frozen", examples)]
 /// This test covers the export, modification, and rejected import flow.
 fn one_byte_change_to_shipped_legacy_terminal_is_rejected() {
     let dir = tempfile::tempdir().unwrap();

@@ -1,11 +1,10 @@
 use assert_cmd::Command;
-use provenance_macros::verifies;
 
 #[path = "export_fixture_support/mod.rs"]
 mod export_fixture_support;
 
+// Implementation aid: rule_legacy_shard_frozen is archived. The legacy shard gate stays until provenance-u9mg removes it.
 #[test]
-#[verifies("rule_legacy_shard_frozen", examples)]
 fn altered_replaced_or_omitted_shipped_disposition_audit_is_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let baseline = export_shipped(&dir);
@@ -62,8 +61,8 @@ fn altered_replaced_or_omitted_shipped_disposition_audit_is_rejected() {
     }
 }
 
+// Implementation aid: rule_legacy_shard_frozen is archived. The legacy shard gate stays until provenance-u9mg removes it.
 #[test]
-#[verifies("rule_legacy_shard_frozen", examples)]
 fn exact_shipped_promotion_decisions_export_is_accepted() {
     let dir = tempfile::tempdir().unwrap();
     let mut legacy = export_shipped(&dir);
@@ -113,8 +112,8 @@ fn exact_shipped_promotion_decisions_export_is_accepted() {
         .success();
 }
 
+// Implementation aid: rule_legacy_terminal_proposals_frozen is archived. The import check stays until provenance-u9mg removes it.
 #[test]
-#[verifies("rule_legacy_terminal_proposals_frozen", examples)]
 fn import_cannot_omit_entire_existing_shipped_legacy_terminal_set() {
     let dir = tempfile::tempdir().unwrap();
     let mut shipped = export_shipped(&dir);

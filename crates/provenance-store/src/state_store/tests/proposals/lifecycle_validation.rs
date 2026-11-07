@@ -22,8 +22,8 @@ fn legacy_disposition_path_reads_shipped_camel_case_records() {
     assert_eq!(dispositions[0].actor.id, "reviewer");
 }
 
+// Implementation aid: rule_legacy_shard_frozen is archived. The legacy shard gate stays until provenance-u9mg removes it.
 #[test]
-#[verifies("rule_legacy_shard_frozen", examples)]
 fn deprecated_disposition_shard_rejects_modern_records() {
     let (_dir, store, scope) = initialized_store();
     allow_actor(&store, "reviewer");
