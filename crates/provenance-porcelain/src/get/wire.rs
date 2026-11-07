@@ -78,6 +78,32 @@ struct GetWire<'a> {
     review_link: Option<&'a super::ReviewLink>,
 }
 
+/// The view of a trace result.
+#[derive(schemars::JsonSchema, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum TraceView {
+    Trace,
+}
+
+/// The shape of a get result for the trace view: the fields of [`GetWire`] that a trace
+/// fills. A trace has no impact detail and no review, so those two fields are null, and
+/// a trace has no shaping summary, notify registration, or review link. A trace result
+/// serializes through this shape, so its schema is the shape of each trace result.
+#[derive(schemars::JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+struct TraceWire<'a> {
+    record: RecordWire<'a>,
+    view: TraceView,
+    related: Vec<RelatedWire<'a>>,
+    detail: (),
+    review: (),
+    bounds: &'a Bounds,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    record_metadata: Option<&'a ResponseMeta>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    view_metadata: Option<&'a ResponseMeta>,
+}
+
 impl GetOutcome {
     fn wire(&self) -> GetWire<'_> {
         GetWire {
@@ -112,9 +138,30 @@ impl GetOutcome {
     }
 }
 
+impl GetOutcome {
+    fn trace_wire<'a>(&'a self, bounds: &'a Bounds) -> TraceWire<'a> {
+        let wire = self.wire();
+        TraceWire {
+            record: wire.record,
+            view: TraceView::Trace,
+            related: wire.related,
+            detail: (),
+            review: (),
+            bounds,
+            record_metadata: wire.record_metadata,
+            view_metadata: wire.view_metadata,
+        }
+    }
+}
+
 impl Serialize for GetOutcome {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.wire().serialize(serializer)
+        match &self.result {
+            super::ViewResult::Trace(traversal) => {
+                self.trace_wire(&traversal.bounds).serialize(serializer)
+            }
+            _ => self.wire().serialize(serializer),
+        }
     }
 }
 
@@ -205,6 +252,11 @@ pub struct NotifyResult {
 /// The get result schema is generated from the serialized projection.
 pub fn output_schema() -> Value {
     schema::<GetWire<'static>>(Contract::Serialize)
+}
+
+/// The schema of a get result for the trace view.
+pub fn trace_output_schema() -> Value {
+    schema::<TraceWire<'static>>(Contract::Serialize)
 }
 
 /// Render a get result as readable text.

@@ -52,7 +52,7 @@ pub fn trace_tool() -> rmcp::model::Tool {
         Command::Trace.declaration().description,
         Effect::Reads,
         crate::derived::input_schema(Command::Trace),
-        provenance_porcelain::get::output_schema(),
+        provenance_porcelain::get::trace_output_schema(),
         SchemaDeclaration::Keep,
     )
 }

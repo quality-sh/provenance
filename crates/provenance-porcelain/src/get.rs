@@ -21,7 +21,7 @@ pub use review_link::{ReviewLink, ReviewLinkPort};
 pub use shaping::{BlockedQuestion, BlockedReason, Claim, QuestionState, SessionSummary};
 pub use wire::{
     input_schema, notify_input_schema, notify_output_schema, output_schema, render_readable,
-    trace_input_schema, NotifyInput, NotifyResult, TraceInput,
+    trace_input_schema, trace_output_schema, NotifyInput, NotifyResult, TraceInput,
 };
 
 /// One future returned by an injected read port.
