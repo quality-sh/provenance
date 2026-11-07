@@ -1,6 +1,7 @@
 //! The operation wire contract: routes, wire schemas, HTTP, MCP and CLI bindings, and
 //! dispatch by operation name. The typed operations stay in `provenance-store`.
 
+mod arguments;
 mod binding;
 mod dispatch;
 mod routes;
@@ -12,6 +13,7 @@ mod tests;
 
 use provenance_store::operations::catalog::{ContextKind, Operation};
 
+pub use arguments::{parameter_argument, Argument, ArgumentPlace};
 pub use binding::{
     ArgumentAlias, CliBinding, CliDefault, CliDefaultValue, Controls, DiscussionWriteKind,
     EtagBinding, FixedBinding, HandlerBinding, HeaderBinding, NullClearBinding, ParentBinding,

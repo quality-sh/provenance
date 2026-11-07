@@ -1,11 +1,15 @@
 //! CLI-owned bindings for shared Porcelain capabilities.
 use provenance_macros::rule;
 
-use crate::repo_context::RepoContext;
-use provenance_porcelain::check::{Category, CheckInput};
+use camino::Utf8PathBuf;
+use provenance_porcelain::check::{Category, CategoryReport, CheckInput, Status};
 use provenance_porcelain::get::{GetInput, GetOutcome};
+use provenance_transport::check::RepositoryCheckPort;
+use provenance_transport::repository::RepoContext;
+use provenance_transport::StatementHost;
 
 mod api;
+mod recovery;
 mod search;
 pub use api::dispatch_api;
 pub use provenance_porcelain::check::render_readable as render_check;
@@ -40,6 +44,65 @@ pub fn check_input_from_selectors(
         .fold(CheckInput::new(categories), CheckInput::with_statement)
 }
 
+/// The host of one repository and scope, with the notify and review link adapters of
+/// the review host.
+pub fn local_host(context: &RepoContext) -> anyhow::Result<StatementHost> {
+    Ok(context
+        .host()?
+        .with_notify_port(std::sync::Arc::new(provenance_review::HostNotifyPort::new(
+            place(context),
+        )))
+        .with_review_link_port(std::sync::Arc::new(
+            provenance_review::HostReviewLinkPort::new(place(context)),
+        )))
+}
+
+/// The repository root and scope as the review library names them.
+pub fn place(context: &RepoContext) -> provenance_review::RepositoryScope {
+    provenance_review::RepositoryScope::new(context.repo.clone(), context.scope.clone())
+}
+
+/// Runs the check command with the repository check adapter, prints the report, and
+/// fails when a category refuses.
+#[rule("rule_ste_strict_committed_statement_gate")]
+pub async fn dispatch_check(repo: &str, json: bool, input: CheckInput) -> anyhow::Result<()> {
+    let repo = Utf8PathBuf::from(repo);
+    if let Some(scope) = &input.scope {
+        // An undeclared scope refuses the whole check before any category runs.
+        provenance_transport::check::ensure_declared_scope(&repo, scope)?;
+    }
+    if let Err(reason) = input.validate() {
+        anyhow::bail!("unsupported check options: {reason}");
+    }
+    let check = input;
+    let port = RepositoryCheckPort::new(repo, false, None);
+    let report = provenance_porcelain::Porcelain::new(port)
+        .check(check)
+        .await;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        println!("{}", render_check(&report));
+    }
+    if report.categories.iter().any(CategoryReport::refuses) {
+        let details = report
+            .categories
+            .iter()
+            .filter(|category| category.status != Status::Passed)
+            .flat_map(|category| {
+                category
+                    .findings
+                    .iter()
+                    .map(|finding| finding.message.as_str())
+                    .chain(category.unavailable_reason.as_deref())
+            })
+            .collect::<Vec<_>>()
+            .join("; ");
+        anyhow::bail!(details);
+    }
+    Ok(())
+}
+
 /// Run one fully parsed target-first Porcelain get command.
 pub async fn dispatch_get(
     repo: &str,
@@ -47,7 +110,7 @@ pub async fn dispatch_get(
     format: Option<OutputFormat>,
     input: GetInput,
 ) -> anyhow::Result<()> {
-    let host = RepoContext::new(repo, scope).local_host()?;
+    let host = local_host(&RepoContext::new(repo, scope))?;
     let service = host.porcelain().get();
     let outcome = service.get(input).await?;
     let edit = if outcome.view() == provenance_porcelain::get::View::Record {

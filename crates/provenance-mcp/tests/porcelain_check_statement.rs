@@ -66,6 +66,10 @@ const fn category_run(category: Category, findings: Vec<Finding>) -> CategoryRun
             findings,
             context: GapsContext { scopes: Vec::new() },
         },
+        Category::Docs => CategoryRun::Docs {
+            findings,
+            refusal: Refusal::None,
+        },
     }
 }
 
@@ -96,7 +100,7 @@ async fn mcp_check_takes_a_statement_and_refuses_the_cli_only_options() {
         .unwrap();
     let with_graph = client
         .call_tool(check_call(
-            json!({"statement": "The pump stops.", "categories": ["graph"]}),
+            json!({"statement": "The pump stops.", "graph": true}),
         ))
         .await
         .unwrap();
@@ -121,16 +125,13 @@ async fn mcp_check_takes_a_statement_and_refuses_the_cli_only_options() {
     );
     for (arguments, field) in [
         (
-            json!({"statement": "The pump stops.", "strict": true}),
-            "strict",
+            json!({"statement": "The pump stops.", "categories": ["statements"]}),
+            "categories",
         ),
+        (json!({"statement": "The pump stops.", "repo": "."}), "repo"),
         (
-            json!({"statement": "The pump stops.", "base": "HEAD"}),
-            "base",
-        ),
-        (
-            json!({"statement": "The pump stops.", "scope": "default"}),
-            "scope",
+            json!({"statement": "The pump stops.", "format": "json"}),
+            "format",
         ),
     ] {
         let refused = client

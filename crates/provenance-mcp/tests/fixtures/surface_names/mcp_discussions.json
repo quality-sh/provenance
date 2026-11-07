@@ -1,0 +1,52 @@
+{
+  "$defs": {
+    "DiscussionStatusFilter": {
+      "description": "The status selection for an addressed Discussion list.",
+      "enum": [
+        "active",
+        "resolved",
+        "all"
+      ],
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "action": {
+      "default": "discussions",
+      "enum": [
+        "discussions",
+        "discussion"
+      ],
+      "type": "string"
+    },
+    "cursor": {
+      "description": "Actions: discussions, discussion.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "limit": {
+      "description": "Actions: discussions, discussion.",
+      "maximum": 200,
+      "minimum": 1,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "status": {
+      "$ref": "#/$defs/DiscussionStatusFilter",
+      "default": "active",
+      "description": "Actions: discussions."
+    },
+    "target": {
+      "description": "List the Discussions under this record. Without it, the Discussions of the scope show. Actions: discussions, discussion.",
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [],
+  "type": "object"
+}

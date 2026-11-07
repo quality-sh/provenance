@@ -187,6 +187,8 @@ fn import(repo: &Path, index_directory: &Path, pdf: &Path) {
         .args([
             "dictionary",
             "import",
+            "--format",
+            "json",
             "--pdf",
             pdf.to_str().unwrap(),
             "--repo",

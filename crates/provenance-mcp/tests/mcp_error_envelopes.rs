@@ -126,16 +126,14 @@ async fn every_mcp_tool_family_uses_the_error_envelope() {
             json!({"action":"create",
                 "target":"source_schema_success",
                 "type":"source",
-                "data":{
-                    "name":"Schema success",
+                "name":"Schema success",
                     "source_type":"policy",
                     "url":"https://example.test/schema-success",
                     "supersedes":[]
-                }
             }),
         ),
         ("discussion", "discussions", json!({})),
-        ("check", "check", json!({"categories":["graph"]})),
+        ("check", "check", json!({"graph": true})),
     ] {
         let result = call(&client, tool, arguments).await;
         assert_ne!(result.is_error, Some(true), "{family}: {result:?}");

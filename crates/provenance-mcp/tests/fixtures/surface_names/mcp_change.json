@@ -1,0 +1,930 @@
+{
+  "$defs": {
+    "ArchivedStamp": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "commit": {
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "commit"
+      ],
+      "type": "object"
+    },
+    "ArtifactLink": {
+      "properties": {
+        "target_id": {
+          "$ref": "#/$defs/StableId"
+        },
+        "target_type": {
+          "$ref": "#/$defs/ArtifactLinkTargetType"
+        }
+      },
+      "required": [
+        "target_type",
+        "target_id"
+      ],
+      "type": "object"
+    },
+    "ArtifactLinkTargetType": {
+      "enum": [
+        "source",
+        "requirement",
+        "resolution",
+        "rule"
+      ],
+      "type": "string"
+    },
+    "CitesEdit": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/SourceReference"
+          },
+          "type": "array"
+        },
+        {
+          "properties": {
+            "add": {
+              "items": {
+                "$ref": "#/$defs/SourceReference"
+              },
+              "type": "array"
+            },
+            "remove": {
+              "items": {
+                "$ref": "#/$defs/StableId"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        }
+      ],
+      "description": "One citation edit: an array is the complete final set of citations; an\nobject names a partial delta that adds citations and removes every clause\nof the sources it names."
+    },
+    "DiscussionOrigin": {
+      "additionalProperties": false,
+      "description": "An outcome cites one known Message in one Discussion. It does not infer membership.",
+      "properties": {
+        "discussion_id": {
+          "$ref": "#/$defs/StableId"
+        },
+        "message_id": {
+          "$ref": "#/$defs/StableId"
+        },
+        "thread_id": {
+          "$ref": "#/$defs/StableId"
+        }
+      },
+      "required": [
+        "thread_id",
+        "discussion_id",
+        "message_id"
+      ],
+      "type": "object"
+    },
+    "IdeationEvidenceReference": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_type": {
+          "$ref": "#/$defs/IdeationEvidenceType"
+        },
+        "file_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "line": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "reference_id": {
+          "$ref": "#/$defs/StableId"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "reference_id",
+        "evidence_type",
+        "summary"
+      ],
+      "type": "object"
+    },
+    "IdeationEvidenceType": {
+      "enum": [
+        "source",
+        "artifact",
+        "thread_message",
+        "domain_knowledge",
+        "unsupported",
+        "exploratory"
+      ],
+      "type": "string"
+    },
+    "ListEdit": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/StableId"
+          },
+          "type": "array"
+        },
+        {
+          "properties": {
+            "add": {
+              "items": {
+                "$ref": "#/$defs/StableId"
+              },
+              "type": "array"
+            },
+            "remove": {
+              "items": {
+                "$ref": "#/$defs/StableId"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        }
+      ],
+      "description": "One list edit: an array is the complete final set; an object names a\npartial delta of entries to add and entries to remove."
+    },
+    "MessageRole": {
+      "enum": [
+        "user",
+        "assistant",
+        "system"
+      ],
+      "type": "string"
+    },
+    "NodeType": {
+      "enum": [
+        "source",
+        "requirement",
+        "resolution",
+        "rule",
+        "topic",
+        "question",
+        "domain",
+        "boundary"
+      ],
+      "type": "string"
+    },
+    "QuestionStatus": {
+      "enum": [
+        "open",
+        "blocked_on_human",
+        "answered",
+        "archived"
+      ],
+      "type": "string"
+    },
+    "RequirementRelations": {
+      "additionalProperties": false,
+      "description": "Relationship edits on one Requirement. Each field is absent (unchanged),\na complete final set, or a partial delta.\n\nThe Store expands the edit against the record's current state under the\npublication lock, and every validation runs on the resulting final\nresource.",
+      "properties": {
+        "cites": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CitesEdit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ListEdit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "refines": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ListEdit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "spawned_by": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SingleEdit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "supersedes": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ListEdit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "RequirementStatus": {
+      "enum": [
+        "active",
+        "discovery",
+        "refinement",
+        "resolved",
+        "archived"
+      ],
+      "type": "string"
+    },
+    "ResolutionInput": {
+      "description": "One input to a Resolution: its type, a reference, and a summary.",
+      "properties": {
+        "input_type": {
+          "$ref": "#/$defs/ResolutionInputType"
+        },
+        "reference": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "input_type",
+        "reference",
+        "summary"
+      ],
+      "type": "object"
+    },
+    "ResolutionInputType": {
+      "enum": [
+        "regulatory",
+        "legal_advice",
+        "commercial",
+        "benchmark",
+        "technical",
+        "incident",
+        "source_material"
+      ],
+      "type": "string"
+    },
+    "ResolutionMethod": {
+      "enum": [
+        "grill",
+        "prototype",
+        "research",
+        "verify",
+        "task"
+      ],
+      "type": "string"
+    },
+    "ResolutionStatus": {
+      "enum": [
+        "draft",
+        "review",
+        "proposed",
+        "approved",
+        "rejected",
+        "revised",
+        "superseded",
+        "abandoned",
+        "archived"
+      ],
+      "type": "string"
+    },
+    "RuleSeverity": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "type": "string"
+    },
+    "RuleStatus": {
+      "enum": [
+        "draft",
+        "review",
+        "active",
+        "deprecated",
+        "archived"
+      ],
+      "type": "string"
+    },
+    "ScopeId": {
+      "description": "A scope ID: lowercase ASCII letters, digits, underscores, and hyphens.",
+      "pattern": "^[a-z0-9_-]+$",
+      "type": "string"
+    },
+    "SingleEdit": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StableId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "One singleton reference edit: the record id sets it, JSON `null` clears it."
+    },
+    "SourceReference": {
+      "properties": {
+        "clause": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_id": {
+          "$ref": "#/$defs/StableId"
+        }
+      },
+      "required": [
+        "source_id"
+      ],
+      "type": "object"
+    },
+    "SourceType": {
+      "enum": [
+        "policy",
+        "document",
+        "legislation",
+        "company_agreement",
+        "system_state",
+        "external_integration",
+        "domain_knowledge",
+        "project_artifact",
+        "incident",
+        "api_spec"
+      ],
+      "type": "string"
+    },
+    "StableId": {
+      "description": "A record ID: lowercase ASCII letters, digits, underscores, and hyphens.",
+      "pattern": "^[a-z0-9_-]+$",
+      "type": "string"
+    },
+    "TopicStatus": {
+      "enum": [
+        "open",
+        "explored",
+        "closed",
+        "archived"
+      ],
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "action": {
+      "enum": [
+        "create",
+        "update",
+        "answer",
+        "claim",
+        "release",
+        "submit",
+        "discuss",
+        "reply",
+        "materialize",
+        "import",
+        "dictionary_import",
+        "swarm_backtrace_land"
+      ],
+      "type": "string"
+    },
+    "actor": {
+      "description": "Actions: create, update, claim, release, submit, discuss, reply.",
+      "type": "string"
+    },
+    "answer": {
+      "description": "Actions: create, answer.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "approved_at": {
+      "description": "Actions: create, update.",
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "approved_by": {
+      "description": "Actions: create, update.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "archived_in_commit": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArchivedStamp"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Actions: create, update."
+    },
+    "body": {
+      "description": "Actions: discuss, reply.",
+      "type": "string"
+    },
+    "builds_on": {
+      "description": "Assertion lineage. A resubmission's rejection link lives on the cycle,\nnever here. Actions: submit.",
+      "items": {
+        "$ref": "#/$defs/StableId"
+      },
+      "type": "array"
+    },
+    "color": {
+      "description": "Actions: create, update.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "commit_pin": {
+      "description": "Actions: create, update.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "confidence": {
+      "description": "Actions: create, update, submit.",
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "context": {
+      "description": "Actions: create, update.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "contradicts": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StableId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Actions: create, update."
+    },
+    "declared_by": {
+      "description": "The owning agent of the record, checked like an edit's `declared_by`. Actions: update, submit, discuss, reply.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "depends_on": {
+      "description": "Actions: create, update.",
+      "items": {
+        "$ref": "#/$defs/StableId"
+      },
+      "type": "array"
+    },
+    "description": {
+      "description": "Actions: create, update.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "domain_id": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StableId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Actions: create, update."
+    },
+    "dry_run": {
+      "default": false,
+      "description": "Run each check of the import and write nothing. Actions: import.",
+      "type": "boolean"
+    },
+    "effective_date": {
+      "description": "Actions: create, update.",
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "enforcement": {
+      "description": "Actions: create, update.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "evidence_references": {
+      "description": "Actions: submit.",
+      "items": {
+        "$ref": "#/$defs/IdeationEvidenceReference"
+      },
+      "type": "array"
+    },
+    "expected_revision": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StableId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Refuses when the record moved on since the caller read it. Actions: submit."
+    },
+    "expected_version": {
+      "description": "Actions: reply.",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "fog": {
+      "description": "Actions: update.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "if_match": {
+      "description": "Actions: update.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "input": {
+      "description": "The scope export file to import: the JSON document that export writes. Actions: import.",
+      "type": "string"
+    },
+    "inputs": {
+      "description": "Actions: create, update.",
+      "items": {
+        "$ref": "#/$defs/ResolutionInput"
+      },
+      "type": "array"
+    },
+    "links": {
+      "description": "Actions: create, update.",
+      "items": {
+        "$ref": "#/$defs/ArtifactLink"
+      },
+      "type": "array"
+    },
+    "made_by": {
+      "description": "Actions: create, update.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "method": {
+      "$ref": "#/$defs/ResolutionMethod",
+      "description": "Actions: create, update."
+    },
+    "name": {
+      "description": "Actions: create, update.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "origin": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DiscussionOrigin"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Actions: create."
+    },
+    "origin_message": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StableId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Actions: create."
+    },
+    "origin_thread": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StableId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Actions: create."
+    },
+    "pdf": {
+      "description": "Path to the local official Issue 9 PDF file Actions: dictionary_import.",
+      "type": "string"
+    },
+    "position": {
+      "description": "Actions: create, update.",
+      "type": "string"
+    },
+    "question": {
+      "description": "Actions: create, update.",
+      "type": "string"
+    },
+    "rationale": {
+      "description": "Actions: create, update.",
+      "type": "string"
+    },
+    "reference": {
+      "description": "Actions: create, update.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "refines": {
+      "default": [],
+      "description": "Actions: create.",
+      "items": {
+        "$ref": "#/$defs/StableId"
+      },
+      "type": "array"
+    },
+    "relationships": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RequirementRelations"
+        }
+      ],
+      "description": "Actions: update."
+    },
+    "replace": {
+      "default": false,
+      "description": "Replace the generated records that an earlier landing of this run wrote. Actions: swarm_backtrace_land.",
+      "type": "boolean"
+    },
+    "replace_parent": {
+      "description": "Replace this Requirement parent and preserve its other parents Actions: update.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "requirement_id": {
+      "$ref": "#/$defs/StableId",
+      "description": "Actions: create."
+    },
+    "requirement_ids": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/StableId"
+          },
+          "type": "array"
+        },
+        {
+          "$ref": "#/$defs/ListEdit"
+        }
+      ],
+      "description": "Actions: create, update."
+    },
+    "resolution_id": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StableId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Actions: create, update, answer."
+    },
+    "resolution_ids": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/StableId"
+          },
+          "type": "array"
+        },
+        {
+          "$ref": "#/$defs/ListEdit"
+        }
+      ],
+      "description": "Actions: create, update."
+    },
+    "resolution_method": {
+      "$ref": "#/$defs/ResolutionMethod",
+      "description": "Actions: create, update."
+    },
+    "review_date": {
+      "description": "Actions: create, update.",
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "review_on": {
+      "description": "Actions: update.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "revises": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StableId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The rejected proposal this submission revises. The store checks the\nrejection and records both links. Actions: submit."
+    },
+    "role": {
+      "$ref": "#/$defs/MessageRole",
+      "description": "Actions: discuss, reply."
+    },
+    "run_dir": {
+      "description": "The swarm run directory: its extractors, refuters, contributions, and merge output. Actions: swarm_backtrace_land.",
+      "type": "string"
+    },
+    "severity": {
+      "$ref": "#/$defs/RuleSeverity",
+      "description": "Actions: create, update."
+    },
+    "source_document": {
+      "description": "Actions: create, update.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_ids": {
+      "description": "Actions: submit.",
+      "items": {
+        "$ref": "#/$defs/StableId"
+      },
+      "type": "array"
+    },
+    "source_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SourceReference"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Actions: create, update."
+    },
+    "source_section": {
+      "description": "Actions: create, update.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_type": {
+      "$ref": "#/$defs/SourceType",
+      "description": "Actions: create, update."
+    },
+    "spawned_by": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StableId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Actions: create."
+    },
+    "statement": {
+      "description": "Actions: create, update.",
+      "type": "string"
+    },
+    "status": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RequirementStatus"
+        },
+        {
+          "$ref": "#/$defs/ResolutionStatus"
+        },
+        {
+          "$ref": "#/$defs/RuleStatus"
+        },
+        {
+          "$ref": "#/$defs/TopicStatus"
+        },
+        {
+          "$ref": "#/$defs/QuestionStatus"
+        }
+      ],
+      "description": "Actions: create, update."
+    },
+    "summary": {
+      "description": "Actions: submit.",
+      "type": "string"
+    },
+    "supersedes": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/StableId"
+          },
+          "type": "array"
+        },
+        {
+          "$ref": "#/$defs/ListEdit"
+        }
+      ],
+      "description": "Actions: create, update."
+    },
+    "target": {
+      "description": "The record ID. Actions: create, update, answer, claim, release, submit, discuss, reply.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "title": {
+      "description": "Actions: create, update, submit.",
+      "type": "string"
+    },
+    "topic_id": {
+      "$ref": "#/$defs/StableId",
+      "description": "Actions: create."
+    },
+    "type": {
+      "description": "The record kind. Actions: create.",
+      "enum": [
+        "source",
+        "requirement",
+        "resolution",
+        "rule",
+        "domain",
+        "boundary",
+        "topic",
+        "question"
+      ],
+      "type": "string"
+    },
+    "url": {
+      "description": "Actions: create, update.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "with_parent": {
+      "description": "Add this parent before the selected parent is removed Actions: update.",
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "action"
+  ],
+  "type": "object"
+}

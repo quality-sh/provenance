@@ -27,9 +27,9 @@ fn assert_get_schema_edges(input: &Validator, output: &Validator, valid: &Value)
     for invalid in [
         json!({"target":""}),
         json!({"target":"req_shared","view":"invented"}),
-        json!({"target":"req_shared","max_depth":0}),
+        json!({"target":"req_shared","depth":0}),
         json!({"target":"req_shared","limit":0}),
-        json!({"target":"req_shared","returned_kinds":["invented"]}),
+        json!({"target":"req_shared","kind":["invented"]}),
     ] {
         assert!(!input.is_valid(&invalid), "invalid input {invalid}");
     }
@@ -288,6 +288,10 @@ impl CheckPort for CategoryFixture {
                         }],
                     },
                 },
+                Category::Docs => CategoryRun::Docs {
+                    findings: Vec::new(),
+                    refusal: Refusal::None,
+                },
             })
         })
     }
@@ -310,14 +314,17 @@ async fn emitted_check_contract_accepts_all_categories_contexts_and_unavailable_
     let input = validator(&json!(check.input_schema));
     let output = validator(&json!(check.output_schema.as_ref().unwrap()));
     for category in Category::ALL {
-        let request = json!({"categories":[category]});
-        assert!(input.is_valid(&request), "{category:?}");
+        let name = serde_json::to_value(category).unwrap();
+        let mut request = serde_json::Map::new();
+        request.insert(name.as_str().unwrap().to_owned(), json!(true));
+        assert!(input.is_valid(&Value::Object(request)), "{category:?}");
     }
-    assert!(!input.is_valid(&json!({"categories":["invented"]})));
+    assert!(!input.is_valid(&json!({"graph": "invented"})));
     assert!(!input.is_valid(&json!({"extra":true})));
-    assert!(!input.is_valid(&json!({"scope":"other"})));
+    assert!(input.is_valid(&json!({"scope":"other"})));
 
-    let arguments = json!({"categories": Category::ALL});
+    let arguments =
+        json!({"graph": true, "statements": true, "bindings": true, "gaps": true, "docs": true});
     let result = client
         .call_tool(
             CallToolRequestParams::new("check")
@@ -378,7 +385,7 @@ async fn emitted_check_contract_accepts_all_categories_contexts_and_unavailable_
     assert_check_context_edges(&output);
 
     fixture.unavailable.store(true, Ordering::SeqCst);
-    let arguments = json!({"categories":["bindings"]});
+    let arguments = json!({"bindings": true});
     let unavailable = client
         .call_tool(
             CallToolRequestParams::new("check")
@@ -428,13 +435,13 @@ async fn assert_trace_tool_is_trace_view(
             .await
             .unwrap()
     };
-    let arguments = json!({"target":"rule_shared", "max_depth":3});
+    let arguments = json!({"target":"rule_shared", "depth":3});
     assert!(input.is_valid(&arguments));
     assert!(!input.is_valid(&json!({"target":"rule_shared", "view":"trace"})));
     let action = call("trace", arguments).await;
     let view = call(
         "get",
-        json!({"target":"rule_shared", "view":"trace", "max_depth":3}),
+        json!({"target":"rule_shared", "view":"trace", "depth":3}),
     )
     .await;
     let value = action.structured_content.as_ref().unwrap();

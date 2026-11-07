@@ -1,27 +1,29 @@
 //! The record actions of the change tool: their fields, and their calls by target.
 
-use provenance_contract::Definition;
+use provenance_contract::{ArgumentPlace, Definition};
+use provenance_core::protocol::failure::ErasedFailure;
 use provenance_core::NodeType;
 use provenance_macros::rule;
 use provenance_porcelain::action::render_readable;
-use provenance_transport::porcelain::{target_call, Action, ActionError};
+use provenance_porcelain::registry::Command;
+use provenance_transport::porcelain::{
+    replacement_call, target_call, Action, ActionError, ParentReplacement, ReplacementError,
+    TargetRoute,
+};
 use provenance_transport::StatementHost;
 use rmcp::model::{CallToolResult, ContentBlock};
 use serde_json::{json, Map, Value};
 
 /// The fields of one record action in the change tool, when the host can run it on
-/// some record kind. The record kind selects the fields of `data`, so the tool input
-/// gives `data` as an object, and a call without `data` gets the schema of the kind.
+/// some record kind. Each argument of the operation is one property, as each is one
+/// CLI flag. The record kind of the target selects the arguments that a call can give,
+/// so a call that lacks a needed argument gets the schema of the kind.
 #[rule("rule_mcp_one_tool_for_record_actions")]
 pub fn action_schema(host: &StatementHost, action: Action) -> Option<Value> {
     let definitions = host.porcelain().executable_target_definitions(action);
     if definitions.is_empty() {
         return None;
     }
-    let kinds = definitions
-        .iter()
-        .map(|(kind, definition)| kind_schema(action, *kind, definition))
-        .collect::<Vec<_>>();
     let mut properties = Map::new();
     properties.insert(
         "target".into(),
@@ -39,77 +41,145 @@ pub fn action_schema(host: &StatementHost, action: Action) -> Option<Value> {
         );
         required.push(json!("type"));
     }
-    for kind in &kinds {
-        for (name, schema) in kind["properties"].as_object().into_iter().flatten() {
-            let field = if name == "data" {
-                json!({
-                    "type": "object",
-                    "description": "The record fields. Omit data to get their schema \
-                                    for the action and record kind."
-                })
-            } else {
-                schema.clone()
-            };
-            properties.entry(name.clone()).or_insert(field);
+    if action == Action::Update {
+        for field in Command::Action(action).declaration().input.fields() {
+            let mut schema = json!({"type": "string", "minLength": 1});
+            if let Some(doc) = field.doc {
+                schema["description"] = json!(doc);
+            }
+            properties.insert(field.name.into(), schema);
         }
     }
-    // The record kind decides if `data` is needed: a call without it gets the schema.
-    Some(json!({"properties": properties, "required": required}))
+    let mut definitions_by_name = Map::new();
+    for (kind, definition) in &definitions {
+        let schema = kind_schema(action, *kind, definition);
+        for (name, property) in schema["properties"].as_object().into_iter().flatten() {
+            match properties.get(name) {
+                Some(held) if held != property => {
+                    let mut branches = match held.get("anyOf") {
+                        Some(Value::Array(branches)) => branches.clone(),
+                        _ => vec![held.clone()],
+                    };
+                    if !branches.contains(property) {
+                        branches.push(property.clone());
+                    }
+                    properties.insert(name.clone(), json!({"anyOf": branches}));
+                }
+                Some(_) => {}
+                None => {
+                    properties.insert(name.clone(), property.clone());
+                }
+            }
+        }
+        for (name, definition) in schema["$defs"].as_object().into_iter().flatten() {
+            definitions_by_name
+                .entry(name.clone())
+                .or_insert_with(|| definition.clone());
+        }
+    }
+    let mut schema = json!({"properties": properties, "required": required});
+    if !definitions_by_name.is_empty() {
+        schema["$defs"] = Value::Object(definitions_by_name);
+    }
+    Some(schema)
 }
 
-/// The fields of one action on one record kind, with the definitions they refer to.
+/// The arguments of one action on one record kind, with the definitions they refer
+/// to. The target fills the record ID, so `id` is not an argument.
 fn kind_schema(action: Action, kind: NodeType, definition: &Definition) -> Value {
-    let mut schema = definition.mcp_input_schema();
-    let object = schema
-        .as_object_mut()
-        .expect("registered MCP input schema is an object");
-    let properties = object["properties"]
-        .as_object_mut()
-        .expect("registered MCP properties are an object");
-    if action == Action::Create {
-        let data = properties["data"]
-            .as_object_mut()
-            .expect("create data schema is an object");
-        data["properties"]
-            .as_object_mut()
-            .expect("create properties are an object")
-            .remove("id");
-        data["required"]
-            .as_array_mut()
-            .expect("create required is an array")
-            .retain(|field| field != "id");
-    } else {
-        properties.remove("id");
-        object["required"]
-            .as_array_mut()
-            .expect("registered MCP required is an array")
-            .retain(|field| field != "id");
+    let mut properties = Map::new();
+    let mut required = Vec::new();
+    let data_required = definition
+        .request_schema()
+        .and_then(|request| request.pointer("/properties/data/required"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    for argument in definition.arguments().unwrap_or_default() {
+        if argument.name == "id" {
+            continue;
+        }
+        let (schema, needed) = match &argument.place {
+            ArgumentPlace::Parameter(parameter) => (parameter.schema.clone(), parameter.required),
+            ArgumentPlace::Body {
+                field,
+                schema,
+                wrap_array,
+            } => (
+                schema.clone(),
+                !wrap_array && data_required.iter().any(|name| name == field.as_str()),
+            ),
+        };
+        if needed {
+            required.push(json!(argument.name));
+        }
+        properties.insert(argument.name, schema);
     }
-    remove_empty_data(object);
-    object.insert(
-        "description".into(),
-        json!(format!("{} {}", action.as_str(), kind.as_str())),
-    );
+    let mut schema = json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": properties,
+        "required": required,
+        "description": format!("{} {}", action.as_str(), kind.as_str()),
+    });
+    if let Some(definitions) = definition
+        .request_schema()
+        .and_then(|request| request.get("$defs"))
+    {
+        schema["$defs"] = definitions.clone();
+    }
     schema
 }
 
-fn remove_empty_data(schema: &mut Map<String, Value>) {
-    let empty = schema["properties"]["data"]["properties"]
-        .as_object()
-        .is_some_and(Map::is_empty)
-        && schema["properties"]["data"]["required"]
-            .as_array()
-            .is_some_and(Vec::is_empty);
-    if empty {
-        schema["properties"]
-            .as_object_mut()
-            .expect("properties are an object")
-            .remove("data");
-        schema["required"]
-            .as_array_mut()
-            .expect("required is an array")
-            .retain(|field| field != "data");
+/// The schema whose required list the call must meet now. A call without record fields
+/// must give each required argument, and a refusal gives the schema of the kind. A call
+/// with record fields goes to the operation, which names all the missing fields at once.
+fn needed_now(mut schema: Value, definition: &Definition, arguments: &Map<String, Value>) -> Value {
+    let declared = definition.arguments().unwrap_or_default();
+    let body = |name: &str| {
+        declared
+            .iter()
+            .any(|argument| argument.name == name && argument.body_field().is_some())
+    };
+    if arguments.keys().any(|name| body(name)) {
+        if let Some(required) = schema["required"].as_array_mut() {
+            required.retain(|name| name.as_str().is_some_and(|name| !body(name)));
+        }
     }
+    schema
+}
+
+/// The request arguments of one call: the body arguments go into `data`, and the
+/// parameters stay. An alias of an array field gives one item of it.
+fn request_arguments(
+    definition: &Definition,
+    arguments: Map<String, Value>,
+) -> Result<Value, CallToolResult> {
+    let declared = definition.arguments().unwrap_or_default();
+    let mut data = Map::new();
+    let mut request = Map::new();
+    for (name, value) in arguments {
+        let Some(argument) = declared.iter().find(|argument| argument.name == name) else {
+            request.insert(name, value);
+            continue;
+        };
+        let ArgumentPlace::Body {
+            field, wrap_array, ..
+        } = &argument.place
+        else {
+            request.insert(name, value);
+            continue;
+        };
+        let value = if *wrap_array { json!([value]) } else { value };
+        if data.insert(field.clone(), value).is_some() {
+            let message = format!("{name} and {field} give the same field");
+            return Err(refusal(&name, "invalid_value", &message));
+        }
+    }
+    if !data.is_empty() {
+        request.insert("data".into(), Value::Object(data));
+    }
+    Ok(Value::Object(request))
 }
 
 /// Runs one record action. The tool input has checked that the call gives the fields
@@ -143,36 +213,108 @@ pub async fn call(
         Err(ActionError::InvalidOptions) => return wrong_kind(host, action, "target"),
         Err(error) => return action_error(&error),
     };
-    let schema = kind_schema(action, route.kind, route.definition);
+    let replace_parent = arguments.remove("replace_parent");
+    let with_parent = arguments.remove("with_parent");
+    let given = |name: &str| match name {
+        "replace_parent" => replace_parent.is_some(),
+        "with_parent" => with_parent.is_some(),
+        name => arguments.contains_key(name),
+    };
+    let relations = Command::Action(action).declaration().input.relations();
+    if let Some((relation, (field, _))) = relations
+        .iter()
+        .find_map(|relation| relation.broken_by(given).map(|broken| (relation, broken)))
+    {
+        return refusal(field, "invalid_value", &relation.message());
+    }
+    let mut schema = needed_now(
+        kind_schema(action, route.kind, route.definition),
+        route.definition,
+        &arguments,
+    );
+    if replace_parent.is_some() {
+        // A replacement reads the record and guards each write with the ETag it read.
+        if let Some(required) = schema["required"].as_array_mut() {
+            required.retain(|name| name != "if_match");
+        }
+    }
     if let Some(refused) = field_refusal(action, route.kind, &schema, &arguments) {
         return refused;
     }
-    let (data, query, headers) =
-        match target_call(route.definition, &Value::Object(arguments), &target) {
-            Ok(call) => call,
-            Err(failure) => return crate::surface::failure_result(failure),
-        };
-    if let Some(name) = query.keys().next() {
-        let message = format!(
-            "the {} action on a {} record does not take {name}",
-            action.as_str(),
-            route.kind.as_str()
-        );
-        return refusal(name, "unknown_field", &message);
-    }
-    match host.invoke_target(&route, data, headers).await {
-        Ok(value) => {
+    let request = match request_arguments(route.definition, arguments) {
+        Ok(request) => request,
+        Err(refused) => return refused,
+    };
+    let written = match write(host, &route, &request, (replace_parent, with_parent)).await {
+        Ok(written) => written,
+        Err(refused) => return refused,
+    };
+    match written {
+        (Ok(value), note) => {
             let mut structured = value.clone();
             if let Some(object) = structured.as_object_mut() {
                 object.insert("type".into(), json!(route.kind.as_str()));
             }
             let mut result = CallToolResult::structured(structured);
-            result.content = vec![ContentBlock::text(render_readable(
-                action, &target, route.kind, &value,
-            ))];
+            let readable = render_readable(action, &target, route.kind, &value);
+            result.content = vec![ContentBlock::text(note.unwrap_or_default() + &readable)];
             result
         }
-        Err(failure) => crate::surface::failure_result(failure),
+        (Err(failure), _) => crate::surface::failure_result(failure),
+    }
+}
+
+/// The written record, or the failure of the write, and a note for the reader. With
+/// both parent fields, the write replaces one Requirement parent.
+async fn write(
+    host: &StatementHost,
+    route: &TargetRoute,
+    request: &Value,
+    (replace_parent, with_parent): (Option<Value>, Option<Value>),
+) -> Result<(Result<Value, ErasedFailure>, Option<String>), CallToolResult> {
+    let replacing = replace_parent.is_some() || with_parent.is_some();
+    let split = if replacing {
+        replacement_call
+    } else {
+        target_call
+    };
+    let (data, query, headers) =
+        split(route.definition, request, &route.target).map_err(crate::surface::failure_result)?;
+    if let Some(name) = query.keys().next() {
+        let message = format!(
+            "the {} action on a {} record does not take {name}",
+            route.action.as_str(),
+            route.kind.as_str()
+        );
+        return Err(refusal(name, "unknown_field", &message));
+    }
+    match (&replace_parent, &with_parent) {
+        (Some(Value::String(old)), Some(Value::String(new))) => {
+            let parents = ParentReplacement {
+                replace_parent: old,
+                with_parent: new,
+            };
+            match host.replace_parent(route, data, headers, parents).await {
+                Ok(replaced) => {
+                    let note = (!replaced.changed)
+                        .then(|| format!("{new} replaced {old} already; nothing changed\n\n"));
+                    Ok((Ok(replaced.record), note))
+                }
+                Err(ReplacementError::Failure(failure)) => Ok((Err(failure), None)),
+                Err(ReplacementError::Invalid(message)) => {
+                    Err(refusal("replace_parent", "invalid_value", &message))
+                }
+                Err(ReplacementError::Unchanged(message)) => Err(crate::surface::detail_error(
+                    json!({"kind": "operation_failed", "message": message}),
+                )),
+            }
+        }
+        (None, None) => Ok((host.invoke_target(route, data, headers).await, None)),
+        _ => Err(refusal(
+            "replace_parent",
+            "invalid_value",
+            "the parents are record IDs",
+        )),
     }
 }
 

@@ -385,10 +385,7 @@ fn file_search_refuses_other_filters_and_a_symbol_without_a_file() {
 
     for (arguments, field) in [
         (&["--file", "code.rs", "--text", "pay"][..], "text"),
-        (
-            &["--file", "code.rs", "--kind", "requirement"][..],
-            "node_types",
-        ),
+        (&["--file", "code.rs", "--kind", "requirement"][..], "kind"),
         (&["--symbol", "pay"][..], "symbol"),
         (&["--kind", "rule", "--line", "3"][..], "line"),
     ] {

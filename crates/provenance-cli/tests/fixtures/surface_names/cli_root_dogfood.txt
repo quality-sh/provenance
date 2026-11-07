@@ -1,0 +1,35 @@
+Usage: provenance [OPTIONS] <COMMAND>
+
+Commands:
+  search           Find records across the permitted kinds in the bound scope, or the Rules bound to a source file and symbol.
+  check            Check graph validity, statement quality, and binding coverage. Give a statement to check that text with the project dictionary before a write.
+  prime            Introduce Provenance domain concepts and actions.
+  init             
+  materialize      
+  export           
+  import           
+  validate         
+  schema           
+  dictionary       
+  graph-reference  
+  swarm-backtrace  
+  docs             
+  skills           
+  report           Deterministic report rendering from a versioned report envelope
+  review           Serve local review assets and authorized repository operations
+  mcp              Serve the MCP tools for one repository on standard input and output
+  dogfood          Dev-build-only: record pain-point notes about provenance itself
+  help             Print this message or the help of the given subcommand(s)
+
+Options:
+      --quiet    Drop the advisory notes commands print alongside their output, such as the warning that this repository has no shaping skills installed
+  -h, --help     Print help
+  -V, --version  Print version
+
+Dynamic commands:
+  provenance api [PATH]
+  provenance api --filter <text>
+  provenance <id> get --view children --depth <N>
+  provenance <id> trace
+
+Discussion actions: provenance discussions, or provenance <record-id> discussions|discuss, or provenance <discussion-id> discussion|reply.

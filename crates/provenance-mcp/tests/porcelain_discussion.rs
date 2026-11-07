@@ -83,7 +83,7 @@ async fn assert_conversation_continuations(
         client,
         "change",
         json!({"action":"discuss",
-            "parent":{"node_type":"requirement","node_id":"req_shared"},
+            "target":"req_shared",
             "actor":"ben", "role":"user", "body":"Other root"
         }),
     )
@@ -94,7 +94,7 @@ async fn assert_conversation_continuations(
     let first_page = call(
         client,
         "discussions",
-        json!({"action":"discussion","discussion_id":id,"limit":1}),
+        json!({"action":"discussion","target":id,"limit":1}),
     )
     .await;
     let cursor = first_page.structured_content.as_ref().unwrap()["result"]["messages"]
@@ -104,14 +104,14 @@ async fn assert_conversation_continuations(
     let wrong_selector = call(
         client,
         "discussions",
-        json!({"action":"discussion","discussion_id":other_id,"limit":1,"cursor":cursor}),
+        json!({"action":"discussion","target":other_id,"limit":1,"cursor":cursor}),
     )
     .await;
     assert_eq!(wrong_selector.is_error, Some(true));
     let next_page = call(
         client,
         "discussions",
-        json!({"action":"discussion","discussion_id":id,"limit":1,"cursor":cursor}),
+        json!({"action":"discussion","target":id,"limit":1,"cursor":cursor}),
     )
     .await;
     assert_eq!(
@@ -122,7 +122,7 @@ async fn assert_conversation_continuations(
         client,
         "change",
         json!({"action":"reply",
-            "discussion_id":id, "actor":"ben",
+            "target":id, "actor":"ben",
             "expected_version":1, "role":"user", "body":"Stale message"
         }),
     )
@@ -132,7 +132,7 @@ async fn assert_conversation_continuations(
         client,
         "change",
         json!({"action":"reply",
-            "discussion_id":id, "actor":"ben",
+            "target":id, "actor":"ben",
             "expected_version":2, "role":"user", "body":"Later message"
         }),
     )
@@ -141,7 +141,7 @@ async fn assert_conversation_continuations(
     let stale_cursor = call(
         client,
         "discussions",
-        json!({"action":"discussion","discussion_id":id,"limit":1,"cursor":cursor}),
+        json!({"action":"discussion","target":id,"limit":1,"cursor":cursor}),
     )
     .await;
     assert_eq!(stale_cursor.is_error, Some(true));
@@ -155,7 +155,7 @@ async fn assert_repeated_start_creates_new_discussion(
         client,
         "change",
         json!({"action":"discuss",
-            "parent":{"node_type":"requirement","node_id":"req_shared"},
+            "target":"req_shared",
             "actor":"ben", "role":"user", "body":"Opening text"
         }),
     )
@@ -181,7 +181,7 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
         &client,
         "change",
         json!({"action":"discuss",
-            "parent":{"node_type":"requirement","node_id":"req_shared"},
+            "target":"req_shared",
             "actor":"ben", "role":"user", "body":"Opening text"
         }),
     )
@@ -194,7 +194,7 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
         &client,
         "change",
         json!({"action":"discuss",
-            "parent":{"node_type":"requirement","node_id":"req_shared"},
+            "target":"req_shared",
             "actor":"ben", "role":"user", "body":"Changed"
         }),
     )
@@ -228,7 +228,7 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
     let conversation = call(
         &client,
         "discussions",
-        json!({"action":"discussion","discussion_id":id}),
+        json!({"action":"discussion","target":id}),
     )
     .await;
     assert_eq!(
@@ -240,7 +240,7 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
         &client,
         "change",
         json!({"action":"reply",
-            "discussion_id":id, "actor":"ben",
+            "target":id, "actor":"ben",
             "expected_version":1, "role":"user", "body":"Second message"
         }),
     )
@@ -283,7 +283,7 @@ async fn reply_grant_does_not_admit_start() {
         &client,
         "change",
         json!({"action":"discuss",
-            "parent":{"node_type":"requirement","node_id":"req_shared"},
+            "target":"req_shared",
             "actor":"ben", "role":"user", "body":"Denied start"
         }),
     )
@@ -293,7 +293,7 @@ async fn reply_grant_does_not_admit_start() {
         &client,
         "change",
         json!({"action":"reply",
-            "discussion_id":receipt.discussion_id, "actor":"ben",
+            "target":receipt.discussion_id, "actor":"ben",
             "expected_version":1, "role":"user", "body":"Permitted reply"
         }),
     )
@@ -344,7 +344,7 @@ async fn denied_parent_grant_is_applied_before_discussion_page_selection() {
         &client,
         "discussions",
         json!({
-            "parent":{"node_type":"source","node_id":"source_shared"}, "limit":1
+            "target":"source_shared", "limit":1
         }),
     )
     .await;
@@ -356,7 +356,7 @@ async fn denied_parent_grant_is_applied_before_discussion_page_selection() {
     let hidden = call(
         &client,
         "discussions",
-        json!({"action":"discussion","discussion_id":source.discussion_id}),
+        json!({"action":"discussion","target":source.discussion_id}),
     )
     .await;
     assert_eq!(hidden.is_error, Some(true));
@@ -364,7 +364,7 @@ async fn denied_parent_grant_is_applied_before_discussion_page_selection() {
         &client,
         "change",
         json!({"action":"reply",
-            "discussion_id":source.discussion_id, "actor":"ben",
+            "target":source.discussion_id, "actor":"ben",
             "expected_version":1, "role":"user", "body":"Denied"
         }),
     )

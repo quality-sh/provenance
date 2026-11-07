@@ -144,7 +144,7 @@ async fn an_orphan_rule_gives_one_finding_and_each_requirement_its_gap() {
     let client = Client::connect(tokio::io::join(stdout, stdin))
         .await
         .unwrap();
-    let mcp = client.call("check", json!({"categories":["gaps"]})).await;
+    let mcp = client.call("check", json!({"gaps": true})).await;
     assert_ne!(mcp["isError"], json!(true), "{mcp}");
     assert_eq!(mcp["structuredContent"]["categories"][0], report);
     client.cancel().await.unwrap();

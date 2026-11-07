@@ -7,7 +7,6 @@
 use super::grammar::TargetVerb;
 use provenance_core::{NodeType, ScopeId};
 use provenance_porcelain::action::Action;
-use provenance_store::layout::ProvenanceLayout;
 
 /// The kind of an existing target, or `None` when the read cannot give one
 /// kind. Help then lists the fields of every record type.
@@ -28,11 +27,14 @@ pub(super) fn resolve_record_kind(
     // Opening a repository takes the publication lock, so help reads the
     // record kinds through the layout instead. While a publication runs, the
     // answer is best-effort.
-    let layout = ProvenanceLayout::new(repo.as_str());
-    provenance_store::publication::read_only_record_kinds(&layout, &scope, target)
-        .ok()
-        .and_then(|kinds| match kinds.as_slice() {
-            [kind] => Some(*kind),
-            _ => None,
-        })
+    provenance_transport::repository::read_only_record_kinds(
+        camino::Utf8Path::new(repo),
+        &scope,
+        target,
+    )
+    .ok()
+    .and_then(|kinds| match kinds.as_slice() {
+        [kind] => Some(*kind),
+        _ => None,
+    })
 }

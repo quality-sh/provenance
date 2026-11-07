@@ -69,12 +69,10 @@ async fn mcp_target_first_source_create_and_update_keep_structured_targets() {
         json!({"action":"create",
             "target":"source_mcp_target",
             "type":"source",
-            "data":{
-                "name":"MCP target",
+            "name":"MCP target",
                 "source_type":"policy",
                 "url":"https://example.test/policy",
                 "supersedes":[]
-            }
         }),
     )
     .await;
@@ -92,7 +90,7 @@ async fn mcp_target_first_source_create_and_update_keep_structured_targets() {
     let edited = call(
         &client,
         "change",
-        json!({"action":"update","target":"source_mcp_target","data":{"reference":"section 1","url":null}}),
+        json!({"action":"update","target":"source_mcp_target","reference":"section 1","url":null}),
     )
     .await;
     assert_ne!(edited.is_error, Some(true), "{edited:?}");
@@ -124,14 +122,12 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
         json!({"action":"create",
             "target":"req_mcp_target",
             "type":"requirement",
-            "data":{
-                "actor":"agent",
+            "actor":"agent",
                 "statement":"The MCP action submits the target Requirement.",
                 "status":"active",
                 "refines":["req_shared"],
                 "depends_on":[],
                 "supersedes":[]
-            }
         }),
     )
     .await;
@@ -156,13 +152,11 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
         json!({"action":"create",
             "target":"req_mcp_dependency",
             "type":"requirement",
-            "data":{
-                "actor":"agent",
+            "actor":"agent",
                 "statement":"The MCP dependency exists.",
                 "status":"active",
                 "depends_on":[],
                 "supersedes":[]
-            }
         }),
     )
     .await;
@@ -174,10 +168,8 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
         json!({"action":"update",
             "target":"req_mcp_target",
             "if_match":requirement.structured_content.as_ref().unwrap()["data"]["edit"]["etag"],
-            "data":{
-                "actor":"agent",
+            "actor":"agent",
                 "relationships":{"depends_on":{"add":["req_mcp_dependency"]}}
-            }
         }),
     )
     .await;
@@ -235,14 +227,12 @@ async fn mcp_target_first_requirement_submit_uses_the_target() {
         "change",
         json!({"action":"submit",
             "target":"req_shared",
-            "data":{
-                "actor":"agent",
+            "actor":"agent",
                 "title":"MCP target",
                 "summary":"The target-first action submits this Requirement.",
                 "source_ids":[],
                 "evidence_references":[],
                 "builds_on":[]
-            }
         }),
     )
     .await;
@@ -280,7 +270,7 @@ async fn mcp_named_actions_infer_kinds_and_refuse_invalid_targets() {
     let claimed = call(
         &client,
         "change",
-        json!({"action":"claim","target":"topic_shared","data":{"actor":"worker"}}),
+        json!({"action":"claim","target":"topic_shared","actor":"worker"}),
     )
     .await;
     assert_ne!(claimed.is_error, Some(true), "{claimed:?}");
@@ -292,7 +282,7 @@ async fn mcp_named_actions_infer_kinds_and_refuse_invalid_targets() {
     let released = call(
         &client,
         "change",
-        json!({"action":"release","target":"topic_shared","data":{"actor":"worker"}}),
+        json!({"action":"release","target":"topic_shared","actor":"worker"}),
     )
     .await;
     assert_ne!(released.is_error, Some(true), "{released:?}");
@@ -301,7 +291,7 @@ async fn mcp_named_actions_infer_kinds_and_refuse_invalid_targets() {
     let answered = call(
         &client,
         "change",
-        json!({"action":"answer","target":"question_shared","data":{"answer":"The shared answer."}}),
+        json!({"action":"answer","target":"question_shared","answer":"The shared answer."}),
     )
     .await;
     assert_ne!(answered.is_error, Some(true), "{answered:?}");
@@ -313,7 +303,7 @@ async fn mcp_named_actions_infer_kinds_and_refuse_invalid_targets() {
     let invalid = call(
         &client,
         "change",
-        json!({"action":"claim","target":"question_shared","data":{"actor":"worker"}}),
+        json!({"action":"claim","target":"question_shared","actor":"worker"}),
     )
     .await;
     assert_eq!(invalid.is_error, Some(true), "{invalid:?}");
@@ -321,7 +311,7 @@ async fn mcp_named_actions_infer_kinds_and_refuse_invalid_targets() {
     let missing = call(
         &client,
         "change",
-        json!({"action":"update","target":"record_missing","data":{"name":"Missing"}}),
+        json!({"action":"update","target":"record_missing","name":"Missing"}),
     )
     .await;
     assert_eq!(missing.is_error, Some(true), "{missing:?}");
@@ -333,7 +323,7 @@ async fn mcp_named_actions_infer_kinds_and_refuse_invalid_targets() {
     let kind_selector = call(
         &client,
         "change",
-        json!({"action":"update","target":"source_shared","type":"invented","data":{"name":"Changed"}}),
+        json!({"action":"update","target":"source_shared","type":"invented","name":"Changed"}),
     )
     .await;
     assert_eq!(kind_selector.is_error, Some(true), "{kind_selector:?}");
@@ -357,7 +347,7 @@ async fn mcp_authoring_does_not_expose_or_run_hidden_operations() {
     let hidden = client
         .call_tool(
             rmcp::model::CallToolRequestParams::new("change").with_arguments(
-                json!({"action":"update","target":"source_shared","data":{"name":"Hidden"}})
+                json!({"action":"update","target":"source_shared","name":"Hidden"})
                     .as_object()
                     .unwrap()
                     .clone(),

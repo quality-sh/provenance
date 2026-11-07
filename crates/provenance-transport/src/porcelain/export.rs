@@ -1,0 +1,201 @@
+//! The scope export document: every record of one scope, as export writes it and
+//! import reads it.
+
+use super::RepositoryPort;
+use crate::repository::RepoContext;
+use crate::snapshot::{ScopeSnapshot, Store};
+use provenance_porcelain::export::{Document, ExportFormat, ExportInput, ExportPort};
+use provenance_porcelain::WorkFuture;
+use provenance_store::publication::with_publication_guard;
+use serde::Serialize;
+
+/// Every record of one scope.
+#[derive(Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ScopeExport {
+    pub scope: String,
+    pub sources: Vec<provenance_core::Source>,
+    #[serde(default)]
+    pub domains: Vec<provenance_core::Domain>,
+    pub requirements: Vec<provenance_core::Requirement>,
+    #[serde(default)]
+    pub boundaries: Vec<provenance_core::Boundary>,
+    #[serde(default)]
+    pub topics: Vec<provenance_core::Topic>,
+    #[serde(default)]
+    pub questions: Vec<provenance_core::Question>,
+    pub resolutions: Vec<provenance_core::Resolution>,
+    pub rules: Vec<provenance_core::Rule>,
+    #[serde(default)]
+    pub verification_bindings: Vec<provenance_core::VerificationBinding>,
+    #[serde(default)]
+    pub implementation_bindings: Vec<provenance_core::ImplementationBinding>,
+    pub threads: Vec<provenance_core::Thread>,
+    pub messages: Vec<provenance_core::Message>,
+    #[serde(default)]
+    pub contributions: Vec<provenance_core::Contribution>,
+    #[serde(default)]
+    pub synthesis_packets: Vec<provenance_core::SynthesisPacket>,
+    #[serde(default)]
+    pub proposal_cards: Vec<provenance_core::ProposalCard>,
+    #[serde(default)]
+    pub assertion_records: Vec<provenance_core::AssertionRecord>,
+    #[serde(default, alias = "promotion_decisions")]
+    pub dispositions: Vec<provenance_core::DispositionRecord>,
+}
+
+impl ScopeExport {
+    /// The export of the records of one scope snapshot.
+    pub fn from_snapshot(scope: String, snapshot: ScopeSnapshot) -> Self {
+        Self {
+            scope,
+            sources: snapshot.sources,
+            domains: snapshot.domains,
+            requirements: snapshot.requirements,
+            boundaries: snapshot.boundaries,
+            topics: snapshot.topics,
+            questions: snapshot.questions,
+            resolutions: snapshot.resolutions,
+            rules: snapshot.rules,
+            verification_bindings: snapshot.verification_bindings,
+            implementation_bindings: snapshot.implementation_bindings,
+            threads: snapshot.threads,
+            messages: snapshot.messages,
+            contributions: snapshot.contributions,
+            synthesis_packets: snapshot.synthesis_packets,
+            proposal_cards: snapshot.proposal_cards,
+            assertion_records: snapshot.assertion_records,
+            dispositions: snapshot.dispositions,
+        }
+    }
+}
+
+impl ExportPort for RepositoryPort {
+    type Failure = anyhow::Error;
+
+    fn export(&self, input: ExportInput) -> WorkFuture<'_, Document, anyhow::Error> {
+        Box::pin(async move {
+            let exported = export_context(&self.context)?;
+            deliver(
+                render_export(input.format, &exported)?,
+                input.output.as_deref(),
+            )
+        })
+    }
+}
+
+/// The document of `text`, written to `output` too when the input names a file.
+pub(super) fn deliver(text: String, output: Option<&str>) -> anyhow::Result<Document> {
+    if let Some(path) = output {
+        std::fs::write(path, &text)?;
+    }
+    Ok(Document { text })
+}
+
+/// The export reads its records from one view of the canonical state. The
+/// review and validation checks read the live store in the same section.
+fn export_context(context: &RepoContext) -> anyhow::Result<ScopeExport> {
+    let repository = context.open()?;
+    let scope_id = repository.scope().clone();
+    with_publication_guard(&repository, |guard| {
+        let held = Store::new(guard.repository());
+        let snapshot = crate::snapshot::snapshot(&guard.repository().view()?, &scope_id)?;
+        held.ensure_review_portable(&scope_id)?;
+        held.validate_ideation_scope(&scope_id)?;
+        held.validate_graph_scope(&scope_id)?;
+        Ok(ScopeExport::from_snapshot(
+            scope_id.as_str().to_owned(),
+            snapshot,
+        ))
+    })
+}
+
+fn render_export(format: ExportFormat, exported: &ScopeExport) -> anyhow::Result<String> {
+    match format {
+        ExportFormat::Json => Ok(format!("{}\n", serde_json::to_string_pretty(exported)?)),
+        ExportFormat::Jsonl => render_jsonl(exported),
+        ExportFormat::Markdown => Ok(render_markdown(exported)),
+        ExportFormat::Toon => Ok(render_toon(exported)),
+        ExportFormat::Table => Ok(render_table(exported)),
+    }
+}
+
+/// One line for each record of each collection. Collections and record keys
+/// come out in alphabetical order.
+fn render_jsonl(exported: &ScopeExport) -> anyhow::Result<String> {
+    let value = serde_json::to_value(exported)?;
+    let records = value
+        .as_object()
+        .into_iter()
+        .flat_map(serde_json::Map::values)
+        .filter_map(serde_json::Value::as_array)
+        .flatten();
+    let mut out = String::new();
+    for record in records {
+        out.push_str(&serde_json::to_string(record)?);
+        out.push('\n');
+    }
+    Ok(out)
+}
+
+fn render_markdown(exported: &ScopeExport) -> String {
+    format!(
+        concat!(
+            "# Provenance Export\n\n- Scope: {}\n- Sources: {}\n- Domains: {}\n",
+            "- Requirements: {}\n- Boundaries: {}\n- Topics: {}\n- Questions: {}\n",
+            "- Resolutions: {}\n- Rules: {}\n- Proposals: {}\n"
+        ),
+        exported.scope,
+        exported.sources.len(),
+        exported.domains.len(),
+        exported.requirements.len(),
+        exported.boundaries.len(),
+        exported.topics.len(),
+        exported.questions.len(),
+        exported.resolutions.len(),
+        exported.rules.len(),
+        exported.proposal_cards.len()
+    )
+}
+
+fn render_toon(exported: &ScopeExport) -> String {
+    format!(
+        concat!(
+            "scope: {}\nsources: {}\ndomains: {}\nrequirements: {}\nboundaries: {}\n",
+            "topics: {}\nquestions: {}\nresolutions: {}\nrules: {}\nproposals: {}\n"
+        ),
+        exported.scope,
+        exported.sources.len(),
+        exported.domains.len(),
+        exported.requirements.len(),
+        exported.boundaries.len(),
+        exported.topics.len(),
+        exported.questions.len(),
+        exported.resolutions.len(),
+        exported.rules.len(),
+        exported.proposal_cards.len()
+    )
+}
+
+fn render_table(exported: &ScopeExport) -> String {
+    format!(
+        concat!(
+            "scope\tsources\tdomains\trequirements\tboundaries\ttopics\tquestions\t",
+            "resolutions\trules\tproposals\n{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n"
+        ),
+        exported.scope,
+        exported.sources.len(),
+        exported.domains.len(),
+        exported.requirements.len(),
+        exported.boundaries.len(),
+        exported.topics.len(),
+        exported.questions.len(),
+        exported.resolutions.len(),
+        exported.rules.len(),
+        exported.proposal_cards.len()
+    )
+}
+
+#[cfg(test)]
+#[path = "export_tests.rs"]
+mod tests;

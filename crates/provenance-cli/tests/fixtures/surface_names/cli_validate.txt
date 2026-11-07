@@ -1,0 +1,10 @@
+Usage: provenance validate [OPTIONS] --input <INPUT> <ARTIFACT>
+
+Arguments:
+  <ARTIFACT>  [possible values: contribution, synthesis-packet, proposal, assertion, disposition, graph-reference, graph-reference-export]
+
+Options:
+      --input <INPUT>    
+      --quiet            Drop the advisory notes commands print alongside their output, such as the warning that this repository has no shaping skills installed
+      --format <FORMAT>  [default: json] [possible values: json]
+  -h, --help             Print help

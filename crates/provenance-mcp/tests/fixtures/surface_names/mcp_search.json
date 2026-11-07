@@ -1,0 +1,90 @@
+{
+  "$defs": {
+    "NodeType": {
+      "enum": [
+        "source",
+        "requirement",
+        "resolution",
+        "rule",
+        "topic",
+        "question",
+        "domain",
+        "boundary"
+      ],
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The one search request. Its fields are the search fields.",
+  "properties": {
+    "cursor": {
+      "default": null,
+      "description": "The continuation from an earlier page of the same search.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "file": {
+      "default": null,
+      "description": "Return the Rules bound in this repository-relative source file.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "include_terminal": {
+      "default": null,
+      "description": "Include archived and other terminal records.",
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "kind": {
+      "default": [],
+      "description": "Record kinds to return.",
+      "items": {
+        "$ref": "#/$defs/NodeType"
+      },
+      "type": "array"
+    },
+    "limit": {
+      "default": null,
+      "description": "The page size. The default is 50.",
+      "maximum": 200,
+      "minimum": 1,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "line": {
+      "default": null,
+      "description": "Put the Rules bound at this line first. Needs file.",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "symbol": {
+      "default": null,
+      "description": "Put the Rules bound to this symbol first. Needs file.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "text": {
+      "default": null,
+      "description": "Text to find in record ids and text.",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "title": "SearchInput",
+  "type": "object"
+}

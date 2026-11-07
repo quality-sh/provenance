@@ -53,7 +53,7 @@ async fn assert_check_readable(client: &Client, repo: &str, name: &str) {
         .output()
         .unwrap();
     assert!(cli.status.success());
-    let mcp = client.call(name, json!({"categories":["graph"]})).await;
+    let mcp = client.call(name, json!({"graph": true})).await;
     assert_eq!(
         String::from_utf8(cli.stdout).unwrap().trim_end(),
         mcp["content"][0]["text"]
@@ -85,6 +85,10 @@ impl provenance_porcelain::check::CheckPort for EmptyCheckPort {
                 Category::Gaps => CategoryRun::Gaps {
                     findings: Vec::new(),
                     context: GapsContext { scopes: Vec::new() },
+                },
+                Category::Docs => CategoryRun::Docs {
+                    findings: Vec::new(),
+                    refusal: Refusal::None,
                 },
             })
         })
@@ -121,11 +125,7 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
     );
     let check_name = tools
         .iter()
-        .find(|tool| {
-            tool["inputSchema"]["properties"]
-                .get("categories")
-                .is_some()
-        })
+        .find(|tool| tool["inputSchema"]["properties"].get("graph").is_some())
         .unwrap()["name"]
         .as_str()
         .unwrap()
@@ -159,10 +159,8 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
         .unwrap();
     assert!(cli_check.status.success());
     let cli_check: serde_json::Value = serde_json::from_slice(&cli_check.stdout).unwrap();
-    let mcp_check = client
-        .call(&check_name, json!({"categories":["graph"]}))
-        .await["structuredContent"]
-        .clone();
+    let mcp_check =
+        client.call(&check_name, json!({"graph": true})).await["structuredContent"].clone();
     assert_eq!(cli_check["categories"], mcp_check["categories"]);
     assert_check_readable(&client, &repo, &check_name).await;
     client.cancel().await.unwrap();
@@ -191,7 +189,7 @@ async fn mcp_get_failures_are_the_cli_json_refusals() {
     let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = Client::connect(client_io).await.unwrap();
     let limit = json!({"target":"source_live_inventory","limit":5});
-    let depth = json!({"target":"source_live_inventory","view":"children","max_depth":0});
+    let depth = json!({"target":"source_live_inventory","view":"children","depth":0});
 
     for (cli, arguments) in [
         ("source_missing get", json!({"target":"source_missing"})),
@@ -211,7 +209,7 @@ async fn mcp_get_failures_are_the_cli_json_refusals() {
     assert_eq!(mcp["isError"], true, "{depth}");
     assert_eq!(
         (&error["kind"], &error["field"], &error["reason"]),
-        (&cli["kind"], &json!("max_depth"), &json!("invalid_value")),
+        (&cli["kind"], &json!("depth"), &json!("invalid_value")),
         "{error} {cli}"
     );
     client.cancel().await.unwrap();
@@ -287,9 +285,18 @@ async fn cli_and_mcp_file_search_return_the_same_result() {
     assert_eq!(mcp_refusal["isError"], true, "{mcp_refusal}");
     let error = &mcp_refusal["structuredContent"]["error"];
     let message = error["message"].as_str().unwrap();
-    assert!(message.contains("search --file <path>"), "{message}");
+    let reason = "symbol: requires a file";
+    assert!(
+        message.starts_with(&format!("{reason}; call search with {{\"file\":\"<path>\"")),
+        "{message}"
+    );
     let cli_message = String::from_utf8(cli_refusal.stderr).unwrap();
-    assert_eq!(cli_message.trim_end(), format!("Error: {message}"));
+    assert!(
+        cli_message.starts_with(&format!(
+            "Error: {reason}; run `provenance search --file <path> --symbol <name>`"
+        )),
+        "{cli_message}"
+    );
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }
@@ -299,7 +306,7 @@ async fn cli_and_mcp_file_search_return_the_same_result() {
 fn live_cli_and_mcp_check_selectors_keep_shared_semantics() {
     let cli = provenance_cli::porcelain::check_input_from_selectors(true, false, true, None);
     let mcp: CheckInput = serde_json::from_value(json!({
-        "categories": ["graph", "bindings"]
+        "graph": true, "bindings": true
     }))
     .unwrap();
 

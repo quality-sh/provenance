@@ -17,10 +17,10 @@ pub fn tool(host: &StatementHost) -> Option<Tool> {
     let declaration = Command::Action(Action::Discussions).declaration();
     readable.then(|| {
         crate::surface::tool(
-            declaration.name,
+            crate::exposed::name(Command::Action(Action::Discussions)),
             declaration.description,
             Effect::Reads,
-            provenance_porcelain::discussion::tool_input_schema(),
+            provenance_porcelain::discussion::action_input_schema(),
             provenance_porcelain::discussion::output_schema(),
             SchemaDeclaration::Remove,
         )
@@ -42,7 +42,8 @@ pub fn refusal(arguments: &Map<String, Value>) -> Option<CallToolResult> {
     })
 }
 
-/// Runs one Discussion action with the fields of that action.
+/// Runs one Discussion action with the fields of that action. The target names the
+/// record above the Discussion, or the Discussion.
 pub async fn run(
     host: &StatementHost,
     action: Action,
@@ -51,11 +52,17 @@ pub async fn run(
     if !host.porcelain().discussion_is_available(action) {
         return error(&ActionError::AccessDenied);
     }
-    let service = host.porcelain().discussion();
-    match service
-        .execute_discussion(action, Value::Object(arguments))
+    let request = match host
+        .porcelain()
+        .get()
+        .discussion_request(action, arguments)
         .await
     {
+        Ok(request) => request,
+        Err(failure) => return error(&failure),
+    };
+    let service = host.porcelain().discussion();
+    match service.execute_discussion(action, request).await {
         Ok(outcome) => {
             let readable = provenance_porcelain::discussion::render_readable(&outcome);
             let mut result = CallToolResult::structured(

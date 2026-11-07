@@ -26,10 +26,10 @@ pub use read_only::get_refusal;
 
 pub fn search_tool() -> rmcp::model::Tool {
     crate::surface::tool(
-        Command::Search.declaration().name,
+        crate::exposed::name(Command::Search),
         Command::Search.declaration().description,
         Effect::Reads,
-        provenance_porcelain::search::input_schema(),
+        crate::derived::input_schema(Command::Search),
         provenance_porcelain::search::output_schema(),
         SchemaDeclaration::Remove,
     )
@@ -37,10 +37,10 @@ pub fn search_tool() -> rmcp::model::Tool {
 
 pub fn get_tool() -> rmcp::model::Tool {
     crate::surface::tool(
-        Command::Get.declaration().name,
+        crate::exposed::name(Command::Get),
         Command::Get.declaration().description,
         Effect::Reads,
-        provenance_porcelain::get::input_schema(),
+        crate::derived::input_schema(Command::Get),
         provenance_porcelain::get::output_schema(),
         SchemaDeclaration::Keep,
     )
@@ -48,40 +48,44 @@ pub fn get_tool() -> rmcp::model::Tool {
 
 pub fn trace_tool() -> rmcp::model::Tool {
     crate::surface::tool(
-        Command::Trace.declaration().name,
+        crate::exposed::name(Command::Trace),
         Command::Trace.declaration().description,
         Effect::Reads,
-        provenance_porcelain::get::trace_input_schema(),
-        provenance_porcelain::get::output_schema(),
+        crate::derived::input_schema(Command::Trace),
+        provenance_porcelain::get::trace_output_schema(),
         SchemaDeclaration::Keep,
     )
 }
 
 pub fn check_tool() -> rmcp::model::Tool {
     crate::surface::tool(
-        Command::Check.declaration().name,
+        crate::exposed::name(Command::Check),
         Command::Check.declaration().description,
         Effect::Reads,
-        provenance_porcelain::check::input_schema(),
+        crate::derived::input_schema(Command::Check),
         provenance_porcelain::check::output_schema(),
         SchemaDeclaration::Keep,
     )
 }
 
-pub async fn call_check(
-    host: &StatementHost,
-    port: std::sync::Arc<dyn provenance_porcelain::check::CheckPort>,
-    arguments: Map<String, Value>,
-) -> CallToolResult {
-    let Ok(arguments) = serde_json::from_value::<CheckInput>(Value::Object(arguments)) else {
+pub async fn call_check(host: &StatementHost, arguments: Map<String, Value>) -> CallToolResult {
+    let Ok(mut input) = serde_json::from_value::<CheckInput>(Value::Object(arguments)) else {
         return get_error("invalid_options", "unsupported check options");
     };
-    let service = host.porcelain().check(port);
-    let mut input = arguments;
+    if let Err(reason) = input.validate() {
+        return get_error(
+            "invalid_options",
+            &format!("unsupported check options: {reason}"),
+        );
+    }
+    // The caller can read only the scope that the server binds.
     if let Some((_, scope)) = host.bound_identity() {
+        if input.scope.as_ref().is_some_and(|asked| *asked != scope) {
+            return get_error("access_denied", "this server checks only its bound scope");
+        }
         input = input.in_scope(scope);
     }
-    let outcome = service.check(input).await;
+    let outcome = host.porcelain().check().check(input).await;
     let summary = provenance_porcelain::check::render_readable(&outcome);
     let mut result =
         CallToolResult::structured(serde_json::to_value(outcome).expect("check outcome is JSON"));
@@ -154,7 +158,17 @@ fn search_error(error: &provenance_porcelain::search::SearchError) -> CallToolRe
         SearchError::AccessDenied => serde_json::json!({"kind":"access_denied"}),
         SearchError::Operation { detail, .. } => detail.clone(),
     };
-    crate::surface::detail_error(with_message(detail, error.to_string()))
+    crate::surface::detail_error(with_message(detail, recovery_message(error)))
+}
+
+/// The refusal message followed by the recovery inputs as tool arguments.
+fn recovery_message(error: &provenance_porcelain::search::SearchError) -> String {
+    let inputs = error.recovery_inputs();
+    if inputs.is_empty() {
+        return error.to_string();
+    }
+    let forms = inputs.iter().map(Value::to_string).collect::<Vec<_>>();
+    format!("{error}; call search with {}", forms.join(" or "))
 }
 
 fn get_error(kind: &str, message: &str) -> CallToolResult {

@@ -8,6 +8,8 @@
 mod arguments;
 #[cfg(feature = "client")]
 mod client;
+pub mod derived;
+pub mod exposed;
 mod io;
 mod json_schema;
 mod listed;
@@ -18,7 +20,7 @@ mod tools;
 #[cfg(feature = "client")]
 pub use client::Client;
 pub use rmcp::service::ServerInitializeError as ServeError;
-pub use server::Server;
+pub use server::{instructions, Server};
 
 use provenance_transport::StatementHost;
 use tokio::io::{AsyncRead, AsyncWrite};

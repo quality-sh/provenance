@@ -1,0 +1,43 @@
+Create the target ID as an explicit record type.
+
+Usage: provenance [OPTIONS] <TARGET> [ACTION]
+
+Arguments:
+  <TARGET>  
+  [ACTION]  [possible values: get, trace, create, update, answer, claim, release, submit, discussions, discussion, discuss, reply]
+
+Options:
+      --repo <REPO>                                        [default: .]
+      --scope <SCOPE>                                      [default: default]
+      --format <FORMAT>                                    [possible values: json]
+      --quiet                                              
+      --type <TYPE>                                        
+      --stdin                                              
+      --name <name>                                        
+      --origin-message <origin-message>                    
+      --origin-thread <origin-thread>                      
+      --description <description>                          
+      --statement <statement>                              
+      --status <status>                                    
+      --requirement-ids <requirement-ids>                  
+      --requirement-id <requirement-id>                    
+      --archived-in-commit <archived-in-commit>            
+      --resolution-ids <resolution-ids>                    
+      --severity <severity>                                
+      --source-document <source-document>                  
+      --source-section <source-section>                    
+      --resolution-id <resolution-id>                      
+      --archived-in-commit-json <archived-in-commit-json>  
+      --description-json <description-json>                
+      --name-json <name-json>                              
+      --origin-message-json <origin-message-json>          
+      --origin-thread-json <origin-thread-json>            
+      --requirement-ids-json <requirement-ids-json>        
+      --resolution-ids-json <resolution-ids-json>          
+      --severity-json <severity-json>                      
+      --source-document-json <source-document-json>        
+      --source-section-json <source-section-json>          
+      --statement-json <statement-json>                    
+      --status-json <status-json>                          
+  -h, --help                                               Print help
+

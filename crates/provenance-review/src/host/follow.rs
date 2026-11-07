@@ -25,7 +25,7 @@ pub async fn follow(
     stop: impl Future<Output = anyhow::Result<()>> + Send,
 ) -> anyhow::Result<()> {
     anyhow::ensure!(
-        input.max_depth.is_none() && input.returned_kinds.is_empty(),
+        input.depth.is_none() && input.kind.is_empty(),
         "review follow does not accept --depth or --kind"
     );
     let limit = input.limit.unwrap_or(50);

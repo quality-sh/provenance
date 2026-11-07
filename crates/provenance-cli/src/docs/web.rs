@@ -1,4 +1,3 @@
-use super::{local_markdown_path, resolve_markdown_link, DocPage, DocsSite, MARKDOWN_OPTIONS};
 use crate::html::{escape_attr, escape_html};
 use axum::{
     extract::State,
@@ -6,6 +5,9 @@ use axum::{
     response::{Html, IntoResponse},
     routing::get,
     Router,
+};
+use provenance_transport::docs::{
+    local_markdown_path, resolve_markdown_link, DocPage, DocsSite, MARKDOWN_OPTIONS,
 };
 use pulldown_cmark::{html, CowStr, Event, Parser, Tag};
 use std::{fmt::Write as _, sync::Arc};
@@ -176,7 +178,18 @@ pub(super) fn router(site: DocsSite) -> Router {
     Router::new()
         .route("/assets/provenance-docs.css", get(stylesheet))
         .fallback(get(render_docs_page))
-        .with_state(Arc::new(site))
+        .with_state(Arc::new(Site(site)))
+}
+
+/// The docs site that the server renders.
+struct Site(DocsSite);
+
+impl std::ops::Deref for Site {
+    type Target = DocsSite;
+
+    fn deref(&self) -> &DocsSite {
+        &self.0
+    }
 }
 
 async fn stylesheet() -> impl IntoResponse {
@@ -186,7 +199,7 @@ async fn stylesheet() -> impl IntoResponse {
     )
 }
 
-async fn render_docs_page(State(site): State<Arc<DocsSite>>, uri: Uri) -> impl IntoResponse {
+async fn render_docs_page(State(site): State<Arc<Site>>, uri: Uri) -> impl IntoResponse {
     let path = uri.path().to_string();
     site.page_for_request_path(&path).map_or_else(
         || (StatusCode::NOT_FOUND, Html(site.render_not_found(&path))).into_response(),
@@ -194,7 +207,7 @@ async fn render_docs_page(State(site): State<Arc<DocsSite>>, uri: Uri) -> impl I
     )
 }
 
-impl DocsSite {
+impl Site {
     fn page_for_request_path(&self, path: &str) -> Option<&DocPage> {
         let route = normalize_request_route(path);
         self.page_by_route
@@ -271,7 +284,7 @@ impl DocsSite {
     ///
     /// Scope and resolution come from the same two functions the docs link
     /// decision is built from (`rule_docs_links_resolve`), so the server
-    /// rewrites exactly the links `docs check` resolved and leaves the rest
+    /// rewrites exactly the links `check --docs` resolved and leaves the rest
     /// - anchors, absolute paths, web addresses - as the author wrote them.
     fn rewrite_markdown_link(&self, page: &DocPage, destination: &str) -> Option<String> {
         let (_path_part, suffix) = local_markdown_path(destination)?;

@@ -5,10 +5,10 @@ use clap::{
     Arg, ArgAction, ArgMatches, Command,
 };
 use provenance_cli::porcelain;
-use provenance_cli::repo_context::RepoContext;
 use provenance_core::NodeType;
 use provenance_porcelain::action::Action;
-use provenance_porcelain::registry::{self, CliForm};
+use provenance_porcelain::registry;
+use provenance_transport::repository::RepoContext;
 
 /// The shared options of the porcelain and catalog grammars, read from the registry's
 /// global flags.
@@ -223,12 +223,7 @@ fn target_declarations() -> impl Iterator<Item = registry::Declaration> {
     registry::Command::ALL
         .iter()
         .map(|command| command.declaration())
-        .filter(|declaration| {
-            matches!(
-                declaration.cli_form,
-                CliForm::Target | CliForm::WordsAndTarget(_)
-            )
-        })
+        .filter(|declaration| declaration.grammar.takes_target())
 }
 
 impl TargetArgs {
@@ -240,7 +235,7 @@ impl TargetArgs {
                 .cloned()
                 .unwrap_or_default(),
             action: matches.get_one::<TargetVerb>("action").copied(),
-            record_type: matches.get_one::<NodeType>("record_type").copied(),
+            record_type: matches.get_one::<NodeType>("type").copied(),
             view: matches.get_one::<String>("view").cloned(),
             depth: matches.get_one::<usize>("depth").copied(),
             kind: kinds(matches),
@@ -313,12 +308,8 @@ pub fn target_command() -> Command {
         );
     let mut declared = std::collections::BTreeSet::new();
     for declaration in target_declarations() {
-        for (flag, arg) in declaration
-            .flags
-            .iter()
-            .zip(crate::registry_cli::args(&declaration))
-        {
-            if declared.insert(flag.field_id()) {
+        for arg in crate::registry_cli::args(&declaration) {
+            if declared.insert(arg.get_id().to_string()) {
                 command = command.arg(arg);
             }
         }
@@ -351,6 +342,6 @@ pub fn discussions_command() -> anyhow::Result<Command> {
             provenance_porcelain::discussion::input_schema(Action::Discussions),
             provenance_porcelain::discussion::input_schema(Action::Discussion),
         ],
-        &["parent", "discussion_id"],
+        &["target"],
     )
 }

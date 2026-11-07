@@ -48,7 +48,9 @@ async fn api_discovery_describes_the_live_catalog_routes() {
 
     let tools = session.tools().await;
     let tool = tools.iter().find(|tool| tool.name == "api").unwrap();
-    for field in ["path", "method", "query", "headers", "body"] {
+    for field in [
+        "path", "method", "input", "header", "query", "filter", "limit",
+    ] {
         assert!(
             tool.input_schema["properties"][field].is_object(),
             "{tool:?}"

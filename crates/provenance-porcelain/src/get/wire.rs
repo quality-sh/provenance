@@ -74,6 +74,35 @@ struct GetWire<'a> {
     view_metadata: Option<&'a ResponseMeta>,
     #[serde(skip_serializing_if = "Option::is_none")]
     notify: Option<&'a Registration>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    review_link: Option<&'a super::ReviewLink>,
+}
+
+/// The view of a trace result.
+#[derive(schemars::JsonSchema, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum TraceView {
+    Trace,
+}
+
+/// The shape of a get result for the trace view: the fields of [`GetWire`] that a trace
+/// fills. A trace has no impact detail and no review, so those two fields are null, and
+/// a trace has no shaping summary, notify registration, or review link. A trace result
+/// serializes through this shape, so its schema is the shape of each trace result.
+#[derive(schemars::JsonSchema, Serialize)]
+#[schemars(description = "A get result for the trace view.")]
+#[serde(deny_unknown_fields)]
+struct TraceWire<'a> {
+    record: RecordWire<'a>,
+    view: TraceView,
+    related: Vec<RelatedWire<'a>>,
+    detail: (),
+    review: (),
+    bounds: &'a Bounds,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    record_metadata: Option<&'a ResponseMeta>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    view_metadata: Option<&'a ResponseMeta>,
 }
 
 impl GetOutcome {
@@ -102,13 +131,38 @@ impl GetOutcome {
             record_metadata: self.record_metadata.as_ref(),
             view_metadata: self.view_metadata(),
             notify: self.review().and_then(|review| review.notify.as_ref()),
+            review_link: match &self.result {
+                super::ViewResult::ReviewLink(link) => Some(link),
+                _ => None,
+            },
+        }
+    }
+}
+
+impl GetOutcome {
+    fn trace_wire<'a>(&'a self, bounds: &'a Bounds) -> TraceWire<'a> {
+        let wire = self.wire();
+        TraceWire {
+            record: wire.record,
+            view: TraceView::Trace,
+            related: wire.related,
+            detail: (),
+            review: (),
+            bounds,
+            record_metadata: wire.record_metadata,
+            view_metadata: wire.view_metadata,
         }
     }
 }
 
 impl Serialize for GetOutcome {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.wire().serialize(serializer)
+        match &self.result {
+            super::ViewResult::Trace(traversal) => {
+                self.trace_wire(&traversal.bounds).serialize(serializer)
+            }
+            _ => self.wire().serialize(serializer),
+        }
     }
 }
 
@@ -122,58 +176,12 @@ fn schema<T: schemars::JsonSchema>(contract: Contract) -> Value {
     .expect("typed get schema is JSON")
 }
 
-/// The MCP get request schema: the deserialized request without the notify field,
-/// because MCP registers a client thread through the notify action of change.
+/// The get request schema: the target and the get fields.
 pub fn input_schema() -> Value {
-    let mut schema = schema::<GetInput>(Contract::Deserialize);
-    schema["properties"]
-        .as_object_mut()
-        .expect("get properties are an object")
-        .remove("notify");
-    let definitions = schema["$defs"]
-        .as_object_mut()
-        .expect("get definitions are an object");
-    definitions.remove("Notify");
-    definitions.remove("NotifyClient");
-    schema
+    schema::<GetInput>(Contract::Deserialize)
 }
 
-/// The MCP notify request schema.
-pub fn notify_input_schema() -> Value {
-    schema::<NotifyInput>(Contract::Deserialize)
-}
-
-/// One notify request on MCP: the client thread to register for the review changes of
-/// one record.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct NotifyInput {
-    #[schemars(length(min = 1))]
-    pub target: String,
-    pub notify: super::Notify,
-}
-
-impl From<NotifyInput> for GetInput {
-    fn from(input: NotifyInput) -> Self {
-        let mut get = Self::new(input.target, View::Review);
-        get.notify = Some(input.notify);
-        get
-    }
-}
-
-/// The MCP notify result schema.
-pub fn notify_output_schema() -> Value {
-    schema::<NotifyResult>(Contract::Serialize)
-}
-
-/// The result of one notify request on MCP.
-#[derive(Clone, Debug, Serialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct NotifyResult {
-    pub notify: super::Registration,
-}
-
-/// The MCP trace request schema: the get request without a view or notify field.
+/// The trace request schema: the target and the trace fields.
 pub fn trace_input_schema() -> Value {
     schema::<TraceInput>(Contract::Deserialize)
 }
@@ -186,9 +194,9 @@ pub struct TraceInput {
     pub target: String,
     #[serde(default)]
     #[schemars(range(min = 1))]
-    pub max_depth: Option<usize>,
+    pub depth: Option<usize>,
     #[serde(default)]
-    pub returned_kinds: Vec<NodeType>,
+    pub kind: Vec<NodeType>,
     #[serde(default)]
     #[schemars(range(min = 1))]
     pub limit: Option<usize>,
@@ -197,19 +205,62 @@ pub struct TraceInput {
 impl From<TraceInput> for GetInput {
     fn from(input: TraceInput) -> Self {
         let mut get = Self::new(input.target, View::Trace);
-        get.max_depth = input.max_depth;
-        get.returned_kinds = input.returned_kinds;
+        get.depth = input.depth;
+        get.kind = input.kind;
         get.limit = input.limit;
         get
     }
 }
 
-/// The MCP get result schema is generated from the serialized projection.
+/// The notify request schema: the target and the get fields that write.
+pub fn notify_input_schema() -> Value {
+    schema::<NotifyInput>(Contract::Deserialize)
+}
+
+/// One notify request: the client thread to register for the review changes of one
+/// record, or `off` to end that registration.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct NotifyInput {
+    #[schemars(length(min = 1))]
+    pub target: String,
+    pub notify: super::NotifyClient,
+    #[schemars(length(min = 1))]
+    pub thread: String,
+}
+
+impl From<NotifyInput> for GetInput {
+    fn from(input: NotifyInput) -> Self {
+        let mut get = Self::new(input.target, View::Review);
+        get.notify = Some(input.notify);
+        get.thread = Some(input.thread);
+        get
+    }
+}
+
+/// The notify result schema.
+pub fn notify_output_schema() -> Value {
+    schema::<NotifyResult>(Contract::Serialize)
+}
+
+/// The result of one notify request.
+#[derive(Clone, Debug, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct NotifyResult {
+    pub notify: super::Registration,
+}
+
+/// The get result schema is generated from the serialized projection.
 pub fn output_schema() -> Value {
     schema::<GetWire<'static>>(Contract::Serialize)
 }
 
-/// Render a get result for both terminal and MCP readers.
+/// The schema of a get result for the trace view.
+pub fn trace_output_schema() -> Value {
+    schema::<TraceWire<'static>>(Contract::Serialize)
+}
+
+/// Render a get result as readable text.
 pub fn render_readable(outcome: &GetOutcome) -> serde_json::Result<String> {
     let mut sections = vec![
         format!(
@@ -263,6 +314,13 @@ pub fn render_readable(outcome: &GetOutcome) -> serde_json::Result<String> {
                 serde_json::to_string_pretty(notify)?
             ));
         }
+    }
+    if let super::ViewResult::ReviewLink(link) = &outcome.result {
+        sections.push(match (&link.review_url, &link.message) {
+            (Some(url), _) => format!("review link: {url}"),
+            (None, Some(message)) => format!("review link: none. {message}"),
+            (None, None) => "review link: none".to_owned(),
+        });
     }
     if let Some(bounds) = outcome.bounds() {
         sections.push(format!(

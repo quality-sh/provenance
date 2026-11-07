@@ -26,6 +26,13 @@ pub fn schema(host: &StatementHost, actions: &[&'static str]) -> Value {
         let schema = provenance_porcelain::get::notify_output_schema();
         branches.push(discriminated(schema, &[NOTIFY], None));
     }
+    for command in super::repository_commands() {
+        let name = crate::exposed::name(command);
+        if actions.contains(&name) {
+            let schema = super::repository_output_schema(command);
+            branches.push(discriminated(schema, &[name], None));
+        }
+    }
     one_of(branches)
 }
 
@@ -122,12 +129,16 @@ fn discriminated(mut schema: Value, actions: &[&str], kinds: Option<&[&str]>) ->
     schema
 }
 
-/// A `oneOf` of the branches, with the definitions of each branch held once at the root.
+/// A `oneOf` of the branches, with each definition held once at the root. A definition
+/// that two branches hold the same way has one name; two different definitions with one
+/// name get the index of their branch. A property schema with fields that two or more
+/// branches repeat is one definition too.
 fn one_of(mut branches: Vec<Value>) -> Value {
     let mut definitions = Map::new();
     for (index, branch) in branches.iter_mut().enumerate() {
-        namespace_definitions(branch, &format!("Output{index}"), &mut definitions);
+        hold_definitions(branch, &format!("Output{index}"), &mut definitions);
     }
+    hold_repeated_properties(&mut branches, &mut definitions);
     let mut schema = json!({ "oneOf": branches });
     if !definitions.is_empty() {
         schema["$defs"] = Value::Object(definitions);
@@ -135,34 +146,119 @@ fn one_of(mut branches: Vec<Value>) -> Value {
     schema
 }
 
-fn namespace_definitions(value: &mut Value, prefix: &str, merged: &mut Map<String, Value>) {
-    if let Some(object) = value.as_object_mut() {
-        object.remove("$schema");
-        if let Some(Value::Object(definitions)) = object.remove("$defs") {
-            for (name, mut schema) in definitions {
-                rewrite_references(&mut schema, prefix);
-                merged.insert(format!("{prefix}{name}"), schema);
+/// Moves the definitions of one branch to `held`. Each definition keeps its name unless
+/// `held` has a different definition of that name; then it gets the branch prefix. A
+/// renamed definition changes the references in the others, so the names are chosen
+/// again until no name changes.
+fn hold_definitions(branch: &mut Value, prefix: &str, held: &mut Map<String, Value>) {
+    let Some(object) = branch.as_object_mut() else {
+        return;
+    };
+    object.remove("$schema");
+    let Some(Value::Object(definitions)) = object.remove("$defs") else {
+        return;
+    };
+    let mut names = definitions
+        .keys()
+        .map(|name| (name.clone(), json!(name)))
+        .collect::<Map<String, Value>>();
+    let renamed = loop {
+        let renamed = definitions
+            .iter()
+            .map(|(name, schema)| {
+                let mut schema = schema.clone();
+                rewrite_references(&mut schema, &names);
+                (names[name].as_str().expect("a name").to_owned(), schema)
+            })
+            .collect::<Vec<_>>();
+        let clashes = definitions
+            .keys()
+            .zip(&renamed)
+            .filter(|(name, (new, schema))| {
+                *name == new && held.get(new).is_some_and(|other| other != schema)
+            })
+            .map(|(name, _)| name.clone())
+            .collect::<Vec<_>>();
+        if clashes.is_empty() {
+            break renamed;
+        }
+        for name in clashes {
+            names.insert(name.clone(), json!(format!("{prefix}{name}")));
+        }
+    };
+    held.extend(renamed);
+    rewrite_references(branch, &names);
+}
+
+/// Each object property schema that two or more branches hold the same way becomes one
+/// definition, named by its title or by the property name.
+fn hold_repeated_properties(branches: &mut [Value], held: &mut Map<String, Value>) {
+    let mut seen: Vec<(String, Value, usize)> = Vec::new();
+    for branch in branches.iter() {
+        for (name, schema) in branch["properties"].as_object().into_iter().flatten() {
+            if schema.get("properties").is_none() {
+                continue;
+            }
+            match seen
+                .iter_mut()
+                .find(|(held_name, held_schema, _)| held_name == name && held_schema == schema)
+            {
+                Some((_, _, count)) => *count += 1,
+                None => seen.push((name.clone(), schema.clone(), 1)),
             }
         }
     }
-    rewrite_references(value, prefix);
+    for (name, schema, count) in seen {
+        if count < 2 {
+            continue;
+        }
+        let title = schema["title"].as_str().map_or_else(
+            || {
+                let mut letters = name.chars();
+                letters
+                    .next()
+                    .map(|first| first.to_uppercase().chain(letters).collect::<String>())
+                    .unwrap_or_default()
+            },
+            str::to_owned,
+        );
+        if held.get(&title).is_some_and(|other| *other != schema) {
+            continue;
+        }
+        for branch in branches.iter_mut() {
+            let property = branch
+                .get_mut("properties")
+                .and_then(|properties| properties.get_mut(&name));
+            if let Some(property) = property {
+                if *property == schema {
+                    *property = json!({ "$ref": format!("#/$defs/{title}") });
+                }
+            }
+        }
+        held.insert(title, schema);
+    }
 }
 
-fn rewrite_references(value: &mut Value, prefix: &str) {
+/// Points each reference to a definition in `names` at the new name of that definition.
+fn rewrite_references(value: &mut Value, names: &Map<String, Value>) {
     match value {
         Value::Object(object) => {
             if let Some(Value::String(reference)) = object.get_mut("$ref") {
-                if let Some(name) = reference.strip_prefix("#/$defs/") {
-                    *reference = format!("#/$defs/{prefix}{name}");
+                if let Some(new) = reference
+                    .strip_prefix("#/$defs/")
+                    .and_then(|name| names.get(name))
+                    .and_then(Value::as_str)
+                {
+                    *reference = format!("#/$defs/{new}");
                 }
             }
             for child in object.values_mut() {
-                rewrite_references(child, prefix);
+                rewrite_references(child, names);
             }
         }
         Value::Array(values) => {
             for child in values {
-                rewrite_references(child, prefix);
+                rewrite_references(child, names);
             }
         }
         _ => {}

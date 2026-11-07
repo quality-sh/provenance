@@ -1,13 +1,13 @@
-use crate::{catalog_cli, cli::Cli, handlers};
-use clap::CommandFactory as _;
-use handlers::{GraphInput, RepositoryInput, WorkspaceInput};
+pub use crate::registry_cli::root_command;
+use crate::{catalog_cli, handlers};
+use handlers::{GraphInput, RepositoryInput, ServerInput, WorkspaceInput};
 use provenance_cli::porcelain;
-use provenance_cli::repo_context::RepoContext;
 use provenance_core::NodeType;
 use provenance_macros::rule;
 use provenance_porcelain::action::{validate_target, Action};
 use provenance_porcelain::get::View;
 use provenance_porcelain::search::SearchInput;
+use provenance_transport::repository::RepoContext;
 
 mod api;
 mod discussion;
@@ -17,7 +17,10 @@ mod removed;
 use grammar::{
     ApiArgs, Delivery, DiscussionsArgs, DiscussionsRoute, SearchArgs, TargetArgs, TargetVerb,
 };
-use provenance_porcelain::registry::{self, CheckCliInput, Interface, PrimeInput};
+use provenance_cli::exposed;
+use provenance_cli::servers::Server;
+use provenance_porcelain::check::CheckInput;
+use provenance_porcelain::registry::{self, PrimeInput};
 
 #[cfg(test)]
 mod surface_tests;
@@ -26,11 +29,12 @@ mod tests;
 
 /// One command selected from a declared grammar.
 pub enum Invocation {
-    Check(CheckCliInput),
+    Check(CheckInput, crate::registry_cli::BoundContext),
     Prime(PrimeInput),
     Repository(RepositoryInput, bool),
     Graph(GraphInput),
     Workspace(WorkspaceInput),
+    Server(ServerInput),
     #[cfg(feature = "dogfood")]
     Dogfood(handlers::DogfoodInput, bool),
     Api(ApiArgs),
@@ -73,7 +77,7 @@ impl Invocation {
         let Some(word) = grammar::command_word(&arguments) else {
             return Ok(Self::parse_root(arguments));
         };
-        match registry::Command::find(Interface::Cli, &[word]) {
+        match exposed::find(&[word]) {
             Some(registry::Command::Search) => {
                 let matches = crate::registry_cli::root_word_command(registry::Command::Search)
                     .try_get_matches_from(arguments)
@@ -138,10 +142,17 @@ impl Invocation {
             .try_get_matches_from(arguments)
             .unwrap_or_else(|error| error.exit());
         let (words, selected) = crate::registry_cli::selected(&matches);
-        match registry::Command::find(Interface::Cli, &words) {
+        if let Some(server) = Server::find(&words) {
+            return Self::Server(
+                ServerInput::from_matches(server, selected)
+                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
+            );
+        }
+        match exposed::find(&words) {
             Some(registry::Command::Check) => Self::Check(
                 crate::registry_cli::input(&registry::Command::Check.declaration(), selected)
                     .unwrap_or_else(|error| catalog_cli::usage_error(error)),
+                crate::registry_cli::bound_context(selected),
             ),
             Some(registry::Command::Prime) => Self::Prime(
                 crate::registry_cli::input(&registry::Command::Prime.declaration(), selected)
@@ -180,7 +191,7 @@ impl Invocation {
     #[rule("rule_porcelain_cli_target_action_order")]
     fn parse_target(arguments: Vec<String>) -> anyhow::Result<Self> {
         let command = catalog_cli::target_command()?;
-        let help_command = command.clone().mut_arg("record_type", |arg| {
+        let help_command = command.clone().mut_arg("type", |arg| {
             arg.value_parser(clap::builder::StringValueParser::new())
         });
         let matches = match help_command.clone().try_get_matches_from(arguments.clone()) {
@@ -198,7 +209,7 @@ impl Invocation {
                     );
                 let action = selection.get_one::<TargetVerb>("action").copied();
                 let kind = selection
-                    .get_one::<String>("record_type")
+                    .get_one::<String>("type")
                     .and_then(|kind| NodeType::parse(kind).ok())
                     .or_else(|| help_kind::resolve_record_kind(&selection, action));
                 catalog_cli::print_target_help(command, action, kind)?;
@@ -218,8 +229,8 @@ impl Invocation {
             catalog_cli::ensure_only_fields(&matches, &["kind", "depth", "limit"]);
             let input = provenance_porcelain::get::TraceInput {
                 target: args.target,
-                max_depth: args.depth,
-                returned_kinds: args.kind,
+                depth: args.depth,
+                kind: args.kind,
                 limit: args.limit,
             };
             return Ok(Self::Get(GetInvocation {
@@ -251,10 +262,10 @@ impl Invocation {
                     .and_then(View::parse)
                     .unwrap_or_default(),
             );
-            input.max_depth = args.depth;
-            input.returned_kinds = args.kind;
+            input.depth = args.depth;
+            input.kind = args.kind;
             input.limit = args.limit;
-            input.notify = notify(&matches)?;
+            (input.notify, input.thread) = notify(&matches)?;
             return Ok(Self::Get(GetInvocation {
                 context,
                 format,
@@ -266,8 +277,9 @@ impl Invocation {
             anyhow::bail!("unsupported target action");
         };
         let kind = args.record_type;
-        validate_target(action, &args.target, kind)
-            .unwrap_or_else(|error| catalog_cli::usage_error(error));
+        if let Err(error) = validate_target(action, &args.target, kind) {
+            catalog_cli::action_usage_error(error);
+        }
         Ok(Self::Target(TargetInvocation {
             context,
             format,
@@ -282,11 +294,12 @@ impl Invocation {
     /// `{error,meta}` object instead of text.
     pub fn json_output(&self) -> bool {
         let format = match self {
-            Self::Check(_)
+            Self::Check(..)
             | Self::Prime(_)
             | Self::Repository(..)
             | Self::Graph(_)
-            | Self::Workspace(_) => None,
+            | Self::Workspace(_)
+            | Self::Server(_) => None,
             #[cfg(feature = "dogfood")]
             Self::Dogfood(..) => None,
             Self::Api(args) => args.common.format(),
@@ -301,13 +314,14 @@ impl Invocation {
 
     pub async fn dispatch(self) -> anyhow::Result<()> {
         match self {
-            Self::Check(input) => handlers::check_command(input).await,
+            Self::Check(input, context) => handlers::check_command(input, context).await,
             Self::Prime(input) => handlers::prime_command(&input),
             Self::Repository(input, quiet) => handlers::repository_command(input, quiet).await,
-            Self::Graph(input) => handlers::graph_command(input),
+            Self::Graph(input) => handlers::graph_command(input).await,
             Self::Workspace(input) => handlers::workspace_command(input).await,
+            Self::Server(input) => handlers::server_command(input).await,
             #[cfg(feature = "dogfood")]
-            Self::Dogfood(input, quiet) => handlers::dogfood_command(input, quiet),
+            Self::Dogfood(input, quiet) => handlers::dogfood_command(input, quiet).await,
             Self::Api(args) => api::dispatch(args).await,
             Self::Get(invocation) => {
                 if invocation.delivery == Delivery::Follow {
@@ -325,7 +339,7 @@ impl Invocation {
                         )
                     };
                     return provenance_review::follow(
-                        &invocation.context.repo.place(),
+                        &provenance_cli::porcelain::place(&invocation.context.repo),
                         invocation.input,
                         tokio::io::stdout(),
                         stop,
@@ -377,15 +391,12 @@ impl SearchArgs {
                 anyhow::anyhow!("the root search query does not declare exclude_terminal")
             })?;
         // A file search returns every bound Rule, so only a text search takes the default.
-        let exclude_terminal = if self.include_terminal {
-            Some(crate::read_policy::exclude_terminal(true))
-        } else {
-            self.file.is_none().then_some(default_exclude_terminal)
-        };
+        let include_terminal = crate::read_policy::include_terminal(self.include_terminal)
+            .or_else(|| self.file.is_none().then_some(!default_exclude_terminal));
         let query = SearchInput {
             text: self.text,
-            node_types: self.kind,
-            exclude_terminal,
+            kind: self.kind,
+            include_terminal,
             cursor: self.cursor,
             limit: self.limit,
             file: self.file,
@@ -414,26 +425,6 @@ impl TargetInvocation {
         )
         .await
     }
-}
-
-/// The root parser: the built-in commands and the word commands that it lists.
-pub fn root_command() -> clap::Command {
-    [
-        registry::Command::Search,
-        registry::Command::Check,
-        registry::Command::Prime,
-    ]
-    .into_iter()
-    .chain(registry::Command::ALL.iter().copied().filter(|command| {
-        matches!(
-            command,
-            registry::Command::Repository(_)
-                | registry::Command::Graph(_)
-                | registry::Command::Workspace(_)
-                | registry::Command::Dogfood(_)
-        ) && command.is_present(registry::Interface::Cli)
-    }))
-    .fold(Cli::command(), crate::registry_cli::add_subcommand)
 }
 
 /// `provenance help [words...]` as `provenance [words...] --help`, so both print the
@@ -475,10 +466,15 @@ fn refuse_collection_word(word: &str) -> ! {
 }
 
 /// Reads `--notify` and its thread: `--thread`, else `CODEX_THREAD_ID` from a Codex session.
-fn notify(matches: &clap::ArgMatches) -> anyhow::Result<Option<provenance_porcelain::get::Notify>> {
-    use provenance_porcelain::get::{Notify, NotifyClient};
+fn notify(
+    matches: &clap::ArgMatches,
+) -> anyhow::Result<(
+    Option<provenance_porcelain::get::NotifyClient>,
+    Option<String>,
+)> {
+    use provenance_porcelain::get::NotifyClient;
     let Some(client) = matches.get_one::<String>("notify") else {
-        return Ok(None);
+        return Ok((None, None));
     };
     let client = if client == "off" {
         NotifyClient::Off
@@ -493,5 +489,5 @@ fn notify(matches: &clap::ArgMatches) -> anyhow::Result<Option<provenance_porcel
     let Some(thread) = thread else {
         anyhow::bail!("--notify needs --thread or the CODEX_THREAD_ID environment variable");
     };
-    Ok(Some(Notify { client, thread }))
+    Ok((Some(client), Some(thread)))
 }

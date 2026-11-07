@@ -11,17 +11,30 @@ mod access;
 mod admission;
 #[cfg(test)]
 mod admission_tests;
+mod atomic_file;
+pub mod check;
+pub mod coverage;
+pub mod docs;
 mod execution;
 mod failure;
 #[cfg(feature = "test-fixture")]
 pub mod fixture;
+mod gitignore;
 mod http;
+mod init_summary;
 mod invocation;
+mod legacy_cleanup;
 mod local;
 pub mod local_host;
+mod onboarding;
 pub mod porcelain;
+pub mod repository;
 mod review_page;
+pub mod reviewer;
 mod routing;
+pub mod skills;
+pub mod snapshot;
+mod ste_onboarding;
 pub use review_page::ReviewPageWrite;
 
 pub use access::{HostAccess, HttpCredential, OpenCredential};
@@ -46,6 +59,8 @@ pub struct StatementHost {
     credential: Option<Arc<dyn access::HttpCredential>>,
     check_port: Option<Arc<dyn provenance_porcelain::check::CheckPort>>,
     notify_port: Option<Arc<dyn provenance_porcelain::get::NotifyPort>>,
+    review_link_port: Option<Arc<dyn provenance_porcelain::get::ReviewLinkPort>>,
+    repository: Option<repository::RepoContext>,
     ingress: Arc<Semaphore>,
     stopping: CancellationToken,
 }
@@ -59,6 +74,8 @@ impl Default for StatementHost {
             credential: Some(Arc::new(access::OpenCredential)),
             check_port: None,
             notify_port: None,
+            review_link_port: None,
+            repository: None,
             ingress: Arc::new(Semaphore::new(8)),
             stopping: CancellationToken::new(),
         }
@@ -119,6 +136,34 @@ impl StatementHost {
     ) -> Self {
         self.notify_port = Some(port);
         self
+    }
+
+    /// Inject the review host client used by the get `review_link` argument.
+    #[must_use]
+    pub fn with_review_link_port(
+        mut self,
+        port: Arc<dyn provenance_porcelain::get::ReviewLinkPort>,
+    ) -> Self {
+        self.review_link_port = Some(port);
+        self
+    }
+
+    /// Bind the repository files that materialize, import, dictionary import, and
+    /// swarm-backtrace land work on.
+    #[must_use]
+    pub fn with_repository(mut self, context: repository::RepoContext) -> Self {
+        self.repository = Some(context);
+        self
+    }
+
+    pub(crate) const fn repository(&self) -> Option<&repository::RepoContext> {
+        self.repository.as_ref()
+    }
+
+    pub(crate) fn review_link_port(
+        &self,
+    ) -> Option<&Arc<dyn provenance_porcelain::get::ReviewLinkPort>> {
+        self.review_link_port.as_ref()
     }
 
     pub(crate) fn notify_port(&self) -> Option<&Arc<dyn provenance_porcelain::get::NotifyPort>> {

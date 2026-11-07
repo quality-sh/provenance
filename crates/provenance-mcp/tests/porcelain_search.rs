@@ -70,7 +70,7 @@ async fn named_mcp_search_intersects_text_and_multiple_kinds() {
     let tools = client.list_all_tools().await.unwrap();
     let tool = tools.iter().find(|tool| tool.name == "search").unwrap();
     assert!(tool.input_schema["properties"]["text"].is_object());
-    assert!(tool.input_schema["properties"]["node_types"].is_object());
+    assert!(tool.input_schema["properties"]["kind"].is_object());
     assert!(tool.output_schema.is_some());
 
     let text_only = call(client, "search", json!({"text":"excludes code"})).await;
@@ -79,7 +79,7 @@ async fn named_mcp_search_intersects_text_and_multiple_kinds() {
         "boundary"
     );
 
-    let kind_only = call(client, "search", json!({"node_types":["domain", "rule"]})).await;
+    let kind_only = call(client, "search", json!({"kind":["domain", "rule"]})).await;
     let kinds = kind_only.structured_content.as_ref().unwrap()["nodes"]
         .as_array()
         .unwrap()
@@ -91,7 +91,7 @@ async fn named_mcp_search_intersects_text_and_multiple_kinds() {
     let combined = call(
         client,
         "search",
-        json!({"text":"searchable", "node_types":["requirement", "rule"]}),
+        json!({"text":"searchable", "kind":["requirement", "rule"]}),
     )
     .await;
     let nodes = combined.structured_content.as_ref().unwrap()["nodes"]
@@ -167,7 +167,7 @@ async fn list_denial_excludes_a_kind_before_selection_and_paging() {
     let session = Session::start(host).await;
     let client = &session.client;
 
-    let source_only = call(client, "search", json!({"node_types":["source"]})).await;
+    let source_only = call(client, "search", json!({"kind":["source"]})).await;
     assert_eq!(source_only.is_error, Some(true), "{source_only:?}");
     assert_eq!(
         source_only.structured_content.as_ref().unwrap()["error"]["kind"],
@@ -177,7 +177,7 @@ async fn list_denial_excludes_a_kind_before_selection_and_paging() {
     let first = call(
         client,
         "search",
-        json!({"node_types":["source", "requirement", "rule"], "limit":1}),
+        json!({"kind":["source", "requirement", "rule"], "limit":1}),
     )
     .await;
     let first_page = first.structured_content.as_ref().unwrap();
@@ -193,7 +193,7 @@ async fn list_denial_excludes_a_kind_before_selection_and_paging() {
         client,
         "search",
         json!({
-            "node_types":["source", "requirement", "rule"],
+            "kind":["source", "requirement", "rule"],
             "limit":1,
             "cursor":cursor
         }),
@@ -234,7 +234,7 @@ async fn list_grant_allows_search_when_get_is_denied() {
     let session = Session::start(host).await;
     let client = &session.client;
 
-    let result = call(client, "search", json!({"node_types":["source"]})).await;
+    let result = call(client, "search", json!({"kind":["source"]})).await;
     assert_ne!(result.is_error, Some(true), "{result:?}");
     assert_eq!(
         result.structured_content.as_ref().unwrap()["nodes"][0]["id"],
@@ -284,10 +284,7 @@ async fn empty_mcp_search_carries_the_reason_and_recovery_forms() {
         .unwrap();
     for text in [
         "search requires text or at least one filter",
-        "provenance search --text <query>",
-        "provenance search --kind <kind>",
-        "\"text\": \"<query>\"",
-        "\"node_types\": [\"<kind>\"]",
+        "call search with {\"text\":\"<query>\"} or {\"kind\":[\"<kind>\"]}",
     ] {
         assert!(message.contains(text), "{message}");
     }
@@ -299,7 +296,7 @@ async fn update_status(
     target: &str,
     status: &str,
 ) {
-    let mut arguments = json!({"action":"update","target":target,"data":{"status":status}});
+    let mut arguments = json!({"action":"update","target":target,"status":status});
     if let Some(collection) = match target {
         "question_shared" => Some("questions"),
         "topic_shared" => Some("topics"),
@@ -347,14 +344,12 @@ async fn mcp_search_shows_each_record_lifecycle() {
         ),
     ] {
         let updated = client
-            .call_tool(
-                CallToolRequestParams::new("change").with_arguments(
-                    json!({"action":action,"target":target,"data":data})
-                        .as_object()
-                        .unwrap()
-                        .clone(),
-                ),
-            )
+            .call_tool(CallToolRequestParams::new("change").with_arguments({
+                let mut arguments = data.as_object().unwrap().clone();
+                arguments.insert("action".into(), json!(action));
+                arguments.insert("target".into(), json!(target));
+                arguments
+            }))
             .await
             .unwrap();
         assert_ne!(updated.is_error, Some(true), "{updated:?}");
@@ -392,10 +387,8 @@ async fn mcp_search_shows_each_record_lifecycle() {
         .call_tool(
             CallToolRequestParams::new("change").with_arguments(
                 json!({
-                    "action":"update", "target":"rule_shared", "data":{
-                        "status":"archived",
+                    "action":"update", "target":"rule_shared", "status":"archived",
                         "archived_in_commit":{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
-                    }
                 })
                 .as_object()
                 .unwrap()
@@ -405,7 +398,7 @@ async fn mcp_search_shows_each_record_lifecycle() {
         .await
         .unwrap();
     assert_ne!(archived.is_error, Some(true), "{archived:?}");
-    let hidden = call(client, "search", json!({"node_types":["rule"]})).await;
+    let hidden = call(client, "search", json!({"kind":["rule"]})).await;
     assert_eq!(
         hidden.structured_content.as_ref().unwrap()["nodes"],
         json!([])
@@ -413,7 +406,7 @@ async fn mcp_search_shows_each_record_lifecycle() {
     let included = call(
         client,
         "search",
-        json!({"node_types":["rule"], "exclude_terminal":false}),
+        json!({"kind":["rule"], "include_terminal": true}),
     )
     .await;
     assert!(included.content[0]
@@ -453,7 +446,7 @@ async fn mcp_file_search_needs_the_rule_grant_and_a_file() {
             error["message"]
                 .as_str()
                 .unwrap()
-                .contains("provenance search --file <path>"),
+                .contains("call search with {\"file\":\"<path>\""),
             "{error}"
         );
     }

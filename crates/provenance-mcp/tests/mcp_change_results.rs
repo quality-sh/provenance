@@ -37,42 +37,42 @@ fn calls() -> Vec<(Value, Option<&'static str>)> {
     vec![
         (
             json!({"action": "create", "target": "source_new", "type": "source",
-                   "data": {"name": "New source", "source_type": "document", "supersedes": []}}),
+                   "name": "New source", "source_type": "document", "supersedes": []}),
             Some("source"),
         ),
         (
             json!({"action": "create", "target": "domain_new", "type": "domain",
-                   "data": {"name": "New domain"}}),
+                   "name": "New domain"}),
             Some("domain"),
         ),
         (
             json!({"action": "answer", "target": "question_shared",
-                   "data": {"answer": "The shared record applies."}}),
+                   "answer": "The shared record applies."}),
             Some("question"),
         ),
         (
-            json!({"action": "claim", "target": "topic_shared", "data": {"actor": "ben"}}),
+            json!({"action": "claim", "target": "topic_shared", "actor": "ben"}),
             Some("topic"),
         ),
         (
-            json!({"action": "release", "target": "topic_shared", "data": {"actor": "ben"}}),
+            json!({"action": "release", "target": "topic_shared", "actor": "ben"}),
             Some("topic"),
         ),
         (
             json!({"action": "submit", "target": "req_shared",
-                   "data": {"actor": "ben", "title": "Shared", "summary": "Submit it.",
-                            "source_ids": [], "evidence_references": [], "builds_on": []}}),
+                   "actor": "ben", "title": "Shared", "summary": "Submit it.",
+                            "source_ids": [], "evidence_references": [], "builds_on": []}),
             Some("requirement"),
         ),
         (
             json!({"action": "discuss",
-                   "parent": {"node_type": "requirement", "node_id": "req_shared"},
+                   "target": "req_shared",
                    "actor": "ben", "role": "user", "body": "Opening text"}),
             None,
         ),
         (
             json!({"action": "notify", "target": "req_shared",
-                   "notify": {"client": "codex", "thread": "thread-1"}}),
+                   "notify": "codex", "thread": "thread-1"}),
             None,
         ),
     ]
@@ -108,7 +108,7 @@ async fn each_change_result_matches_exactly_one_output_branch() {
     let started = support::mcp::call(
         &session.client,
         "discussions",
-        json!({"parent": {"node_type": "requirement", "node_id": "req_shared"}}),
+        json!({"target": "req_shared"}),
     )
     .await;
     let id = started.structured_content.unwrap()["result"]["entries"][0]["discussion_id"].clone();
@@ -121,13 +121,13 @@ async fn each_change_result_matches_exactly_one_output_branch() {
     let etag = read.structured_content.unwrap()["data"]["edit"]["etag"].clone();
     for (arguments, kind) in [
         (
-            json!({"action": "reply", "discussion_id": id, "expected_version": 1,
+            json!({"action": "reply", "target": id, "expected_version": 1,
                    "actor": "ben", "role": "user", "body": "Yes."}),
             None,
         ),
         (
             json!({"action": "update", "target": "req_shared", "if_match": etag,
-                   "data": {"actor": "ben", "statement": "The shared graph is readable by all."}}),
+                   "actor": "ben", "statement": "The shared graph is readable by all."}),
             Some("requirement"),
         ),
     ] {

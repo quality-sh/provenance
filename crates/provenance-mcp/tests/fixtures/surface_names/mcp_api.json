@@ -1,0 +1,81 @@
+{
+  "$defs": {
+    "ApiMethod": {
+      "description": "One HTTP method a public route supports.",
+      "enum": [
+        "get",
+        "post",
+        "patch"
+      ],
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The api fields: one call, or the catalog when the path is not given.",
+  "properties": {
+    "filter": {
+      "default": null,
+      "description": "Show only catalog routes whose method, path, or description contains this text.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "header": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "A request header, as NAME: VALUE.",
+      "type": "object"
+    },
+    "input": {
+      "additionalProperties": true,
+      "default": null,
+      "description": "The JSON body: the data object, without the HTTP {\"data\": ...} wrapper.",
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "limit": {
+      "default": null,
+      "description": "Show at most this many catalog routes.",
+      "maximum": 200,
+      "minimum": 1,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "method": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ApiMethod"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "path": {
+      "default": null,
+      "description": "The public API path. Without a path, the catalog routes show.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "query": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "A query parameter, as NAME=VALUE.",
+      "type": "object"
+    }
+  },
+  "title": "ApiArguments",
+  "type": "object"
+}

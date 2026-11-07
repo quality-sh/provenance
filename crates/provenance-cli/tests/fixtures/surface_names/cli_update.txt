@@ -1,0 +1,194 @@
+Update the existing target while preserving omitted fields.
+
+Usage: provenance [OPTIONS] <TARGET> [ACTION]
+
+Arguments:
+  <TARGET>  
+  [ACTION]  [possible values: get, trace, create, update, answer, claim, release, submit, discussions, discussion, discuss, reply]
+
+Options:
+      --repo <REPO>
+          [default: .]
+      --scope <SCOPE>
+          [default: default]
+      --format <FORMAT>
+          [possible values: json]
+      --quiet
+          
+      --stdin
+          
+      --replace-parent <REPLACE_PARENT>
+          Replace this Requirement parent and preserve its other parents
+      --with-parent <WITH_PARENT>
+          Add this parent before the selected parent is removed
+      --commit-pin <commit-pin>
+          
+      --effective-date <effective-date>
+          
+      --name <name>
+          
+      --reference <reference>
+          
+      --review-date <review-date>
+          
+      --source-type <source-type>
+          
+      --supersedes <supersedes>
+          
+      --url <url>
+          
+      --actor <actor>
+          
+      --depends-on <depends-on>
+          
+      --description <description>
+          
+      --domain-id <domain-id>
+          
+      --statement <statement>
+          
+      --status <status>
+          
+      --approved-at <approved-at>
+          
+      --approved-by <approved-by>
+          
+      --confidence <confidence>
+          
+      --context <context>
+          
+      --enforcement <enforcement>
+          
+      --inputs <inputs>
+          
+      --made-by <made-by>
+          
+      --position <position>
+          
+      --rationale <rationale>
+          
+      --requirement-ids <requirement-ids>
+          
+      --title <title>
+          
+      --archived-in-commit <archived-in-commit>
+          
+      --resolution-ids <resolution-ids>
+          
+      --severity <severity>
+          
+      --source-document <source-document>
+          
+      --source-section <source-section>
+          
+      --resolution-id <resolution-id>
+          
+      --color <color>
+          
+      --source-ref <source-ref>
+          
+      --links <links>
+          
+      --contradicts <contradicts>
+          
+      --question <question>
+          
+      --resolution-method <resolution-method>
+          
+      --method <method>
+          
+      --if-match <if-match>
+          
+      --declared-by <declared-by>
+          
+      --fog <fog>
+          
+      --relationships <relationships>
+          
+      --review-on <review-on>
+          
+      --actor-json <actor-json>
+          
+      --approved-at-json <approved-at-json>
+          
+      --approved-by-json <approved-by-json>
+          
+      --archived-in-commit-json <archived-in-commit-json>
+          
+      --color-json <color-json>
+          
+      --commit-pin-json <commit-pin-json>
+          
+      --confidence-json <confidence-json>
+          
+      --context-json <context-json>
+          
+      --contradicts-json <contradicts-json>
+          
+      --declared-by-json <declared-by-json>
+          
+      --depends-on-json <depends-on-json>
+          
+      --description-json <description-json>
+          
+      --domain-id-json <domain-id-json>
+          
+      --effective-date-json <effective-date-json>
+          
+      --enforcement-json <enforcement-json>
+          
+      --fog-json <fog-json>
+          
+      --inputs-json <inputs-json>
+          
+      --links-json <links-json>
+          
+      --made-by-json <made-by-json>
+          
+      --name-json <name-json>
+          
+      --position-json <position-json>
+          
+      --question-json <question-json>
+          
+      --rationale-json <rationale-json>
+          
+      --reference-json <reference-json>
+          
+      --relationships-json <relationships-json>
+          
+      --requirement-ids-json <requirement-ids-json>
+          
+      --resolution-id-json <resolution-id-json>
+          
+      --resolution-ids-json <resolution-ids-json>
+          
+      --resolution-method-json <resolution-method-json>
+          
+      --review-date-json <review-date-json>
+          
+      --review-on-json <review-on-json>
+          
+      --severity-json <severity-json>
+          
+      --source-document-json <source-document-json>
+          
+      --source-ref-json <source-ref-json>
+          
+      --source-section-json <source-section-json>
+          
+      --source-type-json <source-type-json>
+          
+      --statement-json <statement-json>
+          
+      --status-json <status-json>
+          
+      --supersedes-json <supersedes-json>
+          
+      --title-json <title-json>
+          
+      --url-json <url-json>
+          
+  -h, --help
+          Print help
+

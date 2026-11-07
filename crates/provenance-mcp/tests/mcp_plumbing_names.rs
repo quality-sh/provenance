@@ -97,7 +97,8 @@ async fn no_plumbing_operation_name_is_a_listed_or_callable_tool() {
                 .with_arguments(arguments.as_object().unwrap().clone()),
         )
     };
-    let update = json!({"path":"sources/source_shared","method":"patch","body":{"name":"Renamed"}});
+    let update =
+        json!({"path":"sources/source_shared","method":"patch","input":{"name":"Renamed"}});
     let written = call("api", update).await.unwrap();
     assert_ne!(written.is_error, Some(true), "{written:?}");
     assert_eq!(
@@ -144,7 +145,7 @@ async fn the_change_tool_has_no_api_action() {
     let refused = call(
         "change",
         json!({"action":"api","request":{"path":"sources/source_shared","method":"patch",
-               "body":{"name":"Refused"}}}),
+               "input":{"name":"Refused"}}}),
     )
     .await
     .unwrap();

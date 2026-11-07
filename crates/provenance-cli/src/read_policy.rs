@@ -9,6 +9,10 @@ pub fn default_exclude_terminal(parameters: &[provenance_contract::Parameter]) -
 
 /// Includes terminal records only when the user requests them.
 #[provenance_macros::rule("rule_cli_terminal_records_opt_in")]
-pub const fn exclude_terminal(include_terminal: bool) -> bool {
-    !include_terminal
+pub const fn include_terminal(requested: bool) -> Option<bool> {
+    if requested {
+        Some(true)
+    } else {
+        None
+    }
 }

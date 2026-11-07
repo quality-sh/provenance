@@ -1,0 +1,13 @@
+Serve local review assets and authorized repository operations
+
+Usage: provenance review [OPTIONS] --repo <REPO> --repository-id <REPOSITORY_ID> --scope <SCOPE>
+
+Options:
+      --quiet                          Drop the advisory notes commands print alongside their output, such as the warning that this repository has no shaping skills installed
+      --repo <REPO>                    Repository with an initialized Provenance manifest
+      --repository-id <REPOSITORY_ID>  Opaque repository target exposed to the browser
+      --scope <SCOPE>                  
+      --port <PORT>                    Loopback port. Zero selects an available port [default: 0]
+      --no-open                        Do not open the review page in a browser
+      --detach                         Reuse the running host for this repository and scope, or start one in the background that keeps running after this command returns. Prints where the review page is served
+  -h, --help                           Print help

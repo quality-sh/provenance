@@ -361,7 +361,7 @@ fn cli_import_refuses_unapproved_resolution_links_without_replacing_state() {
             std::fs::write(&input, document.to_string()).unwrap();
         }
         provenance(&[
-            "import", "--repo", repo, "--scope", "default", "--input", input.to_str().unwrap(),
+            "import", "--format", "json", "--repo", repo, "--scope", "default", "--input", input.to_str().unwrap(),
         ]).failure().code(1).stderr(contains(format!("{kind} {kind}_code_scores_health cites resolution res_code_scores_health, which is proposed.")));
         let after = provenance(&[
             "export", "--repo", repo, "--scope", "default", "--format", "json",

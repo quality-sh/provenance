@@ -1,0 +1,11 @@
+Introduce Provenance domain concepts and actions.
+
+Usage: provenance prime [OPTIONS]
+
+Options:
+      --quiet            Drop the advisory notes commands print alongside their output, such as the warning that this repository has no shaping skills installed
+      --repo <REPO>      Deprecated: accepted for compatibility; guidance does not use a repository [default: .]
+      --scope <SCOPE>    Deprecated: accepted for compatibility; guidance does not use a scope [default: default]
+      --format <FORMAT>  [default: markdown] [possible values: json, markdown]
+      --include-threads  Deprecated: accepted for compatibility; guidance does not include project threads
+  -h, --help             Print help

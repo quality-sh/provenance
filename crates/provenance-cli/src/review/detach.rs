@@ -73,7 +73,10 @@ pub fn run(options: &super::Options) -> anyhow::Result<()> {
         (host, Some(started))
     };
     if read_only {
-        eprintln!("{}", crate::reviewer::review_page_warning(&options.repo));
+        eprintln!(
+            "{}",
+            provenance_transport::reviewer::review_page_warning(&options.repo)
+        );
     }
     let url = host.endpoint().join("/")?;
     let mut launch = url.clone();
@@ -247,7 +250,7 @@ fn start_lock(key: &str) -> anyhow::Result<std::fs::File> {
 
 /// The owner-only per-user cache directory for detached host logs and locks.
 fn host_directory() -> anyhow::Result<PathBuf> {
-    let directory = provenance_store::user_cache::cache_directory()
+    let directory = provenance_transport::repository::user_cache_directory()
         .context("cannot find the per-user cache directory")?
         .join("provenance")
         .join("review-host");
@@ -265,10 +268,7 @@ fn host_directory() -> anyhow::Result<PathBuf> {
 fn without_reviewer(repo: &Path) -> anyhow::Result<bool> {
     let repo = camino::Utf8PathBuf::from_path_buf(repo.to_path_buf())
         .map_err(|path| anyhow::anyhow!("repository path {} is not UTF-8", path.display()))?;
-    let layout = provenance_store::layout::ProvenanceLayout::new(repo);
-    provenance_store::layout::with_initialized_graph(&layout, |manifest| {
-        Ok(manifest.disposition_actor_ids.is_empty())
-    })
+    Ok(!provenance_transport::repository::has_reviewer(&repo)?)
 }
 
 #[cfg(test)]

@@ -1,0 +1,9 @@
+Serve the MCP tools for one repository on standard input and output
+
+Usage: provenance mcp [OPTIONS]
+
+Options:
+      --quiet          Drop the advisory notes commands print alongside their output, such as the warning that this repository has no shaping skills installed
+      --repo <REPO>    [default: .]
+      --scope <SCOPE>  [default: default]
+  -h, --help           Print help

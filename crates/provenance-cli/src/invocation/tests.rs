@@ -1,5 +1,5 @@
 use provenance_core::RESERVED_RECORD_IDS;
-use provenance_porcelain::registry::{CliForm, Command};
+use provenance_porcelain::registry::Command;
 use provenance_porcelain::{action::Action, get::View};
 
 #[test]
@@ -12,14 +12,21 @@ fn reserved_ids_cover_declared_root_commands_collections_and_actions() {
         );
     }
     for command in Command::ALL {
-        if let CliForm::Words([word, ..]) | CliForm::WordsAndTarget([word, ..]) =
-            command.declaration().cli_form
-        {
+        let declaration = command.declaration();
+        if declaration.grammar.takes_name() {
+            let word = declaration.words().next().unwrap();
             assert!(
-                RESERVED_RECORD_IDS.contains(word),
+                RESERVED_RECORD_IDS.contains(&word),
                 "root word {word} is not reserved"
             );
         }
+    }
+    for server in provenance_cli::servers::SERVERS {
+        let word = provenance_cli::cli_options::words(&server.declaration()).unwrap()[0];
+        assert!(
+            RESERVED_RECORD_IDS.contains(&word),
+            "root word {word} is not reserved"
+        );
     }
     assert!(RESERVED_RECORD_IDS.contains(&"get"));
     for action in Action::ALL {
@@ -44,7 +51,7 @@ fn discussion_flags_follow_the_typed_input_contracts() {
     for action in Action::DISCUSSION {
         let schema = provenance_porcelain::discussion::input_schema(action);
         for field in schema["properties"].as_object().unwrap().keys() {
-            if ["parent", "discussion_id", "declared_by"].contains(&field.as_str()) {
+            if ["target", "declared_by"].contains(&field.as_str()) {
                 continue;
             }
             let flag = field.replace('_', "-");
@@ -62,7 +69,7 @@ fn discussion_flags_follow_the_typed_input_contracts() {
     for action in [Action::Discussions, Action::Discussion] {
         let schema = provenance_porcelain::discussion::input_schema(action);
         for field in schema["properties"].as_object().unwrap().keys() {
-            if ["parent", "discussion_id"].contains(&field.as_str()) {
+            if field == "target" {
                 continue;
             }
             let flag = field.replace('_', "-");

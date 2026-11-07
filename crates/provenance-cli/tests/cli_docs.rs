@@ -1,18 +1,40 @@
 use assert_cmd::Command;
 use provenance_macros::verifies;
+use serde_json::Value;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::process::Command as StdCommand;
 use std::time::{Duration, Instant};
 
+/// Runs `check --docs --format json` and returns whether it passed and the docs category.
+fn check_docs(repo: &std::path::Path) -> (bool, Value) {
+    let output = Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
+            "check",
+            "--docs",
+            "--repo",
+            &repo.to_string_lossy(),
+            "--format",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let categories = report["categories"].as_array().unwrap();
+    assert_eq!(categories.len(), 1, "{report}");
+    assert_eq!(categories[0]["category"], "docs");
+    (output.status.success(), categories[0].clone())
+}
+
 // The link decision is checked against generated sites in
-// src/docs/tests.rs. These cases pin it to the command a reader runs: the
-// links below are the ones a real docs tree is written with, and `docs
-// check` has to pass or fail on them through the whole load-and-resolve
-// path, not just in the decision function.
+// provenance-transport/src/docs/tests.rs. These cases pin it to the command a
+// reader runs: the links below are the ones a real docs tree is written with,
+// and `check --docs` has to pass or fail on them through the whole
+// load-and-resolve path, not just in the decision function.
 #[test]
 #[verifies("rule_docs_links_resolve", examples)]
-fn docs_check_accepts_plain_markdown_tree_and_reports_inferred_pages() {
+fn check_docs_accepts_plain_markdown_tree() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path();
     std::fs::create_dir_all(repo.join("docs/guide")).unwrap();
@@ -27,28 +49,15 @@ fn docs_check_accepts_plain_markdown_tree_and_reports_inferred_pages() {
     )
     .unwrap();
 
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args([
-            "docs",
-            "check",
-            "--repo",
-            &repo.to_string_lossy(),
-            "--format",
-            "json",
-        ])
-        .assert()
-        .success()
-        .stdout(predicates::str::contains(r#""status": "ok""#))
-        .stdout(predicates::str::contains(r#""homepage_route": "/""#))
-        .stdout(predicates::str::contains(r#""route": "/guide/install/""#))
-        .stdout(predicates::str::contains(r#""title": "Installation""#))
-        .stdout(predicates::str::contains(r#""page_count": 2"#));
+    let (passed, docs) = check_docs(repo);
+    assert!(passed, "{docs}");
+    assert_eq!(docs["status"], "passed");
+    assert_eq!(docs["findings"], serde_json::json!([]));
 }
 
 #[test]
 #[verifies("rule_docs_links_resolve", examples)]
-fn docs_check_fails_on_broken_relative_markdown_links() {
+fn check_docs_fails_on_broken_relative_markdown_links() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path();
     std::fs::create_dir_all(repo.join("docs")).unwrap();
@@ -58,23 +67,22 @@ fn docs_check_fails_on_broken_relative_markdown_links() {
     )
     .unwrap();
 
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args(["docs", "check", "--repo", &repo.to_string_lossy()])
-        .assert()
-        .failure()
-        .stderr(predicates::str::contains("broken docs link"))
-        .stderr(predicates::str::contains("docs/index.md"))
-        .stderr(predicates::str::contains("missing.md"));
+    let (passed, docs) = check_docs(repo);
+    assert!(!passed, "{docs}");
+    assert_eq!(docs["status"], "findings");
+    assert_eq!(docs["findings"].as_array().unwrap().len(), 1);
+    let detail = &docs["findings"][0]["detail"];
+    assert_eq!(detail["source_path"], "docs/index.md");
+    assert_eq!(detail["link"], "missing.md");
 }
 
-// `docs check` and `docs serve` read a page with the same parser options,
+// `check --docs` and `docs serve` read a page with the same parser options,
 // so a footnote is a footnote to both. Read without footnotes, the block
 // below is a link definition and `[^1]` the link using it, and the command
 // would fail on a page the server renders with no link on it at all.
 #[test]
 #[verifies("rule_docs_links_resolve", examples)]
-fn docs_check_reads_footnotes_the_way_the_server_renders_them() {
+fn check_docs_reads_footnotes_the_way_the_server_renders_them() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path();
     std::fs::create_dir_all(repo.join("docs")).unwrap();
@@ -84,27 +92,16 @@ fn docs_check_reads_footnotes_the_way_the_server_renders_them() {
     )
     .unwrap();
 
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args([
-            "docs",
-            "check",
-            "--repo",
-            &repo.to_string_lossy(),
-            "--format",
-            "json",
-        ])
-        .assert()
-        .success()
-        .stdout(predicates::str::contains(r#""broken_links": []"#));
+    let (passed, docs) = check_docs(repo);
+    assert!(passed, "{docs}");
+    assert_eq!(docs["findings"], serde_json::json!([]));
 }
 
 // A link out of docs/ and back into the repo root resolves only when the
-// site publishes README.md as a page, so this case checks the decision as
-// well as the homepage it infers.
+// site publishes README.md as a page.
 #[test]
 #[verifies("rule_docs_links_resolve", examples)]
-fn docs_check_uses_readme_as_homepage_when_docs_index_is_absent() {
+fn check_docs_uses_readme_as_homepage_when_docs_index_is_absent() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path();
     std::fs::create_dir_all(repo.join("docs/guide")).unwrap();
@@ -119,23 +116,9 @@ fn docs_check_uses_readme_as_homepage_when_docs_index_is_absent() {
     )
     .unwrap();
 
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args([
-            "docs",
-            "check",
-            "--repo",
-            &repo.to_string_lossy(),
-            "--format",
-            "json",
-        ])
-        .assert()
-        .success()
-        .stdout(predicates::str::contains(r#""homepage_route": "/""#))
-        .stdout(predicates::str::contains(r#""source_path": "README.md""#))
-        .stdout(predicates::str::contains(r#""title": "Project Handbook""#))
-        .stdout(predicates::str::contains(r#""route": "/guide/install/""#))
-        .stdout(predicates::str::contains(r#""page_count": 2"#));
+    let (passed, docs) = check_docs(repo);
+    assert!(passed, "{docs}");
+    assert_eq!(docs["status"], "passed");
 }
 
 #[test]

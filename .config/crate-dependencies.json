@@ -61,6 +61,7 @@
       "provenance-contract",
       "provenance-transport",
       "provenance-cli",
+      "provenance-mcp",
       "provenance-review",
       "clap",
       "rmcp"
@@ -73,6 +74,18 @@
     "provenance-review": [
       "provenance-cli",
       "clap"
+    ],
+    "provenance-cli": [
+      "provenance-store",
+      "provenance-scanner",
+      "provenance-ste100",
+      "provenance-report"
+    ],
+    "provenance-mcp": [
+      "provenance-store",
+      "provenance-scanner",
+      "provenance-ste100",
+      "provenance-report"
     ]
   },
   "crates": {
@@ -89,11 +102,7 @@
         "provenance-macros",
         "provenance-mcp",
         "provenance-porcelain",
-        "provenance-report",
         "provenance-review",
-        "provenance-scanner",
-        "provenance-ste100",
-        "provenance-store",
         "provenance-transport",
         "remove_dir_all",
         "rustix",
@@ -107,6 +116,8 @@
         "jsonschema",
         "notify",
         "provenance-mcp",
+        "provenance-ste100",
+        "provenance-store",
         "provenance-transport",
         "tempfile",
         "tokio"
@@ -287,15 +298,21 @@
         "axum",
         "dunce",
         "fs2",
+        "jsonschema",
         "provenance-contract",
         "provenance-core",
         "provenance-macros",
         "provenance-porcelain",
+        "provenance-report",
+        "provenance-scanner",
+        "provenance-ste100",
         "provenance-store",
+        "remove_dir_all",
         "tempfile",
         "tokio",
         "tokio-util",
-        "ureq"
+        "ureq",
+        "walkdir"
       ],
       "dev-dependencies": [
         "jsonschema",

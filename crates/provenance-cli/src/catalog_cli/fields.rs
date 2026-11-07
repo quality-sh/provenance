@@ -1,5 +1,5 @@
 use clap::{Arg, ArgAction, Command};
-use provenance_contract::{Definition, Parameter};
+use provenance_contract::{ArgumentPlace, Definition, Parameter};
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
 
@@ -29,98 +29,29 @@ pub(super) fn accepted_flags(declared: &[Field]) -> BTreeSet<String> {
     names
 }
 
+/// The CLI fields of one operation: its contract arguments, each spelled as a flag.
 pub(super) fn declared(definition: &Definition) -> anyhow::Result<Vec<Field>> {
-    let mut fields = Vec::new();
-    let mut names = BTreeSet::new();
-    for parameter in definition.parameters() {
-        if parameter.location == "path" {
-            continue;
-        }
-        let name = cli_name(parameter.name);
-        insert(
-            &mut fields,
-            &mut names,
-            Field {
-                name,
-                source: Source::Parameter(parameter),
-            },
-        )?;
-    }
-    // A body field that a request header fills (`If-Match` -> expected_etag)
-    // has the header flag as its only CLI spelling.
-    let header_bound = definition
-        .registration
-        .controls
-        .headers
-        .iter()
-        .map(|binding| binding.field)
-        .collect::<BTreeSet<_>>();
-    if let Some(request) = definition.request_schema() {
-        if let Some(properties) = request
-            .pointer("/properties/data/properties")
-            .and_then(Value::as_object)
-        {
-            for (wire_field, schema) in properties {
-                if header_bound.contains(wire_field.as_str()) {
-                    continue;
-                }
-                insert(
-                    &mut fields,
-                    &mut names,
-                    Field {
-                        name: wire_field.replace('_', "-"),
-                        source: Source::Body {
-                            wire_field: wire_field.clone(),
-                            value_schema: schema.clone(),
-                            wrap_array: false,
-                        },
-                    },
-                )?;
-            }
-        }
-        for alias in &definition.registration.request.argument_aliases {
-            let schema = request
-                .pointer("/properties/data/properties")
-                .and_then(|properties| properties.get(alias.field))
-                .ok_or_else(|| {
-                    anyhow::anyhow!("catalog alias {} has no body field", alias.argument)
-                })?;
-            let value_schema = if alias.wrap_array {
-                schema.get("items").ok_or_else(|| {
-                    anyhow::anyhow!("catalog alias {} does not name an array", alias.argument)
-                })?
-            } else {
-                schema
-            };
-            insert(
-                &mut fields,
-                &mut names,
-                Field {
-                    name: alias.argument.replace('_', "-"),
-                    source: Source::Body {
-                        wire_field: alias.field.to_owned(),
-                        value_schema: value_schema.clone(),
-                        wrap_array: alias.wrap_array,
-                    },
+    let arguments = definition
+        .arguments()
+        .map_err(|error| anyhow::anyhow!(error))?;
+    Ok(arguments
+        .into_iter()
+        .map(|argument| Field {
+            name: cli_name(&argument.name),
+            source: match argument.place {
+                ArgumentPlace::Parameter(parameter) => Source::Parameter(parameter),
+                ArgumentPlace::Body {
+                    field,
+                    schema,
+                    wrap_array,
+                } => Source::Body {
+                    wire_field: field,
+                    value_schema: schema,
+                    wrap_array,
                 },
-            )?;
-        }
-    }
-    Ok(fields)
-}
-
-fn insert(
-    fields: &mut Vec<Field>,
-    names: &mut BTreeSet<String>,
-    field: Field,
-) -> anyhow::Result<()> {
-    anyhow::ensure!(
-        names.insert(field.name.clone()),
-        "catalog flag --{} has more than one binding",
-        field.name
-    );
-    fields.push(field);
-    Ok(())
+            },
+        })
+        .collect())
 }
 
 pub(super) fn augment_with_overrides(

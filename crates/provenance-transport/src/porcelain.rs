@@ -2,21 +2,81 @@
 
 pub mod api_port;
 pub(crate) mod authoring;
+mod cargo_init;
+mod dictionary;
 mod discussion_port;
+#[cfg(feature = "dogfood")]
+mod dogfood;
+mod export;
 mod get_port;
+mod graph_reference;
 mod host;
+mod import;
+mod init;
+mod materialize;
+mod merge_jsonl;
+mod parent_replacement;
+mod report;
+mod schema;
 mod search_port;
+mod skills;
+mod swarm_backtrace;
+mod validate;
 pub use api_port::HostApiPort;
-pub use authoring::{target_call, Action, ActionError, TargetRoute};
+pub use authoring::{replacement_call, target_call, Action, ActionError, TargetRoute};
 pub use discussion_port::HostDiscussionPort;
+#[cfg(feature = "dogfood")]
+pub use dogfood::SpoolPort;
+pub use export::ScopeExport;
 pub use get_port::HostGetPort;
 pub use host::HostPorcelain;
+pub use merge_jsonl::MergeFailure;
+pub use parent_replacement::{ParentReplacement, Replaced, ReplacementError};
 pub use search_port::HostSearchPort;
+
+use crate::repository::RepoContext;
 
 use provenance_contract::Definition;
 use provenance_core::NodeType;
 
+/// The adapter of the commands that work on the files of one repository and scope:
+/// materialize, import, export, the dictionary commands, the graph references,
+/// report build, and swarm-backtrace land.
+#[derive(Clone, Debug)]
+pub struct RepositoryPort {
+    context: RepoContext,
+}
+
+impl RepositoryPort {
+    pub const fn new(context: RepoContext) -> Self {
+        Self { context }
+    }
+}
+
+/// The adapter of the commands that set up a repository or a workspace: init,
+/// cargo init, and the skills commands. It holds the skills that the program bundles.
+#[derive(Clone, Copy, Debug)]
+pub struct SetupPort {
+    skills: &'static [crate::skills::EmbeddedSkill],
+}
+
+impl SetupPort {
+    pub const fn new(skills: &'static [crate::skills::EmbeddedSkill]) -> Self {
+        Self { skills }
+    }
+}
+
+/// The adapter of the commands that work only on the files that their input names:
+/// validate, schema show, report render, and merge-jsonl.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ArtifactPort;
+
 impl HostPorcelain<'_> {
+    /// The host has repository files that the repository commands work on.
+    pub const fn repository_is_available(&self) -> bool {
+        self.host.repository().is_some()
+    }
+
     /// The host grants what the get capability reads.
     pub fn get_is_available(&self) -> bool {
         get_port::is_available(self.host)

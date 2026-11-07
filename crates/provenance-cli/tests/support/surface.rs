@@ -3,7 +3,7 @@
 
 use provenance_mcp::Client;
 use provenance_porcelain::check::{Category, CategoryRun, PortFuture, Refusal};
-use provenance_porcelain::registry::{self, CliForm};
+use provenance_porcelain::registry;
 use provenance_transport::fixture::{FixtureAccess, Target};
 use provenance_transport::StatementHost;
 use serde_json::Value;
@@ -23,11 +23,8 @@ pub fn help(words: &[&str]) -> String {
 }
 
 /// The words that select one CLI word command.
-pub fn words(command: registry::Command) -> Option<&'static [&'static str]> {
-    match command.declaration().cli_form {
-        CliForm::Words(words) | CliForm::WordsAndTarget(words) => Some(words),
-        CliForm::Target => None,
-    }
+pub fn words(command: registry::Command) -> Option<Vec<&'static str>> {
+    provenance_cli::cli_options::words(&command.declaration())
 }
 
 /// A check port that finds nothing, so a served host lists the check tool.
@@ -57,12 +54,17 @@ impl provenance_porcelain::check::CheckPort for EmptyCheckPort {
                     findings: Vec::new(),
                     context: provenance_porcelain::check::GapsContext { scopes: Vec::new() },
                 },
+                Category::Docs => CategoryRun::Docs {
+                    findings: Vec::new(),
+                    refusal: Refusal::None,
+                },
             })
         })
     }
 }
 
-/// The listed tools, by name, of a full-access host over `repo` with a check port.
+/// The listed tools, by name, of a full-access host over `repo` with a check port and
+/// the repository files.
 pub async fn tools(repo: &std::path::Path) -> BTreeMap<String, Value> {
     let access = FixtureAccess::new(
         vec![Target {
@@ -75,7 +77,12 @@ pub async fn tools(repo: &std::path::Path) -> BTreeMap<String, Value> {
     )
     .unwrap()
     .allow_writes();
-    let host = StatementHost::with_fixture_access(access).with_check_port(Arc::new(EmptyCheckPort));
+    let host = StatementHost::with_fixture_access(access)
+        .with_check_port(Arc::new(EmptyCheckPort))
+        .with_repository(provenance_transport::repository::RepoContext::new(
+            camino::Utf8PathBuf::from_path_buf(repo.to_path_buf()).unwrap(),
+            "default",
+        ));
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = Client::connect(client_io).await.unwrap();
@@ -88,4 +95,37 @@ pub async fn tools(repo: &std::path::Path) -> BTreeMap<String, Value> {
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
     tools
+}
+
+/// The long flag names in one help text, without the leading hyphens.
+pub fn flags(help: &str) -> std::collections::BTreeSet<String> {
+    help.lines()
+        .filter_map(|line| {
+            let line = line.trim_start().trim_start_matches("-h, ");
+            let name = line.strip_prefix("--")?;
+            Some(name.split([' ', '\t']).next().unwrap_or(name).to_owned())
+        })
+        .collect()
+}
+
+/// The properties of one listed tool that one action of the tool takes. Each property
+/// description ends with the actions that take the property.
+pub fn action_properties(tool: &Value, action: &str) -> std::collections::BTreeSet<String> {
+    tool["inputSchema"]["properties"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .filter(|(_, property)| {
+            property["description"]
+                .as_str()
+                .and_then(|text| text.rsplit_once("Actions: "))
+                .is_some_and(|(_, actions)| {
+                    actions
+                        .trim_end_matches('.')
+                        .split(", ")
+                        .any(|name| name == action)
+                })
+        })
+        .map(|(name, _)| name.clone())
+        .collect()
 }

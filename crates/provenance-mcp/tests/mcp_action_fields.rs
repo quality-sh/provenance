@@ -40,7 +40,7 @@ async fn field(client: &Client, name: &str, arguments: Value) -> (Value, Value) 
 #[tokio::test]
 #[verifies("rule_mcp_tool_inputs_are_flat_objects", examples)]
 #[verifies("rule_mcp_tools_read_or_write", examples)]
-async fn each_tool_input_is_a_flat_object_and_only_change_and_api_write() {
+async fn each_action_input_is_a_flat_object_and_only_change_and_api_write() {
     let repository = Repository::new("The shared graph is readable.");
     let session = session(&repository).await;
     let client = &session.client;
@@ -93,7 +93,7 @@ async fn discussion_reads_and_writes_refuse_fields_of_another_action() {
         client,
         "change",
         json!({"action":"discuss",
-            "parent":{"node_type":"requirement","node_id":"req_shared"},
+            "target":"req_shared",
             "actor":"ben", "role":"user", "body":"Opening text"}),
     )
     .await;
@@ -102,13 +102,10 @@ async fn discussion_reads_and_writes_refuse_fields_of_another_action() {
     for (name, valid) in [
         ("discussions", json!({})),
         ("discussions", json!({"action":"discussions","limit":5})),
-        (
-            "discussions",
-            json!({"action":"discussion","discussion_id":id}),
-        ),
+        ("discussions", json!({"action":"discussion","target":id})),
         (
             "change",
-            json!({"action":"reply","discussion_id":id,"expected_version":1,
+            json!({"action":"reply","target":id,"expected_version":1,
                           "actor":"ben","role":"user","body":"Yes."}),
         ),
     ] {
@@ -119,7 +116,7 @@ async fn discussion_reads_and_writes_refuse_fields_of_another_action() {
         (
             "discussions",
             json!({"action":"discussion"}),
-            ("discussion_id", "required"),
+            ("target", "required"),
         ),
         (
             "discussions",
@@ -133,18 +130,18 @@ async fn discussion_reads_and_writes_refuse_fields_of_another_action() {
         ),
         (
             "discussions",
-            json!({"action":"reply","discussion_id":id}),
+            json!({"action":"reply","target":id}),
             ("action", "invalid_value"),
         ),
         (
             "change",
-            json!({"action":"reply","discussion_id":id}),
+            json!({"action":"reply","target":id}),
             ("actor", "required"),
         ),
         (
             "change",
-            json!({"action":"discuss","discussion_id":id,"actor":"ben","role":"user","body":"Hi."}),
-            ("discussion_id", "unknown_field"),
+            json!({"action":"discuss","target":id,"actor":"ben","role":"user","body":"Hi.","expected_version":1}),
+            ("expected_version", "unknown_field"),
         ),
     ] {
         assert_eq!(
@@ -167,7 +164,7 @@ async fn record_actions_refuse_missing_fields_and_other_record_kinds() {
     let answered = call(
         client,
         "change",
-        json!({"action":"answer","target":"question_shared","data":{"answer":"Yes."}}),
+        json!({"action":"answer","target":"question_shared","answer":"Yes."}),
     )
     .await;
     assert_ne!(answered.is_error, Some(true), "{answered:?}");
@@ -178,24 +175,20 @@ async fn record_actions_refuse_missing_fields_and_other_record_kinds() {
             ("action", "invalid_value"),
         ),
         (
-            json!({"action":"answer","data":{"answer":"Yes."}}),
+            json!({"action":"answer","answer":"Yes."}),
             ("target", "required"),
         ),
         (
-            json!({"action":"answer","target":"question_shared","type":"source","data":{}}),
+            json!({"action":"answer","target":"question_shared","type":"source",}),
             ("type", "unknown_field"),
         ),
         (
-            json!({"action":"answer","target":"req_shared","data":{"answer":"Yes."}}),
+            json!({"action":"answer","target":"req_shared","answer":"Yes."}),
             ("target", "invalid_value"),
         ),
         (
-            json!({"action":"create","target":"source_x","type":"invented","data":{}}),
+            json!({"action":"create","target":"source_x","type":"invented",}),
             ("type", "invalid_value"),
-        ),
-        (
-            json!({"action":"update","target":"source_shared"}),
-            ("data", "required"),
         ),
         (
             json!({"action":"create","target":"req_x","type":"requirement","body":"Hi."}),
@@ -211,7 +204,7 @@ async fn record_actions_refuse_missing_fields_and_other_record_kinds() {
     let answer = refused(
         client,
         "change",
-        json!({"action":"answer","target":"req_shared","data":{"answer":"Yes."}}),
+        json!({"action":"answer","target":"req_shared","answer":"Yes."}),
     )
     .await;
     assert_eq!(
@@ -221,10 +214,10 @@ async fn record_actions_refuse_missing_fields_and_other_record_kinds() {
     session.close().await;
 }
 
-/// A call without data gets the data schema of the action and record kind.
+/// A call without the record fields gets the field schema of the action and record kind.
 #[tokio::test]
 #[verifies("rule_mcp_refusal_names_field", examples)]
-async fn a_refusal_without_data_gives_the_data_schema_of_the_record_kind() {
+async fn a_refusal_without_record_fields_gives_the_schema_of_the_record_kind() {
     let repository = Repository::new("The shared graph is readable.");
     repository.all_kinds();
     let session = session(&repository).await;
@@ -235,14 +228,12 @@ async fn a_refusal_without_data_gives_the_data_schema_of_the_record_kind() {
         json!({"action":"create","target":"source_x","type":"source"}),
     )
     .await;
-    assert_eq!(source["field"], "data");
+    assert_eq!(source["field"], "name");
     assert_eq!(
         source["message"],
-        "the create action on a source record needs data"
+        "the create action on a source record needs name"
     );
-    assert!(source["schema"]["properties"]["data"]["properties"]
-        .get("source_type")
-        .is_some());
+    assert!(source["schema"]["properties"].get("source_type").is_some());
     let requirement = refused(
         client,
         "change",

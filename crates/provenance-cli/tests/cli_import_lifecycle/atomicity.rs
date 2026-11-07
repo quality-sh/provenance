@@ -302,6 +302,8 @@ fn concurrent_first_imports_share_pristine_transaction_directory_setup() {
                 std::process::Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
                     .args([
                         "import",
+                        "--format",
+                        "json",
                         "--repo",
                         repo.to_str().unwrap(),
                         "--scope",
@@ -367,6 +369,8 @@ fn dry_run_rejects_symlinked_import_transactions_directory() {
     super::support::provenance()
         .args([
             "import",
+            "--format",
+            "json",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
@@ -406,6 +410,8 @@ fn dry_run_rejects_symlinked_cache_before_locking() {
     super::support::provenance()
         .args([
             "import",
+            "--format",
+            "json",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",

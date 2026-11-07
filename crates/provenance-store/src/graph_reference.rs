@@ -113,7 +113,7 @@ impl GraphReference {
     /// cannot resolve against this repository.
     ///
     /// The same decision is replicated as JSON Schema in
-    /// `provenance-cli/src/handlers/schema/artifacts/graph_reference.rs`
+    /// `provenance-transport/src/porcelain/schema/artifacts/graph_reference.rs`
     /// (`reference_schema`), which is what a holder outside this codebase
     /// validates against; the two must reach the same verdict on every value.
     #[rule("rule_reference_wellformed")]

@@ -1,0 +1,10 @@
+Render the deterministic pull request report from a report envelope
+
+Usage: provenance report render [OPTIONS] --input <INPUT>
+
+Options:
+      --input <INPUT>    Report envelope JSON (schema version 1)
+      --quiet            Drop the advisory notes commands print alongside their output, such as the warning that this repository has no shaping skills installed
+      --format <FORMAT>  [default: markdown] [possible values: json, markdown]
+      --output <OUTPUT>  Write the result to this file instead of standard output
+  -h, --help             Print help

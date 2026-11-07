@@ -1,0 +1,36 @@
+Submit the target Requirement for review.
+
+Usage: provenance [OPTIONS] <TARGET> [ACTION]
+
+Arguments:
+  <TARGET>  
+  [ACTION]  [possible values: get, trace, create, update, answer, claim, release, submit, discussions, discussion, discuss, reply]
+
+Options:
+      --repo <REPO>                                          [default: .]
+      --scope <SCOPE>                                        [default: default]
+      --format <FORMAT>                                      [possible values: json]
+      --quiet                                                
+      --stdin                                                
+      --actor <actor>                                        
+      --confidence <confidence>                              
+      --title <title>                                        
+      --declared-by <declared-by>                            
+      --builds-on <builds-on>                                
+      --evidence-references <evidence-references>            
+      --expected-revision <expected-revision>                
+      --revises <revises>                                    
+      --source-ids <source-ids>                              
+      --summary <summary>                                    
+      --actor-json <actor-json>                              
+      --builds-on-json <builds-on-json>                      
+      --confidence-json <confidence-json>                    
+      --declared-by-json <declared-by-json>                  
+      --evidence-references-json <evidence-references-json>  
+      --expected-revision-json <expected-revision-json>      
+      --revises-json <revises-json>                          
+      --source-ids-json <source-ids-json>                    
+      --summary-json <summary-json>                          
+      --title-json <title-json>                              
+  -h, --help                                                 Print help
+

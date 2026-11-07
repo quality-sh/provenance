@@ -140,7 +140,7 @@ async fn mcp_get_rejects_an_unknown_returned_kind() {
     let result = client
         .call_tool(
             CallToolRequestParams::new("get").with_arguments(
-                json!({"target":"req_shared","view":"children","returned_kinds":["invented"]})
+                json!({"target":"req_shared","view":"children","kind":["invented"]})
                     .as_object()
                     .unwrap()
                     .clone(),
@@ -307,7 +307,8 @@ impl provenance_porcelain::check::CheckPort for CheckFixturePort {
                 }
                 provenance_porcelain::check::Category::Graph
                 | provenance_porcelain::check::Category::Bindings
-                | provenance_porcelain::check::Category::Gaps => Vec::new(),
+                | provenance_porcelain::check::Category::Gaps
+                | provenance_porcelain::check::Category::Docs => Vec::new(),
             };
             Ok(category_run(category, findings))
         })
@@ -342,6 +343,10 @@ const fn category_run(
             findings,
             context: GapsContext { scopes: Vec::new() },
         },
+        Category::Docs => CategoryRun::Docs {
+            findings,
+            refusal: Refusal::None,
+        },
     }
 }
 
@@ -368,12 +373,8 @@ async fn mcp_check_uses_its_separately_injected_port() {
     assert_eq!(success_schema["required"], json!(["categories"]));
     let result = client
         .call_tool(
-            CallToolRequestParams::new("check").with_arguments(
-                json!({"categories":["statements"]})
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-            ),
+            CallToolRequestParams::new("check")
+                .with_arguments(json!({"statements": true}).as_object().unwrap().clone()),
         )
         .await
         .unwrap();

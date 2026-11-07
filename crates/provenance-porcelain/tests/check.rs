@@ -27,6 +27,7 @@ impl CheckPort for FixturePort {
                 Category::Statements => vec![Finding::new("statement uses an unapproved term")],
                 Category::Bindings => vec![Finding::new("active rule has no verification")],
                 Category::Gaps => vec![Finding::new("rule has no producing Requirement")],
+                Category::Docs => vec![Finding::new("docs/guide.md links to a missing page")],
             };
             Ok(match category {
                 Category::Graph => CategoryRun::Graph {
@@ -48,6 +49,10 @@ impl CheckPort for FixturePort {
                 Category::Gaps => CategoryRun::Gaps {
                     findings,
                     context: GapsContext { scopes: Vec::new() },
+                },
+                Category::Docs => CategoryRun::Docs {
+                    findings,
+                    refusal: Refusal::None,
                 },
             })
         })

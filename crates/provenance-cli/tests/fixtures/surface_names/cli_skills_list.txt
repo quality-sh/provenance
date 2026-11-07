@@ -1,0 +1,6 @@
+Usage: provenance skills list [OPTIONS]
+
+Options:
+      --format <FORMAT>  [default: json] [possible values: json]
+      --quiet            Drop the advisory notes commands print alongside their output, such as the warning that this repository has no shaping skills installed
+  -h, --help             Print help

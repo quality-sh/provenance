@@ -15,6 +15,8 @@ fn status_reports_the_referenced_identity_and_a_present_index_after_an_import() 
         .args([
             "dictionary",
             "import",
+            "--format",
+            "json",
             "--pdf",
             pdf.to_str().unwrap(),
             "--repo",

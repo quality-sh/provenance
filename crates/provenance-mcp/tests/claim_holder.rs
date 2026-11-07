@@ -23,7 +23,7 @@ async fn an_mcp_release_of_an_unclaimed_topic_gives_the_reason() {
     let refused = support::mcp::call(
         &session.client,
         "change",
-        json!({"action":"release","target":"topic_shared","data":{"actor":"alice"}}),
+        json!({"action":"release","target":"topic_shared","actor":"alice"}),
     )
     .await;
     assert_eq!(refused.is_error, Some(true), "{refused:?}");

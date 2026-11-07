@@ -85,14 +85,23 @@ async fn cli_and_mcp_share_the_same_guidance() {
         .args(["init", "--path", repo.path().to_str().unwrap()])
         .assert()
         .success();
-    let host =
-        provenance_cli::repo_context::RepoContext::new(repo.path().to_str().unwrap(), "default")
-            .local_host()
-            .unwrap();
+    let context = provenance_transport::repository::RepoContext::new(
+        repo.path().to_str().unwrap(),
+        "default",
+    );
+    let host = provenance_cli::porcelain::local_host(&context).unwrap();
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = Client::connect(client_io).await.unwrap();
-    assert_eq!(client.instructions().as_deref(), Some(text.trim_end()));
+    let shared = provenance_porcelain::guidance::guidance().guidance;
+    let instructions = client.instructions().unwrap();
+    assert!(text.starts_with(&shared), "{text}");
+    assert!(instructions.starts_with(&shared), "{instructions}");
+    assert!(text.contains("`provenance search --text <text>"), "{text}");
+    assert!(
+        instructions.contains("call search with {\"text\":\"<text>\"}"),
+        "{instructions}"
+    );
     let tools = client.tools().await;
     for name in ["get", "search", "trace", "change", "discussions"] {
         let tool = tools.iter().find(|tool| tool["name"] == name).unwrap();

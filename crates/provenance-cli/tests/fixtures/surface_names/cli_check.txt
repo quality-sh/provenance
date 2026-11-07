@@ -1,0 +1,22 @@
+Check graph validity, statement quality, and binding coverage. Give a statement to check that text with the project dictionary before a write.
+
+Usage: provenance check [OPTIONS]
+
+Options:
+      --quiet                          Drop the advisory notes commands print alongside their output, such as the warning that this repository has no shaping skills installed
+      --repo <REPO>                    [default: .]
+      --format <FORMAT>                [possible values: json]
+      --strict                         Reject findings in statements committed at Git HEAD, and every bindings finding.
+      --base <BASE>                    Compare Git HEAD with this commit instead of its first parent.
+      --statement <STATEMENT>          Check this statement instead of the committed statements.
+      --graph                          Run only graph validity checks. Combine with other check selectors.
+      --statements                     Run only statement quality checks. Combine with other check selectors.
+      --bindings                       Run only Rule binding checks. The scan covers the repository root; path limits it.
+      --gaps                           Run only the gaps check: report the unfinished parts of the graph and each Rule without a Source. These findings do not fail the check.
+      --docs                           Run only the docs check: report each Markdown link that names a page the docs site does not publish.
+      --scope <SCOPE>                  Check only this scope. The default is every scope that the caller can read.
+      --path <PATH>                    Bindings check only: scan the files below this path. The default is the repository root.
+      --baseline <BASELINE>            Bindings check only: resolve evidence anchors against this earlier scan report. Needs scope.
+      --output <OUTPUT>                Bindings check only: write the scan report of the selected scope to this file. Needs scope.
+      --output-format <OUTPUT_FORMAT>  [possible values: json, markdown]
+  -h, --help                           Print help

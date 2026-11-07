@@ -1,4 +1,4 @@
-//! Catalog-described public-path API access shared by the CLI and MCP.
+//! Catalog-described public-path API access shared by each consumer.
 
 use provenance_core::protocol::failure::{FailureEnvelope, InvalidInputReason, OperationFailure};
 use provenance_macros::rule;
@@ -33,7 +33,7 @@ impl ApiMethod {
     }
 
     /// Parse one method name in any letter case, as discovery prints
-    /// uppercase names and HTTP tools accept either case.
+    /// uppercase names and HTTP clients accept either case.
     pub fn parse(value: &str) -> Option<Self> {
         match value.to_ascii_lowercase().as_str() {
             "get" => Some(Self::Get),
@@ -44,15 +44,18 @@ impl ApiMethod {
     }
 }
 
-/// The structured arguments one api call accepts on every surface.
+/// The api fields: one call, or the catalog when the path is not given.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, schemars::JsonSchema)]
 #[serde(deny_unknown_fields, default)]
 pub struct ApiArguments {
     pub path: Option<String>,
     pub method: Option<ApiMethod>,
+    pub input: Option<serde_json::Map<String, Value>>,
+    pub header: BTreeMap<String, String>,
     pub query: BTreeMap<String, String>,
-    pub headers: BTreeMap<String, String>,
-    pub body: Option<serde_json::Map<String, Value>>,
+    pub filter: Option<String>,
+    #[schemars(range(min = 1, max = 200))]
+    pub limit: Option<usize>,
 }
 
 /// One semantic public-path request after validation.
@@ -169,6 +172,49 @@ pub struct ApiCatalog {
     pub routes: Vec<ApiRoute>,
 }
 
+/// The catalog routes that the filter and limit fields select, with the counts.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CatalogSelection {
+    pub routes: Vec<ApiRoute>,
+    pub total: usize,
+    pub matching: usize,
+}
+
+impl ApiCatalog {
+    /// The routes whose method, path, or description contains `filter`, without letter
+    /// case, and at most `limit` of them.
+    #[provenance_macros::rule("rule_cli_api_discovery_filter_limit")]
+    pub fn select(self, filter: Option<&str>, limit: Option<usize>) -> CatalogSelection {
+        let total = self.routes.len();
+        let needle = filter.map(str::to_ascii_lowercase);
+        let mut routes = self
+            .routes
+            .into_iter()
+            .filter(|route| {
+                needle.as_ref().is_none_or(|needle| {
+                    format!(
+                        "{} {} {}",
+                        route.method.as_str(),
+                        route.path,
+                        route.description
+                    )
+                    .to_ascii_lowercase()
+                    .contains(needle)
+                })
+            })
+            .collect::<Vec<_>>();
+        let matching = routes.len();
+        if let Some(limit) = limit {
+            routes.truncate(limit);
+        }
+        CatalogSelection {
+            routes,
+            total,
+            matching,
+        }
+    }
+}
+
 /// The structured api answer: the discovery catalog or one route envelope.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ApiOutcome {
@@ -179,7 +225,7 @@ pub enum ApiOutcome {
 /// One future returned by an injected api port.
 pub type ApiPortFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ApiError>> + Send + 'a>>;
 
-/// What one api tool call offers a host client.
+/// What one api call offers a host client.
 pub const API_DESCRIPTION: &str = "Call one public API path with an optional method, query, headers, and JSON body. The body is the data object, without the HTTP {\"data\": ...} wrapper. Omit the path to list the catalog routes with their methods, inputs, and response schemas.";
 
 /// How an api call carries its JSON body.
@@ -192,7 +238,7 @@ pub trait ApiPort: Send + Sync {
     fn discover(&self) -> ApiCatalog;
 }
 
-/// The typed input schema of one api tool call.
+/// The typed input schema of one api call.
 pub fn input_schema() -> Value {
     serde_json::to_value(schemars::schema_for!(ApiArguments)).expect("api input schema is JSON")
 }
@@ -238,8 +284,8 @@ impl ApiRequest {
             let call_option = [
                 ("method", arguments.method.is_some()),
                 ("query", !arguments.query.is_empty()),
-                ("headers", !arguments.headers.is_empty()),
-                ("body", arguments.body.is_some()),
+                ("header", !arguments.header.is_empty()),
+                ("input", arguments.input.is_some()),
             ]
             .into_iter()
             .find_map(|(field, given)| given.then_some(field));
@@ -247,12 +293,21 @@ impl ApiRequest {
                 Err(ApiError::invalid_options(Some(field)))
             });
         };
+        if let Some(field) = [
+            ("filter", arguments.filter.is_some()),
+            ("limit", arguments.limit.is_some()),
+        ]
+        .into_iter()
+        .find_map(|(field, given)| given.then_some(field))
+        {
+            return Err(ApiError::invalid_options(Some(field)));
+        }
         validated(ApiInput {
             method: arguments.method.unwrap_or_default(),
             path,
             query: arguments.query,
-            headers: arguments.headers,
-            body: arguments.body,
+            headers: arguments.header,
+            body: arguments.input,
         })
         .map(Self::Invoke)
     }
@@ -272,7 +327,7 @@ fn validated(input: ApiInput) -> Result<ApiInput, ApiError> {
         return Err(ApiError::unknown_path());
     }
     if input.method == ApiMethod::Get && input.body.is_some() {
-        return Err(ApiError::invalid_options(Some("body")));
+        return Err(ApiError::invalid_options(Some("input")));
     }
     let mut names = BTreeSet::new();
     if !input
@@ -280,7 +335,7 @@ fn validated(input: ApiInput) -> Result<ApiInput, ApiError> {
         .keys()
         .all(|name| names.insert(name.to_ascii_lowercase()))
     {
-        return Err(ApiError::invalid_options(Some("headers")));
+        return Err(ApiError::invalid_options(Some("header")));
     }
     let path = format!("/{relative}");
     Ok(ApiInput { path, ..input })

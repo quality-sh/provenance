@@ -145,6 +145,8 @@ fn scope_export_import_round_trip_preserves_implementation_bindings() {
     provenance()
         .args([
             "import",
+            "--format",
+            "json",
             "--repo",
             target.to_str().unwrap(),
             "--scope",
@@ -185,6 +187,8 @@ fn scope_import_defaults_an_omitted_implementation_binding_family_to_empty() {
     provenance()
         .args([
             "import",
+            "--format",
+            "json",
             "--repo",
             target.to_str().unwrap(),
             "--scope",

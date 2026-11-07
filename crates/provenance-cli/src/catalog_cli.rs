@@ -3,12 +3,12 @@ use crate::invocation::{grammar, GlobalContext};
 use clap::{parser::ValueSource, ArgMatches, Command};
 use provenance_contract::TargetAction;
 use provenance_porcelain::action::Action;
+use provenance_transport::porcelain::ReplacementError;
 
 pub mod fields;
 mod help;
 mod input;
 mod input_guard;
-mod parent_replacement;
 pub mod refusal;
 mod statement_warning;
 
@@ -46,7 +46,7 @@ pub fn target_command() -> anyhow::Result<Command> {
         command,
         provenance_porcelain::action::Action::DISCUSSION
             .map(provenance_porcelain::discussion::input_schema),
-        &["parent", "discussion_id", "declared_by"],
+        &["target", "declared_by"],
     )
 }
 
@@ -71,7 +71,7 @@ pub async fn dispatch_target(
             .unwrap_or_else(|error| usage_error(error));
     }
     let repo = context.repo.clone();
-    let host = repo.local_host()?;
+    let host = provenance_cli::porcelain::local_host(&repo)?;
     let route = host
         .target_route(action, &target, kind)
         .await
@@ -85,7 +85,7 @@ pub async fn dispatch_target(
         &matches,
         stdin,
         None,
-        &["record_type", "stdin", "replace_parent", "with_parent"],
+        &["type", "stdin", "replace_parent", "with_parent"],
     )
     .unwrap_or_else(|error| usage_error(error));
     if !query.is_empty() {
@@ -95,31 +95,33 @@ pub async fn dispatch_target(
     }
     let writes_statement = statement_warning::has_statement(&data);
     let replacement = matches.get_one::<String>("replace_parent");
+    let guidance = |failure: &provenance_core::protocol::failure::ErasedFailure| {
+        failure_with_guidance(failure, &route.path, Some(&target), &context.repo)
+    };
     let result = if let Some(old) = replacement {
-        anyhow::ensure!(
-            action == Action::Update && route.kind == provenance_core::NodeType::Requirement,
-            "parent replacement requires a Requirement update"
-        );
-        parent_replacement::replace(
-            &host,
-            &route.path,
-            data,
-            headers,
-            (
-                old,
-                matches
-                    .get_one::<String>("with_parent")
-                    .expect("paired parent options"),
-            ),
-            |failure| failure_with_guidance(failure, &route.path, Some(&target), &context.repo),
-        )
-        .await
+        let parents = provenance_transport::porcelain::ParentReplacement {
+            replace_parent: old,
+            with_parent: matches
+                .get_one::<String>("with_parent")
+                .expect("paired parent options"),
+        };
+        match host.replace_parent(&route, data, headers, parents).await {
+            Ok(replaced) => {
+                if !replaced.changed {
+                    eprintln!(
+                        "{} replaced {} already; nothing changed",
+                        parents.with_parent, parents.replace_parent
+                    );
+                }
+                Ok(replaced.record)
+            }
+            Err(ReplacementError::Failure(failure)) => Err(guidance(&failure)),
+            Err(error) => Err(anyhow::Error::new(error)),
+        }
     } else {
         host.invoke_target(&route, data, headers)
             .await
-            .map_err(|failure| {
-                failure_with_guidance(&failure, &route.path, Some(&target), &context.repo)
-            })
+            .map_err(|failure| guidance(&failure))
     };
     let json = format == Some(provenance_cli::porcelain::OutputFormat::Json);
     let mut value = match result {
@@ -154,7 +156,7 @@ fn failure_with_guidance(
     failure: &provenance_core::protocol::failure::ErasedFailure,
     path: &str,
     target: Option<&str>,
-    context: &provenance_cli::repo_context::RepoContext,
+    context: &provenance_transport::repository::RepoContext,
 ) -> anyhow::Error {
     actionable_failure(
         failure,
@@ -166,7 +168,7 @@ fn failure_with_guidance(
 
 /// The `--scope` and `--repo` words that make a hinted command run against
 /// the caller's repository and scope. A default repository path stays implicit.
-fn context_options(context: Option<&provenance_cli::repo_context::RepoContext>) -> String {
+fn context_options(context: Option<&provenance_transport::repository::RepoContext>) -> String {
     let Some(context) = context else {
         return String::new();
     };
@@ -182,7 +184,7 @@ fn context_options(context: Option<&provenance_cli::repo_context::RepoContext>) 
 #[provenance_macros::rule("rule_review_refusal_names_read_command")]
 fn review_read_command(
     id: &str,
-    context: Option<&provenance_cli::repo_context::RepoContext>,
+    context: Option<&provenance_transport::repository::RepoContext>,
 ) -> String {
     format!("provenance {id} --view review{}", context_options(context))
 }
@@ -191,7 +193,7 @@ fn actionable_failure(
     failure: &provenance_core::protocol::failure::ErasedFailure,
     record_id: Option<&str>,
     collection: Option<&str>,
-    context: &provenance_cli::repo_context::RepoContext,
+    context: &provenance_transport::repository::RepoContext,
 ) -> anyhow::Error {
     let value = serde_json::to_value(failure).unwrap_or_default();
     let error = &value["error"];
@@ -270,11 +272,25 @@ pub fn usage_error(error: impl std::fmt::Display) -> ! {
     clap::Error::raw(clap::error::ErrorKind::InvalidValue, error.to_string()).exit()
 }
 
+/// Exits with the CLI text of an action that cannot be selected. The CLI names the
+/// record type field by its `--type` option.
+pub fn action_usage_error(error: provenance_porcelain::action::ActionError) -> ! {
+    match error {
+        provenance_porcelain::action::ActionError::KindSelection => usage_error(
+            "create requires --type and existing-record actions infer it without --type",
+        ),
+        error => usage_error(error),
+    }
+}
+
 fn warn_if_skills_missing(repo: &str, quiet: bool) -> anyhow::Result<()> {
     if quiet {
         return Ok(());
     }
-    let status = crate::skills::install_status(std::path::Path::new(repo))?;
+    let status = provenance_transport::skills::install_status(
+        crate::skills::BUNDLED,
+        std::path::Path::new(repo),
+    )?;
     if !status.installed {
         eprintln!(
             "hint: provenance skills are not installed; run `{}` from the repo root",

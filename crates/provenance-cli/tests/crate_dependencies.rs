@@ -215,6 +215,47 @@ fn only_the_interface_crates_use_clap_and_rmcp() {
     assert!(refusals.is_empty(), "{}", refusals.join("\n"));
 }
 
+/// The interface crates reach the work crates only through transport and porcelain.
+const INTERFACES: [&str; 2] = ["provenance-cli", "provenance-mcp"];
+const WORK_CRATES: [&str; 4] = [
+    "provenance-store",
+    "provenance-scanner",
+    "provenance-ste100",
+    "provenance-report",
+];
+
+/// Returns each work crate that the forbidden row of an interface crate does not
+/// name, and each normal or build edge from an interface crate to a work crate.
+#[rule("rule_interfaces_do_not_depend_on_work_crates")]
+fn work_crate_refusals(policy: &Policy, metadata: &Value) -> Vec<String> {
+    let packages = metadata["packages"].as_array().expect("packages");
+    let mut refusals = Vec::new();
+    for interface in INTERFACES {
+        let forbidden = policy.forbidden.get(interface);
+        let package = packages.iter().find(|package| package["name"] == interface);
+        let package = package.expect("each interface crate is a workspace member");
+        for work in WORK_CRATES {
+            if !forbidden.is_some_and(|row| row.contains(work)) {
+                refusals.push(format!(
+                    "the forbidden row for {interface} in {POLICY_FILE} does not name {work}"
+                ));
+            }
+            if edges(package).any(|edge| edge.dependency == work && edge.list() == "dependencies") {
+                refusals.push(format!("{interface} has a normal dependency on {work}"));
+            }
+        }
+    }
+    refusals
+}
+
+#[test]
+#[verifies("rule_interfaces_do_not_depend_on_work_crates", exhaustion)]
+fn interfaces_do_not_depend_on_work_crates() {
+    let refusals = work_crate_refusals(&read_policy(), &workspace_metadata());
+
+    assert!(refusals.is_empty(), "{}", refusals.join("\n"));
+}
+
 fn fixture_policy() -> Value {
     json!({
         "interface_crates": { "clap": "provenance-cli", "rmcp": "provenance-mcp" },

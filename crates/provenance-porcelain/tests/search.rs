@@ -152,7 +152,7 @@ async fn filter_only_search_uses_the_canonical_query_and_result() {
     let port = RecordingPort::default();
     let service = Porcelain::new(port.clone());
     let query = SearchInput {
-        node_types: vec![NodeType::Requirement, NodeType::Rule],
+        kind: vec![NodeType::Requirement, NodeType::Rule],
         limit: Some(7),
         ..SearchInput::default()
     };
@@ -183,10 +183,15 @@ async fn search_refuses_a_request_without_text_or_kinds_before_the_port() {
     let service = Porcelain::new(port.clone());
     let query = SearchInput::default();
 
-    assert!(matches!(
-        service.search(query).await,
-        Err(SearchError::InvalidOptions { .. })
-    ));
+    let error = service.search(query).await.unwrap_err();
+    assert!(matches!(error, SearchError::InvalidOptions { .. }));
+    assert_eq!(
+        error.recovery_inputs(),
+        [
+            serde_json::json!({"text": "<query>"}),
+            serde_json::json!({"kind": ["<kind>"]})
+        ]
+    );
     assert!(port.0.lock().unwrap().is_none());
 }
 
@@ -279,8 +284,8 @@ async fn file_search_reads_the_code_lookup_and_returns_rules_as_nodes() {
         file: Some("code.rs".into()),
         symbol: Some("pay".into()),
         line: Some(2),
-        node_types: vec![NodeType::Rule],
-        exclude_terminal: Some(false),
+        kind: vec![NodeType::Rule],
+        include_terminal: Some(true),
         cursor: Some("next".into()),
         ..SearchInput::default()
     };
@@ -319,18 +324,18 @@ async fn code_lookup_refusals_happen_before_the_port() {
         (
             SearchInput {
                 file: file(),
-                node_types: vec![NodeType::Rule, NodeType::Requirement],
+                kind: vec![NodeType::Rule, NodeType::Requirement],
                 ..SearchInput::default()
             },
-            "node_types",
+            "kind",
         ),
         (
             SearchInput {
                 file: file(),
-                exclude_terminal: Some(true),
+                include_terminal: Some(false),
                 ..SearchInput::default()
             },
-            "exclude_terminal",
+            "include_terminal",
         ),
         (
             SearchInput {
@@ -365,11 +370,10 @@ async fn code_lookup_refusals_happen_before_the_port() {
         );
         let message = error.to_string();
         assert!(message.starts_with(&format!("{field}: ")), "{message}");
-        assert!(
-            message.contains("provenance search --file <path>"),
-            "{message}"
+        assert_eq!(
+            error.recovery_inputs()[0],
+            serde_json::json!({"file": "<path>", "symbol": "<name>"})
         );
-        assert!(message.contains("MCP JSON: {\"file\""), "{message}");
         assert!(port.0.lock().unwrap().is_none());
         assert!(port.1.lock().unwrap().is_none());
     }

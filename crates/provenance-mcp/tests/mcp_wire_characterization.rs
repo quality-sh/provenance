@@ -23,7 +23,7 @@ use std::sync::Arc;
 use support::{check_port::FixtureCheckPort, records::Repository};
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader, DuplexStream, Lines};
 
-const TOOL_LIST_FNV1A: u64 = 15_910_249_827_099_525_131;
+const TOOL_LIST_FNV1A: u64 = 501_996_135_512_916_891;
 
 /// The porcelain tools, in list order. The list has no plumbing tools.
 const PORCELAIN_TOOL_NAMES: &[&str] = &[
@@ -160,7 +160,7 @@ async fn discover_response_keeps_its_fields() {
             "_meta":{"io.modelcontextprotocol/serverInfo":server_info()},
             "cacheScope":"private",
             "capabilities":{"tools":{}},
-            "instructions":provenance_porcelain::guidance::guidance().guidance,
+            "instructions":provenance_mcp::instructions(),
             "resultType":"complete",
             "supportedVersions":["2024-11-05","2025-03-26","2025-06-18","2025-11-25","2026-07-28"],
             "ttlMs":0
@@ -187,7 +187,7 @@ async fn initialize_negotiates_the_older_protocols() {
                 "protocolVersion":agreed,
                 "capabilities":{"tools":{}},
                 "serverInfo":server_info(),
-                "instructions":provenance_porcelain::guidance::guidance().guidance,
+                "instructions":provenance_mcp::instructions(),
             }),
             "requested {requested}"
         );
@@ -239,7 +239,7 @@ async fn tool_list_keeps_its_names_order_and_schemas() {
 
 #[tokio::test]
 async fn tool_call_result_keeps_its_shape() {
-    let call = json!({"name":"check","arguments":{"categories":["graph"]}});
+    let call = json!({"name":"check","arguments":{"graph": true}});
     let mut expected = json!({
         "content":[{"type":"text","text":"graph: passed"}],
         "isError":false,
@@ -291,12 +291,14 @@ async fn typed_refusal_and_unknown_tool_keep_their_shape() {
     let refusal = wire
         .request(
             "tools/call",
-            json!({"name":"check","arguments":{"statement":"The pump stops.","strict":true}}),
+            json!({"name":"check","arguments":{"statement":"The pump stops.","categories":[]}}),
         )
         .await;
     let envelope = json!({
-        "error":{"field":"strict","kind":"invalid_input","reason":"unknown_field",
-                 "message":"check does not take strict; it takes: categories, statement"},
+        "error":{"field":"categories","kind":"invalid_input","reason":"unknown_field",
+                 "message":"check does not take categories; it takes: base, baseline, bindings, \
+                            docs, gaps, graph, output, output_format, path, scope, statement, \
+                            statements, strict"},
         "meta":{}
     });
     assert_eq!(
@@ -335,7 +337,7 @@ fn refusals() -> Vec<(&'static str, Value)> {
     };
     let discussion = json!({
         "field":"unknown_field","kind":"invalid_input","reason":"unknown_field",
-        "message":"the discussions action does not take unknown_field; it takes: cursor, limit, parent, status"
+        "message":"the discussions action does not take unknown_field; it takes: cursor, limit, status, target"
     });
     let change = json!({
         "field":"action","kind":"invalid_input","reason":"required",
@@ -344,21 +346,28 @@ fn refusals() -> Vec<(&'static str, Value)> {
     vec![
         (
             "get",
-            unknown("get", "limit, max_depth, returned_kinds, target, view"),
+            unknown("get", "depth, kind, limit, review_link, target, view"),
         ),
         (
             "search",
             unknown(
                 "search",
-                "cursor, exclude_terminal, file, limit, line, node_types, symbol, text",
+                "cursor, file, include_terminal, kind, limit, line, symbol, text",
             ),
         ),
-        ("api", unknown("api", "body, headers, method, path, query")),
-        ("check", unknown("check", "categories, statement")),
         (
-            "trace",
-            unknown("trace", "limit, max_depth, returned_kinds, target"),
+            "api",
+            unknown("api", "filter, header, input, limit, method, path, query"),
         ),
+        (
+            "check",
+            unknown(
+                "check",
+                "base, baseline, bindings, docs, gaps, graph, output, output_format, path, \
+                 scope, statement, statements, strict",
+            ),
+        ),
+        ("trace", unknown("trace", "depth, kind, limit, target")),
         ("change", change),
         ("discussions", discussion),
         (

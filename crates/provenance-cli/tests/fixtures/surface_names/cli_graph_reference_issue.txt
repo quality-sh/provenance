@@ -1,0 +1,21 @@
+Issue an immutable reference after canonical graph state is committed
+
+Usage: provenance graph-reference issue [OPTIONS]
+
+Options:
+      --quiet
+          Drop the advisory notes commands print alongside their output, such as the warning that this repository has no shaping skills installed
+      --repo <REPO>
+          [default: .]
+      --scope <SCOPE>
+          [default: default]
+      --commit <COMMIT>
+          Git revision to pin. When omitted, clean relevant state at HEAD is required
+      --correlation-system <CORRELATION_SYSTEM>
+          
+      --correlation-key <CORRELATION_KEY>
+          
+      --format <FORMAT>
+          [default: json] [possible values: json]
+  -h, --help
+          Print help

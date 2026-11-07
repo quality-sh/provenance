@@ -1,276 +1,181 @@
-//! One declaration for each command on the CLI and each MCP tool.
+//! One declaration for each porcelain command.
 //!
-//! A declaration names a command, describes it, and declares its inputs for each
-//! interface. It does no work: the handlers stay behind the existing ports. The CLI
-//! renders its parser from these declarations and the MCP server lists its tools
-//! from them.
+//! A declaration names a command, describes it, and declares its one input: the fields,
+//! the fields that name its target, and the relations between them. It does no work:
+//! the handlers stay behind the existing ports. Each consumer keeps its own list of the
+//! commands that it shows, and shows each one from this declaration by one rule.
 
 mod dogfood;
+mod fields;
 mod graph;
 mod porcelain;
+mod porcelain_fields;
 mod repository;
 mod workspace;
 
-pub use dogfood::{
-    DogfoodCommand, DogfoodListInput, DogfoodNoteInput, DogfoodReportInput, DogfoodSimulateInput,
+pub use crate::cargo_init::CargoInitInput;
+pub use crate::dictionary::{DictionaryImportInput, DictionaryStatusInput};
+pub use crate::dogfood::{
+    DogfoodListInput, DogfoodNoteInput, DogfoodReportInput, DogfoodSimulateInput,
     TriageHandleInput, TriageListInput, TriageReopenInput,
 };
-pub use graph::{GraphCommand, ReferenceInput, ReferenceIssueInput, SwarmBacktraceLandInput};
-pub use porcelain::{
-    CheckCliInput, CheckFormat, GetCliInput, PrimeFormat, PrimeInput, ReportFileFormat,
-};
-pub use repository::{
-    CargoInitInput, DictionaryImportInput, DictionaryStatusInput, ExportInput, ImportInput,
-    InitInput, MaterializeInput, MergeJsonlInput, RepositoryCommand, SchemaShowInput,
-    ValidateInput,
-};
-pub use workspace::{
-    DocsCheckInput, DocsServeInput, McpInput, ReportBuildInput, ReportRenderInput, ReviewInput,
-    SkillsInstallInput, SkillsListInput, SkillsShowInput, WorkspaceCommand,
-};
+pub use crate::export::ExportInput;
+pub use crate::graph_reference::{ReferenceInput, ReferenceIssueInput};
+pub use crate::import::ImportInput;
+pub use crate::init::InitInput;
+pub use crate::materialize::MaterializeInput;
+pub use crate::merge_jsonl::MergeJsonlInput;
+pub use crate::report::{ReportBuildInput, ReportRenderInput};
+pub use crate::schema::SchemaShowInput;
+pub use crate::skills::{SkillsInstallInput, SkillsListInput, SkillsShowInput};
+pub use crate::swarm_backtrace::SwarmBacktraceLandInput;
+pub use crate::validate::ValidateInput;
+pub use dogfood::DogfoodCommand;
+pub use fields::{json_format, Field, FieldValue, Fields, Relation, REPO, SCOPE};
+pub use graph::GraphCommand;
+pub use porcelain::{PrimeFormat, PrimeInput};
+pub use repository::RepositoryCommand;
+pub use workspace::WorkspaceCommand;
 
 use crate::action::Action;
 use provenance_macros::rule;
 
-/// One interface that shows commands.
+/// Whether a command takes a target record before its name.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Interface {
-    Cli,
-    Mcp,
-}
-
-/// Whether an interface shows a command, with the reason when it does not.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Presence {
-    Present,
-    Absent { reason: &'static str },
-}
-
-/// The CLI words that select a command.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CliForm {
-    /// `provenance <words...>`.
-    Words(&'static [&'static str]),
-    /// `provenance <target> <name>`.
+pub enum Grammar {
+    /// The command is selected by the words of its name.
+    Name,
+    /// The command acts on one target record.
     Target,
-    /// Both the words and the target form.
-    WordsAndTarget(&'static [&'static str]),
+    /// The command is selected by its name, or acts on one target record.
+    NameAndTarget,
 }
 
-/// The input of a command on one interface.
+impl Grammar {
+    /// Whether the command can act on a target record.
+    pub const fn takes_target(self) -> bool {
+        matches!(self, Self::Target | Self::NameAndTarget)
+    }
+
+    /// Whether the words of the name select the command.
+    pub const fn takes_name(self) -> bool {
+        matches!(self, Self::Name | Self::NameAndTarget)
+    }
+}
+
+/// The input of a command.
 #[derive(Clone, Copy, Debug)]
 pub enum Input {
-    /// A typed input, given as its JSON Schema.
-    Typed(fn() -> serde_json::Value),
-    /// The fields of the catalog operations that the action selects.
-    RecordFields(Action),
+    /// A typed input, declared as its fields.
+    Fields(Fields),
+    /// The fields of the catalog operations that the action selects, after these fields
+    /// of the action.
+    RecordFields {
+        action: Action,
+        fields: &'static [Field],
+        relations: &'static [Relation],
+    },
     /// The typed input of one Discussion action.
     Discussion(Action),
     None,
 }
 
-/// A relation between two CLI flags of one command, by input field name.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Relation {
-    /// The first flag needs the second flag.
-    Requires(&'static str, &'static str),
-    /// The two flags cannot be given together.
-    Conflicts(&'static str, &'static str),
-}
-
-/// How a CLI flag takes its value.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum FlagKind {
-    /// `--name` without a value.
-    Switch,
-    /// `--name <value>`, at most once.
-    Value,
-    /// `--name <value>`, zero or more times.
-    Repeated,
-    /// A value by position.
-    Positional,
-}
-
-/// The value type of a CLI flag, so the CLI refuses a bad value before the command runs.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum FlagValue {
-    Text,
-    /// A whole number from zero.
-    Count,
-    /// One record kind.
-    RecordKind,
-    /// One api method.
-    ApiMethod,
-    /// An api catalog page size from 1 through 200.
-    CatalogLimit,
-    /// A TCP port number.
-    Port,
-}
-
-/// One CLI flag of a command, in the order that help shows it.
-///
-/// The JSON Schema of a typed input does not keep field order or the CLI-only facts
-/// below, so each command declares its flags here.
-// Each bool is one independent CLI fact of the flag.
-#[allow(clippy::struct_excessive_bools)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Flag {
-    /// The CLI flag name, without `--`.
-    pub name: &'static str,
-    /// The input field, when it is not the name with `_` for `-`.
-    pub field_name: Option<&'static str>,
-    pub kind: FlagKind,
-    pub value: FlagValue,
-    pub help: Option<&'static str>,
-    pub default: Option<&'static str>,
-    /// The accepted values, when the flag takes one of a fixed set.
-    pub values: &'static [&'static str],
-    /// The value can start with `-`.
-    pub hyphen_values: bool,
-    pub hidden: bool,
-    /// The command refuses to run without this flag.
-    pub required: bool,
-    /// The subcommands after this flag also take it.
-    pub global: bool,
-}
-
-impl Flag {
-    /// A flag with no help, default, or value set.
-    pub const fn new(name: &'static str, kind: FlagKind) -> Self {
-        Self {
-            name,
-            field_name: None,
-            kind,
-            value: FlagValue::Text,
-            help: None,
-            default: None,
-            values: &[],
-            hyphen_values: false,
-            hidden: false,
-            required: false,
-            global: false,
+impl Input {
+    /// The declared fields, in order.
+    pub const fn fields(&self) -> &'static [Field] {
+        match self {
+            Self::Fields(fields) => fields.fields,
+            Self::RecordFields { fields, .. } => fields,
+            Self::Discussion(_) | Self::None => &[],
         }
     }
 
-    #[must_use]
-    pub const fn hidden(mut self) -> Self {
-        self.hidden = true;
-        self
+    /// The relations between the declared fields.
+    pub const fn relations(&self) -> &'static [Relation] {
+        match self {
+            Self::Fields(fields) => fields.relations,
+            Self::RecordFields { relations, .. } => relations,
+            Self::Discussion(_) | Self::None => &[],
+        }
     }
 
-    #[must_use]
-    pub const fn required(mut self) -> Self {
-        self.required = true;
-        self
-    }
-
-    #[must_use]
-    pub const fn global(mut self) -> Self {
-        self.global = true;
-        self
-    }
-
-    #[must_use]
-    pub const fn value(mut self, value: FlagValue) -> Self {
-        self.value = value;
-        self
-    }
-
-    #[must_use]
-    pub const fn help(mut self, help: &'static str) -> Self {
-        self.help = Some(help);
-        self
-    }
-
-    #[must_use]
-    pub const fn default(mut self, default: &'static str) -> Self {
-        self.default = Some(default);
-        self
-    }
-
-    #[must_use]
-    pub const fn values(mut self, values: &'static [&'static str]) -> Self {
-        self.values = values;
-        self
-    }
-
-    #[must_use]
-    pub const fn hyphen_values(mut self) -> Self {
-        self.hyphen_values = true;
-        self
-    }
-
-    #[must_use]
-    pub const fn field(mut self, field: &'static str) -> Self {
-        self.field_name = Some(field);
-        self
-    }
-
-    /// The input field name. It is also the CLI argument ID.
-    pub fn field_id(&self) -> String {
-        self.field_name
-            .map_or_else(|| self.name.replace('-', "_"), str::to_owned)
+    /// The fields that name what the command acts on, in order.
+    pub const fn target(&self) -> &'static [&'static str] {
+        match self {
+            Self::Fields(fields) => fields.target,
+            Self::RecordFields { .. } | Self::Discussion(_) | Self::None => &[],
+        }
     }
 }
 
-const REPO: Flag = Flag::new("repo", FlagKind::Value).default(".");
-const SCOPE: Flag = Flag::new("scope", FlagKind::Value).default("default");
-
-/// The description of each CLI command group that has one, by its words.
-pub const GROUP_DESCRIPTIONS: &[(&str, &str)] = &[
-    (
-        "report",
-        "Deterministic report rendering from a versioned report envelope",
-    ),
-    (
-        "dogfood",
-        "Dev-build-only: record pain-point notes about provenance itself",
-    ),
-    (
-        "dogfood triage",
-        "Dev-build-only triage of captured notes: mark them handled or reopen them. State \
-         lives beside the spool; the capture history is never rewritten",
-    ),
-];
-
-/// The repository options that the porcelain commands and the commands after them take.
-pub const GLOBAL_FLAGS: &[Flag] = &[
-    REPO.hyphen_values().global(),
-    SCOPE.hyphen_values().global(),
-    json_format_flag(None).global(),
-    Flag::new("quiet", FlagKind::Switch).global(),
-];
-
-/// The repository and scope that a command opens.
-pub const REPO_FLAGS: &[Flag] = &[REPO, SCOPE];
-
-/// The `--format` flag of a command that renders only JSON.
-pub const fn json_format_flag(default: Option<&'static str>) -> Flag {
-    let flag = Flag::new("format", FlagKind::Value).values(&["json"]);
-    match default {
-        Some(default) => flag.default(default),
-        None => flag,
-    }
-}
-
-/// What one command is on each interface. It holds no handler.
+/// What one command is. It holds no handler and names no consumer.
+#[rule("rule_porcelain_names_no_consumer")]
 #[derive(Clone, Copy, Debug)]
 pub struct Declaration {
+    /// The name. Its words select the command when its grammar takes a name.
     pub name: &'static str,
-    /// The description. An empty description shows no about line in the CLI help.
+    /// The description. An empty description shows no about line.
     pub description: &'static str,
-    pub cli_form: CliForm,
-    pub cli_input: Input,
-    pub mcp_input: Input,
-    /// The input fields that the CLI reads by position, in order.
-    pub positional: &'static [&'static str],
-    pub relations: &'static [Relation],
-    pub hidden: bool,
-    /// The CLI flags, in help order.
-    pub flags: &'static [Flag],
+    pub grammar: Grammar,
+    pub input: Input,
+    /// Programs run this command, so a consumer does not document it for people.
+    pub internal: bool,
+    /// What the command runs on that the consumer binds, so its fields do not name it.
+    pub bound: Binding,
 }
 
-/// Every command on the CLI and every MCP tool.
+/// What of its place a command takes from the consumer, not from its fields.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Binding {
+    /// The fields give all that the command reads.
+    None,
+    /// The command reads the files of the bound repository and no scope.
+    Repository,
+    /// The command works on the bound repository and scope.
+    Scope,
+}
+
+impl Declaration {
+    /// A command selected by its name, with a typed input.
+    pub const fn named(name: &'static str, description: &'static str, fields: Fields) -> Self {
+        Self {
+            name,
+            description,
+            grammar: Grammar::Name,
+            input: Input::Fields(fields),
+            internal: false,
+            bound: Binding::None,
+        }
+    }
+
+    /// This command, on the repository and scope that the consumer binds.
+    #[must_use]
+    pub const fn bound(mut self) -> Self {
+        self.bound = Binding::Scope;
+        self
+    }
+
+    /// This command, on the files of the repository that the consumer binds.
+    #[must_use]
+    pub const fn bound_repository(mut self) -> Self {
+        self.bound = Binding::Repository;
+        self
+    }
+
+    /// This command, run by programs.
+    #[must_use]
+    pub const fn internal(mut self) -> Self {
+        self.internal = true;
+        self
+    }
+
+    /// The words of the name.
+    pub fn words(&self) -> impl Iterator<Item = &'static str> {
+        self.name.split(' ')
+    }
+}
+
+/// Every porcelain command.
 #[rule("rule_porcelain_registry_defines_commands")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Command {
@@ -281,18 +186,18 @@ pub enum Command {
     /// The records above one record, up to its Sources: the get trace view as an action.
     Trace,
     Prime,
-    /// The MCP tool that runs one record action, selected by its action argument.
+    /// The command that runs one record action, selected by its action argument.
     Change,
     Action(Action),
     Repository(RepositoryCommand),
     Graph(GraphCommand),
     Workspace(WorkspaceCommand),
-    /// Dev-build-only commands. The CLI shows them only with the `dogfood` feature.
+    /// Dev-build-only commands.
     Dogfood(DogfoodCommand),
 }
 
 impl Command {
-    /// Every command, in MCP tool-list order.
+    /// Every command.
     pub const ALL: &'static [Self] = &[
         Self::Get,
         Self::Search,
@@ -326,15 +231,11 @@ impl Command {
         Self::Graph(GraphCommand::ReferenceVerify),
         Self::Graph(GraphCommand::ReferenceExactExport),
         Self::Graph(GraphCommand::SwarmBacktraceLand),
-        Self::Workspace(WorkspaceCommand::DocsCheck),
-        Self::Workspace(WorkspaceCommand::DocsServe),
         Self::Workspace(WorkspaceCommand::SkillsList),
         Self::Workspace(WorkspaceCommand::SkillsShow),
         Self::Workspace(WorkspaceCommand::SkillsInstall),
         Self::Workspace(WorkspaceCommand::ReportRender),
         Self::Workspace(WorkspaceCommand::ReportBuild),
-        Self::Workspace(WorkspaceCommand::Review),
-        Self::Workspace(WorkspaceCommand::Mcp),
         Self::Dogfood(DogfoodCommand::Note),
         Self::Dogfood(DogfoodCommand::List),
         Self::Dogfood(DogfoodCommand::Report),
@@ -349,136 +250,86 @@ impl Command {
         porcelain::declaration(self)
     }
 
-    /// Whether `interface` shows this command. Each interface has one exhaustive match,
-    /// so a new command does not compile until each interface records it.
-    #[rule("rule_porcelain_interface_records_each_command")]
-    pub const fn presence(self, interface: Interface) -> Presence {
-        match interface {
-            Interface::Cli => match self {
-                Self::Get | Self::Search | Self::Api | Self::Check | Self::Trace | Self::Prime => {
-                    Presence::Present
-                }
-                Self::Change => Presence::Absent {
-                    reason: "the CLI takes each record action as a word after the target",
-                },
-                Self::Action(action) => match action {
-                    Action::Create
-                    | Action::Update
-                    | Action::Answer
-                    | Action::Claim
-                    | Action::Release
-                    | Action::Submit
-                    | Action::Discussions
-                    | Action::Discussion
-                    | Action::Discuss
-                    | Action::Reply => Presence::Present,
-                },
-                Self::Repository(command) => command.presence(interface),
-                Self::Graph(command) => command.presence(interface),
-                Self::Workspace(command) => command.presence(interface),
-                Self::Dogfood(command) => command.presence(interface),
-            },
-            Interface::Mcp => match self {
-                Self::Get | Self::Search | Self::Api | Self::Check | Self::Trace | Self::Change => {
-                    Presence::Present
-                }
-                Self::Prime => Presence::Absent {
-                    reason: "MCP clients receive the same guidance as the initialize instructions",
-                },
-                Self::Action(action) => match action {
-                    Action::Create
-                    | Action::Update
-                    | Action::Answer
-                    | Action::Claim
-                    | Action::Release
-                    | Action::Submit => Presence::Absent {
-                        reason: "MCP takes each record action as the action argument of change",
-                    },
-                    Action::Discussions => Presence::Present,
-                    Action::Discussion => Presence::Absent {
-                        reason: "MCP reads one Discussion through the action argument of \
-                                 discussions",
-                    },
-                    Action::Discuss | Action::Reply => Presence::Absent {
-                        reason: "MCP takes each Discussion write as the action argument of \
-                                 change",
-                    },
-                },
-                Self::Repository(command) => command.presence(interface),
-                Self::Graph(command) => command.presence(interface),
-                Self::Workspace(command) => command.presence(interface),
-                Self::Dogfood(command) => command.presence(interface),
-            },
-        }
+    /// The command with this declaration name.
+    pub fn named(name: &str) -> Option<Self> {
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|command| command.declaration().name == name)
     }
 
-    /// Whether `interface` shows this command.
-    pub const fn is_present(self, interface: Interface) -> bool {
-        matches!(self.presence(interface), Presence::Present)
-    }
-
-    /// The command that `words` select on `interface`. On the CLI, `words` are the root
-    /// words; on MCP, the one tool name. A target action is not found by its words.
-    pub fn find(interface: Interface, words: &[&str]) -> Option<Self> {
-        Self::ALL.iter().copied().find(|command| {
-            if !command.is_present(interface) {
-                return false;
-            }
-            let declaration = command.declaration();
-            match interface {
-                Interface::Mcp => words == [declaration.name],
-                Interface::Cli => match declaration.cli_form {
-                    CliForm::Words(selected) | CliForm::WordsAndTarget(selected) => {
-                        words == selected
-                    }
-                    CliForm::Target => false,
-                },
-            }
-        })
-    }
-
-    /// The target action with this CLI name.
+    /// The command with this name that acts on a target record.
     pub fn find_target_action(name: &str) -> Option<Self> {
         Self::ALL.iter().copied().find(|command| {
-            matches!(
-                command.declaration().cli_form,
-                CliForm::Target | CliForm::WordsAndTarget(_)
-            ) && command.declaration().name == name
+            let declaration = command.declaration();
+            declaration.grammar.takes_target() && declaration.name == name
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::porcelain::VIEWS;
     use super::*;
-    use crate::get::View;
 
-    /// Implementation aid: the view values in the flag table are the get views.
+    /// Implementation aid: each typed input has one schema property for each field.
     #[test]
-    fn the_get_view_flag_lists_every_view() {
-        assert_eq!(VIEWS, View::ALL.map(View::as_str));
-    }
-
-    /// Implementation aid: the typed CLI inputs have one schema property for each flag.
-    #[test]
-    fn typed_cli_inputs_have_a_property_for_each_flag() {
+    fn each_typed_input_has_a_property_for_each_field() {
         for command in Command::ALL {
-            let declaration = command.declaration();
-            let Input::Typed(schema) = declaration.cli_input else {
+            let Input::Fields(fields) = command.declaration().input else {
                 continue;
             };
-            let schema = schema();
-            let properties = schema["properties"].as_object().unwrap();
-            let mut fields = declaration
-                .flags
+            let Some(schema) = fields.schema else {
+                continue;
+            };
+            let target = command
+                .declaration()
+                .grammar
+                .takes_target()
+                .then_some("target");
+            let mut names = fields
+                .fields
                 .iter()
-                .map(Flag::field_id)
+                .map(|field| field.name)
+                .chain(target)
                 .collect::<Vec<_>>();
-            fields.sort();
-            let mut names = properties.keys().cloned().collect::<Vec<_>>();
-            names.sort();
-            assert_eq!(fields, names, "{command:?}");
+            names.sort_unstable();
+            let schema = schema();
+            let mut properties = schema["properties"]
+                .as_object()
+                .unwrap()
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>();
+            properties.sort_unstable();
+            assert_eq!(names, properties, "{command:?}");
+        }
+    }
+
+    /// Implementation aid: each relation and each target names a field of its command.
+    #[test]
+    fn relations_and_targets_name_declared_fields() {
+        for command in Command::ALL {
+            let input = command.declaration().input;
+            let declared = |name: &str| input.fields().iter().any(|field| field.name == name);
+            for relation in input.relations() {
+                let (Relation::Requires(first, second) | Relation::Conflicts(first, second)) =
+                    *relation;
+                assert!(
+                    declared(first) && declared(second),
+                    "{command:?}: {relation:?}"
+                );
+            }
+            for target in input.target() {
+                assert!(declared(target), "{command:?}: {target}");
+            }
+        }
+    }
+
+    /// Implementation aid: each command has its own declaration name.
+    #[test]
+    fn each_declaration_name_selects_its_command() {
+        for command in Command::ALL {
+            assert_eq!(Command::named(command.declaration().name), Some(*command));
         }
     }
 }

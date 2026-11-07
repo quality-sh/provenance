@@ -150,3 +150,52 @@ fn build_url(endpoint: &Url, root: &str, focus: Option<&str>) -> Url {
     }
     url
 }
+
+/// Finds the review links of records in the review host of one repository and scope.
+pub struct HostReviewLinkPort {
+    place: RepositoryScope,
+}
+
+impl HostReviewLinkPort {
+    pub const fn new(place: RepositoryScope) -> Self {
+        Self { place }
+    }
+}
+
+impl provenance_porcelain::get::ReviewLinkPort for HostReviewLinkPort {
+    fn link<'a>(
+        &'a self,
+        kind: NodeType,
+        id: &'a str,
+    ) -> provenance_porcelain::get::PortFuture<'a, provenance_porcelain::get::ReviewLink> {
+        use provenance_porcelain::get::{ReadError, ReviewLink};
+        Box::pin(async move {
+            let record = AffectedReviewRecord {
+                kind,
+                id: id.to_owned(),
+            };
+            let location = review_location(&self.place, &record)
+                .await
+                .map_err(|error| ReadError::Operation(format!("{error:#}")))?
+                .ok_or_else(|| {
+                    ReadError::Operation(format!(
+                        "record {id} is not in a Requirement review document"
+                    ))
+                })?;
+            let review_url = location.plain_link().map(String::from);
+            let message = review_url.is_none().then(|| start_message(&self.place));
+            Ok(ReviewLink {
+                review_url,
+                message,
+            })
+        })
+    }
+}
+
+/// The text that tells how to start the review host of one repository and scope.
+pub fn start_message(place: &RepositoryScope) -> String {
+    format!(
+        "No review host is running. Start it with `provenance review --repo {} --repository-id local --scope {} --detach`.",
+        place.root, place.scope
+    )
+}

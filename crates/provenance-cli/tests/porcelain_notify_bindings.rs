@@ -77,8 +77,9 @@ fn mcp_host_process() {
         .block_on(async move {
             let listener = tokio::net::UnixListener::bind(&socket).unwrap();
             let (stream, _) = listener.accept().await.unwrap();
-            let context = provenance_cli::repo_context::RepoContext::new(repo.as_str(), "default");
-            let host = context.local_host().unwrap();
+            let context =
+                provenance_transport::repository::RepoContext::new(repo.as_str(), "default");
+            let host = provenance_cli::porcelain::local_host(&context).unwrap();
             let _ = provenance_mcp::serve(host, stream)
                 .await
                 .unwrap()
@@ -107,7 +108,7 @@ async fn cli_and_mcp_notify_share_one_registration() {
     };
     let mcp = |notify: &'static str, thread: &str| {
         let arguments = json!({"action":"notify", "target":"req_notify",
-            "notify": {"client": notify, "thread": thread}});
+            "notify": notify, "thread": thread});
         let call = client.call("change", arguments);
         async move { call.await["structuredContent"].clone() }
     };

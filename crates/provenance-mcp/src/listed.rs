@@ -4,15 +4,13 @@
 
 use crate::arguments::InputCheck;
 use crate::tools;
-use provenance_porcelain::check::CheckPort;
-use provenance_porcelain::registry::{Command, Interface};
-use provenance_porcelain::tool_input::ToolInput;
+use provenance_porcelain::action_input::ActionInput;
+use provenance_porcelain::registry::Command;
 use provenance_transport::{porcelain::Action, StatementHost};
 use rmcp::model::{CallToolResult, Tool};
 use serde_json::{Map, Value};
-use std::sync::Arc;
 
-/// The tools of one host in registry order.
+/// The tools of one host in tools/list order.
 pub struct Table(Vec<Listed>);
 
 impl Table {
@@ -20,10 +18,8 @@ impl Table {
     /// stops the server start.
     pub fn new(host: &StatementHost) -> Self {
         Self(
-            Command::ALL
-                .iter()
-                .filter(|command| command.is_present(Interface::Mcp))
-                .filter_map(|command| Listed::new(host, *command))
+            crate::exposed::tools()
+                .filter_map(|command| Listed::new(host, command))
                 .collect(),
         )
     }
@@ -53,18 +49,18 @@ enum Runner {
     Trace,
     Search,
     Api,
-    Check(Arc<dyn CheckPort>),
-    Discussions(ToolInput),
-    Change(ToolInput),
+    Check,
+    Discussions(ActionInput),
+    Change(ActionInput),
 }
 
 /// One call after its input checks: the tool, and the action that the call selected.
-enum Call<'a> {
+enum Call {
     Get,
     Trace,
     Search,
     Api,
-    Check(&'a Arc<dyn CheckPort>),
+    Check,
     Discussion(Action),
     Change(&'static str),
 }
@@ -92,11 +88,11 @@ impl Listed {
             ),
             Command::Check => (
                 tools::check_tool(),
-                Runner::Check(host.check_port()?.clone()),
+                host.check_port().map(|_| Runner::Check)?,
             ),
             Command::Action(Action::Discussions) => (
                 tools::discussions_tool(host)?,
-                Runner::Discussions(provenance_porcelain::discussion::tool_input()),
+                Runner::Discussions(provenance_porcelain::discussion::action_input()),
             ),
             Command::Change => {
                 let input = tools::change_input(host);
@@ -136,7 +132,7 @@ impl Listed {
             Call::Trace => tools::call_trace(host, arguments).await,
             Call::Search => tools::call_search(host, arguments).await,
             Call::Api => tools::call_api(host, arguments).await,
-            Call::Check(port) => tools::call_check(host, port.clone(), arguments).await,
+            Call::Check => tools::call_check(host, arguments).await,
             Call::Discussion(action) => tools::call_discussion(host, action, arguments).await,
             Call::Change(action) => tools::call_change(host, action, arguments).await,
         }
@@ -145,12 +141,12 @@ impl Listed {
     fn checked(
         &self,
         mut arguments: Map<String, Value>,
-    ) -> Result<(Call<'_>, Map<String, Value>), CallToolResult> {
+    ) -> Result<(Call, Map<String, Value>), CallToolResult> {
         let wrong_tool = match &self.runner {
             Runner::Get => tools::get_refusal(&arguments),
             Runner::Discussions(_) => tools::discussions_refusal(&arguments),
             Runner::Change(input) => tools::change_refusal(input, &arguments),
-            Runner::Trace | Runner::Search | Runner::Api | Runner::Check(_) => None,
+            Runner::Trace | Runner::Search | Runner::Api | Runner::Check => None,
         };
         if let Some(refused) = wrong_tool {
             return Err(refused);
@@ -159,7 +155,7 @@ impl Listed {
             tools::lowercase_method(&mut arguments);
         }
         let given = arguments.clone();
-        let select = |input: &ToolInput, arguments: &mut Map<String, Value>| {
+        let select = |input: &ActionInput, arguments: &mut Map<String, Value>| {
             input
                 .select(arguments)
                 .map_err(|refusal| crate::surface::detail_error(refusal.detail()))
@@ -169,7 +165,7 @@ impl Listed {
             Runner::Trace => Call::Trace,
             Runner::Search => Call::Search,
             Runner::Api => Call::Api,
-            Runner::Check(port) => Call::Check(port),
+            Runner::Check => Call::Check,
             Runner::Discussions(input) => {
                 let word = select(input, &mut arguments)?;
                 Call::Discussion(Action::parse(word).expect("a Discussion action"))

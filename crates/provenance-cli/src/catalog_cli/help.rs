@@ -25,7 +25,7 @@ pub(super) fn target(
                 .map(str::to_owned)
                 .collect::<BTreeSet<_>>();
             if action == provenance_contract::TargetAction::Create {
-                allowed.insert("record_type".into());
+                allowed.insert("type".into());
             }
             for (_, definition) in
                 provenance_contract::target_definitions(action).filter(|(registered, _)| {
@@ -75,11 +75,7 @@ fn discussion_help(
     action: provenance_porcelain::action::Action,
 ) -> clap::Command {
     let schema = provenance_porcelain::discussion::input_schema(action);
-    let bound = [
-        provenance_porcelain::discussion::target_field(action),
-        "parent",
-        "discussion_id",
-    ];
+    let bound = ["target"];
     let properties = schema
         .get("properties")
         .and_then(Value::as_object)
@@ -91,7 +87,7 @@ fn discussion_help(
                 .collect::<BTreeSet<_>>()
         })
         .unwrap_or_default();
-    let required = required_discussion_flags(&schema, action);
+    let required = required_discussion_flags(&schema);
     let mut allowed = super::COMMON
         .iter()
         .copied()
@@ -108,17 +104,8 @@ fn discussion_help(
 
 /// The flags a Discussion action needs on the command line: the required
 /// schema fields that neither the target nor a CLI default supplies.
-pub fn required_discussion_flags(
-    schema: &Value,
-    action: provenance_porcelain::action::Action,
-) -> BTreeSet<String> {
-    let supplied = [
-        provenance_porcelain::discussion::target_field(action),
-        "parent",
-        "discussion_id",
-        "actor",
-        "role",
-    ];
+pub fn required_discussion_flags(schema: &Value) -> BTreeSet<String> {
+    let supplied = ["target", "actor", "role"];
     schema
         .get("required")
         .and_then(Value::as_array)

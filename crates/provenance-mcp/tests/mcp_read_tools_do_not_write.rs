@@ -131,14 +131,13 @@ fn read_body(path: &str) -> Option<Value> {
 
 /// Each read tool with each of its fields set. Each call succeeds.
 fn read_calls(discussion_id: &Value) -> Vec<(&'static str, Value)> {
-    let parent = json!({"node_type": "requirement", "node_id": "req_shared"});
     let mut calls = Vec::new();
     calls.push(("get", json!({"target": "req_shared", "view": "record"})));
     for view in ["children", "trace"] {
         calls.push((
             "get",
-            json!({"target": "req_shared", "view": view, "limit": 5, "max_depth": 2,
-                   "returned_kinds": ["requirement", "source"]}),
+            json!({"target": "req_shared", "view": view, "limit": 5, "depth": 2,
+                   "kind": ["requirement", "source"]}),
         ));
     }
     for view in ["impact", "review"] {
@@ -150,31 +149,31 @@ fn read_calls(discussion_id: &Value) -> Vec<(&'static str, Value)> {
     calls.extend([
         (
             "trace",
-            json!({"target": "req_shared", "limit": 5, "max_depth": 2,
-                   "returned_kinds": ["source"]}),
+            json!({"target": "req_shared", "limit": 5, "depth": 2,
+                   "kind": ["source"]}),
         ),
         (
             "search",
-            json!({"text": "shared", "node_types": ["requirement"], "limit": 5,
-                   "exclude_terminal": true}),
+            json!({"text": "shared", "kind": ["requirement"], "limit": 5,
+                   "include_terminal": false}),
         ),
         (
             "search",
             json!({"file": "src/lib.rs", "symbol": "run", "line": 1, "limit": 5,
-                   "exclude_terminal": false}),
+                   "include_terminal": true}),
         ),
         (
             "check",
-            json!({"categories": ["graph", "statements", "bindings", "gaps"],
+            json!({"graph": true, "statements": true, "bindings": true, "gaps": true,
                    "statement": "The pump stops."}),
         ),
         (
             "discussions",
-            json!({"action": "discussions", "parent": parent, "status": "all", "limit": 5}),
+            json!({"action": "discussions", "target": "req_shared", "status": "all", "limit": 5}),
         ),
         (
             "discussions",
-            json!({"action": "discussion", "discussion_id": discussion_id, "limit": 5}),
+            json!({"action": "discussion", "target": discussion_id, "limit": 5}),
         ),
     ]);
     calls
@@ -183,7 +182,7 @@ fn read_calls(discussion_id: &Value) -> Vec<(&'static str, Value)> {
 /// Start one Discussion on the shared Requirement and return its ID.
 async fn start_discussion(session: &Session) -> Value {
     let arguments = json!({"action": "discuss",
-        "parent": {"node_type": "requirement", "node_id": "req_shared"},
+        "target": "req_shared",
         "actor": "ben", "role": "user", "body": "Opening text"});
     let started = support::schema_check::call(&session.client, "change", arguments).await;
     assert_ne!(started.is_error, Some(true), "{started:?}");
@@ -231,7 +230,7 @@ async fn no_read_tool_changes_the_repository() {
         let mut arguments = json!({"method": method, "path": path});
         if method != "get" {
             let body = read_body(&path).unwrap_or_else(|| panic!("{method} {path} has no body"));
-            arguments["body"] = body;
+            arguments["input"] = body;
             posts.push(path.clone());
         }
         let result = support::schema_check::call(&session.client, "api", arguments.clone()).await;

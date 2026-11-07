@@ -29,13 +29,22 @@ impl Server {
     }
 }
 
+/// The first calls that the server suggests after the shared guidance.
+const FIRST_STEPS: &str = "\n\nFor a focused start, call search with {\"text\":\"<text>\"}, \
+then get with {\"target\":\"<id>\",\"view\":\"children\",\"depth\":<N>}.";
+
+/// The shared domain guidance followed by the first calls on this server.
+pub fn instructions() -> String {
+    provenance_porcelain::guidance::guidance().guidance + FIRST_STEPS
+}
+
 impl ServerHandler for Server {
     /// Supplies shared domain guidance through native MCP instructions.
     #[provenance_macros::rule("rule_porcelain_mcp_guidance_native")]
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(server_info())
-            .with_instructions(provenance_porcelain::guidance::guidance().guidance)
+            .with_instructions(instructions())
     }
 
     /// Lists the porcelain MCP tools in registry order.

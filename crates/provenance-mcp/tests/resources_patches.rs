@@ -32,7 +32,7 @@ async fn mcp_source_update_takes_the_guard_as_if_match() {
     repo.all_kinds();
     let etag = source_etag(&repo);
     let session = support::mcp::Session::start(host(&repo, true)).await;
-    let update = |name: &str| json!({"action":"update","target":"source_shared","if_match":etag,"data":{"name":name}});
+    let update = |name: &str| json!({"action":"update","target":"source_shared","if_match":etag,"name":name});
 
     let current = support::mcp::call(&session.client, "change", update("Source B")).await;
     assert_ne!(current.is_error, Some(true), "{current:?}");

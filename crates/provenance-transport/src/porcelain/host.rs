@@ -1,8 +1,8 @@
 //! Porcelain construction for one statement host.
 
-use super::{HostApiPort, HostDiscussionPort, HostGetPort, HostSearchPort};
+use super::{HostApiPort, HostDiscussionPort, HostGetPort, HostSearchPort, RepositoryPort};
 use crate::StatementHost;
-use provenance_porcelain::check::CheckPort;
+use provenance_porcelain::check::{Category, CheckPort, PortFuture};
 use provenance_porcelain::Porcelain;
 use std::sync::Arc;
 
@@ -20,7 +20,14 @@ impl<'a> HostPorcelain<'a> {
         Porcelain::new(HostApiPort::new(self.host.clone()))
     }
 
-    pub fn check(&self, port: Arc<dyn CheckPort>) -> Porcelain<Arc<dyn CheckPort>> {
+    /// The check command with this host's check adapter. A host without one reports
+    /// each category as unavailable.
+    pub fn check(&self) -> Porcelain<Arc<dyn CheckPort>> {
+        let port = self
+            .host
+            .check_port()
+            .cloned()
+            .unwrap_or_else(|| Arc::new(NoRepository));
         Porcelain::new(port)
     }
 
@@ -32,7 +39,25 @@ impl<'a> HostPorcelain<'a> {
         Porcelain::new(HostGetPort::new(self.host.clone()))
     }
 
+    /// Materialize, import, dictionary import, and swarm-backtrace land on the repository
+    /// files of this host, when it has them.
+    pub fn repository(&self) -> Option<Porcelain<RepositoryPort>> {
+        self.host
+            .repository()
+            .cloned()
+            .map(|context| Porcelain::new(RepositoryPort::new(context)))
+    }
+
     pub fn search(&self) -> Porcelain<HostSearchPort> {
         Porcelain::new(HostSearchPort::new(self.host.clone()))
+    }
+}
+
+/// The check adapter of a host that has no repository to check.
+struct NoRepository;
+
+impl CheckPort for NoRepository {
+    fn run<'a>(&'a self, _category: Category, _scope: Option<&'a str>) -> PortFuture<'a> {
+        Box::pin(async { Err("this host has no repository to check".to_owned()) })
     }
 }

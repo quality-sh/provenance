@@ -23,6 +23,8 @@ fn exported_question_prerequisites_match_the_public_schema() {
     provenance(temp.path())
         .args([
             "import",
+            "--format",
+            "json",
             "--repo",
             ".",
             "--scope",

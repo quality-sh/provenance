@@ -50,7 +50,7 @@ fn api_rejects_unsupported_methods_and_malformed_flags_before_any_call() {
         "api", "sources", "--repo", &repo, "--method", "get", "--input", &body,
     ]);
     assert_eq!(refused["error"]["kind"], "invalid_input");
-    assert_eq!(refused["error"]["field"], "body");
+    assert_eq!(refused["error"]["field"], "input");
 }
 
 #[test]
@@ -58,8 +58,8 @@ fn api_refuses_repeated_header_and_query_names() {
     let (_directory, repo) = init();
 
     for (flag, first, second, field) in [
-        ("--header", "Accept: one", "Accept: two", "headers"),
-        ("--header", "If-Match: \"1\"", "if-match: \"2\"", "headers"),
+        ("--header", "Accept: one", "Accept: two", "header"),
+        ("--header", "If-Match: \"1\"", "if-match: \"2\"", "header"),
         ("--query", "limit=1", "limit=2", "query"),
     ] {
         let refused = refusal(&[
@@ -134,6 +134,6 @@ fn api_refuses_a_stdin_body_before_reading_it() {
     ] {
         let refused = refusal_with_open_stdin(&arguments);
         assert_eq!(refused["error"]["kind"], "invalid_input", "{arguments:?}");
-        assert_eq!(refused["error"]["field"], "body", "{arguments:?}");
+        assert_eq!(refused["error"]["field"], "input", "{arguments:?}");
     }
 }

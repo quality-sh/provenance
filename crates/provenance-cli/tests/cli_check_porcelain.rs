@@ -391,7 +391,7 @@ fn binding_options_without_the_bindings_check_are_refused() {
             .assert()
             .code(1)
             .stdout(predicates::str::is_empty())
-            .stderr(predicates::str::contains("add --bindings"));
+            .stderr(predicates::str::contains("add bindings"));
     }
     assert!(!directory.path().join("report.json").exists());
     Command::cargo_bin("provenance")

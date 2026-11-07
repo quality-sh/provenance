@@ -35,11 +35,10 @@ type Case = (
 
 /// The cases of the change tool.
 fn change_cases() -> Vec<Case> {
-    let parent = json!({"node_type": "requirement", "node_id": "req_shared"});
     vec![
         (
             "change",
-            json!({"action": "discuss", "parent": parent, "actor": "ben",
+            json!({"action": "discuss", "target": "req_shared", "actor": "ben",
                    "role": "bogus", "body": "Hi."}),
             "role",
             "invalid_value",
@@ -47,15 +46,15 @@ fn change_cases() -> Vec<Case> {
         ),
         (
             "change",
-            json!({"action": "discuss", "parent": {"node_type": "bogus", "node_id": "x"},
+            json!({"action": "discuss", "target": "",
                    "actor": "ben", "role": "user", "body": "Hi."}),
-            "parent.node_type",
+            "target",
             "invalid_value",
-            "source, requirement",
+            "at least 1",
         ),
         (
             "change",
-            json!({"action": "reply", "discussion_id": "discussion_x", "expected_version": -1,
+            json!({"action": "reply", "target": "discussion_x", "expected_version": -1,
                    "actor": "ben", "role": "user", "body": "Hi."}),
             "expected_version",
             "invalid_value",
@@ -63,10 +62,10 @@ fn change_cases() -> Vec<Case> {
         ),
         (
             "change",
-            json!({"action": "update", "target": "req_shared", "data": "text"}),
-            "data",
+            json!({"action": "update", "target": "req_shared", "statement": 7}),
+            "statement",
             "invalid_value",
-            "object",
+            "string",
         ),
     ]
 }
@@ -90,10 +89,10 @@ fn read_cases() -> Vec<Case> {
         ),
         (
             "discussions",
-            json!({"parent": {"node_type": "requirement", "node_id": "Not An Id"}}),
-            "parent.node_id",
+            json!({"target": ""}),
+            "target",
             "invalid_value",
-            "^[a-z0-9_-]+$",
+            "at least 1",
         ),
         (
             "search",
@@ -111,8 +110,8 @@ fn read_cases() -> Vec<Case> {
         ),
         (
             "search",
-            json!({"node_types": ["bogus"]}),
-            "node_types[0]",
+            json!({"kind": ["bogus"]}),
+            "kind[0]",
             "invalid_value",
             "source, requirement",
         ),
@@ -140,17 +139,17 @@ fn read_cases() -> Vec<Case> {
         ),
         (
             "check",
-            json!({"categories": ["bogus"]}),
-            "categories[0]",
+            json!({"graph": "bogus"}),
+            "graph",
             "invalid_value",
-            "graph, statements",
+            "boolean",
         ),
         (
             "check",
-            json!({"strict": true}),
-            "strict",
+            json!({"categories": ["graph"]}),
+            "categories",
             "unknown_field",
-            "categories, statement",
+            "base, baseline, bindings",
         ),
         (
             "api",

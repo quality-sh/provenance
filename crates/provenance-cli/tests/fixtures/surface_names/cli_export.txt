@@ -1,0 +1,9 @@
+Usage: provenance export [OPTIONS]
+
+Options:
+      --quiet            Drop the advisory notes commands print alongside their output, such as the warning that this repository has no shaping skills installed
+      --repo <REPO>      [default: .]
+      --scope <SCOPE>    [default: default]
+      --format <FORMAT>  [default: json] [possible values: json, jsonl, markdown, table, toon]
+      --output <OUTPUT>  
+  -h, --help             Print help
