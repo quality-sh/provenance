@@ -184,7 +184,6 @@ impl Cascade {
                         (&r.scope_id, &r.id)
                     })
                 }
-                ),
                 CanonicalArtifactType::Boundary => {
                     contains_scoped_id(&self.boundaries, scope, &artifact.artifact_id, |r| {
                         (&r.scope_id, &r.id)
@@ -392,10 +391,7 @@ const fn typed_kind(kind: NodeType) -> Option<TypedResourceKind> {
         NodeType::Source => Some(TypedResourceKind::Source),
         NodeType::Requirement => Some(TypedResourceKind::Requirement),
         NodeType::Rule => Some(TypedResourceKind::Rule),
-        NodeType::Resolution
-        | NodeType::Topic
-        | NodeType::Question
-        | NodeType::Boundary => None,
+        NodeType::Resolution | NodeType::Topic | NodeType::Question | NodeType::Boundary => None,
     }
 }
 

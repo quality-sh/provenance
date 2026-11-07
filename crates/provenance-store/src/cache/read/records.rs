@@ -7,8 +7,8 @@ use crate::cache::quoted;
 use crate::operations::reader::{ReadSnapshot, Table};
 use provenance_core::model::ProjectionRow;
 use provenance_core::{
-    Boundary, ImplementationBinding, NodeType, Question, Requirement, Resolution, Rule,
-    Source, StableId, Topic, VerificationBinding,
+    Boundary, ImplementationBinding, NodeType, Question, Requirement, Resolution, Rule, Source,
+    StableId, Topic, VerificationBinding,
 };
 use provenance_macros::rule;
 use sqlx::sqlite::SqliteRow;

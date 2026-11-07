@@ -185,7 +185,6 @@ fn disk(path: &Utf8Path) -> StateStore {
     StateStore::read_only(ProvenanceLayout::new(path.to_owned()))
 }
 
-
 pub(super) fn read_jsonl_closed<T: DeserializeOwned>(
     store: &StateStore,
     path: &Utf8Path,

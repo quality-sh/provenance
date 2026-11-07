@@ -1,7 +1,7 @@
 use provenance_core::model::relations::RecordFront;
 use provenance_core::{
-    Boundary, Contribution, NodeType, Question, Requirement, Resolution, Rule, ScopeId,
-    Source, StableId, SynthesisPacket, Thread, Topic,
+    Boundary, Contribution, NodeType, Question, Requirement, Resolution, Rule, ScopeId, Source,
+    StableId, SynthesisPacket, Thread, Topic,
 };
 
 pub struct GapGraph<'a> {

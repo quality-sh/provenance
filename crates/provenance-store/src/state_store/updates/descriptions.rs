@@ -80,7 +80,6 @@ impl StateStore {
         })
     }
 
-
     pub fn update_boundary(&self, input: UpdateBoundaryInput) -> anyhow::Result<Boundary> {
         self.with_repository_publication(|held| {
             if let Some(reference) = &input.source_ref {

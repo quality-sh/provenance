@@ -162,7 +162,7 @@ fn flattened_response_schema_matches_serialized_envelope() {
 fn tagged_graph_node_schema_matches_real_serde_variant() {
     use provenance_core::protocol::GraphNode;
     let value = json!({"node_type":"boundary","scope_id":"default",
-        "id":"boundary_a","statement":"A","status":"active"});
+        "id":"boundary_a","requirement_id":"req_a","statement":"A"});
     let decoded: GraphNode = serde_json::from_value(value.clone()).unwrap();
     assert!(valid(&schema::<GraphNode>(Contract::Deserialize), &value));
     assert!(valid(

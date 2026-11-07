@@ -57,18 +57,16 @@ async fn message(
          WHERE m.scope_id=? AND t.parent_type=? AND t.parent_id=? AND {condition} AND m.id=?"
     );
     let mut tx = ctx.snapshot().connection().await;
-    let row: Option<(String, String, String, i64, i64)> =
-        sqlx::query_as(sqlx::AssertSqlSafe(sql))
-            .bind(ctx.snapshot().scope().as_str())
-            .bind(kind)
-            .bind(parent.node_id.as_str())
-            .bind(selector_id)
-            .bind(message_id.as_str())
-            .fetch_optional(&mut **tx)
-            .await?;
+    let row: Option<(String, String, String, i64, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(sql))
+        .bind(ctx.snapshot().scope().as_str())
+        .bind(kind)
+        .bind(parent.node_id.as_str())
+        .bind(selector_id)
+        .bind(message_id.as_str())
+        .fetch_optional(&mut **tx)
+        .await?;
     drop(tx);
-    let (thread, role, body, created_at, size) =
-        row.ok_or(ReadFailure::ResourceNotFound)?;
+    let (thread, role, body, created_at, size) = row.ok_or(ReadFailure::ResourceNotFound)?;
     check_stored_size(size)?;
     Ok(Message {
         scope_id: ctx.snapshot().scope().clone(),
@@ -194,10 +192,10 @@ async fn page_message(ctx: &ReadContext, id: &str, created_at: i64) -> anyhow::R
     let mut tx = ctx.snapshot().connection().await;
     let (thread, role, body): (String, String, String) =
         sqlx::query_as("SELECT thread_id,role,body FROM messages WHERE scope_id=? AND id=?")
-    .bind(ctx.snapshot().scope().as_str())
-    .bind(id)
-    .fetch_one(&mut **tx)
-    .await?;
+            .bind(ctx.snapshot().scope().as_str())
+            .bind(id)
+            .fetch_one(&mut **tx)
+            .await?;
     drop(tx);
     Ok(Message {
         scope_id: ctx.snapshot().scope().clone(),

@@ -107,14 +107,7 @@ impl ReadSnapshot {
             self.scope().as_str(),
             "messages",
             id,
-            &[
-                "scope_id",
-                "id",
-                "thread_id",
-                "role",
-                "body",
-                "created_at",
-            ],
+            &["scope_id", "id", "thread_id", "role", "body", "created_at"],
         )
         .await?;
         let rows = sqlx::query("SELECT * FROM messages WHERE scope_id = ? AND id = ? LIMIT 1")

@@ -1,7 +1,7 @@
 use super::assert_kind_round_trips;
 use crate::model::{
-    ArchivedStamp, ArtifactLink, ArtifactLinkTargetType, Boundary, Question,
-    QuestionStatus, ResolutionMethod, ScopeId, SourceReference, StableId, Topic, TopicStatus,
+    ArchivedStamp, ArtifactLink, ArtifactLinkTargetType, Boundary, Question, QuestionStatus,
+    ResolutionMethod, ScopeId, SourceReference, StableId, Topic, TopicStatus,
 };
 
 fn sid(value: &str) -> StableId {
@@ -136,4 +136,3 @@ fn a_topic_round_trips_through_its_row() {
 fn a_question_round_trips_through_its_row() {
     assert_kind_round_trips(&filled_question(), &bare_question());
 }
-

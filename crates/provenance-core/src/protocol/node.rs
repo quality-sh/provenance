@@ -3,8 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Write as _;
 
 use crate::model::{
-    Boundary, NodeType, Question, Requirement, Resolution, Rule, ScopeId, Source, StableId,
-    Topic,
+    Boundary, NodeType, Question, Requirement, Resolution, Rule, ScopeId, Source, StableId, Topic,
 };
 
 use super::Direction;

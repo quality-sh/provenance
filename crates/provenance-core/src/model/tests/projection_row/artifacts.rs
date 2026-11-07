@@ -1,8 +1,8 @@
 use super::assert_kind_round_trips;
 use crate::model::{
-    DeclarationAddress, Requirement, RequirementStatus, Resolution,
-    ResolutionInput, ResolutionInputType, ResolutionStatus, Rule, RuleSeverity, RuleStatus,
-    ScopeId, Source, SourceReference, SourceType, StableId,
+    DeclarationAddress, Requirement, RequirementStatus, Resolution, ResolutionInput,
+    ResolutionInputType, ResolutionStatus, Rule, RuleSeverity, RuleStatus, ScopeId, Source,
+    SourceReference, SourceType, StableId,
 };
 
 fn sid(value: &str) -> StableId {

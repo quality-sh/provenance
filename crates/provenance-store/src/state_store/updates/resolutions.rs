@@ -3,10 +3,7 @@ use super::{
     invalid, missing, optional, required_text, set, validate_final_relations,
 };
 use crate::{review, shards, state_store::StateStore};
-use provenance_core::{
-    validate_resolution_input_content, Resolution,
-    ResolutionInput,
-};
+use provenance_core::{validate_resolution_input_content, Resolution, ResolutionInput};
 
 fn validate_inputs(
     inputs: Option<Vec<ResolutionInput>>,

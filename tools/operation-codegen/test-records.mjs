@@ -12,10 +12,10 @@ export async function checkRecords({ HttpClient, OperationError }, fixture) {
   );
 
   const methods = {
-    domain: 'getDomain', boundary: 'getBoundary', requirement: 'getRequirement', rule: 'getRule',
+    boundary: 'getBoundary', requirement: 'getRequirement', rule: 'getRule',
     source: 'getSource', resolution: 'getResolution', topic: 'getTopic', question: 'getQuestion',
   };
-  assert.equal(Object.keys(fixture.nodes).length, 8);
+  assert.equal(Object.keys(fixture.nodes).length, 7);
   for (const [nodeType, id] of Object.entries(fixture.nodes)) {
     const result = await client[methods[nodeType]]({ id });
     assert.equal(result.data.id, id);
@@ -43,13 +43,13 @@ export async function checkRecords({ HttpClient, OperationError }, fixture) {
 
   for (const query of ['neighbors', 'trace']) {
     const filtered = await client.getRequirement({
-      id: fixture.nodes.requirement, query, relations: ['domain_id'], limit: 20,
+      id: fixture.nodes.requirement, query, relations: ['requirement_ids'], limit: 20,
     });
     const items = query === 'neighbors' ? filtered.data.neighbors : filtered.data.nodes;
     assert.ok(items.length > 0);
     assert.ok(query === 'neighbors'
-      ? items.every(item => item.relation === 'domain_id')
-      : items.every(item => item.node.id === fixture.nodes.domain));
+      ? items.every(item => item.relation === 'requirement_ids')
+      : items.every(item => [fixture.nodes.rule, fixture.nodes.resolution].includes(item.node.id)));
   }
   await checkCursorReads(client);
 

@@ -1,4 +1,3 @@
-
 // The chain is derived from an exhaustive match, so a new node kind fails
 // compilation here until the rank sweep below covers it.
 fn every_node_type() -> Vec<NodeType> {

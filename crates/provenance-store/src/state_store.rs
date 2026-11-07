@@ -49,9 +49,9 @@ pub use ideation_edits::{UpdateContributionInput, UpdateSynthesisPacketInput};
 pub use inputs::{
     AddSourceReferenceInput, BeginVerificationInput, CascadedResource, CompleteVerificationInput,
     CreateAssertionInput, CreateBoundaryInput, CreateContributionInput, CreateDispositionInput,
-    CreateProposalCardInput, CreateQuestionInput, CreateRequirementInput,
-    CreateResolutionInput, CreateRuleInput, CreateSourceInput, CreateSynthesisPacketInput,
-    CreateTopicInput, DeclarationReferenceInput, MaterializeImplementationBindingInput,
+    CreateProposalCardInput, CreateQuestionInput, CreateRequirementInput, CreateResolutionInput,
+    CreateRuleInput, CreateSourceInput, CreateSynthesisPacketInput, CreateTopicInput,
+    DeclarationReferenceInput, MaterializeImplementationBindingInput,
     MaterializeVerificationBindingInput, PostMessageInput, ReconcileState, ReconciledResource,
     TypedAdoptionTarget, TypedDeclarationKind, TypedFieldChange, TypedImplementationInput,
     TypedRequirementInput, TypedResourceKind, TypedRuleInput, TypedSourceInput,
@@ -88,8 +88,7 @@ fn ensure_new_ids_assignable<T>(
     Ok(())
 }
 use readers::{
-    read_ideation_landings, read_jsonl, read_jsonl_unlocked,
-    read_message_shards_unlocked,
+    read_ideation_landings, read_jsonl, read_jsonl_unlocked, read_message_shards_unlocked,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 

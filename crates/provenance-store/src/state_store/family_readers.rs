@@ -1,9 +1,7 @@
 //! The per-family list readers that the record family tables generate.
 
 use super::ideation_batches::overlay_records;
-use super::readers::{
-    read_jsonl, read_jsonl_closed, read_message_shards,
-};
+use super::readers::{read_jsonl, read_jsonl_closed, read_message_shards};
 use super::StateStore;
 use crate::shards;
 use provenance_core::{Rule, ScopeId};

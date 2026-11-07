@@ -2,8 +2,7 @@ use super::read_budget::ensure_slice_within_read_budget;
 use super::{ensure_new_ids_assignable, read_ideation_landings, IdeationLandingBatch, StateStore};
 use crate::shards;
 use provenance_core::{
-    AssertionRecord, Contribution, DispositionRecord, IdeationAggregate, ProposalCard, ScopeId,
-    SynthesisPacket,
+    AssertionRecord, Contribution, IdeationAggregate, ProposalCard, ScopeId, SynthesisPacket,
 };
 use provenance_macros::rule;
 use std::collections::BTreeSet;

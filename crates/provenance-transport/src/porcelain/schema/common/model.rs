@@ -6,14 +6,13 @@ use provenance_core::{
 };
 use serde::Serialize;
 
-pub(in crate::porcelain::schema) const IDEATION_TARGET_TYPES: [IdeationTargetType; 8] = [
+pub(in crate::porcelain::schema) const IDEATION_TARGET_TYPES: [IdeationTargetType; 7] = [
     IdeationTargetType::Source,
     IdeationTargetType::Requirement,
     IdeationTargetType::Resolution,
     IdeationTargetType::Rule,
     IdeationTargetType::Topic,
     IdeationTargetType::Question,
-    IdeationTargetType::Domain,
     IdeationTargetType::Boundary,
 ];
 

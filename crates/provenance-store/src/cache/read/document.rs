@@ -137,8 +137,8 @@ impl ReadSnapshot {
                     .await?
                     .iter()
                     .any(|(entry_kind, key)| {
-                        let eligible = key.stage == 0
-                            || (key.stage == 1 && kind == NodeType::Source);
+                        let eligible =
+                            key.stage == 0 || (key.stage == 1 && kind == NodeType::Source);
                         eligible && entry_kind == kind.as_str() && key.id == id.as_str()
                     });
                 if contains {

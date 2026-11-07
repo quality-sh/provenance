@@ -1,10 +1,9 @@
 mod relation_fixtures {
     use crate::model::relations::RecordFront;
     use crate::model::{
-        ArtifactLink, ArtifactLinkTargetType, Boundary, Question, QuestionStatus,
-        Requirement, RequirementStatus, Resolution, ResolutionMethod, ResolutionStatus, Rule,
-        RuleSeverity, RuleStatus, ScopeId, Source, SourceReference, SourceType, StableId, Topic,
-        TopicStatus,
+        ArtifactLink, ArtifactLinkTargetType, Boundary, Question, QuestionStatus, Requirement,
+        RequirementStatus, Resolution, ResolutionMethod, ResolutionStatus, Rule, RuleSeverity,
+        RuleStatus, ScopeId, Source, SourceReference, SourceType, StableId, Topic, TopicStatus,
     };
 
     pub(super) fn scope() -> ScopeId {

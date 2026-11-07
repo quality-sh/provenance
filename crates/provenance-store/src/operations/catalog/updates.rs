@@ -2,9 +2,9 @@
 use super::creation::creation;
 use super::ExecutionNeed;
 use crate::state_store::{
-    CreateBoundaryInput, CreateQuestionInput, CreateTopicInput,
-    EditQuestionInput, UpdateBoundaryInput, UpdateRequirementInput,
-    UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
+    CreateBoundaryInput, CreateQuestionInput, CreateTopicInput, EditQuestionInput,
+    UpdateBoundaryInput, UpdateRequirementInput, UpdateResolutionInput, UpdateRuleInput,
+    UpdateSourceInput, UpdateTopicInput,
 };
 creation!(
     UpdateSource,
