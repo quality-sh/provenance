@@ -2,9 +2,7 @@ use super::records;
 use crate::layout::ProvenanceLayout;
 use crate::operations::read_policy::ReadPolicy;
 use crate::repository::Repository;
-use crate::state_store::{
-    CreateBoundaryInput, CreateRequirementInput, StateStore,
-};
+use crate::state_store::{CreateBoundaryInput, CreateRequirementInput, StateStore};
 use provenance_core::protocol::{GetQuery, SearchQuery};
 use provenance_core::{
     Manifest, NodeType, RepoPathPrefix, RequirementStatus, ScopeId, StableId, SDK_PROTOCOL_VERSION,
@@ -105,9 +103,7 @@ fn repository_at(root: &camino::Utf8Path) -> Repository {
 #[tokio::test]
 async fn get_answers_a_boundary_by_id() {
     let (dir, _store, _scope) = seeded_store();
-    for (kind, id, wire) in [
-        (NodeType::Boundary, "boundary_no_backpay", "boundary"),
-    ] {
+    for (kind, id, wire) in [(NodeType::Boundary, "boundary_no_backpay", "boundary")] {
         let answer = super::get(
             &repository_of(&dir),
             ReadPolicy::default(),

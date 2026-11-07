@@ -70,10 +70,7 @@ pub(super) fn request_set(base: &str) -> Vec<Request> {
         get(NodeType::Requirement, LINKED_REQUIREMENT_ID),
         get(NodeType::Rule, LINKED_RULE_ID),
         Request::Search(requests::search("over", Vec::new())),
-        Request::Search(requests::search(
-            "pay",
-            vec![NodeType::Boundary],
-        )),
+        Request::Search(requests::search("pay", vec![NodeType::Boundary])),
         Request::Search(requests::search("e", Vec::new())),
     ];
     set.extend([

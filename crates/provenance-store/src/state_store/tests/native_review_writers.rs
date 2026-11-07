@@ -1,9 +1,8 @@
 use super::seeded_requirement_store;
 use crate::state_store::{
-    CreateBoundaryInput, CreateQuestionInput, CreateRequirementInput,
-    CreateResolutionInput, CreateRuleInput, CreateSourceInput, CreateTopicInput, EditQuestionInput,
-    UpdateBoundaryInput, UpdateResolutionInput, UpdateRuleInput,
-    UpdateSourceInput, UpdateTopicInput,
+    CreateBoundaryInput, CreateQuestionInput, CreateRequirementInput, CreateResolutionInput,
+    CreateRuleInput, CreateSourceInput, CreateTopicInput, EditQuestionInput, UpdateBoundaryInput,
+    UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
 };
 use provenance_core::{
     NodeType, QuestionStatus, RequirementStatus, ResolutionMethod, ResolutionStatus, RuleSeverity,

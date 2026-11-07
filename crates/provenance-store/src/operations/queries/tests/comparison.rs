@@ -20,8 +20,8 @@ use crate::operations::read_policy::{FreshnessPolicy, ReadPolicy};
 use crate::operations::reader::{self, ReadSnapshot};
 use provenance_core::model::ProjectionRow;
 use provenance_core::{
-    Boundary, ImplementationBinding, Question, Requirement, RequirementReview, Resolution,
-    Rule, Source, Topic, VerificationBinding,
+    Boundary, ImplementationBinding, Question, Requirement, RequirementReview, Resolution, Rule,
+    Source, Topic, VerificationBinding,
 };
 use requests::Request;
 use serde_json::{json, Value};

@@ -104,13 +104,6 @@ fn every_descriptive_update_command_uses_the_local_catalog() {
             json!(1234),
         ),
         (
-            "domains",
-            "domain_one",
-            json!({"name":"Changed"}),
-            "name",
-            json!("Changed"),
-        ),
-        (
             "boundaries",
             "boundary_one",
             json!({"statement":"Changed"}),

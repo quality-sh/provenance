@@ -8,8 +8,8 @@ use super::{create_resolution, create_rule_of, create_source, empty_layout, sid}
 use crate::layout::ProvenanceLayout;
 use crate::shards;
 use crate::state_store::{
-    CreateBoundaryInput, CreateQuestionInput, CreateRequirementInput,
-    CreateSourceInput, CreateTopicInput, StateStore,
+    CreateBoundaryInput, CreateQuestionInput, CreateRequirementInput, CreateSourceInput,
+    CreateTopicInput, StateStore,
 };
 use provenance_core::{
     ArtifactLink, ArtifactLinkTargetType, QuestionStatus, Requirement, RequirementStatus,

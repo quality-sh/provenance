@@ -36,7 +36,7 @@ fn create_request(_request_id: &str) -> CreateRequirementRequest {
         "statement": "The system stores records.",
         "description": null,
         "status": "discovery",
-        
+
         "refines": [],
         "depends_on": [],
         "supersedes": [],
@@ -69,9 +69,9 @@ fn update_request_with_etag(
         "declared_by": null,
         "statement": null,
         "description": description,
-        
+
         "status": null,
-        
+
         "clear_fields": [],
         "relationships": null,
         "id": "req_a"
@@ -176,7 +176,7 @@ async fn lifecycle_update_keeps_the_current_submission() {
     let pending = created.decision.pending.unwrap();
     let request: UpdateRequirementRequest = serde_json::from_value(json!({
         "actor":"ben", "expected_etag":created.edit.etag,
-        "declared_by":null, "statement":null, "description":null, 
+        "declared_by":null, "statement":null, "description":null,
         "status":"active", "clear_fields":[],
         "relationships":null, "id":"req_a"
     }))

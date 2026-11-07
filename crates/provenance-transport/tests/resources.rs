@@ -235,7 +235,7 @@ async fn collection_member_query_and_write_use_the_bound_identity() {
 
     let source = json!({"data":{
         "id":"source_created", "name":"Created source", "source_type":"document",
-        "url":null, "reference":null, "commit_pin":null, 
+        "url":null, "reference":null, "commit_pin":null,
         "supersedes":[], "origin_thread":null, "origin_message":null
     }});
     let (status, created) = call(&host, "POST", "/sources", Some(source)).await;

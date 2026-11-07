@@ -3,8 +3,8 @@ use super::{
     seeded_requirement_store,
 };
 use crate::state_store::{
-    EditQuestionInput, UpdateBoundaryInput, UpdateRequirementInput,
-    UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
+    EditQuestionInput, UpdateBoundaryInput, UpdateRequirementInput, UpdateResolutionInput,
+    UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
 };
 use provenance_core::{NodeType, Source};
 

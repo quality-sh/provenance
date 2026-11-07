@@ -315,7 +315,6 @@ fn minimal_exact_export_without_digest() -> Value {
                 "scope_id": "default", "id": "source_policy",
                 "name": "Policy", "source_type": "policy", "url": null
             }],
-            "domains": [],
             "requirements": [{
                 "scope_id": "default", "id": "req_policy",
                 "statement": "Follow policy", "status": "active",

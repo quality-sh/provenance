@@ -4,8 +4,8 @@ use crate::review::{DecideRecordReview, ReviewFeedback, SubmitRecordReview};
 use crate::state_store::{
     AddSourceReferenceInput, CreateQuestionInput, CreateRequirementInput, CreateResolutionInput,
     CreateRuleInput, CreateTopicInput, EditQuestionInput, StateStore, UpdateBoundaryInput,
-    UpdateRequirementInput, UpdateResolutionInput, UpdateRuleInput,
-    UpdateSourceInput, UpdateTopicInput,
+    UpdateRequirementInput, UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput,
+    UpdateTopicInput,
 };
 use provenance_core::protocol::ReadDocumentQuery;
 use provenance_core::{

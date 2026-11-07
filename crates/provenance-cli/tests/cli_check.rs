@@ -45,11 +45,11 @@ fn check_registers_every_scope_record_before_validating_references() {
     .unwrap();
     write_jsonl(
         &state.join("scopes/platform/requirements/req.jsonl"),
-        serde_json::json!({"scope_id":"platform","id":"req_platform","domain_id":"domain_platform","statement":"Platform requirement","status":"active"}).to_string(),
+        serde_json::json!({"scope_id":"platform","id":"req_platform","source_refs":[{"source_id":"source_platform"}],"statement":"Platform requirement","status":"active"}).to_string(),
     );
     write_jsonl(
-        &state.join("scopes/platform/domains/domain.jsonl"),
-        serde_json::json!({"scope_id":"platform","id":"domain_platform","name":"Platform domain"})
+        &state.join("scopes/platform/sources/source.jsonl"),
+        serde_json::json!({"scope_id":"platform","id":"source_platform","name":"Platform source","source_type":"document","url":null})
             .to_string(),
     );
 
@@ -112,11 +112,11 @@ fn check_rejects_record_whose_embedded_scope_differs_from_directory_scope() {
     .unwrap();
     write_jsonl(
         &state.join("scopes/frontend/requirements/req.jsonl"),
-        serde_json::json!({"scope_id":"frontend","id":"req_frontend","domain_id":"domain_misfiled","statement":"Frontend requirement","status":"active"}).to_string(),
+        serde_json::json!({"scope_id":"frontend","id":"req_frontend","source_refs":[{"source_id":"source_misfiled"}],"statement":"Frontend requirement","status":"active"}).to_string(),
     );
     write_jsonl(
-        &state.join("scopes/platform/domains/domain.jsonl"),
-        serde_json::json!({"scope_id":"frontend","id":"domain_misfiled","name":"Misfiled domain"})
+        &state.join("scopes/platform/sources/source.jsonl"),
+        serde_json::json!({"scope_id":"frontend","id":"source_misfiled","name":"Misfiled source","source_type":"document","url":null})
             .to_string(),
     );
 
@@ -124,7 +124,7 @@ fn check_rejects_record_whose_embedded_scope_differs_from_directory_scope() {
         .failure()
         .stderr(contains("scope ownership finding(s):"))
         .stderr(contains(
-            "domain domain_misfiled loaded from scope platform has embedded scope_id frontend",
+            "source source_misfiled loaded from scope platform has embedded scope_id frontend",
         ));
 }
 

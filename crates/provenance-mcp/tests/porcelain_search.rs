@@ -39,14 +39,13 @@ fn deny_operations(mut access: FixtureAccess, operations: &[&str]) -> FixtureAcc
     access
 }
 
-const LIST_SEARCH_OPERATIONS: [&str; 8] = [
+const LIST_SEARCH_OPERATIONS: [&str; 7] = [
     "list-sources",
     "list-requirements",
     "list-resolutions",
     "list-rules",
     "list-topics",
     "list-questions",
-    "list-domains",
     "list-boundaries",
 ];
 
@@ -79,14 +78,14 @@ async fn named_mcp_search_intersects_text_and_multiple_kinds() {
         "boundary"
     );
 
-    let kind_only = call(client, "search", json!({"kind":["domain", "rule"]})).await;
+    let kind_only = call(client, "search", json!({"kind":["boundary", "rule"]})).await;
     let kinds = kind_only.structured_content.as_ref().unwrap()["nodes"]
         .as_array()
         .unwrap()
         .iter()
         .map(|node| node["node_type"].as_str().unwrap())
         .collect::<Vec<_>>();
-    assert_eq!(kinds, ["rule", "domain"]);
+    assert_eq!(kinds, ["rule", "boundary"]);
 
     let combined = call(
         client,

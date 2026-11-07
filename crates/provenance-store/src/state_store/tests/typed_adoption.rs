@@ -1,7 +1,7 @@
 use super::initialized_store;
 use crate::state_store::{
-    CreateRequirementInput, CreateResolutionInput, CreateRuleInput,
-    CreateSourceInput, MaterializeImplementationBindingInput, ReconcileState, StateStore,
+    CreateRequirementInput, CreateResolutionInput, CreateRuleInput, CreateSourceInput,
+    MaterializeImplementationBindingInput, ReconcileState, StateStore,
 };
 use provenance_core::protocol::{
     TypedAdoptionTarget, TypedDeclarationKind, TypedImplementationInput, TypedRequirementInput,

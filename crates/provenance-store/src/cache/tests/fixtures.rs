@@ -1,8 +1,8 @@
 use crate::layout::ProvenanceLayout;
 use crate::repository::Repository;
 use crate::state_store::{
-    CreateBoundaryInput, CreateQuestionInput, CreateRequirementInput,
-    CreateResolutionInput, CreateRuleInput, CreateSourceInput, CreateTopicInput, StateStore,
+    CreateBoundaryInput, CreateQuestionInput, CreateRequirementInput, CreateResolutionInput,
+    CreateRuleInput, CreateSourceInput, CreateTopicInput, StateStore,
 };
 use provenance_core::{
     ArtifactLink, ArtifactLinkTargetType, Manifest, QuestionStatus, RepoPathPrefix, Requirement,

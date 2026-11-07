@@ -18,7 +18,7 @@ fn seed_targets(store: &provenance_store::state_store::StateStore) {
                     "scope_id": "default", "id": id,
                     "statement": "The system stores records.",
                     "status": "discovery", "depends_on": depends_on, "supersedes": [],
-                    "description": null, 
+                    "description": null,
                     "refines": [], "spawned_by": null,
                     "origin_thread": null, "origin_message": null
                 }))
@@ -47,7 +47,7 @@ fn seed_targets(store: &provenance_store::state_store::StateStore) {
                     "scope_id": "default", "id": id, "name": id,
                     "source_type": "policy", "url": null,
                     "reference": "docs/policy.md", "commit_pin": null,
-                    
+
                     "supersedes": [], "origin_thread": null, "origin_message": null
                 }))
                 .unwrap(),

@@ -251,12 +251,11 @@ async fn materialize_state_caches_enriched_source_and_resolution_fields() {
         .unwrap();
     materialize_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    let source: Option<String> =
-        sqlx::query_scalar("SELECT reference FROM sources WHERE id = ?")
-            .bind("source_sah")
-            .fetch_one(pool.pool())
-            .await
-            .unwrap();
+    let source: Option<String> = sqlx::query_scalar("SELECT reference FROM sources WHERE id = ?")
+        .bind("source_sah")
+        .fetch_one(pool.pool())
+        .await
+        .unwrap();
     let resolution: (String, Option<String>, Option<String>, Option<i64>) = sqlx::query_as(
         "SELECT inputs, made_by, approved_by, approved_at FROM resolutions WHERE id = ?",
     )

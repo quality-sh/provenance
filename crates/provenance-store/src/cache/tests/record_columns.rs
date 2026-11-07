@@ -9,8 +9,8 @@ use super::fixtures::seeded_layout;
 use crate::cache::{materialize_state, open_cache};
 use provenance_core::model::ProjectionRow;
 use provenance_core::{
-    Boundary, ImplementationBinding, Question, Requirement, RequirementReview, Resolution,
-    Rule, Source, Topic, VerificationBinding,
+    Boundary, ImplementationBinding, Question, Requirement, RequirementReview, Resolution, Rule,
+    Source, Topic, VerificationBinding,
 };
 use provenance_macros::verifies;
 use std::collections::BTreeSet;

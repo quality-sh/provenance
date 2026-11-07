@@ -6,8 +6,8 @@ use super::super::*;
 use super::fixtures::*;
 use crate::cache::gaps::tests::fixtures as records;
 use provenance_core::{
-    Question, QuestionStatus, Requirement, RequirementStatus, Resolution, ResolutionStatus,
-    Rule, Source, SourceReference, Topic, TopicStatus,
+    Question, QuestionStatus, Requirement, RequirementStatus, Resolution, ResolutionStatus, Rule,
+    Source, SourceReference, Topic, TopicStatus,
 };
 use provenance_macros::verifies;
 

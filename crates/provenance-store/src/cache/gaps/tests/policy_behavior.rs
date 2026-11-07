@@ -138,14 +138,7 @@ fn a_rule_naming_a_missing_resolution_has_a_dangling_reference_gap() {
         resolution_ids: vec![sid("res_missing")],
         ..rule("rule_dangling")
     }];
-    let gaps = compute_for(
-        &[],
-        &[requirement("req_anchor")],
-        &[],
-        &rules,
-        &[],
-        &[],
-    );
+    let gaps = compute_for(&[], &[requirement("req_anchor")], &[], &rules, &[], &[]);
     assert!(gaps.iter().any(|gap| {
         gap.kind == GapKind::DanglingReference
             && gap.node_type == NodeType::Rule
@@ -174,14 +167,7 @@ fn a_contradiction_named_from_both_sides_is_reported_once() {
             ..contradiction("question_right", "req_right", "req_left")
         },
     ];
-    let gaps = compute_for(
-        &sources,
-        &requirements,
-        &[],
-        &[],
-        &pair_topic(),
-        &questions,
-    );
+    let gaps = compute_for(&sources, &requirements, &[], &[], &pair_topic(), &questions);
     assert_eq!(count_kind(&gaps, GapKind::UnresolvedContradictsPair), 1);
     assert_eq!(count_kind(&gaps, GapKind::OpenQuestion), 0);
 }

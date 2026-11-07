@@ -39,7 +39,7 @@ fn seed_kinds(store: &StateStore) {
             serde_json::from_value(json!({
                 "scope_id": "default", "id": "source_award", "name": "Award",
                 "source_type": "policy", "url": null, "reference": "docs/award.md",
-                "commit_pin": null, 
+                "commit_pin": null,
                 "supersedes": [], "origin_thread": null, "origin_message": null
             }))
             .unwrap(),
@@ -194,7 +194,11 @@ fn parent_ownership_and_existence_are_per_kind() {
         .write_discussion(write_for(NodeType::Source, "source_missing", &json!(null)))
         .is_err());
     assert!(store
-        .write_discussion(write_for(NodeType::Boundary, "boundary_missing", &json!(null)))
+        .write_discussion(write_for(
+            NodeType::Boundary,
+            "boundary_missing",
+            &json!(null)
+        ))
         .is_err());
 }
 

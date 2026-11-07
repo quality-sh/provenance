@@ -3,8 +3,8 @@ use crate::{
     layout::ProvenanceLayout,
     shards,
     state_store::{
-        CreateBoundaryInput, CreateQuestionInput, CreateResolutionInput,
-        CreateTopicInput, StateStore, TypedSpecInput,
+        CreateBoundaryInput, CreateQuestionInput, CreateResolutionInput, CreateTopicInput,
+        StateStore, TypedSpecInput,
     },
     write_error::{WriteError, WriteFailure},
 };

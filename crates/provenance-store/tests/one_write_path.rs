@@ -73,7 +73,7 @@ fn every_legacy_edit_publishes_its_change() {
             serde_json::from_value(json!({
                 "scope_id": "default", "id": "source_award", "name": "Award",
                 "source_type": "policy", "url": null, "reference": "docs/award.md",
-                "commit_pin": null, 
+                "commit_pin": null,
                 "supersedes": [], "origin_thread": null, "origin_message": null
             }))
             .unwrap(),

@@ -24,8 +24,8 @@ fn served_discussion_routes_exclude_domain_and_boundary_parents() {
             400
         );
     }
-    // No discussion route exists for these families, so the host API answers unknown_operation.
-    for family in ["domains", "boundaries"] {
+    // No discussion route exists for this family, so the host API answers unknown_operation.
+    for family in ["boundaries"] {
         let path = format!("/{family}/absent/discussions");
         let reply = response(request(&host, "POST", &path, true).send_string("{}"));
         assert_eq!(reply.status(), 404, "{path}");

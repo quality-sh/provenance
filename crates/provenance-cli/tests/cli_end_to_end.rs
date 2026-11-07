@@ -134,10 +134,7 @@ fn import_export_roundtrip_preserves_enriched_v1_cloud_fields() {
             "rationale": "Needs human review",
             "status": "draft",
             "requirement_ids": ["req_sah"],
-            
-            "context": "Codebase scan",
-            "enforcement": "specification",
-            "confidence": 0.91
+            "context": "Codebase scan"
           }],
           "rules": [{
             "scope_id": "default",

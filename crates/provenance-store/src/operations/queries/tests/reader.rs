@@ -224,15 +224,7 @@ async fn every_answer_carries_a_stamp_at_the_stored_serial() {
         assert!(stamp.digest.starts_with("sha256:"), "{operation} digest");
         let (attested, live): (&[&str], &[&str]) = match *operation {
             "get" => (&["requirements"], &[]),
-            "neighbors" | "trace" => (
-                &[
-                    "boundaries",
-                    "relations",
-                    "requirements",
-                    "sources",
-                ],
-                &[],
-            ),
+            "neighbors" | "trace" => (&["boundaries", "relations", "requirements", "sources"], &[]),
             "search" => (
                 &[
                     "questions",

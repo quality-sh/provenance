@@ -4,8 +4,7 @@
 
 use super::seeded_requirement_store;
 use crate::state_store::{
-    CreateBoundaryInput, CreateContributionInput, CreateSynthesisPacketInput,
-    IdeationLandingBatch,
+    CreateBoundaryInput, CreateContributionInput, CreateSynthesisPacketInput, IdeationLandingBatch,
 };
 use provenance_core::{
     ContributionStance, IdeationTarget, IdeationTargetType, ScopeId, StableId, UncertaintyLevel,
