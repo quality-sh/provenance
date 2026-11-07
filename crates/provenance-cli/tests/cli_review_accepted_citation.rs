@@ -32,7 +32,13 @@ fn create(root: &Path, args: &[&str], data: Value) {
     let mut command = std::process::Command::new(assert_cmd::cargo::cargo_bin("provenance"));
     command
         .args(args)
-        .args(["--stdin", "--repo", root.to_str().unwrap(), "--format", "json"])
+        .args([
+            "--stdin",
+            "--repo",
+            root.to_str().unwrap(),
+            "--format",
+            "json",
+        ])
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
@@ -97,7 +103,10 @@ fn approve(host: &Host) {
     let after = read(host, "/resolutions/res_reject");
     // The approval does not change the lifecycle status.
     assert_eq!(after["status"], "proposed");
-    assert!(!after["decision"]["current_acceptance"].is_null(), "{after}");
+    assert!(
+        !after["decision"]["current_acceptance"].is_null(),
+        "{after}"
+    );
 }
 
 #[test]
@@ -105,21 +114,18 @@ fn approve(host: &Host) {
 fn an_answer_can_cite_a_resolution_that_the_reviewer_approved() {
     let (_repo, host) = setup();
     approve(&host);
-    let (status, body) = send(
-        &host,
-        "POST",
-        "/questions/question_result/answer",
-        None,
-        &json!({"answer":"Yes. The system keeps each result.", "resolution_id":"res_reject"}),
-    );
+    let (status, body) = answer(&host);
     assert_eq!(status, 200, "{body}");
-    assert_eq!(read(&host, "/questions/question_result")["status"], "answered");
+    assert_eq!(
+        read(&host, "/questions/question_result")["status"],
+        "answered"
+    );
 }
 
 #[test]
 #[verifies("rule_review_acceptance_approves_resolution_citation", examples)]
 fn a_rule_can_become_active_when_its_resolution_was_approved_in_review() {
-    let (_repo, host) = setup();
+    let (repo, host) = setup();
     approve(&host);
     let rule = read(&host, "/rules/rule_keep_result");
     let (status, body) = send(
@@ -131,19 +137,63 @@ fn a_rule_can_become_active_when_its_resolution_was_approved_in_review() {
     );
     assert_eq!(status, 200, "{body}");
     assert_eq!(read(&host, "/rules/rule_keep_result")["status"], "active");
+    drop(host);
+    // A scope import of the same records reads the same acceptance.
+    let export = repo.path().join("export.json");
+    for args in [
+        ["export", "--output", export.to_str().unwrap()],
+        ["import", "--input", export.to_str().unwrap()],
+    ] {
+        let output = std::process::Command::new(assert_cmd::cargo::cargo_bin("provenance"))
+            .args(args)
+            .args([
+                "--repo",
+                repo.path().to_str().unwrap(),
+                "--scope",
+                "default",
+            ])
+            .args(["--format", "json"])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+/// Answers the Question with a citation of the Resolution.
+fn answer(host: &Host) -> (u16, Value) {
+    send(
+        host,
+        "POST",
+        "/questions/question_result/answer",
+        None,
+        &json!({"answer":"Yes. The system keeps each result.", "resolution_id":"res_reject"}),
+    )
 }
 
 #[test]
 #[verifies("rule_review_acceptance_approves_resolution_citation", examples)]
 fn a_resolution_without_an_accepted_current_revision_is_still_refused() {
     let (_repo, host) = setup();
+    let (status, body) = answer(&host);
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(body["error"]["kind"], "resolution_not_approved");
+    approve(&host);
+    // A content change makes a new revision that no reviewer accepted.
+    let resolution = read(&host, "/resolutions/res_reject");
     let (status, body) = send(
         &host,
-        "POST",
-        "/questions/question_result/answer",
-        None,
-        &json!({"answer":"Yes. The system keeps each result.", "resolution_id":"res_reject"}),
+        "PATCH",
+        "/resolutions/res_reject",
+        resolution["edit"]["etag"].as_str(),
+        &json!({"position":"The system stores each result for one year."}),
     );
-    assert_eq!(status, 409, "{body}");
+    assert_eq!(status, 200, "{body}");
+    let (status, body) = answer(&host);
+    assert_eq!(status, 400, "{body}");
     assert_eq!(body["error"]["kind"], "resolution_not_approved");
+    assert_eq!(read(&host, "/questions/question_result")["status"], "open");
 }
