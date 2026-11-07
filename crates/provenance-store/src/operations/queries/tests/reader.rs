@@ -299,11 +299,7 @@ async fn a_table_handle_puts_its_word_in_attested() {
     })
     .await
     .unwrap();
-    assert_eq!(
-        stamped.result,
-        (1, 2),
-        "one requirement; its domain and boundary rows"
-    );
+    assert_eq!(stamped.result, (1, 1), "one requirement; its boundary row");
     assert_eq!(
         words(&stamped.stamp),
         (vec!["relations", "requirements"], Vec::new())

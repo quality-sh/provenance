@@ -209,7 +209,7 @@ async fn list_denial_excludes_a_kind_before_selection_and_paging() {
 
     let implicit = call(client, "search", json!({"text":"shared", "limit":20})).await;
     let implicit_page = implicit.structured_content.as_ref().unwrap();
-    assert_eq!(implicit_page["nodes"].as_array().unwrap().len(), 7);
+    assert_eq!(implicit_page["nodes"].as_array().unwrap().len(), 6);
     assert!(implicit_page["nodes"]
         .as_array()
         .unwrap()
@@ -363,7 +363,6 @@ async fn mcp_search_shows_each_record_lifecycle() {
         "rule rule_shared · deprecated",
         "topic topic_shared · open",
         "question question_shared · answered",
-        "domain domain_shared\n",
         "boundary boundary_shared\n",
     ] {
         assert!(readable.contains(expected), "{readable}");

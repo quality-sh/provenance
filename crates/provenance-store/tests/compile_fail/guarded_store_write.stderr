@@ -2,4 +2,14 @@ error[E0599]: no method named `clear_requirement_refines` found for struct `Guar
  --> tests/compile_fail/guarded_store_write.rs:7:19
   |
 7 |     let _ = store.clear_requirement_refines(scope, id);
-  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `GuardedStore<'_>`
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+help: there is a method `list_requirement_reviews` with a similar name, but with different arguments
+ --> src/state_store/access/guarded_readers.rs
+  |
+  |         pub fn $reader(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+  |     crate::cache::record_families!(define_guarded_family_readers);
+  |     ------------------------------------------------------------- in this macro invocation
+  = note: this error originates in the macro `guarded_reader` which comes from the expansion of the macro `crate::cache::record_families` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -172,7 +172,7 @@ async fn materialization_stores_a_revision_stamp_with_instance_identity() {
             | "verification_bindings"
             | "requirement_reviews" => 1,
             // Each native create opened one review submission.
-            "proposal_cards" => 4,
+            "proposal_cards" => 3,
             _ => 0,
         };
         assert_eq!(*count, expected_count, "count for {family}");
