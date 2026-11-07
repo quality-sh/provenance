@@ -11,7 +11,7 @@ use crate::{cache::review_families::ReviewFamilyIndex, state_store::StateStore};
 use provenance_core::{
     protocol::DocumentReviewSummary,
     review::{PendingSubmission, RecordedDecision, RequirementDecisionState, ReviewRecord},
-    DispositionDecision, NodeType, ScopeId, StableId,
+    DispositionDecision, NodeType, Resolution, ResolutionStatus, ScopeId, StableId,
 };
 use provenance_macros::rule;
 
@@ -188,5 +188,40 @@ impl StateStore {
             decisions: recorded,
             withdrawn: facts.withdrawn_submissions(kind, record_id),
         })
+    }
+
+    /// The draft, review and proposed Resolutions among `resolutions` whose current
+    /// revision a reviewer accepted. A citation check reads them as approved, because an
+    /// approval does not change the lifecycle status.
+    #[rule("rule_review_acceptance_approves_resolution_citation")]
+    pub(crate) fn accepted_resolution_ids(
+        &self,
+        scope: &ScopeId,
+        resolutions: &[Resolution],
+    ) -> anyhow::Result<Vec<StableId>> {
+        let candidates = resolutions
+            .iter()
+            .filter(|resolution| {
+                matches!(
+                    resolution.status,
+                    ResolutionStatus::Draft | ResolutionStatus::Review | ResolutionStatus::Proposed
+                )
+            })
+            .collect::<Vec<_>>();
+        let mut accepted = Vec::new();
+        if candidates.is_empty() {
+            return Ok(accepted);
+        }
+        let facts = CycleFacts::validated(self, scope)?;
+        for resolution in candidates {
+            let record = ReviewRecord::Resolution(resolution.clone());
+            if Self::record_decision_state_from_parts(&record, &facts)?
+                .current_acceptance
+                .is_some()
+            {
+                accepted.push(resolution.id.clone());
+            }
+        }
+        Ok(accepted)
     }
 }
