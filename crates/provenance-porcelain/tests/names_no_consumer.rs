@@ -275,7 +275,7 @@ fn porcelain_text_names_no_consumer() {
 #[test]
 #[verifies("rule_porcelain_names_no_consumer", examples)]
 fn text_scan_refuses_consumer_syntax_in_comments_and_literals() {
-    let source = r##"
+    let source = r#"
         // Give the text field.
         /// Read with the CLI.
         const A: &str = "run `provenance search --text <query>`";
@@ -285,7 +285,7 @@ fn text_scan_refuses_consumer_syntax_in_comments_and_literals() {
         const E: &str = "a toolbox, a climb, and a flagship";
         #[rule("rule_mcp_refusal_names_field")]
         /* the provenance <id> get form */
-    "##;
+    "#;
     assert_eq!(
         consumer_text(source),
         [
