@@ -104,8 +104,15 @@ async fn mcp_serves_the_tools_of_the_cli_repository() {
     let server = Server::start(&repo).await;
     let client = &server.client;
 
+    // prime and the server instructions hold the same shared guidance; each adds its
+    // own first steps.
     let prime = cli(&["prime", "--repo", &repo]);
-    assert_eq!(client.instructions().as_deref(), Some(prime.trim_end()));
+    let shared = provenance_porcelain::guidance::guidance().guidance;
+    assert!(prime.starts_with(&shared), "{prime}");
+    assert_eq!(
+        client.instructions().as_deref(),
+        Some(provenance_mcp::instructions().as_str())
+    );
     let tools = client.tools().await;
     let names: Vec<&str> = tools
         .iter()

@@ -175,12 +175,24 @@ fn consumer_identifiers(source: &str) -> Vec<String> {
         .collect()
 }
 
+/// True when `line` is a string literal that holds only a Rule ID. A Rule ID names a
+/// graph record, and some Rules are about one consumer, so the ID can have its name.
+fn is_rule_id(line: &str) -> bool {
+    line.trim()
+        .strip_prefix("\"rule_")
+        .and_then(|rest| rest.strip_suffix('"'))
+        .is_some_and(|rest| {
+            rest.chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+        })
+}
+
 /// The lines of comment and literal text in `source` that have consumer syntax.
 fn consumer_text(source: &str) -> Vec<String> {
     split(source)
         .1
         .lines()
-        .filter(|line| has_consumer_syntax(line))
+        .filter(|line| has_consumer_syntax(line) && !is_rule_id(line))
         .map(|line| line.trim().to_owned())
         .collect()
 }
@@ -271,6 +283,7 @@ fn text_scan_refuses_consumer_syntax_in_comments_and_literals() {
         const C: &str = "the tool lists records";
         const D: &str = "give --type";
         const E: &str = "a toolbox, a climb, and a flagship";
+        #[rule("rule_mcp_refusal_names_field")]
         /* the provenance <id> get form */
     "##;
     assert_eq!(

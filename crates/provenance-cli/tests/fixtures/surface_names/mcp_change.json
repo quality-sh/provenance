@@ -454,7 +454,6 @@
           "type": "null"
         }
       ],
-      "default": null,
       "description": "Actions: create, update."
     },
     "body": {
@@ -515,22 +514,11 @@
       ]
     },
     "depends_on": {
-      "anyOf": [
-        {
-          "items": {
-            "$ref": "#/$defs/StableId"
-          },
-          "type": "array"
-        },
-        {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/StableId"
-          },
-          "type": "array"
-        }
-      ],
-      "description": "Actions: create, update."
+      "description": "Actions: create, update.",
+      "items": {
+        "$ref": "#/$defs/StableId"
+      },
+      "type": "array"
     },
     "description": {
       "description": "Actions: create, update.",
@@ -630,26 +618,15 @@
       ]
     },
     "method": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/ResolutionMethod"
-        }
-      ],
+      "$ref": "#/$defs/ResolutionMethod",
       "description": "Actions: create, update."
     },
     "name": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      ],
-      "description": "Actions: create, update."
+      "description": "Actions: create, update.",
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "origin": {
       "anyOf": [
@@ -746,11 +723,7 @@
           "type": "array"
         },
         {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ListEdit"
-            }
-          ]
+          "$ref": "#/$defs/ListEdit"
         }
       ],
       "description": "Actions: create, update."
@@ -761,14 +734,7 @@
           "$ref": "#/$defs/StableId"
         },
         {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/StableId"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": "null"
         }
       ],
       "description": "Actions: create, update, answer."
@@ -782,21 +748,13 @@
           "type": "array"
         },
         {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ListEdit"
-            }
-          ]
+          "$ref": "#/$defs/ListEdit"
         }
       ],
       "description": "Actions: create, update."
     },
     "resolution_method": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/ResolutionMethod"
-        }
-      ],
+      "$ref": "#/$defs/ResolutionMethod",
       "description": "Actions: create, update."
     },
     "review_date": {
@@ -833,11 +791,7 @@
       "type": "string"
     },
     "severity": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/RuleSeverity"
-        }
-      ],
+      "$ref": "#/$defs/RuleSeverity",
       "description": "Actions: create, update."
     },
     "source_document": {
@@ -873,11 +827,7 @@
       ]
     },
     "source_type": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/SourceType"
-        }
-      ],
+      "$ref": "#/$defs/SourceType",
       "description": "Actions: create, update."
     },
     "spawned_by": {
@@ -904,49 +854,13 @@
           "$ref": "#/$defs/ResolutionStatus"
         },
         {
-          "$ref": "#/$defs/RuleStatus",
-          "default": "draft"
+          "$ref": "#/$defs/RuleStatus"
         },
         {
           "$ref": "#/$defs/TopicStatus"
         },
         {
           "$ref": "#/$defs/QuestionStatus"
-        },
-        {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RequirementStatus"
-            },
-            {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/ResolutionStatus"
-                }
-              ]
-            },
-            {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/RuleStatus"
-                }
-              ]
-            },
-            {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/TopicStatus"
-                }
-              ]
-            },
-            {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/QuestionStatus"
-                }
-              ]
-            }
-          ]
         }
       ],
       "description": "Actions: create, update."
@@ -964,11 +878,7 @@
           "type": "array"
         },
         {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ListEdit"
-            }
-          ]
+          "$ref": "#/$defs/ListEdit"
         }
       ],
       "description": "Actions: create, update."
