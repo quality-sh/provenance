@@ -14,6 +14,8 @@ workspace = true
 
 [features]
 test-fixture = ["dep:tempfile", "provenance-store/test-fixture"]
+# Dev-only agent feedback capture. Never enable in release builds.
+dogfood = ["dep:remove_dir_all"]
 
 [dependencies]
 anyhow.workspace = true
@@ -31,14 +33,16 @@ provenance-scanner.workspace = true
 provenance-ste100.workspace = true
 provenance-store = { workspace = true, features = ["schema"] }
 pulldown-cmark.workspace = true
+remove_dir_all = { workspace = true, optional = true }
 serde_json.workspace = true
 serde.workspace = true
+semver.workspace = true
 serde_ignored.workspace = true
 ureq.workspace = true
 url.workspace = true
 uuid.workspace = true
 tokio-util = { version = "0.7", features = ["rt"] }
-tokio = { workspace = true, features = ["sync", "io-util", "io-std", "time"] }
+tokio = { workspace = true, features = ["sync", "io-util", "io-std", "rt", "time"] }
 dunce.workspace = true
 walkdir.workspace = true
 

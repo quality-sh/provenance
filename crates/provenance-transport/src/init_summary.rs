@@ -1,5 +1,6 @@
 //! Renders the result of a completed repository initialization.
 
+use provenance_porcelain::init::InitReport;
 use std::io::Write;
 
 const INTRODUCTION: &str =
@@ -67,17 +68,18 @@ impl InitEnding {
         self
     }
 
-    pub fn print(&self, out: &mut impl Write, quiet: bool) -> std::io::Result<()> {
-        for notice in &self.notices {
-            eprintln!("{notice}");
+    /// The ending as the report of the init port.
+    pub fn into_report(self) -> InitReport {
+        let mut summary = Vec::new();
+        self.write_to(&mut summary)
+            .expect("a write to memory does not fail");
+        InitReport {
+            notices: self.notices,
+            summary: String::from_utf8(summary).expect("the summary is UTF-8"),
         }
-        if !quiet {
-            self.write_to(out)?;
-        }
-        Ok(())
     }
 
-    pub fn write_to(&self, out: &mut impl Write) -> std::io::Result<()> {
+    fn write_to(&self, out: &mut impl Write) -> std::io::Result<()> {
         match &self.result {
             InitResult::Already(line) => {
                 writeln!(out, "{line}")?;
@@ -167,29 +169,13 @@ pub fn scope_phrase(scopes: &[String]) -> String {
 mod tests {
     use super::*;
 
-    struct FailingWriter;
-
-    impl Write for FailingWriter {
-        fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
-            Err(std::io::Error::other("output failed"))
-        }
-
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-
     #[test]
-    fn completed_init_reports_output_failure() {
-        let ending = InitEnding::already("No change.".to_owned(), None);
-        assert_eq!(
-            ending
-                .print(&mut FailingWriter, false)
-                .unwrap_err()
-                .to_string(),
-            "output failed"
-        );
-        ending.print(&mut FailingWriter, true).unwrap();
+    fn completed_init_report_keeps_notices_apart_from_summary() {
+        let report = InitEnding::already("No change.".to_owned(), Some("Warning: one".to_owned()))
+            .into_report();
+        assert_eq!(report.notices, ["Warning: one"]);
+        assert!(report.summary.starts_with("No change.\n\n"));
+        assert!(!report.summary.contains("Warning"));
     }
 
     #[test]

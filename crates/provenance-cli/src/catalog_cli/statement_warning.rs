@@ -46,6 +46,5 @@ fn rule_one_one_warning(repo: &Utf8Path) -> Option<String> {
         .ok()
         .and_then(|root| camino::Utf8PathBuf::from_path_buf(root).ok())
         .unwrap_or_else(|| repo.to_owned());
-    let layout = provenance_store::layout::ProvenanceLayout::new(root);
-    provenance_store::dictionary_reference::missing_index_warning(&layout)
+    provenance_transport::repository::missing_dictionary_warning(&root)
 }

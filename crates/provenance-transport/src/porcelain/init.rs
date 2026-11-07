@@ -1,10 +1,15 @@
+use super::SetupPort;
 use crate::atomic_file::{FileRollbackJournal, FileSnapshot};
 use crate::init_summary::{scope_phrase, InitEnding, InitSummary};
-use crate::skills::{FileStatus, InstallReport};
+use crate::skills::{EmbeddedSkill, FileStatus, InstallReport};
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{Manifest, ScopeId};
 use provenance_macros::rule;
+use provenance_porcelain::init::{
+    InitInput, InitPort, InitReport, InvocationChannel, PackageManager,
+};
+use provenance_porcelain::WorkFuture;
 use provenance_store::layout::ProvenanceLayout;
 
 pub(super) struct InitOptions {
@@ -13,18 +18,36 @@ pub(super) struct InitOptions {
     pub(super) disposition_actor_ids: Vec<String>,
     pub(super) clear_disposition_actors: bool,
     pub(super) ste_pdf: Option<Utf8PathBuf>,
-    pub(super) invocation_channel: crate::cli::InvocationChannel,
-    pub(super) package_manager: Option<crate::cli::PackageManager>,
-    /// Suppresses the printed summary; `--quiet` asks for silence.
-    pub(super) quiet: bool,
+    pub(super) invocation_channel: InvocationChannel,
+    pub(super) package_manager: Option<PackageManager>,
+    pub(super) skills: &'static [EmbeddedSkill],
 }
 
-pub(super) fn init(path: &Utf8Path, options: InitOptions) -> anyhow::Result<()> {
-    let quiet = options.quiet;
+impl InitPort for SetupPort {
+    type Failure = anyhow::Error;
+
+    fn init(&self, input: InitInput) -> WorkFuture<'_, InitReport, anyhow::Error> {
+        let skills = self.skills;
+        Box::pin(async move {
+            let path = Utf8PathBuf::from(input.path);
+            let options = InitOptions {
+                scope: input.scope,
+                path_prefix: input.path_prefix.map(Utf8PathBuf::from),
+                disposition_actor_ids: input.disposition_actor_id,
+                clear_disposition_actors: input.clear_disposition_actors,
+                ste_pdf: input.ste_pdf.map(Utf8PathBuf::from),
+                invocation_channel: input.invocation_channel,
+                package_manager: input.package_manager,
+                skills,
+            };
+            tokio::task::spawn_blocking(move || init(&path, options)).await?
+        })
+    }
+}
+
+fn init(path: &Utf8Path, options: InitOptions) -> anyhow::Result<InitReport> {
     let plan = prepare_init(path, options)?;
-    let ending = plan.apply()?;
-    ending.print(&mut std::io::stdout().lock(), quiet)?;
-    Ok(())
+    Ok(plan.apply()?.into_report())
 }
 
 pub(super) struct InitPlan {
@@ -48,9 +71,9 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
         ste_pdf,
         invocation_channel,
         package_manager,
-        ..
+        skills,
     } = options;
-    provenance_transport::check::recover_before_init(path)
+    crate::check::recover_before_init(path)
         .context("failed to recover an interrupted repository publication")?;
     let invocation = crate::onboarding::Invocation::from_cli(invocation_channel, package_manager)?;
     let layout = ProvenanceLayout::new(path.to_path_buf());
@@ -78,7 +101,7 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
     )?;
     let reviewer_notice = reviewer.map(|reviewer| reviewer.notice);
     let manifest_bytes = format!("{}\n", serde_json::to_string_pretty(&manifest)?).into_bytes();
-    let skills = crate::skills::plan_init_at(path.as_std_path())
+    let skills = crate::skills::plan_init_at(skills, path.as_std_path())
         .context("failed to plan the bundled Provenance skills")?;
     let guidance_scope = crate::onboarding::guidance_scope(path, scope.as_deref(), &manifest)?;
     let planned = PlannedFiles::plan(
@@ -88,7 +111,7 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
         manifest_before,
         manifest_bytes,
     )?;
-    provenance_transport::check::validate_planned_manifest(path, &manifest)
+    crate::check::validate_planned_manifest(path, &manifest)
         .context("the planned Provenance state is not valid")?;
     let dictionary = crate::ste_onboarding::prepare(path, ste_pdf.as_deref())?;
     let scope_ids: Vec<String> = manifest
@@ -380,9 +403,9 @@ mod tests {
                 disposition_actor_ids: Vec::new(),
                 clear_disposition_actors: false,
                 ste_pdf: None,
-                invocation_channel: crate::cli::InvocationChannel::Native,
+                invocation_channel: provenance_porcelain::init::InvocationChannel::Native,
                 package_manager: None,
-                quiet: true,
+                skills: crate::skills::TEST_SKILLS,
             },
         )
         .unwrap();

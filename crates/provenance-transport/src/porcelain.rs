@@ -2,26 +2,35 @@
 
 pub mod api_port;
 pub(crate) mod authoring;
+mod cargo_init;
 mod dictionary;
 mod discussion_port;
+#[cfg(feature = "dogfood")]
+mod dogfood;
 mod export;
 mod get_port;
 mod graph_reference;
 mod host;
 mod import;
+mod init;
 mod materialize;
+mod merge_jsonl;
 mod parent_replacement;
 mod report;
 mod schema;
 mod search_port;
+mod skills;
 mod swarm_backtrace;
 mod validate;
 pub use api_port::HostApiPort;
 pub use authoring::{replacement_call, target_call, Action, ActionError, TargetRoute};
 pub use discussion_port::HostDiscussionPort;
+#[cfg(feature = "dogfood")]
+pub use dogfood::SpoolPort;
 pub use export::ScopeExport;
 pub use get_port::HostGetPort;
 pub use host::HostPorcelain;
+pub use merge_jsonl::MergeFailure;
 pub use parent_replacement::{ParentReplacement, Replaced, ReplacementError};
 pub use search_port::HostSearchPort;
 
@@ -44,8 +53,21 @@ impl RepositoryPort {
     }
 }
 
-/// The adapter of the commands that read only the files that their input names:
-/// validate, schema show, and report render.
+/// The adapter of the commands that set up a repository or a workspace: init,
+/// cargo init, and the skills commands. It holds the skills that the program bundles.
+#[derive(Clone, Copy, Debug)]
+pub struct SetupPort {
+    skills: &'static [crate::skills::EmbeddedSkill],
+}
+
+impl SetupPort {
+    pub const fn new(skills: &'static [crate::skills::EmbeddedSkill]) -> Self {
+        Self { skills }
+    }
+}
+
+/// The adapter of the commands that work only on the files that their input names:
+/// validate, schema show, report render, and merge-jsonl.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ArtifactPort;
 
