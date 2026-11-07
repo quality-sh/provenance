@@ -74,6 +74,8 @@ fn write_reference(repo: &Path, reference: &Value) -> std::path::PathBuf {
 mod export;
 #[path = "cli_graph_references/issuance.rs"]
 mod issuance;
+#[path = "cli_graph_references/key_order.rs"]
+mod key_order;
 #[path = "cli_graph_references/pinned_records.rs"]
 mod pinned_records;
 #[path = "cli_graph_references/schema.rs"]
