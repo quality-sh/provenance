@@ -231,42 +231,74 @@ impl ActionInput {
 }
 
 /// One schema for a field that two actions declare. Schemas that differ only in a
-/// null choice or a description are one schema: it allows null when one of them does,
-/// and it keeps a description. Other differences become `anyOf`.
+/// null choice, a default, or a description are one schema: it allows null when one of
+/// them does, keeps a default only when both have it, and keeps a description. Other
+/// differences become the alternatives of one flat `anyOf`, each alternative once.
 fn merged(held: &Value, other: &Value) -> Value {
-    if shape(held) == shape(other) {
-        let mut kept = if allows_null(other) && !allows_null(held) {
-            other.clone()
-        } else {
-            held.clone()
-        };
-        let description = held.get("description").or_else(|| other.get("description"));
-        if let (Some(object), Some(description)) = (kept.as_object_mut(), description) {
-            object
-                .entry("description")
-                .or_insert_with(|| description.clone());
-        }
-        return kept;
+    let mut branches = Vec::new();
+    for schema in [held, other] {
+        add_branches(&mut branches, schema);
     }
-    let mut branches = match held.get("anyOf") {
-        Some(Value::Array(branches))
-            if held.as_object().is_some_and(|object| object.len() == 1) =>
-        {
-            branches.clone()
-        }
-        _ => vec![held.clone()],
+    let mut kept = if branches.len() == 1 {
+        branches.remove(0)
+    } else {
+        json!({"anyOf": branches})
     };
-    if !branches.contains(other) {
-        branches.push(other.clone());
+    let description = held.get("description").or_else(|| other.get("description"));
+    if let (Some(object), Some(description)) = (kept.as_object_mut(), description) {
+        object
+            .entry("description")
+            .or_insert_with(|| description.clone());
     }
-    json!({"anyOf": branches})
+    kept
 }
 
-/// The schema without its null choice and its description.
+/// Adds the alternatives of `schema` to `branches`. A schema that is only an `anyOf`
+/// adds each of its alternatives; an alternative with the shape of a held one joins it.
+fn add_branches(branches: &mut Vec<Value>, schema: &Value) {
+    let mut schema = schema.clone();
+    if let Some(object) = schema.as_object_mut() {
+        object.remove("description");
+        if object.len() == 1 {
+            if let Some(Value::Array(alternatives)) = object.get("anyOf") {
+                for alternative in alternatives.clone() {
+                    add_branches(branches, &alternative);
+                }
+                return;
+            }
+        }
+    }
+    match branches
+        .iter_mut()
+        .find(|branch| shape(branch) == shape(&schema))
+    {
+        Some(branch) => *branch = joined(branch, &schema),
+        None => branches.push(schema),
+    }
+}
+
+/// One of two schemas of one shape: the one that allows null, with the default only
+/// when both have the same default.
+fn joined(held: &Value, other: &Value) -> Value {
+    let mut kept = if allows_null(other) && !allows_null(held) {
+        other.clone()
+    } else {
+        held.clone()
+    };
+    if held.get("default") != other.get("default") {
+        if let Some(object) = kept.as_object_mut() {
+            object.remove("default");
+        }
+    }
+    kept
+}
+
+/// The schema without its null choice, its default, and its description.
 fn shape(schema: &Value) -> Value {
     let mut shape = without_null(schema);
     if let Some(object) = shape.as_object_mut() {
         object.remove("description");
+        object.remove("default");
     }
     shape
 }

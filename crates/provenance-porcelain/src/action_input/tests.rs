@@ -116,3 +116,26 @@ fn a_field_of_two_actions_has_one_schema() {
         json!({"type": "string", "description": "The record ID."})
     );
 }
+
+#[test]
+fn merged_alternatives_are_flat_and_each_is_held_once() {
+    let list = json!({"items": {"$ref": "#/$defs/Id"}, "type": "array"});
+    let edit = json!({"anyOf": [{"$ref": "#/$defs/Edit"}]});
+    assert_eq!(
+        merged(&merged(&list, &edit), &merged(&list, &edit)),
+        json!({"anyOf": [list, {"$ref": "#/$defs/Edit"}]})
+    );
+    assert_eq!(
+        merged(
+            &json!({"$ref": "#/$defs/Status", "default": "draft"}),
+            &json!({"anyOf": [{"$ref": "#/$defs/Status"}]})
+        ),
+        json!({"$ref": "#/$defs/Status"})
+    );
+    let defaulted = json!({"default": [], "items": {"type": "string"}, "type": "array"});
+    assert_eq!(
+        merged(&defaulted, &defaulted.clone()),
+        defaulted,
+        "the same default stays"
+    );
+}
