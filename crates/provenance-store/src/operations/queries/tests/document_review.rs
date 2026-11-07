@@ -4,8 +4,8 @@ use crate::review::{DecideRecordReview, ReviewFeedback, SubmitRecordReview};
 use crate::state_store::{
     AddSourceReferenceInput, CreateQuestionInput, CreateRequirementInput, CreateResolutionInput,
     CreateRuleInput, CreateTopicInput, EditQuestionInput, StateStore, UpdateBoundaryInput,
-    UpdateDomainInput, UpdateRequirementInput, UpdateResolutionInput, UpdateRuleInput,
-    UpdateSourceInput, UpdateTopicInput,
+    UpdateRequirementInput, UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput,
+    UpdateTopicInput,
 };
 use provenance_core::protocol::ReadDocumentQuery;
 use provenance_core::{
@@ -94,7 +94,6 @@ fn create_document_records(store: &StateStore, scope: &ScopeId) -> Vec<(NodeType
         (NodeType::Requirement, sid("req_overtime")),
         (NodeType::Resolution, sid("resolution_policy")),
         (NodeType::Rule, sid("rule_policy")),
-        (NodeType::Domain, sid("domain_payroll")),
         (NodeType::Boundary, sid("boundary_no_backpay")),
         (NodeType::Topic, sid("topic_policy")),
         (NodeType::Question, sid("question_policy")),
@@ -153,7 +152,7 @@ fn decide(
     decision: DispositionDecision,
 ) {
     let feedback = (decision == DispositionDecision::Rejected
-        && !matches!(kind, NodeType::Domain | NodeType::Boundary))
+        && !matches!(kind, NodeType::Boundary))
     .then(|| ReviewFeedback {
         role: provenance_core::MessageRole::User,
         body: "Use more precise text.".into(),
@@ -211,13 +210,6 @@ fn revise(store: &StateStore, kind: NodeType, id: &StableId) {
                 common,
                 "statement",
                 "The system always uses the policy.",
-            )))
-            .map(|_| ()),
-        NodeType::Domain => store
-            .update_domain(input::<UpdateDomainInput>(with(
-                common,
-                "name",
-                "Payroll policy",
             )))
             .map(|_| ()),
         NodeType::Boundary => store
@@ -383,7 +375,6 @@ async fn document_review_totals_exclude_a_pending_parent_reference() {
             statement: "The first release includes overtime.".into(),
             description: None,
             status: provenance_core::RequirementStatus::Active,
-            domain_id: None,
             refines: vec![sid("req_overtime")],
             depends_on: Vec::new(),
             supersedes: Vec::new(),

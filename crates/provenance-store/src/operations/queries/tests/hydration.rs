@@ -66,9 +66,8 @@ async fn neighbors_hydrate_only_the_served_page_over_a_wide_graph() {
     .await;
     let full = answer.unwrap().result;
     let order = neighbor_ids(&full);
-    assert_eq!(order.len(), 32, "thirty children and two fixed records");
-    assert_eq!(order[30], "domain_payroll");
-    assert_eq!(order[31], "boundary_no_backpay");
+    assert_eq!(order.len(), 31, "thirty children and one fixed record");
+    assert_eq!(order[30], "boundary_no_backpay");
     let mut children = order[..30].to_vec();
     children.sort();
     assert_eq!(&order[..30], &children[..], "children serve in id order");
@@ -182,7 +181,7 @@ async fn trace_hydrates_only_a_bounded_breadth_page() {
     .await;
     let full = answer.unwrap().result;
     let order = trace_ids(&full);
-    assert_eq!(order.len(), 32, "one breadth level holds every neighbour");
+    assert_eq!(order.len(), 31, "one breadth level holds every neighbour");
     assert!(order.iter().all(|(depth, _)| *depth == 1));
     assert!(!full.has_more);
 
@@ -243,7 +242,6 @@ async fn trace_folds_duplicate_paths_and_skips_missing_targets() {
             "req_bridge_01",
             "req_bridge_02",
             "req_dangler",
-            "domain_payroll",
             "boundary_no_backpay"
         ]
     );
@@ -311,7 +309,7 @@ async fn trace_hydrates_no_depth_beyond_a_full_page() {
     .await;
     let full = answer.unwrap().result;
     let ids = trace_ids(&full);
-    assert_eq!(ids.len(), 23, "eleven breadth one rows, ten islands");
+    assert_eq!(ids.len(), 22, "the breadth one rows and the islands");
     assert!(!ids.iter().any(|(_, id)| id == "req_missing"));
     assert!(!full.has_more);
 

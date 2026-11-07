@@ -62,18 +62,18 @@ fn the_summary_formats_count_each_collection() {
     let exported = export_with_threads(vec![thread("thread_a")]);
     assert_eq!(
         render_export(ExportFormat::Markdown, &exported).unwrap(),
-        "# Provenance Export\n\n- Scope: default\n- Sources: 0\n- Domains: 0\n\
+        "# Provenance Export\n\n- Scope: default\n- Sources: 0\n\
          - Requirements: 0\n- Boundaries: 0\n- Topics: 0\n- Questions: 0\n\
          - Resolutions: 0\n- Rules: 0\n- Proposals: 0\n"
     );
     assert_eq!(
         render_export(ExportFormat::Toon, &exported).unwrap(),
-        "scope: default\nsources: 0\ndomains: 0\nrequirements: 0\nboundaries: 0\n\
+        "scope: default\nsources: 0\nrequirements: 0\nboundaries: 0\n\
          topics: 0\nquestions: 0\nresolutions: 0\nrules: 0\nproposals: 0\n"
     );
     assert_eq!(
         render_export(ExportFormat::Table, &exported).unwrap(),
-        "scope\tsources\tdomains\trequirements\tboundaries\ttopics\tquestions\t\
-         resolutions\trules\tproposals\ndefault\t0\t0\t0\t0\t0\t0\t0\t0\t0\n"
+        "scope\tsources\trequirements\tboundaries\ttopics\tquestions\t\
+         resolutions\trules\tproposals\ndefault\t0\t0\t0\t0\t0\t0\t0\t0\n"
     );
 }

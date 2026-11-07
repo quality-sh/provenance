@@ -35,12 +35,11 @@ fn validate_disposition_audit(
         .filter(|proposal| proposal.promotion_state != PromotionState::Proposed)
         .map(|proposal| proposal.id.as_str())
         .collect::<BTreeSet<_>>();
-    let audit = dispositions
-        .iter()
-        .filter(|disposition| terminal_ids.contains(disposition.proposal_id.as_str()));
     anyhow::ensure!(
-        legacy_audit::is_shipped_legacy_disposition_audit(audit),
-        "disposition rows do not match the frozen shipped-v1 disposition audit"
+        !dispositions
+            .iter()
+            .any(|disposition| terminal_ids.contains(disposition.proposal_id.as_str())),
+        "a terminal proposal row takes no disposition"
     );
     Ok(())
 }

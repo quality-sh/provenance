@@ -13,10 +13,10 @@ Options:
       --quiet                                                
       --stdin                                                
       --actor <actor>                                        
-      --confidence <confidence>                              
       --title <title>                                        
       --declared-by <declared-by>                            
       --builds-on <builds-on>                                
+      --confidence <confidence>                              
       --evidence-references <evidence-references>            
       --expected-revision <expected-revision>                
       --revises <revises>                                    

@@ -30,26 +30,26 @@ macro_rules! update_input {
 }
 
 update_input!(UpdateSourceInput, SourceClearField {
-    Url, Reference, CommitPin, EffectiveDate, ReviewDate
+    Url, Reference, CommitPin
 }, {
     declared_by: String, name: String, source_type: SourceType, url: String,
-    reference: String, commit_pin: String, effective_date: i64, review_date: i64,
+    reference: String, commit_pin: String,
     supersedes: ListEdit
 });
 update_input!(UpdateResolutionInput, ResolutionClearField {
-    Context, Enforcement, Confidence, MadeBy, ApprovedBy, ApprovedAt, ReviewOn
+    Context, MadeBy, ApprovedBy, ApprovedAt
 }, {
     title: String, position: String, rationale: String, status: ResolutionStatus,
-    context: String, enforcement: String, confidence: f64, inputs: Vec<ResolutionInput>,
-    made_by: String, approved_by: String, approved_at: i64, review_on: String,
+    context: String, inputs: Vec<ResolutionInput>,
+    made_by: String, approved_by: String, approved_at: i64,
     archived_in_commit: provenance_core::ArchivedStamp,
     requirement_ids: ListEdit, supersedes: ListEdit
 });
 update_input!(UpdateRequirementInput, RequirementClearField {
-    Description, Fog, DomainId
+    Description
 }, {
-    declared_by: String, statement: String, description: String, fog: String,
-    status: RequirementStatus, domain_id: StableId, archived_in_commit: provenance_core::ArchivedStamp
+    declared_by: String, statement: String, description: String,
+    status: RequirementStatus, archived_in_commit: provenance_core::ArchivedStamp
 });
 update_input!(UpdateRuleInput, RuleClearField {
     Name, Description, SourceDocument, SourceSection
@@ -58,9 +58,6 @@ update_input!(UpdateRuleInput, RuleClearField {
     status: RuleStatus, severity: RuleSeverity, source_document: String,
     source_section: String, archived_in_commit: provenance_core::ArchivedStamp,
     requirement_ids: ListEdit, resolution_ids: ListEdit
-});
-update_input!(UpdateDomainInput, DomainClearField { Description, Color }, {
-    name: String, description: String, color: String
 });
 update_input!(UpdateBoundaryInput, BoundaryClearField { SourceRef }, {
     statement: String, source_ref: SourceReference

@@ -46,7 +46,6 @@ pub fn append_requirement(
     let mut record = json!(store.list_requirements(scope).unwrap()[0]);
     record["id"] = json!(id);
     record["description"] = json!("x".repeat(description_bytes));
-    record["domain_id"] = json!(None::<String>);
     record["refines"] = json!(refines.into_iter().collect::<Vec<_>>());
     record["depends_on"] = json!(depends_on);
     record["supersedes"] = json!([]);

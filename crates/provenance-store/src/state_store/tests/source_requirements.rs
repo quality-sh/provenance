@@ -1,4 +1,4 @@
-use super::{initialized_store, seeded_requirement_store, seeded_source_requirement_store};
+use super::{initialized_store, seeded_source_requirement_store};
 use crate::state_store::{AddSourceReferenceInput, CreateRequirementInput, CreateSourceInput};
 use provenance_core::{RequirementStatus, SourceType, StableId};
 
@@ -14,8 +14,6 @@ fn source_requirement_records_are_written_deterministically() {
             url: None,
             reference: None,
             commit_pin: None,
-            effective_date: None,
-            review_date: None,
             supersedes: Vec::new(),
             origin_thread: None,
             origin_message: None,
@@ -28,7 +26,6 @@ fn source_requirement_records_are_written_deterministically() {
             statement: "Overtime".into(),
             description: None,
             status: RequirementStatus::Active,
-            domain_id: None,
             refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
@@ -72,8 +69,6 @@ fn concurrent_source_creates_preserve_all_records() {
                 url: None,
                 reference: None,
                 commit_pin: None,
-                effective_date: None,
-                review_date: None,
                 supersedes: Vec::new(),
                 origin_thread: None,
                 origin_message: None,
@@ -99,8 +94,6 @@ fn concurrent_source_creates_preserve_all_records() {
                     url: None,
                     reference: None,
                     commit_pin: None,
-                    effective_date: None,
-                    review_date: None,
                     supersedes: Vec::new(),
                     origin_thread: None,
                     origin_message: None,
@@ -159,8 +152,6 @@ fn repository_publication_cannot_overwrite_a_concurrent_writer() {
                     url: None,
                     reference: None,
                     commit_pin: None,
-                    effective_date: None,
-                    review_date: None,
                     supersedes: Vec::new(),
                     origin_thread: None,
                     origin_message: None,
@@ -232,36 +223,4 @@ fn repository_publication_excludes_an_entire_multi_shard_write() {
             clause: Some("clause 1".into()),
         }]
     );
-}
-
-#[test]
-fn requirement_fog_is_set_and_cleared_as_free_text() {
-    let (_dir, store, scope) = seeded_requirement_store();
-    let requirement_id = StableId::new("req_overtime").unwrap();
-
-    let updated = store
-        .set_requirement_fog(
-            &scope,
-            &requirement_id,
-            Some("something about public holidays and sleepovers".into()),
-        )
-        .unwrap();
-    assert_eq!(
-        updated.fog.as_deref(),
-        Some("something about public holidays and sleepovers")
-    );
-    assert_eq!(
-        store.list_requirements(&scope).unwrap()[0].fog.as_deref(),
-        Some("something about public holidays and sleepovers")
-    );
-
-    let cleared = store
-        .set_requirement_fog(&scope, &requirement_id, None)
-        .unwrap();
-    assert_eq!(cleared.fog, None);
-    assert!(store
-        .set_requirement_fog(&scope, &StableId::new("req_missing").unwrap(), None)
-        .unwrap_err()
-        .to_string()
-        .contains("does not exist"));
 }

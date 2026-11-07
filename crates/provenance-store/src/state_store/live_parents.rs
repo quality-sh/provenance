@@ -43,6 +43,6 @@ fn requirement_parents(record: &ReviewRecord) -> Vec<StableId> {
         ReviewRecord::Topic(record) => vec![record.requirement_id.clone()],
         ReviewRecord::Question(record) => vec![record.requirement_id.clone()],
         ReviewRecord::Boundary(record) => vec![record.requirement_id.clone()],
-        _ => Vec::new(),
+        ReviewRecord::Source(_) => Vec::new(),
     }
 }

@@ -177,8 +177,6 @@ fn find_gaps_reports_the_frontier_taxonomy() {
             rationale: "Resolves frontier".into(),
             status: ResolutionStatus::Approved,
             context: None,
-            enforcement: None,
-            confidence: None,
             inputs: Vec::new(),
             made_by: None,
             approved_by: None,

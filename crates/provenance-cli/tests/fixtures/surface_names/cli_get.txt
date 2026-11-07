@@ -43,8 +43,6 @@ Options:
           Add this parent before the selected parent is removed
       --commit-pin <commit-pin>
           
-      --effective-date <effective-date>
-          
       --id <id>
           
       --name <name>
@@ -54,8 +52,6 @@ Options:
       --origin-thread <origin-thread>
           
       --reference <reference>
-          
-      --review-date <review-date>
           
       --source-type <source-type>
           
@@ -68,8 +64,6 @@ Options:
       --depends-on <depends-on>
           
       --description <description>
-          
-      --domain-id <domain-id>
           
       --origin <origin>
           
@@ -85,11 +79,7 @@ Options:
           
       --approved-by <approved-by>
           
-      --confidence <confidence>
-          
       --context <context>
-          
-      --enforcement <enforcement>
           
       --inputs <inputs>
           
@@ -117,8 +107,6 @@ Options:
           
       --resolution-id <resolution-id>
           
-      --color <color>
-          
       --source-ref <source-ref>
           
       --links <links>
@@ -139,13 +127,11 @@ Options:
           
       --declared-by <declared-by>
           
-      --fog <fog>
-          
       --relationships <relationships>
           
-      --review-on <review-on>
-          
       --builds-on <builds-on>
+          
+      --confidence <confidence>
           
       --evidence-references <evidence-references>
           
@@ -169,8 +155,6 @@ Options:
           
       --builds-on-json <builds-on-json>
           
-      --color-json <color-json>
-          
       --commit-pin-json <commit-pin-json>
           
       --confidence-json <confidence-json>
@@ -185,17 +169,9 @@ Options:
           
       --description-json <description-json>
           
-      --domain-id-json <domain-id-json>
-          
-      --effective-date-json <effective-date-json>
-          
-      --enforcement-json <enforcement-json>
-          
       --evidence-references-json <evidence-references-json>
           
       --expected-revision-json <expected-revision-json>
-          
-      --fog-json <fog-json>
           
       --id-json <id-json>
           
@@ -234,10 +210,6 @@ Options:
       --resolution-ids-json <resolution-ids-json>
           
       --resolution-method-json <resolution-method-json>
-          
-      --review-date-json <review-date-json>
-          
-      --review-on-json <review-on-json>
           
       --revises-json <revises-json>
           

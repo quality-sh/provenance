@@ -17,7 +17,7 @@ fn new_requirement(id: &str) -> CreateRequirementInput {
         "scope_id": "default", "id": id,
         "statement": "The system stores records.",
         "status": "discovery", "depends_on": [], "supersedes": [],
-        "description": null, "domain_id": null, "refines": [],
+        "description": null, "refines": [],
         "spawned_by": null, "origin_thread": null, "origin_message": null
     }))
     .unwrap()
@@ -73,7 +73,7 @@ fn every_legacy_edit_publishes_its_change() {
             serde_json::from_value(json!({
                 "scope_id": "default", "id": "source_award", "name": "Award",
                 "source_type": "policy", "url": null, "reference": "docs/award.md",
-                "commit_pin": null, "effective_date": null, "review_date": null,
+                "commit_pin": null,
                 "supersedes": [], "origin_thread": null, "origin_message": null
             }))
             .unwrap(),
@@ -106,12 +106,6 @@ fn every_legacy_edit_publishes_its_change() {
         after_cite.etag, after_text.etag,
         "a citation edit publishes"
     );
-
-    store
-        .set_requirement_fog(&scope(), &id(), Some("Free text".into()))
-        .unwrap();
-    store.set_requirement_fog(&scope(), &id(), None).unwrap();
-    assert_eq!(store.list_requirements(&scope()).unwrap()[0].fog, None);
 
     let before = store.list_requirements(&scope()).unwrap();
     assert!(store

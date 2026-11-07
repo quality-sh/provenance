@@ -36,7 +36,6 @@ fn fixture() -> (tempfile::TempDir, StateStore, ScopeId) {
             statement: "The system stores records.".into(),
             description: None,
             status: RequirementStatus::Active,
-            domain_id: None,
             refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),

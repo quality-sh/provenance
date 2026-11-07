@@ -184,12 +184,6 @@ impl Cascade {
                         (&r.scope_id, &r.id)
                     })
                 }
-                CanonicalArtifactType::Domain => contains_scoped_id(
-                    &store.list_domains(scope)?,
-                    scope,
-                    &artifact.artifact_id,
-                    |r| (&r.scope_id, &r.id),
-                ),
                 CanonicalArtifactType::Boundary => {
                     contains_scoped_id(&self.boundaries, scope, &artifact.artifact_id, |r| {
                         (&r.scope_id, &r.id)
@@ -397,11 +391,7 @@ const fn typed_kind(kind: NodeType) -> Option<TypedResourceKind> {
         NodeType::Source => Some(TypedResourceKind::Source),
         NodeType::Requirement => Some(TypedResourceKind::Requirement),
         NodeType::Rule => Some(TypedResourceKind::Rule),
-        NodeType::Resolution
-        | NodeType::Topic
-        | NodeType::Question
-        | NodeType::Domain
-        | NodeType::Boundary => None,
+        NodeType::Resolution | NodeType::Topic | NodeType::Question | NodeType::Boundary => None,
     }
 }
 
@@ -441,7 +431,6 @@ const fn canonical_kind(kind: CanonicalArtifactType) -> &'static str {
         CanonicalArtifactType::Requirement => "requirement",
         CanonicalArtifactType::Resolution => "resolution",
         CanonicalArtifactType::Rule => "rule",
-        CanonicalArtifactType::Domain => "domain",
         CanonicalArtifactType::Boundary => "boundary",
         CanonicalArtifactType::Topic => "topic",
         CanonicalArtifactType::Question => "question",

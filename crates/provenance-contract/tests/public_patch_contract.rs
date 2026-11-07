@@ -25,7 +25,7 @@ fn public_patch_schemas_apply_registered_null_semantics() {
 
     let requirement = validator("update-requirement");
     assert!(requirement.is_valid(&json!({
-        "data": {"actor": "reviewer", "fog": null}
+        "data": {"actor": "reviewer"}
     })));
     assert!(!requirement.is_valid(&json!({
         "data": {"actor": "reviewer", "statement": null}

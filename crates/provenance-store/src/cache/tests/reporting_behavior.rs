@@ -1,7 +1,7 @@
 use super::super::*;
 use super::fixtures::*;
 use crate::layout::ProvenanceLayout;
-use crate::state_store::{CreateRequirementInput, CreateResolutionInput, CreateRuleInput};
+use crate::state_store::{CreateResolutionInput, CreateRuleInput};
 use provenance_core::{
     NodeType, RequirementStatus, ResolutionStatus, RuleSeverity, RuleStatus, ScopeId,
 };
@@ -61,8 +61,6 @@ fn seed_unsourced_chain(layout: &ProvenanceLayout, scope: &ScopeId) {
             rationale: "Settles the requirement".into(),
             status: ResolutionStatus::Approved,
             context: None,
-            enforcement: None,
-            confidence: None,
             inputs: Vec::new(),
             made_by: None,
             approved_by: None,
@@ -180,8 +178,6 @@ fn rule_without_a_producing_requirement_remains_orphaned() {
             rationale: "Settles the requirement".into(),
             status: ResolutionStatus::Proposed,
             context: None,
-            enforcement: None,
-            confidence: None,
             inputs: Vec::new(),
             made_by: None,
             approved_by: None,
@@ -232,8 +228,6 @@ fn seed_rule_with_producers(
                     rationale: "Decides the rule".into(),
                     status: ResolutionStatus::Approved,
                     context: None,
-                    enforcement: None,
-                    confidence: None,
                     inputs: Vec::new(),
                     made_by: None,
                     approved_by: None,
@@ -272,7 +266,7 @@ fn seed_rule_with_producers(
             &crate::shards::resolutions_path(layout, scope),
             &serde_json::json!({"scope_id": scope.as_str(), "id": "res_rule",
                 "title": "Rule decision", "position": "Adopt", "rationale": "Decides the rule",
-                "status": "proposed", "inputs": [], "review_on": null}),
+                "status": "proposed", "inputs": []}),
         );
     }
     let resolution_ids: Vec<&str> = has_resolution.then_some("res_rule").into_iter().collect();
@@ -323,33 +317,4 @@ fn orphan_health_and_gaps_agree_on_the_source_leg() {
             );
         }
     }
-}
-
-#[test]
-#[provenance_macros::verifies("rule_graph_gaps", examples)]
-fn gaps_flag_requirements_without_domain_id_but_not_requirements_with_one() {
-    let (_dir, layout, scope) = seeded_layout();
-    crate::test_support::store(&layout)
-        .create_requirement(CreateRequirementInput {
-            scope_id: scope,
-            id: sid("req_missing_domain"),
-            statement: "Rostering rules need a domain".into(),
-            description: None,
-            status: RequirementStatus::Active,
-            domain_id: None,
-            refines: Vec::new(),
-            depends_on: Vec::new(),
-            supersedes: Vec::new(),
-            spawned_by: None,
-            origin_thread: None,
-            origin_message: None,
-        })
-        .unwrap();
-    let gaps = find_gaps(&open(&layout)).unwrap();
-    assert!(gaps.iter().any(|gap| gap.kind == GapKind::MissingDomainId
-        && gap.requirement_id.as_deref() == Some("req_missing_domain")
-        && gap.reason.contains("domain_id")));
-    assert!(!gaps.iter().any(|gap| gap.kind == GapKind::MissingDomainId
-        && gap.requirement_id.as_deref() == Some("req_schads_overtime")
-        && gap.reason.contains("domain_id")));
 }

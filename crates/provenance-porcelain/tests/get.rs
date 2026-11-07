@@ -99,7 +99,7 @@ fn node(id: &str, kind: &str) -> GraphNode {
             "node_type": "resolution", "scope_id": "default",
             "id": id, "title": "Decision", "position": "Use the typed graph.",
             "rationale": "One graph contract is enough.", "status": "draft",
-            "inputs": [], "requirement_ids": [], "review_on": null
+            "inputs": [], "requirement_ids": []
         }),
         "rule" => json!({
             "node_type": "rule", "scope_id": "default",

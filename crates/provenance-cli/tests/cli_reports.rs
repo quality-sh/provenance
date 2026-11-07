@@ -37,22 +37,6 @@ fn seed_repo() -> (tempfile::TempDir, String) {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "domain_payroll",
-            "create",
-            "--type",
-            "domain",
-            "--repo",
-            &repo,
-            "--scope",
-            "default",
-            "--name",
-            "Payroll",
-        ])
-        .assert()
-        .success();
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args([
             "req_schads_overtime",
             "create",
             "--type",
@@ -63,8 +47,6 @@ fn seed_repo() -> (tempfile::TempDir, String) {
             "default",
             "--statement",
             "Overtime must follow SCHADS thresholds",
-            "--domain-id",
-            "domain_payroll",
         ])
         .assert()
         .success();

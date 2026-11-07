@@ -19,8 +19,6 @@ impl StateStore {
             url,
             reference,
             commit_pin,
-            effective_date,
-            review_date,
             supersedes,
             origin_thread,
             origin_message,
@@ -53,8 +51,6 @@ impl StateStore {
                 url,
                 reference,
                 commit_pin,
-                effective_date,
-                review_date,
                 supersedes,
                 origin_thread,
                 origin_message,
@@ -81,7 +77,6 @@ impl StateStore {
             statement,
             description,
             status,
-            domain_id,
             refines,
             depends_on,
             supersedes,
@@ -91,9 +86,6 @@ impl StateStore {
         } = input;
         self.ensure_canonical_id_available(&scope_id, &id)?;
         super::statement_policy::ensure_statement_is_writable(&self.layout, &statement)?;
-        if let Some(domain_id) = &domain_id {
-            self.ensure_node_exists(&scope_id, NodeType::Domain, domain_id, "--domain-id")?;
-        }
         for parent in &refines {
             self.ensure_node_exists(&scope_id, NodeType::Requirement, parent, "--refines")?;
         }
@@ -120,9 +112,7 @@ impl StateStore {
 
                 statement,
                 description,
-                fog: None,
                 status,
-                domain_id,
                 source_refs: Vec::new(),
                 refines,
                 depends_on,

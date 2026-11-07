@@ -30,10 +30,9 @@ pub(super) async fn load_messages(
     let mut loaded = 0;
     for message in serde_json::from_slice::<Vec<Message>>(bytes)? {
         let payload = serde_json::to_string(&message)?;
-        sqlx::query("INSERT INTO messages (scope_id, id, thread_id, role, body, created_at, ai_metadata, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        sqlx::query("INSERT INTO messages (scope_id, id, thread_id, role, body, created_at, payload) VALUES (?, ?, ?, ?, ?, ?, ?)")
             .bind(message.scope_id.as_str()).bind(message.id.as_str()).bind(message.thread_id.as_str())
             .bind(serde_name(&message.role)?).bind(message.body).bind(message.created_at)
-            .bind(message.ai_metadata.map(|value| value.to_string()))
             .bind(payload)
             .execute(&mut **tx).await?;
         loaded += 1;

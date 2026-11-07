@@ -8,14 +8,6 @@ pub(super) fn add_requirement_gaps(query: &GraphQuery<'_, '_>, gaps: &mut Vec<Ga
     for requirement in query.graph.requirements {
         let resolving = query.resolving_resolutions(&requirement.id);
         let resolved = requirement.status == RequirementStatus::Resolved;
-        if requirement.domain_id.is_none() {
-            gaps.push(GapItem::new(
-                GapKind::MissingDomainId,
-                NodeType::Requirement,
-                &requirement.id,
-                "requirement has no domain_id",
-            ));
-        }
         if !query.requirement_has_valid_source(requirement) {
             gaps.push(GapItem::new(
                 GapKind::MissingSourceRefs,

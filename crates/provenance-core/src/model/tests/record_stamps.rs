@@ -80,7 +80,7 @@ fn equality_ignores_stamps_on_all_four_record_kinds() {
     );
     compare::<Resolution>(
         with(
-            json!({"title":"Original","position":"Adopt","rationale":"Reason","status":"draft","inputs":[],"requirement_ids":["req_one"],"review_on":null}),
+            json!({"title":"Original","position":"Adopt","rationale":"Reason","status":"draft","inputs":[],"requirement_ids":["req_one"]}),
         ),
         "title",
     );
@@ -126,8 +126,6 @@ fn equality_field_lists_cover_each_serialized_record_field_except_stamps() {
         "url",
         "reference",
         "commit_pin",
-        "effective_date",
-        "review_date",
         "supersedes",
         "origin_thread",
         "origin_message",
@@ -139,10 +137,8 @@ fn equality_field_lists_cover_each_serialized_record_field_except_stamps() {
         "declaration_address",
         "statement",
         "description",
-        "fog",
         "status",
         "archived_in_commit",
-        "domain_id",
         "source_refs",
         "refines",
         "depends_on",
@@ -178,15 +174,12 @@ fn equality_field_lists_cover_each_serialized_record_field_except_stamps() {
         "status",
         "archived_in_commit",
         "context",
-        "enforcement",
-        "confidence",
         "inputs",
         "made_by",
         "approved_by",
         "approved_at",
         "requirement_ids",
         "supersedes",
-        "review_on",
         "origin_thread",
         "origin_message",
     ]);

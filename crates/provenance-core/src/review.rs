@@ -42,7 +42,6 @@ macro_rules! review_record_kinds {
             Requirement(crate::Requirement, Requirement),
             Resolution(crate::Resolution, Resolution),
             Rule(crate::Rule, Rule),
-            Domain(crate::Domain, Domain),
             Boundary(crate::Boundary, Boundary),
             Topic(crate::Topic, Topic),
             Question(crate::Question, Question),

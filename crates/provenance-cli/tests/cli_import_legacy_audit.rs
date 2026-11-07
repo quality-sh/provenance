@@ -5,80 +5,20 @@ use provenance_macros::verifies;
 mod export_fixture_support;
 
 #[test]
-#[verifies("rule_legacy_shard_frozen", examples)]
-fn altered_replaced_or_omitted_shipped_disposition_audit_is_rejected() {
+#[verifies("rule_legacy_terminal_proposals_frozen", examples)]
+fn a_disposition_on_a_shipped_terminal_proposal_is_rejected() {
     let dir = tempfile::tempdir().unwrap();
-    let baseline = export_shipped(&dir);
-    let audited = audited_proposal_ids(&baseline);
-    for attack in ["altered", "replaced", "omitted"] {
-        let mut value = baseline.clone();
-        let dispositions = value["dispositions"].as_array_mut().unwrap();
-        // Attack a row of the frozen shipped audit, not one of the repo's
-        // modern tournament dispositions that share the array. The audit is
-        // the set of rows that dispose of a terminal proposal, so ask that
-        // question directly. A name pattern goes stale as the repository
-        // gains modern rows.
-        let target = dispositions
-            .iter()
-            .position(|row| audited.contains(row["proposal_id"].as_str().unwrap()))
-            .unwrap();
-        match attack {
-            "altered" => {
-                dispositions[target]["rationale"] = serde_json::json!(format!(
-                    "{}x",
-                    dispositions[target]["rationale"].as_str().unwrap()
-                ));
-            }
-            "replaced" => {
-                dispositions[target]["id"] = serde_json::json!("disposition_replacement");
-            }
-            "omitted" => {
-                dispositions.remove(target);
-            }
-            _ => unreachable!(),
-        }
-        let input = dir.path().join(format!("{attack}.json"));
-        std::fs::write(&input, serde_json::to_vec(&value).unwrap()).unwrap();
-        let repo = dir.path().join(format!("repo-{attack}"));
-        init(&repo);
-        Command::cargo_bin("provenance")
-            .unwrap()
-            .args([
-                "import",
-                "--format",
-                "json",
-                "--repo",
-                repo.to_str().unwrap(),
-                "--scope",
-                "default",
-                "--input",
-                input.to_str().unwrap(),
-            ])
-            .assert()
-            .failure()
-            .stderr(predicates::str::contains(
-                "frozen shipped-v1 disposition audit",
-            ));
-    }
-}
-
-#[test]
-#[verifies("rule_legacy_shard_frozen", examples)]
-fn exact_shipped_promotion_decisions_export_is_accepted() {
-    let dir = tempfile::tempdir().unwrap();
-    let mut legacy = export_shipped(&dir);
-    legacy.as_object_mut().unwrap().remove("assertion_records");
-    let dispositions = legacy
-        .as_object_mut()
-        .unwrap()
-        .remove("dispositions")
-        .unwrap();
-    legacy["promotion_decisions"] = dispositions;
-    let input = dir.path().join("legacy.json");
-    std::fs::write(&input, serde_json::to_vec(&legacy).unwrap()).unwrap();
+    let mut value = export_shipped(&dir);
+    let terminal = terminal_proposal_ids(&value).into_iter().next().unwrap();
+    let dispositions = value["dispositions"].as_array_mut().unwrap();
+    let mut forged = dispositions[0].clone();
+    forged["id"] = serde_json::json!("disposition_on_terminal");
+    forged["proposal_id"] = serde_json::json!(terminal);
+    dispositions.push(forged);
+    let input = dir.path().join("forged.json");
+    std::fs::write(&input, serde_json::to_vec(&value).unwrap()).unwrap();
     let repo = dir.path().join("repo");
     init(&repo);
-    seed_legacy_statements(&repo, &legacy);
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
@@ -93,24 +33,10 @@ fn exact_shipped_promotion_decisions_export_is_accepted() {
             input.to_str().unwrap(),
         ])
         .assert()
-        .success();
-    assert!(repo
-        .join(".provenance/state/scopes/default/ideation/dispositions.jsonl")
-        .is_file());
-    assert!(!repo
-        .join(".provenance/state/scopes/default/ideation/promotion_decisions.jsonl")
-        .exists());
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args([
-            "check",
-            "--repo",
-            repo.to_str().unwrap(),
-            "--format",
-            "json",
-        ])
-        .assert()
-        .success();
+        .failure()
+        .stderr(predicates::str::contains(
+            "a terminal proposal row takes no disposition",
+        ));
 }
 
 #[test]
@@ -164,12 +90,8 @@ fn import_cannot_omit_entire_existing_shipped_legacy_terminal_set() {
         .stderr(predicates::str::contains("immutable proposal"));
 }
 
-/// The proposal ids the frozen shipped-v1 disposition audit covers.
-///
-/// A disposition belongs to the audit when the proposal it disposes of is in a
-/// terminal state. Modern tournament dispositions share the exported array and
-/// point at proposals that are still proposed.
-fn audited_proposal_ids(export: &serde_json::Value) -> std::collections::BTreeSet<String> {
+/// The ids of the shipped proposals that are in a terminal state.
+fn terminal_proposal_ids(export: &serde_json::Value) -> std::collections::BTreeSet<String> {
     export["proposal_cards"]
         .as_array()
         .unwrap()

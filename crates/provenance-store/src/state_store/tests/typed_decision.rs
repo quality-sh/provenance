@@ -100,7 +100,6 @@ fn an_apply_refuses_a_plan_that_a_native_write_made_stale() {
             statement: "A person wrote this".into(),
             description: None,
             status: RequirementStatus::Active,
-            domain_id: None,
             refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),

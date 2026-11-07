@@ -10,8 +10,6 @@ fn enriched_source_and_requirement_records_roundtrip_without_schema_bump() {
         "url": "https://example.test/sah",
         "reference": "Department guidance",
         "commitPin": "5e1f2a9c4b6d8e0f1234567890abcdef12345678",
-        "effectiveDate": 1_714_521_600_000_i64,
-        "reviewDate": 1_717_200_000_000_i64,
         "supersedes": ["source_sah_2025"],
         "originThread": "thread_req_origin",
         "originMessage": "msg_000001"
@@ -39,8 +37,6 @@ fn enriched_source_and_requirement_records_roundtrip_without_schema_bump() {
         source["commit_pin"],
         "5e1f2a9c4b6d8e0f1234567890abcdef12345678"
     );
-    assert_eq!(source["effective_date"], 1_714_521_600_000_i64);
-    assert_eq!(source["review_date"], 1_717_200_000_000_i64);
     assert_eq!(source["supersedes"][0], "source_sah_2025");
     assert_eq!(source["origin_thread"], "thread_req_origin");
     assert_eq!(source["origin_message"], "msg_000001");
@@ -77,10 +73,7 @@ fn enriched_resolution_and_rule_records_roundtrip_without_schema_bump() {
         "position": "Keep as draft extraction",
         "rationale": "Needs human review",
         "status": "draft",
-        "review_on": null,
         "context": "Codebase scan",
-        "enforcement": "specification",
-        "confidence": 0.91,
         "inputs": [{
             "inputType": "regulatory",
             "reference": "SAH program manual",
@@ -114,7 +107,6 @@ fn enriched_resolution_and_rule_records_roundtrip_without_schema_bump() {
     let rule = serde_json::to_value(rule).unwrap();
 
     assert_eq!(resolution["status"], "draft");
-    assert_eq!(resolution["confidence"], 0.91);
     assert_eq!(resolution["inputs"][0]["input_type"], "regulatory");
     assert_eq!(resolution["inputs"][0]["reference"], "SAH program manual");
     assert_eq!(resolution["inputs"][0]["summary"], "Program rules reviewed");
@@ -128,42 +120,6 @@ fn enriched_resolution_and_rule_records_roundtrip_without_schema_bump() {
     assert_eq!(rule["source_document"], "Example-API-main/src/example.php");
     assert_eq!(rule["origin_thread"], "thread_req_origin");
     assert_eq!(rule["origin_message"], "msg_000001");
-}
-
-#[test]
-fn requirement_fog_roundtrips_as_unstructured_text() {
-    let requirement = serde_json::json!({
-        "scope_id": "default",
-        "id": "req_share_links",
-        "statement": "Provenance docs shareable via short-lived link",
-        "status": "discovery",
-        "fog": "access auditing; expiry configuration; something about revocation"
-    });
-
-    let requirement: Requirement = serde_json::from_value(requirement).unwrap();
-    assert_eq!(
-        requirement.fog.as_deref(),
-        Some("access auditing; expiry configuration; something about revocation")
-    );
-
-    let requirement = serde_json::to_value(requirement).unwrap();
-    assert_eq!(
-        requirement["fog"],
-        "access auditing; expiry configuration; something about revocation"
-    );
-
-    let without_fog = serde_json::json!({
-        "scope_id": "default",
-        "id": "req_plain",
-        "statement": "Plain requirement",
-        "status": "active"
-    });
-    let without_fog: Requirement = serde_json::from_value(without_fog).unwrap();
-    assert_eq!(without_fog.fog, None);
-    assert!(serde_json::to_value(without_fog)
-        .unwrap()
-        .get("fog")
-        .is_none());
 }
 
 /// Rule `expression`/`inputs` and resolution `review_triggers` were Statesman
@@ -184,7 +140,6 @@ fn pre_deletion_exports_carrying_the_removed_keys_read_and_drop_them() {
         "rationale": "Kept",
         "status": "approved",
         "inputs": [],
-        "review_on": null,
         "review_triggers": []
     });
     let rule = serde_json::json!({
@@ -255,7 +210,6 @@ fn resolution_with_input(reference: &str, summary: &str) -> serde_json::Value {
         "position": "Keep as draft extraction",
         "rationale": "Needs human review",
         "status": "draft",
-        "review_on": null,
         "inputs": [{
             "inputType": "regulatory",
             "reference": reference,

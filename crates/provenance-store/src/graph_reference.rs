@@ -70,7 +70,6 @@ pub struct Verification {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct GraphCounts {
     pub sources: usize,
-    pub domains: usize,
     pub requirements: usize,
     pub boundaries: usize,
     pub topics: usize,
@@ -315,7 +314,6 @@ impl From<&GraphExport> for GraphCounts {
     fn from(graph: &GraphExport) -> Self {
         Self {
             sources: graph.sources.len(),
-            domains: graph.domains.len(),
             requirements: graph.requirements.len(),
             boundaries: graph.boundaries.len(),
             topics: graph.topics.len(),

@@ -51,10 +51,6 @@ impl ReadSnapshot {
                     role: word(row.try_get("role")?)?,
                     body: row.try_get("body")?,
                     created_at: row.try_get("created_at")?,
-                    ai_metadata: row
-                        .try_get::<Option<String>, _>("ai_metadata")?
-                        .map(|value| serde_json::from_str(&value))
-                        .transpose()?,
                 })
             })
             .collect()
@@ -111,15 +107,7 @@ impl ReadSnapshot {
             self.scope().as_str(),
             "messages",
             id,
-            &[
-                "scope_id",
-                "id",
-                "thread_id",
-                "role",
-                "body",
-                "created_at",
-                "ai_metadata",
-            ],
+            &["scope_id", "id", "thread_id", "role", "body", "created_at"],
         )
         .await?;
         let rows = sqlx::query("SELECT * FROM messages WHERE scope_id = ? AND id = ? LIMIT 1")
@@ -137,10 +125,6 @@ impl ReadSnapshot {
                     role: word(row.try_get("role")?)?,
                     body: row.try_get("body")?,
                     created_at: row.try_get("created_at")?,
-                    ai_metadata: row
-                        .try_get::<Option<String>, _>("ai_metadata")?
-                        .map(|value| serde_json::from_str(&value))
-                        .transpose()?,
                 })
             })
             .collect::<anyhow::Result<Vec<_>>>()

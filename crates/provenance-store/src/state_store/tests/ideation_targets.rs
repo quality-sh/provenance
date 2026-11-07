@@ -4,8 +4,7 @@
 
 use super::seeded_requirement_store;
 use crate::state_store::{
-    CreateBoundaryInput, CreateContributionInput, CreateDomainInput, CreateSynthesisPacketInput,
-    IdeationLandingBatch, StateStore,
+    CreateBoundaryInput, CreateContributionInput, CreateSynthesisPacketInput, IdeationLandingBatch,
 };
 use provenance_core::{
     ContributionStance, IdeationTarget, IdeationTargetType, ScopeId, StableId, UncertaintyLevel,
@@ -62,18 +61,6 @@ fn synthesis_on(scope: &ScopeId, id: &str, target: IdeationTarget) -> CreateSynt
         suggested_artifacts: Vec::new(),
         required_human_decisions: Vec::new(),
     }
-}
-
-fn create_domain(store: &StateStore, scope: &ScopeId, id: &str) {
-    store
-        .create_domain(CreateDomainInput {
-            scope_id: scope.clone(),
-            id: sid(id),
-            name: id.into(),
-            description: None,
-            color: None,
-        })
-        .unwrap();
 }
 
 #[test]
@@ -265,20 +252,4 @@ fn a_rewrite_that_keeps_an_old_dangling_target_is_not_refused() {
         error.contains("req_also_gone"),
         "a new target is checked: {error}"
     );
-}
-
-#[test]
-#[verifies("rule_new_ideation_target_names_a_record", examples)]
-fn a_target_of_a_non_canonical_kind_is_found_when_it_exists() {
-    let (_dir, store, scope) = seeded_requirement_store();
-    create_domain(&store, &scope, "domain_payroll");
-    let domain = target(IdeationTargetType::Domain, "domain_payroll");
-    store
-        .create_contribution(contribution_on(&scope, "contrib_a", domain.clone()))
-        .unwrap();
-    store
-        .create_synthesis_packet(synthesis_on(&scope, "synth_a", domain))
-        .unwrap();
-    assert_eq!(store.list_contributions(&scope).unwrap().len(), 1);
-    assert_eq!(store.list_synthesis_packets(&scope).unwrap().len(), 1);
 }

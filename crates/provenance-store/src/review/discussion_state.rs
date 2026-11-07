@@ -220,7 +220,7 @@ impl StateStore {
             NodeType::Source | NodeType::Requirement | NodeType::Resolution | NodeType::Rule => {
                 parent_owner_matches(owner.as_deref(), input.declared_by.as_deref())?;
             }
-            NodeType::Domain | NodeType::Boundary => unreachable!(),
+            NodeType::Boundary => unreachable!(),
         }
         let mut ids = BTreeSet::new();
         for thread in self.list_threads(&input.scope_id)? {
@@ -262,7 +262,7 @@ pub(super) const fn discussion_kind_word(kind: NodeType) -> Option<&'static str>
         NodeType::Rule => Some("rule"),
         NodeType::Topic => Some("topic"),
         NodeType::Question => Some("question"),
-        NodeType::Domain | NodeType::Boundary => None,
+        NodeType::Boundary => None,
     }
 }
 
@@ -274,12 +274,12 @@ pub(super) const fn parent_table(kind: NodeType) -> Option<&'static str> {
         NodeType::Rule => Some("rules"),
         NodeType::Topic => Some("topics"),
         NodeType::Question => Some("questions"),
-        NodeType::Domain | NodeType::Boundary => None,
+        NodeType::Boundary => None,
     }
 }
 
 impl StateStore {
-    /// Refuses Discussions on Domain and Boundary records.
+    /// Refuses Discussions on Boundary records.
     #[rule("rule_domain_boundary_accept_no_discussions")]
     pub(super) fn resolve_discussion_parent(
         &self,
@@ -306,7 +306,7 @@ impl StateStore {
             NodeType::Question => {
                 Self::resolve_parent_among(&self.list_questions(scope)?, scope, parent)
             }
-            NodeType::Domain | NodeType::Boundary => anyhow::bail!(
+            NodeType::Boundary => anyhow::bail!(
                 "thread parent kind `{}` does not take Discussions",
                 discussion_kind_word(parent.node_type).unwrap_or("unsupported")
             ),

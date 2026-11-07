@@ -21,7 +21,7 @@ async fn graph_queries_apply_declared_relation_filters() {
         let (status, filtered) = call(
             &host,
             "GET",
-            &format!("/requirements/req_shared?query={query}&relations=domain_id&limit=20"),
+            &format!("/requirements/req_shared?query={query}&relations=requirement_ids&limit=20"),
             None,
         )
         .await;
@@ -34,14 +34,16 @@ async fn graph_queries_apply_declared_relation_filters() {
         assert!(!items.is_empty(), "{query}: {filtered}");
         if query == "neighbors" {
             assert!(
-                items.iter().all(|item| item["relation"] == "domain_id"),
+                items
+                    .iter()
+                    .all(|item| item["relation"] == "requirement_ids"),
                 "{query}: {filtered}"
             );
         } else {
             assert!(
-                items
-                    .iter()
-                    .all(|item| item["node"]["id"] == "domain_shared"),
+                items.iter().all(|item| {
+                    item["node"]["id"] == "rule_shared" || item["node"]["id"] == "resolution_shared"
+                }),
                 "{query}: {filtered}"
             );
         }
@@ -57,7 +59,7 @@ async fn graph_queries_apply_declared_relation_filters() {
             CallToolRequestParams::new("api").with_arguments(
                 json!({
                     "path":"requirements/req_shared",
-                    "query":{"query":"neighbors", "relations":"domain_id", "limit":"20"}
+                    "query":{"query":"neighbors", "relations":"requirement_ids", "limit":"20"}
                 })
                 .as_object()
                 .unwrap()
@@ -72,7 +74,7 @@ async fn graph_queries_apply_declared_relation_filters() {
         .as_array()
         .unwrap()
         .iter()
-        .all(|item| item["relation"] == "domain_id"));
+        .all(|item| item["relation"] == "requirement_ids"));
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }

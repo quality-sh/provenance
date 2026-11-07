@@ -1,10 +1,9 @@
 mod relation_fixtures {
     use crate::model::relations::RecordFront;
     use crate::model::{
-        ArtifactLink, ArtifactLinkTargetType, Boundary, Domain, Question, QuestionStatus,
-        Requirement, RequirementStatus, Resolution, ResolutionMethod, ResolutionStatus, Rule,
-        RuleSeverity, RuleStatus, ScopeId, Source, SourceReference, SourceType, StableId, Topic,
-        TopicStatus,
+        ArtifactLink, ArtifactLinkTargetType, Boundary, Question, QuestionStatus, Requirement,
+        RequirementStatus, Resolution, ResolutionMethod, ResolutionStatus, Rule, RuleSeverity,
+        RuleStatus, ScopeId, Source, SourceReference, SourceType, StableId, Topic, TopicStatus,
     };
 
     pub(super) fn scope() -> ScopeId {
@@ -33,15 +32,13 @@ mod relation_fixtures {
             url: None,
             reference: None,
             commit_pin: None,
-            effective_date: None,
-            review_date: None,
             supersedes: ids(supersedes),
             origin_thread: None,
             origin_message: None,
         }
     }
 
-    pub(super) fn requirement(id: &str, domain_id: Option<&str>, cites: &[&str]) -> Requirement {
+    pub(super) fn requirement(id: &str, cites: &[&str]) -> Requirement {
         Requirement {
             archived_in_commit: None,
             created: None,
@@ -53,9 +50,7 @@ mod relation_fixtures {
 
             statement: format!("{id} statement"),
             description: None,
-            fog: None,
             status: RequirementStatus::Active,
-            domain_id: domain_id.map(sid),
             source_refs: cites
                 .iter()
                 .map(|source_id| SourceReference {
@@ -69,16 +64,6 @@ mod relation_fixtures {
             spawned_by: None,
             origin_thread: None,
             origin_message: None,
-        }
-    }
-
-    pub(super) fn domain(id: &str) -> Domain {
-        Domain {
-            scope_id: scope(),
-            id: sid(id),
-            name: id.to_string(),
-            description: None,
-            color: None,
         }
     }
 
@@ -150,7 +135,6 @@ mod relation_fixtures {
     pub(super) struct Fixture {
         pub(super) sources: Vec<Source>,
         pub(super) requirements: Vec<Requirement>,
-        pub(super) domains: Vec<Domain>,
         pub(super) boundaries: Vec<Boundary>,
         pub(super) topics: Vec<Topic>,
         pub(super) questions: Vec<Question>,
@@ -170,15 +154,12 @@ mod relation_fixtures {
             rationale: "Rationale".into(),
             status: ResolutionStatus::Proposed,
             context: None,
-            enforcement: None,
-            confidence: None,
             inputs: Vec::new(),
             made_by: None,
             approved_by: None,
             approved_at: None,
             requirement_ids: ids(requirements),
             supersedes: ids(supersedes),
-            review_on: None,
             origin_thread: None,
             origin_message: None,
         }
@@ -220,10 +201,10 @@ mod relation_fixtures {
     /// One record of every kind, touching every declared relation at least
     /// once: `req_overtime` is the hub, `req_penalty` refines and depends on it.
     pub(super) fn fixture() -> Fixture {
-        let mut penalty = requirement("req_penalty", None, &[]);
+        let mut penalty = requirement("req_penalty", &[]);
         penalty.refines = vec![sid("req_overtime")];
         penalty.depends_on = ids(&["req_overtime"]);
-        let mut overtime = requirement("req_overtime", Some("domain_payroll"), &["source_award"]);
+        let mut overtime = requirement("req_overtime", &["source_award"]);
         overtime.spawned_by = Some(sid("res_threshold"));
         overtime.supersedes = ids(&["req_penalty"]);
         Fixture {
@@ -232,7 +213,6 @@ mod relation_fixtures {
                 source("source_award_2019", &[]),
             ],
             requirements: vec![overtime, penalty],
-            domains: vec![domain("domain_payroll")],
             boundaries: vec![boundary_citing(
                 "boundary_no_backpay",
                 "req_overtime",
@@ -267,7 +247,6 @@ mod relation_fixtures {
             rules: &records.rules,
             topics: &records.topics,
             questions: &records.questions,
-            domains: &records.domains,
             boundaries: &records.boundaries,
         }
     }

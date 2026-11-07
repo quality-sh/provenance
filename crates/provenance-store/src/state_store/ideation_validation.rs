@@ -1,8 +1,7 @@
 use super::ideation_batches::{
     ensure_asserted_contribution_unchanged, ensure_asserted_synthesis_unchanged, overlay_records,
-    validate_legacy_disposition_shard,
 };
-use super::{read_jsonl, read_legacy_dispositions, IdeationLandingBatch, StateStore};
+use super::{read_jsonl, IdeationLandingBatch, StateStore};
 use crate::shards;
 use provenance_core::{
     AssertionRecord, Contribution, DispositionRecord, IdeationAggregate, ProposalCard, ScopeId,
@@ -42,13 +41,8 @@ impl StateStore {
         let direct_assertions: Vec<AssertionRecord> =
             read_jsonl(self, &shards::assertion_records_path(&self.layout, scope))?;
         let mut assertions_in_order = direct_assertions.clone();
-        let mut direct_dispositions: Vec<DispositionRecord> =
+        let direct_dispositions: Vec<DispositionRecord> =
             read_jsonl(self, &shards::dispositions_path(&self.layout, scope))?;
-        let legacy_dispositions = read_legacy_dispositions(
-            self,
-            &shards::legacy_promotion_decisions_path(&self.layout, scope),
-        )?;
-        direct_dispositions.extend(legacy_dispositions.iter().cloned());
         let mut proposals = BTreeMap::new();
         let mut assertions = BTreeMap::new();
         let mut dispositions = BTreeMap::new();
@@ -106,7 +100,6 @@ impl StateStore {
         let proposals = self.list_proposal_definitions(scope)?;
         let assertions = self.list_assertion_records(scope)?;
         let dispositions = self.list_dispositions(scope)?;
-        validate_legacy_disposition_shard(&legacy_dispositions, &proposals)?;
         provenance_core::validate_ideation_aggregate(IdeationAggregate {
             legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
             disposition_actor_ids,

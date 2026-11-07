@@ -277,7 +277,6 @@ fn exact_export_rejects_non_canonical_graph_families() {
         "proposal_cards",
         "assertions",
         "dispositions",
-        "promotion_decisions",
         "contributions",
         "synthesis_packets",
         "threads",
@@ -334,7 +333,6 @@ fn empty_graph() -> serde_json::Value {
     json!({
         "scope": {"id": "default", "path_prefix": "."},
         "sources": [],
-        "domains": [],
         "requirements": [],
         "boundaries": [],
         "topics": [],

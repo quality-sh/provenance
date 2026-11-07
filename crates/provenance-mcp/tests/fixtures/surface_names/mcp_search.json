@@ -8,7 +8,6 @@
         "rule",
         "topic",
         "question",
-        "domain",
         "boundary"
       ],
       "type": "string"

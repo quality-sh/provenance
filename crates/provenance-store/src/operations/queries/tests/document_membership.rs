@@ -60,7 +60,7 @@ async fn discussion_pages_preserve_independent_threads_and_logical_order() {
             &path,
             &json!({"scope_id":"default","id":format!("msg_{i:03}"),
             "thread_id":if i%2==0 {"thread_later"} else {"thread_earlier"},"role":"user", "body":"Saved discussion",
-            "created_at":i/2,"ai_metadata":{"logical":true}}),
+            "created_at":i/2}),
         );
     }
     let root = root_of(&dir);

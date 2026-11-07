@@ -1,4 +1,4 @@
-const ROUTE_INVENTORY_FNV1A: u64 = 11_939_930_231_785_398_772;
+const ROUTE_INVENTORY_FNV1A: u64 = 16_848_929_470_231_647_734;
 
 fn add(hash: &mut u64, text: &str) {
     for byte in text.bytes() {

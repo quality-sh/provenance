@@ -134,7 +134,7 @@ and objects can also come from one JSON object on standard input with
 field that a flag already set. Every review record update takes its guard as
 `--if-match`, which must contain `review.edit.etag` from the latest review
 read, unchanged. Requirement, Topic, and Question updates require it. Source,
-Rule, Resolution, Domain, and Boundary updates accept it, and write without a
+Rule, Resolution, and Boundary updates accept it, and write without a
 check when it is absent. No update accepts the guard as an `--expected-etag`
 flag or as an `expected_etag` body field.
 

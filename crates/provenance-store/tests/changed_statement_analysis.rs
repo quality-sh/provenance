@@ -16,10 +16,8 @@ fn requirement(id: &str, statement: &str) -> Requirement {
         declaration_address: None,
         statement: statement.to_owned(),
         description: None,
-        fog: None,
         status: RequirementStatus::Active,
 
-        domain_id: None,
         source_refs: Vec::new(),
         refines: Vec::new(),
         depends_on: Vec::new(),

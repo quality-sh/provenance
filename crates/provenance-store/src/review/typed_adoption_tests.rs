@@ -3,8 +3,8 @@ use crate::{
     layout::ProvenanceLayout,
     shards,
     state_store::{
-        CreateBoundaryInput, CreateDomainInput, CreateQuestionInput, CreateResolutionInput,
-        CreateTopicInput, StateStore, TypedSpecInput,
+        CreateBoundaryInput, CreateQuestionInput, CreateResolutionInput, CreateTopicInput,
+        StateStore, TypedSpecInput,
     },
     write_error::{WriteError, WriteFailure},
 };
@@ -323,8 +323,6 @@ fn seed_cascade_dependants(
             rationale: "The durable record is required.".into(),
             status: ResolutionStatus::Proposed,
             context: None,
-            enforcement: None,
-            confidence: None,
             inputs: Vec::new(),
             made_by: None,
             approved_by: None,
@@ -376,15 +374,6 @@ fn seed_cascade_dependants(
             resolution_id: None,
         })
         .unwrap();
-    store
-        .create_domain(CreateDomainInput {
-            scope_id: scope.clone(),
-            id: StableId::new("domain_unchanged").unwrap(),
-            name: "Storage".into(),
-            description: None,
-            color: None,
-        })
-        .unwrap();
     let records = [
         (NodeType::Resolution, "resolution_cascade"),
         (NodeType::Boundary, "boundary_cascade"),
@@ -394,8 +383,6 @@ fn seed_cascade_dependants(
     for (kind, id) in records {
         submit_for_review(store, scope, kind, &StableId::new(id).unwrap());
     }
-    let domain_id = StableId::new("domain_unchanged").unwrap();
-    submit_for_review(store, scope, NodeType::Domain, &domain_id);
     records
 }
 
@@ -420,12 +407,10 @@ fn typed_cascade_captures_each_changed_enrolled_kind() {
         .id
         .clone();
     let records = seed_cascade_dependants(&store, &scope, source, kept, removed);
-    let domain_id = StableId::new("domain_unchanged").unwrap();
     let before = records
         .iter()
         .map(|(kind, id)| content(&store, &scope, *kind, &StableId::new(*id).unwrap()))
         .collect::<Vec<_>>();
-    let domain = content(&store, &scope, NodeType::Domain, &domain_id);
 
     store
         .apply_typed_spec(&scope, cascade_document(false))
@@ -435,10 +420,6 @@ fn typed_cascade_captures_each_changed_enrolled_kind() {
         let after = content(&store, &scope, *kind, &StableId::new(*id).unwrap());
         assert_ne!(after, before, "{kind:?}");
     }
-    assert_eq!(
-        content(&store, &scope, NodeType::Domain, &domain_id),
-        domain
-    );
 }
 
 mod typed_adoption_deletion_tests;

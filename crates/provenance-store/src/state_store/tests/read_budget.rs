@@ -65,8 +65,6 @@ pub(super) fn blank_source(scope: &ScopeId, id: &str) -> Source {
         url: None,
         reference: None,
         commit_pin: None,
-        effective_date: None,
-        review_date: None,
         supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,
@@ -89,8 +87,6 @@ pub(super) fn source_of_stored_bytes(
         url: None,
         reference: None,
         commit_pin: None,
-        effective_date: None,
-        review_date: None,
         supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,
@@ -248,8 +244,6 @@ async fn oversized_update_is_refused_and_keeps_the_published_record() {
             url: None,
             reference: None,
             commit_pin: None,
-            effective_date: None,
-            review_date: None,
             supersedes: None,
             clear_fields: Vec::<SourceClearField>::new(),
         })
@@ -298,7 +292,6 @@ async fn oversized_message_write_is_refused_and_persists_nothing() {
             time::OffsetDateTime::now_utc().unix_timestamp_nanos() / 1_000_000,
         )
         .unwrap(),
-        ai_metadata: None,
     })
     .unwrap();
     let message = store
@@ -385,8 +378,6 @@ fn resolution_input(scope: &ScopeId, id: &str, title: String) -> CreateResolutio
         rationale: "The requirement says so".into(),
         status: ResolutionStatus::Proposed,
         context: None,
-        enforcement: None,
-        confidence: Some(1.0),
         inputs: Vec::new(),
         made_by: None,
         approved_by: None,
@@ -398,7 +389,7 @@ fn resolution_input(scope: &ScopeId, id: &str, title: String) -> CreateResolutio
 
 #[tokio::test]
 #[verifies("rule_accepted_writes_stay_readable", examples)]
-async fn resolution_real_accounting_matches_sqlite_and_refuses_boundary_overflow() {
+async fn resolution_accounting_matches_sqlite_and_refuses_boundary_overflow() {
     let (dir, store, scope) = seeded_requirement_store();
     let baseline = store
         .create_resolution(resolution_input(&scope, "res_base", String::new()))
@@ -421,20 +412,6 @@ async fn resolution_real_accounting_matches_sqlite_and_refuses_boundary_overflow
     .fetch_one(cache.pool())
     .await
     .unwrap();
-    for score in [0.0, 0.00001, 0.123_456_789_012_345_66, 1.0] {
-        let real_bytes: i64 = sqlx::query_scalar("SELECT length(CAST(? AS BLOB))")
-            .bind(score)
-            .fetch_one(cache.pool())
-            .await
-            .unwrap();
-        let mut candidate = baseline.clone();
-        candidate.confidence = Some(score);
-        assert_eq!(
-            ReadBudget::read_bytes(&candidate).unwrap(),
-            usize::try_from(stored - 3 + real_bytes).unwrap(),
-            "confidence {score:?} must use SQLite's REAL byte count"
-        );
-    }
     cache.close().await.unwrap();
     assert_eq!(
         ReadBudget::read_bytes(&baseline).unwrap(),

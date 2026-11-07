@@ -1,8 +1,8 @@
 use crate::layout::ProvenanceLayout;
 use crate::repository::Repository;
 use crate::state_store::{
-    CreateBoundaryInput, CreateDomainInput, CreateQuestionInput, CreateRequirementInput,
-    CreateResolutionInput, CreateRuleInput, CreateSourceInput, CreateTopicInput, StateStore,
+    CreateBoundaryInput, CreateQuestionInput, CreateRequirementInput, CreateResolutionInput,
+    CreateRuleInput, CreateSourceInput, CreateTopicInput, StateStore,
 };
 use provenance_core::{
     ArtifactLink, ArtifactLinkTargetType, Manifest, QuestionStatus, RepoPathPrefix, Requirement,
@@ -59,15 +59,6 @@ pub fn empty_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
 pub fn seeded_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
     let (dir, layout, scope) = empty_layout();
     let store = crate::test_support::store(&layout);
-    store
-        .create_domain(CreateDomainInput {
-            scope_id: scope.clone(),
-            id: sid("domain_payroll"),
-            name: "Payroll".into(),
-            description: None,
-            color: None,
-        })
-        .unwrap();
     create_source(&store, &scope, "source_schads");
     store
         .write_requirement(CreateRequirementInput {
@@ -76,7 +67,6 @@ pub fn seeded_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
             statement: "Overtime".into(),
             description: None,
             status: RequirementStatus::Active,
-            domain_id: Some(sid("domain_payroll")),
             refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
@@ -97,8 +87,6 @@ pub fn seeded_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
             rationale: "Matches source clause".into(),
             status: ResolutionStatus::Approved,
             context: None,
-            enforcement: None,
-            confidence: None,
             inputs: Vec::new(),
             made_by: None,
             approved_by: None,
@@ -142,15 +130,6 @@ pub fn owner_row_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
 }
 
 fn seed_owner_chain(store: &StateStore, scope: &ScopeId) {
-    store
-        .create_domain(CreateDomainInput {
-            scope_id: scope.clone(),
-            id: sid("domain_payroll"),
-            name: "Payroll".into(),
-            description: None,
-            color: None,
-        })
-        .unwrap();
     create_source(store, scope, "source_award_2019");
     store
         .create_source(CreateSourceInput {
@@ -161,8 +140,6 @@ fn seed_owner_chain(store: &StateStore, scope: &ScopeId) {
             url: None,
             reference: None,
             commit_pin: None,
-            effective_date: None,
-            review_date: None,
             supersedes: vec![sid("source_award_2019")],
             origin_thread: None,
             origin_message: None,
@@ -175,7 +152,6 @@ fn seed_owner_chain(store: &StateStore, scope: &ScopeId) {
             statement: "Overtime".into(),
             description: None,
             status: RequirementStatus::Active,
-            domain_id: Some(sid("domain_payroll")),
             refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
@@ -287,8 +263,6 @@ pub fn create_source(store: &StateStore, scope: &ScopeId, id: &str) {
             url: None,
             reference: None,
             commit_pin: None,
-            effective_date: None,
-            review_date: None,
             supersedes: Vec::new(),
             origin_thread: None,
             origin_message: None,
@@ -309,7 +283,6 @@ pub fn create_requirement(
             statement: format!("{id} statement"),
             description: None,
             status,
-            domain_id: None,
             refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
@@ -355,8 +328,6 @@ pub fn create_resolution(store: &StateStore, scope: &ScopeId, id: &str, requirem
             rationale: format!("{id} rationale"),
             status: ResolutionStatus::Approved,
             context: None,
-            enforcement: None,
-            confidence: None,
             inputs: Vec::new(),
             made_by: None,
             approved_by: None,

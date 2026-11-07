@@ -3,7 +3,7 @@
 //! dangling references, and refuses nothing.
 
 use super::super::{compute_gaps, find_gaps, GapGraph, GapItem, GapKind};
-use super::fixtures::{domain, requirement};
+use super::fixtures::requirement;
 use crate::cache::tests::fixtures::{append_record, open, seeded_layout};
 use crate::state_store::CreateContributionInput;
 use provenance_core::{
@@ -64,7 +64,6 @@ fn gaps_with(
         topics: &[],
         questions: &[],
         threads: &[],
-        domains: &[domain("domain_payroll")],
         boundaries: &[boundary("boundary_no_backpay")],
         contributions,
         synthesis_packets,
@@ -123,7 +122,7 @@ fn a_synthesis_packet_on_a_missing_target_is_a_dangling_reference() {
 fn a_target_that_exists_is_not_a_gap() {
     let gaps = gaps_with(
         &[
-            contribution("contrib_a", "domain", "domain_payroll"),
+            contribution("contrib_a", "requirement", "req_overtime"),
             contribution("contrib_b", "boundary", "boundary_no_backpay"),
         ],
         &[synthesis_packet("synth_a", "requirement", "req_overtime")],

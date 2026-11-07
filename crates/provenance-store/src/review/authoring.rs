@@ -96,24 +96,6 @@ impl StateStore {
         self.save_record(input, None)
     }
 
-    /// Sets or clears the deliberately unstructured fog text.
-    pub fn set_requirement_fog(
-        &self,
-        scope_id: &ScopeId,
-        id: &StableId,
-        fog: Option<String>,
-    ) -> anyhow::Result<Requirement> {
-        let mut update = empty_update(scope_id, id);
-        match fog {
-            Some(fog) => {
-                anyhow::ensure!(!fog.trim().is_empty(), "fog text must not be empty");
-                update.fog = Some(fog);
-            }
-            None => update.clear_fields = vec![crate::state_store::RequirementClearField::Fog],
-        }
-        self.save_record(update, None)
-    }
-
     pub fn add_source_reference(
         &self,
         input: AddSourceReferenceInput,
@@ -332,9 +314,7 @@ fn empty_update(scope_id: &ScopeId, id: &StableId) -> UpdateRequirementInput {
         declared_by: None,
         statement: None,
         description: None,
-        fog: None,
         status: None,
-        domain_id: None,
         clear_fields: Vec::new(),
     }
 }

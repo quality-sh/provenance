@@ -13,20 +13,6 @@ async fn resolution_update_retains_placement_and_records_approval_and_later_inpu
     expected["inputs"] = inputs.clone();
     let actual = fixture.call("update-resolution", json!({"scope_id":"default","id":"resolution_one","status":"approved","approved_by":"reviewer","approved_at":1234,"inputs":inputs})).await.unwrap();
     assert_eq!(actual, expected);
-    let before = fixture.store.list_resolutions(&fixture.scope).unwrap();
-    let error = fixture
-        .call(
-            "update-resolution",
-            json!({"scope_id":"default","id":"resolution_one","title":"changed","confidence":2.0}),
-        )
-        .await
-        .unwrap_err();
-    assert_eq!(error["kind"], "invalid_update");
-    assert_eq!(error["message"], "confidence must be between 0.0 and 1.0");
-    assert_eq!(
-        fixture.store.list_resolutions(&fixture.scope).unwrap(),
-        before
-    );
 }
 
 #[tokio::test]

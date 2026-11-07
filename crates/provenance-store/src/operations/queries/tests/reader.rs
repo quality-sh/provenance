@@ -224,16 +224,7 @@ async fn every_answer_carries_a_stamp_at_the_stored_serial() {
         assert!(stamp.digest.starts_with("sha256:"), "{operation} digest");
         let (attested, live): (&[&str], &[&str]) = match *operation {
             "get" => (&["requirements"], &[]),
-            "neighbors" | "trace" => (
-                &[
-                    "boundaries",
-                    "domains",
-                    "relations",
-                    "requirements",
-                    "sources",
-                ],
-                &[],
-            ),
+            "neighbors" | "trace" => (&["boundaries", "relations", "requirements", "sources"], &[]),
             "search" => (
                 &[
                     "questions",
@@ -308,11 +299,7 @@ async fn a_table_handle_puts_its_word_in_attested() {
     })
     .await
     .unwrap();
-    assert_eq!(
-        stamped.result,
-        (1, 2),
-        "one requirement; its domain and boundary rows"
-    );
+    assert_eq!(stamped.result, (1, 1), "one requirement; its boundary row");
     assert_eq!(
         words(&stamped.stamp),
         (vec!["relations", "requirements"], Vec::new())

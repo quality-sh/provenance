@@ -107,14 +107,16 @@ fn rich_and_scalar_body_inputs_follow_one_rule() {
     let (_directory, repo) = init();
     provenance()
         .args([
-            "domain_catalog",
+            "source_catalog",
             "create",
             "--type",
-            "domain",
+            "source",
             "--repo",
             &repo,
             "--name",
             "Catalog",
+            "--source-type",
+            "document",
         ])
         .assert()
         .success();
@@ -330,14 +332,14 @@ fn api_neighbors_query_filters_relations() {
     let (_directory, repo) = init();
     provenance()
         .args([
-            "domain_filter",
+            "req_parent",
             "create",
             "--type",
-            "domain",
+            "requirement",
             "--repo",
             &repo,
-            "--name",
-            "Filter domain",
+            "--statement",
+            "The system keeps records.",
         ])
         .assert()
         .success();
@@ -351,8 +353,8 @@ fn api_neighbors_query_filters_relations() {
             &repo,
             "--statement",
             "The system stores records.",
-            "--domain-id",
-            "domain_filter",
+            "--refines-json",
+            "[\"req_parent\"]",
         ])
         .assert()
         .success();
@@ -366,7 +368,7 @@ fn api_neighbors_query_filters_relations() {
             "--repo",
             &repo,
             "--query",
-            "relations=domain_id",
+            "relations=refines",
             "--query",
             "limit=20",
             "--format",
@@ -382,7 +384,7 @@ fn api_neighbors_query_filters_relations() {
     let output: Value = serde_json::from_slice(&output.stdout).unwrap();
     let neighbors = output["data"]["neighbors"].as_array().unwrap();
     assert_ne!(neighbors.as_slice(), [] as [Value; 0]);
-    assert!(neighbors.iter().all(|item| item["relation"] == "domain_id"));
+    assert!(neighbors.iter().all(|item| item["relation"] == "refines"));
 }
 
 #[test]

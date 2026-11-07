@@ -45,7 +45,7 @@ impl StateStore {
             | NodeType::Rule
             | NodeType::Topic
             | NodeType::Question => {}
-            NodeType::Domain | NodeType::Boundary => {
+            NodeType::Boundary => {
                 return Err(SourceFailure::wrap(
                     WriteFailure::UnsupportedThreadParent,
                     anyhow::anyhow!(
@@ -112,7 +112,6 @@ impl StateStore {
             role,
             body,
             created_at,
-            ai_metadata: None,
         };
         // The bounded page readers refuse any Message whose encoded form
         // exceeds the message read budget, so an oversized Message would be

@@ -10,7 +10,6 @@ mod parsing;
 pub mod projection_row;
 pub mod record_stamps;
 pub mod relations;
-mod services;
 mod shaping;
 mod validation;
 pub use record_stamps::{ArchivedStamp, Stamp};
@@ -30,7 +29,6 @@ pub use ideation::dispositions::{
     CanonicalArtifact, DispositionActor, DispositionActorRefusal, DispositionRecord,
     ExternalActionCorrelation,
 };
-pub use ideation::legacy_audit::is_shipped_legacy_disposition_audit;
 pub use ideation::lifecycle::{
     effective_proposal_state, packet_qualifies_proposal, validate_assertion_intrinsic,
     validate_disposition_admissible, validate_ideation_aggregate, validate_proposal_intrinsic,
@@ -57,7 +55,6 @@ pub use integrations::{
 };
 pub use manifest::{Manifest, RepoPathPrefix, Scope};
 pub use projection_row::{ColumnValue, ProjectionRow};
-pub use services::Domain;
 pub use shaping::{
     ArtifactLink, ArtifactLinkTargetType, Boundary, Question, QuestionStatus, ResolutionMethod,
     Topic, TopicStatus,

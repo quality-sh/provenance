@@ -17,10 +17,6 @@ pub(super) fn fresh_record(family: ProjectionFamily, scope: &str) -> serde_json:
             json!({"scope_id": scope, "id": "source_new",
             "name": "New", "source_type": "policy", "url": null})
         }
-        "domains" => {
-            json!({"scope_id": scope, "id": "domain_new",
-            "name": "New"})
-        }
         "requirements" => {
             json!({"scope_id": scope, "id": "req_new",
             "statement": "New", "status": "active"})

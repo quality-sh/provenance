@@ -319,7 +319,6 @@ function collectionCall(client: CatalogClient, collection: SearchRequest["collec
     case "requirements": return client.listRequirements({ query: "search", ...query });
     case "resolutions": return client.listResolutions({ query: "search", ...query });
     case "rules": return client.listRules({ query: "search", ...query });
-    case "domains": return client.listDomains({ query: "search", ...query });
     case "boundaries": return client.listBoundaries({ query: "search", ...query });
     case "topics": return client.listTopics({ query: "search", ...query });
     case "questions": return client.listQuestions({ query: "search", ...query });
@@ -332,7 +331,6 @@ function memberCall(client: CatalogClient, kind: GetRequest["node_type"], id: st
     case "requirement": return client.getRequirement({ id });
     case "resolution": return client.getResolution({ id });
     case "rule": return client.getRule({ id });
-    case "domain": return client.getDomain({ id });
     case "boundary": return client.getBoundary({ id });
     case "topic": return client.getTopic({ id });
     case "question": return client.getQuestion({ id });
@@ -345,7 +343,6 @@ function neighborsCall(client: CatalogClient, kind: GetRequest["node_type"], id:
     case "requirement": return client.getRequirement({ id, query: "neighbors", ...query });
     case "resolution": return client.getResolution({ id, query: "neighbors", ...query });
     case "rule": return client.getRule({ id, query: "neighbors", ...query });
-    case "domain": return client.getDomain({ id, query: "neighbors", ...query });
     case "boundary": return client.getBoundary({ id, query: "neighbors", ...query });
     case "topic": return client.getTopic({ id, query: "neighbors", ...query });
     case "question": return client.getQuestion({ id, query: "neighbors", ...query });
@@ -358,7 +355,6 @@ function traceCall(client: CatalogClient, kind: GetRequest["node_type"], id: str
     case "requirement": return client.getRequirement({ id, query: "trace", ...query });
     case "resolution": return client.getResolution({ id, query: "trace", ...query });
     case "rule": return client.getRule({ id, query: "trace", ...query });
-    case "domain": return client.getDomain({ id, query: "trace", ...query });
     case "boundary": return client.getBoundary({ id, query: "trace", ...query });
     case "topic": return client.getTopic({ id, query: "trace", ...query });
     case "question": return client.getQuestion({ id, query: "trace", ...query });
@@ -371,7 +367,6 @@ function impactCall(client: CatalogClient, kind: GetRequest["node_type"], id: st
     case "requirement": return client.getRequirement({ id, query: "impact" });
     case "resolution": return client.getResolution({ id, query: "impact" });
     case "rule": return client.getRule({ id, query: "impact" });
-    case "domain": return client.getDomain({ id, query: "impact" });
     case "boundary": return client.getBoundary({ id, query: "impact" });
     case "topic": return client.getTopic({ id, query: "impact" });
     case "question": return client.getQuestion({ id, query: "impact" });

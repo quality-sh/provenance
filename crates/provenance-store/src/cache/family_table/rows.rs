@@ -31,38 +31,8 @@ macro_rules! expand_record_family_rows {
                     update_defaults: NONE,
                     update_aliases: NO_ALIASES,
                     nullable: &[("url", "url"), ("reference", "reference"),
-                        ("commit_pin", "commit_pin"),
-                        ("effective_date", "effective_date"),
-                        ("review_date", "review_date")],
+                        ("commit_pin", "commit_pin")],
                     target: Some(NodeType::Source) }], review: SOURCE
-                };
-                Domains {
-                    record: provenance_core::Domain,
-                    field: domains,
-                    path: domains_path,
-                    meta: { shard: "domains/domain.jsonl", order: 50, budget: Resource },
-                    node: [Domain],
-                    reader: { open: list_domains, closed: [closed_domains],
-                        strategy: direct },
-                    id: field,
-                    loader: [record(Domain)],
-                    graph: [export("domain", Domain, domain_record, "domain_pinned")],
-                    import: [node_budget],
-                    catalog: [projection(ListDomains, "list-domains", PageDomains,
-                        "page-domains", GetDomain, "get-domain")],
-                    route: [writable { mode: searchable,
-                    plural: "domains",
-                    singular: "domain",
-                    singular_id: "Domain",
-                    plural_id: "Domains",
-                    create: CreateDomain,
-                    update: UpdateDomain,
-                    create_defaults: NONE,
-                    create_aliases: NO_ALIASES,
-                    update_defaults: NONE,
-                    update_aliases: NO_ALIASES,
-                    nullable: &[("description", "description"), ("color", "color")],
-                    target: Some(NodeType::Domain) }], review: DOMAIN
                 };
                 Requirements {
                     record: provenance_core::Requirement,
@@ -195,10 +165,8 @@ macro_rules! expand_record_family_rows {
                     update_defaults: NONE,
                     update_aliases: NO_ALIASES,
                     nullable: &[("context", "context"),
-                        ("enforcement", "enforcement"),
-                        ("confidence", "confidence"), ("made_by", "made_by"),
-                        ("approved_by", "approved_by"),
-                        ("approved_at", "approved_at"), ("review_on", "review_on")],
+                        ("made_by", "made_by"), ("approved_by", "approved_by"),
+                        ("approved_at", "approved_at")],
                     target: Some(NodeType::Resolution) }], review: RESOLUTION
                 };
                 Rules {

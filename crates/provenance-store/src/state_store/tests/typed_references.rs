@@ -292,8 +292,6 @@ fn a_rule_carries_its_requirements_and_a_named_resolution() {
             rationale: "The award".into(),
             status: ResolutionStatus::Approved,
             context: None,
-            enforcement: None,
-            confidence: None,
             inputs: Vec::new(),
             made_by: None,
             approved_by: None,

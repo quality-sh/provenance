@@ -10,8 +10,6 @@ fn seed_external_metadata(store: &StateStore, scope: &ScopeId) {
             url: Some("https://example.test/policy".to_string()),
             reference: Some("docs/policy.md".to_string()),
             commit_pin: Some("0123456789abcdef0123456789abcdef01234567".to_string()),
-            effective_date: Some(1_700_000_000_000),
-            review_date: None,
             supersedes: Vec::new(),
             origin_thread: None,
             origin_message: None,
@@ -24,7 +22,6 @@ fn seed_external_metadata(store: &StateStore, scope: &ScopeId) {
             statement: STATEMENT.to_string(),
             description: Some("Metadata authored outside the typed spec".to_string()),
             status: RequirementStatus::Active,
-            domain_id: None,
             refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
@@ -123,7 +120,6 @@ fn adoption_preserves_metadata_outside_the_typed_declaration_surface() {
         Some("0123456789abcdef0123456789abcdef01234567")
     );
     assert_eq!(source.url.as_deref(), Some("https://example.test/policy"));
-    assert_eq!(source.effective_date, Some(1_700_000_000_000));
     let requirement = &store.list_requirements(&scope).unwrap()[0];
     assert_eq!(
         requirement.description.as_deref(),

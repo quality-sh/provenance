@@ -55,8 +55,6 @@ impl DeclarationRecord for Source {
             url: declaration.url.clone(),
             reference: declaration.reference.clone(),
             commit_pin: None,
-            effective_date: None,
-            review_date: None,
             supersedes: Vec::new(),
             origin_thread: None,
             origin_message: None,

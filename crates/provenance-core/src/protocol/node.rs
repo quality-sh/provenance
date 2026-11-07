@@ -3,8 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Write as _;
 
 use crate::model::{
-    Boundary, Domain, NodeType, Question, Requirement, Resolution, Rule, ScopeId, Source, StableId,
-    Topic,
+    Boundary, NodeType, Question, Requirement, Resolution, Rule, ScopeId, Source, StableId, Topic,
 };
 
 use super::Direction;
@@ -31,7 +30,6 @@ pub enum GraphNode {
     Rule(Box<Rule>),
     Topic(Box<Topic>),
     Question(Box<Question>),
-    Domain(Box<Domain>),
     Boundary(Box<Boundary>),
 }
 
@@ -44,7 +42,6 @@ impl GraphNode {
             Self::Rule(_) => NodeType::Rule,
             Self::Topic(_) => NodeType::Topic,
             Self::Question(_) => NodeType::Question,
-            Self::Domain(_) => NodeType::Domain,
             Self::Boundary(_) => NodeType::Boundary,
         }
     }
@@ -57,7 +54,6 @@ impl GraphNode {
             Self::Rule(record) => &record.id,
             Self::Topic(record) => &record.id,
             Self::Question(record) => &record.id,
-            Self::Domain(record) => &record.id,
             Self::Boundary(record) => &record.id,
         }
     }
@@ -70,7 +66,6 @@ impl GraphNode {
             Self::Rule(record) => &record.scope_id,
             Self::Topic(record) => &record.scope_id,
             Self::Question(record) => &record.scope_id,
-            Self::Domain(record) => &record.scope_id,
             Self::Boundary(record) => &record.scope_id,
         }
     }
@@ -98,10 +93,6 @@ impl GraphNode {
             }
             Self::Topic(record) => text.push(record.title.as_str()),
             Self::Question(record) => text.push(record.question.as_str()),
-            Self::Domain(record) => {
-                text.push(record.name.as_str());
-                text.extend(record.description.as_deref());
-            }
             Self::Boundary(record) => text.push(record.statement.as_str()),
         }
         text

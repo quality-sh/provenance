@@ -63,7 +63,7 @@ async fn trace_stops_at_the_limit_and_says_has_more() {
     assert!(answer.result.has_more);
     assert_eq!(
         answer.stamp.attested,
-        ["domains", "relations", "requirements", "rules", "sources"]
+        ["relations", "requirements", "rules", "sources"]
     );
     assert_eq!(answer.stamp.live, [] as [std::string::String; 0]);
 }

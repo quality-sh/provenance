@@ -9,7 +9,6 @@ use super::decl::{declaration_of, RelationDecl, RelationFlow, RelationOwner};
 use super::declared_relations;
 use crate::model::graph::NodeType;
 use crate::model::ids::StableId;
-use crate::model::services::Domain;
 use crate::model::shaping::{ArtifactLink, ArtifactLinkTargetType, Boundary, Question, Topic};
 use crate::model::{Requirement, Resolution, Rule, Source};
 use provenance_macros::rule;
@@ -186,7 +185,6 @@ pub struct RecordFront<'a> {
     pub rules: &'a [Rule],
     pub topics: &'a [Topic],
     pub questions: &'a [Question],
-    pub domains: &'a [Domain],
     pub boundaries: &'a [Boundary],
 }
 
@@ -215,7 +213,6 @@ impl RelationSource for RecordFront<'_> {
                 }
                 rows
             }
-            NodeType::Domain => Vec::new(),
             NodeType::Boundary => outgoing_of(self.boundaries, id),
         }
     }

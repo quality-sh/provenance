@@ -7,7 +7,7 @@ CREATE TABLE sources (
     scope_id TEXT NOT NULL, id TEXT NOT NULL,
     declared_by TEXT, declaration_address TEXT, name TEXT NOT NULL,
     source_type TEXT NOT NULL, url TEXT, reference TEXT, commit_pin TEXT,
-    effective_date INTEGER, review_date INTEGER, supersedes TEXT NOT NULL,
+    supersedes TEXT NOT NULL,
     origin_thread TEXT, origin_message TEXT, search_text TEXT NOT NULL,
     created TEXT, updated TEXT, PRIMARY KEY (scope_id, id)
 );
@@ -16,7 +16,7 @@ CREATE INDEX idx_sources_commit_pin ON sources(scope_id, commit_pin);
 CREATE TABLE requirements (
     scope_id TEXT NOT NULL, id TEXT NOT NULL,
     declared_by TEXT, declaration_address TEXT, statement TEXT NOT NULL,
-    description TEXT, fog TEXT, status TEXT NOT NULL, archived_in_commit TEXT, domain_id TEXT,
+    description TEXT, status TEXT NOT NULL, archived_in_commit TEXT,
     source_refs TEXT NOT NULL, refines TEXT NOT NULL, depends_on TEXT NOT NULL,
     supersedes TEXT NOT NULL, spawned_by TEXT, origin_thread TEXT,
     origin_message TEXT, search_text TEXT NOT NULL, created TEXT, updated TEXT,
@@ -26,13 +26,13 @@ CREATE TABLE requirements (
 CREATE TABLE resolutions (
     scope_id TEXT NOT NULL, id TEXT NOT NULL,
     title TEXT NOT NULL, position TEXT NOT NULL, rationale TEXT NOT NULL,
-    status TEXT NOT NULL, archived_in_commit TEXT, context TEXT, enforcement TEXT, confidence REAL,
+    status TEXT NOT NULL, archived_in_commit TEXT, context TEXT,
     inputs TEXT NOT NULL, made_by TEXT, approved_by TEXT, approved_at INTEGER,
-    requirement_ids TEXT NOT NULL, supersedes TEXT NOT NULL, review_on TEXT,
+    requirement_ids TEXT NOT NULL, supersedes TEXT NOT NULL,
     origin_thread TEXT, origin_message TEXT, search_text TEXT NOT NULL,
     created TEXT, updated TEXT, PRIMARY KEY (scope_id, id)
 );
-CREATE INDEX idx_resolutions_status_review ON resolutions(scope_id, status, review_on);
+CREATE INDEX idx_resolutions_status ON resolutions(scope_id, status);
 
 CREATE TABLE rules (
     scope_id TEXT NOT NULL, id TEXT NOT NULL,
@@ -73,13 +73,6 @@ CREATE INDEX idx_questions_topic ON questions(scope_id, topic_id);
 CREATE INDEX idx_questions_requirement ON questions(scope_id, requirement_id);
 CREATE INDEX idx_questions_status ON questions(scope_id, status);
 CREATE INDEX idx_questions_claimed_by ON questions(scope_id, claimed_by);
-
-CREATE TABLE domains (
-    scope_id TEXT NOT NULL, id TEXT NOT NULL,
-    name TEXT NOT NULL, description TEXT, color TEXT, search_text TEXT NOT NULL,
-    PRIMARY KEY (scope_id, id)
-);
-CREATE INDEX idx_domains_name ON domains(scope_id, name);
 
 CREATE TABLE implementation_bindings (
     scope_id TEXT NOT NULL, id TEXT NOT NULL,
@@ -122,7 +115,7 @@ CREATE INDEX idx_threads_parent_status ON threads(scope_id, parent_type, parent_
 CREATE TABLE messages (
     scope_id TEXT NOT NULL, id TEXT NOT NULL, thread_id TEXT NOT NULL,
     role TEXT NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL,
-    ai_metadata TEXT, payload TEXT NOT NULL, PRIMARY KEY (scope_id, id)
+    payload TEXT NOT NULL, PRIMARY KEY (scope_id, id)
 );
 CREATE INDEX idx_messages_thread_order ON messages(scope_id, thread_id, created_at, id);
 

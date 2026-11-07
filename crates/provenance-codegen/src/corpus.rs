@@ -83,9 +83,10 @@ fn wire_fixtures() -> Value {
             freshness_error: None,
         },
     );
-    let node: GraphNode = serde_json::from_value(json!({"node_type":"domain","scope_id":"default",
-        "id":"domain_a","name":"A"}))
-    .unwrap();
+    let node: GraphNode =
+        serde_json::from_value(json!({"node_type":"boundary","scope_id":"default",
+        "id":"boundary_a","requirement_id":"req_a","statement":"A"}))
+        .unwrap();
     let plan: provenance_store::operations::TypedSpecPlan = serde_json::from_value(json!({"declared_by":"test","created":0,
         "updated":0,"moved":0,"deleted":0,"conflicts":0,"unchanged":0,"resources":[],"affected_rules":[]})).unwrap();
     let run: VerificationRun = serde_json::from_value(json!({"scope_id":"default","id":"run_a",

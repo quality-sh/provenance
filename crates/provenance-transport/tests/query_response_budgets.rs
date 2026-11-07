@@ -79,7 +79,6 @@ fn add_child(repo: &Repository, index: usize, description_bytes: usize) {
             statement: "The graph includes this record.".into(),
             description: Some("x".repeat(description_bytes)),
             status: RequirementStatus::Active,
-            domain_id: None,
             refines: vec![StableId::new("req_shared").unwrap()],
             depends_on: vec![],
             supersedes: vec![],

@@ -1,8 +1,5 @@
 use super::message_ids::{ensure_unique_message_ids, ShardLine};
-use super::{
-    deserialize_closed, DispositionRecord, Message, ProvenanceLayout, ScopeId, StateEntry,
-    StateStore,
-};
+use super::{deserialize_closed, Message, ProvenanceLayout, ScopeId, StateEntry, StateStore};
 use crate::shards;
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -113,20 +110,13 @@ pub fn ensure_no_legacy_retirement(
 /// How a reader turns the lines of one shard into records.
 struct Reading {
     fields: Fields,
-    prepare: fn(&mut serde_json::Value),
 }
 
 const OPEN: Reading = Reading {
     fields: Fields::Open,
-    prepare: leave_as_written,
 };
 const CLOSED: Reading = Reading {
     fields: Fields::Closed,
-    ..OPEN
-};
-const LEGACY_DISPOSITIONS: Reading = Reading {
-    prepare: normalize_disposition_aliases,
-    ..OPEN
 };
 
 /// The records of the shard at `path`, read through `store`; no records
@@ -141,8 +131,7 @@ fn read_records<T: DeserializeOwned>(
     };
     let mut records = Vec::new();
     for (index, line) in contents.lines().enumerate() {
-        let mut value = parse_line(path, index + 1, line)?;
-        (reading.prepare)(&mut value);
+        let value = parse_line(path, index + 1, line)?;
         records.push(record_from_line(
             path,
             index + 1,
@@ -153,8 +142,6 @@ fn read_records<T: DeserializeOwned>(
     }
     Ok(records)
 }
-
-const fn leave_as_written(_value: &mut serde_json::Value) {}
 
 pub fn read_jsonl<T: DeserializeOwned>(
     store: &StateStore,
@@ -189,55 +176,10 @@ pub(super) fn read_ideation_landings_unlocked<T: DeserializeOwned>(
     read_records(&disk(path), path, &OPEN)
 }
 
-pub(super) fn read_legacy_dispositions(
-    store: &StateStore,
-    path: &Utf8Path,
-) -> anyhow::Result<Vec<DispositionRecord>> {
-    store.state_path_access(path, || read_records(store, path, &LEGACY_DISPOSITIONS))
-}
-
-pub(super) fn read_legacy_dispositions_unlocked(
-    path: &Utf8Path,
-) -> anyhow::Result<Vec<DispositionRecord>> {
-    read_records(&disk(path), path, &LEGACY_DISPOSITIONS)
-}
-
 /// A store that reads files with no lock, for a caller that holds the
 /// section. File reads use only the path, so the layout root is not used.
 fn disk(path: &Utf8Path) -> StateStore {
     StateStore::read_only(ProvenanceLayout::new(path.to_owned()))
-}
-
-fn normalize_disposition_aliases(value: &mut serde_json::Value) {
-    let Some(record) = value.as_object_mut() else {
-        return;
-    };
-    rename_key(record, "promotionDecisionId", "id");
-    rename_key(record, "proposalId", "proposal_id");
-    rename_key(record, "decidedBy", "actor");
-    rename_key(record, "canonicalArtifact", "canonical_artifact");
-    if let Some(actor) = record
-        .get_mut("actor")
-        .and_then(serde_json::Value::as_object_mut)
-    {
-        rename_key(actor, "identityType", "identity_type");
-        rename_key(actor, "userId", "id");
-    }
-    if let Some(artifact) = record
-        .get_mut("canonical_artifact")
-        .and_then(serde_json::Value::as_object_mut)
-    {
-        rename_key(artifact, "artifactType", "artifact_type");
-        rename_key(artifact, "artifactId", "artifact_id");
-    }
-}
-
-fn rename_key(object: &mut serde_json::Map<String, serde_json::Value>, old: &str, new: &str) {
-    if !object.contains_key(new) {
-        if let Some(value) = object.remove(old) {
-            object.insert(new.to_owned(), value);
-        }
-    }
 }
 
 pub(super) fn read_jsonl_closed<T: DeserializeOwned>(

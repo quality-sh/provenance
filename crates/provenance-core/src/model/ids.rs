@@ -107,7 +107,6 @@ pub const RESERVED_RECORD_IDS: &[&str] = &[
     "dispositions",
     "docs",
     "dogfood",
-    "domains",
     "export",
     "gaps",
     "get",

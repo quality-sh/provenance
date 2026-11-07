@@ -16,7 +16,6 @@ include!("tests/relation_traversal.rs");
 include!("tests/relation_integrity.rs");
 include!("tests/relations.rs");
 include!("tests/proposal_lifecycle_dispositions.rs");
-include!("tests/services.rs");
 include!("tests/shaping.rs");
 
 mod record_stamps;

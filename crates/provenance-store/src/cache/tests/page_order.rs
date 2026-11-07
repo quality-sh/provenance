@@ -10,8 +10,8 @@ use crate::operations::reader::ReadSnapshot;
 use provenance_core::model::ProjectionRow;
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::{
-    AssertionRecord, Boundary, Contribution, DispositionRecord, Domain, ImplementationBinding,
-    Message, ProposalCard, Question, Requirement, RequirementReview, Resolution, Rule, Source,
+    AssertionRecord, Boundary, Contribution, DispositionRecord, ImplementationBinding, Message,
+    ProposalCard, Question, Requirement, RequirementReview, Resolution, Rule, Source,
     SynthesisPacket, Thread, Topic, VerificationBinding,
 };
 use serde_json::json;
@@ -46,14 +46,13 @@ fn assert_no_sort(table: &str, details: &[String]) {
 }
 
 /// The tables that the ID page functions read.
-const PAGED_TABLES: [&str; 18] = [
+const PAGED_TABLES: [&str; 17] = [
     Source::TABLE,
     Requirement::TABLE,
     Resolution::TABLE,
     Rule::TABLE,
     Topic::TABLE,
     Question::TABLE,
-    Domain::TABLE,
     Boundary::TABLE,
     ImplementationBinding::TABLE,
     VerificationBinding::TABLE,
