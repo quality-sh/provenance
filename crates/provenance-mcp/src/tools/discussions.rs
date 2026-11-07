@@ -17,7 +17,7 @@ pub fn tool(host: &StatementHost) -> Option<Tool> {
     let declaration = Command::Action(Action::Discussions).declaration();
     readable.then(|| {
         crate::surface::tool(
-            declaration.name,
+            crate::exposed::name(Command::Action(Action::Discussions)),
             declaration.description,
             Effect::Reads,
             provenance_porcelain::discussion::action_input_schema(),

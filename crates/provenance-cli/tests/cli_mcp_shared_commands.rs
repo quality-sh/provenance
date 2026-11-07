@@ -20,6 +20,15 @@ use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _};
 
 /// The JSON result of one CLI command that succeeds, or null when it prints nothing.
 fn cli(index: &Path, args: &[&str]) -> Value {
+    let stdout = cli_text(index, args);
+    if stdout.is_empty() {
+        return Value::Null;
+    }
+    serde_json::from_str(&stdout).unwrap()
+}
+
+/// The standard output of one CLI command that succeeds.
+fn cli_text(index: &Path, args: &[&str]) -> String {
     let output = assert_cmd::Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
         .env("PROVENANCE_STE100_INDEX_DIR", index)
         .args(args)
@@ -30,10 +39,7 @@ fn cli(index: &Path, args: &[&str]) -> Value {
         "{args:?}: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    if output.stdout.is_empty() {
-        return Value::Null;
-    }
-    serde_json::from_slice(&output.stdout).unwrap()
+    String::from_utf8(output.stdout).unwrap()
 }
 
 /// One spawned `provenance mcp` that the test speaks raw JSON-RPC to.
@@ -168,7 +174,7 @@ async fn repository_actions_give_the_cli_result_on_mcp() {
                 &["swarm-backtrace", "land", "--run-dir", run_dir],
                 &cli_repo,
             ),
-            json!({"action":"swarm-backtrace land","run_dir":run_dir}),
+            json!({"action":"swarm_backtrace_land","run_dir":run_dir}),
         ),
         (
             run(&["materialize"], &cli_repo),
@@ -176,7 +182,7 @@ async fn repository_actions_give_the_cli_result_on_mcp() {
         ),
         (
             run(&["dictionary", "import", "--pdf", pdf], &cli_repo),
-            json!({"action":"dictionary import","pdf":pdf}),
+            json!({"action":"dictionary_import","pdf":pdf}),
         ),
     ];
     for (mut by_cli, arguments) in pairs {
@@ -188,4 +194,7 @@ async fn repository_actions_give_the_cli_result_on_mcp() {
         assert_eq!(by_mcp, by_cli, "{arguments}");
     }
     wire.close().await;
+    // Without `--format json`, the CLI prints the readable line.
+    let readable = cli_text(cli_index, &["materialize", "--repo", &by_cli]);
+    assert!(readable.starts_with("The cache has "), "{readable}");
 }

@@ -1,11 +1,11 @@
-//! Domain guidance shared by CLI output and MCP discovery.
+//! Domain guidance shared by each consumer.
 
 use crate::action::Action;
 use crate::registry::Command;
 use serde::Serialize;
 use std::fmt::Write;
 
-/// The same domain text in structured CLI output and native MCP instructions.
+/// The same domain text for each consumer. A consumer adds its own first steps.
 #[derive(Clone, Debug, Serialize, schemars::JsonSchema)]
 pub struct Guidance {
     pub guidance: String,
@@ -34,12 +34,7 @@ Unimplemented and Unverified describe absent bindings or evidence; they are not 
 A source citation does not count as an Implementation binding. Coverage checks evaluate code bindings separately from graph reads.\n\n\
 ## Actions\n\n\
 Use search to find IDs, then get to read the selected record and its related views. Create names an explicit record type; actions on an existing record infer its type.\n\
-Available actions depend on the selected surface and its access. Use CLI help or the advertised MCP tools for supported inputs and actions.\n\n",
-    );
-    text.push_str(
-        "For a focused start, run:\n\n\
-- `provenance search --text <text> --scope <scope> --format json`\n\
-- `provenance <id> get --view children --depth <N> --scope <scope> --format json`\n\n",
+Available actions depend on the interface and its access. Each interface lists the inputs and actions it supports.\n\n",
     );
     let commands = [
         Command::Get,

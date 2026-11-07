@@ -4,7 +4,7 @@ use handlers::{GraphInput, RepositoryInput, ServerInput, WorkspaceInput};
 use provenance_cli::porcelain;
 use provenance_core::NodeType;
 use provenance_macros::rule;
-use provenance_porcelain::action::{validate_target, Action};
+use provenance_porcelain::action::{validate_target, Action, ActionError};
 use provenance_porcelain::get::View;
 use provenance_porcelain::search::SearchInput;
 use provenance_transport::repository::RepoContext;
@@ -277,8 +277,12 @@ impl Invocation {
             anyhow::bail!("unsupported target action");
         };
         let kind = args.record_type;
-        validate_target(action, &args.target, kind)
-            .unwrap_or_else(|error| catalog_cli::usage_error(error));
+        validate_target(action, &args.target, kind).unwrap_or_else(|error| match error {
+            ActionError::KindSelection => catalog_cli::usage_error(
+                "create requires --type and existing-record actions infer it without --type",
+            ),
+            error => catalog_cli::usage_error(error),
+        });
         Ok(Self::Target(TargetInvocation {
             context,
             format,

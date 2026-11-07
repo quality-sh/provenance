@@ -38,7 +38,7 @@ pub struct InitInput {
     pub package_manager: Option<String>,
 }
 
-/// The `__cargo-init` input that `cargo provenance init` passes on.
+/// The `__cargo-init` input that the cargo plugin passes on.
 #[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CargoInitInput {

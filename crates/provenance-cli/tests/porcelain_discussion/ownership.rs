@@ -28,7 +28,15 @@ fn repo_with_owned_requirement() -> tempfile::TempDir {
         .to_string(),
     )
     .unwrap();
-    success(&["import", "--repo", repo, "--input", seed.to_str().unwrap()]);
+    success(&[
+        "import",
+        "--format",
+        "json",
+        "--repo",
+        repo,
+        "--input",
+        seed.to_str().unwrap(),
+    ]);
     directory
 }
 

@@ -1,4 +1,4 @@
-//! Catalog-described public-path API access shared by the CLI and MCP.
+//! Catalog-described public-path API access shared by each consumer.
 
 use provenance_core::protocol::failure::{FailureEnvelope, InvalidInputReason, OperationFailure};
 use provenance_macros::rule;
@@ -33,7 +33,7 @@ impl ApiMethod {
     }
 
     /// Parse one method name in any letter case, as discovery prints
-    /// uppercase names and HTTP tools accept either case.
+    /// uppercase names and HTTP clients accept either case.
     pub fn parse(value: &str) -> Option<Self> {
         match value.to_ascii_lowercase().as_str() {
             "get" => Some(Self::Get),
@@ -225,7 +225,7 @@ pub enum ApiOutcome {
 /// One future returned by an injected api port.
 pub type ApiPortFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ApiError>> + Send + 'a>>;
 
-/// What one api tool call offers a host client.
+/// What one api call offers a host client.
 pub const API_DESCRIPTION: &str = "Call one public API path with an optional method, query, headers, and JSON body. The body is the data object, without the HTTP {\"data\": ...} wrapper. Omit the path to list the catalog routes with their methods, inputs, and response schemas.";
 
 /// How an api call carries its JSON body.
@@ -238,7 +238,7 @@ pub trait ApiPort: Send + Sync {
     fn discover(&self) -> ApiCatalog;
 }
 
-/// The typed input schema of one api tool call.
+/// The typed input schema of one api call.
 pub fn input_schema() -> Value {
     serde_json::to_value(schemars::schema_for!(ApiArguments)).expect("api input schema is JSON")
 }

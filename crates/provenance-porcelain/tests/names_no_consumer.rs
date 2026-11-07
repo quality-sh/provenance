@@ -1,5 +1,8 @@
-//! The porcelain sources name no consumer of the commands: no identifier outside
-//! comments and literals has the word `cli`, `mcp`, `clap`, `rmcp`, `flag`, `positional`, or `tool`.
+//! The porcelain sources name no consumer of the commands. No identifier has the word
+//! `cli`, `mcp`, `clap`, `rmcp`, `flag`, `positional`, or `tool`. No comment and no
+//! string literal has one of these words, a `--name` option spelling, a
+//! `` `provenance <command>` `` invocation, or an "MCP JSON" hint: porcelain names fields
+//! by their field names, and each consumer renders its own syntax.
 
 use provenance_macros::verifies;
 use std::path::{Path, PathBuf};
@@ -16,13 +19,20 @@ const CONSUMER_WORDS: &[&str] = &[
     "tools",
 ];
 
-/// The source text with each comment, string, and character literal removed.
-fn code(source: &str) -> String {
+/// The text in porcelain that has consumer syntax for a reason other than a consumer.
+/// Each entry is a file name, the part of the text, and the reason.
+const ALLOWED_TEXT: &[(&str, &str, &str)] = &[];
+
+/// The source split in two: the code without comments and literals, and the text of
+/// each comment and literal on its own line.
+fn split(source: &str) -> (String, String) {
     let chars = source.chars().collect::<Vec<_>>();
     let mut code = String::with_capacity(source.len());
+    let mut text = String::new();
     let mut index = 0;
     while index < chars.len() {
         let rest = &chars[index..];
+        let start = index;
         if rest.starts_with(&['/', '/']) {
             while index < chars.len() && chars[index] != '\n' {
                 index += 1;
@@ -37,12 +47,21 @@ fn code(source: &str) -> String {
         } else if let Some(end) = char_literal_end(&chars, index) {
             index = end;
             code.push(' ');
+            continue;
         } else {
             code.push(chars[index]);
             index += 1;
+            continue;
         }
+        text.extend(&chars[start..index]);
+        text.push('\n');
     }
-    code
+    (code, text)
+}
+
+/// The source text with each comment, string, and character literal removed.
+fn code(source: &str) -> String {
+    split(source).0
 }
 
 /// The index after the nested block comment that starts at `start`.
@@ -156,6 +175,35 @@ fn consumer_identifiers(source: &str) -> Vec<String> {
         .collect()
 }
 
+/// The lines of comment and literal text in `source` that have consumer syntax.
+fn consumer_text(source: &str) -> Vec<String> {
+    split(source)
+        .1
+        .lines()
+        .filter(|line| has_consumer_syntax(line))
+        .map(|line| line.trim().to_owned())
+        .collect()
+}
+
+/// True when `text` has a consumer word, an option spelling, or a command invocation.
+fn has_consumer_syntax(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    let word = lower
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .any(|word| CONSUMER_WORDS.contains(&word));
+    let option = lower
+        .match_indices("--")
+        .any(|(at, _)| lower[at + 2..].starts_with(|c: char| c.is_ascii_lowercase()));
+    word || option || text.contains("`provenance ") || text.contains("provenance <")
+}
+
+/// True when an entry of [`ALLOWED_TEXT`] covers `line` of `path`.
+fn allowed(path: &Path, line: &str) -> bool {
+    ALLOWED_TEXT.iter().any(|(file, part, _)| {
+        path.file_name().is_some_and(|name| name == *file) && line.contains(part)
+    })
+}
+
 fn rust_files(directory: &Path, files: &mut Vec<PathBuf>) {
     for entry in std::fs::read_dir(directory).unwrap() {
         let path = entry.unwrap().path();
@@ -186,6 +234,56 @@ fn porcelain_sources_name_no_consumer() {
         })
         .collect::<Vec<_>>();
     assert_eq!(found, Vec::<String>::new());
+}
+
+/// No porcelain comment or string literal has consumer syntax.
+#[test]
+#[verifies("rule_porcelain_names_no_consumer", exhaustion)]
+fn porcelain_text_names_no_consumer() {
+    let mut files = Vec::new();
+    rust_files(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+        &mut files,
+    );
+    let found = files
+        .iter()
+        .flat_map(|path| {
+            let source = std::fs::read_to_string(path).unwrap();
+            consumer_text(&source)
+                .into_iter()
+                .filter(|line| !allowed(path, line))
+                .map(move |line| format!("{}: {line}", path.display()))
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(found, Vec::<String>::new());
+}
+
+/// The text scan refuses consumer words, option spellings, and invocations in comments
+/// and literals, and accepts other words.
+#[test]
+#[verifies("rule_porcelain_names_no_consumer", examples)]
+fn text_scan_refuses_consumer_syntax_in_comments_and_literals() {
+    let source = r##"
+        // Give the text field.
+        /// Read with the CLI.
+        const A: &str = "run `provenance search --text <query>`";
+        const B: &str = "MCP JSON: {}";
+        const C: &str = "the tool lists records";
+        const D: &str = "give --type";
+        const E: &str = "a toolbox, a climb, and a flagship";
+        /* the provenance <id> get form */
+    "##;
+    assert_eq!(
+        consumer_text(source),
+        [
+            "/// Read with the CLI.",
+            "\"run `provenance search --text <query>`\"",
+            "\"MCP JSON: {}\"",
+            "\"the tool lists records\"",
+            "\"give --type\"",
+            "/* the provenance <id> get form */",
+        ]
+    );
 }
 
 /// The scan refuses a consumer word in an identifier, and accepts it in comments,

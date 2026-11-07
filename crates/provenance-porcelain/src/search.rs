@@ -88,11 +88,10 @@ pub enum SearchError {
 }
 
 impl Display for SearchError {
-    #[provenance_macros::rule("rule_search_refusal_names_query")]
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::InvalidOptions { reason } => write!(formatter, "{reason}; run `provenance search --text <query>` or `provenance search --kind <kind>`; MCP JSON: {{\"text\": \"<query>\"}} or {{\"kind\": [\"<kind>\"]}}"),
-            Self::InvalidCodeLookup { field, reason } => write!(formatter, "{field}: {reason}; run `provenance search --file <path> [--symbol <name>] [--line <n>]`; MCP JSON: {{\"file\": \"<path>\", \"symbol\": \"<name>\"}}"),
+            Self::InvalidOptions { reason } => formatter.write_str(reason),
+            Self::InvalidCodeLookup { field, reason } => write!(formatter, "{field}: {reason}"),
             Self::AccessDenied => formatter.write_str("search access denied"),
             Self::Operation { message, .. } => formatter.write_str(message),
         }
@@ -100,6 +99,26 @@ impl Display for SearchError {
 }
 
 impl std::error::Error for SearchError {}
+
+impl SearchError {
+    /// The inputs that recover from a validation failure, as objects of field names and
+    /// placeholder values. A consumer renders each one in its own syntax after the
+    /// message, so the refusal gives the text and filter forms.
+    #[provenance_macros::rule("rule_search_refusal_names_query")]
+    pub fn recovery_inputs(&self) -> Vec<serde_json::Value> {
+        match self {
+            Self::InvalidOptions { .. } => vec![
+                serde_json::json!({"text": "<query>"}),
+                serde_json::json!({"kind": ["<kind>"]}),
+            ],
+            Self::InvalidCodeLookup { .. } => vec![
+                serde_json::json!({"file": "<path>", "symbol": "<name>"}),
+                serde_json::json!({"file": "<path>", "line": "<n>"}),
+            ],
+            Self::AccessDenied | Self::Operation { .. } => Vec::new(),
+        }
+    }
+}
 
 /// The canonical operations needed for scope-wide discovery and code lookup.
 pub trait SearchPort: Send + Sync {

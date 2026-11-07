@@ -165,7 +165,7 @@ pub enum Command {
     /// The records above one record, up to its Sources: the get trace view as an action.
     Trace,
     Prime,
-    /// The MCP tool that runs one record action, selected by its action argument.
+    /// The command that runs one record action, selected by its action argument.
     Change,
     Action(Action),
     Repository(RepositoryCommand),

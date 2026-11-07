@@ -22,6 +22,8 @@ fn the_import_command_stores_an_index_that_later_checks_use() {
         .args([
             "dictionary",
             "import",
+            "--format",
+            "json",
             "--pdf",
             pdf.to_str().unwrap(),
             "--repo",
@@ -87,6 +89,8 @@ fn the_import_command_accepts_a_relative_pdf_path() {
         .args([
             "dictionary",
             "import",
+            "--format",
+            "json",
             "--pdf",
             "dictionary.pdf",
             "--repo",
@@ -118,6 +122,8 @@ fn the_import_command_rejects_input_that_is_not_a_pdf() {
         .args([
             "dictionary",
             "import",
+            "--format",
+            "json",
             "--pdf",
             pdf.to_str().unwrap(),
             "--repo",

@@ -11,7 +11,13 @@ pub async fn dispatch_search(
 ) -> anyhow::Result<()> {
     let host = super::local_host(&RepoContext::new(repo, scope))?;
     let service = host.porcelain().search();
-    let outcome = service.search(query).await?;
+    let outcome = service.search(query).await.map_err(|error| {
+        anyhow::anyhow!(super::recovery::with_recovery(
+            &error.to_string(),
+            "search",
+            &error.recovery_inputs(),
+        ))
+    })?;
     let rendered = if format == Some(OutputFormat::Json) {
         serde_json::to_string_pretty(&outcome)?
     } else {

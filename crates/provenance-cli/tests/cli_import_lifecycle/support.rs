@@ -69,6 +69,8 @@ pub fn import_scope(repo: &Path, input: &Path) -> assert_cmd::assert::Assert {
     provenance()
         .args([
             "import",
+            "--format",
+            "json",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",

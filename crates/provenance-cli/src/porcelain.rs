@@ -9,6 +9,7 @@ use provenance_transport::repository::RepoContext;
 use provenance_transport::StatementHost;
 
 mod api;
+mod recovery;
 mod search;
 pub use api::dispatch_api;
 pub use provenance_porcelain::check::render_readable as render_check;

@@ -93,13 +93,12 @@ schema_fn!(simulate_schema, DogfoodSimulateInput);
 
 const JSON_FORMAT: Field = json_format(Some("json"));
 
-const NOTE_ID_HELP: &str =
-    "Note id, or an unambiguous prefix of one, as shown by `provenance dogfood triage list`";
+const NOTE_ID_HELP: &str = "Note id, or an unambiguous prefix of one, as shown by the triage list";
 
 const NOTE_FIELDS: &[Field] = &[
     Field::text("surface")
         .required()
-        .doc("The part of provenance the note concerns: a subcommand name, or \"general\""),
+        .doc("The part of provenance the note concerns: a command name, or \"general\""),
     Field::text("category")
         .values(&["friction", "confusion", "missing", "bug", "idea"])
         .required(),

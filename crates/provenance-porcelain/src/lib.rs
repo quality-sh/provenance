@@ -3,7 +3,7 @@
 //!
 //! Shared human-facing semantics for Provenance interfaces.
 //!
-//! Get and check request and result types produce their JSON and MCP schemas here.
+//! Get and check request and result types produce their JSON schemas here.
 //! Add a get result field to the typed projection in `get::wire`.
 //! Record actions use catalog registrations. Discussion actions use typed inputs.
 //! Materialize, import, dictionary import, and swarm-backtrace land run through their

@@ -285,9 +285,18 @@ async fn cli_and_mcp_file_search_return_the_same_result() {
     assert_eq!(mcp_refusal["isError"], true, "{mcp_refusal}");
     let error = &mcp_refusal["structuredContent"]["error"];
     let message = error["message"].as_str().unwrap();
-    assert!(message.contains("search --file <path>"), "{message}");
+    let reason = "symbol: requires a file";
+    assert!(
+        message.starts_with(&format!("{reason}; call search with {{\"file\":\"<path>\"")),
+        "{message}"
+    );
     let cli_message = String::from_utf8(cli_refusal.stderr).unwrap();
-    assert_eq!(cli_message.trim_end(), format!("Error: {message}"));
+    assert!(
+        cli_message.starts_with(&format!(
+            "Error: {reason}; run `provenance search --file <path> --symbol <name>`"
+        )),
+        "{cli_message}"
+    );
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }

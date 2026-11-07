@@ -142,9 +142,7 @@ const fn action_declaration(action: Action) -> Declaration {
         Action::Release => ("Release the target Topic claim.", Grammar::Target),
         Action::Submit => ("Submit the target Requirement for review.", Grammar::Target),
         Action::Discussions => (
-            "List addressed Discussions in a scope or under a record. On MCP, the action \
-             argument also reads one Discussion (discussion), and the change tool starts one \
-             (discuss) or replies to one (reply).",
+            "List addressed Discussions in a scope or under a record.",
             Grammar::NameAndTarget,
         ),
         Action::Discussion => ("Read the addressed Discussion.", Grammar::Target),

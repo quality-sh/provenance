@@ -319,7 +319,7 @@ pub fn output_schema() -> serde_json::Value {
     schema::<CheckOutcome>(schemars::generate::Contract::Serialize)
 }
 
-/// Render category results for terminal and MCP readers.
+/// Render category results as readable text.
 pub fn render_readable(outcome: &CheckOutcome) -> String {
     outcome
         .categories

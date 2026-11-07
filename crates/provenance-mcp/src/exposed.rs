@@ -2,6 +2,7 @@
 
 use provenance_porcelain::action::Action;
 use provenance_porcelain::registry::{Command, GraphCommand, RepositoryCommand};
+use std::sync::LazyLock;
 
 /// Where MCP shows one command.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -54,4 +55,27 @@ pub fn tools() -> impl Iterator<Item = Command> {
         .iter()
         .filter(|(_, place)| *place == Place::Tool)
         .map(|(command, _)| *command)
+}
+
+/// The MCP spelling of each shown command name.
+static NAMES: LazyLock<Vec<(Command, String)>> = LazyLock::new(|| {
+    EXPOSED
+        .iter()
+        .map(|(command, _)| (*command, spelling(command.declaration().name)))
+        .collect()
+});
+
+/// The MCP name of one shown command: the words of the command name in snake_case,
+/// so `dictionary import` is `dictionary_import`. The words stay the same.
+pub fn name(command: Command) -> &'static str {
+    NAMES
+        .iter()
+        .find(|(shown, _)| *shown == command)
+        .map(|(_, name)| name.as_str())
+        .unwrap_or_else(|| panic!("{command:?} is not shown on MCP"))
+}
+
+/// The snake_case spelling of a command name.
+pub fn spelling(name: &str) -> String {
+    name.replace([' ', '-'], "_")
 }

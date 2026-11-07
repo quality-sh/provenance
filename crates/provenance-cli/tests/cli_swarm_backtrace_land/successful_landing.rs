@@ -203,6 +203,8 @@ fn check_rejects_landing_overlays_that_rewrite_asserted_evidence() {
             .args([
                 "swarm-backtrace",
                 "land",
+                "--format",
+                "json",
                 "--repo",
                 &repo,
                 "--scope",

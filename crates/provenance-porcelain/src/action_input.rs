@@ -1,4 +1,4 @@
-//! The input of an MCP tool that takes an action argument.
+//! The input of a command that takes an action argument.
 //!
 //! The input schema is one flat object: the action enum and the fields of all
 //! actions. The server then checks the fields of a call against its action, and a
@@ -14,7 +14,7 @@ struct ActionFields {
     required: Vec<String>,
 }
 
-/// The actions of one tool and the fields of each action.
+/// The actions of one command and the fields of each action.
 pub struct ActionInput {
     actions: Vec<ActionFields>,
     definitions: Map<String, Value>,
@@ -42,7 +42,7 @@ impl FieldRefusal {
 }
 
 impl ActionInput {
-    /// A tool without actions. A call without an action argument selects `default`.
+    /// A command without actions. A call without an action argument selects `default`.
     pub fn new(default: Option<&'static str>) -> Self {
         Self {
             actions: Vec::new(),

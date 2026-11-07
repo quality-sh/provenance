@@ -27,7 +27,7 @@ pub fn schema(host: &StatementHost, actions: &[&'static str]) -> Value {
         branches.push(discriminated(schema, &[NOTIFY], None));
     }
     for command in super::repository_commands() {
-        let name = command.declaration().name;
+        let name = crate::exposed::name(command);
         if actions.contains(&name) {
             let schema = super::repository_output_schema(command);
             branches.push(discriminated(schema, &[name], None));

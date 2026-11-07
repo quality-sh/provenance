@@ -45,6 +45,8 @@ fn altered_replaced_or_omitted_shipped_disposition_audit_is_rejected() {
             .unwrap()
             .args([
                 "import",
+                "--format",
+                "json",
                 "--repo",
                 repo.to_str().unwrap(),
                 "--scope",
@@ -81,6 +83,8 @@ fn exact_shipped_promotion_decisions_export_is_accepted() {
         .unwrap()
         .args([
             "import",
+            "--format",
+            "json",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
@@ -123,6 +127,8 @@ fn import_cannot_omit_entire_existing_shipped_legacy_terminal_set() {
         .unwrap()
         .args([
             "import",
+            "--format",
+            "json",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
@@ -144,6 +150,8 @@ fn import_cannot_omit_entire_existing_shipped_legacy_terminal_set() {
         .unwrap()
         .args([
             "import",
+            "--format",
+            "json",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",

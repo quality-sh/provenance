@@ -12,7 +12,7 @@ use serde_json::{Map, Value};
 
 pub fn tool() -> Tool {
     crate::surface::tool(
-        Command::Api.declaration().name,
+        crate::exposed::name(Command::Api),
         Command::Api.declaration().description,
         Effect::Plumbing,
         crate::derived::input_schema(provenance_porcelain::registry::Command::Api),

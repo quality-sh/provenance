@@ -284,10 +284,7 @@ async fn empty_mcp_search_carries_the_reason_and_recovery_forms() {
         .unwrap();
     for text in [
         "search requires text or at least one filter",
-        "provenance search --text <query>",
-        "provenance search --kind <kind>",
-        "\"text\": \"<query>\"",
-        "\"kind\": [\"<kind>\"]",
+        "call search with {\"text\":\"<query>\"} or {\"kind\":[\"<kind>\"]}",
     ] {
         assert!(message.contains(text), "{message}");
     }
@@ -449,7 +446,7 @@ async fn mcp_file_search_needs_the_rule_grant_and_a_file() {
             error["message"]
                 .as_str()
                 .unwrap()
-                .contains("provenance search --file <path>"),
+                .contains("call search with {\"file\":\"<path>\""),
             "{error}"
         );
     }

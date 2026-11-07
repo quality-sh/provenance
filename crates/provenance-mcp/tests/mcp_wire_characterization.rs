@@ -160,7 +160,7 @@ async fn discover_response_keeps_its_fields() {
             "_meta":{"io.modelcontextprotocol/serverInfo":server_info()},
             "cacheScope":"private",
             "capabilities":{"tools":{}},
-            "instructions":provenance_porcelain::guidance::guidance().guidance,
+            "instructions":provenance_mcp::instructions(),
             "resultType":"complete",
             "supportedVersions":["2024-11-05","2025-03-26","2025-06-18","2025-11-25","2026-07-28"],
             "ttlMs":0
@@ -187,7 +187,7 @@ async fn initialize_negotiates_the_older_protocols() {
                 "protocolVersion":agreed,
                 "capabilities":{"tools":{}},
                 "serverInfo":server_info(),
-                "instructions":provenance_porcelain::guidance::guidance().guidance,
+                "instructions":provenance_mcp::instructions(),
             }),
             "requested {requested}"
         );

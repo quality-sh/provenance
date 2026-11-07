@@ -1,4 +1,4 @@
-//! Implementation aids for the flat tool input.
+//! Implementation aids for the flat action input.
 
 use super::*;
 

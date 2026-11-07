@@ -207,7 +207,7 @@ pub fn output_schema() -> Value {
     schema::<GetWire<'static>>(Contract::Serialize)
 }
 
-/// Render a get result for both terminal and MCP readers.
+/// Render a get result as readable text.
 pub fn render_readable(outcome: &GetOutcome) -> serde_json::Result<String> {
     let mut sections = vec![
         format!(

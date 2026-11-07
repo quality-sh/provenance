@@ -369,6 +369,8 @@ fn cli_rejects_an_imported_resolution_input_with_a_blank_summary() {
         .unwrap()
         .args([
             "import",
+            "--format",
+            "json",
             "--repo",
             &repo,
             "--scope",

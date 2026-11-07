@@ -183,10 +183,15 @@ async fn search_refuses_a_request_without_text_or_kinds_before_the_port() {
     let service = Porcelain::new(port.clone());
     let query = SearchInput::default();
 
-    assert!(matches!(
-        service.search(query).await,
-        Err(SearchError::InvalidOptions { .. })
-    ));
+    let error = service.search(query).await.unwrap_err();
+    assert!(matches!(error, SearchError::InvalidOptions { .. }));
+    assert_eq!(
+        error.recovery_inputs(),
+        [
+            serde_json::json!({"text": "<query>"}),
+            serde_json::json!({"kind": ["<kind>"]})
+        ]
+    );
     assert!(port.0.lock().unwrap().is_none());
 }
 
@@ -365,11 +370,10 @@ async fn code_lookup_refusals_happen_before_the_port() {
         );
         let message = error.to_string();
         assert!(message.starts_with(&format!("{field}: ")), "{message}");
-        assert!(
-            message.contains("provenance search --file <path>"),
-            "{message}"
+        assert_eq!(
+            error.recovery_inputs()[0],
+            serde_json::json!({"file": "<path>", "symbol": "<name>"})
         );
-        assert!(message.contains("MCP JSON: {\"file\""), "{message}");
         assert!(port.0.lock().unwrap().is_none());
         assert!(port.1.lock().unwrap().is_none());
     }

@@ -33,7 +33,7 @@ async fn porcelain_commands_show_one_description() {
     let tools = tools(repo.path()).await;
     for command in mcp::tools().filter(|command| cli::shows(*command)) {
         let declaration = command.declaration();
-        let tool = &tools[declaration.name];
+        let tool = &tools[mcp::name(command)];
         assert_eq!(tool["description"], declaration.description, "{command:?}");
         let target_form = ["req_surface", declaration.name, "--repo", path.as_str()];
         let words = declaration.words().collect::<Vec<_>>();
@@ -111,21 +111,19 @@ async fn registry_commands_appear_on_both_interfaces() {
             let first = words(*command).expect("a CLI target action is on the CLI")[0];
             assert!(!root.iter().any(|name| name == first), "{command:?}");
         }
+        // MCP spells the command name in snake_case: the same words, joined by `_`.
+        let name = mcp::spelling(declaration.name);
         match mcp_place(*command) {
-            Some(Place::Tool) => assert!(
-                tools.contains_key(declaration.name),
-                "tools/list lacks {}",
-                declaration.name
-            ),
+            Some(Place::Tool) => assert!(tools.contains_key(&name), "tools/list lacks {name}"),
             Some(Place::Action { tool }) => assert!(
-                values(&tools, tool, "action").contains(&declaration.name),
+                values(&tools, tool, "action").contains(&name.as_str()),
                 "{command:?} is not an action of {tool}"
             ),
             Some(Place::Category { tool }) => assert!(
-                values(&tools, tool, "categories").contains(&declaration.name),
+                values(&tools, tool, "categories").contains(&name.as_str()),
                 "{command:?} is not a category of {tool}"
             ),
-            None => assert!(!mcp_shows(&tools, declaration.name), "{command:?}"),
+            None => assert!(!mcp_shows(&tools, &name), "{command:?}"),
         }
     }
 }
@@ -153,9 +151,9 @@ async fn shared_commands_have_one_name_and_target_form() {
         }
         let fields = match place {
             Place::Action { tool } => {
-                support::surface::action_properties(&tools[*tool], declaration.name)
+                support::surface::action_properties(&tools[*tool], mcp::name(*command))
             }
-            Place::Tool => properties(&tools[declaration.name]["inputSchema"]),
+            Place::Tool => properties(&tools[mcp::name(*command)]["inputSchema"]),
             Place::Category { tool } => properties(&tools[*tool]["inputSchema"]),
         };
         let mcp_target = TARGET_FIELDS.iter().any(|field| fields.contains(*field));
@@ -189,7 +187,7 @@ async fn cli_flags_and_mcp_properties_come_from_one_field_list() {
             continue;
         }
         let mut mcp = if mcp_place(*command) == Some(Place::Tool) {
-            properties(&tools[declaration.name]["inputSchema"])
+            properties(&tools[mcp::name(*command)]["inputSchema"])
         } else {
             properties(&provenance_mcp::derived::input_schema(*command))
         };
@@ -283,14 +281,20 @@ async fn repository_change_actions_take_the_same_fields() {
         if !in_change || !matches!(command, Command::Repository(_) | Command::Graph(_)) {
             continue;
         }
-        let declaration = command.declaration();
-        let help = help(&words(*command).expect("a word command"));
+        let words = words(*command).expect("a word command");
+        // The action value is the CLI command path in snake_case: the same words.
+        assert_eq!(
+            mcp::name(*command),
+            words.join("_").replace('-', "_"),
+            "{command:?} action value"
+        );
+        let help = help(&words);
         let cli = support::surface::flags(&help)
             .into_iter()
             .filter(|flag| !cli_options.contains(&flag.as_str()))
             .map(|flag| flag.replace('-', "_"))
             .collect::<BTreeSet<_>>();
-        let mcp = support::surface::action_properties(&tools["change"], declaration.name);
+        let mcp = support::surface::action_properties(&tools["change"], mcp::name(*command));
         assert_eq!(cli, mcp, "{command:?}");
         compared += 1;
     }
@@ -417,7 +421,10 @@ async fn server_commands_are_outside_the_registry() {
         let declaration = server.declaration();
         assert_eq!(cli::find(words), None, "{words:?}");
         assert_eq!(Command::named(declaration.name), None, "{words:?}");
-        assert!(!mcp_shows(&tools, declaration.name), "{words:?}");
+        assert!(
+            !mcp_shows(&tools, &mcp::spelling(declaration.name)),
+            "{words:?}"
+        );
         let help = help(words);
         for field in declaration.input.fields() {
             let shown = shown(&declaration, field);

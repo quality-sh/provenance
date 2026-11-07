@@ -317,7 +317,7 @@ impl Display for ReadError {
 impl std::error::Error for ReadError {}
 
 impl ReadError {
-    /// The `{error, meta}` object that the CLI and MCP both return for this failure.
+    /// The `{error, meta}` object that each consumer returns for this failure.
     #[rule("rule_mcp_get_failure_matches_cli")]
     pub fn failure(&self) -> serde_json::Value {
         let mut error = match self {

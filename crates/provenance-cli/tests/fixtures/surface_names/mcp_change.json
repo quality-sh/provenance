@@ -415,8 +415,8 @@
         "reply",
         "materialize",
         "import",
-        "dictionary import",
-        "swarm-backtrace land"
+        "dictionary_import",
+        "swarm_backtrace_land"
       ],
       "type": "string"
     },
@@ -685,7 +685,7 @@
       "description": "Actions: create."
     },
     "pdf": {
-      "description": "Path to the local official Issue 9 PDF file Actions: dictionary import.",
+      "description": "Path to the local official Issue 9 PDF file Actions: dictionary_import.",
       "type": "string"
     },
     "position": {
@@ -725,7 +725,7 @@
     },
     "replace": {
       "default": false,
-      "description": "Replace the generated records that an earlier landing of this run wrote. Actions: swarm-backtrace land.",
+      "description": "Replace the generated records that an earlier landing of this run wrote. Actions: swarm_backtrace_land.",
       "type": "boolean"
     },
     "replace_parent": {
@@ -829,7 +829,7 @@
       "description": "Actions: discuss, reply."
     },
     "run_dir": {
-      "description": "The swarm run directory: its extractors, refuters, contributions, and merge output. Actions: swarm-backtrace land.",
+      "description": "The swarm run directory: its extractors, refuters, contributions, and merge output. Actions: swarm_backtrace_land.",
       "type": "string"
     },
     "severity": {

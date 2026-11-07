@@ -46,6 +46,8 @@ fn import_replaces_only_target_scope_and_removes_all_stale_target_shards() {
         .unwrap()
         .args([
             "import",
+            "--format",
+            "json",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",

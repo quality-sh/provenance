@@ -127,7 +127,13 @@ pub(super) async fn repository_command(input: RepositoryInput, quiet: bool) -> a
             run_blocking(move || cargo_init::handle(input.package.as_deref(), ste_pdf, quiet)).await
         }
         RepositoryInput::Materialize(input, context) => {
-            output::print_json(&work(context).materialize(input).await?)
+            let json = context.json;
+            let result = work(context).materialize(input).await?;
+            print(
+                json,
+                &result,
+                provenance_porcelain::materialize::render_readable,
+            )
         }
         RepositoryInput::Export(input) => export::handle(
             &RepoContext::new(input.repo, input.scope),
@@ -135,7 +141,9 @@ pub(super) async fn repository_command(input: RepositoryInput, quiet: bool) -> a
             input.output.map(Utf8PathBuf::from),
         ),
         RepositoryInput::Import(input, context) => {
-            output::print_json(&work(context).import(input).await?)
+            let json = context.json;
+            let result = work(context).import(input).await?;
+            print(json, &result, provenance_porcelain::import::render_readable)
         }
         RepositoryInput::MergeJsonl(input) => {
             flag_value(&input.format, JsonFormat::from_flag)?;
@@ -162,7 +170,13 @@ pub(super) async fn repository_command(input: RepositoryInput, quiet: bool) -> a
             })
         }
         RepositoryInput::DictionaryImport(input, context) => {
-            output::print_json(&work(context).dictionary_import(input).await?)
+            let json = context.json;
+            let result = work(context).dictionary_import(input).await?;
+            print(
+                json,
+                &result,
+                provenance_porcelain::dictionary::render_import_readable,
+            )
         }
         RepositoryInput::DictionaryStatus(input) => {
             flag_value(&input.format, JsonFormat::from_flag)?;
@@ -171,8 +185,21 @@ pub(super) async fn repository_command(input: RepositoryInput, quiet: bool) -> a
     }
 }
 
-/// The repository commands on the repository and scope of the CLI options. Each prints
-/// the JSON result.
+/// Prints `result` as readable text, or as JSON when the caller asked for it.
+fn print<T: serde::Serialize>(
+    json: bool,
+    result: &T,
+    readable: fn(&T) -> String,
+) -> anyhow::Result<()> {
+    if json {
+        output::print_json(result)
+    } else {
+        println!("{}", readable(result));
+        Ok(())
+    }
+}
+
+/// The repository commands on the repository and scope of the CLI options.
 fn work(context: BoundContext) -> Porcelain<RepositoryPort> {
     Porcelain::new(RepositoryPort::new(RepoContext::new(
         context.repo,
@@ -243,7 +270,13 @@ pub(super) async fn graph_command(input: GraphInput) -> anyhow::Result<()> {
             graph_reference::handle(GraphReferenceCommand::ExactExport { repo, reference })
         }
         GraphInput::SwarmBacktraceLand(input, context) => {
-            output::print_json(&work(context).swarm_backtrace_land(input).await?)
+            let json = context.json;
+            let result = work(context).swarm_backtrace_land(input).await?;
+            print(
+                json,
+                &result,
+                provenance_porcelain::swarm_backtrace::render_readable,
+            )
         }
     }
 }

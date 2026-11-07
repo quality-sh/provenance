@@ -243,6 +243,8 @@ fn import(repo: &std::path::Path, input: &std::path::Path) -> assert_cmd::assert
         .unwrap()
         .args([
             "import",
+            "--format",
+            "json",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",

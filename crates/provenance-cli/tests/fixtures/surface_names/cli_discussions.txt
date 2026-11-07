@@ -1,4 +1,4 @@
-List addressed Discussions in a scope or under a record. On MCP, the action argument also reads one Discussion (discussion), and the change tool starts one (discuss) or replies to one (reply).
+List addressed Discussions in a scope or under a record.
 
 Usage: provenance [OPTIONS] [TARGET] [ACTION]
 

@@ -33,9 +33,8 @@ impl Display for ActionError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::InvalidOptions => formatter.write_str("unsupported action options"),
-            Self::KindSelection => formatter.write_str(
-                "create requires --type and existing-record actions infer it without --type",
-            ),
+            Self::KindSelection => formatter
+                .write_str("create requires type, and actions on an existing record infer type"),
             Self::NotFound => formatter.write_str("record does not exist"),
             Self::AmbiguousIdentity => formatter.write_str("record ID is not unique"),
             Self::AccessDenied => formatter.write_str("access denied"),
@@ -48,7 +47,7 @@ impl Display for ActionError {
 
 impl std::error::Error for ActionError {}
 
-/// Check action options before a CLI opens a repository or a host resolves an ID.
+/// Check action options before a consumer opens a repository or a host resolves an ID.
 pub fn validate_target(
     action: Action,
     target: &str,

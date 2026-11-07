@@ -85,8 +85,8 @@ fn remove_unused_definitions(schema: &mut Value) {
     }
 }
 
-/// The input of the MCP discussions tool: the two Discussion reads. The CLI word is
-/// the action argument; without it the tool lists Discussions.
+/// The input of the discussions command with an action argument: the two Discussion
+/// reads. Without the action argument, the command lists Discussions.
 pub fn action_input() -> crate::action_input::ActionInput {
     crate::action_input::ActionInput::new(Some(Action::Discussions.as_str()))
         .with_action(
@@ -99,7 +99,7 @@ pub fn action_input() -> crate::action_input::ActionInput {
         )
 }
 
-/// The flat input schema of the MCP discussions tool.
+/// The flat input schema of the discussions command with an action argument.
 pub fn action_input_schema() -> serde_json::Value {
     action_input().schema()
 }
@@ -165,7 +165,7 @@ pub struct ReplyInput {
     pub body: String,
 }
 
-/// The shared structured result for CLI and MCP.
+/// The shared structured result of each consumer.
 #[derive(Clone, Debug, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum DiscussionOutcome {

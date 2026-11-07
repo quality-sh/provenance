@@ -194,6 +194,8 @@ fn an_import_with_an_active_rule_citing_an_unapproved_resolution_is_told_what_to
     let import = || {
         provenance(&[
             "import",
+            "--format",
+            "json",
             "--repo",
             repo,
             "--scope",

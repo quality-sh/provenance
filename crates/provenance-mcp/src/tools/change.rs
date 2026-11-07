@@ -37,7 +37,7 @@ pub fn input(host: &StatementHost) -> ActionInput {
     if porcelain.repository_is_available() {
         for command in repository_commands() {
             input = input.with_action(
-                command.declaration().name,
+                crate::exposed::name(command),
                 crate::derived::input_schema(command),
             );
         }
@@ -73,7 +73,7 @@ pub(super) fn repository_commands() -> impl Iterator<Item = Command> {
 
 /// The repository command that this change action names.
 fn repository_command(word: &str) -> Option<Command> {
-    repository_commands().find(|command| command.declaration().name == word)
+    repository_commands().find(|command| crate::exposed::name(*command) == word)
 }
 
 /// The result schema of one repository command.
@@ -97,7 +97,7 @@ pub fn tool(host: &StatementHost, input: &ActionInput) -> Option<Tool> {
     }
     let declaration = Command::Change.declaration();
     Some(crate::surface::tool(
-        declaration.name,
+        crate::exposed::name(Command::Change),
         declaration.description,
         Effect::Writes,
         input.schema(),

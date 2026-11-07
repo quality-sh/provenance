@@ -26,7 +26,7 @@ pub use read_only::get_refusal;
 
 pub fn search_tool() -> rmcp::model::Tool {
     crate::surface::tool(
-        Command::Search.declaration().name,
+        crate::exposed::name(Command::Search),
         Command::Search.declaration().description,
         Effect::Reads,
         crate::derived::input_schema(Command::Search),
@@ -37,7 +37,7 @@ pub fn search_tool() -> rmcp::model::Tool {
 
 pub fn get_tool() -> rmcp::model::Tool {
     crate::surface::tool(
-        Command::Get.declaration().name,
+        crate::exposed::name(Command::Get),
         Command::Get.declaration().description,
         Effect::Reads,
         crate::derived::input_schema(Command::Get),
@@ -48,7 +48,7 @@ pub fn get_tool() -> rmcp::model::Tool {
 
 pub fn trace_tool() -> rmcp::model::Tool {
     crate::surface::tool(
-        Command::Trace.declaration().name,
+        crate::exposed::name(Command::Trace),
         Command::Trace.declaration().description,
         Effect::Reads,
         crate::derived::input_schema(Command::Trace),
@@ -59,7 +59,7 @@ pub fn trace_tool() -> rmcp::model::Tool {
 
 pub fn check_tool() -> rmcp::model::Tool {
     crate::surface::tool(
-        Command::Check.declaration().name,
+        crate::exposed::name(Command::Check),
         Command::Check.declaration().description,
         Effect::Reads,
         crate::derived::input_schema(Command::Check),
@@ -158,7 +158,17 @@ fn search_error(error: &provenance_porcelain::search::SearchError) -> CallToolRe
         SearchError::AccessDenied => serde_json::json!({"kind":"access_denied"}),
         SearchError::Operation { detail, .. } => detail.clone(),
     };
-    crate::surface::detail_error(with_message(detail, error.to_string()))
+    crate::surface::detail_error(with_message(detail, recovery_message(error)))
+}
+
+/// The refusal message followed by the recovery inputs as tool arguments.
+fn recovery_message(error: &provenance_porcelain::search::SearchError) -> String {
+    let inputs = error.recovery_inputs();
+    if inputs.is_empty() {
+        return error.to_string();
+    }
+    let forms = inputs.iter().map(Value::to_string).collect::<Vec<_>>();
+    format!("{error}; call search with {}", forms.join(" or "))
 }
 
 fn get_error(kind: &str, message: &str) -> CallToolResult {
