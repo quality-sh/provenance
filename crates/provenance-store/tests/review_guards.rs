@@ -116,15 +116,11 @@ fn every_record_kind_reads_without_a_format_field() {
         ),
         (
             "resolutions/res.jsonl",
-            json!({"scope_id":"default","id":"resolution_a","title":"Decision","position":"Use it.","rationale":"It is required.","status":"approved","inputs":[],"requirement_ids":["req_a"],"review_on":null}),
+            json!({"scope_id":"default","id":"resolution_a","title":"Decision","position":"Use it.","rationale":"It is required.","status":"approved","inputs":[],"requirement_ids":["req_a"]}),
         ),
         (
             "rules/rule.jsonl",
             json!({"scope_id":"default","id":"rule_a","statement":"The system stores records.","status":"active","severity":"high","requirement_ids":["req_a"],"resolution_ids":[]}),
-        ),
-        (
-            "domains/domain.jsonl",
-            json!({"scope_id":"default","id":"domain_a","name":"Storage"}),
         ),
         (
             "boundaries/boundary.jsonl",
@@ -152,7 +148,6 @@ fn every_record_kind_reads_without_a_format_field() {
     assert_eq!(store.list_requirements(&scope).unwrap().len(), 1);
     assert_eq!(store.list_resolutions(&scope).unwrap().len(), 1);
     assert_eq!(store.list_rules(&scope).unwrap().len(), 1);
-    assert_eq!(store.list_domains(&scope).unwrap().len(), 1);
     assert_eq!(store.list_boundaries(&scope).unwrap().len(), 1);
     assert_eq!(store.list_topics(&scope).unwrap().len(), 1);
     assert_eq!(store.list_questions(&scope).unwrap().len(), 1);

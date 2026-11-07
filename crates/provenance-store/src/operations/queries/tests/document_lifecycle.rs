@@ -370,8 +370,7 @@ async fn lifecycle_filter_applies_to_each_record_without_hiding_visible_children
             "thread_id": "thread_hidden_parent",
             "role": "user",
             "body": "Hidden discussion",
-            "created_at": 1,
-            "ai_metadata": {"logical": true}
+            "created_at": 1
         }),
     );
 

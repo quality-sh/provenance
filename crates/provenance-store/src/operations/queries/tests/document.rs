@@ -247,8 +247,7 @@ async fn document_keeps_graph_and_discussions_at_one_revision_during_publication
                 let message_path = layout.state_dir().join("scopes/default/threads/2026-09.jsonl");
                 crate::cache::tests::fixtures::append_record(&message_path, &json!({
                     "scope_id":"default", "id":format!("msg_{counter}"),
-                    "thread_id":id,"role":"user","body":format!("Discussion {counter}"),"created_at":counter,
-                    "ai_metadata":{"order":"logical"}
+                    "thread_id":id,"role":"user","body":format!("Discussion {counter}"),"created_at":counter
                 }));
             }
             crate::cache::catch_up_state(&open(&layout)).await?;
@@ -275,10 +274,6 @@ async fn document_keeps_graph_and_discussions_at_one_revision_during_publication
     assert_eq!(refreshed["requirements"].as_array().unwrap().len(), 2);
     assert_eq!(refreshed["threads"].as_array().unwrap().len(), 2);
     assert_eq!(refreshed["messages"].as_array().unwrap().len(), 2);
-    assert_eq!(
-        refreshed["messages"][0]["ai_metadata"],
-        json!({"order":"logical"})
-    );
     assert_ne!(refreshed["stamp"]["digest"], initial["stamp"]["digest"]);
 }
 

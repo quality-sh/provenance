@@ -102,7 +102,7 @@ fn update_requests_keep_empty_clear_lists_omitted() {
     check::<EditQuestionInput>();
 
     let value = json!({"scope_id":"default", "id":"req_a",
-        "clear_fields":["description", "fog", "domain_id"]});
+        "clear_fields":["description"]});
     let decoded: UpdateRequirementInput = serde_json::from_value(value.clone()).unwrap();
     assert_eq!(
         serde_json::to_value(decoded).unwrap()["clear_fields"],

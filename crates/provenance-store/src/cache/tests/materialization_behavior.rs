@@ -251,8 +251,8 @@ async fn materialize_state_caches_enriched_source_and_resolution_fields() {
         .unwrap();
     materialize_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    let source: (Option<String>, Option<i64>, Option<i64>) =
-        sqlx::query_as("SELECT reference, effective_date, review_date FROM sources WHERE id = ?")
+    let source: Option<String> =
+        sqlx::query_scalar("SELECT reference FROM sources WHERE id = ?")
             .bind("source_sah")
             .fetch_one(pool.pool())
             .await
@@ -264,9 +264,7 @@ async fn materialize_state_caches_enriched_source_and_resolution_fields() {
     .fetch_one(pool.pool())
     .await
     .unwrap();
-    assert_eq!(source.0.as_deref(), Some("Department guidance"));
-    assert_eq!(source.1, Some(1_714_521_600_000));
-    assert_eq!(source.2, Some(1_717_200_000_000));
+    assert_eq!(source.as_deref(), Some("Department guidance"));
     assert!(resolution.0.contains(r#""input_type":"regulatory""#));
     assert_eq!(resolution.1.as_deref(), Some("Analyst One"));
     assert_eq!(resolution.2.as_deref(), Some("Approver Two"));

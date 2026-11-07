@@ -55,7 +55,6 @@ fn closed_families(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Vec<se
     Ok(vec![
         serde_json::to_value(store.closed_sources(scope)?)?,
         serde_json::to_value(store.closed_requirements(scope)?)?,
-        serde_json::to_value(store.closed_domains(scope)?)?,
         serde_json::to_value(store.closed_boundaries(scope)?)?,
         serde_json::to_value(store.closed_topics(scope)?)?,
         serde_json::to_value(store.closed_questions(scope)?)?,

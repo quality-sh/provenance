@@ -47,7 +47,6 @@ async fn neighbors_keep_the_rank_id_declaration_direction_order() {
             into("requirement_ids", "res_penalty"),
             into("requirement_ids", "rule_penalty_001"),
             into("contradicts", "question_threshold"),
-            out("domain_id", "domain_payroll"),
         ],
         "only current records appear"
     );
@@ -55,7 +54,6 @@ async fn neighbors_keep_the_rank_id_declaration_direction_order() {
     assert_eq!(
         answer.stamp.attested,
         [
-            "domains",
             "questions",
             "relations",
             "requirements",

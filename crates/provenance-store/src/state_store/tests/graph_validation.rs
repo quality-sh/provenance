@@ -176,7 +176,6 @@ fn front_of<'a>(
         rules,
         topics: &[],
         questions: &[],
-        domains: &[],
         boundaries: &[],
     }
 }

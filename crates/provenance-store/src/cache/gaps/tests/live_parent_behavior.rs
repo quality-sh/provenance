@@ -175,7 +175,6 @@ fn an_ended_or_archived_record_or_a_boundary_is_not_a_gap() {
         topics: &topics,
         questions: &questions,
         threads: &[],
-        domains: &[],
         boundaries: &[boundary("boundary_archived_parent", "req_archived")],
         contributions: &[],
         synthesis_packets: &[],

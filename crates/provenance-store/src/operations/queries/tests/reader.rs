@@ -227,7 +227,6 @@ async fn every_answer_carries_a_stamp_at_the_stored_serial() {
             "neighbors" | "trace" => (
                 &[
                     "boundaries",
-                    "domains",
                     "relations",
                     "requirements",
                     "sources",

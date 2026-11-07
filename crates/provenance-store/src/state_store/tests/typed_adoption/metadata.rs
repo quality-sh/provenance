@@ -120,7 +120,6 @@ fn adoption_preserves_metadata_outside_the_typed_declaration_surface() {
         Some("0123456789abcdef0123456789abcdef01234567")
     );
     assert_eq!(source.url.as_deref(), Some("https://example.test/policy"));
-    assert_eq!(source.effective_date, Some(1_700_000_000_000));
     let requirement = &store.list_requirements(&scope).unwrap()[0];
     assert_eq!(
         requirement.description.as_deref(),

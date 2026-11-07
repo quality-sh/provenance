@@ -18,7 +18,7 @@ fn seed_targets(store: &provenance_store::state_store::StateStore) {
                     "scope_id": "default", "id": id,
                     "statement": "The system stores records.",
                     "status": "discovery", "depends_on": depends_on, "supersedes": [],
-                    "description": null, "domain_id": null,
+                    "description": null, 
                     "refines": [], "spawned_by": null,
                     "origin_thread": null, "origin_message": null
                 }))
@@ -33,7 +33,7 @@ fn seed_targets(store: &provenance_store::state_store::StateStore) {
                 "title": "Origin", "position": "Decided",
                 "rationale": "The award says so", "requirement_ids": ["req_a"],
                 "supersedes": [], "status": "proposed", "context": null,
-                "enforcement": null, "confidence": null, "inputs": [],
+                "inputs": [],
                 "made_by": null, "approved_by": null, "approved_at": null,
                 "origin_thread": null, "origin_message": null
             }))
@@ -47,7 +47,7 @@ fn seed_targets(store: &provenance_store::state_store::StateStore) {
                     "scope_id": "default", "id": id, "name": id,
                     "source_type": "policy", "url": null,
                     "reference": "docs/policy.md", "commit_pin": null,
-                    "effective_date": null, "review_date": null,
+                    
                     "supersedes": [], "origin_thread": null, "origin_message": null
                 }))
                 .unwrap(),

@@ -333,7 +333,7 @@ fn minimal_exact_export_without_digest() -> Value {
                 "title": "Apply policy", "position": "Apply it", "rationale": "Required",
                 "status": "approved", "inputs": [{
                     "input_type": "source_material", "reference": "source_policy", "summary": "Policy"
-                }], "review_on": null, "requirement_ids": ["req_policy"]
+                }], "requirement_ids": ["req_policy"]
             }],
             "rules": []
         }

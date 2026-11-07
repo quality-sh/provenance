@@ -134,8 +134,8 @@ async fn unsupported_methods_use_the_contract_failure_envelope() {
 fn source(id: &str, name: &str) -> Value {
     json!({
         "id": id, "name": name, "source_type": "document", "url": null,
-        "reference": null, "commit_pin": null, "effective_date": null,
-        "review_date": null, "supersedes": [], "origin_thread": null,
+        "reference": null, "commit_pin": null, 
+        "supersedes": [], "origin_thread": null,
         "origin_message": null
     })
 }

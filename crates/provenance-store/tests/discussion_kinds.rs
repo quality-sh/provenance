@@ -39,7 +39,7 @@ fn seed_kinds(store: &StateStore) {
             serde_json::from_value(json!({
                 "scope_id": "default", "id": "source_award", "name": "Award",
                 "source_type": "policy", "url": null, "reference": "docs/award.md",
-                "commit_pin": null, "effective_date": null, "review_date": null,
+                "commit_pin": null, 
                 "supersedes": [], "origin_thread": null, "origin_message": null
             }))
             .unwrap(),
@@ -51,8 +51,7 @@ fn seed_kinds(store: &StateStore) {
                 "scope_id": "default", "id": "res_award", "title": "Award",
                 "requirement_ids": ["req_a"], "supersedes": [],
                 "position": "Adopted", "rationale": "The award says so",
-                "status": "proposed", "context": null, "enforcement": null,
-                "confidence": null, "inputs": [], "made_by": "maker",
+                "status": "proposed", "context": null, "inputs": [], "made_by": "maker",
                 "approved_by": null, "approved_at": null,
                 "origin_thread": null, "origin_message": null
             }))
