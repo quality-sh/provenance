@@ -8,9 +8,7 @@ use anyhow::Context as _;
 use std::str::FromStr as _;
 
 use camino::Utf8Path;
-use provenance_core::{
-    EngineInfo, ScopeId, StableId, SDK_PROTOCOL_VERSION, SUPPORTED_SCHEMA_VERSION,
-};
+use provenance_core::{EngineInfo, ScopeId, StableId, SDK_PROTOCOL_VERSION};
 use provenance_macros::rule;
 
 use crate::repository::Repository;
@@ -38,7 +36,6 @@ pub fn engine_info(repository: &Repository) -> EngineInfo {
     EngineInfo {
         engine_version: env!("CARGO_PKG_VERSION").to_string(),
         protocol_version: SDK_PROTOCOL_VERSION,
-        state_schema_version: SUPPORTED_SCHEMA_VERSION.0,
         repository: repository.working_tree().to_path_buf(),
     }
 }

@@ -42,7 +42,6 @@ fn noscope_sized_source_and_requirement_adoption_preserves_all_ids_and_citations
         targets.push(target(TypedDeclarationKind::Requirement, &id));
     }
     let input = TypedSpecInput {
-        schema_version: SUPPORTED_SCHEMA_VERSION.0,
         spec: "migration".to_string(),
         declared_by: OWNER.to_string(),
         adopt_unowned: targets,

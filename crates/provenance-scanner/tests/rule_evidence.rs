@@ -2,7 +2,7 @@ use camino::Utf8PathBuf;
 use provenance_core::coverage::EvidenceAnchor;
 use provenance_core::{
     ImplementationBinding, Rule, RuleSeverity, RuleStatus, ScopeId, StableId, VerificationBinding,
-    VerificationMethod, SUPPORTED_SCHEMA_VERSION,
+    VerificationMethod,
 };
 use provenance_macros::verifies;
 use provenance_scanner::{
@@ -16,7 +16,6 @@ fn rule(id: &str, status: RuleStatus) -> Rule {
         created: None,
         updated: None,
         archived_in_commit: None,
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: ScopeId::new("default").unwrap(),
         id: StableId::new(id).unwrap(),
         declared_by: None,
@@ -69,7 +68,6 @@ fn scanned_comment(source: &str) -> FileScan {
 
 fn typed_implementation(rule_id: &str) -> ImplementationBinding {
     ImplementationBinding {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: ScopeId::new("default").unwrap(),
         id: StableId::new("implementation_binding_claims").unwrap(),
         rule_id: StableId::new(rule_id).unwrap(),
@@ -81,7 +79,6 @@ fn typed_implementation(rule_id: &str) -> ImplementationBinding {
 
 fn typed_verification(rule_id: &str) -> VerificationBinding {
     VerificationBinding {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: ScopeId::new("default").unwrap(),
         id: StableId::new("verification_binding_claims").unwrap(),
         rule_id: StableId::new(rule_id).unwrap(),

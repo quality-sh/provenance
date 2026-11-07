@@ -185,22 +185,6 @@ fn normalize_record_stamps(value: &mut Value) {
                 record.remove("created");
                 record.remove("updated");
             }
-            if matches!(
-                kind.as_deref(),
-                Some(
-                    "source"
-                        | "requirement"
-                        | "resolution"
-                        | "rule"
-                        | "domain"
-                        | "boundary"
-                        | "topic"
-                        | "question"
-                )
-            ) && record.get("schema_version") == Some(&json!(3))
-            {
-                record.insert("schema_version".into(), json!(2));
-            }
             for value in record.values_mut() {
                 normalize_record_stamps(value);
             }

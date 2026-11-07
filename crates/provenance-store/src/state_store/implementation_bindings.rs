@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use provenance_core::{ImplementationBinding, Rule, ScopeId, StableId, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{ImplementationBinding, Rule, ScopeId, StableId};
 use sha2::{Digest, Sha256};
 
 use super::typed_specs::DesiredTypedGraph;
@@ -131,7 +131,6 @@ fn desired_bindings(
                 }
             }
             Ok(ImplementationBinding {
-                schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
                 id: binding_id(&rule_id)?,
                 rule_id,
@@ -169,7 +168,6 @@ impl StateStore {
             );
             let id = binding_id(&input.rule_id)?;
             let binding = ImplementationBinding {
-                schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: input.scope_id.clone(),
                 id,
                 rule_id: input.rule_id,

@@ -1,7 +1,7 @@
 use crate::write_error::{publication_started, SourceFailure, WriteFailure};
 use provenance_core::{
     validate_optional_commit_pin, ScopeId, StableId, VerificationMethod, VerificationRun,
-    VerificationRunStatus, SUPPORTED_SCHEMA_VERSION,
+    VerificationRunStatus,
 };
 use sha2::{Digest, Sha256};
 use std::io::{BufRead, BufReader, Read};
@@ -59,7 +59,6 @@ impl StateStore {
                     |records: &mut Vec<VerificationRun>| {
                         let id = next_run_id(records, started_at)?;
                         let run = VerificationRun {
-                            schema_version: SUPPORTED_SCHEMA_VERSION,
                             scope_id,
                             id,
                             binding_id: Some(binding.id),
@@ -220,7 +219,7 @@ impl StateStore {
                 }
                 line_number += 1;
                 let value: serde_json::Value = serde_json::from_slice(&bytes)?;
-                crate::state_store::readers::ensure_supported_record_version(
+                crate::state_store::readers::ensure_no_legacy_retirement(
                     &path,
                     usize::try_from(line_number)?,
                     &value,

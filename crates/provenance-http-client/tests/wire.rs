@@ -8,7 +8,7 @@ use std::{
 fn metadata(wire: u32) -> String {
     serde_json::json!({
         "data": {
-            "compatibility": {"wire":wire,"state":2,"review_journal":3,"read_derivation":3},
+            "compatibility": {"wire":wire,"read_derivation":3},
             "package": {"name":"fixture","version":"0"},
             "repository": "fixture", "scope": "default"
         },

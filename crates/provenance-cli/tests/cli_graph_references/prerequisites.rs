@@ -1,22 +1,20 @@
 use super::*;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde_json::json;
 
 // Implementation aid: check the public export contract for the new record field.
 #[test]
 fn exported_question_prerequisites_match_the_public_schema() {
     let temp = committed_store();
-    let stamp = SUPPORTED_SCHEMA_VERSION.0;
     let seed = json!({"scope":"default", "sources":[], "resolutions":[], "rules":[],
-    "threads":[], "messages":[], "requirements":[{"schema_version":stamp,"scope_id":"default","id":"req_pay",
+    "threads":[], "messages":[], "requirements":[{"scope_id":"default","id":"req_pay",
         "statement":"The system calculates overtime pay.","status":"discovery"}],
-    "topics":[{"schema_version":stamp,"scope_id":"default","id":"topic_pay",
+    "topics":[{"scope_id":"default","id":"topic_pay",
         "requirement_id":"req_pay","title":"Overtime pay","status":"open","links":[]}],
     "questions":[
-        {"schema_version":stamp,"scope_id":"default","id":"question_threshold",
+        {"scope_id":"default","id":"question_threshold",
             "topic_id":"topic_pay","requirement_id":"req_pay","question":"Which threshold applies?",
             "resolution_method":"research","status":"open","links":[],"depends_on":[]},
-        {"schema_version":stamp,"scope_id":"default","id":"question_rate",
+        {"scope_id":"default","id":"question_rate",
             "topic_id":"topic_pay","requirement_id":"req_pay","question":"Which rate applies?",
             "resolution_method":"grill","status":"open","links":[],"depends_on":["question_threshold"]}
     ]});

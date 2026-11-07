@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { createServer } from "node:http";
 import { COMPATIBILITY, type components } from "./generated/client.js";
-import { STATE_SCHEMA_VERSION } from "./protocol.js";
 import type { ConfigureOptions } from "./settings.js";
 
 type Schemas = components["schemas"];
@@ -64,7 +63,7 @@ export async function recordingHost(responses: Readonly<Record<string, unknown>>
       } else if (command === "begin-verification") {
         const input = body.data as Schemas["BeginVerificationRequest"]["data"];
         const run: VerificationRun = {
-          schema_version: STATE_SCHEMA_VERSION, scope_id: identity.scope,
+          scope_id: identity.scope,
           id: `run_${input.key}`, binding_id: `verification_binding_${input.key}`,
           rule_id: input.rule ?? "rule_expiry", method: input.method,
           declared_by: input.declared_by, status: "running", started_at: 1,

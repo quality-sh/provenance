@@ -164,7 +164,6 @@ fn graph_only_change_between_two_real_commits_lists_added_records() {
     let repo = dir.path();
     let envelope = build_envelope(repo, &base, &head);
 
-    assert_eq!(envelope["schema_version"], 1);
     assert_eq!(envelope["repository"], "quality-sh/provenance");
     assert_eq!(envelope["base_commit"], base);
     assert_eq!(envelope["head_commit"], head);

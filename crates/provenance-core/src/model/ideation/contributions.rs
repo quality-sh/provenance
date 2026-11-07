@@ -4,7 +4,7 @@ use super::{
     ArtifactChangeType, ContributionStance, IdeationEvidenceReference, IdeationEvidenceType,
     IdeationTarget, IdeationTargetType, SpeculationMarker, UncertaintyLevel,
 };
-use crate::model::ids::{SchemaVersion, ScopeId, StableId};
+use crate::model::ids::{ScopeId, StableId};
 use crate::model::validation::deserialize_optional_confidence;
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -70,7 +70,6 @@ pub struct UncertaintyRating {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Contribution {
-    pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
     pub target: IdeationTarget,

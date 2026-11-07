@@ -6,7 +6,7 @@ use crate::state_store::{
     EditQuestionInput, UpdateBoundaryInput, UpdateDomainInput, UpdateRequirementInput,
     UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
 };
-use provenance_core::{NodeType, SchemaVersion, Source};
+use provenance_core::{NodeType, Source};
 
 fn revision(
     store: &crate::state_store::StateStore,
@@ -237,7 +237,6 @@ fn bulk_replacement_reviews_existing_unenrolled_and_enrolled_records() {
     let source = Source {
         created: None,
         updated: None,
-        schema_version: SchemaVersion(2),
         scope_id: scope.clone(),
         id: id("source_bulk"),
         declared_by: None,

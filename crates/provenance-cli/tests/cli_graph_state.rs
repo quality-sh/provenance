@@ -1,7 +1,6 @@
 use assert_cmd::Command;
 use predicates::prelude::PredicateBooleanExt;
 use predicates::str::contains;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use std::path::Path;
 
 fn command(root: &Path, args: &[&str]) -> assert_cmd::assert::Assert {
@@ -10,13 +9,12 @@ fn command(root: &Path, args: &[&str]) -> assert_cmd::assert::Assert {
     command.assert()
 }
 
-fn write_manifest(root: &Path, version: u32) {
+fn write_manifest(root: &Path) {
     let state = root.join(".provenance/state");
     std::fs::create_dir_all(&state).unwrap();
     std::fs::write(
         state.join("manifest.json"),
         serde_json::json!({
-            "schema_version": version,
             "scopes": [{"id": "default", "path_prefix": "."}]
         })
         .to_string(),
@@ -28,7 +26,7 @@ fn write_manifest(root: &Path, version: u32) {
 fn interrupted_publication_is_recovered_by_health() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
-    write_manifest(root, SUPPORTED_SCHEMA_VERSION.0);
+    write_manifest(root);
     let state = root.join(".provenance/state");
     let cache = root.join(".provenance/cache");
     let transaction = cache.join("import-transactions/interrupted");
@@ -37,7 +35,6 @@ fn interrupted_publication_is_recovered_by_health() {
     std::fs::write(
         cache.join("import-publication.json"),
         serde_json::json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "transaction_dir": transaction,
             "phase": "backup_created"
         })
@@ -52,23 +49,13 @@ fn interrupted_publication_is_recovered_by_health() {
 
 #[test]
 fn gaps_check_rejects_invalid_manifests() {
-    let unsupported = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0 + 2,
-        "scopes": []
-    })
-    .to_string();
-    for (content, expected) in [
-        ("{", "EOF"),
-        (unsupported.as_str(), "manifest schema_version must be"),
-    ] {
-        let directory = tempfile::tempdir().unwrap();
-        let state = directory.path().join(".provenance/state");
-        std::fs::create_dir_all(&state).unwrap();
-        std::fs::write(state.join("manifest.json"), content).unwrap();
-        command(directory.path(), &["check", "--gaps"])
-            .failure()
-            .stderr(contains(expected));
-    }
+    let directory = tempfile::tempdir().unwrap();
+    let state = directory.path().join(".provenance/state");
+    std::fs::create_dir_all(&state).unwrap();
+    std::fs::write(state.join("manifest.json"), "{").unwrap();
+    command(directory.path(), &["check", "--gaps"])
+        .failure()
+        .stderr(contains("EOF"));
 }
 
 #[test]
@@ -79,7 +66,7 @@ fn gaps_check_rejects_a_manifest_without_scopes() {
     std::fs::create_dir_all(&state).unwrap();
     std::fs::write(
         state.join("manifest.json"),
-        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scopes": []}).to_string(),
+        serde_json::json!({"scopes": []}).to_string(),
     )
     .unwrap();
 
@@ -87,7 +74,7 @@ fn gaps_check_rejects_a_manifest_without_scopes() {
         .failure()
         .stderr(contains("manifest must contain at least one scope"));
 
-    write_manifest(root, SUPPORTED_SCHEMA_VERSION.0);
+    write_manifest(root);
     command(root, &["check", "--gaps"]).success();
 }
 

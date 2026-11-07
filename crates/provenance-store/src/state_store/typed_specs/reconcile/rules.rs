@@ -1,6 +1,4 @@
-use provenance_core::{
-    DeclarationAddress, Rule, RuleSeverity, RuleStatus, ScopeId, StableId, SUPPORTED_SCHEMA_VERSION,
-};
+use provenance_core::{DeclarationAddress, Rule, RuleSeverity, RuleStatus, ScopeId, StableId};
 
 use super::super::rule_addresses::{local_parent, rule_address};
 use super::super::DesiredTypedIds;
@@ -49,7 +47,6 @@ impl DeclarationRecord for Rule {
             created: None,
             updated: None,
             archived_in_commit: None,
-            schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: scope_id.clone(),
             id: id.clone(),
             declared_by: Some(owner.to_string()),

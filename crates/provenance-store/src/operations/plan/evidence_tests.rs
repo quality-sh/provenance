@@ -1,7 +1,7 @@
 use super::reviews;
 use crate::layout::ProvenanceLayout;
 use crate::state_store::{StateStore, TypedSpecInput};
-use provenance_core::{Manifest, RepoPathPrefix, ScopeId, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{Manifest, RepoPathPrefix, ScopeId};
 use serde_json::json;
 
 fn store() -> (tempfile::TempDir, StateStore, ScopeId) {
@@ -21,7 +21,6 @@ fn store() -> (tempfile::TempDir, StateStore, ScopeId) {
 
 fn spec(requirement: &str) -> TypedSpecInput {
     serde_json::from_value(json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "evidence",
         "declared_by": "spec://typescript/evidence",
         "requirements": [{"key": "sharing", "statement": requirement}],

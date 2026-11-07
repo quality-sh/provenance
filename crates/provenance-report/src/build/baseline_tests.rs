@@ -38,7 +38,7 @@ fn unreadable_base_binding_keeps_graph_and_source_findings() {
     write(
         &repo,
         ".provenance/state/scopes/default/implementations/binding.jsonl",
-        "{\"schema_version\":2,\"scope_id\":\"default\",\"id\":\"broken\"}\n",
+        "{\"scope_id\":\"default\",\"id\":\"broken\"}\n",
     );
     let base = commit(&repo, "Add incompatible implementation binding");
     remove_implementation_bindings(&repo);

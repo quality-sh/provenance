@@ -7,7 +7,7 @@ use crate::cache::tests::fixtures::append_record;
 use crate::layout::ProvenanceLayout;
 use crate::operations::read_policy::ReadPolicy;
 use provenance_core::protocol::GetQuery;
-use provenance_core::{NodeType, SDK_PROTOCOL_VERSION, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{NodeType, SDK_PROTOCOL_VERSION};
 use provenance_macros::verifies;
 use serde_json::json;
 
@@ -19,7 +19,7 @@ async fn a_read_over_an_old_dangling_target_still_answers() {
     append_record(
         &crate::shards::contributions_path(&layout, &scope),
         &json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "contrib_old",
+            "scope_id": "default", "id": "contrib_old",
             "target": {"artifact_type": "requirement", "artifact_id": "req_gone"},
             "participant_slot": "reviewer", "stance": "support", "strongest_finding": "Observed",
             "evidence_references": [], "material_claims": [], "risks": [], "objections": [],

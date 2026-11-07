@@ -8,7 +8,6 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import test, { after } from "node:test";
-import { STATE_SCHEMA_VERSION } from "./protocol.js";
 
 import { apply, configure, defineSpec, plan } from "./index.js";
 import { verifies } from "./rules.js";

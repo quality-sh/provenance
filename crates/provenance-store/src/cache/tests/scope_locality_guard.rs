@@ -9,7 +9,6 @@ use super::super::*;
 use super::fixtures::open;
 use super::fixtures::*;
 use provenance_core::ScopeId;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use std::collections::BTreeSet;
 
 /// Where a recorded read sits: inside a scope, in the global unit, or
@@ -64,7 +63,7 @@ fn two_scope_layout() -> (
         &requirements,
         format!(
             "{}\n",
-            serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "second",
+            serde_json::json!({"scope_id": "second",
                 "id": "req_second", "statement": "Second", "status": "active"})
         ),
     )

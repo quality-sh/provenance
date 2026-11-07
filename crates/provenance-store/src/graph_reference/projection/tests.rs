@@ -6,7 +6,6 @@ use provenance_core::{
 use provenance_macros::verifies;
 
 use super::*;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 mod collaboration;
 mod table;
@@ -83,7 +82,6 @@ macro_rules! define_export_test_inventory {
         fn graph_in_scope(scope: &ScopeId, populated: &[RecordFamily]) -> GraphExport {
             let holds = |family: RecordFamily| populated.contains(&family);
             GraphExport {
-                schema_version: 1,
                 scope: Scope {
                     id: scope.clone(),
                     path_prefix: RepoPathPrefix::new("."),
@@ -116,7 +114,6 @@ macro_rules! define_export_test_inventory {
 
         fn family_count_of(graph: &GraphExport) -> usize {
             let GraphExport {
-                schema_version: _,
                 scope: _,
                 $($export_field,)*
                 $($binding_field,)*
@@ -144,7 +141,6 @@ fn source_record(scope: &ScopeId) -> Source {
     Source {
         created: None,
         updated: None,
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Source),
         declared_by: None,
@@ -165,7 +161,6 @@ fn source_record(scope: &ScopeId) -> Source {
 
 fn domain_record(scope: &ScopeId) -> Domain {
     Domain {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Domain),
         name: "Pinned domain".into(),
@@ -179,7 +174,6 @@ fn requirement_record(scope: &ScopeId) -> Requirement {
         archived_in_commit: None,
         created: None,
         updated: None,
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Requirement),
         declared_by: None,
@@ -202,7 +196,6 @@ fn requirement_record(scope: &ScopeId) -> Requirement {
 
 fn boundary_record(scope: &ScopeId) -> Boundary {
     Boundary {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Boundary),
         requirement_id: stable_id(RecordFamily::Requirement),
@@ -213,7 +206,6 @@ fn boundary_record(scope: &ScopeId) -> Boundary {
 
 fn topic_record(scope: &ScopeId) -> Topic {
     Topic {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Topic),
         requirement_id: stable_id(RecordFamily::Requirement),
@@ -229,7 +221,6 @@ fn topic_record(scope: &ScopeId) -> Topic {
 fn question_record(scope: &ScopeId) -> Question {
     Question {
         depends_on: Vec::new(),
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Question),
         topic_id: stable_id(RecordFamily::Topic),
@@ -252,7 +243,6 @@ fn resolution_record(scope: &ScopeId) -> Resolution {
         archived_in_commit: None,
         created: None,
         updated: None,
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Resolution),
         title: "Pinned resolution".into(),
@@ -279,7 +269,6 @@ fn rule_record(scope: &ScopeId) -> Rule {
         created: None,
         updated: None,
         archived_in_commit: None,
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Rule),
         declared_by: None,
@@ -301,7 +290,6 @@ fn rule_record(scope: &ScopeId) -> Rule {
 
 fn verification_binding_record(scope: &ScopeId) -> VerificationBinding {
     VerificationBinding {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::VerificationBinding),
         rule_id: stable_id(RecordFamily::Rule),
@@ -316,7 +304,6 @@ fn verification_binding_record(scope: &ScopeId) -> VerificationBinding {
 
 fn implementation_binding_record(scope: &ScopeId) -> ImplementationBinding {
     ImplementationBinding {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::ImplementationBinding),
         rule_id: stable_id(RecordFamily::Rule),

@@ -2,7 +2,6 @@ mod pending_decisions;
 #[allow(unused_imports)]
 pub use pending_decisions::keep_decision_links_pending;
 
-use provenance_core::{review::REVIEW_SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSION};
 use std::collections::BTreeSet;
 use std::path::Path;
 
@@ -94,9 +93,8 @@ fn filter_jsonl(path: &Path, keep: impl Fn(&serde_json::Value) -> bool) -> BTree
 }
 
 fn rewrite_manifest(path: &Path) {
-    let mut manifest: serde_json::Value =
+    let manifest: serde_json::Value =
         serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
-    manifest["schema_version"] = SUPPORTED_SCHEMA_VERSION.0.into();
     std::fs::write(path, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
 }
 
@@ -121,10 +119,7 @@ fn rewrite_jsonl(path: &Path) {
     let contents = std::fs::read_to_string(path).unwrap();
     let mut rewritten = String::new();
     for line in contents.lines().filter(|line| !line.trim().is_empty()) {
-        let mut record: serde_json::Value = serde_json::from_str(line).unwrap();
-        if record["schema_version"] == REVIEW_SCHEMA_VERSION.0 {
-            record["schema_version"] = SUPPORTED_SCHEMA_VERSION.0.into();
-        }
+        let record: serde_json::Value = serde_json::from_str(line).unwrap();
         rewritten.push_str(&serde_json::to_string(&record).unwrap());
         rewritten.push('\n');
     }

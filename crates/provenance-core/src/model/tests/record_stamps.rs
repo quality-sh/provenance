@@ -55,8 +55,7 @@ fn compare<T: serde::de::DeserializeOwned + serde::Serialize + PartialEq + std::
 
 #[test]
 fn equality_ignores_stamps_on_all_four_record_kinds() {
-    let base =
-        json!({"schema_version":crate::SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"one"});
+    let base = json!({"scope_id":"default","id":"one"});
     let with = |fields: serde_json::Value| {
         let mut record = base.clone();
         record
@@ -118,7 +117,6 @@ fn assert_equality_fields<T: schemars::JsonSchema>(fields: &[&str]) {
 #[test]
 fn equality_field_lists_cover_each_serialized_record_field_except_stamps() {
     assert_equality_fields::<Source>(&[
-        "schema_version",
         "scope_id",
         "id",
         "declared_by",
@@ -135,7 +133,6 @@ fn equality_field_lists_cover_each_serialized_record_field_except_stamps() {
         "origin_message",
     ]);
     assert_equality_fields::<Requirement>(&[
-        "schema_version",
         "scope_id",
         "id",
         "declared_by",
@@ -155,7 +152,6 @@ fn equality_field_lists_cover_each_serialized_record_field_except_stamps() {
         "origin_message",
     ]);
     assert_equality_fields::<Rule>(&[
-        "schema_version",
         "scope_id",
         "id",
         "declared_by",
@@ -174,7 +170,6 @@ fn equality_field_lists_cover_each_serialized_record_field_except_stamps() {
         "origin_message",
     ]);
     assert_equality_fields::<Resolution>(&[
-        "schema_version",
         "scope_id",
         "id",
         "title",

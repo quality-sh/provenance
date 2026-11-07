@@ -1,11 +1,8 @@
 use super::artifacts::{Requirement, Resolution, Rule, Source};
 
-
-
 #[test]
 fn enriched_source_and_requirement_records_roundtrip_without_schema_bump() {
     let source = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "source_sah",
         "name": "Support at Home",
@@ -20,7 +17,6 @@ fn enriched_source_and_requirement_records_roundtrip_without_schema_bump() {
         "originMessage": "msg_000001"
     });
     let requirement = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "req_sah",
         "statement": "Support at Home shall be traceable",
@@ -37,7 +33,6 @@ fn enriched_source_and_requirement_records_roundtrip_without_schema_bump() {
     let source = serde_json::to_value(source).unwrap();
     let requirement = serde_json::to_value(requirement).unwrap();
 
-    assert_eq!(source["schema_version"], SUPPORTED_SCHEMA_VERSION.0);
     assert_eq!(source["source_type"], "legislation");
     assert_eq!(source["reference"], "Department guidance");
     assert_eq!(
@@ -49,7 +44,6 @@ fn enriched_source_and_requirement_records_roundtrip_without_schema_bump() {
     assert_eq!(source["supersedes"][0], "source_sah_2025");
     assert_eq!(source["origin_thread"], "thread_req_origin");
     assert_eq!(source["origin_message"], "msg_000001");
-    assert_eq!(requirement["schema_version"], SUPPORTED_SCHEMA_VERSION.0);
     assert_eq!(requirement["status"], "discovery");
     assert_eq!(requirement["description"], "Cloud import description");
     assert_eq!(requirement["source_refs"][0]["clause"], "Program overview");
@@ -61,7 +55,6 @@ fn enriched_source_and_requirement_records_roundtrip_without_schema_bump() {
 #[verifies("rule_source_commit_pin", examples)]
 fn source_commit_pin_must_be_hex_git_commit() {
     let source = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "source_codebase",
         "name": "Codebase",
@@ -78,7 +71,6 @@ fn source_commit_pin_must_be_hex_git_commit() {
 #[test]
 fn enriched_resolution_and_rule_records_roundtrip_without_schema_bump() {
     let resolution = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "res_sah",
         "title": "SAH extraction",
@@ -102,7 +94,6 @@ fn enriched_resolution_and_rule_records_roundtrip_without_schema_bump() {
         "originMessage": "msg_000001"
     });
     let rule = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "rule_sah_001",
         "name": "SAH rule",
@@ -122,7 +113,6 @@ fn enriched_resolution_and_rule_records_roundtrip_without_schema_bump() {
     let resolution = serde_json::to_value(resolution).unwrap();
     let rule = serde_json::to_value(rule).unwrap();
 
-    assert_eq!(resolution["schema_version"], SUPPORTED_SCHEMA_VERSION.0);
     assert_eq!(resolution["status"], "draft");
     assert_eq!(resolution["confidence"], 0.91);
     assert_eq!(resolution["inputs"][0]["input_type"], "regulatory");
@@ -134,7 +124,6 @@ fn enriched_resolution_and_rule_records_roundtrip_without_schema_bump() {
     assert_eq!(resolution["supersedes"][0], "res_sah_2025");
     assert_eq!(resolution["origin_thread"], "thread_req_origin");
     assert_eq!(resolution["origin_message"], "msg_000001");
-    assert_eq!(rule["schema_version"], SUPPORTED_SCHEMA_VERSION.0);
     assert_eq!(rule["status"], "draft");
     assert_eq!(rule["source_document"], "Example-API-main/src/example.php");
     assert_eq!(rule["origin_thread"], "thread_req_origin");
@@ -144,7 +133,6 @@ fn enriched_resolution_and_rule_records_roundtrip_without_schema_bump() {
 #[test]
 fn requirement_fog_roundtrips_as_unstructured_text() {
     let requirement = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "req_share_links",
         "statement": "Provenance docs shareable via short-lived link",
@@ -165,7 +153,6 @@ fn requirement_fog_roundtrips_as_unstructured_text() {
     );
 
     let without_fog = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "req_plain",
         "statement": "Plain requirement",
@@ -190,7 +177,6 @@ fn requirement_fog_roundtrips_as_unstructured_text() {
 #[test]
 fn pre_deletion_exports_carrying_the_removed_keys_read_and_drop_them() {
     let resolution = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "res_legacy",
         "title": "Legacy export",
@@ -202,7 +188,6 @@ fn pre_deletion_exports_carrying_the_removed_keys_read_and_drop_them() {
         "review_triggers": []
     });
     let rule = serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "rule_legacy",
         "rule_code": "LEGACY-001",
@@ -264,7 +249,6 @@ fn a_resolution_with_a_blank_input_field_is_refused_on_read() {
 
 fn resolution_with_input(reference: &str, summary: &str) -> serde_json::Value {
     serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "res_sah",
         "title": "SAH extraction",

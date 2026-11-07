@@ -3,8 +3,7 @@ use super::{Requirement, Resolution, Rule, Source};
 
 impl PartialEq for Source {
     fn eq(&self, other: &Self) -> bool {
-        self.schema_version == other.schema_version
-            && self.scope_id == other.scope_id
+        self.scope_id == other.scope_id
             && self.id == other.id
             && self.declared_by == other.declared_by
             && self.declaration_address == other.declaration_address
@@ -23,8 +22,7 @@ impl PartialEq for Source {
 
 impl PartialEq for Requirement {
     fn eq(&self, other: &Self) -> bool {
-        self.schema_version == other.schema_version
-            && self.scope_id == other.scope_id
+        self.scope_id == other.scope_id
             && self.id == other.id
             && self.declared_by == other.declared_by
             && self.declaration_address == other.declaration_address
@@ -46,8 +44,7 @@ impl PartialEq for Requirement {
 
 impl PartialEq for Rule {
     fn eq(&self, other: &Self) -> bool {
-        self.schema_version == other.schema_version
-            && self.scope_id == other.scope_id
+        self.scope_id == other.scope_id
             && self.id == other.id
             && self.declared_by == other.declared_by
             && self.declaration_address == other.declaration_address
@@ -68,8 +65,7 @@ impl PartialEq for Rule {
 
 impl PartialEq for Resolution {
     fn eq(&self, other: &Self) -> bool {
-        self.schema_version == other.schema_version
-            && self.scope_id == other.scope_id
+        self.scope_id == other.scope_id
             && self.id == other.id
             && self.title == other.title
             && self.position == other.position

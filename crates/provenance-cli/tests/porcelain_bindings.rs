@@ -326,7 +326,7 @@ fn live_cli_and_mcp_check_statement_fields_produce_the_same_input() {
 #[verifies("rule_porcelain_cli_readable_json", examples)]
 fn readable_get_warns_when_the_record_or_view_is_stale() {
     let record = serde_json::from_value(json!({
-        "node_type": "requirement", "schema_version": 2, "scope_id": "default",
+        "node_type": "requirement", "scope_id": "default",
         "id": "req_stale", "statement": "Keep the graph typed.", "status": "active"
     }))
     .unwrap();

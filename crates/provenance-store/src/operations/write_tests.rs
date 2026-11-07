@@ -21,10 +21,11 @@ fn fixture() -> (tempfile::TempDir, StateStore, ScopeId) {
     (dir, crate::test_support::store(&layout), scope)
 }
 fn document() -> crate::state_store::TypedSpecInput {
-    serde_json::from_value(json!({"schema_version":provenance_core::SUPPORTED_SCHEMA_VERSION.0,"spec":"example","declared_by":"test",
+    serde_json::from_value(json!({"spec":"example","declared_by":"test",
         "sources":[{"key":"policy","name":"Policy","kind":"document"}],
         "requirements":[{"key":"ready","statement":"The system is ready.","sources":["policy"]}],
-        "rules":[{"key":"ready","requirement":"ready","statement":"The system is ready."}]})).unwrap()
+        "rules":[{"key":"ready","requirement":"ready","statement":"The system is ready."}]}))
+    .unwrap()
 }
 #[test]
 fn missing_references_are_typed_without_changing_the_native_message() {
@@ -94,20 +95,6 @@ fn typed_rule_creation_defaults_to_draft() {
     assert_eq!(rules[0].status, provenance_core::RuleStatus::Draft);
 }
 
-#[test]
-fn native_schema_diagnostic_is_not_duplicated_in_the_error_chain() {
-    let (_dir, store, scope) = fixture();
-    let mut input = document();
-    input.schema_version = 999;
-    let error = store.apply_typed_spec(&scope, input).unwrap_err();
-    assert_eq!(
-        format!("{error:#}"),
-        format!(
-            "typed spec schema_version must be {}",
-            provenance_core::SUPPORTED_SCHEMA_VERSION.0
-        )
-    );
-}
 #[test]
 fn begin_keeps_the_publication_lock_and_reports_saved_binding_on_failure() {
     let (_dir, store, scope) = fixture();

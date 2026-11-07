@@ -26,19 +26,17 @@ fn native_and_batch_writers_refuse_review_mutation_bypasses() {
         "decisions on review submissions go through the review seam",
     );
 
-    let mut batch_card = card;
-    batch_card["schema_version"] = json!(3);
     refused(
         store.land_ideation_batch(
             &super::scope(),
-            serde_json::from_value(json!({"proposals":[batch_card]})).unwrap(),
+            serde_json::from_value(json!({"proposals":[card]})).unwrap(),
             false,
         ),
         "batch writes cannot create review submissions",
     );
     refused(
         store.land_ideation_batch(&super::scope(), serde_json::from_value(json!({"dispositions":[{
-            "schema_version":2,"scope_id":"default","id":"disp-forge","proposal_id":proposal,
+            "scope_id":"default","id":"disp-forge","proposal_id":proposal,
             "decision":"rejected","rationale":"Because","actor":{"identity_type":"human","id":"reviewer"}}]})).unwrap(), false),
         "decisions on review submissions go through the review seam",
     );

@@ -12,7 +12,7 @@ use provenance_macros::rule;
 use super::builders::{RequirementBuilder, RuleBuilder, SourceBuilder, SpecBuilder};
 use super::checks::{reference_violations, DeclarationChecker, RuleChecker};
 use super::AuthoringError;
-use crate::model::{SourceType, StableId, SUPPORTED_SCHEMA_VERSION};
+use crate::model::{SourceType, StableId};
 use crate::protocol::{
     TypedAdoptionTarget, TypedDeclarationKind, TypedImplementationInput, TypedRequirementInput,
     TypedRuleInput, TypedSourceInput, TypedSpecInput,
@@ -49,7 +49,6 @@ impl SpecDocument {
     /// failure beyond what `build()` already rejected.
     pub fn materialize(&self, declared_by: impl Into<String>) -> TypedSpecInput {
         TypedSpecInput {
-            schema_version: SUPPORTED_SCHEMA_VERSION.0,
             spec: self.spec.clone(),
             declared_by: declared_by.into(),
             adopt_unowned: self.adopt_unowned.clone(),

@@ -338,8 +338,6 @@ fn cli_import_refuses_unapproved_resolution_links_without_replacing_state() {
     });
     for family in ["requirements", "resolutions", "topics", "questions"] {
         for record in document[family].as_array_mut().unwrap() {
-            record["schema_version"] =
-                serde_json::json!(provenance_core::SUPPORTED_SCHEMA_VERSION.0);
             record["scope_id"] = serde_json::json!("default");
         }
     }
@@ -356,7 +354,6 @@ fn cli_import_refuses_unapproved_resolution_links_without_replacing_state() {
         if kind == "rule" {
             document["questions"][0]["status"] = serde_json::json!("open");
             document["rules"] = serde_json::json!([{
-                "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
                 "scope_id":"default", "id":"rule_code_scores_health",
                 "statement":"Code scores affect health.", "status":"active", "severity":"high",
                 "requirement_ids":["req_health"], "resolution_ids":["res_code_scores_health"]

@@ -20,10 +20,7 @@ export type RuleDeclaration = Omit<NonNullFields<WireRule>, "address"> & {
 };
 export type ImplementationDeclaration = NonNullable<RuleDeclaration["implementation"]>;
 
-/** The state schema version emitted by the local authoring builders. */
-export const STATE_SCHEMA_VERSION = 2;
-export type TypedSpecDocument = Omit<NonNullFields<WireSpecDocument>, "schema_version" | "sources" | "requirements" | "rules"> & {
-  schema_version: typeof STATE_SCHEMA_VERSION;
+export type TypedSpecDocument = Omit<NonNullFields<WireSpecDocument>, "sources" | "requirements" | "rules"> & {
   sources: SourceDeclaration[];
   requirements: RequirementDeclaration[];
   rules: RuleDeclaration[];
@@ -56,7 +53,7 @@ export interface StaleRequest { base: string; head?: string; limit?: number; cur
 export type GraphCollection = "sources" | "requirements" | "resolutions" | "rules" | "domains" | "boundaries" | "topics" | "questions";
 
 type MemberResponse<Response> = Response extends { data: infer Data }
-  ? Data extends { id: unknown; schema_version: number; scope_id: unknown } ? Response : never
+  ? Data extends { id: unknown; scope_id: unknown } ? Response : never
   : never;
 type ResourceGetResponses = {
   source: MemberResponse<Schemas["GetSourceBaseSuccess"]>;

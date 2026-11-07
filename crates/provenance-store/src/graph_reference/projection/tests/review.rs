@@ -6,7 +6,7 @@ fn enrolled_requirements_keep_review_history_out_of_the_pinned_graph() {
     std::fs::create_dir_all(layout.state_dir()).unwrap();
     std::fs::write(
         layout.manifest_path(),
-        r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}]}"#,
+        r#"{"scopes":[{"id":"default","path_prefix":"."}]}"#,
     )
     .unwrap();
     let store = crate::test_support::store(&layout);
@@ -40,7 +40,7 @@ fn discussion_membership_and_status_do_not_change_the_pinned_graph() {
     std::fs::create_dir_all(layout.state_dir()).unwrap();
     std::fs::write(
         layout.manifest_path(),
-        r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}]}"#,
+        r#"{"scopes":[{"id":"default","path_prefix":"."}]}"#,
     )
     .unwrap();
     let store = crate::test_support::store(&layout);

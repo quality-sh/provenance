@@ -1,8 +1,7 @@
 use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 
-use super::ids::{SchemaVersion, ScopeId};
-use crate::SUPPORTED_SCHEMA_VERSION;
+use super::ids::ScopeId;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -25,7 +24,6 @@ pub struct Scope {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Manifest {
-    pub schema_version: SchemaVersion,
     pub scopes: Vec<Scope>,
     #[serde(default)]
     pub disposition_actor_ids: Vec<String>,
@@ -42,7 +40,6 @@ impl Manifest {
 
     pub fn default_with_scope(scope: ScopeId, path_prefix: RepoPathPrefix) -> Self {
         Self {
-            schema_version: SUPPORTED_SCHEMA_VERSION,
             scopes: vec![Scope {
                 id: scope,
                 path_prefix,

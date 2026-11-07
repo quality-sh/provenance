@@ -55,7 +55,6 @@ pub fn archive_non_canonical_siblings(
 
 #[cfg(test)]
 mod tests {
-    use crate::SUPPORTED_SCHEMA_VERSION;
     use provenance_macros::verifies;
 
     use super::*;
@@ -63,7 +62,6 @@ mod tests {
 
     fn thread(id: &str, status: ThreadStatus, created_at: i64) -> Thread {
         Thread {
-            schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: ScopeId::new("default").unwrap(),
             id: StableId::new(id).unwrap(),
             parent: ThreadParent {

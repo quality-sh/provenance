@@ -2,7 +2,7 @@ use provenance_macros::{ProjectionRow, Relations};
 use serde::{Deserialize, Serialize};
 
 use super::artifacts::SourceReference;
-use super::ids::{SchemaVersion, ScopeId, StableId};
+use super::ids::{ScopeId, StableId};
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -71,7 +71,6 @@ pub struct ArtifactLink {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
 #[table("boundaries")]
 pub struct Boundary {
-    pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
     #[relation(target = Requirement, flow = none)]
@@ -92,7 +91,6 @@ pub struct Boundary {
 ]))))]
 #[table("topics")]
 pub struct Topic {
-    pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
     #[relation(target = Requirement, flow = none)]
@@ -119,7 +117,6 @@ pub struct Topic {
 ]))))]
 #[table("questions")]
 pub struct Question {
-    pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
     #[relation(target = Topic, flow = none)]

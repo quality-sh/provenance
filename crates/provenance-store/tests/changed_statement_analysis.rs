@@ -1,4 +1,3 @@
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
     Requirement, RequirementStatus, Rule, RuleSeverity, RuleStatus, ScopeId, StableId,
 };
@@ -11,7 +10,6 @@ fn requirement(id: &str, statement: &str) -> Requirement {
         archived_in_commit: None,
         created: None,
         updated: None,
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: ScopeId::new("default").unwrap(),
         id: StableId::new(id).unwrap(),
         declared_by: None,
@@ -37,7 +35,6 @@ fn rule(id: &str, statement: &str) -> Rule {
         created: None,
         updated: None,
         archived_in_commit: None,
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: ScopeId::new("default").unwrap(),
         id: StableId::new(id).unwrap(),
         declared_by: None,

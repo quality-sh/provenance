@@ -29,14 +29,14 @@ fn graph_records() -> [(&'static str, Value); 3] {
         (
             "requirements/req.jsonl",
             json!({
-                "schema_version": 2, "scope_id": "default", "id": "req_legacy",
+                "scope_id": "default", "id": "req_legacy",
                 "statement": "The graph is readable.", "status": "resolved"
             }),
         ),
         (
             "rules/rule.jsonl",
             json!({
-                "schema_version": 2, "scope_id": "default", "id": "rule_legacy",
+                "scope_id": "default", "id": "rule_legacy",
                 "name": "Readable graph", "statement": "The graph is readable.",
                 "status": "active", "severity": "medium", "requirement_ids": ["req_legacy"]
             }),
@@ -44,7 +44,7 @@ fn graph_records() -> [(&'static str, Value); 3] {
         (
             "sources/source.jsonl",
             json!({
-                "schema_version": 2, "scope_id": "default", "id": "source_legacy",
+                "scope_id": "default", "id": "source_legacy",
                 "name": "Graph source", "source_type": "document", "url": null
             }),
         ),
@@ -89,7 +89,7 @@ fn head_bindings_refuse_every_legacy_retired_field() {
         (
             "verifications/binding.jsonl",
             json!({
-                "schema_version": 2, "scope_id": "default", "id": "vb_legacy",
+                "scope_id": "default", "id": "vb_legacy",
                 "rule_id": "rule_legacy", "key": "graph", "method": "examples",
                 "declared_by": "fixture", "file": "src/lib.rs"
             }),
@@ -97,7 +97,7 @@ fn head_bindings_refuse_every_legacy_retired_field() {
         (
             "implementations/binding.jsonl",
             json!({
-                "schema_version": 2, "scope_id": "default", "id": "ib_legacy",
+                "scope_id": "default", "id": "ib_legacy",
                 "rule_id": "rule_legacy", "declared_by": "fixture",
                 "file": "src/lib.rs", "symbol": "graph"
             }),
@@ -162,7 +162,7 @@ fn historical_base_keeps_tolerant_graph_parsing() {
 fn supersedes_marks_only_records_of_the_same_kind() {
     let requirement = |id: &str| -> Requirement {
         serde_json::from_value(json!({
-            "schema_version": 2, "scope_id": "default", "id": id,
+            "scope_id": "default", "id": id,
             "statement": "The graph is readable.", "status": "active"
         }))
         .unwrap()

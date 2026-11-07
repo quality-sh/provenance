@@ -45,7 +45,7 @@ fn serves_assets_configuration_and_only_the_selected_graph() {
     assert_eq!(config["dispositionActorIds"], json!([]));
     assert_eq!(
         config["compatibility"],
-        json!({"wire":9,"state":2,"review_journal":3,"read_derivation":3})
+        json!({"wire":9,"read_derivation":3})
     );
     assert!(config.get("bearer").is_none());
     assert_eq!(list_discussions(&host).status(), 200);

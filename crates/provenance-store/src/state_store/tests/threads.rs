@@ -2,7 +2,6 @@ use super::initialized_store;
 use crate::state_store::{PostMessageInput, StateStore};
 use crate::{jsonl, shards};
 use provenance_core::threads::choose_canonical_active_thread;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
     Message, MessageRole, NodeType, ScopeId, StableId, Thread, ThreadParent, ThreadStatus,
 };
@@ -12,7 +11,6 @@ use provenance_macros::verifies;
 fn list_messages_reads_all_month_shards() {
     let (_dir, store, scope) = initialized_store();
     let first_message = Message {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: StableId::new("msg_july").unwrap(),
         thread_id: StableId::new("thread_source_source_schads").unwrap(),
@@ -22,7 +20,6 @@ fn list_messages_reads_all_month_shards() {
         ai_metadata: None,
     };
     let second_message = Message {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: StableId::new("msg_august").unwrap(),
         thread_id: StableId::new("thread_source_source_schads").unwrap(),
@@ -123,7 +120,6 @@ fn seeded_threads(rng: &mut Rng, scope: &ScopeId) -> Vec<Thread> {
                 _ => ThreadStatus::Active,
             };
             threads.push(Thread {
-                schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: scope.clone(),
                 id: StableId::new(format!("thread_seed_{index}_{ordinal}")).unwrap(),
                 parent: parent.clone(),
@@ -388,7 +384,6 @@ fn thread(
     created_at: i64,
 ) -> Thread {
     Thread {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: StableId::new(id).unwrap(),
         parent: parent.clone(),

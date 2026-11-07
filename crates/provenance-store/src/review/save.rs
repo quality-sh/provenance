@@ -10,14 +10,9 @@ use provenance_core::threads::DiscussionOrigin;
 use provenance_core::{NodeType, Requirement, ScopeId, StableId};
 use provenance_macros::rule;
 
-/// The edit precondition is a digest of the record without its stored format
-/// marker or record stamps.
+/// The edit precondition is a digest of the record without its record stamps.
 pub(super) fn etag(record: &ReviewRecord) -> anyhow::Result<String> {
-    let mut content = provenance_core::model::record_stamps::content_value(record)?;
-    content
-        .as_object_mut()
-        .ok_or_else(|| anyhow::anyhow!("record does not serialize to an object"))?
-        .remove("schema_version");
+    let content = provenance_core::model::record_stamps::content_value(record)?;
     Ok(crate::canonical_digest::digest(
         &crate::canonical_digest::canonical_bytes(&content)?,
     ))
@@ -201,7 +196,7 @@ mod tests {
         std::fs::create_dir_all(layout.state_dir()).unwrap();
         std::fs::write(
             layout.manifest_path(),
-            r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}]}"#,
+            r#"{"scopes":[{"id":"default","path_prefix":"."}]}"#,
         )
         .unwrap();
         (
@@ -226,7 +221,6 @@ mod tests {
     #[test]
     fn requirement_etag_ignores_record_stamps() {
         let value = json!({
-            "schema_version": 2,
             "scope_id": "default",
             "id": "req_stamp",
             "statement": "The system stores records.",

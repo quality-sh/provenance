@@ -20,32 +20,6 @@ fn unintegrated_atomic_writer_cannot_replace_a_submitted_requirement() {
     assert_eq!(std::fs::read(path).unwrap(), before);
 }
 
-#[test]
-fn review_schema_is_readable_only_for_requirements_and_manifest() {
-    use provenance_store::layout::ProvenanceLayout;
-    let temp = tempfile::tempdir().unwrap();
-    let root = Utf8Path::from_path(temp.path()).unwrap();
-    let layout = ProvenanceLayout::new(root);
-    std::fs::create_dir_all(layout.state_dir()).unwrap();
-    std::fs::write(
-        layout.manifest_path(),
-        r#"{"schema_version":3,"scopes":[{"id":"default","path_prefix":"."}],"disposition_actor_ids":[]}"#,
-    )
-    .unwrap();
-    assert!(
-        provenance_store::repository::Repository::open(root, "default")
-            .unwrap()
-            .store()
-            .manifest()
-            .is_ok()
-    );
-    assert!(provenance_core::ensure_supported_schema_version(
-        "proposal",
-        provenance_core::SchemaVersion(3)
-    )
-    .is_err());
-}
-
 /// Implementation aid: repeated ids cannot bypass the public writer guard.
 #[test]
 fn duplicate_submitted_identity_cannot_hide_an_extra_mutation() {
@@ -122,7 +96,7 @@ fn unintegrated_writers_refuse_submitted_rows_for_every_record_kind() {
 }
 
 #[test]
-fn review_schema_is_readable_for_every_record_kind() {
+fn every_record_kind_reads_without_a_format_field() {
     use provenance_core::ScopeId;
     use provenance_store::layout::ProvenanceLayout;
     let temp = tempfile::tempdir().unwrap();
@@ -131,61 +105,47 @@ fn review_schema_is_readable_for_every_record_kind() {
     std::fs::create_dir_all(layout.state_dir()).unwrap();
     std::fs::write(
         layout.manifest_path(),
-        r#"{"schema_version":3,"scopes":[{"id":"default","path_prefix":"."}]}"#,
+        r#"{"scopes":[{"id":"default","path_prefix":"."}]}"#,
     )
     .unwrap();
     let fixtures = [
         (
             "sources/source.jsonl",
-            json!({"schema_version":3,"scope_id":"default","id":"source_a","name":"Policy","source_type":"document","url":null}),
+            json!({"scope_id":"default","id":"source_a","name":"Policy","source_type":"document","url":null}),
         ),
         (
             "requirements/req.jsonl",
-            json!({"schema_version":3,"scope_id":"default","id":"req_a","statement":"The system stores records.","status":"active"}),
+            json!({"scope_id":"default","id":"req_a","statement":"The system stores records.","status":"active"}),
         ),
         (
             "resolutions/res.jsonl",
-            json!({"schema_version":3,"scope_id":"default","id":"resolution_a","title":"Decision","position":"Use it.","rationale":"It is required.","status":"approved","inputs":[],"requirement_ids":["req_a"],"review_on":null}),
+            json!({"scope_id":"default","id":"resolution_a","title":"Decision","position":"Use it.","rationale":"It is required.","status":"approved","inputs":[],"requirement_ids":["req_a"],"review_on":null}),
         ),
         (
             "rules/rule.jsonl",
-            json!({"schema_version":3,"scope_id":"default","id":"rule_a","statement":"The system stores records.","status":"active","severity":"high","requirement_ids":["req_a"],"resolution_ids":[]}),
+            json!({"scope_id":"default","id":"rule_a","statement":"The system stores records.","status":"active","severity":"high","requirement_ids":["req_a"],"resolution_ids":[]}),
         ),
         (
             "domains/domain.jsonl",
-            json!({"schema_version":3,"scope_id":"default","id":"domain_a","name":"Storage"}),
+            json!({"scope_id":"default","id":"domain_a","name":"Storage"}),
         ),
         (
             "boundaries/boundary.jsonl",
-            json!({"schema_version":3,"scope_id":"default","id":"boundary_a","requirement_id":"req_a","statement":"Storage only."}),
+            json!({"scope_id":"default","id":"boundary_a","requirement_id":"req_a","statement":"Storage only."}),
         ),
         (
             "topics/topic.jsonl",
-            json!({"schema_version":3,"scope_id":"default","id":"topic_a","requirement_id":"req_a","title":"Storage","status":"open","links":[]}),
+            json!({"scope_id":"default","id":"topic_a","requirement_id":"req_a","title":"Storage","status":"open","links":[]}),
         ),
         (
             "questions/question.jsonl",
-            json!({"schema_version":3,"scope_id":"default","id":"question_a","topic_id":"topic_a","requirement_id":"req_a","question":"Where is storage?","resolution_method":"research","status":"open","links":[]}),
+            json!({"scope_id":"default","id":"question_a","topic_id":"topic_a","requirement_id":"req_a","question":"Where is storage?","resolution_method":"research","status":"open","links":[]}),
         ),
     ];
     for (relative, value) in fixtures {
         let path = layout.scopes_dir().join("default").join(relative);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, format!("{value}\n")).unwrap();
-        let directory = Utf8Path::new(relative)
-            .parent()
-            .unwrap()
-            .file_name()
-            .unwrap();
-        let kind = match directory {
-            "boundaries" => "boundary",
-            other => other.trim_end_matches('s'),
-        };
-        assert!(provenance_core::ensure_supported_schema_version(
-            kind,
-            provenance_core::SchemaVersion(3)
-        )
-        .is_ok());
     }
     let store = provenance_store::repository::Repository::open(root, "default")
         .unwrap()

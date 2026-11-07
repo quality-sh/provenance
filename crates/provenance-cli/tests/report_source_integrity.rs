@@ -248,7 +248,7 @@ fn committed_typed_binding_survives_an_unpinned_source_scan() {
         repo,
         ".provenance/state/scopes/default/implementations/binding.jsonl",
         concat!(
-            "{\"schema_version\":2,\"scope_id\":\"default\",",
+            "{\"scope_id\":\"default\",",
             "\"id\":\"impl_anchor\",\"rule_id\":\"rule_anchor\",",
             "\"declared_by\":\"spec://test/anchor\",",
             "\"file\":\"src/lib.rs\",\"symbol\":\"anchor\"}\n"

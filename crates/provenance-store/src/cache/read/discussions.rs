@@ -1,5 +1,5 @@
 use crate::operations::reader::ReadSnapshot;
-use provenance_core::{Message, ScopeId, StableId, Thread, ThreadParent, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{Message, ScopeId, StableId, Thread, ThreadParent};
 use serde::de::DeserializeOwned;
 use sqlx::Row;
 
@@ -20,7 +20,6 @@ impl ReadSnapshot {
         rows.iter()
             .map(|row| {
                 Ok(Thread {
-                    schema_version: SUPPORTED_SCHEMA_VERSION,
                     scope_id: ScopeId::new(row.try_get::<String, _>("scope_id")?)?,
                     id: StableId::new(row.try_get::<String, _>("id")?)?,
                     parent: ThreadParent {
@@ -46,7 +45,6 @@ impl ReadSnapshot {
         rows.iter()
             .map(|row| {
                 Ok(Message {
-                    schema_version: SUPPORTED_SCHEMA_VERSION,
                     scope_id: ScopeId::new(row.try_get::<String, _>("scope_id")?)?,
                     id: StableId::new(row.try_get::<String, _>("id")?)?,
                     thread_id: StableId::new(row.try_get::<String, _>("thread_id")?)?,
@@ -91,7 +89,6 @@ impl ReadSnapshot {
         rows.iter()
             .map(|row| {
                 Ok(Thread {
-                    schema_version: SUPPORTED_SCHEMA_VERSION,
                     scope_id: ScopeId::new(row.try_get::<String, _>("scope_id")?)?,
                     id: StableId::new(row.try_get::<String, _>("id")?)?,
                     parent: ThreadParent {
@@ -134,7 +131,6 @@ impl ReadSnapshot {
         rows.iter()
             .map(|row| {
                 Ok(Message {
-                    schema_version: SUPPORTED_SCHEMA_VERSION,
                     scope_id: ScopeId::new(row.try_get::<String, _>("scope_id")?)?,
                     id: StableId::new(row.try_get::<String, _>("id")?)?,
                     thread_id: StableId::new(row.try_get::<String, _>("thread_id")?)?,

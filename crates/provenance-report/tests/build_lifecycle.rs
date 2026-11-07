@@ -47,7 +47,7 @@ fn report_with_base(
         repo,
         "requirements/req.jsonl",
         &[json!({
-            "schema_version": 2, "scope_id": "default", "id": "req_anchor",
+            "scope_id": "default", "id": "req_anchor",
             "statement": "The graph is readable.", "status": "active"
         })],
     );
@@ -78,7 +78,7 @@ fn report_with_base(
 #[verifies("rule_branch_report_head_lifecycle", examples)]
 fn added_rule_archived_in_range_has_head_status() {
     let mut row = json!({
-        "schema_version": 2, "scope_id": "default", "id": "rule_history",
+        "scope_id": "default", "id": "rule_history",
         "statement": "The old rule holds.", "status": "active", "severity": "medium",
         "requirement_ids": ["req_anchor"]
     });
@@ -96,13 +96,13 @@ fn added_rule_archived_in_range_has_head_status() {
 #[verifies("rule_branch_report_head_lifecycle", examples)]
 fn requirement_superseded_in_range_has_head_status() {
     let initial = json!({
-        "schema_version": 2, "scope_id": "default", "id": "req_history",
+        "scope_id": "default", "id": "req_history",
         "statement": "The old requirement holds.", "status": "active"
     });
     let mut old = initial.clone();
     old["status"] = json!("resolved");
     let replacement = json!({
-        "schema_version": 2, "scope_id": "default", "id": "req_replacement",
+        "scope_id": "default", "id": "req_replacement",
         "statement": "The new requirement holds.", "status": "active", "supersedes": ["req_history"]
     });
     let rendered = report("requirements/req.jsonl", initial, &[old, replacement]);
@@ -113,7 +113,7 @@ fn requirement_superseded_in_range_has_head_status() {
 #[verifies("rule_branch_report_head_lifecycle", examples)]
 fn added_resolution_abandoned_in_range_has_head_status() {
     let initial = json!({
-        "schema_version": 2, "scope_id": "default", "id": "res_history",
+        "scope_id": "default", "id": "res_history",
         "title": "Keep the old policy", "position": "Keep the old rule.",
         "rationale": "The old rule applies.", "status": "draft", "requirement_ids": ["req_anchor"]
     });
@@ -132,7 +132,7 @@ fn added_resolution_abandoned_in_range_has_head_status() {
 #[verifies("rule_branch_report_head_lifecycle", examples)]
 fn current_added_record_has_no_lifecycle_label() {
     let row = json!({
-        "schema_version": 2, "scope_id": "default", "id": "req_current",
+        "scope_id": "default", "id": "req_current",
         "statement": "The current requirement holds.", "status": "active"
     });
     let rendered = report("requirements/req.jsonl", row.clone(), &[row]);
@@ -147,7 +147,7 @@ fn current_added_record_has_no_lifecycle_label() {
 #[verifies("rule_branch_report_head_lifecycle", examples)]
 fn changed_status_is_labelled_and_kept_in_details() {
     let initial = json!({
-        "schema_version": 2, "scope_id": "default", "id": "res_history",
+        "scope_id": "default", "id": "res_history",
         "title": "Keep the old policy", "position": "Keep the old rule.",
         "rationale": "The old rule applies.", "status": "draft", "requirement_ids": ["req_anchor"]
     });
@@ -171,7 +171,7 @@ fn sources_and_resolutions_list_every_replacement_in_order() {
             "sources/source.jsonl",
             "source",
             json!({
-                "schema_version": 2, "scope_id": "default", "id": "history",
+                "scope_id": "default", "id": "history",
                 "name": "Old source", "source_type": "policy"
             }),
         ),
@@ -179,7 +179,7 @@ fn sources_and_resolutions_list_every_replacement_in_order() {
             "resolutions/res.jsonl",
             "resolution",
             json!({
-                "schema_version": 2, "scope_id": "default", "id": "history",
+                "scope_id": "default", "id": "history",
                 "title": "Old decision", "position": "Keep the old rule.",
                 "rationale": "The old rule applies.", "status": "draft", "requirement_ids": ["req_anchor"]
             }),
@@ -204,7 +204,7 @@ fn sources_and_resolutions_list_every_replacement_in_order() {
 #[verifies("rule_branch_report_head_lifecycle", examples)]
 fn added_deprecated_rule_is_labelled_before_its_statement() {
     let row = json!({
-        "schema_version": 2, "scope_id": "default", "id": "rule_history",
+        "scope_id": "default", "id": "rule_history",
         "statement": "The old rule holds.", "status": "deprecated", "severity": "medium",
         "requirement_ids": ["req_anchor"]
     });

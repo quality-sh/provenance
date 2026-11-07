@@ -312,7 +312,6 @@ fn data_free_failure_schema_does_not_advertise_read_refusals() {
 fn every_discussion_message_member_schema_accepts_one_message() {
     let message = json!({
         "data": {
-            "schema_version": 2,
             "scope_id": "default",
             "id": "message_a",
             "thread_id": "thread_a",

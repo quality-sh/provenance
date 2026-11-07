@@ -127,7 +127,6 @@ fn scope_import_rejects_an_id_shared_by_two_canonical_kinds() {
 fn scope_import_does_not_grandfather_a_keyword_id_from_another_canonical_kind() {
     let (_dir, live, staged, scope, _) = staged_store();
     let old: provenance_core::Source = serde_json::from_value(serde_json::json!({
-        "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default", "id": "search", "name": "Old source",
         "source_type": "document"
     }))
@@ -135,7 +134,6 @@ fn scope_import_does_not_grandfather_a_keyword_id_from_another_canonical_kind() 
     let old_path = shards::sources_path(&staged.layout, &scope);
     seed_shard(&old_path, std::slice::from_ref(&old));
     let replacement: provenance_core::Requirement = serde_json::from_value(serde_json::json!({
-        "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default", "id": "search", "statement": "A new requirement exists.",
         "status": "active"
     }))
@@ -179,14 +177,12 @@ fn a_keyword_id_in_another_scope_does_not_grandfather_an_import() {
     )
     .unwrap();
     let old: provenance_core::Source = serde_json::from_value(serde_json::json!({
-        "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "other", "id": "search", "name": "Old source",
         "source_type": "document"
     }))
     .unwrap();
     seed_shard(&shards::sources_path(&staged.layout, &other), &[old]);
     let incoming: provenance_core::Requirement = serde_json::from_value(serde_json::json!({
-        "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default", "id": "search", "statement": "A new requirement exists.",
         "status": "active"
     }))
@@ -213,7 +209,6 @@ fn a_keyword_id_in_another_scope_does_not_grandfather_an_import() {
 fn scope_import_preserves_a_keyword_id_from_a_landing_only_record() {
     let (_dir, live, staged, scope, _) = staged_store();
     let old: provenance_core::Contribution = serde_json::from_value(serde_json::json!({
-        "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default", "id": "search",
         "target": {"artifact_type": "source", "artifact_id": "source_anchor"},
         "participant_slot": "reviewer", "stance": "support", "strongest_finding": "Evidence",
@@ -252,7 +247,6 @@ fn a_landing_does_not_grandfather_a_different_keyword_id() {
     let (_dir, live, staged, scope, _) = staged_store();
     let contribution = |id| -> provenance_core::Contribution {
         serde_json::from_value(serde_json::json!({
-            "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default", "id": id,
             "target": {"artifact_type": "source", "artifact_id": "source_anchor"},
             "participant_slot": "reviewer", "stance": "support", "strongest_finding": "Evidence",
@@ -306,7 +300,6 @@ fn scope_import_preserves_a_keyword_id_from_a_legacy_disposition() {
     let legacy_path = shards::legacy_promotion_decisions_path(&staged.layout, &scope);
     std::fs::create_dir_all(legacy_path.parent().unwrap()).unwrap();
     let old: provenance_core::DispositionRecord = serde_json::from_value(serde_json::json!({
-        "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default", "id": "search", "proposal_id": "proposal_old",
         "decision": "rejected", "rationale": "Old decision",
         "actor": {"identity_type": "human", "id": "reviewer"}
@@ -356,7 +349,6 @@ fn scope_import_preserves_a_keyword_id_from_a_legacy_disposition() {
 fn oversized_import_refuses_before_replacing_a_legacy_keyword_record() {
     let (_dir, live, staged, scope, _) = staged_store();
     let old: provenance_core::Source = serde_json::from_value(serde_json::json!({
-        "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default", "id": "search", "name": "Old source",
         "source_type": "document"
     }))

@@ -306,7 +306,7 @@ fn cli_binding_check_keeps_the_repository_failure_policy() {
     std::fs::write(
         rules,
         concat!(
-            r#"{"schema_version":2,"scope_id":"default","id":"rule_unbound","statement":"The system keeps the record.","status":"active","severity":"medium","requirement_ids":[]}"#,
+            r#"{"scope_id":"default","id":"rule_unbound","statement":"The system keeps the record.","status":"active","severity":"medium","requirement_ids":[]}"#,
             "\n"
         ),
     )

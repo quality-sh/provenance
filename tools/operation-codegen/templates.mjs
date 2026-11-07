@@ -175,8 +175,7 @@ export class HttpClient {
     checked(value, validate.MetadataSuccess);
     const metadata = (value as components['schemas']['MetadataSuccess']).data;
     const received = metadata.compatibility;
-    if (received.wire !== COMPATIBILITY.wire || received.state !== COMPATIBILITY.state
-      || received.review_journal !== COMPATIBILITY.review_journal
+    if (received.wire !== COMPATIBILITY.wire
       || received.read_derivation !== COMPATIBILITY.read_derivation) {
       throw new ProtocolMismatchError(COMPATIBILITY, received);
     }
@@ -456,7 +455,7 @@ ${failures}
 use crate::types::{${[...imports].sort().join(', ')}};
 use crate::{runtime, Error};
 pub const PROTOCOL_VERSION: u32 = ${c.wire};
-pub const COMPATIBILITY: (u32, u32, u32, u32) = (${c.wire}, ${c.state}, ${c.review_journal}, ${c.read_derivation});
+pub const COMPATIBILITY: (u32, u32) = (${c.wire}, ${c.read_derivation});
 include!("operation_failures.rs");
 #[derive(Clone)] pub struct HttpClient { base_url: String, http: reqwest::Client }
 impl HttpClient {
@@ -490,7 +489,7 @@ impl HttpClient {
         runtime::validate(&value, "MetadataSuccess")?;
         let metadata: MetadataSuccess = runtime::decode(value)?;
         let received = &metadata.data.compatibility;
-        if (received.wire, received.state, received.review_journal, received.read_derivation) != COMPATIBILITY { return Err(Error::CompatibilityMismatch); }
+        if (received.wire, received.read_derivation) != COMPATIBILITY { return Err(Error::CompatibilityMismatch); }
         if let Some((repository, scope)) = identity {
             if metadata.data.repository.as_deref() != Some(repository) || metadata.data.scope.as_deref() != Some(scope) { return Err(Error::IdentityMismatch); }
         }

@@ -17,7 +17,6 @@ pub const SOURCE: ReviewFields = ReviewFields {
         "supersedes",
     ],
     lifecycle_fields: &[
-        "schema_version",
         "scope_id",
         "id",
         "created",
@@ -42,7 +41,6 @@ pub const REQUIREMENT: ReviewFields = ReviewFields {
         "spawned_by",
     ],
     lifecycle_fields: &[
-        "schema_version",
         "scope_id",
         "id",
         "created",
@@ -68,7 +66,6 @@ pub const RESOLUTION: ReviewFields = ReviewFields {
         "supersedes",
     ],
     lifecycle_fields: &[
-        "schema_version",
         "scope_id",
         "id",
         "created",
@@ -95,7 +92,6 @@ pub const RULE: ReviewFields = ReviewFields {
         "source_section",
     ],
     lifecycle_fields: &[
-        "schema_version",
         "scope_id",
         "id",
         "created",
@@ -110,16 +106,15 @@ pub const RULE: ReviewFields = ReviewFields {
 };
 pub const DOMAIN: ReviewFields = ReviewFields {
     content_fields: &["name", "description"],
-    lifecycle_fields: &["schema_version", "scope_id", "id", "color"],
+    lifecycle_fields: &["scope_id", "id", "color"],
 };
 pub const BOUNDARY: ReviewFields = ReviewFields {
     content_fields: &["requirement_id", "statement", "source_ref"],
-    lifecycle_fields: &["schema_version", "scope_id", "id"],
+    lifecycle_fields: &["scope_id", "id"],
 };
 pub const TOPIC: ReviewFields = ReviewFields {
     content_fields: &["requirement_id", "title", "links"],
     lifecycle_fields: &[
-        "schema_version",
         "scope_id",
         "id",
         "status",
@@ -141,7 +136,6 @@ pub const QUESTION: ReviewFields = ReviewFields {
         "contradicts",
     ],
     lifecycle_fields: &[
-        "schema_version",
         "scope_id",
         "id",
         "status",

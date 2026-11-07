@@ -6,7 +6,6 @@ use crate::state_store::{read_budget::ReadBudget, PostMessageInput};
 use crate::write_error::{SourceFailure, WriteFailure};
 use provenance_core::{
     MessageRole, NodeType, ScopeId, StableId, Thread, ThreadParent, ThreadStatus,
-    SUPPORTED_SCHEMA_VERSION,
 };
 use provenance_macros::verifies;
 
@@ -111,7 +110,6 @@ fn post(scope: &ScopeId, parent: &ThreadParent) -> PostMessageInput {
 
 fn thread(scope: &ScopeId, parent: &ThreadParent, id: &str, created_at: i64) -> Thread {
     Thread {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: StableId::new(id).unwrap(),
         parent: parent.clone(),

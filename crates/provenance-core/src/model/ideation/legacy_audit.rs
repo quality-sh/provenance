@@ -17,9 +17,9 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 
 const SHIPPED_TERMINAL_PROPOSAL_DIGEST_V1: &str =
-    "eb8f351c26b3894197e2d5748eed0e62d0b12ca015a309553fce237909462843";
+    "92441c53bce652c363cb8e976ae325fe82e116472ec904d0c9728e54327a1681";
 const SHIPPED_DISPOSITION_AUDIT_DIGEST_V1: &str =
-    "995184bcded00c0c42c5bb0709189bdb34851e26981e82e997fbca6c7823b69b";
+    "e5367fdcfb7760c5ed84f1968606fc197e7a1fdfa3e262aed4c910aace33bda5";
 
 /// Are these terminal proposal rows exactly the ones that shipped?
 ///

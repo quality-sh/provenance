@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::graph::NodeType;
-use super::ids::{SchemaVersion, ScopeId, StableId};
+use super::ids::{ScopeId, StableId};
 use super::parsing::parse_enum_word;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -42,7 +42,6 @@ pub struct ThreadParent {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Thread {
-    pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
     pub parent: ThreadParent,
@@ -53,7 +52,6 @@ pub struct Thread {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Message {
-    pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
     pub thread_id: StableId,

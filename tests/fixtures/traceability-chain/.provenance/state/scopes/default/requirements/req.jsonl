@@ -1,1 +1,1 @@
-{"schema_version":1,"scope_id":"default","id":"req_schads_overtime","statement":"Overtime must follow SCHADS thresholds","status":"active"}
+{"scope_id":"default","id":"req_schads_overtime","statement":"Overtime must follow SCHADS thresholds","status":"active"}

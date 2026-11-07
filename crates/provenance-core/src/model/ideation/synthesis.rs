@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use super::{
     EvidenceQuality, IdeationEvidenceType, IdeationTarget, ProposalType, SpeculationMarker,
 };
-use crate::model::ids::{SchemaVersion, ScopeId, StableId};
+use crate::model::ids::{ScopeId, StableId};
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -93,7 +93,6 @@ pub struct RequiredHumanDecision {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SynthesisPacket {
-    pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
     pub target: IdeationTarget,

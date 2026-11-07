@@ -18,7 +18,6 @@ fn domain_and_boundary_are_node_types_with_stable_wire_names() {
 #[test]
 fn a_domain_node_searches_by_name_and_description() {
     let domain = crate::model::Domain {
-        schema_version: crate::model::SUPPORTED_SCHEMA_VERSION,
         scope_id: crate::model::ScopeId::new("default").unwrap(),
         id: crate::model::StableId::new("domain_payroll").unwrap(),
         name: "Payroll".into(),
@@ -46,7 +45,10 @@ fn a_word_parse_normalizes_the_text_and_uses_the_serde_word_list() {
 
     assert_eq!(NodeType::parse(" Boundary ").unwrap(), NodeType::Boundary);
     assert_eq!(SourceType::parse("API-Spec").unwrap(), SourceType::ApiSpec);
-    assert_eq!(MessageRole::parse("assistant").unwrap(), MessageRole::Assistant);
+    assert_eq!(
+        MessageRole::parse("assistant").unwrap(),
+        MessageRole::Assistant
+    );
 
     let error = NodeType::parse("ticket").unwrap_err().to_string();
     assert!(

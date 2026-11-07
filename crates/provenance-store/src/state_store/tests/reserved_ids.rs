@@ -41,7 +41,6 @@ fn scope_import_refuses_a_new_command_keyword_id() {
     let source = provenance_core::Source {
         created: None,
         updated: None,
-        schema_version: provenance_core::SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: StableId::new("check").unwrap(),
         declared_by: None,
@@ -75,7 +74,6 @@ fn an_existing_keyword_id_survives_a_scope_import() {
         let source = provenance_core::Source {
             created: None,
             updated: None,
-            schema_version: provenance_core::SUPPORTED_SCHEMA_VERSION,
             scope_id: scope.clone(),
             id: StableId::new(keyword).unwrap(),
             declared_by: None,
@@ -106,7 +104,6 @@ fn an_existing_keyword_id_survives_a_scope_import() {
 fn a_keyword_id_from_another_record_kind_is_not_preserved() {
     let (_directory, _live, store, scope, _) = staged_store();
     let message = Message {
-        schema_version: provenance_core::SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: StableId::new("search").unwrap(),
         thread_id: StableId::new("thread_old").unwrap(),
@@ -118,7 +115,6 @@ fn a_keyword_id_from_another_record_kind_is_not_preserved() {
     let path = crate::shards::messages_path(&store.layout, &scope);
     crate::jsonl::write_jsonl_atomic(&path, std::slice::from_ref(&message)).unwrap();
     let thread = Thread {
-        schema_version: provenance_core::SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: StableId::new("search").unwrap(),
         parent: ThreadParent {
@@ -143,7 +139,6 @@ fn a_keyword_id_from_another_record_kind_is_not_preserved() {
 fn an_existing_keyword_message_id_survives_a_scope_import() {
     let (_directory, _live, store, scope, _) = staged_store();
     let message = Message {
-        schema_version: provenance_core::SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: StableId::new("search").unwrap(),
         thread_id: StableId::new("thread_old").unwrap(),

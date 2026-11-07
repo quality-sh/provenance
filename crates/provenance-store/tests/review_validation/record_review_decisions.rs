@@ -22,7 +22,7 @@ fn fixture() -> (tempfile::TempDir, StateStore, ScopeId) {
     std::fs::create_dir_all(layout.state_dir()).unwrap();
     std::fs::write(
         layout.manifest_path(),
-        r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}],"disposition_actor_ids":["reviewer"]}"#,
+        r#"{"scopes":[{"id":"default","path_prefix":"."}],"disposition_actor_ids":["reviewer"]}"#,
     )
     .unwrap();
     let scope = ScopeId::new("default").unwrap();

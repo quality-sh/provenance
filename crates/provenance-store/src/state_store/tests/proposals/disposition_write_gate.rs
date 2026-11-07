@@ -4,7 +4,6 @@ use super::{
 };
 use crate::state_store::proposal_writers::validate_disposition_write_gate;
 use crate::state_store::{CreateDispositionInput, StateStore};
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
     AssertionId, AssertionRecord, CanonicalArtifact, CanonicalArtifactType, DispositionActor,
     DispositionDecision, DispositionRecord, IdentityType, PromotionState, ScopeId, StableId,
@@ -95,7 +94,6 @@ fn admits_exactly_the_writes_the_four_conditions_allow() {
         .unwrap();
     let proposals = store.list_proposal_definitions(&scope).unwrap();
     let assertion = AssertionRecord {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: AssertionId::new("assertion_overtime").unwrap(),
         proposal_id: StableId::new("proposal_overtime").unwrap(),
@@ -344,7 +342,6 @@ fn disposition_by(
     canonical_artifact: Option<CanonicalArtifact>,
 ) -> DispositionRecord {
     DispositionRecord {
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: StableId::new(id).unwrap(),
         proposal_id: StableId::new(proposal_id).unwrap(),

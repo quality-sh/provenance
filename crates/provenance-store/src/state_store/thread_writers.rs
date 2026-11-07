@@ -3,10 +3,7 @@ use super::read_budget::ensure_within_read_budget;
 use super::{serde_name, PostMessageInput, PostMessageResult, StateStore};
 use crate::shards;
 use crate::write_error::{publication_started, SourceFailure, WriteFailure};
-use provenance_core::{
-    Message, NodeType, ScopeId, StableId, Thread, ThreadParent, ThreadStatus,
-    SUPPORTED_SCHEMA_VERSION,
-};
+use provenance_core::{Message, NodeType, ScopeId, StableId, Thread, ThreadParent, ThreadStatus};
 use std::collections::BTreeMap;
 
 impl StateStore {
@@ -109,7 +106,6 @@ impl StateStore {
         let created_at = next_message_time(now_ms, existing.iter().map(|m| m.created_at).max())?;
         let id = new_message_id();
         let message = Message {
-            schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: scope_id.clone(),
             id,
             thread_id: thread_id.clone(),
@@ -164,7 +160,6 @@ fn prepare_thread(
             parent.node_id.as_str()
         );
         let thread = Thread {
-            schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: scope_id.clone(),
             id: next_thread_id(threads, &base_id)?,
             parent: parent.clone(),

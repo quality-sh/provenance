@@ -187,8 +187,6 @@ fn an_import_with_an_active_rule_citing_an_unapproved_resolution_is_told_what_to
     });
     for family in ["requirements", "resolutions", "rules"] {
         for record in document[family].as_array_mut().unwrap() {
-            record["schema_version"] =
-                serde_json::json!(provenance_core::SUPPORTED_SCHEMA_VERSION.0);
             record["scope_id"] = serde_json::json!("default");
         }
     }

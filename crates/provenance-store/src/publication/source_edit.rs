@@ -10,7 +10,6 @@ use crate::{
 };
 use anyhow::Context as _;
 use camino::{Utf8Path, Utf8PathBuf};
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 use std::io::Write as _;
@@ -33,7 +32,6 @@ pub(super) enum SourceEditPhase {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct SourceEditMarker {
-    pub(super) schema_version: u32,
     pub(super) transaction_dir: Utf8PathBuf,
     pub(super) phase: SourceEditPhase,
     pub(super) target: Utf8PathBuf,
@@ -128,7 +126,6 @@ impl StagedStateHook for SourceEditPublication {
         self.backup = Some(backup.clone());
         crate::test_probes::at("source_edit_temp_prepared")?;
         let marker = SourceEditMarker {
-            schema_version: SUPPORTED_SCHEMA_VERSION.0,
             transaction_dir: transaction.to_owned(),
             phase: SourceEditPhase::Prepared,
             target: held.relative().to_owned(),

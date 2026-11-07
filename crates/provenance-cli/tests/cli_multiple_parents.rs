@@ -225,7 +225,6 @@ fn cli_replacement_keeps_the_declaration_owner_precondition() {
         .apply_typed_spec(
             &provenance_core::ScopeId::new("default").unwrap(),
             serde_json::from_value(serde_json::json!({
-                "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
                 "spec":"parent_owner", "declared_by":"spec://parent-owner",
                 "adopt_unowned":[{"kind":"requirement", "id":"req_shared"}],
                 "requirements":[{"key":"shared", "id":"req_shared",

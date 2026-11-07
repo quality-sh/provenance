@@ -70,9 +70,9 @@ pub use typed_statement_policy::TypedSpecWriteError;
 use crate::{layout::ProvenanceLayout, repository::RepositoryIdentity, shards};
 use ideation_batches::overlay_records;
 use provenance_core::{
-    ensure_record_id_assignable, ensure_supported_schema_version, AssertionRecord, Contribution,
-    DispositionRecord, ImplementationBinding, Manifest, Message, ProposalCard, SchemaVersion,
-    Scope, ScopeId, SynthesisPacket, Thread, VerificationBinding,
+    ensure_record_id_assignable, AssertionRecord, Contribution, DispositionRecord,
+    ImplementationBinding, Manifest, Message, ProposalCard, Scope, ScopeId, SynthesisPacket,
+    Thread, VerificationBinding,
 };
 
 fn ensure_new_ids_assignable<T>(
@@ -97,7 +97,6 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ManifestProjection {
-    schema_version: SchemaVersion,
     scopes: Vec<serde_json::Value>,
     #[serde(default, rename = "disposition_actor_ids")]
     _disposition_actor_ids: Vec<String>,
@@ -207,10 +206,7 @@ impl StateStore {
         })
     }
 
-    pub(crate) fn closed_manifest_scope(
-        &self,
-        scope: &ScopeId,
-    ) -> anyhow::Result<(SchemaVersion, Option<Scope>)> {
+    pub(crate) fn closed_manifest_scope(&self, scope: &ScopeId) -> anyhow::Result<Option<Scope>> {
         self.with_repository_read(|held| {
             let manifest: ManifestProjection =
                 deserialize_closed(&held.read_state_text(&held.layout.manifest_path())?)?;
@@ -222,7 +218,7 @@ impl StateStore {
                 })
                 .map(|candidate| deserialize_closed(&serde_json::to_string(&candidate)?))
                 .transpose()?;
-            Ok((manifest.schema_version, selected))
+            Ok(selected)
         })
     }
 
@@ -342,9 +338,7 @@ pub(crate) fn deserialize_closed<T: DeserializeOwned>(input: &str) -> anyhow::Re
 }
 
 pub(crate) fn manifest_from_bytes(bytes: &[u8]) -> anyhow::Result<Manifest> {
-    let manifest: Manifest = serde_json::from_slice(bytes)?;
-    ensure_supported_schema_version("manifest", manifest.schema_version)?;
-    Ok(manifest)
+    Ok(serde_json::from_slice(bytes)?)
 }
 
 #[cfg(test)]

@@ -5,7 +5,7 @@ use super::{
 use crate::shards;
 use provenance_core::{
     ensure_record_id_assignable, validate_optional_confidence_score, Contribution, ScopeId,
-    StableId, SynthesisPacket, SUPPORTED_SCHEMA_VERSION,
+    StableId, SynthesisPacket,
 };
 
 impl StateStore {
@@ -85,7 +85,6 @@ impl StateStore {
         }
         self.ensure_contribution_target(&scope_id, &id, &target)?;
         let contribution = Contribution {
-            schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: scope_id.clone(),
             id,
             target,
@@ -227,7 +226,6 @@ impl StateStore {
         }
         self.ensure_synthesis_target(&scope_id, &id, &target)?;
         let synthesis_packet = SynthesisPacket {
-            schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: scope_id.clone(),
             id,
             target,

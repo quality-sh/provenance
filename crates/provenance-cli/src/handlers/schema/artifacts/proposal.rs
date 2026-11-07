@@ -7,7 +7,6 @@ pub(in crate::handlers::schema) fn schema() -> Value {
         "type": "object",
         "additionalProperties": false,
         "required": [
-            "schema_version",
             "scope_id",
             "id",
             "proposal_key",
@@ -18,7 +17,6 @@ pub(in crate::handlers::schema) fn schema() -> Value {
             "promotion_state"
         ],
         "properties": {
-            "schema_version": {"const": 1},
             "scope_id": {"$ref": "#/$defs/scopeId"},
             "id": {"$ref": "#/$defs/stableId"},
             "proposal_key": {"type": "string", "minLength": 1},

@@ -4,7 +4,6 @@ use crate::model::{
     ResolutionInput, ResolutionInputType, ResolutionStatus, Rule, RuleSeverity, RuleStatus,
     ScopeId, Source, SourceReference, SourceType, StableId,
 };
-use crate::SUPPORTED_SCHEMA_VERSION;
 
 fn sid(value: &str) -> StableId {
     StableId::new(value).unwrap()
@@ -22,7 +21,6 @@ fn filled_source() -> Source {
     Source {
         created: Some(stamp()),
         updated: Some(stamp()),
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("source_schads"),
         declared_by: Some("spec://pay".into()),
@@ -45,7 +43,6 @@ fn bare_source() -> Source {
     Source {
         created: None,
         updated: None,
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("source_bare"),
         declared_by: None,
@@ -72,7 +69,6 @@ fn filled_requirement() -> Requirement {
         }),
         created: Some(stamp()),
         updated: Some(stamp()),
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("req_overtime"),
         declared_by: Some("spec://pay".into()),
@@ -107,7 +103,6 @@ fn bare_requirement() -> Requirement {
         archived_in_commit: None,
         created: None,
         updated: None,
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("req_bare"),
         declared_by: None,
@@ -136,7 +131,6 @@ fn resolution(confidence: Option<f64>) -> Resolution {
         }),
         created: Some(stamp()),
         updated: Some(stamp()),
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("res_overtime"),
         title: "Overtime threshold".into(),
@@ -167,7 +161,6 @@ fn bare_resolution() -> Resolution {
         archived_in_commit: None,
         created: None,
         updated: None,
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("res_bare"),
         title: "Bare".into(),
@@ -197,7 +190,6 @@ fn filled_rule() -> Rule {
             commit: "a".repeat(40),
             at: None,
         }),
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("rule_overtime_001"),
         declared_by: Some("spec://pay".into()),
@@ -222,7 +214,6 @@ fn bare_rule() -> Rule {
         created: None,
         updated: None,
         archived_in_commit: None,
-        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("rule_bare"),
         declared_by: None,

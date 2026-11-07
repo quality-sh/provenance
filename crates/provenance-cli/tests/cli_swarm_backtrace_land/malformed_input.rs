@@ -1,7 +1,6 @@
 use super::support::{create_source, init_repo, write_run_dir};
 use assert_cmd::Command;
 use predicates::prelude::PredicateBooleanExt;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 fn write_bad_nested_stable_id(root: &std::path::Path) {
     let extractors = root.join("extractors");
@@ -12,7 +11,6 @@ fn write_bad_nested_stable_id(root: &std::path::Path) {
         extractors.join("bad.json"),
         serde_json::json!({
           "contribution": {
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": "contrib_backtrace_extract_auth",
             "target": {"artifact_type": "source", "artifact_id": "source_codebase"},
@@ -36,7 +34,6 @@ fn write_bad_nested_stable_id(root: &std::path::Path) {
         merge.join("merged.json"),
         serde_json::json!({
           "synthesis_packet": {
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": "synth_backtrace_auth",
             "target": {"artifact_type": "source", "artifact_id": "source_codebase"},

@@ -20,7 +20,7 @@ and scanner-discovered bindings target one canonical Rule.
 
 ## Consequences
 
-Rule records, schema version, source-location fields, attributes, decorators, and
+Rule records, source-location fields, attributes, decorators, and
 scanner syntax remain compatible. Existing source locations remain citations; only
 scanner-recognized attributes, helpers, decorators, and comments bind implementation.
 Validation and reports distinguish Unimplemented from Unverified; both remain derived

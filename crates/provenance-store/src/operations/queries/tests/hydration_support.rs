@@ -7,7 +7,7 @@ use crate::cache::tests::fixtures::append_record;
 use provenance_core::protocol::{
     Direction, EvidenceQuery, NeighborsQuery, ResolveSymbolQuery, TraceQuery, SDK_PROTOCOL_VERSION,
 };
-use provenance_core::{NodeType, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::NodeType;
 use serde_json::json;
 
 /// Over the stored record ceiling, so the record can never decode.
@@ -64,7 +64,6 @@ pub fn append_binding(
     append_record(
         &crate::shards::implementation_bindings_path(&store.layout, scope),
         &json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": scope.as_str(),
             "id": id,
             "rule_id": rule_id,
@@ -82,7 +81,6 @@ pub fn append_review(
     cleared_at: Option<i64>,
 ) {
     let mut record = json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": scope.as_str(),
         "id": id,
         "rule_id": "rule_overtime",
