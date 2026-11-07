@@ -340,9 +340,9 @@ fn boundary_decisions_refuse_feedback() {
 
         let error = store
             .decide_record_review(DecideRecordReview {
-                scope_id: scope.clone(),
+                scope_id: scope,
                 actor: reviewer(),
-                proposal_id: proposal.clone(),
+                proposal_id: proposal,
                 decision: DispositionDecision::Rejected,
                 rationale: Some("The classification is too broad.".into()),
                 canonical_artifact: None,

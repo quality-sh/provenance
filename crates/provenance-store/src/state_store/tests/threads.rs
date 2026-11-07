@@ -397,10 +397,10 @@ fn thread_parents_stay_within_the_six_original_kinds() {
     {
         let error = store
             .post_thread_message(PostMessageInput {
-                scope_id: scope.clone(),
+                scope_id: scope,
                 parent: ThreadParent {
                     node_type: kind,
-                    node_id: StableId::new("domain_x").unwrap(),
+                    node_id: StableId::new("boundary_x").unwrap(),
                 },
                 role: MessageRole::User,
                 body: "Hello".into(),
