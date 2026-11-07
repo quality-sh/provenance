@@ -43,7 +43,6 @@ fn held_records_give_the_gaps_of_the_same_graph() {
         &held.rules,
         &[],
         &[],
-        &[],
     );
     assert_eq!(gaps, expected);
     assert_eq!(records::count_kind(&gaps, GapKind::UnreferencedSource), 1);

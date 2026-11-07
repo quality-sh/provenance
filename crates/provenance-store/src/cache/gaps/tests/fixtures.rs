@@ -1,8 +1,8 @@
 use super::super::{compute_gaps, GapGraph, GapItem, GapKind};
 use provenance_core::{
-    NodeType, Question, QuestionStatus, Requirement, RequirementStatus, Resolution,
-    ResolutionMethod, ResolutionStatus, Rule, RuleSeverity, RuleStatus, ScopeId, Source,
-    SourceType, StableId, Topic, TopicStatus,
+    Question, QuestionStatus, Requirement, RequirementStatus, Resolution, ResolutionMethod,
+    ResolutionStatus, Rule, RuleSeverity, RuleStatus, ScopeId, Source, SourceType, StableId, Topic,
+    TopicStatus,
 };
 
 pub fn sid(value: &str) -> StableId {

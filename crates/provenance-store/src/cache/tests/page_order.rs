@@ -46,7 +46,7 @@ fn assert_no_sort(table: &str, details: &[String]) {
 }
 
 /// The tables that the ID page functions read.
-const PAGED_TABLES: [&str; 18] = [
+const PAGED_TABLES: [&str; 17] = [
     Source::TABLE,
     Requirement::TABLE,
     Resolution::TABLE,

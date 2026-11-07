@@ -389,7 +389,7 @@ fn resolution_input(scope: &ScopeId, id: &str, title: String) -> CreateResolutio
 
 #[tokio::test]
 #[verifies("rule_accepted_writes_stay_readable", examples)]
-async fn resolution_real_accounting_matches_sqlite_and_refuses_boundary_overflow() {
+async fn resolution_accounting_matches_sqlite_and_refuses_boundary_overflow() {
     let (dir, store, scope) = seeded_requirement_store();
     let baseline = store
         .create_resolution(resolution_input(&scope, "res_base", String::new()))
@@ -412,20 +412,6 @@ async fn resolution_real_accounting_matches_sqlite_and_refuses_boundary_overflow
     .fetch_one(cache.pool())
     .await
     .unwrap();
-    for score in [0.0, 0.00001, 0.123_456_789_012_345_66, 1.0] {
-        let real_bytes: i64 = sqlx::query_scalar("SELECT length(CAST(? AS BLOB))")
-            .bind(score)
-            .fetch_one(cache.pool())
-            .await
-            .unwrap();
-        let mut candidate = baseline.clone();
-        candidate.confidence = Some(score);
-        assert_eq!(
-            ReadBudget::read_bytes(&candidate).unwrap(),
-            usize::try_from(stored - 3 + real_bytes).unwrap(),
-            "confidence {score:?} must use SQLite's REAL byte count"
-        );
-    }
     cache.close().await.unwrap();
     assert_eq!(
         ReadBudget::read_bytes(&baseline).unwrap(),
