@@ -1,10 +1,13 @@
 //! Declarations of the commands that set up, export, import, merge, and check
 //! repository files.
 
-use super::{json_format, Declaration, Field, Fields, Relation, REPO, SCOPE};
-use crate::dictionary::DictionaryImportInput;
+use super::{json_format, Declaration, Field, Fields, Relation};
+use crate::dictionary::{DictionaryImportInput, DictionaryStatusInput};
+use crate::export::ExportInput;
 use crate::import::ImportInput;
 use crate::materialize::MaterializeInput;
+use crate::schema::SchemaShowInput;
+use crate::validate::ValidateInput;
 use serde::Deserialize;
 
 /// One repository command.
@@ -46,16 +49,6 @@ pub struct CargoInitInput {
     pub ste_pdf: Option<String>,
 }
 
-/// The `export` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct ExportInput {
-    pub repo: String,
-    pub scope: String,
-    pub format: String,
-    pub output: Option<String>,
-}
-
 /// The `merge-jsonl` input.
 #[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -65,31 +58,6 @@ pub struct MergeJsonlInput {
     pub theirs: String,
     pub output: Option<String>,
     pub path: Option<String>,
-    pub format: String,
-}
-
-/// The `validate` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct ValidateInput {
-    pub artifact: String,
-    pub input: String,
-    pub format: String,
-}
-
-/// The `schema show` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct SchemaShowInput {
-    pub artifact: String,
-    pub format: String,
-}
-
-/// The `dictionary status` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct DictionaryStatusInput {
-    pub repo: String,
     pub format: String,
 }
 
@@ -134,7 +102,6 @@ const ARTIFACTS: &[&str] = &[
 ];
 
 const JSON_FORMAT: Field = json_format(Some("json"));
-const DEFAULT_REPO: Field = Field::text("repo").default(".");
 
 const INIT_FIELDS: &[Field] = &[
     Field::text("path").default("."),
@@ -164,8 +131,6 @@ const CARGO_INIT_FIELDS: &[Field] = &[
 const MATERIALIZE_FIELDS: &[Field] = &[];
 
 const EXPORT_FIELDS: &[Field] = &[
-    REPO,
-    SCOPE,
     Field::text("format")
         .values(&["json", "jsonl", "markdown", "table", "toon"])
         .default("json"),
@@ -207,7 +172,7 @@ const DICTIONARY_IMPORT_FIELDS: &[Field] = &[Field::text("pdf")
     .required()
     .doc("Path to the local official Issue 9 PDF file")];
 
-const DICTIONARY_STATUS_FIELDS: &[Field] = &[DEFAULT_REPO, JSON_FORMAT];
+const DICTIONARY_STATUS_FIELDS: &[Field] = &[JSON_FORMAT];
 
 /// The declaration of one repository command. Programs run `__cargo-init` and
 /// `merge-jsonl`, so they are internal.
@@ -235,7 +200,7 @@ pub(super) const fn declaration(command: RepositoryCommand) -> Declaration {
         )
         .bound(),
         RepositoryCommand::Export => {
-            Declaration::named("export", "", Fields::new(EXPORT_FIELDS, export_schema))
+            Declaration::named("export", "", Fields::new(EXPORT_FIELDS, export_schema)).bound()
         }
         RepositoryCommand::Import => {
             Declaration::named("import", "", Fields::new(IMPORT_FIELDS, import_schema)).bound()
@@ -267,6 +232,7 @@ pub(super) const fn declaration(command: RepositoryCommand) -> Declaration {
             "dictionary status",
             "Report the committed dictionary reference and the analyzer it selects",
             Fields::new(DICTIONARY_STATUS_FIELDS, dictionary_status_schema),
-        ),
+        )
+        .bound_repository(),
     }
 }

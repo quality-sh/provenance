@@ -6,12 +6,16 @@ mod dictionary;
 mod discussion_port;
 mod export;
 mod get_port;
+mod graph_reference;
 mod host;
 mod import;
 mod materialize;
 mod parent_replacement;
+mod report;
+mod schema;
 mod search_port;
 mod swarm_backtrace;
+mod validate;
 pub use api_port::HostApiPort;
 pub use authoring::{replacement_call, target_call, Action, ActionError, TargetRoute};
 pub use discussion_port::HostDiscussionPort;
@@ -20,7 +24,6 @@ pub use get_port::HostGetPort;
 pub use host::HostPorcelain;
 pub use parent_replacement::{ParentReplacement, Replaced, ReplacementError};
 pub use search_port::HostSearchPort;
-pub use swarm_backtrace::{validate_contribution_record, validate_proposal_card_record};
 
 use crate::repository::RepoContext;
 
@@ -28,7 +31,8 @@ use provenance_contract::Definition;
 use provenance_core::NodeType;
 
 /// The adapter of the commands that work on the files of one repository and scope:
-/// materialize, import, dictionary import, and swarm-backtrace land.
+/// materialize, import, export, the dictionary commands, the graph references,
+/// report build, and swarm-backtrace land.
 #[derive(Clone, Debug)]
 pub struct RepositoryPort {
     context: RepoContext,
@@ -39,6 +43,11 @@ impl RepositoryPort {
         Self { context }
     }
 }
+
+/// The adapter of the commands that read only the files that their input names:
+/// validate, schema show, and report render.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ArtifactPort;
 
 impl HostPorcelain<'_> {
     /// The host has repository files that the repository commands work on.

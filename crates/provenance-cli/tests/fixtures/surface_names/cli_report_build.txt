@@ -5,10 +5,11 @@ Usage: provenance report build [OPTIONS] --base <BASE> --head <HEAD> --repositor
 Options:
       --quiet                    Drop the advisory notes commands print alongside their output, such as the warning that this repository has no shaping skills installed
       --repo <REPO>              [default: .]
+      --scope <SCOPE>            [default: default]
       --base <BASE>              Older endpoint of the comparison range
       --head <HEAD>              Newer endpoint of the comparison range
       --repository <REPOSITORY>  Repository identity in `owner/name` form for report links
-      --scope <SCOPE>            [default: default]
       --path <PATH>              Scan this path instead of the repository root; a partial scan is recorded as incomplete
       --output <OUTPUT>          Write the envelope JSON to this file instead of standard output
+      --format <FORMAT>          [default: json] [possible values: json]
   -h, --help                     Print help
