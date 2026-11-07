@@ -333,8 +333,9 @@ fn pending_classification_review(
 
 #[test]
 #[provenance_macros::verifies("rule_domain_boundary_decisions_accept_no_feedback", examples)]
-fn domain_and_boundary_decisions_refuse_feedback() {
-    for kind in [NodeType::Boundary] {
+fn boundary_decisions_refuse_feedback() {
+    let kind = NodeType::Boundary;
+    {
         let (_temp, store, scope, proposal) = pending_classification_review(kind);
 
         let error = store

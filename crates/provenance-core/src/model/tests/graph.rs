@@ -2,14 +2,15 @@ use super::graph::NodeType;
 
 #[test]
 fn boundary_is_a_node_type_with_a_stable_wire_name() {
-    for (name, expected) in [("boundary", NodeType::Boundary)] {
-        assert_eq!(NodeType::parse(name).unwrap(), expected);
-        assert_eq!(serde_json::to_value(expected).unwrap(), name);
-        assert_eq!(
-            serde_json::from_value::<NodeType>(serde_json::Value::String(name.into())).unwrap(),
-            expected
-        );
-    }
+    assert_eq!(NodeType::parse("boundary").unwrap(), NodeType::Boundary);
+    assert_eq!(
+        serde_json::to_value(NodeType::Boundary).unwrap(),
+        "boundary"
+    );
+    assert_eq!(
+        serde_json::from_value::<NodeType>(serde_json::Value::String("boundary".into())).unwrap(),
+        NodeType::Boundary
+    );
 }
 
 #[test]
