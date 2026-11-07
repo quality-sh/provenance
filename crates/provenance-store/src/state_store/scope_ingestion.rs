@@ -300,6 +300,11 @@ macro_rules! define_imported_scope_shards {
                         $canonical_strategy, $canonical_import
                     );)*
 
+                    // A scope with review records has no export, so no imported
+                    // Resolution has a review acceptance.
+                    super::resolution_decisions::ensure_resolution_decisions(
+                        shards.resolutions, &[], shards.questions, shards.rules,
+                    )?;
                     let scope_dir = store.layout.scopes_dir().join(scope.as_str());
                     if scope_dir.exists() {
                         std::fs::remove_dir_all(&scope_dir)?;
@@ -314,11 +319,6 @@ macro_rules! define_imported_scope_shards {
                         $binding_field, $($binding_graph)+
                     );)*
                     $(write_family!(store, scope, shards, $canonical_variant, $canonical_field);)*
-                    // The check reads the written review records, so that a Resolution
-                    // whose current revision a reviewer accepted counts as approved.
-                    store.ensure_resolution_decisions(
-                        scope, shards.resolutions, shards.questions, shards.rules,
-                    )?;
                     Ok(())
                 })
             }

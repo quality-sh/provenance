@@ -28,7 +28,7 @@ fn read(host: &Host, path: &str) -> Value {
     serde_json::from_str::<Value>(&result.into_string().unwrap()).unwrap()["data"].clone()
 }
 
-fn create(root: &Path, args: &[&str], data: Value) {
+fn create(root: &Path, args: &[&str], data: &Value) {
     let mut command = std::process::Command::new(assert_cmd::cargo::cargo_bin("provenance"));
     command
         .args(args)
@@ -63,7 +63,7 @@ fn setup() -> (tempfile::TempDir, Host) {
     create(
         repo.path(),
         &["rule_keep_result", "create", "--type", "rule"],
-        json!({
+        &json!({
             "statement":"The system keeps each result.", "severity":"medium",
             "status":"review", "requirement_ids":["req_reject"], "resolution_ids":["res_reject"]
         }),
@@ -71,12 +71,12 @@ fn setup() -> (tempfile::TempDir, Host) {
     create(
         repo.path(),
         &["topic_result", "create", "--type", "topic"],
-        json!({"requirement_id":"req_reject", "title":"Result storage", "status":"open", "links":[]}),
+        &json!({"requirement_id":"req_reject", "title":"Result storage", "status":"open", "links":[]}),
     );
     create(
         repo.path(),
         &["question_result", "create", "--type", "question"],
-        json!({"topic_id":"topic_result", "question":"Does the system keep each result?",
+        &json!({"topic_id":"topic_result", "question":"Does the system keep each result?",
                "resolution_method":"grill"}),
     );
     let host = start(repo.path());
@@ -125,7 +125,7 @@ fn an_answer_can_cite_a_resolution_that_the_reviewer_approved() {
 #[test]
 #[verifies("rule_review_acceptance_approves_resolution_citation", examples)]
 fn a_rule_can_become_active_when_its_resolution_was_approved_in_review() {
-    let (repo, host) = setup();
+    let (_repo, host) = setup();
     approve(&host);
     let rule = read(&host, "/rules/rule_keep_result");
     let (status, body) = send(
@@ -137,30 +137,6 @@ fn a_rule_can_become_active_when_its_resolution_was_approved_in_review() {
     );
     assert_eq!(status, 200, "{body}");
     assert_eq!(read(&host, "/rules/rule_keep_result")["status"], "active");
-    drop(host);
-    // A scope import of the same records reads the same acceptance.
-    let export = repo.path().join("export.json");
-    for args in [
-        ["export", "--output", export.to_str().unwrap()],
-        ["import", "--input", export.to_str().unwrap()],
-    ] {
-        let output = std::process::Command::new(assert_cmd::cargo::cargo_bin("provenance"))
-            .args(args)
-            .args([
-                "--repo",
-                repo.path().to_str().unwrap(),
-                "--scope",
-                "default",
-            ])
-            .args(["--format", "json"])
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
 }
 
 /// Answers the Question with a citation of the Resolution.

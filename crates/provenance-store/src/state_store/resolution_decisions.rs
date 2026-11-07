@@ -14,14 +14,14 @@ impl StateStore {
     ) -> anyhow::Result<()> {
         match record {
             ReviewRecord::Question(question) if question.status == QuestionStatus::Answered => self
-                .ensure_resolution_decisions(
+                .ensure_cited_resolutions(
                     &question.scope_id,
                     &self.list_resolutions(&question.scope_id)?,
                     std::slice::from_ref(question),
                     &[],
                 ),
             ReviewRecord::Rule(rule) if rule.status == RuleStatus::Active => self
-                .ensure_resolution_decisions(
+                .ensure_cited_resolutions(
                     &rule.scope_id,
                     &self.list_resolutions(&rule.scope_id)?,
                     &[],
@@ -43,7 +43,7 @@ impl StateStore {
                     .into_iter()
                     .filter(|rule| rule.resolution_ids.contains(&resolution.id))
                     .collect::<Vec<_>>();
-                self.ensure_resolution_decisions(
+                self.ensure_cited_resolutions(
                     &resolution.scope_id,
                     &resolutions,
                     &questions,
@@ -56,34 +56,53 @@ impl StateStore {
 
     /// Refuses an answered Question or an active Rule that cites a Resolution that is not
     /// approved, unless a reviewer accepted the current revision of that Resolution.
-    pub(super) fn ensure_resolution_decisions(
+    fn ensure_cited_resolutions(
         &self,
         scope: &ScopeId,
         resolutions: &[Resolution],
         questions: &[Question],
         rules: &[Rule],
     ) -> anyhow::Result<()> {
-        let answered = questions
-            .iter()
-            .filter(|q| q.status == QuestionStatus::Answered)
-            .filter_map(|q| q.resolution_id.as_ref().map(|id| (id, "question", &q.id)));
-        let active = rules
-            .iter()
-            .filter(|r| r.status == RuleStatus::Active)
-            .flat_map(|r| r.resolution_ids.iter().map(move |id| (id, "rule", &r.id)));
-        let citations = answered.chain(active).collect::<Vec<_>>();
         let cited = resolutions
             .iter()
             .filter(|resolution| resolution.status != ResolutionStatus::Approved)
-            .filter(|resolution| citations.iter().any(|(id, _, _)| **id == resolution.id))
+            .filter(|resolution| {
+                questions
+                    .iter()
+                    .any(|q| q.resolution_id.as_ref() == Some(&resolution.id))
+                    || rules
+                        .iter()
+                        .any(|r| r.resolution_ids.contains(&resolution.id))
+            })
             .cloned()
             .collect::<Vec<_>>();
         let accepted = self.accepted_resolution_ids(scope, &cited)?;
-        for (id, kind, owner) in citations {
-            ensure_approved(resolutions, &accepted, id, kind, owner)?;
-        }
-        Ok(())
+        ensure_resolution_decisions(resolutions, &accepted, questions, rules)
     }
+}
+
+/// Refuses an answered Question or an active Rule that cites a Resolution that is neither
+/// approved nor in `accepted`, the Resolutions whose current revision a reviewer accepted.
+pub(super) fn ensure_resolution_decisions(
+    resolutions: &[Resolution],
+    accepted: &[StableId],
+    questions: &[Question],
+    rules: &[Rule],
+) -> anyhow::Result<()> {
+    for question in questions
+        .iter()
+        .filter(|q| q.status == QuestionStatus::Answered)
+    {
+        if let Some(id) = &question.resolution_id {
+            ensure_approved(resolutions, accepted, id, "question", &question.id)?;
+        }
+    }
+    for rule in rules.iter().filter(|r| r.status == RuleStatus::Active) {
+        for id in &rule.resolution_ids {
+            ensure_approved(resolutions, accepted, id, "rule", &rule.id)?;
+        }
+    }
+    Ok(())
 }
 
 /// Refuses a citation of a Resolution that is not approved or does not exist, with a
