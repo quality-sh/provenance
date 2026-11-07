@@ -90,6 +90,7 @@ enum TraceView {
 /// a trace has no shaping summary, notify registration, or review link. A trace result
 /// serializes through this shape, so its schema is the shape of each trace result.
 #[derive(schemars::JsonSchema, Serialize)]
+#[schemars(description = "A get result for the trace view.")]
 #[serde(deny_unknown_fields)]
 struct TraceWire<'a> {
     record: RecordWire<'a>,

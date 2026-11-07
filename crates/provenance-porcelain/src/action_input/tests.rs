@@ -106,7 +106,8 @@ fn a_field_of_two_actions_has_one_schema() {
             &json!({"$ref": "#/$defs/A"}),
             &json!({"anyOf": [{"$ref": "#/$defs/A"}, {"type": "null"}], "default": null})
         ),
-        json!({"anyOf": [{"$ref": "#/$defs/A"}, {"type": "null"}], "default": null})
+        json!({"anyOf": [{"$ref": "#/$defs/A"}, {"type": "null"}]}),
+        "a default that one action does not have goes"
     );
     assert_eq!(
         merged(
