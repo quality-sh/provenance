@@ -9,6 +9,7 @@ pub mod fields;
 mod help;
 mod input;
 mod input_guard;
+mod plain_object;
 pub mod refusal;
 mod statement_warning;
 
