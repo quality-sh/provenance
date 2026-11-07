@@ -160,7 +160,6 @@ export class HttpClient {
     };
     return HttpClient.connect(baseUrl, authenticated, options);
   }
-  // @provenance rule: rule_sdk_protocol_handshake
   static async connect(baseUrl: string, fetcher: typeof fetch = fetch, options: { signal?: AbortSignal; repository?: string; scope?: string } = {}): Promise<HttpClient> {
     const validate = await import('./validators/metadata.mjs');
     const url = new URL(baseUrl);
