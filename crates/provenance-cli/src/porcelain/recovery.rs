@@ -1,10 +1,11 @@
 //! The CLI spelling of the recovery inputs that a porcelain refusal gives.
 
 use serde_json::Value;
+use std::fmt::Write as _;
 
 /// One command invocation for `input`: each field is a `--kebab-case` option, and each
 /// item of a list is one more use of the option.
-pub(crate) fn command_form(command: &str, input: &Value) -> String {
+pub fn command_form(command: &str, input: &Value) -> String {
     let mut form = format!("provenance {command}");
     for (field, value) in input.as_object().into_iter().flatten() {
         let option = format!("--{}", field.replace('_', "-"));
@@ -14,17 +15,18 @@ pub(crate) fn command_form(command: &str, input: &Value) -> String {
         };
         for value in values {
             match value {
-                Value::Bool(true) => form.push_str(&format!(" {option}")),
-                Value::String(text) => form.push_str(&format!(" {option} {text}")),
-                other => form.push_str(&format!(" {option} {other}")),
+                Value::Bool(true) => write!(form, " {option}"),
+                Value::String(text) => write!(form, " {option} {text}"),
+                other => write!(form, " {option} {other}"),
             }
+            .expect("writing to a String cannot fail");
         }
     }
     form
 }
 
 /// `message` followed by the command forms of `inputs`, when there are any.
-pub(crate) fn with_recovery(message: &str, command: &str, inputs: &[Value]) -> String {
+pub fn with_recovery(message: &str, command: &str, inputs: &[Value]) -> String {
     if inputs.is_empty() {
         return message.to_owned();
     }
