@@ -31,8 +31,8 @@ fn provenance(repo: &Path, args: &[&str]) -> std::process::Output {
 fn write_shard(repo: &Path, shard: &str, records: &[Value]) {
     let path = repo.join(".provenance/state/scopes/default").join(shard);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    let lines: String = records.iter().map(|record| format!("{record}\n")).collect();
-    std::fs::write(path, lines).unwrap();
+    let lines: Vec<String> = records.iter().map(Value::to_string).collect();
+    std::fs::write(path, lines.join("\n") + "\n").unwrap();
 }
 
 fn get(repo: &Path, id: &str) -> String {
