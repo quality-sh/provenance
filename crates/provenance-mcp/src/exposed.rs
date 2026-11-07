@@ -1,5 +1,6 @@
 //! The porcelain commands that MCP shows, each with the place that shows it.
 
+use provenance_macros::rule;
 use provenance_porcelain::action::Action;
 use provenance_porcelain::registry::{Command, GraphCommand, RepositoryCommand};
 use std::sync::LazyLock;
@@ -16,6 +17,7 @@ pub enum Place {
 }
 
 /// Each porcelain command that MCP shows. The tools are in tools/list order.
+#[rule("rule_mcp_shared_command_in_one_tool")]
 pub const EXPOSED: &[(Command, Place)] = &[
     (Command::Get, Place::Tool),
     (Command::Search, Place::Tool),
