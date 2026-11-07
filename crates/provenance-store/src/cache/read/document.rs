@@ -92,8 +92,8 @@ keys(stage, kind, id, counter) AS (
 ),
 ordered AS (
  SELECT stage, kind, id, counter, CASE WHEN stage = 0 AND kind = 'requirement' AND id = ?2 THEN 0 ELSE CASE kind WHEN 'source' THEN 0 WHEN 'requirement' THEN 1
- WHEN 'resolution' THEN 2 WHEN 'rule' THEN 3 WHEN 'topic' THEN 4 WHEN 'question' THEN 5
- WHEN 'domain' THEN 6 WHEN 'boundary' THEN 7 ELSE 0 END + 1 END AS rank FROM keys
+ WHEN 'resolution' THEN 2 WHEN 'rule' THEN 3 WHEN 'topic' THEN 4 WHEN 'question' THEN 5 WHEN 'boundary' THEN 6
+ ELSE 0 END + 1 END AS rank FROM keys
 )
 "
     )
@@ -116,7 +116,7 @@ fn visibility_filter(exclude_terminal: bool, kind: &str, id: &str) -> String {
 
 impl ReadSnapshot {
     /// Returns the nearest member document, then prefers depth and Requirement ID.
-    /// Sources and Domains remain eligible as document references.
+    /// Sources remain eligible as document references.
     #[rule("rule_review_document_choice")]
     pub(crate) async fn containing_document_roots(
         &self,
@@ -138,8 +138,7 @@ impl ReadSnapshot {
                     .iter()
                     .any(|(entry_kind, key)| {
                         let eligible = key.stage == 0
-                            || (key.stage == 1
-                                && matches!(kind, NodeType::Source | NodeType::Domain));
+                            || (key.stage == 1 && kind == NodeType::Source);
                         eligible && entry_kind == kind.as_str() && key.id == id.as_str()
                     });
                 if contains {

@@ -7,7 +7,7 @@ use crate::cache::quoted;
 use crate::operations::reader::{ReadSnapshot, Table};
 use provenance_core::model::ProjectionRow;
 use provenance_core::{
-    Boundary, Domain, ImplementationBinding, NodeType, Question, Requirement, Resolution, Rule,
+    Boundary, ImplementationBinding, NodeType, Question, Requirement, Resolution, Rule,
     Source, StableId, Topic, VerificationBinding,
 };
 use provenance_macros::rule;
@@ -375,7 +375,6 @@ pub async fn kind_of(snapshot: &ReadSnapshot, id: &StableId) -> anyhow::Result<O
     probe!(Rule, NodeType::Rule);
     probe!(Topic, NodeType::Topic);
     probe!(Question, NodeType::Question);
-    probe!(Domain, NodeType::Domain);
     probe!(Boundary, NodeType::Boundary);
     Ok(None)
 }

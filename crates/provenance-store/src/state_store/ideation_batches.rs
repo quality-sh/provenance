@@ -320,53 +320,6 @@ fn merge_immutable<T: Clone>(
     Ok(())
 }
 
-/// The retired `promotion_decisions.jsonl` shard holds history, not decisions.
-///
-/// The shard is admitted only when its rows are the shipped-v1 audit itself,
-/// which `provenance-core` pins as a SHA-256 of the records. Membership is a
-/// property of the whole set, so a row appended beside genuine history changes
-/// the fingerprint and takes the whole shard down with it: a decision taken
-/// now belongs to the modern lifecycle in `dispositions.jsonl`, which checks
-/// the actor against the repository allowlist and demands an assertion behind
-/// an acceptance. An empty shard passes, having claimed nothing.
-///
-/// Every row must also name a proposal that has already left `proposed`, the
-/// reading that makes the shard history rather than a decision surface.
-///
-/// This gate reads the shard as it stands on disk. The same fingerprint is
-/// checked again inside `validate_ideation_aggregate`, over the dispositions
-/// of terminal proposals from every source, so a forged row that reaches the
-/// aggregate by another path is caught there.
-#[rule("rule_legacy_shard_frozen")]
-pub(super) fn validate_legacy_disposition_shard(
-    legacy_dispositions: &[DispositionRecord],
-    proposals: &[ProposalCard],
-) -> anyhow::Result<()> {
-    if legacy_dispositions.is_empty() {
-        return Ok(());
-    }
-    anyhow::ensure!(
-        provenance_core::is_shipped_legacy_disposition_audit(legacy_dispositions),
-        LEGACY_SHARD_REFUSAL
-    );
-    for disposition in legacy_dispositions {
-        anyhow::ensure!(
-            proposals.iter().any(|proposal| {
-                proposal.id == disposition.proposal_id
-                    && proposal.promotion_state != provenance_core::PromotionState::Proposed
-            }),
-            LEGACY_SHARD_REFUSAL
-        );
-    }
-    Ok(())
-}
-
-/// One refusal for both halves of the gate: the shard either is the shipped
-/// audit or it is not, and a caller told which half it failed would learn only
-/// how to forge the other.
-const LEGACY_SHARD_REFUSAL: &str =
-    "deprecated promotion_decisions.jsonl accepts only the frozen shipped-v1 disposition audit";
-
 pub(super) fn overlay_records<T>(records: &mut Vec<T>, incoming: Vec<T>, id: impl Fn(&T) -> &str) {
     for record in incoming {
         if let Some(index) = records

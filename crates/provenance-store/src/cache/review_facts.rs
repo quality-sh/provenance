@@ -13,7 +13,6 @@ pub const SOURCE: ReviewFields = ReviewFields {
         "url",
         "reference",
         "commit_pin",
-        "effective_date",
         "supersedes",
     ],
     lifecycle_fields: &[
@@ -23,7 +22,6 @@ pub const SOURCE: ReviewFields = ReviewFields {
         "updated",
         "declared_by",
         "declaration_address",
-        "review_date",
         "origin_thread",
         "origin_message",
     ],
@@ -32,8 +30,6 @@ pub const REQUIREMENT: ReviewFields = ReviewFields {
     content_fields: &[
         "statement",
         "description",
-        "fog",
-        "domain_id",
         "source_refs",
         "refines",
         "depends_on",
@@ -59,8 +55,6 @@ pub const RESOLUTION: ReviewFields = ReviewFields {
         "position",
         "rationale",
         "context",
-        "enforcement",
-        "confidence",
         "inputs",
         "requirement_ids",
         "supersedes",
@@ -75,7 +69,6 @@ pub const RESOLUTION: ReviewFields = ReviewFields {
         "made_by",
         "approved_by",
         "approved_at",
-        "review_on",
         "origin_thread",
         "origin_message",
     ],
@@ -103,10 +96,6 @@ pub const RULE: ReviewFields = ReviewFields {
         "origin_thread",
         "origin_message",
     ],
-};
-pub const DOMAIN: ReviewFields = ReviewFields {
-    content_fields: &["name", "description"],
-    lifecycle_fields: &["scope_id", "id", "color"],
 };
 pub const BOUNDARY: ReviewFields = ReviewFields {
     content_fields: &["requirement_id", "statement", "source_ref"],

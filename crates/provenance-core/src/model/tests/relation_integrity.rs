@@ -42,9 +42,9 @@ fn a_refinement_chain_that_returns_to_its_start_is_a_cycle() {
 /// the first hop out of it.
 #[test]
 fn a_three_record_cycle_is_named_by_its_closing_pair_with_the_cycle_printed() {
-    let mut a = requirement("req_cyc_a", None, &[]);
-    let mut b = requirement("req_cyc_b", None, &[]);
-    let mut c = requirement("req_cyc_c", None, &[]);
+    let mut a = requirement("req_cyc_a", &[]);
+    let mut b = requirement("req_cyc_b", &[]);
+    let mut c = requirement("req_cyc_c", &[]);
     a.refines = vec![sid("req_cyc_b")];
     b.refines = vec![sid("req_cyc_c")];
     c.refines = vec![sid("req_cyc_a")];
@@ -61,9 +61,9 @@ fn a_three_record_cycle_is_named_by_its_closing_pair_with_the_cycle_printed() {
 
 #[test]
 fn a_hypothetical_edge_reports_the_complete_cycle_path() {
-    let mut a = requirement("req_cyc_a", None, &[]);
-    let mut b = requirement("req_cyc_b", None, &[]);
-    let c = requirement("req_cyc_c", None, &[]);
+    let mut a = requirement("req_cyc_a", &[]);
+    let mut b = requirement("req_cyc_b", &[]);
+    let c = requirement("req_cyc_c", &[]);
     a.depends_on = ids(&["req_cyc_b"]);
     b.depends_on = ids(&["req_cyc_c"]);
     let records = vec![a, b, c];
@@ -85,14 +85,14 @@ fn a_hypothetical_edge_reports_the_complete_cycle_path() {
 
 #[test]
 fn a_batch_walk_reports_the_first_reachable_target_over_a_shared_path() {
-    let mut first = requirement("req_first", None, &[]);
-    let mut branch_a = requirement("req_branch_a", None, &[]);
-    let mut branch_b = requirement("req_branch_b", None, &[]);
-    let mut shared = requirement("req_shared", None, &[]);
-    let owner = requirement("req_owner", None, &[]);
-    let unreachable = requirement("req_unreachable", None, &[]);
-    let mut cycle_a = requirement("req_cycle_a", None, &[]);
-    let mut cycle_b = requirement("req_cycle_b", None, &[]);
+    let mut first = requirement("req_first", &[]);
+    let mut branch_a = requirement("req_branch_a", &[]);
+    let mut branch_b = requirement("req_branch_b", &[]);
+    let mut shared = requirement("req_shared", &[]);
+    let owner = requirement("req_owner", &[]);
+    let unreachable = requirement("req_unreachable", &[]);
+    let mut cycle_a = requirement("req_cycle_a", &[]);
+    let mut cycle_b = requirement("req_cycle_b", &[]);
     first.depends_on = ids(&["req_branch_a", "req_branch_b"]);
     branch_a.depends_on = ids(&["req_shared"]);
     branch_b.depends_on = ids(&["req_shared"]);
@@ -132,10 +132,10 @@ fn a_batch_walk_reports_the_first_reachable_target_over_a_shared_path() {
 
 #[test]
 fn a_batch_walk_ignores_unreachable_targets_in_a_cyclic_graph() {
-    let owner = requirement("req_owner", None, &[]);
-    let unreachable = requirement("req_unreachable", None, &[]);
-    let mut cycle_a = requirement("req_cycle_a", None, &[]);
-    let mut cycle_b = requirement("req_cycle_b", None, &[]);
+    let owner = requirement("req_owner", &[]);
+    let unreachable = requirement("req_unreachable", &[]);
+    let mut cycle_a = requirement("req_cycle_a", &[]);
+    let mut cycle_b = requirement("req_cycle_b", &[]);
     cycle_a.depends_on = ids(&["req_cycle_b"]);
     cycle_b.depends_on = ids(&["req_cycle_a"]);
 
@@ -153,8 +153,8 @@ fn a_batch_walk_ignores_unreachable_targets_in_a_cyclic_graph() {
 #[test]
 fn a_batch_walk_reports_a_self_edge_as_the_first_cycle() {
     let records = vec![
-        requirement("req_owner", None, &[]),
-        requirement("req_unreachable", None, &[]),
+        requirement("req_owner", &[]),
+        requirement("req_unreachable", &[]),
     ];
 
     let cycle = cycle_with_added_edges(

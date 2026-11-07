@@ -40,17 +40,6 @@ macro_rules! define_shard_paths {
 
 record_families!(define_shard_paths);
 
-pub(crate) fn legacy_promotion_decisions_path(
-    layout: &ProvenanceLayout,
-    scope: &ScopeId,
-) -> Utf8PathBuf {
-    layout
-        .scopes_dir()
-        .join(scope.as_str())
-        .join("ideation")
-        .join("promotion_decisions.jsonl")
-}
-
 pub fn ideation_landings_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
     layout
         .scopes_dir()
@@ -105,10 +94,7 @@ fn shard_suffixes() -> impl Iterator<Item = &'static str> {
     ProjectionFamily::ALL
         .into_iter()
         .map(ProjectionFamily::shard_suffix)
-        .chain([
-            "ideation/promotion_decisions.jsonl",
-            "ideation/landings.jsonl",
-        ])
+        .chain(["ideation/landings.jsonl"])
 }
 
 fn is_shard_suffix(shard: &str) -> bool {

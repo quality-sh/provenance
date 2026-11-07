@@ -1,11 +1,8 @@
 use super::graph::NodeType;
 
 #[test]
-fn domain_and_boundary_are_node_types_with_stable_wire_names() {
-    for (name, expected) in [
-        ("domain", NodeType::Domain),
-        ("boundary", NodeType::Boundary),
-    ] {
+fn boundary_is_a_node_type_with_a_stable_wire_name() {
+    for (name, expected) in [("boundary", NodeType::Boundary)] {
         assert_eq!(NodeType::parse(name).unwrap(), expected);
         assert_eq!(serde_json::to_value(expected).unwrap(), name);
         assert_eq!(
@@ -13,24 +10,6 @@ fn domain_and_boundary_are_node_types_with_stable_wire_names() {
             expected
         );
     }
-}
-
-#[test]
-fn a_domain_node_searches_by_name_and_description() {
-    let domain = crate::model::Domain {
-        scope_id: crate::model::ScopeId::new("default").unwrap(),
-        id: crate::model::StableId::new("domain_payroll").unwrap(),
-        name: "Payroll".into(),
-        description: Some("Wages and awards".into()),
-        color: None,
-    };
-    let node = crate::protocol::GraphNode::Domain(Box::new(domain));
-    let text = node.searchable_text();
-    assert!(text.contains(&"Payroll"));
-    assert!(
-        text.contains(&"Wages and awards"),
-        "the description must be searchable: {text:?}"
-    );
 }
 
 #[test]

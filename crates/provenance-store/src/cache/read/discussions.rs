@@ -51,10 +51,6 @@ impl ReadSnapshot {
                     role: word(row.try_get("role")?)?,
                     body: row.try_get("body")?,
                     created_at: row.try_get("created_at")?,
-                    ai_metadata: row
-                        .try_get::<Option<String>, _>("ai_metadata")?
-                        .map(|value| serde_json::from_str(&value))
-                        .transpose()?,
                 })
             })
             .collect()
@@ -118,7 +114,6 @@ impl ReadSnapshot {
                 "role",
                 "body",
                 "created_at",
-                "ai_metadata",
             ],
         )
         .await?;
@@ -137,10 +132,6 @@ impl ReadSnapshot {
                     role: word(row.try_get("role")?)?,
                     body: row.try_get("body")?,
                     created_at: row.try_get("created_at")?,
-                    ai_metadata: row
-                        .try_get::<Option<String>, _>("ai_metadata")?
-                        .map(|value| serde_json::from_str(&value))
-                        .transpose()?,
                 })
             })
             .collect::<anyhow::Result<Vec<_>>>()

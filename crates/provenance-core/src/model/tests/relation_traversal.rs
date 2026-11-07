@@ -60,7 +60,6 @@ fn the_hub_lists_every_neighbour_in_rank_id_declaration_direction_order() {
             inbound("requirement_ids", NodeType::Rule, "rule_pay"),
             inbound("requirement_id", NodeType::Topic, "topic_rates"),
             inbound("requirement_id", NodeType::Question, "question_threshold"),
-            out("domain_id", NodeType::Domain, "domain_payroll"),
             inbound("requirement_id", NodeType::Boundary, "boundary_no_backpay"),
         ]
     );
@@ -118,14 +117,6 @@ fn a_question_reads_its_contradiction_and_resolution_outward() {
     );
     let contradicted = flatten(related_nodes(&front, NodeType::Requirement, &sid("req_penalty")));
     assert!(contradicted.contains(&inbound("contradicts", NodeType::Question, "question_threshold")));
-}
-
-#[test]
-fn a_domain_only_ever_appears_as_a_target() {
-    let records = fixture();
-    let front = front(&records);
-    let reached = flatten(related_nodes(&front, NodeType::Domain, &sid("domain_payroll")));
-    assert_eq!(reached, vec![inbound("domain_id", NodeType::Requirement, "req_overtime")]);
 }
 
 #[test]

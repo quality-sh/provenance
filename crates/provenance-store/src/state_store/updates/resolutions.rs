@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{review, shards, state_store::StateStore};
 use provenance_core::{
-    validate_optional_confidence_score, validate_resolution_input_content, Resolution,
+    validate_resolution_input_content, Resolution,
     ResolutionInput,
 };
 
@@ -80,20 +80,6 @@ impl StateStore {
                     input.clear_fields.contains(&ResolutionClearField::Context),
                 )?;
                 optional(
-                    &mut record.enforcement,
-                    input.enforcement,
-                    input
-                        .clear_fields
-                        .contains(&ResolutionClearField::Enforcement),
-                )?;
-                optional(
-                    &mut record.confidence,
-                    input.confidence,
-                    input
-                        .clear_fields
-                        .contains(&ResolutionClearField::Confidence),
-                )?;
-                optional(
                     &mut record.made_by,
                     input.made_by,
                     input.clear_fields.contains(&ResolutionClearField::MadeBy),
@@ -112,13 +98,6 @@ impl StateStore {
                         .clear_fields
                         .contains(&ResolutionClearField::ApprovedAt),
                 )?;
-                optional(
-                    &mut record.review_on,
-                    input.review_on,
-                    input.clear_fields.contains(&ResolutionClearField::ReviewOn),
-                )?;
-                validate_optional_confidence_score(record.confidence)
-                    .map_err(|error| invalid(&error.to_string()))?;
                 Ok(record.clone())
             },
         )?;

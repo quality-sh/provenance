@@ -1,6 +1,6 @@
-use super::{assert_kind_round_trips, assert_round_trip};
+use super::assert_kind_round_trips;
 use crate::model::{
-    ColumnValue, DeclarationAddress, ProjectionRow, Requirement, RequirementStatus, Resolution,
+    DeclarationAddress, Requirement, RequirementStatus, Resolution,
     ResolutionInput, ResolutionInputType, ResolutionStatus, Rule, RuleSeverity, RuleStatus,
     ScopeId, Source, SourceReference, SourceType, StableId,
 };
@@ -31,8 +31,6 @@ fn filled_source() -> Source {
         url: Some("https://example.test/award".into()),
         reference: Some("clause 28".into()),
         commit_pin: Some("0123456789abcdef0123456789abcdef01234567".into()),
-        effective_date: Some(1_700_000_000),
-        review_date: Some(1_800_000_000),
         supersedes: vec![sid("source_award_2019")],
         origin_thread: Some(sid("thread_one")),
         origin_message: Some(sid("message_one")),
@@ -53,8 +51,6 @@ fn bare_source() -> Source {
         url: None,
         reference: None,
         commit_pin: None,
-        effective_date: None,
-        review_date: None,
         supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,
@@ -76,9 +72,7 @@ fn filled_requirement() -> Requirement {
 
         statement: "Overtime is paid".into(),
         description: Some("After the threshold".into()),
-        fog: Some("Which threshold".into()),
         status: RequirementStatus::Archived,
-        domain_id: Some(sid("domain_payroll")),
         source_refs: vec![
             SourceReference {
                 source_id: sid("source_schads"),
@@ -110,9 +104,7 @@ fn bare_requirement() -> Requirement {
 
         statement: "Bare".into(),
         description: None,
-        fog: None,
         status: RequirementStatus::Discovery,
-        domain_id: None,
         source_refs: Vec::new(),
         refines: Vec::new(),
         depends_on: Vec::new(),
@@ -123,7 +115,7 @@ fn bare_requirement() -> Requirement {
     }
 }
 
-fn resolution(confidence: Option<f64>) -> Resolution {
+fn filled_resolution() -> Resolution {
     Resolution {
         archived_in_commit: Some(crate::ArchivedStamp {
             commit: "a".repeat(40),
@@ -138,8 +130,6 @@ fn resolution(confidence: Option<f64>) -> Resolution {
         rationale: "The award says so".into(),
         status: ResolutionStatus::Archived,
         context: Some("Payroll review".into()),
-        enforcement: Some("A rule".into()),
-        confidence,
         inputs: vec![ResolutionInput {
             input_type: ResolutionInputType::Regulatory,
             reference: "award.pdf".into(),
@@ -150,7 +140,6 @@ fn resolution(confidence: Option<f64>) -> Resolution {
         approved_at: Some(1_700_000_000),
         requirement_ids: vec![sid("req_overtime")],
         supersedes: vec![sid("res_old")],
-        review_on: Some("2027-01-01".into()),
         origin_thread: Some(sid("thread_one")),
         origin_message: Some(sid("message_one")),
     }
@@ -168,15 +157,12 @@ fn bare_resolution() -> Resolution {
         rationale: "Because".into(),
         status: ResolutionStatus::Proposed,
         context: None,
-        enforcement: None,
-        confidence: None,
         inputs: Vec::new(),
         made_by: None,
         approved_by: None,
         approved_at: None,
         requirement_ids: Vec::new(),
         supersedes: Vec::new(),
-        review_on: None,
         origin_thread: None,
         origin_message: None,
     }
@@ -245,29 +231,12 @@ fn a_requirement_round_trips_through_its_row() {
 
 #[test]
 fn a_resolution_round_trips_through_its_row() {
-    assert_kind_round_trips(&resolution(Some(0.95)), &bare_resolution());
+    assert_kind_round_trips(&filled_resolution(), &bare_resolution());
 }
 
 #[test]
 fn a_rule_round_trips_through_its_row() {
     assert_kind_round_trips(&filled_rule(), &bare_rule());
-}
-
-/// A confidence of exactly one is a real, not an integer: the column holds
-/// `Real(1.0)` and the record prints `1.0` again.
-#[test]
-fn a_round_confidence_stays_a_float() {
-    let record = resolution(Some(1.0));
-    let row = record.row().unwrap();
-    let index = Resolution::COLUMNS
-        .iter()
-        .position(|column| *column == "confidence")
-        .unwrap();
-    assert_eq!(row[index], ColumnValue::Real(1.0));
-    assert_round_trip(&record);
-    assert!(serde_json::to_string(&Resolution::from_row(&row).unwrap())
-        .unwrap()
-        .contains(r#""confidence":1.0"#));
 }
 
 fn stamp() -> crate::Stamp {

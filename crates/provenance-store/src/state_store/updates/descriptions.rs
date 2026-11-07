@@ -1,7 +1,6 @@
 use super::{
     inputs::{
-        BoundaryClearField, DomainClearField, RequirementClearField, UpdateBoundaryInput,
-        UpdateDomainInput, UpdateRequirementInput,
+        BoundaryClearField, RequirementClearField, UpdateBoundaryInput, UpdateRequirementInput,
     },
     invalid, missing, optional, owner_matches, required_text, set,
 };
@@ -9,7 +8,7 @@ use crate::{
     shards,
     state_store::{read_budget, RequirementReviewInput, StateStore},
 };
-use provenance_core::{Boundary, Domain, NodeType, Requirement, RequirementStatus};
+use provenance_core::{Boundary, NodeType, Requirement, RequirementStatus};
 use provenance_macros::rule;
 
 impl StateStore {
@@ -20,18 +19,12 @@ impl StateStore {
         input: UpdateRequirementInput,
     ) -> anyhow::Result<Requirement> {
         self.with_repository_publication(|held| {
-            if let Some(id) = &input.domain_id {
-                held.ensure_node_exists(&input.scope_id, NodeType::Domain, id, "domain_id")?;
-            }
             if let Some(statement) = &input.statement {
                 required_text(statement)?;
                 super::super::statement_policy::ensure_statement_is_writable(
                     &held.layout,
                     statement,
                 )?;
-            }
-            if let Some(fog) = &input.fog {
-                required_text(fog)?;
             }
             let rule_ids = held.rule_ids_for_requirement(&input.scope_id, &input.id)?;
             held.list_requirement_reviews(&input.scope_id)?;
@@ -60,18 +53,6 @@ impl StateStore {
                         .clear_fields
                         .contains(&RequirementClearField::Description),
                 )?;
-                optional(
-                    &mut record.fog,
-                    input.fog,
-                    input.clear_fields.contains(&RequirementClearField::Fog),
-                )?;
-                optional(
-                    &mut record.domain_id,
-                    input.domain_id,
-                    input
-                        .clear_fields
-                        .contains(&RequirementClearField::DomainId),
-                )?;
                 Ok(record.clone())
             })?;
             if record.status == RequirementStatus::Archived && !was_archived {
@@ -99,40 +80,6 @@ impl StateStore {
         })
     }
 
-    pub fn update_domain(&self, input: UpdateDomainInput) -> anyhow::Result<Domain> {
-        let path = shards::domains_path(&self.layout, &input.scope_id);
-        let expected_etag = input.expected_etag.clone();
-        self.mutate_graph_record_with_etag(
-            &path,
-            expected_etag.as_deref(),
-            |records: &mut Vec<Domain>| {
-                if let Some(name) = &input.name {
-                    required_text(name)?;
-                    if records.iter().any(|r| r.id != input.id && r.name == *name) {
-                        return Err(invalid("domain name already exists"));
-                    }
-                }
-                let record = records
-                    .iter_mut()
-                    .find(|r| r.id == input.id)
-                    .ok_or_else(missing)?;
-                set(&mut record.name, input.name);
-                optional(
-                    &mut record.description,
-                    input.description,
-                    input.clear_fields.contains(&DomainClearField::Description),
-                )?;
-                optional(
-                    &mut record.color,
-                    input.color,
-                    input.clear_fields.contains(&DomainClearField::Color),
-                )?;
-                let record = record.clone();
-                read_budget::ensure_within_read_budget(&record)?;
-                Ok(record)
-            },
-        )
-    }
 
     pub fn update_boundary(&self, input: UpdateBoundaryInput) -> anyhow::Result<Boundary> {
         self.with_repository_publication(|held| {

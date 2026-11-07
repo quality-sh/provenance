@@ -50,14 +50,14 @@ async fn message(
     let (join, selector_id, condition) = selector_sql(&selector);
     let kind = super::discussion_state::discussion_kind_word(parent.node_type);
     let sql = format!(
-        "SELECT m.thread_id,m.role,m.body,m.created_at,m.ai_metadata,\
-         length(CAST(m.body AS BLOB))+COALESCE(length(CAST(m.ai_metadata AS BLOB)),0)+\
+        "SELECT m.thread_id,m.role,m.body,m.created_at,\
+         length(CAST(m.body AS BLOB))+\
          length(m.id)+length(m.thread_id)+256 FROM messages m \
          JOIN threads t ON t.scope_id=m.scope_id AND t.id=m.thread_id {join} \
          WHERE m.scope_id=? AND t.parent_type=? AND t.parent_id=? AND {condition} AND m.id=?"
     );
     let mut tx = ctx.snapshot().connection().await;
-    let row: Option<(String, String, String, i64, Option<String>, i64)> =
+    let row: Option<(String, String, String, i64, i64)> =
         sqlx::query_as(sqlx::AssertSqlSafe(sql))
             .bind(ctx.snapshot().scope().as_str())
             .bind(kind)
@@ -67,7 +67,7 @@ async fn message(
             .fetch_optional(&mut **tx)
             .await?;
     drop(tx);
-    let (thread, role, body, created_at, metadata, size) =
+    let (thread, role, body, created_at, size) =
         row.ok_or(ReadFailure::ResourceNotFound)?;
     check_stored_size(size)?;
     Ok(Message {
@@ -77,9 +77,6 @@ async fn message(
         role: MessageRole::parse(&role)?,
         body,
         created_at,
-        ai_metadata: metadata
-            .map(|value| serde_json::from_str(&value))
-            .transpose()?,
     })
 }
 
@@ -185,7 +182,7 @@ async fn message_keys(
     let (join, selector, condition) = selector_sql(&query.selector);
     let kind = super::discussion_state::discussion_kind_word(query.parent.node_type);
     let mut tx = ctx.snapshot().connection().await;
-    let keys: Vec<(String, i64, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT m.id,m.created_at,length(CAST(m.body AS BLOB))+COALESCE(length(CAST(m.ai_metadata AS BLOB)),0)+length(m.id)+length(m.thread_id)+256 FROM messages m JOIN threads t ON t.scope_id=m.scope_id AND t.id=m.thread_id {join} WHERE m.scope_id=? AND t.parent_type=? AND t.parent_id=? AND {condition} AND (m.created_at>? OR (m.created_at=? AND m.id>?)) ORDER BY m.created_at,m.id LIMIT ?")))
+    let keys: Vec<(String, i64, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT m.id,m.created_at,length(CAST(m.body AS BLOB))+length(m.id)+length(m.thread_id)+256 FROM messages m JOIN threads t ON t.scope_id=m.scope_id AND t.id=m.thread_id {join} WHERE m.scope_id=? AND t.parent_type=? AND t.parent_id=? AND {condition} AND (m.created_at>? OR (m.created_at=? AND m.id>?)) ORDER BY m.created_at,m.id LIMIT ?")))
         .bind(ctx.snapshot().scope().as_str()).bind(kind).bind(query.parent.node_id.as_str()).bind(selector)
         .bind(position.counter).bind(position.counter).bind(&position.id).bind(i64::try_from(query.limit+1)?).fetch_all(&mut **tx).await.map_err(anyhow::Error::from).map_err(reader::page_error)?;
     drop(tx);
@@ -195,9 +192,8 @@ async fn message_keys(
 /// Loads one message of the page by id.
 async fn page_message(ctx: &ReadContext, id: &str, created_at: i64) -> anyhow::Result<Message> {
     let mut tx = ctx.snapshot().connection().await;
-    let (thread, role, body, metadata): (String, String, String, Option<String>) = sqlx::query_as(
-        "SELECT thread_id,role,body,ai_metadata FROM messages WHERE scope_id=? AND id=?",
-    )
+    let (thread, role, body): (String, String, String) =
+        sqlx::query_as("SELECT thread_id,role,body FROM messages WHERE scope_id=? AND id=?")
     .bind(ctx.snapshot().scope().as_str())
     .bind(id)
     .fetch_one(&mut **tx)
@@ -210,7 +206,6 @@ async fn page_message(ctx: &ReadContext, id: &str, created_at: i64) -> anyhow::R
         role: MessageRole::parse(&role)?,
         body,
         created_at,
-        ai_metadata: metadata.map(|s| serde_json::from_str(&s)).transpose()?,
     })
 }
 
