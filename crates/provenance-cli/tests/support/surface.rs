@@ -63,7 +63,8 @@ impl provenance_porcelain::check::CheckPort for EmptyCheckPort {
     }
 }
 
-/// The listed tools, by name, of a full-access host over `repo` with a check port.
+/// The listed tools, by name, of a full-access host over `repo` with a check port and
+/// the repository files.
 pub async fn tools(repo: &std::path::Path) -> BTreeMap<String, Value> {
     let access = FixtureAccess::new(
         vec![Target {
@@ -76,7 +77,12 @@ pub async fn tools(repo: &std::path::Path) -> BTreeMap<String, Value> {
     )
     .unwrap()
     .allow_writes();
-    let host = StatementHost::with_fixture_access(access).with_check_port(Arc::new(EmptyCheckPort));
+    let host = StatementHost::with_fixture_access(access)
+        .with_check_port(Arc::new(EmptyCheckPort))
+        .with_repository(provenance_transport::repository::RepoContext::new(
+            camino::Utf8PathBuf::from_path_buf(repo.to_path_buf()).unwrap(),
+            "default",
+        ));
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = Client::connect(client_io).await.unwrap();

@@ -1,6 +1,6 @@
 //! Porcelain construction for one statement host.
 
-use super::{HostApiPort, HostDiscussionPort, HostGetPort, HostSearchPort};
+use super::{HostApiPort, HostDiscussionPort, HostGetPort, HostSearchPort, RepositoryPort};
 use crate::StatementHost;
 use provenance_porcelain::check::{Category, CheckPort, PortFuture};
 use provenance_porcelain::Porcelain;
@@ -37,6 +37,15 @@ impl<'a> HostPorcelain<'a> {
 
     pub fn get(&self) -> Porcelain<HostGetPort> {
         Porcelain::new(HostGetPort::new(self.host.clone()))
+    }
+
+    /// Materialize, import, dictionary import, and swarm-backtrace land on the repository
+    /// files of this host, when it has them.
+    pub fn repository(&self) -> Option<Porcelain<RepositoryPort>> {
+        self.host
+            .repository()
+            .cloned()
+            .map(|context| Porcelain::new(RepositoryPort::new(context)))
     }
 
     pub fn search(&self) -> Porcelain<HostSearchPort> {

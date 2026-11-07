@@ -52,6 +52,7 @@ pub struct StatementHost {
     check_port: Option<Arc<dyn provenance_porcelain::check::CheckPort>>,
     notify_port: Option<Arc<dyn provenance_porcelain::get::NotifyPort>>,
     review_link_port: Option<Arc<dyn provenance_porcelain::get::ReviewLinkPort>>,
+    repository: Option<repository::RepoContext>,
     ingress: Arc<Semaphore>,
     stopping: CancellationToken,
 }
@@ -66,6 +67,7 @@ impl Default for StatementHost {
             check_port: None,
             notify_port: None,
             review_link_port: None,
+            repository: None,
             ingress: Arc::new(Semaphore::new(8)),
             stopping: CancellationToken::new(),
         }
@@ -136,6 +138,18 @@ impl StatementHost {
     ) -> Self {
         self.review_link_port = Some(port);
         self
+    }
+
+    /// Bind the repository files that materialize, import, dictionary import, and
+    /// swarm-backtrace land work on.
+    #[must_use]
+    pub fn with_repository(mut self, context: repository::RepoContext) -> Self {
+        self.repository = Some(context);
+        self
+    }
+
+    pub(crate) const fn repository(&self) -> Option<&repository::RepoContext> {
+        self.repository.as_ref()
     }
 
     pub(crate) fn review_link_port(

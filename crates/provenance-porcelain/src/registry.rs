@@ -13,17 +13,20 @@ mod porcelain_fields;
 mod repository;
 mod workspace;
 
+pub use crate::dictionary::DictionaryImportInput;
+pub use crate::import::ImportInput;
+pub use crate::materialize::MaterializeInput;
+pub use crate::swarm_backtrace::SwarmBacktraceLandInput;
 pub use dogfood::{
     DogfoodCommand, DogfoodListInput, DogfoodNoteInput, DogfoodReportInput, DogfoodSimulateInput,
     TriageHandleInput, TriageListInput, TriageReopenInput,
 };
 pub use fields::{json_format, Field, FieldValue, Fields, Relation, REPO, SCOPE};
-pub use graph::{GraphCommand, ReferenceInput, ReferenceIssueInput, SwarmBacktraceLandInput};
+pub use graph::{GraphCommand, ReferenceInput, ReferenceIssueInput};
 pub use porcelain::{PrimeFormat, PrimeInput};
 pub use repository::{
-    CargoInitInput, DictionaryImportInput, DictionaryStatusInput, ExportInput, ImportInput,
-    InitInput, MaterializeInput, MergeJsonlInput, RepositoryCommand, SchemaShowInput,
-    ValidateInput,
+    CargoInitInput, DictionaryStatusInput, ExportInput, InitInput, MergeJsonlInput,
+    RepositoryCommand, SchemaShowInput, ValidateInput,
 };
 pub use workspace::{
     ReportBuildInput, ReportRenderInput, SkillsInstallInput, SkillsListInput, SkillsShowInput,
@@ -129,6 +132,13 @@ impl Declaration {
             internal: false,
             bound: false,
         }
+    }
+
+    /// This command, on the repository and scope that the consumer binds.
+    #[must_use]
+    pub const fn bound(mut self) -> Self {
+        self.bound = true;
+        self
     }
 
     /// This command, run by programs.

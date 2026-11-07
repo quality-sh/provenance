@@ -316,7 +316,7 @@ impl Invocation {
             Self::Check(input, context) => handlers::check_command(input, context).await,
             Self::Prime(input) => handlers::prime_command(&input),
             Self::Repository(input, quiet) => handlers::repository_command(input, quiet).await,
-            Self::Graph(input) => handlers::graph_command(input),
+            Self::Graph(input) => handlers::graph_command(input).await,
             Self::Workspace(input) => handlers::workspace_command(input),
             Self::Server(input) => handlers::server_command(input).await,
             #[cfg(feature = "dogfood")]

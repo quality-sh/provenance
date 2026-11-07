@@ -2720,6 +2720,7 @@ dependencies = [
  "provenance-store",
  "pulldown-cmark",
  "serde",
+ "serde_ignored",
  "serde_json",
  "sqlx",
  "tempfile",

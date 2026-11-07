@@ -4,7 +4,7 @@ Options:
       --quiet              Drop the advisory notes commands print alongside their output, such as the warning that this repository has no shaping skills installed
       --repo <REPO>        [default: .]
       --scope <SCOPE>      [default: default]
-      --run-dir <RUN_DIR>  
-      --replace            
-      --format <FORMAT>    [default: json] [possible values: json]
+      --format <FORMAT>    [possible values: json]
+      --run-dir <RUN_DIR>  The swarm run directory: its extractors, refuters, contributions, and merge output.
+      --replace            Replace the generated records that an earlier landing of this run wrote.
   -h, --help               Print help

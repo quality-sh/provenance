@@ -7,7 +7,8 @@ use provenance_core::{protocol::failure::OperationFailure, ScopeId};
 use provenance_store::repository::{OpenFailure, Repository};
 use std::sync::Arc;
 
-/// Opens the repository at `repo` for `scope` and returns the host with its check adapter.
+/// Opens the repository at `repo` for `scope` and returns the host with its check adapter
+/// and its repository files.
 ///
 /// An undeclared scope is a host refusal, so JSON callers get the refusal object. A
 /// directory inside an initialized repository gets the nested-repository refusal.
@@ -19,7 +20,9 @@ pub fn open(repo: &Utf8Path, scope: &str) -> anyhow::Result<StatementHost> {
     let repository = provenance_store::operations::LocalRepository::bind(repository, "native")
         .map_err(|failure| anyhow::anyhow!(failure))?;
     let check = RepositoryCheckPort::new(working_tree(repo), false, None);
-    Ok(StatementHost::with_access(Arc::new(repository)).with_check_port(Arc::new(check)))
+    Ok(StatementHost::with_access(Arc::new(repository))
+        .with_check_port(Arc::new(check))
+        .with_repository(RepoContext::new(repo, scope)))
 }
 
 /// The repository root as UTF-8. The repository refuses a root that is not UTF-8 first,

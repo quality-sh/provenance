@@ -1,7 +1,7 @@
 //! The porcelain commands that MCP shows, each with the place that shows it.
 
 use provenance_porcelain::action::Action;
-use provenance_porcelain::registry::Command;
+use provenance_porcelain::registry::{Command, GraphCommand, RepositoryCommand};
 
 /// Where MCP shows one command.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -31,6 +31,13 @@ pub const EXPOSED: &[(Command, Place)] = &[
     (Command::Action(Action::Submit), CHANGE),
     (Command::Action(Action::Discuss), CHANGE),
     (Command::Action(Action::Reply), CHANGE),
+    (Command::Repository(RepositoryCommand::Materialize), CHANGE),
+    (Command::Repository(RepositoryCommand::Import), CHANGE),
+    (
+        Command::Repository(RepositoryCommand::DictionaryImport),
+        CHANGE,
+    ),
+    (Command::Graph(GraphCommand::SwarmBacktraceLand), CHANGE),
     (
         Command::Action(Action::Discussion),
         Place::Action {

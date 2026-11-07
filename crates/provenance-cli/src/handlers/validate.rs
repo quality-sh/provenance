@@ -5,10 +5,13 @@ use camino::Utf8Path;
 // asks of a whole scope, so it is the same function: the rule lives in
 // `provenance-core` and the message names the record kind.
 use provenance_core::{
-    ensure_supported_schema_version as ensure_schema_version, validate_optional_confidence_score,
-    AssertionRecord, Contribution, DispositionRecord, ProposalCard, SynthesisPacket,
+    ensure_supported_schema_version as ensure_schema_version, AssertionRecord, Contribution,
+    DispositionRecord, ProposalCard, SynthesisPacket,
 };
 use provenance_store::graph_reference::{ExactExport, GraphReference};
+use provenance_transport::porcelain::{
+    validate_contribution_record, validate_proposal_card_record, validate_synthesis_packet_record,
+};
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -64,32 +67,5 @@ pub(super) fn validate_file(
             ExactExport::from_json(json.as_bytes())?;
         }
     }
-    Ok(())
-}
-
-pub(super) fn validate_contribution_record(contribution: &Contribution) -> anyhow::Result<()> {
-    ensure_schema_version("contribution", contribution.schema_version)?;
-    for claim in &contribution.material_claims {
-        validate_optional_confidence_score(claim.confidence).with_context(|| {
-            format!(
-                "material claim {} confidence is invalid",
-                claim.claim_id.as_str()
-            )
-        })?;
-    }
-    Ok(())
-}
-
-pub(super) fn validate_synthesis_packet_record(
-    synthesis_packet: &SynthesisPacket,
-) -> anyhow::Result<()> {
-    ensure_schema_version("synthesis", synthesis_packet.schema_version)
-}
-
-pub(super) fn validate_proposal_card_record(proposal: &ProposalCard) -> anyhow::Result<()> {
-    ensure_schema_version("proposal", proposal.schema_version)?;
-    provenance_core::validate_proposal_intrinsic(proposal)?;
-    validate_optional_confidence_score(proposal.confidence)
-        .with_context(|| format!("proposal {} confidence is invalid", proposal.id.as_str()))?;
     Ok(())
 }

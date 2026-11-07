@@ -412,7 +412,11 @@
         "release",
         "submit",
         "discuss",
-        "reply"
+        "reply",
+        "materialize",
+        "import",
+        "dictionary import",
+        "swarm-backtrace land"
       ],
       "type": "string"
     },
@@ -546,6 +550,11 @@
       ],
       "description": "Actions: create, update."
     },
+    "dry_run": {
+      "default": false,
+      "description": "Run each check of the import and write nothing. Actions: import.",
+      "type": "boolean"
+    },
     "effective_date": {
       "description": "Actions: create, update.",
       "type": [
@@ -593,6 +602,10 @@
     "if_match": {
       "description": "Actions: update.",
       "minLength": 1,
+      "type": "string"
+    },
+    "input": {
+      "description": "The scope export file to import: the JSON document that export writes. Actions: import.",
       "type": "string"
     },
     "inputs": {
@@ -671,6 +684,10 @@
       ],
       "description": "Actions: create."
     },
+    "pdf": {
+      "description": "Path to the local official Issue 9 PDF file Actions: dictionary import.",
+      "type": "string"
+    },
     "position": {
       "description": "Actions: create, update.",
       "type": "string"
@@ -705,6 +722,11 @@
         }
       ],
       "description": "Actions: update."
+    },
+    "replace": {
+      "default": false,
+      "description": "Replace the generated records that an earlier landing of this run wrote. Actions: swarm-backtrace land.",
+      "type": "boolean"
     },
     "replace_parent": {
       "description": "Replace this Requirement parent and preserve its other parents Actions: update.",
@@ -805,6 +827,10 @@
     "role": {
       "$ref": "#/$defs/MessageRole",
       "description": "Actions: discuss, reply."
+    },
+    "run_dir": {
+      "description": "The swarm run directory: its extractors, refuters, contributions, and merge output. Actions: swarm-backtrace land.",
+      "type": "string"
     },
     "severity": {
       "anyOf": [

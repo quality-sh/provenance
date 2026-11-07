@@ -151,14 +151,14 @@ async fn shared_commands_have_one_name_and_target_form() {
         } else {
             help(&["req_surface", declaration.name, "--repo", &path]);
         }
-        let tool = match place {
-            Place::Tool => declaration.name,
-            Place::Action { tool } | Place::Category { tool } => *tool,
+        let fields = match place {
+            Place::Action { tool } => {
+                support::surface::action_properties(&tools[*tool], declaration.name)
+            }
+            Place::Tool => properties(&tools[declaration.name]["inputSchema"]),
+            Place::Category { tool } => properties(&tools[*tool]["inputSchema"]),
         };
-        let properties = properties(&tools[tool]["inputSchema"]);
-        let mcp_target = TARGET_FIELDS
-            .iter()
-            .any(|field| properties.contains(*field));
+        let mcp_target = TARGET_FIELDS.iter().any(|field| fields.contains(*field));
         assert_eq!(
             mcp_target,
             declaration.grammar.takes_target(),
@@ -268,6 +268,35 @@ async fn record_and_discussion_actions_take_the_same_fields() {
     assert_eq!(compared, 10);
 }
 
+/// Each repository command that MCP shows as a change action takes the same fields on
+/// the CLI and on MCP. The CLI shows each field as `--kebab-case` and takes its own
+/// repository and output options; MCP binds the repository and scope when it starts.
+#[tokio::test]
+#[verifies("rule_shared_command_same_name_and_grammar", exhaustion)]
+async fn repository_change_actions_take_the_same_fields() {
+    let (repo, _) = support::review_paths::init();
+    let tools = tools(repo.path()).await;
+    let cli_options = ["repo", "scope", "format", "quiet", "help"];
+    let mut compared = 0;
+    for (command, place) in mcp::EXPOSED {
+        let in_change = *place == (Place::Action { tool: "change" });
+        if !in_change || !matches!(command, Command::Repository(_) | Command::Graph(_)) {
+            continue;
+        }
+        let declaration = command.declaration();
+        let help = help(&words(*command).expect("a word command"));
+        let cli = support::surface::flags(&help)
+            .into_iter()
+            .filter(|flag| !cli_options.contains(&flag.as_str()))
+            .map(|flag| flag.replace('-', "_"))
+            .collect::<BTreeSet<_>>();
+        let mcp = support::surface::action_properties(&tools["change"], declaration.name);
+        assert_eq!(cli, mcp, "{command:?}");
+        compared += 1;
+    }
+    assert_eq!(compared, 4);
+}
+
 /// How the help shows one field: a target field as a positional argument, and each
 /// other field as a flag.
 fn shown(declaration: &Declaration, field: &Field) -> String {
@@ -343,13 +372,10 @@ fn repository_commands_are_registry_commands() {
     assert_cli_only_registry_commands(&[
         &["init"],
         &["__cargo-init"],
-        &["materialize"],
         &["export"],
-        &["import"],
         &["merge-jsonl"],
         &["validate"],
         &["schema", "show"],
-        &["dictionary", "import"],
         &["dictionary", "status"],
     ]);
 }
@@ -363,7 +389,6 @@ fn graph_read_commands_are_registry_commands() {
         &["graph-reference", "show"],
         &["graph-reference", "verify"],
         &["graph-reference", "exact-export"],
-        &["swarm-backtrace", "land"],
     ]);
 }
 

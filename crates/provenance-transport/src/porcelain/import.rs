@@ -1,8 +1,13 @@
-use super::export::ScopeExport;
-use crate::output;
-use camino::Utf8PathBuf;
+//! The import adapter: one scope export in place of the stored scope.
+
+use super::{RepositoryPort, ScopeExport};
+use crate::repository::RepoContext;
+use crate::snapshot::{snapshot, ScopeSnapshot, Store};
+use camino::Utf8Path;
 use provenance_core::ScopeId;
 use provenance_macros::rule;
+use provenance_porcelain::import::{ImportInput, ImportOutput, ImportPort};
+use provenance_porcelain::WorkFuture;
 use provenance_store::layout::ProvenanceLayout;
 use provenance_store::publication::with_publication_guard;
 use provenance_store::repository::Repository;
@@ -12,24 +17,25 @@ use provenance_store::state_store::{
     StateStore, CONTRIBUTION_KIND, SYNTHESIS_KIND,
 };
 use provenance_store::statement_analysis::{analyze_changed_statements, violation_error};
-use provenance_transport::repository::RepoContext;
-use provenance_transport::snapshot::{snapshot, ScopeSnapshot, Store};
 use serde::Serialize;
 
-#[derive(Serialize)]
-pub struct ImportReport {
-    pub status: &'static str,
-    pub dry_run: bool,
-    pub records: usize,
+impl ImportPort for RepositoryPort {
+    type Failure = anyhow::Error;
+
+    fn import(&self, input: ImportInput) -> WorkFuture<'_, ImportOutput, anyhow::Error> {
+        Box::pin(
+            async move { import_scope(&self.context, Utf8Path::new(&input.input), input.dry_run) },
+        )
+    }
 }
 
 /// Refuses an import that changes or removes shipped-v1 terminal proposals.
 #[rule("rule_legacy_terminal_proposals_frozen")]
-pub(super) fn import_scope(
+fn import_scope(
     context: &RepoContext,
-    input: Utf8PathBuf,
+    input: &Utf8Path,
     dry_run: bool,
-) -> anyhow::Result<ImportReport> {
+) -> anyhow::Result<ImportOutput> {
     let input = std::fs::read_to_string(input)?;
     let exported = deserialize_scope_export(&input)?;
     let repository = context.open()?;
@@ -94,8 +100,8 @@ pub(super) fn import_scope(
         ensure_asserted_evidence_preserved(&stored, &exported)?;
         apply_import(held, &stored, &exported, dry_run)
     })?;
-    Ok(ImportReport {
-        status: "ok",
+    Ok(ImportOutput {
+        status: "ok".to_owned(),
         dry_run,
         records,
     })
@@ -247,7 +253,7 @@ fn apply_import(
     let scope_id = repository.scope();
     repository.stage(dry_run, None, |staged| {
         staged.import_scope(scope_id, &scope_shards(exported))?;
-        provenance_transport::check::validate_repository(staged)?;
+        crate::check::validate_repository(staged)?;
         ensure_changed_statements_are_clean(live, staged)
     })
 }
@@ -298,16 +304,6 @@ fn ensure_changed_statements_are_clean(
     } else {
         Err(violation_error(&diagnostics))
     }
-}
-
-pub(super) fn handle(
-    context: &RepoContext,
-    input: Utf8PathBuf,
-    dry_run: bool,
-) -> anyhow::Result<()> {
-    let report = import_scope(context, input, dry_run)?;
-    output::print_json(&report)?;
-    Ok(())
 }
 
 #[cfg(test)]
