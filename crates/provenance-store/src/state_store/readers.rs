@@ -1,8 +1,5 @@
 use super::message_ids::{ensure_unique_message_ids, ShardLine};
-use super::{
-    deserialize_closed, DispositionRecord, Message, ProvenanceLayout, ScopeId, StateEntry,
-    StateStore,
-};
+use super::{deserialize_closed, Message, ProvenanceLayout, ScopeId, StateEntry, StateStore};
 use crate::shards;
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
