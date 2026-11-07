@@ -65,17 +65,19 @@ static NAMES: LazyLock<Vec<(Command, String)>> = LazyLock::new(|| {
         .collect()
 });
 
-/// The MCP name of one shown command: the words of the command name in snake_case,
+/// The MCP name of one shown command: the words of the command name in `snake_case`,
 /// so `dictionary import` is `dictionary_import`. The words stay the same.
 pub fn name(command: Command) -> &'static str {
     NAMES
         .iter()
         .find(|(shown, _)| *shown == command)
-        .map(|(_, name)| name.as_str())
-        .unwrap_or_else(|| panic!("{command:?} is not shown on MCP"))
+        .map_or_else(
+            || panic!("{command:?} is not shown on MCP"),
+            |(_, name)| name.as_str(),
+        )
 }
 
-/// The snake_case spelling of a command name.
+/// The `snake_case` spelling of a command name.
 pub fn spelling(name: &str) -> String {
     name.replace([' ', '-'], "_")
 }
