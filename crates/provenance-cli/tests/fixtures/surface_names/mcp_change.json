@@ -711,8 +711,6 @@
       "default": [],
       "description": "Actions: create.",
       "items": {
-[1m[91merror[0m: test failed, to rerun pass `-p provenance-cli --test surface_names`
-[1m[92m     Running[0m tests/mcp_tool_schema_size.rs (target/debug/deps/mcp_tool_schema_size-d44235a378e7a9a6)
         "$ref": "#/$defs/StableId"
       },
       "type": "array"
