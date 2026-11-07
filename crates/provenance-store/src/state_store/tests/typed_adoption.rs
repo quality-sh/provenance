@@ -27,19 +27,10 @@ const STATEMENT: &str = "The canonical Requirement keeps its identity";
 #[verifies("rule_porcelain_id_unique_in_repository", examples)]
 fn typed_spec_cannot_reuse_another_canonical_kind_id() {
     let (_dir, store, scope) = initialized_store();
+    let source = serde_json::json!({"scope_id": "default", "id": "shared_typed_spec_id",
+        "name": "Existing source", "source_type": "document", "supersedes": []});
     store
-        .create_source(CreateSourceInput {
-            scope_id: scope.clone(),
-            id: StableId::new("shared_typed_spec_id").unwrap(),
-            name: "Existing source".to_owned(),
-            source_type: SourceType::Document,
-            url: None,
-            reference: None,
-            commit_pin: None,
-            supersedes: Vec::new(),
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_source(serde_json::from_value(source).unwrap())
         .unwrap();
     let input = document(
         OWNER,
