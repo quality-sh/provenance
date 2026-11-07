@@ -300,8 +300,10 @@ macro_rules! define_imported_scope_shards {
                         $canonical_strategy, $canonical_import
                     );)*
 
+                    // A scope with review records has no export, so no imported
+                    // Resolution has a review acceptance.
                     super::resolution_decisions::ensure_resolution_decisions(
-                        shards.resolutions, shards.questions, shards.rules,
+                        shards.resolutions, &[], shards.questions, shards.rules,
                     )?;
                     let scope_dir = store.layout.scopes_dir().join(scope.as_str());
                     if scope_dir.exists() {

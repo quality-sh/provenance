@@ -1,9 +1,10 @@
-//! A proposed decision cannot answer a Question or produce an active Rule.
+//! An answered Question or an active Rule cites only an approved Resolution, or a draft,
+//! review or proposed Resolution whose current revision a reviewer accepted.
 
 use super::StateStore;
 use provenance_core::{
     review::ReviewRecord, Question, QuestionStatus, Resolution, ResolutionStatus, Rule, RuleStatus,
-    StableId,
+    ScopeId, StableId,
 };
 
 impl StateStore {
@@ -12,20 +13,20 @@ impl StateStore {
         record: &ReviewRecord,
     ) -> anyhow::Result<()> {
         match record {
-            ReviewRecord::Question(question) if question.status == QuestionStatus::Answered => {
-                ensure_resolution_decisions(
+            ReviewRecord::Question(question) if question.status == QuestionStatus::Answered => self
+                .ensure_cited_resolutions(
+                    &question.scope_id,
                     &self.list_resolutions(&question.scope_id)?,
                     std::slice::from_ref(question),
                     &[],
-                )
-            }
-            ReviewRecord::Rule(rule) if rule.status == RuleStatus::Active => {
-                ensure_resolution_decisions(
+                ),
+            ReviewRecord::Rule(rule) if rule.status == RuleStatus::Active => self
+                .ensure_cited_resolutions(
+                    &rule.scope_id,
                     &self.list_resolutions(&rule.scope_id)?,
                     &[],
                     std::slice::from_ref(rule),
-                )
-            }
+                ),
             ReviewRecord::Resolution(resolution)
                 if resolution.status != ResolutionStatus::Approved =>
             {
@@ -42,15 +43,49 @@ impl StateStore {
                     .into_iter()
                     .filter(|rule| rule.resolution_ids.contains(&resolution.id))
                     .collect::<Vec<_>>();
-                ensure_resolution_decisions(&resolutions, &questions, &rules)
+                self.ensure_cited_resolutions(
+                    &resolution.scope_id,
+                    &resolutions,
+                    &questions,
+                    &rules,
+                )
             }
             _ => Ok(()),
         }
     }
+
+    /// Refuses an answered Question or an active Rule that cites a Resolution that is not
+    /// approved, unless a reviewer accepted the current revision of that Resolution.
+    fn ensure_cited_resolutions(
+        &self,
+        scope: &ScopeId,
+        resolutions: &[Resolution],
+        questions: &[Question],
+        rules: &[Rule],
+    ) -> anyhow::Result<()> {
+        let cited = resolutions
+            .iter()
+            .filter(|resolution| resolution.status != ResolutionStatus::Approved)
+            .filter(|resolution| {
+                questions
+                    .iter()
+                    .any(|q| q.resolution_id.as_ref() == Some(&resolution.id))
+                    || rules
+                        .iter()
+                        .any(|r| r.resolution_ids.contains(&resolution.id))
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        let accepted = self.accepted_resolution_ids(scope, &cited)?;
+        ensure_resolution_decisions(resolutions, &accepted, questions, rules)
+    }
 }
 
+/// Refuses an answered Question or an active Rule that cites a Resolution that is neither
+/// approved nor in `accepted`, the Resolutions whose current revision a reviewer accepted.
 pub(super) fn ensure_resolution_decisions(
     resolutions: &[Resolution],
+    accepted: &[StableId],
     questions: &[Question],
     rules: &[Rule],
 ) -> anyhow::Result<()> {
@@ -59,12 +94,12 @@ pub(super) fn ensure_resolution_decisions(
         .filter(|q| q.status == QuestionStatus::Answered)
     {
         if let Some(id) = &question.resolution_id {
-            ensure_approved(resolutions, id, "question", &question.id)?;
+            ensure_approved(resolutions, accepted, id, "question", &question.id)?;
         }
     }
     for rule in rules.iter().filter(|r| r.status == RuleStatus::Active) {
         for id in &rule.resolution_ids {
-            ensure_approved(resolutions, id, "rule", &rule.id)?;
+            ensure_approved(resolutions, accepted, id, "rule", &rule.id)?;
         }
     }
     Ok(())
@@ -75,6 +110,7 @@ pub(super) fn ensure_resolution_decisions(
 #[provenance_macros::rule("rule_unapproved_resolution_refusal_says_what_to_do")]
 fn ensure_approved(
     resolutions: &[Resolution],
+    accepted: &[StableId],
     id: &StableId,
     kind: &str,
     owner: &StableId,
@@ -83,7 +119,7 @@ fn ensure_approved(
         .iter()
         .find(|resolution| &resolution.id == id)
         .map(|resolution| resolution.status.clone());
-    if status == Some(ResolutionStatus::Approved) {
+    if status == Some(ResolutionStatus::Approved) || accepted.contains(id) {
         return Ok(());
     }
     let state = status.map_or_else(
