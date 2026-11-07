@@ -337,7 +337,6 @@ fn merge_immutable<T: Clone>(
 /// checked again inside `validate_ideation_aggregate`, over the dispositions
 /// of terminal proposals from every source, so a forged row that reaches the
 /// aggregate by another path is caught there.
-#[rule("rule_legacy_shard_frozen")]
 pub(super) fn validate_legacy_disposition_shard(
     legacy_dispositions: &[DispositionRecord],
     proposals: &[ProposalCard],

@@ -15,7 +15,6 @@ use provenance_core::{
     IdentityType, PromotionState, ProposalCard, ProposalTraceability, ProposalType, ScopeId,
     StableId,
 };
-use provenance_macros::verifies;
 use std::collections::BTreeSet;
 
 // Derived from an exhaustive match so that adding a PromotionState variant
@@ -86,8 +85,8 @@ fn shard_rows(case: ShardCase) -> Vec<DispositionRecord> {
     }
 }
 
+// Implementation aid: rule_legacy_shard_frozen is archived. The legacy shard gate stays until provenance-u9mg removes it.
 #[test]
-#[verifies("rule_legacy_shard_frozen", exhaustion)]
 fn admits_only_the_shipped_audit_over_proposals_that_left_proposed() {
     for case in all_shard_cases() {
         for state in all_promotion_states() {
@@ -109,16 +108,16 @@ fn admits_only_the_shipped_audit_over_proposals_that_left_proposed() {
     }
 }
 
+// Implementation aid: rule_legacy_shard_frozen is archived. The legacy shard gate stays until provenance-u9mg removes it.
 #[test]
-#[verifies("rule_legacy_shard_frozen", examples)]
 fn an_empty_shard_is_admitted() {
     validate_legacy_disposition_shard(&[], &[]).unwrap();
     validate_legacy_disposition_shard(&[], &[proposal("proposal_open", PromotionState::Proposed)])
         .unwrap();
 }
 
+// Implementation aid: rule_legacy_shard_frozen is archived. The legacy shard gate stays until provenance-u9mg removes it.
 #[test]
-#[verifies("rule_legacy_shard_frozen", examples)]
 fn refuses_a_row_naming_no_proposal_at_all() {
     let rows = [legacy_row("disposition_orphan", "proposal_missing")];
     let error = validate_legacy_disposition_shard(&rows, &[])
@@ -130,8 +129,8 @@ fn refuses_a_row_naming_no_proposal_at_all() {
     );
 }
 
+// Implementation aid: rule_legacy_shard_frozen is archived. The legacy shard gate stays until provenance-u9mg removes it.
 #[test]
-#[verifies("rule_legacy_shard_frozen", examples)]
 fn refuses_a_new_decision_appended_beside_genuine_history() {
     let history = shipped_audit();
     let proposals = proposals_for(&history, PromotionState::Accepted);
@@ -151,8 +150,8 @@ fn refuses_a_new_decision_appended_beside_genuine_history() {
     );
 }
 
+// Implementation aid: rule_legacy_shard_frozen is archived. The legacy shard gate stays until provenance-u9mg removes it.
 #[test]
-#[verifies("rule_legacy_shard_frozen", examples)]
 fn refuses_an_edited_or_deleted_row() {
     // Membership is a property of the whole set, so the gate now answers for
     // every field of every row, not only for the proposal each row names.
