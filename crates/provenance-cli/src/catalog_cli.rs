@@ -272,6 +272,17 @@ pub fn usage_error(error: impl std::fmt::Display) -> ! {
     clap::Error::raw(clap::error::ErrorKind::InvalidValue, error.to_string()).exit()
 }
 
+/// Exits with the CLI text of an action that cannot be selected. The CLI names the
+/// record type field by its `--type` option.
+pub fn action_usage_error(error: provenance_porcelain::action::ActionError) -> ! {
+    match error {
+        provenance_porcelain::action::ActionError::KindSelection => usage_error(
+            "create requires --type and existing-record actions infer it without --type",
+        ),
+        error => usage_error(error),
+    }
+}
+
 fn warn_if_skills_missing(repo: &str, quiet: bool) -> anyhow::Result<()> {
     if quiet {
         return Ok(());
