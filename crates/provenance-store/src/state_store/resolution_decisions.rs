@@ -6,7 +6,6 @@ use provenance_core::{
     review::ReviewRecord, Question, QuestionStatus, Resolution, ResolutionStatus, Rule, RuleStatus,
     ScopeId, StableId,
 };
-use std::collections::BTreeSet;
 
 impl StateStore {
     pub(super) fn validate_resolution_decision_write(
@@ -92,7 +91,7 @@ impl StateStore {
 #[provenance_macros::rule("rule_unapproved_resolution_refusal_says_what_to_do")]
 fn ensure_approved(
     resolutions: &[Resolution],
-    accepted: &BTreeSet<StableId>,
+    accepted: &[StableId],
     id: &StableId,
     kind: &str,
     owner: &StableId,

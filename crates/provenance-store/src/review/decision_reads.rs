@@ -198,7 +198,7 @@ impl StateStore {
         &self,
         scope: &ScopeId,
         resolutions: &[Resolution],
-    ) -> anyhow::Result<std::collections::BTreeSet<StableId>> {
+    ) -> anyhow::Result<Vec<StableId>> {
         let candidates = resolutions
             .iter()
             .filter(|resolution| {
@@ -208,7 +208,7 @@ impl StateStore {
                 )
             })
             .collect::<Vec<_>>();
-        let mut accepted = std::collections::BTreeSet::new();
+        let mut accepted = Vec::new();
         if candidates.is_empty() {
             return Ok(accepted);
         }
@@ -219,7 +219,7 @@ impl StateStore {
                 .current_acceptance
                 .is_some()
             {
-                accepted.insert(resolution.id.clone());
+                accepted.push(resolution.id.clone());
             }
         }
         Ok(accepted)
