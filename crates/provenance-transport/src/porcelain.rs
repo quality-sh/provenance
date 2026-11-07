@@ -20,9 +20,7 @@ pub use get_port::HostGetPort;
 pub use host::HostPorcelain;
 pub use parent_replacement::{ParentReplacement, Replaced, ReplacementError};
 pub use search_port::HostSearchPort;
-pub use swarm_backtrace::{
-    validate_contribution_record, validate_proposal_card_record,
-};
+pub use swarm_backtrace::{validate_contribution_record, validate_proposal_card_record};
 
 use crate::repository::RepoContext;
 
