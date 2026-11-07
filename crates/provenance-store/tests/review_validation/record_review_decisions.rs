@@ -6,9 +6,9 @@ use provenance_store::{
     layout::ProvenanceLayout,
     review::{DecideRecordReview, ReviewFeedback},
     state_store::{
-        CreateBoundaryInput, CreateDomainInput, CreateQuestionInput, CreateRequirementInput,
+        CreateBoundaryInput, CreateQuestionInput, CreateRequirementInput,
         CreateResolutionInput, CreateRuleInput, CreateSourceInput, CreateTopicInput,
-        EditQuestionInput, StateStore, UpdateBoundaryInput, UpdateDomainInput,
+        EditQuestionInput, StateStore, UpdateBoundaryInput,
         UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
     },
     write_error::{WriteError, WriteFailure},
@@ -49,7 +49,7 @@ fn input<T: serde::de::DeserializeOwned>(value: serde_json::Value) -> T {
 }
 
 fn create_prerequisites(store: &StateStore, kind: NodeType) {
-    if kind != NodeType::Source && kind != NodeType::Domain {
+    if kind != NodeType::Source {
         store
             .create_requirement(input::<CreateRequirementInput>(json!({
                 "scope_id":"default", "id":"requirement_a",
@@ -98,13 +98,6 @@ fn create_record(store: &StateStore, kind: NodeType) -> StableId {
                     "statement":"The system stores each record.", "status":"draft",
                     "severity":"medium", "requirement_ids":["requirement_a"],
                     "resolution_ids":[]
-                })))
-                .unwrap();
-        }
-        NodeType::Domain => {
-            store
-                .create_domain(input::<CreateDomainInput>(json!({
-                    "scope_id":"default", "id":record_id, "name":"Storage"
                 })))
                 .unwrap();
         }
@@ -161,13 +154,6 @@ fn revise_record(store: &StateStore, kind: NodeType, record_id: &StableId) {
                 common,
                 "statement",
                 json!("The system stores each durable record."),
-            )))
-            .map(|_| ()),
-        NodeType::Domain => store
-            .update_domain(input::<UpdateDomainInput>(common_with(
-                common,
-                "name",
-                json!("Durable storage"),
             )))
             .map(|_| ()),
         NodeType::Boundary => store
@@ -228,7 +214,6 @@ fn record_value(
         NodeType::Source => find!(list_sources),
         NodeType::Resolution => find!(list_resolutions),
         NodeType::Rule => find!(list_rules),
-        NodeType::Domain => find!(list_domains),
         NodeType::Boundary => find!(list_boundaries),
         NodeType::Topic => find!(list_topics),
         NodeType::Question => find!(list_questions),
@@ -241,7 +226,7 @@ fn artifact_type(kind: NodeType) -> CanonicalArtifactType {
 }
 
 fn review_feedback(kind: NodeType) -> Option<ReviewFeedback> {
-    (!matches!(kind, NodeType::Domain | NodeType::Boundary)).then(|| ReviewFeedback {
+    (!matches!(kind, NodeType::Boundary)).then(|| ReviewFeedback {
         role: provenance_core::MessageRole::User,
         body: "Use the precise record text.".into(),
     })
@@ -323,7 +308,6 @@ fn every_added_kind_persists_the_exact_review_versions_without_lifecycle_change(
         NodeType::Source,
         NodeType::Resolution,
         NodeType::Rule,
-        NodeType::Domain,
         NodeType::Boundary,
         NodeType::Topic,
         NodeType::Question,
@@ -350,7 +334,7 @@ fn pending_classification_review(
 #[test]
 #[provenance_macros::verifies("rule_domain_boundary_decisions_accept_no_feedback", examples)]
 fn domain_and_boundary_decisions_refuse_feedback() {
-    for kind in [NodeType::Domain, NodeType::Boundary] {
+    for kind in [NodeType::Boundary] {
         let (_temp, store, scope, proposal) = pending_classification_review(kind);
 
         let error = store

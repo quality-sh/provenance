@@ -277,7 +277,6 @@ fn exact_export_rejects_non_canonical_graph_families() {
         "proposal_cards",
         "assertions",
         "dispositions",
-        "promotion_decisions",
         "contributions",
         "synthesis_packets",
         "threads",

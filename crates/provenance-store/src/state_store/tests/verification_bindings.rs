@@ -111,7 +111,6 @@ fn canonical_identity_cannot_be_reused_in_another_scope() {
             statement: "Other".into(),
             description: None,
             status: provenance_core::RequirementStatus::Active,
-            domain_id: None,
             refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),

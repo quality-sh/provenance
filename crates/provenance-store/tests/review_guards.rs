@@ -51,9 +51,6 @@ fn create(store: &StateStore, kind: NodeType) -> serde_json::Value {
             "scope_id":"default","id":"rule_a","statement":"The system stores records.",
             "status":"active","severity":"medium","requirement_ids":["req_a"],"resolution_ids":[]
         }))).unwrap()),
-        NodeType::Domain => serde_json::to_value(store.create_domain(input(json!({
-            "scope_id":"default","id":"domain_a","name":"Storage"
-        }))).unwrap()),
         NodeType::Boundary => serde_json::to_value(store.create_boundary(input(json!({
             "scope_id":"default","id":"boundary_a","requirement_id":"req_a","statement":"Storage only."
         }))).unwrap()),

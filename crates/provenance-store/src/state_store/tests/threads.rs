@@ -17,7 +17,6 @@ fn list_messages_reads_all_month_shards() {
         role: MessageRole::User,
         body: "July message".into(),
         created_at: 1,
-        ai_metadata: None,
     };
     let second_message = Message {
         scope_id: scope.clone(),
@@ -26,7 +25,6 @@ fn list_messages_reads_all_month_shards() {
         role: MessageRole::Assistant,
         body: "August message".into(),
         created_at: 2,
-        ai_metadata: None,
     };
     let threads_dir = store
         .layout
@@ -395,7 +393,7 @@ fn thread(
 #[test]
 fn thread_parents_stay_within_the_six_original_kinds() {
     let (_dir, store, scope) = initialized_store();
-    for kind in [NodeType::Domain, NodeType::Boundary] {
+    for kind in [NodeType::Boundary] {
         let error = store
             .post_thread_message(PostMessageInput {
                 scope_id: scope.clone(),

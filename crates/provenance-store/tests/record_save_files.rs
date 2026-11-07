@@ -52,12 +52,6 @@ fn create_and_update_every_kind(store: &StateStore, scope: &ScopeId) {
         ))
         .unwrap();
     store
-        .create_domain(input(
-            json!({"scope_id":"default", "id":"domain_files", "name":"Domain A",
-            "description":null, "color":null}),
-        ))
-        .unwrap();
-    store
         .update_domain(input(
             json!({"scope_id":"default", "id":"domain_files", "name":"Domain B"}),
         ))

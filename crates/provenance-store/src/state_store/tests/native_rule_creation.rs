@@ -54,7 +54,6 @@ fn native_rule_creation_accepts_an_existing_rule_after_a_commit() {
             statement: "The anchor requirement holds".into(),
             description: None,
             status: RequirementStatus::Active,
-            domain_id: None,
             refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),

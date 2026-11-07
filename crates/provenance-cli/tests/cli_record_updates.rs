@@ -200,12 +200,6 @@ fn descriptive_records() -> tempfile::TempDir {
     store.create_requirement(serde_json::from_value(json!({"scope_id":"default","id":"req_one","statement":"The system saves the record.","status":"active","depends_on":[],"supersedes":[]})).unwrap()).unwrap();
     store.create_rule(serde_json::from_value(json!({"scope_id":"default","id":"rule_one","statement":"The system saves the record.","status":"draft","severity":"medium","requirement_ids":["req_one"],"resolution_ids":[]})).unwrap()).unwrap();
     store.create_resolution(serde_json::from_value(json!({"scope_id":"default","id":"resolution_one","title":"Decision","position":"Use the saved record.","rationale":"The record is available.","status":"draft","requirement_ids":["req_one"],"supersedes":[],"inputs":[]})).unwrap()).unwrap();
-    store
-        .create_domain(
-            serde_json::from_value(json!({"scope_id":"default","id":"domain_one","name":"Domain"}))
-                .unwrap(),
-        )
-        .unwrap();
     store.create_boundary(serde_json::from_value(json!({"scope_id":"default","id":"boundary_one","requirement_id":"req_one","statement":"Limit"})).unwrap()).unwrap();
     store.create_topic(serde_json::from_value(json!({"scope_id":"default","id":"topic_one","requirement_id":"req_one","title":"Topic","status":"open","links":[]})).unwrap()).unwrap();
     store.create_question(serde_json::from_value(json!({"scope_id":"default","id":"question_one","topic_id":"topic_one","question":"Which record?","resolution_method":"research","status":"open","links":[]})).unwrap()).unwrap();

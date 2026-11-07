@@ -8,7 +8,7 @@ use crate::cache::{catch_up_state, open_cache, quoted, CacheConnection};
 use crate::operations::reader::ReadSnapshot;
 use provenance_core::model::ProjectionRow;
 use provenance_core::{
-    Boundary, Domain, ImplementationBinding, Question, Requirement, RequirementReview, Resolution,
+    Boundary, ImplementationBinding, Question, Requirement, RequirementReview, Resolution,
     Rule, Source, StableId, Topic, VerificationBinding,
 };
 use provenance_macros::verifies;
@@ -69,7 +69,6 @@ async fn a_stored_record_reads_back_as_its_canonical_bytes() {
     assert_reads_back::<Rule>(&snapshot, state.list_rules(scope).unwrap()).await;
     assert_reads_back::<Topic>(&snapshot, state.list_topics(scope).unwrap()).await;
     assert_reads_back::<Question>(&snapshot, state.list_questions(scope).unwrap()).await;
-    assert_reads_back::<Domain>(&snapshot, state.list_domains(scope).unwrap()).await;
     assert_reads_back::<Boundary>(&snapshot, state.list_boundaries(scope).unwrap()).await;
     assert_reads_back::<ImplementationBinding>(
         &snapshot,
@@ -167,8 +166,6 @@ async fn every_stored_row_of_the_repository_state_reads_back_as_written() {
         state.list_questions(scope).unwrap(),
     )
     .await;
-    assert_rows_read_as_written::<Domain>(pool.pool(), word, state.list_domains(scope).unwrap())
-        .await;
     assert_rows_read_as_written::<Boundary>(
         pool.pool(),
         word,

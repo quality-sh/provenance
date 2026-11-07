@@ -118,7 +118,6 @@ fn seed_requirement(store: &StateStore, scope: &ScopeId) {
             statement: "Overtime".into(),
             description: None,
             status: provenance_core::RequirementStatus::Active,
-            domain_id: None,
             refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),

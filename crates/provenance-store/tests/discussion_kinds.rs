@@ -195,7 +195,7 @@ fn parent_ownership_and_existence_are_per_kind() {
         .write_discussion(write_for(NodeType::Source, "source_missing", &json!(null)))
         .is_err());
     assert!(store
-        .write_discussion(write_for(NodeType::Domain, "domain_missing", &json!(null)))
+        .write_discussion(write_for(NodeType::Boundary, "boundary_missing", &json!(null)))
         .is_err());
 }
 

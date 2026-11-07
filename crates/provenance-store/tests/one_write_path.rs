@@ -107,12 +107,6 @@ fn every_legacy_edit_publishes_its_change() {
         "a citation edit publishes"
     );
 
-    store
-        .set_requirement_fog(&scope(), &id(), Some("Free text".into()))
-        .unwrap();
-    store.set_requirement_fog(&scope(), &id(), None).unwrap();
-    assert_eq!(store.list_requirements(&scope()).unwrap()[0].fog, None);
-
     let before = store.list_requirements(&scope()).unwrap();
     assert!(store
         .add_requirement_refines(&scope(), &id(), StableId::new("req_a").unwrap())

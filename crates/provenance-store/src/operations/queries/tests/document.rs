@@ -147,7 +147,7 @@ async fn document_failed_catch_up_precedes_missing_root_in_old_projection() {
         "req_new",
         provenance_core::RequirementStatus::Active,
     );
-    let path = crate::shards::domains_path(&store.layout, &scope);
+    let path = crate::shards::boundaries_path(&store.layout, &scope);
     let saved = std::fs::read(&path).unwrap();
     std::fs::write(&path, "invalid JSON\n").unwrap();
     let request = ReadDocumentQuery {

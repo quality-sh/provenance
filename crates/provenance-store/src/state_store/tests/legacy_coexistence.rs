@@ -103,7 +103,6 @@ fn land_modern_swarm_records(store: &StateStore, scope: &ScopeId) {
             statement: "The modern records name this requirement".into(),
             description: None,
             status: RequirementStatus::Active,
-            domain_id: None,
             refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),

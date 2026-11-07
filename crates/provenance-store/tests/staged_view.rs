@@ -32,8 +32,6 @@ fn source_input(id: &str) -> CreateSourceInput {
         url: None,
         reference: None,
         commit_pin: None,
-        effective_date: None,
-        review_date: None,
         supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,

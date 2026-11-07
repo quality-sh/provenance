@@ -65,8 +65,6 @@ pub(super) fn blank_source(scope: &ScopeId, id: &str) -> Source {
         url: None,
         reference: None,
         commit_pin: None,
-        effective_date: None,
-        review_date: None,
         supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,
@@ -89,8 +87,6 @@ pub(super) fn source_of_stored_bytes(
         url: None,
         reference: None,
         commit_pin: None,
-        effective_date: None,
-        review_date: None,
         supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,
@@ -248,8 +244,6 @@ async fn oversized_update_is_refused_and_keeps_the_published_record() {
             url: None,
             reference: None,
             commit_pin: None,
-            effective_date: None,
-            review_date: None,
             supersedes: None,
             clear_fields: Vec::<SourceClearField>::new(),
         })
@@ -298,7 +292,6 @@ async fn oversized_message_write_is_refused_and_persists_nothing() {
             time::OffsetDateTime::now_utc().unix_timestamp_nanos() / 1_000_000,
         )
         .unwrap(),
-        ai_metadata: None,
     })
     .unwrap();
     let message = store
@@ -385,8 +378,6 @@ fn resolution_input(scope: &ScopeId, id: &str, title: String) -> CreateResolutio
         rationale: "The requirement says so".into(),
         status: ResolutionStatus::Proposed,
         context: None,
-        enforcement: None,
-        confidence: Some(1.0),
         inputs: Vec::new(),
         made_by: None,
         approved_by: None,

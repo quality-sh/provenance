@@ -23,7 +23,6 @@ const SAMPLE_NEEDLE: [(NodeType, &str); 8] = [
     (NodeType::Rule, "rule"),
     (NodeType::Topic, "top"),
     (NodeType::Question, "q"),
-    (NodeType::Domain, "domain"),
     (NodeType::Boundary, "boundary"),
 ];
 
@@ -129,7 +128,7 @@ pub async fn for_store(store: &TestStore) -> Vec<Request> {
     }
     requests.push(Request::Search(search(
         "e",
-        vec![NodeType::Domain, NodeType::Boundary, NodeType::Rule],
+        vec![NodeType::Boundary, NodeType::Rule],
     )));
     if let Some(base) = &store.base_commit {
         requests.push(Request::Stale(StaleQuery {

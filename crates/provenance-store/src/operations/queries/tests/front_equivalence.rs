@@ -22,7 +22,6 @@ async fn assert_fronts_agree(store: &TestStore) {
     let rules = state.list_rules(scope).unwrap();
     let topics = state.list_topics(scope).unwrap();
     let questions = state.list_questions(scope).unwrap();
-    let domains = state.list_domains(scope).unwrap();
     let boundaries = state.list_boundaries(scope).unwrap();
     let records = RecordFront {
         sources: &sources,
@@ -31,7 +30,6 @@ async fn assert_fronts_agree(store: &TestStore) {
         rules: &rules,
         topics: &topics,
         questions: &questions,
-        domains: &domains,
         boundaries: &boundaries,
     };
     let mut frontier: Vec<(NodeType, StableId)> = Vec::new();
@@ -49,7 +47,6 @@ async fn assert_fronts_agree(store: &TestStore) {
     frontier.extend(rules.iter().map(|r| (NodeType::Rule, r.id.clone())));
     frontier.extend(topics.iter().map(|r| (NodeType::Topic, r.id.clone())));
     frontier.extend(questions.iter().map(|r| (NodeType::Question, r.id.clone())));
-    frontier.extend(domains.iter().map(|r| (NodeType::Domain, r.id.clone())));
     frontier.extend(
         boundaries
             .iter()

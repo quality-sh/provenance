@@ -72,11 +72,6 @@ fn direct_create_and_all_named_content_writers_open_submissions() {
     proposal = assert_new_pending(&store, &scope, &id, &proposal);
 
     store
-        .set_requirement_fog(&scope, &id, Some("Unknown condition.".to_owned()))
-        .unwrap();
-    proposal = assert_new_pending(&store, &scope, &id, &proposal);
-
-    store
         .create_source(
             serde_json::from_value::<CreateSourceInput>(json!({
                 "scope_id":"default", "id":"source_a", "name":"Policy",

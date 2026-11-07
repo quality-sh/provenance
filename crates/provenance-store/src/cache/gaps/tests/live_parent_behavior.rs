@@ -54,7 +54,7 @@ fn a_live_requirement_or_rule_under_only_archived_parents_is_a_gap() {
         requirement_ids: vec![sid("req_archived")],
         ..rule("rule_child")
     }];
-    let gaps = compute_for(&[], &requirements, &[], &rules, &[], &[], &[]);
+    let gaps = compute_for(&[], &requirements, &[], &rules, &[], &[]);
     assert_eq!(
         no_live_parent(&gaps),
         [
@@ -96,7 +96,7 @@ fn a_record_with_a_live_parent_or_no_lifecycle_is_not_a_gap() {
             ..rule("rule_archived")
         },
     ];
-    let gaps = compute_for(&[], &requirements, &[], &rules, &[], &[], &[]);
+    let gaps = compute_for(&[], &requirements, &[], &rules, &[], &[]);
     let found = no_live_parent(&gaps);
     assert!(found.is_empty(), "{found:?}");
 }
@@ -114,7 +114,7 @@ fn a_live_resolution_topic_or_question_under_only_archived_parents_is_a_gap() {
         "req_archived",
         QuestionStatus::Open,
     )];
-    let gaps = compute_for(&[], &parents(), &resolutions, &[], &topics, &questions, &[]);
+    let gaps = compute_for(&[], &parents(), &resolutions, &[], &topics, &questions);
     assert_eq!(
         no_live_parent(&gaps),
         [

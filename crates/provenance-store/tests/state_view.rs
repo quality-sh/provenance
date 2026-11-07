@@ -28,8 +28,6 @@ fn source_input(id: &str) -> CreateSourceInput {
         url: None,
         reference: Some("docs/policy.md".to_owned()),
         commit_pin: None,
-        effective_date: None,
-        review_date: None,
         supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,

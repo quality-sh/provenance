@@ -38,7 +38,6 @@ fn a_question_with_a_resolution_settles_its_contradiction() {
         &[],
         &pair_topic(),
         &questions,
-        &[],
     );
     assert_eq!(count_kind(&gaps, GapKind::UnresolvedContradictsPair), 0);
 }
@@ -66,7 +65,6 @@ fn a_rejected_resolution_does_not_settle_a_contradiction() {
             &[],
             &pair_topic(),
             &questions,
-            &[],
         );
         assert_eq!(
             count_kind(&gaps, GapKind::UnresolvedContradictsPair),
@@ -89,7 +87,7 @@ fn approved_resolution_need_not_produce_a_rule_but_resolved_requirement_still_do
         ..resolution("res_approved")
     }];
 
-    let gaps = compute_for(&[], &requirements, &resolutions, &[], &[], &[], &[]);
+    let gaps = compute_for(&[], &requirements, &resolutions, &[], &[], &[]);
     assert!(gaps.iter().any(|gap| {
         gap.kind == GapKind::NoProducedRules
             && gap.node_type == NodeType::Requirement
@@ -113,7 +111,7 @@ fn supersession_settles_a_contradiction() {
         },
     ];
     let questions = vec![contradiction("question_pair", "req_left", "req_right")];
-    let gaps = compute_for(&[], &requirements, &[], &[], &pair_topic(), &questions, &[]);
+    let gaps = compute_for(&[], &requirements, &[], &[], &pair_topic(), &questions);
     assert_eq!(count_kind(&gaps, GapKind::UnresolvedContradictsPair), 0);
 }
 
@@ -127,7 +125,7 @@ fn answered_questions_and_explored_topics_are_not_frontier_gaps() {
         "topic_explored",
         QuestionStatus::Answered,
     )];
-    let gaps = compute_for(&[], &requirements, &[], &[], &topics, &questions, &[]);
+    let gaps = compute_for(&[], &requirements, &[], &[], &topics, &questions);
     assert_eq!(count_kind(&gaps, GapKind::OpenQuestion), 0);
     assert_eq!(count_kind(&gaps, GapKind::UnexploredTopic), 0);
 }
@@ -145,7 +143,6 @@ fn a_rule_naming_a_missing_resolution_has_a_dangling_reference_gap() {
         &[requirement("req_anchor")],
         &[],
         &rules,
-        &[],
         &[],
         &[],
     );
@@ -184,7 +181,6 @@ fn a_contradiction_named_from_both_sides_is_reported_once() {
         &[],
         &pair_topic(),
         &questions,
-        &[],
     );
     assert_eq!(count_kind(&gaps, GapKind::UnresolvedContradictsPair), 1);
     assert_eq!(count_kind(&gaps, GapKind::OpenQuestion), 0);

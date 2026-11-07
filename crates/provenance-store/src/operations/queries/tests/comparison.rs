@@ -20,7 +20,7 @@ use crate::operations::read_policy::{FreshnessPolicy, ReadPolicy};
 use crate::operations::reader::{self, ReadSnapshot};
 use provenance_core::model::ProjectionRow;
 use provenance_core::{
-    Boundary, Domain, ImplementationBinding, Question, Requirement, RequirementReview, Resolution,
+    Boundary, ImplementationBinding, Question, Requirement, RequirementReview, Resolution,
     Rule, Source, Topic, VerificationBinding,
 };
 use requests::Request;
@@ -238,7 +238,6 @@ async fn projection_counts_match_canonical_over_the_repository_state() {
     assert_count::<Rule>(&snapshot, state.list_rules(scope).unwrap().len()).await;
     assert_count::<Topic>(&snapshot, state.list_topics(scope).unwrap().len()).await;
     assert_count::<Question>(&snapshot, state.list_questions(scope).unwrap().len()).await;
-    assert_count::<Domain>(&snapshot, state.list_domains(scope).unwrap().len()).await;
     assert_count::<Boundary>(&snapshot, state.list_boundaries(scope).unwrap().len()).await;
     assert_count::<ImplementationBinding>(
         &snapshot,

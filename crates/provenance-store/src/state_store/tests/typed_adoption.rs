@@ -1,6 +1,6 @@
 use super::initialized_store;
 use crate::state_store::{
-    CreateDomainInput, CreateRequirementInput, CreateResolutionInput, CreateRuleInput,
+    CreateRequirementInput, CreateResolutionInput, CreateRuleInput,
     CreateSourceInput, MaterializeImplementationBindingInput, ReconcileState, StateStore,
 };
 use provenance_core::protocol::{
@@ -27,15 +27,6 @@ const STATEMENT: &str = "The canonical Requirement keeps its identity";
 #[verifies("rule_porcelain_id_unique_in_repository", examples)]
 fn typed_spec_cannot_reuse_another_canonical_kind_id() {
     let (_dir, store, scope) = initialized_store();
-    store
-        .create_domain(CreateDomainInput {
-            scope_id: scope.clone(),
-            id: StableId::new("shared_typed_spec_id").unwrap(),
-            name: "Existing domain".to_owned(),
-            description: None,
-            color: None,
-        })
-        .unwrap();
     let input = document(
         OWNER,
         vec![requirement(
@@ -100,7 +91,6 @@ fn create_unowned_requirement(store: &StateStore, scope: &ScopeId, id: &str, sta
             statement: statement.to_string(),
             description: None,
             status: RequirementStatus::Active,
-            domain_id: None,
             refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
@@ -144,8 +134,6 @@ fn create_unowned_source(store: &StateStore, scope: &ScopeId, name: &str) {
             url: None,
             reference: Some("docs/policy.md".to_string()),
             commit_pin: None,
-            effective_date: None,
-            review_date: None,
             supersedes: Vec::new(),
             origin_thread: None,
             origin_message: None,

@@ -58,7 +58,6 @@ fn resolve(file: &str, symbol: Option<&str>, line: Option<usize>) -> Request {
 /// is fixed by the store's fixed author and dates.
 pub(super) fn request_set(base: &str) -> Vec<Request> {
     let mut set = vec![
-        get(NodeType::Domain, "domain_payroll"),
         get(NodeType::Source, "source_schads"),
         get(NodeType::Requirement, "req_overtime"),
         get(NodeType::Resolution, "res_overtime"),
@@ -73,7 +72,7 @@ pub(super) fn request_set(base: &str) -> Vec<Request> {
         Request::Search(requests::search("over", Vec::new())),
         Request::Search(requests::search(
             "pay",
-            vec![NodeType::Domain, NodeType::Boundary],
+            vec![NodeType::Boundary],
         )),
         Request::Search(requests::search("e", Vec::new())),
     ];
