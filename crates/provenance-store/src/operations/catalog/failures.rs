@@ -3,6 +3,7 @@ use crate::cache::CompletionTimedOut;
 use crate::operations::files::FileAccessRefusal;
 use crate::operations::reader::ReadRefusal;
 use crate::stale::git::GitRefusal;
+use crate::state_store::readers::StateLineInvalid;
 use provenance_core::protocol::{
     failure::OperationFailure,
     read_failure::{MovedUnit, ReadFailure},
@@ -29,7 +30,7 @@ impl ReadError {
         }
         match self.safe() {
             ReadFailure::ResourceNotFound => 404,
-            ReadFailure::ReadFailed => 500,
+            ReadFailure::ReadFailed | ReadFailure::InvalidStateFile { .. } => 500,
             ReadFailure::FileAccessDenied => 403,
             ReadFailure::FileUnavailable
             | ReadFailure::GitUnavailable
@@ -57,9 +58,28 @@ impl ReadError {
         if let Some(error) = self.0.downcast_ref::<CompletionTimedOut>() {
             return completion_failure(error);
         }
-        self.0
-            .downcast_ref::<ReadRefusal>()
-            .map_or(ReadFailure::ReadFailed, refusal_failure)
+        if let Some(error) = self.0.downcast_ref::<ReadRefusal>() {
+            return refusal_failure(error);
+        }
+        StateLineInvalid::find(&self.0).map_or(ReadFailure::ReadFailed, state_line_failure)
+    }
+    /// The native cause chain of a failure of no known kind. The wire answer
+    /// gives only `read_failed`: the chain can hold absolute paths and stored
+    /// values, so only the operator sees it.
+    pub fn unclassified_cause(&self) -> Option<String> {
+        (self.common().is_none() && self.safe() == ReadFailure::ReadFailed)
+            .then(|| format!("{:#}", self.0))
+    }
+}
+
+/// The shard below the state directory, the line and the parse message of a
+/// state line that does not parse.
+#[rule("rule_state_parse_refusal_names_the_line")]
+fn state_line_failure(error: &StateLineInvalid) -> ReadFailure {
+    ReadFailure::InvalidStateFile {
+        file: error.file(),
+        line: error.line,
+        message: error.message.clone(),
     }
 }
 

@@ -14,21 +14,45 @@ use provenance_core::{
     DispositionDecision, NodeType, Resolution, ResolutionStatus, ScopeId, StableId,
 };
 use provenance_macros::rule;
+use std::collections::HashMap;
 
 pub struct DocumentReviewState {
     pub records: Vec<(NodeType, StableId, DocumentReviewSummary)>,
     /// The records whose review rejected them before any acceptance.
     pub rejected_new: Vec<(NodeType, StableId)>,
     pub digest: String,
+    /// The position of the first entry of each record in `records`, by
+    /// record kind and then by record id.
+    positions: HashMap<&'static str, HashMap<String, usize>>,
 }
 
 impl DocumentReviewState {
+    fn new(
+        records: Vec<(NodeType, StableId, DocumentReviewSummary)>,
+        rejected_new: Vec<(NodeType, StableId)>,
+        digest: String,
+    ) -> Self {
+        let mut positions = HashMap::<_, HashMap<_, _>>::new();
+        for (position, (kind, id, _)) in records.iter().enumerate() {
+            positions
+                .entry(kind.as_str())
+                .or_default()
+                .entry(id.as_str().to_owned())
+                .or_insert(position);
+        }
+        Self {
+            records,
+            rejected_new,
+            digest,
+            positions,
+        }
+    }
+
     pub fn summary(&self, kind: NodeType, id: &StableId) -> DocumentReviewSummary {
-        self.records
-            .iter()
-            .find(|(record_kind, record_id, _)| *record_kind == kind && record_id == id)
-            .map(|(_, _, summary)| summary)
-            .cloned()
+        self.positions
+            .get(kind.as_str())
+            .and_then(|ids| ids.get(id.as_str()))
+            .map(|&position| self.records[position].2.clone())
             .unwrap_or_default()
     }
 }
@@ -91,11 +115,7 @@ impl StateStore {
                     )
                 })
                 .collect::<Vec<_>>();
-            Ok(DocumentReviewState {
-                records,
-                rejected_new,
-                digest,
-            })
+            Ok(DocumentReviewState::new(records, rejected_new, digest))
         })
     }
 
@@ -134,14 +154,9 @@ impl StateStore {
         record: &ReviewRecord,
         facts: &CycleFacts,
     ) -> anyhow::Result<RequirementDecisionState> {
-        let proposals = facts.proposals();
-        let dispositions = facts.dispositions();
         let kind = record.kind();
         let record_id = record.id();
         let current_revision = super::save::current_revision(record)?;
-        let targets_record = |target: &provenance_core::IdeationTarget| {
-            NodeType::from(target.artifact_type) == kind && target.artifact_id == *record_id
-        };
         let pending = facts
             .pending_submission_at_revision(kind, record_id, current_revision.as_ref())
             .map(|proposal| PendingSubmission {
@@ -153,21 +168,15 @@ impl StateStore {
                 actor: proposal.actor.unwrap_or_default(),
                 revises: proposal.revises,
             });
-        let mut recorded: Vec<RecordedDecision> = dispositions
-            .iter()
-            .filter_map(|disposition| {
-                let proposal = proposals.iter().find(|p| p.id == disposition.proposal_id)?;
-                if !targets_record(&proposal.traceability.target) {
-                    return None;
-                }
-                Some(RecordedDecision {
-                    revision: proposal
-                        .record_revision
-                        .as_ref()
-                        .map(|binding| binding.revision.clone()),
-                    feedback_message_id: facts.feedback_for(&disposition.id),
-                    disposition: disposition.clone(),
-                })
+        let mut recorded: Vec<RecordedDecision> = facts
+            .decisions_of(kind, record_id)
+            .map(|(disposition, proposal)| RecordedDecision {
+                revision: proposal
+                    .record_revision
+                    .as_ref()
+                    .map(|binding| binding.revision.clone()),
+                feedback_message_id: facts.feedback_for(&disposition.id),
+                disposition: disposition.clone(),
             })
             .collect();
         recorded.sort_by_key(|decision| facts.order_of(&decision.disposition.proposal_id));

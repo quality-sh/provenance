@@ -39,7 +39,7 @@ pub use crate::cache::read::{kind_of, SqlFront};
 use super::read_policy::ReadPolicy;
 use crate::repository::Repository;
 use camino::{Utf8Path, Utf8PathBuf};
-use provenance_core::protocol::Stamped;
+use provenance_core::protocol::{StampPolicy, Stamped};
 use provenance_macros::rule;
 use std::collections::BTreeSet;
 use std::future::Future;
@@ -89,21 +89,33 @@ pub struct ReadContext {
     live: Mutex<BTreeSet<Live>>,
     repository: Repository,
     scan_limit: usize,
+    policy: StampPolicy,
 }
 
 impl ReadContext {
-    const fn new(snapshot: ReadSnapshot, repository: Repository, scan_limit: usize) -> Self {
+    const fn new(
+        snapshot: ReadSnapshot,
+        repository: Repository,
+        scan_limit: usize,
+        policy: StampPolicy,
+    ) -> Self {
         Self {
             snapshot,
             live: Mutex::new(BTreeSet::new()),
             repository,
             scan_limit,
+            policy,
         }
     }
 
     #[cfg(test)]
     pub(crate) fn for_test(snapshot: ReadSnapshot, repository: Repository) -> Self {
-        Self::new(snapshot, repository, ReadPolicy::default().scan_limit)
+        Self::new(
+            snapshot,
+            repository,
+            ReadPolicy::default().scan_limit,
+            StampPolicy::AnnotateOnly,
+        )
     }
 
     pub const fn snapshot(&self) -> &ReadSnapshot {
@@ -133,6 +145,13 @@ impl ReadContext {
     /// The file count the working-tree scan stops at.
     pub const fn scan_limit(&self) -> usize {
         self.scan_limit
+    }
+
+    /// Whether the freshness step found the snapshot's revision equal to
+    /// the canonical state: a catch-up ran, or `refuse_stale` hashed the
+    /// canonical units and found no change.
+    pub(crate) const fn matches_canonical(&self) -> bool {
+        matches!(self.policy, StampPolicy::CatchUp | StampPolicy::RefuseStale)
     }
 
     pub(crate) fn into_parts(self) -> (ReadSnapshot, BTreeSet<Live>) {

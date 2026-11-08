@@ -215,6 +215,7 @@ fn actionable_failure(
                 failure: value,
                 hint: Some(hint),
                 text_shows_failure: false,
+                cause: None,
             }
             .into();
         }
@@ -229,9 +230,8 @@ fn actionable_failure(
         _ => None,
     };
     HostRefusal {
-        failure: value,
         hint,
-        text_shows_failure: true,
+        ..HostRefusal::of(failure)
     }
     .into()
 }

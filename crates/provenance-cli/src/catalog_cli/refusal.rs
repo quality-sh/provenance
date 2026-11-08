@@ -10,31 +10,7 @@ use provenance_porcelain::action::ActionError;
 use provenance_porcelain::get::ReadError;
 use serde_json::{json, Map, Value};
 
-/// A refused host operation with the recovery hint the CLI adds.
-#[derive(Debug)]
-pub struct HostRefusal {
-    /// The `{error,meta}` object the host returned.
-    pub failure: Value,
-    /// Text the CLI adds so the caller knows the next command.
-    pub hint: Option<String>,
-    /// Whether the text form prints the failure object before the hint.
-    pub text_shows_failure: bool,
-}
-
-impl std::fmt::Display for HostRefusal {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.text_shows_failure {
-            formatter.write_str(&serde_json::to_string(&self.failure).unwrap_or_default())?;
-            if let Some(hint) = &self.hint {
-                write!(formatter, "; {hint}")?;
-            }
-            return Ok(());
-        }
-        formatter.write_str(self.hint.as_deref().unwrap_or("operation failed"))
-    }
-}
-
-impl std::error::Error for HostRefusal {}
+pub use provenance_cli::refusal::HostRefusal;
 
 /// The `{error,meta}` object for an error that a JSON caller can parse, or
 /// `None` when the error is not a host refusal.

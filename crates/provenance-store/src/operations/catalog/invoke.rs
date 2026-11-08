@@ -66,7 +66,8 @@ pub fn frame_failure<O: Operation>(failure: OperationError<O::Failure>) -> Failu
         OperationError::Common(error) => FailureEnvelope::new(Some(O::NAME), error),
         OperationError::Handler(error) => {
             let status = O::failure_status(&error);
-            FailureEnvelope::declared(O::NAME, error, status)
+            let cause = O::unclassified_cause(&error);
+            FailureEnvelope::declared(O::NAME, error, status).with_cause(cause)
         }
     }
 }

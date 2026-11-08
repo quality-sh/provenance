@@ -81,6 +81,7 @@ pub async fn dispatch(args: ApiArgs) -> anyhow::Result<()> {
                 failure: serde_json::to_value(&error.failure)?,
                 hint: None,
                 text_shows_failure: true,
+                cause: None,
             }
             .into())
         }

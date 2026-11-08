@@ -161,6 +161,7 @@ pub(crate) fn api_error(failure: &provenance_core::protocol::failure::ErasedFail
         kind,
         failure: serde_json::to_value(failure)
             .unwrap_or_else(|_| json!({"error": {"kind": "internal"}, "meta": {}})),
+        cause: failure.cause().map(str::to_owned),
     }
 }
 

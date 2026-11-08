@@ -124,6 +124,9 @@ impl Operation for Info {
     fn failure_status(error: &ReadError) -> u16 {
         error.status()
     }
+    fn unclassified_cause(error: &ReadError) -> Option<String> {
+        error.unclassified_cause()
+    }
     const NAME: &'static str = "info";
     const CONTEXT: super::ContextKind = super::ContextKind::Repository;
     const FAILURE_STATUSES: &'static [u16] = &[409];
