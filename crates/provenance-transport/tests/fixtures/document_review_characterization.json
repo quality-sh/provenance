@@ -1,0 +1,717 @@
+{
+ "documents": {
+  "exclude_terminal=false&limit=2": [
+   {
+    "entries": [
+     [
+      "member",
+      "req_shared",
+      "pending",
+      "other_2",
+      0
+     ],
+     [
+      "member",
+      "req_accepted",
+      "accepted",
+      null,
+      1
+     ]
+    ],
+    "has_more": true,
+    "totals": {
+     "accepted": 3,
+     "pending": 5,
+     "rejected": 1
+    }
+   },
+   {
+    "entries": [
+     [
+      "member",
+      "req_rejected",
+      "rejected",
+      null,
+      1
+     ],
+     [
+      "member",
+      "req_resubmitted",
+      "pending",
+      "req_resubmitted#2",
+      0
+     ]
+    ],
+    "has_more": true,
+    "totals": {
+     "accepted": 3,
+     "pending": 5,
+     "rejected": 1
+    }
+   },
+   {
+    "entries": [
+     [
+      "member",
+      "req_returned",
+      "accepted",
+      null,
+      0
+     ],
+     [
+      "member",
+      "req_revised",
+      "pending",
+      "req_revised#2",
+      0
+     ]
+    ],
+    "has_more": true,
+    "totals": {
+     "accepted": 3,
+     "pending": 5,
+     "rejected": 1
+    }
+   },
+   {
+    "entries": [
+     [
+      "member",
+      "req_waiting",
+      "pending",
+      "req_waiting#1",
+      0
+     ],
+     [
+      "member",
+      "req_withdrawn",
+      null,
+      null,
+      0
+     ]
+    ],
+    "has_more": true,
+    "totals": {
+     "accepted": 3,
+     "pending": 5,
+     "rejected": 1
+    }
+   },
+   {
+    "entries": [
+     [
+      "member",
+      "resolution_choice",
+      "accepted",
+      null,
+      0
+     ],
+     [
+      "member",
+      "rule_shared",
+      "pending",
+      "other_4",
+      0
+     ]
+    ],
+    "has_more": true,
+    "totals": {
+     "accepted": 3,
+     "pending": 5,
+     "rejected": 1
+    }
+   },
+   {
+    "entries": [
+     [
+      "reference",
+      "req_outside",
+      "pending",
+      "req_outside#1",
+      0
+     ],
+     [
+      "thread"
+     ]
+    ],
+    "has_more": true,
+    "totals": {
+     "accepted": 3,
+     "pending": 5,
+     "rejected": 1
+    }
+   },
+   {
+    "entries": [
+     [
+      "thread"
+     ],
+     [
+      "thread"
+     ]
+    ],
+    "has_more": true,
+    "totals": {
+     "accepted": 3,
+     "pending": 5,
+     "rejected": 1
+    }
+   },
+   {
+    "entries": [
+     [
+      "message"
+     ],
+     [
+      "message"
+     ]
+    ],
+    "has_more": true,
+    "totals": {
+     "accepted": 3,
+     "pending": 5,
+     "rejected": 1
+    }
+   },
+   {
+    "entries": [
+     [
+      "message"
+     ]
+    ],
+    "has_more": false,
+    "totals": {
+     "accepted": 3,
+     "pending": 5,
+     "rejected": 1
+    }
+   }
+  ],
+  "exclude_terminal=false&limit=50": [
+   {
+    "entries": [
+     [
+      "member",
+      "req_shared",
+      "pending",
+      "other_2",
+      0
+     ],
+     [
+      "member",
+      "req_accepted",
+      "accepted",
+      null,
+      1
+     ],
+     [
+      "member",
+      "req_rejected",
+      "rejected",
+      null,
+      1
+     ],
+     [
+      "member",
+      "req_resubmitted",
+      "pending",
+      "req_resubmitted#2",
+      0
+     ],
+     [
+      "member",
+      "req_returned",
+      "accepted",
+      null,
+      0
+     ],
+     [
+      "member",
+      "req_revised",
+      "pending",
+      "req_revised#2",
+      0
+     ],
+     [
+      "member",
+      "req_waiting",
+      "pending",
+      "req_waiting#1",
+      0
+     ],
+     [
+      "member",
+      "req_withdrawn",
+      null,
+      null,
+      0
+     ],
+     [
+      "member",
+      "resolution_choice",
+      "accepted",
+      null,
+      0
+     ],
+     [
+      "member",
+      "rule_shared",
+      "pending",
+      "other_4",
+      0
+     ],
+     [
+      "reference",
+      "req_outside",
+      "pending",
+      "req_outside#1",
+      0
+     ],
+     [
+      "thread"
+     ],
+     [
+      "thread"
+     ],
+     [
+      "thread"
+     ],
+     [
+      "message"
+     ],
+     [
+      "message"
+     ],
+     [
+      "message"
+     ]
+    ],
+    "has_more": false,
+    "totals": {
+     "accepted": 3,
+     "pending": 5,
+     "rejected": 1
+    }
+   }
+  ],
+  "exclude_terminal=true&limit=2": [
+   {
+    "entries": [
+     [
+      "member",
+      "req_shared",
+      "pending",
+      "other_2",
+      0
+     ],
+     [
+      "member",
+      "req_accepted",
+      "accepted",
+      null,
+      1
+     ]
+    ],
+    "has_more": true,
+    "totals": {
+     "accepted": 3,
+     "pending": 5,
+     "rejected": 0
+    }
+   },
+   {
+    "entries": [
+     [
+      "member",
+      "req_resubmitted",
+      "pending",
+      "req_resubmitted#2",
+      0
+     ],
+     [
+      "member",
+      "req_returned",
+      "accepted",
+      null,
+      0
+     ]
+    ],
+    "has_more": true,
+    "totals": {
+     "accepted": 3,
+     "pending": 5,
+     "rejected": 0
+    }
+   },
+   {
+    "entries": [
+     [
+      "member",
+      "req_revised",
+      "pending",
+      "req_revised#2",
+      0
+     ],
+     [
+      "member",
+      "req_waiting",
+      "pending",
+      "req_waiting#1",
+      0
+     ]
+    ],
+    "has_more": true,
+    "totals": {
+     "accepted": 3,
+     "pending": 5,
+     "rejected": 0
+    }
+   },
+   {
+    "entries": [
+     [
+      "member",
+      "req_withdrawn",
+      null,
+      null,
+      0
+     ],
+     [
+      "member",
+      "resolution_choice",
+      "accepted",
+      null,
+      0
+     ]
+    ],
+    "has_more": true,
+    "totals": {
+     "accepted": 3,
+     "pending": 5,
+     "rejected": 0
+    }
+   },
+   {
+    "entries": [
+     [
+      "member",
+      "rule_shared",
+      "pending",
+      "other_4",
+      0
+     ],
+     [
+      "reference",
+      "req_outside",
+      "pending",
+      "req_outside#1",
+      0
+     ]
+    ],
+    "has_more": true,
+    "totals": {
+     "accepted": 3,
+     "pending": 5,
+     "rejected": 0
+    }
+   },
+   {
+    "entries": [
+     [
+      "thread"
+     ],
+     [
+      "thread"
+     ]
+    ],
+    "has_more": true,
+    "totals": {
+     "accepted": 3,
+     "pending": 5,
+     "rejected": 0
+    }
+   },
+   {
+    "entries": [
+     [
+      "message"
+     ],
+     [
+      "message"
+     ]
+    ],
+    "has_more": false,
+    "totals": {
+     "accepted": 3,
+     "pending": 5,
+     "rejected": 0
+    }
+   }
+  ],
+  "exclude_terminal=true&limit=50": [
+   {
+    "entries": [
+     [
+      "member",
+      "req_shared",
+      "pending",
+      "other_2",
+      0
+     ],
+     [
+      "member",
+      "req_accepted",
+      "accepted",
+      null,
+      1
+     ],
+     [
+      "member",
+      "req_resubmitted",
+      "pending",
+      "req_resubmitted#2",
+      0
+     ],
+     [
+      "member",
+      "req_returned",
+      "accepted",
+      null,
+      0
+     ],
+     [
+      "member",
+      "req_revised",
+      "pending",
+      "req_revised#2",
+      0
+     ],
+     [
+      "member",
+      "req_waiting",
+      "pending",
+      "req_waiting#1",
+      0
+     ],
+     [
+      "member",
+      "req_withdrawn",
+      null,
+      null,
+      0
+     ],
+     [
+      "member",
+      "resolution_choice",
+      "accepted",
+      null,
+      0
+     ],
+     [
+      "member",
+      "rule_shared",
+      "pending",
+      "other_4",
+      0
+     ],
+     [
+      "reference",
+      "req_outside",
+      "pending",
+      "req_outside#1",
+      0
+     ],
+     [
+      "thread"
+     ],
+     [
+      "thread"
+     ],
+     [
+      "message"
+     ],
+     [
+      "message"
+     ]
+    ],
+    "has_more": false,
+    "totals": {
+     "accepted": 3,
+     "pending": 5,
+     "rejected": 0
+    }
+   }
+  ]
+ },
+ "states": {
+  "/requirements/req_accepted": {
+   "current_acceptance": {
+    "decision": "accepted",
+    "disposition": "req_accepted#1:accepted",
+    "feedback": true,
+    "proposal": "req_accepted#1",
+    "revision": "req_accepted@1"
+   },
+   "current_revision": "req_accepted@1",
+   "decisions": [
+    {
+     "decision": "accepted",
+     "disposition": "req_accepted#1:accepted",
+     "feedback": true,
+     "proposal": "req_accepted#1",
+     "revision": "req_accepted@1"
+    }
+   ],
+   "pending": null,
+   "withdrawn": []
+  },
+  "/requirements/req_outside": {
+   "current_acceptance": null,
+   "current_revision": "req_outside@1",
+   "decisions": [],
+   "pending": {
+    "proposal": "req_outside#1",
+    "revises": null,
+    "revision": "req_outside@1"
+   },
+   "withdrawn": []
+  },
+  "/requirements/req_rejected": {
+   "current_acceptance": null,
+   "current_revision": "req_rejected@1",
+   "decisions": [
+    {
+     "decision": "rejected",
+     "disposition": "req_rejected#1:rejected",
+     "feedback": true,
+     "proposal": "req_rejected#1",
+     "revision": "req_rejected@1"
+    }
+   ],
+   "pending": null,
+   "withdrawn": []
+  },
+  "/requirements/req_resubmitted": {
+   "current_acceptance": null,
+   "current_revision": "req_resubmitted@1",
+   "decisions": [
+    {
+     "decision": "rejected",
+     "disposition": "req_resubmitted#1:rejected",
+     "feedback": true,
+     "proposal": "req_resubmitted#1",
+     "revision": "req_resubmitted@1"
+    }
+   ],
+   "pending": {
+    "proposal": "req_resubmitted#2",
+    "revises": "req_resubmitted#1",
+    "revision": "req_resubmitted@1"
+   },
+   "withdrawn": []
+  },
+  "/requirements/req_returned": {
+   "current_acceptance": {
+    "decision": "accepted",
+    "disposition": "req_returned#1:accepted",
+    "feedback": false,
+    "proposal": "req_returned#1",
+    "revision": "req_returned@1"
+   },
+   "current_revision": "req_returned@1",
+   "decisions": [
+    {
+     "decision": "accepted",
+     "disposition": "req_returned#1:accepted",
+     "feedback": false,
+     "proposal": "req_returned#1",
+     "revision": "req_returned@1"
+    }
+   ],
+   "pending": null,
+   "withdrawn": []
+  },
+  "/requirements/req_revised": {
+   "current_acceptance": null,
+   "current_revision": "req_revised@2",
+   "decisions": [
+    {
+     "decision": "rejected",
+     "disposition": "req_revised#1:rejected",
+     "feedback": false,
+     "proposal": "req_revised#1",
+     "revision": "req_revised@1"
+    }
+   ],
+   "pending": {
+    "proposal": "req_revised#2",
+    "revises": null,
+    "revision": "req_revised@2"
+   },
+   "withdrawn": []
+  },
+  "/requirements/req_shared": {
+   "current_acceptance": null,
+   "current_revision": "other_1",
+   "decisions": [],
+   "pending": {
+    "proposal": "other_2",
+    "revises": null,
+    "revision": "other_1"
+   },
+   "withdrawn": []
+  },
+  "/requirements/req_waiting": {
+   "current_acceptance": null,
+   "current_revision": "req_waiting@1",
+   "decisions": [],
+   "pending": {
+    "proposal": "req_waiting#1",
+    "revises": null,
+    "revision": "req_waiting@1"
+   },
+   "withdrawn": []
+  },
+  "/requirements/req_withdrawn": {
+   "current_acceptance": null,
+   "current_revision": "req_withdrawn@1",
+   "decisions": [],
+   "pending": null,
+   "withdrawn": [
+    "req_withdrawn#1"
+   ]
+  },
+  "/resolutions/resolution_choice": {
+   "current_acceptance": {
+    "decision": "accepted",
+    "disposition": "resolution_choice#1:accepted",
+    "feedback": false,
+    "proposal": "resolution_choice#1",
+    "revision": "resolution_choice@1"
+   },
+   "current_revision": "resolution_choice@1",
+   "decisions": [
+    {
+     "decision": "accepted",
+     "disposition": "resolution_choice#1:accepted",
+     "feedback": false,
+     "proposal": "resolution_choice#1",
+     "revision": "resolution_choice@1"
+    }
+   ],
+   "pending": null,
+   "withdrawn": []
+  },
+  "/rules/rule_shared": {
+   "current_acceptance": null,
+   "current_revision": "other_3",
+   "decisions": [],
+   "pending": {
+    "proposal": "other_4",
+    "revises": null,
+    "revision": "other_3"
+   },
+   "withdrawn": []
+  }
+ }
+}
