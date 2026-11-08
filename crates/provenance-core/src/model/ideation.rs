@@ -27,8 +27,6 @@ pub enum IdeationTargetType {
     Topic,
     #[serde(rename = "question")]
     Question,
-    #[serde(rename = "boundary")]
-    Boundary,
 }
 
 /// An ideation target names a graph record; this is the kind it names.
@@ -41,7 +39,6 @@ impl From<IdeationTargetType> for NodeType {
             IdeationTargetType::Rule => Self::Rule,
             IdeationTargetType::Topic => Self::Topic,
             IdeationTargetType::Question => Self::Question,
-            IdeationTargetType::Boundary => Self::Boundary,
         }
     }
 }
@@ -57,8 +54,6 @@ pub enum CanonicalArtifactType {
     Resolution,
     #[serde(rename = "rule")]
     Rule,
-    #[serde(rename = "boundary")]
-    Boundary,
     #[serde(rename = "topic")]
     Topic,
     #[serde(rename = "question")]

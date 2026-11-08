@@ -23,10 +23,6 @@ fn centralized_repository_context_keeps_command_help() {
         ("export", &["export", "--help"]),
         ("import", &["import", "--help"]),
         (
-            "graph-reference-issue",
-            &["graph-reference", "issue", "--help"],
-        ),
-        (
             "swarm-backtrace-land",
             &["swarm-backtrace", "land", "--help"],
         ),

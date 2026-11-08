@@ -1,11 +1,11 @@
 //! The id character set has one home in the runtime — `is_well_formed_id` in
-//! `crates/provenance-core/src/model/ids.rs` — and four replicas in the JSON
+//! `crates/provenance-core/src/model/ids.rs` — and two replicas in the JSON
 //! Schemas this CLI publishes. A holder outside this codebase never runs the
 //! runtime; it runs the replica. If the two disagree, a document the schema
 //! calls valid is refused on import, or worse, the other way round.
 //!
 //! So this test does not read the replicas out of the source files. It asks
-//! the shipped binary for the schemas it actually emits, pulls the four
+//! the shipped binary for the schemas it actually emits, pulls the two
 //! `pattern` strings out of them, and pushes a boundary corpus through both
 //! every replica and both runtime constructors. A disagreement names the
 //! value, the replica, and which side accepted it.
@@ -48,10 +48,9 @@ fn pattern_at(schema: &Value, pointer: &str) -> String {
         .to_string()
 }
 
-/// The four replicas, read out of the emitted schemas rather than the source.
+/// The two replicas, read out of the emitted schemas rather than the source.
 fn replicas() -> Vec<Replica> {
-    let reference = shown_schema("graph-reference");
-    let export = shown_schema("graph-reference-export");
+    let reference = shown_schema("contribution");
     [
         (
             "schema/common/mod.rs $defs.stableId",
@@ -60,14 +59,6 @@ fn replicas() -> Vec<Replica> {
         (
             "schema/common/mod.rs $defs.scopeId",
             pattern_at(&reference, "/$defs/scopeId/pattern"),
-        ),
-        (
-            "schema/artifacts/graph_reference.rs reference_schema scope_id",
-            pattern_at(&reference, "/schema/properties/scope_id/pattern"),
-        ),
-        (
-            "schema/artifacts/graph_reference.rs export_definitions id",
-            pattern_at(&export, "/schema/$defs/scope/properties/id/pattern"),
         ),
     ]
     .into_iter()
@@ -162,7 +153,7 @@ const fn verdict(accepted: bool) -> &'static str {
 #[verifies("rule_id_charset", conformance)]
 fn every_published_schema_replica_agrees_with_the_runtime_on_every_boundary_value() {
     let replicas = replicas();
-    assert_eq!(replicas.len(), 4, "a replica went missing from the schemas");
+    assert_eq!(replicas.len(), 2, "a replica went missing from the schemas");
 
     for (name, candidate) in corpus() {
         let stable = StableId::new(candidate.clone()).is_ok();
@@ -193,7 +184,7 @@ fn every_published_schema_replica_agrees_with_the_runtime_on_every_boundary_valu
 
 #[test]
 #[verifies("rule_id_charset", conformance)]
-fn all_four_replicas_publish_the_same_pattern() {
+fn both_replicas_publish_the_same_pattern() {
     let replicas = replicas();
     let first = &replicas[0];
     for replica in &replicas[1..] {

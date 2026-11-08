@@ -4,7 +4,7 @@ use provenance_core::{
     IdeationEvidenceReference, IdeationTarget, MaterialClaim, MessageRole, MinorityObjection,
     NodeType, PromotionState, ProposalTraceability, ProposalType, QuestionStatus,
     RequiredHumanDecision, RequirementStatus, ResolutionInput, ResolutionMethod, ResolutionStatus,
-    RuleSeverity, RuleStatus, ScopeId, SourceReference, SourceType, StableId, SuggestedArtifact,
+    RuleSeverity, RuleStatus, ScopeId, SourceType, StableId, SuggestedArtifact,
     SuggestedArtifactChange, ThreadParent, TopicStatus, UncertaintyRating,
     UnsupportedRecommendation, UnsupportedSpeculation, VerificationMethod,
 };
@@ -52,17 +52,6 @@ pub struct AddSourceReferenceInput {
     pub source_id: StableId,
     pub requirement_id: StableId,
     pub clause: Option<String>,
-}
-
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct CreateBoundaryInput {
-    pub scope_id: ScopeId,
-    pub id: StableId,
-    pub requirement_id: StableId,
-    pub statement: String,
-    pub source_ref: Option<SourceReference>,
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

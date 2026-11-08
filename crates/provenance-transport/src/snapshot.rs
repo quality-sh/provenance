@@ -1,7 +1,7 @@
 use provenance_core::{
-    AssertionRecord, Boundary, Contribution, DispositionRecord, ImplementationBinding, Message,
-    ProposalCard, Question, Requirement, Resolution, Rule, ScopeId, Source, SynthesisPacket,
-    Thread, Topic, VerificationBinding,
+    AssertionRecord, Contribution, DispositionRecord, ImplementationBinding, Message, ProposalCard,
+    Question, Requirement, Resolution, Rule, ScopeId, Source, SynthesisPacket, Thread, Topic,
+    VerificationBinding,
 };
 use provenance_store::{repository::Repository, state_store::StateStore};
 
@@ -37,7 +37,6 @@ pub fn snapshot(store: &StateStore, scope: &ScopeId) -> anyhow::Result<ScopeSnap
         Ok(ScopeSnapshot {
             sources: held.list_sources(scope)?,
             requirements: held.list_requirements(scope)?,
-            boundaries: held.list_boundaries(scope)?,
             topics: held.list_topics(scope)?,
             questions: held.list_questions(scope)?,
             resolutions: held.list_resolutions(scope)?,
@@ -67,7 +66,6 @@ impl std::ops::Deref for Store {
 pub struct ScopeSnapshot {
     pub sources: Vec<Source>,
     pub requirements: Vec<Requirement>,
-    pub boundaries: Vec<Boundary>,
     pub topics: Vec<Topic>,
     pub questions: Vec<Question>,
     pub resolutions: Vec<Resolution>,
@@ -88,7 +86,6 @@ impl ScopeSnapshot {
         GraphRecords {
             sources: &self.sources,
             requirements: &self.requirements,
-            boundaries: &self.boundaries,
             topics: &self.topics,
             questions: &self.questions,
             resolutions: &self.resolutions,
@@ -103,7 +100,6 @@ impl ScopeSnapshot {
 pub struct GraphRecords<'a> {
     pub sources: &'a [Source],
     pub requirements: &'a [Requirement],
-    pub boundaries: &'a [Boundary],
     pub topics: &'a [Topic],
     pub questions: &'a [Question],
     pub resolutions: &'a [Resolution],

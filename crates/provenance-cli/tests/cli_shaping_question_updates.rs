@@ -57,7 +57,7 @@ fn create_claimed_fork_question(repo: &str) {
         "--question",
         "Which UI direction should the shaping map use?",
         "--method",
-        "grill",
+        "ask",
         "--format",
         "json",
     ])
@@ -164,7 +164,7 @@ fn question_update_rejects_answered_without_answer(repo: &str) {
         "--question",
         "What still needs a real answer?",
         "--method",
-        "grill",
+        "ask",
         "--format",
         "json",
     ])

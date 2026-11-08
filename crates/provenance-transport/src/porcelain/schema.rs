@@ -23,8 +23,6 @@ fn schema_for(artifact: Artifact) -> Value {
         Artifact::Proposal => artifacts::proposal::schema(),
         Artifact::Assertion => artifacts::lifecycle::assertion_schema(),
         Artifact::Disposition => artifacts::lifecycle::disposition_schema(),
-        Artifact::GraphReference => artifacts::graph_reference::reference_schema(),
-        Artifact::GraphReferenceExport => artifacts::graph_reference::export_schema(),
     };
 
     json!({
@@ -33,18 +31,6 @@ fn schema_for(artifact: Artifact) -> Value {
         "schema": schema,
         "$defs": common::definitions()
     })
-}
-
-pub(super) fn validate_graph_reference_export(value: &Value) -> anyhow::Result<()> {
-    let schema = artifacts::graph_reference::export_schema();
-    let validator = jsonschema::draft7::new(&schema).map_err(|error| {
-        anyhow::anyhow!("failed to compile graph reference export schema: {error}")
-    })?;
-    anyhow::ensure!(
-        validator.is_valid(value),
-        "graph reference export violates its closed schema"
-    );
-    Ok(())
 }
 
 #[cfg(test)]

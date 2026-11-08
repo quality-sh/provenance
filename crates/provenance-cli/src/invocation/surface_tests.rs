@@ -89,7 +89,7 @@ fn the_parser_commands_outside_the_registry_are_the_servers() {
         }
     }
     outside.sort_by_key(|server| server.declaration().name);
-    assert_eq!(outside, [Server::DocsServe, Server::Mcp, Server::Review]);
+    assert_eq!(outside, [Server::Mcp, Server::Review]);
     for server in SERVERS {
         assert_eq!(registry::Command::named(server.declaration().name), None);
     }

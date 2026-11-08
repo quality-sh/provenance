@@ -1,7 +1,6 @@
 use provenance_macros::{ProjectionRow, Relations};
 use serde::{Deserialize, Serialize};
 
-use super::artifacts::SourceReference;
 use super::ids::{ScopeId, StableId};
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -46,8 +45,8 @@ pub enum QuestionStatus {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ResolutionMethod {
-    #[serde(rename = "grill")]
-    Grill,
+    #[serde(rename = "ask")]
+    Ask,
     #[serde(rename = "prototype")]
     Prototype,
     #[serde(rename = "research")]
@@ -65,22 +64,6 @@ pub struct ArtifactLink {
     pub target_type: ArtifactLinkTargetType,
     #[serde(alias = "targetId")]
     pub target_id: StableId,
-}
-
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
-#[table("boundaries")]
-pub struct Boundary {
-    pub scope_id: ScopeId,
-    pub id: StableId,
-    #[relation(target = Requirement, flow = none)]
-    #[serde(alias = "requirementId")]
-    pub requirement_id: StableId,
-    pub statement: String,
-    #[relation(target = Source, flow = none, name = "cites", via = source_id)]
-    #[serde(default, alias = "sourceRef", skip_serializing_if = "Option::is_none")]
-    #[column(json)]
-    pub source_ref: Option<SourceReference>,
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

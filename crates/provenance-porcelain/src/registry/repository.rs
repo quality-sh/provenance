@@ -63,8 +63,6 @@ const ARTIFACTS: &[&str] = &[
     "proposal",
     "assertion",
     "disposition",
-    "graph-reference",
-    "graph-reference-export",
 ];
 
 const JSON_FORMAT: Field = json_format(Some("json"));

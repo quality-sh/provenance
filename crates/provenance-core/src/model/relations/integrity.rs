@@ -16,7 +16,6 @@ pub const fn kind_word(node_type: NodeType) -> &'static str {
         NodeType::Rule => "rule",
         NodeType::Topic => "topic",
         NodeType::Question => "question",
-        NodeType::Boundary => "boundary",
     }
 }
 

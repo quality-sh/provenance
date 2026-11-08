@@ -17,20 +17,17 @@ pub enum NodeType {
     Topic,
     #[serde(rename = "question")]
     Question,
-    #[serde(rename = "boundary")]
-    Boundary,
 }
 
 impl NodeType {
     /// Every canonical graph record kind in stable contract order.
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 6] = [
         Self::Source,
         Self::Requirement,
         Self::Resolution,
         Self::Rule,
         Self::Topic,
         Self::Question,
-        Self::Boundary,
     ];
 
     /// The canonical wire word for this graph record kind.
@@ -42,7 +39,6 @@ impl NodeType {
             Self::Rule => "rule",
             Self::Topic => "topic",
             Self::Question => "question",
-            Self::Boundary => "boundary",
         }
     }
 
@@ -57,7 +53,6 @@ impl NodeType {
             Self::Rule => 3,
             Self::Topic => 4,
             Self::Question => 5,
-            Self::Boundary => 6,
         }
     }
 

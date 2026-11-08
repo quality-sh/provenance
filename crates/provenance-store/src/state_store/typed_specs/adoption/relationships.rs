@@ -14,7 +14,6 @@ enum RelationshipNode {
     Rule,
     Topic,
     Question,
-    Boundary,
 }
 
 /// One relation as the adoption report spells it: the source end first,
@@ -243,6 +242,5 @@ const fn relationship_node(node_type: NodeType) -> RelationshipNode {
         NodeType::Rule => RelationshipNode::Rule,
         NodeType::Topic => RelationshipNode::Topic,
         NodeType::Question => RelationshipNode::Question,
-        NodeType::Boundary => RelationshipNode::Boundary,
     }
 }

@@ -64,7 +64,7 @@ assume an answer; work it with Ben.
   morning session landed `req_rules_executable_definitions` (anchor),
   `res_rules_executable_by_fiat`, `res_facts_are_composed_rules`,
   `res_cross_language_rules_are_replicas`, `res_rule_scope_is_users_call`,
-  `boundary_no_rule_runtime_engine`, `topic_rules_as_code_model` + 8 questions,
+  `topic_rules_as_code_model` + 8 questions,
   `source_rules_as_code_fiat_handoff`. **Several of these are now stale**:
   `res_rules_executable_by_fiat` needs revision (fiat → strongest rung, not the model);
   `question_rule_decision_reports` is answered in spirit (boundary emission; primitive

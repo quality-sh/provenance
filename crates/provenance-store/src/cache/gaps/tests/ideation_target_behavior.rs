@@ -7,8 +7,8 @@ use super::fixtures::requirement;
 use crate::cache::tests::fixtures::{append_record, open, seeded_layout};
 use crate::state_store::CreateContributionInput;
 use provenance_core::{
-    Boundary, Contribution, ContributionStance, IdeationTarget, IdeationTargetType, NodeType,
-    ScopeId, StableId, SynthesisPacket, UncertaintyLevel, UncertaintyRating,
+    Contribution, ContributionStance, IdeationTarget, IdeationTargetType, NodeType, ScopeId,
+    StableId, SynthesisPacket, UncertaintyLevel, UncertaintyRating,
 };
 use provenance_macros::verifies;
 use serde_json::json;
@@ -42,14 +42,6 @@ fn synthesis_packet(id: &str, kind: &str, target_id: &str) -> SynthesisPacket {
     serde_json::from_value(synthesis_json(id, kind, target_id)).unwrap()
 }
 
-fn boundary(id: &str) -> Boundary {
-    serde_json::from_value(json!({
-        "scope_id": "default", "id": id,
-        "requirement_id": "req_overtime", "statement": "Back pay is out of scope"
-    }))
-    .unwrap()
-}
-
 fn gaps_with(
     contributions: &[Contribution],
     synthesis_packets: &[SynthesisPacket],
@@ -64,7 +56,6 @@ fn gaps_with(
         topics: &[],
         questions: &[],
         threads: &[],
-        boundaries: &[boundary("boundary_no_backpay")],
         contributions,
         synthesis_packets,
     })
@@ -121,31 +112,12 @@ fn a_synthesis_packet_on_a_missing_target_is_a_dangling_reference() {
 #[verifies("rule_old_dangling_ideation_target_is_a_gap", examples)]
 fn a_target_that_exists_is_not_a_gap() {
     let gaps = gaps_with(
-        &[
-            contribution("contrib_a", "requirement", "req_overtime"),
-            contribution("contrib_b", "boundary", "boundary_no_backpay"),
-        ],
+        &[contribution("contrib_a", "requirement", "req_overtime")],
         &[synthesis_packet("synth_a", "requirement", "req_overtime")],
     );
     assert!(
         dangling(&gaps).is_empty(),
         "an existing target is not reported: {gaps:?}"
-    );
-}
-
-#[test]
-#[verifies("rule_old_dangling_ideation_target_is_a_gap", examples)]
-fn a_missing_boundary_target_is_a_dangling_reference() {
-    let gaps = gaps_with(
-        &[contribution("contrib_old", "boundary", "boundary_gone")],
-        &[],
-    );
-    let found = dangling(&gaps);
-    assert_eq!(found.len(), 1, "{gaps:?}");
-    assert_eq!(found[0].node_type, NodeType::Boundary);
-    assert_eq!(
-        found[0].reason,
-        "contribution contrib_old target points at missing boundary boundary_gone"
     );
 }
 

@@ -88,7 +88,7 @@ HTTP and MCP use the same envelope.
 The root must be a present, active Requirement. Members are that Requirement,
 its active refinement descendants, the Resolutions that name those
 Requirements, and the active Rules that name those Requirements or their
-Resolutions. Topics, Questions, and Boundaries anchored to a member Requirement
+Resolutions. Topics and Questions anchored to a member Requirement
 are also members. Here, active means not retired. Lifecycle status does not
 establish retirement or review approval.
 

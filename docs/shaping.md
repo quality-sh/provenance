@@ -62,8 +62,6 @@ A loose idea arrives. This is one session's work. Do **not** also resolve questi
 2. Ask the person, one question at a time, to surface:
    - **Appetite** (Shape Up): how much time is this worth? Recorded up front, re-checked
      as requirements accumulate.
-   - **Boundaries** (the no-gos): constraints on the solution space, each with a source
-     ref where one exists (e.g. a privacy policy clause).
    - **First questions**: each minted with a `resolution_method` (see below), sized to
      one agent session, ordered by `depends_on` where order matters.
 3. Handoff.
@@ -132,7 +130,7 @@ summary limit bound the read. An incomplete summary cannot authorize selection.
 
 ### Invariants
 
-"One question per session" is deliberately **not** the rule: `grill` turns are cheap to
+"One question per session" is deliberately **not** the rule: `ask` turns are cheap to
 continue and expensive to restart, and answers don't respect question boundaries. The
 real invariants:
 
@@ -151,7 +149,7 @@ minted, telling the next session what to do. This complements the content-noun t
 
 | Method | What it is | Claim granularity |
 |---|---|---|
-| `grill` | One-question-at-a-time dialogue with the human; a recommended answer offered each time. The default. | A whole **topic**, drained question by question |
+| `ask` | One-question-at-a-time dialogue with the human; a recommended answer offered each time. The default. | A whole **topic**, drained question by question |
 | `prototype` | Fork tournament — competing concrete artifacts to react to (below) | Single **question** (two-phase) |
 | `research` | Reading sources, docs, codebases; summary linked as evidence | Single **question**, but incidental answers are recorded on whatever questions they actually resolve |
 | `verify` | Adversarial refuters on an expensive-if-wrong claim (regulatory / SCHADS tier) | Single **question** (two-phase) |
@@ -188,7 +186,7 @@ The tree reads as a spec:
 
 Every record that a session creates goes to review at once, so the person can approve each
 record on its own. Requirement create opens a review submission; a Rule, Resolution,
-Boundary, or Source is submitted right after its create.
+or Source is submitted right after its create.
 
 Examples:
 

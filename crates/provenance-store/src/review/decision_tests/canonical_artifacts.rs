@@ -3,14 +3,7 @@ use crate::write_error::{WriteError, WriteFailure};
 
 #[test]
 fn review_approval_rejects_a_canonical_artifact_for_another_record_kind() {
-    for artifact_type in [
-        "source",
-        "resolution",
-        "rule",
-        "boundary",
-        "topic",
-        "question",
-    ] {
+    for artifact_type in ["source", "resolution", "rule", "topic", "question"] {
         let (_temp, store, _, proposal) = enrolled();
         let error = decide(
             &store,

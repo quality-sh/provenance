@@ -72,7 +72,7 @@ fn question_update_method_alias_is_resolved_before_schema_validation() {
             "--repo",
             &repo,
             "--method",
-            "grill",
+            "ask",
             "--if-match",
             etag,
             "--format",
@@ -86,5 +86,5 @@ fn question_update_method_alias_is_resolved_before_schema_validation() {
         String::from_utf8_lossy(&output.stderr)
     );
     let output: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(output["data"]["resolution_method"], "grill");
+    assert_eq!(output["data"]["resolution_method"], "ask");
 }

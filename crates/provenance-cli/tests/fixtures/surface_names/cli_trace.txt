@@ -107,8 +107,6 @@ Options:
           
       --resolution-id <resolution-id>
           
-      --source-ref <source-ref>
-          
       --links <links>
           
       --answer <answer>
@@ -218,8 +216,6 @@ Options:
       --source-document-json <source-document-json>
           
       --source-ids-json <source-ids-json>
-          
-      --source-ref-json <source-ref-json>
           
       --source-section-json <source-section-json>
           

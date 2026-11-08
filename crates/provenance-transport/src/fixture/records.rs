@@ -5,8 +5,8 @@ use provenance_core::{
 use provenance_store::{
     layout::ProvenanceLayout,
     state_store::{
-        CreateBoundaryInput, CreateQuestionInput, CreateRequirementInput, CreateResolutionInput,
-        CreateRuleInput, CreateSourceInput, CreateTopicInput, UpdateRuleInput,
+        CreateQuestionInput, CreateRequirementInput, CreateResolutionInput, CreateRuleInput,
+        CreateSourceInput, CreateTopicInput, UpdateRuleInput,
     },
 };
 use serde_json::json;
@@ -107,15 +107,6 @@ impl Repository {
                 supersedes: vec![],
                 origin_thread: None,
                 origin_message: None,
-            })
-            .unwrap();
-        store
-            .create_boundary(CreateBoundaryInput {
-                scope_id: scope.clone(),
-                id: sid("boundary_shared"),
-                requirement_id: sid("req_shared"),
-                statement: "The shared graph excludes code.".into(),
-                source_ref: None,
             })
             .unwrap();
         store

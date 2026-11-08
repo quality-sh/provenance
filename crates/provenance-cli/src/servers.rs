@@ -1,4 +1,4 @@
-//! The CLI commands that start a server: review, docs serve, and mcp. They are not
+//! The CLI commands that start a server: review and mcp. They are not
 //! porcelain commands, so the CLI declares them here.
 
 use provenance_porcelain::registry::{Declaration, Field, FieldValue, Fields, REPO, SCOPE};
@@ -7,19 +7,12 @@ use serde::Deserialize;
 /// One CLI command that starts a server and runs until it stops.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Server {
-    DocsServe,
     Review,
     Mcp,
 }
 
 /// Each server command, in help order.
-pub const SERVERS: &[Server] = &[Server::DocsServe, Server::Review, Server::Mcp];
-
-const DOCS_SERVE_FIELDS: &[Field] = &[
-    REPO,
-    Field::text("host").default("127.0.0.1"),
-    Field::text("port").of(FieldValue::Port).default("5174"),
-];
+pub const SERVERS: &[Server] = &[Server::Review, Server::Mcp];
 
 const REVIEW_FIELDS: &[Field] = &[
     Field::text("repo")
@@ -41,15 +34,6 @@ const REVIEW_FIELDS: &[Field] = &[
 ];
 
 const MCP_FIELDS: &[Field] = &[REPO, SCOPE];
-
-/// The `docs serve` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct DocsServeInput {
-    pub repo: String,
-    pub host: String,
-    pub port: u16,
-}
 
 /// The `review` input.
 #[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
@@ -77,7 +61,6 @@ impl Server {
     /// The declaration of this server command.
     pub const fn declaration(self) -> Declaration {
         let (name, description, fields, schema): (_, _, _, fn() -> serde_json::Value) = match self {
-            Self::DocsServe => ("docs serve", "", DOCS_SERVE_FIELDS, docs_serve_schema),
             Self::Review => (
                 "review",
                 "Serve local review assets and authorized repository operations",
@@ -101,10 +84,6 @@ impl Server {
             .copied()
             .find(|server| server.declaration().words().eq(words.iter().copied()))
     }
-}
-
-fn docs_serve_schema() -> serde_json::Value {
-    serde_json::to_value(schemars::schema_for!(DocsServeInput)).expect("schema is JSON")
 }
 
 fn review_schema() -> serde_json::Value {

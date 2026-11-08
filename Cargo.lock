@@ -2707,7 +2707,6 @@ dependencies = [
  "dunce",
  "fs2",
  "futures",
- "jsonschema",
  "provenance-contract",
  "provenance-core",
  "provenance-macros",

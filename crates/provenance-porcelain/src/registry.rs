@@ -20,7 +20,6 @@ pub use crate::dogfood::{
     TriageHandleInput, TriageListInput, TriageReopenInput,
 };
 pub use crate::export::ExportInput;
-pub use crate::graph_reference::{ReferenceInput, ReferenceIssueInput};
 pub use crate::import::ImportInput;
 pub use crate::init::InitInput;
 pub use crate::materialize::MaterializeInput;
@@ -226,10 +225,6 @@ impl Command {
         Self::Repository(RepositoryCommand::SchemaShow),
         Self::Repository(RepositoryCommand::DictionaryImport),
         Self::Repository(RepositoryCommand::DictionaryStatus),
-        Self::Graph(GraphCommand::ReferenceIssue),
-        Self::Graph(GraphCommand::ReferenceShow),
-        Self::Graph(GraphCommand::ReferenceVerify),
-        Self::Graph(GraphCommand::ReferenceExactExport),
         Self::Graph(GraphCommand::SwarmBacktraceLand),
         Self::Workspace(WorkspaceCommand::SkillsList),
         Self::Workspace(WorkspaceCommand::SkillsShow),

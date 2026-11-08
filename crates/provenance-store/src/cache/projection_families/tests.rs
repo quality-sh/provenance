@@ -55,18 +55,6 @@ fn every_family_keeps_its_independent_descriptor() {
             ),
         ),
         (
-            ProjectionFamily::Boundaries,
-            expected(
-                (Export, "boundaries"),
-                "boundaries/boundary.jsonl",
-                Some(NodeType::Boundary),
-                Some("boundaries"),
-                Some(60),
-                Resource,
-                &["list-boundaries", "page-boundaries", "get-boundary"],
-            ),
-        ),
-        (
             ProjectionFamily::Topics,
             expected(
                 (Export, "topics"),

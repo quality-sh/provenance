@@ -1,8 +1,0 @@
-Usage: provenance docs serve [OPTIONS]
-
-Options:
-      --quiet        Drop the advisory notes commands print alongside their output, such as the warning that this repository has no shaping skills installed
-      --repo <REPO>  [default: .]
-      --host <HOST>  [default: 127.0.0.1]
-      --port <PORT>  [default: 5174]
-  -h, --help         Print help

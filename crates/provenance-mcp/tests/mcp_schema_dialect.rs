@@ -98,7 +98,6 @@ async fn schemas(session: &Session) -> Vec<(String, Value)> {
         "rule",
         "topic",
         "question",
-        "boundary",
     ] {
         let refused = support::mcp::call(
             &session.client,

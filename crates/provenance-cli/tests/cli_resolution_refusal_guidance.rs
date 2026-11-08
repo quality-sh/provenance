@@ -55,7 +55,7 @@ fn setup() -> tempfile::TempDir {
         "--question",
         "Does the robot rust with neglect?",
         "--method",
-        "grill",
+        "ask",
     ])
     .success();
     dir

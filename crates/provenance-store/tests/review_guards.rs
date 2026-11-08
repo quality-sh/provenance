@@ -51,9 +51,6 @@ fn create(store: &StateStore, kind: NodeType) -> serde_json::Value {
             "scope_id":"default","id":"rule_a","statement":"The system stores records.",
             "status":"active","severity":"medium","requirement_ids":["req_a"],"resolution_ids":[]
         }))).unwrap()),
-        NodeType::Boundary => serde_json::to_value(store.create_boundary(input(json!({
-            "scope_id":"default","id":"boundary_a","requirement_id":"req_a","statement":"Storage only."
-        }))).unwrap()),
         NodeType::Topic | NodeType::Question => {
             let topic = store.create_topic(input(json!({
                 "scope_id":"default","id":"topic_a","requirement_id":"req_a",
@@ -123,10 +120,6 @@ fn every_record_kind_reads_without_a_format_field() {
             json!({"scope_id":"default","id":"rule_a","statement":"The system stores records.","status":"active","severity":"high","requirement_ids":["req_a"],"resolution_ids":[]}),
         ),
         (
-            "boundaries/boundary.jsonl",
-            json!({"scope_id":"default","id":"boundary_a","requirement_id":"req_a","statement":"Storage only."}),
-        ),
-        (
             "topics/topic.jsonl",
             json!({"scope_id":"default","id":"topic_a","requirement_id":"req_a","title":"Storage","status":"open","links":[]}),
         ),
@@ -148,7 +141,6 @@ fn every_record_kind_reads_without_a_format_field() {
     assert_eq!(store.list_requirements(&scope).unwrap().len(), 1);
     assert_eq!(store.list_resolutions(&scope).unwrap().len(), 1);
     assert_eq!(store.list_rules(&scope).unwrap().len(), 1);
-    assert_eq!(store.list_boundaries(&scope).unwrap().len(), 1);
     assert_eq!(store.list_topics(&scope).unwrap().len(), 1);
     assert_eq!(store.list_questions(&scope).unwrap().len(), 1);
 }

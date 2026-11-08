@@ -29,7 +29,6 @@ impl StateStore {
         let rules = self.list_rules(scope)?;
         let topics = self.list_topics(scope)?;
         let questions = self.list_questions(scope)?;
-        let boundaries = self.list_boundaries(scope)?;
         validate_relations(&RecordFront {
             sources: &sources,
             requirements: &requirements,
@@ -37,7 +36,6 @@ impl StateStore {
             rules: &rules,
             topics: &topics,
             questions: &questions,
-            boundaries: &boundaries,
         })
     }
 }
@@ -65,14 +63,12 @@ pub fn validate_relations(front: &RecordFront<'_>) -> anyhow::Result<()> {
     ensure_required(front.rules)?;
     ensure_required(front.topics)?;
     ensure_required(front.questions)?;
-    ensure_required(front.boundaries)?;
     ensure_acyclic(front.requirements)?;
     ensure_acyclic(front.sources)?;
     ensure_acyclic(front.resolutions)?;
     ensure_acyclic(front.rules)?;
     ensure_acyclic(front.topics)?;
-    ensure_acyclic(front.questions)?;
-    ensure_acyclic(front.boundaries)
+    ensure_acyclic(front.questions)
 }
 
 fn ensure_archives<T>(

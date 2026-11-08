@@ -3,8 +3,7 @@ use crate::{
     layout::ProvenanceLayout,
     shards,
     state_store::{
-        CreateBoundaryInput, CreateQuestionInput, CreateResolutionInput, CreateTopicInput,
-        StateStore, TypedSpecInput,
+        CreateQuestionInput, CreateResolutionInput, CreateTopicInput, StateStore, TypedSpecInput,
     },
     write_error::{WriteError, WriteFailure},
 };
@@ -15,7 +14,7 @@ use provenance_core::{
         TypedSourceInput,
     },
     ArtifactLink, ArtifactLinkTargetType, NodeType, QuestionStatus, ResolutionMethod,
-    ResolutionStatus, ScopeId, SourceReference, StableId, TopicStatus,
+    ResolutionStatus, ScopeId, StableId, TopicStatus,
 };
 
 const OWNER: &str = "spec://review/typed";
@@ -311,7 +310,7 @@ fn seed_cascade_dependants(
     source: StableId,
     kept: StableId,
     removed: StableId,
-) -> [(NodeType, &'static str); 4] {
+) -> [(NodeType, &'static str); 3] {
     store
         .create_resolution(CreateResolutionInput {
             scope_id: scope.clone(),
@@ -329,18 +328,6 @@ fn seed_cascade_dependants(
             approved_at: None,
             origin_thread: None,
             origin_message: None,
-        })
-        .unwrap();
-    store
-        .create_boundary(CreateBoundaryInput {
-            scope_id: scope.clone(),
-            id: StableId::new("boundary_cascade").unwrap(),
-            requirement_id: kept.clone(),
-            statement: "The policy is the boundary.".into(),
-            source_ref: Some(SourceReference {
-                source_id: source.clone(),
-                clause: None,
-            }),
         })
         .unwrap();
     store
@@ -376,7 +363,6 @@ fn seed_cascade_dependants(
         .unwrap();
     let records = [
         (NodeType::Resolution, "resolution_cascade"),
-        (NodeType::Boundary, "boundary_cascade"),
         (NodeType::Topic, "topic_cascade"),
         (NodeType::Question, "question_cascade"),
     ];

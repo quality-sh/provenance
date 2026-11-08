@@ -56,8 +56,8 @@ pub use integrations::{
 pub use manifest::{Manifest, RepoPathPrefix, Scope};
 pub use projection_row::{ColumnValue, ProjectionRow};
 pub use shaping::{
-    ArtifactLink, ArtifactLinkTargetType, Boundary, Question, QuestionStatus, ResolutionMethod,
-    Topic, TopicStatus,
+    ArtifactLink, ArtifactLinkTargetType, Question, QuestionStatus, ResolutionMethod, Topic,
+    TopicStatus,
 };
 pub use validation::{
     validate_commit_pin, validate_confidence_score, validate_optional_commit_pin,

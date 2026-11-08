@@ -6,8 +6,8 @@
 
 const METHODS = new Set(['GET', 'POST', 'PATCH']);
 const COLLECTIONS = new Set([
-  'sources', 'requirements', 'resolutions', 'rules', 'boundaries',
-  'topics', 'questions', 'contributions', 'synthesis-packets', 'proposals',
+  'sources', 'requirements', 'resolutions', 'rules', 'topics', 'questions',
+  'contributions', 'synthesis-packets', 'proposals',
   'verification-runs', 'verification-bindings', 'discussion-containers',
   'messages', 'assertions', 'dispositions',
 ]);
@@ -16,8 +16,7 @@ const COMPUTE_COLLECTIONS = new Set([
 ]);
 // Each action and the collections that own it.
 const REVIEWED = [
-  'sources', 'requirements', 'boundaries', 'topics', 'questions',
-  'resolutions', 'rules',
+  'sources', 'requirements', 'topics', 'questions', 'resolutions', 'rules',
 ];
 const ACTION_OWNERS = new Map([
   ['claim', new Set(['topics', 'questions'])],
@@ -292,13 +291,12 @@ export const FAILURE_STATUS = new Map([
   ['write_failed', 500], ['record_ownership_conflict', 409], ['already_exists', 409],
   ['ownership_conflict', 409], ['enrolled_record_deletion_conflict', 409],
   ['requirement_edit_conflict', 409], ['record_edit_conflict', 409],
-  ['unsupported_review_feedback', 400],
   ['review_submission_conflict', 409], ['already_complete', 409],
   ['discussion_version_conflict', 409], ['discussion_membership_mismatch', 400],
   ['discussion_closed', 409], ['discussion_resolved', 409],
   ['discussion_intent_changed', 409], ['claim_conflict', 409],
   ['invalid_commit_pin', 400], ['scope_mismatch', 400],
-  ['empty_message_body', 400], ['unsupported_thread_parent', 400], ['statement_invalid', 400],
+  ['empty_message_body', 400], ['statement_invalid', 400],
   ['invalid_declaration', 400], ['invalid_update', 400], ['missing_reference', 400],
   ['approval_evidence_required', 400], ['resolution_not_approved', 400],
   ['statement_rejected', 400], ['invalid_verification_target', 400], ['invalid_completion', 400],

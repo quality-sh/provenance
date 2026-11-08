@@ -223,14 +223,13 @@ async fn remove_departed_scopes(
 }
 
 /// The families whose records declare relations.
-const RELATION_OWNERS: [ProjectionFamily; 7] = [
+const RELATION_OWNERS: [ProjectionFamily; 6] = [
     ProjectionFamily::Sources,
     ProjectionFamily::Requirements,
     ProjectionFamily::Resolutions,
     ProjectionFamily::Rules,
     ProjectionFamily::Topics,
     ProjectionFamily::Questions,
-    ProjectionFamily::Boundaries,
 ];
 
 /// Rewrites only the parsed families

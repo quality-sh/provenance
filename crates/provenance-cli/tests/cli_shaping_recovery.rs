@@ -307,7 +307,7 @@ fn cross_topic_prerequisites_are_rejected_before_write() {
             "default",
         ],
         &json!({"topic_id":"topic_other",
-        "question":"Which rate?","resolution_method":"grill"})
+        "question":"Which rate?","resolution_method":"ask"})
         .to_string(),
     )
     .success();
@@ -323,7 +323,7 @@ fn cross_topic_prerequisites_are_rejected_before_write() {
             "--scope",
             "default",
         ],
-        &json!({"topic_id":"topic_overtime","question":"Which rate?","resolution_method":"grill",
+        &json!({"topic_id":"topic_overtime","question":"Which rate?","resolution_method":"ask",
         "depends_on":["question_other"]})
         .to_string(),
     )

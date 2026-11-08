@@ -73,8 +73,6 @@ Options:
           
       --resolution-id <resolution-id>
           
-      --source-ref <source-ref>
-          
       --links <links>
           
       --contradicts <contradicts>
@@ -140,8 +138,6 @@ Options:
       --severity-json <severity-json>
           
       --source-document-json <source-document-json>
-          
-      --source-ref-json <source-ref-json>
           
       --source-section-json <source-section-json>
           

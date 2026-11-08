@@ -444,7 +444,7 @@ mod tests {
     fn routes_for_one_handler_share_identical_models() {
         let (openapi, _) = super::documents();
         let source = "/paths/~1sources~1{id}~1submit/post";
-        let boundary = "/paths/~1boundaries~1{id}~1submit/post";
+        let rule = "/paths/~1rules~1{id}~1submit/post";
 
         for suffix in [
             "/requestBody/content/application~1json/schema",
@@ -453,7 +453,7 @@ mod tests {
         ] {
             assert_eq!(
                 schema_reference(&openapi, &format!("{source}{suffix}")),
-                schema_reference(&openapi, &format!("{boundary}{suffix}")),
+                schema_reference(&openapi, &format!("{rule}{suffix}")),
             );
         }
     }

@@ -49,7 +49,7 @@ fn setup() -> tempfile::TempDir {
         "--question",
         "Do code scores affect health?",
         "--method",
-        "grill",
+        "ask",
     ])
     .success();
     dir
@@ -172,7 +172,7 @@ fn cli_answered_question_creation_refuses_proposed_resolution() {
         "--question",
         "What is the daily health budget?",
         "--method",
-        "grill",
+        "ask",
         "--status",
         "answered",
         "--answer",
@@ -333,7 +333,7 @@ fn cli_import_refuses_unapproved_resolution_links_without_replacing_state() {
         "topics":[{"id":"topic_health","requirement_id":"req_health","title":"Health","status":"open","links":[]}],
         "questions":[{"id":"question_code_scores_health","topic_id":"topic_health",
             "requirement_id":"req_health","question":"Do code scores affect health?",
-            "resolution_method":"grill","status":"answered","answer":"Code scores affect health.",
+            "resolution_method":"ask","status":"answered","answer":"Code scores affect health.",
             "resolution_id":"res_code_scores_health","links":[]}]
     });
     for family in ["requirements", "resolutions", "topics", "questions"] {

@@ -122,60 +122,60 @@ macro_rules! write_binding {
     (
         verification, $store:ident, $scope:ident, $shards:ident,
         $variant:ident, $field:ident,
-        verification($kind:literal, $test_kind:ident, $fixture:ident, $id:literal)
+        verification
     ) => {
         write_family!($store, $scope, $shards, $variant, $field);
     };
     (
         implementation, $store:ident, $scope:ident, $shards:ident,
         $variant:ident, $field:ident,
-        implementation($kind:literal, $test_kind:ident, $fixture:ident, $id:literal)
+        implementation
     ) => {
         write_family!($store, $scope, $shards, $variant, $field);
     };
     (
         verification, $store:ident, $scope:ident, $shards:ident,
         $variant:ident, $field:ident,
-        implementation($kind:literal, $test_kind:ident, $fixture:ident, $id:literal)
+        implementation
     ) => {};
     (
         implementation, $store:ident, $scope:ident, $shards:ident,
         $variant:ident, $field:ident,
-        verification($kind:literal, $test_kind:ident, $fixture:ident, $id:literal)
+        verification
     ) => {};
 }
 
 macro_rules! ensure_binding_budget {
     (
         $shards:ident, verification,
-        verification($kind:literal, $test_kind:ident, $fixture:ident, $id:literal), $field:ident
+        verification, $field:ident
     ) => {
         ensure_family_budget($shards.$field)?;
     };
     (
         $shards:ident, $phase:ident,
-        $other:ident($kind:literal, $test_kind:ident, $fixture:ident, $id:literal), $field:ident
+        $other:ident, $field:ident
     ) => {};
 }
 
 macro_rules! ensure_binding_assignable {
     (
         $store:ident, $scope:ident, $shards:ident, verification,
-        verification($kind:literal, $test_kind:ident, $fixture:ident, $id:literal),
+        verification,
         $field:ident, $path:ident, $strategy:ident, $import:ident
     ) => {
         ensure_assignable!($store, $scope, $shards, $field, $path, $strategy, $import);
     };
     (
         $store:ident, $scope:ident, $shards:ident, implementation,
-        implementation($kind:literal, $test_kind:ident, $fixture:ident, $id:literal),
+        implementation,
         $field:ident, $path:ident, $strategy:ident, $import:ident
     ) => {
         ensure_assignable!($store, $scope, $shards, $field, $path, $strategy, $import);
     };
     (
         $store:ident, $scope:ident, $shards:ident, $phase:ident,
-        $other:ident($kind:literal, $test_kind:ident, $fixture:ident, $id:literal),
+        $other:ident,
         $field:ident, $path:ident, $strategy:ident, $import:ident
     ) => {};
 }
@@ -201,7 +201,6 @@ macro_rules! define_imported_scope_shards {
                 node: [$($export_node:tt)*],
                 reader: {
                     open: $export_reader:ident,
-                    closed: [$($export_closed:tt)*],
                     strategy: $export_strategy:ident
                 },
                 id: $export_id:ident,
@@ -222,7 +221,6 @@ macro_rules! define_imported_scope_shards {
                 node: [$($canonical_node:tt)*],
                 reader: {
                     open: $canonical_reader:ident,
-                    closed: [$($canonical_closed:tt)*],
                     strategy: $canonical_strategy:ident
                 },
                 id: $canonical_id:ident,
@@ -243,7 +241,6 @@ macro_rules! define_imported_scope_shards {
                 node: [$($binding_node:tt)*],
                 reader: {
                     open: $binding_reader:ident,
-                    closed: [$($binding_closed:tt)*],
                     strategy: $binding_strategy:ident
                 },
                 id: $binding_id:ident,

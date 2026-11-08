@@ -31,9 +31,8 @@ fn trace_ids(result: &TraceResult) -> Vec<(usize, String)> {
         .collect()
 }
 
-/// Thirty children refine the seeded requirement, which also names its
-/// domain and carries the seeded boundary: thirty-two neighbours, the
-/// children first in id order.
+/// Thirty children refine the seeded requirement: thirty neighbours in id
+/// order.
 fn wide_children(store: &crate::state_store::StateStore, scope: &provenance_core::ScopeId) {
     for index in 0..30 {
         append_requirement(
@@ -47,9 +46,7 @@ fn wide_children(store: &crate::state_store::StateStore, scope: &provenance_core
     }
 }
 
-/// The seeded store's requirement already names its domain and carries
-/// the seeded boundary, so a wide child set serves thirty children and
-/// two fixed neighbours, children first in id order.
+/// A wide child set serves thirty children in id order.
 #[tokio::test]
 #[verifies("rule_query_pages_bound_shared_reads", examples)]
 async fn neighbors_hydrate_only_the_served_page_over_a_wide_graph() {
@@ -66,11 +63,10 @@ async fn neighbors_hydrate_only_the_served_page_over_a_wide_graph() {
     .await;
     let full = answer.unwrap().result;
     let order = neighbor_ids(&full);
-    assert_eq!(order.len(), 31, "thirty children and one fixed record");
-    assert_eq!(order[30], "boundary_no_backpay");
-    let mut children = order[..30].to_vec();
+    assert_eq!(order.len(), 30, "thirty children");
+    let mut children = order.clone();
     children.sort();
-    assert_eq!(&order[..30], &children[..], "children serve in id order");
+    assert_eq!(order, children, "children serve in id order");
     assert!(!full.has_more);
 
     for limit in [1usize, 4, 29] {
@@ -85,7 +81,7 @@ async fn neighbors_hydrate_only_the_served_page_over_a_wide_graph() {
         assert!(result.has_more);
         assert!(
             hydrations <= limit + 2,
-            "limit {limit} decoded {hydrations} rows for 32 matches"
+            "limit {limit} decoded {hydrations} rows for 30 matches"
         );
     }
 }
@@ -181,7 +177,7 @@ async fn trace_hydrates_only_a_bounded_breadth_page() {
     .await;
     let full = answer.unwrap().result;
     let order = trace_ids(&full);
-    assert_eq!(order.len(), 31, "one breadth level holds every neighbour");
+    assert_eq!(order.len(), 30, "one breadth level holds every neighbour");
     assert!(order.iter().all(|(depth, _)| *depth == 1));
     assert!(!full.has_more);
 
@@ -241,8 +237,7 @@ async fn trace_folds_duplicate_paths_and_skips_missing_targets() {
             "req_bridge_00",
             "req_bridge_01",
             "req_bridge_02",
-            "req_dangler",
-            "boundary_no_backpay"
+            "req_dangler"
         ]
     );
     let depth_two: Vec<String> = trace_ids(&answer)
@@ -309,7 +304,7 @@ async fn trace_hydrates_no_depth_beyond_a_full_page() {
     .await;
     let full = answer.unwrap().result;
     let ids = trace_ids(&full);
-    assert_eq!(ids.len(), 22, "the breadth one rows and the islands");
+    assert_eq!(ids.len(), 21, "the breadth one rows and the islands");
     assert!(!ids.iter().any(|(_, id)| id == "req_missing"));
     assert!(!full.has_more);
 

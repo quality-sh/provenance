@@ -1,31 +1,20 @@
 //! The per-family list readers that the record family tables generate.
 
 use super::ideation_batches::overlay_records;
-use super::readers::{read_jsonl, read_jsonl_closed, read_message_shards};
+use super::readers::{read_jsonl, read_message_shards};
 use super::StateStore;
 use crate::shards;
 use provenance_core::{Rule, ScopeId};
 
 macro_rules! family_reader {
-    (Rules, $record:ty, $path:ident, $list:ident, $closed:ident) => {
+    (Rules, $record:ty, $path:ident, $list:ident) => {
         pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
             validate_rule_archives(read_jsonl(self, &shards::$path(&self.layout, scope))?)
         }
-
-        pub(crate) fn $closed(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
-            validate_rule_archives(read_jsonl_closed(
-                self,
-                &shards::$path(&self.layout, scope),
-            )?)
-        }
     };
-    ($variant:ident, $record:ty, $path:ident, $list:ident, $closed:ident) => {
+    ($variant:ident, $record:ty, $path:ident, $list:ident) => {
         pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
             read_jsonl(self, &shards::$path(&self.layout, scope))
-        }
-
-        pub(crate) fn $closed(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
-            read_jsonl_closed(self, &shards::$path(&self.layout, scope))
         }
     };
 }
@@ -39,7 +28,6 @@ macro_rules! define_export_readers {
                 path: $path:ident,
                 node: [$($node:tt)*],
                 reader: $list:ident,
-                closed: [$closed:ident],
                 $($export_rest:tt)*
             };
         )* }
@@ -51,19 +39,17 @@ macro_rules! define_export_readers {
                 path: $binding_path:ident,
                 node: [$($binding_node:tt)*],
                 reader: $binding_list:ident,
-                closed: [$binding_closed:ident],
                 $($binding_rest:tt)*
             };
         )* }
         internal { $($internal:tt)* }
     ) => {
-        $(family_reader!($variant, $record, $path, $list, $closed);)*
+        $(family_reader!($variant, $record, $path, $list);)*
         $(family_reader!(
             $binding_variant,
             $binding_record,
             $binding_path,
-            $binding_list,
-            $binding_closed
+            $binding_list
         );)*
     };
 }
@@ -140,7 +126,6 @@ macro_rules! define_canonical_readers {
                 node: [$($node:tt)*],
                 reader: {
                     open: $reader:ident,
-                    closed: [$($closed:tt)*],
                     strategy: $strategy:ident
                 },
                 id: $id:ident,
