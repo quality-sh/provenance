@@ -1539,12 +1539,6 @@ jobs:
       - name: Test public skill installation and init
         run: cargo test --locked -p provenance-cli --test cli_skills --test cli_skills_copy_tree --test cli_skills_build_source --test cli_skills_cleanup --test cli_init_onboarding --test cli_init_summary
 
-  # The one status the branch ruleset requires. Conditional jobs skip when a
-  # pull request leaves their inputs untouched, and a skipped matrix job never
-  # reports its expanded name, so requiring the jobs directly deadlocks a
-  # state-only pull request. This job always runs and fails when any needed
-  # job failed or was cancelled; skipped counts as success. ci_ok.test.py
-  # tests this decision.
   wasm-kernel:
     timeout-minutes: 30
     name: Wasm kernel
@@ -1587,6 +1581,12 @@ jobs:
             echo "::endgroup::"
           done
 
+  # The one status the branch ruleset requires. Conditional jobs skip when a
+  # pull request leaves their inputs untouched, and a skipped matrix job never
+  # reports its expanded name, so requiring the jobs directly deadlocks a
+  # state-only pull request. This job always runs and fails when any needed
+  # job failed or was cancelled; skipped counts as success. ci_ok.test.py
+  # tests this decision.
   ci-ok:
     timeout-minutes: 10
     name: CI OK

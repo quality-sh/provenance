@@ -92,3 +92,140 @@ required-features = ["host", "test-fixture"]
 name = "local_host"
 path = "tests/local_host.rs"
 required-features = ["test-fixture"]
+
+# Each test uses the adapters, so each test needs host.
+[[test]]
+name = "claim_holder"
+required-features = ["host"]
+
+[[test]]
+name = "decision_actor_refusal"
+required-features = ["host"]
+
+[[test]]
+name = "discussion_parent_routes"
+required-features = ["host"]
+
+[[test]]
+name = "discussion_write_refusals"
+required-features = ["host"]
+
+[[test]]
+name = "document_review_characterization"
+required-features = ["host"]
+
+[[test]]
+name = "document_visibility"
+required-features = ["host"]
+
+[[test]]
+name = "fallback_auth"
+required-features = ["host"]
+
+[[test]]
+name = "file_access"
+required-features = ["host"]
+
+[[test]]
+name = "history_evidence"
+required-features = ["host"]
+
+[[test]]
+name = "history_pages"
+required-features = ["host"]
+
+[[test]]
+name = "host_body_deadline"
+required-features = ["host"]
+
+[[test]]
+name = "host_invocation"
+required-features = ["host"]
+
+[[test]]
+name = "host_queue"
+required-features = ["host"]
+
+[[test]]
+name = "multiple_parents"
+required-features = ["host"]
+
+[[test]]
+name = "page_write_response"
+required-features = ["host"]
+
+[[test]]
+name = "patch_contract"
+required-features = ["host"]
+
+[[test]]
+name = "porcelain_api"
+required-features = ["host"]
+
+[[test]]
+name = "porcelain_api_discovery"
+required-features = ["host"]
+
+[[test]]
+name = "porcelain_route_inventory"
+required-features = ["host"]
+
+[[test]]
+name = "porcelain_target_registration"
+required-features = ["host"]
+
+[[test]]
+name = "query_response_budgets"
+required-features = ["host"]
+
+[[test]]
+name = "request_body_decode"
+required-features = ["host"]
+
+[[test]]
+name = "resources"
+required-features = ["host"]
+
+[[test]]
+name = "resources_patches"
+required-features = ["host"]
+
+[[test]]
+name = "review_access_refusal"
+required-features = ["host"]
+
+[[test]]
+name = "review_read_shard_errors"
+required-features = ["host"]
+
+[[test]]
+name = "review_revisions"
+required-features = ["host"]
+
+[[test]]
+name = "rework"
+required-features = ["host"]
+
+[[test]]
+name = "round2"
+required-features = ["host"]
+
+[[test]]
+name = "rule_patch_submissions"
+required-features = ["host"]
+
+[[test]]
+name = "search_discovery"
+required-features = ["host"]
+
+[[test]]
+name = "target_config"
+required-features = ["host"]
+
+[[test]]
+name = "typed_spec_discussion_deletion"
+required-features = ["host"]
+
+[[test]]
+name = "wire"
+required-features = ["host"]

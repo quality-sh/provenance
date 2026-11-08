@@ -127,7 +127,15 @@ jobs:
             (
               cd "$side"
               sfw cargo fetch --locked
-              cargo test --locked -p provenance-store --release --no-run --message-format=json \
+              # The timing test needs the store engine. A store that has a host
+              # feature builds the engine only with that feature. Older tags
+              # have no host feature and always build the engine.
+              features=()
+              if cargo metadata --locked --offline --no-deps --format-version 1 \
+                | jq -e '.packages[] | select(.name == "provenance-store") | .features | has("host")' > /dev/null; then
+                features=(--features host)
+              fi
+              cargo test --locked -p provenance-store "${features[@]}" --release --no-run --message-format=json \
                 > "$RUNNER_TEMP/$side-build.json"
             )
             binary=$(jq -r 'select(.reason == "compiler-artifact" and .profile.test and .target.kind == ["lib"] and .target.name == "provenance_store") | .executable' "$RUNNER_TEMP/$side-build.json")

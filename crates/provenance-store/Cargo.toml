@@ -72,13 +72,195 @@ windows-sys = { workspace = true, optional = true }
 time = { workspace = true, features = ["wasm-bindgen"] }
 uuid = { workspace = true, features = ["js"] }
 
+# The engine tests need host. The source scan tests (query_handles,
+# read_process_state, store_shape) run without it.
+[[test]]
+name = "automatic_submissions"
+required-features = ["host"]
+
+[[test]]
+name = "catch_up_lock"
+required-features = ["host"]
+
+[[test]]
+name = "changed_statement_analysis"
+required-features = ["host"]
+
+[[test]]
+name = "compile_fail"
+required-features = ["host"]
+
+[[test]]
+name = "coverage_binding_settings"
+required-features = ["host"]
+
+[[test]]
+name = "discover_without_current_directory"
+required-features = ["host"]
+
+[[test]]
+name = "discussion_compatibility"
+required-features = ["host"]
+
+[[test]]
+name = "discussion_discovery"
+required-features = ["host"]
+
+[[test]]
+name = "discussion_excerpt"
+required-features = ["host"]
+
+[[test]]
+name = "discussion_kinds"
+required-features = ["host"]
+
+[[test]]
+name = "discussion_message_cursor"
+required-features = ["host"]
+
+[[test]]
+name = "discussion_origins"
+required-features = ["host"]
+
+[[test]]
+name = "discussion_outcomes"
+required-features = ["host"]
+
+[[test]]
+name = "discussion_reads"
+required-features = ["host"]
+
+[[test]]
+name = "discussion_support"
+required-features = ["host"]
+
+[[test]]
+name = "discussion_target_writes"
+required-features = ["host"]
+
+[[test]]
+name = "discussion_writes"
+required-features = ["host"]
+
+[[test]]
+name = "git_starts_use_the_helper"
+required-features = ["host"]
+
+[[test]]
+name = "manifest_scope_ids"
+required-features = ["host"]
+
+[[test]]
+name = "multiple_parents"
+required-features = ["host"]
+
+[[test]]
+name = "native_review_submissions"
+required-features = ["host"]
+
+[[test]]
+name = "one_write_path"
+required-features = ["host"]
+
+[[test]]
+name = "operation_schema"
+required-features = ["host"]
+
+[[test]]
+name = "read_settings"
+required-features = ["host"]
+
+[[test]]
+name = "record_save_files"
+required-features = ["host"]
+
+[[test]]
+name = "record_updates"
+required-features = ["host"]
+
+[[test]]
+name = "relation_deltas"
+required-features = ["host"]
+
+[[test]]
+name = "repository_open"
+required-features = ["host"]
+
+[[test]]
+name = "requirement_review_reads"
+required-features = ["host"]
+
+[[test]]
+name = "review_cost"
+required-features = ["host"]
+
+[[test]]
+name = "review_cycle_records"
+required-features = ["host"]
+
+[[test]]
+name = "review_history"
+required-features = ["host"]
+
+[[test]]
+name = "review_history_git"
+required-features = ["host"]
+
+[[test]]
+name = "review_history_head_move"
+required-features = ["host"]
+
+[[test]]
+name = "review_markers"
+required-features = ["host"]
+
+[[test]]
+name = "review_paths"
+required-features = ["host"]
+
+[[test]]
+name = "review_projection"
+required-features = ["host"]
+
+[[test]]
+name = "review_reads"
+required-features = ["host"]
+
+[[test]]
+name = "review_revision_kernel"
+required-features = ["host"]
+
+[[test]]
+name = "review_saves"
+required-features = ["host"]
+
+[[test]]
+name = "review_validation"
+required-features = ["host"]
+
+[[test]]
+name = "rule_binding_integrity"
+required-features = ["host"]
+
+[[test]]
+name = "staged_view"
+required-features = ["host"]
+
+[[test]]
+name = "state_view"
+required-features = ["host"]
+
+[[test]]
+name = "stray_state_entries"
+required-features = ["host"]
+
 [[test]]
 name = "review_guards"
-required-features = ["test-fixture"]
+required-features = ["host", "test-fixture"]
 
 [[test]]
 name = "discussion_containers"
-required-features = ["test-fixture"]
+required-features = ["host", "test-fixture"]
 
 [dev-dependencies]
 fs_at.workspace = true
