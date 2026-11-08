@@ -70,8 +70,8 @@ use crate::{layout::ProvenanceLayout, repository::RepositoryIdentity, shards};
 use ideation_batches::overlay_records;
 use provenance_core::{
     ensure_record_id_assignable, AssertionRecord, Contribution, DispositionRecord,
-    ImplementationBinding, Manifest, Message, ProposalCard, Scope, ScopeId, SynthesisPacket,
-    Thread, VerificationBinding,
+    ImplementationBinding, Manifest, Message, ProposalCard, ScopeId, SynthesisPacket, Thread,
+    VerificationBinding,
 };
 
 fn ensure_new_ids_assignable<T>(
@@ -90,15 +90,7 @@ fn ensure_new_ids_assignable<T>(
 use readers::{
     read_ideation_landings, read_jsonl, read_jsonl_unlocked, read_message_shards_unlocked,
 };
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ManifestProjection {
-    scopes: Vec<serde_json::Value>,
-    #[serde(default, rename = "disposition_actor_ids")]
-    _disposition_actor_ids: Vec<String>,
-}
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
 enum Access {
@@ -204,22 +196,6 @@ impl StateStore {
         })
     }
 
-    pub(crate) fn closed_manifest_scope(&self, scope: &ScopeId) -> anyhow::Result<Option<Scope>> {
-        self.with_repository_read(|held| {
-            let manifest: ManifestProjection =
-                deserialize_closed(&held.read_state_text(&held.layout.manifest_path())?)?;
-            let selected = manifest
-                .scopes
-                .into_iter()
-                .find(|candidate| {
-                    candidate.get("id").and_then(serde_json::Value::as_str) == Some(scope.as_str())
-                })
-                .map(|candidate| deserialize_closed(&serde_json::to_string(&candidate)?))
-                .transpose()?;
-            Ok(selected)
-        })
-    }
-
     pub fn list_scope_directories(&self) -> anyhow::Result<Vec<String>> {
         self.with_repository_read(|held| {
             held.state_keys_under(&held.layout.scopes_dir(), StateEntry::Directory, |path| {
@@ -318,21 +294,6 @@ pub fn serde_name<T: serde::Serialize>(value: &T) -> anyhow::Result<String> {
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("expected string enum serialization"))?
         .to_string())
-}
-
-/// Deserializes `input` and refuses a field that `T` does not know.
-pub(crate) fn deserialize_closed<T: DeserializeOwned>(input: &str) -> anyhow::Result<T> {
-    let mut unknown = None;
-    let mut deserializer = serde_json::Deserializer::from_str(input);
-    let value = serde_ignored::deserialize(&mut deserializer, |path| {
-        if unknown.is_none() {
-            unknown = Some(path.to_string());
-        }
-    })?;
-    if let Some(path) = unknown {
-        anyhow::bail!("unknown field `{path}`");
-    }
-    Ok(value)
 }
 
 pub(crate) fn manifest_from_bytes(bytes: &[u8]) -> anyhow::Result<Manifest> {

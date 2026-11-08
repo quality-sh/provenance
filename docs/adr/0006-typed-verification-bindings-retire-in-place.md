@@ -28,7 +28,7 @@ in `declared_by` retires through this path, and the same key reported from
 another file is a separate relationship that stays untouched.
 
 Active coverage, wiki, stale evidence, and plan views exclude retired bindings.
-Export, import, checking, and exact graph references preserve them. Bindings
+Export, import, and checking preserve them. Bindings
 whose recorded file no longer exists are surfaced by the stale gate rather than
 retired, because a run that never executed the file cannot vouch for it.
 

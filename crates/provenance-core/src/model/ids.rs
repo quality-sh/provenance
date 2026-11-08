@@ -110,7 +110,6 @@ pub const RESERVED_RECORD_IDS: &[&str] = &[
     "gaps",
     "get",
     "graph",
-    "graph-reference",
     "health",
     "help",
     "impact",

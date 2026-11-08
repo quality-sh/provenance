@@ -77,7 +77,7 @@ fn setup() -> (tempfile::TempDir, Host) {
         repo.path(),
         &["question_result", "create", "--type", "question"],
         &json!({"topic_id":"topic_result", "question":"Does the system keep each result?",
-               "resolution_method":"grill"}),
+               "resolution_method":"ask"}),
     );
     let host = start(repo.path());
     (repo, host)

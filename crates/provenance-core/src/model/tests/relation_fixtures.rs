@@ -162,7 +162,7 @@ mod relation_fixtures {
             topic_id: sid(topic_id),
             requirement_id: sid(requirement_id),
             question: format!("{id}?"),
-            resolution_method: ResolutionMethod::Grill,
+            resolution_method: ResolutionMethod::Ask,
             status: QuestionStatus::Open,
             archived_in_commit: None,
             claimed_by: None,

@@ -270,7 +270,6 @@ macro_rules! define_record_members {
                         node: [$($node:tt)*],
                         reader: {
                             open: $reader:ident,
-                            closed: [$($closed:tt)*],
                             strategy: $strategy:ident
                         },
                         id: $id:ident,

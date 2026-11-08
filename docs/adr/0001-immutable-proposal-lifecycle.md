@@ -29,8 +29,7 @@ Whole-scope import stages and checks the complete state
 directory before publication. A repository publication lock precedes lifecycle and shard locks;
 a durable phase marker restores backup or finishes cleanup after interruption. Publication uses
 portable directory renames rather than claiming an unavailable atomic directory exchange.
-Graph-reference projection remains limited to canonical
-graph families; lifecycle records do not affect exact export or digest identity. Proposal
+Proposal
 consultation remains demand-driven by exact path or typed territory and is not added to Prime.
 Disposition audit may carry one closed external-action tuple (system, external scope, action
 kind, stable key), while canonical-artifact references resolve against the exact local scope,

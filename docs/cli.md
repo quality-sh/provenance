@@ -169,7 +169,7 @@ A usage error prints clap's text and exits with code 2.
 The following commands keep dedicated behavior because they operate on a
 repository, render a report, manage the host, or perform another product task:
 
-- `init`, `check`, and `docs`
+- `init` and `check`
 - `prime`
 - `review` and `mcp`
 - `import`, `export`, and `materialize`

@@ -298,7 +298,6 @@
         "axum",
         "dunce",
         "fs2",
-        "jsonschema",
         "provenance-contract",
         "provenance-core",
         "provenance-macros",
@@ -315,7 +314,6 @@
         "walkdir"
       ],
       "dev-dependencies": [
-        "jsonschema",
         "provenance-macros",
         "provenance-ste100",
         "sqlx",

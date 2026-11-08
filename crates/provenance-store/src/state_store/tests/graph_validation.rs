@@ -51,7 +51,7 @@ fn a_rule_with_no_requirement_is_refused_by_the_validator() {
 }
 
 #[test]
-fn rule_readers_refuse_an_archive_stamp_on_a_live_rule() {
+fn the_rule_reader_refuses_an_archive_stamp_on_a_live_rule() {
     let (_dir, store, scope) = seeded_requirement_store();
     append(
         &crate::shards::rules_path(&store.layout, &scope),
@@ -66,12 +66,8 @@ fn rule_readers_refuse_an_archive_stamp_on_a_live_rule() {
         }),
     );
 
-    for error in [
-        store.list_rules(&scope).unwrap_err(),
-        store.closed_rules(&scope).unwrap_err(),
-    ] {
-        assert!(error.to_string().contains("archived_in_commit"), "{error}");
-    }
+    let error = store.list_rules(&scope).unwrap_err();
+    assert!(error.to_string().contains("archived_in_commit"), "{error}");
 }
 
 #[test]

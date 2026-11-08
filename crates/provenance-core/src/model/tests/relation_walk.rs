@@ -223,7 +223,7 @@ mod relation_walk {
                 topic_id: sid("topic_rates"),
                 requirement_id: sid("req_overtime"),
                 question: "Which threshold?".into(),
-                resolution_method: ResolutionMethod::Grill,
+                resolution_method: ResolutionMethod::Ask,
                 status: QuestionStatus::Open,
                 archived_in_commit: None,
                 claimed_by: Some("agent".into()),

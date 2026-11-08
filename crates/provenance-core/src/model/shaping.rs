@@ -45,8 +45,8 @@ pub enum QuestionStatus {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ResolutionMethod {
-    #[serde(rename = "grill")]
-    Grill,
+    #[serde(rename = "ask")]
+    Ask,
     #[serde(rename = "prototype")]
     Prototype,
     #[serde(rename = "research")]

@@ -32,7 +32,6 @@ clap.workspace = true
 fs2.workspace = true
 jsonschema.workspace = true
 hex.workspace = true
-pulldown-cmark.workspace = true
 provenance-core.workspace = true
 provenance-macros.workspace = true
 provenance-mcp.workspace = true
@@ -68,6 +67,7 @@ scanner = []
 dogfood = ["provenance-transport/dogfood"]
 
 [dev-dependencies]
+pulldown-cmark.workspace = true
 assert_cmd.workspace = true
 flate2.workspace = true
 pdf_oxide = { version = "=0.3.78", default-features = false, features = ["legacy-crypto"] }

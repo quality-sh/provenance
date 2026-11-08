@@ -28,8 +28,8 @@ Before you call code redundant or delete tests, run
 6. **Read the stored state at the start of every turn.** "Recover before each turn" gives
    the reads.
 
-One question per session is **not** the invariant. A `grill` turn can drain a topic question
-by question; expensive methods claim one question and often stop at a phase boundary.
+One question per session is **not** the invariant. An `ask` turn can answer the Questions of a
+Topic one by one; expensive methods claim one question and often stop at a phase boundary.
 
 ## Start every session
 
@@ -221,7 +221,7 @@ short-lived link - how would that work?" Starting an anchor is one session's wor
    ```
 
 5. **Create topics and first questions.** Questions must be sized to one agent session and
-   minted with the verb that resolves them: `grill`, `prototype`, `research`, `verify`, or
+   minted with the verb that resolves them: `ask`, `prototype`, `research`, `verify`, or
    `task`.
 
    ```sh
@@ -233,7 +233,7 @@ short-lived link - how would that work?" Starting an anchor is one session's wor
    provenance question_<stable_slug> create --type question --scope <scope> \
      --topic-id <topic_id> \
      --question "<precise question>" \
-     --method grill \
+     --method ask \
      --format json
    ```
 
@@ -292,7 +292,7 @@ work so concurrent sessions skip what you are touching. A claim is a graph write
 
 | Method | Claim | Command |
 |---|---|---|
-| `grill` | whole topic | `provenance <topic_id> claim --scope <scope> --actor <agent> --format json` |
+| `ask` | whole topic | `provenance <topic_id> claim --scope <scope> --actor <agent> --format json` |
 | `prototype` | single question | `provenance <question_id> claim --scope <scope> --actor <agent> --format json` |
 | `research` | single question | `provenance <question_id> claim --scope <scope> --actor <agent> --format json` |
 | `verify` | single question | `provenance <question_id> claim --scope <scope> --actor <agent> --format json` |
@@ -387,7 +387,7 @@ recover accepted decisions from the graph before you continue the dialogue.
 
 For each question, use the method on the question.
 
-#### `grill`
+#### `ask`
 
 Ask one precise question at a time and offer a recommended answer. Record the
 answer before the next question. Select records from its meaning, not from a fixed
@@ -585,7 +585,7 @@ even if it is blocked. Update or answer the Questions that the decision made inv
 provenance question_<new_slug> create --type question --scope <scope> \
   --topic-id <topic_id> \
   --question "<newly precise question>" \
-  --method <grill|prototype|research|verify|task> \
+  --method <ask|prototype|research|verify|task> \
   --format json
 ```
 

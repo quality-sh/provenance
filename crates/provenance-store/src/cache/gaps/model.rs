@@ -1,6 +1,6 @@
 use provenance_core::{NodeType, StableId};
 
-/// Why a graph record appears on the shaping frontier.
+/// Why a graph record appears in the gaps check.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GapKind {

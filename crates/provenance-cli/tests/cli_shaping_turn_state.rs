@@ -24,7 +24,7 @@ fn recovery_reads_survive_process_exit_and_claim_conflict() {
         .success();
 
     for (id, method) in [
-        ("question_grill", "grill"),
+        ("question_ask", "ask"),
         ("question_research", "research"),
     ] {
         provenance(&[
@@ -56,7 +56,7 @@ fn recovery_reads_survive_process_exit_and_claim_conflict() {
 
     for conflict in [false, true] {
         if conflict {
-            for id in ["topic_overtime", "question_grill"] {
+            for id in ["topic_overtime", "question_ask"] {
                 provenance(&[id, "claim", "--repo", &repo, "--actor", "agent-two"]).failure();
             }
         }
@@ -64,7 +64,7 @@ fn recovery_reads_survive_process_exit_and_claim_conflict() {
         assert_eq!(topic["id"], "topic_overtime");
         assert_eq!(topic["claimed_by"], "agent-one");
         for (id, method) in [
-            ("question_grill", "grill"),
+            ("question_ask", "ask"),
             ("question_research", "research"),
         ] {
             let question = recovery_record(&repo, "questions", id);

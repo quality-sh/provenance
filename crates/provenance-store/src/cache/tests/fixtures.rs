@@ -203,7 +203,7 @@ fn seed_shaping_owners(store: &StateStore, scope: &ScopeId) {
             id: sid("question_threshold"),
             topic_id: sid("topic_rates"),
             question: "Which threshold applies?".into(),
-            resolution_method: ResolutionMethod::Grill,
+            resolution_method: ResolutionMethod::Ask,
             status: QuestionStatus::Open,
             answer: None,
             links: vec![ArtifactLink {

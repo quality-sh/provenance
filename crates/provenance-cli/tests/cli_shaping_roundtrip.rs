@@ -36,7 +36,7 @@ fn create_question(repo: &str) {
         "--question",
         "Which threshold applies?",
         "--method",
-        "grill",
+        "ask",
         "--status",
         "answered",
         "--answer",
@@ -46,7 +46,7 @@ fn create_question(repo: &str) {
     ])
     .success()
     .stdout(contains("question_overtime_threshold"))
-    .stdout(contains(r#""resolution_method": "grill""#))
+    .stdout(contains(r#""resolution_method": "ask""#))
     .stdout(contains(r#""requirement_id": "req_overtime""#));
 }
 

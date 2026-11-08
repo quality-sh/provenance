@@ -21,7 +21,7 @@ Run a tournament only when **all three** hold:
    forecloses the others.
 2. **Expensive to reverse** — later work will build on the choice; unwinding it means
    unwinding that work.
-3. **Preference unknowable without artifacts.** If a `grill` question can settle the
+3. **Preference unknowable without artifacts.** If an `ask` question can settle the
    choice, ask that question instead. Use a tournament only when the human cannot *specify*
    a preference and can only *react* to an artifact.
 

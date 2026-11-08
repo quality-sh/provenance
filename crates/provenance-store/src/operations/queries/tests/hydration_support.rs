@@ -32,8 +32,8 @@ pub async fn counted<R>(run: impl std::future::Future<Output = R>) -> (R, usize)
 }
 
 /// One raw requirement beside `req_overtime`, written past the writers'
-/// checks so the test controls every relation field. The domain pointer
-/// is dropped, so the graph holds exactly what the test names.
+/// checks so the test controls every relation field, so the graph holds
+/// exactly what the test names.
 pub fn append_requirement(
     store: &crate::state_store::StateStore,
     scope: &provenance_core::ScopeId,

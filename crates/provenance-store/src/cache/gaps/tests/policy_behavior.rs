@@ -117,7 +117,7 @@ fn supersession_settles_a_contradiction() {
 
 #[test]
 #[verifies("rule_graph_gaps", examples)]
-fn answered_questions_and_explored_topics_are_not_frontier_gaps() {
+fn answered_questions_and_explored_topics_are_not_gaps() {
     let requirements = vec![requirement("req_topic")];
     let topics = vec![topic("topic_explored", TopicStatus::Explored)];
     let questions = vec![question(

@@ -10,7 +10,6 @@ use provenance_core::{
 use provenance_porcelain::schema::Artifact;
 use provenance_porcelain::validate::{ValidateInput, ValidatePort, ValidationReport};
 use provenance_porcelain::WorkFuture;
-use provenance_store::graph_reference::{ExactExport, GraphReference};
 
 impl ValidatePort for ArtifactPort {
     type Failure = anyhow::Error;
@@ -49,14 +48,6 @@ fn validate_file(artifact: Artifact, input: &Utf8Path) -> anyhow::Result<()> {
         Artifact::Disposition => {
             let disposition: DispositionRecord = serde_json::from_str(&json)?;
             provenance_core::validate_disposition_intrinsic(&disposition)?;
-        }
-        Artifact::GraphReference => {
-            GraphReference::from_json(json.as_bytes())?;
-        }
-        Artifact::GraphReferenceExport => {
-            let value = serde_json::from_str(&json)?;
-            super::schema::validate_graph_reference_export(&value)?;
-            ExactExport::from_json(json.as_bytes())?;
         }
     }
     Ok(())

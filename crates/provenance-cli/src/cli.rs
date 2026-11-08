@@ -1,5 +1,3 @@
-pub mod workspace;
-
 use clap::Parser;
 
 // The root parser. Every command under it comes from the registry. A doc comment here
