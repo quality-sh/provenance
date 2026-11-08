@@ -10,7 +10,7 @@ use provenance_porcelain::action::ActionError;
 use provenance_porcelain::get::ReadError;
 use serde_json::{json, Map, Value};
 
-pub use provenance_cli::refusal::{Cause, HostRefusal};
+pub use provenance_cli::refusal::HostRefusal;
 
 /// The `{error,meta}` object for an error that a JSON caller can parse, or
 /// `None` when the error is not a host refusal.
