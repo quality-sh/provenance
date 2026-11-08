@@ -8,10 +8,10 @@ use std::path::Path;
 use std::pin::Pin;
 
 /// The status and the body of one call. A status of 200 is a success.
-pub type Answer<'a> = Pin<Box<dyn Future<Output = (u16, Value)> + 'a>>;
+pub type Answer<'a> = Pin<Box<dyn Future<Output = (u16, Value)> + Send + 'a>>;
 
 /// One way in to the public API.
-pub trait Surface {
+pub trait Surface: Sync {
     /// Calls `path`, which can hold a query. `data` is the request data
     /// without the `{"data": ...}` wrapper.
     fn call<'a>(
@@ -247,5 +247,5 @@ fn hand_edit(scope: &Path, step: usize) {
 }
 
 fn lines(kept: &[&str]) -> String {
-    kept.iter().map(|line| format!("{line}\n")).collect()
+    kept.iter().flat_map(|line| [*line, "\n"]).collect()
 }
