@@ -7,6 +7,7 @@
 
 use super::ReadContext;
 use crate::cache::{self, GraphEvidence};
+use crate::repository::Repository;
 use crate::stale::{gate, git, revision_scans};
 use crate::state_store::StateStore;
 use camino::Utf8Path;
@@ -159,7 +160,7 @@ impl<'c> LiveHandle<'c> {
         graph: &GraphEvidence,
     ) -> anyhow::Result<Disturbed> {
         self.only(Live::Diff);
-        disturbed(self.context.repo(), base, head, rules, graph)
+        disturbed(self.context.repository(), base, head, rules, graph)
     }
 }
 
@@ -172,14 +173,15 @@ pub struct Disturbed {
     pub sites: Vec<EvidenceDiffSite>,
 }
 
-pub fn disturbed(
-    repo: &Utf8Path,
+fn disturbed(
+    repository: &Repository,
     base: String,
     head: String,
     rules: &[String],
     graph: &GraphEvidence,
 ) -> anyhow::Result<Disturbed> {
-    let scans = revision_scans::scan_range(repo, &base, &head)?;
+    let repo = repository.working_tree();
+    let scans = revision_scans::scan_range(repository.kept_scans(), repo, &base, &head)?;
     let changes = git::changed_files(repo, &base, &head)?;
     let report = gate::report_scanned(
         repo,

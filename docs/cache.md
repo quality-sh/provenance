@@ -10,7 +10,7 @@ stamped projection. Seven of the eight SDK query operations answer from it
 (`get`, `search`, `neighbors`, `trace`, `impact`, `evidence`,
 `resolve_symbol`); `stale` reads git and canonical shards and attests
 nothing. The stale query and the `evidence` query with a base also use the
-kept scans in process memory, described under
+kept scans that each opened repository holds in memory, described under
 [Kept stale scans](#kept-stale-scans).
 
 Each record kind has one table with one column for each field of its
@@ -168,26 +168,28 @@ reads and parses each path and blob of the range once: the base and the
 head share the scan of each file that the range did not change. A scan
 depends on the path and the blob only.
 
-The process also keeps the scans of the last range of each repository, in
-memory, keyed by the repository root path. A host (HTTP or MCP) that
-answers the same range again reads no blob and parses no file. Nothing is
-written to disk. A new process, such as each CLI call, starts with no kept
-scans.
+Each opened `Repository` also keeps, in memory, the scans of the last
+range that one of its stale or evidence queries read. The handle owns
+them, and each clone of the handle shares them. A host (HTTP or MCP)
+opens its repository once and answers each request with that handle, so
+a host that answers the same range again reads no blob and parses no
+file. Nothing is written to disk. A new open, such as each CLI call,
+starts with no kept scans.
 
-- **Limits.** The process keeps the ranges of at most four repositories,
-  and at most 256 MiB of source text over all of them. A range is two
-  revisions, so it holds about two copies of the source text of its
-  repository, plus the parsed scans. When a new range goes over a limit,
-  the least recently used repository is dropped. A range larger than the
-  byte limit is not kept.
+- **Limits.** An open keeps one range: the base and the head revision,
+  at most 256 MiB of source text. A range holds about two copies of the
+  source text of its repository, plus the parsed scans. A new range
+  replaces the last range. A range larger than the byte limit is not
+  kept.
 - **Same answer as a new process.** Each query runs `rev-parse` and
   `ls-tree` again, so a new commit, a checkout or an amended commit cannot
   give old scans. Before kept scans replace blob reads, one
   `git cat-file --batch-check` confirms that each of those blobs is still
   in the object store. If a blob is missing, the query reads the blobs
   that a new process reads, so it gives the same failure.
-- **Lifetime.** The kept scans stay until the process ends or a limit
-  drops them. They are not tied to an open `Repository`.
+- **Lifetime.** The kept scans stay until the last clone of the open
+  `Repository` is dropped. Two opens, of the same root or not, do not
+  share kept scans.
 
 ## Long-running server handoff
 
