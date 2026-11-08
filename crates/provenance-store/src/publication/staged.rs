@@ -84,7 +84,7 @@ impl StageLock {
     }
 
     /// A test stage that reads and writes the files of the staged state root
-    /// at `root`, as a stage did before stages moved behind the port.
+    /// at `root` instead of an overlay.
     #[cfg(test)]
     pub(crate) fn over_files(root: &Utf8Path) -> Arc<Self> {
         Arc::new(Self {

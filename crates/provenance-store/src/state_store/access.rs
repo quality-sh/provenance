@@ -126,9 +126,8 @@ impl StateStore {
         })
     }
 
-    /// A staged store over the files of the staged state root `layout`, as
-    /// a stage was before stages moved behind the port. Tests of the staged
-    /// writers use it.
+    /// A staged store that reads and writes the files of the staged state
+    /// root `layout`, for tests of the staged writers.
     #[cfg(test)]
     pub(crate) fn staged_view(
         identity: Option<RepositoryIdentity>,
