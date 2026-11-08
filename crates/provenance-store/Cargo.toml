@@ -72,8 +72,8 @@ windows-sys = { workspace = true, optional = true }
 time = { workspace = true, features = ["wasm-bindgen"] }
 uuid = { workspace = true, features = ["js"] }
 
-# The engine tests need host. The source scan tests (query_handles,
-# read_process_state, store_shape) run without it.
+# The engine tests need host. The source scan tests read_process_state and
+# store_shape run without it.
 [[test]]
 name = "automatic_submissions"
 required-features = ["host"]
@@ -164,6 +164,10 @@ required-features = ["host"]
 
 [[test]]
 name = "operation_schema"
+required-features = ["host"]
+
+[[test]]
+name = "query_handles"
 required-features = ["host"]
 
 [[test]]
