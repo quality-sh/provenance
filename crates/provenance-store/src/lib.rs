@@ -11,14 +11,17 @@
 //! - `operations` (with `operations::catalog`) and `review` hold the use cases.
 //! - `state_store` holds validation and the record writers.
 //! - `storage` is the port and its adapters.
-//! - `publication`, `jsonl`, `shards` and `layout` are the local-disk mechanics.
+//! - `publication`, `jsonl`, `shards` and `layout` are the sections, stages
+//!   and shard paths of the engine.
+//! - `families` holds the record family table.
 //! - `cache::connection` manages the SQLite connections.
 //! - `cache::materialize` and `cache::read` are the projection.
 //!
-//! The `host` feature turns on the engine and the local-disk mechanics.
-//! Without it the crate has `storage` (the port and the memory adapter),
-//! `canonical_digest` and `code_refs`, and it builds for
-//! wasm32-unknown-unknown.
+//! Without the `host` feature the crate has the write engine: a repository
+//! over any storage adapter, the record writers, stages, review saves and
+//! the merge logic, and it builds for wasm32-unknown-unknown. The `host`
+//! feature adds the local-disk adapter, git, the dictionary index files,
+//! the projection, the queries and the use cases that read through them.
 
 #[cfg(feature = "host")]
 pub mod cache;
@@ -26,44 +29,33 @@ pub mod canonical_digest;
 pub mod code_refs;
 #[cfg(feature = "host")]
 pub mod current_schema;
-#[cfg(feature = "host")]
 pub mod dictionary_reference;
+pub mod families;
 #[cfg(all(feature = "host", feature = "test-fixture"))]
 pub mod fixture_probe;
 #[cfg(feature = "host")]
 pub mod git_process;
-#[cfg(feature = "host")]
 pub mod jsonl;
-#[cfg(feature = "host")]
 pub mod layout;
 #[cfg(feature = "host")]
 mod long_path;
-#[cfg(feature = "host")]
 pub mod merge;
 #[cfg(feature = "host")]
 pub mod operations;
-#[cfg(feature = "host")]
 pub mod publication;
-#[cfg(feature = "host")]
 pub mod repository;
 #[cfg(feature = "host")]
 pub mod repository_init;
-#[cfg(feature = "host")]
 pub mod review;
 #[cfg(feature = "host")]
 pub mod review_changes;
-#[cfg(feature = "host")]
 pub mod settings;
-#[cfg(feature = "host")]
 pub mod shards;
 #[cfg(feature = "host")]
 pub mod stale;
-#[cfg(feature = "host")]
 pub mod state_store;
-#[cfg(feature = "host")]
 pub mod statement_analysis;
 pub mod storage;
-#[cfg(feature = "host")]
 mod test_probes;
 #[cfg(feature = "host")]
 pub mod user_cache;
@@ -80,5 +72,4 @@ mod test_support;
 #[cfg(feature = "host")]
 pub const VALIDATION_VERSION: u32 = 2;
 
-#[cfg(feature = "host")]
 pub mod write_error;

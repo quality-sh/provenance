@@ -84,4 +84,4 @@ macro_rules! define_family_loader {
     };
 }
 
-crate::cache::record_families!(define_family_loader);
+crate::families::record_families!(define_family_loader);

@@ -145,8 +145,8 @@ macro_rules! define_canonical_readers {
 }
 
 impl StateStore {
-    crate::cache::record_families!(define_export_readers);
-    crate::cache::family_table::record_family_rows!(define_canonical_readers);
+    crate::families::record_families!(define_export_readers);
+    crate::families::family_table::record_family_rows!(define_canonical_readers);
 }
 
 fn validate_rule_archives(rules: Vec<Rule>) -> anyhow::Result<Vec<Rule>> {

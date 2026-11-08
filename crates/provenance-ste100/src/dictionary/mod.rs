@@ -1,22 +1,32 @@
+#[cfg(feature = "host")]
 mod digest;
+#[cfg(feature = "host")]
 mod index;
+#[cfg(feature = "host")]
 mod layout;
+#[cfg(feature = "host")]
 mod parse;
+#[cfg(feature = "host")]
 mod pdf;
 
+#[cfg(feature = "host")]
 pub use index::{
     load_dictionary_index, load_dictionary_index_for_source, store_dictionary_index,
     DictionaryIndexError,
 };
 
+#[cfg(feature = "host")]
 use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
 
 use crate::StandardIssue;
 
+#[cfg(feature = "host")]
 pub const DICTIONARY_EXTRACTOR_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+#[cfg(feature = "host")]
 const EXPECTED_APPROVED_ROWS: usize = 878;
+#[cfg(feature = "host")]
 const EXPECTED_UNAPPROVED_ROWS: usize = 1_318;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -106,6 +116,7 @@ impl std::fmt::Display for DictionaryImportError {
 impl std::error::Error for DictionaryImportError {}
 
 /// Imports dictionary data only after the PDF identity and table are valid.
+#[cfg(feature = "host")]
 pub fn import_dictionary(pdf_bytes: &[u8]) -> Result<DictionaryImport, DictionaryImportError> {
     let pages = pdf::extract_dictionary_pages(pdf_bytes)?;
     let tables = pages
@@ -122,6 +133,7 @@ pub fn import_dictionary(pdf_bytes: &[u8]) -> Result<DictionaryImport, Dictionar
 }
 
 /// Rejects incomplete, unordered, or misclassified dictionary data.
+#[cfg(feature = "host")]
 #[rule("rule_ste_dictionary_structure_validation")]
 fn validate_entries(entries: &[DictionaryEntry]) -> Result<(), DictionaryImportError> {
     let approved = entries
@@ -154,6 +166,7 @@ fn validate_entries(entries: &[DictionaryEntry]) -> Result<(), DictionaryImportE
     Ok(())
 }
 
+#[cfg(feature = "host")]
 fn alphabet_band(headword: &str) -> Option<char> {
     headword
         .chars()

@@ -1,4 +1,5 @@
 use camino::{Utf8Path, Utf8PathBuf};
+#[cfg(feature = "host")]
 use provenance_core::Manifest;
 
 #[derive(Debug, Clone)]
@@ -109,6 +110,7 @@ impl std::fmt::Display for GraphNotInitialized {
 
 impl std::error::Error for GraphNotInitialized {}
 
+#[cfg(feature = "host")]
 fn path_exists(path: &Utf8Path) -> anyhow::Result<bool> {
     match std::fs::symlink_metadata(path) {
         Ok(_) => Ok(true),
@@ -120,12 +122,14 @@ fn path_exists(path: &Utf8Path) -> anyhow::Result<bool> {
 /// Tells if a publication can hold or hide the live state.
 ///
 /// A publisher creates its lock before it can move the live state.
+#[cfg(feature = "host")]
 pub(crate) fn publication_can_run(layout: &ProvenanceLayout) -> anyhow::Result<bool> {
     Ok(path_exists(&layout.publication_marker_path())?
         || path_exists(&layout.publication_lock_path())?)
 }
 
 /// Run a graph operation after publication recovery and manifest validation.
+#[cfg(feature = "host")]
 pub fn with_initialized_graph<R>(
     layout: &ProvenanceLayout,
     operation: impl FnOnce(Manifest) -> anyhow::Result<R>,
@@ -174,6 +178,7 @@ pub fn with_initialized_graph<R>(
 /// Runs a repository-wide operation after the initialized-graph gate, with a
 /// store over every scope of the layout that holds the section. The store has
 /// no repository identity.
+#[cfg(feature = "host")]
 pub fn with_initialized_state<R>(
     layout: &ProvenanceLayout,
     operation: impl FnOnce(Manifest, &crate::state_store::StateStore) -> anyhow::Result<R>,
@@ -187,6 +192,7 @@ pub fn with_initialized_state<R>(
 }
 
 /// Require a valid manifest before a caller opens a graph operation.
+#[cfg(feature = "host")]
 pub fn require_initialized_graph(layout: &ProvenanceLayout) -> anyhow::Result<()> {
     with_initialized_graph(layout, |_| Ok(()))
 }

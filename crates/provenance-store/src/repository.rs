@@ -5,10 +5,14 @@
 //! open, and gives out stores. An operation takes the handle; it does not
 //! discover, canonicalize or re-read settings itself.
 
-use crate::layout::{with_initialized_graph, GraphNotInitialized, ProvenanceLayout};
+use crate::dictionary_reference::ProjectDictionary;
+#[cfg(feature = "host")]
+use crate::layout::with_initialized_graph;
+use crate::layout::{GraphNotInitialized, ProvenanceLayout};
 use crate::publication::SectionHandle;
 use crate::settings::{Settings, SettingsError};
 use crate::state_store::StateStore;
+#[cfg(feature = "host")]
 use crate::storage::local::{LocalSectionLock, LocalStateStorage};
 use crate::storage::{SectionLock, StateKey, StateStorage};
 use crate::write_error::{SourceFailure, WriteError, WriteFailure};
@@ -16,6 +20,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
 use provenance_core::{Manifest, Scope, ScopeId, Stamp};
 use provenance_macros::{rule, verifies};
+#[cfg(feature = "host")]
 use std::path::Path;
 use std::sync::Arc;
 
@@ -40,27 +45,71 @@ struct Inner {
     local: bool,
 }
 
-/// What a repository is, apart from where its state lives.
-///
-/// The working tree, the selected scope and the settings read at open. The
-/// identity has no store constructor, so a holder cannot reach canonical
-/// state through it.
+/// The commit history of the working tree of a repository. `open` gives a
+/// repository the history of its git work tree. With no history, a write
+/// stamps no commit and the archive check finds no gap, as outside a work tree.
+pub trait RepositoryHistory: Send + Sync + std::fmt::Debug {
+    /// The commit of `HEAD`, or `None` when there is no commit.
+    fn head(&self) -> anyhow::Result<Option<String>>;
+    /// `HEAD` when its history is complete; `None` in a shallow clone.
+    fn complete_head(&self) -> anyhow::Result<Option<String>>;
+    /// Whether `commit` names a commit of the history.
+    fn commit_exists(&self, commit: &str) -> anyhow::Result<bool>;
+    /// Whether `commit` is in the history of `head`.
+    fn is_ancestor(&self, commit: &str, head: &str) -> anyhow::Result<bool>;
+}
+
+/// What a repository is, apart from where its state lives: the working tree,
+/// the selected scope, the settings read at open, the project dictionary of
+/// statement checks and the commit history. It has no store constructor, so
+/// a holder cannot reach canonical state through it.
 #[derive(Clone, Debug)]
 pub struct RepositoryIdentity {
     root: Utf8PathBuf,
     scope: ScopeId,
     settings: Arc<Settings>,
+    dictionary: Option<Arc<ProjectDictionary>>,
+    history: Option<Arc<dyn RepositoryHistory>>,
 }
 
 impl RepositoryIdentity {
     /// The identity of a repository whose working tree is `root`, with the
     /// selected scope and the settings that the host read.
+    /// The identity has no project dictionary and no history until the
+    /// `with_` methods give them.
     pub fn new(root: Utf8PathBuf, scope: ScopeId, settings: Settings) -> Self {
         Self {
             root,
             scope,
             settings: Arc::new(settings),
+            dictionary: None,
+            history: None,
         }
+    }
+
+    /// This identity with the commit history of its working tree.
+    #[must_use]
+    pub fn with_history(mut self, history: Arc<dyn RepositoryHistory>) -> Self {
+        self.history = Some(history);
+        self
+    }
+
+    /// The commit history of the working tree, if the host gave one.
+    pub fn history(&self) -> Option<&Arc<dyn RepositoryHistory>> {
+        self.history.as_ref()
+    }
+
+    /// This identity with the project dictionary that the host resolved.
+    #[must_use]
+    pub fn with_dictionary(mut self, dictionary: Option<ProjectDictionary>) -> Self {
+        self.dictionary = dictionary.map(Arc::new);
+        self
+    }
+
+    /// The project dictionary that statement checks use, if the project has
+    /// one that loaded.
+    pub fn dictionary(&self) -> Option<Arc<ProjectDictionary>> {
+        self.dictionary.clone()
     }
 
     /// The canonical working-tree root.
@@ -136,16 +185,22 @@ impl Repository {
     /// Opens the repository at `root` for one scope.
     ///
     /// The root is canonicalized, the initialized-graph gate runs once, the
-    /// manifest must declare the scope, and the settings file is read once.
+    /// manifest must declare the scope, and the settings file and the
+    /// project dictionary are read once.
     #[rule("rule_repository_reads_settings_once_at_open")]
+    #[cfg(feature = "host")]
     pub fn open(root: impl AsRef<Path>, scope: &str) -> Result<Self, OpenFailure> {
         let root = canonical_root(root.as_ref())?;
         let layout = ProvenanceLayout::new(root.clone());
         let manifest = with_initialized_graph(&layout, Ok).map_err(gate_failure)?;
         let scope = declared_scope(&manifest, scope)?.id.clone();
         let settings = Settings::load(&layout)?;
+        let dictionary = crate::dictionary_reference::load_project_dictionary(&layout);
+        let history = Arc::new(crate::state_store::GitHistory::new(root.clone()));
         Ok(Self::with_parts(
-            RepositoryIdentity::new(root, scope, settings),
+            RepositoryIdentity::new(root, scope, settings)
+                .with_dictionary(dictionary)
+                .with_history(history),
             Arc::new(LocalStateStorage::new(layout.clone())),
             Arc::new(LocalSectionLock::new(layout)),
             true,
@@ -198,6 +253,7 @@ impl Repository {
     /// Opens one explicit root, or the nearest enclosing project of the
     /// current directory: the first ancestor with a manifest or a `.git`.
     #[rule("rule_sdk_project_discovery")]
+    #[cfg(feature = "host")]
     pub fn discover(root: Option<Utf8PathBuf>, scope: &str) -> Result<Self, OpenFailure> {
         if let Some(root) = root.as_ref().filter(|root| root.is_absolute()) {
             return Self::open(root, scope);
@@ -400,6 +456,7 @@ pub fn declared_scope<'a>(
 /// form names a different path: a root of 260 characters or more, a
 /// reserved name such as `CON`, or a name that ends with a dot or a space.
 #[rule("rule_opened_root_is_resolved_working_tree")]
+#[cfg(feature = "host")]
 fn canonical_root(path: &Path) -> Result<Utf8PathBuf, OpenFailure> {
     let invalid = |error: std::io::Error| OpenFailure::InvalidRoot {
         path: path.display().to_string(),
@@ -413,6 +470,7 @@ fn canonical_root(path: &Path) -> Result<Utf8PathBuf, OpenFailure> {
         .map_err(|_| invalid(std::io::Error::other("is not UTF-8")))
 }
 
+#[cfg(feature = "host")]
 fn gate_failure(error: anyhow::Error) -> OpenFailure {
     if error.downcast_ref::<GraphNotInitialized>().is_some() {
         OpenFailure::NotInitialized

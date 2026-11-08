@@ -51,7 +51,7 @@ impl StateStore {
             )?;
             let kind = NodeType::from(proposal.traceability.target.artifact_type);
             let record_id = &proposal.traceability.target.artifact_id;
-            crate::cache::review_families::record(held, &scope, kind, record_id)?;
+            crate::families::review_families::record(held, &scope, kind, record_id)?;
             validate_decision_input(kind, record_id, &input)?;
             if facts.is_withdrawn(&input.proposal_id) || facts.is_decided(&input.proposal_id) {
                 return Err(SourceFailure::wrap(
@@ -76,7 +76,7 @@ impl StateStore {
             .as_ref()
             .expect("review_submission checks the binding");
         let record =
-            crate::cache::review_families::record(self, &input.scope_id, kind, &record_id)?;
+            crate::families::review_families::record(self, &input.scope_id, kind, &record_id)?;
         let revision = super::super::save::current_revision(&record)?
             .ok_or_else(|| anyhow::anyhow!("the submitted record has no review revision"))?;
         if revision != binding.revision {

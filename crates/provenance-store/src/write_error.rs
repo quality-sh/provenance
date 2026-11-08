@@ -240,6 +240,7 @@ impl WriteError {
                 diagnostics: error.diagnostics.clone(),
             };
         }
+        #[cfg(feature = "host")]
         if let Some(error) = error.downcast_ref::<crate::operations::files::FileAccessRefusal>() {
             return match error {
                 crate::operations::files::FileAccessRefusal::Denied => {

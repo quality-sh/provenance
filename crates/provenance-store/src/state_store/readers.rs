@@ -148,28 +148,11 @@ pub(super) fn read_jsonl_held<T: DeserializeOwned>(
     read_records(store, path)
 }
 
-/// Reads the shard file at `path`; the caller holds the section.
-pub(super) fn read_jsonl_unlocked<T: DeserializeOwned>(path: &Utf8Path) -> anyhow::Result<Vec<T>> {
-    read_records(&disk(path), path)
-}
-
 pub(super) fn read_ideation_landings<T: DeserializeOwned>(
     store: &StateStore,
     path: &Utf8Path,
 ) -> anyhow::Result<Vec<T>> {
     store.state_path_access(path, |held| read_records(held, path))
-}
-
-pub(super) fn read_ideation_landings_unlocked<T: DeserializeOwned>(
-    path: &Utf8Path,
-) -> anyhow::Result<Vec<T>> {
-    read_records(&disk(path), path)
-}
-
-/// A store that reads files with no lock, for a caller that holds the
-/// section. File reads use only the path, so the layout root is not used.
-fn disk(path: &Utf8Path) -> StateStore {
-    StateStore::read_only(ProvenanceLayout::new(path.to_owned()))
 }
 
 fn read_message_shard_lines<T: DeserializeOwned>(
@@ -206,29 +189,17 @@ pub(super) fn read_message_shards(
     })
 }
 
-fn read_message_shards_held(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Vec<Message>> {
+pub(super) fn read_message_shards_held(
+    store: &StateStore,
+    scope: &ScopeId,
+) -> anyhow::Result<Vec<Message>> {
     let rows = read_message_shard_lines(store, message_shard_paths_in(store, scope)?)?;
     ensure_unique_message_ids(&rows)?;
     Ok(rows.into_iter().map(|(message, _)| message).collect())
 }
 
-pub(super) fn read_message_shards_unlocked(
-    layout: &ProvenanceLayout,
-    scope: &ScopeId,
-) -> anyhow::Result<Vec<Message>> {
-    read_message_shards_held(&StateStore::read_only(layout.clone()), scope)
-}
-
-/// Every month shard of the scope's messages, sorted. All message reads
-/// discover their shards here.
-pub fn message_shard_paths(
-    layout: &ProvenanceLayout,
-    scope: &ScopeId,
-) -> anyhow::Result<Vec<Utf8PathBuf>> {
-    message_shard_paths_in(&StateStore::read_only(layout.clone()), scope)
-}
-
 /// Every month shard of the scope's messages that `store` reads, sorted.
+/// All message reads discover their shards here.
 pub fn message_shard_paths_of(
     store: &StateStore,
     scope: &ScopeId,

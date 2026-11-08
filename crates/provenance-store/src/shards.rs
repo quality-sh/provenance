@@ -1,7 +1,7 @@
 use camino::Utf8PathBuf;
 use provenance_core::{NodeType, ScopeId};
 
-use crate::cache::{record_families, ProjectionFamily};
+use crate::families::{record_families, ProjectionFamily};
 use crate::layout::ProvenanceLayout;
 
 /// The canonical record file of one node kind.

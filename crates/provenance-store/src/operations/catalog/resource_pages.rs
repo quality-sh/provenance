@@ -311,7 +311,7 @@ macro_rules! define_record_pages {
     };
 }
 
-crate::cache::record_families!(define_record_pages);
+crate::families::record_families!(define_record_pages);
 fact_page_operation!(
     PageProposalAssertions,
     "page-proposal-assertions",

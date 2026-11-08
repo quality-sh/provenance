@@ -5,13 +5,18 @@
 //! starts with the manifest, one Requirement and one Rule. Live writes make
 //! and change a verification binding of the Rule; stages make and change a
 //! Requirement and a Rule and import a scope, each as one whole set.
+//!
+//! The tests run with and without the `host` feature; without it the store
+//! has no code that can reach the local disk.
 
 use provenance_core::{
     Manifest, RepoPathPrefix, RequirementStatus, RuleSeverity, RuleStatus, Scope, ScopeId,
     SourceType, StableId, VerificationMethod,
 };
 use provenance_macros::verifies;
+#[cfg(feature = "host")]
 use provenance_store::operations::files::RepositoryFiles;
+#[cfg(feature = "host")]
 use provenance_store::publication::with_staged_state_and_source_edit;
 use provenance_store::repository::{Repository, RepositoryIdentity};
 use provenance_store::settings::Settings;
@@ -407,6 +412,8 @@ fn a_section_reads_the_state_again_after_a_moved_base() {
     assert_eq!(bindings[0].file.as_str(), "tests/third.test.ts");
 }
 
+// A source edit changes a working-tree file, so it is a host operation.
+#[cfg(feature = "host")]
 #[test]
 #[verifies("rule_engine_runs_on_any_storage", examples)]
 fn a_source_edit_on_a_memory_repository_needs_the_local_adapter() {

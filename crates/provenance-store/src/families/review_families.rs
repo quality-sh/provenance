@@ -49,8 +49,8 @@ macro_rules! define_review_families {
                 kind: NodeType::$kind,
                 directory: stringify!($field),
                 owner_field: "id",
-                content_fields: super::review_facts::$review.content_fields,
-                lifecycle_fields: super::review_facts::$review.lifecycle_fields,
+                content_fields: crate::families::review_facts::$review.content_fields,
+                lifecycle_fields: crate::families::review_facts::$review.lifecycle_fields,
             },)*
         ];
 
@@ -97,7 +97,7 @@ macro_rules! define_review_families {
     };
 }
 
-crate::cache::family_table::record_family_rows!(define_review_families);
+crate::families::family_table::record_family_rows!(define_review_families);
 
 /// Loads each family at first use, in caller order, and keeps its first record per id.
 /// The index belongs to one read under the repository publication lock.

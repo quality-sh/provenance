@@ -1,38 +1,52 @@
 use crate::layout::ProvenanceLayout;
-use crate::storage::local::{LocalSectionLock, LocalStateStorage};
-use crate::storage::{Atomicity, SectionLock, StateStorage, WriteSet};
+#[cfg(feature = "host")]
+use crate::storage::local::LocalSectionLock;
+use crate::storage::{Atomicity, SectionLock, WriteSet};
+#[cfg(feature = "host")]
 use anyhow::Context;
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
+#[cfg(feature = "host")]
+use camino::Utf8PathBuf;
 use provenance_macros::rule;
 use serde::{de::DeserializeOwned, Serialize};
 
 mod guard;
 mod holders;
+#[cfg(feature = "host")]
 mod read_only;
+#[cfg(feature = "host")]
 mod source_edit;
+#[cfg(feature = "host")]
 mod source_edit_recovery;
 mod staged;
 mod write_permission;
+#[cfg(feature = "host")]
 pub use crate::storage::local::durability::{sync_directory, sync_tree};
+#[cfg(feature = "host")]
 pub use crate::storage::local::{
     clear_publication_marker, recover_pending_publication, write_publication_marker,
     PublicationPhase,
 };
 #[cfg(all(test, unix))]
 use crate::storage::local::{validate_missing_transaction_dir, validated_transaction_dir};
+#[cfg(feature = "host")]
+pub use guard::publication_guard;
 pub(crate) use guard::SectionHandle;
-pub use guard::{publication_guard, with_publication_guard, PublicationGuard};
+pub use guard::{with_publication_guard, PublicationGuard};
 pub use holders::PublicationHeld;
 pub(crate) use holders::{enter, held_here, refuse_if_held, HolderKind};
+#[cfg(feature = "host")]
 pub use read_only::read_only_record_kinds;
+#[cfg(feature = "host")]
 pub(crate) use read_only::with_read_only_validation;
-#[cfg(any(unix, windows))]
+#[cfg(all(feature = "host", any(unix, windows)))]
 pub use source_edit::{with_staged_state_and_source_edit, SourceEditRecoveryFailure};
+#[cfg(feature = "host")]
 pub(crate) use source_edit_recovery::recover_pending_source_edit;
+#[cfg(feature = "host")]
+pub(crate) use staged::with_stage_body;
 pub use staged::LiveAccessDuringStage;
-pub(crate) use staged::{
-    refuse_held_access_during_stage, with_stage_body, with_staged_state, StageLock,
-};
+pub(crate) use staged::{refuse_held_access_during_stage, with_staged_state, StageLock};
 pub(crate) use write_permission::{protect_rows, WritePermissions};
 
 /// Runs `operation` in the publication section of `layout`.
@@ -40,6 +54,7 @@ pub(crate) use write_permission::{protect_rows, WritePermissions};
 /// `operation` gets a store that holds the section. The store has no
 /// repository identity. A second entry on a thread that holds the section
 /// returns [`PublicationHeld`].
+#[cfg(feature = "host")]
 pub fn with_repository_publication<R>(
     layout: &ProvenanceLayout,
     operation: impl FnOnce(&crate::state_store::StateStore) -> anyhow::Result<R>,
@@ -53,6 +68,7 @@ pub fn with_repository_publication<R>(
 
 /// Takes the publication lock of `layout`, runs `check` and recovery, then
 /// `operation`. Only a store that holds the section may call into it again.
+#[cfg(feature = "host")]
 pub(crate) fn with_repository_publication_checked<R>(
     layout: &ProvenanceLayout,
     check: impl FnOnce() -> anyhow::Result<()>,
@@ -96,6 +112,7 @@ fn enter_section<R>(
 }
 
 // Resolve the existing ancestor so planned-state validation creates no paths.
+#[cfg(feature = "host")]
 fn publication_lock_identity(layout: &ProvenanceLayout) -> anyhow::Result<String> {
     let absolute = std::path::absolute(layout.root())?;
     for ancestor in absolute.ancestors() {
@@ -120,6 +137,14 @@ fn publication_lock_identity(layout: &ProvenanceLayout) -> anyhow::Result<String
         "repository path has no existing ancestor: {}",
         layout.root()
     )
+}
+
+/// The key of the section of `layout`. With no file system to resolve the
+/// root against, the key is the lock path of the layout as given.
+#[cfg(not(feature = "host"))]
+#[allow(clippy::unnecessary_wraps)]
+fn publication_lock_identity(layout: &ProvenanceLayout) -> anyhow::Result<String> {
+    Ok(layout.publication_lock_path().to_string())
 }
 
 impl crate::state_store::StateStore {
@@ -224,6 +249,7 @@ impl crate::state_store::StateStore {
         let Some(stage) = self.stage() else {
             anyhow::bail!("only a staged store deletes the keys below {directory}");
         };
+        #[cfg(test)]
         if stage.reads_files() {
             if directory.exists() {
                 std::fs::remove_dir_all(directory)?;
@@ -256,8 +282,10 @@ impl crate::state_store::StateStore {
             writes
                 .ensure_disjoint()
                 .map_err(crate::write_error::publish_failure)?;
+            #[cfg(test)]
             if stage.reads_files() {
-                return LocalStateStorage::new(self.layout.clone())
+                use crate::storage::StateStorage as _;
+                return crate::storage::local::LocalStateStorage::new(self.layout.clone())
                     .publish(writes)
                     .map(drop)
                     .map_err(crate::write_error::publish_failure);

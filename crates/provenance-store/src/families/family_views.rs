@@ -2,12 +2,12 @@
 
 macro_rules! project_families {
     ($consumer:ident; $argument:ident; $($rows:tt)*) => {
-        $crate::cache::family_views::project_families!(
+        $crate::families::family_views::project_families!(
             @project $consumer [$argument;]; $($rows)*
         );
     };
     ($consumer:ident; $($rows:tt)*) => {
-        $crate::cache::family_views::project_families!(
+        $crate::families::family_views::project_families!(
             @project $consumer []; $($rows)*
         );
     };
@@ -63,14 +63,14 @@ macro_rules! project_families {
 
 macro_rules! record_families {
     ($consumer:ident) => {
-        $crate::cache::family_table::record_family_rows!(
-            $crate::cache::family_views::project_families,
+        $crate::families::family_table::record_family_rows!(
+            $crate::families::family_views::project_families,
             $consumer
         );
     };
     ($consumer:ident, $argument:ident) => {
-        $crate::cache::family_table::record_family_rows!(
-            $crate::cache::family_views::project_families,
+        $crate::families::family_table::record_family_rows!(
+            $crate::families::family_views::project_families,
             $consumer,
             $argument
         );

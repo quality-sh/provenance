@@ -54,7 +54,7 @@ impl GuardedStore<'_> {
         self.store.list_requirements(scope)
     }
 
-    crate::cache::record_families!(define_guarded_family_readers);
+    crate::families::record_families!(define_guarded_family_readers);
 
     pub fn active_verification_bindings(
         &self,

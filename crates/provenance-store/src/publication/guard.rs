@@ -115,6 +115,7 @@ pub fn with_publication_guard<R>(
 /// runs before the caller sees the guard. The guard adds no holder entry: it
 /// can move to another thread, and a synchronous section on any thread then
 /// waits for it.
+#[cfg(feature = "host")]
 pub async fn publication_guard(repository: &Repository) -> anyhow::Result<PublicationGuard> {
     let key = super::publication_lock_identity(repository.layout())?;
     // The lock waits on the blocking pool, so a stage body that blocks on this guard would

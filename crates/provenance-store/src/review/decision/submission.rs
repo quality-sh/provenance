@@ -31,7 +31,7 @@ impl StateStore {
                 held.manifest()?.scopes.iter().any(|s| s.id == scope),
                 "review scope is not in the manifest"
             );
-            let record = crate::cache::review_families::record(
+            let record = crate::families::review_families::record(
                 held,
                 &scope,
                 input.record_kind,
@@ -50,7 +50,7 @@ impl StateStore {
         input: SubmitRecordReview,
     ) -> anyhow::Result<CycleEntry> {
         let scope = input.scope_id.clone();
-        let record = crate::cache::review_families::record(
+        let record = crate::families::review_families::record(
             self,
             &scope,
             input.record_kind,

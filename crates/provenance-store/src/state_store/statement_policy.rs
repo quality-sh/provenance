@@ -31,10 +31,13 @@ impl std::error::Error for StatementWriteError {}
 /// Prevents direct statement writes that have deterministic ASD-STE100 violations.
 #[rule("rule_ste_direct_statement_write_gate")]
 pub(super) fn ensure_statement_is_writable(
-    layout: &crate::layout::ProvenanceLayout,
+    store: &super::StateStore,
     statement: &str,
 ) -> Result<(), StatementWriteError> {
-    let report = crate::statement_analysis::check_project_statement(layout, statement);
+    let report = crate::statement_analysis::check_statement(
+        statement,
+        store.project_dictionary().as_deref(),
+    );
     if report.findings.is_empty() {
         return Ok(());
     }

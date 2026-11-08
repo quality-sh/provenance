@@ -38,7 +38,7 @@ macro_rules! define_record_lists {
     };
 }
 
-crate::cache::record_families!(define_record_lists);
+crate::families::record_families!(define_record_lists);
 
 scoped_list!(
     ListVerificationRuns,

@@ -28,7 +28,7 @@ pub fn test_scan() -> Option<Vec<provenance_scanner::FileScan>> {
     SCAN.with(|scan| scan.borrow().clone())
 }
 
-#[cfg(not(test))]
+#[cfg(all(not(test), feature = "host"))]
 pub const fn test_scan() -> Option<Vec<provenance_scanner::FileScan>> {
     None
 }

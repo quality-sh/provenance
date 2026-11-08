@@ -7,16 +7,55 @@ use provenance_core::model::projection_row::ColumnValue;
 use provenance_core::model::ProjectionRow;
 use provenance_macros::rule;
 use serde::Serialize;
+use std::sync::OnceLock;
+
+const RECORD_BYTES: usize = 65_536;
+const RESOURCE_RECORD_BYTES: usize = 1_048_576 - 16_384;
+
+// The projection pages read with the same budgets.
+#[cfg(feature = "host")]
+const _: () = assert!(
+    RECORD_BYTES == crate::cache::read::page::RECORD_BYTES
+        && RESOURCE_RECORD_BYTES == crate::cache::read::page::RESOURCE_RECORD_BYTES
+);
 
 /// The shared resource row and serialized page-item budget.
 pub const fn resource_record_bytes() -> usize {
-    crate::cache::read::page::RESOURCE_RECORD_BYTES
+    RESOURCE_RECORD_BYTES
 }
 
 /// The canonical row budget the shared query engine enforces, which the
 /// discussion page readers also apply to messages.
 pub const fn record_bytes() -> usize {
-    crate::cache::read::page::RECORD_BYTES
+    RECORD_BYTES
+}
+
+/// Counts the bytes that the supported read gives a REAL column:
+/// `length(CAST(real AS BLOB))` in the SQLite of the projection. The host
+/// answers with libsqlite3, and a Worker with the SQL of its Durable Object.
+pub trait RealBytes: Send + Sync + std::fmt::Debug {
+    /// The byte count of `real` as the SQLite of the projection casts it.
+    fn of(&self, real: f64) -> anyhow::Result<usize>;
+}
+
+static REAL_BYTES: OnceLock<Box<dyn RealBytes>> = OnceLock::new();
+
+/// Sets the REAL byte counter of this process, before the first write that
+/// counts a REAL column. Returns `false`, and keeps the first counter, when a
+/// counter is already set. With the `host` feature, libsqlite3 is the counter
+/// when none is set.
+pub fn set_real_bytes(counter: Box<dyn RealBytes>) -> bool {
+    REAL_BYTES.set(counter).is_ok()
+}
+
+fn real_bytes(real: f64) -> anyhow::Result<usize> {
+    #[cfg(feature = "host")]
+    let counter = REAL_BYTES.get_or_init(|| Box::new(SqliteRealBytes));
+    #[cfg(not(feature = "host"))]
+    let counter = REAL_BYTES.get().ok_or_else(|| {
+        anyhow::anyhow!("no REAL byte counter is set; the host sets one with set_real_bytes")
+    })?;
+    counter.of(real)
 }
 
 /// The row or payload byte accounting one supported read applies to a kind.
@@ -41,54 +80,62 @@ fn column_bytes(value: &ColumnValue) -> anyhow::Result<usize> {
         ColumnValue::Null => Ok(0),
         ColumnValue::Text(text) => Ok(text.len()),
         ColumnValue::Integer(integer) => Ok(integer.to_string().len()),
-        ColumnValue::Real(real) => sqlite_real_bytes(*real),
+        ColumnValue::Real(real) => real_bytes(*real),
     }
 }
 
-fn sqlite_real_bytes(real: f64) -> anyhow::Result<usize> {
-    use libsqlite3_sys as sqlite;
+/// The libsqlite3 answer: the same REAL-to-BLOB conversion as the projection.
+#[cfg(feature = "host")]
+#[derive(Debug)]
+struct SqliteRealBytes;
 
-    let mut connection = std::ptr::null_mut();
-    let mut statement = std::ptr::null_mut();
-    // Use the same REAL-to-BLOB conversion as the supported read. Formatting
-    // the number in Rust, or even with SQLite printf, can give another size.
-    let result = unsafe {
-        (|| {
-            anyhow::ensure!(
-                sqlite::sqlite3_open(c":memory:".as_ptr(), &raw mut connection)
-                    == sqlite::SQLITE_OK,
-                "cannot open SQLite for REAL byte accounting"
-            );
-            anyhow::ensure!(
-                sqlite::sqlite3_prepare_v2(
-                    connection,
-                    c"SELECT CAST(? AS BLOB)".as_ptr(),
-                    -1,
-                    &raw mut statement,
-                    std::ptr::null_mut(),
-                ) == sqlite::SQLITE_OK,
-                "cannot prepare SQLite REAL byte accounting"
-            );
-            anyhow::ensure!(
-                sqlite::sqlite3_bind_double(statement, 1, real) == sqlite::SQLITE_OK,
-                "cannot bind SQLite REAL for byte accounting"
-            );
-            anyhow::ensure!(
-                sqlite::sqlite3_step(statement) == sqlite::SQLITE_ROW,
-                "cannot read SQLite REAL byte count"
-            );
-            Ok(usize::try_from(sqlite::sqlite3_column_bytes(statement, 0))?)
-        })()
-    };
-    unsafe {
-        if !statement.is_null() {
-            sqlite::sqlite3_finalize(statement);
+#[cfg(feature = "host")]
+impl RealBytes for SqliteRealBytes {
+    fn of(&self, real: f64) -> anyhow::Result<usize> {
+        use libsqlite3_sys as sqlite;
+
+        let mut connection = std::ptr::null_mut();
+        let mut statement = std::ptr::null_mut();
+        // Use the same REAL-to-BLOB conversion as the supported read. Formatting
+        // the number in Rust, or even with SQLite printf, can give another size.
+        let result = unsafe {
+            (|| {
+                anyhow::ensure!(
+                    sqlite::sqlite3_open(c":memory:".as_ptr(), &raw mut connection)
+                        == sqlite::SQLITE_OK,
+                    "cannot open SQLite for REAL byte accounting"
+                );
+                anyhow::ensure!(
+                    sqlite::sqlite3_prepare_v2(
+                        connection,
+                        c"SELECT CAST(? AS BLOB)".as_ptr(),
+                        -1,
+                        &raw mut statement,
+                        std::ptr::null_mut(),
+                    ) == sqlite::SQLITE_OK,
+                    "cannot prepare SQLite REAL byte accounting"
+                );
+                anyhow::ensure!(
+                    sqlite::sqlite3_bind_double(statement, 1, real) == sqlite::SQLITE_OK,
+                    "cannot bind SQLite REAL for byte accounting"
+                );
+                anyhow::ensure!(
+                    sqlite::sqlite3_step(statement) == sqlite::SQLITE_ROW,
+                    "cannot read SQLite REAL byte count"
+                );
+                Ok(usize::try_from(sqlite::sqlite3_column_bytes(statement, 0))?)
+            })()
+        };
+        unsafe {
+            if !statement.is_null() {
+                sqlite::sqlite3_finalize(statement);
+            }
+            if !connection.is_null() {
+                sqlite::sqlite3_close(connection);
+            }
         }
-        if !connection.is_null() {
-            sqlite::sqlite3_close(connection);
-        }
+        result
     }
-    result
 }
 
 /// Refuses the mutation before publication when any supported read would
@@ -186,7 +233,7 @@ macro_rules! define_family_budgets {
     };
 }
 
-crate::cache::record_families!(define_family_budgets);
+crate::families::record_families!(define_family_budgets);
 
 impl ReadBudget for provenance_core::Thread {
     fn read_bytes(&self) -> anyhow::Result<usize> {
