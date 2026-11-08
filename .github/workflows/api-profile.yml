@@ -17,6 +17,7 @@ on:
       - "Cargo.lock"
       - ".cargo/**"
       - ".github/workflows/api-profile.yml"
+      - ".github/actions/setup-inferno/**"
       - "tools/profile/**"
       - "tools/api-latency/**"
   push:
@@ -27,6 +28,7 @@ on:
       - "Cargo.lock"
       - ".cargo/**"
       - ".github/workflows/api-profile.yml"
+      - ".github/actions/setup-inferno/**"
       - "tools/profile/**"
       - "tools/api-latency/**"
   workflow_dispatch:
