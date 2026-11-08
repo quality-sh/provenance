@@ -11,13 +11,13 @@ macro_rules! family_reader {
     (Rules, $record:ty, $path:ident, $list:ident) => {
         pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
             let path = shards::$path(&self.layout, scope);
-            validate_rule_archives(shared(&path, || read_jsonl(self, &path))?)
+            validate_rule_archives(shared(self, &path, || read_jsonl(self, &path))?)
         }
     };
     ($variant:ident, $record:ty, $path:ident, $list:ident) => {
         pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
             let path = shards::$path(&self.layout, scope);
-            shared(&path, || read_jsonl(self, &path))
+            shared(self, &path, || read_jsonl(self, &path))
         }
     };
 }

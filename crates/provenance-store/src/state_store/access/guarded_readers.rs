@@ -1,3 +1,5 @@
+use super::super::read_fence::{FencedStore, ReadFence};
+use super::super::Access;
 use super::GuardedStore;
 use crate::repository::Repository;
 use crate::state_store::StateStore;
@@ -114,16 +116,9 @@ impl GuardedStore<'_> {
 }
 
 impl GuardedStore<'_> {
-    /// Runs `body` inside a read fence of `directories` below the scope
-    /// directory of `scope`. A read outside them fails the result.
-    pub(crate) fn fenced<R>(
-        &self,
-        scope: &ScopeId,
-        directories: Vec<&'static str>,
-        body: impl FnOnce() -> anyhow::Result<R>,
-    ) -> anyhow::Result<R> {
-        let scope_dir = self.store.layout.scopes_dir().join(scope.as_str());
-        crate::state_store::with_read_fence(scope_dir, directories, body)
+    /// The read fence of this store, if it is a fenced store.
+    pub(in crate::state_store) fn read_fence(&self) -> Option<&ReadFence> {
+        self.store.read_fence()
     }
 }
 
@@ -142,6 +137,16 @@ impl ViewStore {
             Arc::clone(repository.section_lock()),
             repository.has_local_storage(),
         ))
+    }
+
+    /// This store, with its reads fenced to `directories` below the scope
+    /// directory of `scope`.
+    pub(crate) fn fenced(mut self, scope: &ScopeId, directories: Vec<&'static str>) -> FencedStore {
+        let scope_dir = self.0.layout.scopes_dir().join(scope.as_str());
+        if let Access::View(reads) = &mut self.0.access {
+            reads.fence = Some(ReadFence::new(scope_dir, directories));
+        }
+        FencedStore(GuardedStore::of_view(self))
     }
 }
 

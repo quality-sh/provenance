@@ -9,8 +9,8 @@
 //! bytes did not change. The live-update watcher reads one view of the
 //! state, which no write changes, so it needs no guard and no check.
 //!
-//! A copy is a read of its shard, so it passes through the read fence of
-//! the thread like a parse does.
+//! A copy is a read of its shard through the store that asks for it, so it
+//! passes through the read fence of a fenced store like a parse does.
 
 use camino::{Utf8Path, Utf8PathBuf};
 use std::any::{Any, TypeId};
@@ -42,6 +42,7 @@ pub fn with_shared_parses<R>(body: impl FnOnce() -> R) -> R {
 /// result of `parse`. Inside [`with_shared_parses`], a parse that succeeds
 /// is shared.
 pub(super) fn shared<T: Clone + 'static>(
+    store: &super::StateStore,
     path: &Utf8Path,
     parse: impl FnOnce() -> anyhow::Result<Vec<T>>,
 ) -> anyhow::Result<Vec<T>> {
@@ -55,7 +56,7 @@ pub(super) fn shared<T: Clone + 'static>(
             .cloned()
     });
     if let Some(records) = hit {
-        super::read_fence::check(path)?;
+        store.check_read(path)?;
         return Ok(records);
     }
     let records = parse()?;
@@ -72,5 +73,5 @@ pub(super) fn read_jsonl_shared<T: serde::de::DeserializeOwned + Clone + 'static
     store: &super::StateStore,
     path: &Utf8Path,
 ) -> anyhow::Result<Vec<T>> {
-    shared(path, || super::readers::read_jsonl(store, path))
+    shared(store, path, || super::readers::read_jsonl(store, path))
 }

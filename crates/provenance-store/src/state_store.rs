@@ -24,7 +24,6 @@ mod requirement_reviews;
 mod resolution_decisions;
 mod rule_writers;
 mod scope_ingestion;
-pub(crate) use read_fence::with_read_fence;
 mod shared_parses;
 pub(crate) use shared_parses::with_shared_parses;
 mod shaping_writers;
@@ -63,6 +62,7 @@ pub use inputs::{
     UpdateQuestionInput,
 };
 pub use proposal_surfaces::{ProposalDemand, ProposalSurfaceReason, SurfacedProposal, TopicClaim};
+pub(crate) use read_fence::FencedStore;
 pub use requirement_reviews::{
     requirement_statement_changes, RequirementReviewInput, RequirementStatementChange,
 };
@@ -124,8 +124,9 @@ enum Access {
     /// Reads with no lock and refuses every write.
     ReadOnly,
     /// Reads one view of canonical state with no lock and no disk access,
-    /// and refuses every write and stage.
-    View(std::sync::Arc<crate::storage::StateView>),
+    /// and refuses every write and stage. A fenced view store reads only
+    /// below the directories of its fence.
+    View(read_fence::ViewReads),
 }
 
 #[derive(Clone, Debug)]

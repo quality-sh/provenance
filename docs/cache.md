@@ -36,15 +36,24 @@ one instance. The database can be deleted and rebuilt with
 ## Catch-up
 
 Catch-up is the steady-state refresh. It keeps no journal. A pass runs
-under the publication guard and reads canonical state in place. There is
-one hash unit per manifest scope, which is the scope's directory. There is
-also one global unit, which is every regular canonical file under `state/`
-outside `scopes/`: the manifest and the dictionary. The pass reads the bytes
-of each unit in sorted path order. It ignores the temporary `.tmp*` files
-that an interrupted atomic write leaves beside a shard. After it reads the
+under the publication guard. It reads canonical state through the storage
+port as one `StateView`: the view of the section that the guard holds, or
+a view that the adapter reads under the guard. A view holds the manifest
+and each shard of a scope, keyed by the path below `state/`. Derived state
+under `.provenance/cache` is not in the view.
+
+There is one hash unit per manifest scope: the keys below the scope's
+directory. There is also one global unit: every other key, which is the
+manifest. The pass hashes the keys of each unit in key order. The pass
+parses the same view, so the digests that it stores are always the
+digests of the bytes that it parsed. A file that is not canonical state,
+such as a stray note or a `.tmp*` file of an interrupted write, is not in
+the view and moves no digest.
+
+`refuse_stale` reads with no lock and no view. It hashes the files at the
+same keys, so it gets the same digests as the view. After it reads the
 bytes, it lists the files again. A changed file list fails the read and
-names an added or removed path. Catch-up and `refuse_stale` use this same
-check.
+names an added or removed path.
 
 Each unit has two digests. The stored digest frames the relative path and
 the exact bytes of each file. The content digest frames the relative path
@@ -73,13 +82,19 @@ directory that its reader reads. Each family names the shards that its
 reader reads in `cache/materialize/family_inputs.rs`. The directories come
 from the shard paths in `shards.rs`. For example, the Discussion reader
 reads the threads directory and the directories of the six kinds that can
-be a parent. Each family reader runs inside a read fence of its input
-directories. Every state read passes through one check, and a read outside
-the fence fails the parse. So a reader that starts to read a new directory
-fails until its family names a shard in that directory. A changed file in
-no input directory, or at the top of the scope directory, parses every
-family. A unit with no stored file digests, or a family with no digest row,
-also parses every family.
+be a parent.
+
+A family reader gets only a `FencedStore`: a store over the view of the
+pass that reads only the input directories of its family. The relation
+rows get one for the directories of the owner kinds. The reader has no
+other store. Each read of a fenced store passes through one check. A read
+outside its directories fails the parse, also when the reader drops the
+error. So a reader that starts to read a new directory fails until its
+family names a shard in that directory.
+
+A changed file in no input directory parses every family. A unit with no
+stored file digests, or a family with no digest row, also parses every
+family.
 
 A parsed family whose content digest moved writes only the rows that differ
 from its stored rows. A failed or ambiguous load deletes the family and
@@ -90,14 +105,10 @@ A new scope loads. The projection keeps the content digest and record count
 for each family and scope. So the revision digest is reassembled from
 stored rows without parsing a shard.
 
-After parsing a changed unit, the pass hashes it again. If the two hashes
-match, the pass can use the parsed records and their digest. If an editor
-that does not take the lock changes the bytes, the pass retries the unit
-and parses every family. After three failed attempts, the pass refuses and
-commits nothing. A read then answers at the stored serial with
-`catch_up_failed` and the error `canonical state changed during catch-up
-under <unit>`. A rebuild uses the same hash, parse, and hash-again step in
-place.
+An editor that does not take the lock can change a file after the pass
+reads its view. The pass does not see that change. It stores the digests
+of the view, so the next pass sees the changed bytes and parses them. A
+rebuild reads one view in the same way.
 
 A rebuild records `VALIDATION_VERSION` in `projection_validation`. A
 catch-up pass rebuilds when the stored version differs from this build's
@@ -121,7 +132,7 @@ directory, which is an input directory of the proposal cards. This relies
 on the scope-locality invariant: a scope's rows derive only from files in
 that scope's directory or in the global unit. An instrumented rebuild
 checks the invariant by recording every read and asserting each one lies
-inside the hashed units. Inside a scope, the read fence keeps each family
+inside the hashed units. Inside a scope, the fenced store keeps each family
 reader to its input directories.
 
 Every projection write, rebuild and catch-up alike, holds an owned

@@ -104,7 +104,7 @@ impl StateStore {
                 local,
             },
             layout,
-            access: Access::View(view),
+            access: Access::View(super::read_fence::ViewReads { view, fence: None }),
             record_stamp: RecordStamp::ResolveFromRepository,
         }
     }

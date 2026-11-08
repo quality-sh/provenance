@@ -103,22 +103,18 @@ async fn fresh_cache_initialization_preserves_canonical_services_files() {
 }
 
 #[tokio::test]
-async fn full_rebuild_preserves_canonical_services_files_before_a_later_failure() {
+async fn full_rebuild_skips_and_preserves_services_files_outside_canonical_state() {
     let (_directory, layout, _scope) = empty_layout();
     add_linked_scope(&layout);
     let canaries = seed_canaries(&layout);
 
-    let error = materialize_state(&open(&layout)).await.unwrap_err();
+    materialize_state(&open(&layout)).await.unwrap();
 
     canaries.assert_unchanged();
-    assert!(
-        error.to_string().contains("unsupported state entry"),
-        "{error}"
-    );
 }
 
 #[tokio::test]
-async fn existing_cache_catch_up_preserves_canonical_services_files_before_a_later_failure() {
+async fn existing_cache_catch_up_skips_and_preserves_services_files_outside_canonical_state() {
     let (_directory, layout, _scope) = empty_layout();
     materialize_state(&open(&layout)).await.unwrap();
     let cache = open_cache(&layout).await.unwrap();
@@ -130,13 +126,9 @@ async fn existing_cache_catch_up_preserves_canonical_services_files_before_a_lat
     add_linked_scope(&layout);
     let canaries = seed_canaries(&layout);
 
-    let error = catch_up_state(&open(&layout)).await.unwrap_err();
+    catch_up_state(&open(&layout)).await.unwrap();
 
     canaries.assert_unchanged();
-    assert!(
-        error.to_string().contains("unsupported state entry"),
-        "{error}"
-    );
 }
 
 #[tokio::test]

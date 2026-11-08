@@ -7,7 +7,7 @@
 //! state from the assertions and the dispositions. A Discussion is checked
 //! against its Thread, its Messages and its parent record. Each family names
 //! the shards that its reader reads, and the directories come from the
-//! shard paths in [`crate::shards`]. The reader runs inside a read fence of
+//! shard paths in [`crate::shards`]. The reader gets a store fenced to
 //! these directories, so a read outside them fails the parse.
 
 use crate::cache::ProjectionFamily;
@@ -74,7 +74,7 @@ fn inputs(family: ProjectionFamily) -> Vec<Input> {
 
 /// The directories below a scope directory that the reader of `family`
 /// reads.
-pub fn input_directories(family: ProjectionFamily) -> Vec<&'static str> {
+pub(super) fn input_directories(family: ProjectionFamily) -> Vec<&'static str> {
     let directories: BTreeSet<_> = inputs(family).into_iter().map(Input::directory).collect();
     directories.into_iter().collect()
 }

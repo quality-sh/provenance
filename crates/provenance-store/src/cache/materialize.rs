@@ -12,7 +12,6 @@ mod validation;
 
 pub use catch_up::catch_up_with_guard;
 pub use catch_up::{catch_up_state, CatchUpReport};
-pub use family_inputs::input_directories;
 pub use record_rows::SEARCH_TEXT;
 pub use units::unit_stored_digest;
 pub use units::{scope_ids, unit_digest, units_for, Unit, UnitHashError};
@@ -123,8 +122,12 @@ async fn rebuild_rows(
         let bytes = reader
             .hash(&unit, None)?
             .expect("a unit with no stored pair has changed");
-        let read = units::files_read(&bytes, &std::collections::BTreeMap::new())?;
-        let (records, read) = reader.scope(scope, read, true)?;
+        let read = units::files_read(
+            reader.state_dir(),
+            &bytes,
+            &std::collections::BTreeMap::new(),
+        )?;
+        let records = reader.scope(scope, &read, true)?;
         for records in &records.families {
             records_loaded +=
                 family_rows::load_rows(&mut tx, records.family, &records.bytes).await?;

@@ -6,7 +6,7 @@
 
 use super::batch::{text, Rows, Table};
 use crate::cache::{serde_name, ProjectionFamily};
-use crate::state_store::GuardedStore;
+use crate::state_store::{FencedStore, GuardedStore};
 use provenance_core::model::relations::{link_rows_of, rows_of, RelationRow};
 use provenance_core::{NodeType, ScopeId};
 use sqlx::{Sqlite, Transaction};
@@ -22,19 +22,19 @@ pub(super) const OWNERS: [ProjectionFamily; 6] = [
     ProjectionFamily::Questions,
 ];
 
-/// The rows of one scope, in the order the declarations list them. The
-/// reads run inside a read fence of the directories of the owner families.
-pub(super) fn scope_rows(
-    store: &GuardedStore<'_>,
-    scope: &ScopeId,
-) -> anyhow::Result<Vec<RelationRow>> {
+/// The directories that the readers of the owner families read.
+pub(super) fn input_directories() -> Vec<&'static str> {
     let directories: BTreeSet<_> = OWNERS
         .into_iter()
         .flat_map(super::family_inputs::input_directories)
         .collect();
-    store.fenced(scope, directories.into_iter().collect(), || {
-        owner_rows(store, scope)
-    })
+    directories.into_iter().collect()
+}
+
+/// The rows of one scope, in the order the declarations list them. The
+/// store is fenced to [`input_directories`].
+pub(super) fn scope_rows(store: FencedStore, scope: &ScopeId) -> anyhow::Result<Vec<RelationRow>> {
+    store.read(|store| owner_rows(store, scope))
 }
 
 fn owner_rows(store: &GuardedStore<'_>, scope: &ScopeId) -> anyhow::Result<Vec<RelationRow>> {

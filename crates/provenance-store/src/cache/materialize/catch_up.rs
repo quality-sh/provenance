@@ -115,7 +115,7 @@ pub async fn catch_up_with_guard(
         };
         catch_up_scope(&mut tx, &reader, pass, &mut content, &mut report).await?;
     }
-    report.units_hashed = reader.units_hashed;
+    report.units_hashed = reader.units_hashed();
 
     if !changed {
         drop(tx);
@@ -194,7 +194,7 @@ async fn load_stored_digests(
 struct ScopePass<'a> {
     scope: &'a ScopeId,
     stored: Option<&'a UnitValue>,
-    bytes: &'a units::UnitBytes,
+    bytes: &'a units::UnitBytes<'a>,
 }
 
 /// Parses the families of one scope unit that its changed files can change,
@@ -213,14 +213,14 @@ async fn catch_up_scope(
         bytes,
     } = pass;
     let name = Unit::Scope(scope.clone()).name();
-    let read = units::files_read(bytes, &stored_files(tx, &name).await?)?;
+    let read = units::files_read(reader.state_dir(), bytes, &stored_files(tx, &name).await?)?;
     // A unit with no stored pair, or a scope with a family that has no
     // digest row, parses every family, as a rebuild does.
     let all = stored.is_none()
         || ProjectionFamily::ALL.into_iter().any(|family| {
             !content.contains_key(&(scope.as_str().to_owned(), family.family_name().to_owned()))
         });
-    let (records, read) = reader.scope(scope, read, all)?;
+    let records = reader.scope(scope, &read, all)?;
     rederive_scope(tx, &records, scope, content, report).await?;
     stamp::upsert_unit_row(tx, &name, &read.digests).await?;
     stamp::replace_file_rows(tx, &name, &read.files).await

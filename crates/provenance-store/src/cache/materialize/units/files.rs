@@ -2,6 +2,7 @@
 //! write changed.
 
 use super::{content_digest, frame, UnitBytes, UnitDigests, UnitHashError};
+use camino::Utf8Path;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// The stored digest and the content digest of one file.
@@ -23,29 +24,31 @@ pub(in crate::cache::materialize) struct UnitRead {
 }
 
 /// The digests of one unit whose bytes are `read`, with the digests of
-/// each file. `known_files` are the file digests a previous pass stored:
-/// only a file whose stored digest moved gets its content hashed again.
+/// each file. The keys of `read` are below `state_dir`. `known_files` are
+/// the file digests a previous pass stored: only a file whose stored digest
+/// moved gets its content hashed again.
 pub(in crate::cache::materialize) fn files_read(
-    read: &UnitBytes,
+    state_dir: &Utf8Path,
+    read: &UnitBytes<'_>,
     known_files: &BTreeMap<String, FileDigest>,
 ) -> Result<UnitRead, UnitHashError> {
     let mut files = BTreeMap::new();
     let mut changed = BTreeSet::new();
     let mut content = Vec::new();
-    for ((relative, path), bytes) in read.files.iter().zip(&read.contents) {
+    for (key, bytes) in &read.entries {
         let stored = crate::canonical_digest::digest(bytes);
-        let file = match known_files.get(relative) {
+        let file = match known_files.get(*key) {
             Some(file) if file.stored == stored => file.clone(),
             _ => {
-                changed.insert(relative.clone());
+                changed.insert((*key).to_owned());
                 FileDigest {
-                    content: content_digest(path, bytes)?,
+                    content: content_digest(&state_dir.join(key), bytes)?,
                     stored,
                 }
             }
         };
-        frame(&mut content, relative, file.content.as_bytes());
-        files.insert(relative.clone(), file);
+        frame(&mut content, key, file.content.as_bytes());
+        files.insert((*key).to_owned(), file);
     }
     changed.extend(
         known_files

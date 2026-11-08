@@ -24,7 +24,6 @@ pub use gaps::*;
 pub use health::*;
 pub use impact::*;
 pub(crate) use materialize::catch_up_with_guard;
-pub(crate) use materialize::input_directories;
 pub(crate) use materialize::unit_stored_digest;
 pub use materialize::{
     catch_up_state, materialize_empty_state, materialize_state, scope_ids, unit_digest, units_for,

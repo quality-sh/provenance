@@ -32,7 +32,7 @@ impl StateStore {
         scope: &ScopeId,
     ) -> anyhow::Result<Vec<IdeationLandingBatch>> {
         let path = shards::ideation_landings_path(&self.layout, scope);
-        super::shared_parses::shared(&path, || read_ideation_landings(self, &path))
+        super::shared_parses::shared(self, &path, || read_ideation_landings(self, &path))
     }
 
     pub fn land_ideation_batch(
