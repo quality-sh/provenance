@@ -1,0 +1,15 @@
+{
+  "base": "HEAD",
+  "files_changed": 0,
+  "has_more": false,
+  "head": "HEAD",
+  "limit": 50,
+  "sites": [],
+  "summary": {
+    "gone": 0,
+    "moved": 0,
+    "total_sites": 0,
+    "touched": 0,
+    "untouched": 0
+  }
+}

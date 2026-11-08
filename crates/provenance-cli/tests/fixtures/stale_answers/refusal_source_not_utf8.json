@@ -1,0 +1,5 @@
+{
+  "code": 1,
+  "stderr": "Error: {\"error\":{\"kind\":\"read_failed\"},\"meta\":{}}\n",
+  "stdout": null
+}
