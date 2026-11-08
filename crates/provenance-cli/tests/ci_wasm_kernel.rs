@@ -13,8 +13,12 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
+/// The workflow text with `\n` line ends, as a Windows checkout can have
+/// `\r\n`.
 fn workflow() -> String {
-    fs::read_to_string(workspace_root().join(".github/workflows/ci.yml")).unwrap()
+    fs::read_to_string(workspace_root().join(".github/workflows/ci.yml"))
+        .unwrap()
+        .replace("\r\n", "\n")
 }
 
 /// The text of one top-level job, from its key to the next job key.
