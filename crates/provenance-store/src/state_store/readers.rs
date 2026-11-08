@@ -137,7 +137,7 @@ pub fn read_jsonl<T: DeserializeOwned>(
     store: &StateStore,
     path: &Utf8Path,
 ) -> anyhow::Result<Vec<T>> {
-    store.state_path_access(path, || read_records(store, path))
+    store.state_path_access(path, |held| read_records(held, path))
 }
 
 /// Reads the shard at `path` through `store`, which holds the section.
@@ -157,7 +157,7 @@ pub(super) fn read_ideation_landings<T: DeserializeOwned>(
     store: &StateStore,
     path: &Utf8Path,
 ) -> anyhow::Result<Vec<T>> {
-    store.state_path_access(path, || read_records(store, path))
+    store.state_path_access(path, |held| read_records(held, path))
 }
 
 pub(super) fn read_ideation_landings_unlocked<T: DeserializeOwned>(
@@ -200,8 +200,8 @@ pub(super) fn read_message_shards(
     layout: &ProvenanceLayout,
     scope: &ScopeId,
 ) -> anyhow::Result<Vec<Message>> {
-    store.state_path_access(&shards::threads_path(layout, scope), || {
-        read_message_shards_held(store, scope)
+    store.state_path_access(&shards::threads_path(layout, scope), |held| {
+        read_message_shards_held(held, scope)
     })
 }
 
@@ -225,6 +225,14 @@ pub fn message_shard_paths(
     scope: &ScopeId,
 ) -> anyhow::Result<Vec<Utf8PathBuf>> {
     message_shard_paths_in(&StateStore::read_only(layout.clone()), scope)
+}
+
+/// Every month shard of the scope's messages that `store` reads, sorted.
+pub fn message_shard_paths_of(
+    store: &StateStore,
+    scope: &ScopeId,
+) -> anyhow::Result<Vec<Utf8PathBuf>> {
+    message_shard_paths_in(store, scope)
 }
 
 fn message_shard_paths_in(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Vec<Utf8PathBuf>> {

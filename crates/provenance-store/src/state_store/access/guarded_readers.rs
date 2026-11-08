@@ -1,8 +1,7 @@
 use super::GuardedStore;
-use crate::layout::ProvenanceLayout;
-use crate::repository::RepositoryIdentity;
+use crate::repository::Repository;
 use crate::state_store::StateStore;
-use crate::storage::{StateStorage, StateView};
+use crate::storage::StateView;
 use provenance_core::{
     ImplementationBinding, Manifest, ProposalCard, Requirement, ScopeId, VerificationBinding,
 };
@@ -133,14 +132,16 @@ impl GuardedStore<'_> {
 pub struct ViewStore(StateStore);
 
 impl ViewStore {
-    /// A store over `view`, a view of the canonical state of `layout`.
-    pub fn new(
-        identity: RepositoryIdentity,
-        layout: ProvenanceLayout,
-        view: Arc<StateView>,
-        storage: Arc<dyn StateStorage>,
-    ) -> Self {
-        Self(StateStore::over_view(identity, layout, view, storage))
+    /// A store over `view`, a view of the canonical state of `repository`.
+    pub fn new(repository: &Repository, view: Arc<StateView>) -> Self {
+        Self(StateStore::over_view(
+            repository.identity().clone(),
+            repository.layout().clone(),
+            view,
+            Arc::clone(repository.storage()),
+            Arc::clone(repository.section_lock()),
+            repository.has_local_storage(),
+        ))
     }
 }
 

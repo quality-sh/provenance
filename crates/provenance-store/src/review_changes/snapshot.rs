@@ -32,12 +32,7 @@ impl ReviewStateSnapshot {
             return Self::of_records(&guarded, manifest, settings)
                 .map(|snapshot| ReviewStateCapture(Captured::Read(Box::new(snapshot))));
         };
-        let store = ViewStore::new(
-            repository.identity().clone(),
-            repository.layout().clone(),
-            Arc::new(view),
-            Arc::clone(repository.storage()),
-        );
+        let store = ViewStore::new(repository, Arc::new(view));
         Ok(ReviewStateCapture(Captured::View(Box::new(ViewCapture {
             store,
             manifest,

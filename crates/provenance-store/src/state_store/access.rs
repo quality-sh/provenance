@@ -3,14 +3,17 @@ use crate::layout::ProvenanceLayout;
 use crate::publication::{PublicationGuard, StageLock, WritePermissions};
 use crate::repository::RepositoryIdentity;
 use crate::storage::local::LocalStateStorage;
-use crate::storage::{StateKey, StateStorage, StateView};
-use camino::{Utf8Path, Utf8PathBuf};
+use crate::storage::{SectionLock, StateStorage, StateView};
+use camino::Utf8Path;
 use provenance_macros::{rule, verifies};
 use std::marker::PhantomData;
 use std::sync::Arc;
 
 mod guarded_readers;
+mod section_view;
+
 pub use guarded_readers::ViewStore;
+pub use section_view::{SectionView, StateEntry};
 
 #[cfg(test)]
 mod tests;
@@ -29,18 +32,27 @@ impl StateStore {
 
     /// A store over the live state of an opened repository. A store of the
     /// repository of a section guard holds that section while `section` is
-    /// open; any other store takes the publication lock.
+    /// open; any other store takes `lock` for each read and write.
     pub(crate) fn live(
         identity: RepositoryIdentity,
         layout: ProvenanceLayout,
         section: Option<crate::publication::SectionHandle>,
         storage: Arc<dyn StateStorage>,
+        lock: Arc<dyn SectionLock>,
+        local: bool,
     ) -> Self {
         Self {
             identity: Some(identity),
-            storage: Storage::Shared(storage),
+            storage: Storage::Shared {
+                storage,
+                lock,
+                local,
+            },
             layout,
-            access: section.map_or(Access::Lock, |until| Access::Section { until: Some(until) }),
+            access: section.map_or(Access::Lock, |until| Access::Section {
+                view: Some(until.view()),
+                until: Some(until),
+            }),
             record_stamp: RecordStamp::ResolveFromRepository,
         }
     }
@@ -52,7 +64,10 @@ impl StateStore {
             identity: None,
             storage: Storage::Layout,
             layout,
-            access: Access::Section { until: None },
+            access: Access::Section {
+                until: None,
+                view: None,
+            },
             record_stamp: RecordStamp::ResolveFromRepository,
         }
     }
@@ -78,35 +93,83 @@ impl StateStore {
         layout: ProvenanceLayout,
         view: Arc<StateView>,
         storage: Arc<dyn StateStorage>,
+        lock: Arc<dyn SectionLock>,
+        local: bool,
     ) -> Self {
         Self {
             identity: Some(identity),
-            storage: Storage::Shared(storage),
+            storage: Storage::Shared {
+                storage,
+                lock,
+                local,
+            },
             layout,
             access: Access::View(view),
             record_stamp: RecordStamp::ResolveFromRepository,
         }
     }
 
-    /// A store over a staged state root. It keeps the identity of the live
-    /// store. Its reads and writes take the lock that the stage owns, not the
-    /// publication lock, because the live section holds that. It publishes
-    /// through an adapter rooted at the staged layout.
+    /// A store over a stage of the state that this store holds: the live
+    /// section, or the staged section of an outer stage. The staged store
+    /// keeps the identity and the layout of this store, so its paths name
+    /// the live state. It reads the overlay of the stage, and each write
+    /// lands on that overlay. Its reads and writes take the lock that the
+    /// stage owns, not the section lock, because this store holds that.
+    pub(crate) fn begin_stage(&self, record_stamp: RecordStamp) -> anyhow::Result<Self> {
+        let base = if let Access::StagedSection { stage, .. } = &self.access {
+            stage.read(Clone::clone)
+        } else {
+            self.ensure_holds_live_section()?;
+            match self.section_view() {
+                Some(view) => view.read(self.storage().as_ref(), Clone::clone)?,
+                None => self.storage().read_view()?,
+            }
+        };
+        Ok(Self {
+            identity: self.identity.clone(),
+            storage: self.storage.clone(),
+            layout: self.layout.clone(),
+            access: Access::Staged {
+                permissions: WritePermissions::none(),
+                stage: StageLock::new(self.layout.root(), base),
+            },
+            record_stamp,
+        })
+    }
+
+    /// A staged store that reads and writes the files of the staged state
+    /// root `layout`, for tests of the staged writers.
+    #[cfg(test)]
     pub(crate) fn staged_view(
         identity: Option<RepositoryIdentity>,
         layout: ProvenanceLayout,
         record_stamp: RecordStamp,
     ) -> Self {
-        let stage = StageLock::new(layout.root());
         Self {
             identity,
             storage: Storage::Layout,
-            layout,
             access: Access::Staged {
                 permissions: WritePermissions::none(),
-                stage,
+                stage: StageLock::over_files(layout.root()),
             },
+            layout,
             record_stamp,
+        }
+    }
+
+    /// The changes of the stage of this staged store, as one whole set.
+    pub(crate) fn stage_changes(&self) -> anyhow::Result<crate::storage::WriteSet> {
+        match &self.access {
+            Access::Staged { stage, .. } => Ok(stage.changes()),
+            _ => anyhow::bail!("only a staged store has stage changes"),
+        }
+    }
+
+    /// The stage of this store, if it is a staged store.
+    pub(crate) fn stage(&self) -> Option<&StageLock> {
+        match &self.access {
+            Access::Staged { stage, .. } | Access::StagedSection { stage, .. } => Some(stage),
+            _ => None,
         }
     }
 
@@ -115,15 +178,6 @@ impl StateStore {
         match &self.access {
             Access::Staged { stage, .. } => stage.ensure_intact(),
             _ => Ok(()),
-        }
-    }
-
-    /// Whether this store holds the section of a staged state root. Refuses
-    /// a store that holds no section.
-    pub(crate) fn holds_staged_section(&self) -> anyhow::Result<bool> {
-        match &self.access {
-            Access::StagedSection { .. } => Ok(true),
-            _ => self.ensure_holds_live_section().map(|()| false),
         }
     }
 
@@ -143,7 +197,7 @@ impl StateStore {
     /// from the repository of a section guard and that section has ended.
     fn ensure_section_open(&self) -> anyhow::Result<()> {
         match &self.access {
-            Access::Section { until } => {
+            Access::Section { until, .. } => {
                 crate::publication::refuse_held_access_during_stage(&self.layout)?;
                 if let Some(until) = until {
                     until.ensure_open()?;
@@ -181,13 +235,23 @@ impl StateStore {
     pub(crate) fn storage(&self) -> Arc<dyn StateStorage> {
         match &self.storage {
             Storage::Layout => Arc::new(LocalStateStorage::new(self.layout.clone())),
-            Storage::Shared(storage) => Arc::clone(storage),
+            Storage::Shared { storage, .. } => Arc::clone(storage),
         }
     }
 
-    /// The identity, for a staged view of this store.
-    pub(crate) fn identity_for_stage(&self) -> Option<RepositoryIdentity> {
-        self.identity.clone()
+    /// The local adapter of the layout of this store, which lands a
+    /// working-tree file with the state. A store of a repository on another
+    /// adapter is refused.
+    pub(crate) fn local_storage(&self) -> anyhow::Result<LocalStateStorage> {
+        match &self.storage {
+            Storage::Layout | Storage::Shared { local: true, .. } => {
+                Ok(LocalStateStorage::new(self.layout.clone()))
+            }
+            Storage::Shared { local: false, .. } => Err(anyhow::anyhow!(
+                "this operation needs the local storage adapter, because it changes a file in \
+                 the working tree; this repository keeps its state in another adapter"
+            )),
+        }
     }
 
     /// Runs `run` with this staged store and a permission to change the
@@ -205,8 +269,9 @@ impl StateStore {
                 permissions: permissions.with(paths, id),
                 stage: Arc::clone(stage),
             },
-            Access::StagedSection { permissions } => Access::StagedSection {
+            Access::StagedSection { permissions, stage } => Access::StagedSection {
                 permissions: permissions.with(paths, id),
+                stage: Arc::clone(stage),
             },
             Access::Lock | Access::Section { .. } | Access::ReadOnly | Access::View(_) => {
                 anyhow::bail!("a review write permission needs a staged store")
@@ -229,7 +294,7 @@ impl StateStore {
         static NONE: WritePermissions = WritePermissions::none();
         match &self.access {
             Access::Lock | Access::Section { .. } | Access::ReadOnly | Access::View(_) => &NONE,
-            Access::Staged { permissions, .. } | Access::StagedSection { permissions } => {
+            Access::Staged { permissions, .. } | Access::StagedSection { permissions, .. } => {
                 permissions
             }
         }
@@ -259,10 +324,18 @@ impl StateStore {
         GuardedStore {
             store: Self {
                 identity: Some(guard.repository().identity().clone()),
-                storage: Storage::Shared(Arc::clone(guard.repository().storage())),
+                storage: Storage::Shared {
+                    storage: Arc::clone(guard.repository().storage()),
+                    lock: Arc::clone(guard.repository().section_lock()),
+                    local: guard.repository().has_local_storage(),
+                },
                 layout: guard.repository().layout().clone(),
                 access: Access::Section {
                     until: guard.repository().section().cloned(),
+                    view: guard
+                        .repository()
+                        .section()
+                        .map(crate::publication::SectionHandle::view),
                 },
                 record_stamp: RecordStamp::ResolveFromRepository,
             },
@@ -270,33 +343,41 @@ impl StateStore {
         }
     }
 
+    /// Runs `operation` on the state file at `path` in the section of this
+    /// store, and hands it the store that holds the section.
     pub(super) fn state_path_access<R>(
         &self,
         path: &Utf8Path,
-        operation: impl FnOnce() -> anyhow::Result<R>,
+        operation: impl FnOnce(&Self) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         self.ensure_section_open()?;
         let Some(state_dir) = path.ancestors().find(|ancestor| {
             ancestor.file_name() == Some("state")
                 && ancestor.parent().and_then(Utf8Path::file_name) == Some(".provenance")
         }) else {
-            return operation();
+            return operation(self);
         };
         let root = state_dir
             .parent()
             .and_then(Utf8Path::parent)
             .ok_or_else(|| anyhow::anyhow!("state path has no repository root"))?;
-        match &self.access {
-            Access::Lock => crate::publication::with_repository_publication_checked(
-                &ProvenanceLayout::new(root),
-                || Ok(()),
-                operation,
-            ),
-            Access::Staged { stage, .. } => stage.run(operation),
-            Access::Section { .. }
-            | Access::StagedSection { .. }
-            | Access::ReadOnly
-            | Access::View(_) => operation(),
+        match (&self.access, &self.storage) {
+            (Access::Lock, Storage::Layout) => {
+                crate::publication::with_repository_publication_checked(
+                    &ProvenanceLayout::new(root),
+                    || Ok(()),
+                    || operation(self),
+                )
+            }
+            (Access::Lock, Storage::Shared { .. }) => self.with_repository_publication(operation),
+            (Access::Staged { stage, .. }, _) => stage.run(|| operation(self)),
+            (
+                Access::Section { .. }
+                | Access::StagedSection { .. }
+                | Access::ReadOnly
+                | Access::View(_),
+                _,
+            ) => operation(self),
         }
     }
 
@@ -312,14 +393,30 @@ impl StateStore {
         operation: impl FnOnce(&Self) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         match &self.access {
-            Access::Lock => crate::publication::with_repository_publication_checked(
-                &self.layout,
-                || Ok(()),
-                || operation(&self.section_store(Access::Section { until: None })),
-            ),
+            Access::Lock => match &self.storage {
+                Storage::Layout => crate::publication::with_repository_publication_checked(
+                    &self.layout,
+                    || Ok(()),
+                    || {
+                        operation(&self.section_store(Access::Section {
+                            until: None,
+                            view: None,
+                        }))
+                    },
+                ),
+                Storage::Shared { lock, .. } => {
+                    crate::publication::with_section(&self.layout, lock.as_ref(), || {
+                        operation(&self.section_store(Access::Section {
+                            until: None,
+                            view: Some(Arc::default()),
+                        }))
+                    })
+                }
+            },
             Access::Staged { permissions, stage } => stage.run(|| {
                 operation(&self.section_store(Access::StagedSection {
                     permissions: permissions.clone(),
+                    stage: Arc::clone(stage),
                 }))
             }),
             Access::Section { .. } | Access::ReadOnly => {
@@ -355,144 +452,4 @@ impl StateStore {
     ) -> anyhow::Result<R> {
         self.with_repository_publication(operation)
     }
-}
-
-/// The kind of entry that [`StateStore::state_keys_under`] lists.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum StateEntry {
-    File,
-    Directory,
-}
-
-// Every read below passes through `read_fence::check`, which records it for
-// the tests and refuses it outside a read fence.
-impl StateStore {
-    /// The bytes of the state file at `path`, or `None` when it does not
-    /// exist. A view store answers from its view; any other store reads the
-    /// file.
-    pub(crate) fn state_bytes(&self, path: &Utf8Path) -> anyhow::Result<Option<Vec<u8>>> {
-        super::read_fence::check(path)?;
-        match &self.access {
-            Access::View(view) => Ok(view.get(&self.state_key(path)?).map(<[u8]>::to_vec)),
-            _ => match std::fs::read(path) {
-                Ok(bytes) => Ok(Some(bytes)),
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-                Err(error) => Err(error.into()),
-            },
-        }
-    }
-
-    /// Like [`Self::state_bytes`], as UTF-8 text.
-    pub(crate) fn state_text(&self, path: &Utf8Path) -> anyhow::Result<Option<String>> {
-        super::read_fence::check(path)?;
-        match &self.access {
-            Access::View(_) => self
-                .state_bytes(path)?
-                .map(|bytes| String::from_utf8(bytes).map_err(|_| invalid_text(path)))
-                .transpose(),
-            _ => match std::fs::read_to_string(path) {
-                Ok(text) => Ok(Some(text)),
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-                Err(error) => Err(error.into()),
-            },
-        }
-    }
-
-    /// The bytes of the state file at `path`, which must exist.
-    pub(crate) fn read_state(&self, path: &Utf8Path) -> anyhow::Result<Vec<u8>> {
-        super::read_fence::check(path)?;
-        match &self.access {
-            Access::View(_) => self.state_bytes(path)?.ok_or_else(|| not_found(path)),
-            _ => Ok(std::fs::read(path)?),
-        }
-    }
-
-    /// Like [`Self::read_state`], as UTF-8 text.
-    pub(crate) fn read_state_text(&self, path: &Utf8Path) -> anyhow::Result<String> {
-        super::read_fence::check(path)?;
-        match &self.access {
-            Access::View(_) => self.state_text(path)?.ok_or_else(|| not_found(path)),
-            _ => Ok(std::fs::read_to_string(path)?),
-        }
-    }
-
-    /// Whether the state file at `path` exists.
-    pub(crate) fn state_exists(&self, path: &Utf8Path) -> anyhow::Result<bool> {
-        super::read_fence::check(path)?;
-        match &self.access {
-            Access::View(view) => Ok(view.get(&self.state_key(path)?).is_some()),
-            _ => Ok(path.exists()),
-        }
-    }
-
-    /// The names of the entries of `kind` directly below the state directory
-    /// `directory`, sorted. An entry of that kind with a name that is not
-    /// UTF-8 is refused with `non_utf8` of its path.
-    pub(crate) fn state_keys_under(
-        &self,
-        directory: &Utf8Path,
-        kind: StateEntry,
-        non_utf8: impl Fn(&std::path::Path) -> anyhow::Error,
-    ) -> anyhow::Result<Vec<String>> {
-        super::read_fence::check(directory)?;
-        if let Access::View(view) = &self.access {
-            let prefix = self.view_prefix(directory)?;
-            return Ok(view
-                .children(&prefix)
-                .into_iter()
-                .filter(|(_, below)| *below == (kind == StateEntry::Directory))
-                .map(|(name, _)| name)
-                .collect());
-        }
-        if !directory.exists() {
-            return Ok(Vec::new());
-        }
-        let mut names = Vec::new();
-        for entry in std::fs::read_dir(directory)? {
-            let entry = entry?;
-            let file_type = entry.file_type()?;
-            let matches = match kind {
-                StateEntry::File => file_type.is_file(),
-                StateEntry::Directory => file_type.is_dir(),
-            };
-            if matches {
-                names.push(
-                    entry
-                        .file_name()
-                        .into_string()
-                        .map_err(|_| non_utf8(&entry.path()))?,
-                );
-            }
-        }
-        names.sort();
-        Ok(names)
-    }
-
-    /// The key of the state file at `path`.
-    pub(crate) fn state_key(&self, path: &Utf8Path) -> anyhow::Result<StateKey> {
-        Ok(StateKey::new(self.view_prefix(path)?)?)
-    }
-
-    /// The path below the state directory with `/` between its parts. A path
-    /// outside the state directory is not canonical state and is refused.
-    fn view_prefix(&self, path: &Utf8Path) -> anyhow::Result<String> {
-        let state = self.layout.state_dir();
-        let relative: Utf8PathBuf = path
-            .strip_prefix(&state)
-            .map_err(|_| {
-                anyhow::anyhow!("{path} is not canonical state, so a view does not hold it")
-            })?
-            .to_path_buf();
-        Ok(relative.iter().collect::<Vec<_>>().join("/"))
-    }
-}
-
-fn not_found(path: &Utf8Path) -> anyhow::Error {
-    anyhow::Error::new(std::io::Error::from(std::io::ErrorKind::NotFound))
-        .context(format!("read {path}"))
-}
-
-fn invalid_text(path: &Utf8Path) -> anyhow::Error {
-    anyhow::Error::new(std::io::Error::from(std::io::ErrorKind::InvalidData))
-        .context(format!("read {path}: the file is not UTF-8"))
 }

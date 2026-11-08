@@ -8,12 +8,19 @@ use provenance_macros::rule;
 use std::collections::BTreeSet;
 
 impl StateStore {
+    /// Runs `operation` in the section of this store under the lifecycle
+    /// lock of `scope`. A staged section takes no lifecycle lock: the stage
+    /// lock already runs its sections one at a time, and no other process
+    /// sees the stage before it publishes.
     pub(super) fn with_lifecycle_lock<R>(
         &self,
         scope: &ScopeId,
         operation: impl FnOnce(&Self) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         self.with_repository_publication(|held| {
+            if held.stage().is_some() {
+                return operation(held);
+            }
             crate::jsonl::with_advisory_lock(&held.layout.lifecycle_lock_path(scope), || {
                 operation(held)
             })
