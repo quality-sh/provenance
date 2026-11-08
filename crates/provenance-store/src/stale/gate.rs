@@ -39,6 +39,7 @@ pub(crate) fn report_scanned(
     changes: &[ChangedFile],
     graph: &GraphEvidence,
 ) -> EvidenceDiffReport {
+    let t = std::time::Instant::now();
     let base_scan =
         provenance_scanner::scan_to_coverage(base_files, Some(base.clone()), Vec::new(), None);
     let baseline = CoverageBaseline {
@@ -53,6 +54,7 @@ pub(crate) fn report_scanned(
         Vec::new(),
         Some(baseline),
     );
+    crate::prof("  scan_to_coverage base and head", t);
     let mut sites = marker_sites(&base_scan, &head_scan, changes, &graph.rule_ids);
     let typed_sites = typed_bindings::sites(&sites, &head_scan, graph, changes);
     sites.extend(typed_sites);

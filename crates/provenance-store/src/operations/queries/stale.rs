@@ -13,10 +13,16 @@ pub(super) fn stale(ctx: &ReadContext, request: StaleQuery) -> anyhow::Result<St
         .map_err(provenance_core::protocol::QueryValidation::into_native)?;
     // The range resolves before the store is read, so a bad base is the
     // error that surfaces.
+    let total = std::time::Instant::now();
     let diff = ctx.live(Live::Diff);
+    let t = std::time::Instant::now();
     let (base, head) = diff.resolve_range(request.base, request.head)?;
+    crate::prof("resolve_range", t);
+    let t = std::time::Instant::now();
     let graph = ctx.live(Live::Canonical).graph_evidence()?;
+    crate::prof("graph_evidence", t);
     let found = diff.disturbed(base, head, &request.rules, &graph)?;
+    crate::prof("stale query body", total);
     let summary = summarize(&found.sites);
     let (sites, has_more) = take_page(found.sites, request.limit);
     Ok(StaleResult {

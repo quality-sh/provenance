@@ -36,6 +36,12 @@ pub mod review_changes;
 pub mod settings;
 pub mod shards;
 pub mod stale;
+#[doc(hidden)]
+pub fn prof(stage: &str, start: std::time::Instant) {
+    if std::env::var_os("PROVENANCE_STALE_PROFILE").is_some() {
+        eprintln!("PROF {stage}: {:.2} ms", start.elapsed().as_secs_f64() * 1000.0);
+    }
+}
 pub mod state_store;
 pub mod statement_analysis;
 pub mod storage;

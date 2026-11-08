@@ -179,8 +179,13 @@ pub fn disturbed(
     rules: &[String],
     graph: &GraphEvidence,
 ) -> anyhow::Result<Disturbed> {
+    let t = std::time::Instant::now();
     let scans = revision_scans::scan_range(repo, &base, &head)?;
+    crate::prof("scan_range (ls-tree x2, reads, parse)", t);
+    let t = std::time::Instant::now();
     let changes = git::changed_files(repo, &base, &head)?;
+    crate::prof(&format!("changed_files ({} files)", changes.len()), t);
+    let t = std::time::Instant::now();
     let report = gate::report_scanned(
         repo,
         base,
@@ -190,6 +195,7 @@ pub fn disturbed(
         &changes,
         graph,
     );
+    crate::prof("report_scanned", t);
     let sites = report
         .sites
         .into_iter()
