@@ -33,6 +33,7 @@ impl StateStore {
         })
     }
 
+    #[cfg_attr(not(feature = "host"), allow(dead_code))]
     pub(crate) fn create_review_requirement_resource(
         &self,
         input: CreateReviewRequirement,

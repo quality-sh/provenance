@@ -35,6 +35,7 @@ pub struct PublicationGuard {
 impl PublicationGuard {
     /// Supplies the protected repository layout to guarded readers.
     #[rule("rule_guarded_reads_use_guard_repository")]
+    #[cfg_attr(not(feature = "host"), allow(dead_code))]
     pub(crate) fn layout(&self) -> &ProvenanceLayout {
         self.repository.layout()
     }

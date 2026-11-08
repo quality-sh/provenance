@@ -108,6 +108,7 @@ impl CycleIndex {
     }
 
     /// Whether a Proposal with this id is a review submission.
+    #[cfg_attr(not(feature = "host"), allow(dead_code))]
     pub(super) fn is_submission(&self, proposal: &StableId) -> bool {
         self.cycles.contains_key(proposal.as_str())
     }

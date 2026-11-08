@@ -181,6 +181,7 @@ impl CycleFacts {
     }
 
     /// Whether a Proposal is a review submission.
+    #[cfg_attr(not(feature = "host"), allow(dead_code))]
     pub(super) fn is_submission(&self, proposal: &StableId) -> bool {
         self.index.is_submission(proposal)
     }

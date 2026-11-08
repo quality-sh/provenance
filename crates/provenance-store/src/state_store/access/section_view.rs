@@ -149,6 +149,7 @@ impl StateStore {
     }
 
     /// Whether the state file at `path` exists.
+    #[cfg_attr(not(feature = "host"), allow(dead_code))]
     pub(crate) fn state_exists(&self, path: &Utf8Path) -> anyhow::Result<bool> {
         let key = self.state_key(path);
         self.with_view(|view| Ok(view.get(&key?).is_some()))?

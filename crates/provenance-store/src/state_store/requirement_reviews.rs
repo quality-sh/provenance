@@ -84,6 +84,7 @@ impl StateStore {
 
     /// Clears earlier reviews with the fresh run and its time, and keeps each reason.
     #[rule("rule_review_cleared_by_later_run")]
+    #[cfg_attr(not(feature = "host"), allow(dead_code))]
     pub(crate) fn clear_requirement_reviews(
         &self,
         scope: &ScopeId,

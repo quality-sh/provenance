@@ -5,6 +5,8 @@ pub(crate) mod guard;
 mod input;
 mod publication;
 pub(crate) mod relationships;
+// The resource reads serve the host use cases only.
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 mod resource_read;
 pub(crate) use resource_read::RequirementResourceSnapshot;
 mod save;
@@ -84,6 +86,8 @@ pub use decision_input::{
 mod automatic_submission;
 mod cycle_index;
 mod decision;
+// The document review reads serve the host queries only.
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 mod decision_reads;
 #[cfg(feature = "host")]
 pub(crate) use decision_reads::DocumentReviewState;

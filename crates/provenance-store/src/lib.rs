@@ -23,10 +23,6 @@
 //! feature adds the local-disk adapter, git, the dictionary index files,
 //! the projection, the queries and the use cases that read through them.
 
-// Without host, the engine keeps helpers that only the host use cases call,
-// such as the review resource reads. The host build still reports dead code.
-#![cfg_attr(not(feature = "host"), allow(dead_code))]
-
 #[cfg(feature = "host")]
 pub mod cache;
 pub mod canonical_digest;

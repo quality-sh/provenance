@@ -204,6 +204,7 @@ impl From<provenance_core::protocol::failure::OperationFailure> for WriteError {
 impl WriteError {
     /// The same error with the repository root, so that its cause gives each
     /// path relative to the repository.
+    #[cfg_attr(not(feature = "host"), allow(dead_code))]
     pub(crate) fn in_repository(self, root: &camino::Utf8Path) -> Self {
         Self(in_repository(root.as_std_path(), self.0))
     }

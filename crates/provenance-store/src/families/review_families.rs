@@ -101,6 +101,7 @@ crate::families::family_table::record_family_rows!(define_review_families);
 
 /// Loads each family at first use, in caller order, and keeps its first record per id.
 /// The index belongs to one read under the repository publication lock.
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 pub struct ReviewFamilyIndex<'a> {
     store: &'a StateStore,
     scope: &'a ScopeId,
@@ -109,6 +110,7 @@ pub struct ReviewFamilyIndex<'a> {
     families: BTreeMap<u8, BTreeMap<String, ReviewRecord>>,
 }
 
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 impl<'a> ReviewFamilyIndex<'a> {
     pub(crate) fn new(
         store: &'a StateStore,

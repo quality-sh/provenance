@@ -6,6 +6,7 @@ use provenance_core::{
 macro_rules! guarded_reader {
     ($record:ty, list_requirements) => {};
     ($record:ty, validated_discussions) => {
+        #[cfg_attr(not(feature = "host"), allow(dead_code))]
         pub(crate) fn validated_discussions(
             &self,
             scope: &ScopeId,

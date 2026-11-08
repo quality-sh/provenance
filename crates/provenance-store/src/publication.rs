@@ -115,6 +115,7 @@ fn enter_section<R>(
 /// The existing ancestor is resolved, so planned-state validation creates no
 /// paths. With no file system to resolve the root against, the key is the
 /// lock path of the layout as given.
+#[cfg_attr(not(feature = "host"), allow(clippy::unnecessary_wraps))]
 fn publication_lock_identity(layout: &ProvenanceLayout) -> anyhow::Result<String> {
     #[cfg(not(feature = "host"))]
     return Ok(layout.publication_lock_path().to_string());

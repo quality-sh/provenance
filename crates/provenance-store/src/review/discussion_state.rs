@@ -261,6 +261,7 @@ pub(super) const fn discussion_kind_word(kind: NodeType) -> &'static str {
     }
 }
 
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 pub(super) const fn parent_table(kind: NodeType) -> &'static str {
     match kind {
         NodeType::Source => "sources",

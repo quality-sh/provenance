@@ -35,6 +35,12 @@ pub const fn record_bytes() -> usize {
 /// The count is `length(CAST(real AS BLOB))` in the `SQLite` of the
 /// projection. The host answers with libsqlite3, and a Worker with the SQL
 /// of its Durable Object.
+///
+/// The process has one counter, which [`set_real_bytes`] sets. With the
+/// `host` feature, libsqlite3 is the counter when nothing sets one. Without
+/// `host`, the crate has no counter: a Worker calls [`set_real_bytes`] when
+/// it starts. A write that counts a REAL column before that is refused, and
+/// the error names `set_real_bytes`.
 pub trait RealBytes: Send + Sync + std::fmt::Debug {
     /// The byte count of `real` as the SQLite of the projection casts it.
     fn of(&self, real: f64) -> anyhow::Result<usize>;
@@ -47,6 +53,10 @@ static REAL_BYTES: OnceLock<Box<dyn RealBytes>> = OnceLock::new();
 /// Set it before the first write that counts a REAL column. Returns `false`,
 /// and keeps the first counter, when a counter is already set. With the
 /// `host` feature, libsqlite3 is the counter when none is set.
+///
+/// Without `host`, a Worker calls this function when it starts. Until then,
+/// each write that counts a REAL column fails with an error that names this
+/// function.
 pub fn set_real_bytes(counter: Box<dyn RealBytes>) -> bool {
     REAL_BYTES.set(counter).is_ok()
 }
@@ -56,7 +66,10 @@ fn real_bytes(real: f64) -> anyhow::Result<usize> {
     let counter = REAL_BYTES.get_or_init(|| Box::new(SqliteRealBytes));
     #[cfg(not(feature = "host"))]
     let counter = REAL_BYTES.get().ok_or_else(|| {
-        anyhow::anyhow!("no REAL byte counter is set; the host sets one with set_real_bytes")
+        anyhow::anyhow!(
+            "no REAL byte counter is set: a Worker must call set_real_bytes when it starts, \
+             before the first write that counts a REAL column"
+        )
     })?;
     counter.of(real)
 }

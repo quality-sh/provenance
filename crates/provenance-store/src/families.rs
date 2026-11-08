@@ -6,6 +6,9 @@
 
 pub(crate) mod family_table;
 pub(crate) mod family_views;
+// The projection readers and digests in this module serve the projection,
+// which only the host build has.
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 pub(crate) mod projection_families;
 mod review_facts;
 pub(crate) mod review_families;

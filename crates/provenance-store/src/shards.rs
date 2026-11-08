@@ -51,12 +51,14 @@ pub fn ideation_landings_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf
 /// Whether `key`, a path below the state directory with `/` between its
 /// parts, is a file that the engine reads as canonical state: the manifest,
 /// or a shard below a scope directory with a well-formed scope id.
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 pub(crate) fn is_canonical_key(key: &str) -> bool {
     key == "manifest.json" || scope_shard(key).is_some_and(is_shard_suffix)
 }
 
 /// Whether the directory at `key` can hold a key that
 /// [`is_canonical_key`] accepts.
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 pub(crate) fn can_hold_canonical_keys(key: &str) -> bool {
     key == "scopes"
         || key.strip_prefix("scopes/").is_some_and(is_scope_name)
@@ -80,16 +82,19 @@ pub(crate) fn is_message_month_shard_name(name: &str) -> bool {
 }
 
 /// The part of `key` below its scope directory.
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 fn scope_shard(key: &str) -> Option<&str> {
     let (scope, shard) = key.strip_prefix("scopes/")?.split_once('/')?;
     is_scope_name(scope).then_some(shard)
 }
 
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 fn is_scope_name(name: &str) -> bool {
     ScopeId::new(name).is_ok()
 }
 
 /// The path of each fixed shard below a scope directory.
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 fn shard_suffixes() -> impl Iterator<Item = &'static str> {
     ProjectionFamily::ALL
         .into_iter()
@@ -97,6 +102,7 @@ fn shard_suffixes() -> impl Iterator<Item = &'static str> {
         .chain(["ideation/landings.jsonl"])
 }
 
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 fn is_shard_suffix(shard: &str) -> bool {
     shard
         .strip_prefix("threads/")
