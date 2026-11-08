@@ -127,7 +127,7 @@ async fn change(surface: &impl Surface, step: usize) {
                 "/topics/topic_a",
                 json!({"title":"Topic A, renamed"}),
             )
-            .await
+            .await;
         }
         9 => {
             patch(
