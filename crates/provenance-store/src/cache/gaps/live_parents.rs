@@ -16,7 +16,6 @@ use provenance_core::{
 };
 
 /// One gap per live record whose Requirement parents are all archived.
-/// A Boundary has no lifecycle status, so it is not a live dependent.
 pub(super) fn add_gaps(query: &GraphQuery<'_, '_>, gaps: &mut Vec<GapItem>) {
     let graph = query.graph;
     for record in graph.requirements {

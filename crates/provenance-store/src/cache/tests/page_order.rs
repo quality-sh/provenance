@@ -10,8 +10,8 @@ use crate::operations::reader::ReadSnapshot;
 use provenance_core::model::ProjectionRow;
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::{
-    AssertionRecord, Boundary, Contribution, DispositionRecord, Domain, ImplementationBinding,
-    Message, ProposalCard, Question, Requirement, RequirementReview, Resolution, Rule, Source,
+    AssertionRecord, Contribution, DispositionRecord, Domain, ImplementationBinding, Message,
+    ProposalCard, Question, Requirement, RequirementReview, Resolution, Rule, Source,
     SynthesisPacket, Thread, Topic, VerificationBinding,
 };
 use serde_json::json;
@@ -54,7 +54,6 @@ const PAGED_TABLES: [&str; 18] = [
     Topic::TABLE,
     Question::TABLE,
     Domain::TABLE,
-    Boundary::TABLE,
     ImplementationBinding::TABLE,
     VerificationBinding::TABLE,
     RequirementReview::TABLE,

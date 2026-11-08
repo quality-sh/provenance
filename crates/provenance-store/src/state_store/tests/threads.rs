@@ -395,7 +395,7 @@ fn thread(
 #[test]
 fn thread_parents_stay_within_the_six_original_kinds() {
     let (_dir, store, scope) = initialized_store();
-    for kind in [NodeType::Domain, NodeType::Boundary] {
+    for kind in [NodeType::Domain] {
         let error = store
             .post_thread_message(PostMessageInput {
                 scope_id: scope.clone(),

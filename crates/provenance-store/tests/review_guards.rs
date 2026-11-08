@@ -54,9 +54,6 @@ fn create(store: &StateStore, kind: NodeType) -> serde_json::Value {
         NodeType::Domain => serde_json::to_value(store.create_domain(input(json!({
             "scope_id":"default","id":"domain_a","name":"Storage"
         }))).unwrap()),
-        NodeType::Boundary => serde_json::to_value(store.create_boundary(input(json!({
-            "scope_id":"default","id":"boundary_a","requirement_id":"req_a","statement":"Storage only."
-        }))).unwrap()),
         NodeType::Topic | NodeType::Question => {
             let topic = store.create_topic(input(json!({
                 "scope_id":"default","id":"topic_a","requirement_id":"req_a",
@@ -130,10 +127,6 @@ fn every_record_kind_reads_without_a_format_field() {
             json!({"scope_id":"default","id":"domain_a","name":"Storage"}),
         ),
         (
-            "boundaries/boundary.jsonl",
-            json!({"scope_id":"default","id":"boundary_a","requirement_id":"req_a","statement":"Storage only."}),
-        ),
-        (
             "topics/topic.jsonl",
             json!({"scope_id":"default","id":"topic_a","requirement_id":"req_a","title":"Storage","status":"open","links":[]}),
         ),
@@ -156,7 +149,6 @@ fn every_record_kind_reads_without_a_format_field() {
     assert_eq!(store.list_resolutions(&scope).unwrap().len(), 1);
     assert_eq!(store.list_rules(&scope).unwrap().len(), 1);
     assert_eq!(store.list_domains(&scope).unwrap().len(), 1);
-    assert_eq!(store.list_boundaries(&scope).unwrap().len(), 1);
     assert_eq!(store.list_topics(&scope).unwrap().len(), 1);
     assert_eq!(store.list_questions(&scope).unwrap().len(), 1);
 }

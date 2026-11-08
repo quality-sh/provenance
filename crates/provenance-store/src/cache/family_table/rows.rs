@@ -80,35 +80,6 @@ macro_rules! expand_record_family_rows {
                         PageRequirements, "page-requirements", none)],
                     route: [requirements], review: REQUIREMENT
                 };
-                Boundaries {
-                    record: provenance_core::Boundary,
-                    field: boundaries,
-                    path: boundaries_path,
-                    meta: { shard: "boundaries/boundary.jsonl", order: 60, budget: Resource },
-                    node: [Boundary],
-                    reader: { open: list_boundaries, closed: [closed_boundaries],
-                        strategy: direct },
-                    id: field,
-                    loader: [record(Boundary)],
-                    graph: [export("boundary", Boundary, boundary_record, "boundary_pinned")],
-                    import: [node_budget],
-                    catalog: [projection(ListBoundaries, "list-boundaries",
-                        PageBoundaries, "page-boundaries", GetBoundary,
-                        "get-boundary")],
-                    route: [writable { mode: searchable,
-                    plural: "boundaries",
-                    singular: "boundary",
-                    singular_id: "Boundary",
-                    plural_id: "Boundaries",
-                    create: CreateBoundary,
-                    update: UpdateBoundary,
-                    create_defaults: NONE,
-                    create_aliases: NO_ALIASES,
-                    update_defaults: NONE,
-                    update_aliases: NO_ALIASES,
-                    nullable: &[("source_ref", "source_ref")],
-                    target: Some(NodeType::Boundary) }], review: BOUNDARY
-                };
                 Topics {
                     record: provenance_core::Topic,
                     field: topics,

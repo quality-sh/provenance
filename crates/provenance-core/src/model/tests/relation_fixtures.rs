@@ -1,10 +1,9 @@
 mod relation_fixtures {
     use crate::model::relations::RecordFront;
     use crate::model::{
-        ArtifactLink, ArtifactLinkTargetType, Boundary, Domain, Question, QuestionStatus,
-        Requirement, RequirementStatus, Resolution, ResolutionMethod, ResolutionStatus, Rule,
-        RuleSeverity, RuleStatus, ScopeId, Source, SourceReference, SourceType, StableId, Topic,
-        TopicStatus,
+        ArtifactLink, ArtifactLinkTargetType, Domain, Question, QuestionStatus, Requirement,
+        RequirementStatus, Resolution, ResolutionMethod, ResolutionStatus, Rule, RuleSeverity,
+        RuleStatus, ScopeId, Source, SourceReference, SourceType, StableId, Topic, TopicStatus,
     };
 
     pub(super) fn scope() -> ScopeId {
@@ -82,23 +81,6 @@ mod relation_fixtures {
         }
     }
 
-    pub(super) fn boundary_citing(
-        id: &str,
-        requirement_id: &str,
-        source: Option<&str>,
-    ) -> Boundary {
-        Boundary {
-            scope_id: scope(),
-            id: sid(id),
-            requirement_id: sid(requirement_id),
-            statement: format!("{id} statement"),
-            source_ref: source.map(|source_id| SourceReference {
-                source_id: sid(source_id),
-                clause: None,
-            }),
-        }
-    }
-
     pub(super) fn topic(
         id: &str,
         requirement_id: &str,
@@ -151,7 +133,6 @@ mod relation_fixtures {
         pub(super) sources: Vec<Source>,
         pub(super) requirements: Vec<Requirement>,
         pub(super) domains: Vec<Domain>,
-        pub(super) boundaries: Vec<Boundary>,
         pub(super) topics: Vec<Topic>,
         pub(super) questions: Vec<Question>,
         pub(super) resolutions: Vec<Resolution>,
@@ -233,11 +214,6 @@ mod relation_fixtures {
             ],
             requirements: vec![overtime, penalty],
             domains: vec![domain("domain_payroll")],
-            boundaries: vec![boundary_citing(
-                "boundary_no_backpay",
-                "req_overtime",
-                Some("source_award"),
-            )],
             topics: vec![topic(
                 "topic_rates",
                 "req_overtime",
@@ -268,7 +244,6 @@ mod relation_fixtures {
             topics: &records.topics,
             questions: &records.questions,
             domains: &records.domains,
-            boundaries: &records.boundaries,
         }
     }
 }

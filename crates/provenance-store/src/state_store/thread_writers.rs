@@ -45,7 +45,7 @@ impl StateStore {
             | NodeType::Rule
             | NodeType::Topic
             | NodeType::Question => {}
-            NodeType::Domain | NodeType::Boundary => {
+            NodeType::Domain => {
                 return Err(SourceFailure::wrap(
                     WriteFailure::UnsupportedThreadParent,
                     anyhow::anyhow!(

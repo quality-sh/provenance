@@ -1,5 +1,5 @@
 use provenance_core::{
-    Boundary, Domain, ImplementationBinding, Question, QuestionStatus, RepoPathPrefix, Requirement,
+    Domain, ImplementationBinding, Question, QuestionStatus, RepoPathPrefix, Requirement,
     RequirementStatus, Resolution, ResolutionMethod, ResolutionStatus, Rule, RuleSeverity,
     RuleStatus, Source, SourceType, StableId, Topic, TopicStatus, VerificationBinding,
 };
@@ -191,16 +191,6 @@ fn requirement_record(scope: &ScopeId) -> Requirement {
         spawned_by: None,
         origin_thread: None,
         origin_message: None,
-    }
-}
-
-fn boundary_record(scope: &ScopeId) -> Boundary {
-    Boundary {
-        scope_id: scope.clone(),
-        id: stable_id(RecordFamily::Boundary),
-        requirement_id: stable_id(RecordFamily::Requirement),
-        statement: "Pinned boundary".into(),
-        source_ref: None,
     }
 }
 

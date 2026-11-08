@@ -6,7 +6,7 @@ use crate::operations::reader::ReadSnapshot;
 use provenance_core::protocol::GraphNode;
 use provenance_core::protocol::RecordResolution;
 use provenance_core::{
-    Boundary, Domain, NodeType, Question, Requirement, Resolution, Rule, Source, StableId, Topic,
+    Domain, NodeType, Question, Requirement, Resolution, Rule, Source, StableId, Topic,
 };
 use std::collections::BTreeMap;
 
@@ -62,11 +62,6 @@ macro_rules! for_kind {
             NodeType::Domain => {
                 type $kind = Domain;
                 let $wrap = |record: Domain| GraphNode::Domain(Box::new(record));
-                $body
-            }
-            NodeType::Boundary => {
-                type $kind = Boundary;
-                let $wrap = |record: Boundary| GraphNode::Boundary(Box::new(record));
                 $body
             }
         }

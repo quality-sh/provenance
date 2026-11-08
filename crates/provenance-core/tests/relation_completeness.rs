@@ -33,7 +33,6 @@ const NODE_STRUCTS: &[&str] = &[
     "Source",
     "Requirement",
     "Domain",
-    "Boundary",
     "Topic",
     "Question",
     "Resolution",

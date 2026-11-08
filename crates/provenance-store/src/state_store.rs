@@ -49,10 +49,10 @@ pub use ideation_batches::{
 pub use ideation_edits::{UpdateContributionInput, UpdateSynthesisPacketInput};
 pub use inputs::{
     AddSourceReferenceInput, BeginVerificationInput, CascadedResource, CompleteVerificationInput,
-    CreateAssertionInput, CreateBoundaryInput, CreateContributionInput, CreateDispositionInput,
-    CreateDomainInput, CreateProposalCardInput, CreateQuestionInput, CreateRequirementInput,
-    CreateResolutionInput, CreateRuleInput, CreateSourceInput, CreateSynthesisPacketInput,
-    CreateTopicInput, DeclarationReferenceInput, MaterializeImplementationBindingInput,
+    CreateAssertionInput, CreateContributionInput, CreateDispositionInput, CreateDomainInput,
+    CreateProposalCardInput, CreateQuestionInput, CreateRequirementInput, CreateResolutionInput,
+    CreateRuleInput, CreateSourceInput, CreateSynthesisPacketInput, CreateTopicInput,
+    DeclarationReferenceInput, MaterializeImplementationBindingInput,
     MaterializeVerificationBindingInput, PostMessageInput, ReconcileState, ReconciledResource,
     TypedAdoptionTarget, TypedDeclarationKind, TypedFieldChange, TypedImplementationInput,
     TypedRequirementInput, TypedResourceKind, TypedRuleInput, TypedSourceInput,

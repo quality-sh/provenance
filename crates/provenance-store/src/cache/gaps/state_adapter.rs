@@ -35,7 +35,6 @@ pub struct GraphRecords {
     pub questions: Vec<Question>,
     pub threads: Vec<Thread>,
     pub domains: Vec<provenance_core::Domain>,
-    pub boundaries: Vec<provenance_core::Boundary>,
     pub contributions: Vec<Contribution>,
     pub synthesis_packets: Vec<SynthesisPacket>,
 }
@@ -52,7 +51,6 @@ impl GraphRecords {
             questions: store.list_questions(scope)?,
             threads: store.list_threads(scope)?,
             domains: store.list_domains(scope)?,
-            boundaries: store.list_boundaries(scope)?,
             contributions: store.list_contributions(scope)?,
             synthesis_packets: store.list_synthesis_packets(scope)?,
         })
@@ -69,7 +67,6 @@ impl GraphRecords {
             questions: &self.questions,
             threads: &self.threads,
             domains: &self.domains,
-            boundaries: &self.boundaries,
             contributions: &self.contributions,
             synthesis_packets: &self.synthesis_packets,
         }

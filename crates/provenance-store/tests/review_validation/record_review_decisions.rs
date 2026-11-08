@@ -6,10 +6,10 @@ use provenance_store::{
     layout::ProvenanceLayout,
     review::{DecideRecordReview, ReviewFeedback},
     state_store::{
-        CreateBoundaryInput, CreateDomainInput, CreateQuestionInput, CreateRequirementInput,
-        CreateResolutionInput, CreateRuleInput, CreateSourceInput, CreateTopicInput,
-        EditQuestionInput, StateStore, UpdateBoundaryInput, UpdateDomainInput,
-        UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
+        CreateDomainInput, CreateQuestionInput, CreateRequirementInput, CreateResolutionInput,
+        CreateRuleInput, CreateSourceInput, CreateTopicInput, EditQuestionInput, StateStore,
+        UpdateDomainInput, UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput,
+        UpdateTopicInput,
     },
     write_error::{WriteError, WriteFailure},
 };
@@ -108,14 +108,6 @@ fn create_record(store: &StateStore, kind: NodeType) -> StableId {
                 })))
                 .unwrap();
         }
-        NodeType::Boundary => {
-            store
-                .create_boundary(input::<CreateBoundaryInput>(json!({
-                    "scope_id":"default", "id":record_id,
-                    "requirement_id":"requirement_a", "statement":"Storage only."
-                })))
-                .unwrap();
-        }
         NodeType::Topic => {
             store
                 .create_topic(input::<CreateTopicInput>(json!({
@@ -170,13 +162,6 @@ fn revise_record(store: &StateStore, kind: NodeType, record_id: &StableId) {
                 json!("Durable storage"),
             )))
             .map(|_| ()),
-        NodeType::Boundary => store
-            .update_boundary(input::<UpdateBoundaryInput>(common_with(
-                common,
-                "statement",
-                json!("Durable storage only."),
-            )))
-            .map(|_| ()),
         NodeType::Topic => store
             .edit_topic(input::<UpdateTopicInput>(common_with(
                 common,
@@ -229,7 +214,6 @@ fn record_value(
         NodeType::Resolution => find!(list_resolutions),
         NodeType::Rule => find!(list_rules),
         NodeType::Domain => find!(list_domains),
-        NodeType::Boundary => find!(list_boundaries),
         NodeType::Topic => find!(list_topics),
         NodeType::Question => find!(list_questions),
         NodeType::Requirement => unreachable!("Requirement is the established review kind"),
@@ -241,7 +225,7 @@ fn artifact_type(kind: NodeType) -> CanonicalArtifactType {
 }
 
 fn review_feedback(kind: NodeType) -> Option<ReviewFeedback> {
-    (!matches!(kind, NodeType::Domain | NodeType::Boundary)).then(|| ReviewFeedback {
+    (kind != NodeType::Domain).then(|| ReviewFeedback {
         role: provenance_core::MessageRole::User,
         body: "Use the precise record text.".into(),
     })
@@ -324,7 +308,6 @@ fn every_added_kind_persists_the_exact_review_versions_without_lifecycle_change(
         NodeType::Resolution,
         NodeType::Rule,
         NodeType::Domain,
-        NodeType::Boundary,
         NodeType::Topic,
         NodeType::Question,
     ] {
@@ -349,8 +332,8 @@ fn pending_classification_review(
 
 #[test]
 #[provenance_macros::verifies("rule_domain_boundary_decisions_accept_no_feedback", examples)]
-fn domain_and_boundary_decisions_refuse_feedback() {
-    for kind in [NodeType::Domain, NodeType::Boundary] {
+fn domain_decisions_refuse_feedback() {
+    for kind in [NodeType::Domain] {
         let (_temp, store, scope, proposal) = pending_classification_review(kind);
 
         let error = store

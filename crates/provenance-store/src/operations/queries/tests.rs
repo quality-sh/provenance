@@ -2,9 +2,7 @@ use super::records;
 use crate::layout::ProvenanceLayout;
 use crate::operations::read_policy::ReadPolicy;
 use crate::repository::Repository;
-use crate::state_store::{
-    CreateBoundaryInput, CreateDomainInput, CreateRequirementInput, StateStore,
-};
+use crate::state_store::{CreateDomainInput, CreateRequirementInput, StateStore};
 use provenance_core::protocol::{GetQuery, SearchQuery};
 use provenance_core::{
     Manifest, NodeType, RepoPathPrefix, RequirementStatus, ScopeId, StableId, SDK_PROTOCOL_VERSION,
@@ -43,7 +41,7 @@ fn sid(value: &str) -> StableId {
     StableId::new(value).unwrap()
 }
 
-/// One scope holding a requirement, its domain, and one boundary on it.
+/// One scope holding a requirement and its domain.
 fn seeded_store() -> (tempfile::TempDir, StateStore, ScopeId) {
     let dir = tempfile::tempdir().unwrap();
     let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
@@ -85,15 +83,6 @@ fn seeded_store() -> (tempfile::TempDir, StateStore, ScopeId) {
             origin_message: None,
         })
         .unwrap();
-    store
-        .create_boundary(CreateBoundaryInput {
-            scope_id: scope.clone(),
-            id: sid("boundary_no_backpay"),
-            requirement_id: sid("req_overtime"),
-            statement: "Back pay is out of scope".into(),
-            source_ref: None,
-        })
-        .unwrap();
     (dir, store, scope)
 }
 
@@ -113,12 +102,9 @@ fn repository_at(root: &camino::Utf8Path) -> Repository {
 }
 
 #[tokio::test]
-async fn get_answers_a_domain_and_a_boundary_by_id() {
+async fn get_answers_a_domain_by_id() {
     let (dir, _store, _scope) = seeded_store();
-    for (kind, id, wire) in [
-        (NodeType::Domain, "domain_payroll", "domain"),
-        (NodeType::Boundary, "boundary_no_backpay", "boundary"),
-    ] {
+    for (kind, id, wire) in [(NodeType::Domain, "domain_payroll", "domain")] {
         let answer = super::get(
             &repository_of(&dir),
             ReadPolicy::default(),
@@ -140,7 +126,7 @@ async fn get_answers_a_domain_and_a_boundary_by_id() {
 
 #[tokio::test]
 #[verifies("rule_porcelain_search_crosses_kinds", examples)]
-async fn search_reaches_domains_and_boundaries_by_kind_and_text() {
+async fn search_reaches_domains_by_kind_and_text() {
     let (dir, _store, _scope) = seeded_store();
     let answer = super::search(
         &repository_of(&dir),
@@ -150,7 +136,7 @@ async fn search_reaches_domains_and_boundaries_by_kind_and_text() {
             protocol_version: Some(SDK_PROTOCOL_VERSION),
             exclude_terminal: false,
             text: Some("pay".into()),
-            node_types: vec![NodeType::Domain, NodeType::Boundary],
+            node_types: vec![NodeType::Domain],
             limit: 10,
         },
     )
@@ -167,7 +153,7 @@ async fn search_reaches_domains_and_boundaries_by_kind_and_text() {
                 .to_string()
         })
         .collect();
-    assert_eq!(kinds, ["domain", "boundary"]);
+    assert_eq!(kinds, ["domain"]);
 }
 
 #[tokio::test]
@@ -177,7 +163,7 @@ async fn filter_only_search_reaches_each_selected_kind() {
         &repository_of(&dir),
         ReadPolicy::default(),
         serde_json::from_value(serde_json::json!({
-            "node_types":["requirement", "boundary"],
+            "node_types":["requirement", "domain"],
             "limit":10
         }))
         .unwrap(),
@@ -194,7 +180,7 @@ async fn filter_only_search_reaches_each_selected_kind() {
         found,
         [
             (NodeType::Requirement, "req_overtime"),
-            (NodeType::Boundary, "boundary_no_backpay")
+            (NodeType::Domain, "domain_payroll")
         ]
     );
 }
@@ -220,7 +206,7 @@ async fn default_search_keeps_the_six_settled_kinds_under_protocol_five() {
     for node in &answer.nodes {
         let kind = node.node_type();
         assert!(
-            !matches!(kind, NodeType::Domain | NodeType::Boundary),
+            kind != NodeType::Domain,
             "a default search must not emit {kind:?} while the protocol stays at version 5"
         );
     }
@@ -236,7 +222,6 @@ fn rank_appends_the_new_kinds_after_the_six_settled_positions() {
         (NodeType::Topic, 4),
         (NodeType::Question, 5),
         (NodeType::Domain, 6),
-        (NodeType::Boundary, 7),
     ];
     for (kind, expected) in pinned {
         assert_eq!(records::rank(kind), expected, "rank of {kind:?}");
@@ -265,7 +250,6 @@ async fn search_answers_new_kinds_after_every_settled_kind() {
                 NodeType::Topic,
                 NodeType::Question,
                 NodeType::Domain,
-                NodeType::Boundary,
             ],
             limit: 10,
         },
@@ -283,7 +267,6 @@ async fn search_answers_new_kinds_after_every_settled_kind() {
         [
             (NodeType::Requirement, "req_overtime"),
             (NodeType::Domain, "domain_payroll"),
-            (NodeType::Boundary, "boundary_no_backpay"),
         ],
         "the appended kinds answer after every settled kind"
     );

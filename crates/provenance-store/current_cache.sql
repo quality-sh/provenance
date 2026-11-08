@@ -45,13 +45,6 @@ CREATE TABLE rules (
 );
 CREATE INDEX idx_rules_status_severity ON rules(scope_id, status, severity);
 
-CREATE TABLE boundaries (
-    scope_id TEXT NOT NULL, id TEXT NOT NULL,
-    requirement_id TEXT NOT NULL, statement TEXT NOT NULL, source_ref TEXT,
-    search_text TEXT NOT NULL, PRIMARY KEY (scope_id, id)
-);
-CREATE INDEX idx_boundaries_requirement ON boundaries(scope_id, requirement_id);
-
 CREATE TABLE topics (
     scope_id TEXT NOT NULL, id TEXT NOT NULL,
     requirement_id TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL,

@@ -51,7 +51,6 @@ async fn document_pages_keep_membership_and_whole_totals() {
             ("member", "rule_policy"),
             ("member", "topic_policy"),
             ("member", "question_policy"),
-            ("member", "boundary_no_backpay"),
             ("reference", "source_policy"),
             ("reference", "domain_payroll"),
         ]
@@ -107,7 +106,6 @@ async fn document_entries_keep_observed_member_reference_order() {
             ("member", "rule_policy"),
             ("member", "topic_policy"),
             ("member", "question_policy"),
-            ("member", "boundary_no_backpay"),
             ("reference", "source_policy"),
             ("reference", "domain_payroll"),
         ]

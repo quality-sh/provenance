@@ -1,11 +1,8 @@
 use super::graph::NodeType;
 
 #[test]
-fn domain_and_boundary_are_node_types_with_stable_wire_names() {
-    for (name, expected) in [
-        ("domain", NodeType::Domain),
-        ("boundary", NodeType::Boundary),
-    ] {
+fn domain_is_a_node_type_with_a_stable_wire_name() {
+    for (name, expected) in [("domain", NodeType::Domain)] {
         assert_eq!(NodeType::parse(name).unwrap(), expected);
         assert_eq!(serde_json::to_value(expected).unwrap(), name);
         assert_eq!(
@@ -43,7 +40,7 @@ fn topic_and_question_are_thread_parent_node_types() {
 fn a_word_parse_normalizes_the_text_and_uses_the_serde_word_list() {
     use crate::model::{MessageRole, SourceType};
 
-    assert_eq!(NodeType::parse(" Boundary ").unwrap(), NodeType::Boundary);
+    assert_eq!(NodeType::parse(" Question ").unwrap(), NodeType::Question);
     assert_eq!(SourceType::parse("API-Spec").unwrap(), SourceType::ApiSpec);
     assert_eq!(
         MessageRole::parse("assistant").unwrap(),
@@ -52,7 +49,7 @@ fn a_word_parse_normalizes_the_text_and_uses_the_serde_word_list() {
 
     let error = NodeType::parse("ticket").unwrap_err().to_string();
     assert!(
-        error.contains("ticket") && error.contains("boundary"),
+        error.contains("ticket") && error.contains("question"),
         "the error must name the bad word and the accepted words: {error}"
     );
 }

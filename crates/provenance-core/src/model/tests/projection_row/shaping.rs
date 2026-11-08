@@ -1,7 +1,7 @@
 use super::assert_kind_round_trips;
 use crate::model::{
-    ArchivedStamp, ArtifactLink, ArtifactLinkTargetType, Boundary, Domain, Question,
-    QuestionStatus, ResolutionMethod, ScopeId, SourceReference, StableId, Topic, TopicStatus,
+    ArchivedStamp, ArtifactLink, ArtifactLinkTargetType, Domain, Question, QuestionStatus,
+    ResolutionMethod, ScopeId, StableId, Topic, TopicStatus,
 };
 
 fn sid(value: &str) -> StableId {
@@ -23,29 +23,6 @@ fn links() -> Vec<ArtifactLink> {
             target_id: sid("rule_overtime_001"),
         },
     ]
-}
-
-fn filled_boundary() -> Boundary {
-    Boundary {
-        scope_id: scope(),
-        id: sid("boundary_no_backpay"),
-        requirement_id: sid("req_overtime"),
-        statement: "Back pay is out of scope".into(),
-        source_ref: Some(SourceReference {
-            source_id: sid("source_schads"),
-            clause: Some("cl_3".into()),
-        }),
-    }
-}
-
-fn bare_boundary() -> Boundary {
-    Boundary {
-        scope_id: scope(),
-        id: sid("boundary_bare"),
-        requirement_id: sid("req_overtime"),
-        statement: "Bare".into(),
-        source_ref: None,
-    }
 }
 
 fn filled_topic() -> Topic {
@@ -140,11 +117,6 @@ fn bare_domain() -> Domain {
         description: None,
         color: None,
     }
-}
-
-#[test]
-fn a_boundary_round_trips_through_its_row() {
-    assert_kind_round_trips(&filled_boundary(), &bare_boundary());
 }
 
 #[test]

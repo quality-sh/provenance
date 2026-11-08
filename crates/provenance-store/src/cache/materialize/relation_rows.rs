@@ -33,7 +33,6 @@ pub(super) fn scope_rows(
             &question.links,
         ));
     }
-    rows.extend(rows_of(&store.list_boundaries(scope)?));
     Ok(rows)
 }
 

@@ -18,7 +18,7 @@ pub use model::{
     validate_disposition_intrinsic, validate_ideation_aggregate, validate_optional_commit_pin,
     validate_optional_confidence_score, validate_proposal_intrinsic,
     validate_resolution_input_content, ApprovalEvidenceRequired, ArchivedStamp, ArtifactChangeType,
-    ArtifactLink, ArtifactLinkTargetType, Assertion, AssertionId, AssertionRecord, Boundary,
+    ArtifactLink, ArtifactLinkTargetType, Assertion, AssertionId, AssertionRecord,
     CanonicalArtifact, CanonicalArtifactType, ClaimChallenge, ConsensusFinding, ContestedClaim,
     Contribution, ContributionStance, DeclarationAddress, DispositionActor,
     DispositionActorRefusal, DispositionDecision, DispositionRecord, Domain, EvidenceGap,

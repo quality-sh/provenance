@@ -51,7 +51,6 @@ fn projection_family_table_names_every_stored_family_once() {
         "sources",
         "domains",
         "requirements",
-        "boundaries",
         "topics",
         "questions",
         "resolutions",

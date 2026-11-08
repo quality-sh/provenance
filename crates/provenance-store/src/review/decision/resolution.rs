@@ -55,7 +55,7 @@ impl StateStore {
             let record_id = &proposal.traceability.target.artifact_id;
             crate::cache::review_families::record(held, &scope, kind, record_id)?;
             validate_decision_input(kind, record_id, &input)?;
-            if input.feedback.is_some() && matches!(kind, NodeType::Domain | NodeType::Boundary) {
+            if input.feedback.is_some() && kind == NodeType::Domain {
                 return Err(SourceFailure::wrap(
                     WriteFailure::UnsupportedReviewFeedback { record_kind: kind },
                     anyhow::anyhow!("this record kind does not support review feedback"),
@@ -199,7 +199,6 @@ fn validate_decision_input(
             CanonicalArtifactType::Resolution => NodeType::Resolution,
             CanonicalArtifactType::Rule => NodeType::Rule,
             CanonicalArtifactType::Domain => NodeType::Domain,
-            CanonicalArtifactType::Boundary => NodeType::Boundary,
             CanonicalArtifactType::Topic => NodeType::Topic,
             CanonicalArtifactType::Question => NodeType::Question,
         };

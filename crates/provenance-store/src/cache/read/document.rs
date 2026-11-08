@@ -50,7 +50,7 @@ member_candidates(kind, id) AS (
  JOIN rules r ON r.scope_id = ?1 AND r.id = e.owner_id
  UNION SELECT e.owner_type, e.owner_id FROM branch b JOIN relations e
  ON e.scope_id = ?1 AND e.target_type = 'requirement' AND e.target_id = b.id
- AND e.relation = 'requirement_id' AND e.owner_type IN ('topic', 'question', 'boundary')
+ AND e.relation = 'requirement_id' AND e.owner_type IN ('topic', 'question')
 ),
 members(kind, id) AS (
  SELECT kind, id FROM member_candidates candidate WHERE {member_filter} LIMIT 4097
@@ -93,7 +93,7 @@ keys(stage, kind, id, counter) AS (
 ordered AS (
  SELECT stage, kind, id, counter, CASE WHEN stage = 0 AND kind = 'requirement' AND id = ?2 THEN 0 ELSE CASE kind WHEN 'source' THEN 0 WHEN 'requirement' THEN 1
  WHEN 'resolution' THEN 2 WHEN 'rule' THEN 3 WHEN 'topic' THEN 4 WHEN 'question' THEN 5
- WHEN 'domain' THEN 6 WHEN 'boundary' THEN 7 ELSE 0 END + 1 END AS rank FROM keys
+ WHEN 'domain' THEN 6 ELSE 0 END + 1 END AS rank FROM keys
 )
 "
     )
@@ -206,7 +206,6 @@ impl ReadSnapshot {
             "rules",
             "topics",
             "questions",
-            "boundaries",
             "sources",
             "relations",
             "threads",

@@ -336,7 +336,6 @@ fn empty_graph() -> serde_json::Value {
         "sources": [],
         "domains": [],
         "requirements": [],
-        "boundaries": [],
         "topics": [],
         "questions": [],
         "resolutions": [],

@@ -69,22 +69,6 @@ pub struct ArtifactLink {
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
-#[table("boundaries")]
-pub struct Boundary {
-    pub scope_id: ScopeId,
-    pub id: StableId,
-    #[relation(target = Requirement, flow = none)]
-    #[serde(alias = "requirementId")]
-    pub requirement_id: StableId,
-    pub statement: String,
-    #[relation(target = Source, flow = none, name = "cites", via = source_id)]
-    #[serde(default, alias = "sourceRef", skip_serializing_if = "Option::is_none")]
-    #[column(json)]
-    pub source_ref: Option<SourceReference>,
-}
-
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
 #[cfg_attr(feature = "schema", schemars(extend("x-provenance-validation-only-any-of" = true, "anyOf" = serde_json::json!([
     {"properties":{"status":{"enum":["open","explored","closed"]},"archived_in_commit":{"type":"null"}},"required":["status"]},
     {"properties":{"status":{"const":"archived"},"archived_in_commit":{"type":"object"}},"required":["status","archived_in_commit"]}

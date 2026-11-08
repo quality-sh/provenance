@@ -177,7 +177,6 @@ pub fn compute_for(
         questions,
         threads: &[],
         domains,
-        boundaries: &[],
         contributions: &[],
         synthesis_packets: &[],
     })

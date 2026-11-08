@@ -65,8 +65,8 @@ fn run_requests_and_results_use_the_real_wire_types() {
 #[test]
 fn update_requests_keep_empty_clear_lists_omitted() {
     use provenance_store::state_store::{
-        EditQuestionInput, UpdateBoundaryInput, UpdateDomainInput, UpdateRequirementInput,
-        UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
+        EditQuestionInput, UpdateDomainInput, UpdateRequirementInput, UpdateResolutionInput,
+        UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
     };
 
     fn check<T: JsonSchema + DeserializeOwned + Serialize>() {
@@ -98,7 +98,6 @@ fn update_requests_keep_empty_clear_lists_omitted() {
     check::<UpdateRequirementInput>();
     check::<UpdateRuleInput>();
     check::<UpdateDomainInput>();
-    check::<UpdateBoundaryInput>();
     check::<UpdateTopicInput>();
     check::<EditQuestionInput>();
 

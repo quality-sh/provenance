@@ -108,10 +108,6 @@ pub const DOMAIN: ReviewFields = ReviewFields {
     content_fields: &["name", "description"],
     lifecycle_fields: &["scope_id", "id", "color"],
 };
-pub const BOUNDARY: ReviewFields = ReviewFields {
-    content_fields: &["requirement_id", "statement", "source_ref"],
-    lifecycle_fields: &["scope_id", "id"],
-};
 pub const TOPIC: ReviewFields = ReviewFields {
     content_fields: &["requirement_id", "title", "links"],
     lifecycle_fields: &[

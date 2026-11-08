@@ -33,7 +33,6 @@ const fn owner_flag(kind: NodeType) -> &'static str {
         NodeType::Topic => "--topic-id",
         NodeType::Question => "--id",
         NodeType::Domain => "--domain-id",
-        NodeType::Boundary => "--boundary-id",
     }
 }
 
@@ -69,7 +68,6 @@ impl StateStore {
             NodeType::Topic => ids!(self.list_topics(scope_id)),
             NodeType::Question => ids!(self.list_questions(scope_id)),
             NodeType::Domain => ids!(self.list_domains(scope_id)),
-            NodeType::Boundary => ids!(self.list_boundaries(scope_id)),
         })
     }
 

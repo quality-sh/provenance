@@ -1,10 +1,7 @@
 use super::{seeded_requirement_store, seeded_source_requirement_store};
-use crate::state_store::{
-    CreateBoundaryInput, CreateQuestionInput, CreateTopicInput, UpdateQuestionInput,
-};
+use crate::state_store::{CreateQuestionInput, CreateTopicInput, UpdateQuestionInput};
 use provenance_core::{
-    ArtifactLink, ArtifactLinkTargetType, QuestionStatus, ResolutionMethod, SourceReference,
-    StableId, TopicStatus,
+    ArtifactLink, ArtifactLinkTargetType, QuestionStatus, ResolutionMethod, StableId, TopicStatus,
 };
 use provenance_macros::verifies;
 
@@ -26,12 +23,18 @@ fn canonical_record_ids_are_unique_across_kinds() {
         .unwrap();
 
     let error = store
-        .create_boundary(CreateBoundaryInput {
+        .create_question(CreateQuestionInput {
+            depends_on: Vec::new(),
             scope_id: scope,
-            id: shared,
-            requirement_id: StableId::new("req_overtime").unwrap(),
-            statement: "A different record kind cannot reuse this ID.".into(),
-            source_ref: None,
+            id: shared.clone(),
+            topic_id: shared,
+            question: "Can a different record kind reuse this ID?".into(),
+            resolution_method: ResolutionMethod::Grill,
+            status: QuestionStatus::Open,
+            answer: None,
+            links: Vec::new(),
+            contradicts: None,
+            resolution_id: None,
         })
         .unwrap_err();
 
@@ -75,18 +78,6 @@ fn shaping_records_are_written_deterministically_and_validate_relationships() {
             ],
         })
         .unwrap();
-    store
-        .create_boundary(CreateBoundaryInput {
-            scope_id: scope.clone(),
-            id: StableId::new("boundary_no_manual_rework").unwrap(),
-            requirement_id: StableId::new("req_overtime").unwrap(),
-            statement: "No manual rework".into(),
-            source_ref: Some(SourceReference {
-                source_id: StableId::new("source_schads").unwrap(),
-                clause: Some("28.1".into()),
-            }),
-        })
-        .unwrap();
     let question = store
         .create_question(CreateQuestionInput {
             depends_on: Vec::new(),
@@ -108,15 +99,6 @@ fn shaping_records_are_written_deterministically_and_validate_relationships() {
     assert_eq!(topics[0].links.len(), 2);
     assert_eq!(topics[0].links[0].target_id.as_str(), "req_overtime");
     assert_eq!(topics[0].links[1].target_id.as_str(), "source_schads");
-    assert_eq!(
-        store.list_boundaries(&scope).unwrap()[0]
-            .source_ref
-            .as_ref()
-            .unwrap()
-            .clause
-            .as_deref(),
-        Some("28.1")
-    );
     assert_eq!(question.requirement_id.as_str(), "req_overtime");
     assert!(store
         .create_question(CreateQuestionInput {

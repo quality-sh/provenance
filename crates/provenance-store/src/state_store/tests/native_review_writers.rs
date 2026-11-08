@@ -1,9 +1,8 @@
 use super::seeded_requirement_store;
 use crate::state_store::{
-    CreateBoundaryInput, CreateDomainInput, CreateQuestionInput, CreateRequirementInput,
-    CreateResolutionInput, CreateRuleInput, CreateSourceInput, CreateTopicInput, EditQuestionInput,
-    UpdateBoundaryInput, UpdateDomainInput, UpdateResolutionInput, UpdateRuleInput,
-    UpdateSourceInput, UpdateTopicInput,
+    CreateDomainInput, CreateQuestionInput, CreateRequirementInput, CreateResolutionInput,
+    CreateRuleInput, CreateSourceInput, CreateTopicInput, EditQuestionInput, UpdateDomainInput,
+    UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
 };
 use provenance_core::{
     NodeType, QuestionStatus, RequirementStatus, ResolutionMethod, ResolutionStatus, RuleSeverity,
@@ -83,15 +82,6 @@ pub(super) fn seed_native_records(
         })
         .unwrap();
     store
-        .create_boundary(CreateBoundaryInput {
-            scope_id: scope.clone(),
-            id: id("boundary_native"),
-            requirement_id: id("req_overtime"),
-            statement: "Boundary A".into(),
-            source_ref: None,
-        })
-        .unwrap();
-    store
         .create_topic(CreateTopicInput {
             scope_id: scope.clone(),
             id: id("topic_native"),
@@ -131,12 +121,11 @@ fn revision(
         .revision
 }
 
-const NATIVE_RECORDS: [(NodeType, &str); 7] = [
+const NATIVE_RECORDS: [(NodeType, &str); 6] = [
     (NodeType::Source, "source_native"),
     (NodeType::Domain, "domain_native"),
     (NodeType::Resolution, "resolution_native"),
     (NodeType::Rule, "rule_native"),
-    (NodeType::Boundary, "boundary_native"),
     (NodeType::Topic, "topic_native"),
     (NodeType::Question, "question_native"),
 ];
@@ -160,7 +149,6 @@ fn update_native_records(store: &crate::state_store::StateStore, label: &str) {
         serde_json::json!({"scope_id":"default","id":"resolution_native","position":format!("Use position {label}")}),
         serde_json::json!({"scope_id":"default","id":"rule_native","statement":format!("The system uses position {label}")}),
         serde_json::json!({"scope_id":"default","id":"domain_native","name":format!("Domain {label}")}),
-        serde_json::json!({"scope_id":"default","id":"boundary_native","statement":format!("Boundary {label}")}),
         serde_json::json!({"scope_id":"default","id":"topic_native","title":format!("Topic {label}")}),
         serde_json::json!({"scope_id":"default","id":"question_native","question":format!("Is {label} correct?")}),
     ] {
@@ -176,9 +164,6 @@ fn update_native_records(store: &crate::state_store::StateStore, label: &str) {
                 .map(|_| ()),
             "domain_native" => store
                 .update_domain(serde_json::from_value::<UpdateDomainInput>(value).unwrap())
-                .map(|_| ()),
-            "boundary_native" => store
-                .update_boundary(serde_json::from_value::<UpdateBoundaryInput>(value).unwrap())
                 .map(|_| ()),
             "topic_native" => store
                 .edit_topic(serde_json::from_value::<UpdateTopicInput>(value).unwrap())

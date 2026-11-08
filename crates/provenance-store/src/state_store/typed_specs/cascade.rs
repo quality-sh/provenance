@@ -2,8 +2,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use provenance_core::{
-    ArtifactLink, ArtifactLinkTargetType, Boundary, CanonicalArtifactType, NodeType, Question,
-    Requirement, Resolution, Rule, ScopeId, Source, StableId, Topic,
+    ArtifactLink, ArtifactLinkTargetType, CanonicalArtifactType, NodeType, Question, Requirement,
+    Resolution, Rule, ScopeId, Source, StableId, Topic,
 };
 
 use super::super::{
@@ -21,14 +21,12 @@ pub(super) struct Cascade {
     resolutions: Vec<Resolution>,
     topics: Vec<Topic>,
     questions: Vec<Question>,
-    boundaries: Vec<Boundary>,
     changes: Vec<CascadedResource>,
 }
 
 struct ShapingRecords {
     topics: Vec<Topic>,
     questions: Vec<Question>,
-    boundaries: Vec<Boundary>,
     changes: Vec<CascadedResource>,
 }
 
@@ -124,7 +122,6 @@ impl Cascade {
             resolutions,
             topics: shaping.topics,
             questions: shaping.questions,
-            boundaries: shaping.boundaries,
             changes,
         }
     }
@@ -190,11 +187,6 @@ impl Cascade {
                     &artifact.artifact_id,
                     |r| (&r.scope_id, &r.id),
                 ),
-                CanonicalArtifactType::Boundary => {
-                    contains_scoped_id(&self.boundaries, scope, &artifact.artifact_id, |r| {
-                        (&r.scope_id, &r.id)
-                    })
-                }
                 CanonicalArtifactType::Topic => {
                     contains_scoped_id(&self.topics, scope, &artifact.artifact_id, |r| {
                         (&r.scope_id, &r.id)
@@ -221,7 +213,6 @@ impl Cascade {
         use crate::state_store::read_budget::ensure_slice_within_read_budget;
         ensure_slice_within_read_budget(&self.topics)?;
         ensure_slice_within_read_budget(&self.questions)?;
-        ensure_slice_within_read_budget(&self.boundaries)?;
         store.replace_graph_records(
             &shards::resolutions_path(&store.layout, scope),
             self.resolutions,
@@ -230,10 +221,6 @@ impl Cascade {
         store.replace_graph_records(
             &shards::questions_path(&store.layout, scope),
             self.questions,
-        )?;
-        store.replace_graph_records(
-            &shards::boundaries_path(&store.layout, scope),
-            self.boundaries,
         )?;
         store.mutate_jsonl_records(
             &shards::verification_bindings_path(&store.layout, scope),
@@ -288,18 +275,6 @@ fn prepare_shaping(
         }
         !remove
     });
-    let mut boundaries = view.boundaries.clone();
-    let before_boundaries = boundaries.clone();
-    boundaries.retain(|r| !requirement_ids.contains(r.requirement_id.as_str()));
-    for boundary in &mut boundaries {
-        if boundary
-            .source_ref
-            .as_ref()
-            .is_some_and(|r| source_ids.contains(r.source_id.as_str()))
-        {
-            boundary.source_ref = None;
-        }
-    }
     let mut changes = describe_replacement(NodeType::Topic, &before_topics, &topics, |r| &r.id);
     changes.extend(describe_replacement(
         NodeType::Question,
@@ -307,16 +282,9 @@ fn prepare_shaping(
         &questions,
         |r| &r.id,
     ));
-    changes.extend(describe_replacement(
-        NodeType::Boundary,
-        &before_boundaries,
-        &boundaries,
-        |r| &r.id,
-    ));
     ShapingRecords {
         topics,
         questions,
-        boundaries,
         changes,
     }
 }
@@ -397,11 +365,7 @@ const fn typed_kind(kind: NodeType) -> Option<TypedResourceKind> {
         NodeType::Source => Some(TypedResourceKind::Source),
         NodeType::Requirement => Some(TypedResourceKind::Requirement),
         NodeType::Rule => Some(TypedResourceKind::Rule),
-        NodeType::Resolution
-        | NodeType::Topic
-        | NodeType::Question
-        | NodeType::Domain
-        | NodeType::Boundary => None,
+        NodeType::Resolution | NodeType::Topic | NodeType::Question | NodeType::Domain => None,
     }
 }
 
@@ -442,7 +406,6 @@ const fn canonical_kind(kind: CanonicalArtifactType) -> &'static str {
         CanonicalArtifactType::Resolution => "resolution",
         CanonicalArtifactType::Rule => "rule",
         CanonicalArtifactType::Domain => "domain",
-        CanonicalArtifactType::Boundary => "boundary",
         CanonicalArtifactType::Topic => "topic",
         CanonicalArtifactType::Question => "question",
     }

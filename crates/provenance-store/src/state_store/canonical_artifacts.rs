@@ -73,13 +73,6 @@ impl CanonicalArtifactIndex {
             store.list_domains(scope_id)?,
             |record| (record.scope_id, record.id),
         )?;
-        extend_scoped(
-            &mut entries,
-            scope_id,
-            NodeType::Boundary,
-            store.list_boundaries(scope_id)?,
-            |record| (record.scope_id, record.id),
-        )?;
         Ok(Self {
             scope_id: scope_id.clone(),
             entries,
@@ -109,7 +102,6 @@ impl CanonicalArtifactIndex {
         extend!(Topic, topics_path, provenance_core::Topic);
         extend!(Question, questions_path, provenance_core::Question);
         extend!(Domain, domains_path, provenance_core::Domain);
-        extend!(Boundary, boundaries_path, provenance_core::Boundary);
         Ok(Self {
             scope_id: scope_id.clone(),
             entries,
@@ -126,7 +118,6 @@ impl CanonicalArtifactIndex {
             CanonicalArtifactType::Resolution => NodeType::Resolution,
             CanonicalArtifactType::Rule => NodeType::Rule,
             CanonicalArtifactType::Domain => NodeType::Domain,
-            CanonicalArtifactType::Boundary => NodeType::Boundary,
             CanonicalArtifactType::Topic => NodeType::Topic,
             CanonicalArtifactType::Question => NodeType::Question,
         };

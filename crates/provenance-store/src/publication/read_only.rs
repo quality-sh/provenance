@@ -56,7 +56,6 @@ fn holds(store: &StateStore, scope: &ScopeId, kind: NodeType, id: &str) -> anyho
         NodeType::Topic => any_id!(list_topics),
         NodeType::Question => any_id!(list_questions),
         NodeType::Domain => any_id!(list_domains),
-        NodeType::Boundary => any_id!(list_boundaries),
     })
 }
 

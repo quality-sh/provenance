@@ -1,10 +1,10 @@
 mod relation_walk {
     use crate::model::relations::RelationOwner;
     use crate::model::{
-        ArtifactLink, ArtifactLinkTargetType, Boundary, DeclarationAddress, Question,
-        QuestionStatus, Requirement, RequirementStatus, Resolution, ResolutionInput,
-        ResolutionInputType, ResolutionMethod, ResolutionStatus, Rule, RuleSeverity, RuleStatus,
-        ScopeId, Source, SourceReference, SourceType, StableId, Topic, TopicStatus,
+        ArtifactLink, ArtifactLinkTargetType, DeclarationAddress, Question, QuestionStatus,
+        Requirement, RequirementStatus, Resolution, ResolutionInput, ResolutionInputType,
+        ResolutionMethod, ResolutionStatus, Rule, RuleSeverity, RuleStatus, ScopeId, Source,
+        SourceReference, SourceType, StableId, Topic, TopicStatus,
     };
     use provenance_macros::verifies;
     use serde_json::Value;
@@ -241,21 +241,6 @@ mod relation_walk {
                 contradicts: Some(sid("req_rates")),
             },
             &[SCOPE, LINK_TARGET],
-        );
-    }
-
-    #[test]
-    #[verifies("rule_prov_relation_vocabulary_closed", conformance)]
-    fn every_boundary_reference_key_is_declared_or_allowed() {
-        assert_walk(
-            &Boundary {
-                scope_id: ScopeId::new("default").unwrap(),
-                id: sid("boundary_no_backpay"),
-                requirement_id: sid("req_overtime"),
-                statement: "No back pay".into(),
-                source_ref: Some(reference("source_award")),
-            },
-            &[SCOPE],
         );
     }
 }

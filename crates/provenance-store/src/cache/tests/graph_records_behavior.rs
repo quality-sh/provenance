@@ -64,7 +64,6 @@ fn held_records_give_the_neighbours_of_a_hand_built_front() {
         topics: &[],
         questions: &[],
         domains: &[],
-        boundaries: &[],
     };
     let cited = records::sid("req_cited");
 

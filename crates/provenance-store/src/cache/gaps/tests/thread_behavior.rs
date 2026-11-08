@@ -17,7 +17,6 @@ fn gaps_with(
         questions: &[],
         threads,
         domains,
-        boundaries: &[],
         contributions: &[],
         synthesis_packets: &[],
     })

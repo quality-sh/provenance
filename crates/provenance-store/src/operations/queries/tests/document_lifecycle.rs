@@ -288,7 +288,6 @@ async fn lifecycle_filter_pages_across_hidden_records_and_binds_the_cursor() {
             "res_superseded",
             "rule_a_visible",
             "rule_d_visible",
-            "boundary_no_backpay",
             "domain_payroll",
         ]
     );
