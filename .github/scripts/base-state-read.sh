@@ -82,8 +82,8 @@ for route in "${routes[@]}"; do
       skipped+=("$route")
       echo "$route: skipped, the base state has no rows"
     else
-      passed+=("$route ($count items on the first page)")
-      echo "$route: $count items"
+      passed+=("$route ($count rows on the first page)")
+      echo "$route: $count rows on the first page"
     fi
   else
     # An empty output, an output that is not JSON, and an error envelope
