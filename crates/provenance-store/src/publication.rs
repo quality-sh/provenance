@@ -1,5 +1,7 @@
 use crate::layout::ProvenanceLayout;
-use crate::storage::{Atomicity, WriteSet};
+use crate::storage::local::LocalSectionLock;
+pub(crate) use crate::storage::local::{canonical_utf8, prepare_publication_lock};
+use crate::storage::{Atomicity, SectionLock, WriteSet};
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::rule;
@@ -21,7 +23,7 @@ pub use holders::PublicationHeld;
 pub(crate) use holders::{enter, held_here, refuse_if_held, HolderKind};
 pub use read_only::read_only_record_kinds;
 pub(crate) use read_only::with_read_only_validation;
-use recovery::{canonical_transactions_dir, create_real_directory};
+pub(crate) use recovery::{canonical_transactions_dir, create_real_directory};
 pub use recovery::{
     clear_publication_marker, recover_pending_publication, write_publication_marker,
     PublicationPhase,
@@ -30,6 +32,7 @@ pub use recovery::{
 use recovery::{validate_missing_transaction_dir, validated_transaction_dir};
 #[cfg(any(unix, windows))]
 pub use source_edit::{with_staged_state_and_source_edit, SourceEditRecoveryFailure};
+pub(crate) use source_edit_recovery::recover_pending_source_edit;
 pub use staged::LiveAccessDuringStage;
 pub(crate) use staged::{
     refuse_held_access_during_stage, with_stage_body, with_staged_state, StageLock,
@@ -54,22 +57,46 @@ pub fn with_repository_publication<R>(
 
 /// Takes the publication lock of `layout`, runs `check` and recovery, then
 /// `operation`. Only a store that holds the section may call into it again.
-#[rule("rule_publication_section_is_not_entered_twice")]
 pub(crate) fn with_repository_publication_checked<R>(
     layout: &ProvenanceLayout,
     check: impl FnOnce() -> anyhow::Result<()>,
     operation: impl FnOnce() -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
+    enter_section(
+        layout,
+        || {
+            Ok(Box::new(
+                LocalSectionLock::new(layout.clone()).acquire_checked(check)?,
+            ))
+        },
+        operation,
+    )
+}
+
+/// Takes the section `lock` of the repository at `layout`, then runs
+/// `operation`. Only a store that holds the section may call into it again.
+pub(crate) fn with_section<R>(
+    layout: &ProvenanceLayout,
+    lock: &dyn SectionLock,
+    operation: impl FnOnce() -> anyhow::Result<R>,
+) -> anyhow::Result<R> {
+    enter_section(layout, || lock.acquire(), operation)
+}
+
+/// Refuses a second entry on this thread and live access in a stage body,
+/// holds the section from `acquire`, then runs `operation`.
+#[rule("rule_publication_section_is_not_entered_twice")]
+fn enter_section<R>(
+    layout: &ProvenanceLayout,
+    acquire: impl FnOnce() -> anyhow::Result<Box<dyn Send>>,
+    operation: impl FnOnce() -> anyhow::Result<R>,
+) -> anyhow::Result<R> {
     let key = publication_lock_identity(layout)?;
     staged::refuse_during_stage(&key, layout.root())?;
     refuse_if_held(&key, HolderKind::Live, layout.root())?;
-    prepare_publication_lock(layout)?;
-    let _lock = guard::LockedPublicationFile::acquire(&layout.publication_lock_path())?;
+    let _section = acquire()?;
     let _holder = enter(key, HolderKind::Live);
-    check()?;
-    prepare_transaction_dirs(layout)?;
-    source_edit_recovery::recover_pending_source_edit(layout)?;
-    recover_pending_publication(layout).and_then(|()| operation())
+    operation()
 }
 
 // Resolve the existing ancestor so planned-state validation creates no paths.
@@ -97,43 +124,6 @@ fn publication_lock_identity(layout: &ProvenanceLayout) -> anyhow::Result<String
         "repository path has no existing ancestor: {}",
         layout.root()
     )
-}
-
-fn prepare_publication_lock(layout: &ProvenanceLayout) -> anyhow::Result<()> {
-    let canonical_root = canonical_utf8(
-        layout
-            .provenance_dir()
-            .parent()
-            .unwrap_or_else(|| Utf8Path::new(".")),
-        "repository path",
-    )?;
-    let provenance = layout.provenance_dir();
-    create_real_directory(&provenance)?;
-    let canonical_provenance = canonical_utf8(&provenance, "provenance path")?;
-    anyhow::ensure!(
-        canonical_provenance == canonical_root.join(".provenance"),
-        "repository provenance directory is outside the repository"
-    );
-
-    let cache = layout.cache_dir();
-    create_real_directory(&cache)?;
-    let locks = cache.join("locks");
-    create_real_directory(&locks)?;
-    Ok(())
-}
-
-/// Resolves `path`, keeping the failure message that names what the path was.
-fn canonical_utf8(path: &Utf8Path, description: &str) -> anyhow::Result<Utf8PathBuf> {
-    let resolved =
-        dunce::canonicalize(path).with_context(|| format!("resolve {description} {path}"))?;
-    Utf8PathBuf::from_path_buf(resolved)
-        .map_err(|path| anyhow::anyhow!("{description} is not UTF-8: {}", path.display()))
-}
-
-fn prepare_transaction_dirs(layout: &ProvenanceLayout) -> anyhow::Result<()> {
-    create_real_directory(&layout.import_transactions_dir())?;
-    canonical_transactions_dir(layout)?;
-    create_real_directory(&layout.source_edit_transactions_dir())
 }
 
 impl crate::state_store::StateStore {
@@ -179,9 +169,9 @@ impl crate::state_store::StateStore {
         self.publish_jsonl_if(path, |_, records| mutate(records))
     }
 
-    /// Reads the shard at `path` once under its advisory lock, runs `mutate`,
-    /// and publishes the new shard when `mutate` returns `true`. A change to
-    /// an enrolled row needs a grant in the permissions of the store.
+    /// Reads the shard at `path` once in the section, runs `mutate`, and
+    /// publishes the new shard when `mutate` returns `true`. A change to an
+    /// enrolled row needs a grant in the permissions of the store.
     fn publish_jsonl_if<T>(
         &self,
         path: &Utf8Path,
@@ -192,32 +182,38 @@ impl crate::state_store::StateStore {
     {
         self.ensure_writable()?;
         self.with_repository_publication(|held| {
-            let lock_path = held.layout.state_shard_lock_path(path)?;
-            crate::jsonl::with_advisory_lock(&lock_path, || {
-                let contents = held.state_text(path)?;
-                let bytes = crate::jsonl::mutate_jsonl_bytes(
-                    path,
-                    contents.as_deref(),
-                    held.permissions(),
-                    |records| mutate(held, records),
-                )?;
-                let Some(bytes) = bytes else {
-                    return Ok(false);
-                };
-                held.publish_shard(path, bytes)?;
-                Ok(true)
-            })
+            let contents = held.state_text(path)?;
+            let bytes =
+                crate::jsonl::mutate_jsonl_bytes(held, path, contents.as_deref(), |records| {
+                    mutate(held, records)
+                })?;
+            let Some(bytes) = bytes else {
+                return Ok(false);
+            };
+            held.publish_shard(path, bytes)?;
+            Ok(true)
         })
     }
 
     /// Publishes the shard at `path` as a one-key write set through the
-    /// adapter of this store. The store holds the section, so the set
-    /// carries no base revision.
+    /// adapter of this store. A store with a section view puts the revision
+    /// of the view on the set and applies the set to the view once it lands.
     #[rule("rule_write_sets_publish_through_the_storage_port")]
     fn publish_shard(&self, path: &Utf8Path, bytes: Vec<u8>) -> anyhow::Result<()> {
-        let writes = WriteSet::new(Atomicity::PerKey).put(self.state_key(path)?, bytes);
-        self.storage()
-            .publish(writes)
+        let mut writes = WriteSet::new(Atomicity::PerKey).put(self.state_key(path)?, bytes);
+        let view = self.section_view();
+        if let Some(base) = view.and_then(crate::state_store::SectionView::revision) {
+            writes = writes.on_base(base);
+        }
+        let landed = self.storage().publish(writes.clone());
+        if let Some(view) = view {
+            match &landed {
+                Ok(_) => view.apply(&writes),
+                Err(crate::storage::PublishFailure::Started(_)) => view.forget(),
+                Err(_) => {}
+            }
+        }
+        landed
             .map(drop)
             .map_err(crate::write_error::publish_failure)
     }

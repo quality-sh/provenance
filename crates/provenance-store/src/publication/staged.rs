@@ -115,7 +115,9 @@ pub fn with_staged_state<R>(
         // outer stage. A transaction inside the staged root makes paths too long on Windows.
         publication.transactions = live_layout.root().parent().map(Utf8Path::to_owned);
     }
-    stage_with_hook(live_layout, dry_run, prepare, &mut publication).map_err(|error| {
+    let result = stage_with_hook(live_layout, dry_run, prepare, &mut publication);
+    held.forget_section_view();
+    result.map_err(|error| {
         if live_layout.publication_marker_path().exists() {
             crate::write_error::publication_started(error)
         } else {

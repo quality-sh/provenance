@@ -37,7 +37,7 @@ mod writers;
 pub use updates::*;
 
 pub use access::GuardedStore;
-pub(crate) use access::StateEntry;
+pub(crate) use access::{SectionView, StateEntry};
 pub use archive_history::{ArchiveCommitGap, ArchiveCommitGapReason};
 pub use graph_validation::validate_relations;
 pub use ideation_batches::{
@@ -98,9 +98,12 @@ enum Access {
     Lock,
     /// Holds the live section: inside a held section, or under a guard. A
     /// store from the repository of a section guard keeps `until`, and its
-    /// reads and writes refuse after that section ends.
+    /// reads and writes refuse after that section ends. A store of an opened
+    /// repository reads and writes through the `view` of the section; a
+    /// layout-level store has none and reads the files.
     Section {
         until: Option<crate::publication::SectionHandle>,
+        view: Option<std::sync::Arc<access::SectionView>>,
     },
     /// A store over a staged state root. Each read and write takes the lock
     /// that the stage owns.
@@ -156,8 +159,11 @@ enum Storage {
     /// A local-disk adapter over the layout of the store, made at each use.
     /// A layout-level store and a staged store use it.
     Layout,
-    /// The adapter of the opened repository.
-    Shared(std::sync::Arc<dyn crate::storage::StateStorage>),
+    /// The adapter of the opened repository and the lock of its section.
+    Shared {
+        storage: std::sync::Arc<dyn crate::storage::StateStorage>,
+        lock: std::sync::Arc<dyn crate::storage::SectionLock>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

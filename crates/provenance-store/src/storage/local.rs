@@ -9,12 +9,18 @@ use camino::Utf8Path;
 use std::collections::BTreeMap;
 use std::io::Write;
 
+mod section;
+pub use section::LocalSectionLock;
+#[cfg(test)]
+pub(crate) use section::LockedPublicationFile;
+pub(crate) use section::{canonical_utf8, prepare_publication_lock};
+
 /// Canonical state in the files of one state directory.
 ///
-/// The engine calls this adapter in the publication section of its layout,
-/// after recovery, so no publication runs while it reads or writes, and
-/// publishes are serialized. The adapter takes no lock itself: a store that
-/// holds the section takes no second lock.
+/// The engine calls this adapter in the section that [`LocalSectionLock`]
+/// holds, after recovery, so no publication runs while it reads or writes,
+/// and publishes are serialized. A publish also takes the advisory lock of
+/// each key it changes, which other processes take to change that shard.
 ///
 /// Each key lands with a temporary file and a rename, so one key lands
 /// completely or not at all. The keys of a set land one by one, in key
@@ -78,6 +84,17 @@ impl StateStorage for LocalStateStorage {
                 .iter()
                 .map(|(key, bytes)| (key, Some(bytes.as_slice()))),
         );
+        // Other processes take the advisory lock of a shard to change it, so
+        // the adapter holds the lock of each key while the set lands.
+        let _locks = changes
+            .keys()
+            .map(|key| {
+                let path = self.layout.state_dir().join(key.as_str());
+                let lock_path = self.layout.state_shard_lock_path(&path)?;
+                crate::jsonl::AdvisoryLock::acquire(&lock_path)
+            })
+            .collect::<anyhow::Result<Vec<_>>>()
+            .map_err(PublishFailure::Refused)?;
         for (key, bytes) in changes {
             let path = self.layout.state_dir().join(key.as_str());
             bytes

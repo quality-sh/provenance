@@ -71,7 +71,9 @@ pub fn with_staged_state_and_source_edit<R>(
         backup: None,
         marker: None,
     };
-    stage_with_hook(live, false, prepare, &mut publication).map_err(|error| {
+    let result = stage_with_hook(live, false, prepare, &mut publication);
+    section.forget_section_view();
+    result.map_err(|error| {
         if live.source_edit_marker_path().exists() {
             crate::write_error::publication_started(error)
         } else {

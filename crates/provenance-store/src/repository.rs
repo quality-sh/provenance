@@ -9,8 +9,8 @@ use crate::layout::{with_initialized_graph, GraphNotInitialized, ProvenanceLayou
 use crate::publication::SectionHandle;
 use crate::settings::{Settings, SettingsError};
 use crate::state_store::StateStore;
-use crate::storage::local::LocalStateStorage;
-use crate::storage::StateStorage;
+use crate::storage::local::{LocalSectionLock, LocalStateStorage};
+use crate::storage::{SectionLock, StateKey, StateStorage};
 use crate::write_error::{SourceFailure, WriteError, WriteFailure};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
@@ -34,6 +34,7 @@ struct Inner {
     identity: RepositoryIdentity,
     layout: ProvenanceLayout,
     storage: Arc<dyn StateStorage>,
+    section_lock: Arc<dyn SectionLock>,
 }
 
 /// What a repository is, apart from where its state lives.
@@ -49,6 +50,16 @@ pub struct RepositoryIdentity {
 }
 
 impl RepositoryIdentity {
+    /// The identity of a repository whose working tree is `root`, with the
+    /// selected scope and the settings that the host read.
+    pub fn new(root: Utf8PathBuf, scope: ScopeId, settings: Settings) -> Self {
+        Self {
+            root,
+            scope,
+            settings: Arc::new(settings),
+        }
+    }
+
     /// The canonical working-tree root.
     pub fn working_tree(&self) -> &Utf8Path {
         &self.root
@@ -130,18 +141,52 @@ impl Repository {
         let manifest = with_initialized_graph(&layout, Ok).map_err(gate_failure)?;
         let scope = declared_scope(&manifest, scope)?.id.clone();
         let settings = Settings::load(&layout)?;
-        Ok(Self {
+        Ok(Self::with_parts(
+            RepositoryIdentity::new(root, scope, settings),
+            Arc::new(LocalStateStorage::new(layout.clone())),
+            Arc::new(LocalSectionLock::new(layout)),
+        ))
+    }
+
+    /// Opens a repository over `storage`, whose sections `lock` serializes.
+    ///
+    /// The manifest comes from a view of the storage and must declare the
+    /// scope of `identity`. The repository reads and writes canonical state
+    /// only through the storage; the working tree of the identity names the
+    /// layout of the paths that the engine keys state by.
+    #[rule("rule_engine_runs_on_any_storage")]
+    pub fn with_storage(
+        identity: RepositoryIdentity,
+        storage: Arc<dyn StateStorage>,
+        lock: Arc<dyn SectionLock>,
+    ) -> Result<Self, OpenFailure> {
+        let view = storage
+            .read_view()
+            .map_err(|error| OpenFailure::Io(error.into()))?;
+        let manifest_key = StateKey::new("manifest.json").expect("the manifest key is valid");
+        let Some(manifest) = view.get(&manifest_key) else {
+            return Err(OpenFailure::NotInitialized);
+        };
+        let manifest = crate::state_store::manifest_from_bytes(manifest)
+            .map_err(|error| OpenFailure::Io(error.context("failed to parse the manifest")))?;
+        declared_scope(&manifest, identity.scope().as_str())?;
+        Ok(Self::with_parts(identity, storage, lock))
+    }
+
+    fn with_parts(
+        identity: RepositoryIdentity,
+        storage: Arc<dyn StateStorage>,
+        section_lock: Arc<dyn SectionLock>,
+    ) -> Self {
+        Self {
             inner: Arc::new(Inner {
-                identity: RepositoryIdentity {
-                    root,
-                    scope,
-                    settings: Arc::new(settings),
-                },
-                storage: Arc::new(LocalStateStorage::new(layout.clone())),
-                layout,
+                layout: ProvenanceLayout::new(identity.root.clone()),
+                identity,
+                storage,
+                section_lock,
             }),
             section: None,
-        })
+        }
     }
 
     /// Opens one explicit root, or the nearest enclosing project of the
@@ -234,12 +279,18 @@ impl Repository {
             self.inner.layout.clone(),
             self.section.clone(),
             Arc::clone(self.storage()),
+            Arc::clone(self.section_lock()),
         )
     }
 
     /// The storage that holds the canonical state of this repository.
     pub(crate) fn storage(&self) -> &Arc<dyn StateStorage> {
         &self.inner.storage
+    }
+
+    /// The lock that serializes the sections of this repository.
+    pub(crate) fn section_lock(&self) -> &Arc<dyn SectionLock> {
+        &self.inner.section_lock
     }
 
     /// A store over one consistent view of the canonical state.
@@ -259,6 +310,7 @@ impl Repository {
             self.inner.layout.clone(),
             Arc::new(view),
             Arc::clone(self.storage()),
+            Arc::clone(self.section_lock()),
         ))
     }
 
