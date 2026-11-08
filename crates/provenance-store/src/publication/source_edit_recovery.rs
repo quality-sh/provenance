@@ -15,7 +15,7 @@ use crate::{
 use camino::{Utf8Path, Utf8PathBuf};
 use sha2::{Digest as _, Sha256};
 
-pub(super) fn recover_pending_source_edit(layout: &ProvenanceLayout) -> anyhow::Result<()> {
+pub fn recover_pending_source_edit(layout: &ProvenanceLayout) -> anyhow::Result<()> {
     let marker_path = layout.source_edit_marker_path();
     if !marker_path.exists() {
         return clean_unmarked_transactions(layout);

@@ -34,8 +34,7 @@ fn publish(root: &Utf8Path) {
         .unwrap();
     with_repository_publication(&layout, |section| {
         with_staged_state_and_source_edit(section, held, AFTER, |staged| {
-            std::fs::write(staged.state_dir().join("value"), AFTER)?;
-            Ok(())
+            staged.publish_shard(&staged.layout.state_dir().join("value"), AFTER.to_vec())
         })
     })
     .unwrap();

@@ -11,10 +11,10 @@ mod support {
 use support::review_paths::{create_requirement, json_output, provenance};
 
 const REQUIREMENTS: &str = ".provenance/state/scopes/default/requirements/req.jsonl";
-/// An update changes a staged copy of the state, so the cause names the
-/// staged copy. `<transaction>` stands for the transaction id.
-const REPEATED_MEMBER: &str = ".provenance/cache/import-transactions/<transaction>/staged-repo/\
-    .provenance/state/scopes/default/requirements/req.jsonl line 1: repeated top-level member `extension` cannot survive a typed record change";
+/// An update reads the stage of the live state, so the cause names the live
+/// shard.
+const REPEATED_MEMBER: &str = ".provenance/state/scopes/default/requirements/req.jsonl line 1: \
+    repeated top-level member `extension` cannot survive a typed record change";
 const LEGACY_FIELD: &str = ".provenance/state/scopes/default/requirements/req.jsonl line 1: \
     record req_a contains legacy field `retired`; canonical JSONL requires record-deletion \
     migration 026 before this build can read it";
@@ -82,16 +82,6 @@ fn refusal(output: &std::process::Output) -> Value {
     serde_json::from_str(object).unwrap_or_else(|error| panic!("{error}: {text}"))
 }
 
-/// `cause` with the transaction id of a staged copy as `<transaction>`.
-fn without_transaction(cause: &str) -> String {
-    const MARKER: &str = "import-transactions/";
-    let Some(at) = cause.find(MARKER).map(|at| at + MARKER.len()) else {
-        return cause.to_owned();
-    };
-    let end = cause[at..].find('/').map_or(cause.len(), |end| at + end);
-    format!("{}<transaction>{}", &cause[..at], &cause[end..])
-}
-
 /// Asserts the code and the exact cause, and that no spelling of the
 /// temporary directory is on standard error or in the cause.
 fn assert_cause(
@@ -103,7 +93,7 @@ fn assert_cause(
     let refusal = refusal(output);
     assert_eq!(refusal["error"]["kind"], kind, "{refusal}");
     let cause = refusal["error"]["cause"].as_str().unwrap_or_default();
-    assert_eq!(without_transaction(cause), expected, "{refusal}");
+    assert_eq!(cause, expected, "{refusal}");
     let text = String::from_utf8_lossy(&output.stderr);
     let canonical = std::fs::canonicalize(directory.path()).unwrap();
     for root in [directory.path(), canonical.as_path()] {

@@ -240,7 +240,12 @@ mod tests {
             }
         });
         crate::publication::with_repository_publication(&layout, |held| {
-            crate::publication::with_staged_state(held, false, |_| Ok(()))
+            crate::publication::with_staged_state(
+                held,
+                false,
+                crate::state_store::RecordStamp::ResolveFromRepository,
+                |_| Ok(()),
+            )
         })
         .unwrap();
         crate::test_probes::disarm("state_after_backup_rename");

@@ -1,4 +1,4 @@
-use super::{canonical_utf8, sync_directory};
+use super::{durability::sync_directory, section::canonical_utf8};
 use crate::layout::ProvenanceLayout;
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -176,7 +176,7 @@ fn ensure_written_path_has_no_symlinks(
     Ok(())
 }
 
-pub(super) fn validated_transaction_dir(
+pub fn validated_transaction_dir(
     layout: &ProvenanceLayout,
     transaction_dir: &Utf8Path,
 ) -> anyhow::Result<Utf8PathBuf> {
@@ -189,7 +189,7 @@ pub(super) fn validated_transaction_dir(
     )
 }
 
-pub(super) fn validate_missing_transaction_dir(
+pub fn validate_missing_transaction_dir(
     layout: &ProvenanceLayout,
     transaction_dir: &Utf8Path,
 ) -> anyhow::Result<()> {
@@ -203,7 +203,7 @@ pub(super) fn validate_missing_transaction_dir(
     .map(|_| ())
 }
 
-pub(super) fn canonical_transactions_dir(layout: &ProvenanceLayout) -> anyhow::Result<Utf8PathBuf> {
+pub fn canonical_transactions_dir(layout: &ProvenanceLayout) -> anyhow::Result<Utf8PathBuf> {
     let canonical_cache = canonical_utf8(&layout.cache_dir(), "repository cache path")?;
     recovery_dir_inside_cache(
         &canonical_cache,
@@ -213,7 +213,7 @@ pub(super) fn canonical_transactions_dir(layout: &ProvenanceLayout) -> anyhow::R
     )
 }
 
-pub(super) fn create_real_directory(path: &Utf8Path) -> anyhow::Result<()> {
+pub fn create_real_directory(path: &Utf8Path) -> anyhow::Result<()> {
     match std::fs::symlink_metadata(path) {
         Ok(_) => {}
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {

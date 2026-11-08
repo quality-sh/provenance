@@ -1,5 +1,7 @@
+use crate::layout::ProvenanceLayout;
 use crate::publication::{protect_rows, WritePermissions};
 use crate::state_store::readers::{ensure_no_legacy_retirement, located, parse_line};
+use crate::state_store::StateStore;
 use camino::Utf8Path;
 use fs2::FileExt;
 use serde::{de::DeserializeOwned, Serialize};
@@ -9,12 +11,13 @@ mod preservation;
 
 use preservation::{LoadedRecords, RawRecord};
 
-struct AdvisoryLock {
+/// An exclusive lock on the lock file at a path. Released on drop.
+pub(crate) struct AdvisoryLock {
     file: File,
 }
 
 impl AdvisoryLock {
-    fn acquire(path: &Utf8Path) -> anyhow::Result<Self> {
+    pub(crate) fn acquire(path: &Utf8Path) -> anyhow::Result<Self> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -75,7 +78,7 @@ where
     let mut loaded = load_jsonl(path, contents.as_deref())?;
     let result = mutate(loaded.records_mut())?;
     let lines = loaded.into_lines(path)?;
-    guard_jsonl_lines(path, &lines, &WritePermissions::none())?;
+    guard_jsonl_lines(&files_of(path), path, &lines, &WritePermissions::none())?;
     write_jsonl_lines_atomic_unlocked(path, &lines)
         .map_err(crate::write_error::publication_started)?;
     Ok(result)
@@ -83,11 +86,12 @@ where
 
 /// Loads the shard at `path` from `contents`, runs `mutate`, and returns the
 /// new bytes of the shard when `mutate` returns `true`. A change to an
-/// enrolled row needs a grant in `permissions`. The caller writes the bytes.
+/// enrolled row needs a grant in the permissions of `store`, which holds the
+/// section. The caller writes the bytes.
 pub(crate) fn mutate_jsonl_bytes<T>(
+    store: &StateStore,
     path: &Utf8Path,
     contents: Option<&str>,
-    permissions: &WritePermissions,
     mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<bool>,
 ) -> anyhow::Result<Option<Vec<u8>>>
 where
@@ -98,7 +102,7 @@ where
         return Ok(None);
     }
     let lines = loaded.into_lines(path)?;
-    guard_jsonl_lines(path, &lines, permissions)?;
+    guard_jsonl_lines(store, path, &lines, store.permissions())?;
     Ok(Some(jsonl_bytes(&lines)))
 }
 
@@ -143,7 +147,7 @@ pub(crate) fn write_jsonl_atomic_under_publication<T: Serialize>(
     path: &Utf8Path,
     records: &[T],
 ) -> anyhow::Result<()> {
-    protect_rows(path, records, &WritePermissions::none())?;
+    protect_rows(&files_of(path), path, records, &WritePermissions::none())?;
     write_jsonl_atomic_unlocked(path, records)
 }
 
@@ -170,12 +174,19 @@ pub fn write_preserved_jsonl_atomic(
 ) -> anyhow::Result<()> {
     let lines = crate::merge::preserved_lines(ours, theirs, records)?;
     with_state_publication(path, || {
-        guard_jsonl_lines(path, &lines, &WritePermissions::none())?;
+        guard_jsonl_lines(&files_of(path), path, &lines, &WritePermissions::none())?;
         write_jsonl_lines_atomic_unlocked(path, &lines)
     })
 }
 
+/// A store that reads the files of the repository of `path` with no lock,
+/// for a raw writer that holds the section and writes the files itself.
+fn files_of(path: &Utf8Path) -> StateStore {
+    StateStore::read_only(ProvenanceLayout::new(path.to_owned()))
+}
+
 fn guard_jsonl_lines(
+    store: &StateStore,
     path: &Utf8Path,
     lines: &[String],
     permissions: &WritePermissions,
@@ -184,7 +195,7 @@ fn guard_jsonl_lines(
         .iter()
         .map(|line| serde_json::from_str::<serde_json::Value>(line))
         .collect::<Result<Vec<_>, _>>()?;
-    protect_rows(path, &records, permissions)
+    protect_rows(store, path, &records, permissions)
 }
 
 fn write_jsonl_lines_atomic_unlocked(path: &Utf8Path, lines: &[String]) -> anyhow::Result<()> {

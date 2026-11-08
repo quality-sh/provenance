@@ -3,6 +3,7 @@
 //! A permission belongs to one staged store. A review writer gets a store
 //! with the added permission from `StateStore::permitting`, and a write
 //! through any other store carries none.
+use crate::state_store::StateStore;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::rule;
 use serde::Serialize;
@@ -39,8 +40,13 @@ impl WritePermissions {
     }
 }
 
+/// Refuses `records` as the new rows of the shard at `path` when they change
+/// an enrolled row that `permissions` does not grant. The rows before the
+/// change, the Discussions and the submitted proposals are read through
+/// `store`, which holds the section.
 #[rule("rule_enrolled_record_write_needs_store_permission")]
 pub fn protect_rows<T: Serialize>(
+    store: &StateStore,
     path: &Utf8Path,
     records: &[T],
     permissions: &WritePermissions,
@@ -50,28 +56,13 @@ pub fn protect_rows<T: Serialize>(
     if family.is_none() && directory != Some("threads") {
         return Ok(());
     }
-    let before: Vec<Value> = match std::fs::read_to_string(path) {
-        Ok(text) => text
-            .lines()
-            .map(serde_json::from_str)
-            .collect::<Result<_, _>>()?,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
-        Err(error) => return Err(error.into()),
-    };
+    let before = rows(store, path)?;
     let after = records
         .iter()
         .map(serde_json::to_value)
         .collect::<Result<Vec<_>, _>>()?;
     let discussions = if directory == Some("threads") {
-        let discussion_path = path.parent().unwrap().join("discussions.jsonl");
-        match std::fs::read_to_string(&discussion_path) {
-            Ok(text) => text
-                .lines()
-                .map(serde_json::from_str::<Value>)
-                .collect::<Result<Vec<_>, _>>()?,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
-            Err(error) => return Err(error.into()),
-        }
+        rows(store, &path.parent().unwrap().join("discussions.jsonl"))?
     } else {
         Vec::new()
     };
@@ -99,7 +90,7 @@ pub fn protect_rows<T: Serialize>(
         }
     }
     let submitted = if let Some(family) = family {
-        submitted_ids(path, family.kind)?
+        submitted_ids(store, path, family.kind)?
     } else {
         std::collections::BTreeSet::new()
     };
@@ -132,19 +123,27 @@ pub fn protect_rows<T: Serialize>(
     Ok(())
 }
 
+/// The rows of the shard at `path`, or none when it does not exist.
+fn rows(store: &StateStore, path: &Utf8Path) -> anyhow::Result<Vec<Value>> {
+    let Some(text) = store.state_text(path)? else {
+        return Ok(Vec::new());
+    };
+    Ok(text
+        .lines()
+        .map(serde_json::from_str)
+        .collect::<Result<_, _>>()?)
+}
+
 fn submitted_ids(
+    store: &StateStore,
     path: &Utf8Path,
     kind: provenance_core::NodeType,
 ) -> anyhow::Result<std::collections::BTreeSet<String>> {
     let Some(scope) = path.parent().and_then(Utf8Path::parent) else {
         return Ok(std::collections::BTreeSet::new());
     };
-    let text = match std::fs::read_to_string(scope.join("ideation").join("proposal_cards.jsonl")) {
-        Ok(text) => text,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(std::collections::BTreeSet::new())
-        }
-        Err(error) => return Err(error.into()),
+    let Some(text) = store.state_text(&scope.join("ideation").join("proposal_cards.jsonl"))? else {
+        return Ok(std::collections::BTreeSet::new());
     };
     let mut ids = std::collections::BTreeSet::new();
     for line in text.lines().filter(|line| !line.trim().is_empty()) {
