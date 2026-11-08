@@ -13,11 +13,14 @@
 //! change was decided on.
 //!
 //! The port is synchronous: the engine runs where its storage is.
+//!
+//! The port and the memory adapter build without the `host` feature. The
+//! local-disk adapter needs it.
 
 #[cfg(any(test, feature = "test-fixture"))]
 pub mod contract;
+#[cfg(feature = "host")]
 pub mod local;
-#[cfg(any(test, feature = "test-fixture"))]
 pub mod memory;
 
 use sha2::{Digest, Sha256};
@@ -252,6 +255,16 @@ pub trait StateStorage: Send + Sync + std::fmt::Debug {
     /// write. An adapter honours the atomicity of the set or refuses the set
     /// before any key lands.
     fn publish(&self, writes: WriteSet) -> Result<Revision, PublishFailure>;
+}
+
+/// Where an adapter that holds canonical state in memory keeps each write
+/// set, such as a database of the host.
+///
+/// The persistence is synchronous, as the port is.
+pub trait StatePersistence: Send + Sync + std::fmt::Debug {
+    /// Keeps `writes` before the adapter lands them. An error refuses the
+    /// set: the adapter returns the error and changes no key.
+    fn persist(&self, writes: &WriteSet) -> Result<(), PublishFailure>;
 }
 
 /// Why a storage call did not complete.

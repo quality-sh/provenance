@@ -2,12 +2,17 @@
   "packages": [
     {
       "name": "provenance-macros",
+      "targets": [{ "name": "provenance_macros", "kind": ["proc-macro"] }],
+      "features": {},
       "dependencies": [
         { "name": "syn", "rename": null, "kind": null, "target": null, "optional": false }
       ]
     },
     {
       "name": "provenance-core",
+      "features": {
+        "schema": []
+      },
       "dependencies": [
         { "name": "provenance-macros", "rename": null, "kind": null, "target": null, "optional": false },
         { "name": "serde", "rename": null, "kind": null, "target": null, "optional": false }
@@ -15,6 +20,10 @@
     },
     {
       "name": "provenance-store",
+      "features": {
+        "host": ["dep:tokio"],
+        "tokio": ["dep:tokio"]
+      },
       "dependencies": [
         { "name": "provenance-core", "rename": null, "kind": null, "target": null, "optional": false },
         { "name": "fs2", "rename": null, "kind": "build", "target": null, "optional": false },
@@ -26,6 +35,7 @@
     },
     {
       "name": "provenance-report",
+      "features": {},
       "dependencies": [
         { "name": "provenance-core", "rename": null, "kind": null, "target": null, "optional": false },
         { "name": "provenance-store", "rename": null, "kind": null, "target": null, "optional": false },
@@ -35,12 +45,14 @@
     },
     {
       "name": "provenance-cli",
+      "features": {},
       "dependencies": [
         { "name": "clap", "rename": null, "kind": null, "target": null, "optional": false }
       ]
     },
     {
       "name": "provenance-mcp",
+      "features": {},
       "dependencies": [
         { "name": "rmcp", "rename": null, "kind": null, "target": null, "optional": false }
       ]
