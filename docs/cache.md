@@ -9,7 +9,9 @@ never the source of truth for writes; read authority is delegated to the
 stamped projection. Seven of the eight SDK query operations answer from it
 (`get`, `search`, `neighbors`, `trace`, `impact`, `evidence`,
 `resolve_symbol`); `stale` reads git and canonical shards and attests
-nothing.
+nothing. The stale query and the `evidence` query with a base also use the
+kept scans in process memory, described under
+[Kept stale scans](#kept-stale-scans).
 
 Each record kind has one table with one column for each field of its
 Rust record type, named as the field; list and struct fields are JSON
@@ -157,6 +159,35 @@ mount namespaces are available. It checks the mount options and attempts
 file creation and a database write open before either read. If the mount
 cannot prevent writes, the test prints a skip reason. The tests do not
 reproduce these permissions on Windows.
+
+## Kept stale scans
+
+The stale query and the `evidence` query with a base compare the source
+files of two revisions. `crates/provenance-store/src/stale/revision_scans.rs`
+reads and parses each path and blob of the range once: the base and the
+head share the scan of each file that the range did not change. A scan
+depends on the path and the blob only.
+
+The process also keeps the scans of the last range of each repository, in
+memory, keyed by the repository root path. A host (HTTP or MCP) that
+answers the same range again reads no blob and parses no file. Nothing is
+written to disk. A new process, such as each CLI call, starts with no kept
+scans.
+
+- **Limits.** The process keeps the ranges of at most four repositories,
+  and at most 256 MiB of source text over all of them. A range is two
+  revisions, so it holds about two copies of the source text of its
+  repository, plus the parsed scans. When a new range goes over a limit,
+  the least recently used repository is dropped. A range larger than the
+  byte limit is not kept.
+- **Same answer as a new process.** Each query runs `rev-parse` and
+  `ls-tree` again, so a new commit, a checkout or an amended commit cannot
+  give old scans. Before kept scans replace blob reads, one
+  `git cat-file --batch-check` confirms that each of those blobs is still
+  in the object store. If a blob is missing, the query reads the blobs
+  that a new process reads, so it gives the same failure.
+- **Lifetime.** The kept scans stay until the process ends or a limit
+  drops them. They are not tied to an open `Repository`.
 
 ## Long-running server handoff
 

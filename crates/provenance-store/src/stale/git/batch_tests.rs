@@ -1,27 +1,30 @@
 use super::*;
 
+/// Runs git in `root` with a fixed author and gives the trimmed output.
+pub fn git(root: &Utf8Path, args: &[&str]) -> String {
+    let output = crate::git_process::git()
+        .args([
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+        ])
+        .args(args)
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "git {args:?} failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout).unwrap().trim().to_owned()
+}
+
 fn fixture() -> (tempfile::TempDir, String) {
     let dir = tempfile::tempdir().unwrap();
     let root = Utf8Path::from_path(dir.path()).unwrap();
-    let git = |args: &[&str]| {
-        let output = crate::git_process::git()
-            .args([
-                "-c",
-                "user.name=Fixture",
-                "-c",
-                "user.email=fixture@example.invalid",
-            ])
-            .args(args)
-            .current_dir(root)
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "git {args:?} failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        String::from_utf8(output.stdout).unwrap().trim().to_owned()
-    };
+    let git = |args: &[&str]| git(root, args);
     git(&["init", "-q"]);
     std::fs::create_dir_all(root.join("src/with space")).unwrap();
     std::fs::write(root.join("src/a.rs"), "fn a() {}\n").unwrap();
