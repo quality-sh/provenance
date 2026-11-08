@@ -52,6 +52,7 @@ graphs). A main push names them `api-profile-baseline` and
 | Sticky comment: the rows with the largest share changes, and links | The pull request conversation; the comment starts with `<!-- api-profile -->` | No |
 | Job summary: the same, and a table of all rows | The run page, and the log of the step `Publish the summary` of the `Report` job | No |
 | `profile.json`: the data of the tables and the comparison, for a program | `api-profile` | Yes |
+| `functions.json`: for each row, the inclusive counts of each function with 0.5 percent or more, in total and in each half; a later run compares with it | `api-profile` | Yes |
 | `summary.md`, `comment.md` | `api-profile` | Yes |
 | `rows/<file>.md`: top functions and the change from the baseline for one row | `api-profile` | Yes |
 | `run/results-<way>.json`: the call times under perf, for reference only | `api-profile` | Yes |
@@ -93,10 +94,14 @@ With the gh CLI:
   points: `+5.0` means that the function was on 5 percent more of the samples
   of the row.
 - A change is "over the noise" when it is at least 2 points and at least 3
-  standard errors (`z`, a two-proportion test on the sample counts). A row with
-  fewer than 200 samples has a noisy profile; its `rows/<file>.md` tells so.
-  The samples of one call are not independent, so use `z` as a guide, not as
-  a proof.
+  standard errors (`z`). The standard error is the larger of two values: the
+  error of a two-proportion test on the sample counts, and the error from the
+  halves of the calls. Each run puts the first, third, ... call of a row in
+  half `a` and the second, fourth, ... call in half `b`; the difference
+  between the halves shows how much a share changes from call to call. With 3
+  to 5 calls in a row this error is an estimate, so use `z` as a guide, not as
+  a proof. A row with fewer than 200 samples has a noisy profile; its
+  `rows/<file>.md` tells so.
 - `CPU ms for each call` is the sample count divided by the rate and by the
   number of timed calls. It is an estimate under perf; use the API latency
   workflow for times.
@@ -105,9 +110,14 @@ With the gh CLI:
   request, the profiled commit is the merge of the head into the base; the
   header names the head too. When main changed after the baseline, part of a
   change can come from main.
-- Function names have no Rust hash suffix, so one function has the same name
-  in each build. `[unknown]` frames are code with no frame pointer, for
-  example parts of the standard library.
+- For the counts, function names have no Rust hash suffix and no C library
+  symbol version. A function with one version for each set of CPU features
+  has one name: `__memmove_avx_unaligned_erms` and
+  `__memmove_avx512_unaligned_erms` are both `__memmove_simd_unaligned`.
+  Runners have different CPUs, so without this a change of runner looks like
+  a change of code. The stacks and the flame graphs keep the real names.
+  `[unknown]` frames are code with no frame pointer, for example parts of the
+  standard library.
 
 ## Files
 

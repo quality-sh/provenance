@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Labeler, stackSymbol, compareShares, findRow, functionName, largestChanges, parseFolded, rowFile, rowsFromWindows, shares, top } from './profile.mjs';
+import { Labeler, Shares, splitError, splitKey, stackSymbol, compareShares, findRow, functionName, largestChanges, parseFolded, rowFile, rowsFromWindows, shares, top } from './profile.mjs';
 
 const windows = [
   { way: 'CLI', call: 'GET /rules', pid: 10, start: 1000, end: 1010 },
@@ -25,8 +25,10 @@ test('rows come from windows in order, with one key and one file name each', () 
 
 test('a sample goes to the window of its process that holds its time', () => {
   const { byPid } = rowsFromWindows(windows);
-  assert.equal(findRow(byPid, 20, 2003), rowFile('HTTP GET /rules'));
-  assert.equal(findRow(byPid, 20, 2015), rowFile('HTTP POST /rules'));
+  assert.equal(findRow(byPid, 20, 2003), `${rowFile('HTTP GET /rules')}.a`);
+  assert.equal(findRow(byPid, 20, 2015), `${rowFile('HTTP POST /rules')}.a`);
+  assert.equal(findRow(byPid, 11, 1025), `${rowFile('CLI GET /rules')}.b`);
+  assert.deepEqual(splitKey(`${rowFile('CLI GET /rules')}.b`), { file: rowFile('CLI GET /rules'), half: 'b' });
   assert.equal(findRow(byPid, 20, 2007), null);
   assert.equal(findRow(byPid, 10, 1020), null);
   assert.equal(findRow(byPid, 99, 1005), null);
@@ -54,10 +56,10 @@ test('the labeler keeps samples in windows with the row file name as the process
   const out = input.map(line => labeler.line(line)).filter(line => line !== null);
   const [cli, post] = [rowFile('CLI GET /rules'), rowFile('HTTP POST /rules')];
   assert.deepEqual(out, [
-    `${cli} 10/10 1.005000: cpu-clock:ppp: `,
+    `${cli}.a 10/10 1.005000: cpu-clock:ppp: `,
     '\t    55d1 main (/bin/provenance)',
     '',
-    `${post} 20/21 2.012000: cpu-clock:ppp: `,
+    `${post}.a 20/21 2.012000: cpu-clock:ppp: `,
     '\t    55d2 handle (/bin/provenance)',
     '\t    55d5 <Pin<P> as Future>::poll (/bin/provenance)',
     '\t    55d7 run (/bin/provenance)',
@@ -66,9 +68,15 @@ test('the labeler keeps samples in windows with the row file name as the process
   assert.deepEqual(labeler.stats, { samples: 4, kept: 2, outsideWindows: 1, otherProcesses: 1 });
 });
 
-test('Rust hash suffixes are removed from function names', () => {
+test('a function has one name in each build and on each runner CPU', () => {
   assert.equal(functionName('provenance_store::open::h0123456789abcdef'), 'provenance_store::open');
   assert.equal(functionName('[unknown]'), '[unknown]');
+  assert.equal(functionName('cfree@GLIBC_2.2.5'), 'cfree');
+  assert.equal(functionName('__memmove_avx_unaligned_erms'), '__memmove_simd_unaligned');
+  assert.equal(functionName('__memmove_avx512_unaligned_erms'), '__memmove_simd_unaligned');
+  assert.equal(functionName('__memcmp_evex_movbe'), functionName('__memcmp_avx2_movbe'));
+  assert.equal(functionName('memchr::arch::x86_64::avx2::memchr::One::find_raw'), 'memchr::arch::x86_64::simd::memchr::One::find_raw');
+  assert.equal(functionName('provenance_store::cache::advance'), 'provenance_store::cache::advance');
 });
 
 test('inclusive shares count a function once for each sample, self shares count the top frame', () => {
@@ -104,4 +112,33 @@ test('a share change is over the noise only when it is large and many standard e
 test('the symbol of a stack line has no address and no module', () => {
   assert.equal(stackSymbol('\t    55d5 <Pin<P> as Future>::poll (/bin/provenance)'), '<Pin<P> as Future>::poll');
   assert.equal(stackSymbol('\t    ffffffff81 [unknown] ([kernel.kallsyms])'), '[unknown]');
+});
+
+test('the halves of the calls give the error when the calls differ', () => {
+  const steady = new Shares();
+  steady.add(['main', 'a'], 50, 'a');
+  steady.add(['main', 'b'], 50, 'a');
+  steady.add(['main', 'a'], 50, 'b');
+  steady.add(['main', 'b'], 50, 'b');
+  assert.equal(splitError(steady, 'a'), 0);
+  const jumpy = new Shares();
+  jumpy.add(['main', 'a'], 90, 'a');
+  jumpy.add(['main', 'b'], 10, 'a');
+  jumpy.add(['main', 'a'], 10, 'b');
+  jumpy.add(['main', 'b'], 90, 'b');
+  assert.ok(Math.abs(splitError(jumpy, 'a') - 0.4) < 1e-9);
+  // The same share in both runs, but calls that differ: no change is over the noise.
+  const other = new Shares();
+  other.add(['main', 'a'], 200, 'a');
+  other.add(['main', 'b'], 200, 'b');
+  const change = compareShares(other, steady).find(item => item.function === 'a');
+  assert.equal(change.change, 0);
+  const moved = new Shares();
+  moved.add(['main', 'a'], 120, 'a');
+  moved.add(['main', 'b'], 80, 'a');
+  moved.add(['main', 'a'], 40, 'b');
+  moved.add(['main', 'b'], 160, 'b');
+  const noisy = compareShares(moved, steady).find(item => item.function === 'a');
+  assert.ok(Math.abs(noisy.change + 0.1) < 1e-9);
+  assert.equal(noisy.overNoise, false, 'a 10 point change is in the noise when the halves differ by 40 points');
 });

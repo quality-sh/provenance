@@ -21,8 +21,13 @@ export function rowFile(label) {
 /**
  * The rows of a windows file and, for each process, its time windows sorted
  * by start. A row is a way in and a call. Its file name is a word with no
- * space or semicolon, so it is also the key that replaces the process name in
- * the perf script output. It is the same in each run and each job.
+ * space or semicolon, the same in each run and each job.
+ *
+ * The calls of a row go to two halves in turn: the first, third, ... call to
+ * half `a`, the second, fourth, ... to half `b`. The difference between the
+ * halves measures how much the shares change from call to call. The key of a
+ * window, `<file>.a` or `<file>.b`, replaces the process name in the perf
+ * script output.
  */
 export function rowsFromWindows(windows) {
   const rows = [];
@@ -37,12 +42,13 @@ export function rowsFromWindows(windows) {
       rows.push(row);
       byLabel.set(label, row);
     }
+    const half = row.calls % 2 === 0 ? 'a' : 'b';
     row.calls += 1;
     row.wallMs += window.end - window.start;
     if (!byPid.has(window.pid)) {
       byPid.set(window.pid, []);
     }
-    byPid.get(window.pid).push({ start: window.start, end: window.end, key: row.key });
+    byPid.get(window.pid).push({ start: window.start, end: window.end, key: `${row.key}.${half}` });
   }
   for (const list of byPid.values()) {
     list.sort((a, b) => a.start - b.start);
@@ -50,7 +56,13 @@ export function rowsFromWindows(windows) {
   return { rows, byPid };
 }
 
-/** The key of the row whose window holds the time `ms` of process `pid`, or null. */
+/** The file name and half of a window key. */
+export function splitKey(key) {
+  const dot = key.lastIndexOf('.');
+  return dot < 0 ? { file: key, half: null } : { file: key.slice(0, dot), half: key.slice(dot + 1) };
+}
+
+/** The key of the window of process `pid` that holds the time `ms`, or null. */
 export function findRow(byPid, pid, ms) {
   const list = byPid.get(pid);
   if (!list) {
@@ -140,9 +152,24 @@ export class Labeler {
   }
 }
 
-/** Removes the hash suffix of a Rust symbol, so that one function has one name in each build. */
+// The C library and some Rust crates have one version of a function for each
+// set of CPU features, and the runner CPU chooses the version. These words
+// name the feature set, between `_` or `::` separators.
+const CPU_FEATURE = /(?<=[_:])(avx512[a-z]*|avx2|avx|evex(?:256|512)?|sse2|sse4_1|sse4_2|ssse3)(?=[_:]|$)/g;
+
+/**
+ * The name of a function for the counts: with no Rust hash suffix and no C
+ * library symbol version, and with one name for all CPU feature versions
+ * (`__memmove_avx_unaligned_erms` and `__memmove_avx512_unaligned_erms` are
+ * both `__memmove_simd_unaligned`). So one function has one name in each
+ * build and on each runner.
+ */
 export function functionName(frame) {
-  return frame.replace(/::h[0-9a-f]{16}$/, '');
+  let name = frame.replace(/::h[0-9a-f]{16}$/, '').replace(/@+GLIBC_[\d.]+$/, '').replace(CPU_FEATURE, 'simd');
+  if (name.startsWith('__')) {
+    name = name.replace(/(_erms)?(_rtm)?$/, '');
+  }
+  return name;
 }
 
 /** Reads folded stacks (`a;b;c count`). Gives a map of root frame to its stacks, root removed. */
@@ -171,18 +198,45 @@ export class Shares {
   total = 0;
   inclusive = new Map();
   self = new Map();
+  /** The sample count of each half, and the inclusive counts of each function in each half. */
+  halves = { totals: [0, 0], inclusive: new Map() };
 
-  add(frames, count) {
+  /** Adds one stack. `half` is 'a', 'b' or null. */
+  add(frames, count, half = null) {
     this.total += count;
     const names = frames.map(functionName);
+    const index = half === 'a' ? 0 : half === 'b' ? 1 : -1;
+    if (index >= 0) {
+      this.halves.totals[index] += count;
+    }
     for (const name of new Set(names)) {
       this.inclusive.set(name, (this.inclusive.get(name) ?? 0) + count);
+      if (index >= 0) {
+        if (!this.halves.inclusive.has(name)) {
+          this.halves.inclusive.set(name, [0, 0]);
+        }
+        this.halves.inclusive.get(name)[index] += count;
+      }
     }
     const leaf = names.at(-1);
     if (leaf !== undefined) {
       this.self.set(leaf, (this.self.get(leaf) ?? 0) + count);
     }
   }
+}
+
+/**
+ * The standard error of one function's inclusive share in one run, from the
+ * difference between the two halves of its calls. The mean of two halves has
+ * a standard error of half their difference. Gives 0 when a half has no samples.
+ */
+export function splitError(counts, name) {
+  const [totalA, totalB] = counts.halves.totals;
+  if (!totalA || !totalB) {
+    return 0;
+  }
+  const [a, b] = counts.halves.inclusive.get(name) ?? [0, 0];
+  return Math.abs(a / totalA - b / totalB) / 2;
 }
 
 /** The shares of a list of stacks. */
@@ -217,8 +271,11 @@ export function top(counts, total, limit) {
 
 /**
  * The change of each function's inclusive share from the baseline to now.
- * `z` is the change over its standard error (two-proportion test); a change is
- * over the noise when it is at least MIN_CHANGE and at least MIN_Z standard errors.
+ * `z` is the change over its standard error: the larger of the error of a
+ * two-proportion test on the sample counts and the error from the halves of
+ * both runs (see splitError). The samples of one call are not independent, so
+ * the halves give the larger error when the calls differ. A change is over the
+ * noise when it is at least MIN_CHANGE and at least MIN_Z standard errors.
  */
 export function compareShares(now, base) {
   const names = new Set([...now.inclusive.keys(), ...base.inclusive.keys()]);
@@ -230,7 +287,8 @@ export function compareShares(now, base) {
     const shareNow = now.total ? b / now.total : 0;
     const change = shareNow - shareBase;
     const pooled = base.total + now.total ? (a + b) / (base.total + now.total) : 0;
-    const error = base.total && now.total ? Math.sqrt(pooled * (1 - pooled) * (1 / base.total + 1 / now.total)) : 0;
+    const counted = base.total && now.total ? Math.sqrt(pooled * (1 - pooled) * (1 / base.total + 1 / now.total)) : 0;
+    const error = Math.max(counted, Math.hypot(splitError(now, name), splitError(base, name)));
     const z = error ? change / error : 0;
     changes.push({ function: name, base: shareBase, now: shareNow, change, z, overNoise: Math.abs(change) >= MIN_CHANGE && Math.abs(z) >= MIN_Z });
   }

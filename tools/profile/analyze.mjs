@@ -23,6 +23,7 @@ import {
   Shares,
   compareShares,
   foldedLine,
+  splitKey,
   largestChanges,
   percent,
   points,
@@ -62,69 +63,95 @@ async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'));
 }
 
-async function loadBaseline(directory) {
-  if (!directory || !existsSync(join(directory, 'profile.json'))) {
-    return null;
+/** A function goes into functions.json when its inclusive share is at least this. A smaller share cannot change by MIN_CHANGE alone. */
+const KEEP_SHARE = 0.005;
+
+/** The inclusive counts of a row in each half, for the comparison of a later run. */
+function functionCounts(counts) {
+  const inclusive = {};
+  for (const [name, samples] of counts.inclusive) {
+    if (samples / counts.total >= KEEP_SHARE) {
+      inclusive[name] = [samples, ...(counts.halves.inclusive.get(name) ?? [0, 0])];
+    }
   }
-  const profile = await readJson(join(directory, 'profile.json'));
-  const rows = new Map();
-  for (const row of profile.rows) {
-    const path = join(directory, 'rows', `${row.file}.folded`);
-    rows.set(row.label, existsSync(path) ? await readStacks(path) : new Shares());
-  }
-  return { commit: profile.commit, run: profile.run, rows };
+  return { total: counts.total, totals: counts.halves.totals, inclusive };
 }
 
-/** Reads a folded file line by line and gives the shares of its stacks. */
-async function readStacks(path) {
+/** Reads the counts of a row back from functions.json. A function that is not in the file counts 0. */
+function sharesFromCounts(item) {
   const counts = new Shares();
-  for await (const line of createInterface({ input: createReadStream(path), crlfDelay: Infinity })) {
-    const stack = foldedLine(line);
-    if (stack) {
-      counts.add(stack.frames, stack.count);
-    }
+  counts.total = item.total;
+  counts.halves.totals = item.totals;
+  for (const [name, [samples, a, b]] of Object.entries(item.inclusive)) {
+    counts.inclusive.set(name, samples);
+    counts.halves.inclusive.set(name, [a, b]);
   }
   return counts;
 }
 
+async function loadBaseline(directory) {
+  if (!directory || !existsSync(join(directory, 'profile.json')) || !existsSync(join(directory, 'functions.json'))) {
+    return null;
+  }
+  const profile = await readJson(join(directory, 'profile.json'));
+  const functions = await readJson(join(directory, 'functions.json'));
+  const rows = new Map();
+  for (const row of profile.rows) {
+    const item = functions.rows[row.file];
+    if (item) {
+      rows.set(row.label, sharesFromCounts(item));
+    }
+  }
+  return { commit: profile.commit, run: profile.run, rows };
+}
+
 /**
  * Splits the labeled stacks into one folded file for each row, with the root
- * frame removed, and counts the shares of each row. A file can be larger than
- * memory, so it is read line by line.
+ * frame removed and the two halves merged, and counts the shares of each row.
+ * A file can be larger than memory, so it is read line by line; inferno sorts
+ * its output, so the stacks of a row come together.
  */
 async function splitRows(paths, directory, files) {
   const counts = new Map();
-  let key = null;
-  let out = null;
-  const close = async () => {
-    if (out) {
-      out.end();
-      await once(out, 'finish');
+  const written = new Set();
+  let file = null;
+  let stacks = new Map();
+  const flush = async () => {
+    if (file === null) {
+      return;
     }
+    // A row seen again is added to its file.
+    const out = createWriteStream(join(directory, `${file}.folded`), { flags: written.has(file) ? 'a' : 'w' });
+    written.add(file);
+    for (const [stack, count] of stacks) {
+      if (!out.write(`${stack} ${count}\n`)) {
+        await once(out, 'drain');
+      }
+    }
+    out.end();
+    await once(out, 'finish');
+    stacks = new Map();
   };
   for (const path of paths) {
     for await (const line of createInterface({ input: createReadStream(path), crlfDelay: Infinity })) {
       const stack = foldedLine(line);
-      const root = stack?.frames.shift();
-      if (!stack || !files.has(root)) {
+      const root = stack ? splitKey(stack.frames.shift()) : null;
+      if (!root || !files.has(root.file)) {
         continue;
       }
-      if (root !== key) {
-        await close();
-        // inferno sorts its output, so the stacks of a row come together; a row seen again is added to its file.
-        out = createWriteStream(join(directory, `${root}.folded`), { flags: counts.has(root) ? 'a' : 'w' });
-        key = root;
-        if (!counts.has(root)) {
-          counts.set(root, new Shares());
+      if (root.file !== file) {
+        await flush();
+        file = root.file;
+        if (!counts.has(file)) {
+          counts.set(file, new Shares());
         }
       }
-      counts.get(root).add(stack.frames, stack.count);
-      if (!out.write(`${stack.frames.join(';')} ${stack.count}\n`)) {
-        await once(out, 'drain');
-      }
+      counts.get(file).add(stack.frames, stack.count, root.half);
+      const text = stack.frames.join(';');
+      stacks.set(text, (stacks.get(text) ?? 0) + stack.count);
     }
   }
-  await close();
+  await flush();
   return counts;
 }
 
@@ -250,6 +277,7 @@ async function main() {
   }
   const baseline = await loadBaseline(options.baseline);
   const outRows = [];
+  const functions = { rows: {} };
   for (const row of rows) {
     const counts = rowCounts.get(row.key) ?? new Shares();
     const out = {
@@ -269,6 +297,9 @@ async function main() {
       const changes = compareShares(counts, base);
       out.baseline = { samples: base.total, ...largestChanges(changes, CHANGES), overNoise: changes.filter(item => item.overNoise).length };
     }
+    if (counts.total) {
+      functions.rows[row.file] = functionCounts(counts);
+    }
     await writeFile(join(options.out, 'rows', `${row.file}.md`), rowMarkdown(out));
     outRows.push(out);
   }
@@ -286,6 +317,7 @@ async function main() {
     rows: outRows,
   };
   await writeFile(join(options.out, 'profile.json'), `${JSON.stringify(profile, null, 1)}\n`);
+  await writeFile(join(options.out, 'functions.json'), `${JSON.stringify(functions)}\n`);
   await writeFile(join(options.out, 'summary.md'), summaryMarkdown(profile));
   await writeFile(join(options.out, 'comment.md'), commentMarkdown(profile));
   const graphs = outRows.filter(row => row.samples).map(row => `${row.file}\t${row.label} (${row.samples} samples)`);
