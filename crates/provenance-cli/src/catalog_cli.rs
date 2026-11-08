@@ -215,7 +215,6 @@ fn actionable_failure(
                 failure: value,
                 hint: Some(hint),
                 text_shows_failure: false,
-                cause: None,
             }
             .into();
         }

@@ -99,10 +99,12 @@ opened SQLite databases. The other report sections are not gated.
 
 To examine a result on a local host, run the timing test from a checkout
 that is not inside another checkout. Cargo reads `.cargo/config.toml` from
-the current directory and from all parent directories.
+the current directory and from all parent directories. The timing test needs
+the `host` feature. A tag that has no `host` feature in
+`crates/provenance-store/Cargo.toml` builds the test without that option.
 
 ```bash
-cargo test -p provenance-store --release -- --ignored timing_comparison_rows --nocapture
+cargo test -p provenance-store --features host --release -- --ignored timing_comparison_rows --nocapture
 ```
 
 After the `Release` workflow generates the notes, add the `repository_state`

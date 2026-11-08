@@ -90,9 +90,6 @@ pub enum ApiErrorKind {
 pub struct ApiError {
     pub kind: ApiErrorKind,
     pub failure: Value,
-    /// The native cause of a failure of no known kind, for the operator only.
-    /// It is not part of `failure`.
-    pub cause: Option<String>,
 }
 
 impl ApiError {
@@ -105,7 +102,6 @@ impl ApiError {
                 field: field.map(str::to_owned),
                 reason: InvalidInputReason::InvalidValue,
             }),
-            cause: None,
         }
     }
 
@@ -114,7 +110,6 @@ impl ApiError {
         Self {
             kind: ApiErrorKind::UnknownPath,
             failure: refusal(OperationFailure::UnknownOperation),
-            cause: None,
         }
     }
 }

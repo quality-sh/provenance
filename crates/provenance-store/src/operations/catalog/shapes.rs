@@ -102,7 +102,13 @@ impl<S: GraphReadSpec> OperationShape<S> for GraphRead {
         context: PreparedContext,
         request: S::Request,
     ) -> OperationFuture<S::Success, Self::Failure> {
-        Box::pin(async move { S::read(context.graph()?, request).await })
+        Box::pin(async move {
+            let context = context.graph()?;
+            let root = context.repository.layout().root().to_owned();
+            S::read(context, request)
+                .await
+                .map_err(|error| error.in_repository(&root))
+        })
     }
 }
 
@@ -136,7 +142,8 @@ impl<S: ScopedReadSpec> OperationShape<S> for ScopedRead {
         Box::pin(async move {
             let context = context.scope()?;
             let store = context.repository.store();
-            S::read(&store, context.repository.scope(), request).map_err(Into::into)
+            S::read(&store, context.repository.scope(), request)
+                .map_err(|error| ReadError(error).in_repository(context.repository.layout().root()))
         })
     }
 }
@@ -176,7 +183,9 @@ impl<S: ScopedWriteSpec> OperationShape<S> for ScopedWrite {
                 context.repository.ensure_selected(scope)?;
             }
             let store = context.repository.store();
-            S::write(&store, context.repository.scope().clone(), request).map_err(Into::into)
+            S::write(&store, context.repository.scope().clone(), request).map_err(|error| {
+                WriteError(error).in_repository(context.repository.layout().root())
+            })
         })
     }
 }
@@ -214,7 +223,8 @@ impl<S: ScopedCommandSpec> OperationShape<S> for ScopedCommand {
             if let Some(scope) = S::request_scope(&request) {
                 context.repository.ensure_selected(scope)?;
             }
-            S::execute(context, request).map_err(Into::into)
+            let root = context.repository.layout().root().to_owned();
+            S::execute(context, request).map_err(|error| WriteError(error).in_repository(&root))
         })
     }
 }

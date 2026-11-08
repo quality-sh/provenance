@@ -1,0 +1,79 @@
+name: API latency
+
+# Times each local API call of a release build on this repository's own
+# .provenance/state at the dispatched commit. The catalog routes, the
+# porcelain commands and the MCP tool actions come from the binary, so a new
+# route is timed with no change here. Each call is timed three ways: HTTP to
+# one `provenance review` host, the CLI as a new process for each call, and
+# MCP over stdio to one `provenance mcp` process. Writes go to scratch
+# clones. tools/api-latency/README.md tells how the run works.
+on:
+  workflow_dispatch:
+    inputs:
+      reads:
+        description: Warm repeats of each read after the cold call
+        type: number
+        default: 20
+      writes:
+        description: Warm repeats of each write after the cold call
+        type: number
+        default: 10
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: never
+
+jobs:
+  api-latency:
+    name: API latency
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: api-latency
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Build the release CLI
+        run: |
+          set -euo pipefail
+          sfw cargo fetch --locked
+          cargo build --locked --release -p provenance-cli --bin provenance
+          target/release/provenance --version
+      - name: Time the calls
+        env:
+          READS: ${{ inputs.reads || 20 }}
+          WRITES: ${{ inputs.writes || 10 }}
+        run: |
+          set -euo pipefail
+          mkdir -p api-latency
+          RUNNER_DESCRIPTION="$ImageOS $ImageVersion" node tools/api-latency/run.mjs \
+            --bin target/release/provenance --source . --work "$RUNNER_TEMP/api-latency" \
+            --out api-latency/results.json --reads "$READS" --writes "$WRITES"
+      - name: Write the report
+        run: |
+          set -euo pipefail
+          node tools/api-latency/report.mjs --input api-latency/results.json --out api-latency > /dev/null
+          cat api-latency/report.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: api-latency
+          path: api-latency
+          if-no-files-found: ignore

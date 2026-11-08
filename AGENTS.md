@@ -19,6 +19,8 @@ these copies. See `tools/skills/README.md`.
 
 On configured maintainer hosts, plain `cargo build`, `cargo check`, `cargo clippy`, `cargo test`, and `cargo package` run in GitHub Actions. The command returns the CI result and pushes a public snapshot branch. Stage new files before a check, and keep secrets out of tracked files. Use `PROVENANCE_CI_LOCAL=1 cargo ...` for native Cargo or `PROVENANCE_CI_ARTIFACT=1 cargo build` to receive a dev CLI binary. Public clones do not enable the shim automatically.
 
+A plain `cargo test` of `provenance-store` or `provenance-transport` alone needs `--features host`, because the engine builds only with that feature.
+
 ## Code standards
 
 Browser UI tests do not belong in this repository. Keep Rust host, authorization,

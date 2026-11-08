@@ -1,16 +1,23 @@
-//! The in-memory adapter, for tests: canonical state as a map of keys to bytes.
+//! The in-memory adapter: canonical state as a map of keys to bytes.
+//!
+//! A host that loads a project into memory, such as a Worker, gives the
+//! adapter a persistence that keeps each write set. Tests use the adapter
+//! with no persistence.
 
 use super::{
-    Atomicity, PublishFailure, Revision, StateKey, StateStorage, StateView, StorageError, WriteSet,
+    Atomicity, PublishFailure, Revision, StateKey, StatePersistence, StateStorage, StateView,
+    StorageError, WriteSet,
 };
+use provenance_macros::rule;
 use std::collections::BTreeMap;
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 
 /// Canonical state in memory. One mutex serializes every call. A set with no
 /// failing key lands whole, which satisfies a per-key set too.
 #[derive(Debug, Default)]
 pub struct MemoryStateStorage {
     state: Mutex<State>,
+    persistence: Option<Arc<dyn StatePersistence>>,
 }
 
 #[derive(Debug, Default)]
@@ -28,12 +35,31 @@ impl MemoryStateStorage {
                 entries,
                 failing: None,
             }),
+            persistence: None,
         }
     }
 
-    /// Makes every later landing of `key` fail.
-    pub fn fail_on(&self, key: StateKey) {
+    /// Canonical state loaded from `view`. Each publish gives its write set
+    /// to `persistence` before the set changes the memory.
+    pub fn loaded(view: StateView, persistence: Arc<dyn StatePersistence>) -> Self {
+        Self {
+            persistence: Some(persistence),
+            ..Self::new(view.into_entries())
+        }
+    }
+
+    /// Makes every later landing of `key` fail. The failure comes before the
+    /// persistence sees the set.
+    #[cfg(test)]
+    pub(crate) fn fail_on(&self, key: StateKey) {
         self.state().failing = Some(key);
+    }
+
+    /// Gives `writes` to the persistence, if there is one.
+    fn persist(&self, writes: &WriteSet) -> Result<(), PublishFailure> {
+        self.persistence
+            .as_ref()
+            .map_or(Ok(()), |persistence| persistence.persist(writes))
     }
 
     fn state(&self) -> std::sync::MutexGuard<'_, State> {
@@ -49,7 +75,10 @@ impl StateStorage for MemoryStateStorage {
 
     /// A per-key set lands its keys in key order up to a failing key; a
     /// whole set lands on a copy that replaces the state only when every key
-    /// landed.
+    /// landed. The persistence keeps the keys that land before any of them
+    /// lands: the whole set, or the prefix of a per-key set up to a failing
+    /// key. When it refuses them, no key changes.
+    #[rule("rule_memory_storage_persists_each_publish")]
     fn publish(&self, writes: WriteSet) -> Result<Revision, PublishFailure> {
         writes.ensure_disjoint()?;
         let mut state = self.state();
@@ -73,6 +102,7 @@ impl StateStorage for MemoryStateStorage {
                 return Err(match writes.atomicity() {
                     Atomicity::WholeSet => PublishFailure::Refused(error),
                     Atomicity::PerKey => {
+                        self.persist(&prefix_before(&writes, key))?;
                         state.entries = landed;
                         PublishFailure::Started(error)
                     }
@@ -83,7 +113,80 @@ impl StateStorage for MemoryStateStorage {
                 None => landed.remove(key),
             };
         }
+        self.persist(&writes)?;
         state.entries = landed;
         Ok(Revision::of(&state.entries))
+    }
+}
+
+/// The keys of a per-key `writes` that land before `failing`, in key order.
+fn prefix_before(writes: &WriteSet, failing: &StateKey) -> WriteSet {
+    let mut prefix = WriteSet::new(Atomicity::PerKey);
+    for key in writes.deletes().range(..failing) {
+        prefix = prefix.delete(key.clone());
+    }
+    for (key, bytes) in writes.puts().range(..failing) {
+        prefix = prefix.put(key.clone(), bytes.clone());
+    }
+    prefix
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use provenance_macros::verifies;
+
+    #[derive(Debug, Default)]
+    struct Kept(Mutex<Vec<WriteSet>>);
+
+    impl StatePersistence for Kept {
+        fn persist(&self, writes: &WriteSet) -> Result<(), PublishFailure> {
+            self.0.lock().unwrap().push(writes.clone());
+            Ok(())
+        }
+    }
+
+    fn key(key: &str) -> StateKey {
+        StateKey::new(key).unwrap()
+    }
+
+    /// Memory that holds `old` at `b`, keeps each set in the returned
+    /// persistence, and fails to land `b`.
+    fn failing_on_b() -> (MemoryStateStorage, Arc<Kept>) {
+        let kept = Arc::new(Kept::default());
+        let view = StateView::new(BTreeMap::from([(key("b"), b"old".to_vec())]));
+        let storage = MemoryStateStorage::loaded(view, kept.clone());
+        storage.fail_on(key("b"));
+        (storage, kept)
+    }
+
+    fn put_a_b_c(atomicity: Atomicity) -> WriteSet {
+        WriteSet::new(atomicity)
+            .put(key("a"), b"a".to_vec())
+            .put(key("b"), b"b".to_vec())
+            .put(key("c"), b"c".to_vec())
+    }
+
+    #[test]
+    #[verifies("rule_memory_storage_persists_each_publish", examples)]
+    fn a_refused_whole_set_reaches_no_persistence() {
+        let (storage, kept) = failing_on_b();
+        let before = storage.read_view().unwrap();
+        let result = storage.publish(put_a_b_c(Atomicity::WholeSet));
+        assert!(matches!(result, Err(PublishFailure::Refused(_))));
+        assert!(kept.0.lock().unwrap().is_empty());
+        assert_eq!(storage.read_view().unwrap(), before);
+    }
+
+    #[test]
+    #[verifies("rule_memory_storage_persists_each_publish", examples)]
+    fn the_persistence_keeps_only_the_landed_prefix_of_a_per_key_set() {
+        let (storage, kept) = failing_on_b();
+        let result = storage.publish(put_a_b_c(Atomicity::PerKey));
+        assert!(matches!(result, Err(PublishFailure::Started(_))));
+        let prefix = WriteSet::new(Atomicity::PerKey).put(key("a"), b"a".to_vec());
+        assert_eq!(*kept.0.lock().unwrap(), [prefix]);
+        let landed = BTreeMap::from([(key("a"), b"a".to_vec()), (key("b"), b"old".to_vec())]);
+        assert_eq!(storage.read_view().unwrap().into_entries(), landed);
     }
 }
