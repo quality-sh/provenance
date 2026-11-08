@@ -25,12 +25,6 @@ pub struct HostRefusal {
 #[derive(Debug)]
 pub struct Cause(pub String);
 
-impl Cause {
-    pub fn of(cause: Option<&str>) -> Option<Self> {
-        cause.map(|cause| Self(cause.to_owned()))
-    }
-}
-
 impl std::fmt::Display for Cause {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str(&self.0)
@@ -67,7 +61,7 @@ impl HostRefusal {
             failure: serde_json::to_value(failure).unwrap_or_default(),
             hint: None,
             text_shows_failure: true,
-            cause: Cause::of(failure.cause()),
+            cause: failure.cause().map(|cause| Cause(cause.to_owned())),
         }
     }
 }
