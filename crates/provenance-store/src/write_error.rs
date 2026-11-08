@@ -353,7 +353,7 @@ fn path_start(before: &str) -> usize {
         .unwrap_or(window)
 }
 
-fn ends_path(character: char) -> bool {
+const fn ends_path(character: char) -> bool {
     character.is_whitespace() || matches!(character, '"' | '\'' | '`' | '(' | ')' | ',' | ';')
 }
 
