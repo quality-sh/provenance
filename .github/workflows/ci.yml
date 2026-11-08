@@ -1122,11 +1122,11 @@ jobs:
       - name: Check out the base state
         id: base
         env:
-          BASE: ${{ github.event.pull_request.base.sha || github.event.before || 'origin/main' }}
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || 'origin/main' }}
           SCRATCH: ${{ runner.temp }}/base-state
         run: |
           set -euo pipefail
-          base=$(git rev-parse --verify "$BASE^{commit}")
+          base=$(git rev-parse --verify "$BASE_REF^{commit}")
           git worktree add --detach "$SCRATCH" "$base"
           echo "Base commit: $base"
           echo "State rows: $(find "$SCRATCH/.provenance/state" -name "*.jsonl" -exec cat {} + | wc -l)"
