@@ -290,7 +290,7 @@ mod tests {
 
     #[test]
     #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
-    fn both_adapters_publish_lands_puts_and_deletes() {
+    fn each_adapter_publish_lands_puts_and_deletes() {
         publish_lands_puts_and_deletes(local());
         publish_lands_puts_and_deletes(Memory::default());
         publish_lands_puts_and_deletes(Persisting::default());
@@ -298,7 +298,7 @@ mod tests {
 
     #[test]
     #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
-    fn both_adapters_publish_on_the_current_base_lands() {
+    fn each_adapter_publish_on_the_current_base_lands() {
         publish_on_the_current_base_lands(local());
         publish_on_the_current_base_lands(Memory::default());
         publish_on_the_current_base_lands(Persisting::default());
@@ -306,7 +306,7 @@ mod tests {
 
     #[test]
     #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
-    fn both_adapters_publish_on_a_moved_base_is_refused() {
+    fn each_adapter_publish_on_a_moved_base_is_refused() {
         publish_on_a_moved_base_is_refused(local());
         publish_on_a_moved_base_is_refused(Memory::default());
         publish_on_a_moved_base_is_refused(Persisting::default());
@@ -314,7 +314,7 @@ mod tests {
 
     #[test]
     #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
-    fn both_adapters_publish_refuses_a_put_and_delete_of_one_key() {
+    fn each_adapter_publish_refuses_a_put_and_delete_of_one_key() {
         publish_refuses_a_put_and_delete_of_one_key(local());
         publish_refuses_a_put_and_delete_of_one_key(Memory::default());
         publish_refuses_a_put_and_delete_of_one_key(Persisting::default());
@@ -322,7 +322,7 @@ mod tests {
 
     #[test]
     #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
-    fn both_adapters_a_failed_one_key_set_lands_nothing() {
+    fn each_adapter_a_failed_one_key_set_lands_nothing() {
         a_failed_one_key_set_lands_nothing(local());
         a_failed_one_key_set_lands_nothing(Memory::default());
         a_failed_one_key_set_lands_nothing(Persisting::default());
@@ -330,7 +330,7 @@ mod tests {
 
     #[test]
     #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
-    fn both_adapters_a_failed_per_key_set_leaves_a_landed_prefix() {
+    fn each_adapter_a_failed_per_key_set_leaves_a_landed_prefix() {
         a_failed_per_key_set_leaves_a_landed_prefix(local());
         a_failed_per_key_set_leaves_a_landed_prefix(Memory::default());
         a_failed_per_key_set_leaves_a_landed_prefix(Persisting::default());
