@@ -1,20 +1,21 @@
 use crate::support::{cli_stale, commit as commit_all, fixture, write, Fixture, Goldens};
 use provenance_core::protocol::{StaleQuery, SDK_PROTOCOL_VERSION};
+use provenance_macros::verifies;
 use provenance_store::operations::queries;
 use provenance_store::operations::read_policy::ReadPolicy;
 use provenance_store::repository::Repository;
 use serde_json::Value;
 
 /// One stale request: a name for its recorded answer and its parameters.
-struct Request {
-    name: &'static str,
+pub struct Request {
+    pub name: &'static str,
     base: &'static str,
     head: Option<&'static str>,
     rules: &'static [&'static str],
     limit: usize,
 }
 
-const REQUESTS: [Request; 6] = [
+pub const REQUESTS: [Request; 6] = [
     Request {
         name: "range",
         base: "BASE",
@@ -67,18 +68,27 @@ fn commit(fixture: &Fixture, name: &str) -> String {
     }
 }
 
+/// The query parameters of the request, with the commit ids of the fixture.
+pub fn commit_query(fixture: &Fixture, request: &Request) -> Vec<(&'static str, String)> {
+    let mut query = vec![
+        ("base", commit(fixture, request.base)),
+        ("limit", request.limit.to_string()),
+    ];
+    if let Some(head) = request.head {
+        query.push(("head", commit(fixture, head)));
+    }
+    if !request.rules.is_empty() {
+        query.push(("rules", request.rules.join(",")));
+    }
+    query
+}
+
 fn cli_answer(fixture: &Fixture, request: &Request) -> Value {
-    let base = commit(fixture, request.base);
-    let head = request.head.map(|head| commit(fixture, head));
-    let limit = request.limit.to_string();
-    let mut query = vec![("base", base.as_str()), ("limit", limit.as_str())];
-    if let Some(head) = &head {
-        query.push(("head", head.as_str()));
-    }
-    let rules = request.rules.join(",");
-    if !rules.is_empty() {
-        query.push(("rules", rules.as_str()));
-    }
+    let query = commit_query(fixture, request);
+    let query = query
+        .iter()
+        .map(|(name, value)| (*name, value.as_str()))
+        .collect::<Vec<_>>();
     let (code, stdout, stderr) = cli_stale(fixture.path(), &query);
     assert_eq!(code, 0, "{} failed: {stderr}", request.name);
     fixture.normalized(&stdout["data"])
@@ -103,6 +113,7 @@ async fn store_answer(fixture: &Fixture, repository: &Repository, request: &Requ
 
 /// Each request from a new CLI process gives its recorded answer.
 #[test]
+#[verifies("rule_gate_reports_without_review", examples)]
 fn each_cli_request_gives_the_recorded_answer() {
     let fixture = fixture();
     let mut goldens = Goldens::default();
@@ -119,6 +130,7 @@ fn each_cli_request_gives_the_recorded_answer() {
 /// gives the recorded answer each time. After a new commit, its answer
 /// for the new range is the answer of a new process.
 #[tokio::test(flavor = "multi_thread")]
+#[verifies("rule_gate_reports_without_review", examples)]
 async fn repeated_requests_in_one_process_give_the_recorded_answers() {
     let mut fixture = fixture();
     let repository = Repository::open(fixture.path(), "default").unwrap();

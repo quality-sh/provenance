@@ -1,37 +1,7 @@
-use assert_cmd::Command;
+use crate::review_paths::provenance;
+pub use crate::stale_repo::{commit, git, init_repo, remove_object, write};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
-
-pub fn provenance() -> Command {
-    Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
-}
-
-pub fn git(repo: &Path, args: &[&str]) -> String {
-    let output = provenance_store::git_process::git()
-        .arg("-C")
-        .arg(repo)
-        .args(args)
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "git {args:?} failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8(output.stdout).unwrap().trim().to_string()
-}
-
-pub fn write(repo: &Path, relative: &str, contents: impl AsRef<[u8]>) {
-    let path = repo.join(relative);
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::write(path, contents).unwrap();
-}
-
-pub fn commit(repo: &Path, message: &str) -> String {
-    git(repo, &["add", "-A", "."]);
-    git(repo, &["commit", "-q", "-m", message]);
-    git(repo, &["rev-parse", "HEAD"])
-}
 
 /// The two commits of the fixture range and the repository that holds them.
 pub struct Fixture {
@@ -67,31 +37,10 @@ const RULES: [&str; 9] = [
     "rule_tested",
 ];
 
-fn init_repo() -> tempfile::TempDir {
-    let directory = tempfile::tempdir().unwrap();
-    git(directory.path(), &["init", "-q"]);
-    git(
-        directory.path(),
-        &["config", "user.email", "test@example.com"],
-    );
-    git(directory.path(), &["config", "user.name", "Test"]);
-    provenance()
-        .args([
-            "init",
-            "--path",
-            directory.path().to_str().unwrap(),
-            "--scope",
-            "default",
-            "--path-prefix",
-            ".",
-        ])
-        .assert()
-        .success();
-    directory
-}
-
-fn apply_rules(repo: &Path) {
-    let rules = RULES
+/// Applies one Rule for each id. The Rule `rule_typed` is bound to the
+/// function `startWorkflow` in `src/runtime.ts`.
+pub fn apply_rules(repo: &Path, ids: &[&str]) {
+    let rules = ids
         .iter()
         .map(|id| {
             let mut rule = json!({
@@ -107,30 +56,18 @@ fn apply_rules(repo: &Path) {
             rule
         })
         .collect::<Vec<_>>();
-    let input = json!({
-        "spec": "runtime",
-        "declared_by": "spec://typescript/runtime",
-        "requirements": [{"key": "workflows", "statement": "Accepted workflows execute"}],
-        "rules": rules
-    });
-    provenance()
-        .args([
-            "api",
-            "authoring-changes",
-            "--method",
-            "post",
-            "--input",
-            "-",
-        ])
-        .arg("--repo")
-        .arg(repo)
-        .args(["--scope", "default", "--format", "json"])
-        .write_stdin(serde_json::to_vec(&input).unwrap())
-        .assert()
-        .success();
+    crate::stale_repo::apply_spec(
+        repo,
+        &json!({
+            "spec": "runtime",
+            "declared_by": "spec://typescript/runtime",
+            "requirements": [{"key": "workflows", "statement": "Accepted workflows execute"}],
+            "rules": rules
+        }),
+    );
 }
 
-fn function(rule: &str, name: &str, body: &str) -> String {
+pub fn function(rule: &str, name: &str, body: &str) -> String {
     format!("#[rule(\"{rule}\")]\nfn {name}() -> u32 {{\n    {body}\n}}\n")
 }
 
@@ -146,7 +83,7 @@ pub fn fixture() -> Fixture {
         .collect::<Vec<_>>()
         .concat();
     write_base(repo, &padding);
-    apply_rules(repo);
+    apply_rules(repo, &RULES);
     let base = commit(repo, "base");
     write_head(repo, &padding);
     let head = commit(repo, "head");
@@ -251,11 +188,11 @@ fn write_head(repo: &Path, padding: &str) {
     write(repo, "notes.md", "Notes, changed.\n");
 }
 
-/// The CLI answer: exit code, the JSON on standard output and the text on
-/// standard error.
-pub fn cli_stale(repo: &Path, query: &[(&str, &str)]) -> (i32, Value, String) {
+/// The CLI answer of `api <path>`: exit code, the JSON on standard output
+/// and the text on standard error.
+pub fn cli_api(repo: &Path, path: &str, query: &[(&str, &str)]) -> (i32, Value, String) {
     let mut command = provenance();
-    command.args(["api", "rules", "--query", "query=stale"]);
+    command.args(["api", path]);
     for (name, value) in query {
         command.arg("--query").arg(format!("{name}={value}"));
     }
@@ -271,6 +208,21 @@ pub fn cli_stale(repo: &Path, query: &[(&str, &str)]) -> (i32, Value, String) {
         stdout,
         String::from_utf8_lossy(&output.stderr).into_owned(),
     )
+}
+
+/// The CLI answer of the stale query.
+pub fn cli_stale(repo: &Path, query: &[(&str, &str)]) -> (i32, Value, String) {
+    let mut all = vec![("query", "stale")];
+    all.extend_from_slice(query);
+    cli_api(repo, "rules", &all)
+}
+
+/// The JSON error object of a CLI refusal on standard error.
+pub fn cli_error(stderr: &str) -> Value {
+    let text = stderr.trim();
+    let text = text.strip_prefix("Error: ").unwrap_or(text);
+    serde_json::from_str::<Value>(text).unwrap_or_else(|error| panic!("{error}: {stderr}"))["error"]
+        .clone()
 }
 
 fn golden_path(name: &str) -> PathBuf {

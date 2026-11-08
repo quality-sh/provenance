@@ -1,0 +1,22 @@
+{
+  "base": "SECOND",
+  "head": "THIRD",
+  "sites": [
+    {
+      "end_line": 4,
+      "file_path": "src/three.rs",
+      "kind": "rule_binding",
+      "line": 1,
+      "state": "gone",
+      "subject_id": "rule_twin_paths"
+    },
+    {
+      "end_line": 4,
+      "file_path": "src/two.rs",
+      "kind": "rule_binding",
+      "line": 1,
+      "state": "touched",
+      "subject_id": "rule_twin_paths"
+    }
+  ]
+}
