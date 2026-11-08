@@ -122,10 +122,7 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
         .iter()
         .map(|(kind, id, _)| (*kind, id.clone()))
         .collect::<Vec<_>>();
-    let review_state = ctx
-        .live(crate::operations::reader::Live::Canonical)
-        .store()
-        .document_review_state(ctx.snapshot().scope(), &review_records)?;
+    let review_state = super::review_states::document_review_state(ctx, review_records)?;
     let hidden = hidden_records(&request, &review_state.rejected_new);
     let mut review_totals = DocumentReviewTotals::default();
     for (kind, id, is_member) in &review_keys {

@@ -71,8 +71,10 @@ pub use decision_input::{
     DecideRecordReview, ReviewFeedback, SubmitRecordReview, WithdrawRecordReview,
 };
 mod automatic_submission;
+mod cycle_index;
 mod decision;
 mod decision_reads;
+pub(crate) use decision_reads::DocumentReviewState;
 mod decision_state;
 
 #[cfg(test)]

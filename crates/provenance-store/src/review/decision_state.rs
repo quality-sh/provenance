@@ -2,11 +2,12 @@
 //! Disposition, Withdrawal and Discussion records, and the checks a
 //! submission or a decision must pass against the scope.
 
+use super::cycle_index::CycleIndex;
 use crate::state_store::StateStore;
 use provenance_core::{
     review::{CycleEntry, CycleFact},
     DispositionDecision, DispositionRecord, NodeType, ProposalCard, ProposalType, ScopeId,
-    StableId, Withdrawal,
+    StableId,
 };
 use provenance_macros::rule;
 
@@ -80,8 +81,7 @@ pub(super) struct CycleFacts {
     /// The review submissions among the Proposals.
     submissions: Vec<ProposalCard>,
     dispositions: Vec<DispositionRecord>,
-    withdrawals: Vec<Withdrawal>,
-    feedback: Vec<(StableId, StableId)>,
+    index: CycleIndex,
 }
 
 impl CycleFacts {
@@ -95,13 +95,15 @@ impl CycleFacts {
             .filter(|proposal| proposal.proposal_type == ProposalType::RecordRevision)
             .cloned()
             .collect::<Vec<_>>();
+        let submission_ids = submissions
+            .iter()
+            .map(|proposal| proposal.id.as_str())
+            .collect::<std::collections::HashSet<_>>();
         let withdrawals = store.list_withdrawals(scope)?;
         let mut withdrawn = std::collections::BTreeSet::new();
         for withdrawal in &withdrawals {
             anyhow::ensure!(
-                submissions
-                    .iter()
-                    .any(|proposal| proposal.id == withdrawal.proposal_id),
+                submission_ids.contains(withdrawal.proposal_id.as_str()),
                 "withdrawal {} names no review submission",
                 withdrawal.id.as_str()
             );
@@ -119,19 +121,21 @@ impl CycleFacts {
                     .disposition_id
                     .map(|disposition| (disposition, discussion.root_message_id))
             })
-            .collect();
+            .collect::<Vec<_>>();
+        let dispositions = store.list_dispositions(scope)?;
+        let index = CycleIndex::new(
+            &proposals,
+            &submissions,
+            &dispositions,
+            &withdrawals,
+            &feedback,
+        );
         Ok(Self {
             proposals,
             submissions,
-            dispositions: store.list_dispositions(scope)?,
-            withdrawals,
-            feedback,
+            dispositions,
+            index,
         })
-    }
-
-    /// Every Proposal of the scope, as one read of the records gave them.
-    pub(super) fn proposals(&self) -> &[ProposalCard] {
-        &self.proposals
     }
 
     /// Every Disposition of the scope, as one read of the records gave them.
@@ -139,43 +143,46 @@ impl CycleFacts {
         &self.dispositions
     }
 
-    pub(super) fn is_withdrawn(&self, proposal: &StableId) -> bool {
-        self.withdrawals
+    /// The Dispositions whose Proposal names the record, each with that
+    /// Proposal, in stored order.
+    pub(super) fn decisions_of<'a>(
+        &'a self,
+        kind: NodeType,
+        record_id: &'a StableId,
+    ) -> impl Iterator<Item = (&'a DispositionRecord, &'a ProposalCard)> + 'a {
+        self.index
+            .dispositions_of(kind, record_id)
             .iter()
-            .any(|withdrawal| withdrawal.proposal_id == *proposal)
+            .filter_map(|&position| {
+                let disposition = &self.dispositions[position];
+                let proposal = self.index.proposal(&disposition.proposal_id)?;
+                Some((disposition, &self.proposals[proposal]))
+            })
+    }
+
+    pub(super) fn is_withdrawn(&self, proposal: &StableId) -> bool {
+        self.index.is_withdrawn(proposal)
     }
 
     pub(super) fn is_decided(&self, proposal: &StableId) -> bool {
-        self.dispositions
-            .iter()
-            .any(|disposition| disposition.proposal_id == *proposal)
+        self.index.is_decided(proposal)
     }
 
     /// The feedback Message a decision published, if it did.
     pub(super) fn feedback_for(&self, disposition: &StableId) -> Option<StableId> {
-        self.feedback
-            .iter()
-            .find(|(decided, _)| decided == disposition)
-            .map(|(_, message)| message.clone())
+        self.index.feedback_for(disposition)
     }
 
     /// The order of one review submission: its review cycle, then its id.
     /// A submission whose key names no cycle keeps the end of the order.
     pub(super) fn order_of(&self, proposal: &StableId) -> (u64, String) {
-        let cycle = self
-            .submissions
-            .iter()
-            .find(|submission| submission.id == *proposal)
-            .and_then(cycle_of)
-            .unwrap_or(u64::MAX);
+        let cycle = self.index.cycle(proposal).unwrap_or(u64::MAX);
         (cycle, proposal.as_str().to_owned())
     }
 
     /// Whether a Proposal is a review submission.
     pub(super) fn is_submission(&self, proposal: &StableId) -> bool {
-        self.submissions
-            .iter()
-            .any(|submission| submission.id == *proposal)
+        self.index.is_submission(proposal)
     }
 
     pub(super) fn has_submissions(&self, kind: NodeType, record_id: &StableId) -> bool {
@@ -187,10 +194,10 @@ impl CycleFacts {
         kind: NodeType,
         record_id: &'a StableId,
     ) -> impl Iterator<Item = &'a ProposalCard> + 'a {
-        self.submissions.iter().filter(move |proposal| {
-            NodeType::from(proposal.traceability.target.artifact_type) == kind
-                && proposal.traceability.target.artifact_id == *record_id
-        })
+        self.index
+            .submissions_of(kind, record_id)
+            .iter()
+            .map(|&position| &self.submissions[position])
     }
 
     /// Whether a later submission or a revision link replaces this submission.

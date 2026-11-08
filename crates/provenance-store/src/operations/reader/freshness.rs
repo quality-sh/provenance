@@ -72,7 +72,7 @@ impl Freshness {
                 Err(error) => return Err(error),
             },
         };
-        let context = ReadContext::new(snapshot, repository.clone(), scan_limit);
+        let context = ReadContext::new(snapshot, repository.clone(), scan_limit, self.policy);
         let result = run(&context).await;
         let stamp = stamp::seal(context, self.policy);
         Ok((result, stamp))
