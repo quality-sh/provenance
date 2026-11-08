@@ -1,4 +1,4 @@
-use super::{canonical_utf8, sync_directory};
+use super::{durability::sync_directory, section::canonical_utf8};
 use crate::layout::ProvenanceLayout;
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -176,7 +176,7 @@ fn ensure_written_path_has_no_symlinks(
     Ok(())
 }
 
-pub(super) fn validated_transaction_dir(
+pub fn validated_transaction_dir(
     layout: &ProvenanceLayout,
     transaction_dir: &Utf8Path,
 ) -> anyhow::Result<Utf8PathBuf> {
@@ -189,7 +189,7 @@ pub(super) fn validated_transaction_dir(
     )
 }
 
-pub(super) fn validate_missing_transaction_dir(
+pub fn validate_missing_transaction_dir(
     layout: &ProvenanceLayout,
     transaction_dir: &Utf8Path,
 ) -> anyhow::Result<()> {

@@ -1,5 +1,6 @@
 use super::read_only::tests::{record_kind_repositories, scope};
 use super::*;
+use crate::state_store::RecordStamp::ResolveFromRepository as StampFromGit;
 use provenance_core::NodeType;
 use provenance_macros::verifies;
 
@@ -367,9 +368,9 @@ fn a_repository_read_in_the_publication_gap_waits_for_the_publication() {
     let mut published = manifest;
     published.disposition_actor_ids = vec!["actor_after".to_owned()];
     with_repository_publication(&layout, |held| {
-        with_staged_state(held, false, |staged| {
-            std::fs::write(staged.manifest_path(), serde_json::to_vec(&published)?)?;
-            Ok(())
+        with_staged_state(held, false, StampFromGit, |staged| {
+            let manifest = staged.layout.manifest_path();
+            staged.publish_shard(&manifest, serde_json::to_vec(&published)?)
         })
     })
     .unwrap();
@@ -398,7 +399,7 @@ fn read_only_record_kinds_in_the_publication_swap_find_no_record() {
         }
     });
     let published = with_repository_publication(&live, |held| {
-        with_staged_state(held, false, |_staged| Ok(()))
+        with_staged_state(held, false, StampFromGit, |_staged| Ok(()))
     });
     crate::test_probes::disarm("state_after_backup_rename");
     published.unwrap();
@@ -431,7 +432,7 @@ fn a_read_only_write_is_refused_and_creates_no_path() {
         assert!(store
             .permitting(&[shard.as_path()], "*", |_| Ok(()))
             .is_err());
-        assert!(with_staged_state(store, false, |_| Ok(())).is_err());
+        assert!(with_staged_state(store, false, StampFromGit, |_| Ok(())).is_err());
         let mut sources = store.list_sources(&scope())?;
         sources[0].id = provenance_core::StableId::new("source_not_in_repository")?;
         let refusals = [

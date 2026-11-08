@@ -9,23 +9,38 @@ use camino::Utf8Path;
 use std::collections::BTreeMap;
 use std::io::Write;
 
+pub mod durability;
+#[cfg(any(unix, windows))]
+mod file_install;
+mod recovery;
 mod section;
+pub mod whole_set;
+#[cfg(any(unix, windows))]
+pub use file_install::FileInstall;
+pub use recovery::{
+    clear_publication_marker, recover_pending_publication, write_publication_marker,
+    PublicationPhase,
+};
+#[cfg(all(test, unix))]
+pub(crate) use recovery::{validate_missing_transaction_dir, validated_transaction_dir};
 pub use section::LocalSectionLock;
 #[cfg(test)]
 pub(crate) use section::LockedPublicationFile;
-pub(crate) use section::{canonical_utf8, prepare_publication_lock};
+
+#[cfg(test)]
+pub(crate) use whole_set::copy_directory;
 
 /// Canonical state in the files of one state directory.
 ///
 /// The engine calls this adapter in the section that [`LocalSectionLock`]
 /// holds, after recovery, so no publication runs while it reads or writes,
-/// and publishes are serialized. A publish also takes the advisory lock of
-/// each key it changes, which other processes take to change that shard.
+/// and publishes are serialized.
 ///
-/// Each key lands with a temporary file and a rename, so one key lands
-/// completely or not at all. The keys of a set land one by one, in key
-/// order. The adapter refuses a whole set of more than one key until the
-/// staged publication path moves behind the port.
+/// A per-key set takes the advisory lock of each key it changes, which other
+/// processes take to change that shard. Each key lands with a temporary file
+/// and a rename, so one key lands completely or not at all, and the keys land
+/// one by one, in key order. A whole set lands as one swap of a changed copy
+/// of the state directory, so every key lands or no key lands.
 #[derive(Clone, Debug)]
 pub struct LocalStateStorage {
     layout: ProvenanceLayout,
@@ -53,14 +68,22 @@ impl StateStorage for LocalStateStorage {
     /// With a base, the adapter has the tree from its read under the lock.
     /// With no base, it reads and hashes the tree under the lock after the
     /// write.
+    ///
+    /// A per-key set lands each key with a temporary file and a rename, in
+    /// key order. A whole set lands as one swap of the state directory; see
+    /// [`whole_set`].
     fn publish(&self, writes: WriteSet) -> Result<Revision, PublishFailure> {
+        self.publish_with(&writes, &mut whole_set::StatePublication)
+    }
+}
+
+impl LocalStateStorage {
+    fn publish_with(
+        &self,
+        writes: &WriteSet,
+        hook: &mut dyn whole_set::WholeSetHook,
+    ) -> Result<Revision, PublishFailure> {
         writes.ensure_disjoint()?;
-        if writes.atomicity() == Atomicity::WholeSet && writes.key_count() > 1 {
-            return Err(PublishFailure::Refused(anyhow::anyhow!(
-                "the local adapter cannot land a whole set of {} keys",
-                writes.key_count()
-            )));
-        }
         let base_tree = match writes.base() {
             Some(base) => {
                 let view = self
@@ -76,6 +99,44 @@ impl StateStorage for LocalStateStorage {
             }
             None => None,
         };
+        match writes.atomicity() {
+            Atomicity::WholeSet => self.land_whole_set(writes, hook)?,
+            Atomicity::PerKey => self.land_per_key(writes)?,
+        }
+        base_tree.map_or_else(
+            || {
+                self.read_view()
+                    .map(|view| view.revision().clone())
+                    .map_err(|error| PublishFailure::Started(error.into()))
+            },
+            |mut tree| {
+                writes.apply_to(&mut tree);
+                Ok(Revision::of(&tree))
+            },
+        )
+    }
+
+    /// A failure that leaves the marker of the transaction began to land:
+    /// recovery completes or rolls it back. Any other failure landed no key.
+    fn land_whole_set(
+        &self,
+        writes: &WriteSet,
+        hook: &mut dyn whole_set::WholeSetHook,
+    ) -> Result<(), PublishFailure> {
+        let marker = hook.marker_path(&self.layout);
+        whole_set::land(&self.layout, writes, hook).map_err(|error| {
+            if marker.exists() {
+                PublishFailure::Started(error)
+            } else {
+                match error.downcast::<crate::write_error::PublicationStarted>() {
+                    Ok(started) => PublishFailure::Refused(started.0),
+                    Err(error) => PublishFailure::Refused(error),
+                }
+            }
+        })
+    }
+
+    fn land_per_key(&self, writes: &WriteSet) -> Result<(), PublishFailure> {
         let mut changes: BTreeMap<&StateKey, Option<&[u8]>> = BTreeMap::new();
         changes.extend(writes.deletes().iter().map(|key| (key, None)));
         changes.extend(
@@ -104,17 +165,7 @@ impl StateStorage for LocalStateStorage {
                 )
                 .map_err(PublishFailure::Started)?;
         }
-        base_tree.map_or_else(
-            || {
-                self.read_view()
-                    .map(|view| view.revision().clone())
-                    .map_err(|error| PublishFailure::Started(error.into()))
-            },
-            |mut tree| {
-                writes.apply_to(&mut tree);
-                Ok(Revision::of(&tree))
-            },
-        )
+        Ok(())
     }
 }
 

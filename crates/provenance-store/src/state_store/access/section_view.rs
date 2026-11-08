@@ -72,12 +72,17 @@ pub enum StateEntry {
 
 impl StateStore {
     /// Runs `read` on the view that this store reads, or returns `None` for
-    /// a store that reads the files: a view store has its view, and a store
-    /// of an opened repository that holds the live section has the view of
-    /// that section.
+    /// a store that reads the files: a view store has its view, a staged
+    /// store the overlay of its stage, and a store of an opened repository
+    /// that holds the live section has the view of that section.
     fn with_view<R>(&self, read: impl FnOnce(&StateView) -> R) -> anyhow::Result<Option<R>> {
         match &self.access {
             Access::View(view) => Ok(Some(read(view))),
+            Access::Staged { stage, .. } | Access::StagedSection { stage, .. }
+                if !stage.reads_files() =>
+            {
+                Ok(Some(stage.read(read)))
+            }
             Access::Section {
                 view: Some(section),
                 ..
@@ -94,14 +99,6 @@ impl StateStore {
                 view: Some(view), ..
             } => Some(view),
             _ => None,
-        }
-    }
-
-    /// Makes the section of this store read its view again: a staged
-    /// install changed the state apart from the view.
-    pub(crate) fn forget_section_view(&self) {
-        if let Some(view) = self.section_view() {
-            view.forget();
         }
     }
 

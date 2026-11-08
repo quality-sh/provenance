@@ -32,8 +32,7 @@ fn try_publish(root: &Utf8Path) -> anyhow::Result<()> {
     let held = RepositoryFiles::open(root)?.read_bounded(Utf8Path::new("source.txt"), 1024)?;
     with_repository_publication(&layout, |section| {
         with_staged_state_and_source_edit(section, held, AFTER, |staged| {
-            std::fs::write(staged.state_dir().join("value"), AFTER)?;
-            Ok(())
+            staged.publish_shard(&staged.layout.state_dir().join("value"), AFTER.to_vec())
         })
     })
 }

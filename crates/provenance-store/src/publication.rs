@@ -1,35 +1,31 @@
 use crate::layout::ProvenanceLayout;
-use crate::storage::local::LocalSectionLock;
-pub(crate) use crate::storage::local::{canonical_utf8, prepare_publication_lock};
-use crate::storage::{Atomicity, SectionLock, WriteSet};
+use crate::storage::local::{LocalSectionLock, LocalStateStorage};
+use crate::storage::{Atomicity, SectionLock, StateStorage, WriteSet};
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::rule;
 use serde::{de::DeserializeOwned, Serialize};
 
-mod durability;
 mod guard;
 mod holders;
 mod read_only;
-mod recovery;
 mod source_edit;
 mod source_edit_recovery;
 mod staged;
 mod write_permission;
-pub use durability::{sync_directory, sync_tree};
+pub use crate::storage::local::durability::{sync_directory, sync_tree};
+pub use crate::storage::local::{
+    clear_publication_marker, recover_pending_publication, write_publication_marker,
+    PublicationPhase,
+};
+#[cfg(all(test, unix))]
+use crate::storage::local::{validate_missing_transaction_dir, validated_transaction_dir};
 pub(crate) use guard::SectionHandle;
 pub use guard::{publication_guard, with_publication_guard, PublicationGuard};
 pub use holders::PublicationHeld;
 pub(crate) use holders::{enter, held_here, refuse_if_held, HolderKind};
 pub use read_only::read_only_record_kinds;
 pub(crate) use read_only::with_read_only_validation;
-pub(crate) use recovery::{canonical_transactions_dir, create_real_directory};
-pub use recovery::{
-    clear_publication_marker, recover_pending_publication, write_publication_marker,
-    PublicationPhase,
-};
-#[cfg(all(test, unix))]
-use recovery::{validate_missing_transaction_dir, validated_transaction_dir};
 #[cfg(any(unix, windows))]
 pub use source_edit::{with_staged_state_and_source_edit, SourceEditRecoveryFailure};
 pub(crate) use source_edit_recovery::recover_pending_source_edit;
@@ -195,17 +191,100 @@ impl crate::state_store::StateStore {
         })
     }
 
-    /// Publishes the shard at `path` as a one-key write set through the
-    /// adapter of this store. A store with a section view puts the revision
-    /// of the view on the set and applies the set to the view once it lands.
+    /// Publishes the shard at `path` as a one-key write set.
     #[rule("rule_write_sets_publish_through_the_storage_port")]
-    fn publish_shard(&self, path: &Utf8Path, bytes: Vec<u8>) -> anyhow::Result<()> {
-        let mut writes = WriteSet::new(Atomicity::PerKey).put(self.state_key(path)?, bytes);
-        let view = self.section_view();
-        if let Some(base) = view.and_then(crate::state_store::SectionView::revision) {
-            writes = writes.on_base(base);
+    pub(crate) fn publish_shard(&self, path: &Utf8Path, bytes: Vec<u8>) -> anyhow::Result<()> {
+        self.publish_set(WriteSet::new(Atomicity::PerKey).put(self.state_key(path)?, bytes))
+    }
+
+    /// Writes `records` as the shard at `path` in the stage of this store.
+    /// The write carries no permission, so it cannot change an enrolled row.
+    pub(crate) fn put_jsonl_records<T: Serialize>(
+        &self,
+        path: &Utf8Path,
+        records: &[T],
+    ) -> anyhow::Result<()> {
+        protect_rows(self, path, records, &WritePermissions::none())?;
+        let lines = records
+            .iter()
+            .map(crate::jsonl::to_stable_json)
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        let mut bytes = Vec::new();
+        for line in lines {
+            bytes.extend_from_slice(line.as_bytes());
+            bytes.push(b'\n');
         }
-        let landed = self.storage().publish(writes.clone());
+        self.publish_shard(path, bytes)
+    }
+
+    /// Deletes every key below the state directory `directory` in the stage
+    /// of this store.
+    pub(crate) fn delete_state_keys_under(&self, directory: &Utf8Path) -> anyhow::Result<()> {
+        let prefix = format!("{}/", self.state_key(directory)?.as_str());
+        let Some(stage) = self.stage() else {
+            anyhow::bail!("only a staged store deletes the keys below {directory}");
+        };
+        if stage.reads_files() {
+            if directory.exists() {
+                std::fs::remove_dir_all(directory)?;
+            }
+            return Ok(());
+        }
+        let writes = stage.read(|view| {
+            view.entries()
+                .keys()
+                .filter(|key| key.as_str().starts_with(&prefix))
+                .fold(WriteSet::new(Atomicity::PerKey), |writes, key| {
+                    writes.delete(key.clone())
+                })
+        });
+        self.publish_set(writes)
+    }
+
+    /// Lands the changes of a stage that this store holds the section for:
+    /// on the overlay of an outer stage, or through the adapter.
+    pub(crate) fn land_stage(&self, writes: WriteSet) -> anyhow::Result<()> {
+        self.publish_set(writes)
+    }
+
+    /// Publishes `writes`. A staged store lands them on the overlay of its
+    /// stage. A store with a section view puts the revision of the view on
+    /// a set that has no base, and applies the set to the view once it
+    /// lands. Any other store publishes through its adapter.
+    fn publish_set(&self, writes: WriteSet) -> anyhow::Result<()> {
+        if let Some(stage) = self.stage() {
+            writes
+                .ensure_disjoint()
+                .map_err(crate::write_error::publish_failure)?;
+            if stage.reads_files() {
+                return LocalStateStorage::new(self.layout.clone())
+                    .publish(writes)
+                    .map(drop)
+                    .map_err(crate::write_error::publish_failure);
+            }
+            stage.apply(&writes);
+            return Ok(());
+        }
+        self.publish_through(writes, |writes| self.storage().publish(writes))
+    }
+
+    /// Publishes `writes` with `publish`, in the section view of this store
+    /// as [`Self::publish_set`] does.
+    pub(crate) fn publish_through(
+        &self,
+        mut writes: WriteSet,
+        publish: impl FnOnce(
+            WriteSet,
+        )
+            -> Result<crate::storage::Revision, crate::storage::PublishFailure>,
+    ) -> anyhow::Result<()> {
+        let view = self.section_view();
+        if writes.base().is_none() {
+            if let Some(base) = view.and_then(crate::state_store::SectionView::revision) {
+                writes = writes.on_base(base);
+            }
+        }
+        let landed = publish(writes.clone());
         if let Some(view) = view {
             match &landed {
                 Ok(_) => view.apply(&writes),

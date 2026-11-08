@@ -98,25 +98,68 @@ impl StateStore {
         }
     }
 
-    /// A store over a staged state root. It keeps the identity of the live
-    /// store. Its reads and writes take the lock that the stage owns, not the
-    /// publication lock, because the live section holds that. It publishes
-    /// through an adapter rooted at the staged layout.
+    /// A store over a stage of the state that this store holds: the live
+    /// section, or the staged section of an outer stage. The staged store
+    /// keeps the identity and the layout of this store, so its paths name
+    /// the live state. It reads the overlay of the stage, and each write
+    /// lands on that overlay. Its reads and writes take the lock that the
+    /// stage owns, not the section lock, because this store holds that.
+    pub(crate) fn begin_stage(&self, record_stamp: RecordStamp) -> anyhow::Result<Self> {
+        let base = if let Access::StagedSection { stage, .. } = &self.access {
+            stage.read(Clone::clone)
+        } else {
+            self.ensure_holds_live_section()?;
+            match self.section_view() {
+                Some(view) => view.read(self.storage().as_ref(), Clone::clone)?,
+                None => self.storage().read_view()?,
+            }
+        };
+        Ok(Self {
+            identity: self.identity.clone(),
+            storage: self.storage.clone(),
+            layout: self.layout.clone(),
+            access: Access::Staged {
+                permissions: WritePermissions::none(),
+                stage: StageLock::new(self.layout.root(), base),
+            },
+            record_stamp,
+        })
+    }
+
+    /// A staged store over the files of the staged state root `layout`, as
+    /// a stage was before stages moved behind the port. Tests of the staged
+    /// writers use it.
+    #[cfg(test)]
     pub(crate) fn staged_view(
         identity: Option<RepositoryIdentity>,
         layout: ProvenanceLayout,
         record_stamp: RecordStamp,
     ) -> Self {
-        let stage = StageLock::new(layout.root());
         Self {
             identity,
             storage: Storage::Layout,
-            layout,
             access: Access::Staged {
                 permissions: WritePermissions::none(),
-                stage,
+                stage: StageLock::over_files(layout.root()),
             },
+            layout,
             record_stamp,
+        }
+    }
+
+    /// The changes of the stage of this staged store, as one whole set.
+    pub(crate) fn stage_changes(&self) -> anyhow::Result<crate::storage::WriteSet> {
+        match &self.access {
+            Access::Staged { stage, .. } => Ok(stage.changes()),
+            _ => anyhow::bail!("only a staged store has stage changes"),
+        }
+    }
+
+    /// The stage of this store, if it is a staged store.
+    pub(crate) fn stage(&self) -> Option<&StageLock> {
+        match &self.access {
+            Access::Staged { stage, .. } | Access::StagedSection { stage, .. } => Some(stage),
+            _ => None,
         }
     }
 
@@ -128,21 +171,8 @@ impl StateStore {
         }
     }
 
-    /// Whether this store holds the section of a staged state root. Refuses
-    /// a store that holds no section.
-    pub(crate) fn holds_staged_section(&self) -> anyhow::Result<bool> {
-        match &self.access {
-            Access::StagedSection { .. } => Ok(true),
-            _ => self.ensure_holds_live_section().map(|()| false),
-        }
-    }
-
     /// Refuses unless this store holds the live section. A view store
     /// refuses as it does for every write.
-    ///
-    /// A stage holds the live section that this check admits, and its
-    /// install changes the state apart from the section view. The view is
-    /// read again after the stage; see [`Self::forget_section_view`].
     pub(crate) fn ensure_holds_live_section(&self) -> anyhow::Result<()> {
         self.ensure_not_view()?;
         anyhow::ensure!(
@@ -199,11 +229,6 @@ impl StateStore {
         }
     }
 
-    /// The identity, for a staged view of this store.
-    pub(crate) fn identity_for_stage(&self) -> Option<RepositoryIdentity> {
-        self.identity.clone()
-    }
-
     /// Runs `run` with this staged store and a permission to change the
     /// enrolled rows of `id` (or of every id, `*`) in `paths`. A live store,
     /// also one that holds the section, is refused: a review write runs in a
@@ -219,8 +244,9 @@ impl StateStore {
                 permissions: permissions.with(paths, id),
                 stage: Arc::clone(stage),
             },
-            Access::StagedSection { permissions } => Access::StagedSection {
+            Access::StagedSection { permissions, stage } => Access::StagedSection {
                 permissions: permissions.with(paths, id),
+                stage: Arc::clone(stage),
             },
             Access::Lock | Access::Section { .. } | Access::ReadOnly | Access::View(_) => {
                 anyhow::bail!("a review write permission needs a staged store")
@@ -243,7 +269,7 @@ impl StateStore {
         static NONE: WritePermissions = WritePermissions::none();
         match &self.access {
             Access::Lock | Access::Section { .. } | Access::ReadOnly | Access::View(_) => &NONE,
-            Access::Staged { permissions, .. } | Access::StagedSection { permissions } => {
+            Access::Staged { permissions, .. } | Access::StagedSection { permissions, .. } => {
                 permissions
             }
         }
@@ -365,6 +391,7 @@ impl StateStore {
             Access::Staged { permissions, stage } => stage.run(|| {
                 operation(&self.section_store(Access::StagedSection {
                     permissions: permissions.clone(),
+                    stage: Arc::clone(stage),
                 }))
             }),
             Access::Section { .. } | Access::ReadOnly => {

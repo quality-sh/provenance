@@ -105,8 +105,9 @@ enum Access {
         until: Option<crate::publication::SectionHandle>,
         view: Option<std::sync::Arc<access::SectionView>>,
     },
-    /// A store over a staged state root. Each read and write takes the lock
-    /// that the stage owns.
+    /// A store over a stage: it reads the overlay of the stage, and each
+    /// write lands there. Each read and write takes the lock that the stage
+    /// owns.
     Staged {
         permissions: crate::publication::WritePermissions,
         stage: std::sync::Arc<crate::publication::StageLock>,
@@ -115,6 +116,7 @@ enum Access {
     /// carries write permissions.
     StagedSection {
         permissions: crate::publication::WritePermissions,
+        stage: std::sync::Arc<crate::publication::StageLock>,
     },
     /// Reads with no lock and refuses every write.
     ReadOnly,

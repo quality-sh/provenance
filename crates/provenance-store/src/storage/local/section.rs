@@ -2,11 +2,11 @@
 //! `.provenance/cache/locks`, the checks of the directories it lives in, and
 //! the recovery of an interrupted publication before the section runs.
 
-use crate::layout::ProvenanceLayout;
-use crate::publication::{
+use super::recovery::{
     canonical_transactions_dir, create_real_directory, recover_pending_publication,
-    recover_pending_source_edit,
 };
+use crate::layout::ProvenanceLayout;
+use crate::publication::recover_pending_source_edit;
 use crate::storage::SectionLock;
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};

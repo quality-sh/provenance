@@ -327,16 +327,17 @@ impl Repository {
         }
     }
 
-    /// Runs `prepare` on a staged copy of the live state, then publishes the
-    /// copy, or drops it on a dry run or an error.
+    /// Runs `prepare` on a stage of the live state, then publishes the
+    /// changes of the stage as one whole set, or drops them on a dry run or
+    /// an error.
     ///
     /// The body borrows a store that keeps this repository's identity and
-    /// reads and writes the staged state root. The live section holds the
-    /// publication lock; each read and write of the staged store takes the
-    /// lock that the stage owns, so workers of the body run their staged
-    /// sections one at a time. A panic in a staged section stops the
-    /// publication. While the body runs, live access to this repository on
-    /// the same thread refuses with
+    /// reads and writes the overlay of the stage. The live section holds the
+    /// section lock; each read and write of the staged store takes the lock
+    /// that the stage owns, so workers of the body run their staged sections
+    /// one at a time. A panic in a staged section stops the publication.
+    /// While the body runs, live access to this repository on the same
+    /// thread refuses with
     /// [`LiveAccessDuringStage`](crate::publication::LiveAccessDuringStage).
     /// Records written in the body carry `stamp`, or the working tree's
     /// commit when it is `None`.
@@ -347,22 +348,12 @@ impl Repository {
         stamp: Option<Stamp>,
         prepare: impl FnOnce(&StateStore) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
-        let live = &self.inner.layout;
         let record_stamp = stamp.map_or(
             crate::state_store::RecordStamp::ResolveFromRepository,
             crate::state_store::RecordStamp::Fixed,
         );
         self.store().with_repository_publication(|held| {
-            crate::publication::with_staged_state(held, dry_run, |staged| {
-                let store = StateStore::staged_view(
-                    Some(self.inner.identity.clone()),
-                    staged.clone(),
-                    record_stamp,
-                );
-                let result = crate::publication::with_stage_body(live, || prepare(&store))?;
-                store.ensure_stage_intact()?;
-                Ok(result)
-            })
+            crate::publication::with_staged_state(held, dry_run, record_stamp, prepare)
         })
     }
 }

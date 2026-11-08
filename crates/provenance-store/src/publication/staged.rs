@@ -1,13 +1,13 @@
-//! Complete-state publication shared by import and review saves.
-use super::{
-    clear_publication_marker, enter, held_here, refuse_if_held, sync_directory, sync_tree,
-    write_publication_marker, HolderKind, PublicationPhase,
-};
+//! Staged publication shared by import and review saves: a stage collects
+//! its writes on an overlay and publishes them as one whole set.
+use super::{enter, held_here, refuse_if_held, HolderKind};
 use crate::layout::ProvenanceLayout;
-use crate::state_store::StateStore;
+use crate::state_store::{RecordStamp, StateStore};
+use crate::storage::{Atomicity, StateView, WriteSet};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::rule;
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 
 /// A stage body tried to enter a live publication section of its repository.
 #[derive(Debug, thiserror::Error)]
@@ -51,23 +51,55 @@ pub(super) fn refuse_during_stage(key: &str, repository: &Utf8Path) -> anyhow::R
     Ok(())
 }
 
-/// The lock that one stage owns. The staged sections of the stage run one at
-/// a time. A panic in a staged section poisons the lock, and the stage then
-/// refuses to publish.
+/// One stage: an overlay on the view that the stage started from, and the
+/// lock that its sections take.
+///
+/// The staged sections of the stage run one at a time. A panic in a staged
+/// section poisons the lock, and the stage then refuses to publish. Each
+/// write of the stage lands on the overlay; the live state does not change
+/// until the stage publishes the difference as one whole set.
 #[derive(Debug)]
 pub struct StageLock {
     identity: String,
     root: Utf8PathBuf,
     sections: Mutex<()>,
+    base: StateView,
+    overlay: Mutex<StateView>,
+    /// A test stage over a staged state root reads and writes its files.
+    files: bool,
 }
 
 impl StageLock {
-    pub(crate) fn new(root: &Utf8Path) -> Arc<Self> {
+    /// A stage of the repository at `root` over `base`.
+    pub(crate) fn new(root: &Utf8Path, base: StateView) -> Arc<Self> {
+        static STAGES: AtomicU64 = AtomicU64::new(0);
+        Arc::new(Self {
+            identity: format!("stage {} of {root}", STAGES.fetch_add(1, Ordering::Relaxed)),
+            root: root.to_owned(),
+            sections: Mutex::new(()),
+            overlay: Mutex::new(base.clone()),
+            base,
+            files: false,
+        })
+    }
+
+    /// A test stage that reads and writes the files of the staged state root
+    /// at `root`, as a stage did before stages moved behind the port.
+    #[cfg(test)]
+    pub(crate) fn over_files(root: &Utf8Path) -> Arc<Self> {
         Arc::new(Self {
             identity: root.to_string(),
             root: root.to_owned(),
             sections: Mutex::new(()),
+            base: StateView::new(std::collections::BTreeMap::new()),
+            overlay: Mutex::new(StateView::new(std::collections::BTreeMap::new())),
+            files: true,
         })
+    }
+
+    /// Whether this is a test stage that reads and writes files.
+    pub(crate) const fn reads_files(&self) -> bool {
+        self.files
     }
 
     /// Runs one staged section. Another thread waits; a second entry on this
@@ -95,364 +127,68 @@ impl StageLock {
         );
         Ok(())
     }
+
+    /// Runs `read` on the base view with the writes of the stage applied.
+    pub(crate) fn read<R>(&self, read: impl FnOnce(&StateView) -> R) -> R {
+        read(&self.overlay())
+    }
+
+    /// Lands `writes` on the overlay.
+    pub(crate) fn apply(&self, writes: &WriteSet) {
+        let mut overlay = self.overlay();
+        let mut entries = overlay.entries().clone();
+        writes.apply_to(&mut entries);
+        *overlay = StateView::new(entries);
+    }
+
+    /// Every change of the stage as one whole set on the revision where the
+    /// stage started: a put for each key that is new or has other bytes, and
+    /// a delete for each key of the base that the overlay does not hold.
+    #[rule("rule_stage_lands_as_one_whole_set")]
+    pub(crate) fn changes(&self) -> WriteSet {
+        let overlay = self.overlay();
+        let mut writes = WriteSet::new(Atomicity::WholeSet).on_base(self.base.revision().clone());
+        for (key, bytes) in overlay.entries() {
+            if self.base.get(key) != Some(bytes.as_slice()) {
+                writes = writes.put(key.clone(), bytes.clone());
+            }
+        }
+        for key in self.base.entries().keys() {
+            if overlay.get(key).is_none() {
+                writes = writes.delete(key.clone());
+            }
+        }
+        writes
+    }
+
+    fn overlay(&self) -> std::sync::MutexGuard<'_, StateView> {
+        // Every change replaces the whole view, so a poisoned overlay is intact.
+        self.overlay.lock().unwrap_or_else(PoisonError::into_inner)
+    }
 }
 
-/// Copies the complete state tree and publishes the prepared result under the
-/// section that `held` holds: the live section, or the staged section of a
-/// stage that writes in steps. Copy cost is proportional to all state bytes,
-/// including existing evidence.
+/// Runs `prepare` on a stage over the state that `held` reads: the live
+/// section, or the staged section of an outer stage. The stage body borrows
+/// a staged store with the identity of `held` and records that carry
+/// `stamp`. While the body runs, live access to the repository on this
+/// thread refuses. A dry run drops the stage. Otherwise the changes land as
+/// one whole set: through the adapter for the live section, or on the
+/// overlay of the outer stage.
 pub fn with_staged_state<R>(
     held: &StateStore,
     dry_run: bool,
-    prepare: impl FnOnce(&ProvenanceLayout) -> anyhow::Result<R>,
+    stamp: RecordStamp,
+    prepare: impl FnOnce(&StateStore) -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
-    let live_layout = &held.layout;
-    let mut publication = ImportPublication { transactions: None };
-    if held.holds_staged_section()? {
-        // The stage lock holds the staged root, so no publication lock is taken there.
-        super::prepare_publication_lock(live_layout)?;
-        // The inner transaction goes beside the staged root, in the transaction of the
-        // outer stage. A transaction inside the staged root makes paths too long on Windows.
-        publication.transactions = live_layout.root().parent().map(Utf8Path::to_owned);
-    }
-    let result = stage_with_hook(live_layout, dry_run, prepare, &mut publication);
-    held.forget_section_view();
-    result.map_err(|error| {
-        if live_layout.publication_marker_path().exists() {
-            crate::write_error::publication_started(error)
-        } else {
-            // A failed staged write or completed rollback did not commit live state.
-            match error.downcast::<crate::write_error::PublicationStarted>() {
-                Ok(staged) => staged.0,
-                Err(error) => error,
-            }
-        }
-    })
-}
-
-pub(super) trait StagedStateHook {
-    fn transactions_dir(&self, live: &ProvenanceLayout) -> Utf8PathBuf;
-    fn marker_path(&self, live: &ProvenanceLayout) -> Utf8PathBuf;
-    fn prepared(
-        &mut self,
-        live: &ProvenanceLayout,
-        transaction: &camino::Utf8Path,
-    ) -> anyhow::Result<()>;
-    fn backup_created(
-        &mut self,
-        live: &ProvenanceLayout,
-        transaction: &camino::Utf8Path,
-    ) -> anyhow::Result<()>;
-    fn state_installed(&mut self, live: &ProvenanceLayout) -> anyhow::Result<()>;
-    fn install_file(&mut self) -> anyhow::Result<InstallState>;
-    fn published(
-        &mut self,
-        live: &ProvenanceLayout,
-        transaction: &camino::Utf8Path,
-    ) -> anyhow::Result<()>;
-    fn after_published(&mut self) -> anyhow::Result<()>;
-    fn rollback_finished(&mut self, live: &ProvenanceLayout) -> anyhow::Result<()>;
-    fn finish(
-        &mut self,
-        live: &ProvenanceLayout,
-        transaction: &camino::Utf8Path,
-    ) -> anyhow::Result<()>;
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum InstallState {
-    StateOnly,
-    FileInstalled,
-}
-
-#[rule("rule_live_projection_shows_only_published_state")]
-pub(super) fn stage_with_hook<R>(
-    live_layout: &ProvenanceLayout,
-    dry_run: bool,
-    prepare: impl FnOnce(&ProvenanceLayout) -> anyhow::Result<R>,
-    hook: &mut impl StagedStateHook,
-) -> anyhow::Result<R> {
-    let transaction_name = format!(
-        "{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_nanos()
-    );
-    let transaction = hook.transactions_dir(live_layout).join(transaction_name);
-    std::fs::create_dir(&transaction)?;
-    let _cleanup = TransactionCleanup::new(transaction.clone(), hook.marker_path(live_layout));
-    let staged_repo = transaction.join("staged-repo");
-    copy_directory(
-        &live_layout.state_dir(),
-        &ProvenanceLayout::new(staged_repo.clone()).state_dir(),
-    )?;
-    let layout = ProvenanceLayout::new(staged_repo.clone());
-    let result = prepare(&layout)?;
-    crate::test_probes::at("state_prepared")?;
-    if !dry_run {
-        publish_staged_state(live_layout, &layout, &staged_repo, &transaction, hook)?;
+    let staged = held.begin_stage(stamp)?;
+    let result = with_stage_body(&held.layout, || prepare(&staged))?;
+    staged.ensure_stage_intact()?;
+    if dry_run {
         return Ok(result);
     }
-    std::fs::remove_dir_all(&transaction)
-        .map_err(|error| anyhow::anyhow!("remove import transaction {transaction}: {error}"))?;
+    held.land_stage(staged.stage_changes()?)?;
     Ok(result)
 }
 
-fn publish_staged_state(
-    live_layout: &ProvenanceLayout,
-    staged_layout: &ProvenanceLayout,
-    staged_repo: &camino::Utf8Path,
-    transaction: &camino::Utf8Path,
-    hook: &mut impl StagedStateHook,
-) -> anyhow::Result<()> {
-    sync_tree(&staged_layout.state_dir())?;
-    sync_directory(&staged_layout.provenance_dir())?;
-    sync_directory(staged_repo)?;
-    sync_directory(transaction)?;
-    sync_directory(&hook.transactions_dir(live_layout))?;
-    let backup = transaction.join("backup-state");
-    hook.prepared(live_layout, transaction)?;
-    std::fs::rename(live_layout.state_dir(), &backup).map_err(|error| {
-        anyhow::anyhow!(
-            "move live state {} to backup: {error}",
-            live_layout.state_dir()
-        )
-    })?;
-    install_staged_state(live_layout, staged_layout, transaction, &backup, hook)?;
-    let install_state = install_file(live_layout, staged_layout, &backup, hook)?;
-    record_publication(
-        live_layout,
-        staged_layout,
-        transaction,
-        &backup,
-        install_state,
-        hook,
-    )?;
-    hook.after_published()?;
-    hook.finish(live_layout, transaction)
-}
-
-fn install_staged_state(
-    live_layout: &ProvenanceLayout,
-    staged_layout: &ProvenanceLayout,
-    transaction: &camino::Utf8Path,
-    backup: &camino::Utf8Path,
-    hook: &mut impl StagedStateHook,
-) -> anyhow::Result<()> {
-    let state_result = crate::test_probes::at("state_after_backup_rename")
-        .and_then(|()| hook.backup_created(live_layout, transaction))
-        .and_then(|()| crate::test_probes::at("state_before_install"))
-        .and_then(|()| {
-            std::fs::rename(staged_layout.state_dir(), live_layout.state_dir()).map_err(|error| {
-                anyhow::anyhow!(
-                    "install staged state {}: {error}",
-                    staged_layout.state_dir()
-                )
-            })
-        })
-        .and_then(|()| crate::test_probes::at("state_after_install_rename"))
-        .and_then(|()| crate::test_probes::at("state_installed"))
-        .and_then(|()| sync_directory(&live_layout.provenance_dir()))
-        .and_then(|()| hook.state_installed(live_layout));
-    if let Err(error) = state_result {
-        rollback_after_error(live_layout, staged_layout, backup, hook)?;
-        return Err(error);
-    }
-    Ok(())
-}
-
-fn install_file(
-    live_layout: &ProvenanceLayout,
-    staged_layout: &ProvenanceLayout,
-    backup: &camino::Utf8Path,
-    hook: &mut impl StagedStateHook,
-) -> anyhow::Result<InstallState> {
-    match hook.install_file() {
-        Ok(state) => Ok(state),
-        Err(error) => {
-            rollback_after_error(live_layout, staged_layout, backup, hook)?;
-            Err(error)
-        }
-    }
-}
-
-fn record_publication(
-    live_layout: &ProvenanceLayout,
-    staged_layout: &ProvenanceLayout,
-    transaction: &camino::Utf8Path,
-    backup: &camino::Utf8Path,
-    install_state: InstallState,
-    hook: &mut impl StagedStateHook,
-) -> anyhow::Result<()> {
-    let Err(error) = hook.published(live_layout, transaction) else {
-        return Ok(());
-    };
-    if install_state == InstallState::FileInstalled {
-        return Err(error);
-    }
-    rollback_after_error(live_layout, staged_layout, backup, hook)?;
-    Err(error)
-}
-
-fn rollback_after_error(
-    live_layout: &ProvenanceLayout,
-    staged_layout: &ProvenanceLayout,
-    backup: &camino::Utf8Path,
-    hook: &mut impl StagedStateHook,
-) -> anyhow::Result<()> {
-    rollback_publication(live_layout, staged_layout, backup)
-        .map_err(crate::write_error::publication_started)?;
-    hook.rollback_finished(live_layout)
-        .map_err(crate::write_error::publication_started)
-}
-
-struct TransactionCleanup {
-    transaction: Utf8PathBuf,
-    publication_marker: Utf8PathBuf,
-}
-
-impl TransactionCleanup {
-    const fn new(transaction: Utf8PathBuf, publication_marker: Utf8PathBuf) -> Self {
-        Self {
-            transaction,
-            publication_marker,
-        }
-    }
-}
-
-impl Drop for TransactionCleanup {
-    fn drop(&mut self) {
-        if !self.publication_marker.exists() && self.transaction.exists() {
-            let _ = std::fs::remove_dir_all(&self.transaction);
-        }
-    }
-}
-
-fn rollback_publication(
-    live_layout: &ProvenanceLayout,
-    staged_layout: &ProvenanceLayout,
-    backup: &camino::Utf8Path,
-) -> anyhow::Result<()> {
-    crate::test_probes::at("state_before_rollback")?;
-    if live_layout.state_dir().exists() {
-        std::fs::rename(live_layout.state_dir(), staged_layout.state_dir()).map_err(|error| {
-            anyhow::anyhow!("return live state to stage during rollback: {error}")
-        })?;
-    }
-    if backup.exists() {
-        std::fs::rename(backup, live_layout.state_dir())
-            .map_err(|error| anyhow::anyhow!("restore backup state during rollback: {error}"))?;
-    }
-    sync_directory(&live_layout.provenance_dir())
-}
-
-/// The hook of a staged state publication. `transactions` is set for a stage
-/// in a staged section: its transaction then goes in the outer transaction,
-/// and it writes no marker, because recovery never runs on a staged root. A
-/// crash leaves the outer transaction, which recovery discards or completes.
-struct ImportPublication {
-    transactions: Option<Utf8PathBuf>,
-}
-
-impl ImportPublication {
-    fn mark(
-        &self,
-        live: &ProvenanceLayout,
-        transaction: &camino::Utf8Path,
-        phase: PublicationPhase,
-    ) -> anyhow::Result<()> {
-        if self.transactions.is_some() {
-            return Ok(());
-        }
-        write_publication_marker(live, transaction, phase)
-    }
-}
-
-impl StagedStateHook for ImportPublication {
-    fn transactions_dir(&self, live: &ProvenanceLayout) -> Utf8PathBuf {
-        self.transactions
-            .clone()
-            .unwrap_or_else(|| live.import_transactions_dir())
-    }
-
-    fn marker_path(&self, live: &ProvenanceLayout) -> Utf8PathBuf {
-        live.publication_marker_path()
-    }
-
-    fn prepared(
-        &mut self,
-        live: &ProvenanceLayout,
-        transaction: &camino::Utf8Path,
-    ) -> anyhow::Result<()> {
-        self.mark(live, transaction, PublicationPhase::Prepared)?;
-        crate::test_probes::at("state_marker_prepared")
-    }
-
-    fn backup_created(
-        &mut self,
-        live: &ProvenanceLayout,
-        transaction: &camino::Utf8Path,
-    ) -> anyhow::Result<()> {
-        sync_directory(transaction)?;
-        crate::test_probes::at("state_backup_created")?;
-        sync_directory(&live.provenance_dir())?;
-        self.mark(live, transaction, PublicationPhase::BackupCreated)
-    }
-
-    fn state_installed(&mut self, _live: &ProvenanceLayout) -> anyhow::Result<()> {
-        Ok(())
-    }
-    fn install_file(&mut self) -> anyhow::Result<InstallState> {
-        Ok(InstallState::StateOnly)
-    }
-
-    fn published(
-        &mut self,
-        live: &ProvenanceLayout,
-        transaction: &camino::Utf8Path,
-    ) -> anyhow::Result<()> {
-        self.mark(live, transaction, PublicationPhase::Published)
-    }
-
-    fn after_published(&mut self) -> anyhow::Result<()> {
-        crate::test_probes::at("state_published")
-    }
-
-    fn rollback_finished(&mut self, live: &ProvenanceLayout) -> anyhow::Result<()> {
-        clear_publication_marker(live)
-    }
-
-    fn finish(
-        &mut self,
-        live: &ProvenanceLayout,
-        transaction: &camino::Utf8Path,
-    ) -> anyhow::Result<()> {
-        if std::fs::remove_dir_all(transaction).is_ok() {
-            let _ = clear_publication_marker(live);
-        }
-        Ok(())
-    }
-}
-
-pub(super) fn copy_directory(
-    source: &camino::Utf8Path,
-    destination: &camino::Utf8Path,
-) -> anyhow::Result<()> {
-    std::fs::create_dir_all(destination)?;
-    for entry in std::fs::read_dir(source)? {
-        let entry = entry?;
-        let source_path = Utf8PathBuf::from_path_buf(entry.path())
-            .map_err(|path| anyhow::anyhow!("state path is not UTF-8: {}", path.display()))?;
-        let target = destination.join(entry.file_name().to_string_lossy().as_ref());
-        let file_type = std::fs::symlink_metadata(&source_path)?.file_type();
-        if file_type.is_dir() {
-            copy_directory(&source_path, &target)?;
-        } else if file_type.is_file() {
-            std::fs::copy(source_path, target)?;
-        } else {
-            anyhow::bail!("unsupported state entry: {source_path}");
-        }
-    }
-    Ok(())
-}
+#[cfg(test)]
+pub(super) use crate::storage::local::copy_directory;

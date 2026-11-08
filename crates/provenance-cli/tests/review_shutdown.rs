@@ -24,12 +24,11 @@ use std::{
 fn repository() -> (tempfile::TempDir, ProvenanceLayout) {
     let repo = initialized_repository();
     let layout = ProvenanceLayout::new(repo.path().to_str().unwrap());
-    let scope = ScopeId::new("default").unwrap();
     Repository::open(repo.path(), "default")
         .unwrap()
         .store()
         .create_requirement(provenance_store::state_store::CreateRequirementInput {
-            scope_id: scope.clone(),
+            scope_id: ScopeId::new("default").unwrap(),
             id: provenance_core::StableId::new("req_example").unwrap(),
             statement: "The Requirement accepts review.".into(),
             description: None,

@@ -1,7 +1,6 @@
-use super::{
-    staged::{stage_with_hook, InstallState, StagedStateHook},
-    sync_directory,
-};
+use super::sync_directory;
+use crate::storage::local::whole_set::{InstallState, WholeSetHook};
+use crate::storage::local::{FileInstall, LocalStateStorage};
 use crate::{
     layout::ProvenanceLayout,
     operations::files::{
@@ -54,16 +53,19 @@ pub(super) struct PreparedSourceRecord {
     pub(super) prepared_identity: FileIdentity,
 }
 
-/// Publishes a staged state and one repository file edit under the live
-/// section that `section` holds.
+/// Publishes a stage and one repository file edit under the live section
+/// that `section` holds, through the local adapter of its layout: the edit
+/// is a working-tree step, so it runs only on local disk.
 pub fn with_staged_state_and_source_edit<R>(
     section: &crate::state_store::StateStore,
     held: HeldRepositoryFile,
     replacement: &[u8],
-    prepare: impl FnOnce(&ProvenanceLayout) -> anyhow::Result<R>,
+    prepare: impl FnOnce(&crate::state_store::StateStore) -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
     section.ensure_holds_live_section()?;
-    let live = &section.layout;
+    let staged = section.begin_stage(crate::state_store::RecordStamp::ResolveFromRepository)?;
+    let result = super::with_stage_body(&section.layout, || prepare(&staged))?;
+    staged.ensure_stage_intact()?;
     let mut publication = SourceEditPublication {
         held: Some(held),
         replacement: replacement.to_vec(),
@@ -71,15 +73,11 @@ pub fn with_staged_state_and_source_edit<R>(
         backup: None,
         marker: None,
     };
-    let result = stage_with_hook(live, false, prepare, &mut publication);
-    section.forget_section_view();
-    result.map_err(|error| {
-        if live.source_edit_marker_path().exists() {
-            crate::write_error::publication_started(error)
-        } else {
-            error
-        }
-    })
+    let local = LocalStateStorage::new(section.layout.clone());
+    section.publish_through(staged.stage_changes()?, |writes| {
+        local.publish_with_file(&writes, FileInstall(&mut publication))
+    })?;
+    Ok(result)
 }
 
 struct SourceEditPublication {
@@ -90,7 +88,7 @@ struct SourceEditPublication {
     marker: Option<SourceEditMarker>,
 }
 
-impl StagedStateHook for SourceEditPublication {
+impl WholeSetHook for SourceEditPublication {
     fn transactions_dir(&self, live: &ProvenanceLayout) -> Utf8PathBuf {
         live.source_edit_transactions_dir()
     }

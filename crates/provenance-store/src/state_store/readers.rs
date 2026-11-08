@@ -228,6 +228,14 @@ pub fn message_shard_paths(
     message_shard_paths_in(&StateStore::read_only(layout.clone()), scope)
 }
 
+/// Every month shard of the scope's messages that `store` reads, sorted.
+pub fn message_shard_paths_of(
+    store: &StateStore,
+    scope: &ScopeId,
+) -> anyhow::Result<Vec<Utf8PathBuf>> {
+    message_shard_paths_in(store, scope)
+}
+
 fn message_shard_paths_in(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Vec<Utf8PathBuf>> {
     let threads_dir = shards::threads_path(&store.layout, scope)
         .parent()
