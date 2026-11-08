@@ -1,8 +1,8 @@
 mod contradiction;
 mod dangling;
-mod frontier;
 pub mod graph_query;
 mod ideation_targets;
+mod kinds;
 mod live_parents;
 mod model;
 mod state_adapter;
@@ -24,13 +24,13 @@ pub use state_adapter::{find_gaps, GraphRecords};
 pub fn compute_gaps(graph: &GapGraph<'_>) -> Vec<GapItem> {
     let query = GraphQuery::new(graph);
     let mut gaps = Vec::new();
-    frontier::add_requirement_gaps(&query, &mut gaps);
-    frontier::add_source_gaps(&query, &mut gaps);
+    kinds::add_requirement_gaps(&query, &mut gaps);
+    kinds::add_source_gaps(&query, &mut gaps);
     dangling::add_reference_gaps(&query, &mut gaps);
     ideation_targets::add_target_gaps(&query, &mut gaps);
     contradiction::add_gaps(&query, &mut gaps);
-    frontier::add_question_gaps(&query, &mut gaps);
-    frontier::add_topic_gaps(&query, &mut gaps);
+    kinds::add_question_gaps(&query, &mut gaps);
+    kinds::add_topic_gaps(&query, &mut gaps);
     live_parents::add_gaps(&query, &mut gaps);
     gaps
 }

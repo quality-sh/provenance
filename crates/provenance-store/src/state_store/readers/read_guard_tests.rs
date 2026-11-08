@@ -1,12 +1,11 @@
-use super::{record_from_line, Fields};
+use super::record_from_line;
 use camino::Utf8Path;
 use serde_json::{json, Value};
 
 type Loader = fn(&str) -> anyhow::Result<()>;
 
-const LOADERS: [(&str, Loader); 3] = [
-    ("an open read", load_open),
-    ("a closed read", load_closed),
+const LOADERS: [(&str, Loader); 2] = [
+    ("a read", load_read),
     ("the read inside a write", load_through_a_write),
 ];
 
@@ -14,17 +13,9 @@ fn path() -> &'static Utf8Path {
     Utf8Path::new(".provenance/state/scopes/default/requirements/req.jsonl")
 }
 
-fn load(line: &str, fields: Fields) -> anyhow::Result<Value> {
+fn load_read(line: &str) -> anyhow::Result<()> {
     let value = serde_json::from_str(line)?;
-    record_from_line(path(), 7, line, value, fields)
-}
-
-fn load_open(line: &str) -> anyhow::Result<()> {
-    load(line, Fields::Open).map(drop)
-}
-
-fn load_closed(line: &str) -> anyhow::Result<()> {
-    load(line, Fields::Closed).map(drop)
+    record_from_line::<Value>(path(), 7, value).map(drop)
 }
 
 fn load_through_a_write(line: &str) -> anyhow::Result<()> {

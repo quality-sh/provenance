@@ -31,9 +31,8 @@ fn trace_ids(result: &TraceResult) -> Vec<(usize, String)> {
         .collect()
 }
 
-/// Thirty children refine the seeded requirement, which also names its
-/// domain and carries the seeded boundary: thirty-two neighbours, the
-/// children first in id order.
+/// Thirty children refine the seeded requirement, which also carries the
+/// seeded boundary: thirty-one neighbours, the children first in id order.
 fn wide_children(store: &crate::state_store::StateStore, scope: &provenance_core::ScopeId) {
     for index in 0..30 {
         append_requirement(
@@ -47,9 +46,9 @@ fn wide_children(store: &crate::state_store::StateStore, scope: &provenance_core
     }
 }
 
-/// The seeded store's requirement already names its domain and carries
-/// the seeded boundary, so a wide child set serves thirty children and
-/// two fixed neighbours, children first in id order.
+/// The seeded store's requirement already carries the seeded boundary, so a
+/// wide child set serves thirty children and one fixed neighbour, children
+/// first in id order.
 #[tokio::test]
 #[verifies("rule_query_pages_bound_shared_reads", examples)]
 async fn neighbors_hydrate_only_the_served_page_over_a_wide_graph() {
@@ -85,7 +84,7 @@ async fn neighbors_hydrate_only_the_served_page_over_a_wide_graph() {
         assert!(result.has_more);
         assert!(
             hydrations <= limit + 2,
-            "limit {limit} decoded {hydrations} rows for 32 matches"
+            "limit {limit} decoded {hydrations} rows for 31 matches"
         );
     }
 }

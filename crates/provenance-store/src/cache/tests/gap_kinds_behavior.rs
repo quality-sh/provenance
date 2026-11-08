@@ -133,7 +133,7 @@ fn ordinary_prime_does_not_expand_into_a_global_proposal_queue() {
 #[test]
 #[allow(clippy::too_many_lines)]
 #[verifies("rule_graph_gaps", examples)]
-fn find_gaps_reports_the_frontier_taxonomy() {
+fn find_gaps_reports_each_gap_kind() {
     let (_dir, layout, scope) = empty_layout();
     let store = crate::test_support::store(&layout);
     create_source(&store, &scope, "source_anchor");
@@ -174,7 +174,7 @@ fn find_gaps_reports_the_frontier_taxonomy() {
             requirement_ids: vec![sid("req_decided_no_rule")],
             supersedes: Vec::new(),
             position: "Adopt".into(),
-            rationale: "Resolves frontier".into(),
+            rationale: "Resolves the open question".into(),
             status: ResolutionStatus::Approved,
             context: None,
             inputs: Vec::new(),
@@ -190,8 +190,8 @@ fn find_gaps_reports_the_frontier_taxonomy() {
         &store,
         &scope,
         "req_question_topic",
-        "topic_frontier",
-        "question_frontier",
+        "topic_open",
+        "question_open",
         QuestionStatus::Open,
     );
     // A merge can join an archive on one branch with a new child on the other.
@@ -242,12 +242,8 @@ fn find_gaps_reports_the_frontier_taxonomy() {
             NodeType::Requirement,
             "req_contradicts_a",
         ),
-        (
-            GapKind::OpenQuestion,
-            NodeType::Question,
-            "question_frontier",
-        ),
-        (GapKind::UnexploredTopic, NodeType::Topic, "topic_frontier"),
+        (GapKind::OpenQuestion, NodeType::Question, "question_open"),
+        (GapKind::UnexploredTopic, NodeType::Topic, "topic_open"),
         (
             GapKind::NoLiveParent,
             NodeType::Requirement,
@@ -277,7 +273,7 @@ fn find_gaps_reports_the_frontier_taxonomy() {
 }
 
 #[test]
-fn prime_renders_frontier_gap_subjects() {
+fn prime_renders_gap_subjects() {
     let (_dir, layout, scope) = empty_layout();
     let store = crate::test_support::store(&layout);
     create_source(&store, &scope, "source_anchor");
@@ -294,14 +290,14 @@ fn prime_renders_frontier_gap_subjects() {
         &store,
         &scope,
         "req_question_topic",
-        "topic_frontier",
-        "question_frontier",
+        "topic_open",
+        "question_open",
         QuestionStatus::Open,
     );
     let rendered = render_prime_markdown(&prime_context(&open(&layout), false).unwrap());
     assert!(rendered.contains("- requirement req_contradicts_a -> requirement req_contradicts_b: unresolved `contradicts` pair"));
-    assert!(rendered.contains("- question question_frontier: open question"));
-    assert!(rendered.contains("- topic topic_frontier: unexplored topic"));
+    assert!(rendered.contains("- question question_open: open question"));
+    assert!(rendered.contains("- topic topic_open: unexplored topic"));
 }
 
 #[test]

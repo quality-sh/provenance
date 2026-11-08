@@ -70,8 +70,8 @@ use crate::{layout::ProvenanceLayout, repository::RepositoryIdentity, shards};
 use ideation_batches::overlay_records;
 use provenance_core::{
     ensure_record_id_assignable, AssertionRecord, Contribution, DispositionRecord,
-    ImplementationBinding, Manifest, Message, ProposalCard, Scope, ScopeId, SynthesisPacket,
-    Thread, VerificationBinding,
+    ImplementationBinding, Manifest, Message, ProposalCard, ScopeId, SynthesisPacket, Thread,
+    VerificationBinding,
 };
 
 fn ensure_new_ids_assignable<T>(
