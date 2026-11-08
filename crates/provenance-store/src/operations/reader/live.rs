@@ -7,7 +7,7 @@
 
 use super::ReadContext;
 use crate::cache::{self, GraphEvidence};
-use crate::stale::{gate, git};
+use crate::stale::{gate, git, revision_scans};
 use crate::state_store::StateStore;
 use camino::Utf8Path;
 use provenance_core::coverage::{EvidenceDiffSite, EvidenceDiffState};
@@ -179,10 +179,17 @@ pub fn disturbed(
     rules: &[String],
     graph: &GraphEvidence,
 ) -> anyhow::Result<Disturbed> {
-    let base_files = git::revision_files(repo, &base)?;
-    let head_files = git::revision_files(repo, &head)?;
+    let scans = revision_scans::scan_range(repo, &base, &head)?;
     let changes = git::changed_files(repo, &base, &head)?;
-    let report = gate::report(repo, base, head, base_files, head_files, &changes, graph);
+    let report = gate::report_scanned(
+        repo,
+        base,
+        head,
+        &scans.base.files,
+        &scans.head.files,
+        &changes,
+        graph,
+    );
     let sites = report
         .sites
         .into_iter()
