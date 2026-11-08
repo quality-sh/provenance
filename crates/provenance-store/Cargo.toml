@@ -81,8 +81,6 @@ name = "discussion_containers"
 required-features = ["test-fixture"]
 
 [dev-dependencies]
-# The tests of the crate run the engine, so they turn on its host feature.
-provenance-store = { path = ".", features = ["host"] }
 fs_at.workspace = true
 jsonschema.workspace = true
 filetime.workspace = true

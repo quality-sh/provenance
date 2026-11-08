@@ -390,8 +390,7 @@
       "dev-dependencies": [
         "filetime",
         "fs_at",
-        "jsonschema",
-        "provenance-store"
+        "jsonschema"
       ]
     },
     "provenance-transport": {
