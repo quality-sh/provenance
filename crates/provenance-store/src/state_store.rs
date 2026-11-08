@@ -82,6 +82,8 @@ impl StateStore {
     /// The commit history that the record stamps of this store read: the one
     /// of the repository identity, or, for a layout-level store, the git
     /// history of the layout root.
+    // The match keeps the host arm and the arm without host side by side.
+    #[allow(clippy::option_if_let_else)]
     pub(crate) fn repository_history(
         &self,
     ) -> Option<std::sync::Arc<dyn crate::repository::RepositoryHistory>> {
@@ -99,6 +101,7 @@ impl StateStore {
     /// The project dictionary that the statement checks of this store use:
     /// the one of the repository identity, or, for a layout-level store, the
     /// one that the reference in the layout names.
+    #[allow(clippy::option_if_let_else)]
     pub(crate) fn project_dictionary(
         &self,
     ) -> Option<std::sync::Arc<crate::dictionary_reference::ProjectDictionary>> {

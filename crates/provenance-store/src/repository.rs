@@ -45,9 +45,11 @@ struct Inner {
     local: bool,
 }
 
-/// The commit history of the working tree of a repository. `open` gives a
-/// repository the history of its git work tree. With no history, a write
-/// stamps no commit and the archive check finds no gap, as outside a work tree.
+/// The commit history of the working tree of a repository.
+///
+/// `open` gives a repository the history of its git work tree. With no
+/// history, a write stamps no commit and the archive check finds no gap, as
+/// outside a work tree.
 pub trait RepositoryHistory: Send + Sync + std::fmt::Debug {
     /// The commit of `HEAD`, or `None` when there is no commit.
     fn head(&self) -> anyhow::Result<Option<String>>;
@@ -59,10 +61,11 @@ pub trait RepositoryHistory: Send + Sync + std::fmt::Debug {
     fn is_ancestor(&self, commit: &str, head: &str) -> anyhow::Result<bool>;
 }
 
-/// What a repository is, apart from where its state lives: the working tree,
-/// the selected scope, the settings read at open, the project dictionary of
-/// statement checks and the commit history. It has no store constructor, so
-/// a holder cannot reach canonical state through it.
+/// What a repository is, apart from where its state lives.
+///
+/// The working tree, the selected scope, the settings read at open, the
+/// project dictionary of statement checks and the commit history. It has no
+/// store constructor, so a holder cannot reach canonical state through it.
 #[derive(Clone, Debug)]
 pub struct RepositoryIdentity {
     root: Utf8PathBuf,

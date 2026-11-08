@@ -30,9 +30,11 @@ pub const fn record_bytes() -> usize {
     RECORD_BYTES
 }
 
-/// Counts the bytes that the supported read gives a REAL column:
-/// `length(CAST(real AS BLOB))` in the SQLite of the projection. The host
-/// answers with libsqlite3, and a Worker with the SQL of its Durable Object.
+/// Counts the bytes that the supported read gives a REAL column.
+///
+/// The count is `length(CAST(real AS BLOB))` in the `SQLite` of the
+/// projection. The host answers with libsqlite3, and a Worker with the SQL
+/// of its Durable Object.
 pub trait RealBytes: Send + Sync + std::fmt::Debug {
     /// The byte count of `real` as the SQLite of the projection casts it.
     fn of(&self, real: f64) -> anyhow::Result<usize>;
@@ -40,10 +42,11 @@ pub trait RealBytes: Send + Sync + std::fmt::Debug {
 
 static REAL_BYTES: OnceLock<Box<dyn RealBytes>> = OnceLock::new();
 
-/// Sets the REAL byte counter of this process, before the first write that
-/// counts a REAL column. Returns `false`, and keeps the first counter, when a
-/// counter is already set. With the `host` feature, libsqlite3 is the counter
-/// when none is set.
+/// Sets the REAL byte counter of this process.
+///
+/// Set it before the first write that counts a REAL column. Returns `false`,
+/// and keeps the first counter, when a counter is already set. With the
+/// `host` feature, libsqlite3 is the counter when none is set.
 pub fn set_real_bytes(counter: Box<dyn RealBytes>) -> bool {
     REAL_BYTES.set(counter).is_ok()
 }
