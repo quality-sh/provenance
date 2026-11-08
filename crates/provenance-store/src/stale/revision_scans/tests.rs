@@ -137,9 +137,9 @@ fn clones_of_an_open_share_the_kept_scans_and_another_open_does_not() {
     .unwrap();
     let opened = Repository::open(root, "default").unwrap();
     let repo = opened.working_tree().to_owned();
-    let first = scan_range(opened.kept_scans(), &repo, &base, &head).unwrap();
     let clone = opened.clone();
-    let shared = scan_range(clone.kept_scans(), &repo, &base, &head).unwrap();
+    let first = scan_range(clone.kept_scans(), &repo, &base, &head).unwrap();
+    let shared = scan_range(opened.kept_scans(), &repo, &base, &head).unwrap();
     assert!(Arc::ptr_eq(&first.base, &shared.base));
     let other = Repository::open(root, "default").unwrap();
     assert_eq!(kept_count(other.kept_scans()), 0);
