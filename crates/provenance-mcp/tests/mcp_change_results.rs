@@ -41,11 +41,6 @@ fn calls() -> Vec<(Value, Option<&'static str>)> {
             Some("source"),
         ),
         (
-            json!({"action": "create", "target": "domain_new", "type": "domain",
-                   "name": "New domain"}),
-            Some("domain"),
-        ),
-        (
             json!({"action": "answer", "target": "question_shared",
                    "answer": "The shared record applies."}),
             Some("question"),

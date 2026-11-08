@@ -38,7 +38,6 @@ pub struct CreateRequirementRequest {
     pub statement: String,
     pub description: Option<String>,
     pub status: RequirementStatus,
-    pub domain_id: Option<StableId>,
     #[serde(default)]
     pub refines: Vec<StableId>,
     pub depends_on: Vec<StableId>,
@@ -68,7 +67,6 @@ scoped_write_operation!(
                     statement: request.statement,
                     description: request.description,
                     status: request.status,
-                    domain_id: request.domain_id,
                     refines: request.refines,
                     depends_on: request.depends_on,
                     supersedes: request.supersedes,
@@ -91,10 +89,8 @@ pub struct UpdateRequirementRequest {
     pub declared_by: Option<String>,
     pub statement: Option<String>,
     pub description: Option<String>,
-    pub fog: Option<String>,
     pub status: Option<RequirementStatus>,
     pub archived_in_commit: Option<provenance_core::ArchivedStamp>,
-    pub domain_id: Option<StableId>,
     #[serde(default)]
     pub clear_fields: Vec<RequirementClearField>,
     pub relationships: Option<review::RequirementRelations>,
@@ -122,9 +118,7 @@ scoped_write_operation!(
                     declared_by: request.declared_by,
                     statement: request.statement,
                     description: request.description,
-                    fog: request.fog,
                     status: request.status,
-                    domain_id: request.domain_id,
                     clear_fields: request.clear_fields,
                 },
         })?;

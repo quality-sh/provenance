@@ -2,9 +2,7 @@ use super::records;
 use crate::layout::ProvenanceLayout;
 use crate::operations::read_policy::ReadPolicy;
 use crate::repository::Repository;
-use crate::state_store::{
-    CreateBoundaryInput, CreateDomainInput, CreateRequirementInput, StateStore,
-};
+use crate::state_store::{CreateBoundaryInput, CreateRequirementInput, StateStore};
 use provenance_core::protocol::{GetQuery, SearchQuery};
 use provenance_core::{
     Manifest, NodeType, RepoPathPrefix, RequirementStatus, ScopeId, StableId, SDK_PROTOCOL_VERSION,
@@ -43,7 +41,7 @@ fn sid(value: &str) -> StableId {
     StableId::new(value).unwrap()
 }
 
-/// One scope holding a requirement, its domain, and one boundary on it.
+/// One scope holding a requirement and one boundary on it.
 fn seeded_store() -> (tempfile::TempDir, StateStore, ScopeId) {
     let dir = tempfile::tempdir().unwrap();
     let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
@@ -61,22 +59,12 @@ fn seeded_store() -> (tempfile::TempDir, StateStore, ScopeId) {
     .unwrap();
     let store = crate::test_support::store(&layout);
     store
-        .create_domain(CreateDomainInput {
-            scope_id: scope.clone(),
-            id: sid("domain_payroll"),
-            name: "Payroll".into(),
-            description: Some("Wages and awards".into()),
-            color: None,
-        })
-        .unwrap();
-    store
         .create_requirement(CreateRequirementInput {
             scope_id: scope.clone(),
             id: sid("req_overtime"),
             statement: "Overtime is paid".into(),
             description: None,
             status: RequirementStatus::Active,
-            domain_id: Some(sid("domain_payroll")),
             refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
@@ -113,12 +101,9 @@ fn repository_at(root: &camino::Utf8Path) -> Repository {
 }
 
 #[tokio::test]
-async fn get_answers_a_domain_and_a_boundary_by_id() {
+async fn get_answers_a_boundary_by_id() {
     let (dir, _store, _scope) = seeded_store();
-    for (kind, id, wire) in [
-        (NodeType::Domain, "domain_payroll", "domain"),
-        (NodeType::Boundary, "boundary_no_backpay", "boundary"),
-    ] {
+    for (kind, id, wire) in [(NodeType::Boundary, "boundary_no_backpay", "boundary")] {
         let answer = super::get(
             &repository_of(&dir),
             ReadPolicy::default(),
@@ -140,7 +125,7 @@ async fn get_answers_a_domain_and_a_boundary_by_id() {
 
 #[tokio::test]
 #[verifies("rule_porcelain_search_crosses_kinds", examples)]
-async fn search_reaches_domains_and_boundaries_by_kind_and_text() {
+async fn search_reaches_boundaries_by_kind_and_text() {
     let (dir, _store, _scope) = seeded_store();
     let answer = super::search(
         &repository_of(&dir),
@@ -150,7 +135,7 @@ async fn search_reaches_domains_and_boundaries_by_kind_and_text() {
             protocol_version: Some(SDK_PROTOCOL_VERSION),
             exclude_terminal: false,
             text: Some("pay".into()),
-            node_types: vec![NodeType::Domain, NodeType::Boundary],
+            node_types: vec![NodeType::Boundary],
             limit: 10,
         },
     )
@@ -167,7 +152,7 @@ async fn search_reaches_domains_and_boundaries_by_kind_and_text() {
                 .to_string()
         })
         .collect();
-    assert_eq!(kinds, ["domain", "boundary"]);
+    assert_eq!(kinds, ["boundary"]);
 }
 
 #[tokio::test]
@@ -220,7 +205,7 @@ async fn default_search_keeps_the_six_settled_kinds_under_protocol_five() {
     for node in &answer.nodes {
         let kind = node.node_type();
         assert!(
-            !matches!(kind, NodeType::Domain | NodeType::Boundary),
+            !matches!(kind, NodeType::Boundary),
             "a default search must not emit {kind:?} while the protocol stays at version 5"
         );
     }
@@ -235,8 +220,7 @@ fn rank_appends_the_new_kinds_after_the_six_settled_positions() {
         (NodeType::Rule, 3),
         (NodeType::Topic, 4),
         (NodeType::Question, 5),
-        (NodeType::Domain, 6),
-        (NodeType::Boundary, 7),
+        (NodeType::Boundary, 6),
     ];
     for (kind, expected) in pinned {
         assert_eq!(records::rank(kind), expected, "rank of {kind:?}");
@@ -264,7 +248,6 @@ async fn search_answers_new_kinds_after_every_settled_kind() {
                 NodeType::Rule,
                 NodeType::Topic,
                 NodeType::Question,
-                NodeType::Domain,
                 NodeType::Boundary,
             ],
             limit: 10,
@@ -282,7 +265,6 @@ async fn search_answers_new_kinds_after_every_settled_kind() {
         order,
         [
             (NodeType::Requirement, "req_overtime"),
-            (NodeType::Domain, "domain_payroll"),
             (NodeType::Boundary, "boundary_no_backpay"),
         ],
         "the appended kinds answer after every settled kind"

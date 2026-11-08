@@ -1,11 +1,10 @@
 use crate::{definitions, HttpMethod};
 
-const REVIEW_KINDS: [(&str, &str); 8] = [
+const REVIEW_KINDS: [(&str, &str); 7] = [
     ("sources", "source"),
     ("requirements", "requirement"),
     ("resolutions", "resolution"),
     ("rules", "rule"),
-    ("domains", "domain"),
     ("boundaries", "boundary"),
     ("topics", "topic"),
     ("questions", "question"),
@@ -76,7 +75,7 @@ fn review_actions_do_not_accept_idempotency_headers() {
             .iter()
             .filter(|entry| entry.registration.handler.operation == name)
             .collect::<Vec<_>>();
-        assert_eq!(definitions.len(), 8, "{name} route count");
+        assert_eq!(definitions.len(), 7, "{name} route count");
         for definition in definitions {
             assert!(
                 definition.registration.controls.headers.is_empty(),

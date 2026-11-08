@@ -7,58 +7,6 @@ use provenance_core::{
 use provenance_macros::verifies;
 
 #[test]
-fn legacy_disposition_path_reads_shipped_camel_case_records() {
-    let (_dir, store, scope) = initialized_store();
-    let path = crate::shards::legacy_promotion_decisions_path(&store.layout, &scope);
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::write(
-        path,
-        serde_json::json!({"scope_id":"default","promotionDecisionId":"disposition_legacy","proposalId":"proposal_legacy","decision":"accepted","rationale":"Accepted.","decidedBy":{"identityType":"human","userId":"reviewer"},"canonicalArtifact":{"artifactType":"requirement","artifactId":"requirement_legacy"}}).to_string(),
-    )
-    .unwrap();
-
-    let dispositions = store.list_dispositions(&scope).unwrap();
-    assert_eq!(dispositions[0].id.as_str(), "disposition_legacy");
-    assert_eq!(dispositions[0].actor.id, "reviewer");
-}
-
-// Implementation aid: rule_legacy_shard_frozen is archived. The legacy shard gate stays until provenance-u9mg removes it.
-#[test]
-fn deprecated_disposition_shard_rejects_modern_records() {
-    let (_dir, store, scope) = initialized_store();
-    allow_actor(&store, "reviewer");
-    store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_modern",
-            "Modern proposal",
-            PromotionState::Proposed,
-        ))
-        .unwrap();
-    let path = crate::shards::legacy_promotion_decisions_path(&store.layout, &scope);
-    std::fs::write(
-        path,
-        serde_json::json!({"scope_id":"default","promotionDecisionId":"disposition_modern","proposalId":"proposal_modern","decision":"rejected","rationale":"Rejected.","decidedBy":{"identityType":"human","userId":"reviewer"},"canonicalArtifact":null}).to_string(),
-    )
-    .unwrap();
-
-    let error = store
-        .validate_ideation_scope(&scope)
-        .unwrap_err()
-        .to_string();
-
-    // The full message, so the assertion cannot be satisfied by the separate
-    // shipped-v1 fingerprint errors that share the phrase "frozen shipped-v1".
-    assert!(
-        error.contains(
-            "deprecated promotion_decisions.jsonl accepts only the frozen shipped-v1 \
-             disposition audit"
-        ),
-        "{error}"
-    );
-}
-
-#[test]
 fn direct_modern_proposal_write_rejects_terminal_ingress() {
     let (_dir, store, scope) = initialized_store();
     let error = store

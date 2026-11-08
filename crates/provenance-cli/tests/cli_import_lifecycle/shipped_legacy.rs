@@ -3,7 +3,7 @@ use super::support::{
     write_json,
 };
 
-// Implementation aid: rule_legacy_shard_frozen is archived. The legacy shard gate stays until provenance-u9mg removes it.
+// Implementation aid: rule_legacy_shard_frozen is archived, and the legacy shard is gone. The shipped export still imports.
 #[test]
 /// This test covers the export, import, validation, and materialization flow.
 fn shipped_legacy_export_imports_when_legacy_statements_are_already_canonical() {

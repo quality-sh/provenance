@@ -16,8 +16,6 @@ fn replacement_source(
         url: None,
         reference: None,
         commit_pin: None,
-        effective_date: None,
-        review_date: None,
         supersedes: vec![supersedes],
         origin_thread: None,
         origin_message: None,

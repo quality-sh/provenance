@@ -21,8 +21,6 @@ pub struct CreateSourceInput {
     pub url: Option<String>,
     pub reference: Option<String>,
     pub commit_pin: Option<String>,
-    pub effective_date: Option<i64>,
-    pub review_date: Option<i64>,
     pub supersedes: Vec<StableId>,
     pub origin_thread: Option<StableId>,
     pub origin_message: Option<StableId>,
@@ -37,7 +35,6 @@ pub struct CreateRequirementInput {
     pub statement: String,
     pub description: Option<String>,
     pub status: RequirementStatus,
-    pub domain_id: Option<StableId>,
     #[serde(default)]
     pub refines: Vec<StableId>,
     pub depends_on: Vec<StableId>,
@@ -45,17 +42,6 @@ pub struct CreateRequirementInput {
     pub spawned_by: Option<StableId>,
     pub origin_thread: Option<StableId>,
     pub origin_message: Option<StableId>,
-}
-
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct CreateDomainInput {
-    pub scope_id: ScopeId,
-    pub id: StableId,
-    pub name: String,
-    pub description: Option<String>,
-    pub color: Option<String>,
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -131,8 +117,6 @@ pub struct CreateResolutionInput {
     pub rationale: String,
     pub status: ResolutionStatus,
     pub context: Option<String>,
-    pub enforcement: Option<String>,
-    pub confidence: Option<f64>,
     pub inputs: Vec<ResolutionInput>,
     pub made_by: Option<String>,
     pub approved_by: Option<String>,

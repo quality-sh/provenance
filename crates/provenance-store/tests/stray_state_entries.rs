@@ -44,7 +44,6 @@ fn repository() -> (tempfile::TempDir, Repository) {
             statement: "Share links expire".into(),
             description: None,
             status: RequirementStatus::Active,
-            domain_id: None,
             refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),

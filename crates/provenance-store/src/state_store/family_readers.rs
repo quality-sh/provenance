@@ -1,9 +1,7 @@
 //! The per-family list readers that the record family tables generate.
 
 use super::ideation_batches::overlay_records;
-use super::readers::{
-    read_jsonl, read_jsonl_closed, read_legacy_dispositions, read_message_shards,
-};
+use super::readers::{read_jsonl, read_jsonl_closed, read_message_shards};
 use super::StateStore;
 use crate::shards;
 use provenance_core::{Rule, ScopeId};
@@ -119,10 +117,6 @@ macro_rules! canonical_reader {
         pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
             self.with_repository_read(|held| {
                 let mut records = read_jsonl(held, &shards::$path(&held.layout, scope))?;
-                records.extend(read_legacy_dispositions(
-                    held,
-                    &shards::legacy_promotion_decisions_path(&held.layout, scope),
-                )?);
                 for batch in held.list_ideation_landings(scope)? {
                     overlay_records(&mut records, batch.dispositions, |record| {
                         record.id.as_str()

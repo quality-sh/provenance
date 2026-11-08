@@ -73,8 +73,6 @@ fn add_resolution(store: &StateStore, scope: &ScopeId, id: &str, status: Resolut
             rationale: "The evidence supports the position".into(),
             status,
             context: None,
-            enforcement: None,
-            confidence: None,
             inputs: Vec::new(),
             made_by: None,
             approved_by: None,

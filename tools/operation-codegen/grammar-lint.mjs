@@ -6,7 +6,7 @@
 
 const METHODS = new Set(['GET', 'POST', 'PATCH']);
 const COLLECTIONS = new Set([
-  'sources', 'requirements', 'resolutions', 'rules', 'domains', 'boundaries',
+  'sources', 'requirements', 'resolutions', 'rules', 'boundaries',
   'topics', 'questions', 'contributions', 'synthesis-packets', 'proposals',
   'verification-runs', 'verification-bindings', 'discussion-containers',
   'messages', 'assertions', 'dispositions',
@@ -16,7 +16,7 @@ const COMPUTE_COLLECTIONS = new Set([
 ]);
 // Each action and the collections that own it.
 const REVIEWED = [
-  'sources', 'domains', 'requirements', 'boundaries', 'topics', 'questions',
+  'sources', 'requirements', 'boundaries', 'topics', 'questions',
   'resolutions', 'rules',
 ];
 const ACTION_OWNERS = new Map([

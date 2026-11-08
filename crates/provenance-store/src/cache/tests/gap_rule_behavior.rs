@@ -6,21 +6,19 @@ use super::super::*;
 use super::fixtures::*;
 use crate::cache::gaps::tests::fixtures as records;
 use provenance_core::{
-    Domain, Question, QuestionStatus, Requirement, RequirementStatus, Resolution, ResolutionStatus,
-    Rule, Source, SourceReference, Topic, TopicStatus,
+    Question, QuestionStatus, Requirement, RequirementStatus, Resolution, ResolutionStatus, Rule,
+    Source, SourceReference, Topic, TopicStatus,
 };
 use provenance_macros::verifies;
 
 const ANCHOR_SOURCE: &str = "source_anchor";
-const ANCHOR_DOMAIN: &str = "domain_shaping";
 
 /// The variant list is derived from an exhaustive match so that adding a
 /// `GapKind` fails compilation until the new variant joins the chain, which
 /// keeps the per-kind exhaustion below complete.
 pub(super) fn all_gap_kinds() -> Vec<GapKind> {
-    let mut all = vec![GapKind::MissingDomainId];
+    let mut all = vec![GapKind::MissingSourceRefs];
     while let Some(next) = match all.last().unwrap() {
-        GapKind::MissingDomainId => Some(GapKind::MissingSourceRefs),
         GapKind::MissingSourceRefs => Some(GapKind::NoResolvingDecision),
         GapKind::NoResolvingDecision => Some(GapKind::NoProducedRules),
         GapKind::NoProducedRules => Some(GapKind::UnreferencedSource),
@@ -46,7 +44,6 @@ struct HandBuiltGraph {
     rules: Vec<Rule>,
     topics: Vec<Topic>,
     questions: Vec<Question>,
-    domains: Vec<Domain>,
 }
 
 impl HandBuiltGraph {
@@ -58,18 +55,11 @@ impl HandBuiltGraph {
             &self.rules,
             &self.topics,
             &self.questions,
-            &self.domains,
         )
-    }
-
-    /// The shaping domain every settled requirement names.
-    fn with_domain(mut self) -> Self {
-        self.domains.push(records::domain(ANCHOR_DOMAIN));
-        self
     }
 }
 
-/// A requirement carrying a source ref but no domain.
+/// A requirement carrying a source ref.
 fn sourced_requirement(id: &str, source_id: &str, status: RequirementStatus) -> Requirement {
     Requirement {
         status,
@@ -81,13 +71,10 @@ fn sourced_requirement(id: &str, source_id: &str, status: RequirementStatus) -> 
     }
 }
 
-/// A requirement with nothing missing on its own account: domain assigned and
-/// a live source behind it.
+/// A requirement with nothing missing on its own account: a live source
+/// behind it.
 fn settled_requirement(id: &str, source_id: &str, status: RequirementStatus) -> Requirement {
-    Requirement {
-        domain_id: Some(sid(ANCHOR_DOMAIN)),
-        ..sourced_requirement(id, source_id, status)
-    }
+    sourced_requirement(id, source_id, status)
 }
 
 fn resolution_of(id: &str, requirement: &str, status: ResolutionStatus) -> Resolution {
@@ -110,21 +97,9 @@ fn rule_of(id: &str, requirements: &[&str], resolutions: &[&str]) -> Rule {
 /// `GapKind` cannot be added without stating the smallest graph that opens it.
 #[allow(clippy::too_many_lines)]
 fn minimal_graph_for(kind: GapKind) -> HandBuiltGraph {
-    let graph = match kind {
-        GapKind::MissingDomainId => HandBuiltGraph {
-            sources: vec![records::source(ANCHOR_SOURCE)],
-            requirements: vec![sourced_requirement(
-                "req_no_domain",
-                ANCHOR_SOURCE,
-                RequirementStatus::Active,
-            )],
-            ..HandBuiltGraph::default()
-        },
+    match kind {
         GapKind::MissingSourceRefs => HandBuiltGraph {
-            requirements: vec![Requirement {
-                domain_id: Some(sid(ANCHOR_DOMAIN)),
-                ..records::requirement("req_no_source")
-            }],
+            requirements: vec![records::requirement("req_no_source")],
             ..HandBuiltGraph::default()
         },
         // Resolved, and with a downstream rule of its own, but nothing
@@ -236,15 +211,14 @@ fn minimal_graph_for(kind: GapKind) -> HandBuiltGraph {
             ],
             ..HandBuiltGraph::default()
         },
-    };
-    graph.with_domain()
+    }
 }
 
-/// A graph with nothing left unfinished: every requirement has a domain and
-/// live source, its approved decision names it and its rule names both.
+/// A graph with nothing left unfinished: every requirement has a live
+/// source, its approved decision names it and its rule names both.
 /// Every topic is explored and every question answered.
 fn complete_graph(chains: usize) -> HandBuiltGraph {
-    let mut graph = HandBuiltGraph::default().with_domain();
+    let mut graph = HandBuiltGraph::default();
     for index in 0..chains {
         let source = format!("source_{index}");
         let requirement = format!("req_{index}");

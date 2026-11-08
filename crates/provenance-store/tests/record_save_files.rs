@@ -42,7 +42,7 @@ fn create_and_update_every_kind(store: &StateStore, scope: &ScopeId) {
         .create_source(input(
             json!({"scope_id":"default", "id":"source_files", "name":"Policy A",
             "source_type":"policy", "url":null, "reference":null, "commit_pin":null,
-            "effective_date":null, "review_date":null, "supersedes":[],
+            "supersedes":[],
             "origin_thread":null, "origin_message":null}),
         ))
         .unwrap();
@@ -52,21 +52,10 @@ fn create_and_update_every_kind(store: &StateStore, scope: &ScopeId) {
         ))
         .unwrap();
     store
-        .create_domain(input(
-            json!({"scope_id":"default", "id":"domain_files", "name":"Domain A",
-            "description":null, "color":null}),
-        ))
-        .unwrap();
-    store
-        .update_domain(input(
-            json!({"scope_id":"default", "id":"domain_files", "name":"Domain B"}),
-        ))
-        .unwrap();
-    store
         .create_resolution(input(json!({"scope_id":"default", "id":"resolution_files",
             "title":"Keep files", "requirement_ids":["req_files"], "supersedes":[],
             "position":"Keep files.", "rationale":"Files matter.", "status":"proposed",
-            "context":null, "enforcement":null, "confidence":null, "inputs":[], "made_by":null,
+            "context":null, "inputs":[], "made_by":null,
             "approved_by":null, "approved_at":null, "origin_thread":null, "origin_message":null})))
         .unwrap();
     store

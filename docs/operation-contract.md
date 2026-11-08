@@ -17,7 +17,7 @@ The tuple does not change as part of the route restructure.
 ## Resources
 
 The writable graph collections are `sources`, `requirements`, `resolutions`,
-`rules`, `domains`, `boundaries`, `topics`, and `questions`. Draft collections
+`rules`, `boundaries`, `topics`, and `questions`. Draft collections
 are `contributions`, `synthesis-packets`, and `proposals`. Verification uses
 `verification-runs` and `verification-bindings`. The read-only indexes are
 `discussion-containers`, `messages`, `assertions`, and `dispositions`.

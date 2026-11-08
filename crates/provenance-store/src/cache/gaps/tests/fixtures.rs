@@ -1,8 +1,8 @@
 use super::super::{compute_gaps, GapGraph, GapItem, GapKind};
 use provenance_core::{
-    NodeType, Question, QuestionStatus, Requirement, RequirementStatus, Resolution,
-    ResolutionMethod, ResolutionStatus, Rule, RuleSeverity, RuleStatus, ScopeId, Source,
-    SourceType, StableId, Topic, TopicStatus,
+    Question, QuestionStatus, Requirement, RequirementStatus, Resolution, ResolutionMethod,
+    ResolutionStatus, Rule, RuleSeverity, RuleStatus, ScopeId, Source, SourceType, StableId, Topic,
+    TopicStatus,
 };
 
 pub fn sid(value: &str) -> StableId {
@@ -25,9 +25,7 @@ pub fn requirement(id: &str) -> Requirement {
 
         statement: format!("{id} statement"),
         description: None,
-        fog: None,
         status: RequirementStatus::Active,
-        domain_id: None,
         source_refs: Vec::new(),
         refines: Vec::new(),
         depends_on: Vec::new(),
@@ -50,13 +48,10 @@ pub fn resolution(id: &str) -> Resolution {
         rationale: "It resolves the pair".to_string(),
         status: ResolutionStatus::Draft,
         context: None,
-        enforcement: None,
-        confidence: None,
         inputs: Vec::new(),
         made_by: None,
         approved_by: None,
         approved_at: None,
-        review_on: None,
         requirement_ids: Vec::new(),
         supersedes: Vec::new(),
         origin_thread: None,
@@ -149,8 +144,6 @@ pub fn source(id: &str) -> Source {
         url: None,
         reference: None,
         commit_pin: None,
-        effective_date: None,
-        review_date: None,
         supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,
@@ -164,7 +157,6 @@ pub fn compute_for(
     rules: &[Rule],
     topics: &[Topic],
     questions: &[Question],
-    domains: &[provenance_core::Domain],
 ) -> Vec<GapItem> {
     let scope = scope_id();
     compute_gaps(&GapGraph {
@@ -176,34 +168,10 @@ pub fn compute_for(
         topics,
         questions,
         threads: &[],
-        domains,
         boundaries: &[],
         contributions: &[],
         synthesis_packets: &[],
     })
-}
-
-pub fn domain(id: &str) -> provenance_core::Domain {
-    provenance_core::Domain {
-        scope_id: scope_id(),
-        id: sid(id),
-        name: id.to_string(),
-        description: None,
-        color: None,
-    }
-}
-
-pub fn thread(id: &str, parent_type: NodeType, parent_id: &str) -> provenance_core::Thread {
-    provenance_core::Thread {
-        scope_id: scope_id(),
-        id: sid(id),
-        parent: provenance_core::ThreadParent {
-            node_type: parent_type,
-            node_id: sid(parent_id),
-        },
-        status: provenance_core::ThreadStatus::Active,
-        created_at: 1,
-    }
 }
 
 pub fn count_kind(gaps: &[GapItem], kind: GapKind) -> usize {

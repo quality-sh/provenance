@@ -60,18 +60,6 @@ impl StateStore {
                     input.commit_pin,
                     input.clear_fields.contains(&SourceClearField::CommitPin),
                 )?;
-                optional(
-                    &mut record.effective_date,
-                    input.effective_date,
-                    input
-                        .clear_fields
-                        .contains(&SourceClearField::EffectiveDate),
-                )?;
-                optional(
-                    &mut record.review_date,
-                    input.review_date,
-                    input.clear_fields.contains(&SourceClearField::ReviewDate),
-                )?;
                 record.commit_pin = validate_optional_commit_pin(record.commit_pin.take())
                     .map_err(|error| {
                         crate::write_error::SourceFailure::wrap(
