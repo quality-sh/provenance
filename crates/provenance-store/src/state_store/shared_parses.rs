@@ -4,10 +4,9 @@
 //! rows and the Discussion check each list the six graph kinds. Inside
 //! [`with_shared_parses`], the first list of a shard parses it. Each later
 //! list of the same shard on this thread gets a copy of that parse.
-//! A copy is the parse of the bytes that the body reads. A catch-up holds
-//! the publication guard for the whole body and checks after it that the
-//! bytes did not change. The live-update watcher reads one view of the
-//! state, which no write changes, so it needs no guard and no check.
+//! A copy is the parse of the bytes that the body reads. A catch-up pass
+//! and the live-update watcher each read one view of the state, which no
+//! write changes. So every store of the body reads the same bytes.
 //!
 //! A copy is a read of its shard through the store that asks for it, so it
 //! passes through the read fence of a fenced store like a parse does.

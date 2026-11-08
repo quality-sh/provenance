@@ -72,7 +72,7 @@ pub(super) async fn materialize_with_guard(
     let connection = open_cache(layout).await?;
     let outcome = async {
         crate::test_probes::at("prepare_current_schema_under_guard")?;
-        rebuild_rows(connection.pool(), &mut reader, manifest, global_digests).await
+        rebuild_rows(connection.pool(), &reader, manifest, global_digests).await
     }
     .await;
     connection.settle(outcome).await
@@ -85,7 +85,7 @@ pub(super) async fn materialize_on_pool_with_guard(
 ) -> anyhow::Result<MaterializeReport> {
     let mut reader = validation::UnitReader::new(guard);
     let (manifest, global_digests) = reader.global(None)?;
-    rebuild_rows(pool, &mut reader, manifest, global_digests).await
+    rebuild_rows(pool, &reader, manifest, global_digests).await
 }
 
 /// Hashes, validates, reloads, and commits one full rebuild on the
@@ -93,7 +93,7 @@ pub(super) async fn materialize_on_pool_with_guard(
 #[rule("rule_interrupted_migration_reloads_every_family")]
 async fn rebuild_rows(
     pool: &SqlitePool,
-    reader: &mut validation::UnitReader<'_>,
+    reader: &validation::UnitReader<'_>,
     manifest: provenance_core::Manifest,
     global_digests: units::UnitDigests,
 ) -> anyhow::Result<MaterializeReport> {

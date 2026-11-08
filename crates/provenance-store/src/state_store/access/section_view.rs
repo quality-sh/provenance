@@ -82,7 +82,7 @@ impl StateStore {
     }
 
     /// The read fence of this store, if it is a fenced store.
-    pub(in crate::state_store) fn read_fence(&self) -> Option<&ReadFence> {
+    pub(in crate::state_store) const fn read_fence(&self) -> Option<&ReadFence> {
         match &self.access {
             Access::View(reads) => reads.fence.as_ref(),
             _ => None,
