@@ -66,7 +66,8 @@ so it is the same in each run.
 `profile.json` has `commit`, `head`, `run`, `frequency`, `samples` (the sample
 counts), `limits` (the noise limits), `baseline` (its commit and run, or
 null), `newRows`, `goneRows` and `rows`. Each row has `way`, `call`, `label`,
-`file`, `calls`, `samples`, `cpuMsPerCall`, `top.inclusive` and `top.self`
+`file`, `calls`, `wallMs` (the sum of the call times under perf), `samples`,
+`cpuMsPerCall`, `top.inclusive` and `top.self`
 (the top 25 functions with `share` and `samples`), and `baseline`: null, or
 the baseline `samples`, `grew` and `shrank` (the 10 largest changes, each with
 `base`, `now`, `change`, `z` and `overNoise`) and `overNoise` (the number of

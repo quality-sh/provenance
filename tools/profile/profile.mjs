@@ -162,11 +162,6 @@ export function parseFolded(text, { byRoot = true } = {}) {
   return out;
 }
 
-/** Writes stacks as folded lines. */
-export function foldedText(stacks) {
-  return stacks.map(stack => `${stack.frames.join(';')} ${stack.count}`).join('\n') + (stacks.length ? '\n' : '');
-}
-
 /**
  * Sample counts per function for one row, one stack at a time. Inclusive
  * counts each sample once for each function on its stack; self counts the
