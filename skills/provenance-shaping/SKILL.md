@@ -585,7 +585,7 @@ even if it is blocked. Update or answer the Questions that the decision made inv
 provenance question_<new_slug> create --type question --scope <scope> \
   --topic-id <topic_id> \
   --question "<newly precise question>" \
-  --method <ask|prototype|research|verify|task> \
+  --resolution-method <ask|prototype|research|verify|task> \
   --format json
 ```
 
