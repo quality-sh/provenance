@@ -27,24 +27,20 @@ pub fn changed_files(repo: &Utf8Path, base: &str, head: &str) -> anyhow::Result<
         .map(|field| String::from_utf8(field.to_vec()))
         .collect::<Result<Vec<_>, _>>()?;
     let (paths, malformed) = changed_paths(&fields);
-    // Each file diff is its own git process; they run side by side. The
-    // results stay in diff order, so the first failure in that order wins,
-    // and a malformed entry fails after the diffs of the entries before it.
-    let lines = in_order::map(paths, 1, |(kind, old_path, new_path)| {
-        let lines = diff_lines(repo, base, head, old_path, new_path);
-        (kind, old_path, new_path, lines)
-    });
-    let mut changes = Vec::with_capacity(lines.len());
-    for (kind, old_path, new_path, lines) in lines {
-        let (old_lines, new_lines) = lines?;
-        changes.push(ChangedFile {
+    // Each file diff is its own git process; they run side by side, in diff
+    // order. The first failure in that order wins, and no diff after it
+    // starts. A malformed entry fails after the diffs of the entries before
+    // it.
+    let changes = in_order::try_map(&paths, |&(kind, old_path, new_path)| {
+        let (old_lines, new_lines) = diff_lines(repo, base, head, old_path, new_path)?;
+        Ok::<_, anyhow::Error>(ChangedFile {
             old_path: Utf8PathBuf::from(old_path),
             new_path: Utf8PathBuf::from(new_path),
             kind,
             old_lines,
             new_lines,
-        });
-    }
+        })
+    })?;
     malformed.map_or_else(|| Ok(changes), Err)
 }
 
@@ -131,4 +127,28 @@ pub(super) fn parse_hunk_span(field: &str, prefix: char) -> anyhow::Result<LineS
         start: start.parse()?,
         count: count.parse()?,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    // Implementation aid: a malformed `--name-status` entry cannot be made
+    // through git, so this checks the parse of the entries directly.
+    #[test]
+    fn a_malformed_entry_keeps_the_entries_before_it() {
+        let fields = ["M", "a.rs", "R100", "b.rs"].map(String::from);
+        let (paths, malformed) = super::changed_paths(&fields);
+        assert_eq!(paths.len(), 1);
+        assert_eq!((paths[0].1, paths[0].2), ("a.rs", "a.rs"));
+        assert_eq!(
+            malformed.unwrap().to_string(),
+            "git diff omitted a rename destination"
+        );
+        let fields = ["A", "c.rs", "M"].map(String::from);
+        let (paths, malformed) = super::changed_paths(&fields);
+        assert_eq!(paths.len(), 1);
+        assert_eq!(
+            malformed.unwrap().to_string(),
+            "git diff omitted a changed path"
+        );
+    }
 }

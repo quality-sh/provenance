@@ -1,24 +1,9 @@
-use super::*;
+//! Implementation aids: these tests check the private kept scans directly.
+//! The public answers are checked through the CLI, HTTP and MCP in
+//! `crates/provenance-cli/tests/cli_stale_answers.rs`.
 
-fn git(root: &Utf8Path, args: &[&str]) -> String {
-    let output = crate::git_process::git()
-        .args([
-            "-c",
-            "user.name=Fixture",
-            "-c",
-            "user.email=fixture@example.invalid",
-        ])
-        .args(args)
-        .current_dir(root)
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "git {args:?} failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8(output.stdout).unwrap().trim().to_owned()
-}
+use super::*;
+use crate::stale::git::batch_tests::git;
 
 fn source(index: usize, body: u32) -> String {
     format!("#[rule(\"rule_{index}\")]\nfn item_{index}() -> u32 {{\n    {body}\n}}\n")
@@ -108,4 +93,61 @@ fn parse_keeps_the_input_order_on_many_threads() {
         })
         .collect::<Vec<_>>();
     assert_eq!(parse(files), expected);
+}
+
+fn kept(max_repositories: usize, max_bytes: usize) -> Mutex<KeptScans> {
+    Mutex::new(KeptScans::new(max_repositories, max_bytes))
+}
+
+#[test]
+fn each_repository_keeps_its_own_range() {
+    let (first_dir, first_base, first_head) = range();
+    let (second_dir, second_base, second_head) = range();
+    let first = Utf8Path::from_path(first_dir.path()).unwrap();
+    let second = Utf8Path::from_path(second_dir.path()).unwrap();
+    let scans = kept(KEPT_REPOSITORIES, KEPT_BYTES);
+    let before = scan_range_with(&scans, first, &first_base, &first_head).unwrap();
+    let other = scan_range_with(&scans, second, &second_base, &second_head).unwrap();
+    let after = scan_range_with(&scans, first, &first_base, &first_head).unwrap();
+    assert!(Arc::ptr_eq(&before.base, &after.base));
+    assert!(Arc::ptr_eq(&before.head, &after.head));
+    assert!(!Arc::ptr_eq(&before.base, &other.base));
+    assert_eq!(lock(&scans).repositories.len(), 2);
+
+    // With room for one repository, the other repository evicts the range,
+    // and the answer is the same.
+    let scans = kept(1, KEPT_BYTES);
+    let before = scan_range_with(&scans, first, &first_base, &first_head).unwrap();
+    scan_range_with(&scans, second, &second_base, &second_head).unwrap();
+    let after = scan_range_with(&scans, first, &first_base, &first_head).unwrap();
+    assert!(!Arc::ptr_eq(&before.base, &after.base));
+    assert_eq!(before.base.files, after.base.files);
+    assert_eq!(before.head.files, after.head.files);
+}
+
+#[test]
+fn a_range_over_the_byte_limit_is_not_kept() {
+    let (dir, base, head) = range();
+    let root = Utf8Path::from_path(dir.path()).unwrap();
+    let scans = kept(KEPT_REPOSITORIES, 1);
+    scan_range_with(&scans, root, &base, &head).unwrap();
+    assert!(lock(&scans).repositories.is_empty());
+}
+
+#[test]
+fn a_kept_range_gives_the_read_failure_of_a_missing_blob() {
+    let (dir, base, head) = range();
+    let root = Utf8Path::from_path(dir.path()).unwrap();
+    let scans = kept(KEPT_REPOSITORIES, KEPT_BYTES);
+    scan_range_with(&scans, root, &base, &head).unwrap();
+    let blob = git(root, &["rev-parse", &format!("{head}:src/new.rs")]);
+    std::fs::remove_file(root.join(format!(".git/objects/{}/{}", &blob[..2], &blob[2..]))).unwrap();
+    let cold = scan_range_with(&kept(KEPT_REPOSITORIES, KEPT_BYTES), root, &base, &head)
+        .err()
+        .expect("a new process cannot read the blob");
+    let warm = scan_range_with(&scans, root, &base, &head)
+        .err()
+        .expect("kept scans give the same failure");
+    assert_eq!(warm.to_string(), cold.to_string());
+    assert!(cold.to_string().contains("src/new.rs"), "{cold}");
 }

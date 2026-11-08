@@ -201,28 +201,11 @@ pub(crate) fn read_blobs(
     if blobs.is_empty() {
         return Ok(Vec::new());
     }
-    let mut child = command(repo)
-        .args(["cat-file", "--batch"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .context("run git cat-file --batch")?;
-    let mut stdin = child.stdin.take().context("open git cat-file input")?;
-    let mut request = String::new();
-    for (object, _) in &blobs {
-        request.push_str(object);
-        request.push('\n');
-    }
-    let writer = std::thread::spawn(move || stdin.write_all(request.as_bytes()));
-    let output = child
-        .wait_with_output()
-        .context("read git cat-file --batch")?;
-    let written = writer
-        .join()
-        .map_err(|_| anyhow::anyhow!("git cat-file input writer panicked"))?;
-    let output = checked(output, "git cat-file --batch")?;
-    written.context("write git cat-file input")?;
+    let output = cat_file(
+        repo,
+        "--batch",
+        blobs.iter().map(|(object, _)| object.as_str()),
+    )?;
     let mut rest = output.stdout.as_slice();
     let mut files = Vec::with_capacity(blobs.len());
     for (object, path) in blobs {
@@ -249,6 +232,53 @@ pub(crate) fn read_blobs(
             .context("git cat-file omitted an object terminator")?;
     }
     Ok(files)
+}
+
+/// Whether each object is a blob in the object store, from one
+/// `git cat-file --batch-check` process. A failed check gives false.
+pub(crate) fn blobs_exist(repo: &Utf8Path, objects: &[&str]) -> bool {
+    let Ok(output) = cat_file(repo, "--batch-check", objects.iter().copied()) else {
+        return false;
+    };
+    let mut lines = output.stdout.split(|byte| *byte == b'\n');
+    objects.iter().all(|object| {
+        lines.next().is_some_and(|line| {
+            let mut fields = line.split(|byte| *byte == b' ');
+            fields.next() == Some(object.as_bytes()) && fields.next() == Some(&b"blob"[..])
+        })
+    })
+}
+
+/// Runs `git cat-file <mode>` with one object id on each input line.
+fn cat_file<'o>(
+    repo: &Utf8Path,
+    mode: &str,
+    objects: impl Iterator<Item = &'o str>,
+) -> anyhow::Result<Output> {
+    let operation = format!("git cat-file {mode}");
+    let mut child = command(repo)
+        .args(["cat-file", mode])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .with_context(|| format!("run {operation}"))?;
+    let mut stdin = child.stdin.take().context("open git cat-file input")?;
+    let mut request = String::new();
+    for object in objects {
+        request.push_str(object);
+        request.push('\n');
+    }
+    let writer = std::thread::spawn(move || stdin.write_all(request.as_bytes()));
+    let output = child
+        .wait_with_output()
+        .with_context(|| format!("read {operation}"))?;
+    let written = writer
+        .join()
+        .map_err(|_| anyhow::anyhow!("git cat-file input writer panicked"))?;
+    let output = checked(output, &operation)?;
+    written.context("write git cat-file input")?;
+    Ok(output)
 }
 
 fn resolve_commit(repo: &Utf8Path, revision: &str) -> anyhow::Result<String> {
@@ -318,7 +348,7 @@ mod diff;
 pub use diff::changed_files;
 
 #[cfg(test)]
-mod batch_tests;
+pub(crate) mod batch_tests;
 #[cfg(test)]
 mod security_tests;
 

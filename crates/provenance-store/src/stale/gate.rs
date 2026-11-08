@@ -12,8 +12,8 @@ use std::collections::BTreeSet;
 mod source_refs;
 mod typed_bindings;
 
-/// Classifies evidence changes without a review decision.
-#[rule("rule_gate_reports_without_review")]
+/// Scans the revision files, then classifies the evidence changes as
+/// [`report_scanned`] does.
 pub fn report(
     repo: &Utf8Path,
     base: String,
@@ -28,8 +28,9 @@ pub fn report(
     report_scanned(repo, base, head, &base_files, &head_files, changes, graph)
 }
 
-/// Classifies evidence changes from files that are already scanned, in
-/// the order of the revision trees.
+/// Classifies evidence changes without a review decision, from files that
+/// are already scanned, in the order of the revision trees.
+#[rule("rule_gate_reports_without_review")]
 pub(crate) fn report_scanned(
     repo: &Utf8Path,
     base: String,
