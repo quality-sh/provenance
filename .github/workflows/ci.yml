@@ -88,6 +88,8 @@ jobs:
               - *ci
               - ".github/workflows/benchmarks.yml"
               - "tools/bench/**"
+              - ".github/workflows/api-latency.yml"
+              - "tools/api-latency/**"
             # The trybuild tests compile code against these crates and their
             # dependencies. The build inputs that select the full suite in
             # select_tests.py also change the compiler output.
@@ -1405,14 +1407,16 @@ jobs:
           node-version: 24
       - name: Test the paired timing tools
         run: node --test tools/bench/*.test.mjs
+      - name: Test the API latency tools
+        run: node --test tools/api-latency/*.test.mjs
       - name: Install workflow validator
         env:
           GOBIN: ${{ runner.temp }}/bench-tools
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
-      - name: Validate the Benchmarks workflow
+      - name: Validate the Benchmarks and API latency workflows
         env:
           GOBIN: ${{ runner.temp }}/bench-tools
-        run: '"$GOBIN/actionlint" .github/workflows/benchmarks.yml'
+        run: '"$GOBIN/actionlint" .github/workflows/benchmarks.yml .github/workflows/api-latency.yml'
 
   operation-contract:
     timeout-minutes: 45
