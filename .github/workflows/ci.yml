@@ -1097,14 +1097,29 @@ jobs:
   # The other jobs give a commit's binary only the state of the same commit.
   # This job gives the binary of this commit the state of the base commit,
   # which is the state that existing repositories hold when the new build
-  # ships. A build that cannot read a stored record fails here, not at the
-  # first write.
+  # ships. A build that cannot read or write a stored record fails here, not
+  # at the first write. .github/scripts/base-state-read.sh runs the checks.
+  #
+  # The state-format-change label: put this label on a pull request that
+  # changes a stored format on purpose. Before 1.0 a format changes in place,
+  # and existing repositories are initialised again (AGENTS.md). With the
+  # label, the job runs the same checks and writes each refusal to the job
+  # summary, but it passes, and the summary says that the label was used.
+  # The label is accepted only when the pull request also changes
+  # .provenance/state, which shows that the pull request wrote its own state
+  # again. With the label and no change to .provenance/state, the job fails.
+  # The job reads the labels when it runs: after you add or remove the label,
+  # run the job again. On a push to main, the job reads the labels of the
+  # merged pull request.
   base-state-read:
     timeout-minutes: 15
     name: Base state read
     needs: [changes, build-cli-linux]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.policy == 'true'
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -1130,33 +1145,51 @@ jobs:
           git worktree add --detach "$SCRATCH" "$base"
           echo "Base commit: $base"
           echo "State rows: $(find "$SCRATCH/.provenance/state" -name "*.jsonl" -exec cat {} + | wc -l)"
-      - name: Check the base graph with this binary
-        run: target/debug/provenance check --graph --repo "$RUNNER_TEMP/base-state"
-      # Each list route reads one record family. A read fails on a non-zero
-      # exit or on an error envelope in the output.
-      - name: Read each record family of the base state with this binary
-        if: ${{ !cancelled() && steps.base.outcome == 'success' }}
+      # On a pull request the checkout is the merge commit, so its first
+      # parent shows the change of the pull request. On a push it is the
+      # commit before the push. A manual run has no label.
+      - name: Read the state-format-change label
+        id: label
         env:
-          SCRATCH: ${{ runner.temp }}/base-state
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
-          mapfile -t routes < <(target/debug/provenance api --repo "$SCRATCH" | sed -nE 's|^- GET (/[a-z-]+)$|\1|p')
-          if [[ ${#routes[@]} -eq 0 ]]; then
-            echo "::error::The API catalog gives no list routes."
+          case "$EVENT" in
+            pull_request)
+              labels=$(gh api "repos/$REPOSITORY/issues/$PR_NUMBER/labels" --jq '.[].name')
+              change_base=HEAD^1
+              ;;
+            push)
+              labels=$(gh api "repos/$REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '.[] | select(.merged_at != null) | .labels[].name')
+              change_base=$BEFORE
+              ;;
+            *)
+              labels=""
+              change_base=""
+              ;;
+          esac
+          if ! grep -qx "state-format-change" <<< "$labels"; then
+            echo "override=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git diff --quiet "$change_base" HEAD -- .provenance/state; then
+            message="The state-format-change label is on this pull request, but the pull request does not change .provenance/state. Write the state again in the new format, or remove the label."
+            echo "::error::$message"
+            echo "$message" >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
-          failed=0
-          for route in "${routes[@]}"; do
-            if ! target/debug/provenance api "$route" --repo "$SCRATCH" > "$RUNNER_TEMP/read.json" \
-              || jq -e 'has("error")' "$RUNNER_TEMP/read.json" > /dev/null; then
-              echo "::error::This binary cannot read $route in the base state."
-              head -c 2000 "$RUNNER_TEMP/read.json" || true
-              failed=1
-            else
-              echo "$route: $(jq '.data.items | length' "$RUNNER_TEMP/read.json") items"
-            fi
-          done
-          exit "$failed"
+          echo "The state-format-change label is present, and the pull request changes .provenance/state."
+          echo "override=true" >> "$GITHUB_OUTPUT"
+      # The write changes only the scratch worktree, which CI never commits.
+      - name: Read and write the base state with this binary
+        env:
+          OVERRIDE: ${{ steps.label.outputs.override }}
+          SCRATCH: ${{ runner.temp }}/base-state
+        run: .github/scripts/base-state-read.sh target/debug/provenance "$SCRATCH"
 
   rust-sdk:
     timeout-minutes: 30
