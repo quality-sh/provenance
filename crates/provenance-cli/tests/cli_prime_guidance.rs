@@ -74,6 +74,21 @@ fn legacy_state_options_leave_guidance_unchanged() {
     assert_eq!(std::fs::read_dir(repo.path()).unwrap().count(), 0);
 }
 
+/// The record types, and Domain, which is no longer a record type. A guidance heading
+/// does not use these words, so that a reader does not take a heading for a record type.
+const NOT_HEADINGS: [&str; 10] = [
+    "Domain",
+    "Requirement",
+    "Rule",
+    "Resolution",
+    "Source",
+    "Topic",
+    "Question",
+    "Discussion",
+    "Thread",
+    "Message",
+];
+
 #[tokio::test]
 async fn cli_and_mcp_share_the_same_guidance() {
     use provenance_mcp::Client;
@@ -97,6 +112,15 @@ async fn cli_and_mcp_share_the_same_guidance() {
     let instructions = client.instructions().unwrap();
     assert!(text.starts_with(&shared), "{text}");
     assert!(instructions.starts_with(&shared), "{instructions}");
+    for heading in [&text, &instructions]
+        .into_iter()
+        .flat_map(|guidance| guidance.lines().filter_map(|line| line.strip_prefix("## ")))
+    {
+        assert!(
+            !NOT_HEADINGS.contains(&heading.trim_end_matches('s')),
+            "the heading {heading} reads as a record type"
+        );
+    }
     assert!(text.contains("`provenance search --text <text>"), "{text}");
     assert!(
         instructions.contains("call search with {\"text\":\"<text>\"}"),
