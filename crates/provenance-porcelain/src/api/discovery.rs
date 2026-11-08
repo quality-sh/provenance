@@ -113,7 +113,6 @@ pub struct SeeMore {
 
 impl CatalogAnswer {
     /// The line that says how to see more routes, when the answer is truncated.
-    #[rule("rule_porcelain_output_reports_bounds")]
     pub fn see_more(&self, fields: SeeMore) -> Option<String> {
         self.bounds
             .truncated
