@@ -5,7 +5,7 @@ use std::path::Path;
 /// A native error of an operation on one repository, with the spellings of
 /// the repository root that a path in the error can start with.
 #[derive(Debug)]
-pub(crate) struct InRepository {
+pub struct InRepository {
     roots: Vec<String>,
     source: anyhow::Error,
 }
@@ -22,7 +22,7 @@ impl std::error::Error for InRepository {
 
 /// Puts the repository root on `error`, so that its cause can give each path
 /// relative to the repository.
-pub(crate) fn in_repository(root: &Path, error: anyhow::Error) -> anyhow::Error {
+pub fn in_repository(root: &Path, error: anyhow::Error) -> anyhow::Error {
     if error.downcast_ref::<InRepository>().is_some() {
         return error;
     }
@@ -34,7 +34,7 @@ pub(crate) fn in_repository(root: &Path, error: anyhow::Error) -> anyhow::Error 
 }
 
 /// The native error without the repository root.
-pub(crate) fn native(error: &anyhow::Error) -> &anyhow::Error {
+pub fn native(error: &anyhow::Error) -> &anyhow::Error {
     error
         .downcast_ref::<InRepository>()
         .map_or(error, |located| &located.source)
@@ -44,7 +44,7 @@ pub(crate) fn native(error: &anyhow::Error) -> &anyhow::Error {
 /// the repository root is relative to that root, with `/` between its parts.
 /// Any other absolute path is only its file name.
 #[rule("rule_unclassified_refusal_gives_cause")]
-pub(crate) fn failure_cause(error: &anyhow::Error) -> String {
+pub fn failure_cause(error: &anyhow::Error) -> String {
     let roots = error
         .downcast_ref::<InRepository>()
         .map_or(&[][..], |located| &located.roots);
@@ -168,7 +168,7 @@ fn path_end(text: &str) -> usize {
         .map_or(text.len(), |(at, _)| at)
 }
 
-fn has_drive(text: &str) -> bool {
+const fn has_drive(text: &str) -> bool {
     let bytes = text.as_bytes();
     bytes.len() > 2
         && bytes[0].is_ascii_alphabetic()
@@ -177,7 +177,7 @@ fn has_drive(text: &str) -> bool {
 }
 
 /// A character that can come just before the start of a path.
-fn opens_path(character: char) -> bool {
+const fn opens_path(character: char) -> bool {
     character.is_whitespace() || matches!(character, '"' | '\'' | '`' | '(' | '[' | '<' | '=')
 }
 
