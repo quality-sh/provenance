@@ -6,6 +6,10 @@
 //
 // Each way in gets its own clone, so the writes of one way do not change the
 // input of another. report.mjs ranks the results.
+//
+// With --windows, the run also writes the process id and the time window of
+// each timed call. The profile workflow (tools/profile) uses this file to give
+// each CPU sample to its row.
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -13,7 +17,7 @@ import { helpCommands, mcpToolActions, operationsFromCatalog, possibleValues } f
 import { COMMAND_ARGUMENTS, NOT_CALLED, cliWriteArguments, commandVariants, fillArguments, mcpWriteArguments, orderLeaves, verbOperation } from './commands.mjs';
 import { Planner, Unresolved, describe } from './requests.mjs';
 import { findKey } from './body.mjs';
-import { CliWay, HttpWay, McpWay, run } from './ways.mjs';
+import { CliWay, HttpWay, McpWay, now, run } from './ways.mjs';
 
 const { values: options } = parseArgs({
   options: {
@@ -25,6 +29,7 @@ const { values: options } = parseArgs({
     writes: { type: 'string', default: '10' },
     ways: { type: 'string', default: 'HTTP,MCP,CLI' },
     filter: { type: 'string', default: '' },
+    windows: { type: 'string' },
   },
 });
 const bin = resolve(options.bin);
@@ -38,6 +43,15 @@ const READ_ONLY_POSTS = ['/statement-checks', '/authoring-plans'];
 
 const calls = [];
 const unmeasured = [];
+const windows = [];
+
+/** Add the process and the time window of one timed call to `list`, for the profile. */
+function keepWindow(list, way, call, result) {
+  if (result?.pid && result.at !== undefined) {
+    list.push({ way, call, pid: result.pid, start: result.at, end: result.at + result.ms });
+  }
+}
+
 const log = message => process.stderr.write(`${message}\n`);
 
 function skip(way, call, reason) {
@@ -98,6 +112,9 @@ async function context(repo, operations, http) {
 /** Time one call: cold, then `count` warm repeats. `prepare` gives each request; `follow` gives the read after a write. */
 async function measure(way, label, kind, count, prepare, send, { restart = false, follow = null } = {}) {
   const fail = (step, reason) => skip(way.name, label, `${step}: ${reason}`);
+  const followLabel = `${label}, then the first read`;
+  // The windows of a row are kept only when the row is kept.
+  const rowWindows = [];
   let request;
   try {
     request = await prepare(0);
@@ -110,12 +127,14 @@ async function measure(way, label, kind, count, prepare, send, { restart = false
     await way.start();
   }
   const cold = await send(request);
+  keepWindow(rowWindows, way.name, label, cold);
   if (!cold.ok) {
     fail('the cold call failed', describe(cold.error));
     return;
   }
   const after = follow?.(request, cold);
   const afterCold = after ? await way.call(after) : null;
+  keepWindow(rowWindows, way.name, followLabel, afterCold);
   const warm = [];
   const afterWarm = [];
   for (let index = 1; index <= count; index++) {
@@ -126,6 +145,7 @@ async function measure(way, label, kind, count, prepare, send, { restart = false
       return;
     }
     const result = await send(request);
+    keepWindow(rowWindows, way.name, label, result);
     if (!result.ok) {
       fail(`repeat ${index} failed`, describe(result.error));
       return;
@@ -134,16 +154,19 @@ async function measure(way, label, kind, count, prepare, send, { restart = false
     const next = follow?.(request, result);
     if (next) {
       const read = await way.call(next);
+      keepWindow(rowWindows, way.name, followLabel, read);
       if (read.ok) {
         afterWarm.push(read.ms);
       }
     }
   }
   calls.push({ way: way.name, call: label, kind, cold: cold.ms, warm });
+  windows.push(...rowWindows.filter(item => item.call === label));
   if (afterCold?.ok) {
-    calls.push({ way: way.name, call: `${label}, then the first read`, kind: 'read after write', cold: afterCold.ms, warm: afterWarm });
+    calls.push({ way: way.name, call: followLabel, kind: 'read after write', cold: afterCold.ms, warm: afterWarm });
+    windows.push(...rowWindows.filter(item => item.call === followLabel));
   } else if (after) {
-    skip(way.name, `${label}, then the first read`, `the read failed: ${describe(afterCold?.error)}`);
+    skip(way.name, followLabel, `the read failed: ${describe(afterCold?.error)}`);
   }
   log(`  ${way.name} ${label}: cold ${cold.ms.toFixed(1)} ms`);
 }
@@ -330,11 +353,14 @@ async function main() {
     const Way = { HTTP: HttpWay, MCP: McpWay, CLI: CliWay }[name];
     const way = new Way({ bin, repo });
     log(`${name}: ${repo}`);
+    const startedAt = now();
     const startup = await way.start();
     if (name !== 'CLI') {
       calls.push({ way: name, call: 'process start', kind: 'start', cold: startup, warm: [] });
+      keepWindow(windows, name, 'process start', { pid: way.child?.pid, at: startedAt, ms: startup });
     }
     const first = await way.call({ method: 'get', path: '/requirements', query: { limit: 1 } });
+    keepWindow(windows, name, 'first read on a new clone', first);
     calls.push({ way: name, call: 'first read on a new clone', kind: 'start', cold: first.ms, warm: [] });
     const wayPlanner = new Planner({ operations, context: ctx });
     await routeRows(way, wayPlanner, operations, readRequests);
@@ -358,6 +384,9 @@ async function main() {
     added: planner.added,
   };
   await writeFile(options.out, `${JSON.stringify({ meta, calls, unmeasured }, null, 2)}\n`);
+  if (options.windows) {
+    await writeFile(options.windows, `${JSON.stringify({ meta, windows })}\n`);
+  }
   log(`${calls.length} timed rows, ${unmeasured.length} not measured`);
 }
 

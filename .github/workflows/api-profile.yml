@@ -1,0 +1,222 @@
+name: API profile
+
+# Records where each local API call spends its CPU time. The run builds the
+# release CLI with frame pointers, runs the full API latency benchmark
+# (tools/api-latency) under one `perf record`, and gives each sample to its
+# benchmark row from the process id and the time window of each timed call.
+# For each row it keeps the folded stacks, the top functions and a flame
+# graph, and it compares the inclusive shares with the latest main baseline.
+# This workflow is not a required check. tools/profile/README.md tells where
+# each output is and how to read it.
+on:
+  pull_request:
+    paths:
+      - "**/*.rs"
+      - "**/Cargo.toml"
+      - "Cargo.lock"
+      - ".cargo/**"
+      - ".github/workflows/api-profile.yml"
+      - "tools/profile/**"
+      - "tools/api-latency/**"
+  push:
+    branches: [main]
+    paths:
+      - "**/*.rs"
+      - "**/Cargo.toml"
+      - "Cargo.lock"
+      - ".cargo/**"
+      - ".github/workflows/api-profile.yml"
+      - "tools/profile/**"
+      - "tools/api-latency/**"
+  workflow_dispatch:
+    inputs:
+      reads:
+        description: Warm repeats of each read after the cold call
+        type: number
+        default: 4
+      writes:
+        description: Warm repeats of each write after the cold call
+        type: number
+        default: 2
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: never
+  INFERNO_VERSION: 0.12.8
+  FREQUENCY: 4999
+  # A main push makes the baseline that later runs compare with.
+  ARTIFACT: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'api-profile-baseline' || 'api-profile' }}
+
+jobs:
+  profile:
+    name: Profile
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      # Find and download the baseline artifact of an earlier run.
+      actions: read
+    outputs:
+      artifact-url: ${{ steps.upload.outputs.artifact-url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+      - name: Test the profile tools
+        run: node --test tools/profile/*.test.mjs
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: api-profile
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Restore inferno
+        id: inferno
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/inferno
+          key: inferno-${{ env.INFERNO_VERSION }}-${{ runner.os }}-${{ runner.arch }}
+      - name: Install inferno
+        env:
+          CACHE_HIT: ${{ steps.inferno.outputs.cache-hit }}
+        run: |
+          set -euo pipefail
+          if [ "$CACHE_HIT" != true ]; then
+            sfw cargo install --locked --root "$RUNNER_TEMP/inferno" inferno --version "$INFERNO_VERSION"
+          fi
+          echo "$RUNNER_TEMP/inferno/bin" >> "$GITHUB_PATH"
+      - name: Build the release CLI with frame pointers
+        env:
+          RUSTFLAGS: -C force-frame-pointers=yes
+          CARGO_PROFILE_RELEASE_STRIP: none
+        run: |
+          set -euo pipefail
+          sfw cargo fetch --locked
+          cargo build --locked --release -p provenance-cli --bin provenance
+          target/release/provenance --version
+      - name: Install perf
+        run: |
+          set -euo pipefail
+          sudo apt-get update -q
+          sudo apt-get install -y -q linux-tools-common "linux-tools-$(uname -r)" || sudo apt-get install -y -q linux-tools-azure
+          sudo sysctl -w kernel.perf_event_paranoid=-1 kernel.kptr_restrict=0 kernel.perf_event_max_sample_rate=20000
+          perf --version
+      - name: Profile the calls
+        env:
+          READS: ${{ inputs.reads || 4 }}
+          WRITES: ${{ inputs.writes || 2 }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT"
+          # One perf session follows the harness and every process it starts.
+          # -k mono gives the sample times on the clock that the harness uses
+          # for its call windows.
+          RUNNER_DESCRIPTION="$ImageOS $ImageVersion" perf record -q -F "$FREQUENCY" -g -k mono \
+            -o "$RUNNER_TEMP/perf.data" -- \
+            node tools/api-latency/run.mjs --bin target/release/provenance --source . \
+            --work "$RUNNER_TEMP/api-latency" --out "$ARTIFACT/results.json" \
+            --windows "$RUNNER_TEMP/windows.json" --reads "$READS" --writes "$WRITES" \
+            2> "$RUNNER_TEMP/harness.log" || { tail -50 "$RUNNER_TEMP/harness.log"; exit 1; }
+          tail -3 "$RUNNER_TEMP/harness.log"
+          du -h "$RUNNER_TEMP/perf.data"
+      - name: Fold the stacks for each row
+        run: |
+          set -euo pipefail
+          perf script -i "$RUNNER_TEMP/perf.data" -F comm,pid,tid,time,event,ip,sym,dso --no-inline 2> "$RUNNER_TEMP/perf-script.log" \
+            | node tools/profile/label.mjs --windows "$RUNNER_TEMP/windows.json" --stats "$RUNNER_TEMP/samples.json" \
+            | inferno-collapse-perf > "$RUNNER_TEMP/labeled.folded"
+          # The raw perf data can be about 1 GB; only the folded stacks are kept.
+          rm "$RUNNER_TEMP/perf.data"
+          wc -l "$RUNNER_TEMP/labeled.folded"
+      - name: Download the main baseline
+        if: env.ARTIFACT != 'api-profile-baseline'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=api-profile-baseline&per_page=20" \
+            --jq '[.artifacts[] | select(.expired | not)] | sort_by(.created_at) | last | .workflow_run.id // empty')
+          if [ -z "$run" ]; then
+            echo "No baseline artifact found."
+            exit 0
+          fi
+          gh run download "$run" --repo "$GITHUB_REPOSITORY" -n api-profile-baseline -D "$RUNNER_TEMP/baseline" \
+            || echo "The baseline of run $run did not download."
+      - name: Write the profile of each row
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          node tools/profile/analyze.mjs --folded "$RUNNER_TEMP/labeled.folded" --windows "$RUNNER_TEMP/windows.json" \
+            --stats "$RUNNER_TEMP/samples.json" --baseline "$RUNNER_TEMP/baseline" --out "$ARTIFACT" \
+            --frequency "$FREQUENCY" --head "$HEAD_SHA" --artifact "$ARTIFACT"
+          while IFS=$'\t' read -r file title; do
+            inferno-flamegraph --title "$title" "$ARTIFACT/rows/$file.folded" > "$ARTIFACT/rows/$file.svg"
+          done < "$ARTIFACT/flamegraphs.tsv"
+          rm "$ARTIFACT/flamegraphs.tsv"
+          cp "$RUNNER_TEMP/windows.json" "$RUNNER_TEMP/samples.json" "$ARTIFACT/"
+          # The latency under perf is slower than the benchmark; it is kept for reference only.
+          node tools/api-latency/report.mjs --input "$ARTIFACT/results.json" --out "$ARTIFACT/latency" > /dev/null
+          du -sh "$ARTIFACT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        id: upload
+        with:
+          name: ${{ env.ARTIFACT }}
+          path: ${{ env.ARTIFACT }}
+      - name: Publish the summary
+        env:
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/publish"
+          for name in summary comment; do
+            sed "s|ARTIFACT_URL|$ARTIFACT_URL|g" "$ARTIFACT/$name.md" > "$RUNNER_TEMP/publish/$name.md"
+          done
+          cat "$RUNNER_TEMP/publish/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          # The log holds the summary too, for readers of the job log.
+          cat "$RUNNER_TEMP/publish/summary.md"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: github.event_name == 'pull_request'
+        with:
+          name: api-profile-comment
+          path: ${{ runner.temp }}/publish/comment.md
+
+  comment:
+    name: Comment
+    needs: profile
+    # A fork pull request has a read-only token, so it gets only the job summary.
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: api-profile-comment
+          path: comment
+      - name: Post or update the profile comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- api-profile -->"))) | .id' | head -1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@comment/comment.md --jq .html_url
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F body=@comment/comment.md --jq .html_url
+          fi
