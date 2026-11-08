@@ -175,6 +175,11 @@ pub async fn answer<R: Send>(
     policy: ReadPolicy,
     run: impl for<'c> FnOnce(&'c ReadContext) -> ReadFuture<'c, R> + Send,
 ) -> anyhow::Result<Stamped<R>> {
+    let t = std::time::Instant::now();
     let fresh = freshness::run(repository, policy.freshness).await?;
-    fresh.complete(repository, policy.scan_limit, run).await
+    crate::prof("freshness step (catch-up)", t);
+    let t = std::time::Instant::now();
+    let answer = fresh.complete(repository, policy.scan_limit, run).await;
+    crate::prof("answer and close (query + cache close)", t);
+    answer
 }

@@ -58,6 +58,12 @@ pub mod settings;
 pub mod shards;
 #[cfg(feature = "host")]
 pub mod stale;
+#[doc(hidden)]
+pub fn prof(stage: &str, start: std::time::Instant) {
+    if std::env::var_os("PROVENANCE_STALE_PROFILE").is_some() {
+        eprintln!("PROF {stage}: {:.2} ms", start.elapsed().as_secs_f64() * 1000.0);
+    }
+}
 #[cfg(feature = "host")]
 pub mod state_store;
 #[cfg(feature = "host")]

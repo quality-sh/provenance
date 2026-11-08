@@ -80,7 +80,9 @@ fn scan_revision(
     earlier: Option<&Arc<Revision>>,
     kept: &[Arc<Revision>],
 ) -> anyhow::Result<Arc<Revision>> {
+    let t = std::time::Instant::now();
     let blobs = git::revision_source_blobs(repo, revision)?;
+    crate::prof(&format!("      ls-tree {revision:.8} ({} blobs)", blobs.len()), t);
     if let Some(same) = earlier.filter(|earlier| earlier.blobs == blobs) {
         return Ok(Arc::clone(same));
     }
@@ -91,7 +93,10 @@ fn scan_revision(
         .filter(|blob| !scans.contains_key(blob) && kept_scans.contains_key(blob))
         .map(|(object, _)| object.as_str())
         .collect::<Vec<_>>();
-    if reused.is_empty() || git::blobs_exist(repo, &reused) {
+    let t = std::time::Instant::now();
+    let usable = reused.is_empty() || git::blobs_exist(repo, &reused);
+    crate::prof(&format!("      cat-file --batch-check ({} blobs)", reused.len()), t);
+    if usable {
         if let Some(same) = kept.iter().find(|kept| kept.blobs == blobs) {
             return Ok(Arc::clone(same));
         }
@@ -104,7 +109,13 @@ fn scan_revision(
         .filter(|blob| !scans.contains_key(blob))
         .cloned()
         .collect::<Vec<_>>();
-    let mut parsed = parse(git::read_blobs(repo, missing)?).into_iter();
+    let count = missing.len();
+    let t = std::time::Instant::now();
+    let read = git::read_blobs(repo, missing)?;
+    crate::prof(&format!("      cat-file --batch ({count} blobs)"), t);
+    let t = std::time::Instant::now();
+    let mut parsed = parse(read).into_iter();
+    crate::prof(&format!("      parse ({count} files)"), t);
     let files = blobs
         .iter()
         .map(|blob| {

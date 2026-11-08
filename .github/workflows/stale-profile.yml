@@ -1,0 +1,32 @@
+name: Stale profile
+on:
+  push:
+    branches: [wip/perf/stale-query-profile-after]
+permissions:
+  contents: read
+jobs:
+  profile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: api-latency
+          save-if: false
+      - name: Build
+        run: |
+          set -euo pipefail
+          sfw cargo fetch --locked
+          cargo build --locked --release -p provenance-cli --bin provenance
+      - name: Profile
+        run: |
+          sudo apt-get install -y strace > /dev/null 2>&1 || true
+          bash tools/stale-profile/profile.sh target/release/provenance . "$RUNNER_TEMP/prof"
