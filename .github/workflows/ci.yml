@@ -88,6 +88,8 @@ jobs:
               - *ci
               - ".github/workflows/benchmarks.yml"
               - "tools/bench/**"
+              - ".github/workflows/api-latency.yml"
+              - "tools/api-latency/**"
             # The trybuild tests compile code against these crates and their
             # dependencies. The build inputs that select the full suite in
             # select_tests.py also change the compiler output.
@@ -1096,6 +1098,103 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: target/debug/provenance check --strict --statements --base "$BASE_SHA" --repo .
 
+  # The other jobs give a commit's binary only the state of the same commit.
+  # This job gives the binary of this commit the state of the base commit,
+  # which is the state that existing repositories hold when the new build
+  # ships. A build that cannot read or write a stored record fails here, not
+  # at the first write. .github/scripts/base-state-read.sh runs the checks.
+  #
+  # The state-format-change label: put this label on a pull request that
+  # changes a stored format on purpose. Before 1.0 a format changes in place,
+  # and existing repositories are initialised again (AGENTS.md). With the
+  # label, the job runs the same checks and writes each refusal to the job
+  # summary, but it passes, and the summary says that the label was used.
+  # The label is accepted only when the pull request also changes
+  # .provenance/state, which shows that the pull request wrote its own state
+  # again. With the label and no change to .provenance/state, the job fails.
+  # The job reads the labels when it runs: after you add or remove the label,
+  # run the job again. On a push to main, the job reads the labels of the
+  # merged pull request.
+  base-state-read:
+    timeout-minutes: 15
+    name: Base state read
+    needs: [changes, build-cli-linux]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.policy == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: provenance-cli-x86_64-unknown-linux-gnu
+          path: target/debug
+      - run: chmod +x target/debug/provenance
+      # A pull request reads the state of its base commit. A push to main
+      # reads the state before the push. A manual run reads origin/main.
+      # The base commit goes into a separate worktree, so the graph check
+      # finds its archive commits in the base history.
+      - name: Check out the base state
+        id: base
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || 'origin/main' }}
+          SCRATCH: ${{ runner.temp }}/base-state
+        run: |
+          set -euo pipefail
+          base=$(git rev-parse --verify "$BASE_REF^{commit}")
+          git worktree add --detach "$SCRATCH" "$base"
+          echo "Base commit: $base"
+          echo "State rows: $(find "$SCRATCH/.provenance/state" -name "*.jsonl" -exec cat {} + | wc -l)"
+      # On a pull request the checkout is the merge commit, so its first
+      # parent shows the change of the pull request. On a push it is the
+      # commit before the push. A manual run has no label.
+      - name: Read the state-format-change label
+        id: label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          case "$EVENT" in
+            pull_request)
+              labels=$(gh api "repos/$REPOSITORY/issues/$PR_NUMBER/labels" --jq '.[].name')
+              change_base=HEAD^1
+              ;;
+            push)
+              labels=$(gh api "repos/$REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '.[] | select(.merged_at != null) | .labels[].name')
+              change_base=$BEFORE
+              ;;
+            *)
+              labels=""
+              change_base=""
+              ;;
+          esac
+          if ! grep -qx "state-format-change" <<< "$labels"; then
+            echo "override=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git diff --quiet "$change_base" HEAD -- .provenance/state; then
+            message="The state-format-change label is on this pull request, but the pull request does not change .provenance/state. Write the state again in the new format, or remove the label."
+            echo "::error::$message"
+            echo "$message" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "The state-format-change label is present, and the pull request changes .provenance/state."
+          echo "override=true" >> "$GITHUB_OUTPUT"
+      # The write changes only the scratch worktree, which CI never commits.
+      - name: Read and write the base state with this binary
+        env:
+          OVERRIDE: ${{ steps.label.outputs.override }}
+          SCRATCH: ${{ runner.temp }}/base-state
+        run: .github/scripts/base-state-read.sh target/debug/provenance "$SCRATCH"
+
   rust-sdk:
     timeout-minutes: 30
     name: Rust SDK example
@@ -1407,14 +1506,16 @@ jobs:
           node-version: 24
       - name: Test the paired timing tools
         run: node --test tools/bench/*.test.mjs
+      - name: Test the API latency tools
+        run: node --test tools/api-latency/*.test.mjs
       - name: Install workflow validator
         env:
           GOBIN: ${{ runner.temp }}/bench-tools
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
-      - name: Validate the Benchmarks workflow
+      - name: Validate the Benchmarks and API latency workflows
         env:
           GOBIN: ${{ runner.temp }}/bench-tools
-        run: '"$GOBIN/actionlint" .github/workflows/benchmarks.yml'
+        run: '"$GOBIN/actionlint" .github/workflows/benchmarks.yml .github/workflows/api-latency.yml'
 
   operation-contract:
     timeout-minutes: 45
@@ -1606,6 +1707,7 @@ jobs:
       - crap-quality
       - rule-coverage
       - statement-check
+      - base-state-read
       - rust-sdk
       - typescript-sdk
       - typescript-sdk-example

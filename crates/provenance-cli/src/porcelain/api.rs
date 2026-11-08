@@ -48,17 +48,7 @@ pub async fn dispatch_api(
             }
         }
         Ok(ApiOutcome::Invoked(value)) => println!("{}", serde_json::to_string_pretty(&value)?),
-        Err(error) => {
-            let failure = serde_json::to_string(&error.failure)?;
-            // Text mode prints the native cause of a failure of no known kind
-            // as the cause of the refusal; the refusal object stays the same.
-            return Err(match error.cause {
-                Some(cause) if format != Some(OutputFormat::Json) => {
-                    anyhow::Error::msg(cause).context(failure)
-                }
-                _ => anyhow::Error::msg(failure),
-            });
-        }
+        Err(error) => anyhow::bail!("{}", serde_json::to_string(&error.failure)?),
     }
     Ok(())
 }

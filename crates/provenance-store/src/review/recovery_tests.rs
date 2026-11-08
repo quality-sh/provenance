@@ -223,7 +223,7 @@ fn a_lost_result_resolves_through_resubmission_after_recovery() {
     test_probes::disarm("state_published");
     assert!(matches!(
         crate::write_error::WriteError(error).safe(),
-        crate::write_error::WriteFailure::WriteFailed
+        crate::write_error::WriteFailure::WriteFailed { .. }
     ));
     let reopened = open(root);
     let retried: SaveRequirement = serde_json::from_slice(&request).unwrap();

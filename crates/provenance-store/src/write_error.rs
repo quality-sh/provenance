@@ -6,6 +6,9 @@ use crate::state_store::{
 use provenance_core::protocol::failure::InvalidInputReason;
 use serde::Serialize;
 
+mod cause;
+pub(crate) use cause::{failure_cause, in_repository, native};
+
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -85,7 +88,12 @@ pub enum WriteFailure {
         line: u64,
         message: String,
     },
-    WriteFailed,
+    /// A write failure of no known kind. `cause` is the display chain of the
+    /// native error. A path below the repository in it is relative to the
+    /// repository root, and any other absolute path is only its file name.
+    WriteFailed {
+        cause: String,
+    },
 }
 
 impl WriteFailure {
@@ -194,22 +202,26 @@ impl From<provenance_core::protocol::failure::OperationFailure> for WriteError {
     }
 }
 impl WriteError {
+    /// The same error with the repository root, so that its cause gives each
+    /// path relative to the repository.
+    pub(crate) fn in_repository(self, root: &camino::Utf8Path) -> Self {
+        Self(in_repository(root.as_std_path(), self.0))
+    }
     pub fn safe(&self) -> WriteFailure {
-        if self.0.downcast_ref::<PublicationStarted>().is_some() {
-            return WriteFailure::WriteFailed;
+        let error = native(&self.0);
+        if error.downcast_ref::<PublicationStarted>().is_some() {
+            return self.write_failed();
         }
-        if let Some(error) = self.0.downcast_ref::<SourceFailure>() {
+        if let Some(error) = error.downcast_ref::<SourceFailure>() {
             return error.failure.clone();
         }
-        if self
-            .0
+        if error
             .downcast_ref::<provenance_core::DispositionActorRefusal>()
             .is_some()
         {
             return WriteFailure::AccessDenied;
         }
-        if self
-            .0
+        if error
             .downcast_ref::<provenance_core::ApprovalEvidenceRequired>()
             .is_some()
         {
@@ -218,20 +230,17 @@ impl WriteError {
                     .into(),
             };
         }
-        if let Some(error) = self.0.downcast_ref::<StatementWriteError>() {
+        if let Some(error) = error.downcast_ref::<StatementWriteError>() {
             return WriteFailure::StatementInvalid {
                 report: error.report.clone(),
             };
         }
-        if let Some(error) = self.0.downcast_ref::<TypedSpecWriteError>() {
+        if let Some(error) = error.downcast_ref::<TypedSpecWriteError>() {
             return WriteFailure::StatementRejected {
                 diagnostics: error.diagnostics.clone(),
             };
         }
-        if let Some(error) = self
-            .0
-            .downcast_ref::<crate::operations::files::FileAccessRefusal>()
-        {
+        if let Some(error) = error.downcast_ref::<crate::operations::files::FileAccessRefusal>() {
             return match error {
                 crate::operations::files::FileAccessRefusal::Denied => {
                     WriteFailure::FileAccessDenied
@@ -239,23 +248,30 @@ impl WriteError {
                 _ => WriteFailure::FileUnavailable,
             };
         }
-        StateLineInvalid::find(&self.0).map_or(WriteFailure::WriteFailed, |error| {
-            WriteFailure::InvalidStateFile {
+        StateLineInvalid::find(error).map_or_else(
+            || self.write_failed(),
+            |error| WriteFailure::InvalidStateFile {
                 file: error.file(),
                 line: error.line,
                 message: error.message.clone(),
-            }
-        })
+            },
+        )
     }
-    /// The native cause chain of a failure of no known kind. The wire answer
-    /// gives only `write_failed`: the chain can hold absolute paths and stored
-    /// values, so only the operator sees it.
+    fn write_failed(&self) -> WriteFailure {
+        WriteFailure::WriteFailed {
+            cause: failure_cause(&self.0),
+        }
+    }
+    /// The native cause chain of a failure of no known kind, with absolute
+    /// paths, for the host log. The wire answer gives the cause with each
+    /// path relative to the repository.
     pub fn unclassified_cause(&self) -> Option<String> {
-        matches!(self.safe(), WriteFailure::WriteFailed).then(|| format!("{:#}", self.0))
+        matches!(self.safe(), WriteFailure::WriteFailed { .. })
+            .then(|| format!("{:#}", native(&self.0)))
     }
     pub fn status(&self) -> u16 {
         match self.safe() {
-            WriteFailure::WriteFailed | WriteFailure::InvalidStateFile { .. } => 500,
+            WriteFailure::WriteFailed { .. } | WriteFailure::InvalidStateFile { .. } => 500,
             WriteFailure::FileAccessDenied | WriteFailure::AccessDenied => 403,
             WriteFailure::FileUnavailable => 503,
             WriteFailure::ResourceNotFound => 404,

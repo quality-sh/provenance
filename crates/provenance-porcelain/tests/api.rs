@@ -19,7 +19,6 @@ impl RecordingPort {
         ApiError {
             kind: ApiErrorKind::UnknownPath,
             failure: json!({"error": {"kind": "unknown_operation"}, "meta": {}}),
-            cause: None,
         }
     }
 }
@@ -406,7 +405,6 @@ fn each_api_error_kind_displays_its_own_message() {
         let error = ApiError {
             kind,
             failure: Value::Null,
-            cause: None,
         };
         assert_eq!(error.to_string(), message, "{kind:?}");
     }

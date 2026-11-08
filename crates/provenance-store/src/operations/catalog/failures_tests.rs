@@ -52,7 +52,9 @@ fn a_native_refusal_publishes_its_closed_failure_and_status() {
         ),
         (
             read_error(FileAccessRefusal::Missing),
-            ReadFailure::ReadFailed,
+            ReadFailure::ReadFailed {
+                cause: "repository file not found".into(),
+            },
             500,
         ),
         (
@@ -79,7 +81,9 @@ fn a_native_refusal_publishes_its_closed_failure_and_status() {
         ),
         (
             ReadError(anyhow::anyhow!("an error of no known kind")),
-            ReadFailure::ReadFailed,
+            ReadFailure::ReadFailed {
+                cause: "an error of no known kind".into(),
+            },
             500,
         ),
     ];
@@ -175,4 +179,38 @@ fn a_common_refusal_raised_inside_a_read_keeps_its_kind_and_status() {
         serde_json::to_value(&error).unwrap(),
         serde_json::json!({"kind":"invalid_input","field":"offset","reason":"invalid_value"})
     );
+}
+
+/// The cause of a read failure of no known kind gives a path relative to the
+/// repository root, on both separators.
+#[test]
+#[verifies("rule_unclassified_refusal_gives_cause", examples)]
+fn a_read_failure_of_no_known_kind_gives_its_cause_relative_to_the_repository() {
+    for (root, path) in [
+        (
+            "/tmp/a /b/repo",
+            "/tmp/a /b/repo/.provenance/state/scopes/default/requirements/req.jsonl",
+        ),
+        (
+            r"\\?\C:\Users\Jo Smith\repo",
+            r"\\?\C:\Users\Jo Smith\repo\.provenance\state\scopes\default/requirements/req.jsonl",
+        ),
+    ] {
+        let error = ReadError(
+            anyhow::anyhow!("{path} line 1: record req_a contains legacy field `retired`")
+                .context("failed to load requirements"),
+        )
+        .in_repository(camino::Utf8Path::new(root));
+        assert_eq!(error.status(), 500);
+        assert_eq!(
+            serde_json::to_value(&error).unwrap(),
+            serde_json::json!({
+                "kind": "read_failed",
+                "cause": "failed to load requirements: .provenance/state/scopes/default/\
+                          requirements/req.jsonl line 1: record req_a contains legacy field \
+                          `retired`",
+            }),
+            "{path}"
+        );
+    }
 }
