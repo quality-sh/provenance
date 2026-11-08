@@ -297,12 +297,7 @@ pub(crate) fn failure_cause(error: &anyhow::Error) -> String {
     let mut rest = text.as_str();
     while let Some((at, marker)) = state_marker(rest) {
         let before = &rest[..at];
-        let start = before
-            .char_indices()
-            .rev()
-            .find(|&(_, character)| ends_path(character))
-            .map_or(0, |(index, character)| index + character.len_utf8());
-        cause.push_str(&before[..start]);
+        cause.push_str(&before[..path_start(before)]);
         rest = &rest[at + marker..];
         let end = rest.find(ends_path).unwrap_or(rest.len());
         cause.push_str(&rest[..end].replace('\\', "/"));
@@ -325,6 +320,37 @@ fn state_marker(text: &str) -> Option<(usize, usize)> {
         .iter()
         .filter_map(|marker| text.find(marker).map(|at| (at, marker.len())))
         .min()
+}
+
+/// Where the path that ends `before` starts. An absolute path can hold a
+/// space, so the last root (`/`, `\\` or a drive letter) after a space wins.
+/// The search does not go back past `: ` or another separator. With no root,
+/// the path starts after the last space.
+fn path_start(before: &str) -> usize {
+    let window = before
+        .char_indices()
+        .rev()
+        .find(|&(_, character)| character != ' ' && ends_path(character))
+        .map_or(0, |(at, character)| at + character.len_utf8())
+        .max(before.rfind(": ").map_or(0, |at| at + 2));
+    let bytes = before.as_bytes();
+    let is_root = |index: usize| {
+        let after_space = index == window || bytes[index - 1] == b' ';
+        let root = match bytes[index] {
+            b'/' | b'\\' => true,
+            letter => {
+                letter.is_ascii_alphabetic()
+                    && bytes.get(index + 1) == Some(&b':')
+                    && matches!(bytes.get(index + 2), Some(b'/' | b'\\'))
+            }
+        };
+        after_space && root
+    };
+    (window..bytes.len())
+        .rev()
+        .find(|&index| is_root(index))
+        .or_else(|| before[window..].rfind(' ').map(|at| window + at + 1))
+        .unwrap_or(window)
 }
 
 fn ends_path(character: char) -> bool {
