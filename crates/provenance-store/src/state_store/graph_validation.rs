@@ -29,7 +29,6 @@ impl StateStore {
         let rules = self.list_rules(scope)?;
         let topics = self.list_topics(scope)?;
         let questions = self.list_questions(scope)?;
-        let domains = self.list_domains(scope)?;
         validate_relations(&RecordFront {
             sources: &sources,
             requirements: &requirements,
@@ -37,7 +36,6 @@ impl StateStore {
             rules: &rules,
             topics: &topics,
             questions: &questions,
-            domains: &domains,
         })
     }
 }
@@ -46,7 +44,7 @@ impl StateStore {
 ///
 /// It refuses an archive stamp that does not match the status, an empty
 /// required list, and a chain that returns to its start. It reads only the
-/// front; domains carry no relation it checks.
+/// front.
 pub fn validate_relations(front: &RecordFront<'_>) -> anyhow::Result<()> {
     ensure_archives(
         front.requirements,

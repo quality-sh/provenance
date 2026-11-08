@@ -133,7 +133,7 @@ mod tests {
     fn exact_export_refuses_an_archive_inconsistent_rule() {
         let graph = serde_json::json!({
             "scope": {"id":"default","path_prefix":"."},
-            "sources": [], "domains": [], "requirements": [],
+            "sources": [], "requirements": [],
             "topics": [], "questions": [], "resolutions": [],
             "rules": [{
                 "scope_id": "default", "id": "rule_bad_archive",

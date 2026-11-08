@@ -98,7 +98,6 @@ pub(super) const fn node_type_name(node_type: NodeType) -> &'static str {
         NodeType::Rule => "rule",
         NodeType::Topic => "topic",
         NodeType::Question => "question",
-        NodeType::Domain => "domain",
     }
 }
 

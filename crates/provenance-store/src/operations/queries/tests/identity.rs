@@ -41,7 +41,7 @@ async fn identity_resolution_hides_disallowed_kinds_as_missing() {
     let answer = queries::resolve_record(
         &repository_of(&dir),
         ReadPolicy::default(),
-        request("domain_payroll", vec![NodeType::Requirement]),
+        request("req_overtime", vec![NodeType::Rule]),
     )
     .await
     .unwrap();

@@ -27,12 +27,11 @@ fn workspace_root() -> PathBuf {
 }
 
 /// The files the node-kind structs live in.
-const NODE_FILES: &[&str] = &["artifacts.rs", "shaping.rs", "services.rs"];
+const NODE_FILES: &[&str] = &["artifacts.rs", "shaping.rs"];
 
 const NODE_STRUCTS: &[&str] = &[
     "Source",
     "Requirement",
-    "Domain",
     "Topic",
     "Question",
     "Resolution",

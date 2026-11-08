@@ -56,8 +56,6 @@ fn typed_cascade_refuses_enrolled_deletion_before_publication() {
             rationale: "The record is temporary.".into(),
             status: ResolutionStatus::Proposed,
             context: None,
-            enforcement: None,
-            confidence: None,
             inputs: Vec::new(),
             made_by: None,
             approved_by: None,

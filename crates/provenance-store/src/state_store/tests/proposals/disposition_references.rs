@@ -379,7 +379,6 @@ fn assert_misfiled_record_is_in_canonical_shard(
         "requirement" => serde_json::to_value(store.list_requirements(scope).unwrap()),
         "resolution" => serde_json::to_value(store.list_resolutions(scope).unwrap()),
         "rule" => serde_json::to_value(store.list_rules(scope).unwrap()),
-        "domain" => serde_json::to_value(store.list_domains(scope).unwrap()),
         "topic" => serde_json::to_value(store.list_topics(scope).unwrap()),
         "question" => serde_json::to_value(store.list_questions(scope).unwrap()),
         _ => unreachable!("all canonical artifact kinds are covered"),
@@ -401,7 +400,6 @@ fn canonical_shard_path(
         "requirement" => crate::shards::requirements_path(layout, scope),
         "resolution" => crate::shards::resolutions_path(layout, scope),
         "rule" => crate::shards::rules_path(layout, scope),
-        "domain" => crate::shards::domains_path(layout, scope),
         "topic" => crate::shards::topics_path(layout, scope),
         "question" => crate::shards::questions_path(layout, scope),
         _ => unreachable!("all canonical artifact kinds are covered"),
@@ -414,7 +412,6 @@ fn canonical_artifact_types() -> [&'static str; 7] {
         "requirement",
         "resolution",
         "rule",
-        "domain",
         "topic",
         "question",
     ]
@@ -432,15 +429,11 @@ fn canonical_records(scope: &str) -> [(&'static str, String); 7] {
         ),
         (
             "resolution",
-            serde_json::json!({"scope_id":scope,"id":"artifact_test","title":"Test","position":"Test","rationale":"Test","status":"approved","inputs":[],"review_on":null}).to_string(),
+            serde_json::json!({"scope_id":scope,"id":"artifact_test","title":"Test","position":"Test","rationale":"Test","status":"approved","inputs":[]}).to_string(),
         ),
         (
             "rule",
             serde_json::json!({"scope_id":scope,"id":"artifact_test","statement":"Test","status":"draft","severity":"high"}).to_string(),
-        ),
-        (
-            "domain",
-            serde_json::json!({"scope_id":scope,"id":"artifact_test","name":"Test"}).to_string(),
         ),
         (
             "topic",

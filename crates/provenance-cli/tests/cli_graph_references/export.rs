@@ -147,7 +147,6 @@ fn exact_export_contains_only_canonical_graph_families() {
     let export: Value = serde_json::from_slice(&output).unwrap();
     let graph = export["graph"].as_object().unwrap();
     assert!(!graph.contains_key("proposal_cards"));
-    assert!(!graph.contains_key("promotion_decisions"));
     assert!(!String::from_utf8(output.clone())
         .unwrap()
         .contains("proposal_workflowd_123"));

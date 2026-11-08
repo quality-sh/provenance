@@ -46,11 +46,6 @@ async fn materialize_derives_one_row_per_declared_reference() {
                 ("source", "source_schads")
             ),
             row(
-                ("requirement", "req_schads_overtime"),
-                "domain_id",
-                ("domain", "domain_payroll")
-            ),
-            row(
                 ("resolution", "res_schads_overtime"),
                 "requirement_ids",
                 ("requirement", "req_schads_overtime")

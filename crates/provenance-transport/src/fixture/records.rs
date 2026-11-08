@@ -5,8 +5,8 @@ use provenance_core::{
 use provenance_store::{
     layout::ProvenanceLayout,
     state_store::{
-        CreateDomainInput, CreateQuestionInput, CreateRequirementInput, CreateResolutionInput,
-        CreateRuleInput, CreateSourceInput, CreateTopicInput, UpdateRuleInput,
+        CreateQuestionInput, CreateRequirementInput, CreateResolutionInput, CreateRuleInput,
+        CreateSourceInput, CreateTopicInput, UpdateRuleInput,
     },
 };
 use serde_json::json;
@@ -38,18 +38,8 @@ impl Repository {
     }
     pub fn seed(&self, scope: ScopeId, statement: &str, id_suffix: &str) {
         let store = self.open().store();
-        let domain_id = sid(&format!("domain_shared{id_suffix}"));
         let requirement_id = sid(&format!("req_shared{id_suffix}"));
         let rule_id = sid(&format!("rule_shared{id_suffix}"));
-        store
-            .create_domain(CreateDomainInput {
-                scope_id: scope.clone(),
-                id: domain_id.clone(),
-                name: "Shared domain".into(),
-                description: None,
-                color: None,
-            })
-            .unwrap();
         store
             .create_requirement(CreateRequirementInput {
                 scope_id: scope.clone(),
@@ -57,7 +47,6 @@ impl Repository {
                 statement: "The graph is readable.".into(),
                 description: None,
                 status: RequirementStatus::Active,
-                domain_id: Some(domain_id),
                 refines: Vec::new(),
                 depends_on: vec![],
                 supersedes: vec![],
@@ -115,8 +104,6 @@ impl Repository {
                 url: None,
                 reference: None,
                 commit_pin: None,
-                effective_date: None,
-                review_date: None,
                 supersedes: vec![],
                 origin_thread: None,
                 origin_message: None,
@@ -158,8 +145,6 @@ impl Repository {
                 rationale: "The reader uses the shared contract.".into(),
                 status: ResolutionStatus::Draft,
                 context: None,
-                enforcement: None,
-                confidence: None,
                 inputs: vec![],
                 made_by: None,
                 approved_by: None,

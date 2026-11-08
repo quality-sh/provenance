@@ -1,7 +1,7 @@
 use provenance_core::model::relations::RecordFront;
 use provenance_core::{
-    Contribution, Domain, NodeType, Question, Requirement, Resolution, Rule, ScopeId, Source,
-    StableId, SynthesisPacket, Thread, Topic,
+    Contribution, NodeType, Question, Requirement, Resolution, Rule, ScopeId, Source, StableId,
+    SynthesisPacket, Thread, Topic,
 };
 
 pub struct GapGraph<'a> {
@@ -13,7 +13,6 @@ pub struct GapGraph<'a> {
     pub topics: &'a [Topic],
     pub questions: &'a [Question],
     pub threads: &'a [Thread],
-    pub domains: &'a [Domain],
     /// Ideation records are not graph nodes; they are here for the one
     /// gap their `target` can open.
     pub contributions: &'a [Contribution],
@@ -30,7 +29,6 @@ impl GapGraph<'_> {
             rules: self.rules,
             topics: self.topics,
             questions: self.questions,
-            domains: self.domains,
         }
     }
 }
@@ -83,7 +81,6 @@ impl<'a, 'graph> GraphQuery<'a, 'graph> {
                 .questions
                 .iter()
                 .any(|question| question.id == *id),
-            NodeType::Domain => self.graph.domains.iter().any(|domain| domain.id == *id),
         }
     }
 

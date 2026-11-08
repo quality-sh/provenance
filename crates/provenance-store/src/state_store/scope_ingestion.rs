@@ -369,11 +369,6 @@ fn read_ideation_records_unlocked(
         assertions: read_jsonl_unlocked(&shards::assertion_records_path(layout, scope))?,
         dispositions: read_jsonl_unlocked(&shards::dispositions_path(layout, scope))?,
     };
-    records
-        .dispositions
-        .extend(super::readers::read_legacy_dispositions_unlocked(
-            &shards::legacy_promotion_decisions_path(layout, scope),
-        )?);
     let landings: Vec<IdeationLandingBatch> = super::readers::read_ideation_landings_unlocked(
         &shards::ideation_landings_path(layout, scope),
     )?;

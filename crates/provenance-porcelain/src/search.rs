@@ -328,7 +328,7 @@ const fn lifecycle_suffix(node: &GraphNode) -> &'static str {
         GraphNode::Rule(record) => rule_suffix(&record.status),
         GraphNode::Topic(record) => topic_suffix(record.status),
         GraphNode::Question(record) => question_suffix(record.status),
-        GraphNode::Source(_) | GraphNode::Domain(_) => "",
+        GraphNode::Source(_) => "",
     }
 }
 

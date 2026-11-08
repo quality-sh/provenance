@@ -43,7 +43,6 @@ fn graph_with_source_named(name: &str) -> Value {
             "source_type": "policy",
             "url": null
         }],
-        "domains": [],
         "requirements": [],
         "topics": [],
         "questions": [],

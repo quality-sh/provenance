@@ -475,11 +475,7 @@ fn requirements(out: &mut Vec<Definition>) {
         )
         .review_update_guard(NodeType::Requirement)
         .cli_defaults(UPDATE_REQUIREMENT_DEFAULTS)
-        .public_patch(&[
-            ("description", "description"),
-            ("fog", "fog"),
-            ("domain_id", "domain_id"),
-        ])
+        .public_patch(&[("description", "description")])
         .target(TargetAction::Update, Some(NodeType::Requirement))
         .review_link(Some(NodeType::Requirement))
         .with_etag("/edit/etag", false),

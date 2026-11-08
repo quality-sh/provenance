@@ -55,7 +55,6 @@ async fn inverse_document_read_follows_each_canonical_membership_rule() {
             statement: "The other requirement applies.".into(),
             description: None,
             status: RequirementStatus::Active,
-            domain_id: None,
             refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
@@ -78,7 +77,6 @@ async fn inverse_document_read_follows_each_canonical_membership_rule() {
         (NodeType::Requirement, "req_overtime"),
         (NodeType::Resolution, "resolution_policy"),
         (NodeType::Rule, "rule_via_resolution"),
-        (NodeType::Domain, "domain_payroll"),
         (NodeType::Topic, "topic_policy"),
         (NodeType::Question, "question_policy"),
     ] {

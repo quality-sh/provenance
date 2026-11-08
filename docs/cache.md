@@ -1,7 +1,7 @@
 # Cache
 
 `.provenance/cache/provenance.db` is the stamped projection of canonical
-JSONL: graph records, domains, shaping records, collaboration records,
+JSONL: graph records, shaping records, collaboration records,
 ideation records, implementation and verification bindings, requirement
 reviews, source commit pins, proposal confidence, assertions, and derived
 proposal state. Canonical JSONL is the only write target. The database is
@@ -267,15 +267,15 @@ runtime workers.
 
 | Family | Derivation | Files read |
 |---|---|---|
-| sources, domains, requirements, topics, questions, resolutions, rules | `read_jsonl(<shard>)` | own shard |
-| relations | derived from the six owner kinds' reference fields; no digest row | the scope's own shards |
+| sources, requirements, topics, questions, resolutions, rules | `read_jsonl(<shard>)` | own shard |
+| relations | derived from the seven owner kinds' reference fields; no digest row | the scope's own shards |
 | threads | `read_jsonl(threads.jsonl)` | own shard |
 | messages | `read_message_shards` | every `threads/YYYY-MM.jsonl` in the scope |
 | implementation_bindings, verification_bindings | `read_jsonl(<shard>)` | own shard |
 | requirement_reviews | `list_requirement_reviews`, direct line parse | own shard |
 | contributions, synthesis_packets, assertion_records | `read_jsonl` plus the `landings.jsonl` overlay | own shard, `ideation/landings.jsonl` |
-| dispositions | `read_jsonl`, legacy reader, landings overlay | own shard, `ideation/promotion_decisions.jsonl`, `ideation/landings.jsonl` |
-| proposal_cards | `project_proposal_cards`: validator (validity only), then `effective_proposal_state(card, assertions, dispositions)` | `proposal_cards.jsonl`, `landings.jsonl`, `assertions.jsonl`, `dispositions.jsonl`, `promotion_decisions.jsonl`; the validator also reads `contributions.jsonl`, `synthesis_packets.jsonl`, and the manifest's actor list |
+| dispositions | `read_jsonl`, landings overlay | own shard, `ideation/landings.jsonl` |
+| proposal_cards | `project_proposal_cards`: validator (validity only), then `effective_proposal_state(card, assertions, dispositions)` | `proposal_cards.jsonl`, `landings.jsonl`, `assertions.jsonl`, `dispositions.jsonl`; the validator also reads `contributions.jsonl`, `synthesis_packets.jsonl`, and the manifest's actor list |
 
 Every file in the table lies in the derived scope's directory or in the
 global unit.

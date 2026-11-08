@@ -2,12 +2,8 @@ use super::records;
 use crate::layout::ProvenanceLayout;
 use crate::operations::read_policy::ReadPolicy;
 use crate::repository::Repository;
-use crate::state_store::{CreateDomainInput, CreateRequirementInput, StateStore};
-use provenance_core::protocol::{GetQuery, SearchQuery};
-use provenance_core::{
-    Manifest, NodeType, RepoPathPrefix, RequirementStatus, ScopeId, StableId, SDK_PROTOCOL_VERSION,
-};
-use provenance_macros::verifies;
+use crate::state_store::{CreateRequirementInput, StateStore};
+use provenance_core::{Manifest, NodeType, RepoPathPrefix, RequirementStatus, ScopeId, StableId};
 
 mod binding_pages;
 mod budgets;
@@ -41,7 +37,7 @@ fn sid(value: &str) -> StableId {
     StableId::new(value).unwrap()
 }
 
-/// One scope holding a requirement and its domain.
+/// One scope holding one requirement.
 fn seeded_store() -> (tempfile::TempDir, StateStore, ScopeId) {
     let dir = tempfile::tempdir().unwrap();
     let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
@@ -59,22 +55,12 @@ fn seeded_store() -> (tempfile::TempDir, StateStore, ScopeId) {
     .unwrap();
     let store = crate::test_support::store(&layout);
     store
-        .create_domain(CreateDomainInput {
-            scope_id: scope.clone(),
-            id: sid("domain_payroll"),
-            name: "Payroll".into(),
-            description: Some("Wages and awards".into()),
-            color: None,
-        })
-        .unwrap();
-    store
         .create_requirement(CreateRequirementInput {
             scope_id: scope.clone(),
             id: sid("req_overtime"),
             statement: "Overtime is paid".into(),
             description: None,
             status: RequirementStatus::Active,
-            domain_id: Some(sid("domain_payroll")),
             refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
@@ -102,67 +88,13 @@ fn repository_at(root: &camino::Utf8Path) -> Repository {
 }
 
 #[tokio::test]
-async fn get_answers_a_domain_by_id() {
-    let (dir, _store, _scope) = seeded_store();
-    let (kind, id, wire) = (NodeType::Domain, "domain_payroll", "domain");
-    let answer = super::get(
-        &repository_of(&dir),
-        ReadPolicy::default(),
-        GetQuery {
-            protocol_version: Some(SDK_PROTOCOL_VERSION),
-            node_type: kind,
-            id: id.into(),
-        },
-    )
-    .await
-    .unwrap()
-    .result;
-    assert!(answer.found, "get must find the {wire} record");
-    let node = serde_json::to_value(answer.node.unwrap()).unwrap();
-    assert_eq!(node["node_type"], wire);
-    assert_eq!(node["id"], id);
-}
-
-#[tokio::test]
-#[verifies("rule_porcelain_search_crosses_kinds", examples)]
-async fn search_reaches_domains_by_kind_and_text() {
-    let (dir, _store, _scope) = seeded_store();
-    let answer = super::search(
-        &repository_of(&dir),
-        ReadPolicy::default(),
-        SearchQuery {
-            cursor: None,
-            protocol_version: Some(SDK_PROTOCOL_VERSION),
-            exclude_terminal: false,
-            text: Some("pay".into()),
-            node_types: vec![NodeType::Domain],
-            limit: 10,
-        },
-    )
-    .await
-    .unwrap()
-    .result;
-    let kinds: Vec<String> = answer
-        .nodes
-        .iter()
-        .map(|node| {
-            serde_json::to_value(node).unwrap()["node_type"]
-                .as_str()
-                .unwrap()
-                .to_string()
-        })
-        .collect();
-    assert_eq!(kinds, ["domain"]);
-}
-
-#[tokio::test]
-async fn filter_only_search_reaches_each_selected_kind() {
+async fn filter_only_search_reaches_the_selected_kind() {
     let (dir, _store, _scope) = seeded_store();
     let answer = super::search(
         &repository_of(&dir),
         ReadPolicy::default(),
         serde_json::from_value(serde_json::json!({
-            "node_types":["requirement", "domain"],
+            "node_types":["requirement"],
             "limit":10
         }))
         .unwrap(),
@@ -175,44 +107,11 @@ async fn filter_only_search_reaches_each_selected_kind() {
         .iter()
         .map(|node| (node.node_type(), node.id().as_str()))
         .collect();
-    assert_eq!(
-        found,
-        [
-            (NodeType::Requirement, "req_overtime"),
-            (NodeType::Domain, "domain_payroll")
-        ]
-    );
-}
-
-#[tokio::test]
-async fn default_search_keeps_the_six_settled_kinds_under_protocol_five() {
-    let (dir, _store, _scope) = seeded_store();
-    let answer = super::search(
-        &repository_of(&dir),
-        ReadPolicy::default(),
-        SearchQuery {
-            cursor: None,
-            protocol_version: Some(SDK_PROTOCOL_VERSION),
-            exclude_terminal: false,
-            text: Some("pay".into()),
-            node_types: Vec::new(),
-            limit: 10,
-        },
-    )
-    .await
-    .unwrap()
-    .result;
-    for node in &answer.nodes {
-        let kind = node.node_type();
-        assert!(
-            kind != NodeType::Domain,
-            "a default search must not emit {kind:?} while the protocol stays at version 5"
-        );
-    }
+    assert_eq!(found, [(NodeType::Requirement, "req_overtime")]);
 }
 
 #[test]
-fn rank_appends_the_new_kinds_after_the_six_settled_positions() {
+fn rank_is_the_declared_contract_order() {
     let pinned = [
         (NodeType::Source, 0),
         (NodeType::Requirement, 1),
@@ -220,55 +119,10 @@ fn rank_appends_the_new_kinds_after_the_six_settled_positions() {
         (NodeType::Rule, 3),
         (NodeType::Topic, 4),
         (NodeType::Question, 5),
-        (NodeType::Domain, 6),
     ];
     for (kind, expected) in pinned {
         assert_eq!(records::rank(kind), expected, "rank of {kind:?}");
     }
-}
-
-/// The served search visits kinds in rank order, so a request naming
-/// every kind answers every settled kind before the appended ones. It
-/// serves the order the whole-graph load used to pin.
-#[tokio::test]
-async fn search_answers_new_kinds_after_every_settled_kind() {
-    let (dir, _store, _scope) = seeded_store();
-    let answer = super::search(
-        &repository_of(&dir),
-        ReadPolicy::default(),
-        SearchQuery {
-            cursor: None,
-            protocol_version: Some(SDK_PROTOCOL_VERSION),
-            exclude_terminal: false,
-            text: Some("a".into()),
-            node_types: vec![
-                NodeType::Source,
-                NodeType::Requirement,
-                NodeType::Resolution,
-                NodeType::Rule,
-                NodeType::Topic,
-                NodeType::Question,
-                NodeType::Domain,
-            ],
-            limit: 10,
-        },
-    )
-    .await
-    .unwrap()
-    .result;
-    let order: Vec<(NodeType, &str)> = answer
-        .nodes
-        .iter()
-        .map(|node| (node.node_type(), node.id().as_str()))
-        .collect();
-    assert_eq!(
-        order,
-        [
-            (NodeType::Requirement, "req_overtime"),
-            (NodeType::Domain, "domain_payroll"),
-        ],
-        "the appended kinds answer after every settled kind"
-    );
 }
 
 mod eight_readers;

@@ -43,7 +43,6 @@ fn held_records_give_the_gaps_of_the_same_graph() {
         &held.rules,
         &[],
         &[],
-        &[],
     );
     assert_eq!(gaps, expected);
     assert_eq!(records::count_kind(&gaps, GapKind::UnreferencedSource), 1);
@@ -63,7 +62,6 @@ fn held_records_give_the_neighbours_of_a_hand_built_front() {
         rules: &held.rules,
         topics: &[],
         questions: &[],
-        domains: &[],
     };
     let cited = records::sid("req_cited");
 

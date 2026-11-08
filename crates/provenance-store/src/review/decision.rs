@@ -28,7 +28,6 @@ const fn target_type(kind: NodeType) -> IdeationTargetType {
         NodeType::Requirement => IdeationTargetType::Requirement,
         NodeType::Resolution => IdeationTargetType::Resolution,
         NodeType::Rule => IdeationTargetType::Rule,
-        NodeType::Domain => IdeationTargetType::Domain,
         NodeType::Topic => IdeationTargetType::Topic,
         NodeType::Question => IdeationTargetType::Question,
     }

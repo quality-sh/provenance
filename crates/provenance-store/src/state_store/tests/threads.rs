@@ -17,7 +17,6 @@ fn list_messages_reads_all_month_shards() {
         role: MessageRole::User,
         body: "July message".into(),
         created_at: 1,
-        ai_metadata: None,
     };
     let second_message = Message {
         scope_id: scope.clone(),
@@ -26,7 +25,6 @@ fn list_messages_reads_all_month_shards() {
         role: MessageRole::Assistant,
         body: "August message".into(),
         created_at: 2,
-        ai_metadata: None,
     };
     let threads_dir = store
         .layout
@@ -390,26 +388,4 @@ fn thread(
         status,
         created_at,
     }
-}
-
-#[test]
-fn thread_parents_stay_within_the_six_original_kinds() {
-    let (_dir, store, scope) = initialized_store();
-    let kind = NodeType::Domain;
-    let error = store
-        .post_thread_message(PostMessageInput {
-            scope_id: scope.clone(),
-            parent: ThreadParent {
-                node_type: kind,
-                node_id: StableId::new("domain_x").unwrap(),
-            },
-            role: MessageRole::User,
-            body: "Hello".into(),
-        })
-        .unwrap_err()
-        .to_string();
-    assert!(
-        error.contains("thread parent"),
-        "kind {kind:?} must be refused with a thread-parent error, got: {error}"
-    );
 }

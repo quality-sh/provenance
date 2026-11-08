@@ -135,7 +135,6 @@ async fn a_kernel_authored_requirement_adopts_one_exact_unowned_identity() {
             statement: "The canonical Requirement keeps its identity".to_string(),
             description: None,
             status: RequirementStatus::Active,
-            domain_id: None,
             refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),

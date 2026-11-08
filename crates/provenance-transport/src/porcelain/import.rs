@@ -41,7 +41,6 @@ fn import_scope(
     repository.ensure_selected(&ScopeId::new(&exported.scope)?)?;
     let scope_id = repository.scope().clone();
     let records = exported.sources.len()
-        + exported.domains.len()
         + exported.requirements.len()
         + exported.topics.len()
         + exported.questions.len()
@@ -252,7 +251,6 @@ fn apply_import(
 fn scope_shards(exported: &ScopeExport) -> ScopeShards<'_> {
     ScopeShards {
         sources: &exported.sources,
-        domains: &exported.domains,
         requirements: &exported.requirements,
         topics: &exported.topics,
         questions: &exported.questions,

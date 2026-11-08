@@ -82,7 +82,6 @@ fn requirement_input(scope: &ScopeId, id: &str, statement: &str) -> CreateRequir
         statement: statement.into(),
         description: None,
         status: RequirementStatus::Active,
-        domain_id: None,
         refines: Vec::new(),
         depends_on: Vec::new(),
         supersedes: Vec::new(),

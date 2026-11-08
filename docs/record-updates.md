@@ -13,7 +13,7 @@ PATCH /{collection}/{id}
 ```
 
 The collections are `sources`, `requirements`, `resolutions`, `rules`,
-`domains`, `topics`, and `questions`. The native operation names
+`topics`, and `questions`. The native operation names
 (`update-source`, `update-resolution`, and the other `update-*` names) name
 the same writers. The Requirement PATCH uses the guarded review writer.
 
@@ -21,11 +21,10 @@ the same writers. The Requirement PATCH uses the guarded review writer.
 
 | Record | Fields that can change | Nullable fields that can be cleared |
 | --- | --- | --- |
-| `update-source` | `name`, `source_type`, `url`, `reference`, `commit_pin`, `effective_date`, `review_date` | `url`, `reference`, `commit_pin`, `effective_date`, `review_date` |
-| `update-resolution` | `title`, `position`, `rationale`, `status`, `context`, `enforcement`, `confidence`, `inputs`, `made_by`, `approved_by`, `approved_at`, `review_on`, `archived_in_commit` | `context`, `enforcement`, `confidence`, `made_by`, `approved_by`, `approved_at`, `review_on` |
-| `update-requirement` | `statement`, `description`, `fog`, `status`, `domain_id`, `archived_in_commit` | `description`, `fog`, `domain_id` |
+| `update-source` | `name`, `source_type`, `url`, `reference`, `commit_pin` | `url`, `reference`, `commit_pin` |
+| `update-resolution` | `title`, `position`, `rationale`, `status`, `context`, `inputs`, `made_by`, `approved_by`, `approved_at`, `archived_in_commit` | `context`, `made_by`, `approved_by`, `approved_at` |
+| `update-requirement` | `statement`, `description`, `status`, `archived_in_commit` | `description` |
 | `update-rule` | `name`, `description`, `statement`, `status`, `severity`, `source_document`, `source_section`, `archived_in_commit` | `name`, `description`, `source_document`, `source_section` |
-| `update-domain` | `name`, `description`, `color` | `description`, `color` |
 | `update-topic` | `title`, `status`, `links`, `archived_in_commit` | None |
 | `update-question` | `question`, `resolution_method`, `status`, `links`, `resolution_id`, `contradicts`, `archived_in_commit` | `resolution_id`, `contradicts` |
 
@@ -55,9 +54,8 @@ value: the request is not refused, and the field does not change. This gap is
 separate pending work.
 
 Unknown fields, unknown enum values, missing identity, and invalid references
-are refused. Updated required text must not be blank. A Domain name must stay
-unique in its scope. Source commit pins and Resolution confidence and input
-content use the existing validators.
+are refused. Updated required text must not be blank. Source commit pins and
+Resolution input content use the existing validators.
 
 ## Relationship deltas
 
@@ -203,7 +201,7 @@ record PATCH.
 
 ## Shaping, claims, and drafts
 
-`POST /{collection}` creates `domains`, `topics`, and `questions` with the existing native creation inputs. `claim`, `release`,
+`POST /{collection}` creates `topics` and `questions` with the existing native creation inputs. `claim`, `release`,
 `close`, and `answer` are POST actions on the record path: `claim-topic`,
 `release-topic`, `close-topic`, `claim-question`, `release-question`, and
 `answer-question`. Claims keep native eligibility and claim clearing.

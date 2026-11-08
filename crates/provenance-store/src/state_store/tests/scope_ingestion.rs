@@ -86,7 +86,6 @@ fn scope_import_rejects_an_id_shared_by_two_canonical_kinds() {
             statement: "The imported record has one identity.".to_owned(),
             description: None,
             status: RequirementStatus::Active,
-            domain_id: None,
             refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
@@ -293,57 +292,6 @@ fn a_landing_does_not_grandfather_a_different_keyword_id() {
         1
     );
     assert!(!staged.layout.publication_lock_path().exists());
-}
-
-#[test]
-fn scope_import_preserves_a_keyword_id_from_a_legacy_disposition() {
-    let (_dir, live, staged, scope, _) = staged_store();
-    let legacy_path = shards::legacy_promotion_decisions_path(&staged.layout, &scope);
-    std::fs::create_dir_all(legacy_path.parent().unwrap()).unwrap();
-    let old: provenance_core::DispositionRecord = serde_json::from_value(serde_json::json!({
-        "scope_id": "default", "id": "search", "proposal_id": "proposal_old",
-        "decision": "rejected", "rationale": "Old decision",
-        "actor": {"identity_type": "human", "id": "reviewer"}
-    }))
-    .unwrap();
-    std::fs::write(
-        &legacy_path,
-        format!("{}\n", serde_json::to_string(&old).unwrap()),
-    )
-    .unwrap();
-
-    let mut new = old.clone();
-    new.id = StableId::new("check").unwrap();
-    let error = with_repository_publication(&live.layout, |_| {
-        staged.import_scope(
-            &scope,
-            &ScopeShards {
-                dispositions: &[old.clone(), new],
-                ..ScopeShards::default()
-            },
-        )
-    })
-    .unwrap_err();
-    assert!(
-        error.to_string().contains("reserved record ID check"),
-        "{error}"
-    );
-    assert!(legacy_path.exists());
-    assert!(!shards::dispositions_path(&staged.layout, &scope).exists());
-    assert!(!staged.layout.publication_lock_path().exists());
-
-    with_repository_publication(&live.layout, |_| {
-        staged.import_scope(
-            &scope,
-            &ScopeShards {
-                dispositions: std::slice::from_ref(&old),
-                ..ScopeShards::default()
-            },
-        )
-    })
-    .unwrap();
-    assert!(!staged.layout.publication_lock_path().exists());
-    assert_eq!(staged.list_dispositions(&scope).unwrap(), vec![old]);
 }
 
 #[test]

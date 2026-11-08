@@ -3,17 +3,15 @@ mod relation_tables {
     use crate::model::NodeType;
     use provenance_macros::verifies;
 
-    use NodeType::{Domain, Question, Requirement, Resolution, Rule, Source, Topic};
+    use NodeType::{Question, Requirement, Resolution, Rule, Source, Topic};
     use RelationFlow::{None, TargetDownstream, TargetUpstream};
 
-    /// The six kinds that declare relations, in node rank order. Domain
-    /// references nothing.
+    /// The six kinds that declare relations, in node rank order.
     const OWNERS: [NodeType; 6] = [Source, Requirement, Resolution, Rule, Topic, Question];
 
     /// The section C table: (owner, name, target, list, required, flow).
-    const TABLE: [(NodeType, &str, NodeType, bool, bool, RelationFlow); 17] = [
+    const TABLE: [(NodeType, &str, NodeType, bool, bool, RelationFlow); 16] = [
         (Source, "supersedes", Source, true, false, TargetDownstream),
-        (Requirement, "domain_id", Domain, false, false, None),
         (Requirement, "cites", Source, true, false, TargetUpstream),
         (
             Requirement,
@@ -123,19 +121,18 @@ mod relation_tables {
     /// `links` on topics and questions carries a per-entry target kind, so it is
     /// walked by hand and declared in no table: two declarations, one name.
     #[test]
-    fn the_vocabulary_is_thirteen_names_over_nineteen_declarations() {
+    fn the_vocabulary_is_twelve_names_over_eighteen_declarations() {
         let mut names: Vec<&str> = TABLE.iter().map(|row| row.1).collect();
         names.push("links");
         names.sort_unstable();
         names.dedup();
-        assert_eq!(TABLE.len() + 2, 19);
+        assert_eq!(TABLE.len() + 2, 18);
         assert_eq!(
             names,
             [
                 "cites",
                 "contradicts",
                 "depends_on",
-                "domain_id",
                 "links",
                 "refines",
                 "requirement_id",

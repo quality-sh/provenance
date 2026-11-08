@@ -174,12 +174,11 @@ fn check_help(command: &str, repo: &Path) -> Result<(), String> {
     Err(last_error)
 }
 
-const RECORD_TYPES: [&str; 7] = [
+const RECORD_TYPES: [&str; 6] = [
     "source",
     "requirement",
     "resolution",
     "rule",
     "topic",
     "question",
-    "domain",
 ];

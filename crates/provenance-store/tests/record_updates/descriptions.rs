@@ -22,16 +22,10 @@ async fn requirement_statement_edit_raises_existing_reviews_and_keeps_relations(
 }
 
 #[tokio::test]
-async fn descriptive_updates_keep_domain_topic_and_question_identity() {
+async fn descriptive_updates_keep_topic_and_question_identity() {
     let fixture = Fixture::new();
     fixture.requirement().await;
     for (kind, fields, patch, field) in [
-        (
-            "domain",
-            json!({"name":"Domain","description":"Details","color":"blue"}),
-            json!({"name":"Renamed","clear_fields":["description"]}),
-            "name",
-        ),
         (
             "topic",
             json!({"requirement_id":"req_one","title":"Topic","status":"open","links":[]}),
@@ -72,7 +66,6 @@ async fn invalid_requirement_edits_leave_statements_and_reviews_unchanged() {
     fixture.requirement().await;
     let before = fixture.store.list_requirements(&fixture.scope).unwrap();
     for fields in [
-        json!({"statement":"The system reads the record.","domain_id":"domain_missing"}),
         json!({"description":"conflict","clear_fields":["description"]}),
         json!({"statement":"Stop; wait."}),
         json!({"clear_fields":["statement"]}),

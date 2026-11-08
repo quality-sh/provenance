@@ -42,7 +42,6 @@ fn requirement(id: &str, depends_on: Vec<StableId>) -> CreateRequirementInput {
         statement: "The system keeps each copy.".into(),
         description: None,
         status: RequirementStatus::Active,
-        domain_id: None,
         refines: vec![sid("req_shared")],
         depends_on,
         supersedes: vec![],

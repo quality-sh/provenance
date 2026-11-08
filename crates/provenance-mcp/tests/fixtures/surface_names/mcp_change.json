@@ -181,8 +181,7 @@
         "resolution",
         "rule",
         "topic",
-        "question",
-        "domain"
+        "question"
       ],
       "type": "string"
     },
@@ -466,13 +465,6 @@
       },
       "type": "array"
     },
-    "color": {
-      "description": "Actions: create, update.",
-      "type": [
-        "string",
-        "null"
-      ]
-    },
     "commit_pin": {
       "description": "Actions: create, update.",
       "type": [
@@ -481,7 +473,7 @@
       ]
     },
     "confidence": {
-      "description": "Actions: create, update, submit.",
+      "description": "Actions: submit.",
       "type": [
         "number",
         "null"
@@ -526,35 +518,10 @@
         "null"
       ]
     },
-    "domain_id": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/StableId"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "description": "Actions: create, update."
-    },
     "dry_run": {
       "default": false,
       "description": "Run each check of the import and write nothing. Actions: import.",
       "type": "boolean"
-    },
-    "effective_date": {
-      "description": "Actions: create, update.",
-      "type": [
-        "integer",
-        "null"
-      ]
-    },
-    "enforcement": {
-      "description": "Actions: create, update.",
-      "type": [
-        "string",
-        "null"
-      ]
     },
     "evidence_references": {
       "description": "Actions: submit.",
@@ -578,13 +545,6 @@
       "description": "Actions: reply.",
       "minimum": 0,
       "type": "integer"
-    },
-    "fog": {
-      "description": "Actions: update.",
-      "type": [
-        "string",
-        "null"
-      ]
     },
     "if_match": {
       "description": "Actions: update.",
@@ -756,20 +716,6 @@
       "$ref": "#/$defs/ResolutionMethod",
       "description": "Actions: create, update."
     },
-    "review_date": {
-      "description": "Actions: create, update.",
-      "type": [
-        "integer",
-        "null"
-      ]
-    },
-    "review_on": {
-      "description": "Actions: update.",
-      "type": [
-        "string",
-        "null"
-      ]
-    },
     "revises": {
       "anyOf": [
         {
@@ -902,7 +848,6 @@
         "requirement",
         "resolution",
         "rule",
-        "domain",
         "topic",
         "question"
       ],

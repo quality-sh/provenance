@@ -124,7 +124,6 @@ const REFERENCE_KEYS: &[&str] = &[
 ];
 const FAMILY_KEYS: &[&str] = &[
     "sources",
-    "domains",
     "requirements",
     "topics",
     "questions",

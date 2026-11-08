@@ -17,7 +17,6 @@ fn add_root_requirement(store: &StateStore, scope: &ScopeId, id: &str) {
             statement: format!("{id} statement"),
             description: None,
             status: RequirementStatus::Active,
-            domain_id: None,
             refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
@@ -36,7 +35,6 @@ fn add_requirement(store: &StateStore, scope: &ScopeId, id: &str, parent: &str) 
             statement: format!("{id} statement"),
             description: None,
             status: RequirementStatus::Active,
-            domain_id: None,
             refines: vec![sid(parent)],
             depends_on: Vec::new(),
             supersedes: Vec::new(),
@@ -65,8 +63,6 @@ fn add_resolution(
             rationale: "The evidence supports the position".into(),
             status,
             context: None,
-            enforcement: None,
-            confidence: None,
             inputs: Vec::new(),
             made_by: None,
             approved_by: None,
@@ -288,7 +284,6 @@ async fn lifecycle_filter_pages_across_hidden_records_and_binds_the_cursor() {
             "res_superseded",
             "rule_a_visible",
             "rule_d_visible",
-            "domain_payroll",
         ]
     );
     let unique: std::collections::HashSet<_> = pages.iter().collect();
@@ -373,8 +368,7 @@ async fn lifecycle_filter_applies_to_each_record_without_hiding_visible_children
             "thread_id": "thread_hidden_parent",
             "role": "user",
             "body": "Hidden discussion",
-            "created_at": 1,
-            "ai_metadata": {"logical": true}
+            "created_at": 1
         }),
     );
 

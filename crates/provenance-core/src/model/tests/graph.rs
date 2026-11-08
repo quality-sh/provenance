@@ -1,35 +1,6 @@
 use super::graph::NodeType;
 
 #[test]
-fn domain_is_a_node_type_with_a_stable_wire_name() {
-    let (name, expected) = ("domain", NodeType::Domain);
-    assert_eq!(NodeType::parse(name).unwrap(), expected);
-    assert_eq!(serde_json::to_value(expected).unwrap(), name);
-    assert_eq!(
-        serde_json::from_value::<NodeType>(serde_json::Value::String(name.into())).unwrap(),
-        expected
-    );
-}
-
-#[test]
-fn a_domain_node_searches_by_name_and_description() {
-    let domain = crate::model::Domain {
-        scope_id: crate::model::ScopeId::new("default").unwrap(),
-        id: crate::model::StableId::new("domain_payroll").unwrap(),
-        name: "Payroll".into(),
-        description: Some("Wages and awards".into()),
-        color: None,
-    };
-    let node = crate::protocol::GraphNode::Domain(Box::new(domain));
-    let text = node.searchable_text();
-    assert!(text.contains(&"Payroll"));
-    assert!(
-        text.contains(&"Wages and awards"),
-        "the description must be searchable: {text:?}"
-    );
-}
-
-#[test]
 fn topic_and_question_are_thread_parent_node_types() {
     assert_eq!(NodeType::parse("topic").unwrap(), NodeType::Topic);
     assert_eq!(NodeType::parse("question").unwrap(), NodeType::Question);

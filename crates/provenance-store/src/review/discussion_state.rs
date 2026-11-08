@@ -4,7 +4,6 @@ use provenance_core::{
     Message, NodeType, Question, Requirement, Resolution, Rule, ScopeId, Source, StableId, Thread,
     ThreadParent, Topic,
 };
-use provenance_macros::rule;
 use std::collections::{BTreeMap, BTreeSet};
 
 trait DiscussionParent {
@@ -106,9 +105,7 @@ impl StateStore {
                 .get(&(discussion.thread_id.as_str(), scope.as_str()))
                 .copied()
                 .ok_or_else(|| anyhow::anyhow!("Discussion Thread is missing"))?;
-            let Some(parent_kind) = discussion_kind_word(discussion.parent.node_type) else {
-                anyhow::bail!("Discussion parent mismatch");
-            };
+            let parent_kind = discussion_kind_word(discussion.parent.node_type);
             anyhow::ensure!(
                 thread.parent == discussion.parent,
                 "Discussion parent mismatch"
@@ -220,7 +217,6 @@ impl StateStore {
             NodeType::Source | NodeType::Requirement | NodeType::Resolution | NodeType::Rule => {
                 parent_owner_matches(owner.as_deref(), input.declared_by.as_deref())?;
             }
-            NodeType::Domain => unreachable!(),
         }
         let mut ids = BTreeSet::new();
         for thread in self.list_threads(&input.scope_id)? {
@@ -254,43 +250,34 @@ pub(super) fn parent_owner_matches(
     Ok(())
 }
 
-pub(super) const fn discussion_kind_word(kind: NodeType) -> Option<&'static str> {
+pub(super) const fn discussion_kind_word(kind: NodeType) -> &'static str {
     match kind {
-        NodeType::Source => Some("source"),
-        NodeType::Requirement => Some("requirement"),
-        NodeType::Resolution => Some("resolution"),
-        NodeType::Rule => Some("rule"),
-        NodeType::Topic => Some("topic"),
-        NodeType::Question => Some("question"),
-        NodeType::Domain => None,
+        NodeType::Source => "source",
+        NodeType::Requirement => "requirement",
+        NodeType::Resolution => "resolution",
+        NodeType::Rule => "rule",
+        NodeType::Topic => "topic",
+        NodeType::Question => "question",
     }
 }
 
-pub(super) const fn parent_table(kind: NodeType) -> Option<&'static str> {
+pub(super) const fn parent_table(kind: NodeType) -> &'static str {
     match kind {
-        NodeType::Source => Some("sources"),
-        NodeType::Requirement => Some("requirements"),
-        NodeType::Resolution => Some("resolutions"),
-        NodeType::Rule => Some("rules"),
-        NodeType::Topic => Some("topics"),
-        NodeType::Question => Some("questions"),
-        NodeType::Domain => None,
+        NodeType::Source => "sources",
+        NodeType::Requirement => "requirements",
+        NodeType::Resolution => "resolutions",
+        NodeType::Rule => "rules",
+        NodeType::Topic => "topics",
+        NodeType::Question => "questions",
     }
 }
 
 impl StateStore {
-    /// Refuses Discussions on Domain records.
-    #[rule("rule_domain_boundary_accept_no_discussions")]
     pub(super) fn resolve_discussion_parent(
         &self,
         scope: &ScopeId,
         parent: &ThreadParent,
     ) -> anyhow::Result<Option<String>> {
-        crate::write_error::ensure!(
-            UnsupportedThreadParent,
-            discussion_kind_word(parent.node_type).is_some(),
-            "thread parent kind does not take Discussions: {parent:?}"
-        );
         match parent.node_type {
             NodeType::Source => {
                 Self::resolve_parent_among(&self.list_sources(scope)?, scope, parent)
@@ -306,10 +293,6 @@ impl StateStore {
             NodeType::Question => {
                 Self::resolve_parent_among(&self.list_questions(scope)?, scope, parent)
             }
-            NodeType::Domain => anyhow::bail!(
-                "thread parent kind `{}` does not take Discussions",
-                discussion_kind_word(parent.node_type).unwrap_or("unsupported")
-            ),
         }
     }
 

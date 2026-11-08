@@ -181,28 +181,3 @@ fn import_refuses_trailing_input_and_leaves_the_stored_state_unchanged() {
         );
     }
 }
-
-#[test]
-fn import_still_accepts_the_legacy_disposition_alias() {
-    let dir = tempfile::tempdir().unwrap();
-    let repo = dir.path().join("repo");
-    init(&repo);
-    let seed = dir.path().join("seed.json");
-    std::fs::write(
-        &seed,
-        serde_json::json!({
-            "scope": "default",
-            "sources": [],
-            "requirements": [],
-            "resolutions": [],
-            "rules": [],
-            "threads": [],
-            "messages": [],
-            "promotion_decisions": []
-        })
-        .to_string(),
-    )
-    .unwrap();
-
-    import(&repo, &seed).success();
-}

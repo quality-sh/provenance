@@ -31,8 +31,6 @@ impl StateStore {
         self.decide_record_review_addressed(Some((kind, record_id.clone())), input)
     }
 
-    /// Rejects feedback for record kinds that cannot carry a Discussion.
-    #[rule("rule_domain_boundary_decisions_accept_no_feedback")]
     fn decide_record_review_addressed(
         &self,
         addressed: Option<(NodeType, StableId)>,
@@ -55,12 +53,6 @@ impl StateStore {
             let record_id = &proposal.traceability.target.artifact_id;
             crate::cache::review_families::record(held, &scope, kind, record_id)?;
             validate_decision_input(kind, record_id, &input)?;
-            if input.feedback.is_some() && kind == NodeType::Domain {
-                return Err(SourceFailure::wrap(
-                    WriteFailure::UnsupportedReviewFeedback { record_kind: kind },
-                    anyhow::anyhow!("this record kind does not support review feedback"),
-                ));
-            }
             if facts.is_withdrawn(&input.proposal_id) || facts.is_decided(&input.proposal_id) {
                 return Err(SourceFailure::wrap(
                     facts.conflict_failure(held, &scope, kind, record_id)?,
@@ -198,7 +190,6 @@ fn validate_decision_input(
             CanonicalArtifactType::Requirement => NodeType::Requirement,
             CanonicalArtifactType::Resolution => NodeType::Resolution,
             CanonicalArtifactType::Rule => NodeType::Rule,
-            CanonicalArtifactType::Domain => NodeType::Domain,
             CanonicalArtifactType::Topic => NodeType::Topic,
             CanonicalArtifactType::Question => NodeType::Question,
         };

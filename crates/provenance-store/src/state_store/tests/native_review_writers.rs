@@ -1,8 +1,8 @@
 use super::seeded_requirement_store;
 use crate::state_store::{
-    CreateDomainInput, CreateQuestionInput, CreateRequirementInput, CreateResolutionInput,
-    CreateRuleInput, CreateSourceInput, CreateTopicInput, EditQuestionInput, UpdateDomainInput,
-    UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
+    CreateQuestionInput, CreateRequirementInput, CreateResolutionInput, CreateRuleInput,
+    CreateSourceInput, CreateTopicInput, EditQuestionInput, UpdateResolutionInput, UpdateRuleInput,
+    UpdateSourceInput, UpdateTopicInput,
 };
 use provenance_core::{
     NodeType, QuestionStatus, RequirementStatus, ResolutionMethod, ResolutionStatus, RuleSeverity,
@@ -26,20 +26,9 @@ pub(super) fn seed_native_records(
             url: None,
             reference: None,
             commit_pin: None,
-            effective_date: None,
-            review_date: None,
             supersedes: Vec::new(),
             origin_thread: None,
             origin_message: None,
-        })
-        .unwrap();
-    store
-        .create_domain(CreateDomainInput {
-            scope_id: scope.clone(),
-            id: id("domain_native"),
-            name: "Domain A".into(),
-            description: None,
-            color: None,
         })
         .unwrap();
     store
@@ -53,8 +42,6 @@ pub(super) fn seed_native_records(
             rationale: "Position A satisfies the requirement".into(),
             status: ResolutionStatus::Approved,
             context: None,
-            enforcement: None,
-            confidence: None,
             inputs: Vec::new(),
             made_by: None,
             approved_by: None,
@@ -121,9 +108,8 @@ fn revision(
         .revision
 }
 
-const NATIVE_RECORDS: [(NodeType, &str); 6] = [
+const NATIVE_RECORDS: [(NodeType, &str); 5] = [
     (NodeType::Source, "source_native"),
-    (NodeType::Domain, "domain_native"),
     (NodeType::Resolution, "resolution_native"),
     (NodeType::Rule, "rule_native"),
     (NodeType::Topic, "topic_native"),
@@ -148,7 +134,6 @@ fn update_native_records(store: &crate::state_store::StateStore, label: &str) {
         serde_json::json!({"scope_id":"default","id":"source_native","name":format!("Source {label}")}),
         serde_json::json!({"scope_id":"default","id":"resolution_native","position":format!("Use position {label}")}),
         serde_json::json!({"scope_id":"default","id":"rule_native","statement":format!("The system uses position {label}")}),
-        serde_json::json!({"scope_id":"default","id":"domain_native","name":format!("Domain {label}")}),
         serde_json::json!({"scope_id":"default","id":"topic_native","title":format!("Topic {label}")}),
         serde_json::json!({"scope_id":"default","id":"question_native","question":format!("Is {label} correct?")}),
     ] {
@@ -161,9 +146,6 @@ fn update_native_records(store: &crate::state_store::StateStore, label: &str) {
                 .map(|_| ()),
             "rule_native" => store
                 .update_rule(serde_json::from_value::<UpdateRuleInput>(value).unwrap())
-                .map(|_| ()),
-            "domain_native" => store
-                .update_domain(serde_json::from_value::<UpdateDomainInput>(value).unwrap())
                 .map(|_| ()),
             "topic_native" => store
                 .edit_topic(serde_json::from_value::<UpdateTopicInput>(value).unwrap())
@@ -209,8 +191,6 @@ fn source_rule_and_resolution_creators_refuse_unaddressed_origins() {
         url: None,
         reference: None,
         commit_pin: None,
-        effective_date: None,
-        review_date: None,
         supersedes: Vec::new(),
         origin_thread: None,
         origin_message: Some(missing.clone()),
@@ -225,8 +205,6 @@ fn source_rule_and_resolution_creators_refuse_unaddressed_origins() {
         rationale: "The position satisfies the requirement".into(),
         status: ResolutionStatus::Approved,
         context: None,
-        enforcement: None,
-        confidence: None,
         inputs: Vec::new(),
         made_by: None,
         approved_by: None,
@@ -294,7 +272,6 @@ fn relation_and_shaping_writers_keep_the_revision_of_returned_content() {
             statement: "A target requirement".into(),
             description: None,
             status: RequirementStatus::Active,
-            domain_id: None,
             refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
@@ -312,8 +289,6 @@ fn relation_and_shaping_writers_keep_the_revision_of_returned_content() {
             url: None,
             reference: None,
             commit_pin: None,
-            effective_date: None,
-            review_date: None,
             supersedes: Vec::new(),
             origin_thread: None,
             origin_message: None,

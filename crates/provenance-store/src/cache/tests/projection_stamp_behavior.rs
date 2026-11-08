@@ -42,14 +42,13 @@ fn projection_family_table_names_every_stored_family_once() {
         .iter()
         .map(|family| family.family_name())
         .collect();
-    assert_eq!(names.len(), 20);
+    assert_eq!(names.len(), 19);
     let mut unique = names.clone();
     unique.sort_unstable();
     unique.dedup();
-    assert_eq!(unique.len(), 20, "family names must be unique");
+    assert_eq!(unique.len(), 19, "family names must be unique");
     for expected in [
         "sources",
-        "domains",
         "requirements",
         "topics",
         "questions",
@@ -159,13 +158,12 @@ async fn materialization_stores_a_revision_stamp_with_instance_identity() {
     .fetch_all(pool.pool())
     .await
     .unwrap();
-    assert_eq!(rows.len(), 20, "one row per family for the one scope");
+    assert_eq!(rows.len(), 19, "one row per family for the one scope");
     for (scope_id, family, digest, count) in &rows {
         assert_eq!(scope_id, scope.as_str(), "scope for {family}");
         assert!(digest.starts_with("sha256:"), "digest for {family}");
         let expected_count = match family.as_str() {
             "sources"
-            | "domains"
             | "requirements"
             | "resolutions"
             | "rules"
@@ -173,7 +171,7 @@ async fn materialization_stores_a_revision_stamp_with_instance_identity() {
             | "verification_bindings"
             | "requirement_reviews" => 1,
             // Each native create opened one review submission.
-            "proposal_cards" => 4,
+            "proposal_cards" => 3,
             _ => 0,
         };
         assert_eq!(*count, expected_count, "count for {family}");

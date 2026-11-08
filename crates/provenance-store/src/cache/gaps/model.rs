@@ -4,8 +4,6 @@ use provenance_core::{NodeType, StableId};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GapKind {
-    /// A requirement has no domain assignment.
-    MissingDomainId,
     /// A requirement cites no source that exists.
     MissingSourceRefs,
     /// A resolved requirement is named by no resolution.
@@ -89,6 +87,5 @@ pub const fn node_type_word(node_type: NodeType) -> &'static str {
         NodeType::Rule => "rule",
         NodeType::Topic => "topic",
         NodeType::Question => "question",
-        NodeType::Domain => "domain",
     }
 }

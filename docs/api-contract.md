@@ -28,8 +28,8 @@ rules, and the statuses. These patterns apply once, generically:
 
 Collections:
 
-- Graph: `sources`, `requirements`, `resolutions`, `rules`, `domains`,
-  `topics`, `questions`.
+- Graph: `sources`, `requirements`, `resolutions`, `rules`, `topics`,
+  `questions`.
 - Draft and ideation: `contributions`, `synthesis-packets`, `proposals`,
   `verification-runs`, `verification-bindings`.
 - Read-only scope indexes: `discussion-containers`, `messages`, `assertions`,
@@ -61,8 +61,7 @@ Subresources have parent-owned addresses:
 - `GET /rules/{id}/evidence` reads implementation, verification, and
   Requirement-change evidence.
 - `GET|POST /{collection}/{id}/discussions` lists or starts concerns for Source,
-  Requirement, Resolution, Rule, Topic, and Question records. Domain records
-  have no Discussion routes.
+  Requirement, Resolution, Rule, Topic, and Question records.
 - `GET|PATCH /{collection}/{id}/discussions/{discussion_id}` reads a concern or
   changes its permitted status.
 - `GET|POST /{collection}/{id}/discussions/{discussion_id}/messages[/{message_id}]`
@@ -171,10 +170,6 @@ returns them.
 
 A decide request can omit `rationale` for an accepted or deferred decision. A
 rejected decision must include a nonempty `rationale`.
-
-A decision on a Domain can carry a Disposition rationale. It cannot
-carry Discussion feedback. The server refuses such feedback with the typed
-`unsupported_review_feedback` error.
 
 ## 4. PATCH semantics
 

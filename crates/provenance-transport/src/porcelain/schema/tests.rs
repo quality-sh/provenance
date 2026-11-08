@@ -33,8 +33,7 @@ fn assert_ideation_target_type_array_is_exhaustive(value: IdeationTargetType) {
         | IdeationTargetType::Resolution
         | IdeationTargetType::Rule
         | IdeationTargetType::Topic
-        | IdeationTargetType::Question
-        | IdeationTargetType::Domain => {}
+        | IdeationTargetType::Question => {}
     }
 }
 
@@ -315,7 +314,6 @@ fn minimal_exact_export_without_digest() -> Value {
                 "scope_id": "default", "id": "source_policy",
                 "name": "Policy", "source_type": "policy", "url": null
             }],
-            "domains": [],
             "requirements": [{
                 "scope_id": "default", "id": "req_policy",
                 "statement": "Follow policy", "status": "active",
@@ -332,7 +330,7 @@ fn minimal_exact_export_without_digest() -> Value {
                 "title": "Apply policy", "position": "Apply it", "rationale": "Required",
                 "status": "approved", "inputs": [{
                     "input_type": "source_material", "reference": "source_policy", "summary": "Policy"
-                }], "review_on": null, "requirement_ids": ["req_policy"]
+                }], "requirement_ids": ["req_policy"]
             }],
             "rules": []
         }

@@ -1,7 +1,6 @@
 mod access;
 mod archive_history;
 mod canonical_artifacts;
-mod domain_writers;
 mod family_readers;
 mod graph_validation;
 mod ideation_batches;
@@ -49,14 +48,14 @@ pub use ideation_batches::{
 pub use ideation_edits::{UpdateContributionInput, UpdateSynthesisPacketInput};
 pub use inputs::{
     AddSourceReferenceInput, BeginVerificationInput, CascadedResource, CompleteVerificationInput,
-    CreateAssertionInput, CreateContributionInput, CreateDispositionInput, CreateDomainInput,
-    CreateProposalCardInput, CreateQuestionInput, CreateRequirementInput, CreateResolutionInput,
-    CreateRuleInput, CreateSourceInput, CreateSynthesisPacketInput, CreateTopicInput,
-    DeclarationReferenceInput, MaterializeImplementationBindingInput,
-    MaterializeVerificationBindingInput, PostMessageInput, ReconcileState, ReconciledResource,
-    TypedAdoptionTarget, TypedDeclarationKind, TypedFieldChange, TypedImplementationInput,
-    TypedRequirementInput, TypedResourceKind, TypedRuleInput, TypedSourceInput,
-    TypedSpecDiagnostic, TypedSpecInput, TypedSpecResult, UpdateQuestionInput,
+    CreateAssertionInput, CreateContributionInput, CreateDispositionInput, CreateProposalCardInput,
+    CreateQuestionInput, CreateRequirementInput, CreateResolutionInput, CreateRuleInput,
+    CreateSourceInput, CreateSynthesisPacketInput, CreateTopicInput, DeclarationReferenceInput,
+    MaterializeImplementationBindingInput, MaterializeVerificationBindingInput, PostMessageInput,
+    ReconcileState, ReconciledResource, TypedAdoptionTarget, TypedDeclarationKind,
+    TypedFieldChange, TypedImplementationInput, TypedRequirementInput, TypedResourceKind,
+    TypedRuleInput, TypedSourceInput, TypedSpecDiagnostic, TypedSpecInput, TypedSpecResult,
+    UpdateQuestionInput,
 };
 pub use proposal_surfaces::{ProposalDemand, ProposalSurfaceReason, SurfacedProposal, TopicClaim};
 pub use requirement_reviews::{
@@ -89,8 +88,7 @@ fn ensure_new_ids_assignable<T>(
     Ok(())
 }
 use readers::{
-    read_ideation_landings, read_jsonl, read_jsonl_unlocked, read_legacy_dispositions,
-    read_message_shards_unlocked,
+    read_ideation_landings, read_jsonl, read_jsonl_unlocked, read_message_shards_unlocked,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 

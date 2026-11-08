@@ -2,10 +2,7 @@ use provenance_macros::{ProjectionRow, Relations};
 use serde::{Deserialize, Serialize};
 
 use super::ids::{ScopeId, StableId};
-use super::validation::{
-    deserialize_optional_commit_pin, deserialize_optional_confidence,
-    validate_resolution_input_content,
-};
+use super::validation::{deserialize_optional_commit_pin, validate_resolution_input_content};
 
 mod kinds;
 
@@ -43,14 +40,6 @@ pub struct Source {
         skip_serializing_if = "Option::is_none"
     )]
     pub commit_pin: Option<String>,
-    #[serde(
-        default,
-        alias = "effectiveDate",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub effective_date: Option<i64>,
-    #[serde(default, alias = "reviewDate", skip_serializing_if = "Option::is_none")]
-    pub review_date: Option<i64>,
     #[relation(target = Source, flow = target_downstream)]
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub supersedes: Vec<StableId>,
@@ -103,17 +92,10 @@ pub struct Requirement {
     pub statement: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    /// Deliberately unstructured free text: the dim view of decisions and
-    /// investigations that are coming but cannot yet be phrased sharply.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub fog: Option<String>,
     pub status: RequirementStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[column(json)]
     pub archived_in_commit: Option<super::ArchivedStamp>,
-    #[relation(target = Domain, flow = none)]
-    #[serde(default, alias = "domainId", skip_serializing_if = "Option::is_none")]
-    pub domain_id: Option<StableId>,
     #[relation(target = Source, flow = target_upstream, name = "cites", via = source_id)]
     #[serde(default, alias = "sourceRefs", skip_serializing_if = "Vec::is_empty")]
     pub source_refs: Vec<SourceReference>,
@@ -210,14 +192,6 @@ pub struct Resolution {
     pub archived_in_commit: Option<super::ArchivedStamp>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub enforcement: Option<String>,
-    #[serde(
-        default,
-        deserialize_with = "deserialize_optional_confidence",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub confidence: Option<f64>,
     #[serde(default)]
     pub inputs: Vec<ResolutionInput>,
     #[serde(default, alias = "madeBy", skip_serializing_if = "Option::is_none")]
@@ -236,8 +210,6 @@ pub struct Resolution {
     #[relation(target = Resolution, flow = target_downstream)]
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub supersedes: Vec<StableId>,
-    #[serde(alias = "reviewOn")]
-    pub review_on: Option<String>,
     #[relation(none)]
     #[serde(
         default,

@@ -7,8 +7,7 @@
         "resolution",
         "rule",
         "topic",
-        "question",
-        "domain"
+        "question"
       ],
       "type": "string"
     },

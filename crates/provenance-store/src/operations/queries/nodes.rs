@@ -5,9 +5,7 @@
 use crate::operations::reader::ReadSnapshot;
 use provenance_core::protocol::GraphNode;
 use provenance_core::protocol::RecordResolution;
-use provenance_core::{
-    Domain, NodeType, Question, Requirement, Resolution, Rule, Source, StableId, Topic,
-};
+use provenance_core::{NodeType, Question, Requirement, Resolution, Rule, Source, StableId, Topic};
 use std::collections::BTreeMap;
 
 /// The key a record is filed under: its kind's rank, then its id.
@@ -57,11 +55,6 @@ macro_rules! for_kind {
             NodeType::Question => {
                 type $kind = Question;
                 let $wrap = |record: Question| GraphNode::Question(Box::new(record));
-                $body
-            }
-            NodeType::Domain => {
-                type $kind = Domain;
-                let $wrap = |record: Domain| GraphNode::Domain(Box::new(record));
                 $body
             }
         }

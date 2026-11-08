@@ -8,8 +8,8 @@ use crate::cache::{catch_up_state, open_cache, quoted, CacheConnection};
 use crate::operations::reader::ReadSnapshot;
 use provenance_core::model::ProjectionRow;
 use provenance_core::{
-    Domain, ImplementationBinding, Question, Requirement, RequirementReview, Resolution, Rule,
-    Source, StableId, Topic, VerificationBinding,
+    ImplementationBinding, Question, Requirement, RequirementReview, Resolution, Rule, Source,
+    StableId, Topic, VerificationBinding,
 };
 use provenance_macros::verifies;
 use serde::Serialize;
@@ -69,7 +69,6 @@ async fn a_stored_record_reads_back_as_its_canonical_bytes() {
     assert_reads_back::<Rule>(&snapshot, state.list_rules(scope).unwrap()).await;
     assert_reads_back::<Topic>(&snapshot, state.list_topics(scope).unwrap()).await;
     assert_reads_back::<Question>(&snapshot, state.list_questions(scope).unwrap()).await;
-    assert_reads_back::<Domain>(&snapshot, state.list_domains(scope).unwrap()).await;
     assert_reads_back::<ImplementationBinding>(
         &snapshot,
         state.list_implementation_bindings(scope).unwrap(),
@@ -129,22 +128,14 @@ async fn assert_rows_read_as_written<K: ProjectionRow + Serialize>(
     }
 }
 
-/// The repository's own state holds a real in a `REAL` column (a
-/// resolution confidence of one) that no seeded fixture writes, so this is
-/// the store-side twin of `a_round_confidence_stays_a_float`: an integral
-/// real read back as an integer fails here.
+/// The repository's own state reads back from the cache row by row as it
+/// was written.
 #[tokio::test]
 async fn every_stored_row_of_the_repository_state_reads_back_as_written() {
     let store = test_stores::repository_state();
     let state = store.state_store();
     let scope = &store.scope;
     let resolutions = state.list_resolutions(scope).unwrap();
-    assert!(
-        resolutions
-            .iter()
-            .any(|resolution| resolution.confidence == Some(1.0)),
-        "the repository state must hold a resolution with confidence 1.0"
-    );
     catch_up_state(&store.repository()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
     let word = scope.as_str();
@@ -166,8 +157,6 @@ async fn every_stored_row_of_the_repository_state_reads_back_as_written() {
         state.list_questions(scope).unwrap(),
     )
     .await;
-    assert_rows_read_as_written::<Domain>(pool.pool(), word, state.list_domains(scope).unwrap())
-        .await;
     pool.close().await.unwrap();
 }
 

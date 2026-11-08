@@ -8,8 +8,7 @@ use super::{create_resolution, create_rule_of, create_source, empty_layout, sid}
 use crate::layout::ProvenanceLayout;
 use crate::shards;
 use crate::state_store::{
-    CreateDomainInput, CreateQuestionInput, CreateRequirementInput, CreateSourceInput,
-    CreateTopicInput, StateStore,
+    CreateQuestionInput, CreateRequirementInput, CreateSourceInput, CreateTopicInput, StateStore,
 };
 use provenance_core::{
     ArtifactLink, ArtifactLinkTargetType, QuestionStatus, Requirement, RequirementStatus,
@@ -76,7 +75,6 @@ fn requirement(id: &str, refines: Option<&str>, depends_on: &[&str]) -> CreateRe
         statement: format!("{} overtime statement", id.replace('_', " ")),
         description: None,
         status: RequirementStatus::Active,
-        domain_id: Some(sid("domain_payroll")),
         refines: refines.into_iter().map(sid).collect(),
         depends_on: depends_on.iter().map(|id| sid(id)).collect(),
         supersedes: Vec::new(),
@@ -87,15 +85,6 @@ fn requirement(id: &str, refines: Option<&str>, depends_on: &[&str]) -> CreateRe
 }
 
 fn seed_graph(store: &StateStore, scope: &ScopeId) {
-    store
-        .create_domain(CreateDomainInput {
-            scope_id: scope.clone(),
-            id: sid("domain_payroll"),
-            name: "Payroll".into(),
-            description: Some("Wages and overtime".into()),
-            color: None,
-        })
-        .unwrap();
     create_source(store, scope, "source_award_2019");
     store
         .create_source(CreateSourceInput {
@@ -106,8 +95,6 @@ fn seed_graph(store: &StateStore, scope: &ScopeId) {
             url: None,
             reference: Some("clause 28".into()),
             commit_pin: None,
-            effective_date: None,
-            review_date: None,
             supersedes: vec![sid("source_award_2019")],
             origin_thread: None,
             origin_message: None,

@@ -39,14 +39,13 @@ fn deny_operations(mut access: FixtureAccess, operations: &[&str]) -> FixtureAcc
     access
 }
 
-const LIST_SEARCH_OPERATIONS: [&str; 7] = [
+const LIST_SEARCH_OPERATIONS: [&str; 6] = [
     "list-sources",
     "list-requirements",
     "list-resolutions",
     "list-rules",
     "list-topics",
     "list-questions",
-    "list-domains",
 ];
 
 async fn assert_search_hidden_and_refused(
@@ -78,14 +77,14 @@ async fn named_mcp_search_intersects_text_and_multiple_kinds() {
         "question"
     );
 
-    let kind_only = call(client, "search", json!({"kind":["domain", "rule"]})).await;
+    let kind_only = call(client, "search", json!({"kind":["topic", "rule"]})).await;
     let kinds = kind_only.structured_content.as_ref().unwrap()["nodes"]
         .as_array()
         .unwrap()
         .iter()
         .map(|node| node["node_type"].as_str().unwrap())
         .collect::<Vec<_>>();
-    assert_eq!(kinds, ["rule", "domain"]);
+    assert_eq!(kinds, ["rule", "topic"]);
 
     let combined = call(
         client,
@@ -209,7 +208,7 @@ async fn list_denial_excludes_a_kind_before_selection_and_paging() {
 
     let implicit = call(client, "search", json!({"text":"shared", "limit":20})).await;
     let implicit_page = implicit.structured_content.as_ref().unwrap();
-    assert_eq!(implicit_page["nodes"].as_array().unwrap().len(), 7);
+    assert_eq!(implicit_page["nodes"].as_array().unwrap().len(), 6);
     assert!(implicit_page["nodes"]
         .as_array()
         .unwrap()
@@ -363,7 +362,6 @@ async fn mcp_search_shows_each_record_lifecycle() {
         "rule rule_shared · deprecated",
         "topic topic_shared · open",
         "question question_shared · answered",
-        "domain domain_shared\n",
     ] {
         assert!(readable.contains(expected), "{readable}");
     }

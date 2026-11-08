@@ -30,7 +30,6 @@ fn populate(node: &mut GraphNode) {
         GraphNode::Rule(record) => record.name = Some("Shared rule".into()),
         GraphNode::Topic(record) => record.claimed_by = Some("reviewer".into()),
         GraphNode::Question(record) => record.answer = Some("The shared record.".into()),
-        GraphNode::Domain(record) => record.description = Some("Shared records.".into()),
     }
 }
 

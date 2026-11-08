@@ -18,7 +18,6 @@ macro_rules! read_families {
                 serde_json::to_value(store.list_scope_directories()?)?,
                 serde_json::to_value(store.list_sources(scope)?)?,
                 serde_json::to_value(store.list_requirements(scope)?)?,
-                serde_json::to_value(store.list_domains(scope)?)?,
                 serde_json::to_value(store.list_topics(scope)?)?,
                 serde_json::to_value(store.list_questions(scope)?)?,
                 serde_json::to_value(store.list_resolutions(scope)?)?,
@@ -55,7 +54,6 @@ fn closed_families(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Vec<se
     Ok(vec![
         serde_json::to_value(store.closed_sources(scope)?)?,
         serde_json::to_value(store.closed_requirements(scope)?)?,
-        serde_json::to_value(store.closed_domains(scope)?)?,
         serde_json::to_value(store.closed_topics(scope)?)?,
         serde_json::to_value(store.closed_questions(scope)?)?,
         serde_json::to_value(store.closed_resolutions(scope)?)?,
@@ -152,10 +150,11 @@ async fn a_plain_write_waits_for_the_guard() {
     let (sender, receiver) = mpsc::channel();
     let writer = std::thread::spawn(move || {
         started.send(()).unwrap();
-        let result = store.set_requirement_fog(
-            &scope,
-            &provenance_core::StableId::new("req_overtime").unwrap(),
-            Some("Changed".into()),
+        let result = store.update_requirement(
+            serde_json::from_value(serde_json::json!({
+                "scope_id": scope.as_str(), "id": "req_overtime", "description": "Changed"
+            }))
+            .unwrap(),
         );
         sender.send(result).unwrap();
     });
@@ -170,7 +169,7 @@ async fn a_plain_write_waits_for_the_guard() {
         .recv_timeout(Duration::from_secs(5))
         .unwrap()
         .unwrap();
-    assert_eq!(requirement.fog.as_deref(), Some("Changed"));
+    assert_eq!(requirement.description.as_deref(), Some("Changed"));
     writer.join().unwrap();
 }
 

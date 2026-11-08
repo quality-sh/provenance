@@ -2,8 +2,8 @@ use super::message_ids::{new_message_id, next_message_time};
 use super::read_budget::ensure_within_read_budget;
 use super::{serde_name, PostMessageInput, PostMessageResult, StateStore};
 use crate::shards;
-use crate::write_error::{publication_started, SourceFailure, WriteFailure};
-use provenance_core::{Message, NodeType, ScopeId, StableId, Thread, ThreadParent, ThreadStatus};
+use crate::write_error::publication_started;
+use provenance_core::{Message, ScopeId, StableId, Thread, ThreadParent, ThreadStatus};
 use std::collections::BTreeMap;
 
 impl StateStore {
@@ -38,24 +38,6 @@ impl StateStore {
             !body.trim().is_empty(),
             "message body must not be empty"
         );
-        match parent.node_type {
-            NodeType::Source
-            | NodeType::Requirement
-            | NodeType::Resolution
-            | NodeType::Rule
-            | NodeType::Topic
-            | NodeType::Question => {}
-            NodeType::Domain => {
-                return Err(SourceFailure::wrap(
-                    WriteFailure::UnsupportedThreadParent,
-                    anyhow::anyhow!(
-                        "thread parent kind `{}` is not supported; threads attach to a source, \
-                 requirement, resolution, rule, topic, or question",
-                        serde_name(&parent.node_type)?
-                    ),
-                ))
-            }
-        }
         let threads_path = shards::threads_path(&self.layout, &scope_id);
         let before = self.list_threads(&scope_id)?;
         let mut staged = before.clone();
@@ -112,7 +94,6 @@ impl StateStore {
             role,
             body,
             created_at,
-            ai_metadata: None,
         };
         // The bounded page readers refuse any Message whose encoded form
         // exceeds the message read budget, so an oversized Message would be

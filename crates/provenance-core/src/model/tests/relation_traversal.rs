@@ -84,7 +84,6 @@ mod relation_traversal {
                 inbound("requirement_ids", NodeType::Rule, "rule_pay"),
                 inbound("requirement_id", NodeType::Topic, "topic_rates"),
                 inbound("requirement_id", NodeType::Question, "question_threshold"),
-                out("domain_id", NodeType::Domain, "domain_payroll"),
             ]
         );
     }
@@ -163,21 +162,6 @@ mod relation_traversal {
             NodeType::Question,
             "question_threshold"
         )));
-    }
-
-    #[test]
-    fn a_domain_only_ever_appears_as_a_target() {
-        let records = fixture();
-        let front = front(&records);
-        let reached = flatten(related_nodes(
-            &front,
-            NodeType::Domain,
-            &sid("domain_payroll"),
-        ));
-        assert_eq!(
-            reached,
-            vec![inbound("domain_id", NodeType::Requirement, "req_overtime")]
-        );
     }
 
     #[test]

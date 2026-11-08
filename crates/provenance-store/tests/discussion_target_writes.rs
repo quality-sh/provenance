@@ -17,7 +17,7 @@ fn request(fields: &serde_json::Value) -> TargetDiscussionWrite {
     let mut request = json!({
         "scope_id": "default", "actor": "ben",
         "declared_by": null, "allowed_parent_kinds": [
-            "source", "requirement", "resolution", "rule", "topic", "question", "domain"
+            "source", "requirement", "resolution", "rule", "topic", "question"
         ]
     });
     request

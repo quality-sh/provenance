@@ -23,13 +23,9 @@ Options:
           Add this parent before the selected parent is removed
       --commit-pin <commit-pin>
           
-      --effective-date <effective-date>
-          
       --name <name>
           
       --reference <reference>
-          
-      --review-date <review-date>
           
       --source-type <source-type>
           
@@ -43,8 +39,6 @@ Options:
           
       --description <description>
           
-      --domain-id <domain-id>
-          
       --statement <statement>
           
       --status <status>
@@ -53,11 +47,7 @@ Options:
           
       --approved-by <approved-by>
           
-      --confidence <confidence>
-          
       --context <context>
-          
-      --enforcement <enforcement>
           
       --inputs <inputs>
           
@@ -83,8 +73,6 @@ Options:
           
       --resolution-id <resolution-id>
           
-      --color <color>
-          
       --source-ref <source-ref>
           
       --links <links>
@@ -101,11 +89,7 @@ Options:
           
       --declared-by <declared-by>
           
-      --fog <fog>
-          
       --relationships <relationships>
-          
-      --review-on <review-on>
           
       --actor-json <actor-json>
           
@@ -115,11 +99,7 @@ Options:
           
       --archived-in-commit-json <archived-in-commit-json>
           
-      --color-json <color-json>
-          
       --commit-pin-json <commit-pin-json>
-          
-      --confidence-json <confidence-json>
           
       --context-json <context-json>
           
@@ -130,14 +110,6 @@ Options:
       --depends-on-json <depends-on-json>
           
       --description-json <description-json>
-          
-      --domain-id-json <domain-id-json>
-          
-      --effective-date-json <effective-date-json>
-          
-      --enforcement-json <enforcement-json>
-          
-      --fog-json <fog-json>
           
       --inputs-json <inputs-json>
           
@@ -164,10 +136,6 @@ Options:
       --resolution-ids-json <resolution-ids-json>
           
       --resolution-method-json <resolution-method-json>
-          
-      --review-date-json <review-date-json>
-          
-      --review-on-json <review-on-json>
           
       --severity-json <severity-json>
           

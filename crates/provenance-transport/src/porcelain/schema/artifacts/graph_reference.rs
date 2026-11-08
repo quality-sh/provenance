@@ -43,13 +43,12 @@ pub(in crate::porcelain::schema) fn export_schema() -> Value {
                 "type": "object",
                 "additionalProperties": false,
                 "required": [
-                    "scope", "sources", "domains", "requirements",
+                    "scope", "sources", "requirements",
                     "topics", "questions", "resolutions", "rules"
                 ],
                 "properties": {
                     "scope": {"$ref": "#/$defs/scope"},
                     "sources": record_array("source"),
-                    "domains": record_array("domain"),
                     "requirements": record_array("requirement"),
                     "topics": record_array("topic"),
                     "questions": record_array("question"),
@@ -91,7 +90,6 @@ fn export_definitions() -> Value {
     let id = json!({"type": "string", "pattern": "^[a-z0-9_-]+$"});
     let id_list = json!({"type": "array", "items": id.clone()});
     let string = json!({"type": "string"});
-    let confidence = json!({"type": "number", "minimum": 0, "maximum": 1});
     json!({
         "scope": closed_record(&["id", "path_prefix"], json!({
             "id": id.clone(), "path_prefix": {"type": "string"}
@@ -118,22 +116,16 @@ fn export_definitions() -> Value {
                     "type": "string", "minLength": 7, "maxLength": 64,
                     "pattern": "^[0-9A-Fa-f]+$"
                 },
-                "effective_date": {"type": "integer"},
-                "review_date": {"type": "integer"}, "supersedes": id_list.clone()
+                "supersedes": id_list.clone()
             })
         )),
-        "domain": closed_record(&["scope_id", "id", "name"], json!({
-            "scope_id": id.clone(), "id": id.clone(),
-            "name": string.clone(), "description": string.clone(), "color": string.clone()
-        })),
         "requirement": stamped_record("requirement", closed_record(
             &["scope_id", "id", "statement", "status"],
             json!({
                 "scope_id": id.clone(), "id": id.clone(),
                 "declared_by": string.clone(), "declaration_address": declaration_address(), "statement": string.clone(),
-                "description": string.clone(), "fog": string.clone(),
+                "description": string.clone(),
                 "status": {"enum": ["active", "discovery", "refinement", "resolved"]},
-                "domain_id": id.clone(),
                 "source_refs": {"type": "array", "items": {"$ref": "#/$defs/sourceReference"}},
                 "refines": id_list.clone(), "depends_on": id_list.clone(),
                 "supersedes": id_list.clone(), "spawned_by": id.clone()
@@ -161,16 +153,15 @@ fn export_definitions() -> Value {
             })
         ),
         "resolution": stamped_record("resolution", closed_record(
-            &["scope_id", "id", "title", "position", "rationale", "status", "inputs", "review_on", "requirement_ids"],
+            &["scope_id", "id", "title", "position", "rationale", "status", "inputs", "requirement_ids"],
             json!({
                 "scope_id": id.clone(), "id": id.clone(),
                 "title": string.clone(), "position": string.clone(), "rationale": string.clone(),
                 "status": {"enum": ["draft", "review", "proposed", "approved", "rejected", "revised", "superseded", "abandoned"]},
-                "context": string.clone(), "enforcement": string.clone(), "confidence": confidence,
+                "context": string.clone(),
                 "inputs": {"type": "array", "items": {"$ref": "#/$defs/resolutionInput"}},
                 "made_by": string.clone(), "approved_by": string.clone(), "approved_at": {"type": "integer"},
-                "requirement_ids": id_list.clone(), "supersedes": id_list.clone(),
-                "review_on": {"type": ["string", "null"]}
+                "requirement_ids": id_list.clone(), "supersedes": id_list.clone()
             })
         )),
         "rule": stamped_record("rule", closed_record(

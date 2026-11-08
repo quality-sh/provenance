@@ -52,7 +52,6 @@ async fn document_pages_keep_membership_and_whole_totals() {
             ("member", "topic_policy"),
             ("member", "question_policy"),
             ("reference", "source_policy"),
-            ("reference", "domain_payroll"),
         ]
         .map(|(kind, id)| (kind.to_owned(), id.to_owned()))
         .into_iter()
@@ -107,7 +106,6 @@ async fn document_entries_keep_observed_member_reference_order() {
             ("member", "topic_policy"),
             ("member", "question_policy"),
             ("reference", "source_policy"),
-            ("reference", "domain_payroll"),
         ]
         .map(|(kind, id)| (kind.to_owned(), id.to_owned()))
     );

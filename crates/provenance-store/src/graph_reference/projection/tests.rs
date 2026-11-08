@@ -1,5 +1,5 @@
 use provenance_core::{
-    Domain, ImplementationBinding, Question, QuestionStatus, RepoPathPrefix, Requirement,
+    ImplementationBinding, Question, QuestionStatus, RepoPathPrefix, Requirement,
     RequirementStatus, Resolution, ResolutionMethod, ResolutionStatus, Rule, RuleSeverity,
     RuleStatus, Source, SourceType, StableId, Topic, TopicStatus, VerificationBinding,
 };
@@ -151,21 +151,9 @@ fn source_record(scope: &ScopeId) -> Source {
         url: None,
         reference: None,
         commit_pin: None,
-        effective_date: None,
-        review_date: None,
         supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,
-    }
-}
-
-fn domain_record(scope: &ScopeId) -> Domain {
-    Domain {
-        scope_id: scope.clone(),
-        id: stable_id(RecordFamily::Domain),
-        name: "Pinned domain".into(),
-        description: None,
-        color: None,
     }
 }
 
@@ -181,9 +169,7 @@ fn requirement_record(scope: &ScopeId) -> Requirement {
 
         statement: "Pinned requirement".into(),
         description: None,
-        fog: None,
         status: RequirementStatus::Active,
-        domain_id: None,
         source_refs: Vec::new(),
         refines: Vec::new(),
         depends_on: Vec::new(),
@@ -240,13 +226,10 @@ fn resolution_record(scope: &ScopeId) -> Resolution {
         rationale: "Pinned rationale".into(),
         status: ResolutionStatus::Approved,
         context: None,
-        enforcement: None,
-        confidence: None,
         inputs: Vec::new(),
         made_by: None,
         approved_by: None,
         approved_at: None,
-        review_on: None,
         requirement_ids: Vec::new(),
         supersedes: Vec::new(),
         origin_thread: None,

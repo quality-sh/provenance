@@ -2,9 +2,8 @@
 use super::creation::creation;
 use super::ExecutionNeed;
 use crate::state_store::{
-    CreateDomainInput, CreateQuestionInput, CreateTopicInput, EditQuestionInput, UpdateDomainInput,
-    UpdateRequirementInput, UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput,
-    UpdateTopicInput,
+    CreateQuestionInput, CreateTopicInput, EditQuestionInput, UpdateRequirementInput,
+    UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
 };
 creation!(
     UpdateSource,
@@ -39,14 +38,6 @@ creation!(
     [GraphStorage, Dictionary]
 );
 creation!(
-    UpdateDomain,
-    "update-domain",
-    UpdateDomainInput,
-    provenance_core::Domain,
-    update_domain,
-    [GraphStorage]
-);
-creation!(
     UpdateTopic,
     "update-topic",
     UpdateTopicInput,
@@ -60,14 +51,6 @@ creation!(
     EditQuestionInput,
     provenance_core::Question,
     edit_question,
-    [GraphStorage]
-);
-creation!(
-    CreateDomain,
-    "create-domain",
-    CreateDomainInput,
-    provenance_core::Domain,
-    create_domain,
     [GraphStorage]
 );
 creation!(

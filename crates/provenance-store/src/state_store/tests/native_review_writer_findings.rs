@@ -3,8 +3,7 @@ use super::{
     seeded_requirement_store,
 };
 use crate::state_store::{
-    EditQuestionInput, UpdateDomainInput, UpdateRequirementInput, UpdateResolutionInput,
-    UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
+    EditQuestionInput, UpdateRequirementInput, UpdateRuleInput, UpdateTopicInput,
 };
 use provenance_core::{NodeType, Source};
 
@@ -37,56 +36,6 @@ fn assert_lifecycle_then_content(
     assert_eq!(kept, created, "{kind:?}");
     content();
     assert_ne!(revision(store, scope, kind, record), kept, "{kind:?}");
-}
-
-#[test]
-fn source_review_date_keeps_revision_and_name_changes_it() {
-    let (_dir, store, scope) = seeded_requirement_store();
-    seed_native_records(&store, &scope);
-    let update = |value: serde_json::Value| {
-        store
-            .update_source(serde_json::from_value::<UpdateSourceInput>(value).unwrap())
-            .unwrap();
-    };
-    assert_lifecycle_then_content(
-        &store,
-        &scope,
-        NodeType::Source,
-        "source_native",
-        || update(serde_json::json!({"scope_id":"default", "id":"source_native", "review_date":1})),
-        || {
-            update(
-                serde_json::json!({"scope_id":"default", "id":"source_native", "name":"Source B"}),
-            );
-        },
-    );
-}
-
-#[test]
-fn resolution_review_on_keeps_revision_and_position_changes_it() {
-    let (_dir, store, scope) = seeded_requirement_store();
-    seed_native_records(&store, &scope);
-    let update = |value: serde_json::Value| {
-        store
-            .update_resolution(serde_json::from_value::<UpdateResolutionInput>(value).unwrap())
-            .unwrap();
-    };
-    assert_lifecycle_then_content(
-        &store,
-        &scope,
-        NodeType::Resolution,
-        "resolution_native",
-        || {
-            update(serde_json::json!({
-                "scope_id":"default", "id":"resolution_native", "review_on":"2027-01-01"
-            }));
-        },
-        || {
-            update(serde_json::json!({
-                "scope_id":"default", "id":"resolution_native", "position":"Use position B"
-            }));
-        },
-    );
 }
 
 #[test]
@@ -168,26 +117,9 @@ fn shaping_claims_keep_revisions_and_text_changes_them() {
 }
 
 #[test]
-fn domain_color_and_requirement_status_keep_revisions() {
+fn requirement_status_keeps_revisions() {
     let (_dir, store, scope) = seeded_requirement_store();
     seed_native_records(&store, &scope);
-    let domain = |value: serde_json::Value| {
-        store
-            .update_domain(serde_json::from_value::<UpdateDomainInput>(value).unwrap())
-            .unwrap();
-    };
-    assert_lifecycle_then_content(
-        &store,
-        &scope,
-        NodeType::Domain,
-        "domain_native",
-        || domain(serde_json::json!({"scope_id":"default", "id":"domain_native", "color":"blue"})),
-        || {
-            domain(
-                serde_json::json!({"scope_id":"default", "id":"domain_native", "name":"Domain B"}),
-            );
-        },
-    );
     let requirement = |value: serde_json::Value| {
         store
             .update_requirement(serde_json::from_value::<UpdateRequirementInput>(value).unwrap())
@@ -227,8 +159,6 @@ fn bulk_replacement_reviews_existing_unenrolled_and_enrolled_records() {
         url: None,
         reference: None,
         commit_pin: None,
-        effective_date: None,
-        review_date: None,
         supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,
