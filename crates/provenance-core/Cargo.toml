@@ -28,6 +28,10 @@ serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 
+# A wasm host such as a Worker has no system clock; time reads it through JavaScript.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+time = { workspace = true, features = ["wasm-bindgen"] }
+
 [dev-dependencies]
 trybuild.workspace = true
 jsonschema.workspace = true
