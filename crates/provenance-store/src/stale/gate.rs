@@ -23,14 +23,36 @@ pub fn report(
     changes: &[ChangedFile],
     graph: &GraphEvidence,
 ) -> EvidenceDiffReport {
-    let base_scan = scan_revision(&base, base_files, None);
+    let base_files = base_files.into_iter().map(scan_file).collect::<Vec<_>>();
+    let head_files = head_files.into_iter().map(scan_file).collect::<Vec<_>>();
+    report_scanned(repo, base, head, &base_files, &head_files, changes, graph)
+}
+
+/// Classifies evidence changes from files that are already scanned, in
+/// the order of the revision trees.
+pub(crate) fn report_scanned(
+    repo: &Utf8Path,
+    base: String,
+    head: String,
+    base_files: &[FileScanWithContent],
+    head_files: &[FileScanWithContent],
+    changes: &[ChangedFile],
+    graph: &GraphEvidence,
+) -> EvidenceDiffReport {
+    let base_scan =
+        provenance_scanner::scan_to_coverage(base_files, Some(base.clone()), Vec::new(), None);
     let baseline = CoverageBaseline {
         scan: &base_scan,
         repo,
         scan_path: repo,
         validate_rules: false,
     };
-    let head_scan = scan_revision(&head, head_files, Some(baseline));
+    let head_scan = provenance_scanner::scan_to_coverage(
+        head_files,
+        Some(head.clone()),
+        Vec::new(),
+        Some(baseline),
+    );
     let mut sites = marker_sites(&base_scan, &head_scan, changes, &graph.rule_ids);
     let typed_sites = typed_bindings::sites(&sites, &head_scan, graph, changes);
     sites.extend(typed_sites);
@@ -64,26 +86,18 @@ pub fn report(
     }
 }
 
-fn scan_revision(
-    commit: &str,
-    files: Vec<RevisionFile>,
-    baseline: Option<CoverageBaseline<'_>>,
-) -> ScannedCoverage {
-    let files = files
-        .into_iter()
-        .map(|file| {
-            let language = file
-                .path
-                .extension()
-                .and_then(provenance_scanner::Language::from_extension)
-                .expect("revision files were filtered by scanner language");
-            FileScanWithContent {
-                scan: provenance_scanner::scan_file(&file.path, language, &file.content),
-                content: file.content,
-            }
-        })
-        .collect::<Vec<_>>();
-    provenance_scanner::scan_to_coverage(&files, Some(commit.to_string()), Vec::new(), baseline)
+/// Scans one revision file. The scan depends on the path and the content
+/// only.
+pub(crate) fn scan_file(file: RevisionFile) -> FileScanWithContent {
+    let language = file
+        .path
+        .extension()
+        .and_then(provenance_scanner::Language::from_extension)
+        .expect("revision files were filtered by scanner language");
+    FileScanWithContent {
+        scan: provenance_scanner::scan_file(&file.path, language, &file.content),
+        content: file.content,
+    }
 }
 
 fn marker_sites(
