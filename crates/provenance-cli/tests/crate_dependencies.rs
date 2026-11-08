@@ -1,7 +1,9 @@
 //! Compares the direct dependencies of each workspace crate in `cargo metadata`
 //! with the crate dependency policy in `.config/crate-dependencies.json`.
 
+#[path = "crate_dependencies/kernel.rs"]
 mod kernel;
+#[path = "crate_dependencies/policy.rs"]
 mod policy;
 
 use std::{collections::BTreeSet, process::Command};
