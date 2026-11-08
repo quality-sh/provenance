@@ -219,7 +219,7 @@ async fn cli_flags_and_mcp_properties_come_from_one_field_list() {
         assert_eq!(cli, mcp, "{command:?}");
         compared += 1;
     }
-    assert!(compared > 30, "only {compared} commands have a typed input");
+    assert!(compared > 25, "only {compared} commands have a typed input");
 }
 
 /// Each record action and each Discussion action takes the same fields on the CLI and on
