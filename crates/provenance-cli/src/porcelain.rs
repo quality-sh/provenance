@@ -114,7 +114,7 @@ pub async fn dispatch_get(
     let service = host.porcelain().get();
     let outcome = service.get(input).await?;
     let edit = if outcome.view() == provenance_porcelain::get::View::Record {
-        edit_state(&host, &outcome).await
+        edit_state(&host, &outcome).await?
     } else {
         None
     };
@@ -124,15 +124,19 @@ pub async fn dispatch_get(
 
 /// The `edit` state of the record, read from its member route so that a JSON
 /// record read shows the etag that the next guarded update needs. The text
-/// form stays identical to the shared readable rendering.
+/// form stays identical to the shared readable rendering. A refusal of the
+/// member route is the refusal of the get.
 async fn edit_state(
     host: &provenance_transport::StatementHost,
     outcome: &GetOutcome,
-) -> Option<serde_json::Value> {
+) -> anyhow::Result<Option<serde_json::Value>> {
     use provenance_contract::{target_definitions, TargetAction};
     let kind = outcome.record.node_type();
-    let (_, definition) =
-        target_definitions(TargetAction::Update).find(|(registered, _)| *registered == kind)?;
+    let Some((_, definition)) =
+        target_definitions(TargetAction::Update).find(|(registered, _)| *registered == kind)
+    else {
+        return Ok(None);
+    };
     let path = definition
         .path
         .replace("{id}", outcome.record.id().as_str());
@@ -145,8 +149,8 @@ async fn edit_state(
             axum::http::HeaderMap::new(),
         )
         .await
-        .ok()?;
-    value.get("data")?.get("edit").cloned()
+        .map_err(|failure| crate::refusal::HostRefusal::of(&failure))?;
+    Ok(value.get("data").and_then(|data| data.get("edit")).cloned())
 }
 
 /// Renders the selected record as readable text or structured JSON.

@@ -33,7 +33,7 @@ pub enum ReplacementError {
     /// The text tells why nothing changed.
     Unchanged(String),
     /// A read or a write of the Requirement failed.
-    Failure(ErasedFailure),
+    Failure(Box<ErasedFailure>),
 }
 
 impl std::fmt::Display for ReplacementError {
@@ -140,7 +140,7 @@ impl crate::StatementHost {
             HeaderMap::new(),
         )
         .await
-        .map_err(ReplacementError::Failure)
+        .map_err(|failure| ReplacementError::Failure(Box::new(failure)))
     }
 
     async fn patch_requirement(
@@ -151,7 +151,7 @@ impl crate::StatementHost {
     ) -> Result<Value, ReplacementError> {
         self.invoke_resource(Method::PATCH, path, data, BTreeMap::new(), guard)
             .await
-            .map_err(ReplacementError::Failure)
+            .map_err(|failure| ReplacementError::Failure(Box::new(failure)))
     }
 }
 

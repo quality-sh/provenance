@@ -59,7 +59,7 @@ fn a_message_read_failure_prevents_legacy_thread_publication() {
         .unwrap_err();
     assert!(matches!(
         provenance_store::write_error::WriteError::from(error).safe(),
-        provenance_store::write_error::WriteFailure::WriteFailed
+        provenance_store::write_error::WriteFailure::InvalidStateFile { line: 1, .. }
     ));
     assert_eq!(
         store.list_threads(&scope()).unwrap(),

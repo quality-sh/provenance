@@ -300,7 +300,7 @@ export const FAILURE_STATUS = new Map([
   ['invalid_declaration', 400], ['invalid_update', 400], ['missing_reference', 400],
   ['approval_evidence_required', 400], ['resolution_not_approved', 400],
   ['statement_rejected', 400], ['invalid_verification_target', 400], ['invalid_completion', 400],
-  ['record_too_large', 400],
+  ['record_too_large', 400], ['invalid_state_file', 500],
 ]);
 
 export function failureKinds(document, schema, seen = new Set(), kinds = new Set()) {

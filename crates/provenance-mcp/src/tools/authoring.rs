@@ -300,7 +300,7 @@ async fn write(
                         .then(|| format!("{new} replaced {old} already; nothing changed\n\n"));
                     Ok((Ok(replaced.record), note))
                 }
-                Err(ReplacementError::Failure(failure)) => Ok((Err(failure), None)),
+                Err(ReplacementError::Failure(failure)) => Ok((Err(*failure), None)),
                 Err(ReplacementError::Invalid(message)) => {
                     Err(refusal("replace_parent", "invalid_value", &message))
                 }

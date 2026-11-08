@@ -213,8 +213,12 @@ pub fn error_result(error: Value, meta: Value) -> CallToolResult {
     ])))
 }
 
-/// Preserve the error and metadata from one erased operation failure.
+/// Preserve the error and metadata from one erased operation failure. The
+/// native cause of a failure of no known kind goes to standard error only.
 pub fn failure_result(failure: ErasedFailure) -> CallToolResult {
+    if let Some(cause) = failure.cause() {
+        eprintln!("Operation failed with no known failure kind. Cause: {cause}");
+    }
     error_result(
         failure.error,
         serde_json::to_value(failure.meta).expect("response metadata is JSON"),
