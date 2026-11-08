@@ -6,6 +6,9 @@ use crate::state_store::{
 use provenance_core::protocol::failure::InvalidInputReason;
 use serde::Serialize;
 
+mod cause;
+pub(crate) use cause::{failure_cause, in_repository, native};
+
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -86,8 +89,8 @@ pub enum WriteFailure {
         message: String,
     },
     /// A write failure of no known kind. `cause` is the display chain of the
-    /// native error. A path below a state directory in it is relative to that
-    /// directory.
+    /// native error. A path below the repository in it is relative to the
+    /// repository root, and any other absolute path is only its file name.
     WriteFailed {
         cause: String,
     },
@@ -199,22 +202,26 @@ impl From<provenance_core::protocol::failure::OperationFailure> for WriteError {
     }
 }
 impl WriteError {
+    /// The same error with the repository root, so that its cause gives each
+    /// path relative to the repository.
+    pub(crate) fn in_repository(self, root: &camino::Utf8Path) -> Self {
+        Self(in_repository(root.as_std_path(), self.0))
+    }
     pub fn safe(&self) -> WriteFailure {
-        if self.0.downcast_ref::<PublicationStarted>().is_some() {
+        let error = native(&self.0);
+        if error.downcast_ref::<PublicationStarted>().is_some() {
             return self.write_failed();
         }
-        if let Some(error) = self.0.downcast_ref::<SourceFailure>() {
+        if let Some(error) = error.downcast_ref::<SourceFailure>() {
             return error.failure.clone();
         }
-        if self
-            .0
+        if error
             .downcast_ref::<provenance_core::DispositionActorRefusal>()
             .is_some()
         {
             return WriteFailure::AccessDenied;
         }
-        if self
-            .0
+        if error
             .downcast_ref::<provenance_core::ApprovalEvidenceRequired>()
             .is_some()
         {
@@ -223,20 +230,17 @@ impl WriteError {
                     .into(),
             };
         }
-        if let Some(error) = self.0.downcast_ref::<StatementWriteError>() {
+        if let Some(error) = error.downcast_ref::<StatementWriteError>() {
             return WriteFailure::StatementInvalid {
                 report: error.report.clone(),
             };
         }
-        if let Some(error) = self.0.downcast_ref::<TypedSpecWriteError>() {
+        if let Some(error) = error.downcast_ref::<TypedSpecWriteError>() {
             return WriteFailure::StatementRejected {
                 diagnostics: error.diagnostics.clone(),
             };
         }
-        if let Some(error) = self
-            .0
-            .downcast_ref::<crate::operations::files::FileAccessRefusal>()
-        {
+        if let Some(error) = error.downcast_ref::<crate::operations::files::FileAccessRefusal>() {
             return match error {
                 crate::operations::files::FileAccessRefusal::Denied => {
                     WriteFailure::FileAccessDenied
@@ -244,7 +248,7 @@ impl WriteError {
                 _ => WriteFailure::FileUnavailable,
             };
         }
-        StateLineInvalid::find(&self.0).map_or_else(
+        StateLineInvalid::find(error).map_or_else(
             || self.write_failed(),
             |error| WriteFailure::InvalidStateFile {
                 file: error.file(),
@@ -260,9 +264,10 @@ impl WriteError {
     }
     /// The native cause chain of a failure of no known kind, with absolute
     /// paths, for the host log. The wire answer gives the cause with each
-    /// state path relative to the state directory.
+    /// path relative to the repository.
     pub fn unclassified_cause(&self) -> Option<String> {
-        matches!(self.safe(), WriteFailure::WriteFailed { .. }).then(|| format!("{:#}", self.0))
+        matches!(self.safe(), WriteFailure::WriteFailed { .. })
+            .then(|| format!("{:#}", native(&self.0)))
     }
     pub fn status(&self) -> u16 {
         match self.safe() {
@@ -287,76 +292,6 @@ impl WriteError {
         }
     }
 }
-/// The display chain of `error` for a refusal of no known kind. Each path
-/// below a state directory is given relative to that directory, with `/`
-/// between its parts, so the refusal holds no absolute state path. Other
-/// text stays as the native error gives it.
-pub(crate) fn failure_cause(error: &anyhow::Error) -> String {
-    let text = format!("{error:#}");
-    let mut cause = String::with_capacity(text.len());
-    let mut rest = text.as_str();
-    while let Some((at, marker)) = state_marker(rest) {
-        let before = &rest[..at];
-        cause.push_str(&before[..path_start(before)]);
-        rest = &rest[at + marker..];
-        let end = rest.find(ends_path).unwrap_or(rest.len());
-        cause.push_str(&rest[..end].replace('\\', "/"));
-        rest = &rest[end..];
-    }
-    cause.push_str(rest);
-    cause
-}
-
-/// The first `.provenance/state/` directory in `text`, with either separator,
-/// as its byte offset and length.
-fn state_marker(text: &str) -> Option<(usize, usize)> {
-    const MARKERS: [&str; 4] = [
-        ".provenance/state/",
-        ".provenance\\state\\",
-        ".provenance/state\\",
-        ".provenance\\state/",
-    ];
-    MARKERS
-        .iter()
-        .filter_map(|marker| text.find(marker).map(|at| (at, marker.len())))
-        .min()
-}
-
-/// Where the path that ends `before` starts. An absolute path can hold a
-/// space, so the last root (`/`, `\\` or a drive letter) after a space wins.
-/// The search does not go back past `: ` or another separator. With no root,
-/// the path starts after the last space.
-fn path_start(before: &str) -> usize {
-    let window = before
-        .char_indices()
-        .rev()
-        .find(|&(_, character)| character != ' ' && ends_path(character))
-        .map_or(0, |(at, character)| at + character.len_utf8())
-        .max(before.rfind(": ").map_or(0, |at| at + 2));
-    let bytes = before.as_bytes();
-    let is_root = |index: usize| {
-        let after_space = index == window || bytes[index - 1] == b' ';
-        let root = match bytes[index] {
-            b'/' | b'\\' => true,
-            letter => {
-                letter.is_ascii_alphabetic()
-                    && bytes.get(index + 1) == Some(&b':')
-                    && matches!(bytes.get(index + 2), Some(b'/' | b'\\'))
-            }
-        };
-        after_space && root
-    };
-    (window..bytes.len())
-        .rev()
-        .find(|&index| is_root(index))
-        .or_else(|| before[window..].rfind(' ').map(|at| window + at + 1))
-        .unwrap_or(window)
-}
-
-const fn ends_path(character: char) -> bool {
-    character.is_whitespace() || matches!(character, '"' | '\'' | '`' | '(' | ')' | ',' | ';')
-}
-
 impl Serialize for WriteError {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         self.safe().serialize(serializer)

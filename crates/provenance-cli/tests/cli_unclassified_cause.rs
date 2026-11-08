@@ -1,11 +1,8 @@
 //! A store failure of no known kind keeps the code `write_failed` or
 //! `read_failed`, and the refusal object gives the cause chain in `cause`.
-//! A path below the state directory in the cause is relative to that
-//! directory.
-//!
-//! Implementation aid: no Rule covers the cause of a failure of no known kind
-//! yet, so these tests have no Rule binding.
+//! A path below the repository in the cause is relative to the repository.
 
+use provenance_macros::verifies;
 use serde_json::Value;
 
 mod support {
@@ -14,6 +11,13 @@ mod support {
 use support::review_paths::{create_requirement, json_output, provenance};
 
 const REQUIREMENTS: &str = ".provenance/state/scopes/default/requirements/req.jsonl";
+/// An update changes a staged copy of the state, so the cause names the
+/// staged copy. `<transaction>` stands for the transaction id.
+const REPEATED_MEMBER: &str = ".provenance/cache/import-transactions/<transaction>/staged-repo/\
+    .provenance/state/scopes/default/requirements/req.jsonl line 1: repeated top-level member `extension` cannot survive a typed record change";
+const LEGACY_FIELD: &str = ".provenance/state/scopes/default/requirements/req.jsonl line 1: \
+    record req_a contains legacy field `retired`; canonical JSONL requires record-deletion \
+    migration 026 before this build can read it";
 
 /// Replaces the first requirement row with the output of `change`.
 fn change_requirement_row(directory: &tempfile::TempDir, change: impl FnOnce(&str) -> String) {
@@ -78,43 +82,67 @@ fn refusal(output: &std::process::Output) -> Value {
     serde_json::from_str(object).unwrap_or_else(|error| panic!("{error}: {text}"))
 }
 
-/// Asserts the code, that the cause holds `expected`, and that no absolute
-/// state path is in the refusal.
-fn assert_cause(refusal: &Value, kind: &str, expected: &str) {
+/// `cause` with the transaction id of a staged copy as `<transaction>`.
+fn without_transaction(cause: &str) -> String {
+    const MARKER: &str = "import-transactions/";
+    let Some(at) = cause.find(MARKER).map(|at| at + MARKER.len()) else {
+        return cause.to_owned();
+    };
+    let end = cause[at..].find('/').map_or(cause.len(), |end| at + end);
+    format!("{}<transaction>{}", &cause[..at], &cause[end..])
+}
+
+/// Asserts the code and the exact cause, and that no spelling of the
+/// temporary directory is on standard error or in the cause.
+fn assert_cause(
+    directory: &tempfile::TempDir,
+    output: &std::process::Output,
+    kind: &str,
+    expected: &str,
+) {
+    let refusal = refusal(output);
     assert_eq!(refusal["error"]["kind"], kind, "{refusal}");
     let cause = refusal["error"]["cause"].as_str().unwrap_or_default();
-    assert!(cause.contains(expected), "{refusal}");
-    assert!(!refusal.to_string().contains(".provenance"), "{refusal}");
+    assert_eq!(without_transaction(cause), expected, "{refusal}");
+    let text = String::from_utf8_lossy(&output.stderr);
+    let canonical = std::fs::canonicalize(directory.path()).unwrap();
+    for root in [directory.path(), canonical.as_path()] {
+        let root = root.to_string_lossy();
+        let plain = root.strip_prefix(r"\\?\").unwrap_or(&root);
+        for spelling in [plain.to_owned(), plain.replace('\\', "/")] {
+            assert!(
+                !text.contains(&spelling) && !cause.contains(&spelling),
+                "{spelling} in {text}"
+            );
+        }
+    }
 }
 
 #[test]
+#[verifies("rule_unclassified_refusal_gives_cause", examples)]
 fn text_mode_prints_the_cause_of_a_write_failure_of_no_known_kind() {
-    let (_directory, repo) = repeated_member();
+    let (directory, repo) = repeated_member();
     let output = update(&repo, false);
     let text = String::from_utf8_lossy(&output.stderr).into_owned();
     assert!(text.starts_with("Error: "), "{text}");
-    assert_cause(
-        &refusal(&output),
-        "write_failed",
-        "scopes/default/requirements/req.jsonl line 1: repeated top-level member `extension`",
-    );
+    assert_eq!(text.lines().count(), 1, "{text}");
+    assert_cause(&directory, &output, "write_failed", REPEATED_MEMBER);
 }
 
 #[test]
+#[verifies("rule_unclassified_refusal_gives_cause", examples)]
 fn json_mode_gives_the_cause_of_a_write_failure_of_no_known_kind() {
-    let (_directory, repo) = repeated_member();
-    let refusal = refusal(&update(&repo, true));
-    assert_cause(
-        &refusal,
-        "write_failed",
-        "scopes/default/requirements/req.jsonl line 1: repeated top-level member `extension`",
-    );
+    let (directory, repo) = repeated_member();
+    let output = update(&repo, true);
+    assert_cause(&directory, &output, "write_failed", REPEATED_MEMBER);
+    let refusal = refusal(&output);
     assert_eq!(refusal["meta"], serde_json::json!({}), "{refusal}");
 }
 
 #[test]
-fn a_create_gives_the_cause_of_a_malformed_state_file() {
-    let (_directory, repo) = legacy_field();
+#[verifies("rule_unclassified_refusal_gives_cause", examples)]
+fn a_create_gives_the_write_failed_cause_of_a_legacy_field() {
+    let (directory, repo) = legacy_field();
     let output = provenance()
         .args([
             "req_b",
@@ -130,23 +158,16 @@ fn a_create_gives_the_cause_of_a_malformed_state_file() {
         ])
         .output()
         .unwrap();
-    assert_cause(
-        &refusal(&output),
-        "write_failed",
-        "scopes/default/requirements/req.jsonl line 1: record req_a contains legacy field `retired`",
-    );
+    assert_cause(&directory, &output, "write_failed", LEGACY_FIELD);
 }
 
 #[test]
-fn an_api_read_gives_the_cause_of_a_malformed_state_file() {
-    let (_directory, repo) = legacy_field();
+#[verifies("rule_unclassified_refusal_gives_cause", examples)]
+fn an_api_read_gives_the_read_failed_cause_of_a_legacy_field() {
+    let (directory, repo) = legacy_field();
     let output = provenance()
         .args(["api", "/requirements/req_a", "--repo", &repo])
         .output()
         .unwrap();
-    assert_cause(
-        &refusal(&output),
-        "read_failed",
-        "scopes/default/requirements/req.jsonl line 1: record req_a contains legacy field `retired`",
-    );
+    assert_cause(&directory, &output, "read_failed", LEGACY_FIELD);
 }

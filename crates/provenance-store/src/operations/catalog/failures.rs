@@ -4,7 +4,7 @@ use crate::operations::files::FileAccessRefusal;
 use crate::operations::reader::ReadRefusal;
 use crate::stale::git::GitRefusal;
 use crate::state_store::readers::StateLineInvalid;
-use crate::write_error::failure_cause;
+use crate::write_error::{failure_cause, in_repository, native};
 use provenance_core::protocol::{
     failure::OperationFailure,
     read_failure::{MovedUnit, ReadFailure},
@@ -25,6 +25,11 @@ impl From<OperationFailure> for ReadError {
     }
 }
 impl ReadError {
+    /// The same error with the repository root, so that its cause gives each
+    /// path relative to the repository.
+    pub(super) fn in_repository(self, root: &camino::Utf8Path) -> Self {
+        Self(in_repository(root.as_std_path(), self.0))
+    }
     pub(super) fn status(&self) -> u16 {
         if let Some(error) = self.common() {
             return error.status_code();
@@ -42,27 +47,28 @@ impl ReadError {
     /// A common refusal that a read handler raised itself, such as an input
     /// refusal; it keeps its own kind and status.
     fn common(&self) -> Option<&OperationFailure> {
-        self.0.downcast_ref::<OperationFailure>()
+        native(&self.0).downcast_ref::<OperationFailure>()
     }
     /// The closed failure for the native error. An error of no known kind
     /// reads as `ReadFailed`.
     fn safe(&self) -> ReadFailure {
-        if let Some(error) = self.0.downcast_ref::<ReadFailure>() {
+        let error = native(&self.0);
+        if let Some(error) = error.downcast_ref::<ReadFailure>() {
             return error.clone();
         }
-        if let Some(error) = self.0.downcast_ref::<GitRefusal>() {
+        if let Some(error) = error.downcast_ref::<GitRefusal>() {
             return git_failure(error);
         }
-        if let Some(error) = self.0.downcast_ref::<FileAccessRefusal>() {
+        if let Some(error) = error.downcast_ref::<FileAccessRefusal>() {
             return file_failure(error).unwrap_or_else(|| self.read_failed());
         }
-        if let Some(error) = self.0.downcast_ref::<CompletionTimedOut>() {
+        if let Some(error) = error.downcast_ref::<CompletionTimedOut>() {
             return completion_failure(error);
         }
-        if let Some(error) = self.0.downcast_ref::<ReadRefusal>() {
+        if let Some(error) = error.downcast_ref::<ReadRefusal>() {
             return refusal_failure(error);
         }
-        StateLineInvalid::find(&self.0).map_or_else(|| self.read_failed(), state_line_failure)
+        StateLineInvalid::find(error).map_or_else(|| self.read_failed(), state_line_failure)
     }
     fn read_failed(&self) -> ReadFailure {
         ReadFailure::ReadFailed {
@@ -71,10 +77,10 @@ impl ReadError {
     }
     /// The native cause chain of a failure of no known kind, with absolute
     /// paths, for the host log. The wire answer gives the cause with each
-    /// state path relative to the state directory.
+    /// path relative to the repository.
     pub fn unclassified_cause(&self) -> Option<String> {
         (self.common().is_none() && matches!(self.safe(), ReadFailure::ReadFailed { .. }))
-            .then(|| format!("{:#}", self.0))
+            .then(|| format!("{:#}", native(&self.0)))
     }
 }
 
