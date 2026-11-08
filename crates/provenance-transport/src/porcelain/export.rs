@@ -19,8 +19,6 @@ pub struct ScopeExport {
     pub domains: Vec<provenance_core::Domain>,
     pub requirements: Vec<provenance_core::Requirement>,
     #[serde(default)]
-    pub boundaries: Vec<provenance_core::Boundary>,
-    #[serde(default)]
     pub topics: Vec<provenance_core::Topic>,
     #[serde(default)]
     pub questions: Vec<provenance_core::Question>,
@@ -52,7 +50,6 @@ impl ScopeExport {
             sources: snapshot.sources,
             domains: snapshot.domains,
             requirements: snapshot.requirements,
-            boundaries: snapshot.boundaries,
             topics: snapshot.topics,
             questions: snapshot.questions,
             resolutions: snapshot.resolutions,
@@ -142,14 +139,13 @@ fn render_markdown(exported: &ScopeExport) -> String {
     format!(
         concat!(
             "# Provenance Export\n\n- Scope: {}\n- Sources: {}\n- Domains: {}\n",
-            "- Requirements: {}\n- Boundaries: {}\n- Topics: {}\n- Questions: {}\n",
+            "- Requirements: {}\n- Topics: {}\n- Questions: {}\n",
             "- Resolutions: {}\n- Rules: {}\n- Proposals: {}\n"
         ),
         exported.scope,
         exported.sources.len(),
         exported.domains.len(),
         exported.requirements.len(),
-        exported.boundaries.len(),
         exported.topics.len(),
         exported.questions.len(),
         exported.resolutions.len(),
@@ -161,14 +157,13 @@ fn render_markdown(exported: &ScopeExport) -> String {
 fn render_toon(exported: &ScopeExport) -> String {
     format!(
         concat!(
-            "scope: {}\nsources: {}\ndomains: {}\nrequirements: {}\nboundaries: {}\n",
+            "scope: {}\nsources: {}\ndomains: {}\nrequirements: {}\n",
             "topics: {}\nquestions: {}\nresolutions: {}\nrules: {}\nproposals: {}\n"
         ),
         exported.scope,
         exported.sources.len(),
         exported.domains.len(),
         exported.requirements.len(),
-        exported.boundaries.len(),
         exported.topics.len(),
         exported.questions.len(),
         exported.resolutions.len(),
@@ -180,14 +175,13 @@ fn render_toon(exported: &ScopeExport) -> String {
 fn render_table(exported: &ScopeExport) -> String {
     format!(
         concat!(
-            "scope\tsources\tdomains\trequirements\tboundaries\ttopics\tquestions\t",
-            "resolutions\trules\tproposals\n{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n"
+            "scope\tsources\tdomains\trequirements\ttopics\tquestions\t",
+            "resolutions\trules\tproposals\n{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n"
         ),
         exported.scope,
         exported.sources.len(),
         exported.domains.len(),
         exported.requirements.len(),
-        exported.boundaries.len(),
         exported.topics.len(),
         exported.questions.len(),
         exported.resolutions.len(),

@@ -15,7 +15,6 @@ fn graph_with_source(source: &Value) -> Value {
         "sources": [source],
         "domains": [],
         "requirements": [],
-        "boundaries": [],
         "topics": [],
         "questions": [],
         "resolutions": [],
@@ -79,7 +78,6 @@ fn disposition_schema_closes_canonical_artifact_and_validation_rejects_unknown_f
             "resolution",
             "rule",
             "domain",
-            "boundary",
             "topic",
             "question"
         ])

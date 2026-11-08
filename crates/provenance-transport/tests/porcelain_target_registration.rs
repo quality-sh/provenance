@@ -24,7 +24,6 @@ fn target_actions_are_declared_once_by_canonical_registrations() {
         "topic",
         "question",
         "domain",
-        "boundary",
     ] {
         expected.insert(("create", kind, format!("create-{kind}")));
         expected.insert(("update", kind, format!("update-{kind}")));

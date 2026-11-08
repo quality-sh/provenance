@@ -21,7 +21,6 @@ Provenance records requirements, decisions, and the rules that connect them to c
 - Rule: an identified atomic behavioural obligation that refines one or more Requirements. A Rule can exist before code or verification.\n\
 - Resolution: a recorded decision that removes ambiguity. A Resolution can produce a Rule when it establishes a precise obligation.\n\
 - Source: identified evidence that graph records can cite. A citation records where an obligation came from.\n\
-- Boundary: an explicit limit attached to a Requirement.\n\
 - Topic: a claimable shaping work area attached to a Requirement.\n\
 - Question: a concern to resolve, attached to a Topic and a Requirement, with a selected resolution method.\n\
 - Discussion: one concern identified by a root Message and its replies inside a Thread.\n\

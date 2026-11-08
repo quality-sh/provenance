@@ -13,7 +13,7 @@ PATCH /{collection}/{id}
 ```
 
 The collections are `sources`, `requirements`, `resolutions`, `rules`,
-`domains`, `boundaries`, `topics`, and `questions`. The native operation names
+`domains`, `topics`, and `questions`. The native operation names
 (`update-source`, `update-resolution`, and the other `update-*` names) name
 the same writers. The Requirement PATCH uses the guarded review writer.
 
@@ -26,7 +26,6 @@ the same writers. The Requirement PATCH uses the guarded review writer.
 | `update-requirement` | `statement`, `description`, `fog`, `status`, `domain_id`, `archived_in_commit` | `description`, `fog`, `domain_id` |
 | `update-rule` | `name`, `description`, `statement`, `status`, `severity`, `source_document`, `source_section`, `archived_in_commit` | `name`, `description`, `source_document`, `source_section` |
 | `update-domain` | `name`, `description`, `color` | `description`, `color` |
-| `update-boundary` | `statement`, `source_ref` | `source_ref` |
 | `update-topic` | `title`, `status`, `links`, `archived_in_commit` | None |
 | `update-question` | `question`, `resolution_method`, `status`, `links`, `resolution_id`, `contradicts`, `archived_in_commit` | `resolution_id`, `contradicts` |
 
@@ -204,8 +203,7 @@ record PATCH.
 
 ## Shaping, claims, and drafts
 
-`POST /{collection}` creates `domains`, `boundaries`, `topics`, and
-`questions` with the existing native creation inputs. `claim`, `release`,
+`POST /{collection}` creates `domains`, `topics`, and `questions` with the existing native creation inputs. `claim`, `release`,
 `close`, and `answer` are POST actions on the record path: `claim-topic`,
 `release-topic`, `close-topic`, `claim-question`, `release-question`, and
 `answer-question`. Claims keep native eligibility and claim clearing.

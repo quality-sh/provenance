@@ -212,8 +212,8 @@ fn shaping_guidance_submits_every_created_record_for_review() {
     for text in [
         "Submit every record that the session creates for review at once, so each one has its \
          own Approve control on the page.",
-        "A create command submits the new record by itself: Requirement, Rule, Resolution, \
-         Boundary and Source create all open the review submission in the same write.",
+        "A create command submits the new record by itself: Requirement, Rule, Resolution \
+         and Source create all open the review submission in the same write.",
         "Do not run `submit` after a create command;",
         "each new record has a pending review submission (\"Every record goes to review\");",
     ] {

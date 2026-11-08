@@ -15,7 +15,7 @@ const responses = (success, failure) => ({
 const compatibility = { wire: 9, read_derivation: 1 };
 
 // An update with an optional If-Match header, the shape of the Rule, Source,
-// Resolution, Domain and Boundary updates.
+// Resolution and Domain updates.
 const document = {
   openapi: '3.1.0', info: { title: 'fixture', version: '0' },
   paths: {

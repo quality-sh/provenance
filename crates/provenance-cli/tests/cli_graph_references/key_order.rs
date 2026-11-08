@@ -126,7 +126,6 @@ const FAMILY_KEYS: &[&str] = &[
     "sources",
     "domains",
     "requirements",
-    "boundaries",
     "topics",
     "questions",
     "resolutions",

@@ -34,8 +34,7 @@ fn assert_ideation_target_type_array_is_exhaustive(value: IdeationTargetType) {
         | IdeationTargetType::Rule
         | IdeationTargetType::Topic
         | IdeationTargetType::Question
-        | IdeationTargetType::Domain
-        | IdeationTargetType::Boundary => {}
+        | IdeationTargetType::Domain => {}
     }
 }
 
@@ -322,7 +321,6 @@ fn minimal_exact_export_without_digest() -> Value {
                 "statement": "Follow policy", "status": "active",
                 "source_refs": [{"source_id": "source_policy", "clause": "1.1"}]
             }],
-            "boundaries": [],
             "topics": [{
                 "scope_id": "default", "id": "topic_policy",
                 "requirement_id": "req_policy", "title": "Policy details", "status": "open",

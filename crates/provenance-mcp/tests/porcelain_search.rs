@@ -47,7 +47,6 @@ const LIST_SEARCH_OPERATIONS: [&str; 8] = [
     "list-topics",
     "list-questions",
     "list-domains",
-    "list-boundaries",
 ];
 
 async fn assert_search_hidden_and_refused(
@@ -73,10 +72,10 @@ async fn named_mcp_search_intersects_text_and_multiple_kinds() {
     assert!(tool.input_schema["properties"]["kind"].is_object());
     assert!(tool.output_schema.is_some());
 
-    let text_only = call(client, "search", json!({"text":"excludes code"})).await;
+    let text_only = call(client, "search", json!({"text":"which shared record"})).await;
     assert_eq!(
         text_only.structured_content.as_ref().unwrap()["nodes"][0]["node_type"],
-        "boundary"
+        "question"
     );
 
     let kind_only = call(client, "search", json!({"kind":["domain", "rule"]})).await;
@@ -365,7 +364,6 @@ async fn mcp_search_shows_each_record_lifecycle() {
         "topic topic_shared · open",
         "question question_shared · answered",
         "domain domain_shared\n",
-        "boundary boundary_shared\n",
     ] {
         assert!(readable.contains(expected), "{readable}");
     }

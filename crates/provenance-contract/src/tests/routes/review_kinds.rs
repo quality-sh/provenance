@@ -1,12 +1,11 @@
 use crate::{definitions, HttpMethod};
 
-const REVIEW_KINDS: [(&str, &str); 8] = [
+const REVIEW_KINDS: [(&str, &str); 7] = [
     ("sources", "source"),
     ("requirements", "requirement"),
     ("resolutions", "resolution"),
     ("rules", "rule"),
     ("domains", "domain"),
-    ("boundaries", "boundary"),
     ("topics", "topic"),
     ("questions", "question"),
 ];

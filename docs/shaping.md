@@ -62,8 +62,6 @@ A loose idea arrives. This is one session's work. Do **not** also resolve questi
 2. Ask the person, one question at a time, to surface:
    - **Appetite** (Shape Up): how much time is this worth? Recorded up front, re-checked
      as requirements accumulate.
-   - **Boundaries** (the no-gos): constraints on the solution space, each with a source
-     ref where one exists (e.g. a privacy policy clause).
    - **First questions**: each minted with a `resolution_method` (see below), sized to
      one agent session, ordered by `depends_on` where order matters.
 3. Handoff.
@@ -188,7 +186,7 @@ The tree reads as a spec:
 
 Every record that a session creates goes to review at once, so the person can approve each
 record on its own. Requirement create opens a review submission; a Rule, Resolution,
-Boundary, or Source is submitted right after its create.
+or Source is submitted right after its create.
 
 Examples:
 

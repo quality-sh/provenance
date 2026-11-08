@@ -111,13 +111,6 @@ fn every_descriptive_update_command_uses_the_local_catalog() {
             json!("Changed"),
         ),
         (
-            "boundaries",
-            "boundary_one",
-            json!({"statement":"Changed"}),
-            "statement",
-            json!("Changed"),
-        ),
-        (
             "topics",
             "topic_one",
             json!({"title":"Changed"}),
@@ -206,7 +199,6 @@ fn descriptive_records() -> tempfile::TempDir {
                 .unwrap(),
         )
         .unwrap();
-    store.create_boundary(serde_json::from_value(json!({"scope_id":"default","id":"boundary_one","requirement_id":"req_one","statement":"Limit"})).unwrap()).unwrap();
     store.create_topic(serde_json::from_value(json!({"scope_id":"default","id":"topic_one","requirement_id":"req_one","title":"Topic","status":"open","links":[]})).unwrap()).unwrap();
     store.create_question(serde_json::from_value(json!({"scope_id":"default","id":"question_one","topic_id":"topic_one","question":"Which record?","resolution_method":"research","status":"open","links":[]})).unwrap()).unwrap();
     dir

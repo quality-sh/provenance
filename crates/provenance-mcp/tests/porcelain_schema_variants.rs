@@ -31,12 +31,6 @@ fn populate(node: &mut GraphNode) {
         GraphNode::Topic(record) => record.claimed_by = Some("reviewer".into()),
         GraphNode::Question(record) => record.answer = Some("The shared record.".into()),
         GraphNode::Domain(record) => record.description = Some("Shared records.".into()),
-        GraphNode::Boundary(record) => {
-            record.source_ref = Some(provenance_core::SourceReference {
-                source_id: provenance_core::StableId::new("source_shared").unwrap(),
-                clause: Some("Section 1".into()),
-            });
-        }
     }
 }
 

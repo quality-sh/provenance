@@ -45,7 +45,6 @@ fn graph_with_source_named(name: &str) -> Value {
         }],
         "domains": [],
         "requirements": [],
-        "boundaries": [],
         "topics": [],
         "questions": [],
         "resolutions": [],

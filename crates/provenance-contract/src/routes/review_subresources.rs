@@ -11,7 +11,7 @@ fn routes_for_kind(
     kind: NodeType,
 ) {
     history_for_kind(out, plural, singular, title, kind);
-    if !matches!(kind, NodeType::Domain | NodeType::Boundary) {
+    if kind != NodeType::Domain {
         super::subresources::discussions(out, plural, singular);
     }
 }

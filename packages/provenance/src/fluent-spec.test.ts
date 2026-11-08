@@ -67,7 +67,7 @@ function catalogCreate(
   headers: string[] = [],
 ): void {
   const { id, ...fields } = data;
-  const type = collection === "boundaries" ? "boundary" : collection.replace(/s$/, "");
+  const type = collection.replace(/s$/, "");
   execFileSync(
     engine,
     [String(id), "create", "--type", type, "--repo", repo, "--scope", "default", ...headers, "--stdin"],

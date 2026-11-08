@@ -50,7 +50,7 @@ export interface ImpactRequest { node_type: NodeType; id: string }
 export interface ResolveSymbolRequest { file: string; symbol?: string; line?: number }
 export interface EvidenceRequest { rule: string; base?: string; head?: string }
 export interface StaleRequest { base: string; head?: string; limit?: number; cursor?: string }
-export type GraphCollection = "sources" | "requirements" | "resolutions" | "rules" | "domains" | "boundaries" | "topics" | "questions";
+export type GraphCollection = "sources" | "requirements" | "resolutions" | "rules" | "domains" | "topics" | "questions";
 
 type MemberResponse<Response> = Response extends { data: infer Data }
   ? Data extends { id: unknown; scope_id: unknown } ? Response : never
@@ -61,7 +61,6 @@ type ResourceGetResponses = {
   resolution: MemberResponse<Schemas["GetResolutionBaseSuccess"]>;
   rule: MemberResponse<Schemas["GetRuleBaseSuccess"]>;
   domain: MemberResponse<Schemas["GetDomainBaseSuccess"]>;
-  boundary: MemberResponse<Schemas["GetBoundaryBaseSuccess"]>;
   topic: MemberResponse<Schemas["GetTopicBaseSuccess"]>;
   question: MemberResponse<Schemas["GetQuestionBaseSuccess"]>;
 };

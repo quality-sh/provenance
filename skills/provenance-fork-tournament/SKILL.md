@@ -68,8 +68,8 @@ provenance <question_id> claim --scope <scope> \
 ```
 
 1. **Spawn N agents in parallel** — one Agent tool call per stance, all in one message.
-   Each spawn prompt carries: the anchor requirement and boundaries (loaded with the
-   graph and boundary commands; `provenance search --kind rule` supplies Rules and
+   Each spawn prompt carries: the anchor requirement and its description (loaded with the
+   graph commands; `provenance search --kind rule` supplies Rules and
    `provenance check --gaps` supplies computed gaps),
    the question, the stance (values + quality bar + exit
    criterion), its evidence partition, and its task framing. Each agent produces one

@@ -25,16 +25,13 @@ duplicates; `refines`, `depends_on`, and `supersedes` refuse a cycle at write.
 | rule | `resolution_ids` | resolution | optional | list |
 | source | `supersedes` | source | optional | list |
 | topic | `requirement_id` | requirement | required | single |
-| boundary | `requirement_id` | requirement | required | single |
-| boundary | `source_ref.source_id`, named `cites` | source | optional | single |
 | question | `topic_id`, `requirement_id` | topic, requirement | required | single |
 | question | `resolution_id` | resolution | optional | single |
 | question | `contradicts` | requirement | optional | single |
 
 A contribution or synthesis packet carries a `target` (`artifact_type`,
-`artifact_id`) that names one record of any of the eight kinds above, boundary
-included. The target is not a relation row: it is not in the table above and
-does not enter the projection's `relations` table. A new contribution or
+`artifact_id`) that names one record of any of the seven kinds above. The target
+is not a relation row: it is not in the table above and does not enter the projection's `relations` table. A new contribution or
 synthesis packet must name a record that exists in its scope, or the write is
 refused. A stored target that names no record is reported
 by `provenance check --gaps` as a dangling reference (`contribution <id> target points
@@ -155,6 +152,6 @@ recoverable on next access, and any import command that returns failure leaves t
 A graph reference canonicalizes a selected scope into a JSON object with fixed graph
 families and records sorted by stable ID. JSON object keys are lexicographically ordered
 before SHA-256 hashing. The projection contains the selected manifest scope and its
-sources, domains, requirements, boundaries, topics, questions, resolutions, and rules;
+sources, domains, requirements, topics, questions, resolutions, and rules;
 relations travel as the fields on those records. Threads, messages, contributions,
 synthesis packets, proposals, assertions, dispositions, and cache data are excluded.

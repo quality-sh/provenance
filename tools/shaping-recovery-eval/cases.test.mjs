@@ -7,7 +7,7 @@ import { scorePacket } from './cases.mjs';
 const question = (id, status = 'open', claimed_by = null) => ({ id, status, claimed_by });
 const shell = command => ({ type: 'shell', command });
 const graph = (overrides = {}) => ({
-  topics: [], sources: [], boundaries: [],
+  topics: [], sources: [],
   questions: [question('question_format'), question('question_schedule'), question('question_delivery')],
   requirements: [
     { id: 'req_payroll', statement: 'Payroll.', status: 'active' },

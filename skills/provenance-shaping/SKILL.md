@@ -96,7 +96,6 @@ by question; expensive methods claim one question and often stop at a phase boun
    provenance <anchor_requirement_id> get --view children --scope <scope> --format json
    provenance search --kind topic --scope <scope> --format json
    provenance search --kind question --scope <scope> --format json
-   provenance search --kind boundary --scope <scope> --format json
    ```
 
 4. Keep only one-line summaries of records in your working context. Read full records
@@ -155,8 +154,7 @@ parent Requirement
   for every Question method, also `task`, and also when the person gives the Requirement
   ID. Land the Resolution. If the person gives no reason, the rationale says that the
   person selected this option over the other one, in their words. Do not invent a reason,
-  and do not skip the Resolution because no reason was given. A Boundary can also record
-  the rejected option, but it does not replace the Resolution.
+  and do not skip the Resolution because no reason was given.
 - An accepted fact that is not a choice becomes a child Requirement, and its Rules go
   under that child.
 - Never put a Rule directly under the anchor. Never hang all the session's records off
@@ -166,8 +164,7 @@ parent Requirement
 
 Submit every record that the session creates for review at once, so each one has its own
 Approve control on the page. A create command submits the new record by itself: Requirement,
-Rule, Resolution, Boundary and Source create all open the review submission in the same
-write. Do not run `submit` after a create command; the record already has a pending
+Rule, Resolution and Source create all open the review submission in the same write. Do not run `submit` after a create command; the record already has a pending
 submission, so `submit` refuses.
 
 After each create command, check that
@@ -212,14 +209,14 @@ short-lived link - how would that work?" Starting an anchor is one session's wor
    no-gos, and the first sharp questions. Re-check appetite when the requirement tree gets
    bigger than the user's stated appetite.
 
-4. **Record boundaries as no-gos, not silence.** Attach a source reference where one
-   exists.
+4. **Record no-gos in the anchor description, not silence.** Add one short sentence for
+   each thing that the anchor Requirement does not cover. Cite the source of a no-go on
+   the Requirement where one exists.
 
    ```sh
-   provenance boundary_<stable_slug> create --type boundary --scope <scope> \
-     --requirement-id <anchor_requirement_id> \
-     --statement "<constraint on solution space>" \
-     --source-ref-json '{"source_id":"<source_id>","clause":"<clause or section>"}' \
+   provenance <anchor_requirement_id> update --scope <scope> \
+     --description "<current description> <The Requirement does not cover ...>" \
+     --if-match <etag> \
      --format json
    ```
 
@@ -240,13 +237,13 @@ short-lived link - how would that work?" Starting an anchor is one session's wor
      --format json
    ```
 
-6. **Record the start on the thread.** Record the appetite, boundaries, and question
+6. **Record the start on the thread.** Record the appetite, no-gos, and question
    rationale on the requirement thread.
 
    ```sh
    provenance <anchor_requirement_id> discuss --scope <scope> \
      --role assistant \
-     --body "START: appetite=<...>; boundaries=<...>; first questions=<...>" \
+     --body "START: appetite=<...>; no-gos=<...>; first questions=<...>" \
      --format json
    ```
 
@@ -262,7 +259,7 @@ open Questions and close its gaps.
 
 Load the graph summary with the commands from **Start every session**. `provenance prime`
 explains the domain. Use `provenance search --kind rule` for Rules and `provenance check --gaps` for
-computed gaps. Load the anchor graph, boundaries, topics, and questions with
+computed gaps. Load the anchor graph, topics, and questions with
 their separate commands. The
 shaping-focused subset of the computed gaps includes:
 
@@ -487,7 +484,8 @@ Examples:
   example "A link stops working at the end of its expiry period", go under that child
   and name the Resolution.
 
-Land any Boundary, contradiction, or source gap that the answer also implies.
+Land any no-go, contradiction, or source gap that the answer also implies. A no-go is one
+sentence in the Requirement description.
 
 ##### Landing a Rule and its bindings
 
@@ -706,7 +704,7 @@ Before moving to the next question, verify the current answer has been handled:
 - each precise atomic behavioural obligation is landed as a Rule; any known primary
   implementation and evidence carry `#[rule]` and `#[verifies]` bindings, and
   `check --bindings` reports any remaining absence honestly;
-- boundaries/out-of-scope rejections are explicit;
+- no-gos and out-of-scope rejections are explicit in the Requirement description;
 - source references and evidence are attached where they exist;
 - proposal definitions remain immutable `proposed` records; assertion lineage uses assertion
   IDs, and only positive owned evidence with unblocked adjudication can create an assertion;

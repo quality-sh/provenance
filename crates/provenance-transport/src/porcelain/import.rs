@@ -43,7 +43,6 @@ fn import_scope(
     let records = exported.sources.len()
         + exported.domains.len()
         + exported.requirements.len()
-        + exported.boundaries.len()
         + exported.topics.len()
         + exported.questions.len()
         + exported.resolutions.len()
@@ -255,7 +254,6 @@ fn scope_shards(exported: &ScopeExport) -> ScopeShards<'_> {
         sources: &exported.sources,
         domains: &exported.domains,
         requirements: &exported.requirements,
-        boundaries: &exported.boundaries,
         topics: &exported.topics,
         questions: &exported.questions,
         resolutions: &exported.resolutions,

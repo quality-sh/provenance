@@ -7,7 +7,7 @@ use review_host_support::{repository, request, response, start};
 
 #[test]
 #[verifies("rule_domain_boundary_accept_no_discussions", exhaustion)]
-fn served_discussion_routes_exclude_domain_and_boundary_parents() {
+fn served_discussion_routes_exclude_domain_parents() {
     let repo = repository();
     let host = start(repo.path());
     for family in [
@@ -24,8 +24,8 @@ fn served_discussion_routes_exclude_domain_and_boundary_parents() {
             400
         );
     }
-    // No discussion route exists for these families, so the host API answers unknown_operation.
-    for family in ["domains", "boundaries"] {
+    // No discussion route exists for Domains, so the host API answers unknown_operation.
+    for family in ["domains"] {
         let path = format!("/{family}/absent/discussions");
         let reply = response(request(&host, "POST", &path, true).send_string("{}"));
         assert_eq!(reply.status(), 404, "{path}");

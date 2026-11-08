@@ -44,14 +44,13 @@ pub(in crate::porcelain::schema) fn export_schema() -> Value {
                 "additionalProperties": false,
                 "required": [
                     "scope", "sources", "domains", "requirements",
-                    "boundaries", "topics", "questions", "resolutions", "rules"
+                    "topics", "questions", "resolutions", "rules"
                 ],
                 "properties": {
                     "scope": {"$ref": "#/$defs/scope"},
                     "sources": record_array("source"),
                     "domains": record_array("domain"),
                     "requirements": record_array("requirement"),
-                    "boundaries": record_array("boundary"),
                     "topics": record_array("topic"),
                     "questions": record_array("question"),
                     "resolutions": record_array("resolution"),
@@ -140,14 +139,6 @@ fn export_definitions() -> Value {
                 "supersedes": id_list.clone(), "spawned_by": id.clone()
             })
         )),
-        "boundary": closed_record(
-            &["scope_id", "id", "requirement_id", "statement"],
-            json!({
-                "scope_id": id.clone(), "id": id.clone(),
-                "requirement_id": id.clone(), "statement": string.clone(),
-                "source_ref": {"$ref": "#/$defs/sourceReference"}
-            })
-        ),
         "topic": closed_record(
             &["scope_id", "id", "requirement_id", "title", "status", "links"],
             json!({

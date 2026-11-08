@@ -12,10 +12,10 @@ export async function checkRecords({ HttpClient, OperationError }, fixture) {
   );
 
   const methods = {
-    domain: 'getDomain', boundary: 'getBoundary', requirement: 'getRequirement', rule: 'getRule',
+    domain: 'getDomain', requirement: 'getRequirement', rule: 'getRule',
     source: 'getSource', resolution: 'getResolution', topic: 'getTopic', question: 'getQuestion',
   };
-  assert.equal(Object.keys(fixture.nodes).length, 8);
+  assert.equal(Object.keys(fixture.nodes).length, 7);
   for (const [nodeType, id] of Object.entries(fixture.nodes)) {
     const result = await client[methods[nodeType]]({ id });
     assert.equal(result.data.id, id);
