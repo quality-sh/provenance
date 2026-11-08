@@ -65,6 +65,12 @@ fn kernel_refusals(policy: &Policy, metadata: &Value) -> Vec<String> {
     let kernel = &policy.kernel;
     let host = kernel.host_feature.as_str();
     let mut refusals = Vec::new();
+    if !kernel.target.starts_with("wasm32-") {
+        refusals.push(format!(
+            "the kernel target {} in {POLICY_FILE} is not a wasm32 target",
+            kernel.target
+        ));
+    }
     for (name, entry) in &policy.crates {
         if !kernel.crates.contains(name) && !entry.host_dependencies.is_empty() {
             refusals.push(format!(
@@ -152,7 +158,7 @@ fn set_features(metadata: &mut Value, name: &str, features: Value) {
 }
 
 /// The fixture policy with the store as a kernel crate that has host dependencies.
-fn store_kernel_policy(host_dependencies: Value) -> Value {
+fn store_kernel_policy(host_dependencies: &Value) -> Value {
     let mut policy = fixture_policy();
     policy["kernel"]["crates"] = json!(["provenance-core", "provenance-store"]);
     policy["forbidden"]["provenance-store"] = json!([
@@ -167,7 +173,7 @@ fn store_kernel_policy(host_dependencies: Value) -> Value {
     ]);
     policy["crates"]["provenance-store"] = json!({
         "dependencies": ["provenance-core"],
-        "host-dependencies": host_dependencies,
+        "host-dependencies": host_dependencies.clone(),
         "dev-dependencies": ["tempfile"]
     });
     policy
@@ -181,7 +187,7 @@ fn fixture_kernel_matches_its_policy() {
         Vec::<String>::new()
     );
     assert_eq!(
-        kernel(store_kernel_policy(json!(["tokio"])), &fixture_metadata()),
+        kernel(store_kernel_policy(&json!(["tokio"])), &fixture_metadata()),
         Vec::<String>::new()
     );
 }
@@ -239,7 +245,7 @@ fn edge_that_turns_on_host_in_a_kernel_crate_is_refused() {
 
     assert_eq!(
         kernel(
-            store_kernel_policy(json!(["fs2", "rustix", "tokio"])),
+            store_kernel_policy(&json!(["fs2", "rustix", "tokio"])),
             &metadata
         ),
         [
@@ -261,7 +267,7 @@ fn host_dependency_outside_the_host_feature_is_refused() {
         "provenance-store",
         json!({ "default": ["tokio"], "host": [], "tokio": ["dep:tokio"] }),
     );
-    let policy = store_kernel_policy(json!(["tokio"]));
+    let policy = store_kernel_policy(&json!(["tokio"]));
     assert_eq!(
         kernel(policy, &metadata),
         ["the default feature of provenance-store turns on its host dependency tokio"]
@@ -272,7 +278,7 @@ fn host_dependency_outside_the_host_feature_is_refused() {
         "provenance-store",
         json!({ "host": [], "tokio": ["dep:tokio"] }),
     );
-    let policy = store_kernel_policy(json!(["tokio"]));
+    let policy = store_kernel_policy(&json!(["tokio"]));
     assert_eq!(
         kernel(policy, &metadata),
         ["the host feature of provenance-store does not turn on its host dependency tokio"]
@@ -291,5 +297,18 @@ fn host_dependencies_of_a_crate_outside_the_kernel_are_refused() {
             ".config/crate-dependencies.json gives provenance-report host-dependencies, but \
           provenance-report is not a kernel crate"
         ]
+    );
+}
+
+#[test]
+#[verifies("rule_kernel_default_features_have_no_host_crate", examples)]
+fn kernel_target_that_is_not_wasm32_is_refused() {
+    let mut policy = fixture_policy();
+    policy["kernel"]["target"] = json!("x86_64-unknown-linux-gnu");
+
+    assert_eq!(
+        kernel(policy, &fixture_metadata()),
+        ["the kernel target x86_64-unknown-linux-gnu in .config/crate-dependencies.json is not a \
+          wasm32 target"]
     );
 }
