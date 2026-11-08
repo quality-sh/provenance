@@ -98,6 +98,16 @@ async function context(repo, operations, http) {
 /** Time one call: cold, then `count` warm repeats. `prepare` gives each request; `follow` gives the read after a write. */
 async function measure(way, label, kind, count, prepare, send, { restart = false, follow = null } = {}) {
   const fail = (step, reason) => skip(way.name, label, `${step}: ${reason}`);
+  // Profiling (wip): the wrapper binary reads the row label to choose what it profiles.
+  process.env.PROF_LABEL = label;
+  try {
+    return await measureRow(way, label, kind, count, prepare, send, { restart, follow }, fail);
+  } finally {
+    process.env.PROF_LABEL = '';
+  }
+}
+
+async function measureRow(way, label, kind, count, prepare, send, { restart, follow }, fail) {
   let request;
   try {
     request = await prepare(0);

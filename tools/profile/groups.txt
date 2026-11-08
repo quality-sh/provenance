@@ -1,7 +1,0 @@
-# name|filter|ways|reads|writes for the profile and strace passes
-q3|provenance <id> |CLI|2|3
-q3mcp|tool change action=|MCP|2|3
-q4|check|CLI,MCP|3|3
-q5|materialize|CLI,MCP|3|3
-q6|/rules/{id}/history|CLI,HTTP,MCP|0|0
-q7|report build|CLI|3|3
