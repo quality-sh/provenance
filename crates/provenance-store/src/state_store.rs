@@ -89,9 +89,7 @@ fn ensure_new_ids_assignable<T>(
     }
     Ok(())
 }
-use readers::{
-    read_ideation_landings, read_jsonl, read_jsonl_unlocked, read_message_shards_unlocked,
-};
+use readers::{read_ideation_landings, read_jsonl_unlocked, read_message_shards_unlocked};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
@@ -233,7 +231,10 @@ impl StateStore {
         after_direct_read: impl FnOnce() -> anyhow::Result<()>,
     ) -> anyhow::Result<Vec<Contribution>> {
         self.with_repository_read(|held| {
-            let mut records = read_jsonl(held, &shards::contributions_path(&held.layout, scope))?;
+            let mut records = shared_parses::read_jsonl_shared(
+                held,
+                &shards::contributions_path(&held.layout, scope),
+            )?;
             after_direct_read()?;
             for batch in held.list_ideation_landings(scope)? {
                 overlay_records(&mut records, batch.contributions, |record| {
@@ -293,7 +294,10 @@ impl StateStore {
     }
     pub fn list_proposal_definitions(&self, scope: &ScopeId) -> anyhow::Result<Vec<ProposalCard>> {
         self.with_repository_read(|held| {
-            let mut records = read_jsonl(held, &shards::proposal_cards_path(&held.layout, scope))?;
+            let mut records = shared_parses::read_jsonl_shared(
+                held,
+                &shards::proposal_cards_path(&held.layout, scope),
+            )?;
             for batch in held.list_ideation_landings(scope)? {
                 overlay_records(&mut records, batch.proposals, |record| record.id.as_str());
             }

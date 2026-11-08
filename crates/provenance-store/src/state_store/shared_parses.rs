@@ -61,3 +61,11 @@ pub(super) fn shared<T: Clone + 'static>(
     });
     Ok(records)
 }
+
+/// [`super::readers::read_jsonl`] through [`shared`].
+pub(super) fn read_jsonl_shared<T: serde::de::DeserializeOwned + Clone + 'static>(
+    store: &super::StateStore,
+    path: &Utf8Path,
+) -> anyhow::Result<Vec<T>> {
+    shared(path, || super::readers::read_jsonl(store, path))
+}

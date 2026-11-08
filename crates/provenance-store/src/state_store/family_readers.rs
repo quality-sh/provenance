@@ -2,7 +2,7 @@
 
 use super::ideation_batches::overlay_records;
 use super::readers::{read_jsonl, read_message_shards};
-use super::shared_parses::shared;
+use super::shared_parses::{read_jsonl_shared, shared};
 use super::StateStore;
 use crate::shards;
 use provenance_core::{Rule, ScopeId};
@@ -76,7 +76,7 @@ macro_rules! canonical_reader {
     ($record:ty, $path:ident, $list:ident, synthesis_packets) => {
         pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
             self.with_repository_read(|held| {
-                let mut records = read_jsonl(held, &shards::$path(&held.layout, scope))?;
+                let mut records = read_jsonl_shared(held, &shards::$path(&held.layout, scope))?;
                 for batch in held.list_ideation_landings(scope)? {
                     overlay_records(&mut records, batch.synthesis_packets, |record| {
                         record.id.as_str()
@@ -94,7 +94,7 @@ macro_rules! canonical_reader {
     ($record:ty, $path:ident, $list:ident, assertion_records) => {
         pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
             self.with_repository_read(|held| {
-                let mut records = read_jsonl(held, &shards::$path(&held.layout, scope))?;
+                let mut records = read_jsonl_shared(held, &shards::$path(&held.layout, scope))?;
                 for batch in held.list_ideation_landings(scope)? {
                     overlay_records(&mut records, batch.assertions, |record| record.id.as_str());
                 }
@@ -105,7 +105,7 @@ macro_rules! canonical_reader {
     ($record:ty, $path:ident, $list:ident, dispositions) => {
         pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
             self.with_repository_read(|held| {
-                let mut records = read_jsonl(held, &shards::$path(&held.layout, scope))?;
+                let mut records = read_jsonl_shared(held, &shards::$path(&held.layout, scope))?;
                 for batch in held.list_ideation_landings(scope)? {
                     overlay_records(&mut records, batch.dispositions, |record| {
                         record.id.as_str()
