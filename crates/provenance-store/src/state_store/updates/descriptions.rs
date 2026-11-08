@@ -4,9 +4,9 @@ use super::{
 };
 use crate::{
     shards,
-    state_store::{read_budget, RequirementReviewInput, StateStore},
+    state_store::{RequirementReviewInput, StateStore},
 };
-use provenance_core::{NodeType, Requirement, RequirementStatus};
+use provenance_core::{Requirement, RequirementStatus};
 use provenance_macros::rule;
 
 impl StateStore {

@@ -406,7 +406,7 @@ fn canonical_shard_path(
     }
 }
 
-fn canonical_artifact_types() -> [&'static str; 7] {
+fn canonical_artifact_types() -> [&'static str; 6] {
     [
         "source",
         "requirement",
@@ -417,7 +417,7 @@ fn canonical_artifact_types() -> [&'static str; 7] {
     ]
 }
 
-fn canonical_records(scope: &str) -> [(&'static str, String); 7] {
+fn canonical_records(scope: &str) -> [(&'static str, String); 6] {
     [
         (
             "source",
@@ -446,7 +446,7 @@ fn canonical_records(scope: &str) -> [(&'static str, String); 7] {
     ]
 }
 
-fn misfiled_canonical_records() -> [(&'static str, String); 7] {
+fn misfiled_canonical_records() -> [(&'static str, String); 6] {
     canonical_records("other")
         .map(|(kind, record)| (kind, record.replace("artifact_test", "artifact_misfiled")))
 }

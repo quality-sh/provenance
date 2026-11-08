@@ -101,7 +101,7 @@ fn canonical_path(
     }
 }
 
-fn canonical_artifact_types() -> [&'static str; 7] {
+fn canonical_artifact_types() -> [&'static str; 6] {
     [
         "source",
         "requirement",
@@ -112,7 +112,7 @@ fn canonical_artifact_types() -> [&'static str; 7] {
     ]
 }
 
-fn canonical_records(scope: &str) -> [(&'static str, String); 7] {
+fn canonical_records(scope: &str) -> [(&'static str, String); 6] {
     [
         ("source", serde_json::json!({"scope_id":scope,"id":"artifact_test","name":"Test","source_type":"document","url":null}).to_string()),
         ("requirement", serde_json::json!({"scope_id":scope,"id":"artifact_test","statement":"Test","status":"active"}).to_string()),
