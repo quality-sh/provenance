@@ -12,7 +12,7 @@ if [ -n "${PROF_MODE:-}" ] && [ -n "${PROF_LABEL:-}" ] && printf '%s' "$PROF_LAB
   case "$PROF_MODE" in
     perf) exec perf record -q -k mono -g -e cpu-clock/freq=1999/ -e context-switches/period=1/ \
             -o "$PROF_DIR/$$.data" -- "$PROF_REAL" "$@" ;;
-    strace) exec strace -f -qq -tt -T -yy -s 400 -o "$PROF_DIR/$$.strace" \
+    strace) exec strace -f --kill-on-exit -qq -tt -T -yy -s 400 -o "$PROF_DIR/$$.strace" \
             -e trace=%process,%file,fsync,fdatasync,syncfs,sync_file_range,copy_file_range,pread64,pwrite64,read,write,flock,fcntl \
             "$PROF_REAL" "$@" ;;
   esac

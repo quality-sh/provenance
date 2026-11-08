@@ -26,7 +26,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pass: [time, perf, strace]
+        pass: [strace, perf]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -42,7 +42,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: profile-api-latency
-          save-if: ${{ matrix.pass == 'time' }}
+          save-if: false
       - name: Build the release CLI with symbols and frame pointers
         env:
           CARGO_PROFILE_RELEASE_DEBUG: line-tables-only
@@ -64,6 +64,8 @@ jobs:
           perf --version; strace --version | head -1; uname -r; nproc; free -m
           grep -m1 'model name' /proc/cpuinfo
       - name: Run the pass
+        env:
+          PROF_READS: 3
         run: tools/profile/run.sh target/release/provenance prof "$RUNNER_TEMP/prof" ${{ matrix.pass }}
       - name: Convert
         if: always()
