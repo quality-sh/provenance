@@ -31,7 +31,6 @@ macro_rules! define_review_families {
                 node: [$kind:ident],
                 reader: {
                     open: $reader:ident,
-                    closed: [$($closed:tt)*],
                     strategy: $strategy:ident
                 },
                 id: $id:ident,

@@ -27,7 +27,7 @@ function fixture() {
   cli(repo, ['req_pay', 'create', '--type', 'requirement', '--stdin'], { statement: 'The system calculates overtime pay.' });
   cli(repo, ['topic_pay', 'create', '--type', 'topic', '--stdin'], { requirement_id: 'req_pay', title: 'Overtime pay' });
   for (const id of ['question_threshold', 'question_rate']) {
-    cli(repo, [id, 'create', '--type', 'question', '--stdin'], { topic_id: 'topic_pay', question: 'Which value applies?', resolution_method: 'grill' });
+    cli(repo, [id, 'create', '--type', 'question', '--stdin'], { topic_id: 'topic_pay', question: 'Which value applies?', resolution_method: 'ask' });
   }
   return repo;
 }

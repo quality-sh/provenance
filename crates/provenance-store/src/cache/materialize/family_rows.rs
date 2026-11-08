@@ -61,7 +61,6 @@ macro_rules! define_family_loader {
                         path: $path:ident,
                         node: [$($node:tt)*],
                         reader: $reader:ident,
-                        closed: [$($closed:tt)*],
                         strategy: $strategy:ident,
                         id: $id:ident,
                         loader: [$($loader:tt)*],

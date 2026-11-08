@@ -385,18 +385,6 @@ fn repository_commands_are_registry_commands() {
     ]);
 }
 
-/// The graph read commands come from the registry, and their help shows each declared flag.
-#[test]
-#[verifies("rule_porcelain_interface_shows_recorded_commands", examples)]
-fn graph_read_commands_are_registry_commands() {
-    assert_cli_only_registry_commands(&[
-        &["graph-reference", "issue"],
-        &["graph-reference", "show"],
-        &["graph-reference", "verify"],
-        &["graph-reference", "exact-export"],
-    ]);
-}
-
 /// The workspace commands come from the registry, and their help shows each declared flag.
 #[test]
 #[verifies("rule_porcelain_interface_shows_recorded_commands", examples)]
@@ -410,14 +398,14 @@ fn workspace_commands_are_registry_commands() {
     ]);
 }
 
-/// The three server commands are CLI commands outside the registry. MCP does not show
+/// The two server commands are CLI commands outside the registry. MCP does not show
 /// them, and their help shows each declared flag.
 #[tokio::test]
 #[verifies("rule_porcelain_registry_defines_commands", examples)]
 async fn server_commands_are_outside_the_registry() {
     let (repo, _) = support::review_paths::init();
     let tools = tools(repo.path()).await;
-    for words in [&["docs", "serve"][..], &["review"], &["mcp"]] {
+    for words in [&["review"][..], &["mcp"]] {
         let server = Server::find(words).unwrap_or_else(|| panic!("{words:?} is not a server"));
         let declaration = server.declaration();
         assert_eq!(cli::find(words), None, "{words:?}");

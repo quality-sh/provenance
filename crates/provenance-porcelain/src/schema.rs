@@ -12,8 +12,6 @@ pub enum Artifact {
     Proposal,
     Assertion,
     Disposition,
-    GraphReference,
-    GraphReferenceExport,
 }
 
 impl Artifact {
@@ -25,8 +23,6 @@ impl Artifact {
             Self::Proposal => "proposal",
             Self::Assertion => "assertion",
             Self::Disposition => "disposition",
-            Self::GraphReference => "graph-reference",
-            Self::GraphReferenceExport => "graph-reference-export",
         }
     }
 }

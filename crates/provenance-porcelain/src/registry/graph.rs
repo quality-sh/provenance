@@ -1,42 +1,17 @@
-//! Declarations of the commands that pin graph references and land swarm backtraces.
+//! Declarations of the commands that land swarm backtraces.
 
-use super::{json_format, Declaration, Field, Fields, Relation};
-use crate::graph_reference::{ReferenceInput, ReferenceIssueInput};
+use super::{Declaration, Field, Fields};
 use crate::swarm_backtrace::SwarmBacktraceLandInput;
 
 /// One graph command.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum GraphCommand {
-    ReferenceIssue,
-    ReferenceShow,
-    ReferenceVerify,
-    ReferenceExactExport,
     SwarmBacktraceLand,
 }
 
-macro_rules! schema_fn {
-    ($name:ident, $input:ty) => {
-        fn $name() -> serde_json::Value {
-            serde_json::to_value(schemars::schema_for!($input)).expect("schema is JSON")
-        }
-    };
+fn swarm_backtrace_land_schema() -> serde_json::Value {
+    serde_json::to_value(schemars::schema_for!(SwarmBacktraceLandInput)).expect("schema is JSON")
 }
-
-schema_fn!(reference_issue_schema, ReferenceIssueInput);
-schema_fn!(reference_schema, ReferenceInput);
-schema_fn!(swarm_backtrace_land_schema, SwarmBacktraceLandInput);
-
-const JSON_FORMAT: Field = json_format(Some("json"));
-
-const REFERENCE_ISSUE_FIELDS: &[Field] = &[
-    Field::text("commit")
-        .doc("Git revision to pin. When omitted, clean relevant state at HEAD is required"),
-    Field::text("correlation_system"),
-    Field::text("correlation_key"),
-    JSON_FORMAT,
-];
-
-const REFERENCE_FIELDS: &[Field] = &[Field::text("reference").required(), JSON_FORMAT];
 
 const SWARM_BACKTRACE_LAND_FIELDS: &[Field] = &[
     Field::text("run_dir")
@@ -48,33 +23,6 @@ const SWARM_BACKTRACE_LAND_FIELDS: &[Field] = &[
 
 pub(super) const fn declaration(command: GraphCommand) -> Declaration {
     match command {
-        GraphCommand::ReferenceIssue => Declaration::named(
-            "graph-reference issue",
-            "Issue an immutable reference after canonical graph state is committed",
-            Fields::new(REFERENCE_ISSUE_FIELDS, reference_issue_schema).relations(&[
-                Relation::Requires("correlation_system", "correlation_key"),
-                Relation::Requires("correlation_key", "correlation_system"),
-            ]),
-        )
-        .bound(),
-        GraphCommand::ReferenceShow => Declaration::named(
-            "graph-reference show",
-            "Show metadata and graph-family counts from a pinned reference",
-            Fields::new(REFERENCE_FIELDS, reference_schema),
-        )
-        .bound_repository(),
-        GraphCommand::ReferenceVerify => Declaration::named(
-            "graph-reference verify",
-            "Verify identity and graph content at the pinned Git revision",
-            Fields::new(REFERENCE_FIELDS, reference_schema),
-        )
-        .bound_repository(),
-        GraphCommand::ReferenceExactExport => Declaration::named(
-            "graph-reference exact-export",
-            "Export the canonical graph reconstructed from the pinned Git revision",
-            Fields::new(REFERENCE_FIELDS, reference_schema),
-        )
-        .bound_repository(),
         GraphCommand::SwarmBacktraceLand => Declaration::named(
             "swarm-backtrace land",
             "",

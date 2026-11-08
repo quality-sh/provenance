@@ -123,7 +123,7 @@ pub fn question_for(
         topic_id: sid(topic_id),
         requirement_id: sid(requirement_id),
         question: "What remains?".to_string(),
-        resolution_method: ResolutionMethod::Grill,
+        resolution_method: ResolutionMethod::Ask,
         status,
         archived_in_commit: None,
         claimed_by: None,

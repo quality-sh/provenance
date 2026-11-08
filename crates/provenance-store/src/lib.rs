@@ -23,7 +23,6 @@ pub mod dictionary_reference;
 #[cfg(feature = "test-fixture")]
 pub mod fixture_probe;
 pub mod git_process;
-pub mod graph_reference;
 pub mod jsonl;
 pub mod layout;
 mod long_path;

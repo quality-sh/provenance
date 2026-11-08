@@ -1,9 +1,7 @@
 mod browser;
 mod catalog_cli;
 mod cli;
-mod docs;
 mod handlers;
-mod html;
 mod invocation;
 mod output;
 mod read_policy;

@@ -36,7 +36,7 @@ pub(super) fn fresh_record(family: ProjectionFamily, scope: &str) -> serde_json:
         "questions" => {
             json!({"scope_id": scope, "id": "question_new",
             "topic_id": "topic_new", "requirement_id": "req_schads_overtime",
-            "question": "New?", "resolution_method": "grill", "status": "open"})
+            "question": "New?", "resolution_method": "ask", "status": "open"})
         }
         "resolutions" => {
             json!({"scope_id": scope, "id": "res_new",

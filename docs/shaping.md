@@ -132,7 +132,7 @@ summary limit bound the read. An incomplete summary cannot authorize selection.
 
 ### Invariants
 
-"One question per session" is deliberately **not** the rule: `grill` turns are cheap to
+"One question per session" is deliberately **not** the rule: `ask` turns are cheap to
 continue and expensive to restart, and answers don't respect question boundaries. The
 real invariants:
 
@@ -151,7 +151,7 @@ minted, telling the next session what to do. This complements the content-noun t
 
 | Method | What it is | Claim granularity |
 |---|---|---|
-| `grill` | One-question-at-a-time dialogue with the human; a recommended answer offered each time. The default. | A whole **topic**, drained question by question |
+| `ask` | One-question-at-a-time dialogue with the human; a recommended answer offered each time. The default. | A whole **topic**, drained question by question |
 | `prototype` | Fork tournament — competing concrete artifacts to react to (below) | Single **question** (two-phase) |
 | `research` | Reading sources, docs, codebases; summary linked as evidence | Single **question**, but incidental answers are recorded on whatever questions they actually resolve |
 | `verify` | Adversarial refuters on an expensive-if-wrong claim (regulatory / SCHADS tier) | Single **question** (two-phase) |

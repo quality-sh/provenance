@@ -1,41 +1,9 @@
 use assert_cmd::Command;
-use provenance_macros::verifies;
-use provenance_store::graph_reference::{graph_digest, GraphExport};
 use serde_json::{json, Value};
 fn write_json(dir: &tempfile::TempDir, name: &str, json: impl AsRef<str>) -> String {
     let path = dir.path().join(name);
     std::fs::write(&path, json.as_ref()).unwrap();
     path.to_string_lossy().to_string()
-}
-
-/// A pinned graph carrying one source and nothing else.
-fn graph_with_source(source: &Value) -> Value {
-    json!({
-        "scope": {"id": "default", "path_prefix": "."},
-        "sources": [source],
-        "domains": [],
-        "requirements": [],
-        "boundaries": [],
-        "topics": [],
-        "questions": [],
-        "resolutions": [],
-        "rules": []
-    })
-}
-
-/// An exact-export document carrying `graph` and the digest that graph hashes
-/// to. The digest is derived here rather than written down, so no fixture
-/// claims a hash its graph does not have and each refusal below is earned by
-/// the field its test set out to break.
-fn export_document(graph: &Value) -> Value {
-    let parsed: GraphExport =
-        serde_json::from_value(graph.clone()).expect("the fixture graph is a pinned graph");
-    json!({
-        "operation": "exact-export",
-        "reference_id": format!("grf1_{}", "0".repeat(64)),
-        "graph_digest": graph_digest(&parsed).expect("a graph can be canonicalized"),
-        "graph": graph
-    })
 }
 
 #[test]
@@ -391,76 +359,4 @@ fn validate_rejects_nested_invalid_stable_ids() {
             .failure()
             .stderr(predicates::str::contains("stable id"));
     }
-}
-
-#[test]
-fn validate_rejects_forbidden_graph_reference_export_fields() {
-    let dir = tempfile::tempdir().unwrap();
-    let export = export_document(&graph_with_source(&json!({
-        "scope_id": "default",
-        "id": "source_policy",
-        "name": "Policy",
-        "source_type": "policy",
-        "url": null
-    })));
-
-    for (name, field, value) in [
-        ("collaboration", "origin_thread", json!("thread_private")),
-        ("unknown", "unexpected", json!(true)),
-    ] {
-        let mut malformed = export.clone();
-        malformed["graph"]["sources"][0][field] = value;
-        let path = write_json(
-            &dir,
-            &format!("{name}-export.json"),
-            serde_json::to_string(&malformed).unwrap(),
-        );
-
-        Command::cargo_bin("provenance")
-            .unwrap()
-            .args([
-                "validate",
-                "graph-reference-export",
-                "--input",
-                &path,
-                "--format",
-                "json",
-            ])
-            .assert()
-            .failure();
-    }
-}
-
-#[test]
-#[verifies("rule_pinned_scope_ownership", examples)]
-fn validate_rejects_graph_reference_export_records_from_another_scope() {
-    let dir = tempfile::tempdir().unwrap();
-    let export = export_document(&graph_with_source(&json!({
-        "scope_id": "other",
-        "id": "source_policy",
-        "name": "Policy",
-        "source_type": "policy",
-        "url": null
-    })));
-    let path = write_json(
-        &dir,
-        "cross-scope-export.json",
-        serde_json::to_string(&export).unwrap(),
-    );
-
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args([
-            "validate",
-            "graph-reference-export",
-            "--input",
-            &path,
-            "--format",
-            "json",
-        ])
-        .assert()
-        .failure()
-        .stderr(predicates::str::contains(
-            "source 'source_policy' belongs to scope 'other', not 'default'",
-        ));
 }

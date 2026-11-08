@@ -4,7 +4,7 @@
 
 Scopes live in `manifest.json`; shard paths derive from scope IDs. Cache files and volatile fields are forbidden in state shards.
 
-A record has one format and carries no format field. A reader ignores a field that its record type does not hold, and the pinned graph of a graph reference refuses that field. The format includes the local graph fields plus imported/cloud review metadata. Optional fields are omitted when absent, but preserved when present: domain grouping for root requirements, requirement descriptions and source references, source references/clauses/effective/review dates/commit pins/supersession lists, draft/review statuses, resolution context/enforcement/confidence/input references/actor approval/supersession lists, resolved thread status, rule name/severity/status and source-document citations, proposal confidence, and material-claim confidence.
+A record has one format and carries no format field. A reader ignores a field that its record type does not hold. The format includes the local graph fields plus imported/cloud review metadata. Optional fields are omitted when absent, but preserved when present: domain grouping for root requirements, requirement descriptions and source references, source references/clauses/effective/review dates/commit pins/supersession lists, draft/review statuses, resolution context/enforcement/confidence/input references/actor approval/supersession lists, resolved thread status, rule name/severity/status and source-document citations, proposal confidence, and material-claim confidence.
 
 Relations between records are fields on the record that makes the claim. No
 shard stores a relation row; every reverse lookup, gap, walk, and projection
@@ -151,10 +151,3 @@ finished. Files and containing directories are synced where the platform support
 `fsync`. Portable filesystems do not provide an atomic directory exchange, so the guarantee is
 not overstated as crash-atomic: cooperating access never sees missing live state, interruption is
 recoverable on next access, and any import command that returns failure leaves the old live state.
-
-A graph reference canonicalizes a selected scope into a JSON object with fixed graph
-families and records sorted by stable ID. JSON object keys are lexicographically ordered
-before SHA-256 hashing. The projection contains the selected manifest scope and its
-sources, domains, requirements, boundaries, topics, questions, resolutions, and rules;
-relations travel as the fields on those records. Threads, messages, contributions,
-synthesis packets, proposals, assertions, dispositions, and cache data are excluded.

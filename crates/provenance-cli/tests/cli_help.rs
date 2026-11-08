@@ -10,8 +10,9 @@ fn provenance() -> Command {
 #[test]
 fn top_level_help_keeps_product_commands_and_retires_the_sdk_dispatcher() {
     provenance().arg("--help").assert().success().stdout(
-        contains("docs")
-            .and(contains("graph-reference"))
+        contains("graph-reference")
+            .not()
+            .and(contains("\n  docs ").not())
             .and(contains("provenance <id> trace"))
             .and(contains("coverage"))
             .and(contains("review"))
@@ -21,7 +22,6 @@ fn top_level_help_keeps_product_commands_and_retires_the_sdk_dispatcher() {
 
 #[test]
 fn root_help_names_api_and_no_collection_command() {
-    provenance().args(["docs", "--help"]).assert().success();
     provenance().arg("--help").assert().success().stdout(
         contains("provenance api [PATH]")
             .and(contains("provenance api --filter <text>"))

@@ -70,9 +70,6 @@
         <mxCell id="g_stale" value='&lt;b&gt;stale&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;evidence gate over&lt;br&gt;base..head (git, scanner)&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="gitg">
           <mxGeometry x="15" y="35" width="210" height="90" as="geometry" />
         </mxCell>
-        <mxCell id="g_ref" value='&lt;b&gt;graph_reference&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;issue, show, verify,&lt;br&gt;exact_export at a pin&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="gitg">
-          <mxGeometry x="240" y="35" width="200" height="90" as="geometry" />
-        </mxCell>
         <mxCell id="g_rc" value='&lt;b&gt;review_changes&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;snapshot and diff of&lt;br&gt;canonical records&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="gitg">
           <mxGeometry x="15" y="140" width="210" height="80" as="geometry" />
         </mxCell>

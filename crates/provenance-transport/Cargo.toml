@@ -23,7 +23,6 @@ tempfile = { workspace = true, optional = true }
 axum.workspace = true
 camino.workspace = true
 fs2.workspace = true
-jsonschema.workspace = true
 provenance-core.workspace = true
 provenance-macros.workspace = true
 provenance-porcelain.workspace = true
@@ -48,7 +47,6 @@ walkdir.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
-jsonschema.workspace = true
 sqlx.workspace = true
 futures = "0.3"
 provenance-macros.workspace = true

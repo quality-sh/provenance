@@ -1,7 +1,7 @@
 Usage: provenance schema show [OPTIONS] <ARTIFACT>
 
 Arguments:
-  <ARTIFACT>  [possible values: contribution, synthesis-packet, proposal, assertion, disposition, graph-reference, graph-reference-export]
+  <ARTIFACT>  [possible values: contribution, synthesis-packet, proposal, assertion, disposition]
 
 Options:
       --format <FORMAT>  [default: json] [possible values: json]

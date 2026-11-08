@@ -297,7 +297,7 @@
     },
     "ResolutionMethod": {
       "enum": [
-        "grill",
+        "ask",
         "prototype",
         "research",
         "verify",

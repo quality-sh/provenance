@@ -1,21 +1,9 @@
 use super::message_ids::{ensure_unique_message_ids, ShardLine};
-use super::{
-    deserialize_closed, DispositionRecord, Message, ProvenanceLayout, ScopeId, StateEntry,
-    StateStore,
-};
+use super::{DispositionRecord, Message, ProvenanceLayout, ScopeId, StateEntry, StateStore};
 use crate::shards;
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use serde::de::DeserializeOwned;
-
-/// What a reader does with fields its structs do not know.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Fields {
-    /// Unknown fields are ignored: the reader takes what it recognises.
-    Open,
-    /// Unknown fields are refused, so a pinned graph carries nothing extra.
-    Closed,
-}
 
 /// Names the shard and its line when a stored line is not one JSON record.
 ///
@@ -29,15 +17,6 @@ pub fn located(path: &Utf8Path, line_number: usize, error: &serde_json::Error) -
         .rfind(" at line ")
         .map_or(text.as_str(), |at| &text[..at]);
     anyhow::anyhow!("{} line {line_number}: {message}", state_relative(path))
-}
-
-/// Locates a parse error from a deserializer that returns `anyhow`: a serde
-/// error loses its in-line position, any other refusal gets the shard prefix.
-fn located_any(path: &Utf8Path, line_number: usize, error: anyhow::Error) -> anyhow::Error {
-    match error.downcast::<serde_json::Error>() {
-        Ok(error) => located(path, line_number, &error),
-        Err(error) => anyhow::anyhow!("{} line {line_number}: {error}", state_relative(path)),
-    }
 }
 
 /// The shard path below the state directory, with `/` between its parts on
@@ -61,9 +40,10 @@ pub fn parse_line(
 
 /// The one place a stored line becomes a record.
 ///
-/// Every reader in this module lands here: [`read_records`] carries the open
-/// families, the closed families and the aliased legacy dispositions;
-/// [`read_message_shard_lines`] carries messages. A family that does not pass
+/// Every reader in this module lands here: [`read_records`] carries the
+/// families and the aliased legacy dispositions;
+/// [`read_message_shard_lines`] carries messages. A field that the record
+/// type does not know is ignored. A family that does not pass
 /// through this function is not read at all.
 ///
 /// The caller has already turned the line into a [`serde_json::Value`],
@@ -71,21 +51,10 @@ pub fn parse_line(
 fn record_from_line<T: DeserializeOwned>(
     path: &Utf8Path,
     line_number: usize,
-    line: &str,
     value: serde_json::Value,
-    fields: Fields,
 ) -> anyhow::Result<T> {
     ensure_no_legacy_retirement(path, line_number, &value)?;
-    match fields {
-        Fields::Open => {
-            serde_json::from_value(value).map_err(|error| located(path, line_number, &error))
-        }
-        // The closed reader needs the untouched line: `serde_ignored` reports
-        // an unknown field by walking the document as it was written.
-        Fields::Closed => {
-            deserialize_closed(line).map_err(|error| located_any(path, line_number, error))
-        }
-    }
+    serde_json::from_value(value).map_err(|error| located(path, line_number, &error))
 }
 
 /// Refuses a stored record that still holds the removed `retired` field.
@@ -112,21 +81,14 @@ pub fn ensure_no_legacy_retirement(
 
 /// How a reader turns the lines of one shard into records.
 struct Reading {
-    fields: Fields,
     prepare: fn(&mut serde_json::Value),
 }
 
 const OPEN: Reading = Reading {
-    fields: Fields::Open,
     prepare: leave_as_written,
-};
-const CLOSED: Reading = Reading {
-    fields: Fields::Closed,
-    ..OPEN
 };
 const LEGACY_DISPOSITIONS: Reading = Reading {
     prepare: normalize_disposition_aliases,
-    ..OPEN
 };
 
 /// The records of the shard at `path`, read through `store`; no records
@@ -143,13 +105,7 @@ fn read_records<T: DeserializeOwned>(
     for (index, line) in contents.lines().enumerate() {
         let mut value = parse_line(path, index + 1, line)?;
         (reading.prepare)(&mut value);
-        records.push(record_from_line(
-            path,
-            index + 1,
-            line,
-            value,
-            reading.fields,
-        )?);
+        records.push(record_from_line(path, index + 1, value)?);
     }
     Ok(records)
 }
@@ -240,13 +196,6 @@ fn rename_key(object: &mut serde_json::Map<String, serde_json::Value>, old: &str
     }
 }
 
-pub(super) fn read_jsonl_closed<T: DeserializeOwned>(
-    store: &StateStore,
-    path: &Utf8Path,
-) -> anyhow::Result<Vec<T>> {
-    store.state_path_access(path, || read_records(store, path, &CLOSED))
-}
-
 fn read_message_shard_lines<T: DeserializeOwned>(
     store: &StateStore,
     shard_paths: Vec<Utf8PathBuf>,
@@ -260,7 +209,7 @@ fn read_message_shard_lines<T: DeserializeOwned>(
         for (index, line) in contents.lines().enumerate() {
             let value = parse_line(&path, index + 1, line)?;
             records.push((
-                record_from_line(&path, index + 1, line, value, Fields::Open)?,
+                record_from_line(&path, index + 1, value)?,
                 ShardLine {
                     path: path.clone(),
                     line: index + 1,

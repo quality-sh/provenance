@@ -170,9 +170,8 @@ fn parse_catalog_limit(value: &str) -> Result<usize, String> {
     }
 }
 
-/// The root parser: the built-in commands and the word commands that it lists. `docs`
-/// follows the graph commands, and the other server commands follow the workspace
-/// commands.
+/// The root parser: the built-in commands and the word commands that it lists. The
+/// server commands follow the workspace commands.
 pub fn root_command() -> clap::Command {
     let shown = |command: &registry::Command| provenance_cli::exposed::shows(*command);
     let listed = |filter: fn(&registry::Command) -> bool| {
@@ -181,12 +180,9 @@ pub fn root_command() -> clap::Command {
             .filter(move |command| shown(command) && filter(command))
             .map(|command| command.declaration())
     };
-    let servers = |filter: fn(provenance_cli::servers::Server) -> bool| {
-        provenance_cli::servers::SERVERS
-            .iter()
-            .filter(move |server| filter(**server))
-            .map(|server| server.declaration())
-    };
+    let servers = provenance_cli::servers::SERVERS
+        .iter()
+        .map(|server| server.declaration());
     [
         registry::Command::Search,
         registry::Command::Check,
@@ -200,19 +196,14 @@ pub fn root_command() -> clap::Command {
             registry::Command::Repository(_) | registry::Command::Graph(_)
         )
     }))
-    .chain(servers(is_docs))
     .chain(listed(|command| {
         matches!(command, registry::Command::Workspace(_))
     }))
-    .chain(servers(|server| !is_docs(server)))
+    .chain(servers)
     .chain(listed(|command| {
         matches!(command, registry::Command::Dogfood(_))
     }))
     .fold(crate::cli::Cli::command(), add_subcommand)
-}
-
-fn is_docs(server: provenance_cli::servers::Server) -> bool {
-    server == provenance_cli::servers::Server::DocsServe
 }
 
 /// Adds one word command to `root` under its words, as `provenance <words...>` shows it.
