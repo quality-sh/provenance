@@ -257,6 +257,19 @@ pub trait StateStorage: Send + Sync + std::fmt::Debug {
     fn publish(&self, writes: WriteSet) -> Result<Revision, PublishFailure>;
 }
 
+/// The section that serializes the engine's access to one repository's
+/// canonical state.
+///
+/// The engine holds the section while it reads a view and publishes the
+/// write sets decided on that view. A second acquire waits until the first
+/// section ends. Each adapter names the lock that it needs: the local-disk
+/// adapter a lock file and recovery, the memory adapter a lock in the
+/// process.
+pub trait SectionLock: Send + Sync + std::fmt::Debug {
+    /// Holds the section until the returned value drops.
+    fn acquire(&self) -> anyhow::Result<Box<dyn Send>>;
+}
+
 /// Where an adapter that holds canonical state in memory keeps each write
 /// set, such as a database of the host.
 ///

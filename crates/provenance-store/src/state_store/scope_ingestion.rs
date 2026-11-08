@@ -4,7 +4,6 @@ use super::{
     serde_name, Access, IdeationLandingBatch, StateStore,
 };
 use crate::cache::{BudgetKind, ProjectionFamily, RecordFamily};
-use crate::jsonl::write_jsonl_atomic_under_publication;
 use crate::shards;
 use provenance_core::{
     AssertionRecord, Contribution, DispositionRecord, NodeType, ProposalCard, ScopeId,
@@ -182,7 +181,7 @@ macro_rules! ensure_binding_assignable {
 
 macro_rules! write_family {
     ($store:ident, $scope:ident, $shards:ident, $variant:ident, $field:ident) => {
-        write_jsonl_atomic_under_publication(
+        $store.put_jsonl_records(
             &ProjectionFamily::$variant.shard_path(&$store.layout, $scope),
             $shards.$field,
         )?;
@@ -302,10 +301,9 @@ macro_rules! define_imported_scope_shards {
                     super::resolution_decisions::ensure_resolution_decisions(
                         shards.resolutions, &[], shards.questions, shards.rules,
                     )?;
-                    let scope_dir = store.layout.scopes_dir().join(scope.as_str());
-                    if scope_dir.exists() {
-                        std::fs::remove_dir_all(&scope_dir)?;
-                    }
+                    store.delete_state_keys_under(
+                        &store.layout.scopes_dir().join(scope.as_str()),
+                    )?;
                     $(write_family!(store, scope, shards, $export_variant, $export_field);)*
                     $(write_binding!(
                         verification, store, scope, shards, $binding_variant,

@@ -1,6 +1,7 @@
 //! The owned publication guard.
 //!
-//! The guard owns the open lock file. The lock belongs to that file
+//! The guard owns what the section lock of its repository gave it: for the
+//! local-disk adapter, the open lock file. That lock belongs to the file
 //! description and not to a thread, so a holder may await while it is held.
 //! Helpers that need the lock take `&PublicationGuard`.
 //!
@@ -11,55 +12,22 @@
 //! reach this. A served process must move synchronous publication sections
 //! to `spawn_blocking` or make them async first.
 
-use super::{
-    prepare_publication_lock, prepare_transaction_dirs, recover_pending_publication,
-    source_edit_recovery,
-};
 use crate::layout::ProvenanceLayout;
 use crate::repository::Repository;
-use anyhow::Context;
-use camino::Utf8Path;
-use fs2::FileExt;
+use crate::state_store::SectionView;
+#[cfg(test)]
+pub(super) use crate::storage::local::LockedPublicationFile;
 use provenance_macros::rule;
-use std::fs::{File, OpenOptions};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-
-/// An advisory lock on an open publication lock file. Released on drop.
-pub(super) struct LockedPublicationFile {
-    file: File,
-}
-
-impl LockedPublicationFile {
-    pub(super) fn acquire(path: &Utf8Path) -> anyhow::Result<Self> {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(path)
-            .with_context(|| format!("open publication lock {path}"))?;
-        file.lock_exclusive()
-            .with_context(|| format!("acquire publication lock {path}"))?;
-        Ok(Self { file })
-    }
-}
-
-impl Drop for LockedPublicationFile {
-    fn drop(&mut self) {
-        let _ = fs2::FileExt::unlock(&self.file);
-    }
-}
 
 /// A held publication lock.
 ///
 /// A guard of a repository that already holds a section holds no second
 /// lock. The private fields restrict construction to this module.
 pub struct PublicationGuard {
-    _lock: Option<LockedPublicationFile>,
+    // The mutex makes the guard `Sync`, so a holder can borrow it across an await.
+    _lock: Option<std::sync::Mutex<Box<dyn Send>>>,
     repository: Repository,
 }
 
@@ -84,9 +52,15 @@ impl PublicationGuard {
 #[derive(Clone, Debug)]
 pub struct SectionHandle {
     open: Arc<AtomicBool>,
+    view: Arc<SectionView>,
 }
 
 impl SectionHandle {
+    /// The view that the stores of this section read and write.
+    pub(crate) fn view(&self) -> Arc<SectionView> {
+        Arc::clone(&self.view)
+    }
+
     /// Refuses after the section ended.
     #[rule("rule_section_repository_stops_with_its_section")]
     pub(crate) fn ensure_open(&self) -> anyhow::Result<()> {
@@ -121,9 +95,11 @@ pub fn with_publication_guard<R>(
             repository: repository.clone(),
         });
     }
-    super::with_repository_publication(repository.layout(), |_| {
+    let lock = repository.section_lock();
+    super::with_section(repository.layout(), lock.as_ref(), || {
         let section = SectionHandle {
             open: Arc::new(AtomicBool::new(true)),
+            view: Arc::default(),
         };
         let _close = SectionClose(section.clone());
         operation(&PublicationGuard {
@@ -153,17 +129,9 @@ pub async fn publication_guard(repository: &Repository) -> anyhow::Result<Public
     }
     let repository = repository.clone();
     tokio::task::spawn_blocking(move || {
-        let lock = {
-            let layout = repository.layout();
-            prepare_publication_lock(layout)?;
-            let lock = LockedPublicationFile::acquire(&layout.publication_lock_path())?;
-            prepare_transaction_dirs(layout)?;
-            source_edit_recovery::recover_pending_source_edit(layout)?;
-            recover_pending_publication(layout)?;
-            lock
-        };
+        let lock = repository.section_lock().acquire()?;
         Ok(PublicationGuard {
-            _lock: Some(lock),
+            _lock: Some(std::sync::Mutex::new(lock)),
             repository,
         })
     })

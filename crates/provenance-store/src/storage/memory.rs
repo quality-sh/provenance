@@ -5,12 +5,12 @@
 //! with no persistence.
 
 use super::{
-    Atomicity, PublishFailure, Revision, StateKey, StatePersistence, StateStorage, StateView,
-    StorageError, WriteSet,
+    Atomicity, PublishFailure, Revision, SectionLock, StateKey, StatePersistence, StateStorage,
+    StateView, StorageError, WriteSet,
 };
 use provenance_macros::rule;
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Condvar, Mutex, PoisonError};
 
 /// Canonical state in memory. One mutex serializes every call. A set with no
 /// failing key lands whole, which satisfies a per-key set too.
@@ -116,6 +116,39 @@ impl StateStorage for MemoryStateStorage {
         self.persist(&writes)?;
         state.entries = landed;
         Ok(Revision::of(&state.entries))
+    }
+}
+
+/// The section of a repository whose state is in memory: a lock in the
+/// process. A clone shares the lock.
+#[derive(Clone, Debug, Default)]
+pub struct MemorySectionLock {
+    held: Arc<(Mutex<bool>, Condvar)>,
+}
+
+impl SectionLock for MemorySectionLock {
+    fn acquire(&self) -> anyhow::Result<Box<dyn Send>> {
+        let (held, released) = &*self.held;
+        let mut held = released
+            .wait_while(
+                held.lock().unwrap_or_else(PoisonError::into_inner),
+                |held| *held,
+            )
+            .unwrap_or_else(PoisonError::into_inner);
+        *held = true;
+        drop(held);
+        Ok(Box::new(MemorySection(Arc::clone(&self.held))))
+    }
+}
+
+/// A held memory section. Released on drop.
+struct MemorySection(Arc<(Mutex<bool>, Condvar)>);
+
+impl Drop for MemorySection {
+    fn drop(&mut self) {
+        let (held, released) = &*self.0;
+        *held.lock().unwrap_or_else(PoisonError::into_inner) = false;
+        released.notify_one();
     }
 }
 

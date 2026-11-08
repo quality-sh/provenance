@@ -184,8 +184,7 @@ pub fn a_failed_per_key_set_leaves_a_landed_prefix<H: Harness>(mut harness: H) {
     assert_eq!(read(&harness).entries(), &prefix);
 }
 
-/// A whole set of two keys lands both keys. Only an adapter that lands
-/// whole sets runs this case; the local adapter refuses the set.
+/// A whole set of two keys lands both keys.
 pub fn a_two_key_whole_set_lands_both_keys<H: Harness>(mut harness: H) {
     harness.seed(&[("manifest.json", b"{}")]);
     let writes = WriteSet::new(Atomicity::WholeSet)
@@ -200,11 +199,10 @@ pub fn a_two_key_whole_set_lands_both_keys<H: Harness>(mut harness: H) {
 
 /// A whole set of several keys that fails partway rolls back: no key lands.
 ///
-/// The local adapter cannot run this case. It refuses a whole set of more
-/// than one key before any key lands, until the staged publication path
-/// moves behind the port. The Durable Object adapter must run it: a
-/// statement that fails inside its transaction rolls back every earlier
-/// statement of the set.
+/// The local adapter lands the set on a copy of the state directory, so a
+/// key that fails leaves the live directory as it was. The Durable Object
+/// adapter must run it too: a statement that fails inside its transaction
+/// rolls back every earlier statement of the set.
 pub fn a_failed_whole_set_lands_no_key<H: Harness>(mut harness: H) {
     harness.seed(&[("manifest.json", b"{}")]);
     harness.break_key(B);
@@ -218,54 +216,15 @@ pub fn a_failed_whole_set_lands_no_key<H: Harness>(mut harness: H) {
 }
 
 #[cfg(all(test, feature = "host"))]
+mod local_harness;
+
+#[cfg(all(test, feature = "host"))]
 mod tests {
+    use super::local_harness::local;
     use super::persisting::Persisting;
     use super::*;
-    use crate::layout::ProvenanceLayout;
-    use crate::storage::local::LocalStateStorage;
     use crate::storage::memory::MemoryStateStorage;
-    use camino::Utf8Path;
     use provenance_macros::verifies;
-
-    struct Local {
-        _temp: tempfile::TempDir,
-        layout: ProvenanceLayout,
-        storage: LocalStateStorage,
-    }
-
-    fn local() -> Local {
-        let temp = tempfile::tempdir().unwrap();
-        let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
-        Local {
-            storage: LocalStateStorage::new(layout.clone()),
-            layout,
-            _temp: temp,
-        }
-    }
-
-    impl Harness for Local {
-        fn seed(&mut self, entries: &[(&str, &[u8])]) {
-            for (key, bytes) in entries {
-                let path = self.layout.state_dir().join(key);
-                std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-                std::fs::write(path, bytes).unwrap();
-            }
-        }
-
-        fn with_storage<R>(&self, call: impl FnOnce(&dyn StateStorage) -> R) -> R {
-            crate::publication::with_repository_publication(&self.layout, |_| {
-                Ok(call(&self.storage))
-            })
-            .unwrap()
-        }
-
-        /// A directory in the place of the file makes its rename fail.
-        fn break_key(&mut self, key: &str) {
-            let path = self.layout.state_dir().join(key);
-            std::fs::create_dir_all(&path).unwrap();
-            std::fs::write(path.join("keep"), b"").unwrap();
-        }
-    }
 
     #[derive(Default)]
     struct Memory {
@@ -338,30 +297,14 @@ mod tests {
 
     #[test]
     #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
-    fn memory_lands_a_two_key_whole_set_and_rolls_back_a_failed_one() {
+    #[verifies("rule_stage_lands_as_one_whole_set", examples)]
+    fn each_adapter_lands_a_two_key_whole_set_and_rolls_back_a_failed_one() {
+        a_two_key_whole_set_lands_both_keys(local());
+        a_failed_whole_set_lands_no_key(local());
         a_two_key_whole_set_lands_both_keys(Memory::default());
         a_failed_whole_set_lands_no_key(Memory::default());
         a_two_key_whole_set_lands_both_keys(Persisting::default());
         a_failed_whole_set_lands_no_key(Persisting::default());
-    }
-
-    /// The local adapter cannot run the whole-set cases; see
-    /// [`a_failed_whole_set_lands_no_key`]. It refuses the set instead, and
-    /// no key lands.
-    #[test]
-    #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
-    fn local_refuses_a_multi_key_whole_set() {
-        let mut harness = local();
-        harness.seed(&[("manifest.json", b"{}")]);
-        let before = read(&harness);
-        let writes = WriteSet::new(Atomicity::WholeSet)
-            .put(key(A), b"a".to_vec())
-            .put(key(B), b"b".to_vec());
-        assert!(matches!(
-            publish(&harness, writes),
-            Err(PublishFailure::Refused(_))
-        ));
-        assert_eq!(read(&harness), before);
     }
 
     #[test]
