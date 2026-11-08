@@ -1,5 +1,6 @@
 use assert_cmd::Command;
-use serde_json::{json, Value};
+use serde_json::json;
+
 fn write_json(dir: &tempfile::TempDir, name: &str, json: impl AsRef<str>) -> String {
     let path = dir.path().join(name);
     std::fs::write(&path, json.as_ref()).unwrap();
