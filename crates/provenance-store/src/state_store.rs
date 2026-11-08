@@ -165,6 +165,9 @@ enum Storage {
     Shared {
         storage: std::sync::Arc<dyn crate::storage::StateStorage>,
         lock: std::sync::Arc<dyn crate::storage::SectionLock>,
+        /// Whether the adapter is the local adapter of the layout of the
+        /// store, so that a working-tree file can land with the state.
+        local: bool,
     },
 }
 

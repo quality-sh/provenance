@@ -11,6 +11,8 @@ use provenance_core::{
     SourceType, StableId, VerificationMethod,
 };
 use provenance_macros::verifies;
+use provenance_store::operations::files::RepositoryFiles;
+use provenance_store::publication::with_staged_state_and_source_edit;
 use provenance_store::repository::{Repository, RepositoryIdentity};
 use provenance_store::settings::Settings;
 use provenance_store::state_store::{
@@ -120,19 +122,24 @@ fn memory_repository() -> MemoryRepository {
     }
 }
 
+/// The binding of the Rule with the key `share-link-expiry` in `file`.
+fn binding(file: &str) -> MaterializeVerificationBindingInput {
+    MaterializeVerificationBindingInput {
+        scope_id: scope(),
+        rule_id: id("rule_expiry"),
+        key: "share-link-expiry".into(),
+        method: VerificationMethod::Examples,
+        declared_by: "test://typescript".into(),
+        file: file.into(),
+        symbol: None,
+    }
+}
+
 /// Makes or changes the binding of the Rule with the key `share-link-expiry`.
 fn bind(repository: &Repository, file: &str) {
     repository
         .store()
-        .materialize_verification_binding(MaterializeVerificationBindingInput {
-            scope_id: scope(),
-            rule_id: id("rule_expiry"),
-            key: "share-link-expiry".into(),
-            method: VerificationMethod::Examples,
-            declared_by: "test://typescript".into(),
-            file: file.into(),
-            symbol: None,
-        })
+        .materialize_verification_binding(binding(file))
         .unwrap();
 }
 
@@ -353,4 +360,82 @@ fn a_repository_over_memory_makes_changes_and_imports_records_in_stages() {
         replayed(&memory.recorded).revision(),
         memory.storage.read_view().unwrap().revision()
     );
+}
+
+/// Implementation aid: no proposed Rule of the plan covers the section view
+/// after a refused write. This test shows that a change outside the engine
+/// refuses one write of a section and that the next write of the same
+/// section reads the changed state and lands.
+#[test]
+fn a_section_reads_the_state_again_after_a_moved_base() {
+    let memory = memory_repository();
+    let store = memory.repository.store();
+    store
+        .with_repository_publication(|section| {
+            section.materialize_verification_binding(binding("tests/first.test.ts"))?;
+
+            let manifest = StateKey::new("manifest.json").unwrap();
+            let mut bytes = initial_state().get(&manifest).unwrap().to_vec();
+            bytes.push(b'\n');
+            memory
+                .storage
+                .publish(WriteSet::new(Atomicity::PerKey).put(manifest, bytes))
+                .unwrap();
+
+            let refused = section
+                .materialize_verification_binding(binding("tests/second.test.ts"))
+                .unwrap_err();
+            assert!(
+                matches!(
+                    refused.downcast_ref::<PublishFailure>(),
+                    Some(PublishFailure::BaseMoved { .. })
+                ),
+                "the write after the outside change is refused: {refused:#}"
+            );
+            section.materialize_verification_binding(binding("tests/third.test.ts"))?;
+            Ok(())
+        })
+        .unwrap();
+
+    let bindings = memory
+        .repository
+        .view()
+        .unwrap()
+        .list_verification_bindings(&scope())
+        .unwrap();
+    assert_eq!(bindings.len(), 1);
+    assert_eq!(bindings[0].file.as_str(), "tests/third.test.ts");
+}
+
+#[test]
+#[verifies("rule_engine_runs_on_any_storage", examples)]
+fn a_source_edit_on_a_memory_repository_needs_the_local_adapter() {
+    let memory = memory_repository();
+    let root = camino::Utf8PathBuf::from_path_buf(dunce::canonicalize(memory.root.path()).unwrap())
+        .unwrap();
+    std::fs::write(root.join("source.txt"), b"before\n").unwrap();
+    let held = RepositoryFiles::open(&root)
+        .unwrap()
+        .read_bounded(camino::Utf8Path::new("source.txt"), 1024)
+        .unwrap();
+    let before = memory.storage.read_view().unwrap();
+
+    let refused = memory
+        .repository
+        .store()
+        .with_repository_publication(|section| {
+            with_staged_state_and_source_edit(section, held, b"after\n", |_| Ok(()))
+        })
+        .unwrap_err();
+
+    assert!(
+        refused
+            .to_string()
+            .contains("needs the local storage adapter"),
+        "the refusal names the adapter: {refused:#}"
+    );
+    assert!(refused.downcast_ref::<PublishFailure>().is_none());
+    assert_eq!(memory.storage.read_view().unwrap(), before);
+    assert!(memory.recorded.0.lock().unwrap().is_empty());
+    assert_eq!(std::fs::read(root.join("source.txt")).unwrap(), b"before\n");
 }

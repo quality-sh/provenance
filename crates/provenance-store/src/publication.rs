@@ -288,8 +288,14 @@ impl crate::state_store::StateStore {
         if let Some(view) = view {
             match &landed {
                 Ok(_) => view.apply(&writes),
-                Err(crate::storage::PublishFailure::Started(_)) => view.forget(),
-                Err(_) => {}
+                // A started set can have landed in part, and a moved base
+                // means that the state changed outside the section. Either
+                // way, the next read of the section reads the state again.
+                Err(
+                    crate::storage::PublishFailure::Started(_)
+                    | crate::storage::PublishFailure::BaseMoved { .. },
+                ) => view.forget(),
+                Err(crate::storage::PublishFailure::Refused(_)) => {}
             }
         }
         landed

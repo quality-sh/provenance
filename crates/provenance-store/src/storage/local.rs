@@ -9,14 +9,14 @@ use camino::Utf8Path;
 use std::collections::BTreeMap;
 use std::io::Write;
 
-pub mod durability;
+pub(crate) mod durability;
 #[cfg(any(unix, windows))]
 mod file_install;
 mod recovery;
 mod section;
-pub mod whole_set;
+pub(crate) mod whole_set;
 #[cfg(any(unix, windows))]
-pub use file_install::FileInstall;
+pub(crate) use file_install::FileInstall;
 pub use recovery::{
     clear_publication_marker, recover_pending_publication, write_publication_marker,
     PublicationPhase,
@@ -71,7 +71,7 @@ impl StateStorage for LocalStateStorage {
     ///
     /// A per-key set lands each key with a temporary file and a rename, in
     /// key order. A whole set lands as one swap of the state directory; see
-    /// [`whole_set`].
+    /// `whole_set`.
     fn publish(&self, writes: WriteSet) -> Result<Revision, PublishFailure> {
         self.publish_with(&writes, &mut whole_set::StatePublication)
     }

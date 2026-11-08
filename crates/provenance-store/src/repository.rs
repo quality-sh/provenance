@@ -35,6 +35,9 @@ struct Inner {
     layout: ProvenanceLayout,
     storage: Arc<dyn StateStorage>,
     section_lock: Arc<dyn SectionLock>,
+    /// Whether `storage` is the local adapter of `layout`, which `open`
+    /// makes.
+    local: bool,
 }
 
 /// What a repository is, apart from where its state lives.
@@ -145,6 +148,7 @@ impl Repository {
             RepositoryIdentity::new(root, scope, settings),
             Arc::new(LocalStateStorage::new(layout.clone())),
             Arc::new(LocalSectionLock::new(layout)),
+            true,
         ))
     }
 
@@ -170,13 +174,14 @@ impl Repository {
         let manifest = crate::state_store::manifest_from_bytes(manifest)
             .map_err(|error| OpenFailure::Io(error.context("failed to parse the manifest")))?;
         declared_scope(&manifest, identity.scope().as_str())?;
-        Ok(Self::with_parts(identity, storage, lock))
+        Ok(Self::with_parts(identity, storage, lock, false))
     }
 
     fn with_parts(
         identity: RepositoryIdentity,
         storage: Arc<dyn StateStorage>,
         section_lock: Arc<dyn SectionLock>,
+        local: bool,
     ) -> Self {
         Self {
             inner: Arc::new(Inner {
@@ -184,6 +189,7 @@ impl Repository {
                 identity,
                 storage,
                 section_lock,
+                local,
             }),
             section: None,
         }
@@ -280,7 +286,14 @@ impl Repository {
             self.section.clone(),
             Arc::clone(self.storage()),
             Arc::clone(self.section_lock()),
+            self.has_local_storage(),
         )
+    }
+
+    /// Whether the repository keeps its state in the local adapter of its
+    /// working tree.
+    pub(crate) fn has_local_storage(&self) -> bool {
+        self.inner.local
     }
 
     /// The storage that holds the canonical state of this repository.
@@ -311,6 +324,7 @@ impl Repository {
             Arc::new(view),
             Arc::clone(self.storage()),
             Arc::clone(self.section_lock()),
+            self.has_local_storage(),
         ))
     }
 

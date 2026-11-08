@@ -38,10 +38,15 @@ impl StateStore {
         section: Option<crate::publication::SectionHandle>,
         storage: Arc<dyn StateStorage>,
         lock: Arc<dyn SectionLock>,
+        local: bool,
     ) -> Self {
         Self {
             identity: Some(identity),
-            storage: Storage::Shared { storage, lock },
+            storage: Storage::Shared {
+                storage,
+                lock,
+                local,
+            },
             layout,
             access: section.map_or(Access::Lock, |until| Access::Section {
                 view: Some(until.view()),
@@ -88,10 +93,15 @@ impl StateStore {
         view: Arc<StateView>,
         storage: Arc<dyn StateStorage>,
         lock: Arc<dyn SectionLock>,
+        local: bool,
     ) -> Self {
         Self {
             identity: Some(identity),
-            storage: Storage::Shared { storage, lock },
+            storage: Storage::Shared {
+                storage,
+                lock,
+                local,
+            },
             layout,
             access: Access::View(view),
             record_stamp: RecordStamp::ResolveFromRepository,
@@ -228,6 +238,21 @@ impl StateStore {
         }
     }
 
+    /// The local adapter of the layout of this store, which lands a
+    /// working-tree file with the state. A store of a repository on another
+    /// adapter is refused.
+    pub(crate) fn local_storage(&self) -> anyhow::Result<LocalStateStorage> {
+        match &self.storage {
+            Storage::Layout | Storage::Shared { local: true, .. } => {
+                Ok(LocalStateStorage::new(self.layout.clone()))
+            }
+            Storage::Shared { local: false, .. } => Err(anyhow::anyhow!(
+                "this operation needs the local storage adapter, because it changes a file in \
+                 the working tree; this repository keeps its state in another adapter"
+            )),
+        }
+    }
+
     /// Runs `run` with this staged store and a permission to change the
     /// enrolled rows of `id` (or of every id, `*`) in `paths`. A live store,
     /// also one that holds the section, is refused: a review write runs in a
@@ -301,6 +326,7 @@ impl StateStore {
                 storage: Storage::Shared {
                     storage: Arc::clone(guard.repository().storage()),
                     lock: Arc::clone(guard.repository().section_lock()),
+                    local: guard.repository().has_local_storage(),
                 },
                 layout: guard.repository().layout().clone(),
                 access: Access::Section {
