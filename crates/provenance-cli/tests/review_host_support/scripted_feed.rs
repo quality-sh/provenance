@@ -17,6 +17,27 @@ use std::{
 };
 use tokio::sync::{mpsc, oneshot};
 
+/// Waits until the fixture server answers its identity route.
+///
+/// The server thread starts its runtime after `start` binds the listener. The CLI
+/// identity check has a 200 ms deadline and removes a registration that does not
+/// answer in time. Thus a CLI that starts before the runtime serves can find no
+/// host on a busy runner.
+fn wait_until_serving(endpoint: &str) {
+    let agent = ureq::AgentBuilder::new()
+        .timeout(std::time::Duration::from_secs(1))
+        .build();
+    let url = format!("{endpoint}{IDENTITY_ROUTE}");
+    let deadline = std::time::Instant::now() + super::waits::LIMIT;
+    while agent.get(&url).call().is_err() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the fixture host did not answer {url} within 60 seconds"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
 pub struct Feed {
     pub epoch: String,
     sender: mpsc::UnboundedSender<Value>,
@@ -77,6 +98,7 @@ impl Feed {
                     .with_graceful_shutdown(async { let _ = stopped.await; }).await.unwrap();
             });
         });
+        wait_until_serving(&endpoint);
         Self {
             epoch,
             sender,
@@ -173,6 +195,7 @@ impl Stalled {
                     }
                 });
         });
+        wait_until_serving(&endpoint);
         Self {
             connecting,
             stop: Some(stop),

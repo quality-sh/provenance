@@ -5,8 +5,12 @@
 use provenance_macros::verifies;
 use std::fs;
 
+/// The workflow text with LF line ends. A Windows checkout can convert the
+/// file to CRLF, and the job and filter markers below expect LF.
 fn workflow() -> String {
-    fs::read_to_string(workspace_root().join(".github/workflows/ci.yml")).unwrap()
+    fs::read_to_string(workspace_root().join(".github/workflows/ci.yml"))
+        .unwrap()
+        .replace("\r\n", "\n")
 }
 
 fn workspace_root() -> std::path::PathBuf {

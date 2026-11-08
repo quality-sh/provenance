@@ -13,8 +13,8 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
-/// The workflow text with `\n` line ends, as a Windows checkout can have
-/// `\r\n`.
+/// The workflow text with LF line ends. A Windows checkout can convert the
+/// file to CRLF, and the job and filter markers below expect LF.
 fn workflow() -> String {
     fs::read_to_string(workspace_root().join(".github/workflows/ci.yml"))
         .unwrap()
