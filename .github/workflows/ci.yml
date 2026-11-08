@@ -120,6 +120,8 @@ jobs:
               - "Cargo.toml"
               - "Cargo.lock"
               - ".config/nextest.toml"
+              # The crate dependency test and the wasm kernel job read the policy.
+              - ".config/crate-dependencies.json"
               - "examples/rust-sdk/**"
               # Skill files are Rust inputs: the build script copies the root
               # sources into the binary, and tests install them.
@@ -1505,7 +1507,8 @@ jobs:
           CARGO_HTTP_CHECK_REVOKE: ${{ runner.os == 'Windows' && 'false' || 'true' }}
         run: sfw cargo fetch --locked
       # git_process::tests runs the Windows check that Git starts without a console window.
-      - run: cargo test --locked -p provenance-store --target ${{ matrix.target }} -- operations::files git_process::tests
+      # The tests need the engine, which only the host feature builds.
+      - run: cargo test --locked -p provenance-store --features host --target ${{ matrix.target }} -- operations::files git_process::tests
 
   skills-install:
     timeout-minutes: 60
@@ -1539,6 +1542,48 @@ jobs:
         run: sfw cargo fetch --locked
       - name: Test public skill installation and init
         run: cargo test --locked -p provenance-cli --test cli_skills --test cli_skills_copy_tree --test cli_skills_build_source --test cli_skills_cleanup --test cli_init_onboarding --test cli_init_summary
+
+  wasm-kernel:
+    timeout-minutes: 30
+    name: Wasm kernel
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      # The kernel crates and their target come from the crate dependency policy,
+      # so a crate that joins the kernel there is checked here too.
+      - name: Read the kernel crates from the policy
+        id: kernel
+        run: |
+          echo "target=$(jq -r '.kernel.target' .config/crate-dependencies.json)" >> "$GITHUB_OUTPUT"
+          echo "crates=$(jq -r '.kernel.crates | join(" ")' .config/crate-dependencies.json)" >> "$GITHUB_OUTPUT"
+      - name: Add the target
+        env:
+          TARGET: ${{ steps.kernel.outputs.target }}
+        run: rustup target add "$TARGET"
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: wasm-kernel
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Fetch crates through Socket Firewall
+        run: sfw cargo fetch --locked
+      # One check per crate: a check of two crates together merges their
+      # features, and that can hide a host feature that one of them turns on.
+      - name: Check each kernel crate for the target with default features
+        env:
+          TARGET: ${{ steps.kernel.outputs.target }}
+          CRATES: ${{ steps.kernel.outputs.crates }}
+        run: |
+          for crate in $CRATES; do
+            echo "::group::$crate"
+            cargo check --locked -p "$crate" --target "$TARGET"
+            echo "::endgroup::"
+          done
 
   # The one status the branch ruleset requires. Conditional jobs skip when a
   # pull request leaves their inputs untouched, and a skipped matrix job never
@@ -1575,6 +1620,7 @@ jobs:
       - operation-contract
       - repository-file-access
       - skills-install
+      - wasm-kernel
     if: always()
     runs-on: ubuntu-24.04
     steps:

@@ -217,8 +217,9 @@ pub fn a_failed_whole_set_lands_no_key<H: Harness>(mut harness: H) {
     assert_eq!(read(&harness), before);
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "host"))]
 mod tests {
+    use super::persisting::Persisting;
     use super::*;
     use crate::layout::ProvenanceLayout;
     use crate::storage::local::LocalStateStorage;
@@ -289,44 +290,50 @@ mod tests {
 
     #[test]
     #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
-    fn both_adapters_publish_lands_puts_and_deletes() {
+    fn each_adapter_publish_lands_puts_and_deletes() {
         publish_lands_puts_and_deletes(local());
         publish_lands_puts_and_deletes(Memory::default());
+        publish_lands_puts_and_deletes(Persisting::default());
     }
 
     #[test]
     #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
-    fn both_adapters_publish_on_the_current_base_lands() {
+    fn each_adapter_publish_on_the_current_base_lands() {
         publish_on_the_current_base_lands(local());
         publish_on_the_current_base_lands(Memory::default());
+        publish_on_the_current_base_lands(Persisting::default());
     }
 
     #[test]
     #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
-    fn both_adapters_publish_on_a_moved_base_is_refused() {
+    fn each_adapter_publish_on_a_moved_base_is_refused() {
         publish_on_a_moved_base_is_refused(local());
         publish_on_a_moved_base_is_refused(Memory::default());
+        publish_on_a_moved_base_is_refused(Persisting::default());
     }
 
     #[test]
     #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
-    fn both_adapters_publish_refuses_a_put_and_delete_of_one_key() {
+    fn each_adapter_publish_refuses_a_put_and_delete_of_one_key() {
         publish_refuses_a_put_and_delete_of_one_key(local());
         publish_refuses_a_put_and_delete_of_one_key(Memory::default());
+        publish_refuses_a_put_and_delete_of_one_key(Persisting::default());
     }
 
     #[test]
     #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
-    fn both_adapters_a_failed_one_key_set_lands_nothing() {
+    fn each_adapter_a_failed_one_key_set_lands_nothing() {
         a_failed_one_key_set_lands_nothing(local());
         a_failed_one_key_set_lands_nothing(Memory::default());
+        a_failed_one_key_set_lands_nothing(Persisting::default());
     }
 
     #[test]
     #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
-    fn both_adapters_a_failed_per_key_set_leaves_a_landed_prefix() {
+    fn each_adapter_a_failed_per_key_set_leaves_a_landed_prefix() {
         a_failed_per_key_set_leaves_a_landed_prefix(local());
         a_failed_per_key_set_leaves_a_landed_prefix(Memory::default());
+        a_failed_per_key_set_leaves_a_landed_prefix(Persisting::default());
     }
 
     #[test]
@@ -334,6 +341,8 @@ mod tests {
     fn memory_lands_a_two_key_whole_set_and_rolls_back_a_failed_one() {
         a_two_key_whole_set_lands_both_keys(Memory::default());
         a_failed_whole_set_lands_no_key(Memory::default());
+        a_two_key_whole_set_lands_both_keys(Persisting::default());
+        a_failed_whole_set_lands_no_key(Persisting::default());
     }
 
     /// The local adapter cannot run the whole-set cases; see
@@ -357,34 +366,24 @@ mod tests {
 
     #[test]
     #[verifies("rule_canonical_state_is_read_as_one_view", examples)]
-    fn local_view_returns_every_key_with_its_bytes() {
+    fn each_adapter_view_returns_every_key_with_its_bytes() {
         view_returns_every_key_with_its_bytes(local());
-    }
-
-    #[test]
-    #[verifies("rule_canonical_state_is_read_as_one_view", examples)]
-    fn memory_view_returns_every_key_with_its_bytes() {
         view_returns_every_key_with_its_bytes(Memory::default());
+        view_returns_every_key_with_its_bytes(Persisting::default());
     }
 
     #[test]
-    fn local_empty_state_reads_as_an_empty_view() {
+    fn each_adapter_reads_an_empty_state_as_an_empty_view() {
         empty_state_reads_as_an_empty_view(&local());
-    }
-
-    #[test]
-    fn memory_empty_state_reads_as_an_empty_view() {
         empty_state_reads_as_an_empty_view(&Memory::default());
+        empty_state_reads_as_an_empty_view(&Persisting::default());
     }
 
     #[test]
-    fn local_revision_follows_every_key_and_byte() {
+    fn each_adapter_revision_follows_every_key_and_byte() {
         revision_follows_every_key_and_byte(local());
-    }
-
-    #[test]
-    fn memory_revision_follows_every_key_and_byte() {
         revision_follows_every_key_and_byte(Memory::default());
+        revision_follows_every_key_and_byte(Persisting::default());
     }
 
     /// A symbolic link in the state directory is not a state file.
@@ -414,5 +413,87 @@ mod tests {
         std::fs::write(&runs, b"{}\n").unwrap();
         let view = read(&harness);
         assert_eq!(view.entries(), &expected(&[("manifest.json", b"{}")]));
+    }
+}
+
+/// The memory adapter with a persistence that keeps each write set and can
+/// refuse one.
+#[cfg(test)]
+mod persisting {
+    use super::*;
+    use crate::storage::memory::MemoryStateStorage;
+    use crate::storage::StatePersistence;
+    use provenance_macros::verifies;
+    use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Debug, Default)]
+    struct Kept {
+        sets: Mutex<Vec<WriteSet>>,
+        refuse: AtomicBool,
+    }
+
+    impl StatePersistence for Kept {
+        fn persist(&self, writes: &WriteSet) -> Result<(), PublishFailure> {
+            if self.refuse.load(SeqCst) {
+                return Err(PublishFailure::Refused(anyhow::anyhow!("refused")));
+            }
+            self.sets.lock().unwrap().push(writes.clone());
+            Ok(())
+        }
+    }
+
+    #[derive(Default)]
+    pub struct Persisting {
+        kept: Arc<Kept>,
+        storage: MemoryStateStorage,
+    }
+
+    impl Harness for Persisting {
+        fn seed(&mut self, entries: &[(&str, &[u8])]) {
+            let mut state = self.storage.read_view().unwrap().into_entries();
+            state.extend(expected(entries));
+            self.storage = MemoryStateStorage::loaded(StateView::new(state), self.kept.clone());
+        }
+
+        fn with_storage<R>(&self, call: impl FnOnce(&dyn StateStorage) -> R) -> R {
+            call(&self.storage)
+        }
+
+        fn break_key(&mut self, key: &str) {
+            self.storage.fail_on(StateKey::new(key).unwrap());
+        }
+    }
+
+    #[test]
+    #[verifies("rule_memory_storage_persists_each_publish", examples)]
+    fn the_persistence_keeps_each_published_set() {
+        let mut harness = Persisting::default();
+        harness.seed(&[("manifest.json", b"{}")]);
+        let writes = WriteSet::new(Atomicity::PerKey).put(key(A), b"a".to_vec());
+        publish(&harness, writes.clone()).unwrap();
+        assert_eq!(*harness.kept.sets.lock().unwrap(), [writes]);
+    }
+
+    #[test]
+    #[verifies("rule_memory_storage_persists_each_publish", examples)]
+    fn a_refused_persist_changes_no_key() {
+        let mut harness = Persisting::default();
+        harness.seed(&[("manifest.json", b"{}"), (A, b"old")]);
+        harness
+            .kept
+            .refuse
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        let before = read(&harness);
+        let writes = WriteSet::new(Atomicity::WholeSet)
+            .put(key(A), b"a".to_vec())
+            .put(key(B), b"b".to_vec())
+            .delete(key("manifest.json"));
+        assert!(matches!(
+            publish(&harness, writes),
+            Err(PublishFailure::Refused(_))
+        ));
+        assert_eq!(read(&harness), before);
+        assert!(harness.kept.sets.lock().unwrap().is_empty());
     }
 }
