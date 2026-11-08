@@ -126,7 +126,10 @@ fn api_arguments_select_methods_bodies_queries_and_headers() {
 fn arguments_without_a_path_select_discovery() {
     assert!(matches!(
         ApiRequest::from(ApiArguments::default()),
-        Ok(ApiRequest::Discover)
+        Ok(ApiRequest::Discover {
+            filter: None,
+            limit: None
+        })
     ));
 }
 
@@ -324,7 +327,13 @@ async fn discovery_returns_the_port_catalog() {
     let port = RecordingPort::default();
     let service = Porcelain::new(port.clone());
 
-    let outcome = service.execute_api(ApiRequest::Discover).await.unwrap();
+    let outcome = service
+        .execute_api(ApiRequest::Discover {
+            filter: None,
+            limit: None,
+        })
+        .await
+        .unwrap();
 
     let ApiOutcome::Catalog(catalog) = outcome else {
         panic!("discovery returns the catalog");

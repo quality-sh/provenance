@@ -16,7 +16,7 @@ pub fn guidance() -> Guidance {
     let mut text = String::from(
         "# Provenance\n\n\
 Provenance records requirements, decisions, and the rules that connect them to code.\n\n\
-## Domain\n\n\
+## Records\n\n\
 - Requirement: an obligation the system must satisfy. Requirements can refine other Requirements.\n\
 - Rule: an identified atomic behavioural obligation that refines one or more Requirements. A Rule can exist before code or verification.\n\
 - Resolution: a recorded decision that removes ambiguity. A Resolution can produce a Rule when it establishes a precise obligation.\n\

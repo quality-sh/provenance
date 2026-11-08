@@ -71,7 +71,11 @@ pub struct ApiInput {
 /// One selected api action: the discovery catalog or one bound call.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ApiRequest {
-    Discover,
+    /// The catalog routes that `filter` and `limit` select.
+    Discover {
+        filter: Option<String>,
+        limit: Option<usize>,
+    },
     Invoke(ApiInput),
 }
 
@@ -223,7 +227,7 @@ impl ApiCatalog {
 /// The structured api answer: the discovery catalog or one route envelope.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ApiOutcome {
-    Catalog(ApiCatalog),
+    Catalog(CatalogSelection),
     Invoked(Value),
 }
 
@@ -294,9 +298,13 @@ impl ApiRequest {
             ]
             .into_iter()
             .find_map(|(field, given)| given.then_some(field));
-            return call_option.map_or(Ok(Self::Discover), |field| {
-                Err(ApiError::invalid_options(Some(field)))
-            });
+            return call_option.map_or(
+                Ok(Self::Discover {
+                    filter: arguments.filter,
+                    limit: arguments.limit,
+                }),
+                |field| Err(ApiError::invalid_options(Some(field))),
+            );
         };
         if let Some(field) = [
             ("filter", arguments.filter.is_some()),
@@ -351,11 +359,14 @@ impl<P: ApiPort> crate::Porcelain<P> {
     ///
     /// The port resolves the path against the registered public routes, so a
     /// call never reaches an operation the catalog does not publish, and the
-    /// default method stays GET for arguments that select none.
+    /// default method stays GET for arguments that select none. Discovery
+    /// applies the filter and limit here, so each consumer gets the same routes.
     #[rule("rule_porcelain_api_public_path")]
     pub async fn execute_api(&self, request: ApiRequest) -> Result<ApiOutcome, ApiError> {
         match request {
-            ApiRequest::Discover => Ok(ApiOutcome::Catalog(self.port.discover())),
+            ApiRequest::Discover { filter, limit } => Ok(ApiOutcome::Catalog(
+                self.port.discover().select(filter.as_deref(), limit),
+            )),
             ApiRequest::Invoke(input) => {
                 let input = validated(input)?;
                 Ok(ApiOutcome::Invoked(self.port.invoke(input).await?))

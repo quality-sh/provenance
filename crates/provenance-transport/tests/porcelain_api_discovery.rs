@@ -25,7 +25,13 @@ async fn api_discovery_preserves_query_contracts() {
     repository.all_kinds();
     let service = Porcelain::new(HostApiPort::new(host(&repository)));
 
-    let ApiOutcome::Catalog(catalog) = service.execute_api(ApiRequest::Discover).await.unwrap()
+    let ApiOutcome::Catalog(catalog) = service
+        .execute_api(ApiRequest::Discover {
+            filter: None,
+            limit: None,
+        })
+        .await
+        .unwrap()
     else {
         panic!("discovery returns the catalog");
     };

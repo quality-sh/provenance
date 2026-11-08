@@ -3,7 +3,7 @@
 
 use crate::surface::{Effect, SchemaDeclaration};
 use provenance_porcelain::api::{
-    render_discovery_readable, ApiArguments, ApiError, ApiOutcome, ApiRequest,
+    render_discovery_readable, ApiArguments, ApiCatalog, ApiError, ApiOutcome, ApiRequest,
 };
 use provenance_porcelain::registry::Command;
 use provenance_transport::StatementHost;
@@ -43,7 +43,10 @@ pub async fn call(host: &StatementHost, arguments: Map<String, Value>) -> CallTo
         Err(error) => return refused(&error),
     };
     match host.porcelain().api().execute_api(request).await {
-        Ok(ApiOutcome::Catalog(catalog)) => {
+        Ok(ApiOutcome::Catalog(selection)) => {
+            let catalog = ApiCatalog {
+                routes: selection.routes,
+            };
             let mut result = CallToolResult::structured(
                 serde_json::to_value(&catalog).expect("catalog is JSON"),
             );
