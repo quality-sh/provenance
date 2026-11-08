@@ -333,30 +333,29 @@ fn pending_classification_review(
 #[test]
 #[provenance_macros::verifies("rule_domain_boundary_decisions_accept_no_feedback", examples)]
 fn domain_decisions_refuse_feedback() {
-    for kind in [NodeType::Domain] {
-        let (_temp, store, scope, proposal) = pending_classification_review(kind);
+    let kind = NodeType::Domain;
+    let (_temp, store, scope, proposal) = pending_classification_review(kind);
 
-        let error = store
-            .decide_record_review(DecideRecordReview {
-                scope_id: scope.clone(),
-                actor: reviewer(),
-                proposal_id: proposal.clone(),
-                decision: DispositionDecision::Rejected,
-                rationale: Some("The classification is too broad.".into()),
-                canonical_artifact: None,
-                feedback: Some(ReviewFeedback {
-                    role: provenance_core::MessageRole::User,
-                    body: "Narrow the classification.".into(),
-                }),
-                declared_by: None,
-            })
-            .unwrap_err();
+    let error = store
+        .decide_record_review(DecideRecordReview {
+            scope_id: scope.clone(),
+            actor: reviewer(),
+            proposal_id: proposal.clone(),
+            decision: DispositionDecision::Rejected,
+            rationale: Some("The classification is too broad.".into()),
+            canonical_artifact: None,
+            feedback: Some(ReviewFeedback {
+                role: provenance_core::MessageRole::User,
+                body: "Narrow the classification.".into(),
+            }),
+            declared_by: None,
+        })
+        .unwrap_err();
 
-        assert!(matches!(
-            WriteError(error).safe(),
-            WriteFailure::UnsupportedReviewFeedback {
-                record_kind
-            } if record_kind == kind
-        ));
-    }
+    assert!(matches!(
+        WriteError(error).safe(),
+        WriteFailure::UnsupportedReviewFeedback {
+            record_kind
+        } if record_kind == kind
+    ));
 }

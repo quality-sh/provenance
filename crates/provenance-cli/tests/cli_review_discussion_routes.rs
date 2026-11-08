@@ -25,11 +25,10 @@ fn served_discussion_routes_exclude_domain_parents() {
         );
     }
     // No discussion route exists for Domains, so the host API answers unknown_operation.
-    for family in ["domains"] {
-        let path = format!("/{family}/absent/discussions");
-        let reply = response(request(&host, "POST", &path, true).send_string("{}"));
-        assert_eq!(reply.status(), 404, "{path}");
-        let body: serde_json::Value = serde_json::from_str(&reply.into_string().unwrap()).unwrap();
-        assert_eq!(body["error"]["kind"], "unknown_operation", "{path}");
-    }
+    let family = "domains";
+    let path = format!("/{family}/absent/discussions");
+    let reply = response(request(&host, "POST", &path, true).send_string("{}"));
+    assert_eq!(reply.status(), 404, "{path}");
+    let body: serde_json::Value = serde_json::from_str(&reply.into_string().unwrap()).unwrap();
+    assert_eq!(body["error"]["kind"], "unknown_operation", "{path}");
 }

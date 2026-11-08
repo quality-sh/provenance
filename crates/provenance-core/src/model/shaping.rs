@@ -1,7 +1,6 @@
 use provenance_macros::{ProjectionRow, Relations};
 use serde::{Deserialize, Serialize};
 
-use super::artifacts::SourceReference;
 use super::ids::{ScopeId, StableId};
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

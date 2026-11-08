@@ -39,7 +39,7 @@ fn deny_operations(mut access: FixtureAccess, operations: &[&str]) -> FixtureAcc
     access
 }
 
-const LIST_SEARCH_OPERATIONS: [&str; 8] = [
+const LIST_SEARCH_OPERATIONS: [&str; 7] = [
     "list-sources",
     "list-requirements",
     "list-resolutions",

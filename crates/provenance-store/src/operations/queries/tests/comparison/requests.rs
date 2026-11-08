@@ -16,7 +16,7 @@ const PER_KIND: usize = 3;
 
 /// One needle per kind that meets every id the repositories name, so a
 /// served search over the kind alone answers its records in id order.
-const SAMPLE_NEEDLE: [(NodeType, &str); 8] = [
+const SAMPLE_NEEDLE: [(NodeType, &str); 7] = [
     (NodeType::Source, "source"),
     (NodeType::Requirement, "req"),
     (NodeType::Resolution, "res"),

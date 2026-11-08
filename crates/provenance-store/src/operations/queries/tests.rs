@@ -104,24 +104,23 @@ fn repository_at(root: &camino::Utf8Path) -> Repository {
 #[tokio::test]
 async fn get_answers_a_domain_by_id() {
     let (dir, _store, _scope) = seeded_store();
-    for (kind, id, wire) in [(NodeType::Domain, "domain_payroll", "domain")] {
-        let answer = super::get(
-            &repository_of(&dir),
-            ReadPolicy::default(),
-            GetQuery {
-                protocol_version: Some(SDK_PROTOCOL_VERSION),
-                node_type: kind,
-                id: id.into(),
-            },
-        )
-        .await
-        .unwrap()
-        .result;
-        assert!(answer.found, "get must find the {wire} record");
-        let node = serde_json::to_value(answer.node.unwrap()).unwrap();
-        assert_eq!(node["node_type"], wire);
-        assert_eq!(node["id"], id);
-    }
+    let (kind, id, wire) = (NodeType::Domain, "domain_payroll", "domain");
+    let answer = super::get(
+        &repository_of(&dir),
+        ReadPolicy::default(),
+        GetQuery {
+            protocol_version: Some(SDK_PROTOCOL_VERSION),
+            node_type: kind,
+            id: id.into(),
+        },
+    )
+    .await
+    .unwrap()
+    .result;
+    assert!(answer.found, "get must find the {wire} record");
+    let node = serde_json::to_value(answer.node.unwrap()).unwrap();
+    assert_eq!(node["node_type"], wire);
+    assert_eq!(node["id"], id);
 }
 
 #[tokio::test]

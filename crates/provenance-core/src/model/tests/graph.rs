@@ -2,14 +2,13 @@ use super::graph::NodeType;
 
 #[test]
 fn domain_is_a_node_type_with_a_stable_wire_name() {
-    for (name, expected) in [("domain", NodeType::Domain)] {
-        assert_eq!(NodeType::parse(name).unwrap(), expected);
-        assert_eq!(serde_json::to_value(expected).unwrap(), name);
-        assert_eq!(
-            serde_json::from_value::<NodeType>(serde_json::Value::String(name.into())).unwrap(),
-            expected
-        );
-    }
+    let (name, expected) = ("domain", NodeType::Domain);
+    assert_eq!(NodeType::parse(name).unwrap(), expected);
+    assert_eq!(serde_json::to_value(expected).unwrap(), name);
+    assert_eq!(
+        serde_json::from_value::<NodeType>(serde_json::Value::String(name.into())).unwrap(),
+        expected
+    );
 }
 
 #[test]
