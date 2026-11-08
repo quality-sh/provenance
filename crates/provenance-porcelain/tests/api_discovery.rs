@@ -88,8 +88,8 @@ async fn discovery_reports_the_bounds_of_the_filter_limit_and_default_limit() {
     assert_eq!(complete.bounds, bounds(60, 60, 60));
     assert_eq!(complete.see_more(SEE_MORE), None);
     let bounded = unlimited.bounded();
-    assert_eq!(bounded.bounds, bounds(60, 60, 50));
-    assert_eq!(bounded.routes, complete.routes[..50]);
+    assert_eq!(bounded.bounds, bounds(60, 60, DEFAULT_DISCOVERY_LIMIT));
+    assert_eq!(bounded.routes, complete.routes[..DEFAULT_DISCOVERY_LIMIT]);
 
     let above_default = discover(60, None, Some(55)).await.bounded();
     assert_eq!(above_default.bounds, bounds(60, 60, 55));
