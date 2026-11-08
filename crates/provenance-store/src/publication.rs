@@ -111,40 +111,39 @@ fn enter_section<R>(
     operation()
 }
 
-// Resolve the existing ancestor so planned-state validation creates no paths.
-#[cfg(feature = "host")]
+/// The key of the section of `layout`: the lock path under the resolved root.
+/// The existing ancestor is resolved, so planned-state validation creates no
+/// paths. With no file system to resolve the root against, the key is the
+/// lock path of the layout as given.
 fn publication_lock_identity(layout: &ProvenanceLayout) -> anyhow::Result<String> {
-    let absolute = std::path::absolute(layout.root())?;
-    for ancestor in absolute.ancestors() {
-        match dunce::canonicalize(ancestor) {
-            Ok(resolved) => {
-                let root = resolved.join(absolute.strip_prefix(ancestor)?);
-                let root = Utf8PathBuf::from_path_buf(root).map_err(|path| {
-                    anyhow::anyhow!("repository path is not UTF-8: {}", path.display())
-                })?;
-                return Ok(ProvenanceLayout::new(root)
-                    .publication_lock_path()
-                    .to_string());
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => {
-                return Err(error)
-                    .with_context(|| format!("resolve repository path {}", layout.root()));
+    #[cfg(not(feature = "host"))]
+    return Ok(layout.publication_lock_path().to_string());
+    #[cfg(feature = "host")]
+    {
+        let absolute = std::path::absolute(layout.root())?;
+        for ancestor in absolute.ancestors() {
+            match dunce::canonicalize(ancestor) {
+                Ok(resolved) => {
+                    let root = resolved.join(absolute.strip_prefix(ancestor)?);
+                    let root = Utf8PathBuf::from_path_buf(root).map_err(|path| {
+                        anyhow::anyhow!("repository path is not UTF-8: {}", path.display())
+                    })?;
+                    return Ok(ProvenanceLayout::new(root)
+                        .publication_lock_path()
+                        .to_string());
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => {
+                    return Err(error)
+                        .with_context(|| format!("resolve repository path {}", layout.root()));
+                }
             }
         }
+        anyhow::bail!(
+            "repository path has no existing ancestor: {}",
+            layout.root()
+        )
     }
-    anyhow::bail!(
-        "repository path has no existing ancestor: {}",
-        layout.root()
-    )
-}
-
-/// The key of the section of `layout`. With no file system to resolve the
-/// root against, the key is the lock path of the layout as given.
-#[cfg(not(feature = "host"))]
-#[allow(clippy::unnecessary_wraps)]
-fn publication_lock_identity(layout: &ProvenanceLayout) -> anyhow::Result<String> {
-    Ok(layout.publication_lock_path().to_string())
 }
 
 impl crate::state_store::StateStore {
