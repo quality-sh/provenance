@@ -24,6 +24,7 @@ mod requirement_reviews;
 mod resolution_decisions;
 mod rule_writers;
 mod scope_ingestion;
+pub(crate) use read_fence::FencedStore;
 mod shared_parses;
 pub(crate) use shared_parses::with_shared_parses;
 mod shaping_writers;
@@ -62,7 +63,6 @@ pub use inputs::{
     UpdateQuestionInput,
 };
 pub use proposal_surfaces::{ProposalDemand, ProposalSurfaceReason, SurfacedProposal, TopicClaim};
-pub(crate) use read_fence::FencedStore;
 pub use requirement_reviews::{
     requirement_statement_changes, RequirementReviewInput, RequirementStatementChange,
 };

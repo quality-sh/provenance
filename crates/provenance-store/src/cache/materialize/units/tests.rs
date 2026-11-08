@@ -1,4 +1,4 @@
-use super::{digest_with, unit_digest, unit_digests, unit_stored_digest, Unit, UnitDigests};
+use super::{digests_with, unit_digest, unit_digests, unit_stored_digest, Unit, UnitDigests};
 use crate::storage::{StateKey, StateView};
 
 const SHARD: &str = "scopes/default/requirements/req.jsonl";
@@ -10,7 +10,7 @@ fn a_shard_added_after_bytes_are_read_invalidates_the_digest() {
     let before = unit_digest(state, &unit).unwrap();
     let added = state.join("scopes/default/rules/rule.jsonl");
     std::fs::create_dir_all(added.parent().unwrap()).unwrap();
-    let result = digest_with(state, &unit, |_, _| {
+    let result = digests_with(state, &unit, |_, _| {
         std::fs::write(&added, b"{\"id\":\"added\"}\n").unwrap();
     });
     assert_ne!(before, unit_digest(state, &unit).unwrap());
@@ -63,9 +63,11 @@ fn the_files_and_the_view_of_the_same_bytes_give_the_same_digests() {
     let (dir, unit) = requirement_shard(bytes);
     let state = camino::Utf8Path::from_path(dir.path()).unwrap();
     std::fs::write(state.join("scopes/default/notes.txt"), b"stray").unwrap();
-    let from_view = unit_digests(state, &view_of(bytes), &unit, None).unwrap();
-    assert_eq!(from_view.content, unit_digest(state, &unit).unwrap());
-    assert_eq!(from_view.stored, unit_stored_digest(state, &unit).unwrap());
+    let from_files = digests_with(state, &unit, |_, _| {}).unwrap();
+    assert_eq!(
+        unit_digests(state, &view_of(bytes), &unit, None).unwrap(),
+        from_files
+    );
 }
 
 /// A view that holds the one requirement shard with `bytes`.

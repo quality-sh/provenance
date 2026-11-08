@@ -98,10 +98,7 @@ pub fn units_for(scopes: &[ScopeId]) -> Vec<Unit> {
 /// The digest of one unit's canonical bytes under `state_dir`, read from
 /// the files with no lock.
 pub fn unit_digest(state_dir: &Utf8Path, unit: &Unit) -> Result<String, UnitHashError> {
-    let files = read_unit(state_dir, unit, |_, _| {})?;
-    Ok(files_read(state_dir, &files.bytes(), &BTreeMap::new())?
-        .digests
-        .content)
+    Ok(digests_with(state_dir, unit, |_, _| {})?.content)
 }
 
 /// The digest of the exact stored bytes in one unit, read from the files
@@ -110,16 +107,15 @@ pub fn unit_stored_digest(state_dir: &Utf8Path, unit: &Unit) -> Result<String, U
     Ok(read_unit(state_dir, unit, |_, _| {})?.bytes().stored)
 }
 
-#[cfg(test)]
-pub(super) fn digest_with(
+/// The digests of one unit, read from the files. `retain` sees each file as
+/// it is read.
+pub(super) fn digests_with(
     state_dir: &Utf8Path,
     unit: &Unit,
     retain: impl FnMut(&Utf8Path, &[u8]),
-) -> Result<String, UnitHashError> {
+) -> Result<UnitDigests, UnitHashError> {
     let files = read_unit(state_dir, unit, retain)?;
-    Ok(files_read(state_dir, &files.bytes(), &BTreeMap::new())?
-        .digests
-        .content)
+    Ok(files_read(state_dir, &files.bytes(), &BTreeMap::new())?.digests)
 }
 
 /// The digests of one unit of `view`, the canonical state under
