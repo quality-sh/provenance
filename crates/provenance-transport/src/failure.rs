@@ -1,8 +1,8 @@
 use axum::response::{IntoResponse, Response};
 use provenance_core::protocol::failure::ErasedFailure as FailureEnvelope;
 
-/// The HTTP answer for a failure. A failure of no known kind answers with its
-/// safe kind only, and the host log keeps the native cause for the operator.
+/// The HTTP answer for a failure. The host log also keeps the native cause of
+/// a failure of no known kind, with absolute paths.
 pub fn response(failure: FailureEnvelope) -> Response {
     if let Some(cause) = failure.cause() {
         eprintln!("Operation failed with no known failure kind. Cause: {cause}");

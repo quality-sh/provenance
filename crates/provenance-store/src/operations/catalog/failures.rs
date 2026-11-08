@@ -4,6 +4,7 @@ use crate::operations::files::FileAccessRefusal;
 use crate::operations::reader::ReadRefusal;
 use crate::stale::git::GitRefusal;
 use crate::state_store::readers::StateLineInvalid;
+use crate::write_error::failure_cause;
 use provenance_core::protocol::{
     failure::OperationFailure,
     read_failure::{MovedUnit, ReadFailure},
@@ -30,7 +31,7 @@ impl ReadError {
         }
         match self.safe() {
             ReadFailure::ResourceNotFound => 404,
-            ReadFailure::ReadFailed | ReadFailure::InvalidStateFile { .. } => 500,
+            ReadFailure::ReadFailed { .. } | ReadFailure::InvalidStateFile { .. } => 500,
             ReadFailure::FileAccessDenied => 403,
             ReadFailure::FileUnavailable
             | ReadFailure::GitUnavailable
@@ -53,7 +54,7 @@ impl ReadError {
             return git_failure(error);
         }
         if let Some(error) = self.0.downcast_ref::<FileAccessRefusal>() {
-            return file_failure(error);
+            return file_failure(error).unwrap_or_else(|| self.read_failed());
         }
         if let Some(error) = self.0.downcast_ref::<CompletionTimedOut>() {
             return completion_failure(error);
@@ -61,13 +62,18 @@ impl ReadError {
         if let Some(error) = self.0.downcast_ref::<ReadRefusal>() {
             return refusal_failure(error);
         }
-        StateLineInvalid::find(&self.0).map_or(ReadFailure::ReadFailed, state_line_failure)
+        StateLineInvalid::find(&self.0).map_or_else(|| self.read_failed(), state_line_failure)
     }
-    /// The native cause chain of a failure of no known kind. The wire answer
-    /// gives only `read_failed`: the chain can hold absolute paths and stored
-    /// values, so only the operator sees it.
+    fn read_failed(&self) -> ReadFailure {
+        ReadFailure::ReadFailed {
+            cause: failure_cause(&self.0),
+        }
+    }
+    /// The native cause chain of a failure of no known kind, with absolute
+    /// paths, for the host log. The wire answer gives the cause with each
+    /// state path relative to the state directory.
     pub fn unclassified_cause(&self) -> Option<String> {
-        (self.common().is_none() && self.safe() == ReadFailure::ReadFailed)
+        (self.common().is_none() && matches!(self.safe(), ReadFailure::ReadFailed { .. }))
             .then(|| format!("{:#}", self.0))
     }
 }
@@ -90,11 +96,13 @@ const fn git_failure(error: &GitRefusal) -> ReadFailure {
     }
 }
 
-const fn file_failure(error: &FileAccessRefusal) -> ReadFailure {
+/// The failure of a file refusal that has a kind; a missing or unreadable
+/// file has no kind of its own.
+const fn file_failure(error: &FileAccessRefusal) -> Option<ReadFailure> {
     match error {
-        FileAccessRefusal::Unavailable => ReadFailure::FileUnavailable,
-        FileAccessRefusal::Denied => ReadFailure::FileAccessDenied,
-        FileAccessRefusal::Missing | FileAccessRefusal::Read(_) => ReadFailure::ReadFailed,
+        FileAccessRefusal::Unavailable => Some(ReadFailure::FileUnavailable),
+        FileAccessRefusal::Denied => Some(ReadFailure::FileAccessDenied),
+        FileAccessRefusal::Missing | FileAccessRefusal::Read(_) => None,
     }
 }
 

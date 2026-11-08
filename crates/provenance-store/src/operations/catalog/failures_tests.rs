@@ -52,7 +52,9 @@ fn a_native_refusal_publishes_its_closed_failure_and_status() {
         ),
         (
             read_error(FileAccessRefusal::Missing),
-            ReadFailure::ReadFailed,
+            ReadFailure::ReadFailed {
+                cause: "repository file not found".into(),
+            },
             500,
         ),
         (
@@ -79,7 +81,9 @@ fn a_native_refusal_publishes_its_closed_failure_and_status() {
         ),
         (
             ReadError(anyhow::anyhow!("an error of no known kind")),
-            ReadFailure::ReadFailed,
+            ReadFailure::ReadFailed {
+                cause: "an error of no known kind".into(),
+            },
             500,
         ),
     ];
@@ -175,4 +179,29 @@ fn a_common_refusal_raised_inside_a_read_keeps_its_kind_and_status() {
         serde_json::to_value(&error).unwrap(),
         serde_json::json!({"kind":"invalid_input","field":"offset","reason":"invalid_value"})
     );
+}
+
+/// Implementation aid: the cause of a read failure of no known kind gives a
+/// state path relative to the state directory, on both separators.
+#[test]
+fn a_read_failure_of_no_known_kind_gives_its_cause_without_the_state_root() {
+    for path in [
+        "/tmp/a b/repo/.provenance/state/scopes/default/requirements/req.jsonl",
+        r"C:\repo\.provenance\state\scopes\default/requirements/req.jsonl",
+    ] {
+        let error = ReadError(
+            anyhow::anyhow!("{path} line 1: record req_a contains legacy field `retired`")
+                .context("failed to load requirements"),
+        );
+        assert_eq!(error.status(), 500);
+        assert_eq!(
+            serde_json::to_value(&error).unwrap(),
+            serde_json::json!({
+                "kind": "read_failed",
+                "cause": "failed to load requirements: scopes/default/requirements/req.jsonl \
+                          line 1: record req_a contains legacy field `retired`",
+            }),
+            "{path}"
+        );
+    }
 }

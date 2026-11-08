@@ -54,7 +54,7 @@ fn apply_reports_a_write_failure_before_staged_state_publication() {
     let result = store.apply_typed_spec(&scope, document());
     crate::test_probes::disarm("typed_spec_sources_published");
     let error = WriteError(result.unwrap_err());
-    assert!(matches!(error.safe(), WriteFailure::WriteFailed));
+    assert!(matches!(error.safe(), WriteFailure::WriteFailed { .. }));
     assert_eq!(
         store.list_sources(&scope).unwrap(),
         [] as [provenance_core::Source; 0]
@@ -117,7 +117,7 @@ fn begin_keeps_the_publication_lock_and_reports_saved_binding_on_failure() {
     crate::test_probes::disarm("verification_binding_published");
     assert!(matches!(
         WriteError(result.unwrap_err()).safe(),
-        WriteFailure::WriteFailed
+        WriteFailure::WriteFailed { .. }
     ));
     assert_eq!(store.list_verification_bindings(&scope).unwrap().len(), 1);
     assert_eq!(

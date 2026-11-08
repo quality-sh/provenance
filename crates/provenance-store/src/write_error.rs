@@ -85,7 +85,12 @@ pub enum WriteFailure {
         line: u64,
         message: String,
     },
-    WriteFailed,
+    /// A write failure of no known kind. `cause` is the display chain of the
+    /// native error. A path below a state directory in it is relative to that
+    /// directory.
+    WriteFailed {
+        cause: String,
+    },
 }
 
 impl WriteFailure {
@@ -196,7 +201,7 @@ impl From<provenance_core::protocol::failure::OperationFailure> for WriteError {
 impl WriteError {
     pub fn safe(&self) -> WriteFailure {
         if self.0.downcast_ref::<PublicationStarted>().is_some() {
-            return WriteFailure::WriteFailed;
+            return self.write_failed();
         }
         if let Some(error) = self.0.downcast_ref::<SourceFailure>() {
             return error.failure.clone();
@@ -239,23 +244,29 @@ impl WriteError {
                 _ => WriteFailure::FileUnavailable,
             };
         }
-        StateLineInvalid::find(&self.0).map_or(WriteFailure::WriteFailed, |error| {
-            WriteFailure::InvalidStateFile {
+        StateLineInvalid::find(&self.0).map_or_else(
+            || self.write_failed(),
+            |error| WriteFailure::InvalidStateFile {
                 file: error.file(),
                 line: error.line,
                 message: error.message.clone(),
-            }
-        })
+            },
+        )
     }
-    /// The native cause chain of a failure of no known kind. The wire answer
-    /// gives only `write_failed`: the chain can hold absolute paths and stored
-    /// values, so only the operator sees it.
+    fn write_failed(&self) -> WriteFailure {
+        WriteFailure::WriteFailed {
+            cause: failure_cause(&self.0),
+        }
+    }
+    /// The native cause chain of a failure of no known kind, with absolute
+    /// paths, for the host log. The wire answer gives the cause with each
+    /// state path relative to the state directory.
     pub fn unclassified_cause(&self) -> Option<String> {
-        matches!(self.safe(), WriteFailure::WriteFailed).then(|| format!("{:#}", self.0))
+        matches!(self.safe(), WriteFailure::WriteFailed { .. }).then(|| format!("{:#}", self.0))
     }
     pub fn status(&self) -> u16 {
         match self.safe() {
-            WriteFailure::WriteFailed | WriteFailure::InvalidStateFile { .. } => 500,
+            WriteFailure::WriteFailed { .. } | WriteFailure::InvalidStateFile { .. } => 500,
             WriteFailure::FileAccessDenied | WriteFailure::AccessDenied => 403,
             WriteFailure::FileUnavailable => 503,
             WriteFailure::ResourceNotFound => 404,
@@ -276,6 +287,50 @@ impl WriteError {
         }
     }
 }
+/// The display chain of `error` for a refusal of no known kind. Each path
+/// below a state directory is given relative to that directory, with `/`
+/// between its parts, so the refusal holds no absolute state path. Other
+/// text stays as the native error gives it.
+pub(crate) fn failure_cause(error: &anyhow::Error) -> String {
+    let text = format!("{error:#}");
+    let mut cause = String::with_capacity(text.len());
+    let mut rest = text.as_str();
+    while let Some((at, marker)) = state_marker(rest) {
+        let before = &rest[..at];
+        let start = before
+            .char_indices()
+            .rev()
+            .find(|&(_, character)| ends_path(character))
+            .map_or(0, |(index, character)| index + character.len_utf8());
+        cause.push_str(&before[..start]);
+        rest = &rest[at + marker..];
+        let end = rest.find(ends_path).unwrap_or(rest.len());
+        cause.push_str(&rest[..end].replace('\\', "/"));
+        rest = &rest[end..];
+    }
+    cause.push_str(rest);
+    cause
+}
+
+/// The first `.provenance/state/` directory in `text`, with either separator,
+/// as its byte offset and length.
+fn state_marker(text: &str) -> Option<(usize, usize)> {
+    const MARKERS: [&str; 4] = [
+        ".provenance/state/",
+        ".provenance\\state\\",
+        ".provenance/state\\",
+        ".provenance\\state/",
+    ];
+    MARKERS
+        .iter()
+        .filter_map(|marker| text.find(marker).map(|at| (at, marker.len())))
+        .min()
+}
+
+fn ends_path(character: char) -> bool {
+    character.is_whitespace() || matches!(character, '"' | '\'' | '`' | '(' | ')' | ',' | ';')
+}
+
 impl Serialize for WriteError {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         self.safe().serialize(serializer)
