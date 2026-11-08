@@ -7,7 +7,7 @@ use provenance_core::{
     AssertionRecord, Contribution, DispositionRecord, IdeationAggregate, ProposalCard, ScopeId,
     SynthesisPacket,
 };
-use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 impl StateStore {
     pub fn validate_ideation_scope(&self, scope: &ScopeId) -> anyhow::Result<()> {
@@ -43,9 +43,9 @@ impl StateStore {
         let mut assertions_in_order = direct_assertions.clone();
         let direct_dispositions: Vec<DispositionRecord> =
             read_jsonl(self, &shards::dispositions_path(&self.layout, scope))?;
-        let mut proposals = BTreeMap::new();
-        let mut assertions = BTreeMap::new();
-        let mut dispositions = BTreeMap::new();
+        let mut proposals = BTreeSet::new();
+        let mut assertions = BTreeSet::new();
+        let mut dispositions = BTreeSet::new();
         insert_all(
             "proposal",
             &direct_proposals,
@@ -64,7 +64,25 @@ impl StateStore {
             |r| r.id.as_str(),
             &mut dispositions,
         )?;
+        // The proposal, assertion and disposition lists that the list
+        // readers give: the direct records with each landing laid over them.
+        let mut proposal_definitions = direct_proposals.clone();
+        let mut assertion_records = direct_assertions.clone();
+        let mut disposition_records = direct_dispositions.clone();
         for batch in self.list_ideation_landings(scope)? {
+            overlay_records(
+                &mut proposal_definitions,
+                batch.proposals.clone(),
+                |record| record.id.as_str(),
+            );
+            overlay_records(&mut assertion_records, batch.assertions.clone(), |record| {
+                record.id.as_str()
+            });
+            overlay_records(
+                &mut disposition_records,
+                batch.dispositions.clone(),
+                |record| record.id.as_str(),
+            );
             ensure_batch_evidence_unchanged(
                 &contributions,
                 &synthesis_packets,
@@ -97,9 +115,9 @@ impl StateStore {
             });
             assertions_in_order.extend(batch.assertions);
         }
-        let proposals = self.list_proposal_definitions(scope)?;
-        let assertions = self.list_assertion_records(scope)?;
-        let dispositions = self.list_dispositions(scope)?;
+        let proposals = proposal_definitions;
+        let assertions = assertion_records;
+        let dispositions = disposition_records;
         provenance_core::validate_ideation_aggregate(IdeationAggregate {
             legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
             disposition_actor_ids,
@@ -142,17 +160,16 @@ fn ensure_batch_evidence_unchanged(
     Ok(())
 }
 
-fn insert_all<'a, T: serde::Serialize>(
+fn insert_all<'a, T>(
     kind: &str,
     records: &'a [T],
     id: impl Fn(&'a T) -> &'a str,
-    seen: &mut BTreeMap<String, serde_json::Value>,
+    seen: &mut BTreeSet<String>,
 ) -> anyhow::Result<()> {
     for record in records {
         let record_id = id(record);
-        let value = serde_json::to_value(record)?;
         anyhow::ensure!(
-            seen.insert(record_id.to_owned(), value).is_none(),
+            seen.insert(record_id.to_owned()),
             "duplicate immutable {kind} id {record_id}"
         );
     }

@@ -23,6 +23,8 @@ mod requirement_reviews;
 mod resolution_decisions;
 mod rule_writers;
 mod scope_ingestion;
+mod shared_parses;
+pub(crate) use shared_parses::with_shared_parses;
 mod shaping_writers;
 mod statement_policy;
 mod thread_origins;
@@ -262,6 +264,17 @@ impl StateStore {
             }
             held.validate_graph_scope(scope)?;
             after_validation()?;
+            held.proposal_cards_of_validated_scope(scope)
+        })
+    }
+    /// The proposal cards with their effective state, for a caller that
+    /// validated the ideation and graph records of `scope` under the lock it
+    /// still holds.
+    pub(crate) fn proposal_cards_of_validated_scope(
+        &self,
+        scope: &ScopeId,
+    ) -> anyhow::Result<Vec<ProposalCard>> {
+        self.with_repository_read(|held| {
             let assertions = held.list_assertion_records(scope)?;
             let dispositions = held.list_dispositions(scope)?;
             Ok(held

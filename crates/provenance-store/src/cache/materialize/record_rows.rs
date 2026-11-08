@@ -6,11 +6,10 @@
 //! searchable pieces. Identifiers are quoted, since `key`, `field`,
 //! `before`, and `after` are SQL keywords.
 
+use super::batch::{text, Rows, Table};
 use crate::cache::quoted;
 use provenance_core::model::{ColumnValue, ProjectionRow};
 use provenance_core::protocol::GraphNode;
-use sqlx::sqlite::SqliteArguments;
-use sqlx::{query::Query, Sqlite, Transaction};
 
 /// The derived search column on a kind table.
 pub const SEARCH_TEXT: &str = "search_text";
@@ -28,77 +27,74 @@ fn search_text(node: &GraphNode) -> String {
         .join(SEARCH_TEXT_SEPARATOR)
 }
 
-/// The insert for one record, with the search column when the table has
-/// one.
-fn insert_sql<K: ProjectionRow>(with_search_text: bool) -> String {
+/// The quoted columns of one kind or integration table, with the search
+/// column when the table has one.
+fn columns<K: ProjectionRow>(with_search_text: bool) -> Vec<String> {
     let mut columns: Vec<String> = K::COLUMNS.iter().map(|column| quoted(column)).collect();
     if with_search_text {
         columns.push(quoted(SEARCH_TEXT));
     }
-    let marks = vec!["?"; columns.len()].join(", ");
-    format!(
-        "INSERT INTO {} ({}) VALUES ({})",
-        quoted(K::TABLE),
-        columns.join(", "),
-        marks
-    )
+    columns
 }
 
-fn bind(
-    query: Query<'_, Sqlite, SqliteArguments>,
-    value: ColumnValue,
-) -> Query<'_, Sqlite, SqliteArguments> {
-    match value {
-        ColumnValue::Null => query.bind(None::<String>),
-        ColumnValue::Integer(integer) => query.bind(integer),
-        ColumnValue::Real(real) => query.bind(real),
-        ColumnValue::Text(text) => query.bind(text),
-    }
+/// The values of one record, and its identity row when it is a graph node.
+fn record_rows<K: Clone + ProjectionRow>(
+    record: &K,
+    wrap: Option<fn(Box<K>) -> GraphNode>,
+) -> anyhow::Result<(Vec<ColumnValue>, Option<Vec<ColumnValue>>)> {
+    let node = wrap.map(|wrap| wrap(Box::new(record.clone())));
+    let mut values = record.row()?;
+    let identity = node.map(|node| {
+        values.push(text(search_text(&node)));
+        vec![
+            text(node.scope_id().as_str()),
+            text(node.id().as_str()),
+            text(node.node_type().as_str()),
+        ]
+    });
+    Ok((values, identity))
 }
 
-/// Writes the records of one kind or integration family. `search_text`
-/// is given for a kind table and absent for an integration table.
-async fn load<K: Clone + ProjectionRow + serde::de::DeserializeOwned>(
-    tx: &mut Transaction<'_, Sqlite>,
+/// The rows of one kind or integration family. `search_text` is given for
+/// a kind table and absent for an integration table.
+fn rows_of<K: Clone + ProjectionRow + serde::de::DeserializeOwned>(
     bytes: &[u8],
     wrap: Option<fn(Box<K>) -> GraphNode>,
-) -> anyhow::Result<u64> {
-    let sql: std::sync::Arc<str> = insert_sql::<K>(wrap.is_some()).into();
-    let mut loaded = 0;
+) -> anyhow::Result<Rows> {
+    let identity_columns = ["scope_id", "id", "node_type"].map(String::from);
+    let mut rows = Rows::new(vec![
+        Table::insert(&quoted(K::TABLE), &columns::<K>(wrap.is_some())),
+        Table::insert("record_identities", &identity_columns),
+    ]);
     for record in serde_json::from_slice::<Vec<K>>(bytes)? {
-        let node = wrap.map(|wrap| wrap(Box::new(record.clone())));
-        let mut query = sqlx::query(sqlx::AssertSqlSafe(std::sync::Arc::clone(&sql)));
-        for value in record.row()? {
-            query = bind(query, value);
+        match record_rows(&record, wrap) {
+            Ok((values, identity)) => {
+                rows.push(0, values);
+                if let Some(identity) = identity {
+                    rows.push(1, identity);
+                }
+                rows.loaded += 1;
+            }
+            Err(error) => {
+                rows.failure = Some(error);
+                break;
+            }
         }
-        if let Some(node) = &node {
-            query = query.bind(search_text(node));
-        }
-        query.execute(&mut **tx).await?;
-        if let Some(node) = node {
-            sqlx::query("INSERT INTO record_identities (scope_id, id, node_type) VALUES (?, ?, ?)")
-                .bind(node.scope_id().as_str())
-                .bind(node.id().as_str())
-                .bind(node.node_type().as_str())
-                .execute(&mut **tx)
-                .await?;
-        }
-        loaded += 1;
     }
-    Ok(loaded)
+    Ok(rows)
 }
 
-pub(super) async fn load_record<K: Clone + ProjectionRow + serde::de::DeserializeOwned>(
-    tx: &mut Transaction<'_, Sqlite>,
+/// The rows of a kind family, with an identity row for each record.
+pub(super) fn record_rows_of<K: Clone + ProjectionRow + serde::de::DeserializeOwned>(
     bytes: &[u8],
     wrap: fn(Box<K>) -> GraphNode,
-) -> anyhow::Result<u64> {
-    load(tx, bytes, Some(wrap)).await
+) -> anyhow::Result<Rows> {
+    rows_of(bytes, Some(wrap))
 }
 
-pub(super) async fn load_kind<K: Clone + ProjectionRow + serde::de::DeserializeOwned>(
-    tx: &mut Transaction<'_, Sqlite>,
+/// The rows of an integration family.
+pub(super) fn kind_rows_of<K: Clone + ProjectionRow + serde::de::DeserializeOwned>(
     bytes: &[u8],
-) -> anyhow::Result<u64> {
-    load::<K>(tx, bytes, None).await
+) -> anyhow::Result<Rows> {
+    rows_of::<K>(bytes, None)
 }

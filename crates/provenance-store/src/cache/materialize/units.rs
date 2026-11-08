@@ -2,10 +2,14 @@
 //!
 //! A scope unit is the scope's directory. The global unit is every regular
 //! file under `state/` outside `scopes/`. A unit digest frames each file's
-//! relative path and content bytes in sorted path order, so two shards
-//! that share a basename cannot swap contents unnoticed.
+//! relative path and the digest of its content bytes in sorted path order,
+//! so two shards that share a basename cannot swap contents unnoticed. The
+//! stored digest frames each relative path and the exact bytes.
 
 mod content;
+mod files;
+
+pub(super) use files::{files_read, FileDigest, UnitRead};
 
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -128,14 +132,23 @@ pub(super) fn digests_with(
     }
     let mut content = Vec::new();
     for ((relative, path), bytes) in read.files.iter().zip(&read.contents) {
-        let content_bytes =
-            content::hash_bytes(path, bytes).map_err(|error| UnitHashError::at(path, error))?;
-        frame(&mut content, relative, &content_bytes);
+        frame(
+            &mut content,
+            relative,
+            content_digest(path, bytes)?.as_bytes(),
+        );
     }
     Ok(UnitDigests {
         content: crate::canonical_digest::digest(&content),
         stored: read.stored,
     })
+}
+
+/// The digest of the content bytes of one file.
+fn content_digest(path: &Utf8Path, bytes: &[u8]) -> Result<String, UnitHashError> {
+    let content_bytes =
+        content::hash_bytes(path, bytes).map_err(|error| UnitHashError::at(path, error))?;
+    Ok(crate::canonical_digest::digest(&content_bytes))
 }
 
 fn stored_digest_with(
@@ -147,10 +160,15 @@ fn stored_digest_with(
 }
 
 /// The files of one unit, their bytes, and the digest of those exact bytes.
-struct UnitBytes {
+pub(super) struct UnitBytes {
     files: Vec<(String, Utf8PathBuf)>,
     contents: Vec<Vec<u8>>,
-    stored: String,
+    pub(super) stored: String,
+}
+
+/// The bytes of one unit and the digest of those exact bytes.
+pub(super) fn unit_bytes(state_dir: &Utf8Path, unit: &Unit) -> Result<UnitBytes, UnitHashError> {
+    read_unit(state_dir, unit, |_, _| {})
 }
 
 fn read_unit(

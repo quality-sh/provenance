@@ -345,6 +345,22 @@ impl ProjectionFamily {
     }
 }
 
+impl ProjectionFamily {
+    /// The records of one family for a caller that validated the scope
+    /// under the guard it holds. Only the proposal cards differ from
+    /// [`Self::guarded_records`]: their reader would validate the scope again.
+    pub(crate) fn records_of_validated_scope(
+        self,
+        store: &GuardedStore<'_>,
+        scope: &ScopeId,
+    ) -> anyhow::Result<(Vec<u8>, u64)> {
+        match self {
+            Self::ProposalCards => sorted_bytes(store.proposal_cards_of_validated_scope(scope)?),
+            _ => self.guarded_records(store, scope),
+        }
+    }
+}
+
 fn sorted_bytes<T: RecordFamily>(mut records: Vec<T>) -> anyhow::Result<(Vec<u8>, u64)> {
     records.sort_by(|left, right| left.record_id().cmp(right.record_id()));
     let count = records.len() as u64;

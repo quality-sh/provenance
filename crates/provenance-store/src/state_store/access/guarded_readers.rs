@@ -74,6 +74,14 @@ impl GuardedStore<'_> {
         self.store.list_proposal_definitions(scope)
     }
 
+    /// The proposal cards of a scope that the caller validated under this guard.
+    pub(crate) fn proposal_cards_of_validated_scope(
+        &self,
+        scope: &ScopeId,
+    ) -> anyhow::Result<Vec<ProposalCard>> {
+        self.store.proposal_cards_of_validated_scope(scope)
+    }
+
     pub fn list_proposal_cards_with_actor_ids(
         &self,
         scope: &ScopeId,
@@ -98,5 +106,20 @@ impl GuardedStore<'_> {
 
     pub fn validate_graph_scope(&self, scope: &ScopeId) -> anyhow::Result<()> {
         self.store.validate_graph_scope(scope)
+    }
+}
+
+impl GuardedStore<'static> {
+    /// A guarded store over a view that was read under a guard. It reads no
+    /// file, so it needs no guard after the read.
+    pub(crate) fn of_view(store: crate::state_store::StateStore) -> Self {
+        assert!(
+            matches!(store.access, crate::state_store::Access::View(_)),
+            "only a view store outlives its guard"
+        );
+        GuardedStore {
+            store,
+            _guard: std::marker::PhantomData,
+        }
     }
 }

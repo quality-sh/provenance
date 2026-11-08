@@ -2,6 +2,7 @@
 
 use super::ideation_batches::overlay_records;
 use super::readers::{read_jsonl, read_message_shards};
+use super::shared_parses::shared;
 use super::StateStore;
 use crate::shards;
 use provenance_core::{Rule, ScopeId};
@@ -9,12 +10,14 @@ use provenance_core::{Rule, ScopeId};
 macro_rules! family_reader {
     (Rules, $record:ty, $path:ident, $list:ident) => {
         pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
-            validate_rule_archives(read_jsonl(self, &shards::$path(&self.layout, scope))?)
+            let path = shards::$path(&self.layout, scope);
+            validate_rule_archives(shared(&path, || read_jsonl(self, &path))?)
         }
     };
     ($variant:ident, $record:ty, $path:ident, $list:ident) => {
         pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
-            read_jsonl(self, &shards::$path(&self.layout, scope))
+            let path = shards::$path(&self.layout, scope);
+            shared(&path, || read_jsonl(self, &path))
         }
     };
 }

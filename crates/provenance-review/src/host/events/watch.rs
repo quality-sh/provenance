@@ -1,8 +1,12 @@
 use super::subscribers::Subscribers;
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
 use provenance_store::{
-    cache::ProjectionFamily, layout::ProvenanceLayout, publication::publication_guard,
-    repository::Repository, review_changes::ReviewStateSnapshot, state_store::StateStore,
+    cache::ProjectionFamily,
+    layout::ProvenanceLayout,
+    publication::publication_guard,
+    repository::Repository,
+    review_changes::{ReviewStateCapture, ReviewStateSnapshot},
+    state_store::StateStore,
 };
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -62,7 +66,23 @@ impl Observation {
         })
     }
 
+    /// Reads one snapshot. The guard is held while the bytes are read, and
+    /// the records parse after it is released, so the first read after a
+    /// write does not wait for this parse. When the parse fails, the
+    /// snapshot is read again under the guard, so the error that the
+    /// subscribers get is the error of a guarded read.
     pub async fn read(&self, reattach: bool) -> anyhow::Result<ReviewStateSnapshot> {
+        let capture = self.capture(reattach).await?;
+        let parsed =
+            tokio::task::spawn_blocking(move || ReviewStateSnapshot::from_capture(capture)).await?;
+        if let Ok(snapshot) = parsed {
+            return Ok(snapshot);
+        }
+        let guard = publication_guard(&self.repository).await?;
+        tokio::task::spawn_blocking(move || ReviewStateSnapshot::read(&guard)).await?
+    }
+
+    async fn capture(&self, reattach: bool) -> anyhow::Result<ReviewStateCapture> {
         let guard = publication_guard(&self.repository).await?;
         let watcher = self.watcher.clone();
         let layout = self.layout.clone();
@@ -91,7 +111,7 @@ impl Observation {
                     )?;
                 }
             }
-            ReviewStateSnapshot::read(&guard)
+            ReviewStateSnapshot::capture(&guard)
         })
         .await?
     }

@@ -167,6 +167,11 @@ CREATE TABLE projection_family_digests (
 CREATE TABLE projection_unit_digests (
     unit TEXT PRIMARY KEY, digest TEXT NOT NULL, stored_digest TEXT NOT NULL
 );
+CREATE TABLE projection_file_digests (
+    unit TEXT NOT NULL, path TEXT NOT NULL,
+    stored_digest TEXT NOT NULL, content_digest TEXT NOT NULL,
+    PRIMARY KEY (unit, path)
+);
 CREATE TABLE projection_validation (
     only_row INTEGER PRIMARY KEY CHECK (only_row = 1), version INTEGER NOT NULL
 );

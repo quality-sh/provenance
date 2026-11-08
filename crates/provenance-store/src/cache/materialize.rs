@@ -1,14 +1,19 @@
+mod batch;
 mod catch_up;
 mod collaboration_records;
+mod family_inputs;
 mod family_rows;
 mod record_rows;
 mod relation_rows;
+mod row_changes;
 mod stamp;
 mod units;
 mod validation;
 
 pub use catch_up::catch_up_with_guard;
 pub use catch_up::{catch_up_state, CatchUpReport};
+#[cfg(test)]
+pub use family_inputs::{affected, input_directories};
 pub use record_rows::SEARCH_TEXT;
 pub use units::unit_stored_digest;
 pub use units::{scope_ids, unit_digest, units_for, Unit, UnitHashError};
@@ -116,8 +121,11 @@ async fn rebuild_rows(
         .collect();
     for unit in units::units_for(&scopes) {
         let Unit::Scope(scope) = &unit else { continue };
-        let digests = reader.hash(&unit, None)?;
-        let (records, digests) = reader.scope(scope, digests)?;
+        let bytes = reader
+            .hash(&unit, None)?
+            .expect("a unit with no stored pair has changed");
+        let read = units::files_read(&bytes, &std::collections::BTreeMap::new())?;
+        let (records, read) = reader.scope(scope, read, true)?;
         for records in &records.families {
             records_loaded +=
                 family_rows::load_rows(&mut tx, records.family, &records.bytes).await?;
@@ -132,7 +140,8 @@ async fn rebuild_rows(
             .await?;
         }
         relation_rows::load_rows(&mut tx, &records.relations, scope).await?;
-        stamp::upsert_unit_row(&mut tx, &unit.name(), &digests).await?;
+        stamp::upsert_unit_row(&mut tx, &unit.name(), &read.digests).await?;
+        stamp::replace_file_rows(&mut tx, &unit.name(), &read.files).await?;
     }
     stamp::write_stamp(&mut tx, stored_serial + 1).await?;
     if cache_recreated {
@@ -154,6 +163,7 @@ async fn clear_cache(tx: &mut Transaction<'_, Sqlite>) -> anyhow::Result<()> {
         "record_identities",
         "projection_family_digests",
         "projection_unit_digests",
+        "projection_file_digests",
     ] {
         sqlx::query(sqlx::AssertSqlSafe(format!("DELETE FROM {table}")))
             .execute(&mut **tx)
