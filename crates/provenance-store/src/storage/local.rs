@@ -54,12 +54,7 @@ impl LocalStateStorage {
 
 impl StateStorage for LocalStateStorage {
     fn read_view(&self) -> Result<StateView, StorageError> {
-        let mut entries = BTreeMap::new();
-        let state = self.layout.state_dir();
-        if state.try_exists().map_err(read_error(&state))? {
-            read_tree(&state, "", &mut entries)?;
-        }
-        Ok(StateView::new(entries))
+        read_state_tree(&self.layout.state_dir())
     }
 
     /// Returns the revision of the whole tree after the write. The tree is
@@ -197,6 +192,17 @@ fn remove_file(path: &Utf8Path) -> anyhow::Result<()> {
 /// leaves it out: a name that is not UTF-8, a symbolic link, a special
 /// entry, or a file that is not the manifest or a shard. A shard that the
 /// process cannot read is an error.
+/// The canonical state in the state directory `state`: the manifest and each
+/// shard of a scope. No other entry is in the view. A missing directory is
+/// an empty view.
+pub(crate) fn read_state_tree(state: &Utf8Path) -> Result<StateView, StorageError> {
+    let mut entries = BTreeMap::new();
+    if state.try_exists().map_err(read_error(state))? {
+        read_tree(state, "", &mut entries)?;
+    }
+    Ok(StateView::new(entries))
+}
+
 fn read_tree(
     directory: &Utf8Path,
     prefix: &str,

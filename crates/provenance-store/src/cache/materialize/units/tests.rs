@@ -1,48 +1,22 @@
-use super::{digest_with, digests_with, unit_digest, unit_stored_digest, Unit, UnitDigests};
+use super::{state_view, unit_digest, unit_digests, unit_stored_digest, Unit, UnitDigests};
 
 #[test]
-fn a_file_added_after_bytes_are_read_invalidates_the_digest() {
+fn an_entry_that_is_not_canonical_state_moves_no_digest() {
     for unit in [
         Unit::Global,
         Unit::Scope(provenance_core::ScopeId::new("default").unwrap()),
     ] {
-        let dir = tempfile::tempdir().unwrap();
+        let (dir, _) = requirement_shard(b"{\"id\":\"one\"}\n");
         let state = camino::Utf8Path::from_path(dir.path()).unwrap();
+        let before = unit_digest(state, &unit).unwrap();
         let root = match &unit {
             Unit::Global => state.to_path_buf(),
             Unit::Scope(scope) => state.join("scopes").join(scope.as_str()),
         };
-        std::fs::create_dir_all(&root).unwrap();
-        std::fs::write(root.join("first.txt"), b"first").unwrap();
-        let before = unit_digest(state, &unit).unwrap();
-        let added = root.join("added.txt");
-        let result = digest_with(state, &unit, |_, _| {
-            std::fs::write(&added, b"added").unwrap();
-        });
-        assert_ne!(before, unit_digest(state, &unit).unwrap());
-        let error = result.expect_err("file added while reading bytes was missed");
-        assert_eq!(error.path, added);
+        std::fs::write(root.join("added.txt"), b"added").unwrap();
+        std::fs::write(root.join(".tmp123"), b"half-written").unwrap();
+        assert_eq!(before, unit_digest(state, &unit).unwrap());
     }
-}
-
-#[test]
-fn a_scope_created_after_file_collection_invalidates_the_digest() {
-    let dir = tempfile::tempdir().unwrap();
-    let state = camino::Utf8Path::from_path(dir.path()).unwrap();
-    let added = state.join("scopes/default/added.txt");
-    let path = added.clone();
-    crate::test_probes::arm("unit_files_collected", move || {
-        std::fs::create_dir_all(path.parent().unwrap())?;
-        std::fs::write(&path, b"added")?;
-        Ok(())
-    });
-    let result = unit_digest(
-        state,
-        &Unit::Scope(provenance_core::ScopeId::new("default").unwrap()),
-    );
-    crate::test_probes::disarm("unit_files_collected");
-    let error = result.expect_err("new scope files were missed");
-    assert_eq!(error.path, added);
 }
 
 #[test]
@@ -51,7 +25,13 @@ fn stamps_do_not_change_unit_digests_but_every_other_field_does() {
     let state = camino::Utf8Path::from_path(dir.path()).unwrap();
     let unit = Unit::Scope(provenance_core::ScopeId::new("default").unwrap());
     for family in ["sources", "requirements", "rules", "resolutions"] {
-        let path = state.join(format!("scopes/default/{family}/record.jsonl"));
+        let shard = match family {
+            "sources" => "source",
+            "requirements" => "req",
+            "rules" => "rule",
+            _ => "res",
+        };
+        let path = state.join(format!("scopes/default/{family}/{shard}.jsonl"));
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         let mut record = serde_json::json!({"id":"one","statement":"Original content"});
         let write = |record: &serde_json::Value| {
@@ -81,7 +61,7 @@ fn stamps_do_not_change_unit_digests_but_every_other_field_does() {
 
 fn requirement_shard(bytes: &[u8]) -> (tempfile::TempDir, Unit) {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("scopes/default/requirements/record.jsonl");
+    let path = dir.path().join("scopes/default/requirements/req.jsonl");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, bytes).unwrap();
     (
@@ -100,7 +80,7 @@ fn a_known_pair_with_the_current_stored_digest_is_returned_without_a_parse() {
         stored: unit_stored_digest(state, &unit).unwrap(),
     };
 
-    let digests = digests_with(state, &unit, Some(&known), |_, _| {}).unwrap();
+    let digests = unit_digests(state, &state_view(state).unwrap(), &unit, Some(&known)).unwrap();
 
     assert_eq!(digests, known);
 }
@@ -114,7 +94,7 @@ fn a_known_pair_with_a_different_stored_digest_gets_the_computed_content_digest(
         stored: "fake stored digest".to_string(),
     };
 
-    let digests = digests_with(state, &unit, Some(&known), |_, _| {}).unwrap();
+    let digests = unit_digests(state, &state_view(state).unwrap(), &unit, Some(&known)).unwrap();
 
     assert_eq!(digests.content, unit_digest(state, &unit).unwrap());
     assert_eq!(digests.stored, unit_stored_digest(state, &unit).unwrap());
