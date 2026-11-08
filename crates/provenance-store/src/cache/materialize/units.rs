@@ -194,7 +194,8 @@ fn unit_files(
         Unit::Global => collect(state_dir, "", true, &mut files)?,
         Unit::Scope(scope) => {
             let key = format!("scopes/{}", scope.as_str());
-            let root = state_dir.join(&key);
+            // Component joins keep the native spelling of the paths on Windows.
+            let root = state_dir.join("scopes").join(scope.as_str());
             match std::fs::symlink_metadata(&root) {
                 Ok(_) => collect(&root, &key, false, &mut files)?,
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -285,7 +286,10 @@ fn content_digest(
 ) -> Result<String, UnitHashError> {
     let mut content = Vec::new();
     for (key, bytes) in entries {
-        let path = state_dir.join(key);
+        // Component joins give the native spelling of the file path.
+        let path = key
+            .split('/')
+            .fold(state_dir.to_path_buf(), |path, part| path.join(part));
         let content_bytes =
             content::hash_bytes(&path, bytes).map_err(|error| UnitHashError::at(&path, error))?;
         frame(&mut content, key, &content_bytes);
