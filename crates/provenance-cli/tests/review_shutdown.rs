@@ -21,7 +21,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-fn repository() -> (tempfile::TempDir, ProvenanceLayout, Vec<u8>) {
+fn repository() -> (tempfile::TempDir, ProvenanceLayout) {
     let repo = initialized_repository();
     let layout = ProvenanceLayout::new(repo.path().to_str().unwrap());
     let scope = ScopeId::new("default").unwrap();
@@ -42,17 +42,26 @@ fn repository() -> (tempfile::TempDir, ProvenanceLayout, Vec<u8>) {
             origin_message: None,
         })
         .unwrap();
-    let requirements = provenance_store::shards::requirements_path(&layout, &scope);
-    (repo, layout, std::fs::read(requirements).unwrap())
+    (repo, layout)
 }
 
-// Hold a real filesystem read inside an admitted write. A nonblocking FIFO
-// writer opens only after the host opens the reader, so no timing guess is needed.
+/// A publication marker of a finished publication whose transaction is gone.
+/// Recovery clears it and the section goes on.
+fn finished_marker(layout: &ProvenanceLayout) -> String {
+    json!({
+        "transaction_dir": layout.import_transactions_dir().join("blocked-write"),
+        "phase": "published",
+    })
+    .to_string()
+}
+
+// Hold a real filesystem read inside an admitted write: the section entry
+// reads the publication marker for recovery, and the marker is a FIFO. A
+// nonblocking FIFO writer opens only after the host opens the reader, so no
+// timing guess is needed.
 fn block_write(host: &Host, layout: &ProvenanceLayout) -> (File, TcpStream) {
-    let path =
-        provenance_store::shards::requirements_path(layout, &ScopeId::new("default").unwrap());
+    let path = layout.publication_marker_path();
     provenance_store::publication::with_repository_publication(layout, |_| {
-        std::fs::remove_file(&path)?;
         assert!(Command::new("mkfifo").arg(&path).status()?.success());
         Ok(())
     })
@@ -88,18 +97,15 @@ fn block_write(host: &Host, layout: &ProvenanceLayout) -> (File, TcpStream) {
 #[test]
 /// Implementation aid: pins graceful shutdown ordering around an admitted write.
 fn first_signal_waits_for_an_active_write_to_finish() {
-    let (repo, layout, requirements) = repository();
+    let (repo, layout) = repository();
     let mut host = start_capturing_stderr(repo.path());
     let (mut blocked, mut request) = block_write(&host, &layout);
     host.signal("-TERM");
     std::thread::sleep(Duration::from_millis(1200));
     assert!(host.is_running(), "active writes have no drain deadline");
-    // Restore the normal file before releasing the read, for later store access.
-    let path =
-        provenance_store::shards::requirements_path(&layout, &ScopeId::new("default").unwrap());
-    std::fs::remove_file(&path).unwrap();
-    std::fs::write(path, &requirements).unwrap();
-    blocked.write_all(&requirements).unwrap();
+    blocked
+        .write_all(finished_marker(&layout).as_bytes())
+        .unwrap();
     drop(blocked);
     let mut response = String::new();
     request.read_to_string(&mut response).unwrap();
@@ -119,7 +125,7 @@ fn first_signal_waits_for_an_active_write_to_finish() {
 /// Implementation aid: pins forced shutdown and its incomplete-write warning.
 fn second_signal_forces_exit_from_a_blocked_operation_with_a_warning() {
     for (first, second) in [("-TERM", "-TERM"), ("-INT", "-INT"), ("-TERM", "-INT")] {
-        let (repo, layout, _) = repository();
+        let (repo, layout) = repository();
         let mut host = start_capturing_stderr(repo.path());
         let (_blocked, _request) = block_write(&host, &layout);
         host.signal(first);
@@ -152,7 +158,7 @@ fn first_signal_stops_the_host_while_the_browser_stays_open() {
 #[test]
 /// Implementation aid: this flow checks forced exit with an active write and browser.
 fn second_signal_forces_exit_while_the_browser_stays_open() {
-    let (repo, layout, _) = repository();
+    let (repo, layout) = repository();
     let browser = PersistentBrowser::install();
     let mut host = start_with(repo.path(), |command| browser.configure(command));
     browser.wait_until_running();
