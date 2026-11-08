@@ -1,7 +1,7 @@
 use super::assert_kind_round_trips;
 use crate::model::{
-    ArchivedStamp, ArtifactLink, ArtifactLinkTargetType, Boundary, Question, QuestionStatus,
-    ResolutionMethod, ScopeId, SourceReference, StableId, Topic, TopicStatus,
+    ArchivedStamp, ArtifactLink, ArtifactLinkTargetType, Question, QuestionStatus,
+    ResolutionMethod, ScopeId, StableId, Topic, TopicStatus,
 };
 
 fn sid(value: &str) -> StableId {
@@ -23,29 +23,6 @@ fn links() -> Vec<ArtifactLink> {
             target_id: sid("rule_overtime_001"),
         },
     ]
-}
-
-fn filled_boundary() -> Boundary {
-    Boundary {
-        scope_id: scope(),
-        id: sid("boundary_no_backpay"),
-        requirement_id: sid("req_overtime"),
-        statement: "Back pay is out of scope".into(),
-        source_ref: Some(SourceReference {
-            source_id: sid("source_schads"),
-            clause: Some("cl_3".into()),
-        }),
-    }
-}
-
-fn bare_boundary() -> Boundary {
-    Boundary {
-        scope_id: scope(),
-        id: sid("boundary_bare"),
-        requirement_id: sid("req_overtime"),
-        statement: "Bare".into(),
-        source_ref: None,
-    }
 }
 
 fn filled_topic() -> Topic {
@@ -110,7 +87,7 @@ fn bare_question() -> Question {
         topic_id: sid("topic_rates"),
         requirement_id: sid("req_overtime"),
         question: "Bare?".into(),
-        resolution_method: ResolutionMethod::Grill,
+        resolution_method: ResolutionMethod::Ask,
         status: QuestionStatus::Open,
         archived_in_commit: None,
         claimed_by: None,
@@ -120,11 +97,6 @@ fn bare_question() -> Question {
         resolution_id: None,
         contradicts: None,
     }
-}
-
-#[test]
-fn a_boundary_round_trips_through_its_row() {
-    assert_kind_round_trips(&filled_boundary(), &bare_boundary());
 }
 
 #[test]

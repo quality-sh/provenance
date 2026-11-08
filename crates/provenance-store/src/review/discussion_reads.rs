@@ -80,8 +80,7 @@ pub async fn read_discussion(
 }
 
 pub(super) async fn check_parent(ctx: &ReadContext, parent: &ThreadParent) -> anyhow::Result<()> {
-    let table = super::discussion_state::parent_table(parent.node_type)
-        .ok_or_else(|| anyhow::anyhow!("thread parent kind does not take Discussions"))?;
+    let table = super::discussion_state::parent_table(parent.node_type);
     ctx.snapshot().attest(table);
     let mut tx = ctx.snapshot().connection().await;
     let exists: bool = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(

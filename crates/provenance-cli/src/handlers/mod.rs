@@ -1,20 +1,18 @@
-use crate::cli;
 use crate::output::{self, JsonFormat};
 use crate::registry_cli::BoundContext;
-use provenance_cli::servers::{DocsServeInput, McpInput, ReviewInput, Server};
+use provenance_cli::servers::{McpInput, ReviewInput, Server};
 use provenance_porcelain::export::Document;
 use provenance_porcelain::init::InitReport;
 use provenance_porcelain::registry::{
     self, CargoInitInput, DictionaryImportInput, DictionaryStatusInput, ExportInput, GraphCommand,
-    ImportInput, InitInput, MaterializeInput, MergeJsonlInput, ReferenceInput, ReferenceIssueInput,
-    ReportBuildInput, ReportRenderInput, RepositoryCommand, SchemaShowInput, SkillsInstallInput,
-    SkillsListInput, SkillsShowInput, SwarmBacktraceLandInput, ValidateInput, WorkspaceCommand,
+    ImportInput, InitInput, MaterializeInput, MergeJsonlInput, ReportBuildInput, ReportRenderInput,
+    RepositoryCommand, SchemaShowInput, SkillsInstallInput, SkillsListInput, SkillsShowInput,
+    SwarmBacktraceLandInput, ValidateInput, WorkspaceCommand,
 };
 use provenance_porcelain::Porcelain;
 use provenance_transport::porcelain::{ArtifactPort, RepositoryPort, SetupPort};
 use provenance_transport::repository::RepoContext;
 
-mod docs;
 #[cfg(feature = "dogfood")]
 mod dogfood;
 mod mcp;
@@ -216,10 +214,6 @@ fn work(context: BoundContext) -> Porcelain<RepositoryPort> {
 /// The typed input of one graph command, read from its declared flags.
 #[allow(clippy::redundant_pub_crate)]
 pub(super) enum GraphInput {
-    ReferenceIssue(ReferenceIssueInput, BoundContext),
-    ReferenceShow(ReferenceInput, BoundContext),
-    ReferenceVerify(ReferenceInput, BoundContext),
-    ReferenceExactExport(ReferenceInput, BoundContext),
     SwarmBacktraceLand(SwarmBacktraceLandInput, BoundContext),
 }
 
@@ -240,10 +234,6 @@ impl GraphInput {
             };
         }
         Ok(match command {
-            GraphCommand::ReferenceIssue => read!(ReferenceIssue),
-            GraphCommand::ReferenceShow => read!(ReferenceShow),
-            GraphCommand::ReferenceVerify => read!(ReferenceVerify),
-            GraphCommand::ReferenceExactExport => read!(ReferenceExactExport),
             GraphCommand::SwarmBacktraceLand => read!(SwarmBacktraceLand),
         })
     }
@@ -253,18 +243,6 @@ impl GraphInput {
 #[allow(clippy::redundant_pub_crate)]
 pub(super) async fn graph_command(input: GraphInput) -> anyhow::Result<()> {
     match input {
-        GraphInput::ReferenceIssue(input, context) => {
-            output::print_json(&work(context).reference_issue(input).await?)
-        }
-        GraphInput::ReferenceShow(input, context) => {
-            output::print_json(&work(context).reference_show(input).await?)
-        }
-        GraphInput::ReferenceVerify(input, context) => {
-            output::print_json(&work(context).reference_verify(input).await?)
-        }
-        GraphInput::ReferenceExactExport(input, context) => {
-            output::print_json(&work(context).reference_exact_export(input).await?)
-        }
         GraphInput::SwarmBacktraceLand(input, context) => {
             let json = context.json;
             let result = work(context).swarm_backtrace_land(input).await?;
@@ -357,7 +335,6 @@ pub(super) async fn workspace_command(input: WorkspaceInput) -> anyhow::Result<(
 /// The typed input of one server command, read from its declared flags.
 #[allow(clippy::redundant_pub_crate)]
 pub(super) enum ServerInput {
-    DocsServe(DocsServeInput),
     Review(ReviewInput),
     Mcp(McpInput),
 }
@@ -373,7 +350,6 @@ impl ServerInput {
             };
         }
         Ok(match server {
-            Server::DocsServe => read!(DocsServe),
             Server::Review => read!(Review),
             Server::Mcp => read!(Mcp),
         })
@@ -384,14 +360,6 @@ impl ServerInput {
 #[allow(clippy::redundant_pub_crate)]
 pub(super) async fn server_command(input: ServerInput) -> anyhow::Result<()> {
     match input {
-        ServerInput::DocsServe(input) => {
-            docs::handle(cli::workspace::DocsCommand::Serve {
-                repo: input.repo.into(),
-                host: input.host,
-                port: input.port,
-            })
-            .await
-        }
         ServerInput::Review(input) => {
             crate::review::run(crate::review::Options {
                 repo: input.repo.into(),

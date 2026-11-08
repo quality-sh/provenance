@@ -82,7 +82,6 @@ async fn every_owner_kind_and_the_links_derive_relation_rows() {
         "rule",
         "topic",
         "question",
-        "boundary",
     ] {
         assert!(
             rows.iter().any(|row| row.0 == owner),
@@ -123,11 +122,6 @@ async fn every_owner_kind_and_the_links_derive_relation_rows() {
             ("question", "question_threshold"),
             "topic_id",
             ("topic", "topic_rates"),
-        ),
-        row(
-            ("boundary", "boundary_no_backpay"),
-            "requirement_id",
-            ("requirement", "req_schads_overtime"),
         ),
     ];
     for expected in &declared {

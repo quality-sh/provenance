@@ -73,7 +73,7 @@ function catalogWrite(
 
 /** The record type of one collection name, such as `rule` for `rules`. */
 function recordType(collection: string): string {
-  return collection === "boundaries" ? "boundary" : collection.replace(/s$/, "");
+  return collection.replace(/s$/, "");
 }
 
 const requirementData = (id: string, statement: string) => ({

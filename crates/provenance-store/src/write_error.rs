@@ -23,7 +23,6 @@ pub enum WriteFailure {
     InvalidCommitPin,
     ScopeMismatch,
     EmptyMessageBody,
-    UnsupportedThreadParent,
     StatementInvalid {
         report: provenance_ste100::Report,
     },
@@ -48,9 +47,6 @@ pub enum WriteFailure {
     ReviewSubmissionConflict {
         current_submission: Option<provenance_core::StableId>,
         current_revision: provenance_core::StableId,
-    },
-    UnsupportedReviewFeedback {
-        record_kind: provenance_core::NodeType,
     },
     RecordOwnershipConflict {
         owner: Option<String>,

@@ -41,11 +41,6 @@ fn reviewed_records() -> (tempfile::TempDir, String) {
                 "requirement_ids":["req_review"]}),
         ),
         (
-            "boundaries",
-            json!({"id":"boundary_review", "requirement_id":"req_review",
-                "statement":"Keep the work in the repository."}),
-        ),
-        (
             "topics",
             json!({"id":"topic_review", "requirement_id":"req_review", "title":"Review"}),
         ),
@@ -87,7 +82,6 @@ fn review_view_reads_every_review_record_kind() {
         ("requirement", "req_review"),
         ("resolution", "resolution_review"),
         ("rule", "rule_review"),
-        ("boundary", "boundary_review"),
         ("topic", "topic_review"),
         ("question", "question_review"),
     ] {

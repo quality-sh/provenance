@@ -20,7 +20,7 @@
 //! bare one read alike, so the generator says nothing about the extensions.
 //! The one form that turns on them, a footnote, is an example instead.
 
-use super::{route_depth, DocPage, DocsSite};
+use super::{DocPage, DocsSite};
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
 use std::path::PathBuf;
@@ -363,9 +363,7 @@ fn gen_corpus(rng: &mut Rng) -> Corpus {
         let plants = gen_plants(rng, file);
         let route = route_for(file);
         doc_pages.push(DocPage {
-            depth: route_depth(&route),
             route,
-            title: file.to_string(),
             source_path: file.to_string(),
             file_path: PathBuf::from(format!("{SITE_ROOT}/{file}")),
             markdown: write_document(file, &plants),
@@ -378,11 +376,6 @@ fn gen_corpus(rng: &mut Rng) -> Corpus {
             .iter()
             .map(|page| (page.file_path.clone(), page.route.clone()))
             .collect(),
-        page_by_route: doc_pages
-            .iter()
-            .enumerate()
-            .map(|(index, page)| (page.route.clone(), index))
-            .collect(),
         pages: doc_pages,
     };
     Corpus {
@@ -392,10 +385,10 @@ fn gen_corpus(rng: &mut Rng) -> Corpus {
     }
 }
 
-/// The site infers each page's route and title from its file, and uses README.md as
-/// the homepage when docs/index.md is absent.
+/// The site infers each page's route from its file, and uses README.md as the
+/// homepage when docs/index.md is absent.
 #[test]
-fn the_site_infers_routes_and_titles() {
+fn the_site_infers_routes() {
     let pages = |files: &[(&str, &str)]| {
         let dir = tempfile::tempdir().unwrap();
         for (file, markdown) in files {
@@ -407,20 +400,18 @@ fn the_site_infers_routes_and_titles() {
             .unwrap()
             .pages
             .into_iter()
-            .map(|page| (page.route, page.title, page.source_path))
+            .map(|page| (page.route, page.source_path))
             .collect::<Vec<_>>()
     };
-    let owned = |route: &str, title: &str, source: &str| {
-        (route.to_owned(), title.to_owned(), source.to_owned())
-    };
+    let owned = |route: &str, source: &str| (route.to_owned(), source.to_owned());
     assert_eq!(
         pages(&[
             ("docs/index.md", "# Agent Handbook\n"),
             ("docs/guide/install.md", "# Installation\n"),
         ]),
         [
-            owned("/", "Agent Handbook", "docs/index.md"),
-            owned("/guide/install/", "Installation", "docs/guide/install.md"),
+            owned("/", "docs/index.md"),
+            owned("/guide/install/", "docs/guide/install.md"),
         ]
     );
     assert_eq!(
@@ -429,8 +420,8 @@ fn the_site_infers_routes_and_titles() {
             ("docs/guide/install.md", "# Installation\n"),
         ]),
         [
-            owned("/", "Project Handbook", "README.md"),
-            owned("/guide/install/", "Installation", "docs/guide/install.md"),
+            owned("/", "README.md"),
+            owned("/guide/install/", "docs/guide/install.md"),
         ]
     );
 }

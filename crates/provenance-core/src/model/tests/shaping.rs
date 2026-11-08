@@ -1,17 +1,9 @@
 use super::shaping::{
-    ArtifactLinkTargetType, Boundary, Question, QuestionStatus, ResolutionMethod, Topic,
-    TopicStatus,
+    ArtifactLinkTargetType, Question, QuestionStatus, ResolutionMethod, Topic, TopicStatus,
 };
 
 #[test]
 fn shaping_records_roundtrip_from_convex_style_json() {
-    let boundary = serde_json::json!({
-        "scope_id": "default",
-        "id": "boundary_no_manual_payroll",
-        "requirementId": "req_payroll",
-        "statement": "Do not require manual payroll reconciliation",
-        "sourceRef": {"sourceId": "source_schads", "clause": "28.1"}
-    });
     let topic = serde_json::json!({
         "scope_id": "default",
         "id": "topic_overtime",
@@ -35,15 +27,9 @@ fn shaping_records_roundtrip_from_convex_style_json() {
         "resolutionId": "res_overtime"
     });
 
-    let boundary: Boundary = serde_json::from_value(boundary).unwrap();
     let topic: Topic = serde_json::from_value(topic).unwrap();
     let question: Question = serde_json::from_value(question).unwrap();
 
-    assert_eq!(boundary.requirement_id.as_str(), "req_payroll");
-    assert_eq!(
-        boundary.source_ref.as_ref().unwrap().source_id.as_str(),
-        "source_schads"
-    );
     assert_eq!(topic.status, TopicStatus::Explored);
     assert_eq!(topic.links[0].target_type, ArtifactLinkTargetType::Source);
     assert_eq!(topic.claimed_by, None);
@@ -57,12 +43,9 @@ fn shaping_records_roundtrip_from_convex_style_json() {
         "res_overtime"
     );
 
-    let boundary = serde_json::to_value(boundary).unwrap();
     let topic = serde_json::to_value(topic).unwrap();
     let question = serde_json::to_value(question).unwrap();
 
-    assert_eq!(boundary["requirement_id"], "req_payroll");
-    assert_eq!(boundary["source_ref"]["source_id"], "source_schads");
     assert_eq!(topic["status"], "explored");
     assert_eq!(topic["links"][0]["target_type"], "source");
     assert!(topic.get("claimed_by").is_none());

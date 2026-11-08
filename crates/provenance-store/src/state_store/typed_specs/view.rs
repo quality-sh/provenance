@@ -2,8 +2,7 @@
 
 use crate::dictionary_reference::ProjectDictionary;
 use provenance_core::{
-    Boundary, ImplementationBinding, Question, Requirement, Resolution, Rule, ScopeId, Source,
-    Topic,
+    ImplementationBinding, Question, Requirement, Resolution, Rule, ScopeId, Source, Topic,
 };
 
 use crate::state_store::StateStore;
@@ -21,7 +20,6 @@ pub struct TypedSpecView {
     pub resolutions: Vec<Resolution>,
     pub topics: Vec<Topic>,
     pub questions: Vec<Question>,
-    pub boundaries: Vec<Boundary>,
     /// The project dictionary that statement diagnostics use.
     pub dictionary: Option<ProjectDictionary>,
 }
@@ -37,7 +35,6 @@ impl StateStore {
             resolutions: self.list_resolutions(scope)?,
             topics: self.list_topics(scope)?,
             questions: self.list_questions(scope)?,
-            boundaries: self.list_boundaries(scope)?,
             dictionary: crate::dictionary_reference::load_project_dictionary(&self.layout),
         })
     }

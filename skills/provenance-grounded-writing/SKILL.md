@@ -1,6 +1,6 @@
 ---
 name: provenance-grounded-writing
-description: Write specific, evidence-grounded statements and behaviour descriptions for requirements, rules, sources, resolutions, and boundaries — not generic capability language or meeting minutes. Use before calling `<id> create` for a requirement, rule, source, resolution, or boundary, especially for a root or mid-level requirement, a statement merging several candidates, or a resolution's position and rationale.
+description: Write specific, evidence-grounded statements and behaviour descriptions for requirements, rules, sources, and resolutions — not generic capability language or meeting minutes. Use before calling `<id> create` for a requirement, rule, source, or resolution, especially for a root or mid-level requirement, a statement merging several candidates, or a resolution's position and rationale.
 ---
 
 # Grounded writing

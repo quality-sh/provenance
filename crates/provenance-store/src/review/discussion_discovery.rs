@@ -48,7 +48,7 @@ pub async fn read_discussion_conversation(
 fn allowed_kinds(kinds: &[NodeType]) -> Vec<&'static str> {
     let mut words = kinds
         .iter()
-        .filter_map(|kind| super::discussion_state::discussion_kind_word(*kind))
+        .map(|kind| super::discussion_state::discussion_kind_word(*kind))
         .collect::<Vec<_>>();
     words.sort_unstable();
     words.dedup();
@@ -69,7 +69,7 @@ async fn list(ctx: &ReadContext, query: DiscussionListQuery) -> anyhow::Result<D
     let kinds = allowed_kinds(&query.allowed_parent_kinds);
     if let Some(parent) = &query.parent {
         let kind = super::discussion_state::discussion_kind_word(parent.node_type);
-        if !kind.is_some_and(|word| kinds.contains(&word)) {
+        if !kinds.contains(&kind) {
             return Err(ReadFailure::ResourceNotFound.into());
         }
         super::discussion_reads::check_parent(ctx, parent).await?;
@@ -114,7 +114,9 @@ async fn list(ctx: &ReadContext, query: DiscussionListQuery) -> anyhow::Result<D
     sql.push(")");
     if let Some(parent) = &query.parent {
         sql.push(" AND json_extract(d.parent,'$.node_type')=")
-            .push_bind(super::discussion_state::discussion_kind_word(parent.node_type).unwrap());
+            .push_bind(super::discussion_state::discussion_kind_word(
+                parent.node_type,
+            ));
         sql.push(" AND json_extract(d.parent,'$.node_id')=")
             .push_bind(parent.node_id.as_str());
     }

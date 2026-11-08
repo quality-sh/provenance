@@ -2,9 +2,7 @@
 
 use super::{Bounds, GetInput, GetOutcome, Registration, Review, View};
 use provenance_core::protocol::{GraphNode, ImpactResult, ResponseMeta};
-use provenance_core::{
-    Boundary, NodeType, Question, Requirement, Resolution, Rule, Source, StableId, Topic,
-};
+use provenance_core::{NodeType, Question, Requirement, Resolution, Rule, Source, StableId, Topic};
 use schemars::generate::{Contract, SchemaSettings};
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::Value;
@@ -20,7 +18,6 @@ enum RecordData<'a> {
     Rule(&'a Rule),
     Topic(&'a Topic),
     Question(&'a Question),
-    Boundary(&'a Boundary),
 }
 
 impl<'a> From<&'a GraphNode> for RecordData<'a> {
@@ -32,7 +29,6 @@ impl<'a> From<&'a GraphNode> for RecordData<'a> {
             GraphNode::Rule(record) => Self::Rule(record),
             GraphNode::Topic(record) => Self::Topic(record),
             GraphNode::Question(record) => Self::Question(record),
-            GraphNode::Boundary(record) => Self::Boundary(record),
         }
     }
 }

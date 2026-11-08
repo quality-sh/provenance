@@ -9,7 +9,7 @@ use super::decl::{declaration_of, RelationDecl, RelationFlow, RelationOwner};
 use super::declared_relations;
 use crate::model::graph::NodeType;
 use crate::model::ids::StableId;
-use crate::model::shaping::{ArtifactLink, ArtifactLinkTargetType, Boundary, Question, Topic};
+use crate::model::shaping::{ArtifactLink, ArtifactLinkTargetType, Question, Topic};
 use crate::model::{Requirement, Resolution, Rule, Source};
 use provenance_macros::rule;
 
@@ -185,7 +185,6 @@ pub struct RecordFront<'a> {
     pub rules: &'a [Rule],
     pub topics: &'a [Topic],
     pub questions: &'a [Question],
-    pub boundaries: &'a [Boundary],
 }
 
 impl RelationSource for RecordFront<'_> {
@@ -213,7 +212,6 @@ impl RelationSource for RecordFront<'_> {
                 }
                 rows
             }
-            NodeType::Boundary => outgoing_of(self.boundaries, id),
         }
     }
 
@@ -228,7 +226,6 @@ impl RelationSource for RecordFront<'_> {
         rows.extend(incoming_of(self.rules, node_type, id));
         rows.extend(incoming_of(self.topics, node_type, id));
         rows.extend(incoming_of(self.questions, node_type, id));
-        rows.extend(incoming_of(self.boundaries, node_type, id));
         for topic in self.topics {
             if links_name(&topic.links, node_type, id) {
                 rows.push((LINKS, endpoint(NodeType::Topic, &topic.id)));

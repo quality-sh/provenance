@@ -147,7 +147,17 @@ async fn document_failed_catch_up_precedes_missing_root_in_old_projection() {
         "req_new",
         provenance_core::RequirementStatus::Active,
     );
-    let path = crate::shards::boundaries_path(&store.layout, &scope);
+    store
+        .create_topic(crate::state_store::CreateTopicInput {
+            scope_id: scope.clone(),
+            id: provenance_core::StableId::new("topic_new").unwrap(),
+            requirement_id: provenance_core::StableId::new("req_new").unwrap(),
+            title: "New topic".into(),
+            status: provenance_core::TopicStatus::Open,
+            links: Vec::new(),
+        })
+        .unwrap();
+    let path = crate::shards::topics_path(&store.layout, &scope);
     let saved = std::fs::read(&path).unwrap();
     std::fs::write(&path, "invalid JSON\n").unwrap();
     let request = ReadDocumentQuery {

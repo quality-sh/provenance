@@ -11,9 +11,7 @@ Commands:
   validate         
   schema           
   dictionary       
-  graph-reference  
   swarm-backtrace  
-  docs             
   skills           
   report           Deterministic report rendering from a versioned report envelope
   review           Serve local review assets and authorized repository operations

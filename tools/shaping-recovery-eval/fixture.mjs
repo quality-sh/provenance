@@ -14,7 +14,7 @@ export function cli(binary, repo, args, input) {
 
 /** Creates one record with `<id> create --type <kind> --stdin`; `id` names the record. */
 export function create(binary, repo, collection, { id, ...fields }) {
-  const type = collection === 'boundaries' ? 'boundary' : collection.replace(/s$/, '');
+  const type = collection.replace(/s$/, '');
   return cli(binary, repo, [id, 'create', '--type', type, '--stdin'], fields);
 }
 
@@ -63,7 +63,7 @@ export function prepareFixture(binary, repo, scenario, candidate, guidanceCommit
 
 export function readGraph(binary, repo) {
   const graph = {};
-  for (const kind of ['topics', 'questions', 'requirements', 'resolutions', 'sources', 'rules', 'boundaries']) {
+  for (const kind of ['topics', 'questions', 'requirements', 'resolutions', 'sources', 'rules']) {
     const result = cli(binary, repo, ['api', kind, '--query', 'exclude_terminal=false']);
     if (result.meta?.has_more) throw new Error(`Incomplete ${kind} evidence`);
     graph[kind] = result.data.items ?? result.data;
@@ -74,7 +74,7 @@ export function readGraph(binary, repo) {
 
 /** Reads the review state that the person sees for each record, and each Resolution's downstream records. */
 export function readReview(binary, repo, graph) {
-  const kinds = ['requirements', 'rules', 'resolutions', 'boundaries', 'sources'];
+  const kinds = ['requirements', 'rules', 'resolutions', 'sources'];
   const records = [];
   for (const kind of kinds) {
     for (const record of graph[kind]) {

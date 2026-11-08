@@ -16,7 +16,7 @@
     },
     {
       "id": "question_rate",
-      "method": "grill",
+      "method": "ask",
       "text": "After question_threshold is answered, ask the owner which hourly rate applies."
     },
     {
@@ -31,7 +31,7 @@
     },
     {
       "id": "question_schedule",
-      "method": "grill",
+      "method": "ask",
       "text": "After question_rate is answered, ask the owner when the report is sent."
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "id": "question_bonus",
-      "method": "grill",
+      "method": "ask",
       "text": "Ask whether a night work bonus belongs in the calculator."
     }
   ],

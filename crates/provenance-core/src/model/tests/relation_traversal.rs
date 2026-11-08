@@ -84,7 +84,6 @@ mod relation_traversal {
                 inbound("requirement_ids", NodeType::Rule, "rule_pay"),
                 inbound("requirement_id", NodeType::Topic, "topic_rates"),
                 inbound("requirement_id", NodeType::Question, "question_threshold"),
-                inbound("requirement_id", NodeType::Boundary, "boundary_no_backpay"),
             ]
         );
     }
@@ -104,7 +103,6 @@ mod relation_traversal {
                 out("supersedes", NodeType::Source, "source_award_2019"),
                 inbound("cites", NodeType::Requirement, "req_overtime"),
                 inbound(LINKS, NodeType::Question, "question_threshold"),
-                inbound("cites", NodeType::Boundary, "boundary_no_backpay"),
             ]
         );
         let superseded = flatten(related_nodes(

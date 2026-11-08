@@ -224,10 +224,7 @@ fn actionable_failure(
         (
             Some(id),
             Some(
-                "review_submission_conflict"
-                | "requirement_edit_conflict"
-                | "record_edit_conflict"
-                | "unsupported_review_feedback",
+                "review_submission_conflict" | "requirement_edit_conflict" | "record_edit_conflict",
             ),
         ) => Some(format!("run `{}`", review_read_command(id, Some(context)))),
         _ => None,

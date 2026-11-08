@@ -255,7 +255,7 @@ record ratified product truth.
 
 | State class | Examples | Expected write policy |
 |---|---|---|
-| Graph intent | Sources, Requirements, Rules, Resolutions, Boundaries, Domains, authored edges | Planned Change; approval policy can depend on scope and risk |
+| Graph intent | Sources, Requirements, Rules, Resolutions, Domains, authored edges | Planned Change; approval policy can depend on scope and risk |
 | Working state | Fog, claims, open Questions and Topics, shaping threads | Revision-checked transaction; usually no approval ceremony |
 | Immutable audit | current Proposals, Assertions, Dispositions, landings | Lifecycle-specific append operation; never rewritten |
 | Engine-derived durable state | retirement markers, evidence review records | Engine writes as a consequence of a transaction |

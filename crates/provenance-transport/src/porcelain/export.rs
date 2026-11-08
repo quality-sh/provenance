@@ -18,8 +18,6 @@ pub struct ScopeExport {
     #[serde(default)]
     pub requirements: Vec<provenance_core::Requirement>,
     #[serde(default)]
-    pub boundaries: Vec<provenance_core::Boundary>,
-    #[serde(default)]
     pub topics: Vec<provenance_core::Topic>,
     #[serde(default)]
     pub questions: Vec<provenance_core::Question>,
@@ -50,7 +48,6 @@ impl ScopeExport {
             scope,
             sources: snapshot.sources,
             requirements: snapshot.requirements,
-            boundaries: snapshot.boundaries,
             topics: snapshot.topics,
             questions: snapshot.questions,
             resolutions: snapshot.resolutions,
@@ -140,13 +137,12 @@ fn render_markdown(exported: &ScopeExport) -> String {
     format!(
         concat!(
             "# Provenance Export\n\n- Scope: {}\n- Sources: {}\n",
-            "- Requirements: {}\n- Boundaries: {}\n- Topics: {}\n- Questions: {}\n",
+            "- Requirements: {}\n- Topics: {}\n- Questions: {}\n",
             "- Resolutions: {}\n- Rules: {}\n- Proposals: {}\n"
         ),
         exported.scope,
         exported.sources.len(),
         exported.requirements.len(),
-        exported.boundaries.len(),
         exported.topics.len(),
         exported.questions.len(),
         exported.resolutions.len(),
@@ -158,14 +154,12 @@ fn render_markdown(exported: &ScopeExport) -> String {
 fn render_toon(exported: &ScopeExport) -> String {
     format!(
         concat!(
-            "scope: {}\nsources: {}
-requirements: {}\nboundaries: {}\n",
+            "scope: {}\nsources: {}\nrequirements: {}\n",
             "topics: {}\nquestions: {}\nresolutions: {}\nrules: {}\nproposals: {}\n"
         ),
         exported.scope,
         exported.sources.len(),
         exported.requirements.len(),
-        exported.boundaries.len(),
         exported.topics.len(),
         exported.questions.len(),
         exported.resolutions.len(),
@@ -177,14 +171,12 @@ requirements: {}\nboundaries: {}\n",
 fn render_table(exported: &ScopeExport) -> String {
     format!(
         concat!(
-            "scope	sources	requirements\tboundaries\ttopics\tquestions\t",
-            "resolutions\trules\tproposals\n{}	{}	{}	{}	{}	{}	{}	{}	{}
-"
+            "scope\tsources\trequirements\ttopics\tquestions\t",
+            "resolutions\trules\tproposals\n{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n"
         ),
         exported.scope,
         exported.sources.len(),
         exported.requirements.len(),
-        exported.boundaries.len(),
         exported.topics.len(),
         exported.questions.len(),
         exported.resolutions.len(),

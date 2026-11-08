@@ -11,14 +11,13 @@ const RUST_FILE_LINE_LIMIT: usize = 500;
 /// new one may be born larger than the widest one already earned. The rules
 /// spending the budget, measured over the tracked tree:
 ///
-/// - 29 `rule_reference_verified` (`provenance-store/src/graph_reference.rs`)
 /// - 26 `rule_disposition_write_gate` (`state_store/proposal_writers.rs`)
 /// - 21 `rule_docs_links_resolve` (`provenance-transport/src/docs.rs`)
 /// - 16 `rule_generated_outputs_ignored` (`provenance-transport/src/gitignore.rs`)
 ///
 /// Shrinking one of those is the way to lower this number; nothing else needs
 /// to move.
-const RULE_DOC_LINE_LIMIT: usize = 29;
+const RULE_DOC_LINE_LIMIT: usize = 26;
 
 /// Phrases that are record-keeping by definition, whatever they are wrapped in.
 ///

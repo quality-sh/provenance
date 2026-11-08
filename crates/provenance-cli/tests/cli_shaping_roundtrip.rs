@@ -14,19 +14,11 @@ fn cli_shaping_records_materialize_and_accept_topic_question_discussions() {
 
     init(&repo);
     create_source_and_requirement(&repo);
-    create_boundary(&repo);
     create_topic(&repo);
     create_question(&repo);
     post_topic_thread(&repo);
     post_question_thread(&repo);
     verify_materialized_lists(&repo);
-}
-
-fn create_boundary(repo: &str) {
-    provenance_stdin(&["boundary_no_manual_rework", "create", "--type", "boundary", "--stdin", "--repo", repo, "--scope", "default", "--format", "json"], r#"{"requirement_id":"req_overtime","statement":"No manual payroll reconciliation","source_ref":{"source_id":"source_schads","clause":"28.1"}}"#)
-    .success()
-    .stdout(contains("boundary_no_manual_rework"))
-    .stdout(contains(r#""source_id": "source_schads""#));
 }
 
 fn create_question(repo: &str) {
@@ -44,7 +36,7 @@ fn create_question(repo: &str) {
         "--question",
         "Which threshold applies?",
         "--method",
-        "grill",
+        "ask",
         "--status",
         "answered",
         "--answer",
@@ -54,7 +46,7 @@ fn create_question(repo: &str) {
     ])
     .success()
     .stdout(contains("question_overtime_threshold"))
-    .stdout(contains(r#""resolution_method": "grill""#))
+    .stdout(contains(r#""resolution_method": "ask""#))
     .stdout(contains(r#""requirement_id": "req_overtime""#));
 }
 
@@ -123,16 +115,4 @@ fn verify_materialized_lists(repo: &str) {
     ])
     .success()
     .stdout(contains("question_overtime_threshold"));
-    provenance(&[
-        "api",
-        "boundaries",
-        "--repo",
-        repo,
-        "--scope",
-        "default",
-        "--format",
-        "json",
-    ])
-    .success()
-    .stdout(contains("boundary_no_manual_rework"));
 }

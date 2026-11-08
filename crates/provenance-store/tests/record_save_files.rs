@@ -76,14 +76,6 @@ fn create_and_update_every_kind(store: &StateStore, scope: &ScopeId) {
             "statement":"The system keeps every file."})))
         .unwrap();
     store
-        .create_boundary(input(json!({"scope_id":"default", "id":"boundary_files",
-            "requirement_id":"req_files", "statement":"Boundary A", "source_ref":null})))
-        .unwrap();
-    store
-        .update_boundary(input(json!({"scope_id":"default", "id":"boundary_files",
-            "statement":"Boundary B"})))
-        .unwrap();
-    store
         .create_topic(input(json!({"scope_id":"default", "id":"topic_files",
             "requirement_id":"req_files", "title":"Topic A", "status":"open", "links":[]})))
         .unwrap();

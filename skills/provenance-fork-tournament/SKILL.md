@@ -21,7 +21,7 @@ Run a tournament only when **all three** hold:
    forecloses the others.
 2. **Expensive to reverse** — later work will build on the choice; unwinding it means
    unwinding that work.
-3. **Preference unknowable without artifacts.** If a `grill` question can settle the
+3. **Preference unknowable without artifacts.** If an `ask` question can settle the
    choice, ask that question instead. Use a tournament only when the human cannot *specify*
    a preference and can only *react* to an artifact.
 
@@ -68,8 +68,8 @@ provenance <question_id> claim --scope <scope> \
 ```
 
 1. **Spawn N agents in parallel** — one Agent tool call per stance, all in one message.
-   Each spawn prompt carries: the anchor requirement and boundaries (loaded with the
-   graph and boundary commands; `provenance search --kind rule` supplies Rules and
+   Each spawn prompt carries: the anchor requirement and its description (loaded with the
+   graph commands; `provenance search --kind rule` supplies Rules and
    `provenance check --gaps` supplies computed gaps),
    the question, the stance (values + quality bar + exit
    criterion), its evidence partition, and its task framing. Each agent produces one

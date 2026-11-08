@@ -60,7 +60,7 @@ A packet passes when every case has no findings:
 | `anchor_inside_parent_tree` | No first-turn page with the parent as root, or any page with the anchor as root. |
 | `tree_branches_by_decision` | A new Rule that is not under a Requirement below the anchor, a Rule that does not name the Resolution that spawned its Requirement, an accepted Requirement outside the anchor's tree, or a choice that no Resolution spawned. |
 | `resolution_shows_downstream` | A new Resolution with no review entry, no spawned Requirement, or an empty impact view. |
-| `every_record_submitted` | A created Requirement, Rule, Resolution, Boundary, or Source in the final graph with no review submission, whatever its status. |
+| `every_record_submitted` | A created Requirement, Rule, Resolution, or Source in the final graph with no review submission, whatever its status. |
 | `prerequisite_order` | A Question claimed or answered while a prerequisite from the independent list is open at the end of the turn. |
 | `accepted_decisions` | An accepted Requirement ID is missing or does not state its fact. |
 | `refused_decisions` | A Requirement, Rule, or Resolution position adopts a refused idea. |

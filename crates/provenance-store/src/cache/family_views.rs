@@ -24,7 +24,6 @@ macro_rules! project_families {
                         node: [$($node:tt)*],
                         reader: {
                             open: $reader:ident,
-                            closed: [$($closed:tt)*],
                             strategy: $strategy:ident
                         },
                         id: $id:ident,
@@ -50,7 +49,6 @@ macro_rules! project_families {
                             path: $path,
                             node: [$($node)*],
                             reader: $reader,
-                            closed: [$($closed)*],
                             strategy: $strategy,
                             id: $id,
                             loader: [$($loader)*],

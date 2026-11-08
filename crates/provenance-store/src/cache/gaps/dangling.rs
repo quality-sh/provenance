@@ -14,7 +14,6 @@ pub(super) fn add_reference_gaps(query: &GraphQuery<'_, '_>, gaps: &mut Vec<GapI
     add_declared_refs(query, query.graph.rules, gaps);
     add_declared_refs(query, query.graph.topics, gaps);
     add_declared_refs(query, query.graph.questions, gaps);
-    add_declared_refs(query, query.graph.boundaries, gaps);
     for topic in query.graph.topics {
         add_link_refs(query, NodeType::Topic, &topic.id, &topic.links, None, gaps);
     }

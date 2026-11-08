@@ -2,8 +2,7 @@
 use crate::review::ListEdit;
 use provenance_core::{
     ArtifactLink, QuestionStatus, RequirementStatus, ResolutionInput, ResolutionMethod,
-    ResolutionStatus, RuleSeverity, RuleStatus, ScopeId, SourceReference, SourceType, StableId,
-    TopicStatus,
+    ResolutionStatus, RuleSeverity, RuleStatus, ScopeId, SourceType, StableId, TopicStatus,
 };
 use serde::{Deserialize, Serialize};
 
@@ -58,9 +57,6 @@ update_input!(UpdateRuleInput, RuleClearField {
     status: RuleStatus, severity: RuleSeverity, source_document: String,
     source_section: String, archived_in_commit: provenance_core::ArchivedStamp,
     requirement_ids: ListEdit, resolution_ids: ListEdit
-});
-update_input!(UpdateBoundaryInput, BoundaryClearField { SourceRef }, {
-    statement: String, source_ref: SourceReference
 });
 update_input!(UpdateTopicInput, TopicClearField {}, {
     title: String, status: TopicStatus, links: Vec<ArtifactLink>,

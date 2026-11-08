@@ -1,8 +1,8 @@
 use super::super::{compute_gaps, GapGraph, GapItem, GapKind};
 use super::fixtures::*;
 use provenance_core::{
-    Boundary, NodeType, QuestionStatus, Requirement, RequirementStatus, Resolution,
-    ResolutionStatus, Rule, RuleStatus, ScopeId, TopicStatus,
+    NodeType, QuestionStatus, Requirement, RequirementStatus, Resolution, ResolutionStatus, Rule,
+    RuleStatus, ScopeId, TopicStatus,
 };
 use provenance_macros::verifies;
 
@@ -32,14 +32,6 @@ fn no_live_parent(gaps: &[GapItem]) -> Vec<(NodeType, &str, Option<&str>)> {
             )
         })
         .collect()
-}
-
-fn boundary(id: &str, requirement_id: &str) -> Boundary {
-    serde_json::from_value(serde_json::json!({
-        "scope_id": "default", "id": id,
-        "requirement_id": requirement_id, "statement": "Back pay is out of scope"
-    }))
-    .unwrap()
 }
 
 #[test]
@@ -130,11 +122,10 @@ fn a_live_resolution_topic_or_question_under_only_archived_parents_is_a_gap() {
     assert_eq!(question.requirement_id.as_deref(), Some("req_archived"));
 }
 
-/// An ended or archived decision, an archived Topic or Question, a Topic or
-/// Question with a live parent, and a Boundary are not this gap. A Boundary
-/// has no lifecycle status.
+/// An ended or archived decision, an archived Topic or Question, and a Topic
+/// or Question with a live parent are not this gap.
 #[test]
-fn an_ended_or_archived_record_or_a_boundary_is_not_a_gap() {
+fn an_ended_or_archived_record_is_not_a_gap() {
     let resolutions = [
         ResolutionStatus::Abandoned,
         ResolutionStatus::Rejected,
@@ -175,7 +166,6 @@ fn an_ended_or_archived_record_or_a_boundary_is_not_a_gap() {
         topics: &topics,
         questions: &questions,
         threads: &[],
-        boundaries: &[boundary("boundary_archived_parent", "req_archived")],
         contributions: &[],
         synthesis_packets: &[],
     });

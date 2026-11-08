@@ -82,7 +82,6 @@ npx provenance prime
 | `provenance check` | Validate the state files |
 | `provenance materialize` | Rebuild the SQLite query cache |
 | `provenance <requirement> get --view children` | Show the records below a requirement |
-| `provenance graph-reference issue\|show\|verify\|exact-export` | Hand off an immutable pinned graph |
 | `provenance <rule> trace` | Walk a Rule back to its Requirement, any producing Resolution, and its Sources |
 | `provenance api proposals --scope default --query exclude_terminal=true` | List proposals that do not have a terminal disposition |
 | `provenance review --repo . --repository-id local --scope default` | Serve the review page for the working-copy graph on a local host |

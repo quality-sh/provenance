@@ -1,5 +1,5 @@
 //! The docs site of a repository: its Markdown pages and the link check that `check --docs`
-//! and `docs serve` use.
+//! runs.
 
 use anyhow::{bail, Context};
 use provenance_macros::rule;
@@ -8,20 +8,13 @@ use pulldown_cmark::{Event, Options, Parser, Tag};
 use serde::Serialize;
 use std::{
     collections::BTreeMap,
-    fmt::Write as _,
     path::{Component, Path, PathBuf},
 };
 use walkdir::WalkDir;
 
-/// How this site reads markdown, written down once.
-///
-/// `check --docs` and `docs serve` are two readings of one document, and a
-/// document read two ways can be checked as one thing and served as
-/// another: a footnote definition is a link definition to a parser without
-/// `ENABLE_FOOTNOTES` and a footnote to a parser with it. Both sides parse
-/// with these options, so a destination the check resolves is a
-/// destination the server rewrites, and a destination the check never sees
-/// is one the server never renders as a link.
+/// How this site reads markdown. Footnotes are on: a footnote definition is a
+/// link definition to a parser without `ENABLE_FOOTNOTES` and a footnote to a
+/// parser with it, and a footnote is not a link.
 pub const MARKDOWN_OPTIONS: Options = Options::ENABLE_TABLES
     .union(Options::ENABLE_STRIKETHROUGH)
     .union(Options::ENABLE_TASKLISTS)
@@ -32,18 +25,15 @@ pub const MARKDOWN_OPTIONS: Options = Options::ENABLE_TABLES
 pub struct DocsSite {
     pub pages: Vec<DocPage>,
     pub route_by_path: BTreeMap<PathBuf, String>,
-    pub page_by_route: BTreeMap<String, usize>,
 }
 
 /// One published Markdown page.
 #[derive(Debug, Clone)]
 pub struct DocPage {
     pub route: String,
-    pub title: String,
     pub source_path: String,
     pub file_path: PathBuf,
     pub markdown: String,
-    pub depth: usize,
 }
 
 /// A link to a local document that the site does not publish.
@@ -117,15 +107,11 @@ impl DocsSite {
                     .context("docs source was outside the repo")?,
             );
             let route = route_for_source(&repo, &docs_dir, &file_path)?;
-            let title = infer_title(&markdown, &file_path);
-            let depth = route_depth(&route);
             pages.push(DocPage {
                 route,
-                title,
                 source_path,
                 file_path: normalize_path(&file_path),
                 markdown,
-                depth,
             });
         }
 
@@ -153,34 +139,10 @@ impl DocsSite {
             .iter()
             .map(|page| (page.file_path.clone(), page.route.clone()))
             .collect();
-        let page_by_route = pages
-            .iter()
-            .enumerate()
-            .map(|(index, page)| (page.route.clone(), index))
-            .collect();
-
         Ok(Self {
             pages,
             route_by_path,
-            page_by_route,
         })
-    }
-
-    pub fn ensure_links_valid(&self) -> anyhow::Result<()> {
-        let broken_links = self.broken_links();
-        if broken_links.is_empty() {
-            return Ok(());
-        }
-
-        let mut message = format!("{} broken docs link(s)", broken_links.len());
-        for link in broken_links.iter().take(10) {
-            write!(
-                message,
-                "\n{} -> {} (resolved to {})",
-                link.source_path, link.link, link.resolved_path
-            )?;
-        }
-        bail!(message);
     }
 
     /// Decides which of the docs tree's markdown links do not resolve.
@@ -199,11 +161,6 @@ impl DocsSite {
     /// that does not end in `.md`, the fragment hanging off a local
     /// destination (the page has to exist, the heading inside it need not),
     /// and images.
-    ///
-    /// The server resolves a link with the same two functions
-    /// (`local_markdown_path` and `resolve_markdown_link`) before rewriting
-    /// it to a route, so what this decision accepts is exactly what `docs
-    /// serve` can turn into a link a reader can follow.
     #[rule("rule_docs_links_resolve")]
     pub fn broken_links(&self) -> Vec<BrokenLink> {
         let mut broken = Vec::new();
@@ -233,11 +190,9 @@ impl DocsSite {
 /// resolved to the destination in the definition. Images are a different
 /// tag and are not collected, so a picture is never a broken docs link.
 ///
-/// The page is parsed with `MARKDOWN_OPTIONS`, the options the server
-/// renders with, so what counts as a link here is what the reader will be
-/// offered as one. A footnote is the case where that matters: `[^1]` with a
-/// `[^1]: guide/gone.md` block below it is a footnote to both sides, and
-/// neither reports nor renders a link.
+/// The page is parsed with `MARKDOWN_OPTIONS`. A footnote is the case where
+/// that matters: `[^1]` with a `[^1]: guide/gone.md` block below it is a
+/// footnote, and the check does not report it as a link.
 fn markdown_links(markdown: &str) -> Vec<String> {
     let mut links = Vec::new();
     for event in Parser::new_ext(markdown, MARKDOWN_OPTIONS) {
@@ -250,7 +205,7 @@ fn markdown_links(markdown: &str) -> Vec<String> {
     links
 }
 
-pub fn resolve_markdown_link(page: &DocPage, destination: &str) -> Option<PathBuf> {
+fn resolve_markdown_link(page: &DocPage, destination: &str) -> Option<PathBuf> {
     let (path_part, _suffix) = local_markdown_path(destination)?;
     let target_path = page.file_path.parent()?.join(path_part);
     Some(normalize_path(&target_path))
@@ -259,7 +214,7 @@ pub fn resolve_markdown_link(page: &DocPage, destination: &str) -> Option<PathBu
 /// Splits a destination that names a local document into the path it names
 /// and the fragment trailing it, or `None` when the destination is out of
 /// the docs link decision's scope.
-pub fn local_markdown_path(destination: &str) -> Option<(&str, &str)> {
+fn local_markdown_path(destination: &str) -> Option<(&str, &str)> {
     if destination.starts_with('#') || destination.starts_with('/') || has_url_scheme(destination) {
         return None;
     }
@@ -314,44 +269,6 @@ fn page_sort_key(page: &DocPage) -> (u8, String) {
     } else {
         (1, page.source_path.clone())
     }
-}
-
-fn route_depth(route: &str) -> usize {
-    route
-        .trim_matches('/')
-        .split('/')
-        .filter(|part| !part.is_empty())
-        .count()
-        .saturating_sub(1)
-}
-
-fn infer_title(markdown: &str, file_path: &Path) -> String {
-    for line in markdown.lines() {
-        if let Some(title) = line.strip_prefix("# ") {
-            let title = title.trim().trim_end_matches('#').trim();
-            if !title.is_empty() {
-                return title.to_string();
-            }
-        }
-    }
-
-    file_path
-        .file_stem()
-        .and_then(|stem| stem.to_str())
-        .map_or_else(|| "Untitled".to_string(), titleize_slug)
-}
-
-fn titleize_slug(slug: &str) -> String {
-    slug.split(['-', '_'])
-        .filter(|part| !part.is_empty())
-        .map(|part| {
-            let mut chars = part.chars();
-            chars.next().map_or_else(String::new, |first| {
-                format!("{}{}", first.to_uppercase(), chars.as_str())
-            })
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
 }
 
 fn is_markdown_file(path: &Path) -> bool {
