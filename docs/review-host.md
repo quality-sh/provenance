@@ -281,7 +281,7 @@ unknown path gets 404 `unknown_operation`, and another method on an asset gets
 The host reserves `/review-config` for authenticated runtime configuration:
 
 ```json
-{"endpoint":"http://127.0.0.1:PORT","repositoryId":"A","scope":"default","reviewer":{"actorId":"maintainer","allowed":true},"dispositionActorIds":["maintainer"],"compatibility":{"wire":9,"read_derivation":3},"sdkVersion":"0.3.2"}
+{"endpoint":"http://127.0.0.1:PORT","repositoryId":"A","scope":"default","reviewer":{"actorId":"maintainer","allowed":true},"dispositionActorIds":["maintainer"],"compatibility":{"wire":9,"read_derivation":3},"sdkVersion":"0.4.0"}
 ```
 
 The host reads `dispositionActorIds` from the repository manifest for each
