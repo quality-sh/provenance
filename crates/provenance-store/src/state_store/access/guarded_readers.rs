@@ -130,11 +130,11 @@ impl GuardedStore<'_> {
 
 /// A store that reads one view of the canonical state and no file. Only
 /// [`ViewStore::new`] makes one, and it always reads a view.
-pub(crate) struct ViewStore(StateStore);
+pub struct ViewStore(StateStore);
 
 impl ViewStore {
     /// A store over `view`, a view of the canonical state of `layout`.
-    pub(crate) fn new(
+    pub fn new(
         identity: RepositoryIdentity,
         layout: ProvenanceLayout,
         view: Arc<StateView>,

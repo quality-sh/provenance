@@ -10,7 +10,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 mod guarded_readers;
-pub(crate) use guarded_readers::ViewStore;
+pub use guarded_readers::ViewStore;
 
 #[cfg(test)]
 mod tests;

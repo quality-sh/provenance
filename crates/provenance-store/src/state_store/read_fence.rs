@@ -36,7 +36,7 @@ thread_local! {
 /// Runs `body` with the state reads of this thread fenced to `directories`
 /// below `scope_dir`. A read outside them fails the result. The fence ends
 /// with the body, also when it panics.
-pub(crate) fn with_read_fence<R>(
+pub fn with_read_fence<R>(
     scope_dir: Utf8PathBuf,
     directories: Vec<&'static str>,
     body: impl FnOnce() -> anyhow::Result<R>,
@@ -63,10 +63,7 @@ pub(crate) fn with_read_fence<R>(
             .and_then(|fence| fence.outside.take())
     });
     drop(restore);
-    match outside {
-        Some(path) => Err(outside_error(&path)),
-        None => result,
-    }
+    outside.map_or(result, |path| Err(outside_error(&path)))
 }
 
 /// Records one read of the state file or directory at `path`. Inside a

@@ -74,7 +74,7 @@ fn inputs(family: ProjectionFamily) -> Vec<Input> {
 
 /// The directories below a scope directory that the reader of `family`
 /// reads.
-pub(crate) fn input_directories(family: ProjectionFamily) -> Vec<&'static str> {
+pub fn input_directories(family: ProjectionFamily) -> Vec<&'static str> {
     let directories: BTreeSet<_> = inputs(family).into_iter().map(Input::directory).collect();
     directories.into_iter().collect()
 }

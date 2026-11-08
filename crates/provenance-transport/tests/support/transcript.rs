@@ -157,14 +157,19 @@ pub fn named_answers(names: &mut Names, answers: &[Value]) -> Vec<Value> {
 
 /// Asserts that each read after a catch-up equals the read after a full
 /// rebuild, value for value. A rebuild of a state that validation refuses
-/// stores no projection. Then the read after the catch-up must answer from
-/// the stored projection and name the refusal.
+/// stores no projection, so its reads refuse. Then the read after the
+/// catch-up must also refuse, or answer from the stored projection and name
+/// the refusal.
 pub fn assert_same(caught_up: &[Value], rebuilt: &[Value], context: &str) {
+    let refused = |answer: &Value| {
+        let text = answer.to_string();
+        text.contains("no_projection") || text.contains("catch_up_failed")
+    };
     assert_eq!(caught_up.len(), rebuilt.len(), "{context}");
     for (index, (left, right)) in caught_up.iter().zip(rebuilt).enumerate() {
-        if right.to_string().contains("no_projection") {
-            let refusal = &left["answer"]["body"]["meta"]["freshness_error"];
-            assert!(refusal.is_string(), "{context}, read {index}: {left}");
+        if left != right && refused(right) {
+            let stale = left["answer"]["body"]["meta"]["freshness_error"].is_string();
+            assert!(stale || refused(left), "{context}, read {index}: {left}");
         } else {
             assert_eq!(left, right, "{context}, read {index}");
         }

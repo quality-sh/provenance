@@ -12,7 +12,7 @@ mod validation;
 
 pub use catch_up::catch_up_with_guard;
 pub use catch_up::{catch_up_state, CatchUpReport};
-pub(crate) use family_inputs::input_directories;
+pub use family_inputs::input_directories;
 pub use record_rows::SEARCH_TEXT;
 pub use units::unit_stored_digest;
 pub use units::{scope_ids, unit_digest, units_for, Unit, UnitHashError};
