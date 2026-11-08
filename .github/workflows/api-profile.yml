@@ -167,7 +167,7 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
-      # Find and download the baseline artifacts of an earlier run.
+      # Find and download the baseline artifact of an earlier run.
       actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -195,10 +195,9 @@ jobs:
             echo "No baseline artifact found."
             exit 0
           fi
-          for name in api-profile-baseline api-profile-baseline-stacks; do
-            gh run download "$run" --repo "$GITHUB_REPOSITORY" -n "$name" -D "$RUNNER_TEMP/baseline" \
-              || echo "The artifact $name of run $run did not download."
-          done
+          # profile.json and functions.json hold all that the comparison needs.
+          gh run download "$run" --repo "$GITHUB_REPOSITORY" -n api-profile-baseline -D "$RUNNER_TEMP/baseline" \
+            || echo "The baseline of run $run did not download."
       - name: Write the profile of each row
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}

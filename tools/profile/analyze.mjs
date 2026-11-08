@@ -7,7 +7,7 @@
 // labeled.folded is the inferno-collapse-perf output of label.mjs: the root
 // frame of each stack is the row file name. --folded, --windows and --stats
 // can each be given once for each part of the run. The baseline directory
-// holds the two artifacts of an earlier run. README.md tells what each output
+// holds the api-profile artifact of an earlier run. README.md tells what each output
 // file holds.
 import { createReadStream, createWriteStream, existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
