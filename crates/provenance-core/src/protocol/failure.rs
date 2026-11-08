@@ -91,6 +91,9 @@ pub enum OperationError<F> {
 }
 
 /// Exact declared failure payload after dispatch, with private response status.
+///
+/// A failure of no known kind keeps its native cause for the operator. The
+/// cause is never part of the wire answer.
 #[derive(Debug, Serialize, thiserror::Error)]
 #[error("operation failed")]
 pub struct ErasedFailure {
@@ -98,6 +101,8 @@ pub struct ErasedFailure {
     pub meta: ResponseMeta,
     #[serde(skip)]
     status: u16,
+    #[serde(skip)]
+    cause: Option<String>,
 }
 impl ErasedFailure {
     pub fn new(_: Option<&str>, error: OperationFailure) -> Self {
@@ -106,6 +111,7 @@ impl ErasedFailure {
             error: serde_json::to_value(error).expect("common failure is JSON"),
             meta: ResponseMeta::default(),
             status,
+            cause: None,
         }
     }
     pub fn declared<E: Serialize>(operation: &'static str, error: E, status: u16) -> Self {
@@ -115,11 +121,22 @@ impl ErasedFailure {
                 error,
                 meta: ResponseMeta::default(),
                 status,
+                cause: None,
             },
         )
     }
+    /// Keeps the native cause of a failure of no known kind.
+    #[must_use]
+    pub fn with_cause(mut self, cause: Option<String>) -> Self {
+        self.cause = cause;
+        self
+    }
     pub const fn status_code(&self) -> u16 {
         self.status
+    }
+    /// The native cause of a failure of no known kind, for the operator only.
+    pub fn cause(&self) -> Option<&str> {
+        self.cause.as_deref()
     }
 }
 impl From<FailureEnvelope> for ErasedFailure {

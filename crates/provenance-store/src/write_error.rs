@@ -1,4 +1,5 @@
 //! Source failures retain native diagnostics separately from the safe wire form.
+use crate::state_store::readers::StateLineInvalid;
 use crate::state_store::{
     ReconciledResource, StatementWriteError, TypedSpecDiagnostic, TypedSpecWriteError,
 };
@@ -81,6 +82,13 @@ pub enum WriteFailure {
     FileAccessDenied,
     FileUnavailable,
     RecordTooLarge,
+    // `InvalidStateFile` has the same wire shape as the read failure of the
+    // same name, so it carries no doc comment either.
+    InvalidStateFile {
+        file: String,
+        line: u64,
+        message: String,
+    },
     WriteFailed,
 }
 
@@ -235,11 +243,23 @@ impl WriteError {
                 _ => WriteFailure::FileUnavailable,
             };
         }
-        WriteFailure::WriteFailed
+        StateLineInvalid::find(&self.0).map_or(WriteFailure::WriteFailed, |error| {
+            WriteFailure::InvalidStateFile {
+                file: error.file(),
+                line: error.line,
+                message: error.message.clone(),
+            }
+        })
+    }
+    /// The native cause chain of a failure of no known kind. The wire answer
+    /// gives only `write_failed`: the chain can hold absolute paths and stored
+    /// values, so only the operator sees it.
+    pub fn unclassified_cause(&self) -> Option<String> {
+        matches!(self.safe(), WriteFailure::WriteFailed).then(|| format!("{:#}", self.0))
     }
     pub fn status(&self) -> u16 {
         match self.safe() {
-            WriteFailure::WriteFailed => 500,
+            WriteFailure::WriteFailed | WriteFailure::InvalidStateFile { .. } => 500,
             WriteFailure::FileAccessDenied | WriteFailure::AccessDenied => 403,
             WriteFailure::FileUnavailable => 503,
             WriteFailure::ResourceNotFound => 404,

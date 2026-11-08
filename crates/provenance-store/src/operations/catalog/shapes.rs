@@ -30,6 +30,9 @@ pub trait OperationShape<S: OperationSpec> {
     const CONTEXT: ContextKind;
 
     fn failure_status(error: &Self::Failure) -> u16;
+    fn unclassified_cause(_: &Self::Failure) -> Option<String> {
+        None
+    }
     fn run(
         context: PreparedContext,
         request: S::Request,
@@ -51,6 +54,10 @@ where
 
     fn failure_status(error: &Self::Failure) -> u16 {
         S::Shape::failure_status(error)
+    }
+
+    fn unclassified_cause(error: &Self::Failure) -> Option<String> {
+        S::Shape::unclassified_cause(error)
     }
 
     fn validate_external(request: &Self::Request) -> Result<(), OperationFailure> {
@@ -87,6 +94,10 @@ impl<S: GraphReadSpec> OperationShape<S> for GraphRead {
         error.status()
     }
 
+    fn unclassified_cause(error: &Self::Failure) -> Option<String> {
+        error.unclassified_cause()
+    }
+
     fn run(
         context: PreparedContext,
         request: S::Request,
@@ -112,6 +123,10 @@ impl<S: ScopedReadSpec> OperationShape<S> for ScopedRead {
 
     fn failure_status(error: &Self::Failure) -> u16 {
         error.status()
+    }
+
+    fn unclassified_cause(error: &Self::Failure) -> Option<String> {
+        error.unclassified_cause()
     }
 
     fn run(
@@ -147,6 +162,10 @@ impl<S: ScopedWriteSpec> OperationShape<S> for ScopedWrite {
         error.status()
     }
 
+    fn unclassified_cause(error: &Self::Failure) -> Option<String> {
+        error.unclassified_cause()
+    }
+
     fn run(
         context: PreparedContext,
         request: S::Request,
@@ -180,6 +199,10 @@ impl<S: ScopedCommandSpec> OperationShape<S> for ScopedCommand {
 
     fn failure_status(error: &Self::Failure) -> u16 {
         error.status()
+    }
+
+    fn unclassified_cause(error: &Self::Failure) -> Option<String> {
+        error.unclassified_cause()
     }
 
     fn run(

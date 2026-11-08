@@ -1,7 +1,12 @@
 use axum::response::{IntoResponse, Response};
 use provenance_core::protocol::failure::ErasedFailure as FailureEnvelope;
 
+/// The HTTP answer for a failure. A failure of no known kind answers with its
+/// safe kind only, and the host log keeps the native cause for the operator.
 pub fn response(failure: FailureEnvelope) -> Response {
+    if let Some(cause) = failure.cause() {
+        eprintln!("Operation failed with no known failure kind. Cause: {cause}");
+    }
     (
         axum::http::StatusCode::from_u16(failure.status_code()).expect("valid contract status"),
         axum::Json(failure),

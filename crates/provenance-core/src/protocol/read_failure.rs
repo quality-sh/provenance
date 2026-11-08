@@ -44,6 +44,12 @@ pub enum ReadFailure {
     HalfMigrated,
     #[error("the cache close did not finish in time; retry the read")]
     CacheCloseTimedOut { stage: CacheCloseStage },
+    #[error("{file} line {line}: {message}")]
+    InvalidStateFile {
+        file: String,
+        line: u64,
+        message: String,
+    },
     #[error("read failed")]
     ReadFailed,
 }

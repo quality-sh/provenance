@@ -28,6 +28,10 @@ pub trait Operation: Send + Sync + 'static {
     fn failure_status(_: &Self::Failure) -> u16 {
         500
     }
+    /// The native cause of a failure of no known kind, kept out of the wire answer.
+    fn unclassified_cause(_: &Self::Failure) -> Option<String> {
+        None
+    }
     fn validate_external(
         _: &Self::Request,
     ) -> Result<(), provenance_core::protocol::failure::OperationFailure> {

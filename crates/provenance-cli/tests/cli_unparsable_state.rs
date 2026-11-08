@@ -47,10 +47,7 @@ fn assert_names_the_line(refusal: &Value) {
     assert_eq!(error["file"], CARDS, "{refusal}");
     assert_eq!(error["line"], 1, "{refusal}");
     let message = error["message"].as_str().unwrap_or_default();
-    assert!(
-        message.starts_with("unknown variant `widget`"),
-        "{refusal}"
-    );
+    assert!(message.starts_with("unknown variant `widget`"), "{refusal}");
     assert!(!refusal.to_string().contains(".provenance"), "{refusal}");
 }
 
