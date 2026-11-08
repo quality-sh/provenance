@@ -18,7 +18,6 @@ macro_rules! read_families {
                 serde_json::to_value(store.list_scope_directories()?)?,
                 serde_json::to_value(store.list_sources(scope)?)?,
                 serde_json::to_value(store.list_requirements(scope)?)?,
-                serde_json::to_value(store.list_boundaries(scope)?)?,
                 serde_json::to_value(store.list_topics(scope)?)?,
                 serde_json::to_value(store.list_questions(scope)?)?,
                 serde_json::to_value(store.list_resolutions(scope)?)?,
@@ -51,20 +50,10 @@ macro_rules! read_families {
     }};
 }
 
-fn closed_families(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Vec<serde_json::Value>> {
-    Ok(vec![
-        serde_json::to_value(store.closed_sources(scope)?)?,
-        serde_json::to_value(store.closed_requirements(scope)?)?,
-        serde_json::to_value(store.closed_boundaries(scope)?)?,
-        serde_json::to_value(store.closed_topics(scope)?)?,
-        serde_json::to_value(store.closed_questions(scope)?)?,
-        serde_json::to_value(store.closed_resolutions(scope)?)?,
-        serde_json::to_value(store.closed_rules(scope)?)?,
-        serde_json::to_value(store.closed_verification_bindings(scope)?)?,
-        serde_json::to_value(store.closed_implementation_bindings(scope)?)?,
-        serde_json::to_value(store.list_ideation_landings(scope)?)?,
-        serde_json::to_value(store.closed_manifest_scope(scope)?)?,
-    ])
+fn landings(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Vec<serde_json::Value>> {
+    Ok(vec![serde_json::to_value(
+        store.list_ideation_landings(scope)?,
+    )?])
 }
 
 #[tokio::test]
@@ -73,13 +62,13 @@ fn closed_families(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Vec<se
 async fn a_store_under_the_guard_takes_no_second_lock() {
     let (_dir, store, scope) = seeded_source_requirement_store();
     let mut expected = read_families!(&store, &scope).unwrap();
-    expected.extend(closed_families(&store, &scope).unwrap());
+    expected.extend(landings(&store, &scope).unwrap());
     let guard = publication_guard(&open(&store.layout)).await.unwrap();
     let (sender, receiver) = mpsc::channel();
     let reader = std::thread::spawn(move || {
         let guarded = StateStore::under_guard(&guard);
         let records = read_families!(&guarded, &scope).and_then(|mut records| {
-            records.extend(closed_families(&guarded.store, &scope)?);
+            records.extend(landings(&guarded.store, &scope)?);
             Ok(records)
         });
         sender

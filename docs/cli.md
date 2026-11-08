@@ -56,7 +56,7 @@ records as `provenance <id> get --view trace`, and MCP has a `trace` tool and a
 
 `provenance <id> create --type <kind> --help` lists the fields that one record
 type accepts. The record types are `source`, `requirement`, `resolution`,
-`rule`, `topic`, `question`, `domain`, and `boundary`.
+`rule`, `topic`, `question`, and `domain`.
 
 A word that names an API collection, such as `rules` in `provenance rules list`,
 is not a command. The CLI refuses it with a usage error and shows
@@ -134,7 +134,7 @@ and objects can also come from one JSON object on standard input with
 field that a flag already set. Every review record update takes its guard as
 `--if-match`, which must contain `review.edit.etag` from the latest review
 read, unchanged. Requirement, Topic, and Question updates require it. Source,
-Rule, Resolution, and Boundary updates accept it, and write without a
+Rule, and Resolution updates accept it, and write without a
 check when it is absent. No update accepts the guard as an `--expected-etag`
 flag or as an `expected_etag` body field.
 
@@ -169,7 +169,7 @@ A usage error prints clap's text and exits with code 2.
 The following commands keep dedicated behavior because they operate on a
 repository, render a report, manage the host, or perform another product task:
 
-- `init`, `check`, and `docs`
+- `init` and `check`
 - `prime`
 - `review` and `mcp`
 - `import`, `export`, and `materialize`

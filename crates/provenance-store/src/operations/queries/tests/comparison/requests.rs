@@ -16,14 +16,13 @@ const PER_KIND: usize = 3;
 
 /// One needle per kind that meets every id the repositories name, so a
 /// served search over the kind alone answers its records in id order.
-const SAMPLE_NEEDLE: [(NodeType, &str); 7] = [
+const SAMPLE_NEEDLE: [(NodeType, &str); 6] = [
     (NodeType::Source, "source"),
     (NodeType::Requirement, "req"),
     (NodeType::Resolution, "res"),
     (NodeType::Rule, "rule"),
     (NodeType::Topic, "top"),
     (NodeType::Question, "q"),
-    (NodeType::Boundary, "boundary"),
 ];
 
 #[derive(Debug, Clone)]
@@ -126,10 +125,7 @@ pub async fn for_store(store: &TestStore) -> Vec<Request> {
     for needle in ["pay", "over", "e"] {
         requests.push(Request::Search(search(needle, Vec::new())));
     }
-    requests.push(Request::Search(search(
-        "e",
-        vec![NodeType::Boundary, NodeType::Rule],
-    )));
+    requests.push(Request::Search(search("e", vec![NodeType::Rule])));
     if let Some(base) = &store.base_commit {
         requests.push(Request::Stale(StaleQuery {
             protocol_version: Some(SDK_PROTOCOL_VERSION),

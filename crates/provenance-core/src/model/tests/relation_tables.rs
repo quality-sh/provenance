@@ -3,22 +3,14 @@ mod relation_tables {
     use crate::model::NodeType;
     use provenance_macros::verifies;
 
-    use NodeType::{Boundary, Question, Requirement, Resolution, Rule, Source, Topic};
+    use NodeType::{Question, Requirement, Resolution, Rule, Source, Topic};
     use RelationFlow::{None, TargetDownstream, TargetUpstream};
 
-    /// The seven kinds that declare relations, in node rank order.
-    const OWNERS: [NodeType; 7] = [
-        Source,
-        Requirement,
-        Resolution,
-        Rule,
-        Topic,
-        Question,
-        Boundary,
-    ];
+    /// The six kinds that declare relations, in node rank order.
+    const OWNERS: [NodeType; 6] = [Source, Requirement, Resolution, Rule, Topic, Question];
 
     /// The section C table: (owner, name, target, list, required, flow).
-    const TABLE: [(NodeType, &str, NodeType, bool, bool, RelationFlow); 18] = [
+    const TABLE: [(NodeType, &str, NodeType, bool, bool, RelationFlow); 16] = [
         (Source, "supersedes", Source, true, false, TargetDownstream),
         (Requirement, "cites", Source, true, false, TargetUpstream),
         (
@@ -91,8 +83,6 @@ mod relation_tables {
         (Question, "depends_on", Question, true, false, None),
         (Question, "resolution_id", Resolution, false, false, None),
         (Question, "contradicts", Requirement, false, false, None),
-        (Boundary, "requirement_id", Requirement, false, true, None),
-        (Boundary, "cites", Source, false, false, None),
     ];
 
     fn row_of(decl: &RelationDecl) -> (NodeType, &'static str, NodeType, bool, bool, RelationFlow) {
@@ -131,12 +121,12 @@ mod relation_tables {
     /// `links` on topics and questions carries a per-entry target kind, so it is
     /// walked by hand and declared in no table: two declarations, one name.
     #[test]
-    fn the_vocabulary_is_twelve_names_over_twenty_declarations() {
+    fn the_vocabulary_is_twelve_names_over_eighteen_declarations() {
         let mut names: Vec<&str> = TABLE.iter().map(|row| row.1).collect();
         names.push("links");
         names.sort_unstable();
         names.dedup();
-        assert_eq!(TABLE.len() + 2, 20);
+        assert_eq!(TABLE.len() + 2, 18);
         assert_eq!(
             names,
             [

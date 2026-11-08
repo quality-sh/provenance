@@ -47,7 +47,6 @@ macro_rules! define_record_family_catalog {
                 node: [$($node:tt)*],
                 reader: {
                     open: $reader:ident,
-                    closed: [$($closed:tt)*],
                     strategy: $strategy:ident
                 },
                 id: $id:ident,

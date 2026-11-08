@@ -35,11 +35,6 @@ fn records() -> (tempfile::TempDir, String) {
                 "requirement_ids":["req_guard"]}),
         ),
         (
-            "boundaries",
-            json!({"id":"boundary_guard", "requirement_id":"req_guard",
-                "statement":"Keep the work in the repository."}),
-        ),
-        (
             "topics",
             json!({"id":"topic_guard", "requirement_id":"req_guard", "title":"Guard"}),
         ),
@@ -169,17 +164,6 @@ fn a_resolution_update_takes_the_guard_as_if_match() {
 
 #[test]
 #[verifies("rule_review_update_guard_header", examples)]
-fn a_boundary_update_takes_the_guard_as_if_match() {
-    assert_guarded(
-        "boundaries",
-        "boundary_guard",
-        "--statement",
-        "record_edit_conflict",
-    );
-}
-
-#[test]
-#[verifies("rule_review_update_guard_header", examples)]
 fn a_requirement_update_takes_the_guard_as_if_match() {
     assert_guarded(
         "requirements",
@@ -217,7 +201,6 @@ fn only_requirement_topic_and_question_updates_require_the_guard() {
         ("rules", "rule_guard", "--description", false),
         ("sources", "source_guard", "--name", false),
         ("resolutions", "resolution_guard", "--title", false),
-        ("boundaries", "boundary_guard", "--statement", false),
     ] {
         let result = update(&repo, id, None, &[flag, "The unguarded change holds."]);
         if required {
@@ -264,7 +247,6 @@ fn no_review_update_accepts_expected_etag() {
         ("rules", "rule_guard"),
         ("sources", "source_guard"),
         ("resolutions", "resolution_guard"),
-        ("boundaries", "boundary_guard"),
     ] {
         let etag = etag(&repo, collection, id);
         provenance()

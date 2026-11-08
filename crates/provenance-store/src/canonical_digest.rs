@@ -6,8 +6,8 @@
 //! records must agree on the digit string, or the pin means nothing.
 //!
 //! This module is the one home for canonical serialization in the crate. The
-//! graph-reference digest and the projection digest both hash bytes from
-//! here; neither keeps a private copy.
+//! projection digest and the materialized family digests hash bytes from
+//! here; none keeps a private copy.
 
 use serde::Serialize;
 use sha2::{Digest, Sha256};

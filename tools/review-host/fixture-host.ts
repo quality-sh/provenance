@@ -84,5 +84,5 @@ export async function withFixtureHost<T>(
 
 /** The record type of one collection name, such as `rule` for `rules`. */
 function recordType(collection: string): string {
-  return collection === 'boundaries' ? 'boundary' : collection.replace(/s$/, '');
+  return collection.replace(/s$/, '');
 }

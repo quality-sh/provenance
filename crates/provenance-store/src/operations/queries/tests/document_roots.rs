@@ -77,7 +77,6 @@ async fn inverse_document_read_follows_each_canonical_membership_rule() {
         (NodeType::Requirement, "req_overtime"),
         (NodeType::Resolution, "resolution_policy"),
         (NodeType::Rule, "rule_via_resolution"),
-        (NodeType::Boundary, "boundary_no_backpay"),
         (NodeType::Topic, "topic_policy"),
         (NodeType::Question, "question_policy"),
     ] {

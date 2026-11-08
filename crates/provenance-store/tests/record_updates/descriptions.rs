@@ -22,16 +22,10 @@ async fn requirement_statement_edit_raises_existing_reviews_and_keeps_relations(
 }
 
 #[tokio::test]
-async fn descriptive_updates_keep_boundary_topic_and_question_identity() {
+async fn descriptive_updates_keep_topic_and_question_identity() {
     let fixture = Fixture::new();
     fixture.requirement().await;
     for (kind, fields, patch, field) in [
-        (
-            "boundary",
-            json!({"requirement_id":"req_one","statement":"Limit"}),
-            json!({"statement":"Renamed"}),
-            "statement",
-        ),
         (
             "topic",
             json!({"requirement_id":"req_one","title":"Topic","status":"open","links":[]}),

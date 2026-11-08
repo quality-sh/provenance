@@ -5,14 +5,13 @@ use crate::check::references::{
 use crate::snapshot::GraphRecords;
 use provenance_core::model::relations::{declaration_of, kind_word, RelationOwner};
 use provenance_core::{
-    Boundary, ImplementationBinding, Question, Requirement, Resolution, Rule, ScopeId, Source,
-    Topic, VerificationBinding,
+    ImplementationBinding, Question, Requirement, Resolution, Rule, ScopeId, Source, Topic,
+    VerificationBinding,
 };
 
 pub(super) struct Records<'a> {
     sources: &'a [Source],
     requirements: &'a [Requirement],
-    boundaries: &'a [Boundary],
     topics: &'a [Topic],
     questions: &'a [Question],
     resolutions: &'a [Resolution],
@@ -26,7 +25,6 @@ impl<'a> Records<'a> {
         Self {
             sources: records.sources,
             requirements: records.requirements,
-            boundaries: records.boundaries,
             topics: records.topics,
             questions: records.questions,
             resolutions: records.resolutions,
@@ -57,7 +55,6 @@ impl<'a> Records<'a> {
 
         check_records!(self.sources, "source");
         check_records!(self.requirements, "requirement");
-        check_records!(self.boundaries, "boundary");
         check_records!(self.topics, "topic");
         check_records!(self.questions, "question");
         check_records!(self.resolutions, "resolution");
@@ -72,9 +69,6 @@ impl<'a> Records<'a> {
         }
         for requirement in self.requirements {
             index.add_node(&requirement.scope_id, "requirement", &requirement.id);
-        }
-        for boundary in self.boundaries {
-            index.add_node(&boundary.scope_id, "boundary", &boundary.id);
         }
         for topic in self.topics {
             index.add_node(&topic.scope_id, "topic", &topic.id);
@@ -207,7 +201,6 @@ fn validate_declared_relations(
     check_declared(index, dangling, scope_id, records.rules);
     check_declared(index, dangling, scope_id, records.topics);
     check_declared(index, dangling, scope_id, records.questions);
-    check_declared(index, dangling, scope_id, records.boundaries);
 }
 
 fn check_declared<T: RelationOwner>(

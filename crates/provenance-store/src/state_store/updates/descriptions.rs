@@ -1,14 +1,12 @@
 use super::{
-    inputs::{
-        BoundaryClearField, RequirementClearField, UpdateBoundaryInput, UpdateRequirementInput,
-    },
+    inputs::{RequirementClearField, UpdateRequirementInput},
     invalid, missing, optional, owner_matches, required_text, set,
 };
 use crate::{
     shards,
-    state_store::{read_budget, RequirementReviewInput, StateStore},
+    state_store::{RequirementReviewInput, StateStore},
 };
-use provenance_core::{Boundary, NodeType, Requirement, RequirementStatus};
+use provenance_core::{Requirement, RequirementStatus};
 use provenance_macros::rule;
 
 impl StateStore {
@@ -77,43 +75,6 @@ impl StateStore {
                     .map_err(crate::write_error::publication_started)?;
             }
             Ok(record)
-        })
-    }
-
-    pub fn update_boundary(&self, input: UpdateBoundaryInput) -> anyhow::Result<Boundary> {
-        self.with_repository_publication(|held| {
-            if let Some(reference) = &input.source_ref {
-                held.ensure_node_exists(
-                    &input.scope_id,
-                    NodeType::Source,
-                    &reference.source_id,
-                    "source_ref",
-                )?;
-            }
-            if let Some(statement) = &input.statement {
-                required_text(statement)?;
-            }
-            let path = shards::boundaries_path(&held.layout, &input.scope_id);
-            let expected_etag = input.expected_etag.clone();
-            held.mutate_graph_record_with_etag(
-                &path,
-                expected_etag.as_deref(),
-                |records: &mut Vec<Boundary>| {
-                    let record = records
-                        .iter_mut()
-                        .find(|r| r.id == input.id)
-                        .ok_or_else(missing)?;
-                    set(&mut record.statement, input.statement);
-                    optional(
-                        &mut record.source_ref,
-                        input.source_ref,
-                        input.clear_fields.contains(&BoundaryClearField::SourceRef),
-                    )?;
-                    let record = record.clone();
-                    read_budget::ensure_within_read_budget(&record)?;
-                    Ok(record)
-                },
-            )
         })
     }
 }

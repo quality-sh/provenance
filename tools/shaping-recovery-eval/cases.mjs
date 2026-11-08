@@ -287,7 +287,7 @@ export function resolutionShowsDownstream(packet) {
 export function everyRecordSubmitted(packet) {
   const review = packet.turns.at(-1).review;
   if (!review) return [{ finding: 'no final review state' }];
-  return created(packet, ['requirements', 'resolutions', 'rules', 'boundaries', 'sources'], () => true)
+  return created(packet, ['requirements', 'resolutions', 'rules', 'sources'], () => true)
     .filter(record => { const entry = reviewEntry(review, record); return !entry?.pending && !entry?.decisions; });
 }
 

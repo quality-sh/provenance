@@ -229,8 +229,6 @@ async fn mcp_get_keeps_permitted_kinds_without_probing_forbidden_kinds() {
         "get-rule",
         "get-topic",
         "get-question",
-        "get-domain",
-        "get-boundary",
     ] {
         access = access.deny_operation(operation);
     }

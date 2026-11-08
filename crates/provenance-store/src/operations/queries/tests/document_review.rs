@@ -3,9 +3,8 @@ use crate::operations::{queries, read_policy::ReadPolicy};
 use crate::review::{DecideRecordReview, ReviewFeedback, SubmitRecordReview};
 use crate::state_store::{
     AddSourceReferenceInput, CreateQuestionInput, CreateRequirementInput, CreateResolutionInput,
-    CreateRuleInput, CreateTopicInput, EditQuestionInput, StateStore, UpdateBoundaryInput,
-    UpdateRequirementInput, UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput,
-    UpdateTopicInput,
+    CreateRuleInput, CreateTopicInput, EditQuestionInput, StateStore, UpdateRequirementInput,
+    UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
 };
 use provenance_core::protocol::ReadDocumentQuery;
 use provenance_core::{
@@ -94,7 +93,6 @@ fn create_document_records(store: &StateStore, scope: &ScopeId) -> Vec<(NodeType
         (NodeType::Requirement, sid("req_overtime")),
         (NodeType::Resolution, sid("resolution_policy")),
         (NodeType::Rule, sid("rule_policy")),
-        (NodeType::Boundary, sid("boundary_no_backpay")),
         (NodeType::Topic, sid("topic_policy")),
         (NodeType::Question, sid("question_policy")),
     ]
@@ -151,9 +149,7 @@ fn decide(
     proposal: StableId,
     decision: DispositionDecision,
 ) {
-    let feedback = (decision == DispositionDecision::Rejected
-        && !matches!(kind, NodeType::Boundary))
-    .then(|| ReviewFeedback {
+    let feedback = (decision == DispositionDecision::Rejected).then(|| ReviewFeedback {
         role: provenance_core::MessageRole::User,
         body: "Use more precise text.".into(),
     });
@@ -210,13 +206,6 @@ fn revise(store: &StateStore, kind: NodeType, id: &StableId) {
                 common,
                 "statement",
                 "The system always uses the policy.",
-            )))
-            .map(|_| ()),
-        NodeType::Boundary => store
-            .update_boundary(input::<UpdateBoundaryInput>(with(
-                common,
-                "statement",
-                "Historical back pay is out of scope.",
             )))
             .map(|_| ()),
         NodeType::Topic => store
@@ -335,14 +324,14 @@ async fn document_review_totals_follow_the_filter_and_repeat_on_each_page() {
     assert_eq!(
         page(&root, 50, false).await["review_totals"],
         json!({
-            "pending":4, "accepted":1, "rejected":1
+            "pending":3, "accepted":1, "rejected":1
         })
     );
     let filtered = page(&root, 1, true).await;
     assert_eq!(
         filtered["review_totals"],
         json!({
-            "pending":4, "accepted":1, "rejected":0
+            "pending":3, "accepted":1, "rejected":0
         })
     );
     let cursor = filtered["next_cursor"].as_str().unwrap();

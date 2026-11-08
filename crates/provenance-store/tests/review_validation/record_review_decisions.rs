@@ -6,12 +6,10 @@ use provenance_store::{
     layout::ProvenanceLayout,
     review::{DecideRecordReview, ReviewFeedback},
     state_store::{
-        CreateBoundaryInput, CreateQuestionInput, CreateRequirementInput, CreateResolutionInput,
-        CreateRuleInput, CreateSourceInput, CreateTopicInput, EditQuestionInput, StateStore,
-        UpdateBoundaryInput, UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput,
-        UpdateTopicInput,
+        CreateQuestionInput, CreateRequirementInput, CreateResolutionInput, CreateRuleInput,
+        CreateSourceInput, CreateTopicInput, EditQuestionInput, StateStore, UpdateResolutionInput,
+        UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
     },
-    write_error::{WriteError, WriteFailure},
 };
 use serde_json::json;
 
@@ -101,14 +99,6 @@ fn create_record(store: &StateStore, kind: NodeType) -> StableId {
                 })))
                 .unwrap();
         }
-        NodeType::Boundary => {
-            store
-                .create_boundary(input::<CreateBoundaryInput>(json!({
-                    "scope_id":"default", "id":record_id,
-                    "requirement_id":"requirement_a", "statement":"Storage only."
-                })))
-                .unwrap();
-        }
         NodeType::Topic => {
             store
                 .create_topic(input::<CreateTopicInput>(json!({
@@ -154,13 +144,6 @@ fn revise_record(store: &StateStore, kind: NodeType, record_id: &StableId) {
                 common,
                 "statement",
                 json!("The system stores each durable record."),
-            )))
-            .map(|_| ()),
-        NodeType::Boundary => store
-            .update_boundary(input::<UpdateBoundaryInput>(common_with(
-                common,
-                "statement",
-                json!("Durable storage only."),
             )))
             .map(|_| ()),
         NodeType::Topic => store
@@ -214,7 +197,6 @@ fn record_value(
         NodeType::Source => find!(list_sources),
         NodeType::Resolution => find!(list_resolutions),
         NodeType::Rule => find!(list_rules),
-        NodeType::Boundary => find!(list_boundaries),
         NodeType::Topic => find!(list_topics),
         NodeType::Question => find!(list_questions),
         NodeType::Requirement => unreachable!("Requirement is the established review kind"),
@@ -225,11 +207,11 @@ fn artifact_type(kind: NodeType) -> CanonicalArtifactType {
     serde_json::from_value(json!(kind.as_str())).unwrap()
 }
 
-fn review_feedback(kind: NodeType) -> Option<ReviewFeedback> {
-    (!matches!(kind, NodeType::Boundary)).then(|| ReviewFeedback {
+fn review_feedback() -> ReviewFeedback {
+    ReviewFeedback {
         role: provenance_core::MessageRole::User,
         body: "Use the precise record text.".into(),
-    })
+    }
 }
 
 fn run_review_cycle(kind: NodeType) {
@@ -250,7 +232,7 @@ fn run_review_cycle(kind: NodeType) {
             decision: DispositionDecision::Rejected,
             rationale: Some("The source name is not precise.".into()),
             canonical_artifact: None,
-            feedback: review_feedback(kind),
+            feedback: Some(review_feedback()),
             declared_by: None,
         })
         .unwrap();
@@ -308,57 +290,9 @@ fn every_added_kind_persists_the_exact_review_versions_without_lifecycle_change(
         NodeType::Source,
         NodeType::Resolution,
         NodeType::Rule,
-        NodeType::Boundary,
         NodeType::Topic,
         NodeType::Question,
     ] {
         run_review_cycle(kind);
-    }
-}
-
-fn pending_classification_review(
-    kind: NodeType,
-) -> (tempfile::TempDir, StateStore, ScopeId, StableId) {
-    let (temp, store, scope) = fixture();
-    let record_id = create_record(&store, kind);
-    // The create opened the submission.
-    let proposal = store
-        .record_decision_state(&scope, kind, &record_id)
-        .unwrap()
-        .pending
-        .unwrap()
-        .proposal_id;
-    (temp, store, scope, proposal)
-}
-
-#[test]
-#[provenance_macros::verifies("rule_domain_boundary_decisions_accept_no_feedback", examples)]
-fn boundary_decisions_refuse_feedback() {
-    let kind = NodeType::Boundary;
-    {
-        let (_temp, store, scope, proposal) = pending_classification_review(kind);
-
-        let error = store
-            .decide_record_review(DecideRecordReview {
-                scope_id: scope,
-                actor: reviewer(),
-                proposal_id: proposal,
-                decision: DispositionDecision::Rejected,
-                rationale: Some("The classification is too broad.".into()),
-                canonical_artifact: None,
-                feedback: Some(ReviewFeedback {
-                    role: provenance_core::MessageRole::User,
-                    body: "Narrow the classification.".into(),
-                }),
-                declared_by: None,
-            })
-            .unwrap_err();
-
-        assert!(matches!(
-            WriteError(error).safe(),
-            WriteFailure::UnsupportedReviewFeedback {
-                record_kind
-            } if record_kind == kind
-        ));
     }
 }

@@ -8,8 +8,7 @@ use super::{create_resolution, create_rule_of, create_source, empty_layout, sid}
 use crate::layout::ProvenanceLayout;
 use crate::shards;
 use crate::state_store::{
-    CreateBoundaryInput, CreateQuestionInput, CreateRequirementInput, CreateSourceInput,
-    CreateTopicInput, StateStore,
+    CreateQuestionInput, CreateRequirementInput, CreateSourceInput, CreateTopicInput, StateStore,
 };
 use provenance_core::{
     ArtifactLink, ArtifactLinkTargetType, QuestionStatus, Requirement, RequirementStatus,
@@ -186,24 +185,12 @@ fn seed_shaping(store: &StateStore, scope: &ScopeId) {
             id: sid("question_threshold"),
             topic_id: sid("topic_rates"),
             question: "Which threshold applies to overtime?".into(),
-            resolution_method: ResolutionMethod::Grill,
+            resolution_method: ResolutionMethod::Ask,
             status: QuestionStatus::Open,
             answer: None,
             links: vec![link(ArtifactLinkTargetType::Rule, "rule_overtime_001")],
             resolution_id: Some(sid("res_overtime")),
             contradicts: Some(sid("req_penalty")),
-        })
-        .unwrap();
-    store
-        .create_boundary(CreateBoundaryInput {
-            scope_id: scope.clone(),
-            id: sid("boundary_no_backpay"),
-            requirement_id: sid("req_overtime"),
-            statement: "Back pay is out of scope".into(),
-            source_ref: Some(SourceReference {
-                source_id: sid("source_schads"),
-                clause: Some("cl_3".into()),
-            }),
         })
         .unwrap();
 }

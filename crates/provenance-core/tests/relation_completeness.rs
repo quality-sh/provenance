@@ -32,7 +32,6 @@ const NODE_FILES: &[&str] = &["artifacts.rs", "shaping.rs"];
 const NODE_STRUCTS: &[&str] = &[
     "Source",
     "Requirement",
-    "Boundary",
     "Topic",
     "Question",
     "Resolution",

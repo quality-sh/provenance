@@ -35,7 +35,6 @@ macro_rules! define_projection_families {
                         node: [$($node:tt)*],
                         reader: {
                             open: $reader:ident,
-                            closed: [$($closed:tt)*],
                             strategy: $strategy:ident
                         },
                         id: $id:ident,

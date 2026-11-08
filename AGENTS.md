@@ -51,8 +51,8 @@ Exception: the managed skill stamp compares package release numbers to prevent d
 
 Use ASD-STE100 Simplified Technical English, Issue 9, for technical prose in
 this repository. This rule applies especially to Requirement, Rule, Resolution,
-Source, and Boundary records, and to documentation, code comments, bead text,
-pull requests, commit messages, and agent handoffs.
+and Source records, and to documentation, code comments, bead text, pull
+requests, commit messages, and agent handoffs.
 
 - Treat ASD-STE100 Issue 9 as the authority. Do not invent a substitute writing
   standard or add project-specific language rules in its name.

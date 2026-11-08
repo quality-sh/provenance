@@ -17,7 +17,7 @@
 use anyhow::Context;
 use camino::Utf8Path;
 use provenance_core::model::relations::{missing_required, required_refusal, RelationOwner};
-use provenance_core::{Boundary, Question, Requirement, Resolution, Rule, Source, Topic};
+use provenance_core::{Question, Requirement, Resolution, Rule, Source, Topic};
 use serde_json::Value;
 
 use super::CanonicalRecord;
@@ -48,22 +48,19 @@ pub enum ShardFamily {
     Topics,
     /// `.provenance/state/scopes/<scope>/questions/*.jsonl`
     Questions,
-    /// `.provenance/state/scopes/<scope>/boundaries/*.jsonl`
-    Boundaries,
     /// Any other path, including per-scope families without declared
     /// relations and files outside the state directory. Merged records pass
     /// unchecked.
     Unrecognized,
 }
 
-const SCOPED_FAMILIES: [(&str, ShardFamily); 7] = [
+const SCOPED_FAMILIES: [(&str, ShardFamily); 6] = [
     ("sources", ShardFamily::Sources),
     ("requirements", ShardFamily::Requirements),
     ("resolutions", ShardFamily::Resolutions),
     ("rules", ShardFamily::Rules),
     ("topics", ShardFamily::Topics),
     ("questions", ShardFamily::Questions),
-    ("boundaries", ShardFamily::Boundaries),
 ];
 
 impl ShardFamily {
@@ -137,7 +134,6 @@ pub fn validate_merged_records(
         ShardFamily::Rules => validate_typed_records::<Rule>(records, "rule"),
         ShardFamily::Topics => validate_typed_records::<Topic>(records, "topic"),
         ShardFamily::Questions => validate_typed_records::<Question>(records, "question"),
-        ShardFamily::Boundaries => validate_typed_records::<Boundary>(records, "boundary"),
         ShardFamily::IdeationLandings | ShardFamily::Discussions | ShardFamily::Unrecognized => {
             Ok(())
         }

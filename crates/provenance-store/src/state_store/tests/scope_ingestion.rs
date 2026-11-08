@@ -3,8 +3,8 @@ use crate::cache::ProjectionFamily;
 use crate::publication::with_repository_publication;
 use crate::shards;
 use crate::state_store::ScopeShards;
-use crate::state_store::{CreateBoundaryInput, CreateRequirementInput};
-use provenance_core::{RepoPathPrefix, RequirementStatus, Scope, ScopeId, StableId};
+use crate::state_store::{CreateRequirementInput, CreateTopicInput};
+use provenance_core::{RepoPathPrefix, RequirementStatus, Scope, ScopeId, StableId, TopicStatus};
 use provenance_macros::verifies;
 
 fn seed_shard<T: serde::Serialize>(path: &camino::Utf8Path, records: &[T]) {
@@ -94,25 +94,26 @@ fn scope_import_rejects_an_id_shared_by_two_canonical_kinds() {
             origin_message: None,
         })
         .unwrap();
-    let mut boundary = live_store
-        .create_boundary(CreateBoundaryInput {
+    let mut topic = live_store
+        .create_topic(CreateTopicInput {
             scope_id: scope.clone(),
-            id: StableId::new("boundary_before_import").unwrap(),
+            id: StableId::new("topic_before_import").unwrap(),
             requirement_id: requirement.id.clone(),
-            statement: "The import does not reuse canonical IDs.".to_owned(),
-            source_ref: None,
+            title: "The import does not reuse canonical IDs.".to_owned(),
+            status: TopicStatus::Open,
+            links: Vec::new(),
         })
         .unwrap();
-    boundary.id = requirement.id.clone();
+    topic.id = requirement.id.clone();
     let requirements = [requirement];
-    let boundaries = [boundary];
+    let topics = [topic];
 
     let error = with_repository_publication(&live_store.layout, |_| {
         staged_store.import_scope(
             &scope,
             &ScopeShards {
                 requirements: &requirements,
-                boundaries: &boundaries,
+                topics: &topics,
                 ..ScopeShards::default()
             },
         )

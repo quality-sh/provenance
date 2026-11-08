@@ -50,13 +50,6 @@ const HELP: &[(&str, &[&str])] = &[
     ("schema_show", &["schema", "show"]),
     ("dictionary_import", &["dictionary", "import"]),
     ("dictionary_status", &["dictionary", "status"]),
-    ("graph_reference_issue", &["graph-reference", "issue"]),
-    ("graph_reference_show", &["graph-reference", "show"]),
-    ("graph_reference_verify", &["graph-reference", "verify"]),
-    (
-        "graph_reference_exact_export",
-        &["graph-reference", "exact-export"],
-    ),
     ("swarm_backtrace_land", &["swarm-backtrace", "land"]),
     ("skills_list", &["skills", "list"]),
     ("skills_show", &["skills", "show"]),
@@ -64,7 +57,6 @@ const HELP: &[(&str, &[&str])] = &[
     ("report_render", &["report", "render"]),
     ("report_build", &["report", "build"]),
     ("review", &["review"]),
-    ("docs_serve", &["docs", "serve"]),
     ("mcp", &["mcp"]),
 ];
 

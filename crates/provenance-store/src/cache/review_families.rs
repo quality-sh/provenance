@@ -31,7 +31,6 @@ macro_rules! define_review_families {
                 node: [$kind:ident],
                 reader: {
                     open: $reader:ident,
-                    closed: [$($closed:tt)*],
                     strategy: $strategy:ident
                 },
                 id: $id:ident,
@@ -230,7 +229,6 @@ mod tests {
         );
         assert_eq!(kind::<provenance_core::Resolution>(), NodeType::Resolution);
         assert_eq!(kind::<provenance_core::Rule>(), NodeType::Rule);
-        assert_eq!(kind::<provenance_core::Boundary>(), NodeType::Boundary);
         assert_eq!(kind::<provenance_core::Topic>(), NodeType::Topic);
         assert_eq!(kind::<provenance_core::Question>(), NodeType::Question);
     }

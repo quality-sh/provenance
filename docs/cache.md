@@ -267,7 +267,7 @@ runtime workers.
 
 | Family | Derivation | Files read |
 |---|---|---|
-| sources, requirements, boundaries, topics, questions, resolutions, rules | `read_jsonl(<shard>)` | own shard |
+| sources, requirements, topics, questions, resolutions, rules | `read_jsonl(<shard>)` | own shard |
 | relations | derived from the seven owner kinds' reference fields; no digest row | the scope's own shards |
 | threads | `read_jsonl(threads.jsonl)` | own shard |
 | messages | `read_message_shards` | every `threads/YYYY-MM.jsonl` in the scope |

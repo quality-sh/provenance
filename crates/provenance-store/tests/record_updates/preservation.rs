@@ -283,18 +283,18 @@ async fn target_edit_with_nested_unknown_data_is_refused_without_publication() {
     fixture.requirement().await;
     fixture
         .call(
-            "create-boundary",
-            json!({"scope_id":"default","id":"boundary_one","requirement_id":"req_one","statement":"Limit"}),
+            "create-topic",
+            json!({"scope_id":"default","id":"topic_one","requirement_id":"req_one","title":"Limit","status":"open","links":[]}),
         )
         .await
         .unwrap();
-    let mut record = parsed_rows(&fixture, "boundaries", "boundary.jsonl").remove(0);
+    let mut record = parsed_rows(&fixture, "topics", "topic.jsonl").remove(0);
     record["created"] = json!({"commit":COMMIT,"at":AT});
     // The same edit without the nested unknown must go through, so the
     // refusal below is about the nested field and not the row layout.
     let mut clean = record.clone();
-    clean["sourceRef"] = json!({"sourceId":"source_one","clause":"section 1"});
-    write_rows(&fixture, "boundaries", "boundary.jsonl", &[padded(&clean)]);
+    clean["links"] = json!([{"targetType":"source","targetId":"source_one"}]);
+    write_rows(&fixture, "topics", "topic.jsonl", &[padded(&clean)]);
     let review = fixture
         .dir
         .path()
@@ -304,37 +304,34 @@ async fn target_edit_with_nested_unknown_data_is_refused_without_publication() {
     }
     fixture
         .call(
-            "update-boundary",
-            json!({"scope_id":"default","id":"boundary_one","statement":"Renamed"}),
+            "update-topic",
+            json!({"scope_id":"default","id":"topic_one","title":"Renamed"}),
         )
         .await
         .unwrap();
 
-    let mut loaded = parsed_rows(&fixture, "boundaries", "boundary.jsonl");
-    assert_eq!(loaded[0]["statement"], "Renamed");
-    loaded[0]["source_ref"]["extension"] = json!("keep");
+    let mut loaded = parsed_rows(&fixture, "topics", "topic.jsonl");
+    assert_eq!(loaded[0]["title"], "Renamed");
+    loaded[0]["links"][0]["extension"] = json!("keep");
     let original = padded(&loaded[0]);
     write_rows(
         &fixture,
-        "boundaries",
-        "boundary.jsonl",
+        "topics",
+        "topic.jsonl",
         std::slice::from_ref(&original),
     );
     let before = state_snapshot(&fixture);
 
     let error = fixture
         .call(
-            "update-boundary",
-            json!({"scope_id":"default","id":"boundary_one","statement":"Renamed twice"}),
+            "update-topic",
+            json!({"scope_id":"default","id":"topic_one","title":"Renamed twice"}),
         )
         .await
         .unwrap_err();
 
     assert_eq!(error["kind"], "write_failed");
-    assert_eq!(
-        raw_rows(&fixture, "boundaries", "boundary.jsonl"),
-        vec![original]
-    );
+    assert_eq!(raw_rows(&fixture, "topics", "topic.jsonl"), vec![original]);
     assert_eq!(state_snapshot(&fixture), before);
 }
 

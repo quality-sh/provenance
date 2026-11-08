@@ -115,14 +115,11 @@ fn one_page_site(markdown: &str) -> DocsSite {
     DocsSite {
         route_by_path: std::iter::once((PathBuf::from("/site/docs/index.md"), "/".to_string()))
             .collect(),
-        page_by_route: std::iter::once(("/".to_string(), 0)).collect(),
         pages: vec![DocPage {
             route: "/".to_string(),
-            title: "Page".to_string(),
             source_path: "docs/index.md".to_string(),
             file_path: PathBuf::from("/site/docs/index.md"),
             markdown: markdown.to_string(),
-            depth: 0,
         }],
     }
 }
@@ -149,15 +146,13 @@ fn sees_reference_style_links_and_leaves_images_alone() {
     );
 }
 
-/// The check and the server read one document one way.
+/// The check reads a footnote as a footnote.
 ///
-/// A footnote is where the two readings could part. To a parser without
-/// `ENABLE_FOOTNOTES`, `[^1]` is a shortcut reference link and the block
-/// `[^1]: guide/missing.md` below it is its definition, so the check would
-/// report a broken link on a page where the server, which does enable
-/// footnotes, renders no link at all. Both sides parse with
-/// `MARKDOWN_OPTIONS`, so the footnote is a footnote to both and only the
-/// ordinary definition beside it is reported.
+/// To a parser without `ENABLE_FOOTNOTES`, `[^1]` is a shortcut reference
+/// link and the block `[^1]: guide/missing.md` below it is its definition, so
+/// the check would report a broken link on a page that has no link at all.
+/// The check parses with `MARKDOWN_OPTIONS`, so only the ordinary definition
+/// beside the footnote is reported.
 #[test]
 #[verifies("rule_docs_links_resolve", examples)]
 fn reads_a_footnote_as_a_footnote_and_not_as_a_link() {

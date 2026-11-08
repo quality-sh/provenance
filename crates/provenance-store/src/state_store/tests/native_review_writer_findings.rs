@@ -3,8 +3,7 @@ use super::{
     seeded_requirement_store,
 };
 use crate::state_store::{
-    EditQuestionInput, UpdateBoundaryInput, UpdateRequirementInput, UpdateRuleInput,
-    UpdateTopicInput,
+    EditQuestionInput, UpdateRequirementInput, UpdateRuleInput, UpdateTopicInput,
 };
 use provenance_core::{NodeType, Source};
 
@@ -141,25 +140,6 @@ fn requirement_status_keeps_revisions() {
                 "scope_id":"default", "id":"req_overtime", "statement":"Overtime is recorded."
             }));
         },
-    );
-}
-
-#[test]
-fn boundary_content_change_creates_a_revision() {
-    let (_dir, store, scope) = seeded_requirement_store();
-    seed_native_records(&store, &scope);
-    let created = revision(&store, &scope, NodeType::Boundary, "boundary_native");
-    store
-        .update_boundary(
-            serde_json::from_value::<UpdateBoundaryInput>(serde_json::json!({
-                "scope_id":"default", "id":"boundary_native", "statement":"Boundary B"
-            }))
-            .unwrap(),
-        )
-        .unwrap();
-    assert_ne!(
-        revision(&store, &scope, NodeType::Boundary, "boundary_native"),
-        created
     );
 }
 

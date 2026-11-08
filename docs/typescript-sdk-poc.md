@@ -150,7 +150,7 @@ that address to the canonical ID and rejects an unapplied declaration before
 Node executes the callback. Keeping runs in the existing derived cache prevents
 every local test from dirtying Git-tracked canonical state. Declarations
 themselves remain in `.provenance/state` and therefore appear in exports,
-traceability queries, checks, graph references, and the review page like
+traceability queries, checks, and the review page like
 records created by the existing CLI.
 
 The bindings check (`check --bindings`) consumes canonical typed bindings

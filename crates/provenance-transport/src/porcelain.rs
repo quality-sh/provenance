@@ -9,7 +9,6 @@ mod discussion_port;
 mod dogfood;
 mod export;
 mod get_port;
-mod graph_reference;
 mod host;
 mod import;
 mod init;
@@ -40,7 +39,7 @@ use provenance_contract::Definition;
 use provenance_core::NodeType;
 
 /// The adapter of the commands that work on the files of one repository and scope:
-/// materialize, import, export, the dictionary commands, the graph references,
+/// materialize, import, export, the dictionary commands,
 /// report build, and swarm-backtrace land.
 #[derive(Clone, Debug)]
 pub struct RepositoryPort {

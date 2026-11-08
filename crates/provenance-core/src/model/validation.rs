@@ -49,15 +49,9 @@ where
 ///
 /// A source pin is 7 to 64 hexadecimal digits in either case: the shapes a
 /// person actually has to hand from `git log`, a review comment, or a pasted
-/// permalink, short forms and shouted uppercase included.
-///
-/// This is deliberately looser than `rule_reference_wellformed`'s commit on a
-/// graph reference, which must be a full 40- or 64-character lowercase id. A
-/// source pin locates: it tells a reader where to go and look, and an
-/// abbreviation does that. A reference commit identifies: it is part of a
-/// claim about a repository the holder cannot read, so an abbreviation that
-/// later grows ambiguous would name two different commits. The gap between the
-/// two is a decision, not a divergence to be tidied away.
+/// permalink, short forms and shouted uppercase included. A source pin
+/// locates: it tells a reader where to go and look, and an abbreviation does
+/// that.
 #[rule("rule_source_commit_pin")]
 pub fn validate_commit_pin(commit_pin: &str) -> anyhow::Result<()> {
     anyhow::ensure!(

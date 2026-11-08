@@ -92,7 +92,7 @@ def build_fixture():
         "sources": sources,
         "domains": domains,
         "requirements": requirements,
-        "boundaries": [], "topics": [], "questions": [],
+        "topics": [], "questions": [],
         "resolutions": resolutions,
         "rules": rules,
         "services": [], "service_bindings": [],

@@ -25,11 +25,11 @@ pub use integrity::{
     required_refusal, RelationCycle,
 };
 
-use super::shaping::{Boundary, Question, Topic};
+use super::shaping::{Question, Topic};
 use super::{Requirement, Resolution, Rule, Source};
 use provenance_macros::rule;
 
-/// The declaration tables of the seven owner kinds, in node rank order.
+/// The declaration tables of the six owner kinds, in node rank order.
 ///
 /// Each table is written by `#[derive(Relations)]` from the record's own
 /// fields; this list is the one hand-written concatenation.
@@ -42,7 +42,6 @@ pub const fn declared_relations() -> &'static [&'static [RelationDecl]] {
         &Rule::RELATIONS,
         &Topic::RELATIONS,
         &Question::RELATIONS,
-        &Boundary::RELATIONS,
     ]
 }
 

@@ -1,8 +1,8 @@
 use crate::layout::ProvenanceLayout;
 use crate::repository::Repository;
 use crate::state_store::{
-    CreateBoundaryInput, CreateQuestionInput, CreateRequirementInput, CreateResolutionInput,
-    CreateRuleInput, CreateSourceInput, CreateTopicInput, StateStore,
+    CreateQuestionInput, CreateRequirementInput, CreateResolutionInput, CreateRuleInput,
+    CreateSourceInput, CreateTopicInput, StateStore,
 };
 use provenance_core::{
     ArtifactLink, ArtifactLinkTargetType, Manifest, QuestionStatus, RepoPathPrefix, Requirement,
@@ -118,7 +118,7 @@ pub fn seeded_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
 
 /// Every owner kind carries at least one relation row: two sources in a
 /// supersession chain, the sourced requirement, the decision and rule
-/// that name it, a topic and a question with links, and a boundary. The
+/// that name it, and a topic and a question with links. The
 /// derived relation loader hand-lists the owner kinds, so the relation
 /// tests need a row from each.
 pub fn owner_row_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
@@ -203,7 +203,7 @@ fn seed_shaping_owners(store: &StateStore, scope: &ScopeId) {
             id: sid("question_threshold"),
             topic_id: sid("topic_rates"),
             question: "Which threshold applies?".into(),
-            resolution_method: ResolutionMethod::Grill,
+            resolution_method: ResolutionMethod::Ask,
             status: QuestionStatus::Open,
             answer: None,
             links: vec![ArtifactLink {
@@ -212,18 +212,6 @@ fn seed_shaping_owners(store: &StateStore, scope: &ScopeId) {
             }],
             resolution_id: None,
             contradicts: None,
-        })
-        .unwrap();
-    store
-        .create_boundary(CreateBoundaryInput {
-            scope_id: scope.clone(),
-            id: sid("boundary_no_backpay"),
-            requirement_id: sid("req_schads_overtime"),
-            statement: "No back pay".into(),
-            source_ref: Some(SourceReference {
-                source_id: sid("source_schads"),
-                clause: None,
-            }),
         })
         .unwrap();
 }
