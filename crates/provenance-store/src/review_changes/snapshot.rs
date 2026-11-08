@@ -3,7 +3,7 @@ use crate::{
     cache::{ProjectionFamily, RecordFamily},
     publication::PublicationGuard,
     settings::Settings,
-    state_store::{GuardedStore, StateStore},
+    state_store::{GuardedStore, StateStore, ViewStore},
 };
 use provenance_core::{Manifest, ScopeId};
 use serde_json::Value;
@@ -20,7 +20,7 @@ impl ReviewStateSnapshot {
 
     /// Reads the manifest, the settings and one view of the canonical bytes
     /// under the guard. [`ReviewStateSnapshot::from_capture`] then parses the
-    /// records after the guard is released, so a writer or a reader that
+    /// records after the guard is released. So a writer or a reader that
     /// waits for the guard does not also wait for the parse. When the view
     /// cannot be read, the capture holds the snapshot that
     /// [`ReviewStateSnapshot::read`] gives under the same guard.
@@ -32,7 +32,7 @@ impl ReviewStateSnapshot {
             return Self::of_records(&guarded, manifest, settings)
                 .map(|snapshot| ReviewStateCapture(Captured::Read(Box::new(snapshot))));
         };
-        let store = StateStore::over_view(
+        let store = ViewStore::new(
             repository.identity().clone(),
             repository.layout().clone(),
             Arc::new(view),
@@ -92,7 +92,7 @@ enum Captured {
 }
 
 struct ViewCapture {
-    store: StateStore,
+    store: ViewStore,
     manifest: Manifest,
     settings: Option<Value>,
 }

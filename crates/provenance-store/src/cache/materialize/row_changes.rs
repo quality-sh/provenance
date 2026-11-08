@@ -1,15 +1,15 @@
 //! Writes only the rows of one family that differ from its stored rows.
 //!
 //! The rows of a family table in one scope are keyed by record id. A
-//! record whose values equal its stored row keeps that row; a changed
-//! record replaces its row; a new record adds a row and its identity row;
-//! a record that is gone loses both. The table then holds the same rows as
+//! record whose values equal its stored row keeps that row. A changed
+//! record replaces its row. A new record adds a row and its identity row. A
+//! record that is gone loses both. The table then holds the same rows as
 //! after a delete and a full load. Reads order rows by their columns, never
 //! by insertion, so the place of a written row does not change an answer.
 //!
 //! A load that a full write would refuse goes the full way, so the refusal
-//! is the same: a loader that stopped on a record, two records with one id,
-//! or a table with no id column.
+//! is the same. These loads are a loader that stopped on a record, two
+//! records with one id, and a table with no id column.
 
 use super::batch::{bind, Rows, Table};
 use super::family_rows;
@@ -118,8 +118,8 @@ async fn full(
 
 /// The columns whose values decide whether a stored row is current, the
 /// key first. A collaboration table keeps the whole record as JSON in
-/// `payload`, and its other columns come from that record, so the key and
-/// the payload decide. Any other table compares every column.
+/// `payload`. Its other columns come from that record, so the key and the
+/// payload decide. Any other table compares every column.
 fn compared_columns(table: &Table, key: usize) -> Vec<usize> {
     let payload = table.columns.iter().position(|column| column == "payload");
     let others = (0..table.columns.len()).filter(|index| *index != key);

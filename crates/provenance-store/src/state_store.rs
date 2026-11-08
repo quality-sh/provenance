@@ -15,6 +15,7 @@ pub(crate) mod message_ids;
 mod proposal_surfaces;
 mod proposal_writers;
 pub(crate) mod read_budget;
+mod read_fence;
 pub(crate) mod readers;
 pub(crate) mod record_stamps;
 mod reference_methods;
@@ -23,6 +24,7 @@ mod requirement_reviews;
 mod resolution_decisions;
 mod rule_writers;
 mod scope_ingestion;
+pub(crate) use read_fence::with_read_fence;
 mod shared_parses;
 pub(crate) use shared_parses::with_shared_parses;
 mod shaping_writers;
@@ -40,6 +42,7 @@ pub use updates::*;
 
 pub use access::GuardedStore;
 pub(crate) use access::StateEntry;
+pub(crate) use access::ViewStore;
 pub use archive_history::{ArchiveCommitGap, ArchiveCommitGapReason};
 pub use graph_validation::validate_relations;
 pub use ideation_batches::{
@@ -185,7 +188,6 @@ impl StateStore {
     pub fn manifest(&self) -> anyhow::Result<Manifest> {
         self.with_repository_read(|held| {
             let path = held.layout.manifest_path();
-            crate::test_probes::record_read(&path);
             manifest_from_bytes(&held.read_state(&path)?).map_err(|error| {
                 if error.is::<serde_json::Error>() {
                     error.context(format!("failed to parse manifest {path}"))

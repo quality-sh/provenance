@@ -65,25 +65,7 @@ impl StateStore {
             |r| r.id.as_str(),
             &mut dispositions,
         )?;
-        // The proposal, assertion and disposition lists that the list
-        // readers give: the direct records with each landing laid over them.
-        let mut proposal_definitions = direct_proposals.clone();
-        let mut assertion_records = direct_assertions.clone();
-        let mut disposition_records = direct_dispositions.clone();
         for batch in self.list_ideation_landings(scope)? {
-            overlay_records(
-                &mut proposal_definitions,
-                batch.proposals.clone(),
-                |record| record.id.as_str(),
-            );
-            overlay_records(&mut assertion_records, batch.assertions.clone(), |record| {
-                record.id.as_str()
-            });
-            overlay_records(
-                &mut disposition_records,
-                batch.dispositions.clone(),
-                |record| record.id.as_str(),
-            );
             ensure_batch_evidence_unchanged(
                 &contributions,
                 &synthesis_packets,
@@ -116,9 +98,9 @@ impl StateStore {
             });
             assertions_in_order.extend(batch.assertions);
         }
-        let proposals = proposal_definitions;
-        let assertions = assertion_records;
-        let dispositions = disposition_records;
+        let proposals = self.list_proposal_definitions(scope)?;
+        let assertions = self.list_assertion_records(scope)?;
+        let dispositions = self.list_dispositions(scope)?;
         provenance_core::validate_ideation_aggregate(IdeationAggregate {
             legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
             disposition_actor_ids,

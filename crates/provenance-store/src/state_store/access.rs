@@ -10,6 +10,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 mod guarded_readers;
+pub(crate) use guarded_readers::ViewStore;
 
 #[cfg(test)]
 mod tests;
@@ -275,7 +276,6 @@ impl StateStore {
         operation: impl FnOnce() -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         self.ensure_section_open()?;
-        crate::test_probes::record_read(path);
         let Some(state_dir) = path.ancestors().find(|ancestor| {
             ancestor.file_name() == Some("state")
                 && ancestor.parent().and_then(Utf8Path::file_name) == Some(".provenance")
@@ -364,11 +364,14 @@ pub enum StateEntry {
     Directory,
 }
 
+// Every read below passes through `read_fence::check`, which records it for
+// the tests and refuses it outside a read fence.
 impl StateStore {
     /// The bytes of the state file at `path`, or `None` when it does not
     /// exist. A view store answers from its view; any other store reads the
     /// file.
     pub(crate) fn state_bytes(&self, path: &Utf8Path) -> anyhow::Result<Option<Vec<u8>>> {
+        super::read_fence::check(path)?;
         match &self.access {
             Access::View(view) => Ok(view.get(&self.state_key(path)?).map(<[u8]>::to_vec)),
             _ => match std::fs::read(path) {
@@ -381,6 +384,7 @@ impl StateStore {
 
     /// Like [`Self::state_bytes`], as UTF-8 text.
     pub(crate) fn state_text(&self, path: &Utf8Path) -> anyhow::Result<Option<String>> {
+        super::read_fence::check(path)?;
         match &self.access {
             Access::View(_) => self
                 .state_bytes(path)?
@@ -396,6 +400,7 @@ impl StateStore {
 
     /// The bytes of the state file at `path`, which must exist.
     pub(crate) fn read_state(&self, path: &Utf8Path) -> anyhow::Result<Vec<u8>> {
+        super::read_fence::check(path)?;
         match &self.access {
             Access::View(_) => self.state_bytes(path)?.ok_or_else(|| not_found(path)),
             _ => Ok(std::fs::read(path)?),
@@ -404,6 +409,7 @@ impl StateStore {
 
     /// Like [`Self::read_state`], as UTF-8 text.
     pub(crate) fn read_state_text(&self, path: &Utf8Path) -> anyhow::Result<String> {
+        super::read_fence::check(path)?;
         match &self.access {
             Access::View(_) => self.state_text(path)?.ok_or_else(|| not_found(path)),
             _ => Ok(std::fs::read_to_string(path)?),
@@ -412,6 +418,7 @@ impl StateStore {
 
     /// Whether the state file at `path` exists.
     pub(crate) fn state_exists(&self, path: &Utf8Path) -> anyhow::Result<bool> {
+        super::read_fence::check(path)?;
         match &self.access {
             Access::View(view) => Ok(view.get(&self.state_key(path)?).is_some()),
             _ => Ok(path.exists()),
@@ -427,6 +434,7 @@ impl StateStore {
         kind: StateEntry,
         non_utf8: impl Fn(&std::path::Path) -> anyhow::Error,
     ) -> anyhow::Result<Vec<String>> {
+        super::read_fence::check(directory)?;
         if let Access::View(view) = &self.access {
             let prefix = self.view_prefix(directory)?;
             return Ok(view

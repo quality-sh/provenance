@@ -1,7 +1,12 @@
 use super::GuardedStore;
+use crate::layout::ProvenanceLayout;
+use crate::repository::RepositoryIdentity;
+use crate::state_store::StateStore;
+use crate::storage::{StateStorage, StateView};
 use provenance_core::{
     ImplementationBinding, Manifest, ProposalCard, Requirement, ScopeId, VerificationBinding,
 };
+use std::sync::Arc;
 
 macro_rules! guarded_reader {
     ($record:ty, list_requirements) => {};
@@ -109,16 +114,42 @@ impl GuardedStore<'_> {
     }
 }
 
+impl GuardedStore<'_> {
+    /// Runs `body` inside a read fence of `directories` below the scope
+    /// directory of `scope`. A read outside them fails the result.
+    pub(crate) fn fenced<R>(
+        &self,
+        scope: &ScopeId,
+        directories: Vec<&'static str>,
+        body: impl FnOnce() -> anyhow::Result<R>,
+    ) -> anyhow::Result<R> {
+        let scope_dir = self.store.layout.scopes_dir().join(scope.as_str());
+        crate::state_store::with_read_fence(scope_dir, directories, body)
+    }
+}
+
+/// A store that reads one view of the canonical state and no file. Only
+/// [`ViewStore::new`] makes one, and it always reads a view.
+pub(crate) struct ViewStore(StateStore);
+
+impl ViewStore {
+    /// A store over `view`, a view of the canonical state of `layout`.
+    pub(crate) fn new(
+        identity: RepositoryIdentity,
+        layout: ProvenanceLayout,
+        view: Arc<StateView>,
+        storage: Arc<dyn StateStorage>,
+    ) -> Self {
+        Self(StateStore::over_view(identity, layout, view, storage))
+    }
+}
+
 impl GuardedStore<'static> {
     /// A guarded store over a view that was read under a guard. It reads no
     /// file, so it needs no guard after the read.
-    pub(crate) fn of_view(store: crate::state_store::StateStore) -> Self {
-        assert!(
-            matches!(store.access, crate::state_store::Access::View(_)),
-            "only a view store outlives its guard"
-        );
+    pub(crate) fn of_view(view: ViewStore) -> Self {
         GuardedStore {
-            store,
+            store: view.0,
             _guard: std::marker::PhantomData,
         }
     }

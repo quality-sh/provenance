@@ -66,11 +66,11 @@ impl Observation {
         })
     }
 
-    /// Reads one snapshot. The guard is held while the bytes are read, and
-    /// the records parse after it is released, so the first read after a
-    /// write does not wait for this parse. When the parse fails, the
-    /// snapshot is read again under the guard, so the error that the
-    /// subscribers get is the error of a guarded read.
+    /// Reads one snapshot. The guard is held while the bytes are read. The
+    /// records parse after the guard is released, so the first read after a
+    /// write does not wait for this parse. When the parse fails, the snapshot
+    /// is read again under the guard. So the subscribers get the error of a
+    /// guarded read.
     pub async fn read(&self, reattach: bool) -> anyhow::Result<ReviewStateSnapshot> {
         let capture = self.capture(reattach).await?;
         let parsed =

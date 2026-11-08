@@ -51,9 +51,9 @@ async fn pending(surface: &impl Surface, path: &str) -> String {
         .to_owned()
 }
 
-/// One step. Steps 0 to 14 each make one write through `surface`: a new
-/// record and its review submission, a relation that comes and goes, a
-/// title only, a decision, a withdrawal and a Discussion. The later steps
+/// One step. Steps 0 to 14 each make one write through `surface`. They add
+/// records with their review submissions, add and remove a relation, change
+/// a title, decide, withdraw and start a Discussion. The later steps
 /// make two writes, or edit the files below `state` by hand.
 pub async fn write(surface: &impl Surface, state: &Path, step: usize) {
     if step <= 7 {

@@ -11,9 +11,10 @@ pub(in crate::cache::materialize) struct FileDigest {
     pub content: String,
 }
 
-/// One read of a unit: its digests, the digests of each of its files by
-/// path below the state directory, and the paths whose bytes differ from
-/// the files a previous pass stored, added and removed files included.
+/// One read of a unit. It holds the digests of the unit, and the digests of
+/// each of its files by path below the state directory. It also holds the
+/// paths whose bytes differ from the files that a previous pass stored.
+/// These include the added and the removed files.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::cache::materialize) struct UnitRead {
     pub digests: UnitDigests,

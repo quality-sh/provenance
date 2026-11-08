@@ -11,7 +11,6 @@ mod close_progress;
 mod completion_behavior;
 mod completion_deadline;
 mod current_schema_behavior;
-mod family_inputs_behavior;
 pub mod fixtures;
 mod gap_kinds_behavior;
 mod gap_rule_behavior;

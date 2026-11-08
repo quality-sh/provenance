@@ -10,7 +10,7 @@ use crate::state_store::GuardedStore;
 use provenance_core::model::relations::{link_rows_of, rows_of, RelationRow};
 use provenance_core::{NodeType, ScopeId};
 use sqlx::{Sqlite, Transaction};
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 
 /// The families whose records declare relations.
 pub(super) const OWNERS: [ProjectionFamily; 6] = [
@@ -22,11 +22,22 @@ pub(super) const OWNERS: [ProjectionFamily; 6] = [
     ProjectionFamily::Questions,
 ];
 
-/// The rows of one scope, in the order the declarations list them.
+/// The rows of one scope, in the order the declarations list them. The
+/// reads run inside a read fence of the directories of the owner families.
 pub(super) fn scope_rows(
     store: &GuardedStore<'_>,
     scope: &ScopeId,
 ) -> anyhow::Result<Vec<RelationRow>> {
+    let directories: BTreeSet<_> = OWNERS
+        .into_iter()
+        .flat_map(super::family_inputs::input_directories)
+        .collect();
+    store.fenced(scope, directories.into_iter().collect(), || {
+        owner_rows(store, scope)
+    })
+}
+
+fn owner_rows(store: &GuardedStore<'_>, scope: &ScopeId) -> anyhow::Result<Vec<RelationRow>> {
     let mut rows = rows_of(&store.list_sources(scope)?);
     rows.extend(rows_of(&store.list_requirements(scope)?));
     rows.extend(rows_of(&store.list_resolutions(scope)?));
@@ -83,6 +94,34 @@ pub(super) fn stored_form(rows: &[RelationRow]) -> anyhow::Result<Vec<StoredRow>
     Ok(stored)
 }
 
+/// The insert of relation rows. A row that is stored already is skipped.
+fn insert() -> Rows {
+    let columns = [
+        "scope_id",
+        "owner_type",
+        "owner_id",
+        "relation",
+        "target_type",
+        "target_id",
+    ]
+    .map(String::from);
+    Rows::new(vec![Table::insert_or_ignore("relations", &columns)])
+}
+
+fn push(rows: &mut Rows, scope: &ScopeId, row: &StoredRow) {
+    rows.push(
+        0,
+        vec![
+            text(scope.as_str()),
+            text(row.0.as_str()),
+            text(row.1.as_str()),
+            text(row.2.as_str()),
+            text(row.3.as_str()),
+            text(row.4.as_str()),
+        ],
+    );
+}
+
 /// Makes the stored rows of each owner kind in `owners` equal to the rows
 /// of `rows` with that owner kind. Only the rows that differ are deleted or
 /// written. The other kinds keep their rows, so a caller names every kind
@@ -94,16 +133,7 @@ pub(super) async fn replace_rows(
     owners: &[String],
 ) -> anyhow::Result<()> {
     let fresh = stored_form(rows)?;
-    let columns = [
-        "scope_id",
-        "owner_type",
-        "owner_id",
-        "relation",
-        "target_type",
-        "target_id",
-    ]
-    .map(String::from);
-    let mut added = Rows::new(vec![Table::insert_or_ignore("relations", &columns)]);
+    let mut added = insert();
     for owner in owners {
         let stored: Vec<StoredRow> = sqlx::query_as(
             "SELECT owner_type, owner_id, relation, target_type, target_id FROM relations \
@@ -133,17 +163,7 @@ pub(super) async fn replace_rows(
             .iter()
             .filter(|row| &row.0 == owner && !kept.contains(row))
         {
-            added.push(
-                0,
-                vec![
-                    text(scope.as_str()),
-                    text(row.0.as_str()),
-                    text(row.1.as_str()),
-                    text(row.2.as_str()),
-                    text(row.3.as_str()),
-                    text(row.4.as_str()),
-                ],
-            );
+            push(&mut added, scope, row);
         }
     }
     added.write(tx).await?;
@@ -151,35 +171,16 @@ pub(super) async fn replace_rows(
 }
 
 /// Writes the scope's rows. Two citations of one source with different
-/// clauses are one row. The rows are derived, so they count toward no
-/// family and no report.
+/// clauses are one row, the first. The rows are derived, so they count
+/// toward no family and no report.
 pub(super) async fn load_rows(
     tx: &mut Transaction<'_, Sqlite>,
     rows: &[RelationRow],
     scope: &ScopeId,
 ) -> anyhow::Result<()> {
-    let columns = [
-        "scope_id",
-        "owner_type",
-        "owner_id",
-        "relation",
-        "target_type",
-        "target_id",
-    ]
-    .map(String::from);
-    let mut batch = Rows::new(vec![Table::insert_or_ignore("relations", &columns)]);
-    for row in rows {
-        batch.push(
-            0,
-            vec![
-                text(scope.as_str()),
-                text(serde_name(&row.owner_type)?),
-                text(row.owner_id.as_str()),
-                text(row.relation.as_str()),
-                text(serde_name(&row.target_type)?),
-                text(row.target_id.as_str()),
-            ],
-        );
+    let mut batch = insert();
+    for row in &stored_form(rows)? {
+        push(&mut batch, scope, row);
     }
     batch.write(tx).await?;
     Ok(())

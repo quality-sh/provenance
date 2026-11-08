@@ -1,12 +1,12 @@
 //! Multi-row inserts for the projection loaders.
 //!
-//! A loader adds its rows in the order it used to insert them one by one,
-//! and [`Rows::write`] sends them as multi-row statements, one table at a
-//! time. The rows of one table keep their order, so each table gets the
-//! same row ids as before. When a statement fails, the batch is rolled
-//! back to its savepoint and the rows go again one by one in the order the
-//! loader added them, so the first failing row and its error are the same
-//! as with single-row inserts.
+//! A loader adds its rows in the order it used to insert them one by one.
+//! [`Rows::write`] sends them as multi-row statements, one table at a time.
+//! The rows of one table keep their order, so each table gets the same row
+//! ids as before. When a statement fails, [`Rows::write`] rolls the batch
+//! back to its savepoint. It then inserts the rows one by one in the order
+//! the loader added them. So the first failing row and its error are the
+//! same as with single-row inserts.
 
 use provenance_core::model::ColumnValue;
 use sqlx::sqlite::SqliteArguments;
@@ -61,9 +61,9 @@ impl Table {
     }
 }
 
-/// The rows of one load, for one or more tables, in the loader's order,
-/// with the number of records they hold and the error that stopped the
-/// loader, if one did.
+/// The rows of one load, for one or more tables, in the loader's order.
+/// They come with the number of records they hold, and with the error that
+/// stopped the loader, if one did.
 pub(super) struct Rows {
     pub(super) tables: Vec<Table>,
     pub(super) entries: Vec<(usize, Vec<ColumnValue>)>,

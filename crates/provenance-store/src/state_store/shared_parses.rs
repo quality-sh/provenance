@@ -2,11 +2,15 @@
 //!
 //! In one pass the graph validator, the ideation validator, the relation
 //! rows and the Discussion check each list the six graph kinds. Inside
-//! [`with_shared_parses`], the first list of a shard parses it, and each
-//! later list of the same shard on this thread gets a copy of that parse.
-//! The caller holds the publication guard for the whole body, and checks
-//! after the body that the bytes did not change, so a copy is the parse of
-//! the current bytes.
+//! [`with_shared_parses`], the first list of a shard parses it. Each later
+//! list of the same shard on this thread gets a copy of that parse.
+//! A copy is the parse of the bytes that the body reads. A catch-up holds
+//! the publication guard for the whole body and checks after it that the
+//! bytes did not change. The live-update watcher reads one view of the
+//! state, which no write changes, so it needs no guard and no check.
+//!
+//! A copy is a read of its shard, so it passes through the read fence of
+//! the thread like a parse does.
 
 use camino::{Utf8Path, Utf8PathBuf};
 use std::any::{Any, TypeId};
@@ -35,8 +39,8 @@ pub fn with_shared_parses<R>(body: impl FnOnce() -> R) -> R {
 }
 
 /// The records of the shard at `path`: a copy of a shared parse, or the
-/// result of `parse`, which is shared when it succeeds inside
-/// [`with_shared_parses`].
+/// result of `parse`. Inside [`with_shared_parses`], a parse that succeeds
+/// is shared.
 pub(super) fn shared<T: Clone + 'static>(
     path: &Utf8Path,
     parse: impl FnOnce() -> anyhow::Result<Vec<T>>,
@@ -51,6 +55,7 @@ pub(super) fn shared<T: Clone + 'static>(
             .cloned()
     });
     if let Some(records) = hit {
+        super::read_fence::check(path)?;
         return Ok(records);
     }
     let records = parse()?;

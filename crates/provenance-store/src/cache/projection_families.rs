@@ -349,15 +349,19 @@ impl ProjectionFamily {
     /// The records of one family for a caller that validated the scope
     /// under the guard it holds. Only the proposal cards differ from
     /// [`Self::guarded_records`]: their reader would validate the scope again.
+    ///
+    /// The reader runs inside a read fence of its input directories, so a
+    /// read outside them fails. A catch-up parses the family again only
+    /// after a change in these directories.
     pub(crate) fn records_of_validated_scope(
         self,
         store: &GuardedStore<'_>,
         scope: &ScopeId,
     ) -> anyhow::Result<(Vec<u8>, u64)> {
-        match self {
+        store.fenced(scope, super::input_directories(self), || match self {
             Self::ProposalCards => sorted_bytes(store.proposal_cards_of_validated_scope(scope)?),
             _ => self.guarded_records(store, scope),
-        }
+        })
     }
 }
 

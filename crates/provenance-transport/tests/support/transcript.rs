@@ -4,9 +4,9 @@
 //! The comparison of two repositories keeps every value apart from the
 //! repository path, the projection stamp and the page cursor. The stamp and
 //! the cursors hold the serial of one projection, so an answer keeps only
-//! whether a next page exists. The pinned transcript also names each
-//! generated id, digest and time stamp in the order it first shows, because
-//! record ids are random from run to run.
+//! whether a next page exists. Record ids are random from run to run. So the
+//! pinned transcript names each generated id, digest and time stamp in the
+//! order it first shows.
 
 use super::catch_up_steps::Surface;
 use provenance_transport::fixture::records::Repository;
@@ -156,11 +156,18 @@ pub fn named_answers(names: &mut Names, answers: &[Value]) -> Vec<Value> {
 }
 
 /// Asserts that each read after a catch-up equals the read after a full
-/// rebuild, value for value.
+/// rebuild, value for value. A rebuild of a state that validation refuses
+/// stores no projection. Then the read after the catch-up must answer from
+/// the stored projection and name the refusal.
 pub fn assert_same(caught_up: &[Value], rebuilt: &[Value], context: &str) {
     assert_eq!(caught_up.len(), rebuilt.len(), "{context}");
     for (index, (left, right)) in caught_up.iter().zip(rebuilt).enumerate() {
-        assert_eq!(left, right, "{context}, read {index}");
+        if right.to_string().contains("\"no_projection\"") {
+            let refusal = &left["answer"]["body"]["meta"]["freshness_error"];
+            assert!(refusal.is_string(), "{context}, read {index}: {left}");
+        } else {
+            assert_eq!(left, right, "{context}, read {index}");
+        }
     }
 }
 

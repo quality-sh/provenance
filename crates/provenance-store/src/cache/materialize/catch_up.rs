@@ -198,8 +198,8 @@ struct ScopePass<'a> {
 }
 
 /// Parses the families of one scope unit that its changed files can change,
-/// writes their changed rows, and stores the digests of the unit and of
-/// each of its files.
+/// and writes their changed rows. Then stores the digests of the unit and
+/// of each of its files.
 async fn catch_up_scope(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     reader: &validation::UnitReader<'_>,
