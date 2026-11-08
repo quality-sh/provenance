@@ -1,13 +1,13 @@
-// Writes the per-row profile files, the comparison with the baseline, the
+// Writes the per-row profile files, the comparison with the baselines, the
 // JSON file and the Markdown summaries.
 //
 //   node tools/profile/analyze.mjs --folded labeled.folded --windows windows.json \
-//     --out api-profile --stacks api-profile-stacks [--baseline baseline-dir] [--stats samples.json]
+//     --out api-profile --stacks api-profile-stacks [--baseline baseline-dir ...] [--stats samples.json]
 //
 // labeled.folded is the inferno-collapse-perf output of label.mjs: the root
 // frame of each stack is the row file name. --folded, --windows and --stats
-// can each be given once for each part of the run. The baseline directory
-// holds the api-profile artifact of an earlier run. README.md tells what each output
+// can each be given once for each part of the run. Each baseline directory
+// holds the api-profile artifact of an earlier run, newest first. README.md tells what each output
 // file holds.
 import { createReadStream, createWriteStream, existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -22,6 +22,7 @@ import {
   cell,
   Shares,
   compareShares,
+  dispersion,
   foldedLine,
   splitKey,
   largestChanges,
@@ -38,7 +39,7 @@ const { values: options } = parseArgs({
     windows: { type: 'string', multiple: true, default: [] },
     stats: { type: 'string', multiple: true, default: [] },
     stacks: { type: 'string', default: 'api-profile-stacks' },
-    baseline: { type: 'string' },
+    baseline: { type: 'string', multiple: true, default: [] },
     out: { type: 'string', default: 'api-profile' },
     frequency: { type: 'string', default: '1999' },
     commit: { type: 'string', default: process.env.GITHUB_SHA ?? '' },
@@ -170,8 +171,9 @@ function rowMarkdown(row) {
     }
   }
   if (row.baseline) {
-    lines.push('', '## Inclusive share change from the baseline', '');
-    lines.push(`Baseline samples: ${row.baseline.samples}. A change is over the noise when it is at least ${(MIN_CHANGE * 100).toFixed(1)} points and ${MIN_Z} standard errors.`);
+    const spread = row.baseline.dispersion === null ? 'not known with one baseline' : row.baseline.dispersion.toFixed(1);
+    lines.push('', '## Inclusive share change from the baselines', '');
+    lines.push(`Baseline runs: ${row.baseline.runs}, with ${row.baseline.samples.join(', ')} samples. Dispersion (how much more the shares change from run to run than a count test expects): ${spread}. A change is over the noise when it is at least ${(MIN_CHANGE * 100).toFixed(1)} points and ${MIN_Z} standard errors.`);
     for (const [title, list] of [['Grew', row.baseline.grew], ['Shrank', row.baseline.shrank]]) {
       lines.push('', `### ${title}`, '', '| Baseline | Now | Change (points) | z | Over noise | Function |', '|---:|---:|---:|---:|---|---|');
       for (const item of list) {
@@ -195,10 +197,13 @@ function rankedChanges(rows, filter) {
   return all.sort((a, b) => Math.abs(b.item.change) - Math.abs(a.item.change));
 }
 
+/** The mean sample count of the baselines of a row. */
+const baseSamples = row => Math.round(row.baseline.samples.reduce((total, count) => total + count, 0) / row.baseline.samples.length);
+
 function changeTable(entries) {
   const lines = ['| Row | Samples (baseline, now) | Function | Inclusive share (baseline, now) | Change (points) | z |', '|---|---:|---|---:|---:|---:|'];
   for (const { row, item } of entries) {
-    lines.push(`| ${row.label.replace(/\|/g, '\\|')} | ${row.baseline.samples}, ${row.samples} | ${cell(item.function)} | ${percent(item.base)}, ${percent(item.now)} | ${points(item.change)} | ${item.z.toFixed(1)} |`);
+    lines.push(`| ${row.label.replace(/\|/g, '\\|')} | ${baseSamples(row)}, ${row.samples} | ${cell(item.function)} | ${percent(item.base)}, ${percent(item.now)} | ${points(item.change)} | ${item.z.toFixed(1)} |`);
   }
   return lines;
 }
@@ -208,19 +213,22 @@ function header(profile) {
   const run = profile.run.url ? `[${profile.run.id}](${profile.run.url})` : 'local';
   const head = profile.head && profile.head !== profile.commit ? ` (pull request head \`${short(profile.head)}\` merged into its base)` : '';
   lines.push(`Commit \`${short(profile.commit)}\`${head}, run ${run}. ${profile.rows.length} rows, ${profile.samples.kept ?? 'unknown'} samples at ${frequency} Hz.`);
-  if (profile.baseline) {
-    const base = profile.baseline;
-    const baseRun = base.run?.url ? `[${base.run.id}](${base.run.url})` : 'unknown';
-    lines.push(`Baseline: main commit \`${short(base.commit)}\`, run ${baseRun}.`);
+  const bases = profile.baselines;
+  if (bases.length) {
+    const list = bases.map(base => `commit \`${short(base.commit)}\` run ${base.run?.url ? `[${base.run.id}](${base.run.url})` : 'unknown'}`).join('; ');
+    lines.push(`Baselines (main, newest first): ${list}. The baseline share is their mean.`);
+    if (bases.length === 1) {
+      lines.push('With one baseline, the change from run to run is not known, so part of a change can be runner noise.');
+    }
   } else {
     lines.push('Baseline: none found, so this run has no comparison.');
   }
-  lines.push(`Shares are percent of the CPU samples of one row, not milliseconds, because runner speed changes from run to run. A change is over the noise when it is at least ${(MIN_CHANGE * 100).toFixed(1)} points and ${MIN_Z} standard errors.`);
+  lines.push(`Shares are percent of the CPU samples of one row, not milliseconds, because runner speed changes from run to run. A change is over the noise when it is at least ${(MIN_CHANGE * 100).toFixed(1)} points and ${MIN_Z} standard errors; the error includes how much the shares of the row change between the baseline runs.`);
   return lines;
 }
 
 function changesSection(profile, limit) {
-  if (!profile.baseline) {
+  if (!profile.baselines.length) {
     return [];
   }
   const lines = ['', '### Largest inclusive share changes', ''];
@@ -275,7 +283,13 @@ async function main() {
       stats[name] = (stats[name] ?? 0) + value;
     }
   }
-  const baseline = await loadBaseline(options.baseline);
+  const baselines = [];
+  for (const directory of options.baseline) {
+    const baseline = await loadBaseline(directory);
+    if (baseline) {
+      baselines.push(baseline);
+    }
+  }
   const outRows = [];
   const functions = { rows: {} };
   for (const row of rows) {
@@ -292,10 +306,17 @@ async function main() {
       top: { inclusive: top(counts.inclusive, counts.total, TOP), self: top(counts.self, counts.total, TOP) },
       baseline: null,
     };
-    const base = baseline?.rows.get(row.label);
-    if (base && base.total && counts.total) {
-      const changes = compareShares(counts, base);
-      out.baseline = { samples: base.total, ...largestChanges(changes, CHANGES), overNoise: changes.filter(item => item.overNoise).length };
+    const bases = baselines.map(baseline => baseline.rows.get(row.label)).filter(base => base?.total);
+    if (bases.length && counts.total) {
+      const spread = dispersion(bases);
+      const changes = compareShares(counts, bases, spread);
+      out.baseline = {
+        runs: bases.length,
+        samples: bases.map(base => base.total),
+        dispersion: spread,
+        ...largestChanges(changes, CHANGES),
+        overNoise: changes.filter(item => item.overNoise).length,
+      };
     }
     if (counts.total) {
       functions.rows[row.file] = functionCounts(counts);
@@ -311,9 +332,9 @@ async function main() {
     frequency,
     samples: stats,
     limits: { minChange: MIN_CHANGE, minZ: MIN_Z, fewSamples: FEW_SAMPLES },
-    baseline: baseline ? { commit: baseline.commit, run: baseline.run } : null,
-    newRows: baseline ? outRows.filter(row => !baseline.rows.has(row.label)).map(row => row.label) : [],
-    goneRows: baseline ? [...baseline.rows.keys()].filter(label => !labels.has(label)) : [],
+    baselines: baselines.map(baseline => ({ commit: baseline.commit, run: baseline.run })),
+    newRows: baselines.length ? outRows.filter(row => !row.baseline).map(row => row.label) : [],
+    goneRows: [...new Set(baselines.flatMap(baseline => [...baseline.rows.keys()]))].filter(label => !labels.has(label)),
     rows: outRows,
   };
   await writeFile(join(options.out, 'profile.json'), `${JSON.stringify(profile, null, 1)}\n`);
@@ -322,7 +343,7 @@ async function main() {
   await writeFile(join(options.out, 'comment.md'), commentMarkdown(profile));
   const graphs = outRows.filter(row => row.samples).map(row => `${row.file}\t${row.label} (${row.samples} samples)`);
   await writeFile(join(options.stacks, 'flamegraphs.tsv'), graphs.length ? `${graphs.join('\n')}\n` : '');
-  process.stderr.write(`${outRows.length} rows, baseline ${baseline ? short(baseline.commit) : 'none'}\n`);
+  process.stderr.write(`${outRows.length} rows, ${baselines.length} baselines\n`);
 }
 
 await main();

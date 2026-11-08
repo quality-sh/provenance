@@ -65,14 +65,15 @@ table of the job summary. It is the row label in lower case with a short hash,
 so it is the same in each run.
 
 `profile.json` has `commit`, `head`, `run`, `frequency`, `samples` (the sample
-counts), `limits` (the noise limits), `baseline` (its commit and run, or
-null), `newRows`, `goneRows` and `rows`. Each row has `way`, `call`, `label`,
+counts), `limits` (the noise limits), `baselines` (the commit and run of each,
+newest first), `newRows`, `goneRows` and `rows`. Each row has `way`, `call`, `label`,
 `file`, `calls`, `wallMs` (the sum of the call times under perf), `samples`,
 `cpuMsPerCall`, `top.inclusive` and `top.self`
 (the top 25 functions with `share` and `samples`), and `baseline`: null, or
-the baseline `samples`, `grew` and `shrank` (the 10 largest changes, each with
-`base`, `now`, `change`, `z` and `overNoise`) and `overNoise` (the number of
-functions with a change over the noise).
+`runs` (the number of baselines with this row), `samples` (the sample count
+of each), `dispersion` (null with one baseline), `grew` and `shrank` (the 10
+largest changes, each with `base`, `now`, `change`, `z` and `overNoise`) and
+`overNoise` (the number of functions with a change over the noise).
 
 With the gh CLI:
 
@@ -93,23 +94,35 @@ With the gh CLI:
   the runner changes by up to 30 percent from run to run. A change is in share
   points: `+5.0` means that the function was on 5 percent more of the samples
   of the row.
+- The baseline share of a function is the mean of its share in the newest
+  three main baselines (fewer when fewer exist).
 - A change is "over the noise" when it is at least 2 points and at least 3
-  standard errors (`z`). The standard error is the larger of two values: the
-  error of a two-proportion test on the sample counts, and the error from the
-  halves of the calls. Each run puts the first, third, ... call of a row in
-  half `a` and the second, fourth, ... call in half `b`; the difference
-  between the halves shows how much a share changes from call to call. With 3
-  to 5 calls in a row this error is an estimate, so use `z` as a guide, not as
-  a proof. A row with fewer than 200 samples has a noisy profile; its
-  `rows/<file>.md` tells so.
+  standard errors (`z`). The standard error is the larger of two values:
+  - The error of a count test on the samples, times the square root of the
+    row dispersion. The dispersion tells how much more the shares of the row
+    change between the baseline runs than the count test expects. It is pooled
+    over all functions of the row with a mean share from 2 to 98 percent, so
+    two or three baselines give a usable value. Shares change between runs
+    even for the same code: the runner speed changes how much background work,
+    for example a projection catch-up, falls inside a call.
+  - The error from the halves of the calls. Each run puts the first, third,
+    ... call of a row in half `a` and the second, fourth, ... call in half
+    `b`; the difference between the halves shows how much a share changes
+    from call to call.
+
+  With one baseline the dispersion is not known, and the comment says so. With
+  3 to 5 calls in a row these errors are estimates, so use `z` as a guide, not
+  as a proof. A row with fewer than 200 samples has a noisy profile; its
+  `rows/<file>.md` tells so. When main changed between the baselines, the
+  dispersion of a changed row is larger, so the comparison is more careful.
 - `CPU ms for each call` is the sample count divided by the rate and by the
   number of timed calls. It is an estimate under perf; use the API latency
   workflow for times.
-- The baseline is the newest `api-profile-baseline` artifact, which a main
-  push makes. The comment and the summary name its commit and its run. On a pull
-  request, the profiled commit is the merge of the head into the base; the
-  header names the head too. When main changed after the baseline, part of a
-  change can come from main.
+- The baselines are the `api-profile-baseline` artifacts that main pushes
+  make. The comment and the summary name the commit and the run of each. On a
+  pull request, the profiled commit is the merge of the head into the base;
+  the header names the head too. When main changed after the newest baseline,
+  part of a change can come from main.
 - For the counts, function names have no Rust hash suffix and no C library
   symbol version. A function with one version for each set of CPU features
   has one name: `__memmove_avx_unaligned_erms` and
@@ -121,8 +134,8 @@ With the gh CLI:
 
 ## Files
 
-- `profile.mjs`: the sample labels, the share counts, the comparison. No file
-  input or output.
+- `profile.mjs`: the sample labels, the share counts, the dispersion and the
+  comparison. No file input or output.
 - `label.mjs`: reads `perf script` output and writes the samples of each row
   with the row file name as the process name.
 - `analyze.mjs`: writes `profile.json`, the per-row files and the Markdown.

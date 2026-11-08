@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Labeler, Shares, splitError, splitKey, stackSymbol, compareShares, findRow, functionName, largestChanges, parseFolded, rowFile, rowsFromWindows, shares, top } from './profile.mjs';
+import { Labeler, Shares, dispersion, splitError, splitKey, stackSymbol, compareShares, findRow, functionName, largestChanges, parseFolded, rowFile, rowsFromWindows, shares, top } from './profile.mjs';
 
 const windows = [
   { way: 'CLI', call: 'GET /rules', pid: 10, start: 1000, end: 1010 },
@@ -97,13 +97,13 @@ test('inclusive shares count a function once for each sample, self shares count 
 test('a share change is over the noise only when it is large and many standard errors', () => {
   const base = shares([{ frames: ['main', 'a'], count: 500 }, { frames: ['main', 'b'], count: 500 }]);
   const grown = shares([{ frames: ['main', 'a'], count: 700 }, { frames: ['main', 'b'], count: 300 }]);
-  const changes = compareShares(grown, base);
+  const changes = compareShares(grown, [base]);
   const a = changes.find(item => item.function === 'a');
   assert.ok(Math.abs(a.change - 0.2) < 1e-9);
   assert.ok(a.z > 3);
   assert.equal(a.overNoise, true);
   assert.equal(changes.find(item => item.function === 'main').overNoise, false);
-  const small = compareShares(shares([{ frames: ['a'], count: 6 }, { frames: ['b'], count: 4 }]), shares([{ frames: ['a'], count: 5 }, { frames: ['b'], count: 5 }]));
+  const small = compareShares(shares([{ frames: ['a'], count: 6 }, { frames: ['b'], count: 4 }]), [shares([{ frames: ['a'], count: 5 }, { frames: ['b'], count: 5 }])]);
   assert.equal(small.find(item => item.function === 'a').overNoise, false);
   const { grew, shrank } = largestChanges(changes, 1);
   assert.deepEqual([grew[0].function, shrank[0].function], ['a', 'b']);
@@ -131,14 +131,29 @@ test('the halves of the calls give the error when the calls differ', () => {
   const other = new Shares();
   other.add(['main', 'a'], 200, 'a');
   other.add(['main', 'b'], 200, 'b');
-  const change = compareShares(other, steady).find(item => item.function === 'a');
+  const change = compareShares(other, [steady]).find(item => item.function === 'a');
   assert.equal(change.change, 0);
   const moved = new Shares();
   moved.add(['main', 'a'], 120, 'a');
   moved.add(['main', 'b'], 80, 'a');
   moved.add(['main', 'a'], 40, 'b');
   moved.add(['main', 'b'], 160, 'b');
-  const noisy = compareShares(moved, steady).find(item => item.function === 'a');
+  const noisy = compareShares(moved, [steady]).find(item => item.function === 'a');
   assert.ok(Math.abs(noisy.change + 0.1) < 1e-9);
   assert.equal(noisy.overNoise, false, 'a 10 point change is in the noise when the halves differ by 40 points');
+});
+
+test('the baselines give the dispersion of a row, and a change within it is in the noise', () => {
+  const run = share => shares([{ frames: ['main', 'a'], count: Math.round(1000 * share) }, { frames: ['main', 'b'], count: Math.round(1000 * (1 - share)) }]);
+  assert.equal(dispersion([run(0.5)]), null);
+  assert.equal(dispersion([run(0.5), run(0.5)]), 1);
+  const spread = dispersion([run(0.4), run(0.6), run(0.5)]);
+  assert.ok(spread > 10, `the dispersion is ${spread}`);
+  // A 15 point change is far over a count test, but in the spread of the baselines.
+  const wide = compareShares(run(0.65), [run(0.4), run(0.6), run(0.5)]).find(item => item.function === 'a');
+  assert.ok(Math.abs(wide.change - 0.15) < 1e-9);
+  assert.equal(wide.overNoise, false);
+  // The same change over steady baselines is over the noise.
+  const steady = compareShares(run(0.65), [run(0.5), run(0.5), run(0.51)]).find(item => item.function === 'a');
+  assert.equal(steady.overNoise, true);
 });

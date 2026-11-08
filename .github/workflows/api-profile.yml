@@ -169,7 +169,7 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
-      # Find and download the baseline artifact of an earlier run.
+      # Find and download the baseline artifacts of earlier runs.
       actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -185,21 +185,28 @@ jobs:
           pattern: api-profile-part-*
           path: parts
           merge-multiple: true
-      - name: Download the main baseline
+      - name: Download the main baselines
         if: env.ARTIFACT != 'api-profile-baseline'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=api-profile-baseline&per_page=20" \
-            --jq '[.artifacts[] | select(.expired | not)] | sort_by(.created_at) | last | .workflow_run.id // empty')
-          if [ -z "$run" ]; then
+          # The newest baseline artifact of each of the three newest runs. The
+          # comparison uses their mean and how much they differ.
+          runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=api-profile-baseline&per_page=50" \
+            --jq '[.artifacts[] | select(.expired | not)] | group_by(.workflow_run.id) | map(max_by(.created_at))
+              | sort_by(.created_at) | reverse | .[:3] | .[].workflow_run.id')
+          if [ -z "$runs" ]; then
             echo "No baseline artifact found."
             exit 0
           fi
-          # profile.json and functions.json hold all that the comparison needs.
-          gh run download "$run" --repo "$GITHUB_REPOSITORY" -n api-profile-baseline -D "$RUNNER_TEMP/baseline" \
-            || echo "The baseline of run $run did not download."
+          index=0
+          for run in $runs; do
+            index=$((index + 1))
+            # profile.json and functions.json hold all that the comparison needs.
+            gh run download "$run" --repo "$GITHUB_REPOSITORY" -n api-profile-baseline -D "$RUNNER_TEMP/baseline/$index" \
+              || echo "The baseline of run $run did not download."
+          done
       - name: Write the profile of each row
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -209,7 +216,10 @@ jobs:
           for way in HTTP MCP CLI; do
             args+=(--folded "parts/stacks-$way.folded" --windows "parts/windows-$way.json" --stats "parts/samples-$way.json")
           done
-          node tools/profile/analyze.mjs "${args[@]}" --baseline "$RUNNER_TEMP/baseline" \
+          for directory in "$RUNNER_TEMP"/baseline/*/; do
+            if [ -d "$directory" ]; then args+=(--baseline "$directory"); fi
+          done
+          node tools/profile/analyze.mjs "${args[@]}" \
             --out "$ARTIFACT" --stacks "$ARTIFACT-stacks" --frequency "$FREQUENCY" --head "$HEAD_SHA" --artifact "$ARTIFACT"
           while IFS=$'\t' read -r file title; do
             inferno-flamegraph --title "$title" "$ARTIFACT-stacks/rows/$file.folded" > "$ARTIFACT-stacks/rows/$file.svg"

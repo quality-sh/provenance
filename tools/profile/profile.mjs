@@ -269,26 +269,65 @@ export function top(counts, total, limit) {
     .map(([name, samples]) => ({ function: name, samples, share: total ? samples / total : 0 }));
 }
 
+/** Functions with a mean baseline share in this range measure the dispersion of a row. */
+const DISPERSION_RANGE = [0.02, 0.98];
+
 /**
- * The change of each function's inclusive share from the baseline to now.
- * `z` is the change over its standard error: the larger of the error of a
- * two-proportion test on the sample counts and the error from the halves of
- * both runs (see splitError). The samples of one call are not independent, so
- * the halves give the larger error when the calls differ. A change is over the
- * noise when it is at least MIN_CHANGE and at least MIN_Z standard errors.
+ * How much more the inclusive shares of a row change from run to run than a
+ * count test expects: the mean squared difference of each baseline share from
+ * the mean share, over its count variance, for all functions in
+ * DISPERSION_RANGE. It is pooled over the functions of the row, so a few
+ * baseline runs give a stable value. At least 1; null with fewer than two
+ * baselines.
  */
-export function compareShares(now, base) {
-  const names = new Set([...now.inclusive.keys(), ...base.inclusive.keys()]);
+export function dispersion(bases) {
+  if (bases.length < 2) {
+    return null;
+  }
+  const names = new Set(bases.flatMap(base => [...base.inclusive.keys()]));
+  let sum = 0;
+  let terms = 0;
+  for (const name of names) {
+    const shares = bases.map(base => (base.inclusive.get(name) ?? 0) / base.total);
+    const mean = shares.reduce((total, share) => total + share, 0) / shares.length;
+    if (mean < DISPERSION_RANGE[0] || mean > DISPERSION_RANGE[1]) {
+      continue;
+    }
+    for (const [index, share] of shares.entries()) {
+      sum += (share - mean) ** 2 / ((mean * (1 - mean)) / bases[index].total);
+    }
+    terms += 1;
+  }
+  return terms ? Math.max(1, sum / ((bases.length - 1) * terms)) : 1;
+}
+
+/**
+ * The change of each function's inclusive share from the baselines to now.
+ * The baseline share is the mean share of the baseline runs. `z` is the change
+ * over its standard error, the larger of:
+ * - the error of a count test on the samples, times the square root of the
+ *   row dispersion (see dispersion), which holds the change from run to run;
+ * - the error from the halves of the calls in each run (see splitError).
+ * With one baseline the dispersion is not known and counts as 1. A change is
+ * over the noise when it is at least MIN_CHANGE and at least MIN_Z standard
+ * errors.
+ */
+export function compareShares(now, bases, spread = dispersion(bases)) {
+  const names = new Set([now, ...bases].flatMap(counts => [...counts.inclusive.keys()]));
+  const factor = spread ?? 1;
+  const baseTotal = bases.reduce((total, base) => total + base.total, 0);
+  const inverse = bases.reduce((total, base) => total + 1 / base.total, 0) / bases.length ** 2;
   const changes = [];
   for (const name of names) {
-    const a = base.inclusive.get(name) ?? 0;
+    const counts = bases.map(base => base.inclusive.get(name) ?? 0);
+    const shareBase = bases.reduce((total, base, index) => total + counts[index] / base.total, 0) / bases.length;
     const b = now.inclusive.get(name) ?? 0;
-    const shareBase = base.total ? a / base.total : 0;
-    const shareNow = now.total ? b / now.total : 0;
+    const shareNow = b / now.total;
     const change = shareNow - shareBase;
-    const pooled = base.total + now.total ? (a + b) / (base.total + now.total) : 0;
-    const counted = base.total && now.total ? Math.sqrt(pooled * (1 - pooled) * (1 / base.total + 1 / now.total)) : 0;
-    const error = Math.max(counted, Math.hypot(splitError(now, name), splitError(base, name)));
+    const pooled = (b + counts.reduce((total, count) => total + count, 0)) / (now.total + baseTotal);
+    const counted = Math.sqrt(factor * pooled * (1 - pooled) * (1 / now.total + inverse));
+    const baseSplit = bases.reduce((total, base) => total + splitError(base, name), 0) / bases.length / Math.sqrt(bases.length);
+    const error = Math.max(counted, Math.hypot(splitError(now, name), baseSplit));
     const z = error ? change / error : 0;
     changes.push({ function: name, base: shareBase, now: shareNow, change, z, overNoise: Math.abs(change) >= MIN_CHANGE && Math.abs(z) >= MIN_Z });
   }
