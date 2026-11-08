@@ -75,10 +75,21 @@ export function findRow(byPid, pid, ms) {
 // event. The stack lines that follow start with a tab.
 const HEADER = /^\s*(\S.*?)\s+(\d+)\/(\d+)\s+(\d+\.\d+):(.*)$/;
 
+/** The function name of a `perf script` stack line (`<address> <symbol> (<dso>)`). */
+export function stackSymbol(text) {
+  const body = text.trim();
+  const space = body.indexOf(' ');
+  const rest = space < 0 ? '' : body.slice(space + 1);
+  const dso = rest.lastIndexOf(' (');
+  return dso < 0 ? rest : rest.slice(0, dso);
+}
+
 /**
  * Reads `perf script` output line by line. A sample in a row window comes out
  * with the row key in place of the process name; other samples are dropped.
- * `stats` counts the samples.
+ * A stack line with the same function as the line before it is dropped too:
+ * deep async stacks repeat one poll function many times, and the repeats
+ * change no inclusive or self share. `stats` counts the samples.
  */
 export class Labeler {
   constructor(byPid) {
@@ -95,7 +106,15 @@ export class Labeler {
       return out;
     }
     if (text.startsWith('\t')) {
-      return this.keep ? text : null;
+      if (!this.keep) {
+        return null;
+      }
+      const symbol = stackSymbol(text);
+      if (symbol === this.last) {
+        return null;
+      }
+      this.last = symbol;
+      return text;
     }
     const match = HEADER.exec(text);
     if (!match) {
@@ -105,6 +124,7 @@ export class Labeler {
     this.stats.samples += 1;
     const key = findRow(this.byPid, Number(pid), Number(seconds) * 1000);
     this.keep = key !== null;
+    this.last = null;
     if (key) {
       this.stats.kept += 1;
       return `${key} ${pid}/${tid} ${seconds}:${rest}`;
@@ -127,20 +147,15 @@ export function functionName(frame) {
 export function parseFolded(text, { byRoot = true } = {}) {
   const out = new Map();
   for (const line of text.split('\n')) {
-    const space = line.lastIndexOf(' ');
-    if (space <= 0) {
+    const stack = foldedLine(line);
+    if (!stack) {
       continue;
     }
-    const count = Number(line.slice(space + 1));
-    if (!Number.isFinite(count) || count <= 0) {
-      continue;
-    }
-    const frames = line.slice(0, space).split(';');
-    const root = byRoot ? frames.shift() : '';
+    const root = byRoot ? stack.frames.shift() : '';
     if (!out.has(root)) {
       out.set(root, []);
     }
-    out.get(root).push({ frames, count });
+    out.get(root).push(stack);
   }
   return out;
 }
@@ -151,25 +166,48 @@ export function foldedText(stacks) {
 }
 
 /**
- * Sample counts per function for one row. Inclusive counts each sample once
- * for each function on its stack; self counts the sample for its top frame.
+ * Sample counts per function for one row, one stack at a time. Inclusive
+ * counts each sample once for each function on its stack; self counts the
+ * sample for its top frame.
  */
-export function shares(stacks) {
-  const inclusive = new Map();
-  const self = new Map();
-  let total = 0;
-  for (const { frames, count } of stacks) {
-    total += count;
+export class Shares {
+  total = 0;
+  inclusive = new Map();
+  self = new Map();
+
+  add(frames, count) {
+    this.total += count;
     const names = frames.map(functionName);
     for (const name of new Set(names)) {
-      inclusive.set(name, (inclusive.get(name) ?? 0) + count);
+      this.inclusive.set(name, (this.inclusive.get(name) ?? 0) + count);
     }
     const leaf = names.at(-1);
     if (leaf !== undefined) {
-      self.set(leaf, (self.get(leaf) ?? 0) + count);
+      this.self.set(leaf, (this.self.get(leaf) ?? 0) + count);
     }
   }
-  return { total, inclusive, self };
+}
+
+/** The shares of a list of stacks. */
+export function shares(stacks) {
+  const counts = new Shares();
+  for (const { frames, count } of stacks) {
+    counts.add(frames, count);
+  }
+  return counts;
+}
+
+/** Splits one folded line into its frames and count, or gives null. */
+export function foldedLine(line) {
+  const space = line.lastIndexOf(' ');
+  if (space <= 0) {
+    return null;
+  }
+  const count = Number(line.slice(space + 1));
+  if (!Number.isFinite(count) || count <= 0) {
+    return null;
+  }
+  return { frames: line.slice(0, space).split(';'), count };
 }
 
 /** The `limit` functions with the largest counts, as shares of the row. */

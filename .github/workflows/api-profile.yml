@@ -33,7 +33,7 @@ on:
       reads:
         description: Warm repeats of each read after the cold call
         type: number
-        default: 4
+        default: 3
       writes:
         description: Warm repeats of each write after the cold call
         type: number
@@ -49,7 +49,7 @@ concurrency:
 env:
   CARGO_TERM_COLOR: never
   INFERNO_VERSION: 0.12.8
-  FREQUENCY: 4999
+  FREQUENCY: 1999
   # A main push makes the baseline that later runs compare with.
   ARTIFACT: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'api-profile-baseline' || 'api-profile' }}
 
@@ -115,7 +115,7 @@ jobs:
           perf --version
       - name: Profile the calls
         env:
-          READS: ${{ inputs.reads || 4 }}
+          READS: ${{ inputs.reads || 3 }}
           WRITES: ${{ inputs.writes || 2 }}
         run: |
           set -euo pipefail

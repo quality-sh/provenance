@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Labeler, compareShares, findRow, functionName, largestChanges, parseFolded, rowFile, rowsFromWindows, shares, top } from './profile.mjs';
+import { Labeler, stackSymbol, compareShares, findRow, functionName, largestChanges, parseFolded, rowFile, rowsFromWindows, shares, top } from './profile.mjs';
 
 const windows = [
   { way: 'CLI', call: 'GET /rules', pid: 10, start: 1000, end: 1010 },
@@ -39,6 +39,9 @@ test('the labeler keeps samples in windows with the row key as the process name'
     '',
     ' tokio-runtime-w    20/21    2.012000: cpu-clock:ppp: ',
     '\t    55d2 handle (/bin/provenance)',
+    '\t    55d5 <Pin<P> as Future>::poll (/bin/provenance)',
+    '\t    55d6 <Pin<P> as Future>::poll (/bin/provenance)',
+    '\t    55d7 run (/bin/provenance)',
     '',
     '            node    30/30    2.012000: cpu-clock:ppp: ',
     '\t    55d3 uv_run (/bin/node)',
@@ -54,6 +57,8 @@ test('the labeler keeps samples in windows with the row key as the process name'
     '',
     'r2 20/21 2.012000: cpu-clock:ppp: ',
     '\t    55d2 handle (/bin/provenance)',
+    '\t    55d5 <Pin<P> as Future>::poll (/bin/provenance)',
+    '\t    55d7 run (/bin/provenance)',
     '',
   ]);
   assert.deepEqual(labeler.stats, { samples: 4, kept: 2, outsideWindows: 1, otherProcesses: 1 });
@@ -92,4 +97,9 @@ test('a share change is over the noise only when it is large and many standard e
   assert.equal(small.find(item => item.function === 'a').overNoise, false);
   const { grew, shrank } = largestChanges(changes, 1);
   assert.deepEqual([grew[0].function, shrank[0].function], ['a', 'b']);
+});
+
+test('the symbol of a stack line has no address and no module', () => {
+  assert.equal(stackSymbol('\t    55d5 <Pin<P> as Future>::poll (/bin/provenance)'), '<Pin<P> as Future>::poll');
+  assert.equal(stackSymbol('\t    ffffffff81 [unknown] ([kernel.kallsyms])'), '[unknown]');
 });

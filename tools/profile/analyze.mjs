@@ -8,8 +8,10 @@
 // frame of each stack is the row key. The baseline directory is the
 // `api-profile` artifact of an earlier run. README.md tells what each output
 // file holds.
-import { existsSync } from 'node:fs';
+import { createReadStream, createWriteStream, existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { once } from 'node:events';
+import { createInterface } from 'node:readline';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import {
@@ -17,14 +19,13 @@ import {
   MIN_CHANGE,
   MIN_Z,
   cell,
+  Shares,
   compareShares,
-  foldedText,
+  foldedLine,
   largestChanges,
-  parseFolded,
   percent,
   points,
   rowsFromWindows,
-  shares,
   short,
   top,
 } from './profile.mjs';
@@ -36,7 +37,7 @@ const { values: options } = parseArgs({
     stats: { type: 'string' },
     baseline: { type: 'string' },
     out: { type: 'string', default: 'api-profile' },
-    frequency: { type: 'string', default: '4999' },
+    frequency: { type: 'string', default: '1999' },
     commit: { type: 'string', default: process.env.GITHUB_SHA ?? '' },
     head: { type: 'string', default: '' },
     'run-id': { type: 'string', default: process.env.GITHUB_RUN_ID ?? '' },
@@ -66,10 +67,62 @@ async function loadBaseline(directory) {
   const rows = new Map();
   for (const row of profile.rows) {
     const path = join(directory, 'rows', `${row.file}.folded`);
-    const stacks = existsSync(path) ? (parseFolded(await readFile(path, 'utf8'), { byRoot: false }).get('') ?? []) : [];
-    rows.set(row.label, shares(stacks));
+    rows.set(row.label, existsSync(path) ? await readStacks(path) : new Shares());
   }
   return { commit: profile.commit, run: profile.run, rows };
+}
+
+/** Reads a folded file line by line and gives the shares of its stacks. */
+async function readStacks(path) {
+  const counts = new Shares();
+  for await (const line of createInterface({ input: createReadStream(path), crlfDelay: Infinity })) {
+    const stack = foldedLine(line);
+    if (stack) {
+      counts.add(stack.frames, stack.count);
+    }
+  }
+  return counts;
+}
+
+/**
+ * Splits the labeled stacks into one folded file for each row, with the row
+ * key removed, and counts the shares of each row. The file can be larger than
+ * memory, so it is read line by line.
+ */
+async function splitRows(path, directory, fileOf) {
+  const counts = new Map();
+  const seen = new Set();
+  let key = null;
+  let out = null;
+  const close = async () => {
+    if (out) {
+      out.end();
+      await once(out, 'finish');
+    }
+  };
+  for await (const line of createInterface({ input: createReadStream(path), crlfDelay: Infinity })) {
+    const stack = foldedLine(line);
+    const root = stack?.frames.shift();
+    if (!stack || !fileOf.has(root)) {
+      continue;
+    }
+    if (root !== key) {
+      await close();
+      key = root;
+      // inferno sorts its output, so the stacks of a row come together; a row seen again is added to its file.
+      out = createWriteStream(join(directory, `${fileOf.get(root)}.folded`), { flags: seen.has(root) ? 'a' : 'w' });
+      seen.add(root);
+      if (!counts.has(root)) {
+        counts.set(root, new Shares());
+      }
+    }
+    counts.get(root).add(stack.frames, stack.count);
+    if (!out.write(`${stack.frames.join(';')} ${stack.count}\n`)) {
+      await once(out, 'drain');
+    }
+  }
+  await close();
+  return counts;
 }
 
 function rowMarkdown(row) {
@@ -180,14 +233,13 @@ function commentMarkdown(profile) {
 async function main() {
   const { windows } = await readJson(options.windows);
   const { rows } = rowsFromWindows(windows);
-  const folded = parseFolded(await readFile(options.folded, 'utf8'));
+  await mkdir(join(options.out, 'rows'), { recursive: true });
+  const rowCounts = await splitRows(options.folded, join(options.out, 'rows'), new Map(rows.map(row => [row.key, row.file])));
   const stats = options.stats && existsSync(options.stats) ? await readJson(options.stats) : {};
   const baseline = await loadBaseline(options.baseline);
-  await mkdir(join(options.out, 'rows'), { recursive: true });
   const outRows = [];
   for (const row of rows) {
-    const stacks = folded.get(row.key) ?? [];
-    const counts = shares(stacks);
+    const counts = rowCounts.get(row.key) ?? new Shares();
     const out = {
       way: row.way,
       call: row.call,
@@ -204,9 +256,6 @@ async function main() {
     if (base && base.total && counts.total) {
       const changes = compareShares(counts, base);
       out.baseline = { samples: base.total, ...largestChanges(changes, CHANGES), overNoise: changes.filter(item => item.overNoise).length };
-    }
-    if (stacks.length) {
-      await writeFile(join(options.out, 'rows', `${row.file}.folded`), foldedText(stacks));
     }
     await writeFile(join(options.out, 'rows', `${row.file}.md`), rowMarkdown(out));
     outRows.push(out);
