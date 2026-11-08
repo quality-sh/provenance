@@ -68,8 +68,10 @@ fn http_get(host: &review_host_support::Host, path: &str, query: &[(&str, &str)]
 /// Each stale request and an evidence request with a base give the CLI
 /// answer through HTTP and through MCP. Each host answers the requests
 /// twice, so the second time it can use the scans that it kept.
+// No active Rule states that a query gives the same answer on every
+// interface: rule_shared_command_same_result_on_cli_and_mcp is archived.
+// This PR records no new Rule, so the test has no Rule binding.
 #[tokio::test(flavor = "multi_thread")]
-#[verifies("rule_shared_command_same_result_on_cli_and_mcp", examples)]
 async fn http_and_mcp_give_the_cli_answers() {
     let fixture = fixture();
     let host = review_host_support::start(fixture.path());
@@ -114,8 +116,10 @@ async fn http_and_mcp_give_the_cli_answers() {
 /// The ranges of the cases give the CLI answer through a long-running MCP
 /// server in a mixed order, so that a range follows a range that held the
 /// same blobs or the same tree.
+// No active Rule states that a query gives the same answer on every
+// interface: rule_shared_command_same_result_on_cli_and_mcp is archived.
+// This PR records no new Rule, so the test has no Rule binding.
 #[tokio::test(flavor = "multi_thread")]
-#[verifies("rule_shared_command_same_result_on_cli_and_mcp", examples)]
 async fn mcp_gives_the_cli_answers_for_ranges_that_share_blobs() {
     let cases = cases();
     let mcp = Mcp::start(cases.path()).await;
@@ -140,7 +144,6 @@ async fn mcp_gives_the_cli_answers_for_ranges_that_share_blobs() {
 /// before gives the refusal of a new CLI process, with the read failure as
 /// its cause.
 #[tokio::test(flavor = "multi_thread")]
-#[verifies("rule_shared_command_same_result_on_cli_and_mcp", examples)]
 #[verifies("rule_unclassified_refusal_gives_cause", examples)]
 async fn a_warm_server_gives_the_cli_refusal_for_a_missing_blob() {
     let fixture = fixture();
