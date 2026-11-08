@@ -1,11 +1,10 @@
 use assert_cmd::Command;
-use provenance_macros::verifies;
 
 #[path = "export_fixture_support/mod.rs"]
 mod export_fixture_support;
 
+// Implementation aid: rule_legacy_terminal_proposals_frozen is archived. The import check stays until provenance-u9mg removes it.
 #[test]
-#[verifies("rule_legacy_terminal_proposals_frozen", examples)]
 fn a_disposition_on_a_shipped_terminal_proposal_is_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let mut value = export_shipped(&dir);
@@ -39,8 +38,8 @@ fn a_disposition_on_a_shipped_terminal_proposal_is_rejected() {
         ));
 }
 
+// Implementation aid: rule_legacy_terminal_proposals_frozen is archived. The import check stays until provenance-u9mg removes it.
 #[test]
-#[verifies("rule_legacy_terminal_proposals_frozen", examples)]
 fn import_cannot_omit_entire_existing_shipped_legacy_terminal_set() {
     let dir = tempfile::tempdir().unwrap();
     let mut shipped = export_shipped(&dir);

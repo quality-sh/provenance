@@ -335,6 +335,13 @@ fn parse_plain_value(
         return parsed;
     }
     if schema_kind(request, field.schema, 0) == Some("object") {
+        if let Some(value) = super::plain_object::wrap(request, field.schema, raw) {
+            anyhow::ensure!(
+                validates(request, field.schema, &value)?,
+                "invalid value for --{flag}"
+            );
+            return Ok(value);
+        }
         anyhow::bail!(
             "objects must come from --stdin or --{}",
             fields::json_flag(field.wire_name)
