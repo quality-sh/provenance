@@ -89,6 +89,9 @@ const NOT_HEADINGS: [&str; 10] = [
     "Message",
 ];
 
+// An implementation aid with no Rule binding: rule_porcelain_cli_prime_teaches_domain and
+// rule_porcelain_mcp_guidance_native each name one interface, and no Rule states the
+// guidance headings.
 #[tokio::test]
 async fn cli_and_mcp_share_the_same_guidance() {
     use provenance_mcp::Client;
@@ -112,14 +115,20 @@ async fn cli_and_mcp_share_the_same_guidance() {
     let instructions = client.instructions().unwrap();
     assert!(text.starts_with(&shared), "{text}");
     assert!(instructions.starts_with(&shared), "{instructions}");
-    for heading in [&text, &instructions]
-        .into_iter()
-        .flat_map(|guidance| guidance.lines().filter_map(|line| line.strip_prefix("## ")))
-    {
-        assert!(
-            !NOT_HEADINGS.contains(&heading.trim_end_matches('s')),
-            "the heading {heading} reads as a record type"
-        );
+    for guidance in [&text, &instructions] {
+        let headings = guidance
+            .lines()
+            .filter_map(|line| line.strip_prefix("## "))
+            .collect::<Vec<_>>();
+        assert!(headings.contains(&"Records"), "{headings:?}");
+        for heading in headings {
+            assert!(
+                !heading
+                    .split_whitespace()
+                    .any(|word| NOT_HEADINGS.contains(&word.trim_end_matches('s'))),
+                "the heading {heading} reads as a record type"
+            );
+        }
     }
     assert!(text.contains("`provenance search --text <text>"), "{text}");
     assert!(

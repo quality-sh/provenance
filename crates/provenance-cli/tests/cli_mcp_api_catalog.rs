@@ -1,5 +1,6 @@
-//! The api catalog with a filter and a limit gives the same routes, in the same order,
-//! on the CLI and through a spawned `provenance mcp`.
+//! The api catalog through a spawned `provenance mcp` gives the same routes, in the same
+//! order, and the same bounds as the CLI. Without a limit, MCP gives at most 50 routes, as
+//! the CLI text answer does, and says how to see more.
 
 use provenance_macros::verifies;
 use provenance_mcp::Client;
@@ -24,31 +25,9 @@ fn cli_json(args: &[&str]) -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
-/// The method and path of each route, in catalog order.
-fn names(routes: &Value) -> Vec<String> {
-    routes
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|route| format!("{} {}", route["method"], route["path"]))
-        .collect()
-}
-
-/// The number of routes in one MCP catalog answer.
-async fn count(client: &Client, arguments: Value) -> u64 {
-    let result = client.call("api", arguments).await;
-    u64::try_from(
-        result["structuredContent"]["routes"]
-            .as_array()
-            .unwrap()
-            .len(),
-    )
-    .unwrap()
-}
-
 #[tokio::test]
-#[verifies("rule_cli_api_discovery_filter_limit", examples)]
-async fn mcp_catalog_applies_the_filter_and_limit_of_the_cli() {
+#[verifies("rule_porcelain_output_reports_bounds", examples)]
+async fn mcp_catalog_reports_the_routes_and_bounds_of_the_cli() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_str().unwrap().to_owned();
     assert_cmd::Command::new(binary())
@@ -86,21 +65,33 @@ async fn mcp_catalog_applies_the_filter_and_limit_of_the_cli() {
     ] {
         let mut args = vec!["api", "--repo", &repo, "--format", "json"];
         args.extend(flags);
-        let by_cli = cli_json(&args);
         let result = client.call("api", arguments.clone()).await;
         assert_ne!(result["isError"], json!(true), "{arguments}: {result}");
-        let by_mcp = &result["structuredContent"]["routes"];
-        assert_eq!(names(by_mcp), names(&by_cli["routes"]), "{arguments}");
-        assert_eq!(by_mcp, &by_cli["routes"], "{arguments}");
+        assert_eq!(result["structuredContent"], cli_json(&args), "{arguments}");
     }
+    let limited = client
+        .call("api", json!({"filter": "withdraw", "limit": 2}))
+        .await;
+    let text = limited["content"][0]["text"].as_str().unwrap();
+    assert!(
+        text.ends_with("Use {\"filter\":\"<text>\"} or {\"limit\":<number>} to see more."),
+        "{text}"
+    );
+
+    let total = all["bounds"]["total"].as_u64().unwrap();
+    let unlimited = client.call("api", json!({})).await;
+    let answer = &unlimited["structuredContent"];
     assert_eq!(
-        count(&client, json!({"filter": "withdraw"})).await,
-        matching
+        answer["bounds"],
+        json!({"total": total, "matching": total, "returned": 50, "truncated": true})
     );
     assert_eq!(
-        count(&client, json!({"filter": "withdraw", "limit": 2})).await,
-        2
+        answer["routes"].as_array().unwrap()[..],
+        all["routes"].as_array().unwrap()[..50]
     );
+    let text = unlimited["content"][0]["text"].as_str().unwrap();
+    assert!(text.starts_with("api routes: 50\n"), "{text}");
+    assert!(text.ends_with("to see more."), "{text}");
 
     client.cancel().await.unwrap();
     assert!(child.wait().await.unwrap().success());

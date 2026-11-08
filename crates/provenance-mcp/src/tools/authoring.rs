@@ -1,6 +1,6 @@
 //! The record actions of the change tool: their fields, and their calls by target.
 
-use provenance_contract::{Argument, ArgumentPlace, Definition};
+use provenance_contract::{ArgumentPlace, Definition};
 use provenance_core::protocol::failure::ErasedFailure;
 use provenance_core::NodeType;
 use provenance_macros::rule;
@@ -84,20 +84,6 @@ pub fn action_schema(host: &StatementHost, action: Action) -> Option<Value> {
     Some(schema)
 }
 
-/// The arguments of one operation, each data field under one name. An alias that
-/// gives a data field only a second name is not an argument: a Question create takes
-/// `resolution_method`, the field name of the stored Question.
-fn arguments_of(definition: &Definition) -> Vec<Argument> {
-    let mut arguments = definition.arguments().unwrap_or_default();
-    arguments.retain(|argument| match &argument.place {
-        ArgumentPlace::Body {
-            field, wrap_array, ..
-        } => *wrap_array || *field == argument.name,
-        ArgumentPlace::Parameter(_) => true,
-    });
-    arguments
-}
-
 /// The arguments of one action on one record kind, with the definitions they refer
 /// to. The target fills the record ID, so `id` is not an argument.
 fn kind_schema(action: Action, kind: NodeType, definition: &Definition) -> Value {
@@ -109,7 +95,7 @@ fn kind_schema(action: Action, kind: NodeType, definition: &Definition) -> Value
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
-    for argument in arguments_of(definition) {
+    for argument in definition.arguments().unwrap_or_default() {
         if argument.name == "id" {
             continue;
         }
@@ -149,7 +135,7 @@ fn kind_schema(action: Action, kind: NodeType, definition: &Definition) -> Value
 /// must give each required argument, and a refusal gives the schema of the kind. A call
 /// with record fields goes to the operation, which names all the missing fields at once.
 fn needed_now(mut schema: Value, definition: &Definition, arguments: &Map<String, Value>) -> Value {
-    let declared = arguments_of(definition);
+    let declared = definition.arguments().unwrap_or_default();
     let body = |name: &str| {
         declared
             .iter()
@@ -169,7 +155,7 @@ fn request_arguments(
     definition: &Definition,
     arguments: Map<String, Value>,
 ) -> Result<Value, CallToolResult> {
-    let declared = arguments_of(definition);
+    let declared = definition.arguments().unwrap_or_default();
     let mut data = Map::new();
     let mut request = Map::new();
     for (name, value) in arguments {

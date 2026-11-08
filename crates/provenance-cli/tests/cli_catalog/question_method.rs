@@ -1,11 +1,13 @@
 use super::*;
 
+// An implementation aid with no Rule binding: no Rule states the name of the Question
+// method field on the CLI.
 #[test]
 fn question_method_is_set_with_resolution_method() {
     let (_directory, repo) = init();
     provenance()
         .args([
-            "req_question_alias",
+            "req_question_method",
             "create",
             "--type",
             "requirement",
@@ -18,7 +20,7 @@ fn question_method_is_set_with_resolution_method() {
         .success();
     provenance()
         .args([
-            "topic_question_alias",
+            "topic_question_method",
             "create",
             "--type",
             "topic",
@@ -28,8 +30,8 @@ fn question_method_is_set_with_resolution_method() {
         ])
         .write_stdin(
             json!({
-                "requirement_id":"req_question_alias",
-                "title":"Question aliases", "status":"open", "links":[]
+                "requirement_id":"req_question_method",
+                "title":"Question method", "status":"open", "links":[]
             })
             .to_string(),
         )
@@ -37,14 +39,14 @@ fn question_method_is_set_with_resolution_method() {
         .success();
     provenance()
         .args([
-            "question_alias",
+            "question_method",
             "create",
             "--type",
             "question",
             "--repo",
             &repo,
             "--topic-id",
-            "topic_question_alias",
+            "topic_question_method",
             "--question",
             "Which method applies?",
             "--resolution-method",
@@ -55,7 +57,7 @@ fn question_method_is_set_with_resolution_method() {
     let current = provenance()
         .args([
             "api",
-            "questions/question_alias",
+            "questions/question_method",
             "--repo",
             &repo,
             "--format",
@@ -67,7 +69,7 @@ fn question_method_is_set_with_resolution_method() {
     let etag = current["data"]["edit"]["etag"].as_str().unwrap();
     let output = provenance()
         .args([
-            "question_alias",
+            "question_method",
             "update",
             "--repo",
             &repo,

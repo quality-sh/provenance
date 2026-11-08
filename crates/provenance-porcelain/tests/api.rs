@@ -1,6 +1,10 @@
+#[path = "support/api_routes.rs"]
+mod api_routes;
+
+use api_routes::route;
 use provenance_porcelain::api::{
-    render_discovery_readable, ApiArguments, ApiCatalog, ApiError, ApiErrorKind, ApiInput,
-    ApiMethod, ApiOutcome, ApiParameter, ApiPort, ApiPortFuture, ApiQuery, ApiRequest, ApiRoute,
+    ApiArguments, ApiCatalog, ApiError, ApiErrorKind, ApiInput, ApiMethod, ApiOutcome, ApiPort,
+    ApiPortFuture, ApiRequest,
 };
 use provenance_porcelain::Porcelain;
 use serde_json::{json, Value};
@@ -41,30 +45,6 @@ impl ApiPort for RecordingPort {
                 None,
             )],
         }
-    }
-}
-
-fn route(
-    method: ApiMethod,
-    path: &str,
-    description: &str,
-    request_schema: Option<Value>,
-) -> ApiRoute {
-    ApiRoute {
-        method,
-        path: path.into(),
-        description: description.into(),
-        request_schema,
-        queries: vec![form(None)],
-    }
-}
-
-fn form(query: Option<&str>) -> ApiQuery {
-    ApiQuery {
-        query: query.map(str::to_owned),
-        parameters: Vec::new(),
-        success_schema: json!({"type": "object"}),
-        failure_schema: json!({"type": "object"}),
     }
 }
 
@@ -335,69 +315,13 @@ async fn discovery_returns_the_port_catalog() {
         .await
         .unwrap();
 
-    let ApiOutcome::Catalog(catalog) = outcome else {
+    let ApiOutcome::Catalog(selection) = outcome else {
         panic!("discovery returns the catalog");
     };
+    let catalog = selection.complete();
     assert_eq!(catalog.routes.len(), 1);
     assert_eq!(catalog.routes[0].path, "/requirements");
     assert_eq!(catalog.routes[0].method, ApiMethod::Get);
-}
-
-fn parameter(name: &str, location: &str, required: bool) -> ApiParameter {
-    ApiParameter {
-        name: name.into(),
-        location: location.into(),
-        required,
-        schema: json!({"type": "string"}),
-    }
-}
-
-#[test]
-fn readable_discovery_lists_routes_with_their_inputs() {
-    let mut member = route(
-        ApiMethod::Get,
-        "/requirements/{id}",
-        "Read one requirement.",
-        None,
-    );
-    member.queries[0].parameters = vec![parameter("id", "path", true)];
-    member.queries.push(ApiQuery {
-        parameters: vec![
-            parameter("id", "path", true),
-            parameter("query", "query", true),
-            parameter("depth", "query", false),
-        ],
-        ..form(Some("neighbors"))
-    });
-    let mut create = route(
-        ApiMethod::Post,
-        "/requirements",
-        "Create one requirement.",
-        Some(json!({"type": "object"})),
-    );
-    create.queries[0].parameters = vec![parameter("Idempotency-Key", "header", true)];
-    let catalog = ApiCatalog {
-        routes: vec![
-            route(ApiMethod::Get, "/requirements", "List requirements.", None),
-            member,
-            create,
-        ],
-    };
-
-    assert_eq!(
-        render_discovery_readable(&catalog),
-        concat!(
-            "api routes: 3\n",
-            "- GET /requirements\n  List requirements.\n  inputs: none\n",
-            "- GET /requirements/{id}\n  Read one requirement.\n",
-            "  inputs: id (path, required)\n",
-            "  inputs with query=neighbors: id (path, required), query (query, required), ",
-            "depth (query, optional)\n",
-            "- POST /requirements\n  Create one requirement.\n",
-            "  inputs: Idempotency-Key (header, required)\n",
-            "  The JSON body is the data object, without the HTTP {\"data\": ...} wrapper."
-        )
-    );
 }
 
 #[test]
