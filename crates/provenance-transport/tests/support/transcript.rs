@@ -162,7 +162,7 @@ pub fn named_answers(names: &mut Names, answers: &[Value]) -> Vec<Value> {
 pub fn assert_same(caught_up: &[Value], rebuilt: &[Value], context: &str) {
     assert_eq!(caught_up.len(), rebuilt.len(), "{context}");
     for (index, (left, right)) in caught_up.iter().zip(rebuilt).enumerate() {
-        if right.to_string().contains("\"no_projection\"") {
+        if right.to_string().contains("no_projection") {
             let refusal = &left["answer"]["body"]["meta"]["freshness_error"];
             assert!(refusal.is_string(), "{context}, read {index}: {left}");
         } else {
