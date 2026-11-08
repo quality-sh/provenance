@@ -31,7 +31,7 @@ async fn document_pages_keep_membership_and_whole_totals() {
         let page = read(&root, cursor).await.unwrap();
         assert_eq!(
             page["review_totals"],
-            json!({"pending":6,"accepted":0,"rejected":0})
+            json!({"pending":5,"accepted":0,"rejected":0})
         );
         let entry = &page["entries"][0];
         let id = entry["node"]["id"].as_str().unwrap();
@@ -64,6 +64,7 @@ async fn document_pages_keep_membership_and_whole_totals() {
 #[provenance_macros::verifies("rule_cursor_restarts_on_revision_change", examples)]
 async fn document_page_refuses_cursor_after_public_write() {
     let (dir, store, scope) = seeded_store();
+    create_document_records(&store, &scope);
     let root = root_of(&dir);
     let first = read(&root, None).await.unwrap();
     store

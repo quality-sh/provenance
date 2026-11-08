@@ -304,7 +304,7 @@ async fn trace_hydrates_no_depth_beyond_a_full_page() {
     .await;
     let full = answer.unwrap().result;
     let ids = trace_ids(&full);
-    assert_eq!(ids.len(), 22, "the breadth one rows and the islands");
+    assert_eq!(ids.len(), 21, "the breadth one rows and the islands");
     assert!(!ids.iter().any(|(_, id)| id == "req_missing"));
     assert!(!full.has_more);
 

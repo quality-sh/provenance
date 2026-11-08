@@ -753,17 +753,6 @@
       },
       "type": "array"
     },
-    "source_ref": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/SourceReference"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "description": "Actions: create, update."
-    },
     "source_section": {
       "description": "Actions: create, update.",
       "type": [

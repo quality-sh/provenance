@@ -208,7 +208,7 @@ async fn list_denial_excludes_a_kind_before_selection_and_paging() {
 
     let implicit = call(client, "search", json!({"text":"shared", "limit":20})).await;
     let implicit_page = implicit.structured_content.as_ref().unwrap();
-    assert_eq!(implicit_page["nodes"].as_array().unwrap().len(), 6);
+    assert_eq!(implicit_page["nodes"].as_array().unwrap().len(), 5);
     assert!(implicit_page["nodes"]
         .as_array()
         .unwrap()
