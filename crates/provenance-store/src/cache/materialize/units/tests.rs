@@ -1,4 +1,42 @@
-use super::{state_view, unit_digest, unit_digests, unit_stored_digest, Unit, UnitDigests};
+use super::{digests_with, unit_digest, unit_digests, unit_stored_digest, Unit, UnitDigests};
+use crate::storage::{StateKey, StateView};
+
+const SHARD: &str = "scopes/default/requirements/req.jsonl";
+
+#[test]
+fn a_shard_added_after_bytes_are_read_invalidates_the_digest() {
+    let (dir, unit) = requirement_shard(b"{\"id\":\"one\"}\n");
+    let state = camino::Utf8Path::from_path(dir.path()).unwrap();
+    let before = unit_digest(state, &unit).unwrap();
+    let added = state.join("scopes/default/rules/rule.jsonl");
+    std::fs::create_dir_all(added.parent().unwrap()).unwrap();
+    let result = digests_with(state, &unit, |_, _| {
+        std::fs::write(&added, b"{\"id\":\"added\"}\n").unwrap();
+    });
+    assert_ne!(before, unit_digest(state, &unit).unwrap());
+    let error = result.expect_err("shard added while reading bytes was missed");
+    assert_eq!(error.path, added);
+}
+
+#[test]
+fn a_scope_created_after_file_collection_invalidates_the_digest() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = camino::Utf8Path::from_path(dir.path()).unwrap();
+    let added = state.join(SHARD);
+    let path = added.clone();
+    crate::test_probes::arm("unit_files_collected", move || {
+        std::fs::create_dir_all(path.parent().unwrap())?;
+        std::fs::write(&path, b"added")?;
+        Ok(())
+    });
+    let result = unit_digest(
+        state,
+        &Unit::Scope(provenance_core::ScopeId::new("default").unwrap()),
+    );
+    crate::test_probes::disarm("unit_files_collected");
+    let error = result.expect_err("new scope files were missed");
+    assert_eq!(error.path, added);
+}
 
 #[test]
 fn an_entry_that_is_not_canonical_state_moves_no_digest() {
@@ -17,6 +55,27 @@ fn an_entry_that_is_not_canonical_state_moves_no_digest() {
         std::fs::write(root.join(".tmp123"), b"half-written").unwrap();
         assert_eq!(before, unit_digest(state, &unit).unwrap());
     }
+}
+
+#[test]
+fn the_files_and_the_view_of_the_same_bytes_give_the_same_digests() {
+    let bytes = b"{\"id\":\"one\",\"statement\":\"Kept\"}\n";
+    let (dir, unit) = requirement_shard(bytes);
+    let state = camino::Utf8Path::from_path(dir.path()).unwrap();
+    std::fs::write(state.join("scopes/default/notes.txt"), b"stray").unwrap();
+    let from_files = digests_with(state, &unit, |_, _| {}).unwrap();
+    assert_eq!(
+        unit_digests(state, &view_of(bytes), &unit, None).unwrap(),
+        from_files
+    );
+}
+
+/// A view that holds the one requirement shard with `bytes`.
+fn view_of(bytes: &[u8]) -> StateView {
+    StateView::new(std::collections::BTreeMap::from([(
+        StateKey::new(SHARD).unwrap(),
+        bytes.to_vec(),
+    )]))
 }
 
 #[test]
@@ -61,7 +120,7 @@ fn stamps_do_not_change_unit_digests_but_every_other_field_does() {
 
 fn requirement_shard(bytes: &[u8]) -> (tempfile::TempDir, Unit) {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("scopes/default/requirements/req.jsonl");
+    let path = dir.path().join(SHARD);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, bytes).unwrap();
     (
@@ -80,7 +139,13 @@ fn a_known_pair_with_the_current_stored_digest_is_returned_without_a_parse() {
         stored: unit_stored_digest(state, &unit).unwrap(),
     };
 
-    let digests = unit_digests(state, &state_view(state).unwrap(), &unit, Some(&known)).unwrap();
+    let digests = unit_digests(
+        state,
+        &view_of(&std::fs::read(state.join(SHARD)).unwrap()),
+        &unit,
+        Some(&known),
+    )
+    .unwrap();
 
     assert_eq!(digests, known);
 }
@@ -94,7 +159,13 @@ fn a_known_pair_with_a_different_stored_digest_gets_the_computed_content_digest(
         stored: "fake stored digest".to_string(),
     };
 
-    let digests = unit_digests(state, &state_view(state).unwrap(), &unit, Some(&known)).unwrap();
+    let digests = unit_digests(
+        state,
+        &view_of(&std::fs::read(state.join(SHARD)).unwrap()),
+        &unit,
+        Some(&known),
+    )
+    .unwrap();
 
     assert_eq!(digests.content, unit_digest(state, &unit).unwrap());
     assert_eq!(digests.stored, unit_stored_digest(state, &unit).unwrap());

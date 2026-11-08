@@ -324,7 +324,7 @@ async fn annotate_only_refuses_a_projection_from_an_older_validator() {
 
 #[tokio::test]
 #[verifies("rule_catch_up_stores_the_digest_of_parsed_bytes", examples)]
-async fn a_retry_that_runs_out_answers_catch_up_failed() {
+async fn an_edit_during_catch_up_is_caught_up_by_the_next_read() {
     let store = test_stores::seeded_queries();
     let before = get_through(&store, ReadPolicy::default()).await.unwrap();
     let path = crate::shards::requirements_path(&store.layout(), &store.scope);
@@ -340,15 +340,10 @@ async fn a_retry_that_runs_out_answers_catch_up_failed() {
     let result = get_through(&store, ReadPolicy::default()).await;
     crate::test_probes::disarm("catch_up_before_parse");
     let answer = result.unwrap();
-    assert_eq!(answer.stamp.policy, StampPolicy::CatchUpFailed);
-    assert_eq!(answer.stamp.serial, before.stamp.serial);
-    assert_eq!(answer.stamp.digest, before.stamp.digest);
-    assert_eq!(
-        serde_json::to_value(answer.result).unwrap(),
-        serde_json::to_value(before.result).unwrap()
-    );
-    assert!(answer
-        .freshness_error
-        .unwrap()
-        .contains("canonical state changed during catch-up under scope:default"));
+    assert_eq!(answer.stamp.policy, StampPolicy::CatchUp);
+    assert_eq!(answer.stamp.serial, before.stamp.serial + 1);
+    assert!(answer.freshness_error.is_none());
+    let next = get_through(&store, ReadPolicy::default()).await.unwrap();
+    assert_eq!(next.stamp.policy, StampPolicy::CatchUp);
+    assert_eq!(next.stamp.serial, answer.stamp.serial + 1);
 }

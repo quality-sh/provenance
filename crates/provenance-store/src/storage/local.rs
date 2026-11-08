@@ -54,7 +54,12 @@ impl LocalStateStorage {
 
 impl StateStorage for LocalStateStorage {
     fn read_view(&self) -> Result<StateView, StorageError> {
-        read_state_tree(&self.layout.state_dir())
+        let mut entries = BTreeMap::new();
+        let state = self.layout.state_dir();
+        if state.try_exists().map_err(read_error(&state))? {
+            read_tree(&state, "", &mut entries)?;
+        }
+        Ok(StateView::new(entries))
     }
 
     /// Returns the revision of the whole tree after the write. The tree is
@@ -192,17 +197,6 @@ fn remove_file(path: &Utf8Path) -> anyhow::Result<()> {
 /// leaves it out: a name that is not UTF-8, a symbolic link, a special
 /// entry, or a file that is not the manifest or a shard. A shard that the
 /// process cannot read is an error.
-/// The canonical state in the state directory `state`: the manifest and each
-/// shard of a scope. No other entry is in the view. A missing directory is
-/// an empty view.
-pub(crate) fn read_state_tree(state: &Utf8Path) -> Result<StateView, StorageError> {
-    let mut entries = BTreeMap::new();
-    if state.try_exists().map_err(read_error(state))? {
-        read_tree(state, "", &mut entries)?;
-    }
-    Ok(StateView::new(entries))
-}
-
 fn read_tree(
     directory: &Utf8Path,
     prefix: &str,
@@ -222,7 +216,15 @@ fn read_tree(
         let kind = entry.file_type().map_err(read_error(&path))?;
         if kind.is_dir() && shards::can_hold_canonical_keys(&key) {
             read_tree(&path, &key, entries)?;
-        } else if kind.is_file() && shards::is_canonical_key(&key) {
+        } else if shards::is_canonical_key(&key) {
+            // A shard that is a link or another entry cannot be read as
+            // canonical state, so the view refuses it instead of leaving
+            // the shard out.
+            if !kind.is_file() {
+                return Err(StorageError::Read(anyhow::anyhow!(
+                    "unsupported state entry: {path}"
+                )));
+            }
             let bytes = std::fs::read(&path).map_err(read_error(&path))?;
             entries.insert(StateKey::new(key)?, bytes);
         }
