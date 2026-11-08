@@ -1,52 +1,22 @@
 //! Compares the direct dependencies of each workspace crate in `cargo metadata`
 //! with the crate dependency policy in `.config/crate-dependencies.json`.
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fs,
-    path::{Path, PathBuf},
-    process::Command,
-};
+#[path = "crate_dependencies/kernel.rs"]
+mod kernel;
+#[path = "crate_dependencies/policy.rs"]
+mod policy;
 
+use std::{collections::BTreeSet, process::Command};
+
+use policy::{read_policy, workspace_root, Entry, Policy, POLICY_FILE};
 use provenance_macros::{rule, verifies};
-use serde::Deserialize;
 use serde_json::{json, Value};
-
-const POLICY_FILE: &str = ".config/crate-dependencies.json";
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Policy {
-    /// Each interface crate, such as clap, with the one workspace crate that can depend on it.
-    interface_crates: BTreeMap<String, String>,
-    host_crates: BTreeSet<String>,
-    /// Normal and build edges that no entry can allow. A row can name a crate
-    /// that is not a member yet.
-    forbidden: BTreeMap<String, BTreeSet<String>>,
-    crates: BTreeMap<String, Entry>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
-struct Entry {
-    dependencies: BTreeSet<String>,
-    dev_dependencies: BTreeSet<String>,
-}
-
-impl Entry {
-    fn list(&self, list: &str) -> &BTreeSet<String> {
-        if list == "dev-dependencies" {
-            &self.dev_dependencies
-        } else {
-            &self.dependencies
-        }
-    }
-}
 
 /// One direct edge from a workspace crate, by package name and not by rename.
 struct Edge<'a> {
     dependency: &'a str,
     kind: &'a str,
+    spec: &'a Value,
 }
 
 impl Edge<'_> {
@@ -70,6 +40,7 @@ fn edges(package: &Value) -> impl Iterator<Item = Edge<'_>> {
                 .as_str()
                 .expect("dependency name is text"),
             kind: dependency["kind"].as_str().unwrap_or("normal"),
+            spec: dependency,
         })
 }
 
@@ -103,16 +74,16 @@ fn dependency_refusals(policy: &Policy, metadata: &Value) -> Vec<String> {
         let mut found = BTreeSet::new();
         for edge in edges(package).filter(|edge| checked(edge.dependency)) {
             found.insert((edge.list(), edge.dependency));
-            if !entry.list(edge.list()).contains(edge.dependency) {
+            if !entry.allows(edge.list(), edge.dependency) {
                 refusals.insert(format!(
                     "{name} has a {} dependency on {} that {POLICY_FILE} does not allow",
                     edge.kind, edge.dependency
                 ));
             }
         }
-        for list in ["dependencies", "dev-dependencies"] {
+        for (list, edge_list) in Entry::LISTS {
             for dependency in entry.list(list) {
-                if !found.contains(&(list, dependency.as_str())) {
+                if !found.contains(&(edge_list, dependency.as_str())) {
                     refusals.insert(format!(
                         "{POLICY_FILE} allows {name} to have {dependency} in {list}, \
                          but that edge does not exist"
@@ -166,19 +137,6 @@ fn interface_refusals(policy: &Policy, metadata: &Value) -> Vec<String> {
         }
     }
     refusals.into_iter().collect()
-}
-
-fn read_policy() -> Policy {
-    let policy = fs::read_to_string(workspace_root().join(POLICY_FILE)).expect("read policy");
-    serde_json::from_str(&policy).expect("parse policy")
-}
-
-fn workspace_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .expect("CLI crate is in the workspace crates directory")
-        .to_owned()
 }
 
 fn workspace_metadata() -> Value {
@@ -258,10 +216,18 @@ fn interfaces_do_not_depend_on_work_crates() {
 
 fn fixture_policy() -> Value {
     json!({
+        "kernel": {
+            "target": "wasm32-unknown-unknown",
+            "host_feature": "host",
+            "crates": ["provenance-core"]
+        },
         "interface_crates": { "clap": "provenance-cli", "rmcp": "provenance-mcp" },
         "host_crates": ["fs2", "rustix", "tempfile", "tokio", "windows-sys"],
         "forbidden": {
-            "provenance-core": ["provenance-store", "tokio"],
+            "provenance-core": [
+                "fs2", "provenance-cli", "provenance-mcp", "provenance-report",
+                "provenance-store", "rustix", "tempfile", "tokio", "windows-sys"
+            ],
             "provenance-contract": ["tokio"]
         },
         "crates": {

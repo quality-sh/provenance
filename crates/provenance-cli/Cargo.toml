@@ -38,7 +38,7 @@ provenance-mcp.workspace = true
 provenance-porcelain.workspace = true
 provenance-review.workspace = true
 provenance-contract.workspace = true
-provenance-transport = { path = "../provenance-transport", version = "0.3.2" }
+provenance-transport = { path = "../provenance-transport", version = "0.4.0", features = ["host"] }
 remove_dir_all.workspace = true
 rustix.workspace = true
 schemars.workspace = true
@@ -77,7 +77,7 @@ tempfile.workspace = true
 predicates.workspace = true
 provenance-mcp = { workspace = true, features = ["client"] }
 tar.workspace = true
-provenance-store.workspace = true
+provenance-store = { workspace = true, features = ["host"] }
 provenance-ste100.workspace = true
-provenance-transport = { path = "../provenance-transport", version = "0.3.2", features = ["test-fixture"] }
+provenance-transport = { path = "../provenance-transport", version = "0.4.0", features = ["test-fixture"] }
 tokio = { workspace = true, features = ["process"] }

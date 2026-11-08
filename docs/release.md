@@ -99,10 +99,12 @@ opened SQLite databases. The other report sections are not gated.
 
 To examine a result on a local host, run the timing test from a checkout
 that is not inside another checkout. Cargo reads `.cargo/config.toml` from
-the current directory and from all parent directories.
+the current directory and from all parent directories. The timing test needs
+the `host` feature. A tag that has no `host` feature in
+`crates/provenance-store/Cargo.toml` builds the test without that option.
 
 ```bash
-cargo test -p provenance-store --release -- --ignored timing_comparison_rows --nocapture
+cargo test -p provenance-store --features host --release -- --ignored timing_comparison_rows --nocapture
 ```
 
 After the `Release` workflow generates the notes, add the `repository_state`
@@ -113,8 +115,8 @@ rows of the report and any cause explanation to the GitHub Release body under
 Tag and push the release commit:
 
 ```sh
-git tag v0.3.2
-git push origin v0.3.2
+git tag v0.4.0
+git push origin v0.4.0
 ```
 
 The `Release` workflow creates the GitHub Release, attaches archives, and generates release notes.
@@ -147,7 +149,7 @@ The release rejects a tag unless all versions equal the tag without its `v`
 prefix.
 
 A tag with a SemVer prerelease component is published as a prerelease, so
-`v0.3.2-rc.1` is the way to rehearse a release without announcing one. npm
+`v0.4.0-rc.1` is the way to rehearse a release without announcing one. npm
 publishes that version under the `next` tag; stable versions use `latest`.
 
 ## Never `--all-features`

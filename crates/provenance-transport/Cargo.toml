@@ -13,23 +13,42 @@ publish.workspace = true
 workspace = true
 
 [features]
-test-fixture = ["dep:tempfile", "provenance-store/test-fixture"]
+# The transport adapters, the HTTP host and the local-disk work. Without it the
+# crate has the init summary and the ignore-file projection, and it builds for
+# wasm32-unknown-unknown. Each consumer of the adapters turns it on.
+host = [
+    "dep:axum",
+    "dep:fs2",
+    "dep:provenance-contract",
+    "dep:provenance-report",
+    "dep:provenance-scanner",
+    "dep:provenance-ste100",
+    "provenance-store/host",
+    "dep:ureq",
+    "dep:tokio-util",
+    "dep:tokio",
+    "dep:dunce",
+    "dep:walkdir",
+    "dep:tempfile",
+    "dep:remove_dir_all",
+]
+test-fixture = ["host", "provenance-store/test-fixture"]
 # Dev-only agent feedback capture. Never enable in release builds.
-dogfood = ["dep:remove_dir_all"]
+dogfood = ["host"]
 
 [dependencies]
 anyhow.workspace = true
 tempfile = { workspace = true, optional = true }
-axum.workspace = true
+axum = { workspace = true, optional = true }
 camino.workspace = true
-fs2.workspace = true
+fs2 = { workspace = true, optional = true }
 provenance-core.workspace = true
 provenance-macros.workspace = true
 provenance-porcelain.workspace = true
-provenance-contract.workspace = true
-provenance-report.workspace = true
-provenance-scanner.workspace = true
-provenance-ste100.workspace = true
+provenance-contract = { workspace = true, optional = true }
+provenance-report = { workspace = true, optional = true }
+provenance-scanner = { workspace = true, optional = true }
+provenance-ste100 = { workspace = true, optional = true }
 provenance-store = { workspace = true, features = ["schema"] }
 pulldown-cmark.workspace = true
 remove_dir_all = { workspace = true, optional = true }
@@ -37,13 +56,13 @@ serde_json.workspace = true
 serde.workspace = true
 semver.workspace = true
 serde_ignored.workspace = true
-ureq.workspace = true
+ureq = { workspace = true, optional = true }
 url.workspace = true
 uuid.workspace = true
-tokio-util = { version = "0.7", features = ["rt"] }
-tokio = { workspace = true, features = ["sync", "io-util", "io-std", "rt", "time"] }
-dunce.workspace = true
-walkdir.workspace = true
+tokio-util = { version = "0.7", features = ["rt"], optional = true }
+tokio = { workspace = true, features = ["sync", "io-util", "io-std", "rt", "time"], optional = true }
+dunce = { workspace = true, optional = true }
+walkdir = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
@@ -57,19 +76,156 @@ tower = { version = "0.5", features = ["util"] }
 [[bin]]
 name = "statement-host-fixture"
 path = "src/bin/statement-host-fixture.rs"
-required-features = ["test-fixture"]
+required-features = ["host", "test-fixture"]
 
 [[bin]]
 name = "records-host-fixture"
 path = "src/bin/records-host-fixture.rs"
-required-features = ["test-fixture"]
+required-features = ["host", "test-fixture"]
 
 [[bin]]
 name = "existing-root-host-fixture"
 path = "src/bin/existing-root-host-fixture.rs"
-required-features = ["test-fixture"]
+required-features = ["host", "test-fixture"]
 
 [[test]]
 name = "local_host"
 path = "tests/local_host.rs"
 required-features = ["test-fixture"]
+
+# Each test uses the adapters, so each test needs host.
+[[test]]
+name = "claim_holder"
+required-features = ["host"]
+
+[[test]]
+name = "decision_actor_refusal"
+required-features = ["host"]
+
+[[test]]
+name = "discussion_parent_routes"
+required-features = ["host"]
+
+[[test]]
+name = "discussion_write_refusals"
+required-features = ["host"]
+
+[[test]]
+name = "document_review_characterization"
+required-features = ["host"]
+
+[[test]]
+name = "document_visibility"
+required-features = ["host"]
+
+[[test]]
+name = "fallback_auth"
+required-features = ["host"]
+
+[[test]]
+name = "file_access"
+required-features = ["host"]
+
+[[test]]
+name = "history_evidence"
+required-features = ["host"]
+
+[[test]]
+name = "history_pages"
+required-features = ["host"]
+
+[[test]]
+name = "host_body_deadline"
+required-features = ["host"]
+
+[[test]]
+name = "host_invocation"
+required-features = ["host"]
+
+[[test]]
+name = "host_queue"
+required-features = ["host"]
+
+[[test]]
+name = "multiple_parents"
+required-features = ["host"]
+
+[[test]]
+name = "page_write_response"
+required-features = ["host"]
+
+[[test]]
+name = "patch_contract"
+required-features = ["host"]
+
+[[test]]
+name = "porcelain_api"
+required-features = ["host"]
+
+[[test]]
+name = "porcelain_api_discovery"
+required-features = ["host"]
+
+[[test]]
+name = "porcelain_route_inventory"
+required-features = ["host"]
+
+[[test]]
+name = "porcelain_target_registration"
+required-features = ["host"]
+
+[[test]]
+name = "query_response_budgets"
+required-features = ["host"]
+
+[[test]]
+name = "request_body_decode"
+required-features = ["host"]
+
+[[test]]
+name = "resources"
+required-features = ["host"]
+
+[[test]]
+name = "resources_patches"
+required-features = ["host"]
+
+[[test]]
+name = "review_access_refusal"
+required-features = ["host"]
+
+[[test]]
+name = "review_read_shard_errors"
+required-features = ["host"]
+
+[[test]]
+name = "review_revisions"
+required-features = ["host"]
+
+[[test]]
+name = "rework"
+required-features = ["host"]
+
+[[test]]
+name = "round2"
+required-features = ["host"]
+
+[[test]]
+name = "rule_patch_submissions"
+required-features = ["host"]
+
+[[test]]
+name = "search_discovery"
+required-features = ["host"]
+
+[[test]]
+name = "target_config"
+required-features = ["host"]
+
+[[test]]
+name = "typed_spec_discussion_deletion"
+required-features = ["host"]
+
+[[test]]
+name = "wire"
+required-features = ["host"]
