@@ -27,8 +27,6 @@ pub enum IdeationTargetType {
     Topic,
     #[serde(rename = "question")]
     Question,
-    #[serde(rename = "domain")]
-    Domain,
     #[serde(rename = "boundary")]
     Boundary,
 }
@@ -43,7 +41,6 @@ impl From<IdeationTargetType> for NodeType {
             IdeationTargetType::Rule => Self::Rule,
             IdeationTargetType::Topic => Self::Topic,
             IdeationTargetType::Question => Self::Question,
-            IdeationTargetType::Domain => Self::Domain,
             IdeationTargetType::Boundary => Self::Boundary,
         }
     }
@@ -60,8 +57,6 @@ pub enum CanonicalArtifactType {
     Resolution,
     #[serde(rename = "rule")]
     Rule,
-    #[serde(rename = "domain")]
-    Domain,
     #[serde(rename = "boundary")]
     Boundary,
     #[serde(rename = "topic")]

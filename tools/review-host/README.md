@@ -103,7 +103,7 @@ fetch and WebSocket: a launch link stores the session and opens the event
 socket, a reload mounts with the stored session, and a changed session is
 refused and removed.
 
-The [public renderer archive](https://github.com/quality-sh/provenance/releases/download/renderer-dc61fdbfe49c/provenance-review.tar.gz)
+The [public renderer archive](https://github.com/quality-sh/provenance/releases/download/renderer-31d5defe8076/provenance-review.tar.gz)
 contains the exact bytes from the pinned upstream build. The release contains
 only the renderer. It is separate from the CLI releases and is not the latest
 CLI release. CI and release preparation use this archive without access to the

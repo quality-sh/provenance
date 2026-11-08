@@ -59,6 +59,4 @@ pub struct Message {
     #[serde(alias = "content")]
     pub body: String,
     pub created_at: i64,
-    #[serde(default, alias = "aiMetadata", skip_serializing_if = "Option::is_none")]
-    pub ai_metadata: Option<serde_json::Value>,
 }

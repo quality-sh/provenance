@@ -72,8 +72,7 @@ fn empty_typed_replacement_refuses_enrolled_source_deletion() {
             serde_json::from_value::<UpdateSourceInput>(serde_json::json!({
                 "scope_id": "default",
                 "id": "source_typed_history",
-                "declared_by": "spec://review/history",
-                "review_date": 1
+                "declared_by": "spec://review/history"
             }))
             .unwrap(),
         )

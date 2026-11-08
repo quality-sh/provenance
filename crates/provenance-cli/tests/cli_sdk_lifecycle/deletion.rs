@@ -83,10 +83,10 @@ fn write_dependent_records(base: &std::path::Path, removed: &str, retained: &str
             "{}\n{}\n",
             json!({"scope_id":"default","id":"res_shared",
             "title":"Shared decision","position":"Expire sessions","rationale":"Limit access",
-            "status":"draft","requirement_ids":[removed,retained],"review_on":null}),
+            "status":"draft","requirement_ids":[removed,retained]}),
             json!({"scope_id":"default","id":"res_removed",
             "title":"Removed decision","position":"Expire links","rationale":"Limit access",
-            "status":"draft","requirement_ids":[removed],"review_on":null})
+            "status":"draft","requirement_ids":[removed]})
         ),
     )
     .unwrap();

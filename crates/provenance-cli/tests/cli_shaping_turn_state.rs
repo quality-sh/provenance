@@ -177,7 +177,7 @@ fn cli_shaping_actions_and_requirement_patch_share_the_catalog() {
             &etag,
             "--stdin",
         ],
-        r#"{"fog":"something about sleepovers"}"#,
+        r#"{"description":"something about sleepovers"}"#,
     )
     .success()
     .stdout(contains("something about sleepovers"));

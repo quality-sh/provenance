@@ -98,15 +98,10 @@ fn resolution_lifecycle_change_after_acceptance_opens_no_submission() {
     accept_current(&repo, "resolutions", "resolution", "res_a");
     let before = read(&repo, "resolutions", "res_a");
 
-    guarded_update(
-        &repo,
-        "resolutions",
-        "res_a",
-        &["--review-on", "2027-01-01"],
-    );
+    guarded_update(&repo, "resolutions", "res_a", &["--made-by", "Analyst One"]);
 
     let after = read(&repo, "resolutions", "res_a");
-    assert_eq!(after["review_on"], "2027-01-01");
+    assert_eq!(after["made_by"], "Analyst One");
     assert!(after["decision"]["pending"].is_null());
     assert_eq!(
         after["decision"]["current_acceptance"],

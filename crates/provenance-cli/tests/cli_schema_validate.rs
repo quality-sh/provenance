@@ -46,7 +46,6 @@ fn disposition_schema_closes_canonical_artifact_and_validation_rejects_unknown_f
             "requirement",
             "resolution",
             "rule",
-            "domain",
             "boundary",
             "topic",
             "question"

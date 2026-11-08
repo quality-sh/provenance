@@ -13,7 +13,6 @@ duplicates; `refines`, `depends_on`, and `supersedes` refuse a cycle at write.
 
 | Kind | Field | Target | Required | Shape |
 |---|---|---|---|---|
-| requirement | `domain_id` | domain | optional | single |
 | requirement | `source_refs[].source_id` (+`clause`), named `cites` | source | optional | list |
 | requirement | `refines` | requirement | optional | single |
 | requirement | `depends_on` | requirement | optional | list |
@@ -113,10 +112,8 @@ canonical Verification binding and Rule by ID, and never enter canonical
 shards. The durable binding does enter canonical exports; run outcomes do not.
 
 Modern proposal definitions are immutable `proposed` rows. Assertions live in
-`ideation/assertions.jsonl`; dispositions use `ideation/dispositions.jsonl`. Readers accept
-the previously shipped `ideation/promotion_decisions.jsonl` path only for the exact frozen
-historical audit. Import also accepts the old `promotion_decisions` export field instead of,
-but never alongside, `dispositions`; all other top-level fields are closed. Effective state is
+`ideation/assertions.jsonl`; dispositions use `ideation/dispositions.jsonl`. All top-level
+fields of an import are closed. Effective state is
 derived in the order
 `proposed`, `asserted`, then disposition. `ideation/landings.jsonl` stores one validated
 swarm batch per line so a run is published atomically. Import validates a staged complete

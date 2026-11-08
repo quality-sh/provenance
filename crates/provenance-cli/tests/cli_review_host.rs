@@ -204,7 +204,6 @@ fn record_comment_joins_the_selected_record_thread() {
             statement: "The Requirement accepts review.".into(),
             description: None,
             status: provenance_core::RequirementStatus::Discovery,
-            domain_id: None,
             refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),

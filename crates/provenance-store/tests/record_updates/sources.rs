@@ -86,7 +86,7 @@ async fn matching_owner_can_edit_metadata_without_moving_or_adopting_the_record(
             vec![before.clone()]
         );
     }
-    let updated = fixture.call("update-source", json!({"scope_id":"default","id":before.id,"declared_by":"spec://fixture","commit_pin":"abcdef0123456789","effective_date":1234})).await.unwrap();
+    let updated = fixture.call("update-source", json!({"scope_id":"default","id":before.id,"declared_by":"spec://fixture","commit_pin":"abcdef0123456789"})).await.unwrap();
     assert_eq!(updated["id"], json!(before.id));
     assert_eq!(
         updated["declaration_address"],

@@ -18,8 +18,6 @@ fn a_writer_refuses_a_command_keyword_as_a_new_record_id() {
             url: None,
             reference: None,
             commit_pin: None,
-            effective_date: None,
-            review_date: None,
             supersedes: Vec::new(),
             origin_thread: None,
             origin_message: None,
@@ -50,8 +48,6 @@ fn scope_import_refuses_a_new_command_keyword_id() {
         url: None,
         reference: None,
         commit_pin: None,
-        effective_date: None,
-        review_date: None,
         supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,
@@ -83,8 +79,6 @@ fn an_existing_keyword_id_survives_a_scope_import() {
             url: None,
             reference: None,
             commit_pin: None,
-            effective_date: None,
-            review_date: None,
             supersedes: Vec::new(),
             origin_thread: None,
             origin_message: None,
@@ -110,7 +104,6 @@ fn a_keyword_id_from_another_record_kind_is_not_preserved() {
         role: MessageRole::User,
         body: "Existing message".into(),
         created_at: 1,
-        ai_metadata: None,
     };
     let path = crate::shards::messages_path(&store.layout, &scope);
     crate::jsonl::write_jsonl_atomic(&path, std::slice::from_ref(&message)).unwrap();
@@ -145,7 +138,6 @@ fn an_existing_keyword_message_id_survives_a_scope_import() {
         role: MessageRole::User,
         body: "Existing message".into(),
         created_at: 1,
-        ai_metadata: None,
     };
     let path = crate::shards::messages_path(&store.layout, &scope);
     crate::jsonl::write_jsonl_atomic(&path, std::slice::from_ref(&message)).unwrap();

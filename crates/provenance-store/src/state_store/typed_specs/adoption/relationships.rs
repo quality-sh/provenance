@@ -14,7 +14,6 @@ enum RelationshipNode {
     Rule,
     Topic,
     Question,
-    Domain,
     Boundary,
 }
 
@@ -244,7 +243,6 @@ const fn relationship_node(node_type: NodeType) -> RelationshipNode {
         NodeType::Rule => RelationshipNode::Rule,
         NodeType::Topic => RelationshipNode::Topic,
         NodeType::Question => RelationshipNode::Question,
-        NodeType::Domain => RelationshipNode::Domain,
         NodeType::Boundary => RelationshipNode::Boundary,
     }
 }

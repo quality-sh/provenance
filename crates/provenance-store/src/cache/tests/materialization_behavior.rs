@@ -128,16 +128,9 @@ async fn materialize_caches_generic_disposition_external_action() {
 }
 
 #[tokio::test]
-async fn materialize_state_caches_fog_resolution_method_and_claim_state() {
+async fn materialize_state_caches_resolution_method_and_claim_state() {
     let (_dir, layout, scope) = seeded_layout();
     let store = crate::test_support::store(&layout);
-    store
-        .set_requirement_fog(
-            &scope,
-            &sid("req_schads_overtime"),
-            Some("sleepover rules; something about broken shifts".into()),
-        )
-        .unwrap();
     store
         .create_topic(CreateTopicInput {
             scope_id: scope.clone(),
@@ -172,11 +165,6 @@ async fn materialize_state_caches_fog_resolution_method_and_claim_state() {
 
     materialize_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    let fog: Option<String> = sqlx::query_scalar("SELECT fog FROM requirements WHERE id = ?")
-        .bind("req_schads_overtime")
-        .fetch_one(pool.pool())
-        .await
-        .unwrap();
     let topic: (Option<String>, Option<i64>) =
         sqlx::query_as("SELECT claimed_by, claimed_at FROM topics WHERE id = ?")
             .bind("topic_overtime")
@@ -190,10 +178,6 @@ async fn materialize_state_caches_fog_resolution_method_and_claim_state() {
     .fetch_one(pool.pool())
     .await
     .unwrap();
-    assert_eq!(
-        fog.as_deref(),
-        Some("sleepover rules; something about broken shifts")
-    );
     assert_eq!(topic.0.as_deref(), Some("agent-one"));
     assert!(topic.1.unwrap() > 0);
     assert_eq!(question.0, "verify");
@@ -222,8 +206,6 @@ async fn materialize_state_caches_enriched_source_and_resolution_fields() {
             url: Some("https://example.test/sah".into()),
             reference: Some("Department guidance".into()),
             commit_pin: None,
-            effective_date: Some(1_714_521_600_000),
-            review_date: Some(1_717_200_000_000),
             supersedes: vec![sid("source_sah_2025")],
             origin_thread: None,
             origin_message: None,
@@ -236,7 +218,6 @@ async fn materialize_state_caches_enriched_source_and_resolution_fields() {
             statement: "SAH applies".into(),
             description: None,
             status: provenance_core::RequirementStatus::Active,
-            domain_id: None,
             refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
@@ -256,8 +237,6 @@ async fn materialize_state_caches_enriched_source_and_resolution_fields() {
             rationale: "Needs human review".into(),
             status: ResolutionStatus::Draft,
             context: Some("Codebase scan".into()),
-            enforcement: Some("specification".into()),
-            confidence: Some(0.91),
             inputs: vec![ResolutionInput {
                 input_type: ResolutionInputType::Regulatory,
                 reference: "SAH program manual".into(),
@@ -272,12 +251,11 @@ async fn materialize_state_caches_enriched_source_and_resolution_fields() {
         .unwrap();
     materialize_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    let source: (Option<String>, Option<i64>, Option<i64>) =
-        sqlx::query_as("SELECT reference, effective_date, review_date FROM sources WHERE id = ?")
-            .bind("source_sah")
-            .fetch_one(pool.pool())
-            .await
-            .unwrap();
+    let source: Option<String> = sqlx::query_scalar("SELECT reference FROM sources WHERE id = ?")
+        .bind("source_sah")
+        .fetch_one(pool.pool())
+        .await
+        .unwrap();
     let resolution: (String, Option<String>, Option<String>, Option<i64>) = sqlx::query_as(
         "SELECT inputs, made_by, approved_by, approved_at FROM resolutions WHERE id = ?",
     )
@@ -285,9 +263,7 @@ async fn materialize_state_caches_enriched_source_and_resolution_fields() {
     .fetch_one(pool.pool())
     .await
     .unwrap();
-    assert_eq!(source.0.as_deref(), Some("Department guidance"));
-    assert_eq!(source.1, Some(1_714_521_600_000));
-    assert_eq!(source.2, Some(1_717_200_000_000));
+    assert_eq!(source.as_deref(), Some("Department guidance"));
     assert!(resolution.0.contains(r#""input_type":"regulatory""#));
     assert_eq!(resolution.1.as_deref(), Some("Analyst One"));
     assert_eq!(resolution.2.as_deref(), Some("Approver Two"));

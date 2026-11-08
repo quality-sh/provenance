@@ -229,7 +229,6 @@ mod tests {
         );
         assert_eq!(kind::<provenance_core::Resolution>(), NodeType::Resolution);
         assert_eq!(kind::<provenance_core::Rule>(), NodeType::Rule);
-        assert_eq!(kind::<provenance_core::Domain>(), NodeType::Domain);
         assert_eq!(kind::<provenance_core::Boundary>(), NodeType::Boundary);
         assert_eq!(kind::<provenance_core::Topic>(), NodeType::Topic);
         assert_eq!(kind::<provenance_core::Question>(), NodeType::Question);

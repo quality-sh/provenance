@@ -1,7 +1,7 @@
 use super::assert_kind_round_trips;
 use crate::model::{
-    ArchivedStamp, ArtifactLink, ArtifactLinkTargetType, Boundary, Domain, Question,
-    QuestionStatus, ResolutionMethod, ScopeId, SourceReference, StableId, Topic, TopicStatus,
+    ArchivedStamp, ArtifactLink, ArtifactLinkTargetType, Boundary, Question, QuestionStatus,
+    ResolutionMethod, ScopeId, SourceReference, StableId, Topic, TopicStatus,
 };
 
 fn sid(value: &str) -> StableId {
@@ -122,26 +122,6 @@ fn bare_question() -> Question {
     }
 }
 
-fn filled_domain() -> Domain {
-    Domain {
-        scope_id: scope(),
-        id: sid("domain_payroll"),
-        name: "Payroll".into(),
-        description: Some("Wages and overtime".into()),
-        color: Some("#00ff00".into()),
-    }
-}
-
-fn bare_domain() -> Domain {
-    Domain {
-        scope_id: scope(),
-        id: sid("domain_bare"),
-        name: "Bare".into(),
-        description: None,
-        color: None,
-    }
-}
-
 #[test]
 fn a_boundary_round_trips_through_its_row() {
     assert_kind_round_trips(&filled_boundary(), &bare_boundary());
@@ -155,9 +135,4 @@ fn a_topic_round_trips_through_its_row() {
 #[test]
 fn a_question_round_trips_through_its_row() {
     assert_kind_round_trips(&filled_question(), &bare_question());
-}
-
-#[test]
-fn a_domain_round_trips_through_its_row() {
-    assert_kind_round_trips(&filled_domain(), &bare_domain());
 }

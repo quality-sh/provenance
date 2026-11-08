@@ -56,17 +56,12 @@ fn cli_creates_and_exports_enriched_sources_and_resolutions() {
                 "source_type": "legislation",
                 "reference": "Department guidance",
                 "commit_pin": "5e1f2a9c4b6d8e0f1234567890abcdef12345678",
-                "effective_date": 1_714_521_600_000_i64,
-                "review_date": 1_717_200_000_000_i64,
                 "supersedes": ["source_sah_2025"]
             })
             .to_string(),
         )
         .assert()
         .success()
-        .stdout(predicates::str::contains(
-            r#""effective_date": 1714521600000"#,
-        ))
         .stdout(predicates::str::contains(
             r#""commit_pin": "5e1f2a9c4b6d8e0f1234567890abcdef12345678""#,
         ))
@@ -91,8 +86,6 @@ fn cli_creates_and_exports_enriched_sources_and_resolutions() {
 
     let exported = std::fs::read_to_string(&export_path).unwrap();
     assert!(exported.contains(r#""commit_pin": "5e1f2a9c4b6d8e0f1234567890abcdef12345678""#));
-    assert!(exported.contains(r#""effective_date": 1714521600000"#));
-    assert!(exported.contains(r#""review_date": 1717200000000"#));
 
     // The resolutions anchor on a Requirement, whose creation enrolls it in
     // the review journal; from then on the scope refuses a lossy export.
@@ -164,8 +157,6 @@ fn cli_creates_and_exports_enriched_sources_and_resolutions() {
                 "rationale": "Needs human review",
                 "status": "draft",
                 "context": "Codebase scan",
-                "enforcement": "specification",
-                "confidence": 0.91,
                 "inputs": [{
                     "input_type": "regulatory",
                     "reference": "SAH program manual",

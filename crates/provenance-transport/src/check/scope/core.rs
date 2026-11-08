@@ -5,13 +5,12 @@ use crate::check::references::{
 use crate::snapshot::GraphRecords;
 use provenance_core::model::relations::{declaration_of, kind_word, RelationOwner};
 use provenance_core::{
-    Boundary, Domain, ImplementationBinding, Question, Requirement, Resolution, Rule, ScopeId,
-    Source, Topic, VerificationBinding,
+    Boundary, ImplementationBinding, Question, Requirement, Resolution, Rule, ScopeId, Source,
+    Topic, VerificationBinding,
 };
 
 pub(super) struct Records<'a> {
     sources: &'a [Source],
-    domains: &'a [Domain],
     requirements: &'a [Requirement],
     boundaries: &'a [Boundary],
     topics: &'a [Topic],
@@ -26,7 +25,6 @@ impl<'a> Records<'a> {
     pub(super) const fn load(records: GraphRecords<'a>) -> Self {
         Self {
             sources: records.sources,
-            domains: records.domains,
             requirements: records.requirements,
             boundaries: records.boundaries,
             topics: records.topics,
@@ -58,7 +56,6 @@ impl<'a> Records<'a> {
         }
 
         check_records!(self.sources, "source");
-        check_records!(self.domains, "domain");
         check_records!(self.requirements, "requirement");
         check_records!(self.boundaries, "boundary");
         check_records!(self.topics, "topic");
@@ -72,9 +69,6 @@ impl<'a> Records<'a> {
     pub(super) fn add_to(&self, index: &mut CheckIndex) {
         for source in self.sources {
             index.add_node(&source.scope_id, "source", &source.id);
-        }
-        for domain in self.domains {
-            index.add_node(&domain.scope_id, "domain", &domain.id);
         }
         for requirement in self.requirements {
             index.add_node(&requirement.scope_id, "requirement", &requirement.id);

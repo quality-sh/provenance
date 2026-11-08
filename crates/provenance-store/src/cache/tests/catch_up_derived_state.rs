@@ -1,9 +1,8 @@
 //! A family's byte domain covers derived fields.
 //!
-//! A proposal card's effective promotion state is computed from assertions,
-//! dispositions, and legacy promotion decisions. Each test flips an existing
-//! card's effective state through one of those inputs and requires rebuild
-//! parity.
+//! A proposal card's effective promotion state is computed from assertions
+//! and dispositions. Each test flips an existing card's effective state
+//! through one of those inputs and requires rebuild parity.
 
 use super::super::*;
 use super::catch_up_behavior::assert_catch_up_equals_rebuild;
@@ -98,62 +97,4 @@ async fn an_assertion_write_moves_the_cards_effective_state() {
 
     assert_catch_up_equals_rebuild(&layout).await;
     assert_eq!(effective_state(&layout).await, "asserted");
-}
-
-#[tokio::test]
-async fn a_legacy_promotion_decision_is_refused_by_catch_up_and_by_rebuild() {
-    // The promotion_decisions shard is frozen at the shipped-v1 audit. A
-    // rebuild refuses a new legacy decision. Catch-up must refuse it the same
-    // way and commit nothing.
-    let (_dir, layout, scope) = aggregate_layout();
-    remove_shard(&layout, ProjectionFamily::Dispositions, &scope);
-    materialize_state(&open(&layout)).await.unwrap();
-    assert_eq!(effective_state(&layout).await, "asserted");
-    let pool = open_cache(&layout).await.unwrap();
-    let serial_before: i64 = sqlx::query_scalar("SELECT MAX(serial) FROM projection_revision")
-        .fetch_one(pool.pool())
-        .await
-        .unwrap();
-    pool.close().await.unwrap();
-
-    let legacy = crate::shards::legacy_promotion_decisions_path(&layout, &scope);
-    std::fs::write(
-        legacy,
-        format!(
-            "{}\n",
-            serde_json::json!({"scope_id": scope.as_str(),
-                "promotionDecisionId": "decision_legacy", "proposalId": "proposal_base",
-                "decision": "accepted", "rationale": "Accepted.",
-                "decidedBy": {"identityType": "human", "userId": "reviewer"},
-                "canonicalArtifact": {"artifactType": "requirement",
-                    "artifactId": "req_schads_overtime"}})
-        ),
-    )
-    .unwrap();
-
-    let catch_up_error = catch_up_state(&open(&layout))
-        .await
-        .unwrap_err()
-        .to_string();
-    let rebuild_error = materialize_state(&open(&layout))
-        .await
-        .unwrap_err()
-        .to_string();
-    assert!(
-        catch_up_error.contains("frozen shipped-v1"),
-        "{catch_up_error}"
-    );
-    assert_eq!(catch_up_error, rebuild_error, "refusal parity");
-    assert_eq!(
-        effective_state(&layout).await,
-        "asserted",
-        "nothing committed"
-    );
-    let pool = open_cache(&layout).await.unwrap();
-    let serial_after: i64 = sqlx::query_scalar("SELECT MAX(serial) FROM projection_revision")
-        .fetch_one(pool.pool())
-        .await
-        .unwrap();
-    pool.close().await.unwrap();
-    assert_eq!(serial_after, serial_before);
 }

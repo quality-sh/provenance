@@ -7,7 +7,6 @@ fn review_approval_rejects_a_canonical_artifact_for_another_record_kind() {
         "source",
         "resolution",
         "rule",
-        "domain",
         "boundary",
         "topic",
         "question",

@@ -1,11 +1,15 @@
-error[E0599]: no method named `set_requirement_fog` found for struct `GuardedStore<'g>` in the current scope
+error[E0599]: no method named `clear_requirement_refines` found for struct `GuardedStore<'g>` in the current scope
  --> tests/compile_fail/guarded_store_write.rs:7:19
   |
-7 |     let _ = store.set_requirement_fog(scope, id, Some("Changed".into()));
-  |                   ^^^^^^^^^^^^^^^^^^^
+7 |     let _ = store.clear_requirement_refines(scope, id);
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^
   |
-help: there is a method `list_requirements` with a similar name, but with different arguments
+help: there is a method `list_requirement_reviews` with a similar name, but with different arguments
  --> src/state_store/access/guarded_readers.rs
   |
-  |     pub fn list_requirements(&self, scope: &ScopeId) -> anyhow::Result<Vec<Requirement>> {
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |         pub fn $reader(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+  |     crate::cache::record_families!(define_guarded_family_readers);
+  |     ------------------------------------------------------------- in this macro invocation
+  = note: this error originates in the macro `guarded_reader` which comes from the expansion of the macro `crate::cache::record_families` (in Nightly builds, run with -Z macro-backtrace for more info)

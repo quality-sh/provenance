@@ -43,18 +43,6 @@ fn every_family_keeps_its_independent_descriptor() {
             ),
         ),
         (
-            ProjectionFamily::Domains,
-            expected(
-                (Export, "domains"),
-                "domains/domain.jsonl",
-                Some(NodeType::Domain),
-                Some("domains"),
-                Some(50),
-                Resource,
-                &["list-domains", "page-domains", "get-domain"],
-            ),
-        ),
-        (
             ProjectionFamily::Requirements,
             expected(
                 (Export, "requirements"),

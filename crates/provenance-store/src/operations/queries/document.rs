@@ -43,7 +43,7 @@ pub async fn read_document_answer(
 /// Returns at most one document: nearest, then deepest, then lowest Requirement ID.
 ///
 /// A Requirement selects its own document. Other graph records must be members,
-/// except Sources and Domains, which the document stores as references.
+/// except Sources, which the document stores as references.
 pub async fn containing_review_documents(
     repository: &Repository,
     policy: ReadPolicy,
