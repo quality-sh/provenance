@@ -100,11 +100,6 @@ const RESOLUTION_ALIASES: &[ArgumentAlias] = &[ArgumentAlias {
     field: "requirement_ids",
     wrap_array: true,
 }];
-const QUESTION_ALIASES: &[ArgumentAlias] = &[ArgumentAlias {
-    argument: "method",
-    field: "resolution_method",
-    wrap_array: false,
-}];
 
 macro_rules! family_route_definitions {
     ($out:ident, $record:ty, $catalog:tt, none) => {};

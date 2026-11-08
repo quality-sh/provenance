@@ -122,7 +122,7 @@ fn named_actions_work_for_ordinary_targets() {
         "topic_routing",
         "--question",
         "Does the grammar select the action?",
-        "--method",
+        "--resolution-method",
         "research",
         "--format",
         "json",

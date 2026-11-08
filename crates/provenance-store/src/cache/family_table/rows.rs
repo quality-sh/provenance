@@ -98,9 +98,9 @@ macro_rules! expand_record_family_rows {
                     create: CreateQuestion,
                     update: UpdateQuestion,
                     create_defaults: OPEN_LINK_DEFAULTS,
-                    create_aliases: QUESTION_ALIASES,
+                    create_aliases: NO_ALIASES,
                     update_defaults: NONE,
-                    update_aliases: QUESTION_ALIASES,
+                    update_aliases: NO_ALIASES,
                     nullable: &[("resolution_id", "resolution_id"),
                         ("contradicts", "contradicts")],
                     target: Some(NodeType::Question) }], review: QUESTION

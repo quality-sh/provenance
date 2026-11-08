@@ -233,7 +233,7 @@ short-lived link - how would that work?" Starting an anchor is one session's wor
    provenance question_<stable_slug> create --type question --scope <scope> \
      --topic-id <topic_id> \
      --question "<precise question>" \
-     --method ask \
+     --resolution-method ask \
      --format json
    ```
 

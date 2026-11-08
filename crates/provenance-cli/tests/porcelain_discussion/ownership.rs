@@ -192,7 +192,7 @@ fn topic_and_question_discussions_refuse_a_declared_owner() {
         "topic_ownerless",
         "--question",
         "Which record applies?",
-        "--method",
+        "--resolution-method",
         "research",
     ]);
 

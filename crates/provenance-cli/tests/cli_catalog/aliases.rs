@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn question_update_method_alias_is_resolved_before_schema_validation() {
+fn question_method_is_set_with_resolution_method() {
     let (_directory, repo) = init();
     provenance()
         .args([
@@ -47,7 +47,7 @@ fn question_update_method_alias_is_resolved_before_schema_validation() {
             "topic_question_alias",
             "--question",
             "Which method applies?",
-            "--method",
+            "--resolution-method",
             "research",
         ])
         .assert()
@@ -71,7 +71,7 @@ fn question_update_method_alias_is_resolved_before_schema_validation() {
             "update",
             "--repo",
             &repo,
-            "--method",
+            "--resolution-method",
             "ask",
             "--if-match",
             etag,
