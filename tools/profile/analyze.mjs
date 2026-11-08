@@ -2,11 +2,12 @@
 // JSON file and the Markdown summaries.
 //
 //   node tools/profile/analyze.mjs --folded labeled.folded --windows windows.json \
-//     --out api-profile [--baseline baseline-dir] [--stats label-stats.json]
+//     --out api-profile --stacks api-profile-stacks [--baseline baseline-dir] [--stats samples.json]
 //
 // labeled.folded is the inferno-collapse-perf output of label.mjs: the root
-// frame of each stack is the row key. The baseline directory is the
-// `api-profile` artifact of an earlier run. README.md tells what each output
+// frame of each stack is the row file name. --folded, --windows and --stats
+// can each be given once for each part of the run. The baseline directory
+// holds the two artifacts of an earlier run. README.md tells what each output
 // file holds.
 import { createReadStream, createWriteStream, existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -32,9 +33,10 @@ import {
 
 const { values: options } = parseArgs({
   options: {
-    folded: { type: 'string' },
-    windows: { type: 'string' },
-    stats: { type: 'string' },
+    folded: { type: 'string', multiple: true, default: [] },
+    windows: { type: 'string', multiple: true, default: [] },
+    stats: { type: 'string', multiple: true, default: [] },
+    stacks: { type: 'string', default: 'api-profile-stacks' },
     baseline: { type: 'string' },
     out: { type: 'string', default: 'api-profile' },
     frequency: { type: 'string', default: '1999' },
@@ -52,8 +54,9 @@ const repository = process.env.GITHUB_REPOSITORY ?? '';
 const runUrl = id => (id && repository ? `${server}/${repository}/actions/runs/${id}` : '');
 const frequency = Number(options.frequency);
 
-/** Placeholder for the artifact link. The workflow puts in the real link after the upload. */
+/** Placeholders for the artifact links. The workflow puts in the real links after the upload. */
 const ARTIFACT_URL = 'ARTIFACT_URL';
+const STACKS_URL = 'STACKS_URL';
 
 async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'));
@@ -85,13 +88,12 @@ async function readStacks(path) {
 }
 
 /**
- * Splits the labeled stacks into one folded file for each row, with the row
- * key removed, and counts the shares of each row. The file can be larger than
+ * Splits the labeled stacks into one folded file for each row, with the root
+ * frame removed, and counts the shares of each row. A file can be larger than
  * memory, so it is read line by line.
  */
-async function splitRows(path, directory, fileOf) {
+async function splitRows(paths, directory, files) {
   const counts = new Map();
-  const seen = new Set();
   let key = null;
   let out = null;
   const close = async () => {
@@ -100,25 +102,26 @@ async function splitRows(path, directory, fileOf) {
       await once(out, 'finish');
     }
   };
-  for await (const line of createInterface({ input: createReadStream(path), crlfDelay: Infinity })) {
-    const stack = foldedLine(line);
-    const root = stack?.frames.shift();
-    if (!stack || !fileOf.has(root)) {
-      continue;
-    }
-    if (root !== key) {
-      await close();
-      key = root;
-      // inferno sorts its output, so the stacks of a row come together; a row seen again is added to its file.
-      out = createWriteStream(join(directory, `${fileOf.get(root)}.folded`), { flags: seen.has(root) ? 'a' : 'w' });
-      seen.add(root);
-      if (!counts.has(root)) {
-        counts.set(root, new Shares());
+  for (const path of paths) {
+    for await (const line of createInterface({ input: createReadStream(path), crlfDelay: Infinity })) {
+      const stack = foldedLine(line);
+      const root = stack?.frames.shift();
+      if (!stack || !files.has(root)) {
+        continue;
       }
-    }
-    counts.get(root).add(stack.frames, stack.count);
-    if (!out.write(`${stack.frames.join(';')} ${stack.count}\n`)) {
-      await once(out, 'drain');
+      if (root !== key) {
+        await close();
+        // inferno sorts its output, so the stacks of a row come together; a row seen again is added to its file.
+        out = createWriteStream(join(directory, `${root}.folded`), { flags: counts.has(root) ? 'a' : 'w' });
+        key = root;
+        if (!counts.has(root)) {
+          counts.set(root, new Shares());
+        }
+      }
+      counts.get(root).add(stack.frames, stack.count);
+      if (!out.write(`${stack.frames.join(';')} ${stack.count}\n`)) {
+        await once(out, 'drain');
+      }
     }
   }
   await close();
@@ -129,7 +132,7 @@ function rowMarkdown(row) {
   const lines = [`# ${row.label}`, ''];
   lines.push(`- Way in: ${row.way}. Call: \`${row.call}\`.`);
   lines.push(`- Samples: ${row.samples} over ${row.calls} timed calls (about ${row.cpuMsPerCall.toFixed(1)} ms of CPU for each call at ${frequency} Hz).`);
-  lines.push(`- Stacks: \`${row.file}.folded\`. Flame graph: \`${row.file}.svg\`.`);
+  lines.push(`- Stacks: \`rows/${row.file}.folded\`. Flame graph: \`rows/${row.file}.svg\`. Both are in the \`${options.artifact}-stacks\` artifact.`);
   if (row.samples < FEW_SAMPLES) {
     lines.push(`- This row has fewer than ${FEW_SAMPLES} samples, so its shares are noisy.`);
   }
@@ -212,7 +215,7 @@ function changesSection(profile, limit) {
 
 function summaryMarkdown(profile) {
   const lines = ['## API call CPU profile', '', ...header(profile), ...changesSection(profile, 30)];
-  lines.push('', '### Rows', '', 'Most samples first. Per-row files are in the artifact under `rows/`.', '');
+  lines.push('', '### Rows', '', `Most samples first. For each row, \`rows/<file>.md\` is in the \`${options.artifact}\` artifact; \`rows/<file>.folded\` and \`rows/<file>.svg\` are in the \`${options.artifact}-stacks\` artifact.`, '');
   lines.push('| Row | Samples | CPU ms for each call | Top self function | Largest change (points) | File |', '|---|---:|---:|---|---:|---|');
   for (const row of [...profile.rows].sort((a, b) => b.samples - a.samples)) {
     const self = row.top.self[0];
@@ -220,22 +223,31 @@ function summaryMarkdown(profile) {
     const change = biggest ? `${points(biggest.change)}${biggest.overNoise ? '' : ' (noise)'}` : '';
     lines.push(`| ${row.label.replace(/\|/g, '\\|')} | ${row.samples} | ${row.cpuMsPerCall.toFixed(1)} | ${self ? `${cell(self.function, 70)} ${percent(self.share)}` : ''} | ${change} | \`${row.file}\` |`);
   }
-  lines.push('', `Artifact: [${options.artifact}](${ARTIFACT_URL}). tools/profile/README.md tells how to read it.`);
+  lines.push('', `Artifacts: [${options.artifact}](${ARTIFACT_URL}) (tables and profile.json) and [${options.artifact}-stacks](${STACKS_URL}) (stacks and flame graphs). tools/profile/README.md tells how to read them.`);
   return `${lines.join('\n')}\n`;
 }
 
 function commentMarkdown(profile) {
   const lines = ['<!-- api-profile -->', '## API call CPU profile', '', ...header(profile), ...changesSection(profile, 15)];
-  lines.push('', `Full data: [run](${profile.run.url}), artifact [${options.artifact}](${ARTIFACT_URL}): \`profile.json\`, and for each row \`rows/<file>.md\`, \`.folded\` and \`.svg\`. tools/profile/README.md tells how to read them.`);
+  lines.push('', `Full data: [run](${profile.run.url}); artifact [${options.artifact}](${ARTIFACT_URL}) has \`profile.json\` and \`rows/<file>.md\` for each row; artifact [${options.artifact}-stacks](${STACKS_URL}) has \`rows/<file>.folded\` and \`rows/<file>.svg\`. tools/profile/README.md tells how to read them.`);
   return `${lines.join('\n')}\n`;
 }
 
 async function main() {
-  const { windows } = await readJson(options.windows);
+  const windows = [];
+  for (const path of options.windows) {
+    windows.push(...(await readJson(path)).windows);
+  }
   const { rows } = rowsFromWindows(windows);
   await mkdir(join(options.out, 'rows'), { recursive: true });
-  const rowCounts = await splitRows(options.folded, join(options.out, 'rows'), new Map(rows.map(row => [row.key, row.file])));
-  const stats = options.stats && existsSync(options.stats) ? await readJson(options.stats) : {};
+  await mkdir(join(options.stacks, 'rows'), { recursive: true });
+  const rowCounts = await splitRows(options.folded, join(options.stacks, 'rows'), new Set(rows.map(row => row.key)));
+  const stats = {};
+  for (const path of options.stats.filter(item => existsSync(item))) {
+    for (const [name, value] of Object.entries(await readJson(path))) {
+      stats[name] = (stats[name] ?? 0) + value;
+    }
+  }
   const baseline = await loadBaseline(options.baseline);
   const outRows = [];
   for (const row of rows) {
@@ -277,7 +289,7 @@ async function main() {
   await writeFile(join(options.out, 'summary.md'), summaryMarkdown(profile));
   await writeFile(join(options.out, 'comment.md'), commentMarkdown(profile));
   const graphs = outRows.filter(row => row.samples).map(row => `${row.file}\t${row.label} (${row.samples} samples)`);
-  await writeFile(join(options.out, 'flamegraphs.tsv'), graphs.length ? `${graphs.join('\n')}\n` : '');
+  await writeFile(join(options.stacks, 'flamegraphs.tsv'), graphs.length ? `${graphs.join('\n')}\n` : '');
   process.stderr.write(`${outRows.length} rows, baseline ${baseline ? short(baseline.commit) : 'none'}\n`);
 }
 

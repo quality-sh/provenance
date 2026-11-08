@@ -20,8 +20,9 @@ export function rowFile(label) {
 
 /**
  * The rows of a windows file and, for each process, its time windows sorted
- * by start. A row is a way in and a call. Its key, `r<index>`, is a word that
- * replaces the process name in the perf script output.
+ * by start. A row is a way in and a call. Its file name is a word with no
+ * space or semicolon, so it is also the key that replaces the process name in
+ * the perf script output. It is the same in each run and each job.
  */
 export function rowsFromWindows(windows) {
   const rows = [];
@@ -31,7 +32,8 @@ export function rowsFromWindows(windows) {
     const label = `${window.way} ${window.call}`;
     let row = byLabel.get(label);
     if (!row) {
-      row = { key: `r${rows.length}`, way: window.way, call: window.call, label, file: rowFile(label), calls: 0, wallMs: 0 };
+      row = { key: rowFile(label), way: window.way, call: window.call, label, calls: 0, wallMs: 0 };
+      row.file = row.key;
       rows.push(row);
       byLabel.set(label, row);
     }
@@ -86,7 +88,7 @@ export function stackSymbol(text) {
 
 /**
  * Reads `perf script` output line by line. A sample in a row window comes out
- * with the row key in place of the process name; other samples are dropped.
+ * with the row file name in place of the process name; other samples are dropped.
  * A stack line with the same function as the line before it is dropped too:
  * deep async stacks repeat one poll function many times, and the repeats
  * change no inclusive or self share. `stats` counts the samples.

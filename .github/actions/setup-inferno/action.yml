@@ -1,0 +1,24 @@
+name: Install inferno
+description: Install the pinned inferno release (the flame graph tools) through Socket Firewall, with a cache, and put it on PATH.
+
+runs:
+  using: composite
+  steps:
+    # The cache key holds the pinned release. Change both together.
+    - name: Restore the cached inferno binaries
+      id: cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/inferno
+        key: inferno-0.12.8-${{ runner.os }}-${{ runner.arch }}
+    - name: Install the pinned inferno release
+      shell: bash
+      env:
+        INFERNO_VERSION: '0.12.8'
+        CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+      run: |
+        set -euo pipefail
+        if [ "$CACHE_HIT" != true ]; then
+          sfw cargo install --locked --root "$RUNNER_TEMP/inferno" inferno --version "$INFERNO_VERSION"
+        fi
+        echo "$RUNNER_TEMP/inferno/bin" >> "$GITHUB_PATH"

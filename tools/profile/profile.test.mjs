@@ -11,11 +11,12 @@ const windows = [
 
 test('rows come from windows in order, with one key and one file name each', () => {
   const { rows, byPid } = rowsFromWindows(windows);
-  assert.deepEqual(rows.map(row => [row.key, row.label, row.calls]), [
-    ['r0', 'CLI GET /rules', 2],
-    ['r1', 'HTTP GET /rules', 1],
-    ['r2', 'HTTP POST /rules', 1],
+  assert.deepEqual(rows.map(row => [row.label, row.calls]), [
+    ['CLI GET /rules', 2],
+    ['HTTP GET /rules', 1],
+    ['HTTP POST /rules', 1],
   ]);
+  assert.ok(rows.every(row => row.key === row.file));
   assert.equal(byPid.get(20).length, 2);
   assert.equal(rows[0].file, rowFile('CLI GET /rules'));
   assert.match(rows[0].file, /^cli-get-rules-[0-9a-f]{8}$/);
@@ -24,14 +25,14 @@ test('rows come from windows in order, with one key and one file name each', () 
 
 test('a sample goes to the window of its process that holds its time', () => {
   const { byPid } = rowsFromWindows(windows);
-  assert.equal(findRow(byPid, 20, 2003), 'r1');
-  assert.equal(findRow(byPid, 20, 2015), 'r2');
+  assert.equal(findRow(byPid, 20, 2003), rowFile('HTTP GET /rules'));
+  assert.equal(findRow(byPid, 20, 2015), rowFile('HTTP POST /rules'));
   assert.equal(findRow(byPid, 20, 2007), null);
   assert.equal(findRow(byPid, 10, 1020), null);
   assert.equal(findRow(byPid, 99, 1005), null);
 });
 
-test('the labeler keeps samples in windows with the row key as the process name', () => {
+test('the labeler keeps samples in windows with the row file name as the process name', () => {
   const labeler = new Labeler(rowsFromWindows(windows).byPid);
   const input = [
     '      provenance    10/10    1.005000: cpu-clock:ppp: ',
@@ -51,11 +52,12 @@ test('the labeler keeps samples in windows with the row key as the process name'
     '',
   ];
   const out = input.map(line => labeler.line(line)).filter(line => line !== null);
+  const [cli, post] = [rowFile('CLI GET /rules'), rowFile('HTTP POST /rules')];
   assert.deepEqual(out, [
-    'r0 10/10 1.005000: cpu-clock:ppp: ',
+    `${cli} 10/10 1.005000: cpu-clock:ppp: `,
     '\t    55d1 main (/bin/provenance)',
     '',
-    'r2 20/21 2.012000: cpu-clock:ppp: ',
+    `${post} 20/21 2.012000: cpu-clock:ppp: `,
     '\t    55d2 handle (/bin/provenance)',
     '\t    55d5 <Pin<P> as Future>::poll (/bin/provenance)',
     '\t    55d7 run (/bin/provenance)',

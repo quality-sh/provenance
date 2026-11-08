@@ -4,8 +4,7 @@
 //
 // windows.json is the file that tools/api-latency/run.mjs writes with
 // --windows. A sample of a process that the row timed, inside the time window
-// of a call, comes out with the row key (`r<index>`) in place of the process
-// name. inferno-collapse-perf then puts the key at the root of each stack.
+// of a call, comes out with the row file name in place of the process name. inferno-collapse-perf then puts that name at the root of each stack.
 // Other samples, for example of node, git or the setup calls, are dropped.
 import { readFile, writeFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
