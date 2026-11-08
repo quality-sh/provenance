@@ -153,12 +153,23 @@ fn interrupt_while_connecting_ends_the_follower_at_once() {
     let mut child = host
         .command(repo.path())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    host.connecting
-        .recv_timeout(review_host_support::waits::LIMIT)
-        .unwrap();
+    // A follower that ends before it connects cannot send the request; report its error.
+    let connect_deadline = std::time::Instant::now() + review_host_support::waits::LIMIT;
+    while host.connecting.try_recv().is_err() {
+        if child.try_wait().unwrap().is_some() {
+            let mut stderr = String::new();
+            std::io::Read::read_to_string(&mut child.stderr.take().unwrap(), &mut stderr).unwrap();
+            panic!("the follower ended before it connected:\n{stderr}");
+        }
+        assert!(
+            std::time::Instant::now() < connect_deadline,
+            "the follower did not connect within 60 seconds"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
     assert!(std::process::Command::new("kill")
         .args(["-INT", &child.id().to_string()])
         .status()
