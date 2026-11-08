@@ -1,13 +1,15 @@
 //! The read answers of one fixture repository, in a form two repositories
 //! with the same canonical state can compare.
 //!
-//! Generated ids and digests get a name in the order the transcript first
-//! shows them. The projection stamp and the page cursors hold the serial of
-//! one projection, so the transcript keeps only whether a next page exists.
+//! The comparison of two repositories keeps every value apart from the
+//! repository path, the projection stamp and the page cursor. The stamp and
+//! the cursors hold the serial of one projection, so an answer keeps only
+//! whether a next page exists. The pinned transcript also names each
+//! generated id, digest and time stamp in the order it first shows, because
+//! record ids are random from run to run.
 
-use super::records::Repository;
-use super::resource_http::{call, host};
-use provenance_transport::StatementHost;
+use super::catch_up_steps::Surface;
+use provenance_transport::fixture::records::Repository;
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 
@@ -49,14 +51,13 @@ pub struct Names {
 }
 
 impl Names {
-    fn name(&mut self, text: &str, root: &str) -> String {
-        let text = text.replace(root, "<repo>");
-        if !generated(&text) {
-            return text;
+    fn name(&mut self, text: &str) -> String {
+        if !generated(text) {
+            return text.to_owned();
         }
         let next = self.known.len() + 1;
         self.known
-            .entry(text)
+            .entry(text.to_owned())
             .or_insert_with(|| format!("<generated {next}>"))
             .clone()
     }
@@ -76,22 +77,28 @@ fn generated(text: &str) -> bool {
     uuid || digest || time
 }
 
-fn normalize(names: &mut Names, value: &Value, root: &str) -> Value {
+/// The text with each generated word replaced by `<generated>`.
+#[allow(dead_code)]
+pub fn without_generated(text: &str) -> String {
+    text.split(' ')
+        .map(|word| if generated(word) { "<generated>" } else { word })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// The answer with each generated value named, and each `created_at`
+/// number as `<time>`.
+fn named(names: &mut Names, value: &Value) -> Value {
     match value {
-        Value::String(text) => Value::String(names.name(text, root)),
-        Value::Array(items) => Value::Array(
-            items
-                .iter()
-                .map(|item| normalize(names, item, root))
-                .collect(),
-        ),
+        Value::String(text) => Value::String(names.name(text)),
+        Value::Array(items) => Value::Array(items.iter().map(|item| named(names, item)).collect()),
         Value::Object(fields) => {
             let mut out = Map::new();
             for (key, field) in fields {
                 let value = if key == "created_at" && field.is_number() {
                     json!("<time>")
                 } else {
-                    normalize(names, field, root)
+                    named(names, field)
                 };
                 out.insert(key.clone(), value);
             }
@@ -101,8 +108,26 @@ fn normalize(names: &mut Names, value: &Value, root: &str) -> Value {
     }
 }
 
-/// One read answer without its projection stamp and cursor.
-fn answer(names: &mut Names, status: u16, body: &Value, root: &str) -> Value {
+/// The value with the repository path replaced in each string.
+fn without_root(value: &Value, root: &str) -> Value {
+    match value {
+        Value::String(text) => Value::String(text.replace(root, "<repo>")),
+        Value::Array(items) => {
+            Value::Array(items.iter().map(|item| without_root(item, root)).collect())
+        }
+        Value::Object(fields) => Value::Object(
+            fields
+                .iter()
+                .map(|(key, field)| (key.clone(), without_root(field, root)))
+                .collect(),
+        ),
+        other => other.clone(),
+    }
+}
+
+/// One read answer without the repository path, the projection stamp and
+/// the cursor. Every other value stays as the read gave it.
+fn answer(status: u16, body: &Value, root: &str) -> Value {
     let mut body = body.clone();
     if let Some(meta) = body.get_mut("meta").and_then(Value::as_object_mut) {
         meta.remove("stamp");
@@ -110,61 +135,63 @@ fn answer(names: &mut Names, status: u16, body: &Value, root: &str) -> Value {
             meta.insert("next_cursor".into(), json!(!cursor.is_null()));
         }
     }
-    json!({"status": status, "body": normalize(names, &body, root)})
+    json!({"status": status, "body": without_root(&body, root)})
 }
 
-/// Every read of [`READS`] through `host`, in order.
-pub async fn read_all(host: &StatementHost, repo: &Repository, names: &mut Names) -> Vec<Value> {
+/// Every read of [`READS`] through `surface`, in order, with the values
+/// that [`answer`] keeps.
+pub async fn read_all(surface: &impl Surface, repo: &Repository) -> Vec<Value> {
     let root = repo.dir.path().to_str().unwrap().to_owned();
     let mut answers = Vec::new();
     for path in READS {
-        let (status, body) = call(host, "GET", path, None).await;
-        answers.push(json!({"read": path, "answer": answer(names, status, &body, &root)}));
+        let (status, body) = surface.call("GET", path, None, &[]).await;
+        answers.push(json!({"read": path, "answer": answer(status, &body, &root)}));
     }
     answers
+}
+
+/// The answers with each generated value named, for a pinned transcript.
+pub fn named_answers(names: &mut Names, answers: &[Value]) -> Vec<Value> {
+    answers.iter().map(|answer| named(names, answer)).collect()
+}
+
+/// Asserts that each read after a catch-up equals the read after a full
+/// rebuild, value for value.
+pub fn assert_same(caught_up: &[Value], rebuilt: &[Value], context: &str) {
+    assert_eq!(caught_up.len(), rebuilt.len(), "{context}");
+    for (index, (left, right)) in caught_up.iter().zip(rebuilt).enumerate() {
+        assert_eq!(left, right, "{context}, read {index}");
+    }
 }
 
 /// A copy of the repository with no projection database, so its first read
 /// is a full rebuild.
 pub fn copy_without_projection(repo: &Repository) -> Repository {
     let dir = tempfile::tempdir().unwrap();
-    copy_tree(
-        repo.dir.path(),
-        dir.path(),
-        &repo.layout.cache_dir().into_std_path_buf(),
-    );
+    let cache = repo.layout.cache_dir();
+    let cache = cache
+        .strip_prefix(repo.dir.path().to_str().unwrap())
+        .unwrap();
+    for (path, bytes) in repo.bytes() {
+        if path.starts_with(cache) {
+            continue;
+        }
+        let target = dir.path().join(&path);
+        if repo.dir.path().join(&path).is_dir() {
+            std::fs::create_dir_all(target).unwrap();
+        } else {
+            std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+            std::fs::write(target, bytes).unwrap();
+        }
+    }
     let layout = provenance_store::layout::ProvenanceLayout::new(dir.path().to_str().unwrap());
     Repository { dir, layout }
 }
 
-fn copy_tree(from: &std::path::Path, to: &std::path::Path, cache: &std::path::Path) {
-    std::fs::create_dir_all(to).unwrap();
-    for entry in std::fs::read_dir(from).unwrap() {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        if path.starts_with(cache) {
-            continue;
-        }
-        let target = to.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&path, &target, cache);
-        } else {
-            std::fs::copy(&path, &target).unwrap();
-        }
-    }
-}
-
-/// The answers of a fresh rebuild of the same canonical state.
-pub async fn rebuilt_answers(repo: &Repository) -> Vec<Value> {
-    let copy = copy_without_projection(repo);
-    let copy_host = host(&copy, false);
-    read_all(&copy_host, &copy, &mut Names::default()).await
-}
-
 /// The transcript without what differs from run to run. Record ids such as
-/// proposal ids are random, so each generated value becomes one word, and a
-/// list of records keyed by a generated id, which reads give in id order,
-/// is sorted by its text.
+/// proposal ids are random, so each generated value becomes one word. A list
+/// of records keyed by a generated id is in id order, so it is sorted by its
+/// text.
 pub fn stable_view(value: &Value) -> Value {
     match value {
         Value::String(text) if text.starts_with("<generated ") => json!("<generated>"),
