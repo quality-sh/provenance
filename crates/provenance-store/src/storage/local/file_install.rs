@@ -7,7 +7,7 @@ use crate::storage::{Atomicity, PublishFailure, Revision, WriteSet};
 
 /// The working-tree file steps that land with a whole set, such as the
 /// replacement of a Source file in a source edit.
-pub(crate) struct FileInstall<'a>(pub(crate) &'a mut dyn WholeSetHook);
+pub struct FileInstall<'a>(pub &'a mut dyn WholeSetHook);
 
 impl LocalStateStorage {
     /// Lands the whole set `writes` and the file steps of `file` in one

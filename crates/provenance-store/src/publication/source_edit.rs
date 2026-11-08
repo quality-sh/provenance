@@ -54,9 +54,10 @@ pub(super) struct PreparedSourceRecord {
 }
 
 /// Publishes a stage and one repository file edit under the live section
-/// that `section` holds, through the local adapter of its layout: the edit
-/// is a working-tree step, so it runs only on local disk. A repository on
-/// another adapter is refused before the stage starts.
+/// that `section` holds, through the local adapter of its layout.
+///
+/// The edit is a working-tree step, so it runs only on local disk. A
+/// repository on another adapter is refused before the stage starts.
 pub fn with_staged_state_and_source_edit<R>(
     section: &crate::state_store::StateStore,
     held: HeldRepositoryFile,
