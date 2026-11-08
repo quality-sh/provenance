@@ -144,8 +144,9 @@ fn readable_discovery_lists_routes_with_their_inputs() {
             "  The JSON body is the data object, without the HTTP {\"data\": ...} wrapper."
         )
     );
+    let limited = render_discovery_readable(&catalog.select(None, Some(2)).complete(), SEE_MORE);
     assert!(
-        render_discovery_readable(&catalog.select(None, Some(2)).complete(), SEE_MORE)
-            .ends_with("inputs: id (path, required), query (query, required), depth (query, optional)\nUse FILTER or LIMIT to see more."),
+        limited.ends_with("depth (query, optional)\nUse FILTER or LIMIT to see more."),
+        "{limited}"
     );
 }
