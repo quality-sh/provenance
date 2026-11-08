@@ -43,8 +43,10 @@ impl<'g> UnitReader<'g> {
 
     /// The one view of canonical state that this pass hashes and parses:
     /// the view of the section that the guard holds, which the store of the
-    /// guard reads too.
+    /// guard reads too. A pass stores the digests of the bytes it parsed,
+    /// because both come from this view.
     #[rule("rule_catch_up_reads_units_from_the_view")]
+    #[rule("rule_catch_up_stores_the_digest_of_parsed_bytes")]
     fn view(&mut self) -> anyhow::Result<&StateView> {
         if self.view.is_none() {
             let repository = self.guard.repository();
@@ -72,7 +74,6 @@ impl<'g> UnitReader<'g> {
 
     /// A global change validates every scope. Other passes validate only changed scopes.
     #[rule("rule_catch_up_validates_changed_units_only")]
-    #[rule("rule_catch_up_stores_the_digest_of_parsed_bytes")]
     pub fn global(
         &mut self,
         known: Option<&units::UnitDigests>,
@@ -98,7 +99,6 @@ impl<'g> UnitReader<'g> {
 
     /// Parses the records of one scope from the view whose bytes gave
     /// `digests`.
-    #[rule("rule_catch_up_stores_the_digest_of_parsed_bytes")]
     pub fn scope(
         &self,
         scope: &ScopeId,
