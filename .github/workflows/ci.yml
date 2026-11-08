@@ -1095,9 +1095,10 @@ jobs:
         run: target/debug/provenance check --strict --statements --base "$BASE_SHA" --repo .
 
   # The other jobs give a commit's binary only the state of the same commit.
-  # This job gives the binary of this commit the state of the base commit:
-  # the state that existing repositories hold when the new build ships. A
-  # build that cannot read a stored record fails here, not at the first write.
+  # This job gives the binary of this commit the state of the base commit,
+  # which is the state that existing repositories hold when the new build
+  # ships. A build that cannot read a stored record fails here, not at the
+  # first write.
   base-state-read:
     timeout-minutes: 15
     name: Base state read
