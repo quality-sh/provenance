@@ -27,7 +27,7 @@ provenance-core.workspace = true
 provenance-macros.workspace = true
 provenance-porcelain.workspace = true
 provenance-store = { workspace = true, features = ["host"] }
-provenance-transport = { path = "../provenance-transport", version = "0.4.0" }
+provenance-transport = { path = "../provenance-transport", version = "0.4.0", features = ["host"] }
 serde.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["io-util", "sync", "time"] }

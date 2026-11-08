@@ -7,50 +7,90 @@
 //!
 //! This library does not open a listener. The `provenance-review` crate owns the local review
 //! listener.
+//!
+//! The `host` feature turns on the adapters and the HTTP host. Without it the
+//! crate has the init summary and the ignore-file projection, and it builds for
+//! wasm32-unknown-unknown.
+#[cfg(feature = "host")]
 mod access;
+#[cfg(feature = "host")]
 mod admission;
-#[cfg(test)]
+#[cfg(all(test, feature = "host"))]
 mod admission_tests;
+#[cfg(feature = "host")]
 mod atomic_file;
+#[cfg(feature = "host")]
 pub mod check;
+#[cfg(feature = "host")]
 pub mod coverage;
+#[cfg(feature = "host")]
 pub mod docs;
+#[cfg(feature = "host")]
 mod execution;
+#[cfg(feature = "host")]
 mod failure;
 #[cfg(feature = "test-fixture")]
 pub mod fixture;
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 mod gitignore;
+#[cfg(feature = "host")]
 mod http;
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 mod init_summary;
+#[cfg(feature = "host")]
 mod invocation;
+#[cfg(feature = "host")]
 mod legacy_cleanup;
+#[cfg(feature = "host")]
 mod local;
+#[cfg(feature = "host")]
 pub mod local_host;
+#[cfg(feature = "host")]
 mod onboarding;
+#[cfg(feature = "host")]
 pub mod porcelain;
+#[cfg(feature = "host")]
 pub mod repository;
+#[cfg(feature = "host")]
 mod review_page;
+#[cfg(feature = "host")]
 pub mod reviewer;
+#[cfg(feature = "host")]
 mod routing;
+#[cfg(feature = "host")]
 pub mod skills;
+#[cfg(feature = "host")]
 pub mod snapshot;
+#[cfg(feature = "host")]
 mod ste_onboarding;
+#[cfg(feature = "host")]
 pub use review_page::ReviewPageWrite;
 
+#[cfg(feature = "host")]
 pub use access::{HostAccess, HttpCredential, OpenCredential};
+#[cfg(feature = "host")]
 pub use invocation::Invocation;
+#[cfg(feature = "host")]
 pub use local::{constant_time_eq, LocalAccess};
 
+#[cfg(feature = "host")]
 use execution::Execution;
+#[cfg(feature = "host")]
 use provenance_core::protocol::failure::{ErasedFailure as FailureEnvelope, OperationFailure};
+#[cfg(feature = "host")]
 use serde_json::Value;
+#[cfg(feature = "host")]
 use std::sync::Arc;
+#[cfg(feature = "host")]
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+#[cfg(feature = "host")]
 use tokio_util::sync::CancellationToken;
 
 /// The largest request body that the HTTP adapter reads.
+#[cfg(feature = "host")]
 pub const MAX_BODY_BYTES: usize = 1024 * 1024;
 
+#[cfg(feature = "host")]
 #[derive(Clone)]
 pub struct StatementHost {
     execution: Execution,
@@ -65,6 +105,7 @@ pub struct StatementHost {
     stopping: CancellationToken,
 }
 
+#[cfg(feature = "host")]
 impl Default for StatementHost {
     fn default() -> Self {
         Self {
@@ -82,6 +123,7 @@ impl Default for StatementHost {
     }
 }
 
+#[cfg(feature = "host")]
 impl StatementHost {
     /// Construct Porcelain capabilities with this host's matching adapters.
     pub const fn porcelain(&self) -> porcelain::HostPorcelain<'_> {
