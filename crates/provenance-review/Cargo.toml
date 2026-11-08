@@ -26,7 +26,7 @@ notify = { version = "8.2.0", default-features = false, features = ["macos_fseve
 provenance-core.workspace = true
 provenance-macros.workspace = true
 provenance-porcelain.workspace = true
-provenance-store.workspace = true
+provenance-store = { workspace = true, features = ["host"] }
 provenance-transport = { path = "../provenance-transport", version = "0.3.2" }
 serde.workspace = true
 serde_json.workspace = true

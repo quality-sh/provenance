@@ -13,40 +13,64 @@ publish.workspace = true
 workspace = true
 
 [features]
-schema = ["dep:schemars", "provenance-core/schema", "provenance-ste100/schema"]
+schema = ["dep:schemars", "provenance-core/schema", "provenance-ste100?/schema"]
 test-fixture = []
+# The repository engine and its local-disk mechanics. Without it the crate has
+# the storage port, the memory adapter and canonical digests, and it builds for
+# wasm32-unknown-unknown. Each consumer of the engine turns it on.
+host = [
+    "dep:fs2",
+    "dep:fs_at",
+    "dep:tempfile",
+    "dep:sqlx",
+    "dep:libsqlite3-sys",
+    "dep:tokio",
+    "dep:dunce",
+    "dep:hmac",
+    "dep:base64",
+    "dep:provenance-scanner",
+    "dep:provenance-ste100",
+    "dep:rustix",
+    "dep:windows-sys",
+]
 
 [dependencies]
 time.workspace = true
 schemars = { workspace = true, optional = true }
 anyhow.workspace = true
 camino.workspace = true
-fs2.workspace = true
-fs_at.workspace = true
+fs2 = { workspace = true, optional = true }
+fs_at = { workspace = true, optional = true }
 hex.workspace = true
 provenance-core.workspace = true
 provenance-macros.workspace = true
-provenance-scanner.workspace = true
-provenance-ste100.workspace = true
+provenance-scanner = { workspace = true, optional = true }
+provenance-ste100 = { workspace = true, optional = true }
 serde.workspace = true
 serde_ignored.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
-sqlx.workspace = true
-tempfile.workspace = true
+sqlx = { workspace = true, optional = true }
+tempfile = { workspace = true, optional = true }
 thiserror.workspace = true
-tokio = { workspace = true, features = ["time"] }
+tokio = { workspace = true, features = ["time"], optional = true }
 uuid.workspace = true
-hmac = "0.13"
-base64 = "0.22.1"
-libsqlite3-sys = "0.30.1"
-dunce.workspace = true
+hmac = { version = "0.13", optional = true }
+base64 = { version = "0.22.1", optional = true }
+libsqlite3-sys = { version = "0.30.1", optional = true }
+dunce = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dependencies]
-rustix.workspace = true
+rustix = { workspace = true, optional = true }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys.workspace = true
+windows-sys = { workspace = true, optional = true }
+
+# A wasm host such as a Worker has no system clock or random source of its own;
+# time and uuid reach them through JavaScript.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+time = { workspace = true, features = ["wasm-bindgen"] }
+uuid = { workspace = true, features = ["js"] }
 
 [[test]]
 name = "review_guards"
@@ -57,6 +81,8 @@ name = "discussion_containers"
 required-features = ["test-fixture"]
 
 [dev-dependencies]
+# The tests of the crate run the engine, so they turn on its host feature.
+provenance-store = { workspace = true, features = ["host"] }
 fs_at.workspace = true
 jsonschema.workspace = true
 filetime.workspace = true

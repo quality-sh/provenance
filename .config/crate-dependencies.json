@@ -4,7 +4,8 @@
     "host_feature": "host",
     "crates": [
       "provenance-core",
-      "provenance-porcelain"
+      "provenance-porcelain",
+      "provenance-store"
     ]
   },
   "interface_crates": {
@@ -79,12 +80,42 @@
       "windows-sys"
     ],
     "provenance-store": [
-      "provenance-contract",
-      "provenance-transport",
-      "provenance-cli",
-      "provenance-review",
       "axum",
-      "rmcp"
+      "clap",
+      "dunce",
+      "filetime",
+      "fs2",
+      "fs_at",
+      "hyper",
+      "jsonschema",
+      "libsqlite3-sys",
+      "notify",
+      "open",
+      "provenance-cli",
+      "provenance-codegen",
+      "provenance-contract",
+      "provenance-http-client",
+      "provenance-mcp",
+      "provenance-report",
+      "provenance-review",
+      "provenance-scanner",
+      "provenance-sdk",
+      "provenance-ste100",
+      "provenance-transport",
+      "remove_dir_all",
+      "reqwest",
+      "rmcp",
+      "rustix",
+      "same-file",
+      "sqlx",
+      "tempfile",
+      "tokio",
+      "tokio-tungstenite",
+      "tokio-util",
+      "tower",
+      "ureq",
+      "walkdir",
+      "windows-sys"
     ],
     "provenance-contract": [
       "provenance-transport",
@@ -340,12 +371,14 @@
     },
     "provenance-store": {
       "dependencies": [
+        "provenance-core",
+        "provenance-macros"
+      ],
+      "host-dependencies": [
         "dunce",
         "fs2",
         "fs_at",
         "libsqlite3-sys",
-        "provenance-core",
-        "provenance-macros",
         "provenance-scanner",
         "provenance-ste100",
         "rustix",
@@ -357,7 +390,8 @@
       "dev-dependencies": [
         "filetime",
         "fs_at",
-        "jsonschema"
+        "jsonschema",
+        "provenance-store"
       ]
     },
     "provenance-transport": {

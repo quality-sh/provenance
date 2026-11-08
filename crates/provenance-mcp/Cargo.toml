@@ -34,7 +34,7 @@ futures = "0.3"
 provenance-core.workspace = true
 provenance-macros.workspace = true
 provenance-porcelain.workspace = true
-provenance-store.workspace = true
+provenance-store = { workspace = true, features = ["host"] }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 tower = { version = "0.5", features = ["util"] }

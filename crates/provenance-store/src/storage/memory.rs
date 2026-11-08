@@ -1,16 +1,23 @@
-//! The in-memory adapter, for tests: canonical state as a map of keys to bytes.
+//! The in-memory adapter: canonical state as a map of keys to bytes.
+//!
+//! A host that loads a project into memory, such as a Worker, gives the
+//! adapter a persistence that keeps each write set. Tests use the adapter
+//! with no persistence.
 
 use super::{
-    Atomicity, PublishFailure, Revision, StateKey, StateStorage, StateView, StorageError, WriteSet,
+    Atomicity, PublishFailure, Revision, StateKey, StatePersistence, StateStorage, StateView,
+    StorageError, WriteSet,
 };
+use provenance_macros::rule;
 use std::collections::BTreeMap;
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 
 /// Canonical state in memory. One mutex serializes every call. A set with no
 /// failing key lands whole, which satisfies a per-key set too.
 #[derive(Debug, Default)]
 pub struct MemoryStateStorage {
     state: Mutex<State>,
+    persistence: Option<Arc<dyn StatePersistence>>,
 }
 
 #[derive(Debug, Default)]
@@ -28,6 +35,16 @@ impl MemoryStateStorage {
                 entries,
                 failing: None,
             }),
+            persistence: None,
+        }
+    }
+
+    /// Canonical state loaded from `view`. Each publish gives its write set
+    /// to `persistence` before the set changes the memory.
+    pub fn loaded(view: StateView, persistence: Arc<dyn StatePersistence>) -> Self {
+        Self {
+            persistence: Some(persistence),
+            ..Self::new(view.into_entries())
         }
     }
 
@@ -49,7 +66,9 @@ impl StateStorage for MemoryStateStorage {
 
     /// A per-key set lands its keys in key order up to a failing key; a
     /// whole set lands on a copy that replaces the state only when every key
-    /// landed.
+    /// landed. The persistence keeps the set first; when it refuses the set,
+    /// no key changes.
+    #[rule("rule_memory_storage_persists_each_publish")]
     fn publish(&self, writes: WriteSet) -> Result<Revision, PublishFailure> {
         writes.ensure_disjoint()?;
         let mut state = self.state();
@@ -61,6 +80,9 @@ impl StateStorage for MemoryStateStorage {
                     current,
                 });
             }
+        }
+        if let Some(persistence) = &self.persistence {
+            persistence.persist(&writes)?;
         }
         let failing = state.failing.clone();
         let mut landed = state.entries.clone();

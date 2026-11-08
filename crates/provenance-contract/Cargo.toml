@@ -15,7 +15,7 @@ workspace = true
 [dependencies]
 provenance-core = { workspace = true, features = ["schema"] }
 provenance-macros.workspace = true
-provenance-store = { workspace = true, features = ["schema"] }
+provenance-store = { workspace = true, features = ["host", "schema"] }
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -24,6 +24,6 @@ serde_path_to_error = "=0.1.20"
 [dev-dependencies]
 jsonschema.workspace = true
 provenance-ste100 = { workspace = true, features = ["schema"] }
-provenance-store = { workspace = true, features = ["schema", "test-fixture"] }
+provenance-store = { workspace = true, features = ["host", "schema", "test-fixture"] }
 thiserror.workspace = true
 tokio.workspace = true

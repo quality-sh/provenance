@@ -19,7 +19,7 @@ dunce.workspace = true
 provenance-core.workspace = true
 provenance-macros.workspace = true
 provenance-scanner.workspace = true
-provenance-store.workspace = true
+provenance-store = { workspace = true, features = ["host"] }
 serde.workspace = true
 serde_json.workspace = true
 

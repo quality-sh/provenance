@@ -30,7 +30,7 @@ provenance-contract.workspace = true
 provenance-report.workspace = true
 provenance-scanner.workspace = true
 provenance-ste100.workspace = true
-provenance-store = { workspace = true, features = ["schema"] }
+provenance-store = { workspace = true, features = ["host", "schema"] }
 pulldown-cmark.workspace = true
 remove_dir_all = { workspace = true, optional = true }
 serde_json.workspace = true
