@@ -20,7 +20,7 @@ on:
       - "tools/profile/**"
       - "tools/api-latency/**"
   push:
-    branches: [main]
+    branches: [main, wip/3wii-baseline]
     paths:
       - "**/*.rs"
       - "**/Cargo.toml"
@@ -52,7 +52,7 @@ env:
   FREQUENCY: 1999
   # A main push makes the baseline that later runs compare with. The
   # `<name>-stacks` artifact holds the folded stacks and the flame graphs.
-  ARTIFACT: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'api-profile-baseline' || 'api-profile' }}
+  ARTIFACT: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/wip/3wii-baseline') && 'api-profile-baseline' || 'api-profile' }}
 
 jobs:
   build:
