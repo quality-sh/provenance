@@ -216,17 +216,15 @@ fn read_tree(
         let kind = entry.file_type().map_err(read_error(&path))?;
         if kind.is_dir() && shards::can_hold_canonical_keys(&key) {
             read_tree(&path, &key, entries)?;
-        } else if shards::is_canonical_key(&key) {
-            // A shard that is a link or another entry cannot be read as
-            // canonical state, so the view refuses it instead of leaving
-            // the shard out.
-            if !kind.is_file() {
-                return Err(StorageError::Read(anyhow::anyhow!(
-                    "unsupported state entry: {path}"
-                )));
-            }
+        } else if kind.is_file() && shards::is_canonical_key(&key) {
             let bytes = std::fs::read(&path).map_err(read_error(&path))?;
             entries.insert(StateKey::new(key)?, bytes);
+        } else if !kind.is_dir() && shards::is_canonical_key(&key) {
+            // A link at a shard name cannot be read as canonical state, so
+            // the view refuses it instead of leaving the shard out.
+            return Err(StorageError::Read(anyhow::anyhow!(
+                "unsupported state entry: {path}"
+            )));
         }
     }
     Ok(())

@@ -206,8 +206,8 @@ fn unit_files(
     Ok(files)
 }
 
-/// Collects the canonical files below `dir`, whose key is `prefix`. An
-/// entry at a canonical key that is not a regular file refuses.
+/// Collects the canonical files below `dir`, whose key is `prefix`. A link
+/// at a canonical key refuses, as the view of the local adapter does.
 fn collect(
     dir: &Utf8Path,
     prefix: &str,
