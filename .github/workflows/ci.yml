@@ -1094,6 +1094,69 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: target/debug/provenance check --strict --statements --base "$BASE_SHA" --repo .
 
+  # The other jobs give a commit's binary only the state of the same commit.
+  # This job gives the binary of this commit the state of the base commit:
+  # the state that existing repositories hold when the new build ships. A
+  # build that cannot read a stored record fails here, not at the first write.
+  base-state-read:
+    timeout-minutes: 15
+    name: Base state read
+    needs: [changes, build-cli-linux]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.policy == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: provenance-cli-x86_64-unknown-linux-gnu
+          path: target/debug
+      - run: chmod +x target/debug/provenance
+      # A pull request reads the state of its base commit. A push to main
+      # reads the state before the push. A manual run reads origin/main.
+      # The base commit goes into a separate worktree, so the graph check
+      # finds its archive commits in the base history.
+      - name: Check out the base state
+        id: base
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before || 'origin/main' }}
+          SCRATCH: ${{ runner.temp }}/base-state
+        run: |
+          set -euo pipefail
+          base=$(git rev-parse --verify "$BASE^{commit}")
+          git worktree add --detach "$SCRATCH" "$base"
+          echo "Base commit: $base"
+          echo "State rows: $(find "$SCRATCH/.provenance/state" -name "*.jsonl" -exec cat {} + | wc -l)"
+      - name: Check the base graph with this binary
+        run: target/debug/provenance check --graph --repo "$RUNNER_TEMP/base-state"
+      # Each list route reads one record family. A read fails on a non-zero
+      # exit or on an error envelope in the output.
+      - name: Read each record family of the base state with this binary
+        if: ${{ !cancelled() && steps.base.outcome == 'success' }}
+        env:
+          SCRATCH: ${{ runner.temp }}/base-state
+        run: |
+          set -euo pipefail
+          mapfile -t routes < <(target/debug/provenance api --repo "$SCRATCH" | sed -nE 's|^- GET (/[a-z-]+)$|\1|p')
+          if [[ ${#routes[@]} -eq 0 ]]; then
+            echo "::error::The API catalog gives no list routes."
+            exit 1
+          fi
+          failed=0
+          for route in "${routes[@]}"; do
+            if ! target/debug/provenance api "$route" --repo "$SCRATCH" > "$RUNNER_TEMP/read.json" \
+              || jq -e 'has("error")' "$RUNNER_TEMP/read.json" > /dev/null; then
+              echo "::error::This binary cannot read $route in the base state."
+              head -c 2000 "$RUNNER_TEMP/read.json" || true
+              failed=1
+            else
+              echo "$route: $(jq '.data.items | length' "$RUNNER_TEMP/read.json") items"
+            fi
+          done
+          exit "$failed"
+
   rust-sdk:
     timeout-minutes: 30
     name: Rust SDK example
@@ -1561,6 +1624,7 @@ jobs:
       - crap-quality
       - rule-coverage
       - statement-check
+      - base-state-read
       - rust-sdk
       - typescript-sdk
       - typescript-sdk-example
