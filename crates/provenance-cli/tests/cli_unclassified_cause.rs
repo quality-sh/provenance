@@ -1,10 +1,8 @@
-//! A store failure of no known kind keeps its cause for the operator. Text
-//! mode prints the cause after the refusal object. JSON mode prints only the
-//! safe `write_failed` object, because the cause can hold absolute paths.
-//!
-//! Implementation aid: no Rule covers operator output for a failure of no
-//! known kind yet, so these tests have no Rule binding.
+//! A store failure of no known kind keeps the code `write_failed` or
+//! `read_failed`, and the refusal object gives the cause chain in `cause`.
+//! A path below the repository in the cause is relative to the repository.
 
+use provenance_macros::verifies;
 use serde_json::Value;
 
 mod support {
@@ -12,21 +10,45 @@ mod support {
 }
 use support::review_paths::{create_requirement, json_output, provenance};
 
+const REQUIREMENTS: &str = ".provenance/state/scopes/default/requirements/req.jsonl";
+/// An update changes a staged copy of the state, so the cause names the
+/// staged copy. `<transaction>` stands for the transaction id.
+const REPEATED_MEMBER: &str = ".provenance/cache/import-transactions/<transaction>/staged-repo/\
+    .provenance/state/scopes/default/requirements/req.jsonl line 1: repeated top-level member `extension` cannot survive a typed record change";
+const LEGACY_FIELD: &str = ".provenance/state/scopes/default/requirements/req.jsonl line 1: \
+    record req_a contains legacy field `retired`; canonical JSONL requires record-deletion \
+    migration 026 before this build can read it";
+
+/// Replaces the first requirement row with the output of `change`.
+fn change_requirement_row(directory: &tempfile::TempDir, change: impl FnOnce(&str) -> String) {
+    let path = directory.path().join(REQUIREMENTS);
+    let text = std::fs::read_to_string(&path).unwrap();
+    let row = change(text.lines().next().unwrap());
+    std::fs::write(&path, row + "\n").unwrap();
+}
+
 /// A repository whose requirement row repeats an unknown top-level member, so
 /// that a typed change of the row fails with no known kind.
 fn repeated_member() -> (tempfile::TempDir, String) {
     let (directory, repo) = support::review_paths::init();
     create_requirement(&repo, "req_a");
-    let path = directory
-        .path()
-        .join(".provenance/state/scopes/default/requirements/req.jsonl");
-    let text = std::fs::read_to_string(&path).unwrap();
-    let row = text.lines().next().unwrap();
-    let row = format!(
-        "{},\"extension\":1,\"extension\":2}}\n",
-        row.strip_suffix('}').unwrap()
-    );
-    std::fs::write(&path, row).unwrap();
+    change_requirement_row(&directory, |row| {
+        format!(
+            "{},\"extension\":1,\"extension\":2}}",
+            row.strip_suffix('}').unwrap()
+        )
+    });
+    (directory, repo)
+}
+
+/// A repository whose requirement row holds the removed `retired` field, so
+/// that each read and write of the family fails with no known kind.
+fn legacy_field() -> (tempfile::TempDir, String) {
+    let (directory, repo) = support::review_paths::init();
+    create_requirement(&repo, "req_a");
+    change_requirement_row(&directory, |row| {
+        format!("{},\"retired\":true}}", row.strip_suffix('}').unwrap())
+    });
     (directory, repo)
 }
 
@@ -50,33 +72,102 @@ fn update(repo: &str, json: bool) -> std::process::Output {
     command.output().unwrap()
 }
 
-#[test]
-fn text_mode_prints_the_cause_of_a_write_failure_of_no_known_kind() {
-    let (_directory, repo) = repeated_member();
-    let output = update(&repo, false);
-    let text = String::from_utf8(output.stderr).unwrap();
+/// The refusal object on standard error of a command that exits 1, with or
+/// without the `Error: ` prefix.
+fn refusal(output: &std::process::Output) -> Value {
+    let text = String::from_utf8_lossy(&output.stderr);
     assert_eq!(output.status.code(), Some(1), "{text}");
-    assert!(
-        text.starts_with(r#"Error: {"error":{"kind":"write_failed"},"meta":{}}"#),
-        "{text}"
-    );
-    assert!(text.contains("Caused by:"), "{text}");
-    assert!(
-        text.contains("repeated top-level member `extension`"),
-        "{text}"
-    );
+    let line = text.lines().next().unwrap_or_default();
+    let object = line.strip_prefix("Error: ").unwrap_or(line);
+    serde_json::from_str(object).unwrap_or_else(|error| panic!("{error}: {text}"))
+}
+
+/// `cause` with the transaction id of a staged copy as `<transaction>`.
+fn without_transaction(cause: &str) -> String {
+    const MARKER: &str = "import-transactions/";
+    let Some(at) = cause.find(MARKER).map(|at| at + MARKER.len()) else {
+        return cause.to_owned();
+    };
+    let end = cause[at..].find('/').map_or(cause.len(), |end| at + end);
+    format!("{}<transaction>{}", &cause[..at], &cause[end..])
+}
+
+/// Asserts the code and the exact cause, and that no spelling of the
+/// temporary directory is on standard error or in the cause.
+fn assert_cause(
+    directory: &tempfile::TempDir,
+    output: &std::process::Output,
+    kind: &str,
+    expected: &str,
+) {
+    let refusal = refusal(output);
+    assert_eq!(refusal["error"]["kind"], kind, "{refusal}");
+    let cause = refusal["error"]["cause"].as_str().unwrap_or_default();
+    assert_eq!(without_transaction(cause), expected, "{refusal}");
+    let text = String::from_utf8_lossy(&output.stderr);
+    let canonical = std::fs::canonicalize(directory.path()).unwrap();
+    for root in [directory.path(), canonical.as_path()] {
+        let root = root.to_string_lossy();
+        let plain = root.strip_prefix(r"\\?\").unwrap_or(&root);
+        for spelling in [plain.to_owned(), plain.replace('\\', "/")] {
+            assert!(
+                !text.contains(&spelling) && !cause.contains(&spelling),
+                "{spelling} in {text}"
+            );
+        }
+    }
 }
 
 #[test]
-fn json_mode_keeps_the_cause_out_of_the_write_failure() {
-    let (_directory, repo) = repeated_member();
+#[verifies("rule_unclassified_refusal_gives_cause", examples)]
+fn text_mode_prints_the_cause_of_a_write_failure_of_no_known_kind() {
+    let (directory, repo) = repeated_member();
+    let output = update(&repo, false);
+    let text = String::from_utf8_lossy(&output.stderr).into_owned();
+    assert!(text.starts_with("Error: "), "{text}");
+    assert_eq!(text.lines().count(), 1, "{text}");
+    assert_cause(&directory, &output, "write_failed", REPEATED_MEMBER);
+}
+
+#[test]
+#[verifies("rule_unclassified_refusal_gives_cause", examples)]
+fn json_mode_gives_the_cause_of_a_write_failure_of_no_known_kind() {
+    let (directory, repo) = repeated_member();
     let output = update(&repo, true);
-    let text = String::from_utf8(output.stderr).unwrap();
-    assert_eq!(output.status.code(), Some(1), "{text}");
-    let refusal: Value =
-        serde_json::from_str(&text).unwrap_or_else(|error| panic!("{error}: {text}"));
-    assert_eq!(
-        refusal,
-        serde_json::json!({"error": {"kind": "write_failed"}, "meta": {}})
-    );
+    assert_cause(&directory, &output, "write_failed", REPEATED_MEMBER);
+    let refusal = refusal(&output);
+    assert_eq!(refusal["meta"], serde_json::json!({}), "{refusal}");
+}
+
+#[test]
+#[verifies("rule_unclassified_refusal_gives_cause", examples)]
+fn a_create_gives_the_write_failed_cause_of_a_legacy_field() {
+    let (directory, repo) = legacy_field();
+    let output = provenance()
+        .args([
+            "req_b",
+            "create",
+            "--type",
+            "requirement",
+            "--repo",
+            &repo,
+            "--statement",
+            "The system keeps review feedback available.",
+            "--format",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    assert_cause(&directory, &output, "write_failed", LEGACY_FIELD);
+}
+
+#[test]
+#[verifies("rule_unclassified_refusal_gives_cause", examples)]
+fn an_api_read_gives_the_read_failed_cause_of_a_legacy_field() {
+    let (directory, repo) = legacy_field();
+    let output = provenance()
+        .args(["api", "/requirements/req_a", "--repo", &repo])
+        .output()
+        .unwrap();
+    assert_cause(&directory, &output, "read_failed", LEGACY_FIELD);
 }

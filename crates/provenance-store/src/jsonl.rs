@@ -315,7 +315,7 @@ mod tests {
             .is_some());
         assert!(matches!(
             WriteError(error).safe(),
-            WriteFailure::WriteFailed
+            WriteFailure::WriteFailed { .. }
         ));
     }
 

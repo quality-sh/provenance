@@ -92,8 +92,9 @@ pub enum OperationError<F> {
 
 /// Exact declared failure payload after dispatch, with private response status.
 ///
-/// A failure of no known kind keeps its native cause for the operator. The
-/// cause is never part of the wire answer.
+/// A failure of no known kind keeps its native cause, with absolute paths,
+/// for the host log. The wire answer gives its own `cause` field, with each
+/// state path relative to the state directory.
 #[derive(Debug, Serialize, thiserror::Error)]
 #[error("operation failed")]
 pub struct ErasedFailure {
@@ -134,7 +135,7 @@ impl ErasedFailure {
     pub const fn status_code(&self) -> u16 {
         self.status
     }
-    /// The native cause of a failure of no known kind, for the operator only.
+    /// The native cause of a failure of no known kind, for the host log only.
     pub fn cause(&self) -> Option<&str> {
         self.cause.as_deref()
     }

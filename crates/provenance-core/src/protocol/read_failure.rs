@@ -50,8 +50,11 @@ pub enum ReadFailure {
         line: u64,
         message: String,
     },
-    #[error("read failed")]
-    ReadFailed,
+    /// A read failure of no known kind. `cause` is the display chain of the
+    /// native error. A path below a state directory in it is relative to that
+    /// directory.
+    #[error("read failed: {cause}")]
+    ReadFailed { cause: String },
 }
 
 /// What a cache close was waiting for when its deadline passed.

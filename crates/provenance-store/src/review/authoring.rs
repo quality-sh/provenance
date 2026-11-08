@@ -282,7 +282,7 @@ fn retype_create_error(error: anyhow::Error, duplicate: bool) -> anyhow::Error {
         return error;
     }
     let wrapper = WriteError(error);
-    if matches!(wrapper.safe(), WriteFailure::WriteFailed) {
+    if matches!(wrapper.safe(), WriteFailure::WriteFailed { .. }) {
         return SourceFailure::wrap(
             WriteFailure::AlreadyExists,
             anyhow::anyhow!("requirement already exists"),
