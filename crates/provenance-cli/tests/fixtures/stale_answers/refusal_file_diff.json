@@ -1,0 +1,5 @@
+{
+  "code": 1,
+  "stderr": "Error: {\"error\":{\"cause\":\"git diff failed: fatal: unable to read 7ebdd916e5dc3f74f14245405d87fae8414c0222\",\"kind\":\"read_failed\"},\"meta\":{}}\n",
+  "stdout": null
+}
