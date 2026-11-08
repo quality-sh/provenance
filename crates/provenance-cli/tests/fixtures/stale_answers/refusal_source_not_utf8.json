@@ -1,5 +1,5 @@
 {
   "code": 1,
-  "stderr": "Error: {\"error\":{\"kind\":\"read_failed\"},\"meta\":{}}\n",
+  "stderr": "Error: {\"error\":{\"cause\":\"read blob src/latin1.rs as UTF-8: invalid utf-8 sequence of 1 bytes from index 3\",\"kind\":\"read_failed\"},\"meta\":{}}\n",
   "stdout": null
 }
