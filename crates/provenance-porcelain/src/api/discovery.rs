@@ -234,8 +234,7 @@ impl CatalogSelection {
 pub struct SeeMore {
     pub filter: &'static str,
     pub limit: &'static str,
-    /// A filter that is the method and path of one route, such as
-    /// `--filter "<method> <path>"`.
+    /// A filter that is the method and path of one route, as the interface writes it.
     pub route: &'static str,
 }
 
@@ -255,7 +254,7 @@ impl CatalogAnswer {
     }
 
     /// True when the answer gives the schemas of its route: when it lists one route.
-    fn has_schemas(&self) -> bool {
+    const fn has_schemas(&self) -> bool {
         self.routes.len() == 1
     }
 }

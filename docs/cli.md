@@ -139,8 +139,12 @@ check when it is absent. No update accepts the guard as an `--expected-etag`
 flag or as an `expected_etag` body field.
 
 `provenance api` shows at most 50 routes by default. Use `--filter <text>` to
-select routes or `--limit <number>` to increase the bound. Use `--format json`
-only when you need all request and response schemas.
+select routes or `--limit <number>` to increase the bound. With `--format json`,
+the answer has no default bound. An answer that lists more than one route gives
+the method, path, description, and inputs of each route, and no schemas. To see
+the request and response schemas of one route, give its method and path as the
+filter, for example `provenance api --filter "GET /rules/{id}"`. The text answer
+and the `--format json` answer of one route both give its schemas.
 
 Every catalog result uses `{data,meta}` or `{error,meta}`. Lists put their
 records in `data.items`.
@@ -260,7 +264,9 @@ client thread outside the repository.
 
 `api` is the plumbing tool. It reads and writes, as `provenance api` does: it
 lists the catalog routes when `path` is absent, or calls one route with its
-`method`, `query`, `headers`, and `body`. Its annotations mark it as
+`method`, `query`, `headers`, and `body`. A listing gives at most 50 routes
+without schemas; `{"filter":"GET /rules/{id}"}` gives that one route with its
+request and response schemas, in the structured answer and in the text. Its annotations mark it as
 destructive, not idempotent, and closed-world: a route can change or remove
 data in the repository.
 
