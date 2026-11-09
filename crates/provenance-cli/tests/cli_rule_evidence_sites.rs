@@ -297,9 +297,10 @@ fn evidence_cuts_the_site_lists_at_the_limit() {
     let whole = evidence(repo.path(), "rule_served");
     assert_eq!(whole["meta"]["has_more"], json!(false), "{whole:#}");
 
-    let many: String = (0..60)
+    let many = (0..60)
         .map(|index| format!("#[rule(\"rule_served\")]\nfn serve_{index:02}() {{}}\n"))
-        .collect();
+        .collect::<Vec<_>>()
+        .concat();
     write(repo.path(), "src/many.rs", many);
 
     let cut = evidence(repo.path(), "rule_served");

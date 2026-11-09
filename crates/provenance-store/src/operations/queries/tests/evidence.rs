@@ -101,11 +101,12 @@ impl catalog::ContextResolver for NoRepositoryFiles {
     }
 }
 
-async fn call_without_files<O: catalog::Operation>(
+/// The failure of one call on a host without the repository files.
+async fn refusal_without_files<O: catalog::Operation>(
     store: &TestStore,
     request: serde_json::Value,
-) -> Result<serde_json::Value, provenance_core::protocol::failure::ErasedFailure> {
-    crate::test_support::call::<O, _>(
+) -> provenance_core::protocol::failure::ErasedFailure {
+    let answer = crate::test_support::call::<O, _>(
         json!({
             "context": {"repository": "test", "scope": store.scope.as_str()},
             "request": request
@@ -115,7 +116,11 @@ async fn call_without_files<O: catalog::Operation>(
             store.scope.as_str().to_owned(),
         ))),
     )
-    .await
+    .await;
+    match answer {
+        Ok(answer) => panic!("{} ran without the repository files: {answer}", O::NAME),
+        Err(failure) => failure,
+    }
 }
 
 /// The evidence read scans the working tree as impact does, so a host
@@ -126,18 +131,16 @@ async fn call_without_files<O: catalog::Operation>(
 async fn a_host_without_repository_files_refuses_evidence_as_it_refuses_impact() {
     let store = TestStore::pinned();
 
-    let impact = call_without_files::<catalog::Impact>(
+    let impact = refusal_without_files::<catalog::Impact>(
         &store,
         json!({"id": "rule_overtime_001", "limit": 50}),
     )
-    .await
-    .unwrap_err();
-    let evidence = call_without_files::<catalog::Evidence>(
+    .await;
+    let evidence = refusal_without_files::<catalog::Evidence>(
         &store,
         json!({"rule": "rule_overtime_001", "limit": 50}),
     )
-    .await
-    .expect_err("evidence reads the working tree, so it needs the repository files");
+    .await;
 
     assert_eq!(impact.status_code(), 503);
     assert_eq!(evidence.status_code(), impact.status_code());
