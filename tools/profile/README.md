@@ -56,7 +56,7 @@ graphs). A main push names them `api-profile-baseline` and
 | `summary.md`, `comment.md` | `api-profile` | Yes |
 | `rows/<file>.md`: top functions and the change from the baseline for one row | `api-profile` | Yes |
 | `run/results-<way>.json`: the call times under perf, for reference only | `api-profile` | Yes |
-| `run/windows-<way>.json`, `run/samples-<way>.json`: the call windows and the sample counts | `api-profile` | Yes |
+| `run/windows-<way>.json`, `run/samples-<way>.json`, `run/runner-<way>.json`: the call windows, the sample counts and the runner CPU | `api-profile` | Yes |
 | `rows/<file>.folded`: the collapsed stacks of one row | `api-profile-stacks` | Yes |
 | `rows/<file>.svg`: the flame graph of one row, for a person | `api-profile-stacks` | Yes |
 
@@ -65,8 +65,9 @@ table of the job summary. It is the row label in lower case with a short hash,
 so it is the same in each run.
 
 `profile.json` has `commit`, `head`, `run`, `frequency`, `samples` (the sample
-counts), `limits` (the noise limits), `baselines` (the commit and run of each,
-newest first), `newRows`, `goneRows` and `rows`. Each row has `way`, `call`, `label`,
+counts), `limits` (the noise limits), `runners` (the CPU of each part),
+`baselines` (the commit, run and CPUs of each, newest first), `newRows`,
+`goneRows` and `rows`. Each row has `way`, `call`, `label`,
 `file`, `calls`, `wallMs` (the sum of the call times under perf), `samples`,
 `cpuMsPerCall`, `top.inclusive` and `top.self`
 (the top 25 functions with `share` and `samples`), and `baseline`: null, or
@@ -96,7 +97,7 @@ With the gh CLI:
   of the row.
 - The baseline share of a function is the mean of its share in the newest
   three main baselines (fewer when fewer exist).
-- A change is "over the noise" when it is at least 2 points and at least 3
+- A change is "over the noise" when it is at least 5 points and at least 4
   standard errors (`z`). The standard error is the larger of two values:
   - The error of a count test on the samples, times the square root of the
     row dispersion. The dispersion tells how much more the shares of the row
@@ -112,7 +113,16 @@ With the gh CLI:
 
   With one baseline the dispersion is not known, and the comment says so. With
   3 to 5 calls in a row these errors are estimates, so use `z` as a guide, not
-  as a proof. A row with fewer than 200 samples has a noisy profile; its
+  as a proof. Four runs of the same code, each compared with the other three,
+  gave changes over the noise in 4 to 49 of 744 rows, most in the rows that
+  read after a write. A runner with a different CPU model moves more shares;
+  the header names the CPU of the run and of each baseline.
+- Kernel functions have the suffix `_[k]` (from `inferno-collapse-perf
+  --kernel`). They are in the tables and the flame graphs, but not in the
+  comparison: the memory work of the kernel (page faults, page allocation,
+  cgroup charges) changes with the runner host, not with the code. Their
+  samples still count in the inclusive share of the program functions that
+  call them. A row with fewer than 200 samples has a noisy profile; its
   `rows/<file>.md` tells so. When main changed between the baselines, the
   dispersion of a changed row is larger, so the comparison is more careful.
 - `CPU ms for each call` is the sample count divided by the rate and by the

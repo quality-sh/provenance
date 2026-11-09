@@ -5,9 +5,18 @@
 import { createHash } from 'node:crypto';
 
 /** The smallest change of an inclusive share, in share points, that counts as over the noise. */
-export const MIN_CHANGE = 0.02;
+export const MIN_CHANGE = 0.05;
 /** The smallest change, in standard errors, that counts as over the noise. */
-export const MIN_Z = 3;
+export const MIN_Z = 4;
+
+/**
+ * inferno-collapse-perf --kernel marks kernel functions with this suffix. The
+ * comparison leaves them out: the memory work of the kernel (page faults,
+ * page allocation, cgroup charges) changes with the runner host, not with the
+ * code. Their samples still count in the inclusive share of the program
+ * functions that call them.
+ */
+export const isKernel = name => name.endsWith('_[k]');
 /** A row with fewer samples than this has a noisy profile. */
 export const FEW_SAMPLES = 200;
 
@@ -284,7 +293,7 @@ export function dispersion(bases) {
   if (bases.length < 2) {
     return null;
   }
-  const names = new Set(bases.flatMap(base => [...base.inclusive.keys()]));
+  const names = new Set(bases.flatMap(base => [...base.inclusive.keys()].filter(name => !isKernel(name))));
   let sum = 0;
   let terms = 0;
   for (const name of names) {
@@ -308,12 +317,13 @@ export function dispersion(bases) {
  * - the error of a count test on the samples, times the square root of the
  *   row dispersion (see dispersion), which holds the change from run to run;
  * - the error from the halves of the calls in each run (see splitError).
- * With one baseline the dispersion is not known and counts as 1. A change is
+ * With one baseline the dispersion is not known and counts as 1. Kernel
+ * functions are not compared (see isKernel). A change is
  * over the noise when it is at least MIN_CHANGE and at least MIN_Z standard
  * errors.
  */
 export function compareShares(now, bases, spread = dispersion(bases)) {
-  const names = new Set([now, ...bases].flatMap(counts => [...counts.inclusive.keys()]));
+  const names = new Set([now, ...bases].flatMap(counts => [...counts.inclusive.keys()].filter(name => !isKernel(name))));
   const factor = spread ?? 1;
   const baseTotal = bases.reduce((total, base) => total + base.total, 0);
   const inverse = bases.reduce((total, base) => total + 1 / base.total, 0) / bases.length ** 2;

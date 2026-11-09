@@ -38,6 +38,7 @@ const { values: options } = parseArgs({
     folded: { type: 'string', multiple: true, default: [] },
     windows: { type: 'string', multiple: true, default: [] },
     stats: { type: 'string', multiple: true, default: [] },
+    runner: { type: 'string', multiple: true, default: [] },
     stacks: { type: 'string', default: 'api-profile-stacks' },
     baseline: { type: 'string', multiple: true, default: [] },
     out: { type: 'string', default: 'api-profile' },
@@ -103,7 +104,12 @@ async function loadBaseline(directory) {
       rows.set(row.label, sharesFromCounts(item));
     }
   }
-  return { commit: profile.commit, run: profile.run, rows };
+  return { commit: profile.commit, run: profile.run, cpus: cpus(profile.runners ?? []), rows };
+}
+
+/** The CPU models of the runners of a run. */
+function cpus(runners) {
+  return [...new Set(runners.map(runner => runner.cpu))];
 }
 
 /**
@@ -212,18 +218,18 @@ function header(profile) {
   const lines = [];
   const run = profile.run.url ? `[${profile.run.id}](${profile.run.url})` : 'local';
   const head = profile.head && profile.head !== profile.commit ? ` (pull request head \`${short(profile.head)}\` merged into its base)` : '';
-  lines.push(`Commit \`${short(profile.commit)}\`${head}, run ${run}. ${profile.rows.length} rows, ${profile.samples.kept ?? 'unknown'} samples at ${frequency} Hz.`);
+  lines.push(`Commit \`${short(profile.commit)}\`${head}, run ${run}. ${profile.rows.length} rows, ${profile.samples.kept ?? 'unknown'} samples at ${frequency} Hz. Runner CPU: ${cpus(profile.runners).join('; ') || 'unknown'}.`);
   const bases = profile.baselines;
   if (bases.length) {
-    const list = bases.map(base => `commit \`${short(base.commit)}\` run ${base.run?.url ? `[${base.run.id}](${base.run.url})` : 'unknown'}`).join('; ');
-    lines.push(`Baselines (main, newest first): ${list}. The baseline share is their mean.`);
+    const list = bases.map(base => `commit \`${short(base.commit)}\` run ${base.run?.url ? `[${base.run.id}](${base.run.url})` : 'unknown'} (${base.cpus.join(', ') || 'CPU unknown'})`).join('; ');
+    lines.push(`Baselines (main, newest first): ${list}. The baseline share is their mean. A runner with a different CPU can move shares.`);
     if (bases.length === 1) {
       lines.push('With one baseline, the change from run to run is not known, so part of a change can be runner noise.');
     }
   } else {
     lines.push('Baseline: none found, so this run has no comparison.');
   }
-  lines.push(`Shares are percent of the CPU samples of one row, not milliseconds, because runner speed changes from run to run. A change is over the noise when it is at least ${(MIN_CHANGE * 100).toFixed(1)} points and ${MIN_Z} standard errors; the error includes how much the shares of the row change between the baseline runs.`);
+  lines.push(`Shares are percent of the CPU samples of one row, not milliseconds, because runner speed changes from run to run. A change is over the noise when it is at least ${(MIN_CHANGE * 100).toFixed(1)} points and ${MIN_Z} standard errors; the error includes how much the shares of the row change between the baseline runs. Kernel functions (\`_[k]\`) are not compared.`);
   return lines;
 }
 
@@ -277,6 +283,10 @@ async function main() {
   await mkdir(join(options.out, 'rows'), { recursive: true });
   await mkdir(join(options.stacks, 'rows'), { recursive: true });
   const rowCounts = await splitRows(options.folded, join(options.stacks, 'rows'), new Set(rows.map(row => row.key)));
+  const runners = [];
+  for (const path of options.runner.filter(item => existsSync(item))) {
+    runners.push(await readJson(path));
+  }
   const stats = {};
   for (const path of options.stats.filter(item => existsSync(item))) {
     for (const [name, value] of Object.entries(await readJson(path))) {
@@ -332,7 +342,8 @@ async function main() {
     frequency,
     samples: stats,
     limits: { minChange: MIN_CHANGE, minZ: MIN_Z, fewSamples: FEW_SAMPLES },
-    baselines: baselines.map(baseline => ({ commit: baseline.commit, run: baseline.run })),
+    runners,
+    baselines: baselines.map(baseline => ({ commit: baseline.commit, run: baseline.run, cpus: baseline.cpus })),
     newRows: baselines.length ? outRows.filter(row => !row.baseline).map(row => row.label) : [],
     goneRows: [...new Set(baselines.flatMap(baseline => [...baseline.rows.keys()]))].filter(label => !labels.has(label)),
     rows: outRows,

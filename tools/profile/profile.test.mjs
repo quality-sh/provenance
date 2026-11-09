@@ -96,13 +96,16 @@ test('inclusive shares count a function once for each sample, self shares count 
 
 test('a share change is over the noise only when it is large and many standard errors', () => {
   const base = shares([{ frames: ['main', 'a'], count: 500 }, { frames: ['main', 'b'], count: 500 }]);
-  const grown = shares([{ frames: ['main', 'a'], count: 700 }, { frames: ['main', 'b'], count: 300 }]);
+  const grown = shares([{ frames: ['main', 'a'], count: 700 }, { frames: ['main', 'b'], count: 300 }, { frames: ['main', 'b', 'do_fault_[k]'], count: 1 }]);
   const changes = compareShares(grown, [base]);
   const a = changes.find(item => item.function === 'a');
-  assert.ok(Math.abs(a.change - 0.2) < 1e-9);
+  assert.ok(Math.abs(a.change - 0.2) < 1e-3);
   assert.ok(a.z > 3);
   assert.equal(a.overNoise, true);
   assert.equal(changes.find(item => item.function === 'main').overNoise, false);
+  assert.equal(changes.find(item => item.function === 'do_fault_[k]'), undefined, 'kernel functions are not compared');
+  const tiny = compareShares(shares([{ frames: ['a'], count: 530 }, { frames: ['b'], count: 470 }]), [shares([{ frames: ['a'], count: 500 }, { frames: ['b'], count: 500 }])]);
+  assert.equal(tiny.find(item => item.function === 'a').overNoise, false, 'a 3 point change is under MIN_CHANGE');
   const small = compareShares(shares([{ frames: ['a'], count: 6 }, { frames: ['b'], count: 4 }]), [shares([{ frames: ['a'], count: 5 }, { frames: ['b'], count: 5 }])]);
   assert.equal(small.find(item => item.function === 'a').overNoise, false);
   const { grew, shrank } = largestChanges(changes, 1);
@@ -154,6 +157,6 @@ test('the baselines give the dispersion of a row, and a change within it is in t
   assert.ok(Math.abs(wide.change - 0.15) < 1e-9);
   assert.equal(wide.overNoise, false);
   // The same change over steady baselines is over the noise.
-  const steady = compareShares(run(0.65), [run(0.5), run(0.5), run(0.51)]).find(item => item.function === 'a');
+  const steady = compareShares(run(0.70), [run(0.5), run(0.5), run(0.51)]).find(item => item.function === 'a');
   assert.equal(steady.overNoise, true);
 });
