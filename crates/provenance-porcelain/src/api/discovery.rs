@@ -32,10 +32,12 @@ pub struct CatalogAnswer {
     pub bounds: CatalogBounds,
 }
 
-/// The JSON form of one catalog answer. When the answer lists one route, the route has
-/// its request and response schemas. When it lists more routes, each route has its
-/// method, path, description, and inputs, and no schemas, so that a reader that takes
-/// the whole answer at once can read a long list.
+/// The JSON form of one catalog answer.
+///
+/// When the answer lists one route, the route has its request and response schemas.
+/// When it lists more routes, each route has its method, path, description, and
+/// inputs, and no schemas, so that a reader that takes the whole answer at once can
+/// read a long list.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
 pub struct CatalogListing {
     pub routes: Vec<ListedRoute>,

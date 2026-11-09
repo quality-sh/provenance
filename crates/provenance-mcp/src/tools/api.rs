@@ -38,9 +38,10 @@ pub fn lowercase_method(arguments: &mut Map<String, Value>) {
 }
 
 /// Parse one api tool call's structured arguments and run the shared action,
-/// so MCP callers select the same paths, methods, and bodies as the CLI. The catalog
-/// answer is bounded as the CLI text answer is, because the client reads it whole, and
-/// it has schemas only when it lists one route.
+/// so MCP callers select the same paths, methods, and bodies as the CLI.
+///
+/// The catalog answer is bounded as the CLI text answer is, because the client reads
+/// it whole, and it has schemas only when it lists one route.
 #[provenance_macros::rule("rule_porcelain_mcp_api_arguments")]
 pub async fn call(host: &StatementHost, arguments: Map<String, Value>) -> CallToolResult {
     let Ok(parsed) = serde_json::from_value::<ApiArguments>(Value::Object(arguments.clone()))
