@@ -12,11 +12,14 @@ scope. Queries use GET parameters on the owning path. HTTP and MCP use the same
 response envelope. Lists return records in `data.items`. A queue refusal never
 returns a partial list as a complete answer.
 
-Evidence without a base reads verification runs but does not request Git.
-A head without a base retains this behavior. A base adds canonical evidence and
-Git. Live stamp words retain their separate meanings. Scans do not create
-canonical bindings. Each evidence collection keeps its own cut flag; the impact
-scan has a separate `scan_cut` flag.
+Evidence without a base reads verification runs and the repository files but
+does not request Git. A head without a base retains this behavior. A base adds
+canonical evidence and Git. Evidence and impact both request the repository
+files for their scan, so a host without them refuses both. Live stamp words
+retain their separate meanings. Scans do not create canonical bindings. Each
+evidence record collection keeps its own cut flag; the two site lists stop at
+the same limit and set `has_more`. Impact and evidence both have a separate
+`scan_cut` flag for their scan.
 
 ## Held source files
 

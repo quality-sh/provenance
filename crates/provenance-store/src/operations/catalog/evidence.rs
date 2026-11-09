@@ -60,6 +60,7 @@ const fn evidence_needs(request: &protocol::EvidenceQuery) -> ExecutionNeeds {
             ExecutionNeed::GraphStorage,
             ExecutionNeed::ProjectionMaintenance,
             ExecutionNeed::RunStorage,
+            ExecutionNeed::RepositoryFiles,
             ExecutionNeed::Git,
         ]
     } else {
@@ -67,6 +68,7 @@ const fn evidence_needs(request: &protocol::EvidenceQuery) -> ExecutionNeeds {
             ExecutionNeed::GraphStorage,
             ExecutionNeed::ProjectionMaintenance,
             ExecutionNeed::RunStorage,
+            ExecutionNeed::RepositoryFiles,
         ]
     }
 }
