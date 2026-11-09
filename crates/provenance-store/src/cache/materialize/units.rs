@@ -265,14 +265,10 @@ fn unit_files(
         Unit::Scope(scope) => {
             let key = format!("scopes/{}", scope.as_str());
             // Component joins keep the native spelling of the paths on Windows.
-            let root = state_dir.join("scopes").join(scope.as_str());
-            match std::fs::symlink_metadata(&root) {
-                Ok(metadata) if metadata.is_dir() => collect(&root, &key, false, &mut files)?,
-                // The view leaves out a file at the scope directory.
-                Ok(metadata) if metadata.is_file() => {}
-                Ok(_) => return Err(unsupported(&root)),
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => return Err(UnitHashError::at(&root, error)),
+            let scopes = state_dir.join("scopes");
+            let root = scopes.join(scope.as_str());
+            if is_directory(&scopes)? && is_directory(&root)? {
+                collect(&root, &key, false, &mut files)?;
             }
         }
     }
@@ -280,11 +276,24 @@ fn unit_files(
     Ok(files)
 }
 
+/// Whether the entry at `path`, a directory that can hold canonical keys,
+/// is a directory. A missing entry holds no keys; any other entry refuses,
+/// as the view refuses it.
+fn is_directory(path: &Utf8Path) -> Result<bool, UnitHashError> {
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.is_dir() => Ok(true),
+        Ok(_) => Err(unsupported(path)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(UnitHashError::at(path, error)),
+    }
+}
+
 /// Collects the canonical files below `dir`, whose key is `prefix`, as the
 /// view of the local adapter reads them: it leaves out a name that is not
 /// UTF-8 and any entry that cannot hold or be canonical state. An entry
-/// that is not a directory or a regular file refuses where the view keeps
-/// a shard or enters a directory.
+/// that is not a directory refuses where the view enters a directory, and
+/// an entry that is not a regular file refuses where the view keeps a
+/// shard.
 fn collect(
     dir: &Utf8Path,
     prefix: &str,
@@ -305,18 +314,15 @@ fn collect(
         let file_type = entry
             .file_type()
             .map_err(|error| UnitHashError::at(&path, error))?;
+        let holds_keys = crate::shards::can_hold_canonical_keys(&key);
         if file_type.is_dir() {
-            if !(skip_scopes && key == "scopes") && crate::shards::can_hold_canonical_keys(&key) {
+            if holds_keys && !(skip_scopes && key == "scopes") {
                 collect(&path, &key, skip_scopes, out)?;
             }
-        } else if file_type.is_file() {
-            if crate::shards::is_canonical_key(&key) {
-                out.push((key, path));
-            }
-        } else if crate::shards::is_canonical_key(&key)
-            || crate::shards::can_hold_canonical_keys(&key)
-        {
+        } else if holds_keys || (!file_type.is_file() && crate::shards::is_canonical_key(&key)) {
             return Err(unsupported(&path));
+        } else if file_type.is_file() && crate::shards::is_canonical_key(&key) {
+            out.push((key, path));
         }
     }
     Ok(())
