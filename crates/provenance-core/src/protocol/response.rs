@@ -129,12 +129,33 @@ pub struct StaleEvidence {
 pub struct EvidenceResult {
     pub rule_id: String,
     pub limit: usize,
+    /// A list of this answer stopped at `limit`: one of the four lists
+    /// that carry their own flag, or `implementations` or `verifications`.
     pub has_more: bool,
-    /// The typed implementation bindings that a spec declares. The
-    /// `#[rule]` attributes in the code are in `implementation_sites`.
+    /// Each place in the code that implements the Rule, with the same
+    /// name and item shape as `affected_rules[].implementations` in the
+    /// impact answer: the `#[rule]` attributes from the working-tree scan
+    /// and the typed bindings of `implementation_bindings`. An empty list
+    /// with `scan_cut` false means no code implements the Rule.
+    #[serde(default)]
+    pub implementations: Vec<ImplementationSite>,
+    /// Each place in the code that verifies the Rule, with the same name
+    /// and item shape as `affected_rules[].verifications` in the impact
+    /// answer: the `#[verifies]` attributes from the working-tree scan and
+    /// the typed bindings of `verification_bindings`.
+    #[serde(default)]
+    pub verifications: Vec<VerificationSite>,
+    /// The working-tree scan stopped at the configured file count, so
+    /// `implementations` and `verifications` are a lower bound.
+    #[serde(default)]
+    pub scan_cut: bool,
+    /// Only the implementation records that a typed spec declares. The
+    /// `#[rule]` attributes are not in this list, so an empty list does not
+    /// mean that the Rule has no code: read `implementations`.
     pub implementation_bindings: Vec<ImplementationBinding>,
-    /// The typed verification bindings that a spec or a run declares. The
-    /// `#[verifies]` attributes in the code are in `verification_sites`.
+    /// Only the verification records that a typed spec or a run declares.
+    /// The `#[verifies]` attributes are not in this list: read
+    /// `verifications`.
     pub verification_bindings: Vec<VerificationBinding>,
     pub verification_runs: Vec<VerificationRun>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -142,7 +163,8 @@ pub struct EvidenceResult {
     pub review_required: bool,
     pub reviews: Vec<RequirementReview>,
     pub stale: Option<StaleEvidence>,
-    /// The cut flag of each list; `has_more` is the OR of the four.
+    /// The cut flag of each list; `has_more` is the OR of the four and of
+    /// the cuts of `implementations` and `verifications`.
     #[serde(default)]
     pub implementation_bindings_has_more: bool,
     #[serde(default)]
@@ -151,20 +173,6 @@ pub struct EvidenceResult {
     pub verification_runs_has_more: bool,
     #[serde(default)]
     pub reviews_has_more: bool,
-    /// Each place in the code that implements the Rule: the `#[rule]`
-    /// attributes from the working-tree scan and the typed bindings of
-    /// this answer, as impact gives them.
-    #[serde(default)]
-    pub implementation_sites: Vec<ImplementationSite>,
-    /// Each place in the code that verifies the Rule: the `#[verifies]`
-    /// attributes from the working-tree scan and the typed bindings of
-    /// this answer, as impact gives them.
-    #[serde(default)]
-    pub verification_sites: Vec<VerificationSite>,
-    /// The working-tree scan stopped at the configured file count, so the
-    /// scanned sites are a lower bound.
-    #[serde(default)]
-    pub scan_cut: bool,
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

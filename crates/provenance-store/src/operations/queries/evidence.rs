@@ -8,14 +8,16 @@ use super::super::sites;
 /// Everything standing behind one Rule, kept apart by kind.
 ///
 /// Implementation bindings, verification bindings, and open reviews come
-/// from the projection; verification runs stay cache JSONL. The site
-/// lists add the `#[rule]` and `#[verifies]` attributes from the
-/// working-tree scan to the typed bindings of the page, as impact does,
-/// and `scan_cut` says when that scan stopped short. Review
-/// required says the Requirement was restated; stale says the code
-/// carrying the evidence changed, and it is read from a diff the caller
-/// names. Each of the four lists carries its own cut flag beside the
-/// top-level `has_more`, which stays the OR of the four.
+/// from the projection; verification runs stay cache JSONL.
+/// `implementations` and `verifications` add the `#[rule]` and
+/// `#[verifies]` attributes from the working-tree scan to the typed
+/// bindings of the page, as impact does, and `scan_cut` says when that
+/// scan stopped short. Review required says the Requirement was restated;
+/// stale says the code carrying the evidence changed, and it is read from
+/// a diff the caller names. Each of the four record lists carries its own
+/// cut flag beside the top-level `has_more`. The two site lists stop at
+/// the same limit and have no flag of their own, so `has_more` is the OR
+/// of the four flags and of the two site cuts.
 #[rule("rule_evidence_flags_each_cut_list")]
 #[rule("rule_evidence_gives_scanned_sites")]
 pub(super) async fn evidence(
@@ -83,13 +85,20 @@ pub(super) async fn evidence(
         implementations: &implementation_bindings,
     }
     .affected_rule(ctx.repo(), rule);
+    let (implementations, implementations_cut) = take_page(sites.implementations, request.limit);
+    let (verifications, verifications_cut) = take_page(sites.verifications, request.limit);
     Ok(EvidenceResult {
         rule_id: request.rule,
         limit: request.limit,
         has_more: implementation_bindings_has_more
             || verification_bindings_has_more
             || verification_runs_has_more
-            || reviews_has_more,
+            || reviews_has_more
+            || implementations_cut
+            || verifications_cut,
+        implementations,
+        verifications,
+        scan_cut,
         implementation_bindings,
         verification_bindings,
         verification_runs,
@@ -101,8 +110,5 @@ pub(super) async fn evidence(
         verification_bindings_has_more,
         verification_runs_has_more,
         reviews_has_more,
-        implementation_sites: sites.implementations,
-        verification_sites: sites.verifications,
-        scan_cut,
     })
 }

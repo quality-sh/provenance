@@ -39,8 +39,8 @@ const ADDITIVE_FIELDS: [&str; 10] = [
     "reviews_has_more",
     "scan_cut",
     "matches",
-    "implementation_sites",
-    "verification_sites",
+    "implementations",
+    "verifications",
 ];
 
 pub fn strip_additive(value: &mut Value) {
