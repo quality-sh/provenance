@@ -81,7 +81,10 @@ async fn mcp_catalog_reports_the_routes_and_bounds_of_the_cli() {
         .await;
     let text = limited["content"][0]["text"].as_str().unwrap();
     assert!(
-        text.ends_with("Use {\"filter\":\"<text>\"} or {\"limit\":<number>} to see more."),
+        text.ends_with(concat!(
+            "Use {\"filter\":\"<text>\"} or {\"limit\":<number>} to see more.\n",
+            "Use {\"filter\":\"<method> <path>\"} to see the schemas of one route."
+        )),
         "{text}"
     );
 
@@ -98,7 +101,12 @@ async fn mcp_catalog_reports_the_routes_and_bounds_of_the_cli() {
     );
     let text = unlimited["content"][0]["text"].as_str().unwrap();
     assert!(text.starts_with("api routes: 50\n"), "{text}");
-    assert!(text.ends_with("to see more."), "{text}");
+    assert!(
+        text.ends_with(
+            "to see more.\nUse {\"filter\":\"<method> <path>\"} to see the schemas of one route."
+        ),
+        "{text}"
+    );
 
     client.cancel().await.unwrap();
     assert!(child.wait().await.unwrap().success());

@@ -298,18 +298,29 @@ fn api_discovery_describes_the_live_catalog() {
         "{readable}"
     );
     assert!(
-        readable
-            .trim_end()
-            .ends_with("Use --format json for all schemas."),
+        readable.trim_end().ends_with(
+            "Use --filter \"<method> <path>\" --format json to see the schemas of one route."
+        ),
         "{readable}"
     );
 
-    let structured = json(&["api", "--repo", &repo, "--format", "json"]);
+    let structured = json(&[
+        "api",
+        "--repo",
+        &repo,
+        "--filter",
+        "GET /sources/{id}",
+        "--format",
+        "json",
+    ]);
     let routes = structured["routes"].as_array().unwrap();
-    let member = routes
-        .iter()
-        .find(|route| route["path"] == "/sources/{id}" && route["method"] == "get")
-        .expect("the source member route is described");
+    let [member] = routes.as_slice() else {
+        panic!("the filter selects the source member route: {structured}");
+    };
+    assert_eq!(
+        (&member["method"], &member["path"]),
+        (&json!("get"), &json!("/sources/{id}"))
+    );
     let forms = member["queries"].as_array().unwrap();
     assert_ne!(forms.as_slice(), [] as [serde_json::Value; 0]);
     let base = forms

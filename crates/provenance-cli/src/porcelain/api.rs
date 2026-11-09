@@ -8,8 +8,12 @@ const SEE_MORE: SeeMore = SeeMore {
     limit: "--limit <number>",
 };
 
+/// How to see the schemas of one route.
+const SCHEMAS: &str =
+    "Use --filter \"<method> <path>\" --format json to see the schemas of one route.";
+
 /// Runs one API action with the selected context. JSON gives each selected route with
-/// the bounds; text gives the bounded summary.
+/// the bounds, and the schemas when it gives one route; text gives the bounded summary.
 #[provenance_macros::rule("rule_porcelain_api_uses_context")]
 pub async fn dispatch_api(
     repo: &str,
@@ -30,7 +34,7 @@ pub async fn dispatch_api(
                 "{}",
                 render_discovery_readable(&selection.bounded(), SEE_MORE)
             );
-            println!("Use --format json for all schemas.");
+            println!("{SCHEMAS}");
         }
         Ok(ApiOutcome::Invoked(value)) => println!("{}", serde_json::to_string_pretty(&value)?),
         Err(error) => anyhow::bail!("{}", serde_json::to_string(&error.failure)?),

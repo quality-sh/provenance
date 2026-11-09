@@ -1,4 +1,4 @@
-Call one public API path with an optional method, query, headers, and JSON body. The body is the data object, without the HTTP {"data": ...} wrapper. Omit the path to list the catalog routes with their methods, inputs, and response schemas.
+Call one public API path with an optional method, query, headers, and JSON body. The body is the data object, without the HTTP {"data": ...} wrapper. Omit the path to list the catalog routes with their methods and inputs. A filter that is the method and path of one route, such as GET /rules, gives the request and response schemas of that route.
 
 Usage: provenance [OPTIONS] <COMMAND> [PATH]
 

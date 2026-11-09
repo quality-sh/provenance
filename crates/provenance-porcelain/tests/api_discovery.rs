@@ -150,3 +150,78 @@ fn readable_discovery_lists_routes_with_their_inputs() {
         "{limited}"
     );
 }
+
+#[tokio::test]
+#[verifies("rule_api_catalog_filter_selects_one_route", examples)]
+async fn a_filter_that_is_the_method_and_path_of_one_route_selects_only_that_route() {
+    let paths = |selection: CatalogSelection| {
+        selection
+            .complete()
+            .routes
+            .into_iter()
+            .map(|route| route.path)
+            .collect::<Vec<_>>()
+    };
+    // The filter "get /r1" is also a part of "get /r10" to "get /r19".
+    assert_eq!(paths(discover(20, Some("GET /r1"), None).await), ["/r1"]);
+    assert_eq!(paths(discover(20, Some("get /R1"), None).await), ["/r1"]);
+    // Without a route of that method and path, the filter selects each route that
+    // contains it.
+    assert_eq!(paths(discover(20, Some("/r1"), None).await).len(), 11);
+    assert_eq!(paths(discover(20, Some("post /r1"), None).await).len(), 0);
+}
+
+#[test]
+#[verifies("rule_api_catalog_schemas_only_for_one_route", examples)]
+fn the_json_form_has_schemas_only_when_the_answer_lists_one_route() {
+    let mut member = route(ApiMethod::Get, "/sources/{id}", "Read one source.", None);
+    member.queries[0].parameters = vec![parameter("id", "path", true)];
+    let create = route(
+        ApiMethod::Post,
+        "/sources",
+        "Create one source.",
+        Some(json!({"type": "object"})),
+    );
+    let catalog = ApiCatalog {
+        routes: vec![member, create],
+    };
+
+    let listing = serde_json::to_value(catalog.clone().select(None, None).complete()).unwrap();
+    assert_eq!(
+        listing["routes"],
+        json!([
+            {
+                "method": "get",
+                "path": "/sources/{id}",
+                "description": "Read one source.",
+                "queries": [{
+                    "query": null,
+                    "parameters": [{"name": "id", "location": "path", "required": true}],
+                }],
+            },
+            {
+                "method": "post",
+                "path": "/sources",
+                "description": "Create one source.",
+                "queries": [{"query": null, "parameters": []}],
+            },
+        ])
+    );
+
+    let one = serde_json::to_value(catalog.select(Some("POST /sources"), None).complete()).unwrap();
+    assert_eq!(
+        one["routes"],
+        json!([{
+            "method": "post",
+            "path": "/sources",
+            "description": "Create one source.",
+            "request_schema": {"type": "object"},
+            "queries": [{
+                "query": null,
+                "parameters": [],
+                "success_schema": {"type": "object"},
+                "failure_schema": {"type": "object"},
+            }],
+        }])
+    );
+}

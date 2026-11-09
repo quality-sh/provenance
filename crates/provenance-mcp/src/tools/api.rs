@@ -27,6 +27,9 @@ const SEE_MORE: SeeMore = SeeMore {
     limit: "{\"limit\":<number>}",
 };
 
+/// How to see the schemas of one route, for an answer that lists more routes.
+const SCHEMAS: &str = "Use {\"filter\":\"<method> <path>\"} to see the schemas of one route.";
+
 /// The method of an api call in lower case, as the schema gives it.
 pub fn lowercase_method(arguments: &mut Map<String, Value>) {
     if let Some(Value::String(method)) = arguments.get_mut("method") {
@@ -36,7 +39,8 @@ pub fn lowercase_method(arguments: &mut Map<String, Value>) {
 
 /// Parse one api tool call's structured arguments and run the shared action,
 /// so MCP callers select the same paths, methods, and bodies as the CLI. The catalog
-/// answer is bounded as the CLI text answer is, because the client reads it whole.
+/// answer is bounded as the CLI text answer is, because the client reads it whole, and
+/// it has schemas only when it lists one route.
 #[provenance_macros::rule("rule_porcelain_mcp_api_arguments")]
 pub async fn call(host: &StatementHost, arguments: Map<String, Value>) -> CallToolResult {
     let Ok(parsed) = serde_json::from_value::<ApiArguments>(Value::Object(arguments.clone()))
@@ -52,11 +56,14 @@ pub async fn call(host: &StatementHost, arguments: Map<String, Value>) -> CallTo
     match host.porcelain().api().execute_api(request).await {
         Ok(ApiOutcome::Catalog(selection)) => {
             let answer = selection.bounded();
+            let mut text = render_discovery_readable(&answer, SEE_MORE);
+            if answer.routes.len() > 1 {
+                text.push('\n');
+                text.push_str(SCHEMAS);
+            }
             let mut result =
                 CallToolResult::structured(serde_json::to_value(&answer).expect("catalog is JSON"));
-            result.content = vec![ContentBlock::text(render_discovery_readable(
-                &answer, SEE_MORE,
-            ))];
+            result.content = vec![ContentBlock::text(text)];
             result
         }
         Ok(ApiOutcome::Invoked(value)) => CallToolResult::structured(value),

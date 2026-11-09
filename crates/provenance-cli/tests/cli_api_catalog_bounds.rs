@@ -44,7 +44,8 @@ fn bounds(repo: &str, flags: &[&str]) -> Value {
 }
 
 const MORE: &str = "Use --filter <text> or --limit <number> to see more.";
-const SCHEMAS: &str = "Use --format json for all schemas.";
+const SCHEMAS: &str =
+    "Use --filter \"<method> <path>\" --format json to see the schemas of one route.";
 
 /// The route count line, the number of route lines, and the lines after the routes.
 fn text(repo: &str, flags: &[&str]) -> (String, usize, Vec<String>) {
