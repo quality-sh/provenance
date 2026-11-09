@@ -21,6 +21,7 @@ fn options(actor: &str) -> InitOptions {
 /// A reader holds the publication lock. A second init must not change the
 /// manifest until the reader releases the lock; then it lands.
 #[test]
+#[provenance_macros::verifies("rule_init_reads_get_whole_state", examples)]
 fn second_init_waits_for_the_publication_lock() {
     let directory = tempfile::tempdir().unwrap();
     let repo = Utf8PathBuf::from_path_buf(directory.path().join("repo")).unwrap();
@@ -40,8 +41,8 @@ fn second_init_waits_for_the_publication_lock() {
             let _ = done_sender.send(());
             result
         });
-        // Without the lock, init lands in milliseconds; this bound only makes a wrong
-        // result show. A correct init still waits when the bound ends.
+        // An init that ignores the lock ends in milliseconds. A correct init still
+        // waits when this bound ends.
         let finished = done.recv_timeout(Duration::from_secs(2)).is_ok();
         let during = std::fs::read(layout.manifest_path())?;
         Ok((writer, finished, during))

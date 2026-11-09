@@ -284,6 +284,7 @@ fn build_summary(
 
 impl InitPlan {
     #[rule("rule_init_apply_rolls_back_owned_changes")]
+    #[rule("rule_init_reads_get_whole_state")]
     pub(super) fn apply(self) -> anyhow::Result<InitEnding> {
         let layout = ProvenanceLayout::new(self.path.clone());
         // Replacing a file under `.provenance/state` moves the old file away before the new
