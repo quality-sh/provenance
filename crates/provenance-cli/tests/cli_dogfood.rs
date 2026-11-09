@@ -134,6 +134,43 @@ fn note_accepts_any_known_subcommand_as_surface() {
         .success();
 }
 
+/// Implementation aid: no Rule in the graph owns the dogfood surface names. The test
+/// pins that a note can name each command that a user can type: a root word, a
+/// record-id action, `api`, and `general`.
+#[test]
+fn note_accepts_each_command_that_a_user_can_type_as_surface() {
+    for surface in [
+        "api",
+        "get",
+        "search",
+        "trace",
+        "create",
+        "discussions",
+        "reply",
+        "review",
+        "general",
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        note_cmd(temp.path())
+            .args([
+                "dogfood",
+                "note",
+                "--surface",
+                surface,
+                "--category",
+                "bug",
+                "--severity",
+                "annoyance",
+                "--detail",
+                "a note about one command",
+                "one command has a problem",
+            ])
+            .assert()
+            .success();
+        assert_eq!(read_spool(temp.path())[0]["surface"], surface);
+    }
+}
+
 #[test]
 fn note_rejects_unknown_surface_and_lists_valid_ones() {
     let temp = tempfile::tempdir().unwrap();
@@ -151,8 +188,11 @@ fn note_rejects_unknown_surface_and_lists_valid_ones() {
             "whatever",
         ])
         .assert()
-        .failure()
+        .code(1)
+        .stderr(predicates::str::contains("unknown surface `not-a-real-surface`"))
         .stderr(predicates::str::contains("prime"))
+        .stderr(predicates::str::contains("api"))
+        .stderr(predicates::str::contains("trace"))
         .stderr(predicates::str::contains("general"));
 
     assert!(!temp.path().join("notes.jsonl").exists());
