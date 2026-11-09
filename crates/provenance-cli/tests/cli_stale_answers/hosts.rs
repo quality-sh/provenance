@@ -200,7 +200,7 @@ async fn warm_hosts_follow_head(prepare: Move, change: Move) {
             .as_array()
             .unwrap()
             .iter()
-            .any(|site| site["subject_id"] == "rule_kept"),
+            .any(|site| site["subject_id"] == "rule_kept" && site["line"] == 3),
         "{cli}"
     );
     let by_http = http_get(&host, "/rules", &query);
@@ -211,11 +211,13 @@ async fn warm_hosts_follow_head(prepare: Move, change: Move) {
     mcp.stop().await;
 }
 
+/// Moves the `rule_kept` binding down two lines and changes its body, so
+/// that the site line comes from the scan of the new head.
 fn change_kept(fixture: &Fixture) {
     write(
         fixture.path(),
         "src/kept.rs",
-        function("rule_kept", "kept", "5"),
+        format!("fn first() {{}}\n\n{}", function("rule_kept", "kept", "5")),
     );
 }
 
