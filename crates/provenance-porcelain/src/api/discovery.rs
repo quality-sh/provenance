@@ -44,8 +44,8 @@ pub struct CatalogListing {
     pub bounds: CatalogBounds,
 }
 
-/// One route of a [`CatalogListing`]. The schemas are present only when the listing
-/// has one route.
+/// One route of a catalog listing. The schemas are present only when the listing has
+/// one route.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
 pub struct ListedRoute {
     pub method: ApiMethod,
@@ -58,7 +58,7 @@ pub struct ListedRoute {
     pub queries: Vec<ListedQuery>,
 }
 
-/// One `query` form of a [`ListedRoute`].
+/// One `query` form of a listed route.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
 pub struct ListedQuery {
     pub query: Option<String>,
@@ -69,7 +69,7 @@ pub struct ListedQuery {
     pub failure_schema: Option<Value>,
 }
 
-/// One parameter of a [`ListedQuery`].
+/// One parameter of a listed `query` form.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
 pub struct ListedParameter {
     pub name: String,
