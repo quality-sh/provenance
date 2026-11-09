@@ -137,7 +137,7 @@ fn each_case_gives_the_recorded_answer() {
 /// follows a range that held the same blobs or the same tree, gives the
 /// answer of a new process each time.
 #[tokio::test(flavor = "multi_thread")]
-#[verifies("rule_gate_reports_without_review", examples)]
+#[verifies("rule_kept_scans_match_new_process", examples)]
 async fn one_process_gives_the_answers_of_new_processes() {
     let cases = cases();
     let repository = Repository::open(cases.path(), "default").unwrap();

@@ -4,6 +4,7 @@
 
 use super::*;
 use crate::stale::git::batch_tests::git;
+use provenance_macros::verifies;
 
 fn source(index: usize, body: u32) -> String {
     format!("#[rule(\"rule_{index}\")]\nfn item_{index}() -> u32 {{\n    {body}\n}}\n")
@@ -120,21 +121,13 @@ fn a_repeated_range_uses_the_kept_scans_and_a_new_range_replaces_them() {
 }
 
 #[test]
+#[verifies("rule_kept_scans_match_new_process", examples)]
 fn clones_of_an_open_share_the_kept_scans_and_another_open_does_not() {
     use crate::layout::ProvenanceLayout;
     use crate::repository::Repository;
-    use provenance_core::{Manifest, RepoPathPrefix, ScopeId};
     let (dir, base, head) = range();
     let root = Utf8Path::from_path(dir.path()).unwrap();
-    let layout = ProvenanceLayout::new(root.as_str());
-    std::fs::create_dir_all(layout.state_dir()).unwrap();
-    let manifest =
-        Manifest::default_with_scope(ScopeId::new("default").unwrap(), RepoPathPrefix::new("."));
-    std::fs::write(
-        layout.manifest_path(),
-        serde_json::to_vec(&manifest).unwrap(),
-    )
-    .unwrap();
+    crate::test_support::initialize(&ProvenanceLayout::new(root.as_str()), &[]);
     let opened = Repository::open(root, "default").unwrap();
     let repo = opened.working_tree().to_owned();
     let clone = opened.clone();
@@ -161,6 +154,7 @@ fn a_range_over_the_byte_limit_is_not_kept() {
 }
 
 #[test]
+#[verifies("rule_kept_scans_match_new_process", examples)]
 fn a_kept_range_gives_the_read_failure_of_a_missing_blob() {
     let (dir, base, head) = range();
     let root = Utf8Path::from_path(dir.path()).unwrap();

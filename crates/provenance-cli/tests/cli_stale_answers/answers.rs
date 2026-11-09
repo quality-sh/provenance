@@ -130,7 +130,7 @@ fn each_cli_request_gives_the_recorded_answer() {
 /// gives the recorded answer each time. After a new commit, its answer
 /// for the new range is the answer of a new process.
 #[tokio::test(flavor = "multi_thread")]
-#[verifies("rule_gate_reports_without_review", examples)]
+#[verifies("rule_kept_scans_match_new_process", examples)]
 async fn repeated_requests_in_one_process_give_the_recorded_answers() {
     let mut fixture = fixture();
     let repository = Repository::open(fixture.path(), "default").unwrap();

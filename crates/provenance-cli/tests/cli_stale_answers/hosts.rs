@@ -4,7 +4,9 @@
 use crate::answers::{commit_query, REQUESTS};
 use crate::cases::{cases, RANGES};
 use crate::review_host_support::{self, request, response};
-use crate::support::{cli_error, cli_stale, fixture, git, remove_object};
+use crate::support::{
+    cli_error, cli_stale, commit, fixture, function, git, remove_object, write, Fixture,
+};
 use provenance_macros::verifies;
 use provenance_mcp::Client;
 use serde_json::{json, Value};
@@ -68,10 +70,8 @@ fn http_get(host: &review_host_support::Host, path: &str, query: &[(&str, &str)]
 /// Each stale request and an evidence request with a base give the CLI
 /// answer through HTTP and through MCP. Each host answers the requests
 /// twice, so the second time it can use the scans that it kept.
-// No active Rule states that a query gives the same answer on every
-// interface: rule_shared_command_same_result_on_cli_and_mcp is archived.
-// This PR records no new Rule, so the test has no Rule binding.
 #[tokio::test(flavor = "multi_thread")]
+#[verifies("rule_kept_scans_match_new_process", examples)]
 async fn http_and_mcp_give_the_cli_answers() {
     let fixture = fixture();
     let host = review_host_support::start(fixture.path());
@@ -116,10 +116,8 @@ async fn http_and_mcp_give_the_cli_answers() {
 /// The ranges of the cases give the CLI answer through a long-running MCP
 /// server in a mixed order, so that a range follows a range that held the
 /// same blobs or the same tree.
-// No active Rule states that a query gives the same answer on every
-// interface: rule_shared_command_same_result_on_cli_and_mcp is archived.
-// This PR records no new Rule, so the test has no Rule binding.
 #[tokio::test(flavor = "multi_thread")]
+#[verifies("rule_kept_scans_match_new_process", examples)]
 async fn mcp_gives_the_cli_answers_for_ranges_that_share_blobs() {
     let cases = cases();
     let mcp = Mcp::start(cases.path()).await;
@@ -174,4 +172,92 @@ async fn a_warm_server_gives_the_cli_refusal_for_a_missing_blob() {
         "{cause}"
     );
     mcp.stop().await;
+}
+
+/// A change to the commit that `HEAD` names after the hosts answered.
+type Move = fn(&Fixture);
+
+/// A warm HTTP host and a warm MCP server answer the stale query with no
+/// head, then `change` moves `HEAD`. Their next answer is the answer of a
+/// new CLI process, and it holds the site of the moved `rule_kept`.
+async fn warm_hosts_follow_head(prepare: Move, change: Move) {
+    let fixture = fixture();
+    prepare(&fixture);
+    let host = review_host_support::start(fixture.path());
+    let mcp = Mcp::start(fixture.path()).await;
+    let query = [("query", "stale"), ("base", fixture.base.as_str())];
+    let warm = http_get(&host, "/rules", &query);
+    let by_mcp = mcp.api("rules", &query).await;
+    assert_eq!(by_mcp["structuredContent"]["data"], warm["data"]);
+    assert_eq!(warm["data"]["head"], json!(fixture.head));
+
+    change(&fixture);
+    let (code, cli, stderr) = cli_stale(fixture.path(), &query[1..]);
+    assert_eq!(code, 0, "{stderr}");
+    assert_ne!(cli["data"]["head"], warm["data"]["head"]);
+    assert!(
+        cli["data"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|site| site["subject_id"] == "rule_kept"),
+        "{cli}"
+    );
+    let by_http = http_get(&host, "/rules", &query);
+    assert_eq!(by_http["data"], cli["data"], "HTTP");
+    let by_mcp = mcp.api("rules", &query).await;
+    assert_ne!(by_mcp["isError"], json!(true), "{by_mcp}");
+    assert_eq!(by_mcp["structuredContent"]["data"], cli["data"], "MCP");
+    mcp.stop().await;
+}
+
+fn change_kept(fixture: &Fixture) {
+    write(
+        fixture.path(),
+        "src/kept.rs",
+        function("rule_kept", "kept", "5"),
+    );
+}
+
+fn no_preparation(_: &Fixture) {}
+
+#[tokio::test(flavor = "multi_thread")]
+#[verifies("rule_kept_scans_match_new_process", examples)]
+async fn warm_hosts_follow_a_new_commit() {
+    warm_hosts_follow_head(no_preparation, |fixture| {
+        change_kept(fixture);
+        commit(fixture.path(), "later head");
+    })
+    .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[verifies("rule_kept_scans_match_new_process", examples)]
+async fn warm_hosts_follow_an_amended_commit() {
+    warm_hosts_follow_head(no_preparation, |fixture| {
+        change_kept(fixture);
+        git(fixture.path(), &["add", "-A", "."]);
+        git(fixture.path(), &["commit", "-q", "--amend", "--no-edit"]);
+    })
+    .await;
+}
+
+/// The branch `other` starts at the base and changes `src/kept.rs`.
+#[tokio::test(flavor = "multi_thread")]
+#[verifies("rule_kept_scans_match_new_process", examples)]
+async fn warm_hosts_follow_a_checkout_of_another_branch() {
+    warm_hosts_follow_head(
+        |fixture| {
+            let repo = fixture.path();
+            let branch = git(repo, &["rev-parse", "--abbrev-ref", "HEAD"]);
+            git(repo, &["checkout", "-q", "-b", "other", &fixture.base]);
+            change_kept(fixture);
+            commit(repo, "other branch");
+            git(repo, &["checkout", "-q", &branch]);
+        },
+        |fixture| {
+            git(fixture.path(), &["checkout", "-q", "other"]);
+        },
+    )
+    .await;
 }

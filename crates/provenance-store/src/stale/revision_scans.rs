@@ -8,6 +8,7 @@
 use super::git::{self, RevisionFile};
 use super::{gate, in_order};
 use camino::{Utf8Path, Utf8PathBuf};
+use provenance_macros::rule;
 use provenance_scanner::FileScanWithContent;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -45,6 +46,7 @@ pub struct RangeScans {
 /// The scanned source files of `base` and of `head`. The git reads run in
 /// the same order as reading the two revisions one after the other, so
 /// the same failure wins.
+#[rule("rule_kept_scans_match_new_process")]
 pub fn scan_range(
     kept: &KeptScans,
     repo: &Utf8Path,
