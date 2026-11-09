@@ -29,6 +29,8 @@ pub(super) struct ReadFence {
 }
 
 impl ReadFence {
+    // Only catch-up, which the host build has, fences a store.
+    #[cfg_attr(not(feature = "host"), allow(dead_code))]
     pub(super) const fn new(scope_dir: Utf8PathBuf, directories: Vec<&'static str>) -> Self {
         Self {
             scope_dir,

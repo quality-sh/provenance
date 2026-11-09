@@ -56,6 +56,8 @@ pub fn ideation_landings_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf
 
 /// The directory below a scope directory that holds the shard at `suffix`,
 /// a path below the scope directory.
+// Only catch-up, which the host build has, asks for the directory.
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 pub(crate) fn shard_directory(suffix: &'static str) -> &'static str {
     suffix
         .split_once('/')

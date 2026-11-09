@@ -17,7 +17,9 @@ use crate::state_store::StateStore;
 use crate::storage::local::{LocalSectionLock, LocalStateStorage};
 use crate::storage::{SectionLock, StateKey, StateStorage};
 use crate::write_error::{SourceFailure, WriteError, WriteFailure};
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
+#[cfg(feature = "host")]
+use camino::Utf8PathBuf;
 use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
 use provenance_core::{Manifest, Scope, ScopeId, Stamp};
 use provenance_macros::{rule, verifies};

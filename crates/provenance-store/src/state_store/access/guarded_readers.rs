@@ -125,8 +125,11 @@ impl GuardedStore<'_> {
 
 /// A store that reads one view of the canonical state and no file. Only
 /// [`ViewStore::new`] makes one, and it always reads a view.
+// Only catch-up, which the host build has, makes a view store.
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 pub struct ViewStore(StateStore);
 
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 impl ViewStore {
     /// A store over `view`, a view of the canonical state of `repository`.
     pub fn new(repository: &Repository, view: Arc<StateView>) -> Self {
@@ -173,6 +176,7 @@ impl ViewStore {
 impl GuardedStore<'static> {
     /// A guarded store over a view that was read under a guard. It reads no
     /// file, so it needs no guard after the read.
+    #[cfg_attr(not(feature = "host"), allow(dead_code))]
     pub(crate) fn of_view(view: ViewStore) -> Self {
         GuardedStore {
             store: view.0,
