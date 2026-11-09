@@ -14,6 +14,11 @@ fn binary() -> &'static std::path::Path {
 
 /// The JSON answer of one CLI command that succeeds.
 fn cli_json(args: &[&str]) -> Value {
+    serde_json::from_str(&cli_text(args)).unwrap()
+}
+
+/// The standard output of one CLI command that succeeds.
+fn cli_text(args: &[&str]) -> String {
     let output = assert_cmd::Command::new(binary())
         .args(args)
         .output()
@@ -23,7 +28,7 @@ fn cli_json(args: &[&str]) -> Value {
         "{args:?}: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    serde_json::from_slice(&output.stdout).unwrap()
+    String::from_utf8(output.stdout).unwrap()
 }
 
 /// One temporary repository and a connected `provenance mcp` client on it.
@@ -197,6 +202,57 @@ async fn mcp_catalog_listing_is_small_and_one_route_gives_its_schemas() {
     let routes = create["structuredContent"]["routes"].as_array().unwrap();
     assert_eq!(routes.len(), 1, "{create}");
     assert!(routes[0]["request_schema"].is_object(), "{create}");
+
+    client.cancel().await.unwrap();
+    assert!(child.wait().await.unwrap().success());
+}
+
+/// The JSON of the route in the `schemas:` line of a readable answer, if any.
+fn text_schemas(text: &str) -> Option<Value> {
+    text.lines()
+        .find_map(|line| line.strip_prefix("  schemas: "))
+        .map(|json| serde_json::from_str(json).unwrap())
+}
+
+#[tokio::test]
+#[verifies("rule_api_catalog_schemas_only_for_one_route", examples)]
+async fn the_text_of_one_route_has_its_schemas_and_cli_and_mcp_give_the_same_hint() {
+    let (_directory, repo, mut child, client) = serve().await;
+    let cli_hint = "Use --filter \"<method> <path>\" to see the schemas of one route.";
+    let mcp_hint = "Use {\"filter\":\"<method> <path>\"} to see the schemas of one route.";
+
+    for (filter, routes) in [
+        ("", "many"),
+        ("withdraw", "many"),
+        ("GET /sources/{id}", "one"),
+        ("post /sources", "one"),
+        ("no route has this text", "none"),
+    ] {
+        let result = client.call("api", json!({"filter": filter})).await;
+        assert_ne!(result["isError"], json!(true), "{filter}: {result}");
+        let mcp = result["content"][0]["text"].as_str().unwrap();
+        let cli = cli_text(&["api", "--repo", &repo, "--filter", filter]);
+        let many = routes == "many";
+        assert_eq!(mcp.contains(mcp_hint), many, "{filter}: {mcp}");
+        assert_eq!(cli.contains(cli_hint), many, "{filter}: {cli}");
+
+        // A host that gives the model only the text sees the same schemas as the
+        // structured answer.
+        let structured = &result["structuredContent"]["routes"];
+        let one = (routes == "one").then(|| structured[0].clone());
+        assert_eq!(text_schemas(mcp), one, "{filter}: {mcp}");
+        assert_eq!(text_schemas(&cli), one, "{filter}: {cli}");
+    }
+    let one = text_schemas(&cli_text(&[
+        "api",
+        "--repo",
+        &repo,
+        "--filter",
+        "POST /sources",
+    ]))
+    .unwrap();
+    assert!(one["request_schema"].is_object(), "{one}");
+    assert!(one["queries"][0]["success_schema"].is_object(), "{one}");
 
     client.cancel().await.unwrap();
     assert!(child.wait().await.unwrap().success());

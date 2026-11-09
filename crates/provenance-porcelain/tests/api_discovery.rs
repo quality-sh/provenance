@@ -55,6 +55,7 @@ async fn discover(count: usize, filter: Option<&str>, limit: Option<usize>) -> C
 const SEE_MORE: SeeMore = SeeMore {
     filter: "FILTER",
     limit: "LIMIT",
+    route: "ROUTE",
 };
 
 #[tokio::test]
@@ -95,7 +96,8 @@ async fn discovery_reports_the_bounds_of_the_filter_limit_and_default_limit() {
     assert_eq!(above_default.bounds, bounds(60, 60, 55));
     let under_default = discover(10, None, None).await.bounded();
     assert_eq!(under_default.bounds, bounds(10, 10, 10));
-    assert!(render_discovery_readable(&under_default, SEE_MORE).ends_with("inputs: none"));
+    assert!(render_discovery_readable(&under_default, SEE_MORE)
+        .ends_with("inputs: none\nUse ROUTE to see the schemas of one route."));
 }
 
 #[test]
@@ -141,12 +143,16 @@ fn readable_discovery_lists_routes_with_their_inputs() {
             "depth (query, optional)\n",
             "- POST /requirements\n  Create one requirement.\n",
             "  inputs: Idempotency-Key (header, required)\n",
-            "  The JSON body is the data object, without the HTTP {\"data\": ...} wrapper."
+            "  The JSON body is the data object, without the HTTP {\"data\": ...} wrapper.\n",
+            "Use ROUTE to see the schemas of one route."
         )
     );
     let limited = render_discovery_readable(&catalog.select(None, Some(2)).complete(), SEE_MORE);
     assert!(
-        limited.ends_with("depth (query, optional)\nUse FILTER or LIMIT to see more."),
+        limited.ends_with(concat!(
+            "depth (query, optional)\nUse FILTER or LIMIT to see more.\n",
+            "Use ROUTE to see the schemas of one route."
+        )),
         "{limited}"
     );
 }
@@ -223,5 +229,77 @@ fn the_json_form_has_schemas_only_when_the_answer_lists_one_route() {
                 "failure_schema": {"type": "object"},
             }],
         }])
+    );
+}
+
+#[tokio::test]
+#[verifies("rule_api_catalog_filter_selects_one_route", examples)]
+async fn a_filter_that_is_not_the_method_and_path_of_a_route_matches_the_description() {
+    let paths = |selection: CatalogSelection| {
+        selection
+            .complete()
+            .routes
+            .into_iter()
+            .map(|route| route.path)
+            .collect::<Vec<_>>()
+    };
+    // Only the descriptions of the odd routes contain this text.
+    assert_eq!(
+        paths(discover(6, Some("READ ONE source"), None).await),
+        ["/r1", "/r3", "/r5"]
+    );
+    // A filter can go from the path into the description.
+    assert_eq!(
+        paths(discover(20, Some("/r3 read one"), None).await),
+        ["/r3"]
+    );
+    assert_eq!(
+        paths(discover(20, Some("GET /r1 list"), None).await),
+        Vec::<String>::new()
+    );
+}
+
+#[test]
+#[verifies("rule_api_catalog_schemas_only_for_one_route", examples)]
+fn the_readable_answer_of_one_route_gives_its_schemas() {
+    let mut create = route(
+        ApiMethod::Post,
+        "/sources",
+        "Create one source.",
+        Some(json!({"type": "object"})),
+    );
+    create.queries[0].parameters = vec![parameter("Idempotency-Key", "header", true)];
+    let catalog = ApiCatalog {
+        routes: vec![
+            create,
+            route(ApiMethod::Get, "/sources", "List sources.", None),
+        ],
+    };
+
+    let one = catalog
+        .clone()
+        .select(Some("POST /sources"), None)
+        .complete();
+    assert_eq!(
+        render_discovery_readable(&one, SEE_MORE),
+        concat!(
+            "api routes: 1\n",
+            "- POST /sources\n  Create one source.\n",
+            "  inputs: Idempotency-Key (header, required)\n",
+            "  The JSON body is the data object, without the HTTP {\"data\": ...} wrapper.\n",
+            "  schemas: {\"method\":\"post\",\"path\":\"/sources\",",
+            "\"description\":\"Create one source.\",\"request_schema\":{\"type\":\"object\"},",
+            "\"queries\":[{\"query\":null,\"parameters\":[{\"name\":\"Idempotency-Key\",",
+            "\"location\":\"header\",\"required\":true,\"schema\":{\"type\":\"string\"}}],",
+            "\"success_schema\":{\"type\":\"object\"},\"failure_schema\":{\"type\":\"object\"}}]}"
+        )
+    );
+
+    let both =
+        render_discovery_readable(&catalog.select(Some("sources"), None).complete(), SEE_MORE);
+    assert!(!both.contains("schemas:"), "{both}");
+    assert!(
+        both.ends_with("\nUse ROUTE to see the schemas of one route."),
+        "{both}"
     );
 }

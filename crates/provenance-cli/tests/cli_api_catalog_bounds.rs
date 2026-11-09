@@ -44,8 +44,7 @@ fn bounds(repo: &str, flags: &[&str]) -> Value {
 }
 
 const MORE: &str = "Use --filter <text> or --limit <number> to see more.";
-const SCHEMAS: &str =
-    "Use --filter \"<method> <path>\" --format json to see the schemas of one route.";
+const SCHEMAS: &str = "Use --filter \"<method> <path>\" to see the schemas of one route.";
 
 /// The route count line, the number of route lines, and the lines after the routes.
 fn text(repo: &str, flags: &[&str]) -> (String, usize, Vec<String>) {
@@ -117,4 +116,9 @@ fn text_catalog_gives_at_most_50_routes_and_says_how_to_see_more() {
     let limit = total.to_string();
     let (_, routes, tail) = text(&repo, &["--limit", &limit]);
     assert_eq!((routes as u64, tail), (total, complete));
+    // One route gives its schemas, so the answer has no line after the route.
+    assert_eq!(
+        text(&repo, &["--filter", "GET /sources/{id}"]),
+        ("api routes: 1".to_owned(), 1, Vec::new())
+    );
 }

@@ -298,9 +298,9 @@ fn api_discovery_describes_the_live_catalog() {
         "{readable}"
     );
     assert!(
-        readable.trim_end().ends_with(
-            "Use --filter \"<method> <path>\" --format json to see the schemas of one route."
-        ),
+        readable
+            .trim_end()
+            .ends_with("Use --filter \"<method> <path>\" to see the schemas of one route."),
         "{readable}"
     );
 
