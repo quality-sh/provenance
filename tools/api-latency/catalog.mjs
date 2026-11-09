@@ -8,6 +8,45 @@ export function selectorOf(variant) {
   return parameter?.schema?.const ?? null;
 }
 
+/** The filter that selects one route by its method and path, for example `GET /rules/{id}`. */
+export function routeFilter(route) {
+  return `${route.method.toUpperCase()} ${route.path}`;
+}
+
+/**
+ * The catalog with the schemas of each route. A listing of more than one route
+ * gives no schemas, so each route comes again from the answer to the filter of
+ * its method and path. `readRoute(filter)` gives that answer. An older binary
+ * can give more routes for that filter, so the route is found by its method
+ * and path.
+ */
+export async function catalogWithSchemas(listing, readRoute, { concurrency = 8 } = {}) {
+  refuseTruncated(listing);
+  const listed = listing.routes ?? [];
+  const routes = new Array(listed.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < listed.length) {
+      const index = next++;
+      const route = listed[index];
+      const answer = await readRoute(routeFilter(route));
+      const full = (answer.routes ?? []).find(item => item.method === route.method && item.path === route.path);
+      if (!full) {
+        throw new Error(`the filter ${routeFilter(route)} gives no route ${routeFilter(route)}`);
+      }
+      routes[index] = full;
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, listed.length) }, worker));
+  return { ...listing, routes };
+}
+
+function refuseTruncated(catalog) {
+  if (catalog?.bounds?.truncated) {
+    throw new Error(`the catalog listing is truncated at ${catalog.bounds.returned} of ${catalog.bounds.total} routes`);
+  }
+}
+
 /** The label of one operation, for example `GET /rules/{id} query=trace`. */
 export function operationLabel(method, path, selector) {
   const head = `${method.toUpperCase()} ${path}`;
@@ -20,13 +59,15 @@ export function operationLabel(method, path, selector) {
  * route only checks or plans, which the `readOnlyPosts` list names by path.
  */
 export function operationsFromCatalog(catalog, { readOnlyPosts = [] } = {}) {
-  if (catalog?.bounds?.truncated) {
-    throw new Error(`the catalog listing is truncated at ${catalog.bounds.returned} of ${catalog.bounds.total} routes`);
-  }
+  refuseTruncated(catalog);
   const operations = [];
   for (const route of catalog.routes ?? []) {
     const variants = route.queries?.length ? route.queries : [{ parameters: [] }];
     for (const variant of variants) {
+      // Without schemas, the query forms and the write bodies are lost.
+      if (!variant.success_schema || (variant.parameters ?? []).some(parameter => !parameter.schema)) {
+        throw new Error(`the catalog gives no schemas for ${routeFilter(route)}: read each route with catalogWithSchemas`);
+      }
       const selector = selectorOf(variant);
       const method = route.method.toLowerCase();
       operations.push({

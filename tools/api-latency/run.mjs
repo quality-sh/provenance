@@ -12,7 +12,7 @@
 // each CPU sample to its row.
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { helpCommands, mcpToolActions, operationsFromCatalog, possibleValues } from './catalog.mjs';
+import { catalogWithSchemas, helpCommands, mcpToolActions, operationsFromCatalog, possibleValues } from './catalog.mjs';
 import { COMMAND_ARGUMENTS, NOT_CALLED, cliWriteArguments, commandVariants, fillArguments, mcpWriteArguments, orderLeaves, verbOperation } from './commands.mjs';
 import { Planner, Unresolved, describe } from './requests.mjs';
 import { findKey } from './body.mjs';
@@ -308,7 +308,14 @@ async function main() {
   if (listing.code !== 0) {
     throw new Error(`the catalog listing failed: ${listing.stderr}`);
   }
-  const operations = operationsFromCatalog(JSON.parse(listing.stdout), { readOnlyPosts: READ_ONLY_POSTS });
+  const catalog = await catalogWithSchemas(JSON.parse(listing.stdout), async filter => {
+    const answer = await run(bin, ['api', '--format', 'json', '--filter', filter], { cwd: planRepo });
+    if (answer.code !== 0) {
+      throw new Error(`the catalog answer for ${filter} failed: ${answer.stderr}`);
+    }
+    return JSON.parse(answer.stdout);
+  });
+  const operations = operationsFromCatalog(catalog, { readOnlyPosts: READ_ONLY_POSTS });
   log(`${operations.length} catalog operations`);
   const http = new HttpWay({ bin, repo: planRepo });
   await http.start();

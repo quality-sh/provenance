@@ -8,7 +8,10 @@ workflow_dispatch. It does not run on a pull request or a push.
 
 - Each operation of the catalog: each route with each of its query variants,
   reads and writes. The list comes from `provenance api --format json`, so a
-  new route is timed with no change to the benchmark.
+  new route is timed with no change to the benchmark. That list has no
+  schemas, so the run reads each route again with the filter of its method and
+  path (`--filter "GET /rules/{id}"`) to get its query forms and its request
+  body schema.
 - Each porcelain command from `provenance --help` and its subcommands, and each
   action of `provenance <id> <action>`.
 - Each MCP tool and each action of a tool, from `tools/list`.
@@ -60,5 +63,9 @@ that the store refuses.
   200 ms.
 - `catalog.mjs`, `requests.mjs`, `body.mjs` and `commands.mjs` find the calls
   and their input. `ways.mjs` holds the three clients.
+
+- `fixtures/catalog.json` holds catalog answers of a provenance binary for
+  `catalog.test.mjs`. `node tools/api-latency/fixtures/capture.mjs <binary>
+  <repository>` writes it again.
 
 Run the unit tests with `node --test tools/api-latency/*.test.mjs`.

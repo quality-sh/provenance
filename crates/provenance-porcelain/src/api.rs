@@ -14,8 +14,8 @@ use std::{
 mod discovery;
 
 pub use discovery::{
-    render_discovery_readable, CatalogAnswer, CatalogBounds, CatalogSelection, SeeMore,
-    DEFAULT_DISCOVERY_LIMIT,
+    render_discovery_readable, CatalogAnswer, CatalogBounds, CatalogListing, CatalogSelection,
+    ListedParameter, ListedQuery, ListedRoute, SeeMore, DEFAULT_DISCOVERY_LIMIT,
 };
 
 /// One HTTP method a public route supports.
@@ -194,7 +194,7 @@ pub enum ApiOutcome {
 pub type ApiPortFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ApiError>> + Send + 'a>>;
 
 /// What one api call offers a host client.
-pub const API_DESCRIPTION: &str = "Call one public API path with an optional method, query, headers, and JSON body. The body is the data object, without the HTTP {\"data\": ...} wrapper. Omit the path to list the catalog routes with their methods, inputs, and response schemas.";
+pub const API_DESCRIPTION: &str = "Call one public API path with an optional method, query, headers, and JSON body. The body is the data object, without the HTTP {\"data\": ...} wrapper. Omit the path to list the catalog routes with their methods and inputs. A filter that is the method and path of one route, such as GET /rules, gives the request and response schemas of that route.";
 
 /// How an api call carries its JSON body.
 pub const BODY_NOTE: &str =
@@ -216,8 +216,8 @@ pub fn input_schema() -> Value {
 /// Both arms are generated from typed contracts, so their shared definitions
 /// are hoisted to one root document and every `#/$defs/` reference resolves.
 pub fn output_schema() -> Value {
-    let mut catalog =
-        serde_json::to_value(schemars::schema_for!(CatalogAnswer)).expect("catalog schema is JSON");
+    let mut catalog = serde_json::to_value(schemars::schema_for!(CatalogListing<'static>))
+        .expect("catalog schema is JSON");
     let mut envelope = serde_json::to_value(schemars::schema_for!(
         provenance_core::protocol::SuccessEnvelope<Value>
     ))
@@ -349,7 +349,7 @@ mod tests {
     #[test]
     fn output_schema_arms_share_no_definition_name() {
         let catalog = definition_names(
-            &serde_json::to_value(schemars::schema_for!(super::CatalogAnswer)).unwrap(),
+            &serde_json::to_value(schemars::schema_for!(super::CatalogListing<'static>)).unwrap(),
         );
         let envelope = definition_names(
             &serde_json::to_value(schemars::schema_for!(
