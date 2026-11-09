@@ -6,14 +6,12 @@ use provenance_transport::repository::RepoContext;
 const SEE_MORE: SeeMore = SeeMore {
     filter: "--filter <text>",
     limit: "--limit <number>",
+    route: "--filter \"<method> <path>\"",
 };
 
-/// How to see the schemas of one route.
-const SCHEMAS: &str =
-    "Use --filter \"<method> <path>\" --format json to see the schemas of one route.";
-
 /// Runs one API action with the selected context. JSON gives each selected route with
-/// the bounds, and the schemas when it gives one route; text gives the bounded summary.
+/// the bounds; text gives the bounded summary. Both give the schemas of a route only
+/// when the answer has one route.
 #[provenance_macros::rule("rule_porcelain_api_uses_context")]
 pub async fn dispatch_api(
     repo: &str,
@@ -34,7 +32,6 @@ pub async fn dispatch_api(
                 "{}",
                 render_discovery_readable(&selection.bounded(), SEE_MORE)
             );
-            println!("{SCHEMAS}");
         }
         Ok(ApiOutcome::Invoked(value)) => println!("{}", serde_json::to_string_pretty(&value)?),
         Err(error) => anyhow::bail!("{}", serde_json::to_string(&error.failure)?),

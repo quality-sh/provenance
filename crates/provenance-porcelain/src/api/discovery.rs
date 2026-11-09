@@ -4,7 +4,7 @@
 
 use super::{ApiCatalog, ApiMethod, ApiParameter, ApiQuery, ApiRoute, BODY_NOTE};
 use provenance_macros::rule;
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use serde_json::Value;
 
 /// The number of routes in a bounded catalog answer when the request gives no limit.
@@ -25,11 +25,16 @@ pub struct CatalogBounds {
 
 /// One catalog answer: the selected routes and how they were bounded. Its JSON form is
 /// a [`CatalogListing`].
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-#[serde(into = "CatalogListing")]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CatalogAnswer {
     pub routes: Vec<ApiRoute>,
     pub bounds: CatalogBounds,
+}
+
+impl Serialize for CatalogAnswer {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        CatalogListing::from(self).serialize(serializer)
+    }
 }
 
 /// The JSON form of one catalog answer.
@@ -39,54 +44,54 @@ pub struct CatalogAnswer {
 /// inputs, and no schemas, so that a reader that takes the whole answer at once can
 /// read a long list.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
-pub struct CatalogListing {
-    pub routes: Vec<ListedRoute>,
+pub struct CatalogListing<'a> {
+    pub routes: Vec<ListedRoute<'a>>,
     pub bounds: CatalogBounds,
 }
 
 /// One route of a catalog listing. The schemas are present only when the listing has
 /// one route.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
-pub struct ListedRoute {
+pub struct ListedRoute<'a> {
     pub method: ApiMethod,
-    pub path: String,
-    pub description: String,
+    pub path: &'a str,
+    pub description: &'a str,
     /// The JSON body schema: the data object, without the HTTP
     /// `{"data": ...}` wrapper.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub request_schema: Option<Value>,
-    pub queries: Vec<ListedQuery>,
+    pub request_schema: Option<&'a Value>,
+    pub queries: Vec<ListedQuery<'a>>,
 }
 
 /// One `query` form of a listed route.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
-pub struct ListedQuery {
-    pub query: Option<String>,
-    pub parameters: Vec<ListedParameter>,
+pub struct ListedQuery<'a> {
+    pub query: Option<&'a str>,
+    pub parameters: Vec<ListedParameter<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub success_schema: Option<Value>,
+    pub success_schema: Option<&'a Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub failure_schema: Option<Value>,
+    pub failure_schema: Option<&'a Value>,
 }
 
 /// One parameter of a listed `query` form.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
-pub struct ListedParameter {
-    pub name: String,
-    pub location: String,
+pub struct ListedParameter<'a> {
+    pub name: &'a str,
+    pub location: &'a str,
     pub required: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub schema: Option<Value>,
+    pub schema: Option<&'a Value>,
 }
 
-impl From<CatalogAnswer> for CatalogListing {
+impl<'a> From<&'a CatalogAnswer> for CatalogListing<'a> {
     #[rule("rule_api_catalog_schemas_only_for_one_route")]
-    fn from(answer: CatalogAnswer) -> Self {
-        let schemas = answer.routes.len() == 1;
+    fn from(answer: &'a CatalogAnswer) -> Self {
+        let schemas = answer.has_schemas();
         Self {
             routes: answer
                 .routes
-                .into_iter()
+                .iter()
                 .map(|route| ListedRoute::new(route, schemas))
                 .collect(),
             bounds: answer.bounds,
@@ -94,38 +99,38 @@ impl From<CatalogAnswer> for CatalogListing {
     }
 }
 
-impl ListedRoute {
-    fn new(route: ApiRoute, schemas: bool) -> Self {
+impl<'a> ListedRoute<'a> {
+    fn new(route: &'a ApiRoute, schemas: bool) -> Self {
         Self {
             method: route.method,
-            path: route.path,
-            description: route.description,
-            request_schema: route.request_schema.filter(|_| schemas),
+            path: &route.path,
+            description: &route.description,
+            request_schema: route.request_schema.as_ref().filter(|_| schemas),
             queries: route
                 .queries
-                .into_iter()
+                .iter()
                 .map(|form| ListedQuery::new(form, schemas))
                 .collect(),
         }
     }
 }
 
-impl ListedQuery {
-    fn new(form: ApiQuery, schemas: bool) -> Self {
+impl<'a> ListedQuery<'a> {
+    fn new(form: &'a ApiQuery, schemas: bool) -> Self {
         Self {
-            query: form.query,
+            query: form.query.as_deref(),
             parameters: form
                 .parameters
-                .into_iter()
+                .iter()
                 .map(|parameter| ListedParameter {
-                    name: parameter.name,
-                    location: parameter.location,
+                    name: &parameter.name,
+                    location: &parameter.location,
                     required: parameter.required,
-                    schema: schemas.then_some(parameter.schema),
+                    schema: schemas.then_some(&parameter.schema),
                 })
                 .collect(),
-            success_schema: schemas.then_some(form.success_schema),
-            failure_schema: schemas.then_some(form.failure_schema),
+            success_schema: schemas.then_some(&form.success_schema),
+            failure_schema: schemas.then_some(&form.failure_schema),
         }
     }
 }
@@ -223,11 +228,15 @@ impl CatalogSelection {
     }
 }
 
-/// How one interface writes the filter and the limit in the "see more" line.
+/// How one interface writes the filter and the limit in the "see more" line, and the
+/// filter of one route in the line that says how to see the schemas of one route.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SeeMore {
     pub filter: &'static str,
     pub limit: &'static str,
+    /// A filter that is the method and path of one route, such as
+    /// `--filter "<method> <path>"`.
+    pub route: &'static str,
 }
 
 impl CatalogAnswer {
@@ -237,16 +246,32 @@ impl CatalogAnswer {
             .truncated
             .then(|| format!("Use {} or {} to see more.", fields.filter, fields.limit))
     }
+
+    /// The line that says how to see the schemas of one route, when the answer lists
+    /// more routes and so gives no schemas.
+    pub fn see_schemas(&self, fields: SeeMore) -> Option<String> {
+        (self.routes.len() > 1)
+            .then(|| format!("Use {} to see the schemas of one route.", fields.route))
+    }
+
+    /// True when the answer gives the schemas of its route: when it lists one route.
+    fn has_schemas(&self) -> bool {
+        self.routes.len() == 1
+    }
 }
 
 /// Render the routes of one answer as one readable summary, with the "see more" line
 /// when the answer is truncated.
 ///
-/// Each route lists the inputs of its base form and of each `query` form;
-/// the JSON form of an answer with one route has its request and response schemas.
+/// Each route lists the inputs of its base form and of each `query` form. An answer
+/// with one route also gives the JSON form of that route, with its request and
+/// response schemas. An answer with more routes says how to see the schemas of one
+/// route.
+#[rule("rule_api_catalog_schemas_only_for_one_route")]
 pub fn render_discovery_readable(answer: &CatalogAnswer, fields: SeeMore) -> String {
+    let listing = CatalogListing::from(answer);
     let mut lines = vec![format!("api routes: {}", answer.routes.len())];
-    for route in &answer.routes {
+    for (route, listed) in answer.routes.iter().zip(&listing.routes) {
         lines.push(format!(
             "- {} {}",
             route.method.as_str().to_uppercase(),
@@ -266,8 +291,13 @@ pub fn render_discovery_readable(answer: &CatalogAnswer, fields: SeeMore) -> Str
         if route.request_schema.is_some() {
             lines.push(format!("  {BODY_NOTE}"));
         }
+        if answer.has_schemas() {
+            let json = serde_json::to_string(listed).expect("a listed route is JSON");
+            lines.push(format!("  schemas: {json}"));
+        }
     }
     lines.extend(answer.see_more(fields));
+    lines.extend(answer.see_schemas(fields));
     lines.join("\n")
 }
 

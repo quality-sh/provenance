@@ -216,7 +216,7 @@ pub fn input_schema() -> Value {
 /// Both arms are generated from typed contracts, so their shared definitions
 /// are hoisted to one root document and every `#/$defs/` reference resolves.
 pub fn output_schema() -> Value {
-    let mut catalog = serde_json::to_value(schemars::schema_for!(CatalogListing))
+    let mut catalog = serde_json::to_value(schemars::schema_for!(CatalogListing<'static>))
         .expect("catalog schema is JSON");
     let mut envelope = serde_json::to_value(schemars::schema_for!(
         provenance_core::protocol::SuccessEnvelope<Value>
@@ -349,7 +349,7 @@ mod tests {
     #[test]
     fn output_schema_arms_share_no_definition_name() {
         let catalog = definition_names(
-            &serde_json::to_value(schemars::schema_for!(super::CatalogListing)).unwrap(),
+            &serde_json::to_value(schemars::schema_for!(super::CatalogListing<'static>)).unwrap(),
         );
         let envelope = definition_names(
             &serde_json::to_value(schemars::schema_for!(
