@@ -1,3 +1,5 @@
+#[path = "build/commit.rs"]
+mod commit;
 #[path = "build/skills.rs"]
 mod skills;
 
@@ -9,6 +11,7 @@ fn main() {
         std::env::var_os("CARGO_MANIFEST_DIR").expect("Cargo manifest directory"),
     );
     skills::generate(&crate_root, &output).expect("complete bundled skill sources");
+    commit::publish(&crate_root);
     println!("cargo:warning=Next step: run cargo provenance init in your project.");
 
     // The generated Clap parser exceeds Windows' 1 MiB main-thread stack in
