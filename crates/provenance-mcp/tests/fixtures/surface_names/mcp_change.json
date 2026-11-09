@@ -576,10 +576,6 @@
         "null"
       ]
     },
-    "method": {
-      "$ref": "#/$defs/ResolutionMethod",
-      "description": "Actions: create, update."
-    },
     "name": {
       "description": "Actions: create, update.",
       "type": [

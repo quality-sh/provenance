@@ -1,0 +1,13 @@
+{
+  "base": "FIRST",
+  "files_changed": 0,
+  "head": "THIRD",
+  "items": [],
+  "summary": {
+    "gone": 0,
+    "moved": 0,
+    "total_sites": 0,
+    "touched": 0,
+    "untouched": 0
+  }
+}

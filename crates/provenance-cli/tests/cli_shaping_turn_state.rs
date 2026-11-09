@@ -35,7 +35,7 @@ fn recovery_reads_survive_process_exit_and_claim_conflict() {
             "topic_overtime",
             "--question",
             "Which threshold applies?",
-            "--method",
+            "--resolution-method",
             method,
         ])
         .success();
@@ -100,7 +100,7 @@ fn cli_shaping_actions_and_requirement_patch_share_the_catalog() {
         "topic_overtime",
         "--question",
         "Which threshold applies?",
-        "--method",
+        "--resolution-method",
         "research",
     ])
     .success();

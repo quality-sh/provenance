@@ -27,8 +27,14 @@ async fn refused(session: &Session, name: &str, arguments: Value) -> Value {
 /// The routes of the api catalog: method, path with each path parameter filled, and
 /// whether the registered operation of the route writes.
 async fn routes(session: &Session) -> Vec<(String, String, bool)> {
-    let catalog = support::schema_check::call(&session.client, "api", json!({})).await;
+    // The highest limit, because a call with no limit gives at most 50 routes.
+    let catalog = support::schema_check::call(&session.client, "api", json!({"limit": 200})).await;
     let catalog = catalog.structured_content.unwrap();
+    assert_eq!(
+        catalog["bounds"]["truncated"], false,
+        "{}",
+        catalog["bounds"]
+    );
     let routes = catalog["routes"]
         .as_array()
         .expect("the catalog lists routes");

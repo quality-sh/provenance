@@ -8,6 +8,8 @@
 use crate::layout::{with_initialized_graph, GraphNotInitialized, ProvenanceLayout};
 use crate::publication::SectionHandle;
 use crate::settings::{Settings, SettingsError};
+#[cfg(feature = "host")]
+use crate::stale::revision_scans::KeptScans;
 use crate::state_store::StateStore;
 use crate::storage::local::{LocalSectionLock, LocalStateStorage};
 use crate::storage::{SectionLock, StateKey, StateStorage};
@@ -38,6 +40,10 @@ struct Inner {
     /// Whether `storage` is the local adapter of `layout`, which `open`
     /// makes.
     local: bool,
+    /// The source scans of the last commit range that a stale or evidence
+    /// query of this open read. Each clone of the handle shares them.
+    #[cfg(feature = "host")]
+    kept_scans: KeptScans,
 }
 
 /// What a repository is, apart from where its state lives.
@@ -190,6 +196,8 @@ impl Repository {
                 storage,
                 section_lock,
                 local,
+                #[cfg(feature = "host")]
+                kept_scans: KeptScans::new(),
             }),
             section: None,
         }
@@ -299,6 +307,13 @@ impl Repository {
     /// The storage that holds the canonical state of this repository.
     pub(crate) fn storage(&self) -> &Arc<dyn StateStorage> {
         &self.inner.storage
+    }
+
+    /// The source scans that the stale and evidence queries of this open
+    /// keep between calls.
+    #[cfg(feature = "host")]
+    pub(crate) fn kept_scans(&self) -> &KeptScans {
+        &self.inner.kept_scans
     }
 
     /// The lock that serializes the sections of this repository.

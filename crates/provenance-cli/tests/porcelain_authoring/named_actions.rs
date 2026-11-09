@@ -39,7 +39,7 @@ fn named_action_repo() -> (tempfile::TempDir, String) {
         "topic_actions",
         "--question",
         "Does the action resolve its target?",
-        "--method",
+        "--resolution-method",
         "research",
         "--format",
         "json",

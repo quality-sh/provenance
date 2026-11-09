@@ -1,0 +1,46 @@
+{
+  "base": "FIRST",
+  "files_changed": 4,
+  "head": "SECOND",
+  "items": [
+    {
+      "end_line": 4,
+      "file_path": "src/deleted.rs",
+      "kind": "rule_binding",
+      "line": 1,
+      "state": "gone",
+      "subject_id": "rule_deleted"
+    },
+    {
+      "end_line": 4,
+      "file_path": "src/flip.rs",
+      "kind": "rule_binding",
+      "line": 1,
+      "state": "touched",
+      "subject_id": "rule_flip"
+    },
+    {
+      "end_line": 4,
+      "file_path": "src/three.rs",
+      "kind": "rule_binding",
+      "line": 1,
+      "state": "touched",
+      "subject_id": "rule_twin_paths"
+    },
+    {
+      "end_line": 4,
+      "file_path": "src/two.rs",
+      "kind": "rule_binding",
+      "line": 1,
+      "state": "touched",
+      "subject_id": "rule_twin_paths"
+    }
+  ],
+  "summary": {
+    "gone": 1,
+    "moved": 0,
+    "total_sites": 4,
+    "touched": 3,
+    "untouched": 0
+  }
+}

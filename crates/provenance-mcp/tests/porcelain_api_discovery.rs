@@ -57,12 +57,12 @@ async fn api_discovery_describes_the_live_catalog_routes() {
         );
     }
 
-    let discovery = session.call(json!({})).await;
+    // The highest limit, because a call with no limit gives at most 50 routes.
+    let discovery = session.call(json!({"limit": 200})).await;
     assert_ne!(discovery.is_error, Some(true), "{discovery:?}");
-    let routes = discovery.structured_content.as_ref().unwrap()["routes"]
-        .as_array()
-        .unwrap()
-        .clone();
+    let answer = discovery.structured_content.as_ref().unwrap();
+    assert_eq!(answer["bounds"]["truncated"], false, "{}", answer["bounds"]);
+    let routes = answer["routes"].as_array().unwrap().clone();
 
     // The write-granted fixture advertises every registered definition, so
     // the described routes must track that set exactly.
@@ -125,7 +125,7 @@ async fn api_discovery_hides_denied_operations() {
     let restricted = access(&repository).deny_operation("list-sources");
     let session = ApiSession::start(StatementHost::with_fixture_access(restricted)).await;
 
-    let discovery = session.call(json!({})).await;
+    let discovery = session.call(json!({"limit": 200})).await;
     let routes = discovery.structured_content.as_ref().unwrap()["routes"]
         .as_array()
         .unwrap();
@@ -168,7 +168,7 @@ async fn mcp_api_outputs_validate_against_the_published_schema() {
     // so a dangling reference fails here.
     let published = compile(&published_schema).expect("the published api output schema compiles");
 
-    let discovery = session.call(json!({})).await;
+    let discovery = session.call(json!({"limit": 200})).await;
     let structured = discovery.structured_content.as_ref().unwrap();
     assert!(
         published.is_valid(structured),

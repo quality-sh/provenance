@@ -1,61 +1,13 @@
-use assert_cmd::Command;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::path::Path;
 
-fn provenance() -> Command {
-    Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
-}
-
-fn git(repo: &Path, args: &[&str]) -> String {
-    let output = provenance_store::git_process::git()
-        .arg("-C")
-        .arg(repo)
-        .args(args)
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "git {args:?} failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8(output.stdout).unwrap().trim().to_string()
-}
-
-fn write(repo: &Path, relative: &str, contents: &str) {
-    let path = repo.join(relative);
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::write(path, contents).unwrap();
-}
-
-fn commit(repo: &Path, message: &str) -> String {
-    git(repo, &["add", "."]);
-    git(repo, &["commit", "-m", message]);
-    git(repo, &["rev-parse", "HEAD"])
-}
-
-fn init_repo() -> tempfile::TempDir {
-    let directory = tempfile::tempdir().unwrap();
-    git(directory.path(), &["init", "-q"]);
-    git(
-        directory.path(),
-        &["config", "user.email", "test@example.com"],
-    );
-    git(directory.path(), &["config", "user.name", "Test"]);
-    provenance()
-        .args([
-            "init",
-            "--path",
-            directory.path().to_str().unwrap(),
-            "--scope",
-            "default",
-            "--path-prefix",
-            ".",
-        ])
-        .assert()
-        .success();
-    directory
-}
+#[path = "support/review_paths.rs"]
+mod review_paths;
+#[path = "support/stale_repo.rs"]
+mod stale_repo;
+use review_paths::provenance;
+use stale_repo::{apply_spec, commit, init_repo, write};
 
 fn apply_binding(repo: &Path) {
     let input = json!({
@@ -76,24 +28,7 @@ fn apply_binding(repo: &Path) {
             }
         }]
     });
-    provenance()
-        .args([
-            "api",
-            "authoring-changes",
-            "--method",
-            "post",
-            "--input",
-            "-",
-            "--repo",
-            repo.to_str().unwrap(),
-            "--scope",
-            "default",
-            "--format",
-            "json",
-        ])
-        .write_stdin(serde_json::to_vec(&input).unwrap())
-        .assert()
-        .success();
+    apply_spec(repo, &input);
 }
 
 fn stale(repo: &Path, base: &str, head: &str) -> Vec<Value> {

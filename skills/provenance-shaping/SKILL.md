@@ -233,7 +233,7 @@ short-lived link - how would that work?" Starting an anchor is one session's wor
    provenance question_<stable_slug> create --type question --scope <scope> \
      --topic-id <topic_id> \
      --question "<precise question>" \
-     --method ask \
+     --resolution-method ask \
      --format json
    ```
 
@@ -585,7 +585,7 @@ even if it is blocked. Update or answer the Questions that the decision made inv
 provenance question_<new_slug> create --type question --scope <scope> \
   --topic-id <topic_id> \
   --question "<newly precise question>" \
-  --method <ask|prototype|research|verify|task> \
+  --resolution-method <ask|prototype|research|verify|task> \
   --format json
 ```
 

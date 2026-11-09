@@ -431,7 +431,7 @@ fn create_question(repo: &std::path::Path, id: &str, quiet: bool) -> assert_cmd:
             "topic_hint",
             "--question",
             "Which value applies?",
-            "--method",
+            "--resolution-method",
             "ask",
             "--repo",
             repo.to_str().unwrap(),

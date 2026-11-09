@@ -69,7 +69,7 @@ fn seed(repo: &str) {
             "topic_search",
             "--question",
             "Which state applies?",
-            "--method",
+            "--resolution-method",
             "research",
             "--status",
             "answered",

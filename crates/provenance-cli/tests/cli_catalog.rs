@@ -417,5 +417,5 @@ fn scalar_flags_follow_the_declared_body_field_type() {
     assert_eq!(output["data"]["url"], "true");
 }
 
-#[path = "cli_catalog/aliases.rs"]
-mod aliases;
+#[path = "cli_catalog/question_method.rs"]
+mod question_method;

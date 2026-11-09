@@ -138,6 +138,10 @@ fn parse_warnings(files: &[FileScanWithContent]) -> Vec<ValidationWarning> {
 fn site_spans(files: &[FileScanWithContent]) -> BTreeMap<(Utf8PathBuf, usize), usize> {
     let mut spans = BTreeMap::new();
     for file in files {
+        // A file without sites adds no span, so its lines are not split.
+        if file.scan.annotations.is_empty() && file.scan.bindings.is_empty() {
+            continue;
+        }
         let lines = file.content.lines().collect::<Vec<_>>();
         for site in &file.scan.annotations {
             let end = symbol_end(

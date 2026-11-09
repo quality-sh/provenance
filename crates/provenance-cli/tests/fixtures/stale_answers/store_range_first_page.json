@@ -1,0 +1,34 @@
+{
+  "base": "BASE",
+  "files_changed": 11,
+  "has_more": true,
+  "head": "HEAD",
+  "limit": 2,
+  "sites": [
+    {
+      "end_line": 4,
+      "file_path": "src/removed.rs",
+      "kind": "rule_binding",
+      "line": 1,
+      "state": "gone",
+      "subject_id": "rule_removed"
+    },
+    {
+      "end_line": 4,
+      "file_path": "src/renamed_after.rs",
+      "kind": "rule_binding",
+      "line": 1,
+      "original_file_path": "src/renamed_before.rs",
+      "original_line": 1,
+      "state": "moved",
+      "subject_id": "rule_renamed"
+    }
+  ],
+  "summary": {
+    "gone": 2,
+    "moved": 3,
+    "total_sites": 8,
+    "touched": 3,
+    "untouched": 0
+  }
+}
