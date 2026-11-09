@@ -50,7 +50,8 @@ async fn a_stray_file_does_not_move_a_unit_digest() {
     std::fs::write(requirements_dir.join("notes.txt"), b"not a shard").unwrap();
     std::fs::write(layout.state_dir().join(".tmpXyZ789"), b"half-written").unwrap();
     std::fs::write(layout.state_dir().join("dictionary.json"), b"{}").unwrap();
-    #[cfg(unix)]
+    // macOS refuses a file name that is not UTF-8.
+    #[cfg(target_os = "linux")]
     {
         use std::os::unix::ffi::OsStrExt;
         let name = std::ffi::OsStr::from_bytes(b"not-utf-8-\xff.jsonl");
