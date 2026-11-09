@@ -221,7 +221,7 @@ fn change_kept(fixture: &Fixture) {
     );
 }
 
-fn no_preparation(_: &Fixture) {}
+const fn no_preparation(_: &Fixture) {}
 
 #[tokio::test(flavor = "multi_thread")]
 #[verifies("rule_kept_scans_match_new_process", examples)]
