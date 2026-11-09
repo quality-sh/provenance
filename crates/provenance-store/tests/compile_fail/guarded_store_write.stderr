@@ -10,6 +10,6 @@ help: there is a method `list_requirement_reviews` with a similar name, but with
   |         pub fn $reader(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 ...
-  |     crate::cache::record_families!(define_guarded_family_readers);
-  |     ------------------------------------------------------------- in this macro invocation
-  = note: this error originates in the macro `guarded_reader` which comes from the expansion of the macro `crate::cache::record_families` (in Nightly builds, run with -Z macro-backtrace for more info)
+  |     crate::families::record_families!(define_guarded_family_readers);
+  |     ---------------------------------------------------------------- in this macro invocation
+  = note: this error originates in the macro `guarded_reader` which comes from the expansion of the macro `crate::families::record_families` (in Nightly builds, run with -Z macro-backtrace for more info)

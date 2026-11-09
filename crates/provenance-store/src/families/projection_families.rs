@@ -206,7 +206,7 @@ macro_rules! terminal_statuses {
 }
 
 /// Returns the SQL suffix that hides terminal rows from one family table.
-pub(super) fn exclude_terminal_predicate(table: &str, exclude_terminal: bool) -> String {
+pub fn exclude_terminal_predicate(table: &str, exclude_terminal: bool) -> String {
     if !exclude_terminal {
         return String::new();
     }
@@ -228,7 +228,7 @@ pub(super) fn exclude_terminal_predicate(table: &str, exclude_terminal: bool) ->
 /// Returns the SQL predicate for terminal-and-dead record identities.
 /// Selects only native terminal states, so superseded records stay visible.
 #[provenance_macros::rule("rule_review_keeps_superseded_records_visible")]
-pub(super) fn terminal_and_dead_predicate(kind: &str, id: &str, scope: &str) -> String {
+pub fn terminal_and_dead_predicate(kind: &str, id: &str, scope: &str) -> String {
     FAMILIES
         .iter()
         .filter(|family| !family.terminal_statuses.is_empty())
@@ -322,7 +322,7 @@ macro_rules! family_catalog {
     };
 }
 
-crate::cache::family_table::record_family_rows!(define_projection_families);
+crate::families::family_table::record_family_rows!(define_projection_families);
 
 impl ProjectionFamily {
     pub(crate) fn content_digest(self, bytes: &[u8]) -> anyhow::Result<String> {

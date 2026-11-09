@@ -87,7 +87,7 @@ impl StateStore {
         let threads_path = shards::threads_path(&self.layout, scope);
         // Only the month shards that hold a removed Message are written.
         let mut message_paths = Vec::new();
-        for path in readers::message_shard_paths(&self.layout, scope)? {
+        for path in readers::message_shard_paths_of(self, scope)? {
             let messages: Vec<Message> = readers::read_jsonl(self, &path)?;
             let before = removed.messages.len();
             removed.messages.extend(

@@ -52,7 +52,7 @@ pub fn protect_rows<T: Serialize>(
     permissions: &WritePermissions,
 ) -> anyhow::Result<()> {
     let directory = path.parent().and_then(Utf8Path::file_name);
-    let family = directory.and_then(crate::cache::review_families::by_directory);
+    let family = directory.and_then(crate::families::review_families::by_directory);
     if family.is_none() && directory != Some("threads") {
         return Ok(());
     }

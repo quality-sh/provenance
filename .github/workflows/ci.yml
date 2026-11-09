@@ -1686,6 +1686,12 @@ jobs:
             cargo check --locked -p "$crate" --target "$TARGET"
             echo "::endgroup::"
           done
+      # The check above builds for the target only. These tests run the engine
+      # without host on the memory adapter, which has no state files.
+      - name: Test the store on the memory adapter without host
+        run: >-
+          cargo test --locked -p provenance-store
+          --test memory_repository --test memory_repository_stage_reads
 
   # The one status the branch ruleset requires. Conditional jobs skip when a
   # pull request leaves their inputs untouched, and a skipped matrix job never

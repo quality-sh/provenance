@@ -2,6 +2,7 @@ use super::{Access, RecordStamp, StateStore, Storage};
 use crate::layout::ProvenanceLayout;
 use crate::publication::{PublicationGuard, StageLock, WritePermissions};
 use crate::repository::RepositoryIdentity;
+#[cfg(feature = "host")]
 use crate::storage::local::LocalStateStorage;
 use crate::storage::{SectionLock, StateStorage, StateView};
 use camino::Utf8Path;
@@ -12,6 +13,7 @@ use std::sync::Arc;
 mod guarded_readers;
 mod section_view;
 
+#[cfg(feature = "host")]
 pub use guarded_readers::ViewStore;
 pub use section_view::{SectionView, StateEntry};
 
@@ -20,6 +22,7 @@ mod tests;
 
 impl StateStore {
     /// A layout-level store with no repository identity.
+    #[cfg(feature = "host")]
     pub(crate) const fn new(layout: ProvenanceLayout) -> Self {
         Self {
             identity: None,
@@ -59,6 +62,7 @@ impl StateStore {
 
     /// A store that holds the live section of `layout`, handed to the
     /// closure of a layout-level section.
+    #[cfg(feature = "host")]
     pub(crate) const fn in_section(layout: ProvenanceLayout) -> Self {
         Self {
             identity: None,
@@ -76,6 +80,7 @@ impl StateStore {
     /// creates no path. A record write, a write permission and a staged
     /// publication through it refuse.
     #[rule("rule_read_only_store_refuses_writes")]
+    #[cfg(feature = "host")]
     pub(crate) const fn read_only(layout: ProvenanceLayout) -> Self {
         Self {
             identity: None,
@@ -239,6 +244,7 @@ impl StateStore {
     /// The adapter that this store publishes through.
     pub(crate) fn storage(&self) -> Arc<dyn StateStorage> {
         match &self.storage {
+            #[cfg(feature = "host")]
             Storage::Layout => Arc::new(LocalStateStorage::new(self.layout.clone())),
             Storage::Shared { storage, .. } => Arc::clone(storage),
         }
@@ -247,6 +253,7 @@ impl StateStore {
     /// The local adapter of the layout of this store, which lands a
     /// working-tree file with the state. A store of a repository on another
     /// adapter is refused.
+    #[cfg(feature = "host")]
     pub(crate) fn local_storage(&self) -> anyhow::Result<LocalStateStorage> {
         match &self.storage {
             Storage::Layout | Storage::Shared { local: true, .. } => {
@@ -362,12 +369,15 @@ impl StateStore {
         }) else {
             return operation(self);
         };
-        let root = state_dir
-            .parent()
-            .and_then(Utf8Path::parent)
-            .ok_or_else(|| anyhow::anyhow!("state path has no repository root"))?;
+        #[cfg(not(feature = "host"))]
+        let _ = state_dir;
         match (&self.access, &self.storage) {
+            #[cfg(feature = "host")]
             (Access::Lock, Storage::Layout) => {
+                let root = state_dir
+                    .parent()
+                    .and_then(Utf8Path::parent)
+                    .ok_or_else(|| anyhow::anyhow!("state path has no repository root"))?;
                 crate::publication::with_repository_publication_checked(
                     &ProvenanceLayout::new(root),
                     || Ok(()),
@@ -399,6 +409,7 @@ impl StateStore {
     ) -> anyhow::Result<R> {
         match &self.access {
             Access::Lock => match &self.storage {
+                #[cfg(feature = "host")]
                 Storage::Layout => crate::publication::with_repository_publication_checked(
                     &self.layout,
                     || Ok(()),

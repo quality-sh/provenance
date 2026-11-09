@@ -1,7 +1,7 @@
 //! Publication of review changes to graph record files.
 
 use crate::{
-    cache::ProjectionFamily,
+    families::ProjectionFamily,
     state_store::{readers, RecordStamp, StateStore},
 };
 use camino::{Utf8Path, Utf8PathBuf};

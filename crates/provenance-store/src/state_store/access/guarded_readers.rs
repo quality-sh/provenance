@@ -12,6 +12,7 @@ use std::sync::Arc;
 macro_rules! guarded_reader {
     ($record:ty, list_requirements) => {};
     ($record:ty, validated_discussions) => {
+        #[cfg_attr(not(feature = "host"), allow(dead_code))]
         pub(crate) fn validated_discussions(
             &self,
             scope: &ScopeId,
@@ -60,7 +61,7 @@ impl GuardedStore<'_> {
         self.store.list_requirements(scope)
     }
 
-    crate::cache::record_families!(define_guarded_family_readers);
+    crate::families::record_families!(define_guarded_family_readers);
 
     pub fn active_verification_bindings(
         &self,
@@ -124,8 +125,11 @@ impl GuardedStore<'_> {
 
 /// A store that reads one view of the canonical state and no file. Only
 /// [`ViewStore::new`] makes one, and it always reads a view.
+// Only catch-up, which the host build has, makes a view store.
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 pub struct ViewStore(StateStore);
 
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 impl ViewStore {
     /// A store over `view`, a view of the canonical state of `repository`.
     pub fn new(repository: &Repository, view: Arc<StateView>) -> Self {
@@ -172,6 +176,7 @@ impl ViewStore {
 impl GuardedStore<'static> {
     /// A guarded store over a view that was read under a guard. It reads no
     /// file, so it needs no guard after the read.
+    #[cfg_attr(not(feature = "host"), allow(dead_code))]
     pub(crate) fn of_view(view: ViewStore) -> Self {
         GuardedStore {
             store: view.0,

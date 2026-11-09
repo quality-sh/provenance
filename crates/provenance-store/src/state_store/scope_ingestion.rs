@@ -1,9 +1,9 @@
 use super::read_budget::{ensure_slice_within_read_budget, ReadBudget};
 use super::{
-    ensure_new_ids_assignable, overlay_records, read_jsonl_unlocked, read_message_shards_unlocked,
+    ensure_new_ids_assignable, overlay_records, read_jsonl_held, read_message_shards_held,
     serde_name, Access, IdeationLandingBatch, StateStore,
 };
-use crate::cache::{BudgetKind, ProjectionFamily, RecordFamily};
+use crate::families::{BudgetKind, ProjectionFamily, RecordFamily};
 use crate::shards;
 use provenance_core::{
     AssertionRecord, Contribution, DispositionRecord, NodeType, ProposalCard, ScopeId,
@@ -38,7 +38,7 @@ macro_rules! ensure_assignable {
     ) => {};
     ($store:ident, $scope:ident, $shards:ident, $field:ident, $path:ident, direct, assignable) => {
         ensure_new_ids_assignable(
-            &read_jsonl_unlocked(&crate::shards::$path(&$store.layout, $scope))?,
+            &read_jsonl_held($store, &crate::shards::$path(&$store.layout, $scope))?,
             $shards.$field,
             |record| record.id.as_str(),
         )?;
@@ -60,7 +60,7 @@ macro_rules! ensure_assignable {
         $path:ident, messages, messages_assignable_budget
     ) => {
         ensure_new_ids_assignable(
-            &read_message_shards_unlocked(&$store.layout, $scope)?,
+            &read_message_shards_held($store, $scope)?,
             $shards.$field,
             |record| record.id.as_str(),
         )?;
@@ -70,7 +70,7 @@ macro_rules! ensure_assignable {
         $path:ident, contributions, assignable
     ) => {
         ensure_new_ids_assignable(
-            &read_ideation_records_unlocked($store, $scope)?.contributions,
+            &read_ideation_records_held($store, $scope)?.contributions,
             $shards.$field,
             |record| record.id.as_str(),
         )?;
@@ -80,7 +80,7 @@ macro_rules! ensure_assignable {
         $path:ident, synthesis_packets, assignable
     ) => {
         ensure_new_ids_assignable(
-            &read_ideation_records_unlocked($store, $scope)?.synthesis_packets,
+            &read_ideation_records_held($store, $scope)?.synthesis_packets,
             $shards.$field,
             |record| record.id.as_str(),
         )?;
@@ -90,7 +90,7 @@ macro_rules! ensure_assignable {
         $path:ident, proposal_cards, assignable
     ) => {
         ensure_new_ids_assignable(
-            &read_ideation_records_unlocked($store, $scope)?.proposals,
+            &read_ideation_records_held($store, $scope)?.proposals,
             $shards.$field,
             |record| record.id.as_str(),
         )?;
@@ -100,7 +100,7 @@ macro_rules! ensure_assignable {
         $path:ident, assertion_records, assignable
     ) => {
         ensure_new_ids_assignable(
-            &read_ideation_records_unlocked($store, $scope)?.assertions,
+            &read_ideation_records_held($store, $scope)?.assertions,
             $shards.$field,
             |record| record.id.as_str(),
         )?;
@@ -110,7 +110,7 @@ macro_rules! ensure_assignable {
         $path:ident, dispositions, assignable
     ) => {
         ensure_new_ids_assignable(
-            &read_ideation_records_unlocked($store, $scope)?.dispositions,
+            &read_ideation_records_held($store, $scope)?.dispositions,
             $shards.$field,
             |record| record.id.as_str(),
         )?;
@@ -321,7 +321,7 @@ macro_rules! define_imported_scope_shards {
     };
 }
 
-crate::cache::family_table::record_family_rows!(define_imported_scope_shards);
+crate::families::family_table::record_family_rows!(define_imported_scope_shards);
 
 impl StateStore {
     /// Runs a scope import in one section of the stage of this store. A live
@@ -352,21 +352,20 @@ struct StoredIdeationRecords {
     dispositions: Vec<DispositionRecord>,
 }
 
-fn read_ideation_records_unlocked(
+fn read_ideation_records_held(
     store: &StateStore,
     scope: &ScopeId,
 ) -> anyhow::Result<StoredIdeationRecords> {
     let layout = &store.layout;
     let mut records = StoredIdeationRecords {
-        contributions: read_jsonl_unlocked(&shards::contributions_path(layout, scope))?,
-        synthesis_packets: read_jsonl_unlocked(&shards::synthesis_packets_path(layout, scope))?,
-        proposals: read_jsonl_unlocked(&shards::proposal_cards_path(layout, scope))?,
-        assertions: read_jsonl_unlocked(&shards::assertion_records_path(layout, scope))?,
-        dispositions: read_jsonl_unlocked(&shards::dispositions_path(layout, scope))?,
+        contributions: read_jsonl_held(store, &shards::contributions_path(layout, scope))?,
+        synthesis_packets: read_jsonl_held(store, &shards::synthesis_packets_path(layout, scope))?,
+        proposals: read_jsonl_held(store, &shards::proposal_cards_path(layout, scope))?,
+        assertions: read_jsonl_held(store, &shards::assertion_records_path(layout, scope))?,
+        dispositions: read_jsonl_held(store, &shards::dispositions_path(layout, scope))?,
     };
-    let landings: Vec<IdeationLandingBatch> = super::readers::read_ideation_landings_unlocked(
-        &shards::ideation_landings_path(layout, scope),
-    )?;
+    let landings: Vec<IdeationLandingBatch> =
+        read_jsonl_held(store, &shards::ideation_landings_path(layout, scope))?;
     for batch in landings {
         overlay_records(&mut records.contributions, batch.contributions, |r| {
             r.id.as_str()

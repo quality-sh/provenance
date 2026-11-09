@@ -1,10 +1,17 @@
+//! JSON Lines shards: the row code that builds and checks shard bytes, and,
+//! with the `host` feature, the file writers of derived state, fixtures and
+//! the merge driver.
+
+#[cfg(feature = "host")]
 use crate::layout::ProvenanceLayout;
 use crate::publication::{protect_rows, WritePermissions};
 use crate::state_store::readers::{ensure_no_legacy_retirement, located, parse_line};
 use crate::state_store::StateStore;
 use camino::Utf8Path;
+#[cfg(feature = "host")]
 use fs2::FileExt;
 use serde::{de::DeserializeOwned, Serialize};
+#[cfg(feature = "host")]
 use std::fs::{File, OpenOptions};
 
 mod preservation;
@@ -12,10 +19,12 @@ mod preservation;
 use preservation::{LoadedRecords, RawRecord};
 
 /// An exclusive lock on the lock file at a path. Released on drop.
+#[cfg(feature = "host")]
 pub(crate) struct AdvisoryLock {
     file: File,
 }
 
+#[cfg(feature = "host")]
 impl AdvisoryLock {
     pub(crate) fn acquire(path: &Utf8Path) -> anyhow::Result<Self> {
         if let Some(parent) = path.parent() {
@@ -34,12 +43,14 @@ impl AdvisoryLock {
     }
 }
 
+#[cfg(feature = "host")]
 impl Drop for AdvisoryLock {
     fn drop(&mut self) {
         let _ = self.file.unlock();
     }
 }
 
+#[cfg(feature = "host")]
 pub fn with_advisory_lock<R>(
     path: &Utf8Path,
     operation: impl FnOnce() -> anyhow::Result<R>,
@@ -54,7 +65,7 @@ pub fn to_stable_json<T: Serialize>(value: &T) -> anyhow::Result<String> {
 
 /// Writes a test fixture shard in its own publication section. It carries no
 /// write permission, and inside a held section or stage body it refuses.
-#[cfg(any(test, feature = "test-fixture"))]
+#[cfg(all(feature = "host", any(test, feature = "test-fixture")))]
 pub fn write_jsonl_atomic<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyhow::Result<()> {
     with_state_publication(path, || write_jsonl_atomic_under_publication(path, records))
 }
@@ -62,6 +73,7 @@ pub fn write_jsonl_atomic<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyho
 /// Mutates one file of derived state, such as the verification runs, under
 /// its advisory lock, and writes the file in place. The caller holds the
 /// section. Canonical state publishes through the storage port instead.
+#[cfg(feature = "host")]
 pub(crate) fn mutate_jsonl_locked<T, R>(
     path: &Utf8Path,
     lock_path: &Utf8Path,
@@ -143,6 +155,7 @@ where
 
 /// Writes one JSONL shard while the caller holds the publication lock. It
 /// carries no write permission, so it cannot change an enrolled row.
+#[cfg(feature = "host")]
 pub(crate) fn write_jsonl_atomic_under_publication<T: Serialize>(
     path: &Utf8Path,
     records: &[T],
@@ -151,6 +164,7 @@ pub(crate) fn write_jsonl_atomic_under_publication<T: Serialize>(
     write_jsonl_atomic_unlocked(path, records)
 }
 
+#[cfg(feature = "host")]
 fn write_jsonl_atomic_unlocked<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyhow::Result<()> {
     let lines = records
         .iter()
@@ -166,6 +180,7 @@ fn write_jsonl_atomic_unlocked<T: Serialize>(path: &Utf8Path, records: &[T]) -> 
 /// refused before the target is replaced. JSON line bytes are preserved; line
 /// terminators are written as `\n`. The write takes its own publication
 /// section, so inside a held section or stage body it refuses.
+#[cfg(feature = "host")]
 pub fn write_preserved_jsonl_atomic(
     path: &Utf8Path,
     ours: &[crate::merge::StoredRow],
@@ -181,6 +196,7 @@ pub fn write_preserved_jsonl_atomic(
 
 /// A store that reads the files of the repository of `path` with no lock,
 /// for a raw writer that holds the section and writes the files itself.
+#[cfg(feature = "host")]
 fn files_of(path: &Utf8Path) -> StateStore {
     StateStore::read_only(ProvenanceLayout::new(path.to_owned()))
 }
@@ -198,6 +214,7 @@ fn guard_jsonl_lines(
     protect_rows(store, path, &records, permissions)
 }
 
+#[cfg(feature = "host")]
 fn write_jsonl_lines_atomic_unlocked(path: &Utf8Path, lines: &[String]) -> anyhow::Result<()> {
     crate::storage::local::write_file_atomic(path, &jsonl_bytes(lines))
 }
@@ -214,6 +231,7 @@ fn jsonl_bytes(lines: &[String]) -> Vec<u8> {
 
 /// Runs a raw write in the publication section of the repository that holds
 /// `path`. The raw writers carry no permission and get no held store.
+#[cfg(feature = "host")]
 fn with_state_publication<R>(
     path: &Utf8Path,
     run: impl FnOnce() -> anyhow::Result<R>,

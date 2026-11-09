@@ -120,6 +120,7 @@ pub fn read_jsonl_rows(path: &camino::Utf8Path) -> anyhow::Result<Vec<StoredRow>
 /// ours when our side holds it, theirs when only theirs does. The merge is
 /// refused when no stored row matches, because re-encoding that record would
 /// publish content that no side stored.
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 pub(crate) fn preserved_lines(
     ours: &[StoredRow],
     theirs: &[StoredRow],

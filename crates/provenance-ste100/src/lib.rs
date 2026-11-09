@@ -11,10 +11,14 @@ mod protected_spans;
 mod vocabulary;
 mod word_class;
 
+#[cfg(feature = "host")]
 pub use dictionary::{
     import_dictionary, load_dictionary_index, load_dictionary_index_for_source,
-    store_dictionary_index, DictionaryEntry, DictionaryImport, DictionaryImportError,
-    DictionaryImportIdentity, DictionaryIndexError, DictionaryStatus, PartOfSpeech,
+    store_dictionary_index, DictionaryIndexError,
+};
+pub use dictionary::{
+    DictionaryEntry, DictionaryImport, DictionaryImportError, DictionaryImportIdentity,
+    DictionaryStatus, PartOfSpeech,
 };
 
 use provenance_macros::rule;

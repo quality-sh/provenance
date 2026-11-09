@@ -85,7 +85,7 @@ impl StateStore {
             origin_message,
         } = input;
         self.ensure_canonical_id_available(&scope_id, &id)?;
-        super::statement_policy::ensure_statement_is_writable(&self.layout, &statement)?;
+        super::statement_policy::ensure_statement_is_writable(self, &statement)?;
         for parent in &refines {
             self.ensure_node_exists(&scope_id, NodeType::Requirement, parent, "--refines")?;
         }

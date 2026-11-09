@@ -5,6 +5,8 @@ pub(crate) mod guard;
 mod input;
 mod publication;
 pub(crate) mod relationships;
+// The resource reads serve the host use cases only.
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 mod resource_read;
 pub(crate) use resource_read::RequirementResourceSnapshot;
 mod save;
@@ -31,8 +33,12 @@ fn owner_matches(record: &impl serde::Serialize, owner: Option<&str>) -> anyhow:
     Ok(())
 }
 
+// The review reads page through the projection; they run on the host.
+#[cfg(feature = "host")]
 mod history;
+#[cfg(feature = "host")]
 mod reads;
+#[cfg(feature = "host")]
 pub use reads::{read_evidence, read_history};
 
 #[cfg(test)]
@@ -52,16 +58,23 @@ pub use create::CreateReviewRequirement;
 mod authoring;
 mod native_batch;
 pub(crate) use native_batch::NativeRecordBatch;
+#[cfg(feature = "host")]
 mod discussion_discovery;
+#[cfg(feature = "host")]
 mod discussion_messages;
+#[cfg(feature = "host")]
 mod discussion_page;
+#[cfg(feature = "host")]
 mod discussion_reads;
 mod discussion_removal;
 mod typed_adoption;
 #[cfg(test)]
 mod typed_adoption_tests;
+#[cfg(feature = "host")]
 pub use discussion_discovery::{read_discussion_conversation, read_discussion_list};
+#[cfg(feature = "host")]
 pub use discussion_messages::{read_discussion_message, read_discussion_messages};
+#[cfg(feature = "host")]
 pub use discussion_reads::{read_discussion, read_discussions};
 #[cfg(test)]
 mod discussion_recovery_tests;
@@ -73,7 +86,10 @@ pub use decision_input::{
 mod automatic_submission;
 mod cycle_index;
 mod decision;
+// The document review reads serve the host queries only.
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 mod decision_reads;
+#[cfg(feature = "host")]
 pub(crate) use decision_reads::DocumentReviewState;
 mod decision_state;
 

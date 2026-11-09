@@ -29,6 +29,8 @@ pub struct SharedParses {
     parses: Mutex<Parses>,
 }
 
+// Only catch-up, which the host build has, shares parses.
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 impl SharedParses {
     /// No parses yet of the shards of `view`.
     pub(crate) fn new(view: Arc<StateView>) -> Arc<Self> {

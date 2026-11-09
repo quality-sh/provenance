@@ -35,14 +35,18 @@ pub(super) mod typed_specs;
 mod typed_statement_policy;
 mod updates;
 mod verification_bindings;
+#[cfg(feature = "host")]
 mod verification_runs;
 mod withdrawal_writers;
 mod writers;
 pub use updates::*;
 
 pub use access::GuardedStore;
+#[cfg(feature = "host")]
 pub(crate) use access::ViewStore;
 pub(crate) use access::{SectionView, StateEntry};
+#[cfg(feature = "host")]
+pub use archive_history::GitHistory;
 pub use archive_history::{ArchiveCommitGap, ArchiveCommitGapReason};
 pub use graph_validation::validate_relations;
 pub use ideation_batches::{
@@ -63,6 +67,7 @@ pub use inputs::{
     UpdateQuestionInput,
 };
 pub use proposal_surfaces::{ProposalDemand, ProposalSurfaceReason, SurfacedProposal, TopicClaim};
+pub use read_budget::{set_real_bytes, RealBytes};
 pub use requirement_reviews::{
     requirement_statement_changes, RequirementReviewInput, RequirementStatementChange,
 };
@@ -79,6 +84,44 @@ use provenance_core::{
     VerificationBinding,
 };
 
+impl StateStore {
+    /// The commit history that the record stamps of this store read: the one
+    /// of the repository identity, or, for a layout-level store, the git
+    /// history of the layout root.
+    // The match keeps the host arm and the arm without host side by side.
+    #[allow(clippy::option_if_let_else)]
+    pub(crate) fn repository_history(
+        &self,
+    ) -> Option<std::sync::Arc<dyn crate::repository::RepositoryHistory>> {
+        match &self.identity {
+            Some(identity) => identity.history().cloned(),
+            #[cfg(feature = "host")]
+            None => Some(std::sync::Arc::new(GitHistory::new(
+                self.layout.root().to_owned(),
+            ))),
+            #[cfg(not(feature = "host"))]
+            None => None,
+        }
+    }
+
+    /// The project dictionary that the statement checks of this store use:
+    /// the one of the repository identity, or, for a layout-level store, the
+    /// one that the reference in the layout names.
+    #[allow(clippy::option_if_let_else)]
+    pub(crate) fn project_dictionary(
+        &self,
+    ) -> Option<std::sync::Arc<crate::dictionary_reference::ProjectDictionary>> {
+        match &self.identity {
+            Some(identity) => identity.dictionary(),
+            #[cfg(feature = "host")]
+            None => crate::dictionary_reference::load_project_dictionary(&self.layout)
+                .map(std::sync::Arc::new),
+            #[cfg(not(feature = "host"))]
+            None => None,
+        }
+    }
+}
+
 fn ensure_new_ids_assignable<T>(
     existing: &[T],
     incoming: &[T],
@@ -92,7 +135,7 @@ fn ensure_new_ids_assignable<T>(
     }
     Ok(())
 }
-use readers::{read_ideation_landings, read_jsonl_unlocked, read_message_shards_unlocked};
+use readers::{read_ideation_landings, read_jsonl_held, read_message_shards_held};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
@@ -122,6 +165,7 @@ enum Access {
         stage: std::sync::Arc<crate::publication::StageLock>,
     },
     /// Reads with no lock and refuses every write.
+    #[cfg_attr(not(feature = "host"), allow(dead_code))]
     ReadOnly,
     /// Reads one view of canonical state with no lock and no disk access,
     /// and refuses every write and stage. A fenced view store reads only
@@ -164,6 +208,7 @@ pub struct StateStore {
 enum Storage {
     /// A local-disk adapter over the layout of the store, made at each use.
     /// A layout-level store and a staged store use it.
+    #[cfg(feature = "host")]
     Layout,
     /// The adapter of the opened repository and the lock of its section.
     Shared {
@@ -171,6 +216,7 @@ enum Storage {
         lock: std::sync::Arc<dyn crate::storage::SectionLock>,
         /// Whether the adapter is the local adapter of the layout of the
         /// store, so that a working-tree file can land with the state.
+        #[cfg_attr(not(feature = "host"), allow(dead_code))]
         local: bool,
     },
 }

@@ -1,6 +1,7 @@
 //! The CI wiring for the kernel crates: one job checks each crate that the
 //! crate dependency policy names as a kernel crate, for the policy target and
-//! with default features, and the required `CI OK` job needs that job.
+//! with default features, and the required `CI OK` job needs that job. The
+//! same job runs the memory adapter tests of the store without `host`.
 
 use provenance_macros::verifies;
 use std::{fs, path::PathBuf};
@@ -40,6 +41,21 @@ fn job(workflow: &str, name: &str) -> String {
     start[..end].to_string()
 }
 
+/// The text of one step of `job`, from its name to the next step.
+fn step(job: &str, name: &str) -> String {
+    let start = job
+        .split_once(&format!("- name: {name}\n"))
+        .unwrap_or_else(|| panic!("the {name} step exists:\n{job}"))
+        .1;
+    let step = start
+        .split_once("\n      - ")
+        .map_or(start, |(step, _)| step);
+    // The last step of a job ends at the blank line before the next job.
+    step.split_once("\n\n")
+        .map_or(step, |(step, _)| step)
+        .to_string()
+}
+
 #[test]
 #[verifies("rule_kernel_crates_build_for_wasm", conformance)]
 fn wasm_kernel_job_checks_each_policy_kernel_crate_for_the_policy_target() {
@@ -61,9 +77,36 @@ fn wasm_kernel_job_checks_each_policy_kernel_crate_for_the_policy_target() {
         !job.contains("--features") && !job.contains("--all-features"),
         "the wasm-kernel job checks the default features only:\n{job}"
     );
+    let check = step(
+        &job,
+        "Check each kernel crate for the target with default features",
+    );
     assert!(
-        !job.contains("-p provenance-"),
-        "the wasm-kernel job takes its crates from the policy, not from a list of its own:\n{job}"
+        !check.contains("-p provenance-"),
+        "the wasm-kernel job takes its crates from the policy, not from a list of its own:\n{check}"
+    );
+}
+
+/// Implementation aid: no proposed Rule covers the CI wiring of the memory
+/// adapter tests. The tests that this step runs carry the evidence of
+/// `rule_engine_runs_on_any_storage`; this test shows that CI runs them
+/// without `host`.
+#[test]
+fn wasm_kernel_job_runs_the_memory_adapter_tests_without_host() {
+    let job = job(&workflow(), "wasm-kernel");
+    let test = step(&job, "Test the store on the memory adapter without host");
+    let command = test.split_whitespace().collect::<Vec<_>>().join(" ");
+
+    for part in [
+        "cargo test --locked -p provenance-store",
+        "--test memory_repository",
+        "--test memory_repository_stage_reads",
+    ] {
+        assert!(command.contains(part), "the step runs `{part}`:\n{test}");
+    }
+    assert!(
+        !command.contains("--features") && !command.contains("--target"),
+        "the step runs the native build with default features:\n{test}"
     );
 }
 

@@ -27,6 +27,7 @@ use std::sync::Arc;
 /// lock. The private fields restrict construction to this module.
 pub struct PublicationGuard {
     // The mutex makes the guard `Sync`, so a holder can borrow it across an await.
+    // An async guard keeps the close of its section here too.
     _lock: Option<std::sync::Mutex<Box<dyn Send>>>,
     repository: Repository,
 }
@@ -34,6 +35,7 @@ pub struct PublicationGuard {
 impl PublicationGuard {
     /// Supplies the protected repository layout to guarded readers.
     #[rule("rule_guarded_reads_use_guard_repository")]
+    #[cfg_attr(not(feature = "host"), allow(dead_code))]
     pub(crate) fn layout(&self) -> &ProvenanceLayout {
         self.repository.layout()
     }
@@ -114,7 +116,10 @@ pub fn with_publication_guard<R>(
 /// The blocking wait runs on the blocking pool. Pending-publication recovery
 /// runs before the caller sees the guard. The guard adds no holder entry: it
 /// can move to another thread, and a synchronous section on any thread then
-/// waits for it.
+/// waits for it. As under a synchronous guard, the stores of the guard's
+/// repository read and write one view of the section, and they refuse after
+/// the guard drops.
+#[cfg(feature = "host")]
 pub async fn publication_guard(repository: &Repository) -> anyhow::Result<PublicationGuard> {
     let key = super::publication_lock_identity(repository.layout())?;
     // The lock waits on the blocking pool, so a stage body that blocks on this guard would
@@ -130,9 +135,15 @@ pub async fn publication_guard(repository: &Repository) -> anyhow::Result<Public
     let repository = repository.clone();
     tokio::task::spawn_blocking(move || {
         let lock = repository.section_lock().acquire()?;
+        let section = SectionHandle {
+            open: Arc::new(AtomicBool::new(true)),
+            view: Arc::default(),
+        };
+        // The section closes before the lock is released.
+        let held: Box<dyn Send> = Box::new((SectionClose(section.clone()), lock));
         Ok(PublicationGuard {
-            _lock: Some(std::sync::Mutex::new(lock)),
-            repository,
+            _lock: Some(std::sync::Mutex::new(held)),
+            repository: repository.within_section(section),
         })
     })
     .await
@@ -200,6 +211,20 @@ mod tests {
         assert_ne!(taken_on, dropped_on);
         with_repository_publication(repository.layout(), |_| Ok(()))
             .expect("a section on the thread that took the guard proceeds");
+    }
+
+    #[tokio::test]
+    #[verifies("rule_section_repository_stops_with_its_section", examples)]
+    async fn an_async_guard_repository_reads_one_view_and_stops_with_the_guard() {
+        let (_dir, repository) = repo();
+        let guard = publication_guard(&repository).await.unwrap();
+        let held = guard.repository().clone();
+        let scopes = held.store().manifest().unwrap().scopes.len();
+        // A file change under the guard is not in the view of its section.
+        std::fs::write(repository.layout().manifest_path(), b"{").unwrap();
+        assert_eq!(held.store().manifest().unwrap().scopes.len(), scopes);
+        drop(guard);
+        assert!(held.store().manifest().is_err());
     }
 
     #[test]

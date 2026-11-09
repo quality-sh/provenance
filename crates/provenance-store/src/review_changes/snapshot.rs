@@ -1,6 +1,6 @@
 use super::ReviewStateSnapshot;
 use crate::{
-    cache::{ProjectionFamily, RecordFamily},
+    families::{ProjectionFamily, RecordFamily},
     publication::PublicationGuard,
     settings::Settings,
     state_store::{GuardedStore, SharedParses, StateStore, ViewStore},
@@ -141,4 +141,4 @@ macro_rules! snapshot_families {
     };
 }
 
-crate::cache::record_families!(snapshot_families);
+crate::families::record_families!(snapshot_families);

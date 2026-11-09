@@ -101,6 +101,8 @@ fn real_kernel_queue_loss_sends_reset_and_current_read() {
 #[tokio::test]
 // Implementation aid: the observer parses the captured bytes after it releases the guard.
 // When that parse fails, it reads again under the guard and reports the error of that read.
+// The guarded read reads the view of the section of the guard, so it refuses the bytes with
+// the text of the view, as the parse does, and not with the text of a file read.
 async fn a_failed_parse_reports_the_error_of_a_guarded_read() {
     let repo = repository();
     source_before_host(repo.path(), "source_saved");
@@ -114,7 +116,6 @@ async fn a_failed_parse_reports_the_error_of_a_guarded_read() {
     let repository = review_host_support::waits::repository(repo.path());
     let guard = review_host_support::waits::guard(&repository).await;
     let temporary = shard.with_extension("replacement");
-    // A parse of the view and a read of the file refuse these bytes with different texts.
     std::fs::write(&temporary, b"\xff not UTF-8\n").unwrap();
     std::fs::rename(&temporary, &shard).unwrap();
     drop(guard);
@@ -126,10 +127,13 @@ async fn a_failed_parse_reports_the_error_of_a_guarded_read() {
         .find(|line| line.starts_with("Live review updates are unavailable"))
         .unwrap();
     assert!(
-        line.contains("stream did not contain valid UTF-8"),
+        line.contains("source.jsonl: the file is not UTF-8"),
         "{line}"
     );
-    assert!(!line.contains("the file is not UTF-8"), "{line}");
+    assert!(
+        !line.contains("stream did not contain valid UTF-8"),
+        "{line}"
+    );
 }
 
 #[tokio::test]

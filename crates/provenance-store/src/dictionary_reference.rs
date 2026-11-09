@@ -1,13 +1,26 @@
+//! The project dictionary that statement checks use. A repository identity
+//! carries it; with the `host` feature, the committed reference resolves it
+//! from the machine index directory.
+
+#[cfg(feature = "host")]
 use std::path::PathBuf;
 
+#[cfg(feature = "host")]
 use anyhow::Context;
+#[cfg(feature = "host")]
 use camino::Utf8PathBuf;
+#[cfg(feature = "host")]
 use provenance_macros::rule;
-use provenance_ste100::{DictionaryImport, DictionaryImportIdentity};
+use provenance_ste100::DictionaryImport;
+#[cfg(feature = "host")]
+use provenance_ste100::DictionaryImportIdentity;
+#[cfg(feature = "host")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "host")]
 use crate::layout::ProvenanceLayout;
 
+#[cfg(feature = "host")]
 pub fn dictionary_reference_path(layout: &ProvenanceLayout) -> Utf8PathBuf {
     layout.state_dir().join("dictionary.json")
 }
@@ -15,6 +28,7 @@ pub fn dictionary_reference_path(layout: &ProvenanceLayout) -> Utf8PathBuf {
 /// The committed project dictionary reference: the identity of the machine
 /// index, and the technical names that ASD-STE100 Rule 1.1 accepts.
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg(feature = "host")]
 struct DictionaryReference {
     #[serde(flatten)]
     identity: DictionaryImportIdentity,
@@ -33,6 +47,7 @@ pub struct ProjectDictionary {
 
 /// How the project dictionary reference resolved on this machine.
 #[derive(Debug)]
+#[cfg(feature = "host")]
 pub enum DictionaryResolution {
     /// The project commits no dictionary reference.
     NoReference,
@@ -48,6 +63,7 @@ pub enum DictionaryResolution {
 
 /// Separates a missing reference from a reference that cannot load, so a strict
 /// gate can fail on the second and stay silent on the first.
+#[cfg(feature = "host")]
 pub fn resolve_project_dictionary(layout: &ProvenanceLayout) -> DictionaryResolution {
     let Ok(reference) = std::fs::read(dictionary_reference_path(layout).as_std_path()) else {
         return DictionaryResolution::NoReference;
@@ -84,6 +100,7 @@ pub fn resolve_project_dictionary(layout: &ProvenanceLayout) -> DictionaryResolu
 
 /// Loads the referenced dictionary, or nothing when it cannot load.
 #[rule("rule_ste_dictionary_reference_resolution")]
+#[cfg(feature = "host")]
 pub fn load_project_dictionary(layout: &ProvenanceLayout) -> Option<ProjectDictionary> {
     match resolve_project_dictionary(layout) {
         DictionaryResolution::Loaded(dictionary) => Some(dictionary),
@@ -92,6 +109,7 @@ pub fn load_project_dictionary(layout: &ProvenanceLayout) -> Option<ProjectDicti
 }
 
 /// Stores the index in the machine data directory and writes the project reference.
+#[cfg(feature = "host")]
 pub fn set_project_dictionary(
     layout: &ProvenanceLayout,
     import: &DictionaryImport,
@@ -109,6 +127,7 @@ pub fn set_project_dictionary(
 
 /// The reference bytes for a new dictionary identity. The bytes keep the
 /// technical names of the current reference.
+#[cfg(feature = "host")]
 pub fn reference_bytes(
     layout: &ProvenanceLayout,
     identity: &DictionaryImportIdentity,
@@ -133,6 +152,7 @@ pub fn reference_bytes(
 /// The warning for a reference that exists without a loadable index, because
 /// then the statement checks do not run ASD-STE100 Rule 1.1.
 #[rule("rule_ste_dictionary_index_missing_warning")]
+#[cfg(feature = "host")]
 pub fn missing_index_warning(layout: &ProvenanceLayout) -> Option<String> {
     let DictionaryResolution::Unavailable {
         directory, reason, ..
@@ -152,6 +172,7 @@ pub fn missing_index_warning(layout: &ProvenanceLayout) -> Option<String> {
 }
 
 /// The machine directory that holds imported dictionary index files.
+#[cfg(feature = "host")]
 pub fn index_directory() -> Option<PathBuf> {
     if let Some(directory) = std::env::var_os("PROVENANCE_STE100_INDEX_DIR") {
         return Some(PathBuf::from(directory));
@@ -164,16 +185,19 @@ pub fn index_directory() -> Option<PathBuf> {
 }
 
 #[cfg(target_os = "windows")]
+#[cfg(feature = "host")]
 fn data_directory() -> Option<PathBuf> {
     std::env::var_os("APPDATA").map(PathBuf::from)
 }
 
 #[cfg(target_os = "macos")]
+#[cfg(feature = "host")]
 fn data_directory() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Library/Application Support"))
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
+#[cfg(feature = "host")]
 fn data_directory() -> Option<PathBuf> {
     std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)

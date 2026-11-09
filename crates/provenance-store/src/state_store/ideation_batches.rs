@@ -21,9 +21,17 @@ impl StateStore {
             if held.stage().is_some() {
                 return operation(held);
             }
-            crate::jsonl::with_advisory_lock(&held.layout.lifecycle_lock_path(scope), || {
+            #[cfg(feature = "host")]
+            return crate::jsonl::with_advisory_lock(
+                &held.layout.lifecycle_lock_path(scope),
+                || operation(held),
+            );
+            // With no lock files, the section alone runs the writes one at a time.
+            #[cfg(not(feature = "host"))]
+            {
+                let _ = scope;
                 operation(held)
-            })
+            }
         })
     }
 

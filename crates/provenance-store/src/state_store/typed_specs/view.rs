@@ -35,7 +35,7 @@ impl StateStore {
             resolutions: self.list_resolutions(scope)?,
             topics: self.list_topics(scope)?,
             questions: self.list_questions(scope)?,
-            dictionary: crate::dictionary_reference::load_project_dictionary(&self.layout),
+            dictionary: self.project_dictionary().as_deref().cloned(),
         })
     }
 }

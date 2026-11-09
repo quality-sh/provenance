@@ -180,6 +180,7 @@ impl StateStore {
     }
 
     /// Whether the state file at `path` exists.
+    #[cfg_attr(not(feature = "host"), allow(dead_code))]
     pub(crate) fn state_exists(&self, path: &Utf8Path) -> anyhow::Result<bool> {
         self.check_read(path)?;
         let key = self.state_key(path);

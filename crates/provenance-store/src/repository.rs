@@ -5,21 +5,30 @@
 //! open, and gives out stores. An operation takes the handle; it does not
 //! discover, canonicalize or re-read settings itself.
 
-use crate::layout::{with_initialized_graph, GraphNotInitialized, ProvenanceLayout};
+#[cfg(feature = "host")]
+use crate::layout::with_initialized_graph;
+use crate::layout::{GraphNotInitialized, ProvenanceLayout};
 use crate::publication::SectionHandle;
 use crate::settings::{Settings, SettingsError};
 #[cfg(feature = "host")]
 use crate::stale::revision_scans::KeptScans;
 use crate::state_store::StateStore;
+#[cfg(feature = "host")]
 use crate::storage::local::{LocalSectionLock, LocalStateStorage};
 use crate::storage::{SectionLock, StateKey, StateStorage};
 use crate::write_error::{SourceFailure, WriteError, WriteFailure};
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
+#[cfg(feature = "host")]
+use camino::Utf8PathBuf;
 use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
 use provenance_core::{Manifest, Scope, ScopeId, Stamp};
 use provenance_macros::{rule, verifies};
+#[cfg(feature = "host")]
 use std::path::Path;
 use std::sync::Arc;
+
+mod identity;
+pub use identity::{RepositoryHistory, RepositoryIdentity};
 
 /// One opened repository. A clone shares the open; one open per command or host.
 #[derive(Clone, Debug)]
@@ -44,45 +53,6 @@ struct Inner {
     /// query of this open read. Each clone of the handle shares them.
     #[cfg(feature = "host")]
     kept_scans: KeptScans,
-}
-
-/// What a repository is, apart from where its state lives.
-///
-/// The working tree, the selected scope and the settings read at open. The
-/// identity has no store constructor, so a holder cannot reach canonical
-/// state through it.
-#[derive(Clone, Debug)]
-pub struct RepositoryIdentity {
-    root: Utf8PathBuf,
-    scope: ScopeId,
-    settings: Arc<Settings>,
-}
-
-impl RepositoryIdentity {
-    /// The identity of a repository whose working tree is `root`, with the
-    /// selected scope and the settings that the host read.
-    pub fn new(root: Utf8PathBuf, scope: ScopeId, settings: Settings) -> Self {
-        Self {
-            root,
-            scope,
-            settings: Arc::new(settings),
-        }
-    }
-
-    /// The canonical working-tree root.
-    pub fn working_tree(&self) -> &Utf8Path {
-        &self.root
-    }
-
-    /// The scope the handle selected at open.
-    pub const fn scope(&self) -> &ScopeId {
-        &self.scope
-    }
-
-    /// The settings read once at open.
-    pub fn settings(&self) -> &Settings {
-        &self.settings
-    }
 }
 
 /// Why a repository did not open.
@@ -142,16 +112,22 @@ impl Repository {
     /// Opens the repository at `root` for one scope.
     ///
     /// The root is canonicalized, the initialized-graph gate runs once, the
-    /// manifest must declare the scope, and the settings file is read once.
+    /// manifest must declare the scope, and the settings file and the
+    /// project dictionary are read once.
     #[rule("rule_repository_reads_settings_once_at_open")]
+    #[cfg(feature = "host")]
     pub fn open(root: impl AsRef<Path>, scope: &str) -> Result<Self, OpenFailure> {
         let root = canonical_root(root.as_ref())?;
         let layout = ProvenanceLayout::new(root.clone());
         let manifest = with_initialized_graph(&layout, Ok).map_err(gate_failure)?;
         let scope = declared_scope(&manifest, scope)?.id.clone();
         let settings = Settings::load(&layout)?;
+        let dictionary = crate::dictionary_reference::load_project_dictionary(&layout);
+        let history = Arc::new(crate::state_store::GitHistory::new(root.clone()));
         Ok(Self::with_parts(
-            RepositoryIdentity::new(root, scope, settings),
+            RepositoryIdentity::new(root, scope, settings)
+                .with_dictionary(dictionary)
+                .with_history(history),
             Arc::new(LocalStateStorage::new(layout.clone())),
             Arc::new(LocalSectionLock::new(layout)),
             true,
@@ -191,7 +167,7 @@ impl Repository {
     ) -> Self {
         Self {
             inner: Arc::new(Inner {
-                layout: ProvenanceLayout::new(identity.root.clone()),
+                layout: ProvenanceLayout::new(identity.working_tree().to_owned()),
                 identity,
                 storage,
                 section_lock,
@@ -206,6 +182,7 @@ impl Repository {
     /// Opens one explicit root, or the nearest enclosing project of the
     /// current directory: the first ancestor with a manifest or a `.git`.
     #[rule("rule_sdk_project_discovery")]
+    #[cfg(feature = "host")]
     pub fn discover(root: Option<Utf8PathBuf>, scope: &str) -> Result<Self, OpenFailure> {
         if let Some(root) = root.as_ref().filter(|root| root.is_absolute()) {
             return Self::open(root, scope);
@@ -416,6 +393,7 @@ pub fn declared_scope<'a>(
 /// form names a different path: a root of 260 characters or more, a
 /// reserved name such as `CON`, or a name that ends with a dot or a space.
 #[rule("rule_opened_root_is_resolved_working_tree")]
+#[cfg(feature = "host")]
 fn canonical_root(path: &Path) -> Result<Utf8PathBuf, OpenFailure> {
     let invalid = |error: std::io::Error| OpenFailure::InvalidRoot {
         path: path.display().to_string(),
@@ -429,6 +407,7 @@ fn canonical_root(path: &Path) -> Result<Utf8PathBuf, OpenFailure> {
         .map_err(|_| invalid(std::io::Error::other("is not UTF-8")))
 }
 
+#[cfg(feature = "host")]
 fn gate_failure(error: anyhow::Error) -> OpenFailure {
     if error.downcast_ref::<GraphNotInitialized>().is_some() {
         OpenFailure::NotInitialized
