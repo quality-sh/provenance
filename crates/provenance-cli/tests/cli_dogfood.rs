@@ -189,7 +189,9 @@ fn note_rejects_unknown_surface_and_lists_valid_ones() {
         ])
         .assert()
         .code(1)
-        .stderr(predicates::str::contains("unknown surface `not-a-real-surface`"))
+        .stderr(predicates::str::contains(
+            "unknown surface `not-a-real-surface`",
+        ))
         .stderr(predicates::str::contains("prime"))
         .stderr(predicates::str::contains("api"))
         .stderr(predicates::str::contains("trace"))
