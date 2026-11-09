@@ -266,7 +266,6 @@ impl CatalogAnswer {
 /// with one route also gives the JSON form of that route, with its request and
 /// response schemas. An answer with more routes says how to see the schemas of one
 /// route.
-#[rule("rule_api_catalog_schemas_only_for_one_route")]
 pub fn render_discovery_readable(answer: &CatalogAnswer, fields: SeeMore) -> String {
     let listing = CatalogListing::from(answer);
     let mut lines = vec![format!("api routes: {}", answer.routes.len())];
