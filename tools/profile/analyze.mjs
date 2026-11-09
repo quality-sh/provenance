@@ -44,7 +44,6 @@ const { values: options } = parseArgs({
     out: { type: 'string', default: 'api-profile' },
     frequency: { type: 'string', default: '1999' },
     commit: { type: 'string', default: process.env.GITHUB_SHA ?? '' },
-    head: { type: 'string', default: '' },
     'run-id': { type: 'string', default: process.env.GITHUB_RUN_ID ?? '' },
     artifact: { type: 'string', default: 'api-profile' },
   },
@@ -217,8 +216,7 @@ function changeTable(entries) {
 function header(profile) {
   const lines = [];
   const run = profile.run.url ? `[${profile.run.id}](${profile.run.url})` : 'local';
-  const head = profile.head && profile.head !== profile.commit ? ` (pull request head \`${short(profile.head)}\` merged into its base)` : '';
-  lines.push(`Commit \`${short(profile.commit)}\`${head}, run ${run}. ${profile.rows.length} rows, ${profile.samples.kept ?? 'unknown'} samples at ${frequency} Hz. Runner CPU: ${cpus(profile.runners).join('; ') || 'unknown'}.`);
+  lines.push(`Commit \`${short(profile.commit)}\`, run ${run}. ${profile.rows.length} rows, ${profile.samples.kept ?? 'unknown'} samples at ${frequency} Hz. Runner CPU: ${cpus(profile.runners).join('; ') || 'unknown'}.`);
   const bases = profile.baselines;
   if (bases.length) {
     const list = bases.map(base => `commit \`${short(base.commit)}\` run ${base.run?.url ? `[${base.run.id}](${base.run.url})` : 'unknown'} (${base.cpus.join(', ') || 'CPU unknown'})`).join('; ');
@@ -227,7 +225,7 @@ function header(profile) {
       lines.push('With one baseline, the change from run to run is not known, so part of a change can be runner noise.');
     }
   } else {
-    lines.push('Baseline: none found, so this run has no comparison.');
+    lines.push('No main baseline found, so this run has no comparison.');
   }
   lines.push(`Shares are percent of the CPU samples of one row, not milliseconds, because runner speed changes from run to run. A change is over the noise when it is at least ${(MIN_CHANGE * 100).toFixed(1)} points and ${MIN_Z} standard errors; the error includes how much the shares of the row change between the baseline runs. Kernel functions (\`_[k]\`) are not compared.`);
   return lines;
@@ -337,7 +335,6 @@ async function main() {
   const labels = new Set(outRows.map(row => row.label));
   const profile = {
     commit: options.commit,
-    head: options.head || options.commit,
     run: { id: options['run-id'], url: runUrl(options['run-id']) },
     frequency,
     samples: stats,

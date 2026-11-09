@@ -28,6 +28,8 @@ const { values: options } = parseArgs({
     reads: { type: 'string', default: '20' },
     writes: { type: 'string', default: '10' },
     ways: { type: 'string', default: 'HTTP,MCP,CLI' },
+    // The ways that call the catalog write operations. The profile workflow uses MCP only, to fit its time limit.
+    'route-writes': { type: 'string', default: 'HTTP,MCP,CLI' },
     filter: { type: 'string', default: '' },
     windows: { type: 'string' },
   },
@@ -185,6 +187,10 @@ async function routeRows(way, planner, operations, readRequests) {
     if (request) {
       await measure(way, op.label, 'read', reads, async () => request, send, { restart });
     }
+  }
+  if (!options['route-writes'].split(',').includes(way.name)) {
+    log(`  ${way.name}: the catalog write operations are not called (--route-writes)`);
+    return;
   }
   for (const op of operations.filter(item => item.write && selected(item.label))) {
     await measure(way, op.label, 'write', writes, () => planner.writeRequest(send, op, {}, way.name), send, {

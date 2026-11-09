@@ -50,6 +50,8 @@ that the store refuses.
 - `run.mjs` runs the calls and writes `results.json`. With `--windows <file>`,
   it also writes the process id and the time window of each timed call. The
   API profile workflow uses that file (see `tools/profile/README.md`).
+  `--route-writes MCP` calls the catalog write operations through MCP only;
+  the default is `HTTP,MCP,CLI`.
 - `report.mjs` ranks the rows, slowest warm p50 first, and writes `report.md`
   and `report.json`. A row is marked when its cold, p50 or p95 time is over
   200 ms.
