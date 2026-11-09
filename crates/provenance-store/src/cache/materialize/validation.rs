@@ -1,11 +1,14 @@
-use super::{relation_rows, units};
+use super::{family_inputs, relation_rows, units};
 use crate::cache::ProjectionFamily;
 use crate::publication::PublicationGuard;
-use crate::state_store::{GuardedStore, StateStore};
+use crate::state_store::{FencedStore, GuardedStore, SharedParses, ViewStore};
+use crate::storage::{StateKey, StateView};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::model::relations::RelationRow;
 use provenance_core::{Manifest, ScopeId};
 use provenance_macros::rule;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 pub(super) struct FamilyRecords {
     pub family: ProjectionFamily,
@@ -19,30 +22,84 @@ pub(super) struct ScopeRecords {
 }
 
 pub(super) struct UnitReader<'g> {
-    store: GuardedStore<'g>,
+    guard: &'g PublicationGuard,
     state_dir: Utf8PathBuf,
-    pub units_hashed: u64,
+    pass: Option<PassView>,
+    /// The catch-up holds the reader across an await of a future that
+    /// must be `Send`, so the count is atomic.
+    units_hashed: AtomicU64,
+}
+
+/// The one view of canonical state that a pass hashes and parses, and the
+/// store that reads it.
+struct PassView {
+    view: Arc<StateView>,
+    store: GuardedStore<'static>,
 }
 
 impl<'g> UnitReader<'g> {
-    /// Catch-up and rebuild read the tree protected by the publication guard.
+    /// Catch-up and rebuild read the state that the publication guard
+    /// protects.
     #[rule("rule_catch_up_hashes_canonical_state_in_place")]
     pub fn new(guard: &'g PublicationGuard) -> Self {
         Self {
-            store: StateStore::under_guard(guard),
+            guard,
             state_dir: guard.layout().state_dir(),
-            units_hashed: 0,
+            pass: None,
+            units_hashed: AtomicU64::new(0),
         }
     }
 
-    /// Hashes one unit. `known` is the pair the projection holds for it;
-    /// a unit whose bytes have not changed keeps that pair without a parse.
+    /// The state directory whose view this pass reads.
+    pub fn state_dir(&self) -> &Utf8Path {
+        &self.state_dir
+    }
+
+    /// The number of units that this pass hashed.
+    pub fn units_hashed(&self) -> u64 {
+        self.units_hashed.load(Ordering::Relaxed)
+    }
+
+    /// Reads the one view of canonical state that this pass hashes and
+    /// parses: the view of the section that the guard holds, or a view that
+    /// the adapter reads under the guard. The store of the pass reads this
+    /// view too. So the digests that a pass stores are the digests of the
+    /// bytes that it parsed.
+    #[rule("rule_catch_up_reads_units_from_the_view")]
+    #[rule("rule_catch_up_stores_the_digest_of_parsed_bytes")]
+    fn read_view(&mut self) -> anyhow::Result<&PassView> {
+        if self.pass.is_none() {
+            let repository = self.guard.repository();
+            let storage = repository.storage();
+            let view = Arc::new(match repository.section() {
+                Some(section) => section.view().read(storage.as_ref(), Clone::clone)?,
+                None => storage.read_view()?,
+            });
+            let store = GuardedStore::of_view(ViewStore::new(repository, Arc::clone(&view)));
+            self.pass = Some(PassView { view, store });
+        }
+        Ok(self.pass.as_ref().expect("the view is read"))
+    }
+
+    /// The view of this pass. [`Self::global`] reads it first.
+    fn pass(&self) -> anyhow::Result<&PassView> {
+        self.pass
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("the catch-up read no view before it hashed a scope"))
+    }
+
+    /// The bytes of one unit in the view. `known` is the pair the
+    /// projection holds for it; a unit whose bytes have not changed gives
+    /// `None`.
     pub fn hash(
-        &mut self,
+        &self,
         unit: &units::Unit,
         known: Option<&units::UnitDigests>,
-    ) -> anyhow::Result<units::UnitDigests> {
-        hash(&self.state_dir, unit, known, &mut self.units_hashed)
+    ) -> anyhow::Result<Option<units::UnitBytes<'_>>> {
+        self.units_hashed.fetch_add(1, Ordering::Relaxed);
+        crate::test_probes::at("catch_up_unit_hashed")?;
+        let bytes = units::UnitBytes::of_view(&self.pass()?.view, unit);
+        Ok((known.map(|known| &known.stored) != Some(&bytes.stored)).then_some(bytes))
     }
 
     /// A global change validates every scope. Other passes validate only changed scopes.
@@ -51,98 +108,102 @@ impl<'g> UnitReader<'g> {
         &mut self,
         known: Option<&units::UnitDigests>,
     ) -> anyhow::Result<(Manifest, units::UnitDigests)> {
-        let unit = units::Unit::Global;
-        let path = self.state_dir.join("manifest.json");
-        let mut manifest_bytes = None;
-        self.units_hashed += 1;
+        self.units_hashed.fetch_add(1, Ordering::Relaxed);
         crate::test_probes::at("catch_up_unit_hashed")?;
-        let digests = units::digests_with(&self.state_dir, &unit, known, |read_path, bytes| {
-            if read_path == path {
-                manifest_bytes = Some(bytes.to_vec());
-            }
-        })?;
+        let state_dir = self.state_dir.clone();
+        let pass = self.read_view()?;
+        let digests = units::unit_digests(&state_dir, &pass.view, &units::Unit::Global, known)?;
         crate::test_probes::at("catch_up_global_before_parse")?;
+        let path = state_dir.join("manifest.json");
         crate::test_probes::record_read(&path);
         if known == Some(&digests) {
-            let bytes =
-                manifest_bytes.ok_or_else(|| anyhow::anyhow!("missing manifest: {path}"))?;
-            return Ok((crate::state_store::manifest_from_bytes(&bytes)?, digests));
+            let key = StateKey::new("manifest.json").expect("the manifest key is valid");
+            let bytes = pass
+                .view
+                .get(&key)
+                .ok_or_else(|| anyhow::anyhow!("missing manifest: {path}"))?;
+            return Ok((crate::state_store::manifest_from_bytes(bytes)?, digests));
         }
-        stable(&self.state_dir, &unit, digests, || {
-            let manifest = self.store.manifest()?;
-            for scope in &manifest.scopes {
-                validate(&self.store, &scope.id)?;
-            }
-            Ok(manifest)
-        })
+        let manifest = pass.store.manifest()?;
+        for scope in &manifest.scopes {
+            validate(&pass.store, &scope.id)?;
+        }
+        Ok((manifest, digests))
     }
 
+    /// Validates the whole scope and parses the families that the changed
+    /// files of `read` can change, or every family when `all` is set. The
+    /// relation rows are derived when an owner family is parsed. The pass
+    /// parses the view whose bytes gave `read`. The stores of the scope
+    /// share their parses of that view.
     pub fn scope(
         &self,
         scope: &ScopeId,
-        digests: units::UnitDigests,
-    ) -> anyhow::Result<(ScopeRecords, units::UnitDigests)> {
-        stable(
-            &self.state_dir,
-            &units::Unit::Scope(scope.clone()),
-            digests,
-            || {
-                crate::test_probes::at("catch_up_before_parse")?;
-                validate(&self.store, scope)?;
-                let mut families = Vec::new();
-                for family in ProjectionFamily::ALL {
-                    let (bytes, count) = family.guarded_records(&self.store, scope)?;
-                    families.push(FamilyRecords {
-                        family,
-                        bytes,
-                        count,
-                    });
-                }
-                Ok(ScopeRecords {
-                    families,
-                    relations: relation_rows::scope_rows(&self.store, scope)?,
-                })
+        read: &units::UnitRead,
+        all: bool,
+    ) -> anyhow::Result<ScopeRecords> {
+        crate::test_probes::at("catch_up_before_parse")?;
+        let parses = SharedParses::new(Arc::clone(&self.pass()?.view));
+        let repository = self.guard.repository();
+        validate(
+            &GuardedStore::of_view(ViewStore::sharing(repository, &parses)),
+            scope,
+        )?;
+        let selected = if all {
+            None
+        } else {
+            family_inputs::affected(scope, &read.changed)
+        };
+        let selected = selected.unwrap_or_else(|| ProjectionFamily::ALL.to_vec());
+        let mut families = Vec::new();
+        for family in selected {
+            let fenced = fenced(
+                repository,
+                &parses,
+                scope,
+                family_inputs::input_directories(family),
+            );
+            let (bytes, count) = family.records_of_validated_scope(fenced, scope)?;
+            families.push(FamilyRecords {
+                family,
+                bytes,
+                count,
+            });
+        }
+        let owners = families
+            .iter()
+            .any(|records| relation_rows::OWNERS.contains(&records.family));
+        Ok(ScopeRecords {
+            families,
+            relations: if owners {
+                let fenced = fenced(
+                    repository,
+                    &parses,
+                    scope,
+                    relation_rows::input_directories(),
+                );
+                relation_rows::scope_rows(fenced, scope)?
+            } else {
+                Vec::new()
             },
-        )
+        })
     }
+}
+
+/// A store over the view of `parses` that shares them and reads only
+/// `directories` below the scope directory of `scope`.
+fn fenced(
+    repository: &crate::repository::Repository,
+    parses: &Arc<SharedParses>,
+    scope: &ScopeId,
+    directories: Vec<&'static str>,
+) -> FencedStore {
+    ViewStore::sharing(repository, parses).fenced(scope, directories)
 }
 
 fn validate(store: &GuardedStore<'_>, scope: &ScopeId) -> anyhow::Result<()> {
     store.validate_ideation_scope(scope)?;
     store.validate_graph_scope(scope)
-}
-
-fn hash(
-    state_dir: &Utf8Path,
-    unit: &units::Unit,
-    known: Option<&units::UnitDigests>,
-    hashes: &mut u64,
-) -> anyhow::Result<units::UnitDigests> {
-    *hashes += 1;
-    crate::test_probes::at("catch_up_unit_hashed")?;
-    Ok(units::unit_digests(state_dir, unit, known)?)
-}
-
-/// A parsed unit is used only when its hashes before and after parsing match.
-#[rule("rule_catch_up_stores_the_digest_of_parsed_bytes")]
-fn stable<T>(
-    state_dir: &Utf8Path,
-    unit: &units::Unit,
-    mut digests: units::UnitDigests,
-    mut parse: impl FnMut() -> anyhow::Result<T>,
-) -> anyhow::Result<(T, units::UnitDigests)> {
-    for _ in 0..3 {
-        let records = parse();
-        let after = units::unit_digests(state_dir, unit, Some(&digests))?;
-        if after == digests {
-            return records.map(|records| (records, digests));
-        }
-        digests = after;
-    }
-    anyhow::bail!(
-        "canonical state changed during catch-up under {}",
-        unit.name()
-    )
 }
 
 /// A projection from a different validator version requires a full rebuild.

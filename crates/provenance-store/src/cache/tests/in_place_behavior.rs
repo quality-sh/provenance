@@ -40,36 +40,53 @@ async fn an_unchanged_pass_parses_no_shard_but_the_manifest() {
     );
 }
 
+/// The statement of the one Requirement in the projection.
+async fn projected_statement(layout: &crate::layout::ProvenanceLayout) -> String {
+    let pool = open_cache(layout).await.unwrap();
+    let statement = sqlx::query_scalar("SELECT statement FROM requirements")
+        .fetch_one(pool.pool())
+        .await
+        .unwrap();
+    pool.close().await.unwrap();
+    statement
+}
+
+/// The content digest that the projection stores for the unit of `scope`.
+async fn stored_scope_digest(
+    layout: &crate::layout::ProvenanceLayout,
+    scope: &provenance_core::ScopeId,
+) -> String {
+    let pool = open_cache(layout).await.unwrap();
+    let stored = sqlx::query_scalar("SELECT digest FROM projection_unit_digests WHERE unit = ?")
+        .bind(format!("scope:{}", scope.as_str()))
+        .fetch_one(pool.pool())
+        .await
+        .unwrap();
+    pool.close().await.unwrap();
+    stored
+}
+
 #[tokio::test]
 #[verifies("rule_catch_up_stores_the_digest_of_parsed_bytes", examples)]
-async fn an_edit_between_hash_and_parse_is_hashed_again() {
+#[verifies("rule_catch_up_reads_units_from_the_view", examples)]
+async fn an_edit_after_the_view_is_read_waits_for_the_next_pass() {
     let (_dir, layout, scope) = seeded_layout();
     materialize_state(&open(&layout)).await.unwrap();
     let path = crate::shards::requirements_path(&layout, &scope);
     rewrite_records(&path, |r| r["statement"] = "First edit".into());
+    let first = unit_digest(&layout.state_dir(), &Unit::Scope(scope.clone())).unwrap();
     test_probes::arm("catch_up_before_parse", move || {
         rewrite_records(&path, |r| r["statement"] = "Second edit".into());
         Ok(())
     });
     catch_up_state(&open(&layout)).await.unwrap();
     test_probes::disarm("catch_up_before_parse");
-    let pool = open_cache(&layout).await.unwrap();
-    let statement: String = sqlx::query_scalar("SELECT statement FROM requirements")
-        .fetch_one(pool.pool())
-        .await
-        .unwrap();
-    assert_eq!(statement, "Second edit");
-    let stored: String =
-        sqlx::query_scalar("SELECT digest FROM projection_unit_digests WHERE unit = ?")
-            .bind(format!("scope:{}", scope.as_str()))
-            .fetch_one(pool.pool())
-            .await
-            .unwrap();
-    assert_eq!(
-        stored,
-        unit_digest(&layout.state_dir(), &Unit::Scope(scope)).unwrap()
-    );
-    pool.close().await.unwrap();
+
+    assert_eq!(projected_statement(&layout).await, "First edit");
+    assert_eq!(stored_scope_digest(&layout, &scope).await, first);
+    let report = catch_up_state(&open(&layout)).await.unwrap();
+    assert!(report.revision_committed, "{report:?}");
+    assert_eq!(projected_statement(&layout).await, "Second edit");
     assert_catch_up_equals_rebuild(&layout).await;
 }
 
@@ -77,6 +94,7 @@ async fn an_edit_between_hash_and_parse_is_hashed_again() {
 #[verifies("rule_catch_up_stores_the_digest_of_parsed_bytes", examples)]
 async fn a_rebuild_stores_the_digest_of_the_bytes_it_loaded() {
     let (_dir, layout, scope) = seeded_layout();
+    let loaded = unit_digest(&layout.state_dir(), &Unit::Scope(scope.clone())).unwrap();
     let path = crate::shards::requirements_path(&layout, &scope);
     test_probes::arm("catch_up_before_parse", move || {
         rewrite_records(&path, |r| r["statement"] = "Edit during rebuild".into());
@@ -84,35 +102,22 @@ async fn a_rebuild_stores_the_digest_of_the_bytes_it_loaded() {
     });
     materialize_state(&open(&layout)).await.unwrap();
     test_probes::disarm("catch_up_before_parse");
-    let pool = open_cache(&layout).await.unwrap();
-    let statement: String = sqlx::query_scalar("SELECT statement FROM requirements")
-        .fetch_one(pool.pool())
-        .await
-        .unwrap();
-    assert_eq!(statement, "Edit during rebuild");
-    let stored: String =
-        sqlx::query_scalar("SELECT digest FROM projection_unit_digests WHERE unit = ?")
-            .bind(format!("scope:{}", scope.as_str()))
-            .fetch_one(pool.pool())
-            .await
-            .unwrap();
-    assert_eq!(
-        stored,
-        unit_digest(&layout.state_dir(), &Unit::Scope(scope)).unwrap()
-    );
-    pool.close().await.unwrap();
-    assert!(
-        !catch_up_state(&open(&layout))
-            .await
-            .unwrap()
-            .revision_committed
-    );
+
+    assert_ne!(projected_statement(&layout).await, "Edit during rebuild");
+    assert_eq!(stored_scope_digest(&layout, &scope).await, loaded);
+    let report = catch_up_state(&open(&layout)).await.unwrap();
+    assert!(report.revision_committed, "{report:?}");
+    assert_eq!(projected_statement(&layout).await, "Edit during rebuild");
 }
 
 #[cfg(unix)]
-#[test]
-fn a_unit_with_a_symbolic_link_is_refused_before_parsing() {
+#[tokio::test]
+#[verifies("rule_catch_up_reads_units_from_the_view", examples)]
+async fn a_symbolic_link_in_a_unit_is_not_canonical_state() {
     let (_dir, layout, scope) = seeded_layout();
+    let repository = open(&layout);
+    materialize_state(&repository).await.unwrap();
+    let before = unit_digest(&layout.state_dir(), &Unit::Scope(scope.clone())).unwrap();
     let external = layout.state_dir().join("external.jsonl");
     std::fs::write(&external, "[]").unwrap();
     let link = layout
@@ -120,12 +125,13 @@ fn a_unit_with_a_symbolic_link_is_refused_before_parsing() {
         .join(scope.as_str())
         .join("external-link");
     std::os::unix::fs::symlink(&external, &link).unwrap();
-    let result = unit_digest(&layout.state_dir(), &Unit::Scope(scope));
-    assert!(result.is_err(), "an unhashed link was accepted: {result:?}");
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("unsupported state entry"));
+
+    let report = catch_up_state(&repository).await.unwrap();
+    assert!(!report.revision_committed, "{report:?}");
+    assert_eq!(
+        unit_digest(&layout.state_dir(), &Unit::Scope(scope)).unwrap(),
+        before
+    );
 }
 
 #[tokio::test]
@@ -163,8 +169,8 @@ async fn a_manifest_restored_before_hashing_keeps_its_scopes() {
 }
 
 #[tokio::test]
-#[verifies("rule_catch_up_stores_the_digest_of_parsed_bytes", examples)]
-async fn a_manifest_repaired_after_hashing_is_retried() {
+#[verifies("rule_catch_up_reads_units_from_the_view", examples)]
+async fn a_manifest_repaired_after_the_view_is_read_waits_for_the_next_pass() {
     let (_dir, layout, _scope) = seeded_layout();
     // Open before the test changes the manifest: an open refuses that manifest.
     let repository = open(&layout);
@@ -178,9 +184,12 @@ async fn a_manifest_repaired_after_hashing_is_retried() {
     });
     let result = catch_up_state(&repository).await;
     test_probes::disarm("catch_up_global_before_parse");
-    assert!(
-        result.is_ok(),
-        "the repaired manifest was not retried: {result:?}"
+    let error = result.expect_err("the pass parsed a manifest it did not hash");
+    let refusal = format!(
+        "failed to parse manifest {}: EOF while parsing an object at line 1 column 1",
+        repository.layout().manifest_path()
     );
-    assert!(!result.unwrap().revision_committed);
+    assert!(format!("{error:#}").contains(&refusal), "{error:#}");
+    let report = catch_up_state(&repository).await.unwrap();
+    assert!(!report.revision_committed, "{report:?}");
 }

@@ -38,56 +38,119 @@ one instance. The database can be deleted and rebuilt with
 ## Catch-up
 
 Catch-up is the steady-state refresh. It keeps no journal. A pass runs
-under the publication guard and reads canonical state in place. It
-hashes the complete canonical bytes of each hash unit. There is
-one unit per manifest scope, which is the scope's directory, and one
-global unit, which is every regular canonical file under `state/` outside
-`scopes/`: the manifest and the dictionary. A unit
-digest frames the relative path and the bytes of every file in sorted
-path order. It ignores the temporary `.tmp*` files an interrupted atomic
-write leaves beside a shard. After reading the bytes, the hash lists the
-files again. A changed file list fails the hash and names an added or removed
-path. Catch-up and `refuse_stale` use this same check.
+under the publication guard. It reads canonical state through the storage
+port as one `StateView`: the view of the section that the guard holds, or
+a view that the adapter reads under the guard. A view holds the manifest
+and each shard of a scope, keyed by the path below `state/`. Derived state
+under `.provenance/cache` is not in the view.
 
-When both the global unit and a scope are unchanged, that scope is not
-parsed or validated. The pass lists scopes from the exact manifest bytes
-used in the global hash. A changed scope runs both the graph and ideation
-validators and parses its families. Only families whose content digest moved are
-rewritten. A changed global unit validates every scope and updates its
-digest row. No family derives from the global unit. A changed scope unit also reloads the scope's `relations` rows for each owner
-kind whose family moved. A departed scope loses its rows in the eighteen
-tables, its `relations` rows, and its digest rows. A new scope loads. The projection keeps the content
-digest and record count for each family and scope, so the revision digest
-is reassembled from stored rows without parsing a shard.
+There is one hash unit per manifest scope: the keys below the scope's
+directory. There is also one global unit: every other key, which is the
+manifest. The pass hashes the keys of each unit in key order. The pass
+parses the same view, so the digests that it stores are always the
+digests of the bytes that it parsed. A file that is not canonical state,
+such as a stray note or a `.tmp*` file of an interrupted write, is not in
+the view and moves no digest. A name that is not UTF-8 is not in the view.
 
-After parsing a changed unit, the pass hashes it again. If the two hashes
-match, the pass can use the parsed records and their digest. If an editor
-that does not take the lock changes the bytes, the pass retries the unit.
-After three failed attempts, the pass refuses and commits nothing. A read
-then answers at the stored serial with `catch_up_failed` and the error
-`canonical state changed during catch-up under <unit>`. A rebuild uses the
-same hash, parse, and hash-again step in place.
+The local adapter cannot read a symbolic link or a special entry as
+canonical state. When such an entry has the name of a shard, or the name
+of a directory that can hold shards, such as `scopes/<id>` or
+`scopes/<id>/rules`, the view refuses with `unsupported state entry:
+<path>`. A view that left the entry out would read that scope or family
+as empty, and the catch-up would delete its rows. At any other name, the
+view leaves the entry out.
+
+`refuse_stale` reads with no lock and no view. It walks the files of each
+unit as the view does, key for key, and refuses the same entries with the
+same text. So it gets the same digests as the view. After it reads the
+bytes, it lists the files again. A changed file list fails the read and
+names an added or removed path.
+
+Each unit has two digests. The stored digest frames the relative path and
+the exact bytes of each file. The content digest frames the relative path
+and the content digest of each file. The content digest of a graph record
+file ignores the `created` and `updated` fields. The projection keeps both
+digests of each unit. For each file of a scope unit, it also keeps the
+stored digest and the content digest in `projection_file_digests`.
+
+When the stored digests of the global unit and of a scope are unchanged,
+the pass does not parse or validate that scope. The pass lists scopes from
+the exact manifest bytes used in the global hash. A changed global unit
+validates every scope and updates its digest row. No family derives from
+the global unit.
+
+A changed scope unit runs the graph and the ideation validators on the
+whole scope. The graph rules refuse a cycle and an empty required list
+across all records of the scope. The ideation rules check a disposition
+against the records of all six graph kinds. Then the pass compares the
+stored digest of each file with its row in `projection_file_digests`. A
+file is changed when its digest moved, when it is new, or when it is gone.
+The pass parses only the families whose input directories hold a changed
+file.
+
+The stores that validate and parse one scope share their parses. The
+first list of a shard parses it, and each later list of the same shard
+gets a copy. The shared parses belong to the view of the pass and end
+with the scope. Only a store over that view shares them, so a store over
+another view or over the files never gets a parse of other bytes.
+
+The input directories of a family are the directories below the scope
+directory that its reader reads. Each family names the shards that its
+reader reads in `cache/materialize/family_inputs.rs`. The directories come
+from the shard paths in `shards.rs`. For example, the Discussion reader
+reads the threads directory and the directories of the six kinds that can
+be a parent.
+
+A family reader gets only a `FencedStore`: a store over the view of the
+pass that reads only the input directories of its family. The relation
+rows get one for the directories of the owner kinds. The reader has no
+other store. Each read of a fenced store passes through one check. A read
+outside its directories fails the parse, also when the reader drops the
+error. So a reader that starts to read a new directory fails until its
+family names a shard in that directory.
+
+A changed file in no input directory parses every family. A unit with no
+stored file digests, or a family with no digest row, also parses every
+family.
+
+A parsed family whose content digest moved writes only the rows that differ
+from its stored rows. A failed or ambiguous load deletes the family and
+loads it in full. The `relations` rows change only for the owner kinds
+whose family moved, and only the rows that differ. A departed scope loses
+its rows in the eighteen tables, its `relations` rows, and its digest rows.
+A new scope loads. The projection keeps the content digest and record count
+for each family and scope. So the revision digest is reassembled from
+stored rows without parsing a shard.
+
+An editor that does not take the lock can change a file after the pass
+reads its view. The pass does not see that change. It stores the digests
+of the view, so the next pass sees the changed bytes and parses them. A
+rebuild reads one view in the same way.
 
 A rebuild records `VALIDATION_VERSION` in `projection_validation`. A
 catch-up pass rebuilds when the stored version differs from this build's
-version, or when no version is stored. Validator changes that need to check
-existing scopes increase this constant. Catch-up keeps the stored content
-digest of a unit whose bytes have not changed, so a change to what the content
-digest covers also increases this constant. `provenance materialize` and
-`provenance check` always validate every scope.
+version, or when no version is stored. `provenance materialize` and
+`provenance check` always validate every scope. A change to the projection
+schema changes the schema digest, and the next read rebuilds the
+projection. The pass keeps the stored digests of a unit whose bytes did not
+change. So after a build changes what a content digest covers, the stored
+digests stay until the bytes change or `provenance materialize` rebuilds
+the projection.
 
 A pass that changes rows, digests, or the unit set commits them together
 with one new revision in one transaction. The new serial is the stored
 serial plus one. A pass that changes nothing commits no revision row. A
 lost database rebuilds at serial one under a fresh instance id.
 
-Derived fields are covered by the scope hash. A proposal card's effective
-promotion state reads assertions, dispositions, and legacy promotion
-decisions of its own scope, and the scope hash covers every byte in that
-scope. This relies on the scope-locality invariant: a scope's rows derive
-only from files in that scope's directory or in the global unit. An
-instrumented rebuild checks the invariant by recording every read and
-asserting each one lies inside the hashed units.
+Derived fields come from the files of their own scope. A proposal card's
+effective promotion state reads the assertions, dispositions, and legacy
+promotion decisions of its scope. These files are in the ideation
+directory, which is an input directory of the proposal cards. This relies
+on the scope-locality invariant: a scope's rows derive only from files in
+that scope's directory or in the global unit. An instrumented rebuild
+checks the invariant by recording every read and asserting each one lies
+inside the hashed units. Inside a scope, the fenced store keeps each family
+reader to its input directories.
 
 Every projection write, rebuild and catch-up alike, holds an owned
 publication guard. The lock belongs to an open file description rather

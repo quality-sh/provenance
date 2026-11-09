@@ -337,6 +337,7 @@ impl Repository {
             self.inner.identity.clone(),
             self.inner.layout.clone(),
             Arc::new(view),
+            None,
             Arc::clone(self.storage()),
             Arc::clone(self.section_lock()),
             self.has_local_storage(),

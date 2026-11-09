@@ -99,6 +99,40 @@ fn real_kernel_queue_loss_sends_reset_and_current_read() {
 }
 
 #[tokio::test]
+// Implementation aid: the observer parses the captured bytes after it releases the guard.
+// When that parse fails, it reads again under the guard and reports the error of that read.
+async fn a_failed_parse_reports_the_error_of_a_guarded_read() {
+    let repo = repository();
+    source_before_host(repo.path(), "source_saved");
+    let mut host = review_host_support::start_capturing_stderr(repo.path());
+    let stderr = host.take_stderr();
+    let mut socket = Socket::connect(&host);
+    let ready = socket.frame();
+    let shard = layout(repo.path())
+        .scopes_dir()
+        .join("default/sources/source.jsonl");
+    let repository = review_host_support::waits::repository(repo.path());
+    let guard = review_host_support::waits::guard(&repository).await;
+    let temporary = shard.with_extension("replacement");
+    // A parse of the view and a read of the file refuse these bytes with different texts.
+    std::fs::write(&temporary, b"\xff not UTF-8\n").unwrap();
+    std::fs::rename(&temporary, &shard).unwrap();
+    drop(guard);
+    let reset = socket.frame();
+    assert_eq!(reset["reason"], "observation-failed");
+    assert_eq!(reset["epoch"], ready["epoch"]);
+    let line = std::io::BufRead::lines(std::io::BufReader::new(stderr))
+        .map(Result::unwrap)
+        .find(|line| line.starts_with("Live review updates are unavailable"))
+        .unwrap();
+    assert!(
+        line.contains("stream did not contain valid UTF-8"),
+        "{line}"
+    );
+    assert!(!line.contains("the file is not UTF-8"), "{line}");
+}
+
+#[tokio::test]
 // Implementation aid: a failed canonical read must explicitly invalidate connected readers.
 async fn failed_snapshot_resets_disconnects_and_recovers_on_a_file_event() {
     let repo = repository();

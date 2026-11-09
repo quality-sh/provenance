@@ -1,13 +1,14 @@
 use super::ideation_batches::{
     ensure_asserted_contribution_unchanged, ensure_asserted_synthesis_unchanged, overlay_records,
 };
-use super::{read_jsonl, IdeationLandingBatch, StateStore};
+use super::shared_parses::read_jsonl_shared;
+use super::{IdeationLandingBatch, StateStore};
 use crate::shards;
 use provenance_core::{
     AssertionRecord, Contribution, DispositionRecord, IdeationAggregate, ProposalCard, ScopeId,
     SynthesisPacket,
 };
-use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 impl StateStore {
     pub fn validate_ideation_scope(&self, scope: &ScopeId) -> anyhow::Result<()> {
@@ -33,19 +34,19 @@ impl StateStore {
         disposition_actor_ids: &[String],
     ) -> anyhow::Result<()> {
         let mut contributions: Vec<Contribution> =
-            read_jsonl(self, &shards::contributions_path(&self.layout, scope))?;
+            read_jsonl_shared(self, &shards::contributions_path(&self.layout, scope))?;
         let mut synthesis_packets: Vec<SynthesisPacket> =
-            read_jsonl(self, &shards::synthesis_packets_path(&self.layout, scope))?;
+            read_jsonl_shared(self, &shards::synthesis_packets_path(&self.layout, scope))?;
         let direct_proposals: Vec<ProposalCard> =
-            read_jsonl(self, &shards::proposal_cards_path(&self.layout, scope))?;
+            read_jsonl_shared(self, &shards::proposal_cards_path(&self.layout, scope))?;
         let direct_assertions: Vec<AssertionRecord> =
-            read_jsonl(self, &shards::assertion_records_path(&self.layout, scope))?;
+            read_jsonl_shared(self, &shards::assertion_records_path(&self.layout, scope))?;
         let mut assertions_in_order = direct_assertions.clone();
         let direct_dispositions: Vec<DispositionRecord> =
-            read_jsonl(self, &shards::dispositions_path(&self.layout, scope))?;
-        let mut proposals = BTreeMap::new();
-        let mut assertions = BTreeMap::new();
-        let mut dispositions = BTreeMap::new();
+            read_jsonl_shared(self, &shards::dispositions_path(&self.layout, scope))?;
+        let mut proposals = BTreeSet::new();
+        let mut assertions = BTreeSet::new();
+        let mut dispositions = BTreeSet::new();
         insert_all(
             "proposal",
             &direct_proposals,
@@ -142,17 +143,16 @@ fn ensure_batch_evidence_unchanged(
     Ok(())
 }
 
-fn insert_all<'a, T: serde::Serialize>(
+fn insert_all<'a, T>(
     kind: &str,
     records: &'a [T],
     id: impl Fn(&'a T) -> &'a str,
-    seen: &mut BTreeMap<String, serde_json::Value>,
+    seen: &mut BTreeSet<String>,
 ) -> anyhow::Result<()> {
     for record in records {
         let record_id = id(record);
-        let value = serde_json::to_value(record)?;
         anyhow::ensure!(
-            seen.insert(record_id.to_owned(), value).is_none(),
+            seen.insert(record_id.to_owned()),
             "duplicate immutable {kind} id {record_id}"
         );
     }

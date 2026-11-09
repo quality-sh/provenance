@@ -2,6 +2,7 @@
 mod diff;
 mod page;
 mod snapshot;
+pub use snapshot::ReviewStateCapture;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

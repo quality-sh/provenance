@@ -6,6 +6,7 @@ use super::fixtures::open;
 use super::fixtures::*;
 use super::projection_stamp_behavior::seed_integration_shards;
 use provenance_core::ScopeId;
+use provenance_macros::verifies;
 
 fn scope_digest(layout: &crate::layout::ProvenanceLayout, scope: &ScopeId) -> String {
     unit_digest(&layout.state_dir(), &Unit::Scope(scope.clone())).unwrap()
@@ -32,9 +33,12 @@ fn swapping_two_shards_that_share_a_basename_moves_the_scope_digest() {
     );
 }
 
-#[test]
-fn temporary_write_residue_does_not_move_a_unit_digest() {
+#[tokio::test]
+#[verifies("rule_catch_up_reads_units_from_the_view", examples)]
+async fn a_stray_file_does_not_move_a_unit_digest() {
     let (_dir, layout, scope) = seeded_layout();
+    let repository = open(&layout);
+    materialize_state(&repository).await.unwrap();
     let before = scope_digest(&layout, &scope);
     let global_before = unit_digest(&layout.state_dir(), &Unit::Global).unwrap();
 
@@ -43,8 +47,19 @@ fn temporary_write_residue_does_not_move_a_unit_digest() {
         .unwrap()
         .to_path_buf();
     std::fs::write(requirements_dir.join(".tmpAbC123"), b"half-written").unwrap();
+    std::fs::write(requirements_dir.join("notes.txt"), b"not a shard").unwrap();
     std::fs::write(layout.state_dir().join(".tmpXyZ789"), b"half-written").unwrap();
+    std::fs::write(layout.state_dir().join("dictionary.json"), b"{}").unwrap();
+    // macOS refuses a file name that is not UTF-8.
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        let name = std::ffi::OsStr::from_bytes(b"not-utf-8-\xff.jsonl");
+        std::fs::write(requirements_dir.as_std_path().join(name), b"[]").unwrap();
+    }
 
+    let report = catch_up_state(&repository).await.unwrap();
+    assert!(!report.revision_committed, "{report:?}");
     assert_eq!(scope_digest(&layout, &scope), before);
     assert_eq!(
         unit_digest(&layout.state_dir(), &Unit::Global).unwrap(),
@@ -53,21 +68,17 @@ fn temporary_write_residue_does_not_move_a_unit_digest() {
 }
 
 #[test]
-fn the_global_unit_covers_every_canonical_file_outside_scopes() {
+fn the_global_unit_covers_the_manifest() {
     let (_dir, layout, scope) = seeded_layout();
     let before = unit_digest(&layout.state_dir(), &Unit::Global).unwrap();
     let scope_before = scope_digest(&layout, &scope);
-
-    std::fs::write(layout.state_dir().join("dictionary.json"), b"{}").unwrap();
-    let after_dictionary = unit_digest(&layout.state_dir(), &Unit::Global).unwrap();
-    assert_ne!(after_dictionary, before, "the dictionary is global");
 
     let mut manifest = std::fs::read_to_string(layout.manifest_path()).unwrap();
     manifest.push('\n');
     std::fs::write(layout.manifest_path(), manifest).unwrap();
     assert_ne!(
         unit_digest(&layout.state_dir(), &Unit::Global).unwrap(),
-        after_dictionary,
+        before,
         "the manifest is global"
     );
     assert_eq!(scope_digest(&layout, &scope), scope_before, "scopes stand");

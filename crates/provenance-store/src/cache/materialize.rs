@@ -1,8 +1,11 @@
+mod batch;
 mod catch_up;
 mod collaboration_records;
+mod family_inputs;
 mod family_rows;
 mod record_rows;
 mod relation_rows;
+mod row_changes;
 mod stamp;
 mod units;
 mod validation;
@@ -69,7 +72,7 @@ pub(super) async fn materialize_with_guard(
     let connection = open_cache(layout).await?;
     let outcome = async {
         crate::test_probes::at("prepare_current_schema_under_guard")?;
-        rebuild_rows(connection.pool(), &mut reader, manifest, global_digests).await
+        rebuild_rows(connection.pool(), &reader, manifest, global_digests).await
     }
     .await;
     connection.settle(outcome).await
@@ -82,7 +85,7 @@ pub(super) async fn materialize_on_pool_with_guard(
 ) -> anyhow::Result<MaterializeReport> {
     let mut reader = validation::UnitReader::new(guard);
     let (manifest, global_digests) = reader.global(None)?;
-    rebuild_rows(pool, &mut reader, manifest, global_digests).await
+    rebuild_rows(pool, &reader, manifest, global_digests).await
 }
 
 /// Hashes, validates, reloads, and commits one full rebuild on the
@@ -90,7 +93,7 @@ pub(super) async fn materialize_on_pool_with_guard(
 #[rule("rule_interrupted_migration_reloads_every_family")]
 async fn rebuild_rows(
     pool: &SqlitePool,
-    reader: &mut validation::UnitReader<'_>,
+    reader: &validation::UnitReader<'_>,
     manifest: provenance_core::Manifest,
     global_digests: units::UnitDigests,
 ) -> anyhow::Result<MaterializeReport> {
@@ -116,8 +119,15 @@ async fn rebuild_rows(
         .collect();
     for unit in units::units_for(&scopes) {
         let Unit::Scope(scope) = &unit else { continue };
-        let digests = reader.hash(&unit, None)?;
-        let (records, digests) = reader.scope(scope, digests)?;
+        let bytes = reader
+            .hash(&unit, None)?
+            .expect("a unit with no stored pair has changed");
+        let read = units::files_read(
+            reader.state_dir(),
+            &bytes,
+            &std::collections::BTreeMap::new(),
+        )?;
+        let records = reader.scope(scope, &read, true)?;
         for records in &records.families {
             records_loaded +=
                 family_rows::load_rows(&mut tx, records.family, &records.bytes).await?;
@@ -132,7 +142,8 @@ async fn rebuild_rows(
             .await?;
         }
         relation_rows::load_rows(&mut tx, &records.relations, scope).await?;
-        stamp::upsert_unit_row(&mut tx, &unit.name(), &digests).await?;
+        stamp::upsert_unit_row(&mut tx, &unit.name(), &read.digests).await?;
+        stamp::replace_file_rows(&mut tx, &unit.name(), &read.files).await?;
     }
     stamp::write_stamp(&mut tx, stored_serial + 1).await?;
     if cache_recreated {
@@ -154,6 +165,7 @@ async fn clear_cache(tx: &mut Transaction<'_, Sqlite>) -> anyhow::Result<()> {
         "record_identities",
         "projection_family_digests",
         "projection_unit_digests",
+        "projection_file_digests",
     ] {
         sqlx::query(sqlx::AssertSqlSafe(format!("DELETE FROM {table}")))
             .execute(&mut **tx)

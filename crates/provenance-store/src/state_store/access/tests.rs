@@ -200,3 +200,30 @@ fn a_live_store_that_holds_the_section_gets_no_write_permission() {
     assert!(refused(&repository.store()), "a store that takes the lock");
     assert_eq!(std::fs::read(&path).unwrap(), before);
 }
+
+/// Implementation aid: a fenced store reads only its directories. A read
+/// outside them fails the result, also when the reader drops the error.
+/// No Rule binds it.
+#[test]
+fn a_fenced_store_refuses_a_read_outside_its_directories() {
+    let (_dir, store, scope) = seeded_source_requirement_store();
+    let repository = open(&store.layout);
+    let view = std::sync::Arc::new(repository.storage().read_view().unwrap());
+    let fenced = |directories| {
+        super::ViewStore::new(&repository, std::sync::Arc::clone(&view)).fenced(&scope, directories)
+    };
+    let inside = fenced(vec!["requirements"])
+        .read(|store| store.list_requirements(&scope))
+        .unwrap();
+    assert_eq!(inside.len(), 1);
+    let error = fenced(vec!["requirements"])
+        .read(|store| {
+            let _dropped = store.list_sources(&scope);
+            store.list_requirements(&scope)
+        })
+        .unwrap_err();
+    assert!(
+        error.to_string().contains("outside its input directories"),
+        "{error:#}"
+    );
+}

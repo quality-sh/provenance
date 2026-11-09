@@ -173,14 +173,13 @@ async fn a_guarded_read_refuses_a_file_added_after_collection() {
         assert!(crate::test_probes::publication_lock_is_held(&layout));
         hashes += 1;
         if hashes == 2 {
-            std::fs::write(
-                layout
-                    .state_dir()
-                    .join("scopes")
-                    .join(scope.as_str())
-                    .join("added.txt"),
-                b"new canonical bytes",
-            )?;
+            let threads = layout
+                .state_dir()
+                .join("scopes")
+                .join(scope.as_str())
+                .join("threads");
+            std::fs::create_dir_all(&threads)?;
+            std::fs::write(threads.join("2025-01.jsonl"), b"new canonical bytes")?;
         }
         Ok(())
     });
@@ -195,7 +194,7 @@ async fn a_guarded_read_refuses_a_file_added_after_collection() {
     assert_ne!(before, after);
     let error = result.expect_err("file added during hash was missed");
     assert!(
-        matches!(error.downcast_ref::<ReadRefusal>(), Some(ReadRefusal::UnitUnreadable { unit, path, .. }) if unit == "scope:default" && path.file_name() == Some("added.txt"))
+        matches!(error.downcast_ref::<ReadRefusal>(), Some(ReadRefusal::UnitUnreadable { unit, path, .. }) if unit == "scope:default" && path.file_name() == Some("2025-01.jsonl"))
     );
 }
 
