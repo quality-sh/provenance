@@ -12,28 +12,14 @@
 // each CPU sample to its row.
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { parseArgs } from 'node:util';
 import { helpCommands, mcpToolActions, operationsFromCatalog, possibleValues } from './catalog.mjs';
 import { COMMAND_ARGUMENTS, NOT_CALLED, cliWriteArguments, commandVariants, fillArguments, mcpWriteArguments, orderLeaves, verbOperation } from './commands.mjs';
 import { Planner, Unresolved, describe } from './requests.mjs';
 import { findKey } from './body.mjs';
 import { CliWay, HttpWay, McpWay, now, run } from './ways.mjs';
+import { keepWindow, outputFiles, readOptions, routesWrites } from './options.mjs';
 
-const { values: options } = parseArgs({
-  options: {
-    bin: { type: 'string' },
-    source: { type: 'string', default: '.' },
-    work: { type: 'string' },
-    out: { type: 'string', default: 'results.json' },
-    reads: { type: 'string', default: '20' },
-    writes: { type: 'string', default: '10' },
-    ways: { type: 'string', default: 'HTTP,MCP,CLI' },
-    // The ways that call the catalog write operations. The profile workflow uses MCP only, to fit its time limit.
-    'route-writes': { type: 'string', default: 'HTTP,MCP,CLI' },
-    filter: { type: 'string', default: '' },
-    windows: { type: 'string' },
-  },
-});
+const options = readOptions(process.argv.slice(2));
 const bin = resolve(options.bin);
 const work = resolve(options.work);
 const reads = Number(options.reads);
@@ -46,13 +32,6 @@ const READ_ONLY_POSTS = ['/statement-checks', '/authoring-plans'];
 const calls = [];
 const unmeasured = [];
 const windows = [];
-
-/** Add the process and the time window of one timed call to `list`, for the profile. */
-function keepWindow(list, way, call, result) {
-  if (result?.pid && result.at !== undefined) {
-    list.push({ way, call, pid: result.pid, start: result.at, end: result.at + result.ms });
-  }
-}
 
 const log = message => process.stderr.write(`${message}\n`);
 
@@ -129,14 +108,14 @@ async function measure(way, label, kind, count, prepare, send, { restart = false
     await way.start();
   }
   const cold = await send(request);
-  keepWindow(rowWindows, way.name, label, cold);
+  keepWindow(rowWindows, way.name, label, cold, { cold: true });
   if (!cold.ok) {
     fail('the cold call failed', describe(cold.error));
     return;
   }
   const after = follow?.(request, cold);
   const afterCold = after ? await way.call(after) : null;
-  keepWindow(rowWindows, way.name, followLabel, afterCold);
+  keepWindow(rowWindows, way.name, followLabel, afterCold, { cold: true });
   const warm = [];
   const afterWarm = [];
   for (let index = 1; index <= count; index++) {
@@ -188,7 +167,7 @@ async function routeRows(way, planner, operations, readRequests) {
       await measure(way, op.label, 'read', reads, async () => request, send, { restart });
     }
   }
-  if (!options['route-writes'].split(',').includes(way.name)) {
+  if (!routesWrites(options, way.name)) {
     log(`  ${way.name}: the catalog write operations are not called (--route-writes)`);
     return;
   }
@@ -363,10 +342,10 @@ async function main() {
     const startup = await way.start();
     if (name !== 'CLI') {
       calls.push({ way: name, call: 'process start', kind: 'start', cold: startup, warm: [] });
-      keepWindow(windows, name, 'process start', { pid: way.child?.pid, at: startedAt, ms: startup });
+      keepWindow(windows, name, 'process start', { pid: way.child?.pid, at: startedAt, ms: startup }, { cold: true });
     }
     const first = await way.call({ method: 'get', path: '/requirements', query: { limit: 1 } });
-    keepWindow(windows, name, 'first read on a new clone', first);
+    keepWindow(windows, name, 'first read on a new clone', first, { cold: true });
     calls.push({ way: name, call: 'first read on a new clone', kind: 'start', cold: first.ms, warm: [] });
     const wayPlanner = new Planner({ operations, context: ctx });
     await routeRows(way, wayPlanner, operations, readRequests);
@@ -389,9 +368,8 @@ async function main() {
     writes,
     added: planner.added,
   };
-  await writeFile(options.out, `${JSON.stringify({ meta, calls, unmeasured }, null, 2)}\n`);
-  if (options.windows) {
-    await writeFile(options.windows, `${JSON.stringify({ meta, windows })}\n`);
+  for (const [path, text] of outputFiles(options, { meta, calls, unmeasured, windows })) {
+    await writeFile(path, text);
   }
   log(`${calls.length} timed rows, ${unmeasured.length} not measured`);
 }

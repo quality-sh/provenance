@@ -34,6 +34,26 @@ test('a sample goes to the window of its process that holds its time', () => {
   assert.equal(findRow(byPid, 99, 1005), null);
 });
 
+test('the cold call counts in its row but in no half', () => {
+  const coldWindows = [
+    { way: 'MCP', call: 'POST /rules', pid: 30, start: 0, end: 10, cold: true },
+    { way: 'MCP', call: 'POST /rules', pid: 30, start: 20, end: 30 },
+  ];
+  const { rows, byPid } = rowsFromWindows(coldWindows);
+  const file = rowFile('MCP POST /rules');
+  assert.deepEqual(rows.map(row => [row.calls, row.warmCalls]), [[2, 1]]);
+  assert.equal(findRow(byPid, 30, 5), file);
+  assert.deepEqual(splitKey(file), { file, half: null });
+  assert.equal(findRow(byPid, 30, 25), `${file}.a`);
+  // One warm call fills half a only, so the halves give no error: the cold call is not compared with a warm one.
+  const counts = new Shares();
+  counts.add(['main', 'open_store'], 90, splitKey(findRow(byPid, 30, 5)).half);
+  counts.add(['main', 'write'], 10, splitKey(findRow(byPid, 30, 25)).half);
+  assert.equal(counts.total, 100);
+  assert.deepEqual(counts.halves.totals, [10, 0]);
+  assert.equal(splitError(counts, 'open_store'), 0);
+});
+
 test('the labeler keeps samples in windows with the row file name as the process name', () => {
   const labeler = new Labeler(rowsFromWindows(windows).byPid);
   const input = [

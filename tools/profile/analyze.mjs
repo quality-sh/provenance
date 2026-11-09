@@ -228,6 +228,7 @@ function header(profile) {
     lines.push('No main baseline found, so this run has no comparison.');
   }
   lines.push(`Shares are percent of the CPU samples of one row, not milliseconds, because runner speed changes from run to run. A change is over the noise when it is at least ${(MIN_CHANGE * 100).toFixed(1)} points and ${MIN_Z} standard errors; the error includes how much the shares of the row change between the baseline runs. Kernel functions (\`_[k]\`) are not compared.`);
+  lines.push('Four runs of the same code gave a change over the noise in 1.7 percent of rows (2 to 18 of 510 for each run), so check the stacks of a row before you act on its change.');
   return lines;
 }
 

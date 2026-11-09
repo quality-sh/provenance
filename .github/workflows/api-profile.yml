@@ -29,19 +29,22 @@ on:
   workflow_dispatch:
     inputs:
       reads:
-        description: Warm repeats of each read after the cold call
+        description: Warm repeats of each read after the cold call (0 or more)
         type: number
         default: 3
       writes:
-        description: Warm repeats of each write after the cold call
+        description: Warm repeats of each write after the cold call (0 or more)
         type: number
         default: 1
 
 permissions:
   contents: read
 
+# A new dispatch cancels the older dispatch on its branch. The event name is in
+# the group, so a dispatch on main does not cancel a main push run, which
+# makes a baseline.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
 
 env:
@@ -151,10 +154,19 @@ jobs:
       - name: Profile the calls
         env:
           WAY: ${{ matrix.way }}
-          READS: ${{ inputs.reads || 3 }}
-          WRITES: ${{ inputs.writes || 1 }}
+          # Empty on a push. A dispatch input of 0 stays 0.
+          READS: ${{ inputs.reads }}
+          WRITES: ${{ inputs.writes }}
         run: |
           set -euo pipefail
+          READS=${READS:-3}
+          WRITES=${WRITES:-1}
+          for value in "$READS" "$WRITES"; do
+            if ! [[ "$value" =~ ^[0-9]+$ ]]; then
+              echo "::error::The reads and writes inputs must be whole numbers, 0 or more. Got '$value'."
+              exit 1
+            fi
+          done
           mkdir -p part
           # One perf session follows the harness and every process it starts.
           # -k mono gives the sample times on the clock that the harness uses
@@ -192,15 +204,17 @@ jobs:
     needs: profile
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    # This job reads the artifact data and runs the inferno binaries, so it has
+    # no write permission. The Comment job writes the pull request comment.
     permissions:
       contents: read
       # Find and download the baseline artifacts of earlier runs.
       actions: read
-      # Update the comment of the pull request of a dispatched branch.
-      pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          # The baseline selection needs the main history.
+          fetch-depth: 0
           persist-credentials: false
       - uses: ./.github/actions/setup-socket-firewall
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
@@ -225,17 +239,33 @@ jobs:
         run: |
           set -euo pipefail
           # The newest baseline artifact of each of the three newest main runs
-          # before this one. The comparison uses their mean and how much they differ.
-          runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=api-profile-baseline&per_page=50" \
+          # before this one whose commit is at or before the merge base of this
+          # commit and main. A main commit after the merge base has changes that
+          # this commit does not have, so it is not a baseline. The comparison
+          # uses the mean of the baselines and how much they differ.
+          base=$(git merge-base HEAD origin/main)
+          echo "Merge base with main: $base"
+          candidates=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=api-profile-baseline&per_page=100" \
             --jq "[.artifacts[] | select((.expired | not) and .workflow_run.head_branch == \"main\" and .workflow_run.id != $GITHUB_RUN_ID)]
               | group_by(.workflow_run.id) | map(max_by(.created_at))
-              | sort_by(.created_at) | reverse | .[:3] | .[].workflow_run.id")
-          if [ -z "$runs" ]; then
-            echo "No main baseline artifact found."
+              | sort_by(.created_at) | reverse | .[] | \"\\(.workflow_run.id) \\(.workflow_run.head_sha)\"")
+          runs=()
+          while read -r run sha; do
+            if [ -z "$run" ] || [ "${#runs[@]}" -ge 3 ]; then
+              break
+            fi
+            if git merge-base --is-ancestor "$sha" "$base" 2>/dev/null; then
+              runs+=("$run")
+            else
+              echo "Not used: run $run at $sha is not at or before the merge base."
+            fi
+          done <<< "$candidates"
+          if [ "${#runs[@]}" -eq 0 ]; then
+            echo "No main baseline artifact at or before the merge base found."
             exit 0
           fi
           index=0
-          for run in $runs; do
+          for run in "${runs[@]}"; do
             index=$((index + 1))
             # profile.json and functions.json hold all that the comparison needs.
             gh run download "$run" --repo "$GITHUB_REPOSITORY" -n api-profile-baseline -D "$RUNNER_TEMP/baseline/$index" \
@@ -284,8 +314,29 @@ jobs:
           cat "$RUNNER_TEMP/publish/summary.md" >> "$GITHUB_STEP_SUMMARY"
           # The log holds the summary too, for readers of the job log.
           cat "$RUNNER_TEMP/publish/summary.md"
-      - name: Update the pull request comment
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: github.event_name == 'workflow_dispatch'
+        with:
+          name: api-profile-comment
+          path: ${{ runner.temp }}/publish/comment.md
+          retention-days: 1
+
+  # Only this job can write, and it runs no artifact data: it posts comment.md as text.
+  comment:
+    name: Comment
+    needs: report
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      # Find the pull request of the branch and post or update its comment.
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: api-profile-comment
+          path: ${{ runner.temp }}/publish
+      - name: Update the pull request comment
         env:
           GH_TOKEN: ${{ github.token }}
           PR_HEAD: ${{ github.repository_owner }}:${{ github.ref_name }}
@@ -296,8 +347,10 @@ jobs:
             echo "The branch has no open pull request, so the job summary is the only report."
             exit 0
           fi
-          id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$pr/comments" \
-            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- api-profile -->"))) | .id' | head -1)
+          # The full list first: a pipe into head can stop gh early, and pipefail then fails the step.
+          ids=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$pr/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- api-profile -->"))) | .id')
+          id=${ids%%$'\n'*}
           if [ -n "$id" ]; then
             gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@"$RUNNER_TEMP/publish/comment.md" --jq .html_url
           else

@@ -16,7 +16,8 @@ It runs:
 
 It does not run on a pull request or on a push to a pull request branch. A
 reviewer starts it for a pull request branch. A new dispatch on a branch
-cancels the older run on that branch.
+cancels the older dispatch on that branch. A dispatch on main does not cancel
+a main push run.
 
 ## Rows and time limit
 
@@ -41,7 +42,8 @@ slowest profile job 4, report 1).
   same write handlers, and the writes were most of the time of each way. MCP
   had the shortest write rows. The HTTP and CLI ways keep all catalog reads.
 - Repeats: 3 warm repeats of each read and 1 of each write after the cold
-  call (the `reads` and `writes` inputs of a dispatch). Most of the time of a
+  call (the `reads` and `writes` inputs of a dispatch; 0 gives the cold call
+  only). Most of the time of a
   write row is the setup of each write, so a write repeat costs more than a
   read repeat.
 
@@ -70,15 +72,16 @@ The rows of a run:
    under one `perf record` at 1999 Hz. The sequence is necessary: a row that
    runs alone on a new clone sees less state and gives different times.
 3. The harness writes the process id and the start and end time of each timed
-   call to `windows-<way>.json`. `label.mjs` gives each CPU sample of that
+   call to `windows-<way>.json`, and marks the cold call of each row. `label.mjs` gives each CPU sample of that
    process in that window to the row. Samples of setup calls, of node, of git
    and of a host between calls are not counted. When one function is on the
    stack two or more times in a row, as the poll functions of async code are,
    the stacks keep it once. This changes no share.
 4. `inferno-collapse-perf` folds the stacks. The `Report` job runs
    `analyze.mjs`, which writes the tables and the comparison, and
-   `inferno-flamegraph` draws one SVG for each row. On a dispatch, the same
-   job posts or updates the pull request comment.
+   `inferno-flamegraph` draws one SVG for each row. The `Report` job has no
+   write permission. On a dispatch, the `Comment` job, which has only
+   `pull-requests: write`, posts or updates the pull request comment.
 
 A row is one way in and one call, for example `HTTP GET /rules/{id}` or
 `CLI provenance check --format json`. The labels are the same as in the API
@@ -141,7 +144,14 @@ With the gh CLI:
   points: `+5.0` means that the function was on 5 percent more of the samples
   of the row.
 - The baseline share of a function is the mean of its share in the newest
-  three main baselines (fewer when fewer exist).
+  three main baselines whose commit is at or before the merge base of the
+  profiled commit and main (fewer when fewer exist). A main commit after the
+  merge base has changes that the profiled commit does not have, so its
+  baseline is not used. The baselines can still be at different main
+  commits before the merge base. When main changed between them, the
+  dispersion of a changed row is larger, so the comparison is more careful,
+  and a change can come from a main commit between the oldest baseline and
+  the merge base.
 - A change is "over the noise" when it is at least 5 points and at least 4
   standard errors (`z`). The standard error is the larger of two values:
   - The error of a count test on the samples, times the square root of the
@@ -151,33 +161,45 @@ With the gh CLI:
     two or three baselines give a usable value. Shares change between runs
     even for the same code: the runner speed changes how much background work,
     for example a projection catch-up, falls inside a call.
-  - The error from the halves of the calls. Each run puts the first, third,
-    ... call of a row in half `a` and the second, fourth, ... call in half
-    `b`; the difference between the halves shows how much a share changes
-    from call to call.
+  - The error from the halves of the warm calls. Each run puts the first,
+    third, ... warm call of a row in half `a` and the second, fourth, ... warm
+    call in half `b`; the difference between the halves shows how much a
+    share changes from call to call. The cold call counts in the shares of
+    the row but in no half, because a cold call does different work (for
+    example, it opens the store). A row with one warm call, as each write row
+    has with the default `writes` input of 1, has an empty half `b`, so it
+    gets no error from the halves and only the count test applies.
 
   With one baseline the dispersion is not known, and the comment says so. With
   2 to 4 calls in a row these errors are estimates, so use `z` as a guide, not
-  as a proof. Four runs of the same code, each compared with the other three,
-  gave changes over the noise in 4 to 49 of 744 rows, most in the rows that
-  read after a write (those runs had 2 write repeats and all CLI rows). A runner with a different CPU model moves more shares;
-  the header names the CPU of the run and of each baseline.
+  as a proof.
+- Same-code test: four dispatch runs of one commit with no Rust change from
+  main (runs 42551709224, 42551712777, 42551715881 and 42551718762, with
+  the row set and the math of this file), each compared with the other three
+  as baselines, gave a change over the noise in 2, 4, 10 and 18 of 510 rows:
+  34 of 2040 row comparisons, or 1.7 percent. All were HTTP or MCP rows, and
+  24 of the 34 were rows that read after a write. The two runs with 10 and
+  18 rows had a profile job on a second CPU model. So up to about 4 rows of
+  100 can show a change over the noise with no code change. Before you act
+  on a change, look at the stacks of its row, and dispatch the run again
+  when a runner CPU differs. The header names the CPU of the run and of each
+  baseline.
 - Kernel functions have the suffix `_[k]` (from `inferno-collapse-perf
   --kernel`). They are in the tables and the flame graphs, but not in the
   comparison: the memory work of the kernel (page faults, page allocation,
   cgroup charges) changes with the runner host, not with the code. Their
   samples still count in the inclusive share of the program functions that
   call them. A row with fewer than 200 samples has a noisy profile; its
-  `rows/<file>.md` tells so. When main changed between the baselines, the
-  dispersion of a changed row is larger, so the comparison is more careful.
+  `rows/<file>.md` tells so.
 - `CPU ms for each call` is the sample count divided by the rate and by the
   number of timed calls. It is an estimate under perf; use the API latency
   workflow for times.
 - The baselines are the `api-profile-baseline` artifacts of main push runs;
   artifacts of other branches are not used. The comment and the summary name
   the commit and the run of each. A dispatch profiles the branch head, not a
-  merge with main: when main changed after the branch point, part of a change
-  can come from main.
+  merge with main, so only baselines at or before the branch point count.
+  When no main baseline is at or before the merge base, the run has no
+  comparison.
 - For the counts, function names have no Rust hash suffix and no C library
   symbol version. A function with one version for each set of CPU features
   has one name: `__memmove_avx_unaligned_erms` and

@@ -32,11 +32,13 @@ export function rowFile(label) {
  * by start. A row is a way in and a call. Its file name is a word with no
  * space or semicolon, the same in each run and each job.
  *
- * The calls of a row go to two halves in turn: the first, third, ... call to
- * half `a`, the second, fourth, ... to half `b`. The difference between the
- * halves measures how much the shares change from call to call. The key of a
- * window, `<file>.a` or `<file>.b`, replaces the process name in the perf
- * script output.
+ * The warm calls of a row go to two halves in turn: the first, third, ...
+ * warm call to half `a`, the second, fourth, ... to half `b`. The difference
+ * between the halves measures how much the shares change from call to call.
+ * The cold call (a window with `cold: true`) counts in the row but in no
+ * half, because its shares differ from those of a warm call. The key of a
+ * window, `<file>.a`, `<file>.b` or `<file>` for the cold call, replaces the
+ * process name in the perf script output.
  */
 export function rowsFromWindows(windows) {
   const rows = [];
@@ -46,18 +48,22 @@ export function rowsFromWindows(windows) {
     const label = `${window.way} ${window.call}`;
     let row = byLabel.get(label);
     if (!row) {
-      row = { key: rowFile(label), way: window.way, call: window.call, label, calls: 0, wallMs: 0 };
+      row = { key: rowFile(label), way: window.way, call: window.call, label, calls: 0, warmCalls: 0, wallMs: 0 };
       row.file = row.key;
       rows.push(row);
       byLabel.set(label, row);
     }
-    const half = row.calls % 2 === 0 ? 'a' : 'b';
+    let key = row.key;
+    if (!window.cold) {
+      key = `${row.key}.${row.warmCalls % 2 === 0 ? 'a' : 'b'}`;
+      row.warmCalls += 1;
+    }
     row.calls += 1;
     row.wallMs += window.end - window.start;
     if (!byPid.has(window.pid)) {
       byPid.set(window.pid, []);
     }
-    byPid.get(window.pid).push({ start: window.start, end: window.end, key: `${row.key}.${half}` });
+    byPid.get(window.pid).push({ start: window.start, end: window.end, key });
   }
   for (const list of byPid.values()) {
     list.sort((a, b) => a.start - b.start);
