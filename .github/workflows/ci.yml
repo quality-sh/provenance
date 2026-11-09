@@ -1657,6 +1657,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
+          components: clippy
       # The kernel crates and their target come from the crate dependency policy,
       # so a crate that joins the kernel there is checked here too.
       - name: Read the kernel crates from the policy
@@ -1692,6 +1693,12 @@ jobs:
         run: >-
           cargo test --locked -p provenance-store
           --test memory_repository --test memory_repository_stage_reads
+      # The store must build every target without host, its library unit
+      # tests too. A unit test that needs the local disk is gated behind host.
+      - name: Lint all store targets without host
+        run: cargo clippy --locked -p provenance-store --all-targets -- -D warnings
+      - name: Test the store library without host
+        run: cargo test --locked -p provenance-store --lib
 
   # The one status the branch ruleset requires. Conditional jobs skip when a
   # pull request leaves their inputs untouched, and a skipped matrix job never

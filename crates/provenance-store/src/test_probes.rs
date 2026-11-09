@@ -92,12 +92,12 @@ pub fn record_read(path: &camino::Utf8Path) {
 #[cfg(not(test))]
 pub const fn record_read(_path: &camino::Utf8Path) {}
 
-#[cfg(test)]
+#[cfg(all(test, feature = "host"))]
 pub fn start_recording_reads() {
     READS.with(|reads| *reads.borrow_mut() = Some(BTreeSet::new()));
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "host"))]
 pub fn take_recorded_reads() -> BTreeSet<String> {
     READS.with(|reads| reads.borrow_mut().take().unwrap_or_default())
 }
@@ -108,19 +108,19 @@ fn leak_label(label: &str) -> &'static str {
     Box::leak(label.to_string().into_boxed_str())
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "host"))]
 pub fn arm(label: &'static str, probe: impl FnMut() -> anyhow::Result<()> + 'static) {
     PROBES.with(|probes| probes.borrow_mut().insert(label, Box::new(probe)));
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "host"))]
 pub fn disarm(label: &str) {
     PROBES.with(|probes| {
         probes.borrow_mut().remove(label);
     });
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "host"))]
 pub fn crash_at(label: &'static str) {
     arm(label, move || anyhow::bail!("injected crash at {label}"));
 }
