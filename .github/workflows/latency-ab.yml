@@ -16,15 +16,15 @@ env:
   MAIN_SHA: 33386c06f3425ca0c89f181e823a904375a08c9e
   PR616_SHA: f2753054673b5197dddbb18f5fe10f6a900a7936
   PR618_SHA: 59a7589c488b389511248a62d140d82066a63cd8
-  READS: 16
-  WRITES: 8
+  READS: 10
+  WRITES: 5
   ROUNDS: 3
 
 jobs:
   ab:
     name: Latency A/B
     runs-on: ubuntu-24.04
-    timeout-minutes: 350
+    timeout-minutes: 355
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -65,7 +65,8 @@ jobs:
           set -uo pipefail
           mkdir -p ab
           for round in $(seq 1 "$ROUNDS"); do
-            for name in main pr616 pr618; do
+            case $round in 1) order="main pr616 pr618";; 2) order="pr616 pr618 main";; *) order="pr618 main pr616";; esac
+            for name in $order; do
               start=$(date +%s)
               rm -rf "$RUNNER_TEMP/work"
               if RUNNER_DESCRIPTION="$ImageOS $ImageVersion" node tools/api-latency/run.mjs \
