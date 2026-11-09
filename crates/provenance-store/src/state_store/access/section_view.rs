@@ -89,6 +89,15 @@ impl StateStore {
         }
     }
 
+    /// The parses that this store shares, if it is a view store that shares
+    /// the parses of its view.
+    pub(in crate::state_store) fn shared_parses(&self) -> Option<&super::super::SharedParses> {
+        match &self.access {
+            Access::View(reads) => reads.parses.as_deref(),
+            _ => None,
+        }
+    }
+
     /// Runs `read` on the view that this store reads, or returns `None` for
     /// a store that reads the files: a view store has its view, a staged
     /// store the overlay of its stage, and a store of an opened repository

@@ -26,7 +26,7 @@ mod rule_writers;
 mod scope_ingestion;
 pub(crate) use read_fence::FencedStore;
 mod shared_parses;
-pub(crate) use shared_parses::with_shared_parses;
+pub(crate) use shared_parses::SharedParses;
 mod shaping_writers;
 mod statement_policy;
 mod thread_origins;

@@ -92,6 +92,7 @@ impl StateStore {
         identity: RepositoryIdentity,
         layout: ProvenanceLayout,
         view: Arc<StateView>,
+        parses: Option<Arc<super::SharedParses>>,
         storage: Arc<dyn StateStorage>,
         lock: Arc<dyn SectionLock>,
         local: bool,
@@ -104,7 +105,11 @@ impl StateStore {
                 local,
             },
             layout,
-            access: Access::View(super::read_fence::ViewReads { view, fence: None }),
+            access: Access::View(super::read_fence::ViewReads {
+                view,
+                parses,
+                fence: None,
+            }),
             record_stamp: RecordStamp::ResolveFromRepository,
         }
     }

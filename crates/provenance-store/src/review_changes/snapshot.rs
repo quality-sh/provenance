@@ -3,7 +3,7 @@ use crate::{
     cache::{ProjectionFamily, RecordFamily},
     publication::PublicationGuard,
     settings::Settings,
-    state_store::{GuardedStore, StateStore, ViewStore},
+    state_store::{GuardedStore, SharedParses, StateStore, ViewStore},
 };
 use provenance_core::{Manifest, ScopeId};
 use serde_json::Value;
@@ -32,7 +32,7 @@ impl ReviewStateSnapshot {
             return Self::of_records(&guarded, manifest, settings)
                 .map(|snapshot| ReviewStateCapture(Captured::Read(Box::new(snapshot))));
         };
-        let store = ViewStore::new(repository, Arc::new(view));
+        let store = ViewStore::sharing(repository, &SharedParses::new(Arc::new(view)));
         Ok(ReviewStateCapture(Captured::View(Box::new(ViewCapture {
             store,
             manifest,
@@ -52,10 +52,7 @@ impl ReviewStateSnapshot {
                     manifest,
                     settings,
                 } = *capture;
-                let store = GuardedStore::of_view(store);
-                crate::state_store::with_shared_parses(|| {
-                    Self::of_records(&store, manifest, settings)
-                })
+                Self::of_records(&GuardedStore::of_view(store), manifest, settings)
             }
             Captured::Read(snapshot) => Ok(*snapshot),
         }

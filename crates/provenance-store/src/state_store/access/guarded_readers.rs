@@ -2,7 +2,7 @@ use super::super::read_fence::{FencedStore, ReadFence};
 use super::super::Access;
 use super::GuardedStore;
 use crate::repository::Repository;
-use crate::state_store::StateStore;
+use crate::state_store::{SharedParses, StateStore};
 use crate::storage::StateView;
 use provenance_core::{
     ImplementationBinding, Manifest, ProposalCard, Requirement, ScopeId, VerificationBinding,
@@ -129,10 +129,29 @@ pub struct ViewStore(StateStore);
 impl ViewStore {
     /// A store over `view`, a view of the canonical state of `repository`.
     pub fn new(repository: &Repository, view: Arc<StateView>) -> Self {
+        Self::over(repository, view, None)
+    }
+
+    /// A store over the view of `parses` that shares those parses with
+    /// each other store over them.
+    pub(crate) fn sharing(repository: &Repository, parses: &Arc<SharedParses>) -> Self {
+        Self::over(
+            repository,
+            Arc::clone(parses.view()),
+            Some(Arc::clone(parses)),
+        )
+    }
+
+    fn over(
+        repository: &Repository,
+        view: Arc<StateView>,
+        parses: Option<Arc<SharedParses>>,
+    ) -> Self {
         Self(StateStore::over_view(
             repository.identity().clone(),
             repository.layout().clone(),
             view,
+            parses,
             Arc::clone(repository.storage()),
             Arc::clone(repository.section_lock()),
             repository.has_local_storage(),

@@ -11,10 +11,12 @@ use crate::storage::StateView;
 use camino::{Utf8Path, Utf8PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 
-/// What a view store reads: one view, and the fence of a fenced store.
+/// What a view store reads: one view, the parses of that view that the
+/// store shares, and the fence of a fenced store.
 #[derive(Debug)]
 pub(super) struct ViewReads {
     pub view: Arc<StateView>,
+    pub parses: Option<Arc<super::SharedParses>>,
     pub fence: Option<ReadFence>,
 }
 

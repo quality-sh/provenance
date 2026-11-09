@@ -33,10 +33,12 @@ fn swapping_two_shards_that_share_a_basename_moves_the_scope_digest() {
     );
 }
 
-#[test]
+#[tokio::test]
 #[verifies("rule_catch_up_reads_units_from_the_view", examples)]
-fn a_stray_file_does_not_move_a_unit_digest() {
+async fn a_stray_file_does_not_move_a_unit_digest() {
     let (_dir, layout, scope) = seeded_layout();
+    let repository = open(&layout);
+    materialize_state(&repository).await.unwrap();
     let before = scope_digest(&layout, &scope);
     let global_before = unit_digest(&layout.state_dir(), &Unit::Global).unwrap();
 
@@ -48,7 +50,15 @@ fn a_stray_file_does_not_move_a_unit_digest() {
     std::fs::write(requirements_dir.join("notes.txt"), b"not a shard").unwrap();
     std::fs::write(layout.state_dir().join(".tmpXyZ789"), b"half-written").unwrap();
     std::fs::write(layout.state_dir().join("dictionary.json"), b"{}").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        let name = std::ffi::OsStr::from_bytes(b"not-utf-8-\xff.jsonl");
+        std::fs::write(requirements_dir.as_std_path().join(name), b"[]").unwrap();
+    }
 
+    let report = catch_up_state(&repository).await.unwrap();
+    assert!(!report.revision_committed, "{report:?}");
     assert_eq!(scope_digest(&layout, &scope), before);
     assert_eq!(
         unit_digest(&layout.state_dir(), &Unit::Global).unwrap(),

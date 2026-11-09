@@ -16,6 +16,8 @@ mod gap_kinds_behavior;
 mod gap_rule_behavior;
 mod graph_records_behavior;
 mod in_place_behavior;
+#[cfg(unix)]
+mod linked_entries;
 mod materialization_behavior;
 mod materialize_guard_behavior;
 mod page_order;

@@ -264,9 +264,13 @@ fn unit_files(
         Unit::Global => collect(state_dir, "", true, &mut files)?,
         Unit::Scope(scope) => {
             let key = format!("scopes/{}", scope.as_str());
-            let root = state_dir.join(&key);
+            // Component joins keep the native spelling of the paths on Windows.
+            let root = state_dir.join("scopes").join(scope.as_str());
             match std::fs::symlink_metadata(&root) {
-                Ok(_) => collect(&root, &key, false, &mut files)?,
+                Ok(metadata) if metadata.is_dir() => collect(&root, &key, false, &mut files)?,
+                // The view leaves out a file at the scope directory.
+                Ok(metadata) if metadata.is_file() => {}
+                Ok(_) => return Err(unsupported(&root)),
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                 Err(error) => return Err(UnitHashError::at(&root, error)),
             }
@@ -276,33 +280,25 @@ fn unit_files(
     Ok(files)
 }
 
-/// Collects the canonical files below `dir`, whose key is `prefix`. An
-/// entry at a canonical key that is not a regular file refuses, as the view
-/// of the local adapter does.
+/// Collects the canonical files below `dir`, whose key is `prefix`, as the
+/// view of the local adapter reads them: it leaves out a name that is not
+/// UTF-8 and any entry that cannot hold or be canonical state. An entry
+/// that is not a directory or a regular file refuses where the view keeps
+/// a shard or enters a directory.
 fn collect(
     dir: &Utf8Path,
     prefix: &str,
     skip_scopes: bool,
     out: &mut Vec<(String, Utf8PathBuf)>,
 ) -> Result<(), UnitHashError> {
-    let metadata = std::fs::symlink_metadata(dir).map_err(|error| UnitHashError::at(dir, error))?;
-    if !metadata.is_dir() {
-        return Err(UnitHashError::at(
-            dir,
-            anyhow::anyhow!("unsupported state entry: {dir}"),
-        ));
-    }
     for entry in std::fs::read_dir(dir).map_err(|error| UnitHashError::at(dir, error))? {
         let entry = entry.map_err(|error| UnitHashError::at(dir, error))?;
-        let path = Utf8PathBuf::from_path_buf(entry.path()).map_err(|path| {
-            UnitHashError::at(
-                dir,
-                anyhow::anyhow!("non-UTF-8 canonical path: {}", path.display()),
-            )
-        })?;
-        let name = path.file_name().unwrap_or_default();
+        let Ok(name) = entry.file_name().into_string() else {
+            continue;
+        };
+        let path = dir.join(&name);
         let key = if prefix.is_empty() {
-            name.to_owned()
+            name
         } else {
             format!("{prefix}/{name}")
         };
@@ -313,17 +309,21 @@ fn collect(
             if !(skip_scopes && key == "scopes") && crate::shards::can_hold_canonical_keys(&key) {
                 collect(&path, &key, skip_scopes, out)?;
             }
-        } else if crate::shards::is_canonical_key(&key) {
-            if !file_type.is_file() {
-                return Err(UnitHashError::at(
-                    &path,
-                    anyhow::anyhow!("unsupported state entry: {path}"),
-                ));
+        } else if file_type.is_file() {
+            if crate::shards::is_canonical_key(&key) {
+                out.push((key, path));
             }
-            out.push((key, path));
+        } else if crate::shards::is_canonical_key(&key)
+            || crate::shards::can_hold_canonical_keys(&key)
+        {
+            return Err(unsupported(&path));
         }
     }
     Ok(())
+}
+
+fn unsupported(path: &Utf8Path) -> UnitHashError {
+    UnitHashError::at(path, anyhow::anyhow!("unsupported state entry: {path}"))
 }
 
 /// The canonical path whose bytes could not be hashed.

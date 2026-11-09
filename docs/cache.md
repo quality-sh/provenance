@@ -48,10 +48,19 @@ manifest. The pass hashes the keys of each unit in key order. The pass
 parses the same view, so the digests that it stores are always the
 digests of the bytes that it parsed. A file that is not canonical state,
 such as a stray note or a `.tmp*` file of an interrupted write, is not in
-the view and moves no digest.
+the view and moves no digest. A name that is not UTF-8 is not in the view.
 
-`refuse_stale` reads with no lock and no view. It hashes the files at the
-same keys, so it gets the same digests as the view. After it reads the
+The local adapter cannot read a symbolic link or a special entry as
+canonical state. When such an entry has the name of a shard, or the name
+of a directory that can hold shards, such as `scopes/<id>` or
+`scopes/<id>/rules`, the view refuses with `unsupported state entry:
+<path>`. A view that left the entry out would read that scope or family
+as empty, and the catch-up would delete its rows. At any other name, the
+view leaves the entry out.
+
+`refuse_stale` reads with no lock and no view. It walks the files of each
+unit as the view does, key for key, and refuses the same entries with the
+same text. So it gets the same digests as the view. After it reads the
 bytes, it lists the files again. A changed file list fails the read and
 names an added or removed path.
 
@@ -76,6 +85,12 @@ stored digest of each file with its row in `projection_file_digests`. A
 file is changed when its digest moved, when it is new, or when it is gone.
 The pass parses only the families whose input directories hold a changed
 file.
+
+The stores that validate and parse one scope share their parses. The
+first list of a shard parses it, and each later list of the same shard
+gets a copy. The shared parses belong to the view of the pass and end
+with the scope. Only a store over that view shares them, so a store over
+another view or over the files never gets a parse of other bytes.
 
 The input directories of a family are the directories below the scope
 directory that its reader reads. Each family names the shards that its

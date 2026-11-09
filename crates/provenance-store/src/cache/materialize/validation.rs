@@ -1,7 +1,7 @@
 use super::{family_inputs, relation_rows, units};
 use crate::cache::ProjectionFamily;
 use crate::publication::PublicationGuard;
-use crate::state_store::{FencedStore, GuardedStore, ViewStore};
+use crate::state_store::{FencedStore, GuardedStore, SharedParses, ViewStore};
 use crate::storage::{StateKey, StateView};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::model::relations::RelationRow;
@@ -25,6 +25,8 @@ pub(super) struct UnitReader<'g> {
     guard: &'g PublicationGuard,
     state_dir: Utf8PathBuf,
     pass: Option<PassView>,
+    /// The catch-up holds the reader across an await of a future that
+    /// must be `Send`, so the count is atomic.
     units_hashed: AtomicU64,
 }
 
@@ -132,27 +134,21 @@ impl<'g> UnitReader<'g> {
     /// Validates the whole scope and parses the families that the changed
     /// files of `read` can change, or every family when `all` is set. The
     /// relation rows are derived when an owner family is parsed. The pass
-    /// parses the view whose bytes gave `read`.
+    /// parses the view whose bytes gave `read`. The stores of the scope
+    /// share their parses of that view.
     pub fn scope(
         &self,
         scope: &ScopeId,
         read: &units::UnitRead,
         all: bool,
     ) -> anyhow::Result<ScopeRecords> {
-        crate::state_store::with_shared_parses(|| self.parse_scope(scope, read, all))
-    }
-
-    /// Validates the scope and parses the selected families, or every family
-    /// when `all` is set. See [`Self::scope`].
-    fn parse_scope(
-        &self,
-        scope: &ScopeId,
-        read: &units::UnitRead,
-        all: bool,
-    ) -> anyhow::Result<ScopeRecords> {
         crate::test_probes::at("catch_up_before_parse")?;
-        let pass = self.pass()?;
-        validate(&pass.store, scope)?;
+        let parses = SharedParses::new(Arc::clone(&self.pass()?.view));
+        let repository = self.guard.repository();
+        validate(
+            &GuardedStore::of_view(ViewStore::sharing(repository, &parses)),
+            scope,
+        )?;
         let selected = if all {
             None
         } else {
@@ -161,7 +157,12 @@ impl<'g> UnitReader<'g> {
         let selected = selected.unwrap_or_else(|| ProjectionFamily::ALL.to_vec());
         let mut families = Vec::new();
         for family in selected {
-            let fenced = self.fenced(scope, family_inputs::input_directories(family))?;
+            let fenced = fenced(
+                repository,
+                &parses,
+                scope,
+                family_inputs::input_directories(family),
+            );
             let (bytes, count) = family.records_of_validated_scope(fenced, scope)?;
             families.push(FamilyRecords {
                 family,
@@ -175,24 +176,29 @@ impl<'g> UnitReader<'g> {
         Ok(ScopeRecords {
             families,
             relations: if owners {
-                let fenced = self.fenced(scope, relation_rows::input_directories())?;
+                let fenced = fenced(
+                    repository,
+                    &parses,
+                    scope,
+                    relation_rows::input_directories(),
+                );
                 relation_rows::scope_rows(fenced, scope)?
             } else {
                 Vec::new()
             },
         })
     }
+}
 
-    /// A store over the view of this pass that reads only `directories`
-    /// below the scope directory of `scope`.
-    fn fenced(
-        &self,
-        scope: &ScopeId,
-        directories: Vec<&'static str>,
-    ) -> anyhow::Result<FencedStore> {
-        let view = Arc::clone(&self.pass()?.view);
-        Ok(ViewStore::new(self.guard.repository(), view).fenced(scope, directories))
-    }
+/// A store over the view of `parses` that shares them and reads only
+/// `directories` below the scope directory of `scope`.
+fn fenced(
+    repository: &crate::repository::Repository,
+    parses: &Arc<SharedParses>,
+    scope: &ScopeId,
+    directories: Vec<&'static str>,
+) -> FencedStore {
+    ViewStore::sharing(repository, parses).fenced(scope, directories)
 }
 
 fn validate(store: &GuardedStore<'_>, scope: &ScopeId) -> anyhow::Result<()> {
