@@ -63,5 +63,5 @@ async fn a_cleared_review_is_not_open() {
             "verification_bindings"
         ]
     );
-    assert_eq!(answer.stamp.live, ["verification_runs"]);
+    assert_eq!(answer.stamp.live, ["scanned_sites", "verification_runs"]);
 }

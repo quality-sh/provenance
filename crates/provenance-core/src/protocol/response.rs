@@ -7,7 +7,10 @@ use crate::model::{
 };
 use crate::StableId;
 
-use super::{AffectedRule, GraphNode, Neighbor, Stamp, Stamped, TracedNode, SDK_PROTOCOL_VERSION};
+use super::{
+    AffectedRule, GraphNode, ImplementationSite, Neighbor, Stamp, Stamped, TracedNode,
+    VerificationSite, SDK_PROTOCOL_VERSION,
+};
 
 /// The envelope every query primitive answers in.
 ///
@@ -127,7 +130,11 @@ pub struct EvidenceResult {
     pub rule_id: String,
     pub limit: usize,
     pub has_more: bool,
+    /// The typed implementation bindings that a spec declares. The
+    /// `#[rule]` attributes in the code are in `implementation_sites`.
     pub implementation_bindings: Vec<ImplementationBinding>,
+    /// The typed verification bindings that a spec or a run declares. The
+    /// `#[verifies]` attributes in the code are in `verification_sites`.
     pub verification_bindings: Vec<VerificationBinding>,
     pub verification_runs: Vec<VerificationRun>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -144,6 +151,20 @@ pub struct EvidenceResult {
     pub verification_runs_has_more: bool,
     #[serde(default)]
     pub reviews_has_more: bool,
+    /// Each place in the code that implements the Rule: the `#[rule]`
+    /// attributes from the working-tree scan and the typed bindings of
+    /// this answer, as impact gives them.
+    #[serde(default)]
+    pub implementation_sites: Vec<ImplementationSite>,
+    /// Each place in the code that verifies the Rule: the `#[verifies]`
+    /// attributes from the working-tree scan and the typed bindings of
+    /// this answer, as impact gives them.
+    #[serde(default)]
+    pub verification_sites: Vec<VerificationSite>,
+    /// The working-tree scan stopped at the configured file count, so the
+    /// scanned sites are a lower bound.
+    #[serde(default)]
+    pub scan_cut: bool,
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

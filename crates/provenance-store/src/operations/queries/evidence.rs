@@ -3,15 +3,21 @@ use provenance_core::protocol::{take_page, EvidenceQuery, EvidenceResult, StaleE
 use provenance_core::{ImplementationBinding, RequirementReview, StableId, VerificationBinding};
 use provenance_macros::rule;
 
+use super::super::sites;
+
 /// Everything standing behind one Rule, kept apart by kind.
 ///
 /// Implementation bindings, verification bindings, and open reviews come
-/// from the projection; verification runs stay cache JSONL. Review
+/// from the projection; verification runs stay cache JSONL. The site
+/// lists add the `#[rule]` and `#[verifies]` attributes from the
+/// working-tree scan to the typed bindings of the page, as impact does,
+/// and `scan_cut` says when that scan stopped short. Review
 /// required says the Requirement was restated; stale says the code
 /// carrying the evidence changed, and it is read from a diff the caller
 /// names. Each of the four lists carries its own cut flag beside the
 /// top-level `has_more`, which stays the OR of the four.
 #[rule("rule_evidence_flags_each_cut_list")]
+#[rule("rule_evidence_gives_scanned_sites")]
 pub(super) async fn evidence(
     ctx: &ReadContext,
     request: EvidenceQuery,
@@ -70,6 +76,13 @@ pub(super) async fn evidence(
                 })
         })
         .transpose()?;
+    let (scans, scan_cut) = ctx.live(Live::ScannedSites).scan_tree()?;
+    let sites = sites::Evidence {
+        scans: &scans,
+        verifications: &verification_bindings,
+        implementations: &implementation_bindings,
+    }
+    .affected_rule(ctx.repo(), rule);
     Ok(EvidenceResult {
         rule_id: request.rule,
         limit: request.limit,
@@ -88,5 +101,8 @@ pub(super) async fn evidence(
         verification_bindings_has_more,
         verification_runs_has_more,
         reviews_has_more,
+        implementation_sites: sites.implementations,
+        verification_sites: sites.verifications,
+        scan_cut,
     })
 }

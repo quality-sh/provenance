@@ -59,7 +59,9 @@ Subresources have parent-owned addresses:
 - `GET /{collection}/{id}/history/{entry_id}/evidence/{side}` reads a before or
   after snapshot span for each graph record kind.
 - `GET /rules/{id}/evidence` reads implementation, verification, and
-  Requirement-change evidence.
+  Requirement-change evidence. `implementation_sites` and `verification_sites`
+  give the `#[rule]` and `#[verifies]` attributes from the file scan and the
+  typed bindings, as impact does. The stamp gives `scanned_sites` as live.
 - `GET|POST /{collection}/{id}/discussions` lists or starts concerns for Source,
   Requirement, Resolution, Rule, Topic, and Question records.
 - `GET|PATCH /{collection}/{id}/discussions/{discussion_id}` reads a concern or

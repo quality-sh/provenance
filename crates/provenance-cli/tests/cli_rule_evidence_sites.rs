@@ -105,7 +105,7 @@ fn evidence(repo: &Path) -> Value {
 }
 
 #[test]
-#[verifies("rule_evidence_lists_scanned_sites", examples)]
+#[verifies("rule_evidence_gives_scanned_sites", examples)]
 fn evidence_lists_the_attribute_sites_on_a_new_repository() {
     let repo = repo_with_attributes();
 
@@ -123,7 +123,11 @@ fn evidence_lists_the_attribute_sites_on_a_new_repository() {
         "{answer:#}"
     );
     assert_eq!(data["scan_cut"], json!(false));
-    assert_eq!(data["implementation_bindings"], json!([]), "no typed binding");
+    assert_eq!(
+        data["implementation_bindings"],
+        json!([]),
+        "no typed binding"
+    );
 }
 
 #[test]
