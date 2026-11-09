@@ -286,6 +286,19 @@ impl InitPlan {
     #[rule("rule_init_apply_rolls_back_owned_changes")]
     pub(super) fn apply(self) -> anyhow::Result<InitEnding> {
         let layout = ProvenanceLayout::new(self.path.clone());
+        // Replacing a file under `.provenance/state` moves the old file away before the new
+        // file goes in. Readers take the publication lock, so a write under that lock is never
+        // seen half done. A new repository has no `.provenance` and no readers yet.
+        match std::fs::symlink_metadata(layout.provenance_dir()) {
+            Ok(_) => provenance_store::publication::with_repository_publication(&layout, |_| {
+                self.write(&layout)
+            }),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => self.write(&layout),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    fn write(self, layout: &ProvenanceLayout) -> anyhow::Result<InitEnding> {
         self.planned
             .manifest_before
             .recheck(layout.manifest_path().as_std_path())?;
@@ -384,6 +397,9 @@ fn parse_manifest(bytes: &[u8], path: &std::path::Path) -> anyhow::Result<Manife
     serde_json::from_slice::<Manifest>(bytes)
         .with_context(|| format!("failed to parse manifest {}", path.display()))
 }
+
+#[cfg(test)]
+mod lock_tests;
 
 #[cfg(test)]
 mod tests {
