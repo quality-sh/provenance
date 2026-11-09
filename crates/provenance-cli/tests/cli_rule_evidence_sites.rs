@@ -295,7 +295,7 @@ fn evidence_says_when_the_scan_was_cut_as_impact_does() {
 fn evidence_cuts_the_site_lists_at_the_limit() {
     let repo = repo_with_attributes();
     let whole = evidence(repo.path(), "rule_served");
-    assert_eq!(whole["data"]["has_more"], json!(false), "{whole:#}");
+    assert_eq!(whole["meta"]["has_more"], json!(false), "{whole:#}");
 
     let many: String = (0..60)
         .map(|index| format!("#[rule(\"rule_served\")]\nfn serve_{index:02}() {{}}\n"))
@@ -304,14 +304,14 @@ fn evidence_cuts_the_site_lists_at_the_limit() {
 
     let cut = evidence(repo.path(), "rule_served");
     let data = &cut["data"];
-    assert_eq!(data["limit"], json!(50));
+    assert_eq!(cut["meta"]["limit"], json!(50));
     assert_eq!(
         data["implementations"].as_array().unwrap().len(),
         50,
         "{cut:#}"
     );
     assert_eq!(data["verifications"].as_array().unwrap().len(), 1);
-    assert_eq!(data["has_more"], json!(true), "{cut:#}");
+    assert_eq!(cut["meta"]["has_more"], json!(true), "{cut:#}");
 }
 
 #[test]
