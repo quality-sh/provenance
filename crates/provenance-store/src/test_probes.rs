@@ -19,11 +19,12 @@ type Probe = Box<dyn FnMut() -> anyhow::Result<()>>;
 thread_local! {
     static PROBES: RefCell<HashMap<&'static str, Probe>> = RefCell::new(HashMap::new());
     static READS: RefCell<Option<BTreeSet<String>>> = const { RefCell::new(None) };
+    #[cfg(feature = "host")]
     static SCAN: RefCell<Option<Vec<provenance_scanner::FileScan>>> = const { RefCell::new(None) };
 }
 
 /// The scan a test set on this thread, when there is one.
-#[cfg(test)]
+#[cfg(all(test, feature = "host"))]
 pub fn test_scan() -> Option<Vec<provenance_scanner::FileScan>> {
     SCAN.with(|scan| scan.borrow().clone())
 }
@@ -33,13 +34,13 @@ pub const fn test_scan() -> Option<Vec<provenance_scanner::FileScan>> {
     None
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "host"))]
 pub fn set_test_scan(scans: Option<Vec<provenance_scanner::FileScan>>) {
     SCAN.with(|scan| *scan.borrow_mut() = scans);
 }
 
 /// Whether another holder has the repository's publication lock right now.
-#[cfg(test)]
+#[cfg(all(test, feature = "host"))]
 pub fn publication_lock_is_held(layout: &crate::layout::ProvenanceLayout) -> bool {
     use fs2::FileExt;
     let path = layout.publication_lock_path();

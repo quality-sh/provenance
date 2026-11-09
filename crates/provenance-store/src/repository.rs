@@ -416,5 +416,5 @@ fn gate_failure(error: anyhow::Error) -> OpenFailure {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "host"))]
 mod stage_recovery_tests;

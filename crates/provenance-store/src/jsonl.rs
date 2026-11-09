@@ -249,7 +249,7 @@ fn with_state_publication<R>(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "host"))]
 mod tests {
     use super::*;
     use serde::{Deserialize, Serialize};

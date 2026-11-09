@@ -377,5 +377,5 @@ pub(crate) fn manifest_from_bytes(bytes: &[u8]) -> anyhow::Result<Manifest> {
     Ok(serde_json::from_slice(bytes)?)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "host"))]
 mod tests;

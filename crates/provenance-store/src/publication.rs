@@ -27,7 +27,7 @@ pub use crate::storage::local::{
     clear_publication_marker, recover_pending_publication, write_publication_marker,
     PublicationPhase,
 };
-#[cfg(all(test, unix))]
+#[cfg(all(test, unix, feature = "host"))]
 use crate::storage::local::{validate_missing_transaction_dir, validated_transaction_dir};
 #[cfg(feature = "host")]
 pub use guard::publication_guard;
@@ -249,7 +249,7 @@ impl crate::state_store::StateStore {
         let Some(stage) = self.stage() else {
             anyhow::bail!("only a staged store deletes the keys below {directory}");
         };
-        #[cfg(test)]
+        #[cfg(all(test, feature = "host"))]
         if stage.reads_files() {
             if directory.exists() {
                 std::fs::remove_dir_all(directory)?;
@@ -282,7 +282,7 @@ impl crate::state_store::StateStore {
             writes
                 .ensure_disjoint()
                 .map_err(crate::write_error::publish_failure)?;
-            #[cfg(test)]
+            #[cfg(all(test, feature = "host"))]
             if stage.reads_files() {
                 use crate::storage::StateStorage as _;
                 return crate::storage::local::LocalStateStorage::new(self.layout.clone())
@@ -332,7 +332,7 @@ impl crate::state_store::StateStore {
     }
 }
 
-#[cfg(all(test, unix))]
+#[cfg(all(test, unix, feature = "host"))]
 mod containment_tests;
-#[cfg(test)]
+#[cfg(all(test, feature = "host"))]
 mod tests;

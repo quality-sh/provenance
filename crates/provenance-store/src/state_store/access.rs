@@ -17,7 +17,7 @@ mod section_view;
 pub use guarded_readers::ViewStore;
 pub use section_view::{SectionView, StateEntry};
 
-#[cfg(test)]
+#[cfg(all(test, feature = "host"))]
 mod tests;
 
 impl StateStore {
@@ -149,7 +149,7 @@ impl StateStore {
 
     /// A staged store that reads and writes the files of the staged state
     /// root `layout`, for tests of the staged writers.
-    #[cfg(test)]
+    #[cfg(all(test, feature = "host"))]
     pub(crate) fn staged_view(
         identity: Option<RepositoryIdentity>,
         layout: ProvenanceLayout,

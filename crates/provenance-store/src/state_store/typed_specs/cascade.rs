@@ -13,7 +13,7 @@ use super::super::{
 use super::view::TypedSpecView;
 use crate::shards;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "host"))]
 mod tests;
 
 pub(super) struct Cascade {
