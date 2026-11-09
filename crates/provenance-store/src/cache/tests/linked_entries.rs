@@ -47,7 +47,14 @@ async fn assert_entry_refuses(
     path: &Utf8PathBuf,
     replace: impl FnOnce(&Utf8Path, &Utf8Path),
 ) {
+    let open_root = layout.root();
     let repository = open(layout);
+    // The repository resolves its root: on macOS the temporary directory is
+    // under a link (/var to /private/var), and on Windows it has a short
+    // name. Every reader gets the resolved layout, so each one names the
+    // entry by the same root.
+    let layout = repository.layout();
+    let path = &layout.root().join(path.strip_prefix(open_root).unwrap());
     materialize_state(&repository).await.unwrap();
     let pool = open_cache(layout).await.unwrap();
     let before = dump_family_tables(pool.pool()).await;
