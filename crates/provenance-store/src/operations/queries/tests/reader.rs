@@ -250,7 +250,7 @@ async fn every_answer_carries_a_stamp_at_the_stored_serial() {
                     "requirement_reviews",
                     "verification_bindings",
                 ],
-                &["canonical", "diff", "verification_runs"],
+                &["canonical", "diff", "scanned_sites", "verification_runs"],
             ),
             "stale" => (&[], &["canonical", "diff"]),
             _ => (&[], &["canonical"]),
@@ -277,7 +277,7 @@ async fn evidence_without_a_base_lists_no_diff() {
     assert!(answer.result.stale.is_none());
     assert_eq!(
         words(&answer.stamp).1,
-        ["verification_runs"],
+        ["scanned_sites", "verification_runs"],
         "canonical is read for the diff half alone, so it is not listed either"
     );
 }
