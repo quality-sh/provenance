@@ -161,7 +161,6 @@ fn read_message_shard_lines<T: DeserializeOwned>(
 ) -> anyhow::Result<Vec<(T, ShardLine)>> {
     let mut records = Vec::new();
     for path in shard_paths {
-        crate::test_probes::record_read(&path);
         let contents = store
             .read_state_text(&path)
             .with_context(|| format!("failed to read message shard {}", path.as_str()))?;

@@ -11,6 +11,13 @@ use std::{
     pin::Pin,
 };
 
+mod discovery;
+
+pub use discovery::{
+    render_discovery_readable, CatalogAnswer, CatalogBounds, CatalogListing, CatalogSelection,
+    ListedParameter, ListedQuery, ListedRoute, SeeMore, DEFAULT_DISCOVERY_LIMIT,
+};
+
 /// One HTTP method a public route supports.
 #[derive(
     Clone, Copy, Debug, Default, Eq, PartialEq, Deserialize, Serialize, schemars::JsonSchema,
@@ -71,7 +78,11 @@ pub struct ApiInput {
 /// One selected api action: the discovery catalog or one bound call.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ApiRequest {
-    Discover,
+    /// The catalog routes that `filter` and `limit` select.
+    Discover {
+        filter: Option<String>,
+        limit: Option<usize>,
+    },
     Invoke(ApiInput),
 }
 
@@ -172,53 +183,10 @@ pub struct ApiCatalog {
     pub routes: Vec<ApiRoute>,
 }
 
-/// The catalog routes that the filter and limit fields select, with the counts.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CatalogSelection {
-    pub routes: Vec<ApiRoute>,
-    pub total: usize,
-    pub matching: usize,
-}
-
-impl ApiCatalog {
-    /// The routes whose method, path, or description contains `filter`, without letter
-    /// case, and at most `limit` of them.
-    #[provenance_macros::rule("rule_cli_api_discovery_filter_limit")]
-    pub fn select(self, filter: Option<&str>, limit: Option<usize>) -> CatalogSelection {
-        let total = self.routes.len();
-        let needle = filter.map(str::to_ascii_lowercase);
-        let mut routes = self
-            .routes
-            .into_iter()
-            .filter(|route| {
-                needle.as_ref().is_none_or(|needle| {
-                    format!(
-                        "{} {} {}",
-                        route.method.as_str(),
-                        route.path,
-                        route.description
-                    )
-                    .to_ascii_lowercase()
-                    .contains(needle)
-                })
-            })
-            .collect::<Vec<_>>();
-        let matching = routes.len();
-        if let Some(limit) = limit {
-            routes.truncate(limit);
-        }
-        CatalogSelection {
-            routes,
-            total,
-            matching,
-        }
-    }
-}
-
 /// The structured api answer: the discovery catalog or one route envelope.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ApiOutcome {
-    Catalog(ApiCatalog),
+    Catalog(CatalogSelection),
     Invoked(Value),
 }
 
@@ -226,7 +194,7 @@ pub enum ApiOutcome {
 pub type ApiPortFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ApiError>> + Send + 'a>>;
 
 /// What one api call offers a host client.
-pub const API_DESCRIPTION: &str = "Call one public API path with an optional method, query, headers, and JSON body. The body is the data object, without the HTTP {\"data\": ...} wrapper. Omit the path to list the catalog routes with their methods, inputs, and response schemas.";
+pub const API_DESCRIPTION: &str = "Call one public API path with an optional method, query, headers, and JSON body. The body is the data object, without the HTTP {\"data\": ...} wrapper. Omit the path to list the catalog routes with their methods and inputs. A filter that is the method and path of one route, such as GET /rules, gives the request and response schemas of that route.";
 
 /// How an api call carries its JSON body.
 pub const BODY_NOTE: &str =
@@ -248,8 +216,8 @@ pub fn input_schema() -> Value {
 /// Both arms are generated from typed contracts, so their shared definitions
 /// are hoisted to one root document and every `#/$defs/` reference resolves.
 pub fn output_schema() -> Value {
-    let mut catalog =
-        serde_json::to_value(schemars::schema_for!(ApiCatalog)).expect("catalog schema is JSON");
+    let mut catalog = serde_json::to_value(schemars::schema_for!(CatalogListing<'static>))
+        .expect("catalog schema is JSON");
     let mut envelope = serde_json::to_value(schemars::schema_for!(
         provenance_core::protocol::SuccessEnvelope<Value>
     ))
@@ -289,9 +257,13 @@ impl ApiRequest {
             ]
             .into_iter()
             .find_map(|(field, given)| given.then_some(field));
-            return call_option.map_or(Ok(Self::Discover), |field| {
-                Err(ApiError::invalid_options(Some(field)))
-            });
+            return call_option.map_or(
+                Ok(Self::Discover {
+                    filter: arguments.filter,
+                    limit: arguments.limit,
+                }),
+                |field| Err(ApiError::invalid_options(Some(field))),
+            );
         };
         if let Some(field) = [
             ("filter", arguments.filter.is_some()),
@@ -346,65 +318,20 @@ impl<P: ApiPort> crate::Porcelain<P> {
     ///
     /// The port resolves the path against the registered public routes, so a
     /// call never reaches an operation the catalog does not publish, and the
-    /// default method stays GET for arguments that select none.
+    /// default method stays GET for arguments that select none. Discovery
+    /// applies the filter and limit here, so each consumer gets the same routes.
     #[rule("rule_porcelain_api_public_path")]
     pub async fn execute_api(&self, request: ApiRequest) -> Result<ApiOutcome, ApiError> {
         match request {
-            ApiRequest::Discover => Ok(ApiOutcome::Catalog(self.port.discover())),
+            ApiRequest::Discover { filter, limit } => Ok(ApiOutcome::Catalog(
+                self.port.discover().select(filter.as_deref(), limit),
+            )),
             ApiRequest::Invoke(input) => {
                 let input = validated(input)?;
                 Ok(ApiOutcome::Invoked(self.port.invoke(input).await?))
             }
         }
     }
-}
-
-/// Render the route inventory as one bounded readable summary.
-///
-/// Each route lists the inputs of its base form and of each `query` form;
-/// the JSON form keeps the full request and response schemas.
-pub fn render_discovery_readable(catalog: &ApiCatalog) -> String {
-    let mut lines = vec![format!("api routes: {}", catalog.routes.len())];
-    for route in &catalog.routes {
-        lines.push(format!(
-            "- {} {}",
-            route.method.as_str().to_uppercase(),
-            route.path
-        ));
-        lines.push(format!("  {}", route.description));
-        for form in &route.queries {
-            let label = form.query.as_ref().map_or_else(
-                || "inputs".to_owned(),
-                |name| format!("inputs with query={name}"),
-            );
-            lines.push(format!(
-                "  {label}: {}",
-                render_parameters(&form.parameters)
-            ));
-        }
-        if route.request_schema.is_some() {
-            lines.push(format!("  {BODY_NOTE}"));
-        }
-    }
-    lines.join("\n")
-}
-
-fn render_parameters(parameters: &[ApiParameter]) -> String {
-    if parameters.is_empty() {
-        return "none".to_owned();
-    }
-    parameters
-        .iter()
-        .map(|parameter| {
-            let need = if parameter.required {
-                "required"
-            } else {
-                "optional"
-            };
-            format!("{} ({}, {need})", parameter.name, parameter.location)
-        })
-        .collect::<Vec<_>>()
-        .join(", ")
 }
 
 #[cfg(test)]
@@ -422,7 +349,7 @@ mod tests {
     #[test]
     fn output_schema_arms_share_no_definition_name() {
         let catalog = definition_names(
-            &serde_json::to_value(schemars::schema_for!(super::ApiCatalog)).unwrap(),
+            &serde_json::to_value(schemars::schema_for!(super::CatalogListing<'static>)).unwrap(),
         );
         let envelope = definition_names(
             &serde_json::to_value(schemars::schema_for!(

@@ -1,5 +1,5 @@
 use crate::layout::ProvenanceLayout;
-use crate::state_store::{GuardedStore, StateStore};
+use crate::state_store::{FencedStore, GuardedStore, StateStore};
 use camino::Utf8PathBuf;
 use provenance_core::ScopeId;
 
@@ -342,6 +342,26 @@ impl ProjectionFamily {
         Ok(crate::canonical_digest::digest(
             &crate::canonical_digest::canonical_bytes(&records)?,
         ))
+    }
+}
+
+impl ProjectionFamily {
+    /// The records of one family for a caller that validated the scope
+    /// under the guard it holds. Only the proposal cards differ from
+    /// [`Self::guarded_records`]: their reader would validate the scope again.
+    ///
+    /// The reader gets only a store fenced to the input directories of the
+    /// family, so a read outside them fails. A catch-up parses the family
+    /// again only after a change in these directories.
+    pub(crate) fn records_of_validated_scope(
+        self,
+        store: FencedStore,
+        scope: &ScopeId,
+    ) -> anyhow::Result<(Vec<u8>, u64)> {
+        store.read(|store| match self {
+            Self::ProposalCards => sorted_bytes(store.proposal_cards_of_validated_scope(scope)?),
+            _ => self.guarded_records(store, scope),
+        })
     }
 }
 

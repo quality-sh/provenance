@@ -1,0 +1,5 @@
+{
+  "code": 1,
+  "stderr": "Error: {\"error\":{\"kind\":\"git_revision_not_found\"},\"meta\":{}}\n",
+  "stdout": null
+}

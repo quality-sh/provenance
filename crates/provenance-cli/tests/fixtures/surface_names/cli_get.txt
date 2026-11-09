@@ -119,8 +119,6 @@ Options:
           
       --topic-id <topic-id>
           
-      --method <method>
-          
       --if-match <if-match>
           
       --declared-by <declared-by>

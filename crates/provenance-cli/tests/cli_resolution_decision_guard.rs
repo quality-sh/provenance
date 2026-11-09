@@ -48,7 +48,7 @@ fn setup() -> tempfile::TempDir {
         "topic_overtime",
         "--question",
         "Do code scores affect health?",
-        "--method",
+        "--resolution-method",
         "ask",
     ])
     .success();
@@ -171,7 +171,7 @@ fn cli_answered_question_creation_refuses_proposed_resolution() {
         "topic_overtime",
         "--question",
         "What is the daily health budget?",
-        "--method",
+        "--resolution-method",
         "ask",
         "--status",
         "answered",

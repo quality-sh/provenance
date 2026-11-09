@@ -104,16 +104,18 @@ pub async fn catch_up_with_guard(
     for unit in &live {
         let Unit::Scope(scope) = unit else { continue };
         let stored = stored_units.get(&unit.name());
-        let digests = reader.hash(unit, stored)?;
-        if stored == Some(&digests) {
+        let Some(bytes) = reader.hash(unit, stored)? else {
             continue;
-        }
-        let (records, digests) = reader.scope(scope, digests)?;
+        };
         changed = true;
-        rederive_scope(&mut tx, &records, scope, &mut content, &mut report).await?;
-        stamp::upsert_unit_row(&mut tx, &unit.name(), &digests).await?;
+        let pass = ScopePass {
+            scope,
+            stored,
+            bytes: &bytes,
+        };
+        catch_up_scope(&mut tx, &reader, pass, &mut content, &mut report).await?;
     }
-    report.units_hashed = reader.units_hashed;
+    report.units_hashed = reader.units_hashed();
 
     if !changed {
         drop(tx);
@@ -188,6 +190,59 @@ async fn load_stored_digests(
     Ok((units, content))
 }
 
+/// One scope unit whose bytes moved since the stored pair.
+struct ScopePass<'a> {
+    scope: &'a ScopeId,
+    stored: Option<&'a UnitValue>,
+    bytes: &'a units::UnitBytes<'a>,
+}
+
+/// Parses the families of one scope unit that its changed files can change,
+/// and writes their changed rows. Then stores the digests of the unit and
+/// of each of its files.
+async fn catch_up_scope(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    reader: &validation::UnitReader<'_>,
+    pass: ScopePass<'_>,
+    content: &mut BTreeMap<ContentKey, ContentValue>,
+    report: &mut CatchUpReport,
+) -> anyhow::Result<()> {
+    let ScopePass {
+        scope,
+        stored,
+        bytes,
+    } = pass;
+    let name = Unit::Scope(scope.clone()).name();
+    let read = units::files_read(reader.state_dir(), bytes, &stored_files(tx, &name).await?)?;
+    // A unit with no stored pair, or a scope with a family that has no
+    // digest row, parses every family, as a rebuild does.
+    let all = stored.is_none()
+        || ProjectionFamily::ALL.into_iter().any(|family| {
+            !content.contains_key(&(scope.as_str().to_owned(), family.family_name().to_owned()))
+        });
+    let records = reader.scope(scope, &read, all)?;
+    rederive_scope(tx, &records, scope, content, report).await?;
+    stamp::upsert_unit_row(tx, &name, &read.digests).await?;
+    stamp::replace_file_rows(tx, &name, &read.files).await
+}
+
+/// The file rows of one unit, by path.
+async fn stored_files(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    unit: &str,
+) -> anyhow::Result<BTreeMap<String, units::FileDigest>> {
+    let rows: Vec<(String, String, String)> = sqlx::query_as(
+        "SELECT path, stored_digest, content_digest FROM projection_file_digests WHERE unit = ?",
+    )
+    .bind(unit)
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|(path, stored, content)| (path, units::FileDigest { stored, content }))
+        .collect())
+}
+
 /// Removes the rows, relation rows, and digest rows of every scope the
 /// manifest does not name. Returns whether anything departed.
 async fn remove_departed_scopes(
@@ -217,24 +272,18 @@ async fn remove_departed_scopes(
             .bind(name)
             .execute(&mut **tx)
             .await?;
+        sqlx::query("DELETE FROM projection_file_digests WHERE unit = ?")
+            .bind(name)
+            .execute(&mut **tx)
+            .await?;
         departed = true;
     }
     Ok(departed)
 }
 
-/// The families whose records declare relations.
-const RELATION_OWNERS: [ProjectionFamily; 6] = [
-    ProjectionFamily::Sources,
-    ProjectionFamily::Requirements,
-    ProjectionFamily::Resolutions,
-    ProjectionFamily::Rules,
-    ProjectionFamily::Topics,
-    ProjectionFamily::Questions,
-];
-
-/// Rewrites only the parsed families
-/// whose content digest moved; the scope's relation rows follow whenever
-/// an owner family did.
+/// Rewrites only the parsed families whose content digest moved, and in
+/// each of them only the rows that differ. When an owner family moved, the
+/// relation rows of its kind follow the same way.
 async fn rederive_scope(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     records: &validation::ScopeRecords,
@@ -242,7 +291,7 @@ async fn rederive_scope(
     content: &mut BTreeMap<ContentKey, ContentValue>,
     report: &mut CatchUpReport,
 ) -> anyhow::Result<()> {
-    let mut owner_moved = false;
+    let mut moved_owners = Vec::new();
     for records in &records.families {
         let family = records.family;
         let fresh = ContentValue {
@@ -258,15 +307,17 @@ async fn rederive_scope(
         let content_changed = previous.is_none_or(|previous| {
             previous.content != fresh.content || previous.count != fresh.count
         });
-        family_rows::delete_rows(tx, family, scope).await?;
-        report.rows_written += family_rows::load_rows(tx, family, &records.bytes).await?;
+        report.rows_written += family_rows::replace_rows(tx, family, scope, &records.bytes).await?;
         report.families_rederived += 1;
-        owner_moved |= content_changed && RELATION_OWNERS.contains(&family);
+        if content_changed && relation_rows::OWNERS.contains(&family) {
+            if let Some(node_type) = family.node_type() {
+                moved_owners.push(crate::cache::serde_name(&node_type)?);
+            }
+        }
         content.insert(key, fresh);
     }
-    if owner_moved {
-        relation_rows::delete_rows(tx, scope).await?;
-        relation_rows::load_rows(tx, &records.relations, scope).await?;
+    if !moved_owners.is_empty() {
+        relation_rows::replace_rows(tx, &records.relations, scope, &moved_owners).await?;
     }
     Ok(())
 }

@@ -57,12 +57,12 @@ async fn api_discovery_describes_the_live_catalog_routes() {
         );
     }
 
-    let discovery = session.call(json!({})).await;
+    // The highest limit, because a call with no limit gives at most 50 routes.
+    let discovery = session.call(json!({"limit": 200})).await;
     assert_ne!(discovery.is_error, Some(true), "{discovery:?}");
-    let routes = discovery.structured_content.as_ref().unwrap()["routes"]
-        .as_array()
-        .unwrap()
-        .clone();
+    let answer = discovery.structured_content.as_ref().unwrap();
+    assert_eq!(answer["bounds"]["truncated"], false, "{}", answer["bounds"]);
+    let routes = answer["routes"].as_array().unwrap().clone();
 
     // The write-granted fixture advertises every registered definition, so
     // the described routes must track that set exactly.
@@ -72,10 +72,16 @@ async fn api_discovery_describes_the_live_catalog_routes() {
         "one described route per advertised definition"
     );
 
-    let member = routes
-        .iter()
-        .find(|route| route["path"] == "/sources/{id}" && route["method"] == "get")
-        .expect("the source member route is described");
+    assert!(
+        routes
+            .iter()
+            .any(|route| route["path"] == "/sources/{id}" && route["method"] == "get"),
+        "the source member route is listed"
+    );
+
+    // A filter that is the method and path of one route gives that route with its
+    // schemas.
+    let member = one_route(&session, "GET /sources/{id}").await;
     let definition = provenance_contract::definitions()
         .iter()
         .find(|definition| {
@@ -109,10 +115,7 @@ async fn api_discovery_describes_the_live_catalog_routes() {
         .unwrap();
     assert_ne!(neighbors["success_schema"], base["success_schema"]);
 
-    let create = routes
-        .iter()
-        .find(|route| route["path"] == "/sources" && route["method"] == "post")
-        .expect("the source creation route is described");
+    let create = one_route(&session, "POST /sources").await;
     assert!(create["request_schema"].is_object(), "{create}");
 
     session.shutdown().await;
@@ -125,7 +128,7 @@ async fn api_discovery_hides_denied_operations() {
     let restricted = access(&repository).deny_operation("list-sources");
     let session = ApiSession::start(StatementHost::with_fixture_access(restricted)).await;
 
-    let discovery = session.call(json!({})).await;
+    let discovery = session.call(json!({"limit": 200})).await;
     let routes = discovery.structured_content.as_ref().unwrap()["routes"]
         .as_array()
         .unwrap();
@@ -168,7 +171,7 @@ async fn mcp_api_outputs_validate_against_the_published_schema() {
     // so a dangling reference fails here.
     let published = compile(&published_schema).expect("the published api output schema compiles");
 
-    let discovery = session.call(json!({})).await;
+    let discovery = session.call(json!({"limit": 200})).await;
     let structured = discovery.structured_content.as_ref().unwrap();
     assert!(
         published.is_valid(structured),
@@ -184,13 +187,12 @@ async fn mcp_api_outputs_validate_against_the_published_schema() {
 
     // The described base form schema must also describe the live result
     // that the api tool returns on the same public path.
-    let routes = discovery.structured_content.as_ref().unwrap()["routes"]
-        .as_array()
-        .unwrap();
-    let member = routes
-        .iter()
-        .find(|route| route["path"] == "/sources/{id}" && route["method"] == "get")
-        .expect("the source member route is described");
+    let detail = session.call(json!({"filter": "GET /sources/{id}"})).await;
+    assert!(
+        published.is_valid(detail.structured_content.as_ref().unwrap()),
+        "the one-route answer violates the published schema: {detail:?}"
+    );
+    let member = &detail.structured_content.as_ref().unwrap()["routes"][0];
     let base_schema = member["queries"]
         .as_array()
         .unwrap()
@@ -205,6 +207,17 @@ async fn mcp_api_outputs_validate_against_the_published_schema() {
     );
 
     session.shutdown().await;
+}
+
+/// The one route that a filter of its method and path selects, with its schemas.
+async fn one_route(session: &ApiSession, filter: &str) -> Value {
+    let answer = session.call(json!({"filter": filter})).await;
+    let routes = answer.structured_content.as_ref().unwrap()["routes"]
+        .as_array()
+        .unwrap()
+        .clone();
+    let [route] = <[Value; 1]>::try_from(routes).expect("the filter selects one route");
+    route
 }
 
 /// Read a schema that has no `$schema` keyword as a Draft 7 document.

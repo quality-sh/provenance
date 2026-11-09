@@ -2,14 +2,17 @@
 // wall-clock time from the send to the complete answer.
 //
 // A request is { method, path, query, headers, body }. `path` is a concrete
-// path. A result is { ok, status, data, error, ms }.
+// path. A result is { ok, status, data, error, ms, at, pid }: `at` is the
+// monotonic clock time of the send in milliseconds, and `pid` is the process
+// that answered. The profile workflow uses them to find the samples of a call.
 import { spawn } from 'node:child_process';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 
-const now = () => Number(process.hrtime.bigint()) / 1e6;
+/** The monotonic clock in milliseconds. `perf record -k mono` uses the same clock. */
+export const now = () => Number(process.hrtime.bigint()) / 1e6;
 
 function parseJson(text) {
   try {
@@ -26,7 +29,7 @@ function envelopeResult(envelope, ok, status, ms) {
   return { ok: false, status, error: envelope?.error ?? envelope, ms };
 }
 
-/** Run a child process to the end. Gives exit code, stdout, stderr and time. */
+/** Run a child process to the end. Gives exit code, stdout, stderr, time, start time and process id. */
 export function run(command, args, { cwd, input, env } = {}) {
   return new Promise(resolve => {
     const start = now();
@@ -35,9 +38,9 @@ export function run(command, args, { cwd, input, env } = {}) {
     const err = [];
     child.stdout.on('data', chunk => out.push(chunk));
     child.stderr.on('data', chunk => err.push(chunk));
-    child.on('error', error => resolve({ code: -1, stdout: '', stderr: String(error), ms: now() - start }));
+    child.on('error', error => resolve({ code: -1, stdout: '', stderr: String(error), ms: now() - start, at: start, pid: child.pid }));
     child.on('close', code => {
-      resolve({ code, stdout: Buffer.concat(out).toString(), stderr: Buffer.concat(err).toString(), ms: now() - start });
+      resolve({ code, stdout: Buffer.concat(out).toString(), stderr: Buffer.concat(err).toString(), ms: now() - start, at: start, pid: child.pid });
     });
     if (child.stdin) {
       // A child that exits before it reads its input closes the pipe; that is not a failure of the run.
@@ -115,18 +118,19 @@ export class HttpWay {
       init.body = JSON.stringify({ data: body });
     }
     const start = now();
+    const pid = this.child.pid;
     let response;
     let text;
     try {
       response = await fetch(url, init);
       text = await response.text();
     } catch (error) {
-      return { ok: false, status: 0, error: { kind: 'transport', message: String(error.cause ?? error) }, ms: now() - start };
+      return { ok: false, status: 0, error: { kind: 'transport', message: String(error.cause ?? error) }, ms: now() - start, at: start, pid };
     }
     const ms = now() - start;
     const result = envelopeResult(parseJson(text), response.ok, response.status, ms);
     result.etag = response.headers.get('etag') ?? undefined;
-    return result;
+    return { ...result, at: start, pid };
   }
 
   async stop() {
@@ -177,11 +181,12 @@ export class CliWay {
   async command(args) {
     const result = await run(this.bin, args, { cwd: this.repo });
     const stdout = parseJson(result.stdout);
+    const { ms, at, pid } = result;
     if (result.code === 0) {
-      return { ok: true, status: 0, data: stdout?.data ?? stdout ?? result.stdout, ms: result.ms };
+      return { ok: true, status: 0, data: stdout?.data ?? stdout ?? result.stdout, ms, at, pid };
     }
     const error = parseJson(result.stderr.replace(/^Error: /, '')) ?? { message: result.stderr.trim().slice(0, 400) };
-    return { ok: false, status: result.code, error: error.error ?? error, ms: result.ms };
+    return { ok: false, status: result.code, error: error.error ?? error, ms, at, pid };
   }
 
   async stop() {}
@@ -242,18 +247,20 @@ export class McpWay {
 
   /** Call one tool. The result is the tool's JSON text, parsed. */
   async tool(name, args) {
+    const pid = this.child.pid;
     const start = now();
     const answer = await this.rpc('tools/call', { name, arguments: args });
     const ms = now() - start;
+    const at = start;
     if (answer.error) {
-      return { ok: false, status: 0, error: answer.error, ms };
+      return { ok: false, status: 0, error: answer.error, ms, at, pid };
     }
     const text = (answer.result?.content ?? []).map(item => item.text ?? '').join('');
     const value = parseJson(text) ?? answer.result?.structuredContent ?? text;
     if (answer.result?.isError) {
-      return { ok: false, status: 0, error: value?.error ?? value, ms };
+      return { ok: false, status: 0, error: value?.error ?? value, ms, at, pid };
     }
-    return { ok: true, status: 0, data: value?.data ?? value, meta: value?.meta, ms };
+    return { ok: true, status: 0, data: value?.data ?? value, meta: value?.meta, ms, at, pid };
   }
 
   async call({ method, path, query = {}, headers = {}, body = null }) {

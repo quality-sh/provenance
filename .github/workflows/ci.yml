@@ -90,6 +90,9 @@ jobs:
               - "tools/bench/**"
               - ".github/workflows/api-latency.yml"
               - "tools/api-latency/**"
+              - ".github/workflows/api-profile.yml"
+              - ".github/actions/setup-inferno/**"
+              - "tools/profile/**"
             # The trybuild tests compile code against these crates and their
             # dependencies. The build inputs that select the full suite in
             # select_tests.py also change the compiler output.
@@ -1508,14 +1511,16 @@ jobs:
         run: node --test tools/bench/*.test.mjs
       - name: Test the API latency tools
         run: node --test tools/api-latency/*.test.mjs
+      - name: Test the API profile tools
+        run: node --test tools/profile/*.test.mjs
       - name: Install workflow validator
         env:
           GOBIN: ${{ runner.temp }}/bench-tools
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
-      - name: Validate the Benchmarks and API latency workflows
+      - name: Validate the Benchmarks, API latency and API profile workflows
         env:
           GOBIN: ${{ runner.temp }}/bench-tools
-        run: '"$GOBIN/actionlint" .github/workflows/benchmarks.yml .github/workflows/api-latency.yml'
+        run: '"$GOBIN/actionlint" .github/workflows/benchmarks.yml .github/workflows/api-latency.yml .github/workflows/api-profile.yml'
 
   operation-contract:
     timeout-minutes: 45

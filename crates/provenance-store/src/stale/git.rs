@@ -160,7 +160,7 @@ pub fn revision_files_at_paths(
 /// The object id and path of each source blob in the revision tree. One
 /// `ls-tree` call lists the tree; it takes no path specs, so the argument
 /// list stays short for any selection.
-fn revision_source_blobs(
+pub(crate) fn revision_source_blobs(
     repo: &Utf8Path,
     revision: &str,
 ) -> anyhow::Result<Vec<(String, Utf8PathBuf)>> {
@@ -194,35 +194,18 @@ fn revision_source_blobs(
 }
 
 /// Read the blobs through one `git cat-file --batch` process.
-fn read_blobs(
+pub(crate) fn read_blobs(
     repo: &Utf8Path,
     blobs: Vec<(String, Utf8PathBuf)>,
 ) -> anyhow::Result<Vec<RevisionFile>> {
     if blobs.is_empty() {
         return Ok(Vec::new());
     }
-    let mut child = command(repo)
-        .args(["cat-file", "--batch"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .context("run git cat-file --batch")?;
-    let mut stdin = child.stdin.take().context("open git cat-file input")?;
-    let mut request = String::new();
-    for (object, _) in &blobs {
-        request.push_str(object);
-        request.push('\n');
-    }
-    let writer = std::thread::spawn(move || stdin.write_all(request.as_bytes()));
-    let output = child
-        .wait_with_output()
-        .context("read git cat-file --batch")?;
-    let written = writer
-        .join()
-        .map_err(|_| anyhow::anyhow!("git cat-file input writer panicked"))?;
-    let output = checked(output, "git cat-file --batch")?;
-    written.context("write git cat-file input")?;
+    let output = cat_file(
+        repo,
+        "--batch",
+        blobs.iter().map(|(object, _)| object.as_str()),
+    )?;
     let mut rest = output.stdout.as_slice();
     let mut files = Vec::with_capacity(blobs.len());
     for (object, path) in blobs {
@@ -251,108 +234,51 @@ fn read_blobs(
     Ok(files)
 }
 
-pub fn changed_files(repo: &Utf8Path, base: &str, head: &str) -> anyhow::Result<Vec<ChangedFile>> {
-    let output = git(
-        repo,
-        &[
-            "diff",
-            "--no-ext-diff",
-            "--no-textconv",
-            "--name-status",
-            "-z",
-            "--find-renames",
-            base,
-            head,
-            "--",
-        ],
-    )?;
-    let fields = output
-        .stdout
-        .split(|byte| *byte == 0)
-        .filter(|field| !field.is_empty())
-        .map(|field| String::from_utf8(field.to_vec()))
-        .collect::<Result<Vec<_>, _>>()?;
-    let mut cursor = 0;
-    let mut changes = Vec::new();
-    while cursor < fields.len() {
-        let status = &fields[cursor];
-        cursor += 1;
-        let old_path = fields
-            .get(cursor)
-            .context("git diff omitted a changed path")?;
-        cursor += 1;
-        let (kind, new_path) = match status.as_bytes().first() {
-            Some(b'A') => (ChangeKind::Added, old_path.as_str()),
-            Some(b'D') => (ChangeKind::Deleted, old_path.as_str()),
-            Some(b'R' | b'C') => {
-                let new_path = fields
-                    .get(cursor)
-                    .context("git diff omitted a rename destination")?;
-                cursor += 1;
-                (ChangeKind::Renamed, new_path.as_str())
-            }
-            _ => (ChangeKind::Modified, old_path.as_str()),
-        };
-        let (old_lines, new_lines) = diff_lines(repo, base, head, old_path, new_path)?;
-        changes.push(ChangedFile {
-            old_path: Utf8PathBuf::from(old_path),
-            new_path: Utf8PathBuf::from(new_path),
-            kind,
-            old_lines,
-            new_lines,
-        });
-    }
-    Ok(changes)
-}
-
-fn diff_lines(
-    repo: &Utf8Path,
-    base: &str,
-    head: &str,
-    old_path: &str,
-    new_path: &str,
-) -> anyhow::Result<(Vec<LineSpan>, Vec<LineSpan>)> {
-    let mut command = command(repo);
-    command
-        .args([
-            "diff",
-            "--unified=0",
-            "--no-color",
-            "--no-ext-diff",
-            "--no-textconv",
-            base,
-            head,
-            "--",
-            old_path,
-        ])
-        .current_dir(repo);
-    if new_path != old_path {
-        command.arg(new_path);
-    }
-    let output = checked(command.output().context("run git diff")?, "git diff")?;
-    let text = String::from_utf8(output.stdout)?;
-    let mut old_lines = Vec::new();
-    let mut new_lines = Vec::new();
-    for line in text.lines().filter(|line| line.starts_with("@@ ")) {
-        let mut fields = line.split_whitespace();
-        let _marker = fields.next();
-        let old = fields.next().context("malformed git diff hunk")?;
-        let new = fields.next().context("malformed git diff hunk")?;
-        old_lines.push(parse_hunk_span(old, '-')?);
-        new_lines.push(parse_hunk_span(new, '+')?);
-    }
-    Ok((old_lines, new_lines))
-}
-
-fn parse_hunk_span(field: &str, prefix: char) -> anyhow::Result<LineSpan> {
-    let coordinates = field
-        .strip_prefix(prefix)
-        .context("malformed git diff hunk coordinates")?;
-    let (start, count) = coordinates.split_once(',').unwrap_or((coordinates, "1"));
-    Ok(LineSpan {
-        start: start.parse()?,
-        count: count.parse()?,
+/// Whether each object is a blob in the object store, from one
+/// `git cat-file --batch-check` process. A failed check gives false.
+pub(crate) fn blobs_exist(repo: &Utf8Path, objects: &[&str]) -> bool {
+    let Ok(output) = cat_file(repo, "--batch-check", objects.iter().copied()) else {
+        return false;
+    };
+    let mut lines = output.stdout.split(|byte| *byte == b'\n');
+    objects.iter().all(|object| {
+        lines.next().is_some_and(|line| {
+            let mut fields = line.split(|byte| *byte == b' ');
+            fields.next() == Some(object.as_bytes()) && fields.next() == Some(&b"blob"[..])
+        })
     })
+}
+
+/// Runs `git cat-file <mode>` with one object id on each input line.
+fn cat_file<'o>(
+    repo: &Utf8Path,
+    mode: &str,
+    objects: impl Iterator<Item = &'o str>,
+) -> anyhow::Result<Output> {
+    let operation = format!("git cat-file {mode}");
+    let mut child = command(repo)
+        .args(["cat-file", mode])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .with_context(|| format!("run {operation}"))?;
+    let mut stdin = child.stdin.take().context("open git cat-file input")?;
+    let mut request = String::new();
+    for object in objects {
+        request.push_str(object);
+        request.push('\n');
+    }
+    let writer = std::thread::spawn(move || stdin.write_all(request.as_bytes()));
+    let output = child
+        .wait_with_output()
+        .with_context(|| format!("read {operation}"))?;
+    let written = writer
+        .join()
+        .map_err(|_| anyhow::anyhow!("git cat-file input writer panicked"))?;
+    let output = checked(output, &operation)?;
+    written.context("write git cat-file input")?;
+    Ok(output)
 }
 
 fn resolve_commit(repo: &Utf8Path, revision: &str) -> anyhow::Result<String> {
@@ -418,13 +344,17 @@ fn checked(output: Output, operation: &str) -> anyhow::Result<Output> {
     Ok(output)
 }
 
+mod diff;
+pub use diff::changed_files;
+
 #[cfg(test)]
-mod batch_tests;
+pub(crate) mod batch_tests;
 #[cfg(test)]
 mod security_tests;
 
 #[cfg(test)]
 mod tests {
+    use super::diff::parse_hunk_span;
     use super::*;
 
     #[test]

@@ -76,3 +76,28 @@ pub(super) async fn upsert_unit_row(
     .await?;
     Ok(())
 }
+
+/// Replaces the file rows of one unit with `files`.
+pub(super) async fn replace_file_rows(
+    tx: &mut Transaction<'_, Sqlite>,
+    unit: &str,
+    files: &std::collections::BTreeMap<String, super::units::FileDigest>,
+) -> anyhow::Result<()> {
+    sqlx::query("DELETE FROM projection_file_digests WHERE unit = ?")
+        .bind(unit)
+        .execute(&mut **tx)
+        .await?;
+    for (path, file) in files {
+        sqlx::query(
+            "INSERT INTO projection_file_digests (unit, path, stored_digest, content_digest) \
+             VALUES (?, ?, ?, ?)",
+        )
+        .bind(unit)
+        .bind(path)
+        .bind(&file.stored)
+        .bind(&file.content)
+        .execute(&mut **tx)
+        .await?;
+    }
+    Ok(())
+}

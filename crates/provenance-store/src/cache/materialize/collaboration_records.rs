@@ -1,135 +1,266 @@
+use super::batch::{optional_text, text, Rows, Table};
 use crate::cache::serde_name;
+use provenance_core::model::ColumnValue;
 use provenance_core::{
     AssertionRecord, Contribution, DispositionRecord, Message, ProposalCard, SynthesisPacket,
     Thread,
 };
-use sqlx::{Sqlite, Transaction};
+use serde::de::DeserializeOwned;
 
-pub(super) async fn load_threads(
-    tx: &mut Transaction<'_, Sqlite>,
+/// The rows of one collaboration family in `table`, one row for each
+/// record, with the values that `row` gives.
+fn rows_of<T: DeserializeOwned>(
     bytes: &[u8],
-) -> anyhow::Result<u64> {
-    let mut loaded = 0;
-    for thread in serde_json::from_slice::<Vec<Thread>>(bytes)? {
-        let payload = serde_json::to_string(&thread)?;
-        sqlx::query("INSERT INTO threads (scope_id, id, parent_type, parent_id, status, created_at, payload) VALUES (?, ?, ?, ?, ?, ?, ?)")
-            .bind(thread.scope_id.as_str()).bind(thread.id.as_str())
-            .bind(serde_name(&thread.parent.node_type)?).bind(thread.parent.node_id.as_str())
-            .bind(serde_name(&thread.status)?).bind(thread.created_at)
-            .bind(payload)
-            .execute(&mut **tx).await?;
-        loaded += 1;
+    table: &str,
+    columns: &[&str],
+    row: impl Fn(T) -> anyhow::Result<Vec<ColumnValue>>,
+) -> anyhow::Result<Rows> {
+    let columns: Vec<String> = columns.iter().map(|column| (*column).to_owned()).collect();
+    let mut rows = Rows::new(vec![Table::insert(table, &columns)]);
+    for record in serde_json::from_slice::<Vec<T>>(bytes)? {
+        match row(record) {
+            Ok(values) => {
+                rows.push(0, values);
+                rows.loaded += 1;
+            }
+            Err(error) => {
+                rows.failure = Some(error);
+                break;
+            }
+        }
     }
-    Ok(loaded)
+    Ok(rows)
 }
 
-pub(super) async fn load_messages(
-    tx: &mut Transaction<'_, Sqlite>,
-    bytes: &[u8],
-) -> anyhow::Result<u64> {
-    let mut loaded = 0;
-    for message in serde_json::from_slice::<Vec<Message>>(bytes)? {
-        let payload = serde_json::to_string(&message)?;
-        sqlx::query("INSERT INTO messages (scope_id, id, thread_id, role, body, created_at, payload) VALUES (?, ?, ?, ?, ?, ?, ?)")
-            .bind(message.scope_id.as_str()).bind(message.id.as_str()).bind(message.thread_id.as_str())
-            .bind(serde_name(&message.role)?).bind(message.body).bind(message.created_at)
-            .bind(payload)
-            .execute(&mut **tx).await?;
-        loaded += 1;
-    }
-    Ok(loaded)
+fn json<T: serde::Serialize>(value: &T) -> anyhow::Result<ColumnValue> {
+    Ok(text(serde_json::to_string(value)?))
 }
 
-pub(super) async fn load_contributions(
-    tx: &mut Transaction<'_, Sqlite>,
-    bytes: &[u8],
-) -> anyhow::Result<u64> {
-    let mut loaded = 0;
-    for contribution in serde_json::from_slice::<Vec<Contribution>>(bytes)? {
-        sqlx::query("INSERT INTO contributions (scope_id, id, target_type, target_id, participant_slot, stance, strongest_finding, uncertainty, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-            .bind(contribution.scope_id.as_str()).bind(contribution.id.as_str())
-            .bind(serde_name(&contribution.target.artifact_type)?)
-            .bind(contribution.target.artifact_id.as_str()).bind(&contribution.participant_slot)
-            .bind(serde_name(&contribution.stance)?).bind(&contribution.strongest_finding)
-            .bind(serde_json::to_string(&contribution.uncertainty)?)
-            .bind(serde_json::to_string(&contribution)?).execute(&mut **tx).await?;
-        loaded += 1;
-    }
-    Ok(loaded)
+pub(super) fn rows_of_threads(bytes: &[u8]) -> anyhow::Result<Rows> {
+    let columns = [
+        "scope_id",
+        "id",
+        "parent_type",
+        "parent_id",
+        "status",
+        "created_at",
+        "payload",
+    ];
+    rows_of(bytes, "threads", &columns, |thread: Thread| {
+        let payload = json(&thread)?;
+        Ok(vec![
+            text(thread.scope_id.as_str()),
+            text(thread.id.as_str()),
+            text(serde_name(&thread.parent.node_type)?),
+            text(thread.parent.node_id.as_str()),
+            text(serde_name(&thread.status)?),
+            ColumnValue::Integer(thread.created_at),
+            payload,
+        ])
+    })
 }
 
-pub(super) async fn load_synthesis_packets(
-    tx: &mut Transaction<'_, Sqlite>,
-    bytes: &[u8],
-) -> anyhow::Result<u64> {
-    let mut loaded = 0;
-    for packet in serde_json::from_slice::<Vec<SynthesisPacket>>(bytes)? {
-        sqlx::query("INSERT INTO synthesis_packets (scope_id, id, target_type, target_id, summary, payload) VALUES (?, ?, ?, ?, ?, ?)")
-            .bind(packet.scope_id.as_str()).bind(packet.id.as_str())
-            .bind(serde_name(&packet.target.artifact_type)?).bind(packet.target.artifact_id.as_str())
-            .bind(&packet.summary).bind(serde_json::to_string(&packet)?)
-            .execute(&mut **tx).await?;
-        loaded += 1;
-    }
-    Ok(loaded)
+pub(super) fn rows_of_messages(bytes: &[u8]) -> anyhow::Result<Rows> {
+    let columns = [
+        "scope_id",
+        "id",
+        "thread_id",
+        "role",
+        "body",
+        "created_at",
+        "payload",
+    ];
+    rows_of(bytes, "messages", &columns, |message: Message| {
+        let payload = json(&message)?;
+        Ok(vec![
+            text(message.scope_id.as_str()),
+            text(message.id.as_str()),
+            text(message.thread_id.as_str()),
+            text(serde_name(&message.role)?),
+            text(message.body),
+            ColumnValue::Integer(message.created_at),
+            payload,
+        ])
+    })
 }
 
-pub(super) async fn load_assertion_records(
-    tx: &mut Transaction<'_, Sqlite>,
-    bytes: &[u8],
-) -> anyhow::Result<u64> {
-    let mut loaded = 0;
-    for assertion in serde_json::from_slice::<Vec<AssertionRecord>>(bytes)? {
-        sqlx::query("INSERT INTO assertion_records (scope_id, id, proposal_id, synthesis_packet_id, supporting_claim_ids, payload) VALUES (?, ?, ?, ?, ?, ?)")
-            .bind(assertion.scope_id.as_str()).bind(assertion.id.as_str())
-            .bind(assertion.proposal_id.as_str()).bind(assertion.synthesis_packet_id.as_str())
-            .bind(serde_json::to_string(&assertion.supporting_claim_ids)?)
-            .bind(serde_json::to_string(&assertion)?).execute(&mut **tx).await?;
-        loaded += 1;
-    }
-    Ok(loaded)
+pub(super) fn rows_of_contributions(bytes: &[u8]) -> anyhow::Result<Rows> {
+    let columns = [
+        "scope_id",
+        "id",
+        "target_type",
+        "target_id",
+        "participant_slot",
+        "stance",
+        "strongest_finding",
+        "uncertainty",
+        "payload",
+    ];
+    rows_of(bytes, "contributions", &columns, |record: Contribution| {
+        Ok(vec![
+            text(record.scope_id.as_str()),
+            text(record.id.as_str()),
+            text(serde_name(&record.target.artifact_type)?),
+            text(record.target.artifact_id.as_str()),
+            text(record.participant_slot.as_str()),
+            text(serde_name(&record.stance)?),
+            text(record.strongest_finding.as_str()),
+            json(&record.uncertainty)?,
+            json(&record)?,
+        ])
+    })
 }
 
-pub(super) async fn load_proposal_cards(
-    tx: &mut Transaction<'_, Sqlite>,
-    bytes: &[u8],
-) -> anyhow::Result<u64> {
-    let mut loaded = 0;
-    for proposal in serde_json::from_slice::<Vec<ProposalCard>>(bytes)? {
-        let payload = serde_json::to_string(&proposal)?;
-        sqlx::query("INSERT INTO proposal_cards (scope_id, id, proposal_key, proposal_type, title, summary, confidence, target_type, target_id, traceability, builds_on, promotion_state, duplicate_of, superseded_by, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-            .bind(proposal.scope_id.as_str()).bind(proposal.id.as_str()).bind(&proposal.proposal_key)
-            .bind(serde_name(&proposal.proposal_type)?).bind(&proposal.title).bind(&proposal.summary)
-            .bind(proposal.confidence).bind(serde_name(&proposal.traceability.target.artifact_type)?)
-            .bind(proposal.traceability.target.artifact_id.as_str())
-            .bind(serde_json::to_string(&proposal.traceability)?)
-            .bind(serde_json::to_string(&proposal.builds_on)?)
-            .bind(serde_name(&proposal.promotion_state)?)
-            .bind(proposal.duplicate_of.as_ref().map(provenance_core::StableId::as_str))
-            .bind(proposal.superseded_by.as_ref().map(provenance_core::StableId::as_str))
-            .bind(payload)
-            .execute(&mut **tx).await?;
-        loaded += 1;
-    }
-    Ok(loaded)
+pub(super) fn rows_of_synthesis_packets(bytes: &[u8]) -> anyhow::Result<Rows> {
+    let columns = [
+        "scope_id",
+        "id",
+        "target_type",
+        "target_id",
+        "summary",
+        "payload",
+    ];
+    rows_of(
+        bytes,
+        "synthesis_packets",
+        &columns,
+        |packet: SynthesisPacket| {
+            Ok(vec![
+                text(packet.scope_id.as_str()),
+                text(packet.id.as_str()),
+                text(serde_name(&packet.target.artifact_type)?),
+                text(packet.target.artifact_id.as_str()),
+                text(packet.summary.as_str()),
+                json(&packet)?,
+            ])
+        },
+    )
 }
 
-pub(super) async fn load_dispositions(
-    tx: &mut Transaction<'_, Sqlite>,
-    bytes: &[u8],
-) -> anyhow::Result<u64> {
-    let mut loaded = 0;
-    for disposition in serde_json::from_slice::<Vec<DispositionRecord>>(bytes)? {
-        let payload = serde_json::to_string(&disposition)?;
-        sqlx::query("INSERT INTO dispositions (scope_id, id, proposal_id, decision, rationale, actor, canonical_artifact, external_action, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-            .bind(disposition.scope_id.as_str()).bind(disposition.id.as_str()).bind(disposition.proposal_id.as_str())
-            .bind(serde_name(&disposition.decision)?).bind(&disposition.rationale)
-            .bind(serde_json::to_string(&disposition.actor)?)
-            .bind(disposition.canonical_artifact.as_ref().map(serde_json::to_string).transpose()?)
-            .bind(disposition.external_action.as_ref().map(serde_json::to_string).transpose()?)
-            .bind(payload)
-            .execute(&mut **tx).await?;
-        loaded += 1;
-    }
-    Ok(loaded)
+pub(super) fn rows_of_assertion_records(bytes: &[u8]) -> anyhow::Result<Rows> {
+    let columns = [
+        "scope_id",
+        "id",
+        "proposal_id",
+        "synthesis_packet_id",
+        "supporting_claim_ids",
+        "payload",
+    ];
+    rows_of(
+        bytes,
+        "assertion_records",
+        &columns,
+        |record: AssertionRecord| {
+            Ok(vec![
+                text(record.scope_id.as_str()),
+                text(record.id.as_str()),
+                text(record.proposal_id.as_str()),
+                text(record.synthesis_packet_id.as_str()),
+                json(&record.supporting_claim_ids)?,
+                json(&record)?,
+            ])
+        },
+    )
+}
+
+pub(super) fn rows_of_proposal_cards(bytes: &[u8]) -> anyhow::Result<Rows> {
+    let columns = [
+        "scope_id",
+        "id",
+        "proposal_key",
+        "proposal_type",
+        "title",
+        "summary",
+        "confidence",
+        "target_type",
+        "target_id",
+        "traceability",
+        "builds_on",
+        "promotion_state",
+        "duplicate_of",
+        "superseded_by",
+        "payload",
+    ];
+    rows_of(
+        bytes,
+        "proposal_cards",
+        &columns,
+        |proposal: ProposalCard| {
+            let payload = json(&proposal)?;
+            Ok(vec![
+                text(proposal.scope_id.as_str()),
+                text(proposal.id.as_str()),
+                text(proposal.proposal_key.as_str()),
+                text(serde_name(&proposal.proposal_type)?),
+                text(proposal.title.as_str()),
+                text(proposal.summary.as_str()),
+                proposal
+                    .confidence
+                    .map_or(ColumnValue::Null, ColumnValue::Real),
+                text(serde_name(&proposal.traceability.target.artifact_type)?),
+                text(proposal.traceability.target.artifact_id.as_str()),
+                json(&proposal.traceability)?,
+                json(&proposal.builds_on)?,
+                text(serde_name(&proposal.promotion_state)?),
+                optional_text(
+                    proposal
+                        .duplicate_of
+                        .as_ref()
+                        .map(provenance_core::StableId::as_str),
+                ),
+                optional_text(
+                    proposal
+                        .superseded_by
+                        .as_ref()
+                        .map(provenance_core::StableId::as_str),
+                ),
+                payload,
+            ])
+        },
+    )
+}
+
+pub(super) fn rows_of_dispositions(bytes: &[u8]) -> anyhow::Result<Rows> {
+    let columns = [
+        "scope_id",
+        "id",
+        "proposal_id",
+        "decision",
+        "rationale",
+        "actor",
+        "canonical_artifact",
+        "external_action",
+        "payload",
+    ];
+    rows_of(
+        bytes,
+        "dispositions",
+        &columns,
+        |record: DispositionRecord| {
+            let payload = json(&record)?;
+            Ok(vec![
+                text(record.scope_id.as_str()),
+                text(record.id.as_str()),
+                text(record.proposal_id.as_str()),
+                text(serde_name(&record.decision)?),
+                text(record.rationale.as_str()),
+                json(&record.actor)?,
+                optional_text(
+                    record
+                        .canonical_artifact
+                        .as_ref()
+                        .map(serde_json::to_string)
+                        .transpose()?,
+                ),
+                optional_text(
+                    record
+                        .external_action
+                        .as_ref()
+                        .map(serde_json::to_string)
+                        .transpose()?,
+                ),
+                payload,
+            ])
+        },
+    )
 }

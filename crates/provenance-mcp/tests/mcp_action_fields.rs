@@ -244,3 +244,42 @@ async fn a_refusal_without_record_fields_gives_the_schema_of_the_record_kind() {
     support::schema_check::compile(&requirement["schema"]);
     session.close().await;
 }
+
+/// A Question create names its method in one field, `resolution_method`, as the stored
+/// Question record does. A call that gives the method twice is refused at the second name.
+#[tokio::test]
+#[verifies("rule_mcp_refusal_names_field", examples)]
+async fn a_question_create_names_its_method_in_one_field() {
+    let repository = Repository::new("The shared graph is readable.");
+    repository.all_kinds();
+    let session = session(&repository).await;
+    let client = &session.client;
+    let schema = refused(
+        client,
+        "change",
+        json!({"action":"create","target":"question_new","type":"question"}),
+    )
+    .await["schema"]
+        .clone();
+    let required = schema["required"].as_array().unwrap();
+    assert!(required.contains(&json!("resolution_method")), "{schema}");
+    assert!(!required.contains(&json!("method")), "{schema}");
+    assert!(schema["properties"].get("method").is_none(), "{schema}");
+
+    let question = json!({"action":"create","type":"question","target":"question_new",
+        "topic_id":"topic_shared","question":"Which host?","links":[],"status":"open",
+        "resolution_method":"ask"});
+    let mut twice = question.clone();
+    twice["method"] = json!("ask");
+    assert_eq!(
+        field(client, "change", twice).await,
+        (json!("method"), json!("unknown_field"))
+    );
+    let created = call(client, "change", question).await;
+    assert_ne!(created.is_error, Some(true), "{created:?}");
+    assert_eq!(
+        created.structured_content.unwrap()["data"]["resolution_method"],
+        "ask"
+    );
+    session.close().await;
+}

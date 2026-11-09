@@ -25,6 +25,7 @@ pub mod memory;
 
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::OnceLock;
 
 /// The path of one state file below the state directory, with `/` between
 /// its parts.
@@ -83,22 +84,36 @@ impl Revision {
 }
 
 /// One consistent read of canonical state, held in memory.
-#[derive(Clone, Debug, PartialEq, Eq)]
+///
+/// The revision is a digest of every byte of the view. A view computes it
+/// on the first call of [`Self::revision`], so a reader that does not ask
+/// for it does not pay for it.
+#[derive(Clone, Debug)]
 pub struct StateView {
-    revision: Revision,
+    revision: OnceLock<Revision>,
     entries: BTreeMap<StateKey, Vec<u8>>,
 }
 
+/// Two views are equal when their entries are equal. The revision is a
+/// function of the entries.
+impl PartialEq for StateView {
+    fn eq(&self, other: &Self) -> bool {
+        self.entries == other.entries
+    }
+}
+
+impl Eq for StateView {}
+
 impl StateView {
-    pub fn new(entries: BTreeMap<StateKey, Vec<u8>>) -> Self {
+    pub const fn new(entries: BTreeMap<StateKey, Vec<u8>>) -> Self {
         Self {
-            revision: Revision::of(&entries),
+            revision: OnceLock::new(),
             entries,
         }
     }
 
-    pub const fn revision(&self) -> &Revision {
-        &self.revision
+    pub fn revision(&self) -> &Revision {
+        self.revision.get_or_init(|| Revision::of(&self.entries))
     }
 
     pub const fn entries(&self) -> &BTreeMap<StateKey, Vec<u8>> {

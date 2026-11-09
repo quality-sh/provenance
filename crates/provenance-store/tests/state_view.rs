@@ -8,8 +8,9 @@ use camino::Utf8Path;
 use provenance_core::{ScopeId, StableId};
 use provenance_macros::verifies;
 use provenance_store::layout::ProvenanceLayout;
-use provenance_store::publication::with_publication_guard;
+use provenance_store::publication::{publication_guard, with_publication_guard};
 use provenance_store::repository::Repository;
+use provenance_store::review_changes::ReviewStateSnapshot;
 use provenance_store::state_store::{CreateSourceInput, StateStore};
 
 #[path = "support/initialization.rs"]
@@ -121,4 +122,28 @@ fn a_handle_that_holds_the_section_takes_its_view_in_that_section() {
     })
     .unwrap();
     assert_eq!(sources.len(), 1);
+}
+
+/// Implementation aid: the live-update watcher captures the bytes under the
+/// guard and parses them after the guard ends. The parse gives the snapshot
+/// of a guarded read of the same bytes, also after a later write. No Rule
+/// binds it.
+#[tokio::test]
+async fn a_capture_parses_to_the_snapshot_of_a_guarded_read() {
+    let (_dir, repository) = repository();
+    let guard = publication_guard(&repository).await.unwrap();
+    let read = ReviewStateSnapshot::read(&guard).unwrap();
+    let capture = ReviewStateSnapshot::capture(&guard).unwrap();
+    drop(guard);
+    repository
+        .store()
+        .create_source(source_input("source_later"))
+        .unwrap();
+    let parsed = ReviewStateSnapshot::from_capture(capture).unwrap();
+    let changes = parsed.changes_since(&read);
+    assert!(!changes.configuration_changed);
+    assert!(changes.scopes.is_empty());
+    let guard = publication_guard(&repository).await.unwrap();
+    let later = ReviewStateSnapshot::read(&guard).unwrap();
+    assert_eq!(later.changes_since(&parsed).scopes.len(), 1);
 }

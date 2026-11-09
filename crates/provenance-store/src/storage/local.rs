@@ -193,9 +193,13 @@ fn remove_file(path: &Utf8Path) -> anyhow::Result<()> {
 
 /// The manifest and each shard below `directory`, keyed by `prefix` and
 /// their path below it. The walk enters only a directory that can hold the
-/// manifest or a shard. Any other entry is not canonical state, and the view
-/// leaves it out: a name that is not UTF-8, a symbolic link, a special
-/// entry, or a file that is not the manifest or a shard. A shard that the
+/// manifest or a shard. The view leaves out a name that is not UTF-8, a
+/// directory that cannot hold the manifest or a shard, and any other entry
+/// at a key that is not the manifest or a shard and cannot hold one. A
+/// symbolic link or a special entry at the key of a shard, and any entry
+/// that is not a directory at the key of a directory that can hold a shard,
+/// is an error: the view cannot read it, and a view without its shards
+/// would delete their rows. A shard that the
 /// process cannot read is an error.
 fn read_tree(
     directory: &Utf8Path,
@@ -214,17 +218,18 @@ fn read_tree(
             format!("{prefix}/{name}")
         };
         let kind = entry.file_type().map_err(read_error(&path))?;
-        if kind.is_dir() && shards::can_hold_canonical_keys(&key) {
-            read_tree(&path, &key, entries)?;
-        } else if kind.is_file() && shards::is_canonical_key(&key) {
-            let bytes = std::fs::read(&path).map_err(read_error(&path))?;
-            entries.insert(StateKey::new(key)?, bytes);
-        } else if !kind.is_dir() && shards::is_canonical_key(&key) {
-            // A link at a shard name cannot be read as canonical state, so
-            // the view refuses it instead of leaving the shard out.
+        let holds_keys = shards::can_hold_canonical_keys(&key);
+        if kind.is_dir() {
+            if holds_keys {
+                read_tree(&path, &key, entries)?;
+            }
+        } else if holds_keys || (!kind.is_file() && shards::is_canonical_key(&key)) {
             return Err(StorageError::Read(anyhow::anyhow!(
                 "unsupported state entry: {path}"
             )));
+        } else if kind.is_file() && shards::is_canonical_key(&key) {
+            let bytes = std::fs::read(&path).map_err(read_error(&path))?;
+            entries.insert(StateKey::new(key)?, bytes);
         }
     }
     Ok(())

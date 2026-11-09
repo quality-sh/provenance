@@ -1,6 +1,6 @@
 #[path = "../tests/support/initialization.rs"]
 mod initialization;
-pub use initialization::allow_reviewer;
+pub use initialization::{allow_reviewer, initialize};
 
 /// The fixture repository at `layout`, opened for `default`, or for the
 /// first scope its manifest declares. The open runs publication recovery

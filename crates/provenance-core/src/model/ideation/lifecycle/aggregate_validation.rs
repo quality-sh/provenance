@@ -7,7 +7,6 @@ use crate::model::{
     DispositionRecord, PromotionState, ProposalCard,
 };
 use provenance_macros::rule;
-use serde::Serialize;
 use std::collections::BTreeMap;
 
 pub(super) fn validate(aggregate: IdeationAggregate<'_>) -> anyhow::Result<()> {
@@ -226,17 +225,13 @@ fn validate_disposition_links(aggregate: &IdeationAggregate<'_>) -> anyhow::Resu
     Ok(())
 }
 
-fn ensure_immutable_ids<'a, T: Serialize + 'a>(
+fn ensure_immutable_ids<'a, T: 'a>(
     kind: &str,
     records: impl IntoIterator<Item = (&'a str, &'a T)>,
 ) -> anyhow::Result<()> {
-    let mut seen = BTreeMap::new();
-    for (id, record) in records {
-        let value = serde_json::to_value(record)?;
-        anyhow::ensure!(
-            seen.insert(id, value).is_none(),
-            "duplicate immutable {kind} id {id}"
-        );
+    let mut seen = std::collections::BTreeSet::new();
+    for (id, _) in records {
+        anyhow::ensure!(seen.insert(id), "duplicate immutable {kind} id {id}");
     }
     Ok(())
 }

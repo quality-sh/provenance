@@ -4,9 +4,13 @@
 
 use super::comparison::requests;
 use super::comparison::test_stores::TestStore;
+use crate::operations::catalog;
 use crate::operations::queries;
 use crate::operations::read_policy::ReadPolicy;
+use provenance_core::protocol::failure::OperationFailure;
 use provenance_macros::verifies;
+use serde_json::json;
+use std::sync::Arc;
 
 /// Two implementations, three verifications, and two open reviews share
 /// a limit of two. Only the verification list is cut.
@@ -63,5 +67,82 @@ async fn a_cleared_review_is_not_open() {
             "verification_bindings"
         ]
     );
-    assert_eq!(answer.stamp.live, ["verification_runs"]);
+    assert_eq!(answer.stamp.live, ["scanned_sites", "verification_runs"]);
+}
+
+/// A host that opens the graph but gives no access to the repository
+/// files: it refuses each operation that names `RepositoryFiles`.
+struct NoRepositoryFiles(camino::Utf8PathBuf, String);
+
+impl catalog::ContextResolver for NoRepositoryFiles {
+    fn authorize(
+        &self,
+        _: &'static str,
+        _: &catalog::RequestedContext,
+    ) -> Result<(), OperationFailure> {
+        Ok(())
+    }
+
+    fn prepare(
+        &self,
+        _: &'static str,
+        _: catalog::RequestedContext,
+        needs: catalog::ExecutionNeeds,
+    ) -> Result<catalog::PreparedContext, OperationFailure> {
+        if needs.contains(&catalog::ExecutionNeed::RepositoryFiles) {
+            return Err(OperationFailure::UnavailableNeeds);
+        }
+        Ok(catalog::PreparedContext::read(catalog::PreparedRead {
+            repository: crate::repository::Repository::open(&self.0, &self.1).unwrap(),
+            policy: ReadPolicy::default(),
+            requested_target: "test".into(),
+            external: false,
+        }))
+    }
+}
+
+/// The failure of one call on a host without the repository files.
+async fn refusal_without_files<O: catalog::Operation>(
+    store: &TestStore,
+    request: serde_json::Value,
+) -> provenance_core::protocol::failure::ErasedFailure {
+    let answer = crate::test_support::call::<O, _>(
+        json!({
+            "context": {"repository": "test", "scope": store.scope.as_str()},
+            "request": request
+        }),
+        catalog::Direct(Arc::new(NoRepositoryFiles(
+            store.root.clone(),
+            store.scope.as_str().to_owned(),
+        ))),
+    )
+    .await;
+    match answer {
+        Ok(answer) => panic!("{} ran without the repository files: {answer}", O::NAME),
+        Err(failure) => failure,
+    }
+}
+
+/// The evidence read scans the working tree as impact does, so a host
+/// without the repository files refuses it before it runs, with the
+/// failure that impact gives.
+#[tokio::test]
+#[verifies("rule_evidence_gives_scanned_sites", examples)]
+async fn a_host_without_repository_files_refuses_evidence_as_it_refuses_impact() {
+    let store = TestStore::pinned();
+
+    let impact = refusal_without_files::<catalog::Impact>(
+        &store,
+        json!({"id": "rule_overtime_001", "limit": 50}),
+    )
+    .await;
+    let evidence = refusal_without_files::<catalog::Evidence>(
+        &store,
+        json!({"rule": "rule_overtime_001", "limit": 50}),
+    )
+    .await;
+
+    assert_eq!(impact.status_code(), 503);
+    assert_eq!(evidence.status_code(), impact.status_code());
+    assert_eq!(evidence.error, impact.error);
 }

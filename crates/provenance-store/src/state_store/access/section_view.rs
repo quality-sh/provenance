@@ -1,6 +1,7 @@
 //! The view that one live section reads and writes, and the state reads of a
 //! store, which answer from a view when the store has one.
 
+use super::super::read_fence::ReadFence;
 use super::super::{Access, StateStore};
 use crate::storage::{StateKey, StateStorage, StateView, WriteSet};
 use camino::{Utf8Path, Utf8PathBuf};
@@ -70,14 +71,40 @@ pub enum StateEntry {
     Directory,
 }
 
+// Every state read below passes through `check_read`, which records it for
+// the tests and refuses it outside the read fence of a fenced store.
 impl StateStore {
+    /// Records one read of the state file or directory at `path`. A fenced
+    /// store refuses a path outside its fence.
+    pub(in crate::state_store) fn check_read(&self, path: &Utf8Path) -> anyhow::Result<()> {
+        crate::test_probes::record_read(path);
+        self.read_fence().map_or(Ok(()), |fence| fence.check(path))
+    }
+
+    /// The read fence of this store, if it is a fenced store.
+    pub(in crate::state_store) const fn read_fence(&self) -> Option<&ReadFence> {
+        match &self.access {
+            Access::View(reads) => reads.fence.as_ref(),
+            _ => None,
+        }
+    }
+
+    /// The parses that this store shares, if it is a view store that shares
+    /// the parses of its view.
+    pub(in crate::state_store) fn shared_parses(&self) -> Option<&super::super::SharedParses> {
+        match &self.access {
+            Access::View(reads) => reads.parses.as_deref(),
+            _ => None,
+        }
+    }
+
     /// Runs `read` on the view that this store reads, or returns `None` for
     /// a store that reads the files: a view store has its view, a staged
     /// store the overlay of its stage, and a store of an opened repository
     /// that holds the live section has the view of that section.
     fn with_view<R>(&self, read: impl FnOnce(&StateView) -> R) -> anyhow::Result<Option<R>> {
         match &self.access {
-            Access::View(view) => Ok(Some(read(view))),
+            Access::View(reads) => Ok(Some(read(&reads.view))),
             Access::Staged { stage, .. } | Access::StagedSection { stage, .. }
                 if !stage.reads_files() =>
             {
@@ -106,6 +133,7 @@ impl StateStore {
     /// exist. A store with a view answers from it; any other store reads the
     /// file.
     pub(crate) fn state_bytes(&self, path: &Utf8Path) -> anyhow::Result<Option<Vec<u8>>> {
+        self.check_read(path)?;
         let key = self.state_key(path);
         if let Some(bytes) = self.with_view(|view| Ok(view.get(&key?).map(<[u8]>::to_vec)))? {
             return bytes;
@@ -119,6 +147,7 @@ impl StateStore {
 
     /// Like [`Self::state_bytes`], as UTF-8 text.
     pub(crate) fn state_text(&self, path: &Utf8Path) -> anyhow::Result<Option<String>> {
+        self.check_read(path)?;
         if self.with_view(|_| ())?.is_some() {
             return self
                 .state_bytes(path)?
@@ -134,6 +163,7 @@ impl StateStore {
 
     /// The bytes of the state file at `path`, which must exist.
     pub(crate) fn read_state(&self, path: &Utf8Path) -> anyhow::Result<Vec<u8>> {
+        self.check_read(path)?;
         if self.with_view(|_| ())?.is_some() {
             return self.state_bytes(path)?.ok_or_else(|| not_found(path));
         }
@@ -142,6 +172,7 @@ impl StateStore {
 
     /// Like [`Self::read_state`], as UTF-8 text.
     pub(crate) fn read_state_text(&self, path: &Utf8Path) -> anyhow::Result<String> {
+        self.check_read(path)?;
         if self.with_view(|_| ())?.is_some() {
             return self.state_text(path)?.ok_or_else(|| not_found(path));
         }
@@ -151,6 +182,7 @@ impl StateStore {
     /// Whether the state file at `path` exists.
     #[cfg_attr(not(feature = "host"), allow(dead_code))]
     pub(crate) fn state_exists(&self, path: &Utf8Path) -> anyhow::Result<bool> {
+        self.check_read(path)?;
         let key = self.state_key(path);
         self.with_view(|view| Ok(view.get(&key?).is_some()))?
             .unwrap_or_else(|| Ok(path.exists()))
@@ -165,6 +197,7 @@ impl StateStore {
         kind: StateEntry,
         non_utf8: impl Fn(&std::path::Path) -> anyhow::Error,
     ) -> anyhow::Result<Vec<String>> {
+        self.check_read(directory)?;
         let prefix = self.view_prefix(directory);
         let listed = self.with_view(|view| {
             Ok::<_, anyhow::Error>(

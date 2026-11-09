@@ -111,10 +111,12 @@ async fn a_rebuild_stores_the_digest_of_the_bytes_it_loaded() {
 }
 
 #[cfg(unix)]
-#[test]
+#[tokio::test]
 #[verifies("rule_catch_up_reads_units_from_the_view", examples)]
-fn a_symbolic_link_in_a_unit_is_not_canonical_state() {
+async fn a_symbolic_link_in_a_unit_is_not_canonical_state() {
     let (_dir, layout, scope) = seeded_layout();
+    let repository = open(&layout);
+    materialize_state(&repository).await.unwrap();
     let before = unit_digest(&layout.state_dir(), &Unit::Scope(scope.clone())).unwrap();
     let external = layout.state_dir().join("external.jsonl");
     std::fs::write(&external, "[]").unwrap();
@@ -123,6 +125,9 @@ fn a_symbolic_link_in_a_unit_is_not_canonical_state() {
         .join(scope.as_str())
         .join("external-link");
     std::os::unix::fs::symlink(&external, &link).unwrap();
+
+    let report = catch_up_state(&repository).await.unwrap();
+    assert!(!report.revision_committed, "{report:?}");
     assert_eq!(
         unit_digest(&layout.state_dir(), &Unit::Scope(scope)).unwrap(),
         before
@@ -179,10 +184,12 @@ async fn a_manifest_repaired_after_the_view_is_read_waits_for_the_next_pass() {
     });
     let result = catch_up_state(&repository).await;
     test_probes::disarm("catch_up_global_before_parse");
-    assert!(
-        result.is_err(),
-        "the pass parsed a manifest it did not hash"
+    let error = result.expect_err("the pass parsed a manifest it did not hash");
+    let refusal = format!(
+        "failed to parse manifest {}: EOF while parsing an object at line 1 column 1",
+        repository.layout().manifest_path()
     );
+    assert!(format!("{error:#}").contains(&refusal), "{error:#}");
     let report = catch_up_state(&repository).await.unwrap();
     assert!(!report.revision_committed, "{report:?}");
 }

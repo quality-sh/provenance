@@ -13,6 +13,7 @@ use std::sync::Arc;
 mod guarded_readers;
 mod section_view;
 
+pub use guarded_readers::ViewStore;
 pub use section_view::{SectionView, StateEntry};
 
 #[cfg(test)]
@@ -95,6 +96,7 @@ impl StateStore {
         identity: RepositoryIdentity,
         layout: ProvenanceLayout,
         view: Arc<StateView>,
+        parses: Option<Arc<super::SharedParses>>,
         storage: Arc<dyn StateStorage>,
         lock: Arc<dyn SectionLock>,
         local: bool,
@@ -107,7 +109,11 @@ impl StateStore {
                 local,
             },
             layout,
-            access: Access::View(view),
+            access: Access::View(super::read_fence::ViewReads {
+                view,
+                parses,
+                fence: None,
+            }),
             record_stamp: RecordStamp::ResolveFromRepository,
         }
     }
@@ -356,7 +362,6 @@ impl StateStore {
         operation: impl FnOnce(&Self) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         self.ensure_section_open()?;
-        crate::test_probes::record_read(path);
         let Some(state_dir) = path.ancestors().find(|ancestor| {
             ancestor.file_name() == Some("state")
                 && ancestor.parent().and_then(Utf8Path::file_name) == Some(".provenance")

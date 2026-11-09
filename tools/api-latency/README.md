@@ -8,7 +8,10 @@ workflow_dispatch. It does not run on a pull request or a push.
 
 - Each operation of the catalog: each route with each of its query variants,
   reads and writes. The list comes from `provenance api --format json`, so a
-  new route is timed with no change to the benchmark.
+  new route is timed with no change to the benchmark. That list has no
+  schemas, so the run reads each route again with the filter of its method and
+  path (`--filter "GET /rules/{id}"`) to get its query forms and its request
+  body schema.
 - Each porcelain command from `provenance --help` and its subcommands, and each
   action of `provenance <id> <action>`.
 - Each MCP tool and each action of a tool, from `tools/list`.
@@ -47,11 +50,22 @@ that the store refuses.
 
 ## Files
 
-- `run.mjs` runs the calls and writes `results.json`.
+- `run.mjs` runs the calls and writes `results.json`. With `--windows <file>`,
+  it also writes the process id and the time window of each timed call. The
+  API profile workflow uses that file (see `tools/profile/README.md`).
+  `--route-writes MCP` calls the catalog write operations through MCP only;
+  the default is `HTTP,MCP,CLI`. Without `--windows`, the run writes only
+  `results.json`.
+- `options.mjs` reads the options of `run.mjs`, keeps the time windows and
+  names the files that a run writes.
 - `report.mjs` ranks the rows, slowest warm p50 first, and writes `report.md`
   and `report.json`. A row is marked when its cold, p50 or p95 time is over
   200 ms.
 - `catalog.mjs`, `requests.mjs`, `body.mjs` and `commands.mjs` find the calls
   and their input. `ways.mjs` holds the three clients.
+
+- `fixtures/catalog.json` holds catalog answers of a provenance binary for
+  `catalog.test.mjs`. `node tools/api-latency/fixtures/capture.mjs <binary>
+  <repository>` writes it again.
 
 Run the unit tests with `node --test tools/api-latency/*.test.mjs`.

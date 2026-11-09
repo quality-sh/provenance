@@ -81,8 +81,6 @@ Options:
           
       --resolution-method <resolution-method>
           
-      --method <method>
-          
       --if-match <if-match>
           
       --declared-by <declared-by>

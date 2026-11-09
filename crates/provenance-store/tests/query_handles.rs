@@ -23,6 +23,7 @@ use std::path::{Path, PathBuf};
 const BYPASS_PATHS: &[&str] = &[
     "crate::stale::git",
     "crate::stale::gate",
+    "crate::stale::revision_scans",
     "crate::cache",
     "crate::layout",
     "crate::publication",
@@ -37,6 +38,8 @@ const BYPASS_PATHS: &[&str] = &[
     "open_cache",
     "list_verification_runs",
     "git::",
+    "revision_scans::",
+    "scan_range",
 ];
 
 fn queries_dir() -> PathBuf {
@@ -107,6 +110,24 @@ fn the_gate_sees_a_planted_bypass() {
     assert_eq!(
         bypasses("planted.rs", planted),
         ["planted.rs: provenance_scanner::scan_path"]
+    );
+}
+
+#[test]
+fn the_gate_sees_a_direct_revision_scan() {
+    let planted = "use crate::stale::revision_scans;\nfn read() { revision_scans::scan_range(kept, repo, a, b) }";
+    assert_eq!(
+        bypasses("planted.rs", planted),
+        [
+            "planted.rs: crate::stale::revision_scans",
+            "planted.rs: revision_scans::",
+            "planted.rs: scan_range",
+        ]
+    );
+    let grouped = "use crate::stale::{revision_scans};\nfn read() { revision_scans::scan_range(kept, repo, a, b) }";
+    assert_eq!(
+        bypasses("planted.rs", grouped),
+        ["planted.rs: revision_scans::", "planted.rs: scan_range"]
     );
 }
 

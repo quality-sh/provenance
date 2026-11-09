@@ -15,6 +15,7 @@ pub(crate) mod message_ids;
 mod proposal_surfaces;
 mod proposal_writers;
 pub(crate) mod read_budget;
+mod read_fence;
 pub(crate) mod readers;
 pub(crate) mod record_stamps;
 mod reference_methods;
@@ -23,6 +24,9 @@ mod requirement_reviews;
 mod resolution_decisions;
 mod rule_writers;
 mod scope_ingestion;
+pub(crate) use read_fence::FencedStore;
+mod shared_parses;
+pub(crate) use shared_parses::SharedParses;
 mod shaping_writers;
 mod statement_policy;
 mod thread_origins;
@@ -38,6 +42,7 @@ mod writers;
 pub use updates::*;
 
 pub use access::GuardedStore;
+pub(crate) use access::ViewStore;
 pub(crate) use access::{SectionView, StateEntry};
 #[cfg(feature = "host")]
 pub use archive_history::GitHistory;
@@ -162,8 +167,9 @@ enum Access {
     #[cfg_attr(not(feature = "host"), allow(dead_code))]
     ReadOnly,
     /// Reads one view of canonical state with no lock and no disk access,
-    /// and refuses every write and stage.
-    View(std::sync::Arc<crate::storage::StateView>),
+    /// and refuses every write and stage. A fenced view store reads only
+    /// below the directories of its fence.
+    View(read_fence::ViewReads),
 }
 
 #[derive(Clone, Debug)]
@@ -239,7 +245,6 @@ impl StateStore {
     pub fn manifest(&self) -> anyhow::Result<Manifest> {
         self.with_repository_read(|held| {
             let path = held.layout.manifest_path();
-            crate::test_probes::record_read(&path);
             manifest_from_bytes(&held.read_state(&path)?).map_err(|error| {
                 if error.is::<serde_json::Error>() {
                     error.context(format!("failed to parse manifest {path}"))
@@ -285,7 +290,10 @@ impl StateStore {
         after_direct_read: impl FnOnce() -> anyhow::Result<()>,
     ) -> anyhow::Result<Vec<Contribution>> {
         self.with_repository_read(|held| {
-            let mut records = read_jsonl(held, &shards::contributions_path(&held.layout, scope))?;
+            let mut records = shared_parses::read_jsonl_shared(
+                held,
+                &shards::contributions_path(&held.layout, scope),
+            )?;
             after_direct_read()?;
             for batch in held.list_ideation_landings(scope)? {
                 overlay_records(&mut records, batch.contributions, |record| {
@@ -316,6 +324,17 @@ impl StateStore {
             }
             held.validate_graph_scope(scope)?;
             after_validation()?;
+            held.proposal_cards_of_validated_scope(scope)
+        })
+    }
+    /// The proposal cards with their effective state, for a caller that
+    /// validated the ideation and graph records of `scope` under the lock it
+    /// still holds.
+    pub(crate) fn proposal_cards_of_validated_scope(
+        &self,
+        scope: &ScopeId,
+    ) -> anyhow::Result<Vec<ProposalCard>> {
+        self.with_repository_read(|held| {
             let assertions = held.list_assertion_records(scope)?;
             let dispositions = held.list_dispositions(scope)?;
             Ok(held
@@ -334,7 +353,10 @@ impl StateStore {
     }
     pub fn list_proposal_definitions(&self, scope: &ScopeId) -> anyhow::Result<Vec<ProposalCard>> {
         self.with_repository_read(|held| {
-            let mut records = read_jsonl(held, &shards::proposal_cards_path(&held.layout, scope))?;
+            let mut records = shared_parses::read_jsonl_shared(
+                held,
+                &shards::proposal_cards_path(&held.layout, scope),
+            )?;
             for batch in held.list_ideation_landings(scope)? {
                 overlay_records(&mut records, batch.proposals, |record| record.id.as_str());
             }

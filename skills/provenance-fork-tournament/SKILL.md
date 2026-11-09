@@ -214,7 +214,7 @@ each Proposal.
 
 - **Question status and method are first-class** — use `<question_id> update --if-match
   <etag> --status blocked_on_human` for the phase boundary, and `<question_id> update
-  --if-match <etag> --method prototype` if an existing Question has the wrong method. Every
+  --if-match <etag> --resolution-method prototype` if an existing Question has the wrong method. Every
   Question update carries the current `review.edit.etag` from `<question_id> --view review`. Keep the
   Discussion Message because the Proposal IDs are not Question link targets.
 - **Proposal definitions are immutable and always `proposed`.** Before disposition, create an

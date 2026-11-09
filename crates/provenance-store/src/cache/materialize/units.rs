@@ -2,17 +2,24 @@
 //!
 //! The units cover canonical state: the manifest and each shard of a scope.
 //! A scope unit is the keys below the scope's directory; the global unit is
-//! every other key. Catch-up hashes one view, and the reads with no lock
-//! hash the files at the same keys, so a stray file under `state/` moves no
-//! digest. A digest frames each key and its bytes in key order, so two
-//! shards that share a basename cannot swap contents unnoticed.
+//! every other key. A catch-up hashes the view that its pass parses. A read
+//! with no lock hashes the files at the same keys, so a stray file under
+//! `state/` moves no digest. A unit digest frames each key and the digest
+//! of its content bytes in key order, so two shards that share a basename
+//! cannot swap contents unnoticed. The stored digest frames each key and
+//! its exact bytes.
 
 mod content;
+mod files;
+
+pub(super) use files::{files_read, FileDigest, UnitRead};
 
 use crate::storage::StateView;
+
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{Manifest, ScopeId};
+use std::collections::BTreeMap;
 
 /// One hash unit. `name` is the key of its digest row.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,7 +104,7 @@ pub fn unit_digest(state_dir: &Utf8Path, unit: &Unit) -> Result<String, UnitHash
 /// The digest of the exact stored bytes in one unit, read from the files
 /// with no lock.
 pub fn unit_stored_digest(state_dir: &Utf8Path, unit: &Unit) -> Result<String, UnitHashError> {
-    Ok(read_unit(state_dir, unit, |_, _| {})?.stored)
+    Ok(read_unit(state_dir, unit, |_, _| {})?.bytes().stored)
 }
 
 /// The digests of one unit, read from the files. `retain` sees each file as
@@ -107,35 +114,101 @@ pub(super) fn digests_with(
     unit: &Unit,
     retain: impl FnMut(&Utf8Path, &[u8]),
 ) -> Result<UnitDigests, UnitHashError> {
-    let read = read_unit(state_dir, unit, retain)?;
-    let entries: Vec<(&str, &[u8])> = read
-        .files
-        .iter()
-        .zip(&read.contents)
-        .map(|((key, _), bytes)| (key.as_str(), bytes.as_slice()))
-        .collect();
-    let content = content_digest(state_dir, &entries)?;
-    Ok(UnitDigests {
-        content,
-        stored: read.stored,
-    })
+    let files = read_unit(state_dir, unit, retain)?;
+    Ok(files_read(state_dir, &files.bytes(), &BTreeMap::new())?.digests)
 }
 
-/// The canonical files of one unit, their bytes, and the digest of those
-/// exact bytes.
-struct UnitBytes {
+/// The digests of one unit of `view`, the canonical state under
+/// `state_dir`. `known` is the pair a previous pass stored for the unit:
+/// when the stored bytes still hash to its stored digest, the bytes have
+/// not changed and neither has their content, so the pair is returned
+/// without a parse of the records.
+pub(super) fn unit_digests(
+    state_dir: &Utf8Path,
+    view: &StateView,
+    unit: &Unit,
+    known: Option<&UnitDigests>,
+) -> Result<UnitDigests, UnitHashError> {
+    let bytes = UnitBytes::of_view(view, unit);
+    if let Some(known) = known.filter(|known| known.stored == bytes.stored) {
+        return Ok(known.clone());
+    }
+    Ok(files_read(state_dir, &bytes, &BTreeMap::new())?.digests)
+}
+
+/// The digest of the content bytes of one file.
+fn content_digest(path: &Utf8Path, bytes: &[u8]) -> Result<String, UnitHashError> {
+    let content_bytes =
+        content::hash_bytes(path, bytes).map_err(|error| UnitHashError::at(path, error))?;
+    Ok(crate::canonical_digest::digest(&content_bytes))
+}
+
+/// The keys of one unit and their bytes, in key order, and the digest of
+/// those exact bytes.
+pub(super) struct UnitBytes<'b> {
+    entries: Vec<(&'b str, &'b [u8])>,
+    pub(super) stored: String,
+}
+
+impl<'b> UnitBytes<'b> {
+    fn new(entries: Vec<(&'b str, &'b [u8])>) -> Self {
+        let mut stored = Vec::new();
+        for (key, bytes) in &entries {
+            frame(&mut stored, key, bytes);
+        }
+        Self {
+            entries,
+            stored: crate::canonical_digest::digest(&stored),
+        }
+    }
+
+    /// The keys of `unit` in `view` and their bytes.
+    pub(super) fn of_view(view: &'b StateView, unit: &Unit) -> Self {
+        let scope = match unit {
+            Unit::Global => None,
+            Unit::Scope(scope) => Some(format!("scopes/{}/", scope.as_str())),
+        };
+        Self::new(
+            view.entries()
+                .iter()
+                .map(|(key, bytes)| (key.as_str(), bytes.as_slice()))
+                .filter(|(key, _)| {
+                    scope.as_ref().map_or_else(
+                        || !key.starts_with("scopes/"),
+                        |prefix| key.starts_with(prefix.as_str()),
+                    )
+                })
+                .collect(),
+        )
+    }
+}
+
+/// The canonical files of one unit and their bytes, read with no lock.
+struct UnitFiles {
     files: Vec<(String, Utf8PathBuf)>,
     contents: Vec<Vec<u8>>,
-    stored: String,
 }
 
-/// Reads the canonical files of one unit with no lock. A file list that
-/// changes while the bytes are read refuses, so the bytes are one listing.
+impl UnitFiles {
+    fn bytes(&self) -> UnitBytes<'_> {
+        UnitBytes::new(
+            self.files
+                .iter()
+                .zip(&self.contents)
+                .map(|((key, _), bytes)| (key.as_str(), bytes.as_slice()))
+                .collect(),
+        )
+    }
+}
+
+/// Reads the canonical files of one unit with no lock. A writer can change
+/// the files during the read, so a file list that changes while the bytes
+/// are read refuses. A catch-up reads a view instead, which no write changes.
 fn read_unit(
     state_dir: &Utf8Path,
     unit: &Unit,
     mut retain: impl FnMut(&Utf8Path, &[u8]),
-) -> Result<UnitBytes, UnitHashError> {
+) -> Result<UnitFiles, UnitHashError> {
     let files = unit_files(state_dir, unit)?;
     crate::test_probes::at("unit_files_collected")
         .map_err(|error| UnitHashError::at(state_dir, error))?;
@@ -146,17 +219,7 @@ fn read_unit(
         contents.push(bytes);
     }
     ensure_file_list_unchanged(state_dir, unit, &files)?;
-    let entries: Vec<(&str, &[u8])> = files
-        .iter()
-        .zip(&contents)
-        .map(|((key, _), bytes)| (key.as_str(), bytes.as_slice()))
-        .collect();
-    let stored = stored_digest(&entries);
-    Ok(UnitBytes {
-        files,
-        contents,
-        stored,
-    })
+    Ok(UnitFiles { files, contents })
 }
 
 fn ensure_file_list_unchanged(
@@ -183,6 +246,13 @@ fn ensure_file_list_unchanged(
     ))
 }
 
+fn frame(target: &mut Vec<u8>, relative: &str, bytes: &[u8]) {
+    target.extend_from_slice(relative.as_bytes());
+    target.push(0);
+    target.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
+    target.extend_from_slice(bytes);
+}
+
 /// The canonical files of one unit, by key: the keys that the view of the
 /// local adapter holds.
 fn unit_files(
@@ -195,11 +265,10 @@ fn unit_files(
         Unit::Scope(scope) => {
             let key = format!("scopes/{}", scope.as_str());
             // Component joins keep the native spelling of the paths on Windows.
-            let root = state_dir.join("scopes").join(scope.as_str());
-            match std::fs::symlink_metadata(&root) {
-                Ok(_) => collect(&root, &key, false, &mut files)?,
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => return Err(UnitHashError::at(&root, error)),
+            let scopes = state_dir.join("scopes");
+            let root = scopes.join(scope.as_str());
+            if is_directory(&scopes)? && is_directory(&root)? {
+                collect(&root, &key, false, &mut files)?;
             }
         }
     }
@@ -207,128 +276,60 @@ fn unit_files(
     Ok(files)
 }
 
-/// Collects the canonical files below `dir`, whose key is `prefix`. A link
-/// at a canonical key refuses, as the view of the local adapter does.
+/// Whether the entry at `path`, a directory that can hold canonical keys,
+/// is a directory. A missing entry holds no keys; any other entry refuses,
+/// as the view refuses it.
+fn is_directory(path: &Utf8Path) -> Result<bool, UnitHashError> {
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.is_dir() => Ok(true),
+        Ok(_) => Err(unsupported(path)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(UnitHashError::at(path, error)),
+    }
+}
+
+/// Collects the canonical files below `dir`, whose key is `prefix`, as the
+/// view of the local adapter reads them: it leaves out a name that is not
+/// UTF-8 and any entry that cannot hold or be canonical state. An entry
+/// that is not a directory refuses where the view enters a directory, and
+/// an entry that is not a regular file refuses where the view keeps a
+/// shard.
 fn collect(
     dir: &Utf8Path,
     prefix: &str,
     skip_scopes: bool,
     out: &mut Vec<(String, Utf8PathBuf)>,
 ) -> Result<(), UnitHashError> {
-    let metadata = std::fs::symlink_metadata(dir).map_err(|error| UnitHashError::at(dir, error))?;
-    if !metadata.is_dir() {
-        return Err(UnitHashError::at(
-            dir,
-            anyhow::anyhow!("unsupported state entry: {dir}"),
-        ));
-    }
     for entry in std::fs::read_dir(dir).map_err(|error| UnitHashError::at(dir, error))? {
         let entry = entry.map_err(|error| UnitHashError::at(dir, error))?;
-        let path = Utf8PathBuf::from_path_buf(entry.path()).map_err(|path| {
-            UnitHashError::at(
-                dir,
-                anyhow::anyhow!("non-UTF-8 canonical path: {}", path.display()),
-            )
-        })?;
-        let name = path.file_name().unwrap_or_default();
+        let Ok(name) = entry.file_name().into_string() else {
+            continue;
+        };
+        let path = dir.join(&name);
         let key = if prefix.is_empty() {
-            name.to_owned()
+            name
         } else {
             format!("{prefix}/{name}")
         };
         let file_type = entry
             .file_type()
             .map_err(|error| UnitHashError::at(&path, error))?;
+        let holds_keys = crate::shards::can_hold_canonical_keys(&key);
         if file_type.is_dir() {
-            if !(skip_scopes && key == "scopes") && crate::shards::can_hold_canonical_keys(&key) {
+            if holds_keys && !(skip_scopes && key == "scopes") {
                 collect(&path, &key, skip_scopes, out)?;
             }
-        } else if crate::shards::is_canonical_key(&key) {
-            if !file_type.is_file() {
-                return Err(UnitHashError::at(
-                    &path,
-                    anyhow::anyhow!("unsupported state entry: {path}"),
-                ));
-            }
+        } else if holds_keys || (!file_type.is_file() && crate::shards::is_canonical_key(&key)) {
+            return Err(unsupported(&path));
+        } else if file_type.is_file() && crate::shards::is_canonical_key(&key) {
             out.push((key, path));
         }
     }
     Ok(())
 }
 
-/// The digests of one unit of `view`, the canonical state under `state_dir`.
-/// `known` is the pair a previous pass stored for the unit: when the stored
-/// bytes still hash to its stored digest, the bytes have not changed and
-/// neither has their content, so the pair is returned without a parse of
-/// the records.
-pub(super) fn unit_digests(
-    state_dir: &Utf8Path,
-    view: &StateView,
-    unit: &Unit,
-    known: Option<&UnitDigests>,
-) -> Result<UnitDigests, UnitHashError> {
-    let entries = unit_entries(view, unit);
-    let stored = stored_digest(&entries);
-    if let Some(known) = known.filter(|known| known.stored == stored) {
-        return Ok(known.clone());
-    }
-    Ok(UnitDigests {
-        content: content_digest(state_dir, &entries)?,
-        stored,
-    })
-}
-
-/// The digest of the record content of `entries`, without the Git creation
-/// and update metadata.
-fn content_digest(
-    state_dir: &Utf8Path,
-    entries: &[(&str, &[u8])],
-) -> Result<String, UnitHashError> {
-    let mut content = Vec::new();
-    for (key, bytes) in entries {
-        // Component joins give the native spelling of the file path.
-        let path = key
-            .split('/')
-            .fold(state_dir.to_path_buf(), |path, part| path.join(part));
-        let content_bytes =
-            content::hash_bytes(&path, bytes).map_err(|error| UnitHashError::at(&path, error))?;
-        frame(&mut content, key, &content_bytes);
-    }
-    Ok(crate::canonical_digest::digest(&content))
-}
-
-/// The keys of `unit` in `view` and their bytes, in key order.
-fn unit_entries<'v>(view: &'v StateView, unit: &Unit) -> Vec<(&'v str, &'v [u8])> {
-    let scope = match unit {
-        Unit::Global => None,
-        Unit::Scope(scope) => Some(format!("scopes/{}/", scope.as_str())),
-    };
-    view.entries()
-        .iter()
-        .map(|(key, bytes)| (key.as_str(), bytes.as_slice()))
-        .filter(|(key, _)| {
-            scope.as_ref().map_or_else(
-                || !key.starts_with("scopes/"),
-                |prefix| key.starts_with(prefix.as_str()),
-            )
-        })
-        .collect()
-}
-
-/// The digest of the exact bytes of `entries`.
-fn stored_digest(entries: &[(&str, &[u8])]) -> String {
-    let mut stored = Vec::new();
-    for (key, bytes) in entries {
-        frame(&mut stored, key, bytes);
-    }
-    crate::canonical_digest::digest(&stored)
-}
-
-fn frame(target: &mut Vec<u8>, relative: &str, bytes: &[u8]) {
-    target.extend_from_slice(relative.as_bytes());
-    target.push(0);
-    target.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
-    target.extend_from_slice(bytes);
+fn unsupported(path: &Utf8Path) -> UnitHashError {
+    UnitHashError::at(path, anyhow::anyhow!("unsupported state entry: {path}"))
 }
 
 /// The canonical path whose bytes could not be hashed.

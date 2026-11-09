@@ -5,8 +5,9 @@
 //! eleven record families go through the one `ProjectionRow` loader; the
 //! seven collaboration families keep their hand-written inserts.
 
+use super::batch::Rows;
 use super::collaboration_records;
-use super::record_rows::{load_kind, load_record};
+use super::record_rows::{kind_rows_of, record_rows_of};
 use crate::cache::quoted;
 use crate::cache::ProjectionFamily;
 use provenance_core::protocol::GraphNode;
@@ -35,18 +36,15 @@ pub(super) async fn delete_rows(
     Ok(())
 }
 
-macro_rules! load_family {
-    ($record:ty, record($node:ident), $tx:ident, $bytes:ident) => {
-        load_record::<$record>($tx, $bytes, GraphNode::$node).await
+macro_rules! family_rows_of {
+    ($record:ty, record($node:ident), $bytes:ident) => {
+        record_rows_of::<$record>($bytes, GraphNode::$node)
     };
-    ($record:ty, kind, $tx:ident, $bytes:ident) => {
-        load_kind::<$record>($tx, $bytes).await
+    ($record:ty, kind, $bytes:ident) => {
+        kind_rows_of::<$record>($bytes)
     };
-    ($record:ty, payload($loader:ident), $tx:ident, $bytes:ident) => {
-        collaboration_records::$loader($tx, $bytes).await
-    };
-    ($record:ty, journal, $tx:ident, $bytes:ident) => {
-        crate::review::cache::load_rows($tx, $bytes).await
+    ($record:ty, payload($loader:ident), $bytes:ident) => {
+        collaboration_records::$loader($bytes)
     };
 }
 
@@ -70,14 +68,11 @@ macro_rules! define_family_loader {
             }
         )*
     ) => {
-        pub(super) async fn load_rows(
-            tx: &mut Transaction<'_, Sqlite>,
-            family: ProjectionFamily,
-            bytes: &[u8],
-        ) -> anyhow::Result<u64> {
+        /// The rows of one family's records, before they are written.
+        fn rows_of(family: ProjectionFamily, bytes: &[u8]) -> anyhow::Result<Rows> {
             match family {
                 $($(ProjectionFamily::$variant => {
-                    load_family!($record, $($loader)*, tx, bytes)
+                    family_rows_of!($record, $($loader)*, bytes)
                 },)*)*
             }
         }
@@ -85,3 +80,24 @@ macro_rules! define_family_loader {
 }
 
 crate::families::record_families!(define_family_loader);
+
+/// Writes every row of one family, for a family with no stored rows.
+pub(super) async fn load_rows(
+    tx: &mut Transaction<'_, Sqlite>,
+    family: ProjectionFamily,
+    bytes: &[u8],
+) -> anyhow::Result<u64> {
+    rows_of(family, bytes)?.write(tx).await
+}
+
+/// Makes the stored rows of one family in `scope` equal to the rows of
+/// `bytes`, and writes only the rows that differ.
+pub(super) async fn replace_rows(
+    tx: &mut Transaction<'_, Sqlite>,
+    family: ProjectionFamily,
+    scope: &ScopeId,
+    bytes: &[u8],
+) -> anyhow::Result<u64> {
+    let rows = rows_of(family, bytes)?;
+    super::row_changes::write_changes(tx, rows, family, scope).await
+}

@@ -35,7 +35,7 @@ fn create_question(repo: &str) {
         "topic_overtime",
         "--question",
         "Which threshold applies?",
-        "--method",
+        "--resolution-method",
         "ask",
         "--status",
         "answered",
