@@ -61,7 +61,7 @@ fn shaping_records(repo: &str, scope: &str) {
         "topic_open",
         "--question",
         "Why?",
-        "--method",
+        "--resolution-method",
         "research",
         "--format",
         "json",

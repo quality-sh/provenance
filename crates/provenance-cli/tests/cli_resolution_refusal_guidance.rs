@@ -54,7 +54,7 @@ fn setup() -> tempfile::TempDir {
         "topic_overtime",
         "--question",
         "Does the robot rust with neglect?",
-        "--method",
+        "--resolution-method",
         "ask",
     ])
     .success();
