@@ -1,0 +1,81 @@
+{
+  "base": "BASE",
+  "files_changed": 11,
+  "head": "HEAD",
+  "items": [
+    {
+      "end_line": 4,
+      "file_path": "src/removed.rs",
+      "kind": "rule_binding",
+      "line": 1,
+      "state": "gone",
+      "subject_id": "rule_removed"
+    },
+    {
+      "end_line": 4,
+      "file_path": "src/renamed_after.rs",
+      "kind": "rule_binding",
+      "line": 1,
+      "original_file_path": "src/renamed_before.rs",
+      "original_line": 1,
+      "state": "moved",
+      "subject_id": "rule_renamed"
+    },
+    {
+      "file_path": "src/runtime.ts",
+      "kind": "rule_binding",
+      "state": "touched",
+      "subject_id": "rule_typed"
+    },
+    {
+      "end_line": 44,
+      "file_path": "src/shifted.rs",
+      "kind": "rule_binding",
+      "line": 41,
+      "original_line": 1,
+      "state": "moved",
+      "subject_id": "rule_shifted"
+    },
+    {
+      "end_line": 5,
+      "file_path": "src/to.rs",
+      "kind": "rule_binding",
+      "line": 2,
+      "original_file_path": "src/from.rs",
+      "original_line": 1,
+      "state": "moved",
+      "subject_id": "rule_crossed"
+    },
+    {
+      "end_line": 4,
+      "file_path": "src/touched.rs",
+      "kind": "rule_binding",
+      "line": 1,
+      "state": "touched",
+      "subject_id": "rule_touched"
+    },
+    {
+      "end_line": 9,
+      "file_path": "src/twins.rs",
+      "kind": "rule_binding",
+      "line": 6,
+      "state": "gone",
+      "subject_id": "rule_twins"
+    },
+    {
+      "end_line": 4,
+      "file_path": "tests/checks.rs",
+      "kind": "verification",
+      "line": 1,
+      "state": "touched",
+      "subject_id": "rule_tested"
+    }
+  ],
+  "summary": {
+    "gone": 2,
+    "moved": 3,
+    "total_sites": 8,
+    "touched": 3,
+    "untouched": 0
+  }
+}

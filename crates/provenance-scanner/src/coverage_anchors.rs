@@ -1,6 +1,7 @@
 use provenance_core::coverage::{AnchorState, AnchoredSite, CoverageScan, ValidationWarning};
 use provenance_macros::rule;
-use std::collections::{BTreeMap, BTreeSet};
+use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 pub fn reconcile(
     current: &mut CoverageScan,
@@ -41,6 +42,10 @@ struct ScanPaths<'a> {
     repo: &'a camino::Utf8Path,
     canonical_repo: Option<camino::Utf8PathBuf>,
     scan_path: &'a camino::Utf8Path,
+    /// The normalized form of each path seen in this reconcile. Pairing
+    /// compares the same paths many times, and each normalization reads
+    /// the file system.
+    normalized: RefCell<HashMap<camino::Utf8PathBuf, camino::Utf8PathBuf>>,
 }
 
 impl<'a> ScanPaths<'a> {
@@ -52,6 +57,7 @@ impl<'a> ScanPaths<'a> {
             repo,
             canonical_repo,
             scan_path,
+            normalized: RefCell::new(HashMap::new()),
         }
     }
 
@@ -79,6 +85,17 @@ impl<'a> ScanPaths<'a> {
     }
 
     fn normalized(&self, path: &camino::Utf8Path) -> camino::Utf8PathBuf {
+        if let Some(normalized) = self.normalized.borrow().get(path) {
+            return normalized.clone();
+        }
+        let normalized = self.normalize(path);
+        self.normalized
+            .borrow_mut()
+            .insert(path.to_path_buf(), normalized.clone());
+        normalized
+    }
+
+    fn normalize(&self, path: &camino::Utf8Path) -> camino::Utf8PathBuf {
         let canonical = dunce::canonicalize(path)
             .ok()
             .and_then(|path| camino::Utf8PathBuf::from_path_buf(path).ok());
@@ -151,20 +168,29 @@ struct Reconciliation<'a, S: AnchoredSite> {
 impl<S: AnchoredSite> Reconciliation<'_, S> {
     /// Pin by exact file and line first, so a surviving duplicate keeps its
     /// identity and only the genuinely missing instances fall through.
+    /// The first unclaimed current site on the same line wins, in current
+    /// order.
     fn pin_exact(&mut self, paths: &ScanPaths<'_>) {
+        let mut by_line: HashMap<usize, Vec<usize>> = HashMap::new();
+        for (index, site) in self.current.iter().enumerate() {
+            by_line.entry(site.line()).or_default().push(index);
+        }
         for position in 0..self.tracked.len() {
             let previous_index = self.tracked[position];
             let previous = &self.baseline[previous_index];
-            if let Some((current_index, found)) =
-                self.current.iter().enumerate().find(|(index, site)| {
-                    !self.used.contains(index)
-                        && site.line() == previous.line()
-                        && sites_match(previous, *site, paths)
-                })
-            {
+            let Some(on_line) = by_line.get(&previous.line()) else {
+                continue;
+            };
+            if let Some(&current_index) = on_line.iter().find(|&&index| {
+                !self.used.contains(&index) && sites_match(previous, &self.current[index], paths)
+            }) {
                 self.used.insert(current_index);
-                self.by_previous[previous_index] =
-                    Some(resolved(found, AnchorState::Unchanged, None, None));
+                self.by_previous[previous_index] = Some(resolved(
+                    &self.current[current_index],
+                    AnchorState::Unchanged,
+                    None,
+                    None,
+                ));
             }
         }
     }
