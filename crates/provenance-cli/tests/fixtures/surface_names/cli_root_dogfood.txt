@@ -6,12 +6,12 @@ Commands:
   prime            Introduce Provenance domain concepts and actions.
   init             Set up Provenance in a repository and install the agent skills
   materialize      Build the local query cache again from the graph files of the repository
-  export           Write the records of one scope as one document
-  import           Add the records of one scope export file to the scope
+  export           Write the records of one scope as a scope export file
+  import           Replace the records of one scope with a scope export file and delete each record that is not in the file
   validate         Check one artifact file against its schema and its record checks
-  schema           Show the JSON Schema of an artifact type
+  schema           Show the JSON Schema of one artifact type
   dictionary       Import and report the ASD-STE100 dictionary that the statement check uses
-  swarm-backtrace  Add the results of a swarm backtrace run to the graph
+  swarm-backtrace  Add the results of one swarm backtrace run to the graph as proposals
   skills           List, show, and install the bundled agent skills
   report           Deterministic report rendering from a versioned report envelope
   review           Serve local review assets and authorized repository operations
