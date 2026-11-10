@@ -209,7 +209,11 @@ function assertLocalEngines(project, environment, engineManifest, binaryName, ve
     env: environment,
     encoding: "utf8",
   });
-  assert.equal(directVersion.trim(), `provenance ${version}`);
+  // A build from a git checkout names its commit after the release number.
+  assert.match(
+    directVersion.trim(),
+    new RegExp(`^provenance ${version.replaceAll(".", "\\.")}( \\([0-9a-f]{8}(-dirty)?\\))?$`),
+  );
 
   const check = runProvenance(npmCli, project, environment, [
     "check", "--repo", ".", "--format", "json",

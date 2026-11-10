@@ -51,6 +51,7 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
             "endpoint": startup.endpoint(), "bearer": startup.bearer(),
             "repositoryId": startup.repository_id(), "scope": startup.scope(),
             "instanceNonce": startup.instance_nonce(), "url": startup.url(),
+            "build": crate::cli::BUILD,
         })
     );
     std::io::stdout().flush()?;

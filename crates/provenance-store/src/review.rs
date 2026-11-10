@@ -42,8 +42,10 @@ mod reads;
 pub use reads::{read_evidence, read_history};
 
 #[cfg(test)]
+#[cfg(feature = "host")]
 mod concurrency_tests;
 #[cfg(test)]
+#[cfg(feature = "host")]
 mod recovery_tests;
 
 mod discussion_input;
@@ -69,6 +71,7 @@ mod discussion_reads;
 mod discussion_removal;
 mod typed_adoption;
 #[cfg(test)]
+#[cfg(feature = "host")]
 mod typed_adoption_tests;
 #[cfg(feature = "host")]
 pub use discussion_discovery::{read_discussion_conversation, read_discussion_list};
@@ -77,6 +80,7 @@ pub use discussion_messages::{read_discussion_message, read_discussion_messages}
 #[cfg(feature = "host")]
 pub use discussion_reads::{read_discussion, read_discussions};
 #[cfg(test)]
+#[cfg(feature = "host")]
 mod discussion_recovery_tests;
 
 mod decision_input;
@@ -94,6 +98,8 @@ pub(crate) use decision_reads::DocumentReviewState;
 mod decision_state;
 
 #[cfg(test)]
+#[cfg(feature = "host")]
 mod decision_tests;
 #[cfg(test)]
+#[cfg(feature = "host")]
 mod write_permission_tests;

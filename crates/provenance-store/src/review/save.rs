@@ -185,6 +185,7 @@ impl StateStore {
 }
 
 #[cfg(test)]
+#[cfg(feature = "host")]
 mod tests {
     use super::*;
     use crate::layout::ProvenanceLayout;

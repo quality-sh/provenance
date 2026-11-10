@@ -85,7 +85,7 @@ impl StageLock {
 
     /// A test stage that reads and writes the files of the staged state root
     /// at `root` instead of an overlay.
-    #[cfg(test)]
+    #[cfg(all(test, feature = "host"))]
     pub(crate) fn over_files(root: &Utf8Path) -> Arc<Self> {
         Arc::new(Self {
             identity: root.to_string(),
@@ -190,5 +190,5 @@ pub fn with_staged_state<R>(
     Ok(result)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "host"))]
 pub(super) use crate::storage::local::copy_directory;

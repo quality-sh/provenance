@@ -91,9 +91,5 @@ pub(super) fn validated_actor(actor: &str) -> anyhow::Result<String> {
 }
 
 pub(super) fn now_ms() -> anyhow::Result<i64> {
-    Ok(i64::try_from(
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_millis(),
-    )?)
+    super::super::requirement_reviews::now_millis()
 }
