@@ -276,9 +276,9 @@ impl crate::state_store::StateStore {
     }
 
     /// Publishes `writes`. A staged store lands them on the overlay of its
-    /// stage. A store with a section view puts the revision of the view on
-    /// a set that has no base, and applies the set to the view once it
-    /// lands. Any other store publishes through its adapter.
+    /// stage. A store with a section view puts the view as the base of a set
+    /// that has no base, and applies the set to the view once it lands. Any
+    /// other store publishes through its adapter.
     fn publish_set(&self, writes: WriteSet) -> anyhow::Result<()> {
         if let Some(stage) = self.stage() {
             writes
@@ -289,7 +289,6 @@ impl crate::state_store::StateStore {
                 use crate::storage::StateStorage as _;
                 return crate::storage::local::LocalStateStorage::new(self.layout.clone())
                     .publish(writes)
-                    .map(drop)
                     .map_err(crate::write_error::publish_failure);
             }
             stage.apply(&writes);
@@ -299,38 +298,35 @@ impl crate::state_store::StateStore {
     }
 
     /// Publishes `writes` with `publish`, in the section view of this store
-    /// as [`Self::publish_set`] does.
+    /// as [`Self::publish_set`] does. The adapter gets the set by value, so
+    /// no base holds the view when the set is applied to it.
     pub(crate) fn publish_through(
         &self,
         mut writes: WriteSet,
-        publish: impl FnOnce(
-            WriteSet,
-        )
-            -> Result<crate::storage::Revision, crate::storage::PublishFailure>,
+        publish: impl FnOnce(WriteSet) -> Result<(), crate::storage::PublishFailure>,
     ) -> anyhow::Result<()> {
-        let view = self.section_view();
-        if writes.base().is_none() {
-            if let Some(base) = view.and_then(crate::state_store::SectionView::revision) {
+        let Some(view) = self.section_view() else {
+            return publish(writes).map_err(crate::write_error::publish_failure);
+        };
+        if writes.base_view().is_none() {
+            if let Some(base) = view.held() {
                 writes = writes.on_base(base);
             }
         }
-        let landed = publish(writes.clone());
-        if let Some(view) = view {
-            match &landed {
-                Ok(_) => view.apply(&writes),
-                // A started set can have landed in part, and a moved base
-                // means that the state changed outside the section. Either
-                // way, the next read of the section reads the state again.
-                Err(
-                    crate::storage::PublishFailure::Started(_)
-                    | crate::storage::PublishFailure::BaseMoved { .. },
-                ) => view.forget(),
-                Err(crate::storage::PublishFailure::Refused(_)) => {}
-            }
+        let changes = writes.without_base();
+        let landed = publish(writes);
+        match &landed {
+            Ok(()) => view.apply(&changes),
+            // A started set can have landed in part, and a moved base means
+            // that the state changed outside the section. Either way, the
+            // next read of the section reads the state again.
+            Err(
+                crate::storage::PublishFailure::Started(_)
+                | crate::storage::PublishFailure::BaseMoved { .. },
+            ) => view.forget(),
+            Err(crate::storage::PublishFailure::Refused(_)) => {}
         }
-        landed
-            .map(drop)
-            .map_err(crate::write_error::publish_failure)
+        landed.map_err(crate::write_error::publish_failure)
     }
 }
 

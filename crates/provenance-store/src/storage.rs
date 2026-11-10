@@ -9,10 +9,14 @@
 //! not in a view.
 //!
 //! The engine publishes a change as one write set. A write set states the
-//! atomicity that the change needs, and may carry the revision that the
-//! change was decided on.
+//! atomicity that the change needs, and may carry the view that the change
+//! was decided on: its base.
 //!
 //! The port is synchronous: the engine runs where its storage is.
+//!
+//! The store, not an adapter, parses the state, keeps the raw lines of a
+//! shard, guards each JSONL line with `guard_jsonl_lines` and checks write
+//! permissions. An adapter keeps keys and bytes only.
 //!
 //! The port and the memory adapter build without the `host` feature. The
 //! local-disk adapter needs it.
@@ -25,7 +29,7 @@ pub mod memory;
 
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 /// The path of one state file below the state directory, with `/` between
 /// its parts.
@@ -68,6 +72,8 @@ impl Revision {
     /// with their lengths, so no two trees share a revision by a shift of
     /// bytes between a key and its contents.
     pub fn of(entries: &BTreeMap<StateKey, Vec<u8>>) -> Self {
+        // The probe only counts hashes in lib tests, and it cannot fail there.
+        drop(crate::test_probes::at("state_tree_hashed"));
         let mut digest = Sha256::new();
         for (key, bytes) in entries {
             digest.update((key.0.len() as u64).to_le_bytes());
@@ -128,6 +134,13 @@ impl StateView {
         self.entries.get(key).map(Vec::as_slice)
     }
 
+    /// Lands `writes` on this view. The revision is computed again on the
+    /// next call of [`Self::revision`].
+    pub fn apply(&mut self, writes: &WriteSet) {
+        writes.apply_to(&mut self.entries);
+        self.revision = OnceLock::new();
+    }
+
     /// The names directly below `directory` (a key prefix, or `""` for the
     /// state directory), sorted, each with `true` when it has keys below it.
     pub fn children(&self, directory: &str) -> Vec<(String, bool)> {
@@ -160,12 +173,36 @@ pub enum Atomicity {
 }
 
 /// One change to canonical state: the keys to put and the keys to delete.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct WriteSet {
-    base: Option<Revision>,
+    base: Option<Arc<StateView>>,
     puts: BTreeMap<StateKey, Vec<u8>>,
     deletes: BTreeSet<StateKey>,
     atomicity: Atomicity,
+}
+
+/// Shows the base as its number of keys. The bytes of the base are not
+/// shown, and the base is not hashed.
+impl std::fmt::Debug for WriteSet {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        struct BaseKeys(usize);
+        impl std::fmt::Debug for BaseKeys {
+            fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(formatter, "<{} keys>", self.0)
+            }
+        }
+        let base = self
+            .base
+            .as_ref()
+            .map(|base| BaseKeys(base.entries().len()));
+        formatter
+            .debug_struct("WriteSet")
+            .field("base", &base)
+            .field("puts", &self.puts)
+            .field("deletes", &self.deletes)
+            .field("atomicity", &self.atomicity)
+            .finish()
+    }
 }
 
 impl WriteSet {
@@ -178,9 +215,10 @@ impl WriteSet {
         }
     }
 
-    /// Refuses the set when the state is no longer at `base`.
+    /// Refuses the set when the stored keys and bytes are no longer those
+    /// of `base`.
     #[must_use]
-    pub fn on_base(mut self, base: Revision) -> Self {
+    pub fn on_base(mut self, base: Arc<StateView>) -> Self {
         self.base = Some(base);
         self
     }
@@ -197,8 +235,39 @@ impl WriteSet {
         self
     }
 
-    pub const fn base(&self) -> Option<&Revision> {
-        self.base.as_ref()
+    /// The revision of the base, computed once for each view.
+    pub fn base(&self) -> Option<&Revision> {
+        self.base.as_deref().map(StateView::revision)
+    }
+
+    /// The keys and bytes of the base.
+    pub fn base_view(&self) -> Option<&StateView> {
+        self.base.as_deref()
+    }
+
+    /// The same puts, deletes and atomicity with no base.
+    pub(crate) fn without_base(&self) -> Self {
+        Self {
+            base: None,
+            puts: self.puts.clone(),
+            deletes: self.deletes.clone(),
+            atomicity: self.atomicity,
+        }
+    }
+
+    /// Refuses the set with [`PublishFailure::BaseMoved`] when `current` is
+    /// not the base of the set. Only a moved base is hashed.
+    pub(crate) fn ensure_base(
+        &self,
+        current: &BTreeMap<StateKey, Vec<u8>>,
+    ) -> Result<(), PublishFailure> {
+        match self.base_view() {
+            Some(base) if base.entries() != current => Err(PublishFailure::BaseMoved {
+                base: base.revision().clone(),
+                current: Revision::of(current),
+            }),
+            _ => Ok(()),
+        }
     }
 
     pub const fn puts(&self) -> &BTreeMap<StateKey, Vec<u8>> {
@@ -246,7 +315,8 @@ pub enum PublishFailure {
     /// No key landed.
     #[error("{0:#}")]
     Refused(anyhow::Error),
-    /// The state was not at the base revision of the set. No key landed.
+    /// The stored keys and bytes were not those of the base of the set. No
+    /// key landed.
     #[error("the state moved from revision {} to {} before the write", .base.as_str(), .current.as_str())]
     BaseMoved { base: Revision, current: Revision },
     /// The failure came after the first key began to land. A per-key set
@@ -261,15 +331,20 @@ pub enum PublishFailure {
 /// given. The engine calls it in the section that serializes access to the
 /// state; see each adapter for what that section is. Publishes are
 /// serialized. A set with one key lands completely or not at all. A set
-/// whose base revision moved is refused before any key lands.
+/// whose stored keys and bytes differ from its base is refused before any
+/// key lands. A failure after the first key began to land is
+/// [`PublishFailure::Started`].
 pub trait StateStorage: Send + Sync + std::fmt::Debug {
     /// One consistent view of every key and its bytes.
     fn read_view(&self) -> Result<StateView, StorageError>;
 
-    /// Lands `writes` and returns the revision of the whole tree after the
-    /// write. An adapter honours the atomicity of the set or refuses the set
-    /// before any key lands.
-    fn publish(&self, writes: WriteSet) -> Result<Revision, PublishFailure>;
+    /// Lands `writes`. An adapter honours the atomicity of the set or
+    /// refuses the set before any key lands.
+    ///
+    /// A copy of a write set holds the base view. When an adapter keeps a
+    /// copy after `publish` returns, the section copies the whole tree on
+    /// its next write.
+    fn publish(&self, writes: WriteSet) -> Result<(), PublishFailure>;
 }
 
 /// The section that serializes the engine's access to one repository's
@@ -302,4 +377,34 @@ pub enum StorageError {
     InvalidKey { key: String, reason: &'static str },
     #[error("{0:#}")]
     Read(anyhow::Error),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Atomicity, StateKey, StateView, WriteSet};
+    use std::collections::BTreeMap;
+    use std::sync::Arc;
+
+    fn key(key: &str) -> StateKey {
+        StateKey::new(key).unwrap()
+    }
+
+    #[test]
+    fn debug_shows_the_base_as_its_number_of_keys() {
+        let base = BTreeMap::from([(key("a"), b"secret".to_vec()), (key("b"), b"x".to_vec())]);
+        let writes = WriteSet::new(Atomicity::PerKey)
+            .put(key("c"), vec![1])
+            .delete(key("d"));
+        let based = writes.clone().on_base(Arc::new(StateView::new(base)));
+        assert_eq!(
+            format!("{based:?}"),
+            "WriteSet { base: Some(<2 keys>), puts: {StateKey(\"c\"): [1]}, \
+             deletes: {StateKey(\"d\")}, atomicity: PerKey }"
+        );
+        assert_eq!(
+            format!("{writes:?}"),
+            "WriteSet { base: None, puts: {StateKey(\"c\"): [1]}, \
+             deletes: {StateKey(\"d\")}, atomicity: PerKey }"
+        );
+    }
 }

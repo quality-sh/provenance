@@ -24,7 +24,7 @@ it in the same change.
   work that the current CLI allows. Do not change the graph to suit an old binary.
   To update the native binary, run `cargo install provenance-cli --force`. In a
   TypeScript project, update the `@quality-sh/provenance` development dependency
-  with the package manager.
+  with the package manager.{skill_command_note}
 - Plan: `{command} prime --quiet`
 - New obligation: `{command} rule_<slug> create --type rule --scope {selected_scope} --requirement-id <req> --statement "<testable clause>"`
 - Annotate implementation with `rule`, tests with `verifies`. Annotations move
@@ -92,30 +92,69 @@ it in the same change.
   https://www.asd-ste100.org/STE_downloads.html#article02-2l. Provenance names
   only its implemented checks and makes no compliance or endorsement claim."#;
 
+/// The bin file of the project package, relative to the directory that
+/// contains `node_modules`. It is a macro so that `concat!` can make each
+/// command a `&'static str`.
+macro_rules! package_bin {
+    () => {
+        "node_modules/@quality-sh/provenance/bin/provenance.mjs"
+    };
+}
+
+/// The command that runs a native Provenance binary from PATH.
+pub const NATIVE_COMMAND: &str = "provenance";
+
 pub struct Invocation(&'static str);
 
 impl Invocation {
+    /// The command that runs Provenance in the initialized project.
+    pub const fn command(&self) -> &'static str {
+        self.0
+    }
+
+    /// Tells the agent how to run a command from a skill or from the output of
+    /// a command in a TypeScript project, because that text shows the native
+    /// command.
+    fn skill_command_note(&self) -> String {
+        if self.0 == NATIVE_COMMAND {
+            return String::new();
+        }
+        format!(
+            "\n- The installed skills and the output of each command show commands as\n  `{NATIVE_COMMAND} …`. In this project, run them as `{} …`\n  from the directory that contains `node_modules`.",
+            self.0
+        )
+    }
+
     pub(super) fn from_cli(
         channel: InvocationChannel,
         package_manager: Option<PackageManager>,
     ) -> anyhow::Result<Self> {
         match (channel, package_manager) {
-            (InvocationChannel::Native, None) => Ok(Self("provenance")),
+            (InvocationChannel::Native, None) => Ok(Self(NATIVE_COMMAND)),
             (InvocationChannel::Native, Some(_)) => {
                 anyhow::bail!("--package-manager requires the TypeScript invocation channel")
             }
             (InvocationChannel::Typescript, None) => {
                 anyhow::bail!("TypeScript initialization requires --package-manager")
             }
+            // Each command names a file in the project, or asks the package
+            // manager for a binary of the project only. The npm, Bun and Nub
+            // commands name the bin file of the package by its path, so these
+            // commands cannot download a package, use a cache or use PATH. When
+            // the package is missing, runs showed that the npm, pnpm, Yarn and
+            // Bun commands fail and do not run a `provenance` executable from
+            // PATH. The Deno and Nub commands did not run.
+            // `npx --no` can run a cached package of the same name and `bunx
+            // --no-install` can run a PATH executable, so this code uses neither.
             (InvocationChannel::Typescript, Some(manager)) => Ok(Self(match manager {
-                PackageManager::Npm => "npx --no provenance",
+                PackageManager::Npm => concat!("node ", package_bin!()),
                 PackageManager::Pnpm => "pnpm exec ./node_modules/.bin/provenance",
                 PackageManager::Yarn => "yarn run -B provenance",
-                PackageManager::Bun => "bunx --no-install provenance",
+                PackageManager::Bun => concat!("bun ", package_bin!()),
                 PackageManager::Deno => {
                     "deno task --node-modules-dir=manual --eval \"./node_modules/.bin/provenance\""
                 }
-                PackageManager::Nub => "nub exec provenance",
+                PackageManager::Nub => concat!("nub ", package_bin!()),
             })),
         }
     }
@@ -199,6 +238,7 @@ pub fn project(existing: &[u8], invocation: &Invocation, scope: &str) -> anyhow:
 #[rule("rule_init_follow_monitor_guidance")]
 fn instructions(invocation: &Invocation, scope: &str) -> String {
     INSTRUCTIONS
+        .replace("{skill_command_note}", &invocation.skill_command_note())
         .replace("{command}", invocation.0)
         .replace("{selected_scope}", scope)
 }

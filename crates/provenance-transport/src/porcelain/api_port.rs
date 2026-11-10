@@ -21,11 +21,7 @@ impl ApiPort for HostApiPort {
     fn invoke(&self, input: provenance_porcelain::api::ApiInput) -> ApiPortFuture<'_, Value> {
         Box::pin(async move {
             let headers = header_map(&input.headers)?;
-            let method = match input.method {
-                ApiMethod::Get => axum::http::Method::GET,
-                ApiMethod::Post => axum::http::Method::POST,
-                ApiMethod::Patch => axum::http::Method::PATCH,
-            };
+            let method = http_method(input.method);
             self.check_body(&method, &input)?;
             let data = input.body.clone().map_or_else(|| json!({}), Value::Object);
             self.host
@@ -80,6 +76,43 @@ fn header_map(
         }
     }
     Ok(map)
+}
+
+/// Whether one query parameter of a public route takes a list of values, or
+/// `None` when no route matches `method` and `path`.
+///
+/// The `query` value of the call selects the form of the route. With no
+/// `query` value, the first schema of each name in the forms of the route
+/// counts.
+pub fn query_takes_list(
+    method: ApiMethod,
+    path: &str,
+    selector: Option<&str>,
+    name: &str,
+) -> Option<bool> {
+    let definition = crate::routing::find(&http_method(method), path)?.definition;
+    let variants = definition.query_variants();
+    let parameters = match selector {
+        Some(_) if !variants.is_empty() => variants
+            .into_iter()
+            .filter(|variant| variant.selector == selector)
+            .flat_map(|variant| variant.parameters)
+            .collect(),
+        _ => definition.parameters(),
+    };
+    Some(parameters.iter().any(|parameter| {
+        parameter.name == name
+            && parameter.location == "query"
+            && parameter.schema.get("type").and_then(Value::as_str) == Some("array")
+    }))
+}
+
+const fn http_method(method: ApiMethod) -> axum::http::Method {
+    match method {
+        ApiMethod::Get => axum::http::Method::GET,
+        ApiMethod::Post => axum::http::Method::POST,
+        ApiMethod::Patch => axum::http::Method::PATCH,
+    }
 }
 
 /// Describe the advertised public routes from the live operation catalog,

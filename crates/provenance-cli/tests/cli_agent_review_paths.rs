@@ -144,7 +144,7 @@ fn invalid_if_match_names_the_edit_etag_form() {
     let (_directory, repo) = init();
     create_requirement(&repo, "req_etag");
 
-    provenance()
+    let refused = provenance()
         .args([
             "req_etag",
             "update",
@@ -155,10 +155,14 @@ fn invalid_if_match_names_the_edit_etag_form() {
             "--description",
             "Changed",
         ])
-        .assert()
-        .failure()
-        .stderr(contains("--if-match must equal data.edit.etag"))
-        .stderr(contains("sha256:<64 lowercase hexadecimal characters>"));
+        .output()
+        .unwrap();
+    assert!(!refused.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&refused.stderr).trim_end(),
+        "error: --if-match must equal edit.etag from the latest record read; \
+         expected sha256:<64 lowercase hexadecimal characters>"
+    );
 }
 
 #[test]
@@ -353,4 +357,70 @@ fn search_includes_terminal_records_on_request() {
     ]));
     let ids = record_ids(&searched);
     assert_eq!(ids, ["rule_active", "rule_archived"]);
+}
+
+/// Implementation-aid test: no active Rule states the refusal of a missing
+/// guard yet. The test runs the read that the refusal names and gives its
+/// edit.etag to --if-match, so the named correction must make the update pass.
+#[test]
+fn missing_if_match_names_the_read_and_the_flag_that_takes_the_etag() {
+    let (_directory, repo) = init();
+    create_requirement(&repo, "req_unguarded");
+
+    let refused = provenance()
+        .args([
+            "req_unguarded",
+            "update",
+            "--repo",
+            &repo,
+            "--description",
+            "Changed",
+            "--format",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    assert!(!refused.status.success());
+    let refused: Value = serde_json::from_slice(&refused.stderr).unwrap();
+    assert_eq!(refused["error"]["field"], "If-Match");
+    assert_eq!(refused["error"]["reason"], "required");
+    let hint = refused["error"]["hint"].as_str().unwrap_or_default();
+    assert_eq!(
+        hint,
+        format!(
+            "this update needs --if-match; run `provenance req_unguarded get --format json \
+             --scope default --repo {repo}` and give edit.etag to --if-match; \
+             expected sha256:<64 lowercase hexadecimal characters>"
+        )
+    );
+    let text = provenance()
+        .args(["req_unguarded", "update", "--repo", &repo])
+        .args(["--description", "Changed"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&text.stderr).trim_end(),
+        format!(
+            "Error: {{\"error\":{{\"field\":\"If-Match\",\"kind\":\"invalid_input\",\
+             \"reason\":\"required\"}},\"meta\":{{}}}}; {hint}"
+        )
+    );
+
+    let read = hint.split('`').nth(1).unwrap_or_default();
+    let words: Vec<&str> = read.split_whitespace().skip(1).collect();
+    let current = json_output(provenance().args(&words));
+    let etag = current["edit"]["etag"].as_str().unwrap();
+    provenance()
+        .args([
+            "req_unguarded",
+            "update",
+            "--repo",
+            &repo,
+            "--description",
+            "Changed",
+            "--if-match",
+            etag,
+        ])
+        .assert()
+        .success();
 }

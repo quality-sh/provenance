@@ -11,7 +11,7 @@ pub struct InitialReviewer {
 
 /// Selects the human reviewer during repository initialization.
 #[provenance_macros::rule("rule_init_configures_human_reviewer")]
-pub fn select(path: &Utf8Path) -> anyhow::Result<InitialReviewer> {
+pub fn select(path: &Utf8Path, command: &str) -> anyhow::Result<InitialReviewer> {
     let git_identity = git_actor_id(path);
     let actor_id = if std::io::stdin().is_terminal() {
         Some(prompt(git_identity.as_deref().unwrap_or("reviewer"))?)
@@ -19,15 +19,15 @@ pub fn select(path: &Utf8Path) -> anyhow::Result<InitialReviewer> {
         git_identity
     };
     let notice = actor_id.as_ref().map_or_else(
-        || read_only_warning(path.as_std_path()),
-        |actor_id| reviewer_set_notice(path, actor_id),
+        || read_only_warning(path.as_std_path(), command),
+        |actor_id| reviewer_set_notice(path, actor_id, command),
     );
     Ok(InitialReviewer { actor_id, notice })
 }
 
-fn read_only_warning(path: &std::path::Path) -> String {
+fn read_only_warning(path: &std::path::Path, command: &str) -> String {
     format!(
-        "Warning: No reviewer is configured. Review will be read-only. Add a reviewer with `provenance init --path {} --disposition-actor-id <reviewer-id>`.",
+        "Warning: No reviewer is configured. Review will be read-only. Add a reviewer with `{command} init --path {} --disposition-actor-id <reviewer-id>`.",
         path.display()
     )
 }
@@ -41,9 +41,9 @@ pub fn review_page_warning(path: &std::path::Path) -> String {
     )
 }
 
-fn reviewer_set_notice(path: &Utf8Path, actor_id: &str) -> String {
+fn reviewer_set_notice(path: &Utf8Path, actor_id: &str, command: &str) -> String {
     format!(
-        "Reviewer set to \"{actor_id}\". Change reviewers with `provenance init --path {path} --disposition-actor-id <reviewer-id>`."
+        "Reviewer set to \"{actor_id}\". Change reviewers with `{command} init --path {path} --disposition-actor-id <reviewer-id>`."
     )
 }
 

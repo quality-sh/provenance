@@ -1,3 +1,6 @@
+/// The form of an edit `ETag`, as the guard refusals name it.
+pub(super) const ETAG_FORM: &str = "sha256:<64 lowercase hexadecimal characters>";
+
 /// Refuses a malformed review edit guard and names the required `ETag` form.
 #[provenance_macros::rule("rule_cli_guard_guidance")]
 pub(super) fn validate_review_etag(value: &str) -> anyhow::Result<()> {
@@ -8,8 +11,7 @@ pub(super) fn validate_review_etag(value: &str) -> anyhow::Result<()> {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
     anyhow::ensure!(
         valid,
-        "--if-match must equal data.edit.etag from the latest record read; \
-         expected sha256:<64 lowercase hexadecimal characters>"
+        "--if-match must equal edit.etag from the latest record read; expected {ETAG_FORM}"
     );
     Ok(())
 }

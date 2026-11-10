@@ -27,7 +27,11 @@ pub struct Plan {
 /// existing import, import a selected PDF, or download the official asset.
 #[rule("rule_ste_dictionary_agent_acquisition")]
 #[rule("rule_ste_dictionary_no_operational_download")]
-pub fn prepare(repo: &Utf8Path, selected_pdf: Option<&Utf8Path>) -> anyhow::Result<Plan> {
+pub fn prepare(
+    repo: &Utf8Path,
+    selected_pdf: Option<&Utf8Path>,
+    command: &str,
+) -> anyhow::Result<Plan> {
     let layout = ProvenanceLayout::new(repo.to_owned());
     let reference_path = dictionary_reference::dictionary_reference_path(&layout);
     let reference_before = FileSnapshot::read(reference_path.as_std_path())?;
@@ -41,7 +45,7 @@ pub fn prepare(repo: &Utf8Path, selected_pdf: Option<&Utf8Path>) -> anyhow::Resu
     } else {
         match acquire_official_dictionary_blocking() {
             Ok(import) => (Some(import), None),
-            Err(error) => (None, Some(fallback_guidance(&error))),
+            Err(error) => (None, Some(fallback_guidance(&error, command))),
         }
     };
 
@@ -307,9 +311,9 @@ fn asset_directory() -> Option<PathBuf> {
     )
 }
 
-fn fallback_guidance(error: &anyhow::Error) -> String {
+fn fallback_guidance(error: &anyhow::Error, command: &str) -> String {
     format!(
-        "Warning: the official Issue 9 dictionary could not be added ({error:#}). Initialization continues without a dictionary. To add it later, rerun init, or run `provenance dictionary import --pdf <path>` with a local PDF file."
+        "Warning: the official Issue 9 dictionary could not be added ({error:#}). Initialization continues without a dictionary. To add it later, rerun init, or run `{command} dictionary import --pdf <path>` with a local PDF file."
     )
 }
 

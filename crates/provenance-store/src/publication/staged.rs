@@ -63,7 +63,7 @@ pub struct StageLock {
     identity: String,
     root: Utf8PathBuf,
     sections: Mutex<()>,
-    base: StateView,
+    base: Arc<StateView>,
     overlay: Mutex<StateView>,
     /// A test stage over a staged state root reads and writes its files.
     files: bool,
@@ -71,13 +71,13 @@ pub struct StageLock {
 
 impl StageLock {
     /// A stage of the repository at `root` over `base`.
-    pub(crate) fn new(root: &Utf8Path, base: StateView) -> Arc<Self> {
+    pub(crate) fn new(root: &Utf8Path, base: Arc<StateView>) -> Arc<Self> {
         static STAGES: AtomicU64 = AtomicU64::new(0);
         Arc::new(Self {
             identity: format!("stage {} of {root}", STAGES.fetch_add(1, Ordering::Relaxed)),
             root: root.to_owned(),
             sections: Mutex::new(()),
-            overlay: Mutex::new(base.clone()),
+            overlay: Mutex::new(StateView::clone(&base)),
             base,
             files: false,
         })
@@ -91,7 +91,7 @@ impl StageLock {
             identity: root.to_string(),
             root: root.to_owned(),
             sections: Mutex::new(()),
-            base: StateView::new(std::collections::BTreeMap::new()),
+            base: Arc::new(StateView::new(std::collections::BTreeMap::new())),
             overlay: Mutex::new(StateView::new(std::collections::BTreeMap::new())),
             files: true,
         })
@@ -134,21 +134,18 @@ impl StageLock {
         read(&self.overlay())
     }
 
-    /// Lands `writes` on the overlay.
+    /// Lands `writes` on the overlay, in place.
     pub(crate) fn apply(&self, writes: &WriteSet) {
-        let mut overlay = self.overlay();
-        let mut entries = overlay.entries().clone();
-        writes.apply_to(&mut entries);
-        *overlay = StateView::new(entries);
+        self.overlay().apply(writes);
     }
 
-    /// Every change of the stage as one whole set on the revision where the
+    /// Every change of the stage as one whole set on the view where the
     /// stage started: a put for each key that is new or has other bytes, and
     /// a delete for each key of the base that the overlay does not hold.
     #[rule("rule_stage_lands_as_one_whole_set")]
     pub(crate) fn changes(&self) -> WriteSet {
         let overlay = self.overlay();
-        let mut writes = WriteSet::new(Atomicity::WholeSet).on_base(self.base.revision().clone());
+        let mut writes = WriteSet::new(Atomicity::WholeSet).on_base(Arc::clone(&self.base));
         for (key, bytes) in overlay.entries() {
             if self.base.get(key) != Some(bytes.as_slice()) {
                 writes = writes.put(key.clone(), bytes.clone());
@@ -163,7 +160,8 @@ impl StageLock {
     }
 
     fn overlay(&self) -> std::sync::MutexGuard<'_, StateView> {
-        // Every change replaces the whole view, so a poisoned overlay is intact.
+        // A change of the overlay does not panic, so a poisoned overlay is
+        // intact.
         self.overlay.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }

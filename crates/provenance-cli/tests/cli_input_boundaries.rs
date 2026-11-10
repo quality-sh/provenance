@@ -102,3 +102,21 @@ fn discussion_write_refuses_repeated_actor_without_creating_a_discussion() {
     let list = output(&mut command(repo, &["req_parent", "discussions"]));
     assert_eq!(list["result"]["entries"], json!([]));
 }
+
+/// Implementation-aid test: no active Rule states this refusal yet. A query
+/// parameter flag with a closed set lists the set, in schema order, as a
+/// body flag does.
+#[test]
+fn invalid_discussion_status_lists_the_accepted_values() {
+    let directory = fixture();
+    let repo = directory.path().to_str().unwrap();
+    let refused = Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
+        .args(["discussions", "--status", "bogus", "--repo", repo])
+        .output()
+        .unwrap();
+    assert!(!refused.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&refused.stderr).trim_end(),
+        "error: invalid value for --status; accepted values: active, resolved, all"
+    );
+}

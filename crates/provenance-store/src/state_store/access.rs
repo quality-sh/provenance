@@ -128,12 +128,12 @@ impl StateStore {
     /// stage owns, not the section lock, because this store holds that.
     pub(crate) fn begin_stage(&self, record_stamp: RecordStamp) -> anyhow::Result<Self> {
         let base = if let Access::StagedSection { stage, .. } = &self.access {
-            stage.read(Clone::clone)
+            Arc::new(stage.read(Clone::clone))
         } else {
             self.ensure_holds_live_section()?;
             match self.section_view() {
-                Some(view) => view.read(self.storage().as_ref(), Clone::clone)?,
-                None => self.storage().read_view()?,
+                Some(view) => view.shared(self.storage().as_ref())?,
+                None => Arc::new(self.storage().read_view()?),
             }
         };
         Ok(Self {
