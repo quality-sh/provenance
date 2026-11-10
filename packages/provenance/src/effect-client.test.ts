@@ -4,7 +4,9 @@ import * as Effect from 'effect/Effect';
 import * as Cause from 'effect/Cause';
 import * as Exit from 'effect/Exit';
 import * as Fiber from 'effect/Fiber';
-import { COMPATIBILITY, EffectHttpClient } from './effect.js';
+import { createServer, type RequestListener } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { COMPATIBILITY, EffectHttpClient, OutcomeUnknownError } from './effect.js';
 import { verifies } from './rules.js';
 
 const metadata = (repository = 'fixture', scope = 'default') => Response.json({
@@ -112,4 +114,121 @@ test('a declared failure remains a typed operation error', async () => {
   const error = await Effect.runPromise(Effect.flip(client.checkStatement({ data: { statement: 'Stop.' } })));
   assert.equal(error._tag, 'OperationError');
   if (error._tag === 'OperationError') assert.equal(error.status, 403);
+});
+
+async function listen(handler: RequestListener) {
+  const server = createServer(handler);
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const close = async () => {
+    server.closeAllConnections();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+  };
+  return { baseUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, close };
+}
+
+async function hostWithLostResponses() {
+  const received = { reads: 0, writes: 0 };
+  const host = await listen((request, response) => {
+    if (request.method === 'GET') {
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ data: { compatibility: COMPATIBILITY, package: { name: 'provenance', version: 'test' }, repository: 'fixture', scope: 'default' }, meta: {} }));
+      return;
+    }
+    if (request.url?.startsWith('/statement-checks')) received.reads++;
+    else received.writes++;
+    request.resume();
+    request.on('end', () => request.socket.destroy());
+  });
+  const client = await Effect.runPromise(EffectHttpClient.connect({ baseUrl: host.baseUrl }));
+  return { client, received, close: host.close };
+}
+
+test('a write whose response is lost fails with an outcome-unknown error and is sent once', async function lostWriteResponse() {
+  verifies('rule_effect_sdk_retains_unknown_writes', 'examples');
+  const host = await hostWithLostResponses();
+  try {
+    const error = await Effect.runPromise(Effect.flip(host.client.answerQuestion({ id: 'question_x', data: { answer: 'Done.' } })));
+    assert.equal(error.message, 'The outcome of the write request is not known. Read the current state before you send the write again');
+    assert.equal(error._tag, 'OutcomeUnknownError');
+    assert.ok(error instanceof OutcomeUnknownError);
+    assert.equal(host.received.writes, 1);
+  } finally { await host.close(); }
+});
+
+test('a write that the host refuses to connect fails with a connection error', async function refusedWrite() {
+  verifies('rule_effect_sdk_retains_unknown_writes', 'examples');
+  const host = await hostWithLostResponses();
+  await host.close();
+  const error = await Effect.runPromise(Effect.flip(host.client.answerQuestion({ id: 'question_x', data: { answer: 'Done.' } })));
+  assert.equal(error._tag, 'ConnectionError');
+});
+
+// Implementation aid: no Rule states how a read reports a lost response. This test
+// shows that the outcome-unknown error of a write does not go to a read.
+test('a read whose response is lost fails with a connection error', async function lostReadResponse() {
+  const host = await hostWithLostResponses();
+  try {
+    const error = await Effect.runPromise(Effect.flip(host.client.checkStatement({ data: { statement: 'Stop.' } })));
+    assert.equal(error._tag, 'ConnectionError');
+    assert.equal(host.received.reads, 1);
+  } finally { await host.close(); }
+});
+
+// The host is never reached, so the write fetch rejects with the given cause.
+// Each cause is a shape that a loopback socket cannot make.
+async function writeFailure(rejection: () => unknown) {
+  const client = await Effect.runPromise(EffectHttpClient.connect({ baseUrl: 'http://localhost', fetch: async (_url, init) => {
+    if (init?.method !== 'POST') return metadata();
+    throw rejection();
+  } }));
+  return Effect.runPromise(Effect.flip(client.answerQuestion({ id: 'question_x', data: { answer: 'Done.' } })));
+}
+
+const systemError = (code: string, syscall: string) => Object.assign(new Error(`${syscall} ${code}`), { code, syscall });
+
+test('a write whose open socket becomes unreachable has an unknown outcome', async function unreachableAfterConnect() {
+  verifies('rule_effect_sdk_retains_unknown_writes', 'examples');
+  const error = await writeFailure(() => new TypeError('fetch failed', { cause: systemError('EHOSTUNREACH', 'read') }));
+  assert.equal(error._tag, 'OutcomeUnknownError');
+});
+
+test('a write whose response body fails has an unknown outcome, whatever the cause', async function responseBodyFailure() {
+  verifies('rule_effect_sdk_retains_unknown_writes', 'examples');
+  const client = await Effect.runPromise(EffectHttpClient.connect({ baseUrl: 'http://localhost', fetch: async (_url, init) => {
+    if (init?.method !== 'POST') return metadata();
+    return new Response(new ReadableStream({ start(controller) { controller.error(systemError('EHOSTUNREACH', 'connect')); } }));
+  } }));
+  const error = await Effect.runPromise(Effect.flip(client.answerQuestion({ id: 'question_x', data: { answer: 'Done.' } })));
+  assert.equal(error._tag, 'OutcomeUnknownError');
+});
+
+test('a write whose cause has no error code has an unknown outcome', async function browserTypeError() {
+  verifies('rule_effect_sdk_retains_unknown_writes', 'examples');
+  const error = await writeFailure(() => new TypeError('Failed to fetch'));
+  assert.equal(error._tag, 'OutcomeUnknownError');
+});
+
+test('a write that each address refuses fails with a connection error', async function refusedByEachAddress() {
+  verifies('rule_effect_sdk_retains_unknown_writes', 'examples');
+  // Node sets the code of the first attempt on the AggregateError, but no system call.
+  const attempts = () => Object.assign(new AggregateError([
+    systemError('ECONNREFUSED', 'connect'), systemError('ENETUNREACH', 'connect'),
+  ]), { code: 'ECONNREFUSED' });
+  assert.equal((await writeFailure(() => new TypeError('fetch failed', { cause: attempts() })))._tag, 'ConnectionError');
+  const opened = Object.assign(new AggregateError([
+    systemError('ECONNREFUSED', 'connect'), systemError('ECONNRESET', 'read'),
+  ]), { code: 'ECONNREFUSED' });
+  assert.equal((await writeFailure(() => new TypeError('fetch failed', { cause: opened })))._tag, 'OutcomeUnknownError');
+});
+
+test('a write to a host name that does not resolve fails with a connection error', async function unresolvedHost() {
+  verifies('rule_effect_sdk_retains_unknown_writes', 'examples');
+  // The metadata comes from the test, and the write goes through the real fetch.
+  // The .invalid domain never resolves (RFC 6761).
+  const client = await Effect.runPromise(EffectHttpClient.connect({ baseUrl: 'http://host.invalid', fetch: async (url, init) => {
+    if (init?.method !== 'POST') return metadata();
+    return fetch(url, init);
+  } }));
+  const error = await Effect.runPromise(Effect.flip(client.answerQuestion({ id: 'question_x', data: { answer: 'Done.' } })));
+  assert.equal(error._tag, 'ConnectionError');
 });

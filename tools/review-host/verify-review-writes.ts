@@ -144,9 +144,10 @@ async function revisionAfterRejectionKeepsFeedbackAndWaitsForDecision(): Promise
   });
 }
 
-// Implementation aid: no Rule states the generated Promise client's behaviour when a
-// write response is lost. The Effect SDK Rule rule_effect_sdk_retains_unknown_writes
-// does not cover this client. This check keeps the client from sending a write again.
+// Implementation aid: no Rule names the generated Promise client. It shares the
+// runtime of the Effect SDK, which rule_effect_sdk_retains_unknown_writes governs.
+// This check keeps the client from sending a write again and shows that the client
+// reports an unknown outcome.
 async function lostWriteResponseIsReportedAndNotResent(): Promise<void> {
   const id = 'req_lost';
   await withHost(client => createRequirement(client, id));
@@ -168,7 +169,7 @@ async function lostWriteResponseIsReportedAndNotResent(): Promise<void> {
     await assert.rejects(client.requirementCreateDiscussion({
       id, data: { actor: 'reviewer', role: 'user', body: 'One concern.' },
     }), (error: any) => {
-      assert.equal(error._tag, 'ConnectionError');
+      assert.equal(error._tag, 'OutcomeUnknownError');
       return true;
     });
   }, losing);

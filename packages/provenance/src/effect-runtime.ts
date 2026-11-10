@@ -1,7 +1,7 @@
 import * as Effect from 'effect/Effect';
 import {
-  ConnectionError, IdentityMismatchError, MalformedResponseError, OperationError, ProtocolMismatchError,
-  type OperationFailure,
+  ConnectionError, IdentityMismatchError, MalformedResponseError, OperationError, OutcomeUnknownError,
+  ProtocolMismatchError, type OperationFailure,
 } from './generated/client.js';
 
 export class InvalidRequestError extends Error {
@@ -9,7 +9,7 @@ export class InvalidRequestError extends Error {
   constructor() { super('Request cannot be serialized as JSON'); this.name = this._tag; }
 }
 export type ClientFailure<F = OperationFailure> =
-  ConnectionError | IdentityMismatchError | MalformedResponseError | ProtocolMismatchError |
+  ConnectionError | OutcomeUnknownError | IdentityMismatchError | MalformedResponseError | ProtocolMismatchError |
   OperationError<F> | InvalidRequestError;
 
 export function requestEffect<A, E>(run: (signal: AbortSignal) => Promise<A>, failure: (cause: unknown) => E): Effect.Effect<A, E> {
@@ -28,7 +28,7 @@ export function requestEffect<A, E>(run: (signal: AbortSignal) => Promise<A>, fa
 
 export function connectionFailure<F>(cause: unknown,
   isFailure: (failure: unknown) => failure is F): ClientFailure<F> {
-  if (cause instanceof ConnectionError || cause instanceof MalformedResponseError ||
+  if (cause instanceof ConnectionError || cause instanceof OutcomeUnknownError || cause instanceof MalformedResponseError ||
     cause instanceof ProtocolMismatchError || cause instanceof IdentityMismatchError) return cause;
   if (cause instanceof OperationError) {
     return isFailure(cause.failure)
