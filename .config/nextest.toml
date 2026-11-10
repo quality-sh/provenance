@@ -30,7 +30,7 @@ priority = 95
 
 [[profile.default.overrides]]
 # These tests invoke Cargo. The derive tests also share trybuild output.
-filter = 'binary(cargo_nested_sdk) | binary(compile_fail) | binary(relation_derive_refusals) | binary(projection_row_refusals)'
+filter = 'binary(cargo_nested_sdk) | binary(compile_fail) | binary(relation_derive_refusals) | binary(projection_row_refusals) | binary(review_asset_rebuild)'
 test-group = "cargo"
 threads-required = 4
 priority = 90
