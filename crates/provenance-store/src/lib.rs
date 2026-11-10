@@ -43,6 +43,7 @@ pub mod merge;
 #[cfg(feature = "host")]
 pub mod operations;
 pub mod publication;
+pub(crate) mod refusal;
 pub mod repository;
 #[cfg(feature = "host")]
 pub mod repository_init;

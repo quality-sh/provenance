@@ -3,7 +3,7 @@ use crate::state_store::readers::StateLineInvalid;
 use crate::state_store::{
     ReconciledResource, StatementWriteError, TypedSpecDiagnostic, TypedSpecWriteError,
 };
-use provenance_core::protocol::failure::InvalidInputReason;
+use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
 use serde::Serialize;
 
 mod cause;
@@ -196,8 +196,8 @@ impl From<anyhow::Error> for WriteError {
         Self(error)
     }
 }
-impl From<provenance_core::protocol::failure::OperationFailure> for WriteError {
-    fn from(error: provenance_core::protocol::failure::OperationFailure) -> Self {
+impl From<OperationFailure> for WriteError {
+    fn from(error: OperationFailure) -> Self {
         Self(error.into())
     }
 }
@@ -268,10 +268,19 @@ impl WriteError {
     /// paths, for the host log. The wire answer gives the cause with each
     /// path relative to the repository.
     pub fn unclassified_cause(&self) -> Option<String> {
-        matches!(self.safe(), WriteFailure::WriteFailed { .. })
+        (self.common().is_none() && matches!(self.safe(), WriteFailure::WriteFailed { .. }))
             .then(|| format!("{:#}", native(&self.0)))
     }
+    /// A common refusal that a write raised, such as an unknown scope; it
+    /// keeps its own kind and status, as a read does.
+    #[provenance_macros::rule("rule_write_keeps_common_refusal_kind")]
+    fn common(&self) -> Option<&OperationFailure> {
+        native(&self.0).downcast_ref::<OperationFailure>()
+    }
     pub fn status(&self) -> u16 {
+        if let Some(error) = self.common() {
+            return error.status_code();
+        }
         match self.safe() {
             WriteFailure::WriteFailed { .. } | WriteFailure::InvalidStateFile { .. } => 500,
             WriteFailure::FileAccessDenied | WriteFailure::AccessDenied => 403,
@@ -296,7 +305,10 @@ impl WriteError {
 }
 impl Serialize for WriteError {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.safe().serialize(serializer)
+        match self.common() {
+            Some(error) => error.serialize(serializer),
+            None => self.safe().serialize(serializer),
+        }
     }
 }
 #[cfg(feature = "schema")]
@@ -309,14 +321,39 @@ impl schemars::JsonSchema for WriteError {
     }
 }
 
+/// Returns the error of `refuse!(Kind, ...)` when the condition is false;
+/// `ensure!(Fault, ...)` returns a declared internal fault.
 macro_rules! ensure {
-    (InvalidUpdate, $condition:expr, $($message:tt)*) => {
-        if !$condition { return Err($crate::write_error::WriteFailure::invalid_update(
-            anyhow::anyhow!($($message)*))); }
+    (Fault, $condition:expr, $($message:tt)*) => {
+        if !$condition { return Err($crate::refusal::fault!($($message)*)); }
     };
     ($kind:ident, $condition:expr, $($message:tt)*) => {
-        if !$condition { return Err($crate::write_error::SourceFailure::wrap(
-            $crate::write_error::WriteFailure::$kind, anyhow::anyhow!($($message)*))); }
+        if !$condition { return Err($crate::refusal::refuse!($kind, $($message)*)); }
     };
 }
 pub(crate) use ensure;
+
+#[cfg(test)]
+mod common_tests {
+    use super::{OperationFailure, WriteError};
+    use anyhow::Context as _;
+
+    /// Probe: anyhow finds the common refusal below a context layer.
+    #[test]
+    #[provenance_macros::verifies("rule_write_keeps_common_refusal_kind", examples)]
+    fn a_common_refusal_inside_a_write_keeps_its_kind_and_status() {
+        let plain = anyhow::Error::from(OperationFailure::UnknownScope);
+        let wrapped = Err::<(), _>(OperationFailure::UnknownScope)
+            .context("the write reads its scope")
+            .unwrap_err();
+        for error in [plain, wrapped] {
+            let error = WriteError(error);
+            assert_eq!(error.status(), 404);
+            assert_eq!(
+                serde_json::to_value(&error).unwrap(),
+                serde_json::json!({"kind":"unknown_scope"})
+            );
+            assert!(error.unclassified_cause().is_none());
+        }
+    }
+}

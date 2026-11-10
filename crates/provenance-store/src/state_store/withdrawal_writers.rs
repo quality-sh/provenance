@@ -1,6 +1,9 @@
 //! Withdrawal records of review submissions.
 
-use super::{readers::read_jsonl, StateStore};
+use super::{
+    readers::{read_jsonl, read_jsonl_located},
+    StateStore,
+};
 use crate::shards;
 use provenance_core::{ProposalType, ScopeId, Withdrawal};
 
@@ -8,6 +11,14 @@ impl StateStore {
     /// Reads the scope's Withdrawal records.
     pub fn list_withdrawals(&self, scope: &ScopeId) -> anyhow::Result<Vec<Withdrawal>> {
         read_jsonl(self, &shards::withdrawals_path(&self.layout, scope))
+    }
+
+    /// Reads the scope's Withdrawal records, each with its shard line.
+    pub(crate) fn list_withdrawals_located(
+        &self,
+        scope: &ScopeId,
+    ) -> anyhow::Result<Vec<(Withdrawal, super::message_ids::ShardLine)>> {
+        read_jsonl_located(self, &shards::withdrawals_path(&self.layout, scope))
     }
 
     /// Writes the one Withdrawal of a review submission. Only the review seam

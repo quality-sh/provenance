@@ -143,6 +143,10 @@ name = "discussion_writes"
 required-features = ["host"]
 
 [[test]]
+name = "refusals_declare_a_kind"
+required-features = ["host"]
+
+[[test]]
 name = "git_starts_use_the_helper"
 required-features = ["host"]
 

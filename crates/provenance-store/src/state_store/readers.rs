@@ -133,6 +133,31 @@ fn read_records<T: DeserializeOwned>(
     Ok(records)
 }
 
+/// The records of the shard at `path`, each with its line, so that a check
+/// over records that do not agree can name the record at fault.
+pub fn read_jsonl_located<T: DeserializeOwned>(
+    store: &StateStore,
+    path: &Utf8Path,
+) -> anyhow::Result<Vec<(T, ShardLine)>> {
+    store.state_path_access(path, |held| {
+        let Some(contents) = held.state_text(path)? else {
+            return Ok(Vec::new());
+        };
+        let mut records = Vec::new();
+        for (index, line) in contents.lines().enumerate() {
+            let value = parse_line(path, index + 1, line)?;
+            records.push((
+                record_from_line(path, index + 1, value)?,
+                ShardLine {
+                    path: path.to_owned(),
+                    line: index + 1,
+                },
+            ));
+        }
+        Ok(records)
+    })
+}
+
 pub fn read_jsonl<T: DeserializeOwned>(
     store: &StateStore,
     path: &Utf8Path,
