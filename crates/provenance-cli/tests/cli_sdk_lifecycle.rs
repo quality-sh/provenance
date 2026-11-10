@@ -3,6 +3,7 @@
 //!
 //! These tests have no Rule binding. No Rule states the typed deletion
 //! cascade yet; the tests keep the behaviour under a compiled target.
+#[path = "cli_sdk_lifecycle/deletion.rs"]
 mod deletion;
 
 use assert_cmd::Command;
