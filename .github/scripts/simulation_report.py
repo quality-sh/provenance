@@ -9,9 +9,11 @@ steps, the replay line and the `#[hegel::reproduce_failure]` blob.
 A shrink runs many failing cases, and each one writes the failure file of its
 law, so one run can leave files of laws that the shrink passed through. Only
 the law of the last "simulation law ... broken" line of a layer's log opens an
-issue. A planted test whose law did not see its fault prints "simulation check
-broken"; its layer gets an issue that says that a check is broken, not a law
-issue.
+issue. A probe that breaks a law prints "simulation probe <test> broke law
+..." and the command that runs the probe; each such probe and law opens its
+own issue. A planted test whose law did not see its fault prints "simulation
+check broken"; its layer gets an issue that says that a check is broken, in
+addition to the law issues of the layer.
 """
 
 import argparse
@@ -23,6 +25,9 @@ import sys
 
 BLOB = re.compile(r'#\[hegel::reproduce_failure\("([^"]*)"\)\]')
 LAW_LINE = re.compile(r"simulation law (\S+) broken in layer (\S+):")
+PROBE_LINE = re.compile(
+    r"simulation probe (\S+) broke law (\S+) in layer (\S+): ([^\r\n]*)\r?\nreplay: ([^\r\n]*)"
+)
 CHECK_BROKEN = "simulation check broken"
 GUIDE = (
     "https://github.com/quality-sh/provenance/blob/main/"
@@ -94,26 +99,67 @@ def describe(failure, blob, run_url=None):
 
 
 def describe_run(layer, log="", run_url=None):
-    """The report of a job that did not succeed with no failure file."""
-    if CHECK_BROKEN in log:
-        lines = [
-            f"### {title(layer, CHECK_BROKEN)}",
-            "",
-            "A planted test failed: its law did not see the planted fault, so the "
-            "check itself is broken. No law of the engine is known to be broken. "
-            "Read the lines with \"simulation check broken\" in the log.",
-        ]
-    else:
-        lines = [
-            f"### {title(layer, NO_LAW)}",
-            "",
-            "The job did not succeed, and no random case wrote a failure file. "
-            "The build, a probe test or a planted test failed, a test panicked "
-            "outside a law, or the job stopped at its time limit. Read the log.",
-        ]
+    """The report of a job that did not succeed with no other report."""
+    lines = [
+        f"### {title(layer, NO_LAW)}",
+        "",
+        "The job did not succeed, and no random case wrote a failure file. "
+        "The build, a probe test or a planted test failed, a test panicked "
+        "outside a law, or the job stopped at its time limit. Read the log.",
+    ]
     if run_url:
         lines.append(f"Run: {run_url}")
     lines.append(f"What to do: {GUIDE}")
+    return "\n".join(lines) + "\n"
+
+
+def describe_check_broken(layer, log, run_url=None):
+    """The report of the planted tests of `layer` whose law did not see the
+    planted fault."""
+    broken = [line.strip() for line in log.splitlines() if CHECK_BROKEN in line]
+    lines = [
+        f"### {title(layer, CHECK_BROKEN)}",
+        "",
+        "A planted test failed: its law did not see the planted fault, so the "
+        "check itself is broken. A law issue of this run for the same layer "
+        "is reported apart from this issue. The lines of the log:",
+        "",
+    ]
+    lines += [f"- `{line}`" for line in dict.fromkeys(broken)]
+    lines.append("")
+    if run_url:
+        lines.append(f"Run: {run_url}")
+    lines.append(f"What to do: {GUIDE}")
+    return "\n".join(lines) + "\n"
+
+
+def probe_title(layer, test, law):
+    return f"Simulation: probe {test} broke law {law} in the {layer} layer"
+
+
+def probe_failures(log, layer):
+    """(test, law, detail, replay) of each probe of `layer` that broke a law,
+    once for each probe and law."""
+    found = {}
+    for match in PROBE_LINE.finditer(log):
+        test, law, probe_layer, detail, replay = match.groups()
+        if probe_layer == layer:
+            found.setdefault((test, law), (test, law, detail, replay))
+    return list(found.values())
+
+
+def describe_probe(layer, probe, run_url=None):
+    test, law, detail, replay = probe
+    lines = [
+        f"### {probe_title(layer, test, law)}",
+        "",
+        f"- Probe: `{test}`, a fixed case",
+        f"- Detail: {detail}",
+        f"- Replay: `{replay}`",
+    ]
+    if run_url:
+        lines.append(f"- Run: {run_url}")
+    lines.append(f"- What to do: {GUIDE}")
     return "\n".join(lines) + "\n"
 
 
@@ -126,6 +172,25 @@ def layer_failures(log, layer, failures):
     if law is None:
         return failures
     return [failure for failure in failures if failure["law"] == law]
+
+
+def layer_reports(layer, log, failures, run_url=None):
+    """(title, body) of each report of one layer that did not succeed: one
+    for each law of a random case, one for each probe and law, and one when a
+    planted check is broken. With none of these, one that says that the
+    layer failed without a broken law."""
+    found = []
+    for failure in layer_failures(log, layer, failures):
+        body = describe(failure, blob_for(log, failure), run_url)
+        found.append((title(layer, failure["law"]), body))
+    for probe in probe_failures(log, layer):
+        test, law = probe[0], probe[1]
+        found.append((probe_title(layer, test, law), describe_probe(layer, probe, run_url)))
+    if CHECK_BROKEN in log:
+        found.append((title(layer, CHECK_BROKEN), describe_check_broken(layer, log, run_url)))
+    if not found:
+        found.append((title(layer, NO_LAW), describe_run(layer, log, run_url)))
+    return found
 
 
 def counts(stats_dir, layer):
@@ -144,14 +209,12 @@ def summary(layer, log_path, failures_dir, stats_dir=None, succeeded=False):
     if succeeded:
         return text or f"The {layer} layer passed.\n"
     log = Path(log_path).read_text(errors="replace") if Path(log_path).is_file() else ""
-    failures = layer_failures(log, layer, load_failures(failures_dir))
-    if not failures:
-        return text + describe_run(layer, log)
-    return text + "\n".join(describe(failure, blob_for(log, failure)) for failure in failures)
+    found = layer_reports(layer, log, load_failures(failures_dir))
+    return text + "\n".join(body for _, body in found)
 
 
 def reports(artifacts, run_url):
-    """(title, body) for each failure of each layer.
+    """(title, body) for each report of each layer.
 
     Each job uploads `<layer>.log` with its `failures` directory beside it.
     A download of one artifact unpacks it in `artifacts`; a download of more
@@ -161,13 +224,8 @@ def reports(artifacts, run_url):
     for log_path in sorted(Path(artifacts).rglob("*.log")):
         layer = log_path.stem
         log = log_path.read_text(errors="replace")
-        failures = layer_failures(log, layer, load_failures(log_path.parent / "failures"))
-        if not failures:
-            law = CHECK_BROKEN if CHECK_BROKEN in log else NO_LAW
-            found.append((title(layer, law), describe_run(layer, log, run_url)))
-        for failure in failures:
-            body = describe(failure, blob_for(log, failure), run_url)
-            found.append((title(layer, failure["law"]), body))
+        failures = load_failures(log_path.parent / "failures")
+        found += layer_reports(layer, log, failures, run_url)
     if not found:
         found.append((title(NO_LAYER, NO_LAW), describe_run(NO_LAYER, "", run_url)))
     return found
@@ -177,18 +235,28 @@ def gh(*args):
     return subprocess.run(["gh", *args], check=True, text=True, capture_output=True).stdout
 
 
-def open_issues(artifacts, run_url, run=gh):
-    run("label", "create", LABEL, "--force", "--color", "B60205",
-        "--description", "A law of the nightly simulation broke")
+def open_issues(artifacts, run_url, run=gh, print_only=False, out=sys.stdout):
+    """Opens or comments on one issue for each report. With `print_only`,
+    makes no GitHub write: it reads the open issues and prints each issue
+    that it would open and each comment that it would add."""
+    if not print_only:
+        run("label", "create", LABEL, "--force", "--color", "B60205",
+            "--description", "A law of the nightly simulation broke")
     for issue_title, body in reports(artifacts, run_url):
         listed = json.loads(run("issue", "list", "--label", LABEL, "--state", "open",
                                 "--search", f'"{issue_title}" in:title',
                                 "--json", "number,title"))
         same = [issue for issue in listed if issue["title"] == issue_title]
-        if same:
+        if print_only:
+            action = (f"Would comment on issue #{same[0]['number']}" if same
+                      else "Would open an issue")
+            out.write(f"## {action}: {issue_title}\n\n{body}\n")
+        elif same:
             run("issue", "comment", str(same[0]["number"]), "--body", body)
+            out.write(f"Commented on issue #{same[0]['number']}: {issue_title}\n")
         else:
             run("issue", "create", "--title", issue_title, "--label", LABEL, "--body", body)
+            out.write(f"Opened an issue: {issue_title}\n")
 
 
 def main(argv=None):
@@ -203,13 +271,15 @@ def main(argv=None):
     every = commands.add_parser("issues")
     every.add_argument("--artifacts", required=True)
     every.add_argument("--run-url", required=True)
+    every.add_argument("--mode", choices=["issues", "print"], default="issues",
+                       help="print: print each issue and comment, and make no GitHub write")
     args = parser.parse_args(argv)
     if args.command == "summary":
         sys.stdout.write(
             summary(args.layer, args.log, args.failures, args.stats, args.job_status == "success")
         )
     else:
-        open_issues(args.artifacts, args.run_url)
+        open_issues(args.artifacts, args.run_url, print_only=args.mode == "print")
     return 0
 
 

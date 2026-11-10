@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import importlib.util
+import io
 import json
 from pathlib import Path
 import tempfile
@@ -42,6 +43,24 @@ def layer_artifact(root, failures, log=LOG, name="simulation-engine"):
         path = directory / "failures" / f"{failure['layer']}-{failure['law']}.json"
         path.write_text(json.dumps(failure))
     return directory
+
+
+PROBE_LOG = (
+    "thread 'a_case_with_every_fault_keeps_the_laws' panicked at tests/engine.rs:9:5:\n"
+    "simulation probe a_case_with_every_fault_keeps_the_laws broke law L1 in layer engine: "
+    "operation 3 failed\n"
+    "replay: cargo nextest run --profile simulation --run-ignored all -p provenance-simulation "
+    "--test engine -E 'test(=a_case_with_every_fault_keeps_the_laws)'\n"
+)
+CHECK_LOG = "simulation check broken: law L3 did not see its planted fault: x\n"
+# A planted test that fails prints the text of its planted run.
+PLANTED_TEXT = "planted run in layer engine: law L5 reported: operation 1\n"
+
+
+def open_issues(root, gh, **options):
+    out = io.StringIO()
+    report.open_issues(root, "https://run", run=gh, out=out, **options)
+    return out.getvalue()
 
 
 class FakeGh:
@@ -93,7 +112,7 @@ class ReportTests(unittest.TestCase):
         gh = FakeGh()
         with tempfile.TemporaryDirectory() as root:
             layer_artifact(root, [FAILURE])
-            report.open_issues(root, "https://run", run=gh)
+            open_issues(root, gh)
         created = gh.made("create")
         self.assertEqual(len(created), 1)
         self.assertIn("Simulation: law L5 broken in the engine layer", created[0])
@@ -105,7 +124,7 @@ class ReportTests(unittest.TestCase):
         gh = FakeGh([{"number": 7, "title": title}, {"number": 8, "title": title + " too"}])
         with tempfile.TemporaryDirectory() as root:
             layer_artifact(root, [FAILURE])
-            report.open_issues(root, "https://run", run=gh)
+            open_issues(root, gh)
         self.assertEqual(gh.made("create"), [])
         comments = gh.made("comment")
         self.assertEqual(len(comments), 1)
@@ -116,7 +135,7 @@ class ReportTests(unittest.TestCase):
         gh = FakeGh()
         with tempfile.TemporaryDirectory() as root:
             layer_artifact(root, [FAILURE], name=None)
-            report.open_issues(root, "https://run", run=gh)
+            open_issues(root, gh)
         titles = [call[3] for call in gh.made("create")]
         self.assertEqual(titles, ["Simulation: law L5 broken in the engine layer"])
 
@@ -124,14 +143,14 @@ class ReportTests(unittest.TestCase):
         gh = FakeGh()
         with tempfile.TemporaryDirectory() as root:
             layer_artifact(root, [], name=None)
-            report.open_issues(root, "https://run", run=gh)
+            open_issues(root, gh)
         titles = [call[3] for call in gh.made("create")]
         self.assertEqual(titles, ["Simulation: the engine layer failed without a broken law"])
 
     def test_no_artifact_still_opens_an_issue(self):
         gh = FakeGh()
         with tempfile.TemporaryDirectory() as root:
-            report.open_issues(root, "https://run", run=gh)
+            open_issues(root, gh)
         titles = [call[3] for call in gh.made("create")]
         self.assertEqual(titles, ["Simulation: the simulation layer failed without a broken law"])
 
@@ -146,7 +165,7 @@ class ReportTests(unittest.TestCase):
                 log=contract_log,
                 name="simulation-contract",
             )
-            report.open_issues(root, "https://run", run=gh)
+            open_issues(root, gh)
         titles = sorted(call[3] for call in gh.made("create"))
         self.assertEqual(titles, [
             "Simulation: law L5 broken in the contract layer",
@@ -158,7 +177,7 @@ class ReportTests(unittest.TestCase):
         gh = FakeGh()
         with tempfile.TemporaryDirectory() as root:
             layer_artifact(root, [FAILURE, {**FAILURE, "law": "L3"}])
-            report.open_issues(root, "https://run", run=gh)
+            open_issues(root, gh)
         titles = [call[3] for call in gh.made("create")]
         self.assertEqual(titles, ["Simulation: law L5 broken in the engine layer"])
 
@@ -166,7 +185,7 @@ class ReportTests(unittest.TestCase):
         gh = FakeGh()
         with tempfile.TemporaryDirectory() as root:
             layer_artifact(root, [FAILURE], log="the job stopped at its time limit\n")
-            report.open_issues(root, "https://run", run=gh)
+            open_issues(root, gh)
         titles = [call[3] for call in gh.made("create")]
         self.assertEqual(titles, ["Simulation: law L5 broken in the engine layer"])
 
@@ -175,13 +194,87 @@ class ReportTests(unittest.TestCase):
         log = "simulation check broken: law L3 did not see its planted fault: x\n"
         with tempfile.TemporaryDirectory() as root:
             layer_artifact(root, [], log=log, name=None)
-            report.open_issues(root, "https://run", run=gh)
+            open_issues(root, gh)
         created = gh.made("create")
         self.assertEqual(
             [call[3] for call in created],
             ["Simulation: a planted fault was not found in the engine layer"],
         )
         self.assertIn("the check itself is broken", created[0][7])
+
+    def test_a_broken_check_is_reported_with_the_law_of_its_layer(self):
+        gh = FakeGh()
+        with tempfile.TemporaryDirectory() as root:
+            layer_artifact(root, [FAILURE], log=LOG + CHECK_LOG)
+            open_issues(root, gh)
+        titles = sorted(call[3] for call in gh.made("create"))
+        self.assertEqual(titles, [
+            "Simulation: a planted fault was not found in the engine layer",
+            "Simulation: law L5 broken in the engine layer",
+        ])
+
+    def test_the_text_of_a_failed_planted_test_does_not_replace_the_law(self):
+        # The planted text comes after the last broken-law line of the log.
+        gh = FakeGh()
+        with tempfile.TemporaryDirectory() as root:
+            layer_artifact(root, [FAILURE], log=LOG + PLANTED_TEXT + CHECK_LOG)
+            open_issues(root, gh)
+        titles = sorted(call[3] for call in gh.made("create"))
+        self.assertIn("Simulation: law L5 broken in the engine layer", titles)
+        self.assertIsNone(report.LAW_LINE.search(PLANTED_TEXT))
+        self.assertIsNone(report.LAW_LINE.search(CHECK_LOG))
+
+    def test_a_probe_that_breaks_a_law_opens_an_issue_with_its_replay(self):
+        gh = FakeGh()
+        with tempfile.TemporaryDirectory() as root:
+            layer_artifact(root, [], log=PROBE_LOG + PROBE_LOG, name=None)
+            open_issues(root, gh)
+        created = gh.made("create")
+        self.assertEqual(
+            [call[3] for call in created],
+            ["Simulation: probe a_case_with_every_fault_keeps_the_laws broke law L1 "
+             "in the engine layer"],
+        )
+        self.assertIn("-E 'test(=a_case_with_every_fault_keeps_the_laws)'", created[0][7])
+        self.assertIn("operation 3 failed", created[0][7])
+
+    def test_a_probe_line_is_not_a_law_line_of_a_random_case(self):
+        self.assertIsNone(report.LAW_LINE.search(PROBE_LOG))
+        self.assertIsNone(report.last_law(PROBE_LOG, "engine"))
+
+    def test_print_mode_makes_no_write_and_prints_each_issue_and_comment(self):
+        title = "Simulation: law L5 broken in the engine layer"
+        gh = FakeGh([{"number": 7, "title": title}])
+        with tempfile.TemporaryDirectory() as root:
+            layer_artifact(root, [FAILURE], log=LOG + CHECK_LOG)
+            text = open_issues(root, gh, print_only=True)
+        writes = [call for call in gh.calls if call[:2] != ("issue", "list")]
+        self.assertEqual(writes, [])
+        self.assertIn(f"## Would comment on issue #7: {title}", text)
+        self.assertIn(
+            "## Would open an issue: Simulation: a planted fault was not found in the engine layer",
+            text,
+        )
+        self.assertIn('#[hegel::reproduce_failure("AAEC")]', text)
+        self.assertIn(FAILURE["replay"], text)
+
+    def test_print_mode_is_a_choice_of_the_command_line(self):
+        calls = []
+        original = report.open_issues
+        report.open_issues = lambda *args, **options: calls.append(options)
+        try:
+            report.main(["issues", "--artifacts", "a", "--run-url", "u", "--mode", "print"])
+            report.main(["issues", "--artifacts", "a", "--run-url", "u"])
+        finally:
+            report.open_issues = original
+        self.assertEqual(calls, [{"print_only": True}, {"print_only": False}])
+
+    def test_the_summary_gives_a_broken_check_and_the_law(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = layer_artifact(root, [FAILURE], log=LOG + CHECK_LOG)
+            text = report.summary("engine", directory / "engine.log", directory / "failures")
+        self.assertIn("law L5 broken in the engine layer", text)
+        self.assertIn("a planted fault was not found in the engine layer", text)
 
     def test_each_issue_links_the_guide(self):
         self.assertIn(report.GUIDE, report.describe(FAILURE, "AAEC"))
