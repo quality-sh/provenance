@@ -131,11 +131,13 @@ async fn a_discussion_that_names_a_missing_thread_or_another_scope_is_located() 
     discussion(&repo).await;
     let original = lines(&repo, DISCUSSIONS);
     change_first(&repo, DISCUSSIONS, |row| {
-        row["thread_id"] = json!("thread_missing")
+        row["thread_id"] = json!("thread_missing");
     });
     let (status, missing) = start(&repo).await;
     write(&repo, DISCUSSIONS, &original);
-    change_first(&repo, DISCUSSIONS, |row| row["scope_id"] = json!("other"));
+    change_first(&repo, DISCUSSIONS, |row| {
+        row["scope_id"] = json!("other");
+    });
     let (other_status, other) = start(&repo).await;
     assert_eq!((status, other_status), (500, 500), "{missing} {other}");
     assert_eq!(
