@@ -67,9 +67,17 @@ def conclusion(name):
 if a[0] == 'api' and 'dispatches' in ' '.join(a):
     payload = json.loads(sys.stdin.read())
     with open(os.environ['FAKE_GH_PAYLOAD'], 'w') as f: json.dump(payload, f)
-    run_id = 314 + len(list(state.glob('run-*.json')))
+    # Two dispatches can arrive at the same time: take the next free run id
+    # with an exclusive create.
+    run_id = 314
+    while True:
+        try:
+            fd = os.open(state / f'run-{run_id}.json', os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            break
+        except FileExistsError:
+            run_id += 1
     inputs = payload['inputs']
-    (state / f'run-{run_id}.json').write_text(json.dumps({'branch': payload['ref'], 'sha': inputs['snapshot_sha'], 'command_key': inputs['command_key'], 'command_json': inputs['command_json']}))
+    with os.fdopen(fd, 'w') as f: json.dump({'branch': payload['ref'], 'sha': inputs['snapshot_sha'], 'command_key': inputs['command_key'], 'command_json': inputs['command_json']}, f)
     print(json.dumps({'workflow_run_id': run_id, 'html_url': f'https://github.com/quality-sh/provenance/actions/runs/{run_id}'}))
 elif a[:2] == ['run', 'list']:
     branch = a[a.index('--branch') + 1]
