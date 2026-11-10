@@ -6,19 +6,20 @@ test-threads = 8
 # run; the other shard runs the rest of the provenance-cli tests.
 # The simulation tests run only in the nightly simulation workflow, with the
 # simulation profile. CI compiles them, but no CI job runs them.
-default-filter = 'not binary(cli_skills_single_source) & not package(provenance-simulation) & not binary(simulation_cli)'
+default-filter = 'not binary(cli_skills_single_source) & not package(provenance-simulation) & not binary(/^simulation_cli/)'
 
 [profile.ci.junit]
 # target/nextest/ci/junit.xml; CI uploads it for TAG, the test aggregator.
 path = "junit.xml"
 
 # The nightly simulation. The ci profile leaves out every test of
-# provenance-simulation and of simulation_cli, so no CI job runs them. The
+# provenance-simulation, simulation_cli and simulation_cli_planted, so no CI
+# job runs them. The
 # random cases are also ignored tests, so a plain cargo test does not run
 # them. The workflow passes --run-ignored all and sets HEGEL_SEED and
 # HEGEL_TEST_CASES. simulation_cli runs the CLI layer.
 [profile.simulation]
-default-filter = 'package(provenance-simulation) | binary(simulation_cli)'
+default-filter = 'package(provenance-simulation) | binary(/^simulation_cli/)'
 fail-fast = false
 slow-timeout = { period = "300s", terminate-after = 2 }
 

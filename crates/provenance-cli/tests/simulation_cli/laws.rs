@@ -43,7 +43,7 @@ pub fn check(case: &Case, run: &CliRun) -> Result<(), Violation> {
     if let Err(detail) = &run.reads {
         return broken("L6", detail.clone());
     }
-    one_writer_answers_as_the_engine(case, run)
+    one_writer_answers_as_the_engine(case, run, apply_public)
 }
 
 /// The values that a record can hold after each group; `None` is any value.
@@ -122,7 +122,7 @@ fn one_winner_per_etag(run: &CliRun) -> Result<(), Violation> {
 
 /// The engine runs a write as the public API does: a create and an update
 /// open a review submission.
-fn apply_public(repository: &Repository, task: &Task) -> anyhow::Result<Effect> {
+pub fn apply_public(repository: &Repository, task: &Task) -> anyhow::Result<Effect> {
     use provenance_store::review::{CreateReviewRequirement, SaveRequirement};
     use provenance_store::state_store::{CreateRequirementInput, UpdateRequirementInput};
     let (scope, store) = (ScopeId::new(SCOPE)?, repository.store());
@@ -199,7 +199,11 @@ fn answer(done: &Done) -> Result<(), Option<&str>> {
 /// merge, get the answer kind that the engine gives the same writes. A
 /// write that the simulation did not send, because the read of its etag
 /// refused, has no CLI answer to compare.
-fn one_writer_answers_as_the_engine(case: &Case, run: &CliRun) -> Result<(), Violation> {
+pub fn one_writer_answers_as_the_engine(
+    case: &Case,
+    run: &CliRun,
+    apply: provenance_simulation::Apply,
+) -> Result<(), Violation> {
     let alone = run.groups.iter().take_while(|(way, _)| *way == Ran::Alone);
     let alone: Vec<&Done> = alone.flat_map(|(_, done)| done).collect();
     let mut steps = Vec::new();
@@ -210,7 +214,7 @@ fn one_writer_answers_as_the_engine(case: &Case, run: &CliRun) -> Result<(), Vio
         steps.extend(std::iter::repeat_n(Step::Turn(engine), 400));
     }
     let config = Config {
-        apply: Some(apply_public),
+        apply: Some(apply),
         ..Config::default()
     };
     let engines = case.engines;

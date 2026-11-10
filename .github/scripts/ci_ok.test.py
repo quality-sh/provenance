@@ -91,7 +91,7 @@ class WorkflowWiringTests(unittest.TestCase):
         # runs everything else and the distribution shard runs only that test.
         self.assertIn(
             "default-filter = 'not binary(cli_skills_single_source) & "
-            "not package(provenance-simulation) & not binary(simulation_cli)'",
+            "not package(provenance-simulation) & not binary(/^simulation_cli/)'",
             NEXTEST.read_text(),
         )
         job = self.job(SHARDS)

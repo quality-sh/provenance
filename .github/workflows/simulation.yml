@@ -40,11 +40,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        layer: [engine, contract]
+        include:
+          - layer: engine
+            tests: --test engine --test engine_planted --test storage_contract
+          - layer: contract
+            tests: --test contract --test contract_planted
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
       LAYER: ${{ matrix.layer }}
+      TESTS: ${{ matrix.tests }}
       SIMULATION_FAILURE_DIR: ${{ github.workspace }}/target/simulation/failures
       SIMULATION_STATS_DIR: ${{ github.workspace }}/target/simulation/stats
     steps:
@@ -69,8 +74,9 @@ jobs:
         run: |
           mkdir -p target/simulation
           set -o pipefail
+          read -ra tests <<< "$TESTS"
           cargo nextest run --locked --profile simulation --run-ignored all \
-            -p provenance-simulation --test "$LAYER" --test "${LAYER}_planted" \
+            -p provenance-simulation "${tests[@]}" \
             --no-fail-fast 2>&1 | tee "target/simulation/$LAYER.log"
       # The summary gives the counts of the random cases on each run, and the
       # broken laws when the job did not succeed. A job that stops at its
@@ -149,8 +155,8 @@ jobs:
           mkdir -p target/simulation
           set -o pipefail
           cargo nextest run --locked --profile simulation --run-ignored all \
-            -p provenance-cli --test simulation_cli --no-fail-fast 2>&1 \
-            | tee "target/simulation/$LAYER.log"
+            -p provenance-cli --test simulation_cli --test simulation_cli_planted \
+            --no-fail-fast 2>&1 | tee "target/simulation/$LAYER.log"
       - name: Report the counts and the broken laws
         if: always()
         shell: bash
