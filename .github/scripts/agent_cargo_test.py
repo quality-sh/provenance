@@ -260,6 +260,23 @@ class AgentCargoTest(unittest.TestCase):
         branches = [call[call.index("--branch") + 1] for call in self.calls_matching("list")]
         self.assertTrue(any(branch.startswith("agent-ci/build-artifact/") for branch in branches))
 
+    def test_check_after_an_artifact_download_snapshots_the_change(self):
+        (self.repo / ".gitignore").write_text("target/\n")
+        self.git("add", ".gitignore")
+        self.git("commit", "-m", "ignore target")
+        artifact = self.cargo("build", env={**self.env, "PROVENANCE_CI_ARTIFACT": "1"})
+        self.assertEqual(artifact.returncode, 0, artifact.stderr)
+        self.assertTrue((self.repo / "target/debug/provenance").is_file())
+        (self.repo / "src.rs").write_text("after\n")
+
+        result = self.cargo("check")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(self.payload.read_text())
+        snapshot = payload["headSha"]
+        self.assertEqual(self.git("show", f"{snapshot}:src.rs"), "after")
+        self.assertEqual(self.git("ls-tree", "-r", "--name-only", snapshot, "--", "target"), "")
+
     def test_shared_target_symlink_keeps_binary_in_worktree_git_dir(self):
         shared = self.root / "shared-target"
         shared_binary = shared / "debug/provenance"

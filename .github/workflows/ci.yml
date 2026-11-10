@@ -1510,6 +1510,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           python3 scripts/agent-bin/tests/test_package.py
+          python3 .github/scripts/agent_cargo_test.py
           python3 .github/scripts/test_release_crates.py
       - name: Test release smoke helpers
         if: runner.os == 'Linux'
