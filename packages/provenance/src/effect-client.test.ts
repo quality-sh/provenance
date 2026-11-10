@@ -4,6 +4,8 @@ import * as Effect from 'effect/Effect';
 import * as Cause from 'effect/Cause';
 import * as Exit from 'effect/Exit';
 import * as Fiber from 'effect/Fiber';
+import { createServer, type RequestListener } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { COMPATIBILITY, EffectHttpClient } from './effect.js';
 import { verifies } from './rules.js';
 
@@ -112,4 +114,61 @@ test('a declared failure remains a typed operation error', async () => {
   const error = await Effect.runPromise(Effect.flip(client.checkStatement({ data: { statement: 'Stop.' } })));
   assert.equal(error._tag, 'OperationError');
   if (error._tag === 'OperationError') assert.equal(error.status, 403);
+});
+
+async function listen(handler: RequestListener) {
+  const server = createServer(handler);
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const close = async () => {
+    server.closeAllConnections();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+  };
+  return { baseUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, close };
+}
+
+async function hostWithLostResponses() {
+  const received = { reads: 0, writes: 0 };
+  const host = await listen((request, response) => {
+    if (request.method === 'GET') {
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ data: { compatibility: COMPATIBILITY, package: { name: 'provenance', version: 'test' }, repository: 'fixture', scope: 'default' }, meta: {} }));
+      return;
+    }
+    if (request.url?.startsWith('/statement-checks')) received.reads++;
+    else received.writes++;
+    request.resume();
+    request.on('end', () => request.socket.destroy());
+  });
+  const client = await Effect.runPromise(EffectHttpClient.connect({ baseUrl: host.baseUrl }));
+  return { client, received, close: host.close };
+}
+
+test('a write whose response is lost fails with an outcome-unknown error and is sent once', async function lostWriteResponse() {
+  verifies('rule_effect_sdk_retains_unknown_writes', 'examples');
+  const host = await hostWithLostResponses();
+  try {
+    const error = await Effect.runPromise(Effect.flip(host.client.answerQuestion({ id: 'question_x', data: { answer: 'Done.' } })));
+    assert.match(error.message, /Read the current state before you send the write again/);
+    assert.equal(error._tag, 'OutcomeUnknownError');
+    assert.equal(host.received.writes, 1);
+  } finally { await host.close(); }
+});
+
+test('a write that cannot connect fails with a connection error and is not sent', async function unsentWrite() {
+  verifies('rule_effect_sdk_retains_unknown_writes', 'examples');
+  const host = await hostWithLostResponses();
+  await host.close();
+  const error = await Effect.runPromise(Effect.flip(host.client.answerQuestion({ id: 'question_x', data: { answer: 'Done.' } })));
+  assert.equal(error._tag, 'ConnectionError');
+  assert.equal(host.received.writes, 0);
+});
+
+test('a read whose response is lost fails with a connection error', async function lostReadResponse() {
+  verifies('rule_effect_sdk_retains_unknown_writes', 'examples');
+  const host = await hostWithLostResponses();
+  try {
+    const error = await Effect.runPromise(Effect.flip(host.client.checkStatement({ data: { statement: 'Stop.' } })));
+    assert.equal(error._tag, 'ConnectionError');
+    assert.equal(host.received.reads, 1);
+  } finally { await host.close(); }
 });
