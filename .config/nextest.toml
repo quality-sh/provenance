@@ -12,9 +12,9 @@ path = "junit.xml"
 
 # The nightly simulation. Its random cases are ignored tests, so a pull
 # request never runs them; the workflow passes --run-ignored all and sets
-# HEGEL_SEED and HEGEL_TEST_CASES.
+# HEGEL_SEED and HEGEL_TEST_CASES. simulation_cli runs the CLI layer.
 [profile.simulation]
-default-filter = 'package(provenance-simulation)'
+default-filter = 'package(provenance-simulation) | binary(simulation_cli)'
 fail-fast = false
 slow-timeout = { period = "300s", terminate-after = 24 }
 

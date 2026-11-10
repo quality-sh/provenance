@@ -288,6 +288,7 @@
         "jsonschema",
         "notify",
         "provenance-mcp",
+        "provenance-simulation",
         "provenance-ste100",
         "provenance-store",
         "provenance-transport",
