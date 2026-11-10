@@ -9,6 +9,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -33,6 +34,62 @@ ALL_CRATES = sorted(package["name"] for package in METADATA["packages"])
 
 def select(*files, event="pull_request"):
     return SELECTOR.select(event, list(files), METADATA)
+
+
+# Test binaries that read above their crate directory, but read only files
+# that ROOT_INPUTS maps to their crate or files of crates that they depend on.
+# A test that reads the Rust source of a crate that it does not depend on goes
+# in RUST_SOURCE_READERS in select_tests.py instead.
+ROOT_FILE_READERS = (
+    "provenance-cli::ci_coverage_workflow",
+    "provenance-cli::ci_wasm_kernel",
+    "provenance-cli::cli_import_legacy_audit",
+    "provenance-cli::cli_import_lifecycle",
+    "provenance-cli::cli_skills",
+    "provenance-cli::cli_skills_build_source",
+    "provenance-cli::cli_skills_copy_tree",
+    "provenance-cli::cli_skills_single_source",
+    "provenance-cli::cli_version",
+    "provenance-cli::release_commands",
+    "provenance-cli::review_bundle",
+    "provenance-scanner::scanner_declarations",
+    # The unit tests of the store library read .provenance/state.
+    "provenance-store",
+    "provenance-store::review_cost",
+)
+
+# A test file that takes CARGO_MANIFEST_DIR and goes up from it reads files
+# above its crate directory.
+GOES_UP = re.compile(r"\.parent\(\)|\bancestors\(\)|\"\.\./|join\(\"\.\.\"\)")
+INCLUDE = re.compile(r'include_(?:str|bytes)!\(\s*"([^"]+)"\s*\)')
+
+
+def binaries_of_test_files(crate, crate_directory):
+    """Return the test binaries that compile each test file of a crate.
+
+    A file in src/ belongs to the library tests, which have the crate name as
+    their binary id. Production files in src/ are left out.
+    """
+    tests = crate_directory / "tests"
+    binaries = {}
+    for path in sorted(crate_directory.rglob("*.rs")):
+        relative = path.relative_to(crate_directory)
+        if relative.parts[0] == "src":
+            if "test" in path.name or "tests" in relative.parts:
+                binaries[path] = [crate]
+        elif relative.parts[0] == "tests":
+            name = relative.parts[1].removesuffix(".rs")
+            if (tests / f"{name}.rs").is_file():
+                binaries[path] = [f"{crate}::{name}"]
+            else:
+                # A shared module directory: the binaries that name it own the file.
+                names = re.compile(rf"\bmod {re.escape(name)}\b|/{re.escape(name)}/")
+                binaries[path] = [
+                    f"{crate}::{top.stem}"
+                    for top in sorted(tests.glob("*.rs"))
+                    if names.search(top.read_text())
+                ]
+    return binaries
 
 
 class SelectionTests(unittest.TestCase):
@@ -78,15 +135,39 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(json.loads(selection["test-crates"]), ["provenance-cli"])
         self.assertEqual(selection["doc-packages"], "-p provenance-cli")
         self.assertEqual(selection["crate-dirs"], "crates/provenance-cli")
-        # The wildcard gate in provenance-core reads the CLI source.
         self.assertEqual(
-            selection["test-packages"], "-p provenance-cli -p provenance-core"
+            selection["test-packages"],
+            "-p provenance-cli -p provenance-contract -p provenance-core"
+            " -p provenance-scanner -p provenance-store",
         )
         self.assertEqual(
             selection["test-filter"],
-            "rdeps(=provenance-cli) | binary_id(provenance-cli::cli_structure)"
-            " | binary_id(provenance-core::no_wildcard_gates)",
+            " | ".join(
+                ["rdeps(=provenance-cli)"]
+                + [f"binary_id({binary})" for binary in SELECTOR.RUST_SOURCE_READERS]
+            ),
         )
+
+    def test_a_rust_change_in_any_crate_selects_every_rust_source_reader(self):
+        # PR 642 changed only CLI and transport files. A direct Git start in a
+        # CLI test file broke the store test that reads every crate.
+        for path in (
+            "crates/provenance-cli/tests/cli_init_typescript_commands.rs",
+            "crates/provenance-transport/src/skills.rs",
+            "crates/provenance-macros/src/lib.rs",
+            "crates/provenance-http-client/tests/client_policy.rs",
+            "crates/provenance-cli/build/commit.rs",
+        ):
+            with self.subTest(path=path):
+                selection = select(path)
+                for binary in SELECTOR.RUST_SOURCE_READERS:
+                    self.assertIn(f"binary_id({binary})", selection["test-filter"])
+                    self.assertIn(f"-p {binary.split('::')[0]} ", selection["test-packages"] + " ")
+
+    def test_a_file_that_is_not_rust_selects_no_rust_source_reader(self):
+        selection = select("crates/provenance-cli/tests/fixtures/surface_names/cli.txt")
+        self.assertNotIn("git_starts_use_the_helper", selection["test-filter"])
+        self.assertNotIn("-p provenance-store", selection["test-packages"])
 
     def test_a_store_change_selects_every_crate_that_depends_on_the_store(self):
         selection = select("crates/provenance-store/src/lib.rs")
@@ -150,16 +231,23 @@ class SelectionTests(unittest.TestCase):
 
     def test_root_inputs_select_the_crates_that_read_them(self):
         selection = select("skills/provenance/SKILL.md")
-        self.assertEqual(json.loads(selection["test-crates"]), ["provenance-cli"])
+        self.assertEqual(
+            json.loads(selection["test-crates"]),
+            ["provenance-cli", "provenance-mcp", "provenance-review", "provenance-transport"],
+        )
         selection = select("contracts/operations/statements.json")
         self.assertEqual(json.loads(selection["test-crates"]), ["provenance-http-client"])
 
-    def test_a_rust_file_outside_the_crates_runs_only_the_file_audit(self):
+    def test_a_rust_file_outside_the_crates_runs_only_the_source_readers(self):
         selection = select("examples/rust-sdk/src/main.rs")
         self.assertEqual(selection["test-scope"], "some")
         self.assertEqual(json.loads(selection["test-crates"]), [])
-        self.assertEqual(selection["test-packages"], "-p provenance-cli")
-        self.assertEqual(selection["test-filter"], "binary_id(provenance-cli::cli_structure)")
+        crates = sorted({binary.split("::")[0] for binary in SELECTOR.RUST_SOURCE_READERS})
+        self.assertEqual(selection["test-packages"], " ".join(f"-p {crate}" for crate in crates))
+        self.assertEqual(
+            selection["test-filter"],
+            " | ".join(f"binary_id({binary})" for binary in SELECTOR.RUST_SOURCE_READERS),
+        )
         self.assertEqual(selection["crate-dirs"], "")
 
     def test_every_named_crate_and_test_binary_exists(self):
@@ -168,10 +256,63 @@ class SelectionTests(unittest.TestCase):
             self.assertLessEqual(set(crates), names)
         root = Path(METADATA["workspace_root"])
         directories, _ = SELECTOR.workspace(METADATA)
-        for _, _, binary in SELECTOR.SOURCE_READERS:
-            crate, target = binary.split("::", 1)
+        binaries = [binary for _, _, binary in SELECTOR.SOURCE_READERS]
+        binaries += SELECTOR.RUST_SOURCE_READERS + ROOT_FILE_READERS
+        for binary in binaries:
+            crate, _, target = binary.partition("::")
             self.assertIn(crate, names)
-            self.assertTrue((root / directories[crate] / "tests" / f"{target}.rs").is_file(), binary)
+            if target:
+                self.assertTrue(
+                    (root / directories[crate] / "tests" / f"{target}.rs").is_file(), binary
+                )
+
+    def test_each_test_that_reads_above_its_crate_is_in_a_list(self):
+        # A test that reads the files of another crate must run when the
+        # files change. A new test of this kind fails here until a list names
+        # it, so the selection cannot leave it out without a decision.
+        root = Path(METADATA["workspace_root"])
+        directories, _ = SELECTOR.workspace(METADATA)
+        known = set(SELECTOR.RUST_SOURCE_READERS) | set(ROOT_FILE_READERS)
+        known |= {binary for _, _, binary in SELECTOR.SOURCE_READERS}
+        found = 0
+        for crate, directory in sorted(directories.items()):
+            for path, binaries in binaries_of_test_files(crate, root / directory).items():
+                lines = [
+                    line
+                    for line in path.read_text().splitlines()
+                    if not line.lstrip().startswith(("//", "#[path"))
+                ]
+                text = "\n".join(lines)
+                if "CARGO_MANIFEST_DIR" not in text or not GOES_UP.search(text):
+                    continue
+                relative = str(path.relative_to(root))
+                self.assertTrue(binaries, f"{relative} is in no test binary")
+                for binary in binaries:
+                    found += 1
+                    with self.subTest(path=relative):
+                        self.assertIn(binary, known)
+        self.assertGreater(found, 20)
+
+    def test_each_file_that_a_crate_includes_from_outside_selects_the_crate(self):
+        root = Path(METADATA["workspace_root"])
+        directories, _ = SELECTOR.workspace(METADATA)
+        found = 0
+        for crate, directory in sorted(directories.items()):
+            crate_root = (root / directory).resolve()
+            for path in sorted(crate_root.rglob("*.rs")):
+                if "target" in path.relative_to(crate_root).parts:
+                    continue
+                for included in INCLUDE.findall(path.read_text()):
+                    target = (path.parent / included).resolve()
+                    if target.is_relative_to(crate_root):
+                        continue
+                    found += 1
+                    changed = target.relative_to(root.resolve()).as_posix()
+                    with self.subTest(crate=crate, file=changed):
+                        selection = select(changed)
+                        if selection["test-scope"] != "all":
+                            self.assertIn(crate, json.loads(selection["test-crates"]))
+        self.assertGreater(found, 0)
 
     def test_the_command_line_writes_workflow_outputs(self):
         with tempfile.TemporaryDirectory() as temp:
