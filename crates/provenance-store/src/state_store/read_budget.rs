@@ -48,10 +48,9 @@ pub trait ReadBudget: Serialize {
 /// text as its UTF-8 bytes, and a real through `SQLite`'s own conversion.
 ///
 /// Only a REAL column needs `SQLite` to count it, so only the host build,
-/// which has libsqlite3, counts one. No record kind that the write check
-/// counts column by column has a float field: `projection_budget!` requires
-/// each such kind to be `Eq`, which `f32` and `f64` are not.
-#[rule("rule_row_counted_records_hold_no_real_column")]
+/// which has libsqlite3, counts one. The host count stays as a defence for a
+/// field that is `Eq` but serializes as a JSON float, which
+/// `row_counted_kind_holds_no_float_field!` does not refuse.
 pub(super) fn column_bytes(value: &ColumnValue) -> anyhow::Result<usize> {
     match value {
         ColumnValue::Null => Ok(0),
@@ -145,14 +144,35 @@ pub fn ensure_slice_within_read_budget<T: ReadBudget>(records: &[T]) -> anyhow::
     Ok(())
 }
 
+/// Fails the build when `$kind` is not `Eq`. `projection_budget!` calls it for
+/// each record kind that the write check counts column by column.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! row_counted_kind_holds_no_float_field {
+    ($kind:ty) => {
+        const _: () = {
+            /// Refuses a row-counted kind with an `f32` or `f64` field, because
+            /// such a kind is not `Eq`. A field type that is `Eq` but serializes
+            /// as a JSON float, such as `serde_json::Value`, is not refused at
+            /// build time; the build without `host` refuses that write with a
+            /// fixed error. No current row-counted kind has such a field.
+            #[::provenance_macros::rule("rule_row_counted_records_hold_no_real_column")]
+            #[::provenance_macros::verifies(
+                "rule_row_counted_records_hold_no_real_column",
+                construction
+            )]
+            trait HoldsNoFloatField: ::core::cmp::Eq {}
+            impl<T: ::core::cmp::Eq> HoldsNoFloatField for T {}
+            const fn holds_no_float_field<T: HoldsNoFloatField>() {}
+            holds_no_float_field::<$kind>();
+        };
+    };
+}
+
 macro_rules! projection_budget {
     ($($kind:ty),+ $(,)?) => {
         $(
-            // A float field makes the kind not `Eq`, so this fails to build.
-            const _: () = {
-                const fn holds_no_float_field<T: Eq>() {}
-                holds_no_float_field::<$kind>();
-            };
+            $crate::row_counted_kind_holds_no_float_field!($kind);
 
             impl ReadBudget for $kind {
                 fn read_bytes(&self) -> anyhow::Result<usize> {

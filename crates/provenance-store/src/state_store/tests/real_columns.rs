@@ -65,7 +65,7 @@ fn assert_counted_without_real<T: ProjectionRow + ReadBudget>(record: &T) {
 }
 
 #[test]
-#[verifies("rule_row_counted_records_hold_no_real_column", conformance)]
+#[verifies("rule_row_counted_records_hold_no_real_column", examples)]
 fn source_and_requirement_rows_hold_no_real_column() {
     assert_counted_without_real(&Source {
         scope_id: scope(),
@@ -108,7 +108,7 @@ fn source_and_requirement_rows_hold_no_real_column() {
 }
 
 #[test]
-#[verifies("rule_row_counted_records_hold_no_real_column", conformance)]
+#[verifies("rule_row_counted_records_hold_no_real_column", examples)]
 fn shaping_rows_hold_no_real_column() {
     assert_counted_without_real(&Topic {
         scope_id: scope(),
@@ -165,7 +165,7 @@ fn shaping_rows_hold_no_real_column() {
 }
 
 #[test]
-#[verifies("rule_row_counted_records_hold_no_real_column", conformance)]
+#[verifies("rule_row_counted_records_hold_no_real_column", examples)]
 fn rule_and_binding_rows_hold_no_real_column() {
     assert_counted_without_real(&Rule {
         scope_id: scope(),
@@ -207,9 +207,9 @@ fn rule_and_binding_rows_hold_no_real_column() {
     });
 }
 
+// Implementation aid: pins the fixed error of the build without `host`.
 #[cfg(not(feature = "host"))]
 #[test]
-#[verifies("rule_row_counted_records_hold_no_real_column", examples)]
 fn real_column_is_refused_without_host() {
     let error = column_bytes(&ColumnValue::Real(0.5)).unwrap_err();
     assert_eq!(
@@ -218,9 +218,9 @@ fn real_column_is_refused_without_host() {
     );
 }
 
+// Implementation aid: pins the host REAL count to the `SQLite` cast.
 #[cfg(feature = "host")]
 #[tokio::test]
-#[verifies("rule_row_counted_records_hold_no_real_column", conformance)]
 async fn real_column_counts_as_sqlite_casts_it() {
     let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
     for real in [0.5, -0.1, 1.0, 1e300, f64::MIN_POSITIVE, 123_456.789] {
