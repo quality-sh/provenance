@@ -228,7 +228,7 @@ async fn an_archived_rule_with_no_archive_commit_is_located_at_its_line() {
         &host(&repo, true),
         "PATCH",
         "/rules/rule_shared",
-        Some(json!({"data":{"description":"Edited."}})),
+        Some(json!({"data":{"actor":"reviewer", "description":"Edited."}})),
         &[("if-match", "\"stale\"")],
     )
     .await;
