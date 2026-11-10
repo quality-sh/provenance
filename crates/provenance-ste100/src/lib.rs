@@ -3,6 +3,7 @@
 //!
 //! Deterministic descriptive-text checks from ASD-STE100 Issue 9.
 
+mod alternatives;
 mod contracted_verbs;
 mod dictionary;
 mod inflection;
@@ -223,20 +224,23 @@ fn unapproved_word_findings(
     let names = vocabulary::technical_name_spans(text, technical_names);
     vocabulary::classify(text, protected, dictionary)
         .into_iter()
-        .filter(|word_use| word_use.category == VocabularyCategory::Unapproved)
-        .filter(|word_use| {
+        .filter(|classified| classified.word_use.category == VocabularyCategory::Unapproved)
+        .filter(|classified| {
+            let span = classified.word_use.span;
             !names
                 .iter()
-                .any(|name| name.start <= word_use.span.start && word_use.span.end <= name.end)
+                .any(|name| name.start <= span.start && span.end <= name.end)
         })
-        .map(|word_use| {
-            let rejected = &text[word_use.span.start..word_use.span.end];
+        .map(|classified| {
+            let span = classified.word_use.span;
+            let rejected = &text[span.start..span.end];
+            let given = alternatives::given(dictionary, &classified.entries);
             Finding {
                 rule: RuleNumber::OneOne,
                 kind: FindingKind::Violation,
-                span: word_use.span,
+                span,
                 message: format!(
-                    "The word or phrase \"{rejected}\" is not approved by ASD-STE100 Rule 1.1."
+                    "The word or phrase \"{rejected}\" is not approved by ASD-STE100 Rule 1.1.{given}"
                 ),
             }
         })
@@ -263,6 +267,9 @@ fn sort_findings(findings: &mut [Finding]) {
 pub fn classify_vocabulary(text: &str, dictionary: &DictionaryImport) -> Vec<WordUse> {
     let protected = protected_spans::analyze(text);
     vocabulary::classify(text, &protected, dictionary)
+        .into_iter()
+        .map(|classified| classified.word_use)
+        .collect()
 }
 
 /// Reports each paragraph with clear boundaries that has more than six sentences.
