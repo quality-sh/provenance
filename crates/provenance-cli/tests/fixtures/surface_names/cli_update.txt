@@ -165,3 +165,4 @@ archived is not archived. It loses only its link to the archived Requirement. An
 or rejected Resolution keeps its status. Archiving a Topic also archives all Questions in
 that Topic. Merge the pull request with a merge commit: a squash or rebase merge drops the
 commit that the archive names.
+
