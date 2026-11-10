@@ -225,7 +225,9 @@ impl StateStore {
                 .iter()
                 .find(|r| r.id() == result.id())
                 .cloned()
-                .ok_or_else(|| anyhow::anyhow!("record mutation returned a missing record"))?;
+                .ok_or_else(|| {
+                    crate::refusal::fault!("record mutation returned a missing record")
+                })?;
             ensure_within_read_budget(&stamped)?;
             let previous = before
                 .into_iter()

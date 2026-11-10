@@ -94,7 +94,8 @@ impl StateStore {
         scope: &ScopeId,
         demand: &ProposalDemand,
     ) -> anyhow::Result<Vec<SurfacedProposal>> {
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            Fault,
             !demand.changed_paths.is_empty() || !demand.targets.is_empty(),
             "proposal demand must include at least one changed path or territory target"
         );

@@ -15,11 +15,13 @@ impl StateStore {
         proposal: CreateProposalCardInput,
         assertion: CreateAssertionInput,
     ) -> anyhow::Result<ProposalCard> {
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            ScopeMismatch,
             proposal.scope_id == assertion.scope_id,
             "proposal and assertion scope_id must match"
         );
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidUpdate,
             proposal.id == assertion.proposal_id,
             "assertion proposal_id must match proposal id"
         );
@@ -65,12 +67,18 @@ impl StateStore {
                 .list_synthesis_packets(&scope)?
                 .into_iter()
                 .find(|packet| packet.id == input.synthesis_packet_id)
-                .ok_or_else(|| anyhow::anyhow!("assertion synthesis packet does not exist"))?;
+                .ok_or_else(|| {
+                    crate::refusal::refuse!(
+                        MissingReference,
+                        "assertion synthesis packet does not exist"
+                    )
+                })?;
             let decision_keys = decision_keys
                 .iter()
                 .map(StableId::as_str)
                 .collect::<std::collections::BTreeSet<_>>();
-            anyhow::ensure!(
+            crate::write_error::ensure!(
+                InvalidUpdate,
                 !decision_keys.is_empty(),
                 "no human decision key was supplied"
             );
@@ -82,7 +90,8 @@ impl StateStore {
                         && decision_keys.contains(decision.decision_key.as_str())
                 })
                 .count();
-            anyhow::ensure!(
+            crate::write_error::ensure!(
+                InvalidUpdate,
                 resolved == decision_keys.len(),
                 "synthesis packet has no matching blocking human decision to resolve"
             );
@@ -120,7 +129,8 @@ impl StateStore {
         scope_id: &ScopeId,
         proposal_id: &StableId,
     ) -> anyhow::Result<()> {
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidUpdate,
             !self
                 .list_dispositions(scope_id)?
                 .iter()
@@ -142,7 +152,8 @@ impl StateStore {
         self.ensure_proposal_not_disposed(&input.scope_id, &assertion.proposal_id)?;
         let path = shards::assertion_records_path(&self.layout, &input.scope_id);
         self.mutate_jsonl_records(&path, |records: &mut Vec<AssertionRecord>| {
-            anyhow::ensure!(
+            crate::write_error::ensure!(
+                AlreadyExists,
                 !records.iter().any(|record| {
                     record.id == assertion.id || record.proposal_id == assertion.proposal_id
                 }),
@@ -177,7 +188,8 @@ impl StateStore {
     fn write_proposal_card(&self, input: CreateProposalCardInput) -> anyhow::Result<ProposalCard> {
         let candidate = proposal_from_input(input)?;
         ensure_record_id_assignable(candidate.id.as_str())?;
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidUpdate,
             candidate.proposal_type != ProposalType::RecordRevision
                 || self.permits(
                     &shards::proposal_cards_path(&self.layout, &candidate.scope_id),
@@ -185,7 +197,8 @@ impl StateStore {
                 ),
             "review submissions go through the review seam"
         );
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidUpdate,
             candidate.actor.is_none() || candidate.proposal_type == ProposalType::RecordRevision,
             "only a review submission names its actor"
         );
@@ -203,10 +216,11 @@ impl StateStore {
         let path = shards::proposal_cards_path(&self.layout, &candidate.scope_id);
         self.mutate_jsonl_records(&path, |records: &mut Vec<ProposalCard>| {
             if let Some(index) = records.iter().position(|record| record.id == candidate.id) {
-                anyhow::bail!(
+                return Err(crate::refusal::refuse!(
+                    AlreadyExists,
                     "proposal {} already exists and is immutable",
                     records[index].id.as_str()
-                );
+                ));
             }
             super::read_budget::ensure_within_read_budget(&candidate)?;
             records.push(candidate.clone());
@@ -256,7 +270,8 @@ impl StateStore {
             .find(|proposal| proposal.id == disposition.proposal_id)
         {
             if target.proposal_type == ProposalType::RecordRevision {
-                anyhow::ensure!(
+                crate::write_error::ensure!(
+                    InvalidUpdate,
                     self.permits(&shards::dispositions_path(&self.layout, &scope_id), "*"),
                     "decisions on review submissions go through the review seam"
                 );
@@ -283,7 +298,8 @@ impl StateStore {
         self.mutate_jsonl_records(
             &dispositions_path,
             |records: &mut Vec<DispositionRecord>| {
-                anyhow::ensure!(
+                crate::write_error::ensure!(
+                    AlreadyExists,
                     !records.iter().any(|record| record.id == disposition.id),
                     "disposition already exists"
                 );
@@ -315,7 +331,8 @@ impl StateStore {
         scope_id: &ScopeId,
         existing: &ProposalCard,
     ) -> anyhow::Result<()> {
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidUpdate,
             existing.proposal_type != ProposalType::RecordRevision,
             "review submission {} belongs to the review cycle; withdraw it instead of replacing it",
             existing.id.as_str()
@@ -332,10 +349,10 @@ impl StateStore {
         let state = serde_name(&existing.promotion_state)
             .unwrap_or_else(|_| format!("{:?}", existing.promotion_state));
         if decisions.is_empty() {
-            anyhow::bail!(
+            return Err(crate::refusal::refuse!(InvalidUpdate,
                 "proposal {} has a human disposition and cannot be replaced; promotion_state is {state}",
                 existing.id.as_str()
-            );
+            ));
         }
 
         let decision_ids = decisions
@@ -343,10 +360,10 @@ impl StateStore {
             .map(|decision| decision.id.as_str())
             .collect::<Vec<_>>()
             .join(", ");
-        anyhow::bail!(
+        Err(crate::refusal::refuse!(InvalidUpdate,
             "proposal {} has a human disposition and cannot be replaced; promotion_state is {state}; disposition(s): {decision_ids}",
             existing.id.as_str()
-        );
+        ))
     }
 }
 
@@ -396,16 +413,20 @@ pub(super) fn validate_disposition_write_gate(
 fn proposal_from_input(input: CreateProposalCardInput) -> anyhow::Result<ProposalCard> {
     match input.promotion_state {
         PromotionState::Duplicate => {
-            anyhow::ensure!(
-                input.duplicate_of.is_some(),
-                "duplicate proposals must set duplicate_of"
-            );
+            if input.duplicate_of.is_none() {
+                return Err(crate::refusal::refuse!(
+                    (crate::write_error::WriteFailure::invalid_field("request.duplicate_of")),
+                    "duplicate proposals must set duplicate_of"
+                ));
+            }
         }
         PromotionState::Superseded => {
-            anyhow::ensure!(
-                input.superseded_by.is_some(),
-                "superseded proposals must set superseded_by"
-            );
+            if input.superseded_by.is_none() {
+                return Err(crate::refusal::refuse!(
+                    (crate::write_error::WriteFailure::invalid_field("request.superseded_by")),
+                    "superseded proposals must set superseded_by"
+                ));
+            }
         }
         PromotionState::Proposed
         | PromotionState::Asserted

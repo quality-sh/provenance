@@ -13,7 +13,7 @@ pub fn next_message_time(now_ms: i64, latest: Option<i64>) -> anyhow::Result<i64
     match latest {
         Some(latest) if latest >= now_ms => latest
             .checked_add(1)
-            .ok_or_else(|| anyhow::anyhow!("Message timestamp overflow")),
+            .ok_or_else(|| crate::refusal::fault!("Message timestamp overflow")),
         _ => Ok(now_ms),
     }
 }
@@ -41,10 +41,26 @@ pub fn ensure_unique_message_ids(
     {
         let lines = locations
             .iter()
-            .map(|location| format!("{}:{}", location.path, location.line))
+            .map(|location| format!("{}:{}", state_file(location), location.line))
             .collect::<Vec<_>>()
             .join(", ");
-        anyhow::bail!("Message ID {id} appears more than once: {lines}; see docs/cli.md#repairing-a-duplicate-message-id");
+        // The refusal is at the second row with the id. The message gives
+        // each row with its shard path below the state directory, because the
+        // message reaches the caller as it is.
+        return Err(crate::refusal::state_fault(
+            locations[1],
+            format!("Message ID {id} appears more than once: {lines}; see docs/cli.md#repairing-a-duplicate-message-id"),
+        ));
     }
     Ok(())
+}
+
+/// The shard path of `location` below the state directory.
+fn state_file(location: &ShardLine) -> String {
+    super::readers::StateLineInvalid {
+        path: location.path.clone(),
+        line: 0,
+        message: String::new(),
+    }
+    .file()
 }

@@ -143,7 +143,8 @@ impl StateStore {
                 dispositions: &dispositions,
             })?;
             for disposition in &incoming.dispositions {
-                anyhow::ensure!(
+                crate::write_error::ensure!(
+                    InvalidUpdate,
                     !proposals.iter().any(|proposal| {
                         proposal.id == disposition.proposal_id
                             && proposal.proposal_type
@@ -175,7 +176,8 @@ fn validate_batch_proposals(proposals: &[ProposalCard]) -> anyhow::Result<()> {
         // A truthful binding to an exact review revision can only be
         // written by the review seam, which checks the revision under
         // the publication lock.
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidUpdate,
             proposal.proposal_type != provenance_core::ProposalType::RecordRevision,
             "batch writes cannot create review submissions; they go through the review seam"
         );
@@ -204,7 +206,8 @@ pub fn ensure_asserted_evidence_unchanged<T: serde::Serialize>(
     if serde_json::to_value(existing)? == serde_json::to_value(replacement)? {
         return Ok(());
     }
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        InvalidUpdate,
         !cited_by_assertion(),
         "{kind} {id} is referenced by an assertion and cannot be replaced"
     );
@@ -284,7 +287,11 @@ fn ensure_scope(scope: &ScopeId, batch: &IdeationLandingBatch) -> anyhow::Result
                 .map(|r| ("disposition", &r.scope_id)),
         )
     {
-        anyhow::ensure!(actual == scope, "{kind} scope_id must match landing scope");
+        crate::write_error::ensure!(
+            ScopeMismatch,
+            actual == scope,
+            "{kind} scope_id must match landing scope"
+        );
     }
     Ok(())
 }
@@ -299,12 +306,17 @@ fn merge_replaceable<T: Clone>(
     let mut incoming_ids = BTreeSet::new();
     for record in incoming {
         let record_id = id(record);
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidUpdate,
             incoming_ids.insert(record_id),
             "duplicate {kind} id {record_id} in batch"
         );
         if let Some(index) = existing.iter().position(|current| id(current) == record_id) {
-            anyhow::ensure!(replace, "{kind} {record_id} already exists");
+            crate::write_error::ensure!(
+                AlreadyExists,
+                replace,
+                "{kind} {record_id} already exists"
+            );
             existing[index] = record.clone();
         } else {
             existing.push(record.clone());
@@ -322,11 +334,13 @@ fn merge_immutable<T: Clone>(
     let mut incoming_ids = BTreeSet::new();
     for record in incoming {
         let record_id = id(record);
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidUpdate,
             incoming_ids.insert(record_id),
             "duplicate {kind} id {record_id} in batch"
         );
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            AlreadyExists,
             !existing.iter().any(|current| id(current) == record_id),
             "{kind} {record_id} already exists and is immutable"
         );

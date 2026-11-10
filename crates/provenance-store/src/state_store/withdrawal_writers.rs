@@ -26,15 +26,19 @@ impl StateStore {
     pub(crate) fn create_withdrawal(&self, withdrawal: Withdrawal) -> anyhow::Result<Withdrawal> {
         let scope = withdrawal.scope_id.clone();
         let path = shards::withdrawals_path(&self.layout, &scope);
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            Fault,
             self.permits(&path, "*"),
             "withdrawals of review submissions go through the review seam"
         );
-        anyhow::ensure!(
-            !withdrawal.actor.trim().is_empty(),
-            "invalid withdrawal actor"
-        );
-        anyhow::ensure!(
+        if withdrawal.actor.trim().is_empty() {
+            return Err(crate::refusal::refuse!(
+                (crate::write_error::WriteFailure::invalid_field("request.actor")),
+                "invalid withdrawal actor"
+            ));
+        }
+        crate::write_error::ensure!(
+            InvalidUpdate,
             self.list_proposal_definitions(&scope)?
                 .iter()
                 .any(|proposal| proposal.id == withdrawal.proposal_id
@@ -42,7 +46,8 @@ impl StateStore {
             "a withdrawal names a review submission"
         );
         self.mutate_jsonl_records(&path, |records: &mut Vec<Withdrawal>| {
-            anyhow::ensure!(
+            crate::write_error::ensure!(
+                AlreadyExists,
                 !records.iter().any(|record| record.id == withdrawal.id
                     || record.proposal_id == withdrawal.proposal_id),
                 "the review submission is already withdrawn"

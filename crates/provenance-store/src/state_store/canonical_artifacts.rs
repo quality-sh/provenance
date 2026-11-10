@@ -28,6 +28,8 @@ impl CanonicalArtifactIndex {
             &mut entries,
             scope_id,
             NodeType::Source,
+            store,
+            &crate::shards::sources_path(&store.layout, scope_id),
             store.list_sources(scope_id)?,
             |record| (record.scope_id, record.id),
         )?;
@@ -35,6 +37,8 @@ impl CanonicalArtifactIndex {
             &mut entries,
             scope_id,
             NodeType::Requirement,
+            store,
+            &crate::shards::requirements_path(&store.layout, scope_id),
             store.list_requirements(scope_id)?,
             |record| (record.scope_id, record.id),
         )?;
@@ -42,6 +46,8 @@ impl CanonicalArtifactIndex {
             &mut entries,
             scope_id,
             NodeType::Resolution,
+            store,
+            &crate::shards::resolutions_path(&store.layout, scope_id),
             store.list_resolutions(scope_id)?,
             |record| (record.scope_id, record.id),
         )?;
@@ -49,6 +55,8 @@ impl CanonicalArtifactIndex {
             &mut entries,
             scope_id,
             NodeType::Rule,
+            store,
+            &crate::shards::rules_path(&store.layout, scope_id),
             store.list_rules(scope_id)?,
             |record| (record.scope_id, record.id),
         )?;
@@ -56,6 +64,8 @@ impl CanonicalArtifactIndex {
             &mut entries,
             scope_id,
             NodeType::Topic,
+            store,
+            &crate::shards::topics_path(&store.layout, scope_id),
             store.list_topics(scope_id)?,
             |record| (record.scope_id, record.id),
         )?;
@@ -63,6 +73,8 @@ impl CanonicalArtifactIndex {
             &mut entries,
             scope_id,
             NodeType::Question,
+            store,
+            &crate::shards::questions_path(&store.layout, scope_id),
             store.list_questions(scope_id)?,
             |record| (record.scope_id, record.id),
         )?;
@@ -80,6 +92,8 @@ impl CanonicalArtifactIndex {
                     &mut entries,
                     scope_id,
                     NodeType::$kind,
+                    store,
+                    &crate::shards::$path(&store.layout, scope_id),
                     super::readers::read_jsonl_held::<$ty>(
                         store,
                         &crate::shards::$path(&store.layout, scope_id),
@@ -112,7 +126,8 @@ impl CanonicalArtifactIndex {
             CanonicalArtifactType::Topic => NodeType::Topic,
             CanonicalArtifactType::Question => NodeType::Question,
         };
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            MissingReference,
             self.entries.contains(&key(kind, &artifact.artifact_id)),
             "canonical artifact does not exist in scope {} with kind {:?}: {}",
             self.scope_id.as_str(),
@@ -128,7 +143,8 @@ impl CanonicalArtifactIndex {
     #[rule("rule_new_ideation_target_names_a_record")]
     pub(super) fn ensure_target_exists(&self, target: &IdeationTarget) -> anyhow::Result<()> {
         let kind = NodeType::from(target.artifact_type);
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            MissingReference,
             self.entries.contains(&key(kind, &target.artifact_id)),
             "target points at missing {} {} in scope {}",
             kind_word(kind),
@@ -264,6 +280,8 @@ fn extend_scoped<T>(
     entries: &mut HashSet<RecordKey>,
     scope_id: &ScopeId,
     kind: NodeType,
+    store: &StateStore,
+    path: &camino::Utf8Path,
     records: Vec<T>,
     fields: impl Fn(T) -> (ScopeId, StableId),
 ) -> anyhow::Result<()> {
@@ -272,13 +290,19 @@ fn extend_scoped<T>(
         if embedded_scope_id != *scope_id {
             continue;
         }
-        anyhow::ensure!(
-            entries.insert(key(kind, &id)),
-            "{} {} appears more than once in scope {}",
-            kind_word(kind),
-            id.as_str(),
-            scope_id.as_str()
-        );
+        if !entries.insert(key(kind, &id)) {
+            return Err(super::readers::record_fault(
+                store,
+                path,
+                id.as_str(),
+                format!(
+                    "{} {} appears more than once in scope {}",
+                    kind_word(kind),
+                    id.as_str(),
+                    scope_id.as_str()
+                ),
+            ));
+        }
     }
     Ok(())
 }

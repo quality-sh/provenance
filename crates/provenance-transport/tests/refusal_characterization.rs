@@ -289,6 +289,60 @@ async fn a_review_refusal_has_a_declared_kind() {
     );
 }
 
+fn proposal(id: &str, extra: &Value) -> Value {
+    let mut data = json!({
+        "scope_id":"default", "id":id, "proposal_key":"shared", "proposal_type":"requirement_candidate",
+        "title":"Shared", "summary":"Clarify the shared requirement.", "confidence":null,
+        "traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_shared"},
+            "source_ids":[], "evidence_references":[], "supporting_claim_ids":[]},
+        "builds_on":[], "promotion_state":"proposed", "duplicate_of":null, "superseded_by":null,
+        "record_revision":null, "actor":null, "revises":null, "revises_rejection":null
+    });
+    for (key, value) in extra.as_object().unwrap() {
+        data[key] = value.clone();
+    }
+    json!({ "data": data })
+}
+
+/// Proposal refusals that the base commit gave as 500 `write_failed`.
+#[tokio::test]
+#[provenance_macros::verifies("rule_caller_refusal_has_declared_kind", examples)]
+async fn a_proposal_refusal_has_a_declared_kind() {
+    let repo = Repository::new("The shared graph is readable.");
+    let host = host(&repo, true);
+    let (status, created) = call(
+        &host,
+        "POST",
+        "/proposals",
+        Some(proposal("proposal_shared", &json!({}))),
+    )
+    .await;
+    assert_eq!(status, 200, "{created}");
+    let mut rows = Vec::new();
+    for (name, body) in [
+        (
+            "create an existing proposal",
+            proposal("proposal_shared", &json!({})),
+        ),
+        (
+            "create a duplicate proposal with no duplicate_of",
+            proposal("proposal_twin", &json!({"promotion_state":"duplicate"})),
+        ),
+    ] {
+        rows.push(row(
+            name,
+            call(&host, "POST", "/proposals", Some(body)).await,
+        ));
+    }
+    assert_eq!(
+        Value::Array(rows),
+        json!([
+            {"error":{"kind":"already_exists"},"row":"create an existing proposal","status":409},
+            {"error":{"field":"request.duplicate_of","kind":"invalid_input","reason":"invalid_value"},"row":"create a duplicate proposal with no duplicate_of","status":400}
+        ])
+    );
+}
+
 #[tokio::test]
 async fn each_refusal_keeps_its_kind_status_and_fields() {
     let repo = Repository::new("The shared graph is readable.");

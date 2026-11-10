@@ -110,10 +110,10 @@ pub fn ensure_no_legacy_retirement(
         .get("id")
         .and_then(serde_json::Value::as_str)
         .map_or_else(|| "record".to_string(), |id| format!("record {id}"));
-    anyhow::bail!(
+    return Err(crate::refusal::fault!(
         "{path} line {line_number}: {name} contains legacy field `retired`; \
          canonical JSONL requires record-deletion migration 026 before this build can read it"
-    )
+    ));
 }
 
 /// The records of the shard at `path`, read through `store`; no records
@@ -156,6 +156,31 @@ pub fn read_jsonl_located<T: DeserializeOwned>(
         }
         Ok(records)
     })
+}
+
+/// A stored record of the shard at `path` that does not agree with itself or
+/// with another record. The refusal is `invalid_state_file` at the second
+/// line with the id `id` when the shard holds it twice, else at its only
+/// line. The shard is read again only here, on the refusal path.
+pub fn record_fault(
+    store: &StateStore,
+    path: &Utf8Path,
+    id: &str,
+    message: String,
+) -> anyhow::Error {
+    let rows = match read_jsonl_located::<serde_json::Value>(store, path) {
+        Ok(rows) => rows,
+        Err(error) => return error,
+    };
+    let mut lines = rows
+        .into_iter()
+        .filter(|(row, _)| row.get("id").and_then(serde_json::Value::as_str) == Some(id))
+        .map(|(_, line)| line);
+    let first = lines.next();
+    match lines.next().or(first) {
+        Some(at) => crate::refusal::state_fault(&at, message),
+        None => crate::refusal::fault!("{message}"),
+    }
 }
 
 pub fn read_jsonl<T: DeserializeOwned>(
@@ -237,7 +262,7 @@ fn message_shard_paths_in(store: &StateStore, scope: &ScopeId) -> anyhow::Result
         .expect("threads path must have a parent")
         .to_path_buf();
     let names = store.state_keys_under(&threads_dir, StateEntry::File, |path| {
-        anyhow::anyhow!("non-UTF-8 message shard path: {}", path.display())
+        crate::refusal::fault!("non-UTF-8 message shard path: {}", path.display())
     })?;
     Ok(names
         .into_iter()

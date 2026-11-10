@@ -2,7 +2,6 @@
 //!
 //! Supported reads limit page keys, stored row bytes, and serialized page
 //! items. A write must check each limit before it publishes the record.
-use crate::write_error::{SourceFailure, WriteFailure};
 use provenance_core::model::projection_row::ColumnValue;
 use provenance_core::model::ProjectionRow;
 use provenance_macros::rule;
@@ -66,7 +65,7 @@ fn real_bytes(real: f64) -> anyhow::Result<usize> {
     let counter = REAL_BYTES.get_or_init(|| Box::new(SqliteRealBytes));
     #[cfg(not(feature = "host"))]
     let counter = REAL_BYTES.get().ok_or_else(|| {
-        anyhow::anyhow!(
+        crate::refusal::fault!(
             "no REAL byte counter is set: a Worker must call set_real_bytes when it starts, \
              before the first write that counts a REAL column"
         )
@@ -116,12 +115,14 @@ impl RealBytes for SqliteRealBytes {
         // the number in Rust, or even with SQLite printf, can give another size.
         let result = unsafe {
             (|| {
-                anyhow::ensure!(
+                crate::write_error::ensure!(
+                    Fault,
                     sqlite::sqlite3_open(c":memory:".as_ptr(), &raw mut connection)
                         == sqlite::SQLITE_OK,
                     "cannot open SQLite for REAL byte accounting"
                 );
-                anyhow::ensure!(
+                crate::write_error::ensure!(
+                    Fault,
                     sqlite::sqlite3_prepare_v2(
                         connection,
                         c"SELECT CAST(? AS BLOB)".as_ptr(),
@@ -131,11 +132,13 @@ impl RealBytes for SqliteRealBytes {
                     ) == sqlite::SQLITE_OK,
                     "cannot prepare SQLite REAL byte accounting"
                 );
-                anyhow::ensure!(
+                crate::write_error::ensure!(
+                    Fault,
                     sqlite::sqlite3_bind_double(statement, 1, real) == sqlite::SQLITE_OK,
                     "cannot bind SQLite REAL for byte accounting"
                 );
-                anyhow::ensure!(
+                crate::write_error::ensure!(
+                    Fault,
                     sqlite::sqlite3_step(statement) == sqlite::SQLITE_ROW,
                     "cannot read SQLite REAL byte count"
                 );
@@ -164,11 +167,9 @@ pub fn ensure_within_read_budget<T: ReadBudget>(record: &T) -> anyhow::Result<()
         (serde_json::to_vec(record)?.len(), resource_record_bytes()),
     ] {
         if size > budget {
-            return Err(SourceFailure::wrap(
-                WriteFailure::RecordTooLarge,
-                anyhow::anyhow!(
-                    "record uses {size} bytes; the supported read allows at most {budget} bytes"
-                ),
+            return Err(crate::refusal::refuse!(
+                RecordTooLarge,
+                "record uses {size} bytes; the supported read allows at most {budget} bytes"
             ));
         }
     }

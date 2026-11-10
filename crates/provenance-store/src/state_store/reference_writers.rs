@@ -42,8 +42,10 @@ fn ensure_no_cycle<T: RelationOwner>(
     targets: &[StableId],
 ) -> anyhow::Result<()> {
     if let Some(cycle) = cycle_with_added_edges(records, name, owner, targets) {
-        return Err(crate::write_error::WriteFailure::invalid_update(
-            anyhow::anyhow!("{}", cycle_refusal(name, &cycle)),
+        return Err(crate::refusal::refuse!(
+            InvalidUpdate,
+            "{}",
+            cycle_refusal(name, &cycle)
         ));
     }
     Ok(())
@@ -178,14 +180,12 @@ impl StateStore {
                     .iter_mut()
                     .find(|record| RelationOwner::id(*record) == owner)
                     .ok_or_else(|| {
-                        crate::write_error::SourceFailure::wrap(
-                            crate::write_error::WriteFailure::MissingReference,
-                            anyhow::anyhow!(
-                                "{} {} does not exist ({})",
-                                kind_word(T::OWNER),
-                                owner.as_str(),
-                                owner_flag(T::OWNER)
-                            ),
+                        crate::refusal::refuse!(
+                            MissingReference,
+                            "{} {} does not exist ({})",
+                            kind_word(T::OWNER),
+                            owner.as_str(),
+                            owner_flag(T::OWNER)
                         )
                     })?;
                 let Some(RelationSlot::Single(slot)) = record.relation_slot_mut(name) else {
@@ -223,14 +223,12 @@ impl StateStore {
                     .iter_mut()
                     .find(|record| RelationOwner::id(*record) == owner)
                     .ok_or_else(|| {
-                        crate::write_error::SourceFailure::wrap(
-                            crate::write_error::WriteFailure::MissingReference,
-                            anyhow::anyhow!(
-                                "{} {} does not exist ({})",
-                                kind_word(T::OWNER),
-                                owner.as_str(),
-                                owner_flag(T::OWNER)
-                            ),
+                        crate::refusal::refuse!(
+                            MissingReference,
+                            "{} {} does not exist ({})",
+                            kind_word(T::OWNER),
+                            owner.as_str(),
+                            owner_flag(T::OWNER)
                         )
                     })?;
                 let Some(RelationSlot::List(list)) = record.relation_slot_mut(name) else {
@@ -267,14 +265,12 @@ impl StateStore {
                     .iter()
                     .position(|record| RelationOwner::id(record) == owner)
                     .ok_or_else(|| {
-                        crate::write_error::SourceFailure::wrap(
-                            crate::write_error::WriteFailure::MissingReference,
-                            anyhow::anyhow!(
-                                "{} {} does not exist ({})",
-                                kind_word(T::OWNER),
-                                owner.as_str(),
-                                owner_flag(T::OWNER)
-                            ),
+                        crate::refusal::refuse!(
+                            MissingReference,
+                            "{} {} does not exist ({})",
+                            kind_word(T::OWNER),
+                            owner.as_str(),
+                            owner_flag(T::OWNER)
                         )
                     })?;
                 store.validate_relation_targets(

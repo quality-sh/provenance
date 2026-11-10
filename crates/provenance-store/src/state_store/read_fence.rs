@@ -82,7 +82,7 @@ impl FencedStore {
 }
 
 fn outside_error(path: &Utf8Path) -> anyhow::Error {
-    anyhow::anyhow!("a family reader read {path}, which is outside its input directories")
+    crate::refusal::fault!("a family reader read {path}, which is outside its input directories")
 }
 
 #[cfg(test)]

@@ -6,6 +6,7 @@ use sha2::{Digest, Sha256};
 use super::typed_specs::DesiredTypedGraph;
 use super::{MaterializeImplementationBindingInput, StateStore, TypedFieldChange};
 use crate::shards;
+use crate::write_error::WriteFailure;
 
 pub(super) struct Reconciliation {
     pub records: Vec<ImplementationBinding>,
@@ -103,9 +104,8 @@ fn desired_bindings(
             validate_target(&implementation.file, &implementation.symbol)?;
             if let Some(record) = existing.iter().find(|record| record.rule_id == rule_id) {
                 if record.declared_by != graph.owner {
-                    use crate::write_error::{SourceFailure, WriteFailure};
-                    return Err(SourceFailure::wrap(
-                        WriteFailure::OwnershipConflict {
+                    return Err(crate::refusal::refuse!(
+                        (WriteFailure::OwnershipConflict {
                             conflicts: vec![super::ReconciledResource {
                                 kind: super::TypedResourceKind::Rule,
                                 key: rule.key.clone(),
@@ -121,12 +121,10 @@ fn desired_bindings(
                                     after: graph.owner.into(),
                                 }],
                             }],
-                        },
-                        anyhow::anyhow!(
-                            "rule `{}` implementation is owned by `{}`",
-                            record.rule_id.as_str(),
-                            record.declared_by
-                        ),
+                        }),
+                        "rule `{}` implementation is owned by `{}`",
+                        record.rule_id.as_str(),
+                        record.declared_by
                     ));
                 }
             }
@@ -149,17 +147,22 @@ impl StateStore {
         input: MaterializeImplementationBindingInput,
     ) -> anyhow::Result<ImplementationBinding> {
         self.with_repository_publication(|held| {
-            anyhow::ensure!(
-                !input.declared_by.trim().is_empty(),
-                "declared_by must not be empty"
-            );
+            if input.declared_by.trim().is_empty() {
+                return Err(crate::refusal::refuse!(
+                    (WriteFailure::invalid_field("request.declared_by")),
+                    "declared_by must not be empty"
+                ));
+            }
             validate_target(&input.file, &input.symbol)?;
-            anyhow::ensure!(
-                held.layout.root().join(&input.file).is_file(),
-                "implementation file `{}` does not exist",
-                input.file
-            );
-            anyhow::ensure!(
+            if !held.layout.root().join(&input.file).is_file() {
+                return Err(crate::refusal::refuse!(
+                    (WriteFailure::invalid_field("request.file")),
+                    "implementation file `{}` does not exist",
+                    input.file
+                ));
+            }
+            crate::write_error::ensure!(
+                MissingReference,
                 held.list_rules(&input.scope_id)?
                     .iter()
                     .any(|rule| rule.id == input.rule_id),
@@ -178,14 +181,15 @@ impl StateStore {
             };
             let path = shards::implementation_bindings_path(&held.layout, &input.scope_id);
             held.mutate_jsonl_records(&path, |records: &mut Vec<ImplementationBinding>| {
-                anyhow::ensure!(
-                    !records.iter().any(|record| {
-                        record.rule_id == binding.rule_id
-                            && record.declared_by != binding.declared_by
-                    }),
-                    "rule `{}` implementation is owned by another declaration owner",
-                    binding.rule_id.as_str()
-                );
+                if let Some(owner) = records.iter().find(|record| {
+                    record.rule_id == binding.rule_id && record.declared_by != binding.declared_by
+                }) {
+                    return Err(crate::refusal::refuse!(
+                        (WriteFailure::record_ownership_conflict(Some(&owner.declared_by))),
+                        "rule `{}` implementation is owned by another declaration owner",
+                        binding.rule_id.as_str()
+                    ));
+                }
                 if let Some(record) = records
                     .iter_mut()
                     .find(|record| record.rule_id == binding.rule_id)

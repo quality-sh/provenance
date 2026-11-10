@@ -11,7 +11,11 @@ macro_rules! family_reader {
     (Rules, $record:ty, $path:ident, $list:ident) => {
         pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
             let path = shards::$path(&self.layout, scope);
-            validate_rule_archives(shared(self, &path, || read_jsonl(self, &path))?)
+            validate_rule_archives(
+                self,
+                &path,
+                shared(self, &path, || read_jsonl(self, &path))?,
+            )
         }
     };
     ($variant:ident, $record:ty, $path:ident, $list:ident) => {
@@ -152,10 +156,19 @@ impl StateStore {
     crate::families::family_table::record_family_rows!(define_canonical_readers);
 }
 
-fn validate_rule_archives(rules: Vec<Rule>) -> anyhow::Result<Vec<Rule>> {
+fn validate_rule_archives(
+    store: &StateStore,
+    path: &camino::Utf8Path,
+    rules: Vec<Rule>,
+) -> anyhow::Result<Vec<Rule>> {
     for rule in &rules {
         rule.validate_archive().map_err(|error| {
-            anyhow::anyhow!("rule {} is archive-inconsistent: {error}", rule.id.as_str())
+            super::readers::record_fault(
+                store,
+                path,
+                rule.id.as_str(),
+                format!("rule {} is archive-inconsistent: {error}", rule.id.as_str()),
+            )
         })?;
     }
     Ok(rules)

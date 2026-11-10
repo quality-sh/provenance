@@ -112,3 +112,45 @@ async fn a_requirement_stored_on_two_lines_is_located_at_the_second_line() {
             "message":format!("requirement req_shared is stored again; line {first} stores it first")}),
     );
 }
+
+#[tokio::test]
+#[verifies("rule_inconsistent_records_refusal_names_records", examples)]
+async fn a_message_id_on_two_lines_is_located_at_the_second_line() {
+    let repo = Repository::new("The shared graph is readable.");
+    let (status, started) = call(
+        &host(&repo, true),
+        "POST",
+        "/requirements/req_shared/discussions",
+        Some(json!({"data":{"actor":"reviewer","declared_by":null,"role":"user","body":"A concern."}})),
+    )
+    .await;
+    assert_eq!(status, 200, "{started}");
+    let threads = repo
+        .dir
+        .path()
+        .join(".provenance/state/scopes/default/threads");
+    let shard = std::fs::read_dir(&threads)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .find(|name| name.len() == "2026-11.jsonl".len() && name.as_bytes()[4] == b'-')
+        .unwrap();
+    let path = threads.join(&shard);
+    let text = std::fs::read_to_string(&path).unwrap();
+    let line = text.lines().next().unwrap().to_owned();
+    let id = serde_json::from_str::<serde_json::Value>(&line).unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    std::fs::write(&path, format!("{line}\n{text}")).unwrap();
+    let (status, failure) = call(&host(&repo, false), "GET", "/messages", None).await;
+    assert_eq!(status, 500, "{failure}");
+    let file = format!("scopes/default/threads/{shard}");
+    assert_eq!(
+        failure["error"],
+        json!({"kind":"invalid_state_file", "file":file, "line":2,
+        "message":format!(
+            "Message ID {id} appears more than once: {file}:1, {file}:2; \
+             see docs/cli.md#repairing-a-duplicate-message-id"
+        )}),
+    );
+}

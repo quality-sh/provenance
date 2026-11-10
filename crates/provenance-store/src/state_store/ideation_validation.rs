@@ -1,8 +1,10 @@
 use super::ideation_batches::{
     ensure_asserted_contribution_unchanged, ensure_asserted_synthesis_unchanged, overlay_records,
 };
+use super::message_ids::ShardLine;
 use super::shared_parses::read_jsonl_shared;
 use super::{IdeationLandingBatch, StateStore};
+use crate::refusal::state_fault;
 use crate::shards;
 use provenance_core::{
     AssertionRecord, Contribution, DispositionRecord, IdeationAggregate, ProposalCard, ScopeId,
@@ -47,25 +49,36 @@ impl StateStore {
         let mut proposals = BTreeSet::new();
         let mut assertions = BTreeSet::new();
         let mut dispositions = BTreeSet::new();
+        let path = shards::proposal_cards_path(&self.layout, scope);
         insert_all(
             "proposal",
             &direct_proposals,
             |r| r.id.as_str(),
             &mut proposals,
+            |id, message| super::readers::record_fault(self, &path, id, message),
         )?;
+        let path = shards::assertion_records_path(&self.layout, scope);
         insert_all(
             "assertion",
             &direct_assertions,
             |r| r.id.as_str(),
             &mut assertions,
+            |id, message| super::readers::record_fault(self, &path, id, message),
         )?;
+        let path = shards::dispositions_path(&self.layout, scope);
         insert_all(
             "disposition",
             &direct_dispositions,
             |r| r.id.as_str(),
             &mut dispositions,
+            |id, message| super::readers::record_fault(self, &path, id, message),
         )?;
-        for batch in self.list_ideation_landings(scope)? {
+        let landings = shards::ideation_landings_path(&self.layout, scope);
+        for (index, batch) in self.list_ideation_landings(scope)?.into_iter().enumerate() {
+            let at = ShardLine {
+                path: landings.clone(),
+                line: index + 1,
+            };
             ensure_batch_evidence_unchanged(
                 &contributions,
                 &synthesis_packets,
@@ -77,18 +90,21 @@ impl StateStore {
                 &batch.proposals,
                 |r| r.id.as_str(),
                 &mut proposals,
+                |_, message| state_fault(&at, message),
             )?;
             insert_all(
                 "assertion",
                 &batch.assertions,
                 |r| r.id.as_str(),
                 &mut assertions,
+                |_, message| state_fault(&at, message),
             )?;
             insert_all(
                 "disposition",
                 &batch.dispositions,
                 |r| r.id.as_str(),
                 &mut dispositions,
+                |_, message| state_fault(&at, message),
             )?;
             overlay_records(&mut contributions, batch.contributions, |record| {
                 record.id.as_str()
@@ -148,13 +164,16 @@ fn insert_all<'a, T>(
     records: &'a [T],
     id: impl Fn(&'a T) -> &'a str,
     seen: &mut BTreeSet<String>,
+    at_fault: impl Fn(&str, String) -> anyhow::Error,
 ) -> anyhow::Result<()> {
     for record in records {
         let record_id = id(record);
-        anyhow::ensure!(
-            seen.insert(record_id.to_owned()),
-            "duplicate immutable {kind} id {record_id}"
-        );
+        if !seen.insert(record_id.to_owned()) {
+            return Err(at_fault(
+                record_id,
+                format!("duplicate immutable {kind} id {record_id}"),
+            ));
+        }
     }
     Ok(())
 }

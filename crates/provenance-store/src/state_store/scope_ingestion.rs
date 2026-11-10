@@ -332,7 +332,8 @@ impl StateStore {
         &self,
         operation: impl FnOnce(&Self) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            Fault,
             matches!(
                 self.access,
                 Access::Staged { .. } | Access::StagedSection { .. }
@@ -390,7 +391,11 @@ fn validate_threads(threads: &[Thread]) -> anyhow::Result<()> {
             .iter()
             .any(|earlier| earlier.id == thread.id)
         {
-            anyhow::bail!("duplicate thread id {}", thread.id.as_str());
+            return Err(crate::refusal::refuse!(
+                InvalidUpdate,
+                "duplicate thread id {}",
+                thread.id.as_str()
+            ));
         }
         if thread.status != ThreadStatus::Active {
             continue;
@@ -399,13 +404,14 @@ fn validate_threads(threads: &[Thread]) -> anyhow::Result<()> {
             earlier.status == ThreadStatus::Active && earlier.parent == thread.parent
         }) {
             let node_type = serde_name(&thread.parent.node_type)?;
-            anyhow::bail!(
+            return Err(crate::refusal::refuse!(
+                InvalidUpdate,
                 "multiple active threads for {} {}: {} and {}",
                 node_type,
                 thread.parent.node_id.as_str(),
                 earlier.id.as_str(),
                 thread.id.as_str()
-            );
+            ));
         }
     }
     Ok(())
