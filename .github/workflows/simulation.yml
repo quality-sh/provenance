@@ -18,6 +18,14 @@ on:
         description: "Seed (HEGEL_SEED); empty uses the run ID"
         required: false
         type: number
+      report:
+        description: "issues opens or comments on issues; print prints them and makes no GitHub write"
+        required: false
+        type: choice
+        options:
+          - issues
+          - print
+        default: issues
 
 permissions:
   contents: read
@@ -201,10 +209,17 @@ jobs:
         with:
           pattern: simulation-*
           path: target/simulation
-      - name: Open or update one issue per layer and law
+      # The schedule has no inputs, so it opens issues. A manual start with
+      # report "print" prints each issue and comment in the log and the
+      # summary, and makes no GitHub write.
+      - name: Open or update one issue per layer and law, or print them
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: >-
-          python3 .github/scripts/simulation_report.py issues
-          --artifacts target/simulation --run-url "$RUN_URL"
+          REPORT_MODE: ${{ inputs.report || 'issues' }}
+        run: |
+          set -o pipefail
+          python3 .github/scripts/simulation_report.py issues \
+            --artifacts target/simulation --run-url "$RUN_URL" --mode "$REPORT_MODE" \
+            | tee -a "$GITHUB_STEP_SUMMARY"

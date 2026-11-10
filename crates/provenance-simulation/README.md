@@ -87,7 +87,11 @@ and Windows jobs do.
 
 In the Actions tab, open the workflow "Simulation" and click "Run workflow".
 The input `cases` sets the number of cases for each random test (the default
-is 100). The input `seed` sets the seed (the default is the run ID).
+is 100). The input `seed` sets the seed (the default is the run ID). The
+input `report` is `issues` or `print`. With `issues`, the report job opens
+or comments on issues, as the nightly run does. With `print`, the report job
+prints each issue that it would open and each comment that it would add, in
+the job log and the job summary, and makes no GitHub write.
 
 ## Known failures
 
