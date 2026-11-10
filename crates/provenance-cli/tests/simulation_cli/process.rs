@@ -15,7 +15,7 @@ pub fn binary() -> &'static Path {
 }
 
 pub fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
-    let output = Command::new("git")
+    let output = provenance_store::git_process::git()
         .args(["-c", "user.name=Simulation"])
         .args(["-c", "user.email=simulation@example.com"])
         .args(["-c", "commit.gpgsign=false"])
