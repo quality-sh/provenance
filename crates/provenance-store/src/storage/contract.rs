@@ -120,7 +120,44 @@ pub fn publish_on_a_moved_base_is_refused<H: Harness>(mut harness: H) {
     let writes = WriteSet::new(Atomicity::PerKey)
         .on_base(Arc::new(base.clone()))
         .put(key(Y), b"y".to_vec());
-    match publish(&harness, writes) {
+    assert_base_moved(publish(&harness, writes), &base, &moved);
+    assert_eq!(read(&harness), moved);
+}
+
+/// A set on a view with the stored keys, where the bytes of one key are no
+/// longer stored, is refused before any key lands.
+pub fn publish_on_a_base_with_changed_bytes_is_refused<H: Harness>(mut harness: H) {
+    harness.seed(&[("manifest.json", b"{}"), (X, b"one")]);
+    let base = read(&harness);
+    harness.seed(&[(X, b"onf")]);
+    let moved = read(&harness);
+    assert!(moved.entries().keys().eq(base.entries().keys()));
+    let writes = WriteSet::new(Atomicity::PerKey)
+        .on_base(Arc::new(base.clone()))
+        .put(key(Y), b"y".to_vec());
+    assert_base_moved(publish(&harness, writes), &base, &moved);
+    assert_eq!(read(&harness), moved);
+}
+
+/// A whole set on a view whose keys and bytes are no longer stored is
+/// refused before any key lands.
+pub fn a_whole_set_on_a_moved_base_is_refused<H: Harness>(mut harness: H) {
+    harness.seed(&[("manifest.json", b"{}"), (A, b"a")]);
+    let base = read(&harness);
+    harness.seed(&[(A, b"moved")]);
+    let moved = read(&harness);
+    let writes = WriteSet::new(Atomicity::WholeSet)
+        .on_base(Arc::new(base.clone()))
+        .put(key(A), b"new".to_vec())
+        .put(key(B), b"b".to_vec())
+        .delete(key("manifest.json"));
+    assert_base_moved(publish(&harness, writes), &base, &moved);
+    assert_eq!(read(&harness), moved);
+}
+
+/// The failure names the revision of the base and of the stored state.
+fn assert_base_moved(result: Result<(), PublishFailure>, base: &StateView, moved: &StateView) {
+    match result {
         Err(PublishFailure::BaseMoved {
             base: from,
             current,
@@ -130,7 +167,6 @@ pub fn publish_on_a_moved_base_is_refused<H: Harness>(mut harness: H) {
         }
         other => panic!("expected BaseMoved, got {other:?}"),
     }
-    assert_eq!(read(&harness), moved);
 }
 
 /// A set that puts and deletes one key is refused before any key lands.
@@ -145,6 +181,16 @@ pub fn publish_refuses_a_put_and_delete_of_one_key<H: Harness>(mut harness: H) {
         Err(PublishFailure::Refused(_))
     ));
     assert_eq!(read(&harness), before);
+}
+
+/// A one-key set lands all of the new bytes of its key.
+pub fn a_one_key_set_lands_all_of_its_bytes<H: Harness>(mut harness: H) {
+    harness.seed(&[("manifest.json", b"{}"), (X, b"short")]);
+    let bytes: &[u8] = b"{\"id\":\"a longer line\"}\r\n\xff\xfe\n";
+    let writes = WriteSet::new(Atomicity::PerKey).put(key(X), bytes.to_vec());
+    publish(&harness, writes).unwrap();
+    let after: &[(&str, &[u8])] = &[("manifest.json", b"{}"), (X, bytes)];
+    assert_eq!(read(&harness).entries(), &expected(after));
 }
 
 /// A one-key set that fails while it lands leaves the state as it was and
@@ -266,6 +312,30 @@ mod tests {
     }
 
     #[test]
+    #[verifies("rule_adapter_refuses_a_set_on_a_moved_base", examples)]
+    fn each_adapter_publish_on_a_base_with_changed_bytes_is_refused() {
+        publish_on_a_base_with_changed_bytes_is_refused(local());
+        publish_on_a_base_with_changed_bytes_is_refused(Memory::default());
+        publish_on_a_base_with_changed_bytes_is_refused(Persisting::default());
+    }
+
+    #[test]
+    #[verifies("rule_adapter_refuses_a_set_on_a_moved_base", examples)]
+    fn each_adapter_a_whole_set_on_a_moved_base_is_refused() {
+        a_whole_set_on_a_moved_base_is_refused(local());
+        a_whole_set_on_a_moved_base_is_refused(Memory::default());
+        a_whole_set_on_a_moved_base_is_refused(Persisting::default());
+    }
+
+    #[test]
+    #[verifies("rule_one_key_write_set_lands_whole", examples)]
+    fn each_adapter_a_one_key_set_lands_all_of_its_bytes() {
+        a_one_key_set_lands_all_of_its_bytes(local());
+        a_one_key_set_lands_all_of_its_bytes(Memory::default());
+        a_one_key_set_lands_all_of_its_bytes(Persisting::default());
+    }
+
+    #[test]
     #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
     fn each_adapter_publish_refuses_a_put_and_delete_of_one_key() {
         publish_refuses_a_put_and_delete_of_one_key(local());
@@ -356,84 +426,5 @@ mod tests {
     }
 }
 
-/// The memory adapter with a persistence that keeps each write set and can
-/// refuse one.
 #[cfg(test)]
-mod persisting {
-    use super::*;
-    use crate::storage::memory::MemoryStateStorage;
-    use crate::storage::StatePersistence;
-    use provenance_macros::verifies;
-    use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
-    use std::sync::{Arc, Mutex};
-
-    #[derive(Debug, Default)]
-    struct Kept {
-        sets: Mutex<Vec<WriteSet>>,
-        refuse: AtomicBool,
-    }
-
-    impl StatePersistence for Kept {
-        fn persist(&self, writes: &WriteSet) -> Result<(), PublishFailure> {
-            if self.refuse.load(SeqCst) {
-                return Err(PublishFailure::Refused(anyhow::anyhow!("refused")));
-            }
-            self.sets.lock().unwrap().push(writes.clone());
-            Ok(())
-        }
-    }
-
-    #[derive(Default)]
-    pub struct Persisting {
-        kept: Arc<Kept>,
-        storage: MemoryStateStorage,
-    }
-
-    impl Harness for Persisting {
-        fn seed(&mut self, entries: &[(&str, &[u8])]) {
-            let mut state = self.storage.read_view().unwrap().into_entries();
-            state.extend(expected(entries));
-            self.storage = MemoryStateStorage::loaded(StateView::new(state), self.kept.clone());
-        }
-
-        fn with_storage<R>(&self, call: impl FnOnce(&dyn StateStorage) -> R) -> R {
-            call(&self.storage)
-        }
-
-        fn break_key(&mut self, key: &str) {
-            self.storage.fail_on(StateKey::new(key).unwrap());
-        }
-    }
-
-    #[test]
-    #[verifies("rule_memory_storage_persists_each_publish", examples)]
-    fn the_persistence_keeps_each_published_set() {
-        let mut harness = Persisting::default();
-        harness.seed(&[("manifest.json", b"{}")]);
-        let writes = WriteSet::new(Atomicity::PerKey).put(key(A), b"a".to_vec());
-        publish(&harness, writes.clone()).unwrap();
-        assert_eq!(*harness.kept.sets.lock().unwrap(), [writes]);
-    }
-
-    #[test]
-    #[verifies("rule_memory_storage_persists_each_publish", examples)]
-    fn a_refused_persist_changes_no_key() {
-        let mut harness = Persisting::default();
-        harness.seed(&[("manifest.json", b"{}"), (A, b"old")]);
-        harness
-            .kept
-            .refuse
-            .store(true, std::sync::atomic::Ordering::SeqCst);
-        let before = read(&harness);
-        let writes = WriteSet::new(Atomicity::WholeSet)
-            .put(key(A), b"a".to_vec())
-            .put(key(B), b"b".to_vec())
-            .delete(key("manifest.json"));
-        assert!(matches!(
-            publish(&harness, writes),
-            Err(PublishFailure::Refused(_))
-        ));
-        assert_eq!(read(&harness), before);
-        assert!(harness.kept.sets.lock().unwrap().is_empty());
-    }
-}
+mod persisting;

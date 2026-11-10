@@ -173,12 +173,36 @@ pub enum Atomicity {
 }
 
 /// One change to canonical state: the keys to put and the keys to delete.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct WriteSet {
     base: Option<Arc<StateView>>,
     puts: BTreeMap<StateKey, Vec<u8>>,
     deletes: BTreeSet<StateKey>,
     atomicity: Atomicity,
+}
+
+/// Shows the base as its number of keys. The bytes of the base are not
+/// shown, and the base is not hashed.
+impl std::fmt::Debug for WriteSet {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        struct BaseKeys(usize);
+        impl std::fmt::Debug for BaseKeys {
+            fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(formatter, "<{} keys>", self.0)
+            }
+        }
+        let base = self
+            .base
+            .as_ref()
+            .map(|base| BaseKeys(base.entries().len()));
+        formatter
+            .debug_struct("WriteSet")
+            .field("base", &base)
+            .field("puts", &self.puts)
+            .field("deletes", &self.deletes)
+            .field("atomicity", &self.atomicity)
+            .finish()
+    }
 }
 
 impl WriteSet {
@@ -316,6 +340,10 @@ pub trait StateStorage: Send + Sync + std::fmt::Debug {
 
     /// Lands `writes`. An adapter honours the atomicity of the set or
     /// refuses the set before any key lands.
+    ///
+    /// A copy of a write set holds the base view. When an adapter keeps a
+    /// copy after `publish` returns, the section copies the whole tree on
+    /// its next write.
     fn publish(&self, writes: WriteSet) -> Result<(), PublishFailure>;
 }
 
@@ -349,4 +377,34 @@ pub enum StorageError {
     InvalidKey { key: String, reason: &'static str },
     #[error("{0:#}")]
     Read(anyhow::Error),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Atomicity, StateKey, StateView, WriteSet};
+    use std::collections::BTreeMap;
+    use std::sync::Arc;
+
+    fn key(key: &str) -> StateKey {
+        StateKey::new(key).unwrap()
+    }
+
+    #[test]
+    fn debug_shows_the_base_as_its_number_of_keys() {
+        let base = BTreeMap::from([(key("a"), b"secret".to_vec()), (key("b"), b"x".to_vec())]);
+        let writes = WriteSet::new(Atomicity::PerKey)
+            .put(key("c"), vec![1])
+            .delete(key("d"));
+        let based = writes.clone().on_base(Arc::new(StateView::new(base)));
+        assert_eq!(
+            format!("{based:?}"),
+            "WriteSet { base: Some(<2 keys>), puts: {StateKey(\"c\"): [1]}, \
+             deletes: {StateKey(\"d\")}, atomicity: PerKey }"
+        );
+        assert_eq!(
+            format!("{writes:?}"),
+            "WriteSet { base: None, puts: {StateKey(\"c\"): [1]}, \
+             deletes: {StateKey(\"d\")}, atomicity: PerKey }"
+        );
+    }
 }
