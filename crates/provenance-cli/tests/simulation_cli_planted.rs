@@ -94,8 +94,8 @@ fn a_stale_etag_recorded_for_a_fresh_write_breaks_l4() {
     expect_law(check(&case, &run), "L4");
 }
 
-// No Rule: proof that L6 can fail. After the last write, one description
-// in the projection files has other bytes of the same length.
+// No Rule: proof that L6 can fail. After the last write and a read, one
+// description in the projection files has other bytes of the same length.
 #[test]
 #[ignore = "a planted fault of the nightly simulation"]
 fn a_changed_projection_row_breaks_l6() {
@@ -104,6 +104,8 @@ fn a_changed_projection_row_breaks_l6() {
         steps: vec![write(0, update(0))],
     };
     let mut fixture = run_steps(&case);
+    // A read catches up the projection, so that it holds the description.
+    fixture.l6("the reads before the planted change of the projection");
     let (from, to) = (
         b"Description from operation 1",
         b"Xescription from operation 1",

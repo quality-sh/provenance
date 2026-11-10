@@ -96,7 +96,9 @@ pub fn message_times_increase(run: &Run) -> Result<(), Violation> {
 }
 
 /// O3: each whole set names the revision where its stage started, and each
-/// operation that always stages and succeeded landed one whole set.
+/// operation of an engine that always stages and succeeded landed one whole
+/// set. A write outside every engine lands as one change of the world, with
+/// no whole set, so O3 does not count it.
 pub fn stages_land_whole(run: &Run) -> Result<(), Violation> {
     if let Some(publish) = run
         .publishes
@@ -114,7 +116,7 @@ pub fn stages_land_whole(run: &Run) -> Result<(), Violation> {
     for done in run
         .done
         .iter()
-        .filter(|done| done.op.always_stages())
+        .filter(|done| done.engine.is_some() && done.op.always_stages())
         .filter(|done| matches!(&done.result, Ok(effect) if *effect != Effect::Skipped))
     {
         let whole = publishes_of(run, done)
