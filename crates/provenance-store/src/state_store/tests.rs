@@ -91,6 +91,7 @@ pub(super) fn seeded_source_requirement_store() -> (tempfile::TempDir, StateStor
 
 mod asserted_evidence;
 mod proposal_surfacing;
+mod real_columns;
 
 #[cfg(feature = "host")]
 mod archive_history;
