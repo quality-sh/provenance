@@ -288,7 +288,10 @@ fn build_summary(
 }
 
 impl InitPlan {
+    /// Writes the plan. In an initialized repository it holds the publication
+    /// lock while it writes, so a read waits for init and gets the graph.
     #[rule("rule_init_apply_rolls_back_owned_changes")]
+    #[rule("rule_read_waits_for_repeated_init")]
     pub(super) fn apply(self) -> anyhow::Result<InitEnding> {
         let layout = ProvenanceLayout::new(self.path.clone());
         // Replacing a file under `.provenance/state` moves the old file away before the new

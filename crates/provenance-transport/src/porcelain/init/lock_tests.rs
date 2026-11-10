@@ -111,8 +111,8 @@ impl StoppedInit {
 /// While a second init has the manifest moved away, it holds the publication
 /// lock, so a holder of the lock waits for init. The manifest lands when init
 /// continues, and the lock is then free.
-/// This test has no Rule binding, because the text of the Rule for reads
-/// during init waits for the owner.
+/// This test has no Rule binding: it does no read, and it checks the lock that
+/// the read test depends on.
 #[test]
 fn second_init_holds_the_publication_lock_while_the_manifest_is_away() {
     let (_directory, repo, layout) = initialized();
@@ -136,9 +136,8 @@ fn second_init_holds_the_publication_lock_while_the_manifest_is_away() {
 /// A repository open, the read of the review follow and of the commands,
 /// starts while a second init has the manifest moved away. The read waits for
 /// init and gets the graph from after init; it does not get an error.
-/// This test has no Rule binding, because the text of the Rule for reads
-/// during init waits for the owner.
 #[test]
+#[provenance_macros::verifies("rule_read_waits_for_repeated_init", examples)]
 fn a_read_while_init_moves_the_manifest_gets_a_graph() {
     let (_directory, repo, layout) = initialized();
     let plan = prepare_init(&repo, options("new-reviewer")).unwrap();
@@ -182,9 +181,8 @@ fn tree(root: &Utf8Path) -> BTreeMap<String, Option<Vec<u8>>> {
 /// A second init fails after it moved the manifest away, while it holds the
 /// publication lock. The files are as they were before that init, no new path
 /// stays, and the lock is free: a following read and a following init work.
-/// This test has no Rule binding, because the text of the Rule for reads
-/// during init waits for the owner.
 #[test]
+#[provenance_macros::verifies("rule_init_apply_rolls_back_owned_changes", examples)]
 fn a_failed_second_init_restores_the_state_and_frees_the_lock() {
     let (_directory, repo, layout) = initialized();
     // Init writes AGENTS.md again after the manifest. Every temporary name of
