@@ -83,7 +83,8 @@ Thus you can see which build a long-running host uses. The commit is the commit
 that the build checked out. A CI build for a `pull_request` event builds the
 merge commit that GitHub makes from the PR head and the base branch. Thus that
 build names the merge commit, not the PR head. A build from a checkout with
-changes to its tracked build inputs adds `-dirty` to the commit. Treat the JSON output as a credential. Each process
+changes to its tracked build inputs adds `-dirty` to the commit.
+Treat the JSON output as a credential. Each process
 generates a new token and a non-secret host-instance nonce. The token is not
 saved in the repository, a cookie, browser storage, a URL query, or a URL
 fragment.
