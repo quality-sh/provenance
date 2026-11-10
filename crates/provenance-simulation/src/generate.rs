@@ -69,8 +69,8 @@ pub enum Fault {
     /// The next publish lands `landed` keys and its outcome is unknown.
     UnknownOutcome { landed: u8 },
     /// The engine stops where it is; a new engine takes its place. The CLI
-    /// layer kills the write process at `at` / 255 of the measured time of
-    /// a write.
+    /// layer kills the write process at a time that `at` draws in the
+    /// second half of the measured time of a write.
     Stop { engine: u8, at: u8 },
 }
 

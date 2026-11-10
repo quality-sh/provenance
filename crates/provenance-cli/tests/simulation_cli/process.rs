@@ -333,9 +333,10 @@ fn mean_write_time() -> Duration {
     }
 }
 
-/// When a stop at `at` kills a write: `at` / 255 of the mean write time.
+/// When a stop at `at` kills a write: in the second half of the mean write
+/// time, where the write publishes.
 pub fn stop_delay(at: u8) -> Duration {
-    mean_write_time() * u32::from(at) / 255
+    mean_write_time() * (255 + u32::from(at)) / 510
 }
 
 /// Runs `tasks` at once on `root`. Each etag is read before the first
@@ -356,14 +357,19 @@ pub fn run_at_once(root: &Path, tasks: &[Task], stop: Option<Duration>) -> Vec<D
     for (task, process) in started {
         outcome.push(match (process, stop) {
             (Err(refusal), _) => done(task, Err(refusal), false),
-            (Ok((mut child, _, _)), Some(delay)) => {
+            (Ok((mut child, request, _)), Some(delay)) => {
                 std::thread::sleep(delay);
                 if matches!(child.try_wait(), Ok(Some(_))) {
+                    // The write ended before the stop: it is a write alone.
                     provenance_simulation::stats::add(&layer(), "stops after the write ended", 1);
+                    let result = finish(child, &format!("write {}", request.path));
+                    let result = result.and_then(|data| effect(task, &request, &data));
+                    done(task, result, false)
+                } else {
+                    let _ = child.kill();
+                    let _ = wait_limited(child, "a stopped write");
+                    done(task, Err("stopped".into()), true)
                 }
-                let _ = child.kill();
-                let _ = wait_limited(child, "a stopped write");
-                done(task, Err("stopped".into()), true)
             }
             (Ok((child, request, started)), None) => {
                 let result = finish(child, &format!("write {}", request.path));

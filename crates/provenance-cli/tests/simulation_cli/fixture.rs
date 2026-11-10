@@ -105,14 +105,11 @@ impl Fixture {
         }
         let before = (way == Ran::Stopped).then(|| state_entries(&self.root()));
         let done = run_at_once(&self.root(), &tasks, stop.map(stop_delay));
-        if let Some(before) = before {
-            stats::add(&layer(), "stops", 1);
+        if let Some(before) = before.filter(|_| done.iter().any(|done| done.stopped)) {
+            stats::add(&layer(), "stops during a write", 1);
             let changed = state_entries(&self.root()) != before;
-            stats::add(
-                &layer(),
-                "stops after which the state changed",
-                u64::from(changed),
-            );
+            let name = "stops during a write after which the state changed";
+            stats::add(&layer(), name, u64::from(changed));
         }
         if !done.is_empty() {
             self.groups.push((way, done));
