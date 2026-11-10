@@ -1,8 +1,7 @@
-use assert_cmd::Command;
+use crate::bounded_process::{provenance, Bounded};
 
 pub fn init_repo(repo: &str) {
-    Command::cargo_bin("provenance")
-        .unwrap()
+    provenance()
         .args([
             "init",
             "--path",
@@ -12,14 +11,13 @@ pub fn init_repo(repo: &str) {
             "--path-prefix",
             ".",
         ])
-        .assert()
+        .bounded_assert()
         .success();
     crate::export_fixture_support::make_default_scope_portable(repo);
 }
 
 pub fn create_source(repo: &str) {
-    Command::cargo_bin("provenance")
-        .unwrap()
+    provenance()
         .args([
             "source_codebase",
             "create",
@@ -40,7 +38,7 @@ pub fn create_source(repo: &str) {
             "--format",
             "json",
         ])
-        .assert()
+        .bounded_assert()
         .success();
 }
 

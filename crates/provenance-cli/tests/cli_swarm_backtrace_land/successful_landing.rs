@@ -1,5 +1,5 @@
 use super::support::{create_source, init_repo, write_run_dir};
-use assert_cmd::Command;
+use crate::bounded_process::{provenance, Bounded};
 use predicates::prelude::PredicateBooleanExt;
 use std::io::Write;
 
@@ -13,8 +13,7 @@ fn swarm_backtrace_land_writes_run_dir_outputs_end_to_end() {
     write_run_dir(&run_dir, "Publishing is guarded by worker assignment.");
     let run_dir = run_dir.to_string_lossy().to_string();
 
-    Command::cargo_bin("provenance")
-        .unwrap()
+    provenance()
         .args([
             "swarm-backtrace",
             "land",
@@ -27,19 +26,18 @@ fn swarm_backtrace_land_writes_run_dir_outputs_end_to_end() {
             "--format",
             "json",
         ])
-        .assert()
+        .bounded_assert()
         .success()
         .stdout(predicates::str::contains(r#""contributions": 2"#))
         .stdout(predicates::str::contains(r#""synthesis_packets": 1"#))
         .stdout(predicates::str::contains(r#""proposals": 1"#));
 
     crate::export_fixture_support::make_default_scope_portable(&repo);
-    Command::cargo_bin("provenance")
-        .unwrap()
+    provenance()
         .args([
             "export", "--repo", &repo, "--scope", "default", "--format", "json",
         ])
-        .assert()
+        .bounded_assert()
         .success()
         .stdout(predicates::str::contains("contrib_backtrace_extract_auth"))
         .stdout(predicates::str::contains("synth_backtrace_auth"))
@@ -51,8 +49,7 @@ fn swarm_backtrace_land_writes_run_dir_outputs_end_to_end() {
         ))
         .stdout(predicates::str::contains(r#""confidence": 0.91"#));
 
-    Command::cargo_bin("provenance")
-        .unwrap()
+    provenance()
         .args([
             "api",
             "proposals",
@@ -63,7 +60,7 @@ fn swarm_backtrace_land_writes_run_dir_outputs_end_to_end() {
             "--format",
             "json",
         ])
-        .assert()
+        .bounded_assert()
         .success()
         .stdout(predicates::str::contains(
             r#""promotion_state": "asserted""#,
@@ -80,8 +77,7 @@ fn swarm_backtrace_land_cannot_replace_asserted_run_outputs() {
     write_run_dir(&run_dir, "Original extracted finding.");
     let run_dir_arg = run_dir.to_string_lossy().to_string();
 
-    Command::cargo_bin("provenance")
-        .unwrap()
+    provenance()
         .args([
             "swarm-backtrace",
             "land",
@@ -94,7 +90,7 @@ fn swarm_backtrace_land_cannot_replace_asserted_run_outputs() {
             "--format",
             "json",
         ])
-        .assert()
+        .bounded_assert()
         .success();
     write_run_dir(&run_dir, "Updated extracted finding.");
     let merge_path = run_dir.join("merge/merged.json");
@@ -103,8 +99,7 @@ fn swarm_backtrace_land_cannot_replace_asserted_run_outputs() {
     merge["proposals"] = serde_json::json!([]);
     merge["assertions"] = serde_json::json!([]);
     std::fs::write(&merge_path, serde_json::to_vec(&merge).unwrap()).unwrap();
-    Command::cargo_bin("provenance")
-        .unwrap()
+    provenance()
         .args([
             "swarm-backtrace",
             "land",
@@ -118,17 +113,16 @@ fn swarm_backtrace_land_cannot_replace_asserted_run_outputs() {
             "--format",
             "json",
         ])
-        .assert()
+        .bounded_assert()
         .failure()
         .stderr(predicates::str::contains("referenced by an assertion"));
 
     crate::export_fixture_support::make_default_scope_portable(&repo);
-    Command::cargo_bin("provenance")
-        .unwrap()
+    provenance()
         .args([
             "export", "--repo", &repo, "--scope", "default", "--format", "json",
         ])
-        .assert()
+        .bounded_assert()
         .success()
         .stdout(predicates::str::contains("Original extracted finding."))
         .stdout(predicates::str::contains("Updated extracted finding.").not())
@@ -146,8 +140,7 @@ fn identical_proposal_and_assertion_relanding_without_replace_is_rejected() {
     let run_dir_arg = run_dir.to_string_lossy().to_string();
 
     let land = || {
-        Command::cargo_bin("provenance")
-            .unwrap()
+        provenance()
             .args([
                 "swarm-backtrace",
                 "land",
@@ -160,7 +153,7 @@ fn identical_proposal_and_assertion_relanding_without_replace_is_rejected() {
                 "--format",
                 "json",
             ])
-            .assert()
+            .bounded_assert()
     };
     land().success();
     std::fs::remove_dir_all(run_dir.join("extractors")).unwrap();
@@ -176,13 +169,11 @@ fn identical_proposal_and_assertion_relanding_without_replace_is_rejected() {
         .stderr(predicates::str::contains("already exists"));
 
     crate::export_fixture_support::make_default_scope_portable(&repo);
-    let output = Command::cargo_bin("provenance")
-        .unwrap()
+    let output = provenance()
         .args([
             "export", "--repo", &repo, "--scope", "default", "--format", "json",
         ])
-        .output()
-        .unwrap();
+        .bounded_output();
     assert!(output.status.success());
     let export: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(export["proposal_cards"].as_array().unwrap().len(), 1);
@@ -198,8 +189,7 @@ fn check_rejects_landing_overlays_that_rewrite_asserted_evidence() {
         init_repo(&repo);
         create_source(&repo);
         write_run_dir(&run_dir, "Original extracted finding.");
-        Command::cargo_bin("provenance")
-            .unwrap()
+        provenance()
             .args([
                 "swarm-backtrace",
                 "land",
@@ -212,7 +202,7 @@ fn check_rejects_landing_overlays_that_rewrite_asserted_evidence() {
                 "--run-dir",
                 run_dir.to_str().unwrap(),
             ])
-            .assert()
+            .bounded_assert()
             .success();
 
         let landings = std::path::Path::new(&repo)
@@ -247,10 +237,9 @@ fn check_rejects_landing_overlays_that_rewrite_asserted_evidence() {
             .unwrap();
         writeln!(file, "{}", serde_json::to_string(&overlay).unwrap()).unwrap();
 
-        Command::cargo_bin("provenance")
-            .unwrap()
+        provenance()
             .args(["check", "--repo", &repo, "--format", "json"])
-            .assert()
+            .bounded_assert()
             .failure()
             .stderr(predicates::str::contains("referenced by an assertion"));
     }
