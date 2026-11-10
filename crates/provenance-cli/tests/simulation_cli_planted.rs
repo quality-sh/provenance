@@ -7,6 +7,7 @@
 
 #[allow(dead_code)]
 mod support {
+    #[path = "api_process.rs"]
     pub mod api_process;
     #[path = "../../../provenance-transport/tests/support/catch_up_steps.rs"]
     pub mod catch_up_steps;
