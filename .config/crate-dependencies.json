@@ -442,7 +442,8 @@
       ],
       "dev-dependencies": [
         "provenance-contract",
-        "provenance-macros"
+        "provenance-macros",
+        "provenance-store"
       ]
     },
     "provenance-ste100": {

@@ -25,3 +25,5 @@ uuid.workspace = true
 [dev-dependencies]
 provenance-contract.workspace = true
 provenance-macros.workspace = true
+# The storage contract suite (tests/storage_contract.rs).
+provenance-store = { workspace = true, features = ["test-fixture"] }

@@ -11,11 +11,11 @@
 //! So a deadlock fails its case in minutes, with the case, and does not hold
 //! the job.
 
+use crate::plant::Plant;
 use provenance_store::storage::{
     Atomicity, PublishFailure, Revision, SectionLock, StateKey, StateStorage, StateView,
     StorageError, WriteSet,
 };
-use crate::plant::Plant;
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
@@ -78,6 +78,8 @@ struct State {
     stopped: bool,
     /// The planted fault met its first chance.
     planted: bool,
+    /// A key whose landing fails, as the storage contract suite asks.
+    broken: Option<StateKey>,
     publishes: Vec<Publish>,
     outside_writes: usize,
     /// The entries that an engine read before its last moved base (planted
@@ -172,6 +174,12 @@ impl World {
             whole_set: false,
             on_base: false,
         });
+    }
+
+    /// Makes each later landing of `key` fail: a per-key set lands the keys
+    /// before it, a whole set lands no key, and the outcome is unknown.
+    pub fn break_key(&self, key: StateKey) {
+        self.lock().broken = Some(key);
     }
 
     /// Notes that an engine of the case stopped.
@@ -342,6 +350,24 @@ impl World {
                         Outcome::Unknown,
                     )
                 }
+                None if state.broken.as_ref().is_some_and(|key| touches(writes, key)) => {
+                    let broken = state.broken.clone().expect("a broken key");
+                    let landed = match writes.atomicity() {
+                        Atomicity::PerKey => keys_in_order(writes)
+                            .iter()
+                            .position(|key| **key == broken)
+                            .unwrap_or_default(),
+                        Atomicity::WholeSet => 0,
+                    };
+                    land_prefix(&mut state.entries, writes, landed);
+                    (
+                        Err(PublishFailure::Started(anyhow::anyhow!(
+                            "the simulated storage failed to land {}",
+                            broken.as_str()
+                        ))),
+                        Outcome::Unknown,
+                    )
+                }
                 None => {
                     let lose = self.plant == Some(Plant::LoseWrite)
                         && engine.is_some()
@@ -386,6 +412,18 @@ impl World {
             drop(state);
         }
     }
+}
+
+/// Tells if `writes` puts or deletes `key`.
+fn touches(writes: &WriteSet, key: &StateKey) -> bool {
+    writes.puts().contains_key(key) || writes.deletes().contains(key)
+}
+
+/// The keys of `writes` in key order.
+fn keys_in_order(writes: &WriteSet) -> Vec<&StateKey> {
+    let mut keys: Vec<&StateKey> = writes.deletes().iter().chain(writes.puts().keys()).collect();
+    keys.sort();
+    keys
 }
 
 /// Lands the first `landed` keys of `writes` in key order. A whole set lands
