@@ -30,6 +30,7 @@ pub fn check_statement(
 
 /// Applies the same statement rules and dictionary selection as direct writes.
 #[must_use]
+#[cfg(feature = "host")]
 pub fn check_project_statement(
     layout: &crate::layout::ProvenanceLayout,
     statement: &str,

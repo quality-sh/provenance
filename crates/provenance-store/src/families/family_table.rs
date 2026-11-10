@@ -7,18 +7,18 @@ pub(crate) use rows::expand_record_family_rows;
 
 macro_rules! record_family_rows {
     ($consumer:path) => {
-        $crate::cache::family_table::expand_record_family_rows!(($consumer) []);
+        $crate::families::family_table::expand_record_family_rows!(($consumer) []);
     };
     ($consumer:path, $argument:ident) => {
-        $crate::cache::family_table::expand_record_family_rows!(($consumer) [$argument;]);
+        $crate::families::family_table::expand_record_family_rows!(($consumer) [$argument;]);
     };
     ($consumer:path, $first:ident, $second:ident) => {
-        $crate::cache::family_table::expand_record_family_rows!(
+        $crate::families::family_table::expand_record_family_rows!(
             ($consumer) [$first; $second;]
         );
     };
     ($consumer:path, $first:ident, $second:ident, $third:ident) => {
-        $crate::cache::family_table::expand_record_family_rows!(
+        $crate::families::family_table::expand_record_family_rows!(
             ($consumer) [$first; $second; $third;]
         );
     };

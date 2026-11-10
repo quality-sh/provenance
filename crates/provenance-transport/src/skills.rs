@@ -129,11 +129,12 @@ pub struct InitSkillPlan(install_plan::InstallPlan);
 pub fn plan_init_at(
     skills: &'static [EmbeddedSkill],
     base: &Path,
+    command: &'static str,
 ) -> anyhow::Result<InitSkillPlan> {
     Ok(InitSkillPlan(install_plan::InstallPlan::build(
         skills,
         base,
-        install_plan::InstallRequest::Init,
+        install_plan::InstallRequest::Init { command },
     )?))
 }
 

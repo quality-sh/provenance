@@ -27,7 +27,7 @@ The agent supplies three low-cardinality dimensions plus text:
 
 | field | values |
 | --- | --- |
-| `--surface` | any top-level provenance subcommand name, or `general` (validated against the real command tree) |
+| `--surface` | the first word of a command that a user can type (such as `check`, `api` or `dogfood`), a record-id action (such as `get`, `trace` or `create`), or `general`. The CLI makes the list from its command declarations. |
 | `--category` | `friction` / `confusion` / `missing` / `bug` / `idea` |
 | `--severity` | `blocked` / `workaround` / `annoyance` — impact on the task at hand |
 | summary (positional) | one line |

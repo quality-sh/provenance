@@ -1,6 +1,6 @@
 use super::ReviewStateSnapshot;
 use crate::{
-    cache::{ProjectionFamily, RecordFamily},
+    families::{ProjectionFamily, RecordFamily},
     publication::PublicationGuard,
     settings::Settings,
     state_store::{GuardedStore, SharedParses, StateStore, ViewStore},
@@ -21,18 +21,25 @@ impl ReviewStateSnapshot {
     /// Reads the manifest, the settings and one view of the canonical bytes
     /// under the guard. [`ReviewStateSnapshot::from_capture`] then parses the
     /// records after the guard is released. So a writer or a reader that
-    /// waits for the guard does not also wait for the parse. When the view
-    /// cannot be read, the capture holds the snapshot that
-    /// [`ReviewStateSnapshot::read`] gives under the same guard.
+    /// waits for the guard does not also wait for the parse. The view is the
+    /// view of the section that the guard holds, or a view that the adapter
+    /// reads under the guard. When the view cannot be read, the capture holds
+    /// the snapshot that [`ReviewStateSnapshot::read`] gives under the same
+    /// guard.
     pub fn capture(guard: &PublicationGuard) -> anyhow::Result<ReviewStateCapture> {
         let guarded = StateStore::under_guard(guard);
         let (manifest, settings) = manifest_and_settings(guard, &guarded)?;
         let repository = guard.repository();
-        let Ok(view) = repository.storage().read_view() else {
+        let storage = repository.storage();
+        let view = repository.section().map_or_else(
+            || storage.read_view().ok().map(Arc::new),
+            |section| section.view().shared(storage.as_ref()).ok(),
+        );
+        let Some(view) = view else {
             return Self::of_records(&guarded, manifest, settings)
                 .map(|snapshot| ReviewStateCapture(Captured::Read(Box::new(snapshot))));
         };
-        let store = ViewStore::sharing(repository, &SharedParses::new(Arc::new(view)));
+        let store = ViewStore::sharing(repository, &SharedParses::new(view));
         Ok(ReviewStateCapture(Captured::View(Box::new(ViewCapture {
             store,
             manifest,
@@ -141,4 +148,4 @@ macro_rules! snapshot_families {
     };
 }
 
-crate::cache::record_families!(snapshot_families);
+crate::families::record_families!(snapshot_families);

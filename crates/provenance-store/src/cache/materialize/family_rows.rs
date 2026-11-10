@@ -79,7 +79,7 @@ macro_rules! define_family_loader {
     };
 }
 
-crate::cache::record_families!(define_family_loader);
+crate::families::record_families!(define_family_loader);
 
 /// Writes every row of one family, for a family with no stored rows.
 pub(super) async fn load_rows(

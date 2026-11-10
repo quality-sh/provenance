@@ -19,10 +19,7 @@ impl StateStore {
         self.with_repository_publication(|held| {
             if let Some(statement) = &input.statement {
                 required_text(statement)?;
-                super::super::statement_policy::ensure_statement_is_writable(
-                    &held.layout,
-                    statement,
-                )?;
+                super::super::statement_policy::ensure_statement_is_writable(held, statement)?;
             }
             let rule_ids = held.rule_ids_for_requirement(&input.scope_id, &input.id)?;
             held.list_requirement_reviews(&input.scope_id)?;

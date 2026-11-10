@@ -3,12 +3,16 @@ import importlib.machinery
 import importlib.util
 import json
 from pathlib import Path
+import sys
 import unittest
 from unittest.mock import patch
 
 loader = importlib.machinery.SourceFileLoader("agent_cargo", str(Path(__file__).parents[1] / "cargo"))
 spec = importlib.util.spec_from_loader(loader.name, loader)
 shim = importlib.util.module_from_spec(spec)
+# A load through SourceFileLoader writes scripts/agent-bin/__pycache__/, and the
+# shim refuses a snapshot when the worktree has an untracked file.
+sys.dont_write_bytecode = True
 loader.exec_module(shim)
 
 

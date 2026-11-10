@@ -1,38 +1,52 @@
 use crate::layout::ProvenanceLayout;
-use crate::storage::local::{LocalSectionLock, LocalStateStorage};
-use crate::storage::{Atomicity, SectionLock, StateStorage, WriteSet};
+#[cfg(feature = "host")]
+use crate::storage::local::LocalSectionLock;
+use crate::storage::{Atomicity, SectionLock, WriteSet};
+#[cfg(feature = "host")]
 use anyhow::Context;
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
+#[cfg(feature = "host")]
+use camino::Utf8PathBuf;
 use provenance_macros::rule;
 use serde::{de::DeserializeOwned, Serialize};
 
 mod guard;
 mod holders;
+#[cfg(feature = "host")]
 mod read_only;
+#[cfg(feature = "host")]
 mod source_edit;
+#[cfg(feature = "host")]
 mod source_edit_recovery;
 mod staged;
 mod write_permission;
+#[cfg(feature = "host")]
 pub use crate::storage::local::durability::{sync_directory, sync_tree};
+#[cfg(feature = "host")]
 pub use crate::storage::local::{
     clear_publication_marker, recover_pending_publication, write_publication_marker,
     PublicationPhase,
 };
-#[cfg(all(test, unix))]
+#[cfg(all(test, unix, feature = "host"))]
 use crate::storage::local::{validate_missing_transaction_dir, validated_transaction_dir};
+#[cfg(feature = "host")]
+pub use guard::publication_guard;
 pub(crate) use guard::SectionHandle;
-pub use guard::{publication_guard, with_publication_guard, PublicationGuard};
+pub use guard::{with_publication_guard, PublicationGuard};
 pub use holders::PublicationHeld;
 pub(crate) use holders::{enter, held_here, refuse_if_held, HolderKind};
+#[cfg(feature = "host")]
 pub use read_only::read_only_record_kinds;
+#[cfg(feature = "host")]
 pub(crate) use read_only::with_read_only_validation;
-#[cfg(any(unix, windows))]
+#[cfg(all(feature = "host", any(unix, windows)))]
 pub use source_edit::{with_staged_state_and_source_edit, SourceEditRecoveryFailure};
+#[cfg(feature = "host")]
 pub(crate) use source_edit_recovery::recover_pending_source_edit;
+#[cfg(feature = "host")]
+pub(crate) use staged::with_stage_body;
 pub use staged::LiveAccessDuringStage;
-pub(crate) use staged::{
-    refuse_held_access_during_stage, with_stage_body, with_staged_state, StageLock,
-};
+pub(crate) use staged::{refuse_held_access_during_stage, with_staged_state, StageLock};
 pub(crate) use write_permission::{protect_rows, WritePermissions};
 
 /// Runs `operation` in the publication section of `layout`.
@@ -40,6 +54,7 @@ pub(crate) use write_permission::{protect_rows, WritePermissions};
 /// `operation` gets a store that holds the section. The store has no
 /// repository identity. A second entry on a thread that holds the section
 /// returns [`PublicationHeld`].
+#[cfg(feature = "host")]
 pub fn with_repository_publication<R>(
     layout: &ProvenanceLayout,
     operation: impl FnOnce(&crate::state_store::StateStore) -> anyhow::Result<R>,
@@ -53,6 +68,7 @@ pub fn with_repository_publication<R>(
 
 /// Takes the publication lock of `layout`, runs `check` and recovery, then
 /// `operation`. Only a store that holds the section may call into it again.
+#[cfg(feature = "host")]
 pub(crate) fn with_repository_publication_checked<R>(
     layout: &ProvenanceLayout,
     check: impl FnOnce() -> anyhow::Result<()>,
@@ -95,31 +111,40 @@ fn enter_section<R>(
     operation()
 }
 
-// Resolve the existing ancestor so planned-state validation creates no paths.
+/// The key of the section of `layout`: the lock path under the resolved root.
+/// The existing ancestor is resolved, so planned-state validation creates no
+/// paths. With no file system to resolve the root against, the key is the
+/// lock path of the layout as given.
+#[cfg_attr(not(feature = "host"), allow(clippy::unnecessary_wraps))]
 fn publication_lock_identity(layout: &ProvenanceLayout) -> anyhow::Result<String> {
-    let absolute = std::path::absolute(layout.root())?;
-    for ancestor in absolute.ancestors() {
-        match dunce::canonicalize(ancestor) {
-            Ok(resolved) => {
-                let root = resolved.join(absolute.strip_prefix(ancestor)?);
-                let root = Utf8PathBuf::from_path_buf(root).map_err(|path| {
-                    anyhow::anyhow!("repository path is not UTF-8: {}", path.display())
-                })?;
-                return Ok(ProvenanceLayout::new(root)
-                    .publication_lock_path()
-                    .to_string());
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => {
-                return Err(error)
-                    .with_context(|| format!("resolve repository path {}", layout.root()));
+    #[cfg(not(feature = "host"))]
+    return Ok(layout.publication_lock_path().to_string());
+    #[cfg(feature = "host")]
+    {
+        let absolute = std::path::absolute(layout.root())?;
+        for ancestor in absolute.ancestors() {
+            match dunce::canonicalize(ancestor) {
+                Ok(resolved) => {
+                    let root = resolved.join(absolute.strip_prefix(ancestor)?);
+                    let root = Utf8PathBuf::from_path_buf(root).map_err(|path| {
+                        anyhow::anyhow!("repository path is not UTF-8: {}", path.display())
+                    })?;
+                    return Ok(ProvenanceLayout::new(root)
+                        .publication_lock_path()
+                        .to_string());
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => {
+                    return Err(error)
+                        .with_context(|| format!("resolve repository path {}", layout.root()));
+                }
             }
         }
+        anyhow::bail!(
+            "repository path has no existing ancestor: {}",
+            layout.root()
+        )
     }
-    anyhow::bail!(
-        "repository path has no existing ancestor: {}",
-        layout.root()
-    )
 }
 
 impl crate::state_store::StateStore {
@@ -224,6 +249,7 @@ impl crate::state_store::StateStore {
         let Some(stage) = self.stage() else {
             anyhow::bail!("only a staged store deletes the keys below {directory}");
         };
+        #[cfg(all(test, feature = "host"))]
         if stage.reads_files() {
             if directory.exists() {
                 std::fs::remove_dir_all(directory)?;
@@ -248,18 +274,19 @@ impl crate::state_store::StateStore {
     }
 
     /// Publishes `writes`. A staged store lands them on the overlay of its
-    /// stage. A store with a section view puts the revision of the view on
-    /// a set that has no base, and applies the set to the view once it
-    /// lands. Any other store publishes through its adapter.
+    /// stage. A store with a section view puts the view as the base of a set
+    /// that has no base, and applies the set to the view once it lands. Any
+    /// other store publishes through its adapter.
     fn publish_set(&self, writes: WriteSet) -> anyhow::Result<()> {
         if let Some(stage) = self.stage() {
             writes
                 .ensure_disjoint()
                 .map_err(crate::write_error::publish_failure)?;
+            #[cfg(all(test, feature = "host"))]
             if stage.reads_files() {
-                return LocalStateStorage::new(self.layout.clone())
+                use crate::storage::StateStorage as _;
+                return crate::storage::local::LocalStateStorage::new(self.layout.clone())
                     .publish(writes)
-                    .map(drop)
                     .map_err(crate::write_error::publish_failure);
             }
             stage.apply(&writes);
@@ -269,42 +296,41 @@ impl crate::state_store::StateStore {
     }
 
     /// Publishes `writes` with `publish`, in the section view of this store
-    /// as [`Self::publish_set`] does.
+    /// as [`Self::publish_set`] does. The adapter gets the set by value, so
+    /// no base holds the view when the set is applied to it.
     pub(crate) fn publish_through(
         &self,
         mut writes: WriteSet,
-        publish: impl FnOnce(
-            WriteSet,
-        )
-            -> Result<crate::storage::Revision, crate::storage::PublishFailure>,
+        publish: impl FnOnce(WriteSet) -> Result<(), crate::storage::PublishFailure>,
     ) -> anyhow::Result<()> {
-        let view = self.section_view();
-        if writes.base().is_none() {
-            if let Some(base) = view.and_then(crate::state_store::SectionView::revision) {
+        let Some(view) = self.section_view() else {
+            return publish(writes).map_err(crate::write_error::publish_failure);
+        };
+        if writes.base_view().is_none() {
+            if let Some(base) = view.held() {
                 writes = writes.on_base(base);
             }
         }
-        let landed = publish(writes.clone());
-        if let Some(view) = view {
-            match &landed {
-                Ok(_) => view.apply(&writes),
-                // A started set can have landed in part, and a moved base
-                // means that the state changed outside the section. Either
-                // way, the next read of the section reads the state again.
-                Err(
-                    crate::storage::PublishFailure::Started(_)
-                    | crate::storage::PublishFailure::BaseMoved { .. },
-                ) => view.forget(),
-                Err(crate::storage::PublishFailure::Refused(_)) => {}
-            }
+        let changes = writes.without_base();
+        let landed = publish(writes);
+        match &landed {
+            Ok(()) => view.apply(&changes),
+            // A started set can have landed in part, and a moved base means
+            // that the state changed outside the section. Either way, the
+            // next read of the section reads the state again.
+            Err(
+                crate::storage::PublishFailure::Started(_)
+                | crate::storage::PublishFailure::BaseMoved { .. },
+            ) => view.forget(),
+            Err(crate::storage::PublishFailure::Refused(_)) => {}
         }
-        landed
-            .map(drop)
-            .map_err(crate::write_error::publish_failure)
+        landed.map_err(crate::write_error::publish_failure)
     }
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
+#[cfg(all(unix, feature = "host"))]
 mod containment_tests;
 #[cfg(test)]
+#[cfg(feature = "host")]
 mod tests;

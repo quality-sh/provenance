@@ -118,7 +118,7 @@ impl StateStore {
             origin_thread.as_ref(),
             origin_message.as_ref(),
         )?;
-        super::statement_policy::ensure_statement_is_writable(&self.layout, &statement)?;
+        super::statement_policy::ensure_statement_is_writable(self, &statement)?;
         crate::write_error::ensure!(
             MissingReference,
             !requirement_ids.is_empty(),

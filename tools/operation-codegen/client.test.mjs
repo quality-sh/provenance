@@ -31,7 +31,7 @@ async function host(handler, action) {
   const server = createServer(handler);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   try { await action(`http://127.0.0.1:${server.address().port}`); }
-  finally { await new Promise(resolve => server.close(resolve)); }
+  finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 }
 
 const metadata = compatibility => ({
@@ -131,6 +131,55 @@ test('an aborted read cancels a response stream and releases its lock', async ()
   assert.equal(cancelled, true);
   await rejected;
   assert.equal(body.locked, false);
+});
+
+// Implementation aid: no Rule names the Promise client. It shares the runtime of
+// the Effect SDK, so these tests show how an abort classifies a write.
+async function abortedWrite(respond, abortAt) {
+  const { HttpClient, COMPATIBILITY } = clientModule;
+  const controller = new AbortController();
+  let posts = 0;
+  let error;
+  await host((request, response) => {
+    if (request.method === 'GET') { response.end(JSON.stringify(metadata(COMPATIBILITY))); return; }
+    posts++;
+    respond(response, controller);
+  }, async url => {
+    let responded;
+    const arrived = new Promise(resolve => { responded = resolve; });
+    const fetcher = async (target, init) => {
+      const response = await fetch(target, init);
+      if (init?.method === 'POST') responded();
+      return response;
+    };
+    const client = await HttpClient.connect(url, fetcher);
+    if (abortAt === 'before') controller.abort();
+    const result = client.completeVerification({ run_id: 'run_x', data: { status: 'passed' } }, { signal: controller.signal });
+    if (abortAt === 'reading') { await arrived; controller.abort(); }
+    error = await result.then(() => assert.fail('Expected the write to fail'), failure => failure);
+  });
+  return { error, posts };
+}
+
+test('a write aborted before dispatch fails with a connection error and is not sent', async () => {
+  const { error, posts } = await abortedWrite(response => response.end('{}'), 'before');
+  assert.equal(error._tag, 'ConnectionError');
+  assert.equal(posts, 0);
+});
+
+test('a write aborted after the host receives it has an unknown outcome', async () => {
+  const { error, posts } = await abortedWrite((_response, controller) => controller.abort(), 'host');
+  assert.equal(error._tag, 'OutcomeUnknownError');
+  assert.equal(posts, 1);
+});
+
+test('a write aborted while its response is read has an unknown outcome', async () => {
+  const { error, posts } = await abortedWrite(response => {
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.write('{"data":');
+  }, 'reading');
+  assert.equal(error._tag, 'OutcomeUnknownError');
+  assert.equal(posts, 1);
 });
 
 clientPolicyTests('Promise', async ({ baseUrl, bearer, fetch, repository, scope }) => {

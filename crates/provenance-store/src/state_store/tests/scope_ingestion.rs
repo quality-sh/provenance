@@ -1,5 +1,5 @@
 use super::staged_store;
-use crate::cache::ProjectionFamily;
+use crate::families::ProjectionFamily;
 use crate::publication::with_repository_publication;
 use crate::shards;
 use crate::state_store::ScopeShards;

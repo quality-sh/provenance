@@ -24,7 +24,8 @@ pub(super) struct InstallPlan {
 
 #[derive(Clone, Copy)]
 pub(super) enum InstallRequest {
-    Init,
+    /// Init names the command that runs Provenance in the project.
+    Init { command: &'static str },
     Standalone {
         global: bool,
         force: bool,
@@ -38,15 +39,15 @@ impl InstallPlan {
         base: &Path,
         request: InstallRequest,
     ) -> anyhow::Result<Self> {
-        let (global, force, copy, cleanup_agents) = match request {
-            InstallRequest::Init => (false, false, false, false),
+        let (command, global, force, copy, cleanup_agents) = match request {
+            InstallRequest::Init { command } => (command, false, false, false, false),
             InstallRequest::Standalone {
                 global,
                 force,
                 copy,
-            } => (global, force, copy, true),
+            } => (crate::onboarding::NATIVE_COMMAND, global, force, copy, true),
         };
-        let guidance = conflict_guidance(base, global, copy);
+        let guidance = conflict_guidance(base, global, copy, command);
         let canonical_dir = base.join(".agents").join("skills");
         let claude_dir = base.join(".claude").join("skills");
         ensure_managed_directory(base, &canonical_dir)?;
@@ -165,17 +166,18 @@ impl InstallPlan {
     }
 }
 
-fn conflict_guidance(base: &Path, global: bool, copy: bool) -> String {
-    let command = format!(
-        "provenance skills install{}{} --force",
+/// `command` is the command that runs Provenance in the project.
+fn conflict_guidance(base: &Path, global: bool, copy: bool, command: &str) -> String {
+    let install = format!(
+        "{command} skills install{}{} --force",
         if global { " --global" } else { "" },
         if copy { " --copy" } else { "" },
     );
     if global {
-        format!("run `{command}`")
+        format!("run `{install}`")
     } else {
         format!(
-            "run `{command}` with this working directory: {}",
+            "run `{install}` with this working directory: {}",
             base.display()
         )
     }

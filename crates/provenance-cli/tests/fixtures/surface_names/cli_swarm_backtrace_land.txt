@@ -1,3 +1,5 @@
+Add the results of one swarm backtrace run to the graph as proposals
+
 Usage: provenance swarm-backtrace land [OPTIONS] --run-dir <RUN_DIR>
 
 Options:

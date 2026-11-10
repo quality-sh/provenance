@@ -142,7 +142,7 @@ impl<K: ProjectionRow> Table<'_, K> {
         limit: usize,
         exclude_terminal: bool,
     ) -> anyhow::Result<Vec<String>> {
-        let filter = crate::cache::projection_families::exclude_terminal_predicate(
+        let filter = crate::families::projection_families::exclude_terminal_predicate(
             K::TABLE,
             exclude_terminal,
         );

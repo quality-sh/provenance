@@ -120,10 +120,7 @@ impl StateStore {
                 );
                 if let Some(statement) = &input.statement {
                     required_text(statement)?;
-                    super::super::statement_policy::ensure_statement_is_writable(
-                        &self.layout,
-                        statement,
-                    )?;
+                    super::super::statement_policy::ensure_statement_is_writable(self, statement)?;
                 }
                 set(&mut record.statement, input.statement);
                 set(&mut record.status, input.status);

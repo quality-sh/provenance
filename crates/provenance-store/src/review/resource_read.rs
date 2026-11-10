@@ -54,8 +54,8 @@ impl StateStore {
         id: &StableId,
     ) -> anyhow::Result<RecordResourceSnapshot> {
         crate::test_probes::at("requirement_resource_snapshot")?;
-        let record = crate::cache::review_families::record(self, scope, kind, id)?;
-        #[cfg(feature = "test-fixture")]
+        let record = crate::families::review_families::record(self, scope, kind, id)?;
+        #[cfg(all(feature = "host", feature = "test-fixture"))]
         if kind == NodeType::Requirement {
             crate::fixture_probe::at("requirement_resource_record_read");
         }

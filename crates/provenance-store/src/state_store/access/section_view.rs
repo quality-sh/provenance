@@ -5,7 +5,7 @@ use super::super::read_fence::ReadFence;
 use super::super::{Access, StateStore};
 use crate::storage::{StateKey, StateStorage, StateView, WriteSet};
 use camino::{Utf8Path, Utf8PathBuf};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 
 /// One view of canonical state for the life of one live section.
 ///
@@ -14,9 +14,13 @@ use std::sync::{Mutex, PoisonError};
 /// section publishes is applied to the view, so the section reads its own
 /// writes. A change that does not go through the adapter, such as the
 /// install of a staged state, makes the section read the view again.
+///
+/// The view is shared: a stage and the base of a write set hold it without
+/// a copy. A write set that lands changes the view in place when nothing
+/// else holds it, and copies it once when a stage still does.
 #[derive(Debug, Default)]
 pub struct SectionView {
-    view: Mutex<Option<StateView>>,
+    view: Mutex<Option<Arc<StateView>>>,
 }
 
 impl SectionView {
@@ -27,29 +31,32 @@ impl SectionView {
         storage: &dyn StateStorage,
         read: impl FnOnce(&StateView) -> R,
     ) -> anyhow::Result<R> {
-        let mut held = self.view();
-        let view = match held.take() {
-            Some(view) => view,
-            None => storage.read_view()?,
-        };
-        let result = read(&view);
-        *held = Some(view);
-        drop(held);
-        Ok(result)
+        Ok(read(self.shared(storage)?.as_ref()))
     }
 
-    /// The revision of the view, if the section has read it.
-    pub fn revision(&self) -> Option<crate::storage::Revision> {
-        self.view().as_ref().map(|view| view.revision().clone())
+    /// The view, reading it from `storage` first if the section has no view
+    /// yet.
+    pub fn shared(&self, storage: &dyn StateStorage) -> anyhow::Result<Arc<StateView>> {
+        let mut held = self.view();
+        if let Some(view) = held.as_ref() {
+            return Ok(Arc::clone(view));
+        }
+        let view = Arc::new(storage.read_view()?);
+        *held = Some(Arc::clone(&view));
+        drop(held);
+        Ok(view)
+    }
+
+    /// The view, if the section has read it.
+    pub fn held(&self) -> Option<Arc<StateView>> {
+        self.view().clone()
     }
 
     /// Applies a write set that landed.
     pub fn apply(&self, writes: &WriteSet) {
-        let mut view = self.view();
-        if let Some(current) = view.take() {
-            let mut entries = current.into_entries();
-            writes.apply_to(&mut entries);
-            *view = Some(StateView::new(entries));
+        let mut held = self.view();
+        if let Some(view) = held.as_mut() {
+            Arc::make_mut(view).apply(writes);
         }
     }
 
@@ -58,8 +65,9 @@ impl SectionView {
         *self.view() = None;
     }
 
-    fn view(&self) -> std::sync::MutexGuard<'_, Option<StateView>> {
-        // Every change replaces the whole value, so a poisoned view is intact.
+    fn view(&self) -> std::sync::MutexGuard<'_, Option<Arc<StateView>>> {
+        // A view changes in one call that does not panic, so a poisoned view
+        // is intact.
         self.view.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }
@@ -180,6 +188,7 @@ impl StateStore {
     }
 
     /// Whether the state file at `path` exists.
+    #[cfg_attr(not(feature = "host"), allow(dead_code))]
     pub(crate) fn state_exists(&self, path: &Utf8Path) -> anyhow::Result<bool> {
         self.check_read(path)?;
         let key = self.state_key(path);

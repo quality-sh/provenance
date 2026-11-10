@@ -30,7 +30,7 @@ priority = 95
 
 [[profile.default.overrides]]
 # These tests invoke Cargo. The derive tests also share trybuild output.
-filter = 'binary(cargo_nested_sdk) | binary(compile_fail) | binary(relation_derive_refusals) | binary(projection_row_refusals)'
+filter = 'binary(cargo_nested_sdk) | binary(compile_fail) | binary(relation_derive_refusals) | binary(projection_row_refusals) | binary(review_asset_rebuild)'
 test-group = "cargo"
 threads-required = 4
 priority = 90
@@ -55,3 +55,9 @@ slow-timeout = { period = "30s", terminate-after = 2 }
 # about a minute, not at the job timeout.
 filter = 'package(provenance-transport) & (binary(host_queue) | binary(host_invocation))'
 slow-timeout = { period = "30s", terminate-after = 2 }
+
+[[profile.default.overrides]]
+# The review record test takes about 8s. One CI run stalled in it for more than
+# 80 minutes. A stall must fail the test in minutes and not hold the job.
+filter = 'package(provenance-cli) & binary(cli_agent_review_records)'
+slow-timeout = { period = "60s", terminate-after = 3 }

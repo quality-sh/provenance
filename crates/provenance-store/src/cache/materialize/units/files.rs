@@ -41,8 +41,12 @@ pub(in crate::cache::materialize) fn files_read(
             Some(file) if file.stored == stored => file.clone(),
             _ => {
                 changed.insert((*key).to_owned());
+                // Component joins give the native spelling of the file path.
+                let path = key
+                    .split('/')
+                    .fold(state_dir.to_path_buf(), |path, part| path.join(part));
                 FileDigest {
-                    content: content_digest(&state_dir.join(key), bytes)?,
+                    content: content_digest(&path, bytes)?,
                     stored,
                 }
             }

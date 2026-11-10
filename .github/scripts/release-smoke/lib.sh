@@ -145,9 +145,13 @@ assert_binary_version() {
   fi
   printf '%s\n' "$output"
   local expected_output="$expected_name $expected_version"
-  if [[ "$output" != "$expected_output" ]]; then
+  # A build from a clean git checkout names its commit after the release number.
+  local commit_pattern='^ \([0-9a-f]{8}\)$'
+  local rest=${output#"$expected_output"}
+  if [[ "$output" != "$expected_output" ]] &&
+    { [[ "$rest" == "$output" ]] || ! [[ "$rest" =~ $commit_pattern ]]; }; then
     channel_failure "$channel" \
-      "$binary reported '$output'; expected '$expected_output'"
+      "$binary reported '$output'; expected '$expected_output' or '$expected_output (<commit>)'"
     return 1
   fi
 }

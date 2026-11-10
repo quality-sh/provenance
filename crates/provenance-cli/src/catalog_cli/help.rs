@@ -45,14 +45,17 @@ pub(super) fn target(
                 let hidden = !allowed.contains(arg.get_id().as_str());
                 arg.hide(hidden)
             });
+            let create = action == provenance_contract::TargetAction::Create;
             if needs_type {
-                command = command.after_help(
-                    "Select a record type to see its accepted fields:\n  provenance <id> create --type <kind> --help",
-                );
-            } else if action == provenance_contract::TargetAction::Create
-                && kind == Some(provenance_core::NodeType::Question)
-            {
+                command = command.after_help(format!("{SELECT_TYPE}\n\n{CITE_GUIDANCE}"));
+            } else if create && kind == Some(provenance_core::NodeType::Question) {
                 command = command.after_help(QUESTION_GUIDANCE);
+            } else if create && kind == Some(provenance_core::NodeType::Requirement) {
+                command = command.after_help(CITE_POINTER);
+            } else if action == provenance_contract::TargetAction::Update
+                && allowed.contains("archived-in-commit")
+            {
+                command = command.after_help(ARCHIVE_GUIDANCE);
             }
         } else if provenance_porcelain::action::Action::DISCUSSION.contains(&action) {
             command = discussion_help(command, action);
@@ -119,3 +122,33 @@ pub fn required_discussion_flags(schema: &Value) -> BTreeSet<String> {
 
 const QUESTION_GUIDANCE: &str =
     "A question should be resolvable in one agent session;\notherwise split it into smaller Questions.";
+
+const SELECT_TYPE: &str =
+    "Select a record type to see its accepted fields:\n  provenance <id> create --type <kind> --help";
+
+// Create takes no citation field, so the help names the update that adds one. The
+// help of one record type names no update flag, because it lists only the fields that
+// create accepts for that type.
+const CITE_GUIDANCE: &str = "\
+Create takes no Source citation. To cite a Source on a Requirement,
+update the Requirement after create:
+  provenance <id> update --if-match <etag> \\
+    --relationships-json '{\"cites\":{\"add\":[{\"source_id\":\"<source_id>\",\"clause\":\"<clause>\"}]}}'";
+
+const CITE_POINTER: &str = "\
+Create takes no Source citation. To cite a Source on a Requirement,
+update the Requirement after create. The create help with no record type shows the update.";
+
+// Only the record types that accept the archived status show this text.
+const ARCHIVE_GUIDANCE: &str = "\
+To archive a record, set the archived status and give the commit that contains the change:
+  provenance <id> update --status archived --archived-in-commit <full_commit_sha> \\
+    --if-match <etag>
+
+An archived status is terminal. Archiving a Requirement also archives each Requirement,
+Rule, and Resolution under it when all its parents are archived, and the Topics of each
+archived Requirement with their Questions. A record that also has a parent that is not
+archived is not archived. It loses only its link to the archived Requirement. An abandoned
+or rejected Resolution keeps its status. Archiving a Topic also archives all Questions in
+that Topic. Merge the pull request with a merge commit: a squash or rebase merge drops the
+commit that the archive names.";

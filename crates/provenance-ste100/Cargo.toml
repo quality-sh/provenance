@@ -14,19 +14,27 @@ workspace = true
 
 [features]
 schema = ["dep:schemars"]
+# Dictionary import from the PDF and the dictionary index files. Without it
+# the crate has the statement checker, and it builds for
+# wasm32-unknown-unknown.
+host = ["dep:fs2", "dep:office_oxide", "dep:pdf_oxide"]
 
 [dependencies]
 schemars = { workspace = true, optional = true }
-fs2.workspace = true
+fs2 = { workspace = true, optional = true }
 hex.workspace = true
 # Keep the DocumentIR shape that pdf_oxide supports.
 # Raise the ceiling only with a pdf_oxide release that builds with the newer DocumentIR.
-office_oxide = { version = ">=0.1.15, <0.1.16", default-features = false }
-pdf_oxide = { version = "=0.3.78", default-features = false, features = ["legacy-crypto"] }
+office_oxide = { version = ">=0.1.15, <0.1.16", default-features = false, optional = true }
+pdf_oxide = { version = "=0.3.78", default-features = false, features = ["legacy-crypto"], optional = true }
 provenance-macros.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+
+[[test]]
+name = "dictionary_import"
+required-features = ["host"]
 
 [dev-dependencies]
 jsonschema.workspace = true

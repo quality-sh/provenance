@@ -1,8 +1,8 @@
 //! Repository read settings, checked before a query opens the projection.
 
 use crate::layout::ProvenanceLayout;
-use crate::operations::read_policy::FreshnessPolicy;
 use camino::{Utf8Path, Utf8PathBuf};
+use provenance_core::protocol::repository::FreshnessPolicy;
 use provenance_macros::rule;
 use serde_json::{Map, Value};
 

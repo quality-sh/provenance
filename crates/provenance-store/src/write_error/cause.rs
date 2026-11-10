@@ -22,6 +22,7 @@ impl std::error::Error for InRepository {
 
 /// Puts the repository root on `error`, so that its cause can give each path
 /// relative to the repository.
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 pub fn in_repository(root: &Path, error: anyhow::Error) -> anyhow::Error {
     if error.downcast_ref::<InRepository>().is_some() {
         return error;
@@ -55,6 +56,7 @@ pub fn failure_cause(error: &anyhow::Error) -> String {
 /// Each spelling of `root` that an error can hold: as given, canonical, with
 /// and without the `\\?\` prefix, and with either separator. The longest
 /// spelling is first.
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 fn root_spellings(root: &Path) -> Vec<String> {
     let mut given = vec![root.to_string_lossy().into_owned()];
     if let Ok(canonical) = std::fs::canonicalize(root) {

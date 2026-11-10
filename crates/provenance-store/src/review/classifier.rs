@@ -1,4 +1,4 @@
-use crate::{cache::review_families, canonical_digest};
+use crate::{canonical_digest, families::review_families};
 use provenance_core::{NodeType, StableId};
 use provenance_macros::rule;
 use serde::Serialize;
@@ -76,7 +76,7 @@ pub fn review_revision<T: Serialize>(kind: NodeType, record: &T) -> anyhow::Resu
 #[cfg(test)]
 mod tests {
     use super::{changed_fields, changes_revision, content_digest};
-    use crate::cache::review_families::REVIEW_FAMILIES;
+    use crate::families::review_families::REVIEW_FAMILIES;
     use serde_json::json;
 
     #[test]

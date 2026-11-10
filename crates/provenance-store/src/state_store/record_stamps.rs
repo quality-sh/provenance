@@ -131,7 +131,7 @@ macro_rules! define_stored_review_records {
     };
 }
 
-crate::cache::family_table::record_family_rows!(define_stored_review_records);
+crate::families::family_table::record_family_rows!(define_stored_review_records);
 
 impl StateStore {
     pub(crate) fn current_record_stamp(&self) -> anyhow::Result<Option<Stamp>> {
@@ -140,22 +140,14 @@ impl StateStore {
             RecordStamp::Fixed(stamp) => return Ok(Some(stamp.clone())),
             RecordStamp::ResolveFromRepository => {}
         }
-        // A staged store reads the commit of its live working tree.
-        let working_tree = self
-            .repository()
-            .map_or_else(|| self.layout.root(), |identity| identity.working_tree());
-        let output = crate::git_process::git()
-            .args(["rev-parse", "HEAD"])
-            .current_dir(working_tree)
-            .output();
-        // A new repository without a commit can still accept its first graph.
-        let Ok(output) = output else {
+        // A staged store reads the commit of its live working tree. A new
+        // repository without a commit can still accept its first graph.
+        let Some(history) = self.repository_history() else {
             return Ok(None);
         };
-        if !output.status.success() {
+        let Some(commit) = history.head()? else {
             return Ok(None);
-        }
-        let commit = String::from_utf8(output.stdout)?.trim().to_owned();
+        };
         provenance_core::model::record_stamps::validate_commit(&commit)?;
         Ok(Some(Stamp {
             commit,

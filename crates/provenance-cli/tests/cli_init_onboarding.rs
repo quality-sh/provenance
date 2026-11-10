@@ -1,4 +1,3 @@
-use assert_cmd::Command;
 use predicates::prelude::*;
 use {provenance_macros::verifies, std::path::Path};
 
@@ -61,40 +60,6 @@ fn init_onboarding_is_idempotent() {
         std::fs::read(repo.join(".agents/skills/provenance-shaping/SKILL.md")).unwrap(),
         skill
     );
-}
-
-#[test]
-#[verifies("rule_init_typescript_local_command", examples)]
-fn typescript_init_writes_a_package_local_command() {
-    let temporary = tempfile::tempdir().unwrap();
-    let repo = temporary.path().join("repo");
-
-    init_with(
-        &repo,
-        &[
-            "--invocation-channel",
-            "typescript",
-            "--package-manager",
-            "npm",
-        ],
-    )
-    .success();
-
-    let agents = read_agents(&repo);
-    assert!(agents.contains("`npx --no provenance prime --quiet`"));
-    assert!(
-        agents.contains("`npx --no provenance check --statement \"<statement>\" --format json`")
-    );
-    assert!(!agents.contains("`provenance prime --quiet`"));
-    assert!(agents.contains("npx --no provenance rule_<slug> create --type rule"));
-    for collection_form in [
-        "provenance rules ",
-        "provenance requirements ",
-        "provenance questions ",
-        "provenance topics ",
-    ] {
-        assert!(!agents.contains(collection_form), "{collection_form}");
-    }
 }
 
 #[cfg(unix)]
@@ -407,6 +372,20 @@ fn init_preserves_a_following_setext_section() {
 }
 
 #[test]
+#[verifies("rule_init_native_command", examples)]
+fn native_init_writes_no_package_manager_command_item() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+
+    init(&repo).success();
+
+    let agents = read_agents(&repo);
+    assert!(agents.contains("- Run `provenance --version` before"));
+    assert!(!agents.contains("The installed skills and the output of each command"));
+    assert!(!agents.contains("In this project, run them as"));
+}
+
+#[test]
 #[verifies("rule_init_owns_agents_provenance_section", examples)]
 fn init_does_not_claim_a_blockquoted_provenance_heading() {
     let temporary = tempfile::tempdir().unwrap();
@@ -422,21 +401,7 @@ fn init_does_not_claim_a_blockquoted_provenance_heading() {
     assert_eq!(managed_heading_count(&agents), 1);
 }
 fn init(repo: &Path) -> assert_cmd::assert::Assert {
-    init_with(repo, &[])
-}
-
-fn init_with(repo: &Path, extra: &[&str]) -> assert_cmd::assert::Assert {
-    let mut command = Command::cargo_bin("provenance").unwrap();
-    command.args([
-        "init",
-        "--path",
-        repo.to_str().unwrap(),
-        "--scope",
-        "default",
-        "--path-prefix",
-        ".",
-    ]);
-    command.args(extra).assert()
+    dictionary_support::init_command(repo, &[]).assert()
 }
 
 fn read_agents(repo: &Path) -> String {

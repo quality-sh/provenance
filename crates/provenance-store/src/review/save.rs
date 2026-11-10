@@ -57,7 +57,7 @@ impl StateStore {
         id: &StableId,
     ) -> anyhow::Result<RequirementEditState> {
         self.with_repository_publication(|held| {
-            let record = crate::cache::review_families::record(held, scope, kind, id)?;
+            let record = crate::families::review_families::record(held, scope, kind, id)?;
             Self::record_edit_state_for_record(&record)
         })
     }
@@ -78,6 +78,7 @@ impl StateStore {
         })
     }
 
+    #[cfg_attr(not(feature = "host"), allow(dead_code))]
     pub(crate) fn save_requirement_resource(
         &self,
         input: SaveRequirement,
@@ -184,6 +185,7 @@ impl StateStore {
 }
 
 #[cfg(test)]
+#[cfg(feature = "host")]
 mod tests {
     use super::*;
     use crate::layout::ProvenanceLayout;

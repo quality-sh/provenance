@@ -76,8 +76,15 @@ fails after the host starts, the command stops the host before it exits.
 
 The host serves requests first. Then it publishes its registry record and writes
 one JSON line to stdout with `endpoint`, `bearer`, `repositoryId`,
-`scope`, `instanceNonce`, and `url`. The URL is `http://127.0.0.1:PORT/`; it
-contains no credential. Treat the JSON output as a credential. Each process
+`scope`, `instanceNonce`, `url`, and `build`. The URL is `http://127.0.0.1:PORT/`; it
+contains no credential. The `build` field has the same text that
+`provenance --version` prints after the name, for example `0.4.0 (6347b4b0)`.
+Thus you can see which build a long-running host uses. The commit is the commit
+that the build checked out. A CI build for a `pull_request` event builds the
+merge commit that GitHub makes from the PR head and the base branch. Thus that
+build names the merge commit, not the PR head. A build from a checkout with
+changes to its tracked build inputs adds `-dirty` to the commit.
+Treat the JSON output as a credential. Each process
 generates a new token and a non-secret host-instance nonce. The token is not
 saved in the repository, a cookie, browser storage, a URL query, or a URL
 fragment.

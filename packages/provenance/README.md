@@ -40,8 +40,11 @@ Browser callers can import the named `HttpClient` and error classes from
 Both clients validate responses against generated contracts and bound them to
 16 MiB. `OperationError` carries a validated declared failure; `ConnectionError`
 and `MalformedResponseError` identify transport or contract failures. A write
-returns success or one of these typed errors. The clients keep no uncertain
-write ledger. They never retry mutations or replay redirects automatically.
+that possibly went to the host and lost its response fails with
+`OutcomeUnknownError`. Its outcome is not known: read the current state before
+you send the write again. A write returns success or one of these typed errors. The clients keep
+no uncertain write ledger. They never retry mutations or replay redirects
+automatically.
 
 ## Consumer CI
 

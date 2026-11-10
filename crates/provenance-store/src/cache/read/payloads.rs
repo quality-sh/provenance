@@ -39,7 +39,7 @@ macro_rules! define_payload_rows {
     };
 }
 
-crate::cache::record_families!(define_payload_rows);
+crate::families::record_families!(define_payload_rows);
 
 impl sealed::ProposalOwned for AssertionRecord {}
 impl sealed::ProposalOwned for DispositionRecord {}

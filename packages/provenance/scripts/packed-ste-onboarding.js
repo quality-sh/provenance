@@ -83,8 +83,8 @@ export function verifyPackedSteOnboarding({
     assert.match(first, /(?:^|\n)Initialized Provenance for scope "default" in /);
     assert.equal(first.match(/Provenance records requirements, decisions, and the rules that connect them to code\./g)?.length, 1);
     assert.match(first, /\nNew\n/);
-    assert.equal(first.match(/Have your agent run provenance prime to get acclimated\./g)?.length, 1);
-    assert.ok(first.endsWith("Have your agent run provenance prime to get acclimated.\n"));
+    assert.equal(first.match(/Have your agent run npx --no -- provenance prime to get acclimated\./g)?.length, 1);
+    assert.ok(first.endsWith("Have your agent run npx --no -- provenance prime to get acclimated.\n"));
     assertSingleDictionaryRequest(server.requests());
 
     const packageLocalEntry = join(
@@ -139,8 +139,8 @@ function assertRepeatedInitializationPreservesScope({
       });
       assert.match(rerun, /(?:^|\n)Provenance is already set up for scope "default" in /);
       assert.equal(rerun.match(/Provenance records requirements, decisions, and the rules that connect them to code\./g)?.length, 1);
-      assert.equal(rerun.match(/Have your agent run provenance prime to get acclimated\./g)?.length, 1);
-      assert.ok(rerun.endsWith("Have your agent run provenance prime to get acclimated.\n"));
+      assert.equal(rerun.match(/Have your agent run npx --no -- provenance prime to get acclimated\./g)?.length, 1);
+      assert.ok(rerun.endsWith("Have your agent run npx --no -- provenance prime to get acclimated.\n"));
       assert.deepEqual(JSON.parse(readFileSync(manifestPath, "utf8")).scopes, [
         { id: "default", path_prefix: prefix },
       ], "repeated npm initialization must preserve the configured scope");
@@ -172,8 +172,8 @@ function assertAgentInstructions(project) {
   const agents = readFileSync(join(project, "AGENTS.md"), "utf8");
   for (const expected of [
     "provenance-grounded-writing",
-    'npx --no provenance check --statement "<statement>" --format json',
-    "npx --no provenance prime --quiet",
+    'npx --no -- provenance check --statement "<statement>" --format json',
+    "npx --no -- provenance prime --quiet",
     "Write graph state only through the Provenance CLI or SDK",
     "Do not edit\n  `.provenance/state` directly",
     "ASD owns ASD-STE100. STEMG maintains it",
@@ -209,7 +209,11 @@ function assertLocalEngines(project, environment, engineManifest, binaryName, ve
     env: environment,
     encoding: "utf8",
   });
-  assert.equal(directVersion.trim(), `provenance ${version}`);
+  // A build from a git checkout names its commit after the release number.
+  assert.match(
+    directVersion.trim(),
+    new RegExp(`^provenance ${version.replaceAll(".", "\\.")}( \\([0-9a-f]{8}(-dirty)?\\))?$`),
+  );
 
   const check = runProvenance(npmCli, project, environment, [
     "check", "--repo", ".", "--format", "json",
@@ -302,7 +306,7 @@ function assertStrictCommittedEditGate(project, environment, npmCli, version) {
     rule: "1.1",
     disposition: "violation",
     span: { start: 4, end: 18 },
-    message: "The word or phrase \"bunapprovedaaa\" is not approved by ASD-STE100 Rule 1.1.",
+    message: "The word or phrase \"bunapprovedaaa\" is not approved by ASD-STE100 Rule 1.1. The dictionary gives: ITEM (n).",
   }]);
 }
 

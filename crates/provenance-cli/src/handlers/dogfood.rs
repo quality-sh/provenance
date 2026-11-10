@@ -86,10 +86,10 @@ pub async fn handle(input: DogfoodInput, quiet: bool) -> anyhow::Result<()> {
     }
 }
 
-/// Refuses a surface that is not a top-level command name or "general".
+/// Refuses a surface that is not a command that a user can type, or "general".
 fn check_surface(surface: &str) -> anyhow::Result<()> {
     let surfaces = valid_surfaces();
-    if !surfaces.iter().any(|known| known == surface) {
+    if !surfaces.contains(&surface) {
         anyhow::bail!(
             "unknown surface `{surface}`; valid surfaces: {}",
             surfaces.join(", ")
@@ -98,15 +98,24 @@ fn check_surface(surface: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Surfaces are the CLI's own top-level subcommand names plus "general",
-/// read from the root parser so the set never drifts from the actual command tree.
-fn valid_surfaces() -> Vec<String> {
-    let mut surfaces: Vec<String> = crate::invocation::root_command()
-        .get_subcommands()
-        .map(|command| command.get_name().to_string())
+/// The surfaces are "general" and the first word of each command that the CLI shows
+/// and of each server command. For a record-id action such as `provenance <id> trace`,
+/// that word is the action. The list comes from the command declarations, so it does
+/// not drift from the command set.
+fn valid_surfaces() -> Vec<&'static str> {
+    let commands = provenance_cli::exposed::EXPOSED
+        .iter()
+        .map(|command| command.declaration());
+    let servers = provenance_cli::servers::SERVERS
+        .iter()
+        .map(|server| server.declaration());
+    let mut surfaces: Vec<&'static str> = commands
+        .chain(servers)
+        .filter_map(|declaration| declaration.words().next())
+        .chain(["general"])
         .collect();
-    surfaces.push("general".to_string());
-    surfaces.sort();
+    surfaces.sort_unstable();
+    surfaces.dedup();
     surfaces
 }
 

@@ -70,6 +70,24 @@ if assert_binary_version test 0.2.2 provenance "$fake_binary" >/dev/null 2>&1; t
   fail "binary version check accepted extra output"
 fi
 
+for output in 'provenance 0.2.2 (0123abcd-dirty)' 'provenance 0.2.2 (0123abc)' \
+  'provenance 0.2.2 (0123abcd) extra' 'provenance 0.2.3 (0123abcd)'; do
+  cat > "$fake_binary" <<SH
+#!/usr/bin/env bash
+printf '%s\n' '$output'
+SH
+  if assert_binary_version test 0.2.2 provenance "$fake_binary" >/dev/null 2>&1; then
+    fail "binary version check accepted '$output'"
+  fi
+done
+
+cat > "$fake_binary" <<'SH'
+#!/usr/bin/env bash
+printf 'provenance 0.2.2 (0123abcd)\n'
+SH
+assert_binary_version test 0.2.2 provenance "$fake_binary" >/dev/null ||
+  fail "binary version check refused a build that names its commit"
+
 cat > "$fake_binary" <<'SH'
 #!/usr/bin/env bash
 if [[ ${1-} == --version ]]; then

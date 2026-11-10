@@ -22,6 +22,10 @@ use std::path::{Path, PathBuf};
 
 const HELPER: &str = "crates/provenance-store/src/git_process.rs";
 const THIS_FILE: &str = "crates/provenance-store/tests/git_starts_use_the_helper.rs";
+/// The CLI build script names the commit of the build. A build script cannot use the
+/// helper, because the helper needs the `host` feature of this crate. The script sets
+/// the same Windows flag as the helper.
+const BUILD_SCRIPT: &str = "crates/provenance-cli/build/commit.rs";
 const GIT_PROGRAMS: [&str; 2] = ["git", "git.exe"];
 const SHELLS: [&str; 7] = [
     "sh",
@@ -310,7 +314,11 @@ fn only_the_git_process_helper_starts_git() {
     assert!(files.iter().any(|file| file.ends_with(HELPER)));
     let offenders: Vec<String> = files
         .iter()
-        .filter(|file| !file.ends_with(HELPER) && !file.ends_with(THIS_FILE))
+        .filter(|file| {
+            ![HELPER, THIS_FILE, BUILD_SCRIPT]
+                .iter()
+                .any(|own| file.ends_with(own))
+        })
         .filter(|file| direct_git_starts(&std::fs::read_to_string(file).unwrap()) > 0)
         .map(|file| file.strip_prefix(&root).unwrap().display().to_string())
         .collect();

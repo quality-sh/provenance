@@ -13,7 +13,7 @@ publish.workspace = true
 workspace = true
 
 [features]
-schema = ["dep:schemars", "provenance-core/schema", "provenance-ste100?/schema"]
+schema = ["dep:schemars", "provenance-core/schema", "provenance-ste100/schema"]
 test-fixture = []
 # The repository engine and its local-disk mechanics. Without it the crate has
 # the storage port, the memory adapter and canonical digests, and it builds for
@@ -29,7 +29,7 @@ host = [
     "dep:hmac",
     "dep:base64",
     "dep:provenance-scanner",
-    "dep:provenance-ste100",
+    "provenance-ste100/host",
     "dep:rustix",
     "dep:windows-sys",
 ]
@@ -45,7 +45,7 @@ hex.workspace = true
 provenance-core.workspace = true
 provenance-macros.workspace = true
 provenance-scanner = { workspace = true, optional = true }
-provenance-ste100 = { workspace = true, optional = true }
+provenance-ste100.workspace = true
 serde.workspace = true
 serde_ignored.workspace = true
 serde_json.workspace = true
@@ -267,7 +267,9 @@ name = "discussion_containers"
 required-features = ["host", "test-fixture"]
 
 [dev-dependencies]
+dunce.workspace = true
 fs_at.workspace = true
 jsonschema.workspace = true
 filetime.workspace = true
+tempfile.workspace = true
 trybuild.workspace = true

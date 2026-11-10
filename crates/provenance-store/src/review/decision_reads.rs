@@ -7,7 +7,7 @@
 //! their own proposals; none of them attests the record's current contents.
 
 use super::decision_state::CycleFacts;
-use crate::{cache::review_families::ReviewFamilyIndex, state_store::StateStore};
+use crate::{families::review_families::ReviewFamilyIndex, state_store::StateStore};
 use provenance_core::{
     protocol::DocumentReviewSummary,
     review::{PendingSubmission, RecordedDecision, RequirementDecisionState, ReviewRecord},
@@ -136,7 +136,7 @@ impl StateStore {
         kind: NodeType,
         record_id: &StableId,
     ) -> anyhow::Result<RequirementDecisionState> {
-        let record = crate::cache::review_families::record(self, scope, kind, record_id)?;
+        let record = crate::families::review_families::record(self, scope, kind, record_id)?;
         self.record_decision_state_for_record(&record)
     }
 

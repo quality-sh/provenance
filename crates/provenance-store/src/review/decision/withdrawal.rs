@@ -63,7 +63,7 @@ impl StateStore {
             )?;
             let kind = NodeType::from(proposal.traceability.target.artifact_type);
             let record_id = &proposal.traceability.target.artifact_id;
-            let record = crate::cache::review_families::record(held, &scope, kind, record_id)?;
+            let record = crate::families::review_families::record(held, &scope, kind, record_id)?;
             owner_matches(&record, input.declared_by.as_deref())?;
             let binding = proposal
                 .record_revision

@@ -5,6 +5,7 @@
     "crates": [
       "provenance-core",
       "provenance-porcelain",
+      "provenance-ste100",
       "provenance-store",
       "provenance-transport"
     ]
@@ -101,8 +102,43 @@
       "provenance-review",
       "provenance-scanner",
       "provenance-sdk",
-      "provenance-ste100",
       "provenance-transport",
+      "remove_dir_all",
+      "reqwest",
+      "rmcp",
+      "rustix",
+      "same-file",
+      "sqlx",
+      "tempfile",
+      "tokio",
+      "tokio-tungstenite",
+      "tokio-util",
+      "tower",
+      "ureq",
+      "walkdir",
+      "windows-sys"
+    ],
+    "provenance-ste100": [
+      "axum",
+      "clap",
+      "dunce",
+      "filetime",
+      "fs2",
+      "fs_at",
+      "hyper",
+      "jsonschema",
+      "libsqlite3-sys",
+      "notify",
+      "open",
+      "provenance-cli",
+      "provenance-codegen",
+      "provenance-contract",
+      "provenance-http-client",
+      "provenance-mcp",
+      "provenance-report",
+      "provenance-review",
+      "provenance-scanner",
+      "provenance-sdk",
       "remove_dir_all",
       "reqwest",
       "rmcp",
@@ -395,8 +431,10 @@
     },
     "provenance-ste100": {
       "dependencies": [
-        "fs2",
         "provenance-macros"
+      ],
+      "host-dependencies": [
+        "fs2"
       ],
       "dev-dependencies": [
         "jsonschema"
@@ -405,7 +443,8 @@
     "provenance-store": {
       "dependencies": [
         "provenance-core",
-        "provenance-macros"
+        "provenance-macros",
+        "provenance-ste100"
       ],
       "host-dependencies": [
         "dunce",
@@ -413,7 +452,6 @@
         "fs_at",
         "libsqlite3-sys",
         "provenance-scanner",
-        "provenance-ste100",
         "rustix",
         "sqlx",
         "tempfile",
@@ -421,9 +459,11 @@
         "windows-sys"
       ],
       "dev-dependencies": [
+        "dunce",
         "filetime",
         "fs_at",
-        "jsonschema"
+        "jsonschema",
+        "tempfile"
       ]
     },
     "provenance-transport": {

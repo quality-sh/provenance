@@ -107,7 +107,7 @@ fn visibility_filter(exclude_terminal: bool, kind: &str, id: &str) -> String {
     if exclude_terminal {
         format!(
             "NOT ({})",
-            crate::cache::projection_families::terminal_and_dead_predicate(kind, id, "?1")
+            crate::families::projection_families::terminal_and_dead_predicate(kind, id, "?1")
         )
     } else {
         "1".to_owned()

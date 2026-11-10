@@ -4,8 +4,10 @@ use serde_json::{json, Value};
 
 type Loader = fn(&str) -> anyhow::Result<()>;
 
-const LOADERS: [(&str, Loader); 2] = [
+/// The write path needs the local disk, so it runs only with `host`.
+const LOADERS: &[(&str, Loader)] = &[
     ("a read", load_read),
+    #[cfg(feature = "host")]
     ("the read inside a write", load_through_a_write),
 ];
 
@@ -18,6 +20,7 @@ fn load_read(line: &str) -> anyhow::Result<()> {
     record_from_line::<Value>(path(), 7, value).map(drop)
 }
 
+#[cfg(feature = "host")]
 fn load_through_a_write(line: &str) -> anyhow::Result<()> {
     let dir = tempfile::tempdir()?;
     let shard = camino::Utf8PathBuf::from_path_buf(dir.path().join("req.jsonl"))
@@ -41,7 +44,7 @@ fn legacy_retirement_requires_the_canonical_record_deletion_migration() {
     })
     .to_string();
 
-    for (loader_name, load_line) in LOADERS {
+    for (loader_name, load_line) in LOADERS.iter().copied() {
         let message = load_line(&line).unwrap_err().to_string();
         assert!(
             message.contains("record req_retired"),

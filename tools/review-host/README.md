@@ -87,8 +87,9 @@ The review write check starts a new review host for each step on one
 repository. The generated client starts, replies to and resolves Discussions,
 rejects with feedback, and revises a Requirement. Each step reads the result
 through the next host. The check also closes one write response before its body
-arrives. The client must report a connection error, send the write only once,
-and the repository must hold one result. CI runs this check on the Linux CLI.
+arrives. The client must report an outcome-unknown error
+(`OutcomeUnknownError`), send the write only once, and the repository must hold
+one result. CI runs this check on the Linux CLI.
 
 ```sh
 node --test tools/review-host/*.test.ts

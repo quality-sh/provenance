@@ -298,7 +298,7 @@ macro_rules! register_catalog_member {
     };
 }
 
-crate::cache::family_table::record_family_rows!(define_record_members);
+crate::families::family_table::record_family_rows!(define_record_members);
 fact_member_operation!(
     GetProposalAssertion,
     "get-proposal-assertion",
