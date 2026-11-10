@@ -57,6 +57,7 @@ pub(super) struct InitPlan {
     dictionary: crate::ste_onboarding::Plan,
     scope_ids: Vec<String>,
     reviewer_notice: Option<String>,
+    command: &'static str,
 }
 
 #[rule("rule_init_plans_all_project_writes")]
@@ -81,7 +82,7 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
     let manifest_exists = manifest_before.bytes().is_some();
     let reviewer =
         if !manifest_exists && disposition_actor_ids.is_empty() && !clear_disposition_actors {
-            Some(crate::reviewer::select(path)?)
+            Some(crate::reviewer::select(path, invocation.command())?)
         } else {
             None
         };
@@ -101,7 +102,7 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
     )?;
     let reviewer_notice = reviewer.map(|reviewer| reviewer.notice);
     let manifest_bytes = format!("{}\n", serde_json::to_string_pretty(&manifest)?).into_bytes();
-    let skills = crate::skills::plan_init_at(skills, path.as_std_path())
+    let skills = crate::skills::plan_init_at(skills, path.as_std_path(), invocation.command())
         .context("failed to plan the bundled Provenance skills")?;
     let guidance_scope = crate::onboarding::guidance_scope(path, scope.as_deref(), &manifest)?;
     let planned = PlannedFiles::plan(
@@ -113,7 +114,8 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
     )?;
     crate::check::validate_planned_manifest(path, &manifest)
         .context("the planned Provenance state is not valid")?;
-    let dictionary = crate::ste_onboarding::prepare(path, ste_pdf.as_deref())?;
+    let dictionary =
+        crate::ste_onboarding::prepare(path, ste_pdf.as_deref(), invocation.command())?;
     let scope_ids: Vec<String> = manifest
         .scopes
         .iter()
@@ -126,6 +128,7 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
         dictionary,
         scope_ids,
         reviewer_notice,
+        command: invocation.command(),
     })
 }
 
@@ -178,6 +181,7 @@ fn already_ending(
     scope_ids: &[String],
     path: &Utf8Path,
     dictionary: &crate::ste_onboarding::Plan,
+    command: &'static str,
 ) -> InitEnding {
     InitEnding::already(
         format!(
@@ -185,6 +189,7 @@ fn already_ending(
             scope_phrase(scope_ids)
         ),
         dictionary.warning(),
+        command,
     )
 }
 
@@ -349,8 +354,8 @@ impl InitPlan {
             &self.dictionary,
         )
         .map_or_else(
-            || already_ending(&self.scope_ids, &self.path, &self.dictionary),
-            |summary| InitEnding::applied(summary, self.dictionary.warning()),
+            || already_ending(&self.scope_ids, &self.path, &self.dictionary, self.command),
+            |summary| InitEnding::applied(summary, self.dictionary.warning(), self.command),
         )
         .with_notice(self.reviewer_notice))
     }

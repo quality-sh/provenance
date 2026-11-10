@@ -362,7 +362,7 @@ mod tests {
             &claude,
             false,
             false,
-            &super::super::conflict_guidance(base, false, false),
+            &super::super::conflict_guidance(base, false, false, crate::onboarding::NATIVE_COMMAND),
         )
         .unwrap();
         let mut rollback = FileRollbackJournal::within(base);
