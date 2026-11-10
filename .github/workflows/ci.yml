@@ -120,6 +120,11 @@ jobs:
               - ".github/scripts/crap_gate.test.py"
               - ".github/scripts/fixtures/crap_gate/**"
               - ".github/scripts/publish-cargo-if-missing.sh"
+              # The Test job runs only when this filter matches. Some tests
+              # read each .rs file in the repository, and the scanner obeys
+              # the .gitignore files.
+              - "**/*.rs"
+              - "**/.gitignore"
               - "crates/**"
               - "Cargo.toml"
               - "Cargo.lock"

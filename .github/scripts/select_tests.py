@@ -77,20 +77,29 @@ NOT_TEST_INPUTS = (
     "AGENTS.md",
     "CONTEXT.md",
     "rustfmt.toml",
-    ".gitignore",
     ".gitleaks.toml",
 )
 
+# The scanner obeys the .gitignore files, and tests scan the workspace with it.
+# A change to a .gitignore file can hide a file from these tests, so it selects
+# the full suite.
+IGNORE_FILE = ".gitignore"
+
 # Test binaries that read the Rust source of crates that they do not depend
-# on. A changed .rs file anywhere in the repository selects each of them, so a
-# change in any crate runs them. select_tests.test.py finds each test that
-# reads above its crate directory and fails when the test is in no list.
+# on. A changed .rs file anywhere in the repository selects each of them. The
+# rust path filter in ci.yml matches each .rs file, so the Test job runs for
+# this change. select_tests.test.py finds each test that reads above its crate
+# directory and fails when the test is in no list.
+#
+# Some tests read the Rust source of one other crate, and another rule always
+# selects them for a change to that source. They are not in this list:
+# - provenance-contract::registration_ownership and
+#   provenance-scanner::scanner_lexer_regressions: SOURCE_READERS selects them.
+# - provenance-scanner::method_word_conformance: the scanner crate depends on
+#   provenance-macros, so a change to provenance-macros selects it.
 RUST_SOURCE_READERS = (
     "provenance-cli::cli_structure",
-    "provenance-contract::registration_ownership",
     "provenance-core::no_wildcard_gates",
-    "provenance-scanner::method_word_conformance",
-    "provenance-scanner::scanner_lexer_regressions",
     "provenance-store::git_starts_use_the_helper",
     "provenance-store::rule_binding_integrity",
 )
@@ -143,7 +152,7 @@ def changed_crates(files, directories):
     crates = set()
     owners = sorted(directories.items(), key=lambda item: -len(item[1]))
     for path in files:
-        if path.startswith(FULL_SUITE):
+        if path.startswith(FULL_SUITE) or PurePosixPath(path).name == IGNORE_FILE:
             return None
         owner = next(
             (name for name, directory in owners if path.startswith(directory + "/")),
