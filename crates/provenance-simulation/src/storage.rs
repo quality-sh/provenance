@@ -121,7 +121,7 @@ impl World {
     }
 
     /// The planted faults that turn off the section lock and the base check.
-    fn no_concurrency_control(&self) -> bool {
+    const fn no_concurrency_control(&self) -> bool {
         matches!(
             self.plant,
             Some(Plant::NoConcurrencyControl | Plant::ClockBackwards)
