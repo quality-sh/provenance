@@ -1,25 +1,41 @@
-//! The three forms of a store error.
+//! The four forms of a store error. Each form has one way to make it.
 //!
-//! - `refuse!(Kind, "...")`: a refusal that the input or the state of a caller
-//!   can cause. It has a declared `WriteFailure` kind. A read refuses with a
+//! - `refuse!(Kind, "...")`, or `ensure!(Kind, condition, "...")` from
+//!   `write_error`: a refusal that the input or the state of a caller can
+//!   cause. It has a declared `WriteFailure` kind. A read refuses with a
 //!   `ReadFailure` value.
-//! - `fault!("...")`: a broken code invariant. It reads as `write_failed` or
-//!   `read_failed` (500) and keeps its text as the cause.
-//! - [`state_fault`]: stored records that do not agree. It reads as
-//!   `invalid_state_file` with the file and the line of the record at fault.
+//! - [`common`]: a refusal of a common kind of the operation protocol, such
+//!   as `unknown_scope` or `invalid_input` on a request field. It keeps its
+//!   kind and status on a read and on a write.
+//! - `fault!("...")`, or `ensure!(Fault, condition, "...")`: a broken code
+//!   invariant. It reads as `write_failed` or `read_failed` (500) and keeps
+//!   its text as the cause.
+//! - [`state_fault`] at a known line, or `readers::record_fault` at the line
+//!   of a record id: stored records that the store cannot read or that do not
+//!   agree. It reads as `invalid_state_file` with the file and the line of
+//!   the record at fault.
 //!
 //! The `refusals_declare_a_kind` test refuses a raw anyhow refusal outside this
 //! file and `write_error.rs`.
 
 use crate::state_store::message_ids::ShardLine;
 use crate::state_store::readers::StateLineInvalid;
+use provenance_core::protocol::failure::OperationFailure;
 
 /// The text of a declared internal fault.
+///
+/// No code reads this type back from an error. It exists so that `fault!`
+/// makes an error with no raw anyhow text, and so that the
+/// `refusals_declare_a_kind` guard can tell a declared fault from a raw one.
 #[derive(Debug, thiserror::Error)]
 #[error("{0}")]
 pub struct Fault(pub String);
 
-/// The text of a declared refusal.
+/// The text of a declared refusal, below its `SourceFailure` kind.
+///
+/// No code reads this type back from an error: the kind is in the
+/// `SourceFailure` above it. It exists so that `refuse!` gives its text with
+/// no raw anyhow text.
 #[derive(Debug, thiserror::Error)]
 #[error("{0}")]
 pub struct Reason(pub String);
@@ -64,4 +80,10 @@ pub fn state_fault(at: &ShardLine, message: String) -> anyhow::Error {
         message,
     }
     .into()
+}
+
+/// A refusal of a common kind. The caller gets the kind and the status of
+/// `failure`; a context on the error does not change them.
+pub fn common(failure: OperationFailure) -> anyhow::Error {
+    failure.into()
 }

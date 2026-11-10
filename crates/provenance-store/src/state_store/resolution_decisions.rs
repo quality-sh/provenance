@@ -136,13 +136,12 @@ fn ensure_approved(
     );
     // The text error carries the same message, so a command without JSON output, such as a
     // scope import, also says what to do.
-    let text = crate::refusal::Reason(message.clone());
-    Err(crate::write_error::SourceFailure::wrap(
-        crate::write_error::WriteFailure::ResolutionNotApproved {
+    Err(crate::refusal::refuse!(
+        (crate::write_error::WriteFailure::ResolutionNotApproved {
             resolution_id: id.to_owned(),
-            message,
-        },
-        text,
+            message: message.clone(),
+        }),
+        "{message}"
     ))
 }
 

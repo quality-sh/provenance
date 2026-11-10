@@ -71,7 +71,7 @@ pub struct StatementViolationReport<'a> {
 /// [`StatementViolationReport`], which the CLI prints as it is.
 #[derive(Debug, thiserror::Error)]
 #[error("{0}")]
-pub struct StatementViolations(String);
+pub(crate) struct StatementViolations(String);
 
 pub fn violation_error(diagnostics: &[StatementDiagnostic]) -> anyhow::Error {
     let report = StatementViolationReport {

@@ -75,10 +75,7 @@ impl StateStore {
         )?;
         let landings = shards::ideation_landings_path(&self.layout, scope);
         for (index, batch) in self.list_ideation_landings(scope)?.into_iter().enumerate() {
-            let at = ShardLine {
-                path: landings.clone(),
-                line: index + 1,
-            };
+            let at = ShardLine::new(&landings, index + 1);
             ensure_batch_evidence_unchanged(
                 &contributions,
                 &synthesis_packets,

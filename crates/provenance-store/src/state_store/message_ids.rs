@@ -18,9 +18,19 @@ pub fn next_message_time(now_ms: i64, latest: Option<i64>) -> anyhow::Result<i64
     }
 }
 
+/// A line of a shard file. The first line is 1.
 pub struct ShardLine {
     pub path: camino::Utf8PathBuf,
     pub line: usize,
+}
+
+impl ShardLine {
+    pub fn new(path: &camino::Utf8Path, line: usize) -> Self {
+        Self {
+            path: path.to_owned(),
+            line,
+        }
+    }
 }
 
 /// Duplicate Message identities are refused with every stored row location.
@@ -41,7 +51,13 @@ pub fn ensure_unique_message_ids(
     {
         let lines = locations
             .iter()
-            .map(|location| format!("{}:{}", state_file(location), location.line))
+            .map(|location| {
+                format!(
+                    "{}:{}",
+                    super::readers::state_file(&location.path),
+                    location.line
+                )
+            })
             .collect::<Vec<_>>()
             .join(", ");
         // The refusal is at the second row with the id. The message gives
@@ -53,14 +69,4 @@ pub fn ensure_unique_message_ids(
         ));
     }
     Ok(())
-}
-
-/// The shard path of `location` below the state directory.
-fn state_file(location: &ShardLine) -> String {
-    super::readers::StateLineInvalid {
-        path: location.path.clone(),
-        line: 0,
-        message: String::new(),
-    }
-    .file()
 }

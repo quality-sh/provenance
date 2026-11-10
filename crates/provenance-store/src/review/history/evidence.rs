@@ -1,7 +1,6 @@
 //! Bounded pages of the canonical JSON of one record version.
 
 use crate::{canonical_digest, operations::reader::RECORD_BYTES};
-use anyhow::Context as _;
 use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
 use provenance_core::{review::EvidencePage, StableId};
 
@@ -19,11 +18,10 @@ pub(in crate::review) fn page(
     let document = canonical_digest::canonical_bytes(value)?;
     let length = document.len() as u64;
     if offset >= length {
-        return Err(OperationFailure::InvalidInput {
+        return Err(crate::refusal::common(OperationFailure::InvalidInput {
             field: Some("offset".to_owned()),
             reason: InvalidInputReason::InvalidValue,
-        }
-        .into());
+        }));
     }
     let start = usize::try_from(offset)?;
     let end = usize::try_from((length - offset).min(PAGE_TEXT_BYTES) + offset)?;
@@ -34,11 +32,11 @@ pub(in crate::review) fn page(
             std::str::from_utf8(&buffer[..error.valid_up_to()])?
         }
         Err(_) => {
-            return Err(OperationFailure::InvalidInput {
+            return Err(crate::refusal::common(OperationFailure::InvalidInput {
                 field: Some("offset".to_owned()),
                 reason: InvalidInputReason::InvalidValue,
             })
-            .context("evidence offset is not a UTF-8 boundary");
+            .context("evidence offset is not a UTF-8 boundary"));
         }
     };
     let next = offset + text.len() as u64;

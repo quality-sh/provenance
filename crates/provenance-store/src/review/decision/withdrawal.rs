@@ -10,7 +10,6 @@ use crate::{
     state_store::{RecordStamp, StateStore},
     write_error::WriteFailure,
 };
-use provenance_core::protocol::failure::OperationFailure;
 use provenance_core::{
     review::{CycleEntry, CycleFact},
     DispositionDecision, NodeType, StableId, Withdrawal,
@@ -54,9 +53,7 @@ impl StateStore {
         check_request_size(&input)?;
         let scope = input.scope_id.clone();
         self.with_repository_publication(move |held| {
-            if !held.manifest()?.scopes.iter().any(|s| s.id == scope) {
-                return Err(OperationFailure::UnknownScope.into());
-            }
+            crate::review::ensure_manifest_scope(held, &scope)?;
             let proposal = review_submission(held, &scope, &input.proposal_id)?;
             let facts = CycleFacts::validated(held, &scope)?;
             validate_submission_address(

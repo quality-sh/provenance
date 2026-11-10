@@ -265,10 +265,7 @@ pub fn ensure_unique_ids(
         let id = string_id(key, &row.record)?;
         if let Some(first) = first_lines.insert(id, row.line_number) {
             return Err(crate::refusal::state_fault(
-                &crate::state_store::message_ids::ShardLine {
-                    path: shard_path.to_owned(),
-                    line: row.line_number,
-                },
+                &crate::state_store::message_ids::ShardLine::new(shard_path, row.line_number),
                 format!(
                     "{side} holds record id {id} at line {first} and at line {}",
                     row.line_number
@@ -310,9 +307,7 @@ fn index_by_id(
     let mut indexed = BTreeMap::new();
     for record in records {
         let id = string_id(key, record)?;
-        if indexed.contains_key(id) {
-            return Err(crate::refusal::fault!("duplicate record id {id}"));
-        }
+        crate::write_error::ensure!(Fault, !indexed.contains_key(id), "duplicate record id {id}");
         indexed.insert(id.to_string(), record.clone());
     }
     Ok(indexed)

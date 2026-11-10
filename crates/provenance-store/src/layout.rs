@@ -168,11 +168,11 @@ pub fn with_initialized_graph<R>(
                     ))
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    if path_exists(&path)? {
-                        return Err(crate::refusal::fault!(
-                            "Provenance graph manifest is not a file"
-                        ));
-                    }
+                    crate::write_error::ensure!(
+                        Fault,
+                        !path_exists(&path)?,
+                        "Provenance graph manifest is not a file"
+                    );
                     return Err(GraphNotInitialized.into());
                 }
                 Err(error) => return Err(error.into()),

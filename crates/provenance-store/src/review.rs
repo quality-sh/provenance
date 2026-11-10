@@ -18,6 +18,25 @@ fn new_id() -> provenance_core::StableId {
         .expect("UUID uses valid stable ID characters")
 }
 
+/// Refuses a review write to a scope that the manifest does not hold, with
+/// the common `unknown_scope`.
+fn ensure_manifest_scope(
+    held: &crate::state_store::StateStore,
+    scope: &provenance_core::ScopeId,
+) -> anyhow::Result<()> {
+    if held
+        .manifest()?
+        .scopes
+        .iter()
+        .any(|known| known.id == *scope)
+    {
+        return Ok(());
+    }
+    Err(crate::refusal::common(
+        provenance_core::protocol::failure::OperationFailure::UnknownScope,
+    ))
+}
+
 fn owner_matches(record: &impl serde::Serialize, owner: Option<&str>) -> anyhow::Result<()> {
     let value = serde_json::to_value(record)?;
     let saved_owner = value

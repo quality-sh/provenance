@@ -11,7 +11,6 @@ use crate::{
     shards,
     state_store::{CreateProposalCardInput, RecordStamp, StateStore},
 };
-use provenance_core::protocol::failure::OperationFailure;
 use provenance_core::{
     review::{CycleEntry, CycleFact},
     IdeationTarget, PromotionState, ProposalTraceability, ProposalType, RecordRevisionBinding,
@@ -27,9 +26,7 @@ impl StateStore {
         check_request_size(&input)?;
         let scope = input.scope_id.clone();
         self.with_repository_publication(move |held| {
-            if !held.manifest()?.scopes.iter().any(|s| s.id == scope) {
-                return Err(OperationFailure::UnknownScope.into());
-            }
+            crate::review::ensure_manifest_scope(held, &scope)?;
             let record = crate::families::review_families::record(
                 held,
                 &scope,

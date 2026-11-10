@@ -1,3 +1,4 @@
+use crate::state_store::message_ids::ShardLine;
 use camino::Utf8Path;
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -45,9 +46,8 @@ impl RawRecord {
             .filter(|name| !scan.members.iter().any(|member| &member.name == *name))
             .collect::<Vec<_>>();
         if !missing.is_empty() {
-            return Err(state_fault(
-                path,
-                line_number,
+            return Err(crate::refusal::state_fault(
+                &ShardLine::new(path, line_number),
                 format!("stored field names {missing:?} cannot be read back safely"),
             ));
         }
@@ -80,16 +80,14 @@ impl RawRecord {
 
     fn changed_line<T: Serialize>(self, path: &Utf8Path, record: &T) -> anyhow::Result<String> {
         if let Some(name) = self.repeated_member {
-            return Err(state_fault(
-                path,
-                self.line_number,
+            return Err(crate::refusal::state_fault(
+                &ShardLine::new(path, self.line_number),
                 format!("repeated top-level member `{name}` cannot survive a typed record change"),
             ));
         }
         if let Some(field) = self.nested_unknown {
-            return Err(state_fault(
-                path,
-                self.line_number,
+            return Err(crate::refusal::state_fault(
+                &ShardLine::new(path, self.line_number),
                 format!("nested unknown field `{field}` cannot survive a typed record change"),
             ));
         }
@@ -97,11 +95,11 @@ impl RawRecord {
             return serde_json::to_string(record).map_err(Into::into);
         }
         let mut typed = serde_json::to_string(record)?;
-        if !typed.ends_with('}') {
-            return Err(crate::refusal::fault!(
-                "a changed record with stored unknown fields must serialize as an object"
-            ));
-        }
+        crate::write_error::ensure!(
+            Fault,
+            typed.ends_with('}'),
+            "a changed record with stored unknown fields must serialize as an object"
+        );
         typed.pop();
         for (position, raw) in self.unknown.iter().enumerate() {
             if position > 0 || typed != "{" {
@@ -175,9 +173,8 @@ impl<T: Serialize> LoadedRecords<T> {
             .flatten()
             .find(|raw| raw.id().is_none() && raw.has_unknown());
         if let (true, Some(raw)) = (added_without_id, kept_without_id) {
-            return Err(state_fault(
-                path,
-                raw.line_number,
+            return Err(crate::refusal::state_fault(
+                &ShardLine::new(path, raw.line_number),
                 "unknown fields cannot survive a typed change to a record without an id".into(),
             ));
         }
@@ -207,26 +204,11 @@ fn unique_id_match(
             .expect("the filter keeps only rows that are available")
             .line_number;
         return Err(crate::refusal::state_fault(
-            &crate::state_store::message_ids::ShardLine {
-                path: path.to_owned(),
-                line,
-            },
+            &ShardLine::new(path, line),
             format!("duplicate record id `{id}` prevents a safe typed change"),
         ));
     }
     Ok(first)
-}
-
-/// The stored row at `line` of `path` holds data that a typed change cannot
-/// keep. The refusal is `invalid_state_file` at that row.
-fn state_fault(path: &Utf8Path, line: usize, message: String) -> anyhow::Error {
-    crate::refusal::state_fault(
-        &crate::state_store::message_ids::ShardLine {
-            path: path.to_owned(),
-            line,
-        },
-        message,
-    )
 }
 
 const fn take(raw: &mut [Option<RawRecord>], index: usize) -> RawRecord {
@@ -337,12 +319,12 @@ mod tests {
             .into_iter()
             .enumerate()
         {
-            let (record, raw) =
-                RawRecord::deserialize::<serde_json::Value>(
+            let (record, raw) = RawRecord::deserialize::<serde_json::Value>(
                 camino::Utf8Path::new("records.jsonl"),
                 line,
                 index + 1,
-            ).unwrap();
+            )
+            .unwrap();
             loaded.push(record, raw);
         }
         loaded.records_mut()[0]["n"] = 3.into();

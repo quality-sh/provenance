@@ -97,11 +97,11 @@ pub fn prepare_publication_lock(layout: &ProvenanceLayout) -> anyhow::Result<()>
     let provenance = layout.provenance_dir();
     create_real_directory(&provenance)?;
     let canonical_provenance = canonical_utf8(&provenance, "provenance path")?;
-    if canonical_provenance != canonical_root.join(".provenance") {
-        return Err(crate::refusal::fault!(
-            "repository provenance directory is outside the repository"
-        ));
-    }
+    crate::write_error::ensure!(
+        Fault,
+        canonical_provenance == canonical_root.join(".provenance"),
+        "repository provenance directory is outside the repository"
+    );
 
     let cache = layout.cache_dir();
     create_real_directory(&cache)?;

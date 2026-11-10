@@ -38,11 +38,7 @@ impl StateStore {
         check_request_size(&input)?;
         let scope = input.scope_id.clone();
         self.with_repository_publication(move |held| {
-            if !held.manifest()?.scopes.iter().any(|s| s.id == scope) {
-                return Err(
-                    provenance_core::protocol::failure::OperationFailure::UnknownScope.into(),
-                );
-            }
+            crate::review::ensure_manifest_scope(held, &scope)?;
             let proposal = review_submission(held, &scope, &input.proposal_id)?;
             let facts = CycleFacts::validated(held, &scope)?;
             validate_submission_address(

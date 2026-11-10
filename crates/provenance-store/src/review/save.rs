@@ -5,7 +5,6 @@ use crate::{
     state_store::{RecordStamp, StateStore},
     write_error::WriteFailure,
 };
-use provenance_core::protocol::failure::OperationFailure;
 use provenance_core::review::{RequirementEditState, ReviewRecord};
 use provenance_core::threads::DiscussionOrigin;
 use provenance_core::{NodeType, Requirement, ScopeId, StableId};
@@ -144,9 +143,7 @@ impl StateStore {
             crate::test_probes::at("requirement_save_locked")?;
             let scope_id = input.update.scope_id.clone();
             let scope = &scope_id;
-            if !held.manifest()?.scopes.iter().any(|s| s.id == *scope) {
-                return Err(OperationFailure::UnknownScope.into());
-            }
+            super::ensure_manifest_scope(held, scope)?;
             let record = held.requirement(scope, &input.update.id)?;
             super::owner_matches(&record, input.update.declared_by.as_deref())?;
             if let Some(origin) = origin {
