@@ -1,3 +1,5 @@
+Write the records of one scope as a scope export file
+
 Usage: provenance export [OPTIONS]
 
 Options:

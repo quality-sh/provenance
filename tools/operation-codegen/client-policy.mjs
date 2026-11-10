@@ -83,14 +83,14 @@ export function clientPolicyTests(label, connect, compatibility, maxResponseByte
         else { writes++; response.writeHead(307, { location: destination }); response.end(); }
       }, async baseUrl => {
         const client = await connect({ baseUrl, bearer: 'private-secret' });
-        await refusal(client.write, 'ConnectionError');
+        await refusal(client.write, 'OutcomeUnknownError');
       });
     });
     assert.equal(writes, 1);
     assert.equal(forwarded, 0);
   });
 
-  test(`${label}: a lost mutation response is a connection error and is not replayed`, async () => {
+  test(`${label}: a lost mutation response is an outcome-unknown error and is not replayed`, async () => {
     let writes = 0;
     await host((request, response) => {
       if (request.method === 'GET') {
@@ -99,7 +99,7 @@ export function clientPolicyTests(label, connect, compatibility, maxResponseByte
       } else { writes++; request.socket.destroy(); }
     }, async baseUrl => {
       const client = await connect({ baseUrl });
-      await refusal(client.write, 'ConnectionError');
+      await refusal(client.write, 'OutcomeUnknownError');
     });
     assert.equal(writes, 1);
   });

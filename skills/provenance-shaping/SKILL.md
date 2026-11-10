@@ -65,8 +65,8 @@ Topic one by one; expensive methods claim one question and often stop at a phase
      ```
 
    - **Claude Desktop or ChatGPT desktop** (MCP tools, no browser pane): open the MCP
-     document view. Call the `get-requirement-document` tool with the parent's ID and show
-     the result to the person. Call it again after each answer lands.
+     document view. Call the `api` tool with the path `requirements/<parent_id>/document`
+     and show the result to the person. Call it again after each answer lands.
 
    - **A plain CLI session** (a terminal, `claude`, `codex`): start or reuse the host so
      that it opens the system browser, then show the parent's tree in that page:
@@ -522,6 +522,7 @@ change the artifact's kind.
    Rule and does not require an implementation binding.
 
    ```rust
+   use provenance_sdk::{rule, verifies};
    #[rule("rule_<stable_slug>")]
    pub fn <bare_symbol>(...) -> ... { ... }
 

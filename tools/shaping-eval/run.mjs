@@ -60,13 +60,15 @@ export async function prepare(workspace, { variant }) {
   await writeFile(join(workspace, 'docs/shaping.md'), shapingDoc);
   await create(workspace, 'source', { id: 'src_owner_brief', name: 'Owner brief, health negative control', source_type: 'project_artifact', reference: 'session.json:negativeControl' });
   for (const [id, statement, refines] of [
-    ['req_robot', 'The robot supports personal work goals.'],
+    ['req_robot', 'The robot helps the owner to complete personal work goals.'],
     ['req_tasks', 'The robot rewards completed tasks.', 'req_robot'],
-    ['req_health', 'The robot loses health when goals are neglected.', 'req_robot'],
+    ['req_health', 'The health of the robot decreases when goals are neglected.', 'req_robot'],
     ['req_appearance', 'The robot has a friendly appearance.', 'req_robot'],
   ]) await create(workspace, 'requirement', { id, statement, ...(refines ? { refines: [refines] } : {}) });
   await create(workspace, 'resolution', { id: 'res_negative_control', title: 'Health floor', requirement_ids: ['req_health'], position: 'Use a zero health floor.', context: 'Health cannot express a value below zero.', rationale: 'A zero floor prevents negative health. A negative floor would require a separate meaning.', status: 'proposed' });
-  await create(workspace, 'rule', { id: 'rule_negative_control', requirement_ids: ['req_health'], resolution_ids: ['res_negative_control'], statement: 'Health cannot decrease below 0.', source_document: 'Owner brief, health negative control', source_section: 'The owner requires a zero health floor independently of the proposed Resolution.', status: 'active' });
+  // The owner brief grounds the active Rule. Only an approved Resolution can produce an
+  // active Rule, so the Rule does not cite the proposed Resolution.
+  await create(workspace, 'rule', { id: 'rule_negative_control', requirement_ids: ['req_health'], statement: 'Health cannot decrease below 0.', source_document: 'Owner brief, health negative control', source_section: 'The owner requires a zero health floor independently of the proposed Resolution.', status: 'active' });
 }
 
 export async function snapshot(workspace) {

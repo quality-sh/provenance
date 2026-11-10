@@ -81,9 +81,10 @@ Use the same rubric for both variants. A finding has `category`, `recordIds`,
   producing Resolution. These relationships have different meanings.
 - `state`: a record or transcript claims acceptance without acceptance of the
   current content revision, or guesses owner authorship. Lifecycle alone is
-  insufficient. The supplied active Rule with a proposed Resolution is grounded
-  independently in the owner brief and is a negative control. Do not count it
-  as an error because of that pair of statuses.
+  insufficient. The supplied active Rule is grounded independently in the owner
+  brief and is a negative control. A proposed Resolution for the same health
+  floor is on the same Requirement, and the Rule does not cite it. Do not count
+  the Rule as an error because of that pair of statuses.
 - `citationOnly`: a Resolution rationale gives citations or quotations without
   explaining the unresolved problem and why the choice is better than the
   alternatives. A citation in addition to an explanation is not an error.

@@ -74,7 +74,7 @@ export async function exercise(baseUrl: string, bearer: string, suffix = '') {
    return response;
  }}));
  const lost = await Effect.runPromise(Effect.flip(lostClient.createSource({data:{id:lostId,name:'Lost response',source_type:'document',supersedes:[]}})));
- if(dispatched!==1 || lost._tag!=='ConnectionError') throw new Error('Lost mutation response classification');
+ if(dispatched!==1 || lost._tag!=='OutcomeUnknownError') throw new Error('Lost mutation response classification');
  const evidence=await Effect.runPromise(client.getSource({id:lostId}));
  if(evidence.data.id!==lostId) throw new Error('Expected the mutation to persist after response loss');
  if(!ProvenanceApi) throw new Error('Missing contract');

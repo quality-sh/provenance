@@ -1,3 +1,5 @@
+Replace the records of one scope with a scope export file and delete each record that is not in the file
+
 Usage: provenance import [OPTIONS] --input <INPUT>
 
 Options:
