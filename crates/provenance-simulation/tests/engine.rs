@@ -51,17 +51,17 @@ fn the_write_after_a_moved_base_lands() {
 fn a_case_with_every_fault_keeps_the_laws() {
     let update = Operation::UpdateRequirement { n: 0, stale: false };
     let mut steps = vec![
+        Step::Fault(Fault::UnknownOutcome { landed: 1 }),
+        write(2, Operation::ClaimTopic),
+    ];
+    // The claim publishes before another engine holds the section and before
+    // the next fault, so it meets the unknown outcome.
+    steps.extend(std::iter::repeat_n(Step::Turn(2), 50));
+    steps.extend([
         write(0, update.clone()),
         write(1, update),
         Step::Turn(0),
         Step::Turn(1),
-        Step::Fault(Fault::UnknownOutcome { landed: 1 }),
-        write(2, Operation::ClaimTopic),
-    ];
-    // The claim publishes before the next fault, so it meets the unknown
-    // outcome.
-    steps.extend(std::iter::repeat_n(Step::Turn(2), 50));
-    steps.extend([
         Step::Fault(Fault::Stop { engine: 1, at: 0 }),
         Step::Fault(Fault::Refuse),
         write(1, Operation::SubmitReview),
