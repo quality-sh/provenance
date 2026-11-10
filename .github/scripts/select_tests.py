@@ -4,8 +4,9 @@
 A changed file in a crate selects that crate. The tests run for the selected
 crates and for every workspace crate that depends on them, through normal,
 build or dev dependencies, because those tests link the changed code. A
-change to a file that all builds read selects the full suite. Events other
-than pull_request always select the full suite.
+changed Rust file also selects the tests that read the Rust source of crates
+that they do not depend on. A change to a file that all builds read selects
+the full suite. Events other than pull_request always select the full suite.
 """
 
 import argparse
@@ -41,7 +42,8 @@ ROOT_INPUTS = (
     (".provenance/", ("provenance-cli", "provenance-store")),
     (".agents/skills/", ("provenance-cli",)),
     (".claude/skills/", ("provenance-cli",)),
-    ("skills/", ("provenance-cli",)),
+    # The transport crate includes the bundled skill text in its source.
+    ("skills/", ("provenance-cli", "provenance-transport")),
     ("tools/skills/", ("provenance-cli",)),
     ("tools/review-host/", ("provenance-review",)),
     ("tools/review-assets.json", ("provenance-review",)),
@@ -75,15 +77,37 @@ NOT_TEST_INPUTS = (
     "AGENTS.md",
     "CONTEXT.md",
     "rustfmt.toml",
-    ".gitignore",
     ".gitleaks.toml",
 )
 
-# Test binaries that read the source of crates that they do not depend on.
-# A changed file that starts with the prefix and ends with the suffix also
-# selects the test binary.
+# The scanner obeys the .gitignore files, and tests scan the workspace with it.
+# A change to a .gitignore file can hide a file from these tests, so it selects
+# the full suite.
+IGNORE_FILE = ".gitignore"
+
+# Test binaries that read the Rust source of crates that they do not depend
+# on. A changed .rs file anywhere in the repository selects each of them. The
+# rust path filter in ci.yml matches each .rs file, so the Test job runs for
+# this change. select_tests.test.py finds each test that reads above its crate
+# directory and fails when the test is in no list.
+#
+# Some tests read the Rust source of one other crate, and another rule always
+# selects them for a change to that source. They are not in this list:
+# - provenance-contract::registration_ownership and
+#   provenance-scanner::scanner_lexer_regressions: SOURCE_READERS selects them.
+# - provenance-scanner::method_word_conformance: the scanner crate depends on
+#   provenance-macros, so a change to provenance-macros selects it.
+RUST_SOURCE_READERS = (
+    "provenance-cli::cli_structure",
+    "provenance-core::no_wildcard_gates",
+    "provenance-store::git_starts_use_the_helper",
+    "provenance-store::rule_binding_integrity",
+)
+
+# Test binaries that read files other than Rust source in crates that they do
+# not depend on. A changed file that starts with the prefix and ends with the
+# suffix selects the test binary.
 SOURCE_READERS = (
-    ("", ".rs", "provenance-cli::cli_structure"),
     ("crates/", "/Cargo.toml", "provenance-cli::crate_dependencies"),
     # These read the metadata of every workspace crate.
     ("crates/", "/Cargo.toml", "provenance-cli::release_structure"),
@@ -94,16 +118,6 @@ SOURCE_READERS = (
     # The scan obeys the .gitignore files in the store tree and the text
     # search does not, so every file in the tree is an input.
     ("crates/provenance-store/", "", "provenance-scanner::scanner_lexer_regressions"),
-    *(
-        (f"crates/{name}/src/", ".rs", "provenance-core::no_wildcard_gates")
-        for name in (
-            "provenance-core",
-            "provenance-store",
-            "provenance-cli",
-            "provenance-scanner",
-            "provenance-sdk",
-        )
-    ),
 )
 
 
@@ -138,7 +152,7 @@ def changed_crates(files, directories):
     crates = set()
     owners = sorted(directories.items(), key=lambda item: -len(item[1]))
     for path in files:
-        if path.startswith(FULL_SUITE):
+        if path.startswith(FULL_SUITE) or PurePosixPath(path).name == IGNORE_FILE:
             return None
         owner = next(
             (name for name, directory in owners if path.startswith(directory + "/")),
@@ -160,14 +174,15 @@ def changed_crates(files, directories):
 
 
 def source_readers(files):
-    return sorted(
-        {
-            binary
-            for path in files
-            for prefix, suffix, binary in SOURCE_READERS
-            if path.startswith(prefix) and path.endswith(suffix)
-        }
-    )
+    readers = {
+        binary
+        for path in files
+        for prefix, suffix, binary in SOURCE_READERS
+        if path.startswith(prefix) and path.endswith(suffix)
+    }
+    if any(path.endswith(".rs") for path in files):
+        readers.update(RUST_SOURCE_READERS)
+    return sorted(readers)
 
 
 def select(event, files, metadata):
