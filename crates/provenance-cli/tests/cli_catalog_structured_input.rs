@@ -419,3 +419,52 @@ fn existing_header_preconditions_remain_required() {
         .failure()
         .stderr(contains("If-Match"));
 }
+
+/// Implementation-aid test: no active Rule states this refusal yet. The test
+/// creates a Source with each value that the refusal lists, so the list must
+/// hold only values that the create accepts.
+#[test]
+fn invalid_source_type_lists_the_accepted_values() {
+    let (_directory, repo) = init();
+    let refused = provenance()
+        .args([
+            "source_bad_type",
+            "create",
+            "--type",
+            "source",
+            "--repo",
+            &repo,
+            "--name",
+            "Bad type",
+            "--source-type",
+            "decision",
+        ])
+        .output()
+        .unwrap();
+    assert!(!refused.status.success());
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    let listed = stderr
+        .split_once("invalid value for --source-type; accepted values: ")
+        .map(|(_, values)| values.trim())
+        .unwrap_or_else(|| panic!("{stderr}"));
+    let values: Vec<&str> = listed.split(", ").collect();
+    assert!(values.contains(&"document"), "{stderr}");
+    assert!(!values.contains(&"decision"), "{stderr}");
+    for (index, value) in values.iter().enumerate() {
+        provenance()
+            .args([
+                &format!("source_type_{index}"),
+                "create",
+                "--type",
+                "source",
+                "--repo",
+                &repo,
+                "--name",
+                value,
+                "--source-type",
+                value,
+            ])
+            .assert()
+            .success();
+    }
+}

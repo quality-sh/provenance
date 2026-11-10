@@ -336,3 +336,39 @@ fn git(repo: &Path, arguments: &[&str]) {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+/// Implementation-aid test: no active Rule states the alternatives in a Rule
+/// 1.1 finding yet. The test puts the first alternative of the write refusal
+/// into the statement, so the given word must make the write pass.
+#[test]
+fn an_unapproved_word_finding_gives_the_dictionary_alternatives() {
+    let (_scratch, repo, index_directory) = setup(true);
+    let statement = format!("The {UNAPPROVED_WORD} stops.");
+
+    let checked = check(&repo, &index_directory, &statement, &["--format", "json"]);
+    let refused = create_requirement(&repo, &index_directory, "req_word", &statement);
+
+    let report = check_report(&checked);
+    let message = statements_category(&report)["findings"][0]["message"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    assert!(!refused.status.success());
+    let refusal = error_json(&refused);
+    assert_eq!(
+        refusal["report"]["findings"][0]["message"], message,
+        "{refusal}"
+    );
+    let alternative = message
+        .split_once("The dictionary gives these approved alternatives: ")
+        .and_then(|(_, list)| list.split_whitespace().next())
+        .unwrap_or_else(|| panic!("{message}"))
+        .to_lowercase();
+    let corrected = statement.replace(UNAPPROVED_WORD, &alternative);
+    let written = create_requirement(&repo, &index_directory, "req_word", &corrected);
+    assert!(
+        written.status.success(),
+        "{corrected}: {}",
+        String::from_utf8_lossy(&written.stderr)
+    );
+}

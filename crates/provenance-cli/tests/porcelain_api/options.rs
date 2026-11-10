@@ -1,4 +1,4 @@
-use super::{directory_file, envelope, init, provenance, refusal};
+use super::{directory_file, envelope, init, json as read_json, provenance, refusal, seed_source};
 use serde_json::{json, Value};
 use std::io::Read as _;
 use std::process::{Command, Stdio};
@@ -136,4 +136,45 @@ fn api_refuses_a_stdin_body_before_reading_it() {
         assert_eq!(refused["error"]["kind"], "invalid_input", "{arguments:?}");
         assert_eq!(refused["error"]["field"], "input", "{arguments:?}");
     }
+}
+
+/// Implementation-aid test: no active Rule states this refusal yet. It pins
+/// that a repeated query parameter names the parameter and a form that works,
+/// and that the named form then reads the record.
+#[test]
+fn api_repeated_query_names_the_parameter_and_the_comma_form() {
+    let (_directory, repo) = init();
+    seed_source(&repo);
+
+    let refused = refusal(&[
+        "api",
+        "sources/source_api",
+        "--repo",
+        &repo,
+        "--format",
+        "json",
+        "--query",
+        "query=neighbors",
+        "--query",
+        "relations=cites",
+        "--query",
+        "relations=refines",
+    ]);
+    assert_eq!(refused["error"]["field"], "query");
+    let hint = refused["error"]["hint"].as_str().unwrap_or_default();
+    assert!(hint.contains("--query relations=a,b"), "{refused}");
+
+    let read = read_json(&[
+        "api",
+        "sources/source_api",
+        "--repo",
+        &repo,
+        "--format",
+        "json",
+        "--query",
+        "query=neighbors",
+        "--query",
+        "relations=cites,refines",
+    ]);
+    assert_eq!(read["data"]["id"], "source_api");
 }
