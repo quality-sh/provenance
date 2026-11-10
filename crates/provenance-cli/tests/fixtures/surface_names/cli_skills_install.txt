@@ -1,3 +1,5 @@
+Install the bundled agent skills
+
 Usage: provenance skills install [OPTIONS]
 
 Options:
