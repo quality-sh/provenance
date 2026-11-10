@@ -61,6 +61,9 @@ mod test_probes;
 pub mod user_cache;
 #[cfg(all(test, feature = "host"))]
 extern crate self as provenance_store;
+// Each module of unit tests that needs `host` has a plain `#[cfg(test)]` and
+// a second attribute for the host gate. Clippy treats only a module with a
+// plain `cfg(test)` as test code.
 #[cfg(all(test, feature = "host"))]
 mod test_support;
 

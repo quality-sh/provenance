@@ -15,7 +15,7 @@
 use crate::layout::ProvenanceLayout;
 use crate::repository::Repository;
 use crate::state_store::SectionView;
-#[cfg(test)]
+#[cfg(all(test, feature = "host"))]
 pub(super) use crate::storage::local::LockedPublicationFile;
 use provenance_macros::rule;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -151,6 +151,7 @@ pub async fn publication_guard(repository: &Repository) -> anyhow::Result<Public
 }
 
 #[cfg(test)]
+#[cfg(feature = "host")]
 mod tests {
     use crate::publication::{
         publication_guard, with_publication_guard, with_read_only_validation,
