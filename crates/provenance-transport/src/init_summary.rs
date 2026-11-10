@@ -21,26 +21,24 @@ pub struct InitEnding {
 }
 
 impl InitEnding {
-    pub fn already(line: String, warning: Option<String>) -> Self {
+    /// The handoff line names `command`, the command that runs Provenance in
+    /// the project.
+    pub fn already(line: String, warning: Option<String>, command: &'static str) -> Self {
         Self {
             result: InitResult::Already(line),
             notices: warning.into_iter().collect(),
-            command: "provenance",
+            command,
         }
     }
 
-    pub fn applied(summary: InitSummary, warning: Option<String>) -> Self {
+    /// The handoff line names `command`, the command that runs Provenance in
+    /// the project.
+    pub fn applied(summary: InitSummary, warning: Option<String>, command: &'static str) -> Self {
         Self {
             result: InitResult::Applied(Box::new(summary)),
             notices: warning.into_iter().collect(),
-            command: "provenance",
+            command,
         }
-    }
-
-    /// Names the command that runs Provenance in the project in the handoff line.
-    pub const fn invoked_as(mut self, command: &'static str) -> Self {
-        self.command = command;
-        self
     }
 
     pub fn with_notice(mut self, notice: Option<String>) -> Self {
@@ -183,8 +181,12 @@ mod tests {
 
     #[test]
     fn completed_init_report_keeps_notices_apart_from_summary() {
-        let report = InitEnding::already("No change.".to_owned(), Some("Warning: one".to_owned()))
-            .into_report();
+        let report = InitEnding::already(
+            "No change.".to_owned(),
+            Some("Warning: one".to_owned()),
+            crate::onboarding::NATIVE_COMMAND,
+        )
+        .into_report();
         assert_eq!(report.notices, ["Warning: one"]);
         assert!(report.summary.starts_with("No change.\n\n"));
         assert!(!report.summary.contains("Warning"));

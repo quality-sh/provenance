@@ -37,7 +37,7 @@ fn legacy_parent_change_refuses_the_planned_cleanup() {
         crate::skills::TEST_SKILLS,
         directory.path(),
         InstallRequest::Init {
-            command: "provenance",
+            command: crate::onboarding::NATIVE_COMMAND,
         },
     )
     .unwrap();
@@ -63,7 +63,7 @@ fn symlink_creation_failure_uses_the_preplanned_copy() {
         crate::skills::TEST_SKILLS,
         directory.path(),
         InstallRequest::Init {
-            command: "provenance",
+            command: crate::onboarding::NATIVE_COMMAND,
         },
     )
     .unwrap();

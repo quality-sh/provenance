@@ -24,8 +24,8 @@ it in the same change.
   work that the current CLI allows. Do not change the graph to suit an old binary.
   To update the native binary, run `cargo install provenance-cli --force`. In a
   TypeScript project, update the `@quality-sh/provenance` development dependency
-  with the package manager.
-- Plan: `{command} prime --quiet`{skill_command_note}
+  with the package manager.{skill_command_note}
+- Plan: `{command} prime --quiet`
 - New obligation: `{command} rule_<slug> create --type rule --scope {selected_scope} --requirement-id <req> --statement "<testable clause>"`
 - Annotate implementation with `rule`, tests with `verifies`. Annotations move
   with code.
@@ -92,6 +92,9 @@ it in the same change.
   https://www.asd-ste100.org/STE_downloads.html#article02-2l. Provenance names
   only its implemented checks and makes no compliance or endorsement claim."#;
 
+/// The command that runs a native Provenance binary from PATH.
+pub const NATIVE_COMMAND: &str = "provenance";
+
 pub struct Invocation(&'static str);
 
 impl Invocation {
@@ -100,14 +103,15 @@ impl Invocation {
         self.0
     }
 
-    /// Tells the agent how to run a skill command in a TypeScript project,
-    /// because the bundled skills show the native command.
+    /// Tells the agent how to run a command from a skill or from the output of
+    /// a command in a TypeScript project, because that text shows the native
+    /// command.
     fn skill_command_note(&self) -> String {
-        if self.0 == "provenance" {
+        if self.0 == NATIVE_COMMAND {
             return String::new();
         }
         format!(
-            "\n- Each command in the installed skills starts with the word provenance. In\n  this project, replace that word with `{}`.",
+            "\n- The installed skills and the output of each command show commands as\n  `{NATIVE_COMMAND} …`. In this project, run them as `{} …`.",
             self.0
         )
     }
@@ -117,7 +121,7 @@ impl Invocation {
         package_manager: Option<PackageManager>,
     ) -> anyhow::Result<Self> {
         match (channel, package_manager) {
-            (InvocationChannel::Native, None) => Ok(Self("provenance")),
+            (InvocationChannel::Native, None) => Ok(Self(NATIVE_COMMAND)),
             (InvocationChannel::Native, Some(_)) => {
                 anyhow::bail!("--package-manager requires the TypeScript invocation channel")
             }

@@ -45,7 +45,7 @@ impl InstallPlan {
                 global,
                 force,
                 copy,
-            } => ("provenance", global, force, copy, true),
+            } => (crate::onboarding::NATIVE_COMMAND, global, force, copy, true),
         };
         let guidance = conflict_guidance(base, global, copy, command);
         let canonical_dir = base.join(".agents").join("skills");
@@ -166,17 +166,18 @@ impl InstallPlan {
     }
 }
 
-fn conflict_guidance(base: &Path, global: bool, copy: bool, program: &str) -> String {
-    let command = format!(
-        "{program} skills install{}{} --force",
+/// `command` is the command that runs Provenance in the project.
+fn conflict_guidance(base: &Path, global: bool, copy: bool, command: &str) -> String {
+    let install = format!(
+        "{command} skills install{}{} --force",
         if global { " --global" } else { "" },
         if copy { " --copy" } else { "" },
     );
     if global {
-        format!("run `{command}`")
+        format!("run `{install}`")
     } else {
         format!(
-            "run `{command}` with this working directory: {}",
+            "run `{install}` with this working directory: {}",
             base.display()
         )
     }

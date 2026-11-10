@@ -181,6 +181,7 @@ fn already_ending(
     scope_ids: &[String],
     path: &Utf8Path,
     dictionary: &crate::ste_onboarding::Plan,
+    command: &'static str,
 ) -> InitEnding {
     InitEnding::already(
         format!(
@@ -188,6 +189,7 @@ fn already_ending(
             scope_phrase(scope_ids)
         ),
         dictionary.warning(),
+        command,
     )
 }
 
@@ -352,11 +354,10 @@ impl InitPlan {
             &self.dictionary,
         )
         .map_or_else(
-            || already_ending(&self.scope_ids, &self.path, &self.dictionary),
-            |summary| InitEnding::applied(summary, self.dictionary.warning()),
+            || already_ending(&self.scope_ids, &self.path, &self.dictionary, self.command),
+            |summary| InitEnding::applied(summary, self.dictionary.warning(), self.command),
         )
-        .with_notice(self.reviewer_notice)
-        .invoked_as(self.command))
+        .with_notice(self.reviewer_notice))
     }
 }
 
