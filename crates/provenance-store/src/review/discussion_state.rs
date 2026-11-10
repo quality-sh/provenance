@@ -109,19 +109,22 @@ impl StateStore {
                 return Err(state_fault(
                     at,
                     format!(
-                        "discussion {id} names scope {}, not the scope of its file",
+                        "the discussion names scope {}, not the scope of its file",
                         discussion.scope_id.as_str()
                     ),
                 ));
             }
             if !ids.insert(id) {
-                return Err(state_fault(at, format!("discussion {id} is stored again")));
+                return Err(state_fault(
+                    at,
+                    format!("the discussion id {id} is stored again"),
+                ));
             }
             let thread_id = discussion.thread_id.as_str();
             let Some(thread) = threads_by_key.get(&(thread_id, scope.as_str())).copied() else {
                 return Err(state_fault(
                     at,
-                    format!("discussion {id} names thread {thread_id}, which does not exist"),
+                    format!("the discussion names thread {thread_id}, which does not exist"),
                 ));
             };
             let parent_kind = discussion_kind_word(discussion.parent.node_type);
@@ -130,7 +133,7 @@ impl StateStore {
                 return Err(state_fault(
                     at,
                     format!(
-                        "discussion {id} names parent {parent}; its thread {thread_id} names parent {}",
+                        "the discussion names parent {parent}; its thread {thread_id} names parent {}",
                         thread.parent.node_id.as_str()
                     ),
                 ));
@@ -142,7 +145,7 @@ impl StateStore {
                 return Err(state_fault(
                     at,
                     format!(
-                        "discussion {id} names parent {parent}, which does not exist one time in this scope"
+                        "the discussion names parent {parent}, which does not exist one time in this scope"
                     ),
                 ));
             }
@@ -151,7 +154,7 @@ impl StateStore {
                 if !membership.insert(message) {
                     return Err(state_fault(
                         at,
-                        format!("discussion {id} names message {message}, which another discussion names"),
+                        format!("the discussion names message {message}, which another discussion names"),
                     ));
                 }
                 let matches = messages_by_id.get(message).is_some_and(|candidates| {
@@ -164,7 +167,7 @@ impl StateStore {
                     return Err(state_fault(
                         at,
                         format!(
-                            "Discussion Message membership mismatch: discussion {id} names message {message}, which is not one message of thread {thread_id}"
+                            "Discussion Message membership mismatch: the discussion names message {message}, which is not one message of thread {thread_id}"
                         ),
                     ));
                 }
