@@ -208,11 +208,10 @@ async fn fit_page(
             if page.rules.len() == limit {
                 return page.cut(at_rule);
             }
-            let rule = GraphNode::Rule(Box::new(
-                records
-                    .remove(id)
-                    .ok_or_else(|| anyhow::anyhow!("ranked Rule left the snapshot"))?,
-            ));
+            let rule =
+                GraphNode::Rule(Box::new(records.remove(id).ok_or_else(|| {
+                    crate::refusal::fault!("ranked Rule left the snapshot")
+                })?));
             let size = serde_json::to_vec(&rule)?.len() + 1;
             if bytes + size > PAGE_BYTES {
                 return page.cut(at_rule);

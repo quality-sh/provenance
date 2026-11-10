@@ -165,7 +165,7 @@ fn signing_key(ctx: &ReadContext) -> anyhow::Result<Vec<u8>> {
     std::fs::File::open(path)?
         .take(33)
         .read_to_end(&mut bytes)?;
-    anyhow::ensure!(bytes.len() == 32, "invalid cursor signing key");
+    crate::write_error::ensure!(Fault, bytes.len() == 32, "invalid cursor signing key");
     Ok(bytes)
 }
 

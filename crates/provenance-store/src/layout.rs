@@ -47,7 +47,7 @@ impl ProvenanceLayout {
     }
     pub fn state_shard_lock_path(&self, shard_path: &Utf8Path) -> anyhow::Result<Utf8PathBuf> {
         let relative = shard_path.strip_prefix(self.state_dir()).map_err(|_| {
-            anyhow::anyhow!("state shard path {shard_path} is outside the state directory")
+            crate::refusal::fault!("state shard path {shard_path} is outside the state directory")
         })?;
         Ok(self
             .cache_dir()
@@ -93,7 +93,9 @@ pub fn locate_repo_root(start: &Utf8Path) -> anyhow::Result<Utf8PathBuf> {
             return Ok(candidate.to_path_buf());
         }
     }
-    anyhow::bail!("could not locate repository root from {start}")
+    Err(crate::refusal::fault!(
+        "could not locate repository root from {start}"
+    ))
 }
 
 #[derive(Debug)]
@@ -160,10 +162,16 @@ pub fn with_initialized_graph<R>(
                         error
                     }
                 })?,
-                Ok(_) => anyhow::bail!("Provenance graph manifest is not a file"),
+                Ok(_) => {
+                    return Err(crate::refusal::fault!(
+                        "Provenance graph manifest is not a file"
+                    ))
+                }
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                     if path_exists(&path)? {
-                        anyhow::bail!("Provenance graph manifest is not a file");
+                        return Err(crate::refusal::fault!(
+                            "Provenance graph manifest is not a file"
+                        ));
                     }
                     return Err(GraphNotInitialized.into());
                 }

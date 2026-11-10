@@ -43,10 +43,11 @@ impl RawRecord {
             .iter()
             .filter(|name| !scan.members.iter().any(|member| &member.name == *name))
             .collect::<Vec<_>>();
-        anyhow::ensure!(
-            missing.is_empty(),
-            "line {line_number}: stored field names {missing:?} cannot be read back safely"
-        );
+        if !missing.is_empty() {
+            return Err(crate::refusal::fault!(
+                "line {line_number}: stored field names {missing:?} cannot be read back safely"
+            ));
+        }
         let unknown = scan
             .members
             .into_iter()
@@ -76,25 +77,26 @@ impl RawRecord {
 
     fn changed_line<T: Serialize>(self, path: &Utf8Path, record: &T) -> anyhow::Result<String> {
         if let Some(name) = self.repeated_member {
-            anyhow::bail!(
+            return Err(crate::refusal::fault!(
                 "{path} line {}: repeated top-level member `{name}` cannot survive a typed record change",
                 self.line_number
-            );
+            ));
         }
         if let Some(field) = self.nested_unknown {
-            anyhow::bail!(
+            return Err(crate::refusal::fault!(
                 "{path} line {}: nested unknown field `{field}` cannot survive a typed record change",
                 self.line_number
-            );
+            ));
         }
         if self.unknown.is_empty() {
             return serde_json::to_string(record).map_err(Into::into);
         }
         let mut typed = serde_json::to_string(record)?;
-        anyhow::ensure!(
-            typed.ends_with('}'),
-            "a changed record with stored unknown fields must serialize as an object"
-        );
+        if !typed.ends_with('}') {
+            return Err(crate::refusal::fault!(
+                "a changed record with stored unknown fields must serialize as an object"
+            ));
+        }
         typed.pop();
         for (position, raw) in self.unknown.iter().enumerate() {
             if position > 0 || typed != "{" {
@@ -169,9 +171,9 @@ impl<T: Serialize> LoadedRecords<T> {
                 .flatten()
                 .any(|raw| raw.id().is_none() && raw.has_unknown())
         {
-            anyhow::bail!(
+            return Err(crate::refusal::fault!(
                 "{path}: unknown fields cannot survive a typed change to a record without an id"
-            );
+            ));
         }
         Ok(lines)
     }
@@ -193,8 +195,15 @@ fn unique_id_match(
         .filter(|(_, candidate)| candidate.as_ref().and_then(RawRecord::id) == Some(id))
         .map(|(index, _)| index);
     let first = matching.next();
-    if first.is_some() && matching.next().is_some() {
-        anyhow::bail!("{path}: duplicate record id `{id}` prevents a safe typed change");
+    if let Some(second) = matching.next() {
+        let line = raw[second].as_ref().map_or(0, |row| row.line_number);
+        return Err(crate::refusal::state_fault(
+            &crate::state_store::message_ids::ShardLine {
+                path: path.to_owned(),
+                line,
+            },
+            format!("duplicate record id `{id}` prevents a safe typed change"),
+        ));
     }
     Ok(first)
 }
@@ -298,7 +307,29 @@ fn top_level_members(line: &str) -> anyhow::Result<Scan> {
 
 #[cfg(test)]
 mod tests {
-    use super::top_level_members;
+    use super::{top_level_members, LoadedRecords, RawRecord};
+
+    #[test]
+    fn a_changed_record_with_a_stored_id_twice_is_located_at_the_second_line() {
+        let mut loaded = LoadedRecords::default();
+        for (index, line) in [r#"{"id":"one","n":1}"#, r#"{"id":"one","n":2}"#]
+            .into_iter()
+            .enumerate()
+        {
+            let (record, raw) =
+                RawRecord::deserialize::<serde_json::Value>(line, index + 1).unwrap();
+            loaded.push(record, raw);
+        }
+        loaded.records_mut()[0]["n"] = 3.into();
+        let error = loaded
+            .into_lines(camino::Utf8Path::new("state/scopes/default/records.jsonl"))
+            .unwrap_err();
+        let state = crate::state_store::readers::StateLineInvalid::find(&error).unwrap();
+        assert_eq!(
+            (state.line, state.message.as_str()),
+            (2, "duplicate record id `one` prevents a safe typed change")
+        );
+    }
 
     #[test]
     fn collects_members_in_written_order_with_raw_bytes() {

@@ -25,9 +25,9 @@ fn owner_matches(record: &impl serde::Serialize, owner: Option<&str>) -> anyhow:
         .or_else(|| value.get("made_by"))
         .and_then(serde_json::Value::as_str);
     if saved_owner != owner {
-        return Err(crate::write_error::SourceFailure::wrap(
-            crate::write_error::WriteFailure::record_ownership_conflict(saved_owner),
-            anyhow::anyhow!("declared_by must match the existing owner"),
+        return Err(crate::refusal::refuse!(
+            (crate::write_error::WriteFailure::record_ownership_conflict(saved_owner)),
+            "declared_by must match the existing owner"
         ));
     }
     Ok(())

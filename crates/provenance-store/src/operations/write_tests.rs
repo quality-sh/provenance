@@ -184,3 +184,64 @@ fn foreign_implementation_owner_is_a_typed_conflict_with_its_identity() {
     assert_eq!(conflicts[0].id, rule.id);
     assert_eq!(conflicts[0].changes[0].before, "foreign");
 }
+
+#[test]
+#[verifies("rule_caller_refusal_has_declared_kind", examples)]
+fn a_rule_declaration_that_names_another_id_is_a_typed_declaration_refusal() {
+    let (_dir, store, scope) = fixture();
+    store.apply_typed_spec(&scope, document()).unwrap();
+    let mut input = document();
+    input.rules[0].id = Some("rule_other".into());
+    let error = WriteError(store.apply_typed_spec(&scope, input).unwrap_err());
+    assert!(
+        error
+            .to_string()
+            .contains("already resolves to canonical id"),
+        "{error}"
+    );
+    assert!(matches!(error.safe(), WriteFailure::InvalidDeclaration));
+}
+
+#[test]
+#[verifies("rule_inconsistent_records_refusal_names_records", examples)]
+fn two_stored_records_at_one_declaration_address_are_located_at_the_second_line() {
+    let (dir, store, scope) = fixture();
+    store.apply_typed_spec(&scope, document()).unwrap();
+    let layout = ProvenanceLayout::new(dir.path().to_str().unwrap());
+    let path = crate::shards::requirements_path(&layout, &scope);
+    let first = std::fs::read_to_string(&path).unwrap();
+    let mut twin: serde_json::Value = serde_json::from_str(first.trim_end()).unwrap();
+    twin["id"] = json!("requirement_zz_twin");
+    std::fs::write(&path, format!("{first}{twin}\n")).unwrap();
+    let error = WriteError(store.apply_typed_spec(&scope, document()).unwrap_err());
+    let WriteFailure::InvalidStateFile {
+        file,
+        line,
+        message,
+    } = error.safe()
+    else {
+        panic!("{error}");
+    };
+    assert_eq!(
+        (file.as_str(), line),
+        ("scopes/default/requirements/req.jsonl", 2)
+    );
+    assert!(
+        message.ends_with("resolves to more than one canonical id"),
+        "{message}"
+    );
+}
+
+#[test]
+#[verifies("rule_caller_refusal_has_declared_kind", examples)]
+fn a_blank_disposition_actor_id_is_an_invalid_input() {
+    let error = WriteError(
+        crate::repository_init::plan_manifest(None, None, None, vec![" ".into()], false, None)
+            .unwrap_err(),
+    );
+    assert_eq!(error.to_string(), "disposition actor IDs must not be empty");
+    assert!(matches!(
+        error.safe(),
+        WriteFailure::InvalidInput { field: Some(field), .. } if field == "actor_ids"
+    ));
+}

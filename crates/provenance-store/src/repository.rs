@@ -189,7 +189,7 @@ impl Repository {
         }
         let cwd = std::env::current_dir().map_err(|error| OpenFailure::Io(error.into()))?;
         let cwd = Utf8PathBuf::from_path_buf(cwd).map_err(|path| {
-            OpenFailure::Io(anyhow::anyhow!(
+            OpenFailure::Io(crate::refusal::fault!(
                 "current directory is not UTF-8: {}",
                 path.display()
             ))

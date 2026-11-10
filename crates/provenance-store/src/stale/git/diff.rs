@@ -55,7 +55,7 @@ fn changed_paths(fields: &[String]) -> (Vec<(ChangeKind, &str, &str)>, Option<an
         let Some(old_path) = fields.get(cursor) else {
             return (
                 paths,
-                Some(anyhow::anyhow!("git diff omitted a changed path")),
+                Some(crate::refusal::fault!("git diff omitted a changed path")),
             );
         };
         cursor += 1;
@@ -66,7 +66,9 @@ fn changed_paths(fields: &[String]) -> (Vec<(ChangeKind, &str, &str)>, Option<an
                 let Some(new_path) = fields.get(cursor) else {
                     return (
                         paths,
-                        Some(anyhow::anyhow!("git diff omitted a rename destination")),
+                        Some(crate::refusal::fault!(
+                            "git diff omitted a rename destination"
+                        )),
                     );
                 };
                 cursor += 1;

@@ -12,12 +12,14 @@ pub(super) fn validate_targets(
     let mut targets = BTreeSet::new();
     for target in &input.adopt_unowned {
         StableId::new(&target.id).map_err(|_| {
-            anyhow::anyhow!(
+            crate::refusal::refuse!(
+                InvalidDeclaration,
                 "adoption target id `{}` must use lowercase ASCII letters, digits, '_' or '-'",
                 target.id
             )
         })?;
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidDeclaration,
             targets.insert(target.clone()),
             "duplicate adoption target `{}:{}`",
             kind_name(target.kind),
@@ -51,13 +53,15 @@ pub(super) fn validate_targets(
                     .count(),
             ),
         };
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidDeclaration,
             declarations > 0,
             "adoption target `{}:{}` does not name a declaration in this document",
             kind_name(target.kind),
             target.id
         );
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidDeclaration,
             exact == 1,
             "adoption target `{}:{}` must name exactly one declaration with the same explicit id",
             kind_name(target.kind),
@@ -79,7 +83,8 @@ pub(super) fn validate_targets(
                 .iter()
                 .any(|value| value.id.as_str() == target.id),
         };
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidDeclaration,
             exists,
             "adoption target `{}:{}` does not exist in canonical state",
             kind_name(target.kind),

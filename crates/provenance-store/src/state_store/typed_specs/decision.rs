@@ -18,7 +18,9 @@ use super::{
     adopted_rule_ids, all_resources, cascade, publication, reconcile_implementations, spec_result,
     DesiredImplementations,
 };
-use crate::state_store::{ReconciledResource, StateStore, TypedSpecInput, TypedSpecResult};
+use crate::state_store::{
+    ReconciledResource, StateStore, TypedDeclarationKind, TypedSpecInput, TypedSpecResult,
+};
 use crate::write_error::{SourceFailure, WriteFailure};
 
 pub(super) struct CurrentTypedState {
@@ -196,27 +198,38 @@ pub fn decide_typed_spec(
 
 impl CurrentTypedState {
     fn new(owner: &str, view: &TypedSpecView) -> anyhow::Result<Self> {
-        let source_addresses = owned_declaration_ids(owner, &view.sources, |record| {
-            (
-                &record.id,
-                record.declared_by.as_deref(),
-                record.declaration_address.as_ref(),
-            )
-        })?;
-        let requirement_addresses = owned_declaration_ids(owner, &view.requirements, |record| {
-            (
-                &record.id,
-                record.declared_by.as_deref(),
-                record.declaration_address.as_ref(),
-            )
-        })?;
-        let rule_addresses = owned_declaration_ids(owner, &view.rules, |record| {
-            (
-                &record.id,
-                record.declared_by.as_deref(),
-                record.declaration_address.as_ref(),
-            )
-        })?;
+        let source_addresses = owned_declaration_ids(
+            TypedDeclarationKind::Source,
+            owner,
+            &view.sources,
+            |record| {
+                (
+                    &record.id,
+                    record.declared_by.as_deref(),
+                    record.declaration_address.as_ref(),
+                )
+            },
+        )?;
+        let requirement_addresses = owned_declaration_ids(
+            TypedDeclarationKind::Requirement,
+            owner,
+            &view.requirements,
+            |record| {
+                (
+                    &record.id,
+                    record.declared_by.as_deref(),
+                    record.declaration_address.as_ref(),
+                )
+            },
+        )?;
+        let rule_addresses =
+            owned_declaration_ids(TypedDeclarationKind::Rule, owner, &view.rules, |record| {
+                (
+                    &record.id,
+                    record.declared_by.as_deref(),
+                    record.declaration_address.as_ref(),
+                )
+            })?;
         Ok(Self {
             sources: view.sources.clone(),
             requirements: view.requirements.clone(),

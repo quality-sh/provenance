@@ -49,7 +49,7 @@ fn review_resource(
         record: record
             .as_object()
             .cloned()
-            .ok_or_else(|| anyhow::anyhow!("reviewed record is not an object"))?,
+            .ok_or_else(|| crate::refusal::fault!("reviewed record is not an object"))?,
         edit: snapshot.edit,
         decision: snapshot.decision,
     })

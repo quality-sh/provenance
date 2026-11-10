@@ -247,7 +247,7 @@ impl StateStore {
         let relative: Utf8PathBuf = path
             .strip_prefix(&state)
             .map_err(|_| {
-                anyhow::anyhow!("{path} is not canonical state, so a view does not hold it")
+                crate::refusal::fault!("{path} is not canonical state, so a view does not hold it")
             })?
             .to_path_buf();
         Ok(relative.iter().collect::<Vec<_>>().join("/"))

@@ -84,11 +84,28 @@ impl StateStore {
     ) -> anyhow::Result<TypedSpecResult> {
         self.validate_typed_spec(scope_id, &input)?;
         let view = self.typed_spec_view(scope_id)?;
-        let decision = decide_typed_spec(scope_id, input, &view)?;
+        let decision = decide_typed_spec(scope_id, input, &view)
+            .map_err(|error| self.locate_shared_address(scope_id, error))?;
         match mode {
             ReconcileMode::Plan => Ok(decision.result),
             ReconcileMode::Apply => decision.publish(self, scope_id),
         }
+    }
+
+    /// Gives a [`identity::SharedDeclarationAddress`] as `invalid_state_file`
+    /// at the line of the second record; another error is unchanged.
+    fn locate_shared_address(&self, scope: &ScopeId, error: anyhow::Error) -> anyhow::Error {
+        let Some(shared) = error.downcast_ref::<identity::SharedDeclarationAddress>() else {
+            return error;
+        };
+        let path = match shared.kind {
+            TypedDeclarationKind::Source => crate::shards::sources_path(&self.layout, scope),
+            TypedDeclarationKind::Requirement => {
+                crate::shards::requirements_path(&self.layout, scope)
+            }
+            TypedDeclarationKind::Rule => crate::shards::rules_path(&self.layout, scope),
+        };
+        super::readers::record_fault(self, &path, shared.id.as_str(), shared.to_string())
     }
 
     /// Puts the evidence of every Rule under a restated Requirement up for review.

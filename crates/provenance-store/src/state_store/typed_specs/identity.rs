@@ -8,6 +8,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use provenance_core::authoring;
+use provenance_core::protocol::TypedDeclarationKind;
 use provenance_core::{DeclarationAddress, StableId};
 use provenance_macros::rule;
 use sha2::{Digest, Sha256};
@@ -49,7 +50,8 @@ pub(super) fn rule_declaration_ids(
             existing,
             &candidates,
         )?;
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidDeclaration,
             canonical.insert(id.as_str().to_string()),
             "two rule declarations resolve to id `{}`",
             id.as_str()
@@ -69,7 +71,8 @@ fn resolve_rule_id(
 ) -> anyhow::Result<StableId> {
     let explicit_id = explicit_id.map(StableId::new).transpose()?;
     if let Some(existing_id) = existing.get(address) {
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidDeclaration,
             explicit_id.as_ref().is_none_or(|id| id == existing_id),
             "declaration `{}` already resolves to canonical id `{}`",
             address.segments().join("/"),
@@ -78,7 +81,8 @@ fn resolve_rule_id(
         return Ok(existing_id.clone());
     }
     if let Some(id) = explicit_id {
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidDeclaration,
             candidates.is_empty() || candidates.contains(&id),
             "rule declaration `{}` can only select an existing migration candidate by explicit id",
             address.segments().join("/")
@@ -87,10 +91,13 @@ fn resolve_rule_id(
     }
     match candidates {
         [id] => return Ok(id.clone()),
-        [_, _, ..] => anyhow::bail!(
-            "rule declaration `{}` has ambiguous existing identities; provide an explicit existing id",
-            address.segments().join("/")
-        ),
+        [_, _, ..] => {
+            return Err(crate::refusal::refuse!(
+                InvalidDeclaration,
+                "rule declaration `{}` has ambiguous existing identities; provide an explicit existing id",
+                address.segments().join("/")
+            ))
+        }
         [] => {}
     }
     resolve_id("rule", owner, address, canonical_key, None, existing)
@@ -116,7 +123,8 @@ pub(super) fn declaration_ids<'a>(
             explicit_id,
             existing,
         )?;
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidDeclaration,
             canonical.insert(id.as_str().to_string()),
             "two {kind} declarations resolve to id `{}`",
             id.as_str()
@@ -140,7 +148,8 @@ fn resolve_id(
 ) -> anyhow::Result<StableId> {
     let explicit_id = explicit_id.map(StableId::new).transpose()?;
     if let Some(existing_id) = existing.get(address) {
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidDeclaration,
             explicit_id.as_ref().is_none_or(|id| id == existing_id),
             "declaration `{}` already resolves to canonical id `{}`",
             address.segments().join("/"),
@@ -168,7 +177,18 @@ fn resolve_id(
     StableId::new(format!("{kind}_{slug}_{}", &digest[..10]))
 }
 
+/// Two stored records of one owner hold the same declaration address. The
+/// store locates the record `id` in the shard of `kind`.
+#[derive(Debug, thiserror::Error)]
+#[error("declaration `{address}` resolves to more than one canonical id")]
+pub(super) struct SharedDeclarationAddress {
+    pub(super) kind: TypedDeclarationKind,
+    pub(super) address: String,
+    pub(super) id: StableId,
+}
+
 pub(super) fn owned_declaration_ids<'a, T: 'a>(
+    kind: TypedDeclarationKind,
     owner: &str,
     records: &'a [T],
     fields: impl Fn(
@@ -188,11 +208,14 @@ pub(super) fn owned_declaration_ids<'a, T: 'a>(
         let Some(address) = address else {
             continue;
         };
-        anyhow::ensure!(
-            ids.insert(address.clone(), id.clone()).is_none(),
-            "declaration `{}` resolves to more than one canonical id",
-            address.segments().join("/")
-        );
+        if ids.insert(address.clone(), id.clone()).is_some() {
+            return Err(SharedDeclarationAddress {
+                kind,
+                address: address.segments().join("/"),
+                id: id.clone(),
+            }
+            .into());
+        }
     }
     Ok(ids)
 }

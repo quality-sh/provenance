@@ -114,9 +114,11 @@ pub fn resolve_range(
     let (base, head) = match (base, head, since) {
         (Some(base), Some(head), None) => (base, head),
         (None, None, Some(since)) => (since, "HEAD".to_string()),
-        _ => anyhow::bail!(
-            "stale requires two commits (`stale <BASE> <HEAD>`) or `--since <COMMIT>`"
-        ),
+        _ => {
+            return Err(crate::refusal::fault!(
+                "stale requires two commits (`stale <BASE> <HEAD>`) or `--since <COMMIT>`"
+            ))
+        }
     };
     let available = command(repo)
         .args(["rev-parse", "--git-dir"])
@@ -126,7 +128,7 @@ pub fn resolve_range(
         })?;
     if !available.status.success() {
         return Err(GitRefusal::Unavailable {
-            source: anyhow::anyhow!(
+            source: crate::refusal::fault!(
                 "git rev-parse failed: {}",
                 String::from_utf8_lossy(&available.stderr).trim()
             ),
@@ -177,7 +179,9 @@ pub(crate) fn revision_source_blobs(
         let mut fields = meta.split(' ');
         let (Some(_mode), Some(kind), Some(object)) = (fields.next(), fields.next(), fields.next())
         else {
-            anyhow::bail!("git ls-tree wrote a malformed entry: {entry}");
+            return Err(crate::refusal::fault!(
+                "git ls-tree wrote a malformed entry: {entry}"
+            ));
         };
         let path = Utf8PathBuf::from(path);
         if kind != "blob"
@@ -216,7 +220,11 @@ pub(crate) fn read_blobs(
         let header = std::str::from_utf8(&rest[..header_end])?;
         let size = match header.split(' ').collect::<Vec<_>>().as_slice() {
             [id, "blob", size] if *id == object => size.parse::<usize>()?,
-            _ => anyhow::bail!("git cat-file could not read {path} ({header})"),
+            _ => {
+                return Err(crate::refusal::fault!(
+                    "git cat-file could not read {path} ({header})"
+                ))
+            }
         };
         let body_start = header_end + 1;
         let body = rest
@@ -275,7 +283,7 @@ fn cat_file<'o>(
         .with_context(|| format!("read {operation}"))?;
     let written = writer
         .join()
-        .map_err(|_| anyhow::anyhow!("git cat-file input writer panicked"))?;
+        .map_err(|_| crate::refusal::fault!("git cat-file input writer panicked"))?;
     let output = checked(output, &operation)?;
     written.context("write git cat-file input")?;
     Ok(output)
@@ -319,10 +327,10 @@ pub(crate) fn is_ancestor(repo: &Utf8Path, commit: &str, head: &str) -> anyhow::
     match output.status.code() {
         Some(0) => Ok(true),
         Some(1) => Ok(false),
-        _ => anyhow::bail!(
+        _ => Err(crate::refusal::fault!(
             "git merge-base --is-ancestor failed: {}",
             String::from_utf8_lossy(&output.stderr).trim()
-        ),
+        )),
     }
 }
 
@@ -336,7 +344,8 @@ fn git(repo: &Utf8Path, args: &[&str]) -> anyhow::Result<Output> {
 }
 
 fn checked(output: Output, operation: &str) -> anyhow::Result<Output> {
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        Fault,
         output.status.success(),
         "{operation} failed: {}",
         String::from_utf8_lossy(&output.stderr).trim()

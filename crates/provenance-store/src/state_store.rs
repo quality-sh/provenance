@@ -259,7 +259,7 @@ impl StateStore {
     pub fn list_scope_directories(&self) -> anyhow::Result<Vec<String>> {
         self.with_repository_read(|held| {
             held.state_keys_under(&held.layout.scopes_dir(), StateEntry::Directory, |path| {
-                anyhow::anyhow!(
+                crate::refusal::fault!(
                     "non-UTF-8 scope directory name: {}",
                     path.file_name().unwrap_or_default().to_string_lossy()
                 )
@@ -369,7 +369,7 @@ impl StateStore {
 pub fn serde_name<T: serde::Serialize>(value: &T) -> anyhow::Result<String> {
     Ok(serde_json::to_value(value)?
         .as_str()
-        .ok_or_else(|| anyhow::anyhow!("expected string enum serialization"))?
+        .ok_or_else(|| crate::refusal::fault!("expected string enum serialization"))?
         .to_string())
 }
 

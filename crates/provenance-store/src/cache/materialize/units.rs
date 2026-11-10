@@ -242,7 +242,7 @@ fn ensure_file_list_unchanged(
         .expect("different file lists have a changed entry");
     Err(UnitHashError::at(
         &changed.1,
-        anyhow::anyhow!("canonical file list changed during hashing"),
+        crate::refusal::fault!("canonical file list changed during hashing"),
     ))
 }
 
@@ -329,7 +329,10 @@ fn collect(
 }
 
 fn unsupported(path: &Utf8Path) -> UnitHashError {
-    UnitHashError::at(path, anyhow::anyhow!("unsupported state entry: {path}"))
+    UnitHashError::at(
+        path,
+        crate::refusal::fault!("unsupported state entry: {path}"),
+    )
 }
 
 /// The canonical path whose bytes could not be hashed.

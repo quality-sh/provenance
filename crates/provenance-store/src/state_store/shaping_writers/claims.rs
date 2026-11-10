@@ -1,4 +1,4 @@
-use crate::write_error::{SourceFailure, WriteFailure};
+use crate::write_error::WriteFailure;
 use provenance_core::{Question, QuestionStatus, StableId, Topic, TopicStatus};
 use provenance_macros::rule;
 
@@ -75,11 +75,12 @@ pub(super) fn ensure_claim_holder(
     actor: &str,
 ) -> anyhow::Result<()> {
     match holder {
-        Some(holder) if holder != actor => Err(SourceFailure::wrap(
-            WriteFailure::ClaimConflict {
+        Some(holder) if holder != actor => Err(crate::refusal::refuse!(
+            (WriteFailure::ClaimConflict {
                 holder: holder.to_owned(),
-            },
-            anyhow::anyhow!("{kind} {} is already claimed by {holder}", id.as_str()),
+            }),
+            "{kind} {} is already claimed by {holder}",
+            id.as_str()
         )),
         _ => Ok(()),
     }

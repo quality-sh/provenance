@@ -36,9 +36,9 @@ impl AdvisoryLock {
             .create(true)
             .truncate(false)
             .open(path)
-            .map_err(|error| anyhow::anyhow!("open advisory lock {path}: {error}"))?;
+            .map_err(|error| crate::refusal::fault!("open advisory lock {path}: {error}"))?;
         file.lock_exclusive()
-            .map_err(|error| anyhow::anyhow!("acquire advisory lock {path}: {error}"))?;
+            .map_err(|error| crate::refusal::fault!("acquire advisory lock {path}: {error}"))?;
         Ok(Self { file })
     }
 }
