@@ -38,7 +38,7 @@ impl StateStore {
         let Some((record, at)) = matches.next() else {
             return Err(crate::refusal::refuse!(
                 ResourceNotFound,
-                "requirement {} does not exist in this scope",
+                "requirement {} does not exist uniquely in this scope",
                 id.as_str()
             ));
         };
