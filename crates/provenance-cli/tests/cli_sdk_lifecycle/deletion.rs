@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 
 const OWNER: &str = "spec://typescript/share-links";
 
-fn document(requirements: Value) -> Value {
+fn document(requirements: &Value) -> Value {
     json!({
         "spec": "share-links",
         "declared_by": OWNER,
@@ -47,21 +47,21 @@ fn record(repo: &str, id: &str) -> Value {
     json_output(&[id, "get", "--repo", repo, "--format", "json"])["record"]["value"].clone()
 }
 
-#[test]
-fn deleting_a_requirement_removes_its_ids_from_surviving_records() {
-    let (_directory, repo) = initialized_repo();
-    let other = json!({"key": "other", "statement": "The host starts."});
+/// Makes the Requirements `sharing` and `other` with a typed document, then
+/// a Resolution, a Rule, a Topic and a Question that cite `sharing` with
+/// `create`. Gives the ids of `sharing` and `other`.
+fn cited_requirement(repo: &str) -> (String, String) {
     let both = json!([
         {"key": "sharing", "statement": "The host stops.", "sources": ["policy"]},
-        other
+        other_requirement()
     ]);
-    let initial = authoring(&repo, "authoring-changes", &document(both));
+    let initial = authoring(repo, "authoring-changes", &document(&both));
     let removed = requirement_id(&initial, "sharing");
     let retained = requirement_id(&initial, "other");
     let both_ids = json!([removed, retained]).to_string();
     let removed_link = json!([{"target_type": "requirement", "target_id": removed}]).to_string();
     create(
-        &repo,
+        repo,
         "res_shared",
         "resolution",
         &[
@@ -76,7 +76,7 @@ fn deleting_a_requirement_removes_its_ids_from_surviving_records() {
         ],
     );
     create(
-        &repo,
+        repo,
         "rule_shared",
         "rule",
         &[
@@ -89,7 +89,7 @@ fn deleting_a_requirement_removes_its_ids_from_surviving_records() {
         ],
     );
     create(
-        &repo,
+        repo,
         "topic_retained",
         "topic",
         &[
@@ -102,7 +102,7 @@ fn deleting_a_requirement_removes_its_ids_from_surviving_records() {
         ],
     );
     create(
-        &repo,
+        repo,
         "question_retained",
         "question",
         &[
@@ -118,14 +118,18 @@ fn deleting_a_requirement_removes_its_ids_from_surviving_records() {
             &removed_link,
         ],
     );
-    let after = document(json!([other]));
+    (removed, retained)
+}
 
-    let planned = authoring(&repo, "authoring-plans", &after);
-    let applied = authoring(&repo, "authoring-changes", &after);
+fn other_requirement() -> Value {
+    json!({"key": "other", "statement": "The host starts."})
+}
 
+/// The cascade that the deletion of `removed` gives.
+fn expected_cascade(removed: &str, retained: &str) -> Value {
     let shared_before = json!([retained, removed]);
     let links_before = json!([{"target_id": removed, "target_type": "requirement"}]);
-    let expected = json!([
+    json!([
         {"id": "res_shared", "kind": "resolution", "state": "updated", "changes": [
             {"field": "requirement_ids", "before": shared_before, "after": [retained]}
         ]},
@@ -139,7 +143,19 @@ fn deleting_a_requirement_removes_its_ids_from_surviving_records() {
             {"field": "contradicts", "before": removed, "after": null},
             {"field": "links", "before": links_before, "after": []}
         ]}
-    ]);
+    ])
+}
+
+#[test]
+fn deleting_a_requirement_removes_its_ids_from_surviving_records() {
+    let (_directory, repo) = initialized_repo();
+    let (removed, retained) = cited_requirement(&repo);
+    let after = document(&json!([other_requirement()]));
+
+    let planned = authoring(&repo, "authoring-plans", &after);
+    let applied = authoring(&repo, "authoring-changes", &after);
+
+    let expected = expected_cascade(&removed, &retained);
     assert_eq!(planned["cascade"], expected, "plan cascade: {planned}");
     assert_eq!(
         (&planned["updated"], &planned["deleted"]),
