@@ -277,6 +277,50 @@ class AgentCargoTest(unittest.TestCase):
         self.assertEqual(self.git("show", f"{snapshot}:src.rs"), "after")
         self.assertEqual(self.git("ls-tree", "-r", "--name-only", snapshot, "--", "target"), "")
 
+    def check_snapshot_entries(self, ignore_target):
+        if ignore_target:
+            (self.repo / ".gitignore").write_text("target/\n")
+            self.git("add", ".gitignore")
+            self.git("commit", "-m", "ignore target")
+        (self.repo / "src.rs").write_text("after\n")
+
+        result = self.cargo("check")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        snapshot = json.loads(self.payload.read_text())["headSha"]
+        self.assertEqual(self.git("show", f"{snapshot}:src.rs"), "after")
+        return self.git("ls-tree", "-r", "--name-only", snapshot).splitlines()
+
+    def test_snapshot_leaves_out_a_target_directory(self):
+        built = self.repo / "target/debug/provenance"
+        built.parent.mkdir(parents=True)
+        built.write_text("local binary")
+
+        entries = self.check_snapshot_entries(ignore_target=False)
+
+        self.assertEqual(sorted(entries), [".github/workflows/agent-cargo.yml", "Cargo.toml", "src.rs"], entries)
+
+    def test_snapshot_leaves_out_a_target_symlink(self):
+        shared = self.root / "shared-target"
+        shared.mkdir()
+        (self.repo / "target").symlink_to(shared, target_is_directory=True)
+
+        entries = self.check_snapshot_entries(ignore_target=True)
+
+        self.assertEqual(sorted(entries), [".github/workflows/agent-cargo.yml", ".gitignore", "Cargo.toml", "src.rs"], entries)
+
+    def test_snapshot_leaves_out_a_target_file(self):
+        (self.repo / "target").write_text("local file")
+
+        entries = self.check_snapshot_entries(ignore_target=True)
+
+        self.assertEqual(sorted(entries), [".github/workflows/agent-cargo.yml", ".gitignore", "Cargo.toml", "src.rs"], entries)
+
+    def test_snapshot_without_target_holds_the_change(self):
+        entries = self.check_snapshot_entries(ignore_target=True)
+
+        self.assertEqual(sorted(entries), [".github/workflows/agent-cargo.yml", ".gitignore", "Cargo.toml", "src.rs"], entries)
+
     def test_shared_target_symlink_keeps_binary_in_worktree_git_dir(self):
         shared = self.root / "shared-target"
         shared_binary = shared / "debug/provenance"

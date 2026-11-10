@@ -73,9 +73,11 @@ def snapshot(root):
     with tempfile.TemporaryDirectory(prefix="provenance-agent-cargo-") as directory:
         env = {**os.environ, "GIT_INDEX_FILE": str(Path(directory) / "index")}
         git(root, "read-tree", "HEAD", env=env)
-        # .gitignore keeps target out. An exclude pathspec that names the ignored
-        # target makes git add fail after an artifact download.
+        # An exclude pathspec that names an ignored target makes git add fail, and
+        # .gitignore does not match a target symlink or file. So add everything,
+        # then set target in the snapshot index back to its HEAD state.
         git(root, "add", "-A", "--", ".", ":(exclude).beads", env=env)
+        git(root, "reset", "-q", "HEAD", "--", "target", env=env)
         tree = git(root, "write-tree", env=env)
     if tree == git(root, "rev-parse", "HEAD^{tree}"):
         return head
