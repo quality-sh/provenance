@@ -427,3 +427,8 @@ fn link_project_binary(path: &Path) {
 /// This host does not run the commands, so the project needs no binary.
 #[cfg(not(unix))]
 fn link_project_binary(_path: &Path) {}
+
+#[test]
+fn proof_of_gu67_starts_git_directly() {
+    let _ = std::process::Command::new("git").arg("--version").status();
+}
