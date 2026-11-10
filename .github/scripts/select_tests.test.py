@@ -210,7 +210,9 @@ def binaries_of_test_files(crate, crate_directory):
     """Return the test binaries that compile each test file of a crate.
 
     A file in src/ belongs to the library tests, which have the crate name as
-    their binary id. Production files in src/ are left out.
+    their binary id. Production files in src/ are left out. A file in src/
+    counts as a test file when its name contains "test", so a name such as
+    latest.rs also counts; this makes the check stricter and is safe.
     """
     tests = crate_directory / "tests"
     binaries = {}
@@ -314,8 +316,9 @@ class SelectionTests(unittest.TestCase):
         )
 
     def test_a_rust_change_in_any_crate_selects_every_rust_source_reader(self):
-        # PR 642 changed only CLI and transport files. A direct Git start in a
-        # CLI test file broke the store test that reads every crate.
+        # A change to a test file of one crate can break a test of a different
+        # crate that reads every Rust file. A direct Git start in a CLI test
+        # file is an example: the store test that reads every crate finds it.
         for path in (
             "crates/provenance-cli/tests/cli_init_typescript_commands.rs",
             "crates/provenance-transport/src/skills.rs",
