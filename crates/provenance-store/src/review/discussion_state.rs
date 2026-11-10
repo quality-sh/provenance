@@ -1,4 +1,8 @@
-use crate::{shards, state_store::StateStore};
+use crate::refusal::state_fault;
+use crate::{
+    shards,
+    state_store::{message_ids::ShardLine, StateStore},
+};
 use provenance_core::{
     threads::{Discussion, DiscussionOrigin, DiscussionOutcome},
     Message, NodeType, Question, Requirement, Resolution, Rule, ScopeId, Source, StableId, Thread,
@@ -73,7 +77,11 @@ impl StateStore {
     /// Reads the scope's Discussions and refuses one whose Thread, parent, or
     /// Message membership disagrees with the Thread and Message records.
     pub(crate) fn validated_discussions(&self, scope: &ScopeId) -> anyhow::Result<Vec<Discussion>> {
-        let discussions = self.list_discussions(scope)?;
+        let discussions: Vec<(Discussion, ShardLine)> =
+            crate::state_store::readers::read_jsonl_located(
+                self,
+                &shards::discussions_path(&self.layout, scope),
+            )?;
         let threads = self.list_threads(scope)?;
         let messages = self.list_messages(scope)?;
         // Index each shard once, so validation runs one pass over these maps
@@ -94,44 +102,78 @@ impl StateStore {
         let parents_by_key = self.index_discussion_parents(scope)?;
         let mut ids = BTreeSet::new();
         let mut membership = BTreeSet::new();
-        for discussion in &discussions {
+        for (discussion, at) in &discussions {
             discussion.validate()?;
-            anyhow::ensure!(discussion.scope_id == *scope, "Discussion scope mismatch");
-            anyhow::ensure!(
-                ids.insert(discussion.discussion_id.as_str()),
-                "duplicate Discussion identity"
-            );
-            let thread = threads_by_key
-                .get(&(discussion.thread_id.as_str(), scope.as_str()))
-                .copied()
-                .ok_or_else(|| anyhow::anyhow!("Discussion Thread is missing"))?;
+            let id = discussion.discussion_id.as_str();
+            if discussion.scope_id != *scope {
+                return Err(state_fault(
+                    at,
+                    format!(
+                        "discussion {id} names scope {}, not the scope of its file",
+                        discussion.scope_id.as_str()
+                    ),
+                ));
+            }
+            if !ids.insert(id) {
+                return Err(state_fault(at, format!("discussion {id} is stored again")));
+            }
+            let thread_id = discussion.thread_id.as_str();
+            let Some(thread) = threads_by_key.get(&(thread_id, scope.as_str())).copied() else {
+                return Err(state_fault(
+                    at,
+                    format!("discussion {id} names thread {thread_id}, which does not exist"),
+                ));
+            };
             let parent_kind = discussion_kind_word(discussion.parent.node_type);
-            anyhow::ensure!(
-                thread.parent == discussion.parent,
-                "Discussion parent mismatch"
-            );
+            let parent = discussion.parent.node_id.as_str();
+            if thread.parent != discussion.parent {
+                return Err(state_fault(
+                    at,
+                    format!(
+                        "discussion {id} names parent {parent}; its thread {thread_id} names parent {}",
+                        thread.parent.node_id.as_str()
+                    ),
+                ));
+            }
             let in_scope = parents_by_key
-                .get(&(parent_kind, discussion.parent.node_id.as_str().to_owned()))
+                .get(&(parent_kind, parent.to_owned()))
                 .is_some_and(|scopes| scopes.len() == 1 && scopes[0].as_str() == scope.as_str());
-            anyhow::ensure!(
-                in_scope,
-                "Discussion parent does not exist uniquely in this scope"
-            );
-            for id in &discussion.message_ids {
-                anyhow::ensure!(
-                    membership.insert(id.as_str()),
-                    "Message belongs to multiple Discussions"
-                );
-                let matches = messages_by_id.get(id.as_str()).is_some_and(|candidates| {
+            if !in_scope {
+                return Err(state_fault(
+                    at,
+                    format!(
+                        "discussion {id} names parent {parent}, which does not exist one time in this scope"
+                    ),
+                ));
+            }
+            for message in &discussion.message_ids {
+                let message = message.as_str();
+                if !membership.insert(message) {
+                    return Err(state_fault(
+                        at,
+                        format!("discussion {id} names message {message}, which another discussion names"),
+                    ));
+                }
+                let matches = messages_by_id.get(message).is_some_and(|candidates| {
                     candidates.len() == 1
                         && candidates
                             .iter()
                             .any(|m| m.scope_id == *scope && m.thread_id == discussion.thread_id)
                 });
-                anyhow::ensure!(matches, "Discussion Message membership mismatch");
+                if !matches {
+                    return Err(state_fault(
+                        at,
+                        format!(
+                            "Discussion Message membership mismatch: discussion {id} names message {message}, which is not one message of thread {thread_id}"
+                        ),
+                    ));
+                }
             }
         }
-        Ok(discussions)
+        Ok(discussions
+            .into_iter()
+            .map(|(discussion, _)| discussion)
+            .collect())
     }
 
     pub(super) fn validate_discussion_origin(
@@ -151,7 +193,8 @@ impl StateStore {
         origin: &DiscussionOrigin,
         discussions: &[Discussion],
     ) -> anyhow::Result<()> {
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidUpdate,
             discussions
                 .iter()
                 .any(|d| d.discussion_id == origin.discussion_id
@@ -184,7 +227,9 @@ impl StateStore {
                 let discussion = discussions
                     .iter_mut()
                     .find(|d| d.discussion_id == origin.discussion_id)
-                    .ok_or_else(|| anyhow::anyhow!("outcome origin Discussion is missing"))?;
+                    .ok_or_else(|| {
+                        crate::refusal::fault!("outcome origin Discussion is missing")
+                    })?;
                 if !discussion.outcomes.contains(&outcome) {
                     discussion.outcomes.push(outcome);
                 }
@@ -210,7 +255,8 @@ impl StateStore {
         match input.parent.node_type {
             // A claim is a work lock, not authorship: any participant may
             // raise a concern on a topic or question.
-            NodeType::Topic | NodeType::Question => anyhow::ensure!(
+            NodeType::Topic | NodeType::Question => crate::write_error::ensure!(
+                InvalidUpdate,
                 input.declared_by.is_none(),
                 "a topic or question parent takes no declared owner"
             ),
@@ -219,16 +265,26 @@ impl StateStore {
             }
         }
         let mut ids = BTreeSet::new();
-        for thread in self.list_threads(&input.scope_id)? {
-            anyhow::ensure!(
-                ids.insert(thread.id.as_str().to_owned()),
-                "duplicate Thread identity"
-            );
-            if thread.parent == input.parent {
-                anyhow::ensure!(
-                    thread.scope_id == input.scope_id,
-                    "Thread parent scope mismatch"
-                );
+        let threads: Vec<(Thread, ShardLine)> = crate::state_store::readers::read_jsonl_located(
+            self,
+            &shards::threads_path(&self.layout, &input.scope_id),
+        )?;
+        for (thread, at) in threads {
+            if !ids.insert(thread.id.as_str().to_owned()) {
+                return Err(state_fault(
+                    &at,
+                    format!("thread {} is stored again", thread.id.as_str()),
+                ));
+            }
+            if thread.parent == input.parent && thread.scope_id != input.scope_id {
+                return Err(state_fault(
+                    &at,
+                    format!(
+                        "thread {} names scope {}, not the scope of its file",
+                        thread.id.as_str(),
+                        thread.scope_id.as_str()
+                    ),
+                ));
             }
         }
         Ok(())
@@ -240,11 +296,9 @@ pub(super) fn parent_owner_matches(
     supplied: Option<&str>,
 ) -> anyhow::Result<()> {
     if saved != supplied {
-        return Err(crate::write_error::SourceFailure::wrap(
-            crate::write_error::WriteFailure::record_ownership_conflict(saved),
-            anyhow::anyhow!(
-                "declared_by must match the existing owner; omit it for a manual record"
-            ),
+        return Err(crate::refusal::refuse!(
+            (crate::write_error::WriteFailure::record_ownership_conflict(saved)),
+            "declared_by must match the existing owner; omit it for a manual record"
         ));
     }
     Ok(())
@@ -280,46 +334,93 @@ impl StateStore {
         parent: &ThreadParent,
     ) -> anyhow::Result<Option<String>> {
         match parent.node_type {
-            NodeType::Source => {
-                Self::resolve_parent_among(&self.list_sources(scope)?, scope, parent)
-            }
-            NodeType::Requirement => {
-                Self::resolve_parent_among(&self.list_requirements(scope)?, scope, parent)
-            }
-            NodeType::Resolution => {
-                Self::resolve_parent_among(&self.list_resolutions(scope)?, scope, parent)
-            }
-            NodeType::Rule => Self::resolve_parent_among(&self.list_rules(scope)?, scope, parent),
-            NodeType::Topic => Self::resolve_parent_among(&self.list_topics(scope)?, scope, parent),
-            NodeType::Question => {
-                Self::resolve_parent_among(&self.list_questions(scope)?, scope, parent)
-            }
+            NodeType::Source => self.resolve_parent_among(
+                &self.list_sources(scope)?,
+                &shards::sources_path(&self.layout, scope),
+                scope,
+                parent,
+            ),
+            NodeType::Requirement => self.resolve_parent_among(
+                &self.list_requirements(scope)?,
+                &shards::requirements_path(&self.layout, scope),
+                scope,
+                parent,
+            ),
+            NodeType::Resolution => self.resolve_parent_among(
+                &self.list_resolutions(scope)?,
+                &shards::resolutions_path(&self.layout, scope),
+                scope,
+                parent,
+            ),
+            NodeType::Rule => self.resolve_parent_among(
+                &self.list_rules(scope)?,
+                &shards::rules_path(&self.layout, scope),
+                scope,
+                parent,
+            ),
+            NodeType::Topic => self.resolve_parent_among(
+                &self.list_topics(scope)?,
+                &shards::topics_path(&self.layout, scope),
+                scope,
+                parent,
+            ),
+            NodeType::Question => self.resolve_parent_among(
+                &self.list_questions(scope)?,
+                &shards::questions_path(&self.layout, scope),
+                scope,
+                parent,
+            ),
         }
     }
 
     fn resolve_parent_among<T: DiscussionParent>(
+        &self,
         records: &[T],
+        path: &camino::Utf8Path,
         scope: &ScopeId,
         parent: &ThreadParent,
     ) -> anyhow::Result<Option<String>> {
+        let id = parent.node_id.as_str();
         let matches = records
             .iter()
             .filter(|record| record.parent_id() == &parent.node_id)
             .collect::<Vec<_>>();
-        anyhow::ensure!(
-            matches.len() <= 1,
-            "Discussion parent identity is not unique"
-        );
+        if matches.len() > 1 {
+            return Err(state_fault(
+                &self.parent_line(path, id, 1)?,
+                format!("Discussion parent {id} is stored again"),
+            ));
+        }
         let record = matches.first().ok_or_else(|| {
-            crate::write_error::SourceFailure::wrap(
-                crate::write_error::WriteFailure::ResourceNotFound,
-                anyhow::anyhow!("Discussion parent does not exist in this scope"),
+            crate::refusal::refuse!(
+                ResourceNotFound,
+                "Discussion parent does not exist in this scope"
             )
         })?;
-        anyhow::ensure!(
-            record.parent_scope() == scope,
-            "Discussion parent scope mismatch"
-        );
+        if record.parent_scope() != scope {
+            return Err(state_fault(
+                &self.parent_line(path, id, 0)?,
+                format!(
+                    "Discussion parent {id} names scope {}, not the scope of its file",
+                    record.parent_scope().as_str()
+                ),
+            ));
+        }
         Ok(record.owner_field().map(str::to_owned))
+    }
+
+    /// The line of the record after `skip` earlier records with the id `id`.
+    fn parent_line(
+        &self,
+        path: &camino::Utf8Path,
+        id: &str,
+        skip: usize,
+    ) -> anyhow::Result<ShardLine> {
+        crate::state_store::readers::read_jsonl_located::<serde_json::Value>(self, path)?
+            .into_iter()
+            .filter(|(record, _)| record["id"] == id)
+            .nth(skip)
+            .map(|(_, at)| at)
+            .ok_or_else(|| crate::refusal::fault!("record {id} has no line in its file"))
     }
 }

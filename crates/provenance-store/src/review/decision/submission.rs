@@ -10,8 +10,8 @@ use crate::{
     },
     shards,
     state_store::{CreateProposalCardInput, RecordStamp, StateStore},
-    write_error::SourceFailure,
 };
+use provenance_core::protocol::failure::OperationFailure;
 use provenance_core::{
     review::{CycleEntry, CycleFact},
     IdeationTarget, PromotionState, ProposalTraceability, ProposalType, RecordRevisionBinding,
@@ -27,10 +27,9 @@ impl StateStore {
         check_request_size(&input)?;
         let scope = input.scope_id.clone();
         self.with_repository_publication(move |held| {
-            anyhow::ensure!(
-                held.manifest()?.scopes.iter().any(|s| s.id == scope),
-                "review scope is not in the manifest"
-            );
+            if !held.manifest()?.scopes.iter().any(|s| s.id == scope) {
+                return Err(OperationFailure::UnknownScope.into());
+            }
             let record = crate::families::review_families::record(
                 held,
                 &scope,
@@ -57,7 +56,7 @@ impl StateStore {
             &input.record_id,
         )?;
         let revision = super::super::save::current_revision(&record)?.ok_or_else(|| {
-            anyhow::anyhow!(
+            crate::refusal::fault!(
                 "submission requires a review revision: save the record through the review seam first"
             )
         })?;
@@ -67,18 +66,18 @@ impl StateStore {
             .as_ref()
             .is_some_and(|expected| revision != *expected)
         {
-            return Err(SourceFailure::wrap(
-                facts.conflict_failure(self, &scope, input.record_kind, &input.record_id)?,
-                anyhow::anyhow!("stale submission revision"),
+            return Err(crate::refusal::refuse!(
+                (facts.conflict_failure(self, &scope, input.record_kind, &input.record_id)?),
+                "stale submission revision"
             ));
         }
         if facts
             .pending_submission(self, &scope, input.record_kind, &input.record_id)?
             .is_some()
         {
-            return Err(SourceFailure::wrap(
-                facts.conflict_failure(self, &scope, input.record_kind, &input.record_id)?,
-                anyhow::anyhow!("this record already has a pending review submission"),
+            return Err(crate::refusal::refuse!(
+                (facts.conflict_failure(self, &scope, input.record_kind, &input.record_id)?),
+                "this record already has a pending review submission"
             ));
         }
         let (revises, revises_rejection) = match &input.revises {

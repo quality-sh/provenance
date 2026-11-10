@@ -4,6 +4,7 @@ use crate::{
     shards,
     state_store::{CreateRequirementInput, RecordStamp, StateStore},
 };
+use provenance_core::protocol::failure::OperationFailure;
 use provenance_core::{
     review::RequirementEditState, threads::DiscussionOrigin, NodeType, Requirement,
 };
@@ -51,10 +52,9 @@ impl StateStore {
         normalize(&mut input)?;
         self.with_repository_publication(|held| {
             let scope = &input.create.scope_id;
-            anyhow::ensure!(
-                held.manifest()?.scopes.iter().any(|s| s.id == *scope),
-                "review scope is not in the manifest"
-            );
+            if !held.manifest()?.scopes.iter().any(|s| s.id == *scope) {
+                return Err(OperationFailure::UnknownScope.into());
+            }
             crate::write_error::ensure!(
                 AlreadyExists,
                 !held
@@ -66,7 +66,8 @@ impl StateStore {
             if let Some(origin) = &input.origin {
                 held.validate_discussion_origin(scope, origin)?;
             }
-            anyhow::ensure!(
+            crate::write_error::ensure!(
+                InvalidUpdate,
                 input.origin.is_some()
                     || !held.origin_requires_review(scope, input.create.origin_message.as_ref())?,
                 "addressed creation requires Discussion origin"
@@ -110,7 +111,8 @@ impl StateStore {
 
 fn normalize(input: &mut CreateReviewRequirement) -> anyhow::Result<()> {
     crate::write_error::ensure_actor(&input.actor)?;
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        RecordTooLarge,
         serde_json::to_vec(&input)?.len() <= 1_048_576,
         "review request exceeds the operation byte budget"
     );
@@ -123,7 +125,8 @@ fn normalize(input: &mut CreateReviewRequirement) -> anyhow::Result<()> {
         ids.dedup();
     }
     if let Some(origin) = &input.origin {
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidUpdate,
             input
                 .create
                 .origin_thread

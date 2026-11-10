@@ -8,7 +8,6 @@ use crate::{
     },
     shards,
     state_store::{CreateDispositionInput, RecordStamp, StateStore},
-    write_error::{SourceFailure, WriteFailure},
 };
 use provenance_core::{
     review::{CycleEntry, CycleFact},
@@ -39,10 +38,11 @@ impl StateStore {
         check_request_size(&input)?;
         let scope = input.scope_id.clone();
         self.with_repository_publication(move |held| {
-            anyhow::ensure!(
-                held.manifest()?.scopes.iter().any(|s| s.id == scope),
-                "review scope is not in the manifest"
-            );
+            if !held.manifest()?.scopes.iter().any(|s| s.id == scope) {
+                return Err(
+                    provenance_core::protocol::failure::OperationFailure::UnknownScope.into(),
+                );
+            }
             let proposal = review_submission(held, &scope, &input.proposal_id)?;
             let facts = CycleFacts::validated(held, &scope)?;
             validate_submission_address(
@@ -54,9 +54,9 @@ impl StateStore {
             crate::families::review_families::record(held, &scope, kind, record_id)?;
             validate_decision_input(kind, record_id, &input)?;
             if facts.is_withdrawn(&input.proposal_id) || facts.is_decided(&input.proposal_id) {
-                return Err(SourceFailure::wrap(
-                    facts.conflict_failure(held, &scope, kind, record_id)?,
-                    anyhow::anyhow!("this review submission is no longer pending"),
+                return Err(crate::refusal::refuse!(
+                    (facts.conflict_failure(held, &scope, kind, record_id)?),
+                    "this review submission is no longer pending"
                 ));
             }
             with_record_state(held, RecordStamp::ResolveFromRepository, |staged| {
@@ -78,12 +78,12 @@ impl StateStore {
         let record =
             crate::families::review_families::record(self, &input.scope_id, kind, &record_id)?;
         let revision = super::super::save::current_revision(&record)?
-            .ok_or_else(|| anyhow::anyhow!("the submitted record has no review revision"))?;
+            .ok_or_else(|| crate::refusal::fault!("the submitted record has no review revision"))?;
         if revision != binding.revision {
             let facts = CycleFacts::validated(self, &input.scope_id)?;
-            return Err(SourceFailure::wrap(
-                facts.conflict_failure(self, &input.scope_id, kind, &record_id)?,
-                anyhow::anyhow!("stale review selection"),
+            return Err(crate::refusal::refuse!(
+                (facts.conflict_failure(self, &input.scope_id, kind, &record_id)?),
+                "stale review selection"
             ));
         }
         let disposition_id = new_id();
@@ -180,9 +180,10 @@ fn validate_decision_input(
     input: &DecideRecordReview,
 ) -> anyhow::Result<()> {
     if input.decision == DispositionDecision::Accepted && input.rationale.is_some() {
-        return Err(WriteFailure::invalid_update(anyhow::anyhow!(
+        return Err(crate::refusal::refuse!(
+            InvalidUpdate,
             "an approval does not take a rationale"
-        )));
+        ));
     }
     if let Some(artifact) = &input.canonical_artifact {
         let artifact_kind = match artifact.artifact_type {
@@ -194,9 +195,10 @@ fn validate_decision_input(
             CanonicalArtifactType::Question => NodeType::Question,
         };
         if artifact_kind != kind || artifact.artifact_id != *record_id {
-            return Err(WriteFailure::invalid_update(anyhow::anyhow!(
+            return Err(crate::refusal::refuse!(
+                InvalidUpdate,
                 "the approval artifact is not the reviewed record"
-            )));
+            ));
         }
     }
     Ok(())

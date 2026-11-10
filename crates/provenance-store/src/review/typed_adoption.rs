@@ -5,7 +5,6 @@ use crate::{
     families::review_families,
     review::publication::with_record_state,
     state_store::{RecordStamp, StateStore},
-    write_error::SourceFailure,
 };
 use provenance_core::{review::ReviewRecord, ScopeId};
 
@@ -21,10 +20,12 @@ impl StateStore {
         actor: &str,
         publish: impl FnOnce(&Self) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
-        anyhow::ensure!(
-            !actor.trim().is_empty(),
-            "invalid typed-spec review identity"
-        );
+        if actor.trim().is_empty() {
+            return Err(crate::refusal::refuse!(
+                (crate::write_error::WriteFailure::invalid_field("actor")),
+                "invalid typed-spec review identity"
+            ));
+        }
         with_record_state(self, RecordStamp::ResolveFromRepository, |staged| {
             // The staged copy holds the live records until `publish` runs.
             let current = review_families::review_records(staged, scope)?;
@@ -85,15 +86,13 @@ fn content(record: &ReviewRecord) -> serde_json::Result<serde_json::Value> {
 }
 
 fn enrolled_deletion_conflict(before: &ReviewRecord) -> anyhow::Error {
-    SourceFailure::wrap(
-        crate::write_error::WriteFailure::EnrolledRecordDeletionConflict {
+    crate::refusal::refuse!(
+        (crate::write_error::WriteFailure::EnrolledRecordDeletionConflict {
             record_kind: before.kind(),
             record_id: before.id().clone(),
-        },
-        anyhow::anyhow!(
-            "cannot delete enrolled {} {} through typed-spec apply",
-            before.kind().as_str(),
-            before.id().as_str()
-        ),
+        }),
+        "cannot delete enrolled {} {} through typed-spec apply",
+        before.kind().as_str(),
+        before.id().as_str()
     )
 }

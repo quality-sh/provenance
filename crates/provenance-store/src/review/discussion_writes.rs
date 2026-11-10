@@ -12,7 +12,8 @@ use provenance_core::{
 use provenance_macros::rule;
 
 pub(super) fn check_size(input: &WriteDiscussion) -> anyhow::Result<()> {
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        RecordTooLarge,
         canonical_digest::canonical_bytes(input)?.len() <= 1_048_576,
         "Discussion request exceeds the operation byte budget"
     );
@@ -62,10 +63,7 @@ impl StateStore {
                         .into_iter()
                         .find(|d| d.discussion_id == *discussion_id)
                         .ok_or_else(|| {
-                            crate::write_error::SourceFailure::wrap(
-                                crate::write_error::WriteFailure::ResourceNotFound,
-                                anyhow::anyhow!("Discussion does not exist"),
-                            )
+                            crate::refusal::refuse!(ResourceNotFound, "Discussion does not exist")
                         })?
                 };
                 crate::write_error::ensure!(
@@ -226,7 +224,8 @@ impl StateStore {
                     );
                 }
                 let current = threads.iter_mut().find(|t| t.id == thread.id).unwrap();
-                anyhow::ensure!(
+                crate::write_error::ensure!(
+                    DiscussionClosed,
                     current.status == ThreadStatus::Active,
                     "Discussion Thread closed during publication"
                 );

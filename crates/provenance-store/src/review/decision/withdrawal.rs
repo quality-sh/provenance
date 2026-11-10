@@ -8,8 +8,9 @@ use crate::{
     },
     shards,
     state_store::{RecordStamp, StateStore},
-    write_error::SourceFailure,
+    write_error::WriteFailure,
 };
+use provenance_core::protocol::failure::OperationFailure;
 use provenance_core::{
     review::{CycleEntry, CycleFact},
     DispositionDecision, NodeType, StableId, Withdrawal,
@@ -43,18 +44,19 @@ impl StateStore {
     ) -> anyhow::Result<CycleEntry> {
         crate::write_error::ensure_actor(&input.actor)?;
         if let Some(reason) = &input.reason {
-            anyhow::ensure!(
-                !reason.trim().is_empty(),
-                "withdrawal reason must not be empty"
-            );
+            if reason.trim().is_empty() {
+                return Err(crate::refusal::refuse!(
+                    (WriteFailure::invalid_field("request.reason")),
+                    "withdrawal reason must not be empty"
+                ));
+            }
         }
         check_request_size(&input)?;
         let scope = input.scope_id.clone();
         self.with_repository_publication(move |held| {
-            anyhow::ensure!(
-                held.manifest()?.scopes.iter().any(|s| s.id == scope),
-                "review scope is not in the manifest"
-            );
+            if !held.manifest()?.scopes.iter().any(|s| s.id == scope) {
+                return Err(OperationFailure::UnknownScope.into());
+            }
             let proposal = review_submission(held, &scope, &input.proposal_id)?;
             let facts = CycleFacts::validated(held, &scope)?;
             validate_submission_address(
@@ -69,8 +71,9 @@ impl StateStore {
                 .record_revision
                 .as_ref()
                 .expect("review_submission checks the binding");
-            let revision = super::super::save::current_revision(&record)?
-                .ok_or_else(|| anyhow::anyhow!("the submitted record has no review revision"))?;
+            let revision = super::super::save::current_revision(&record)?.ok_or_else(|| {
+                crate::refusal::fault!("the submitted record has no review revision")
+            })?;
             let refusal = if revision != binding.revision {
                 Some("this review submission is stale")
             } else if facts.is_withdrawn(&input.proposal_id) {
@@ -86,9 +89,9 @@ impl StateStore {
                 None
             };
             if let Some(reason) = refusal {
-                return Err(SourceFailure::wrap(
-                    facts.conflict_failure(held, &scope, kind, record_id)?,
-                    anyhow::anyhow!(reason),
+                return Err(crate::refusal::refuse!(
+                    (facts.conflict_failure(held, &scope, kind, record_id)?),
+                    "{reason}"
                 ));
             }
             with_record_state(held, RecordStamp::ResolveFromRepository, |staged| {

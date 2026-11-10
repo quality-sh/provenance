@@ -11,7 +11,7 @@ use crate::{
         record_stamps::GraphRecord, AddSourceReferenceInput, CreateRequirementInput, RecordStamp,
         StateStore, UpdateRequirementInput,
     },
-    write_error::{SourceFailure, WriteError, WriteFailure},
+    write_error::{WriteError, WriteFailure},
 };
 use camino::Utf8Path;
 use provenance_core::{review::ReviewRecord, Requirement, ScopeId, SourceReference, StableId};
@@ -35,10 +35,16 @@ impl StateStore {
                     let before =
                         staged.replace_graph_records_guarded(&staged_path, replacement.to_vec())?;
                     for record in &before {
-                        anyhow::ensure!(
-                            replacement.iter().any(|after| after.id() == record.id()),
-                            "an enrolled graph record cannot be removed by replacement"
-                        );
+                        if !replacement.iter().any(|after| after.id() == record.id()) {
+                            let record: ReviewRecord = record.clone().into();
+                            return Err(crate::refusal::refuse!(
+                                (WriteFailure::EnrolledRecordDeletionConflict {
+                                    record_kind: record.kind(),
+                                    record_id: record.id().clone(),
+                                }),
+                                "an enrolled graph record cannot be removed by replacement"
+                            ));
+                        }
                     }
                     if let Some(scope) = scope {
                         staged.validate_graph_scope(&scope)?;
@@ -283,10 +289,7 @@ fn retype_create_error(error: anyhow::Error, duplicate: bool) -> anyhow::Error {
     }
     let wrapper = WriteError(error);
     if matches!(wrapper.safe(), WriteFailure::WriteFailed { .. }) {
-        return SourceFailure::wrap(
-            WriteFailure::AlreadyExists,
-            anyhow::anyhow!("requirement already exists"),
-        );
+        return crate::refusal::refuse!(AlreadyExists, "requirement already exists");
     }
     wrapper.0
 }

@@ -1,6 +1,7 @@
 //! Bounded pages of the canonical JSON of one record version.
 
 use crate::{canonical_digest, operations::reader::RECORD_BYTES};
+use anyhow::Context as _;
 use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
 use provenance_core::{review::EvidencePage, StableId};
 
@@ -32,7 +33,13 @@ pub(in crate::review) fn page(
         Err(error) if error.error_len().is_none() && error.valid_up_to() > 0 => {
             std::str::from_utf8(&buffer[..error.valid_up_to()])?
         }
-        Err(_) => anyhow::bail!("evidence offset is not a UTF-8 boundary"),
+        Err(_) => {
+            return Err(OperationFailure::InvalidInput {
+                field: Some("offset".to_owned()),
+                reason: InvalidInputReason::InvalidValue,
+            })
+            .context("evidence offset is not a UTF-8 boundary");
+        }
     };
     let next = offset + text.len() as u64;
     let result = EvidencePage {
@@ -42,7 +49,8 @@ pub(in crate::review) fn page(
         json_text: text.to_owned(),
         next_offset: (next < length).then_some(next),
     };
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        Fault,
         serde_json::to_vec(&result)?.len() <= RECORD_BYTES,
         "evidence page exceeds the encoded byte budget"
     );

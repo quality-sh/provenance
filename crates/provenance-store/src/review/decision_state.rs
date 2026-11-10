@@ -15,7 +15,8 @@ use provenance_macros::rule;
 const MAX_SAFE_CYCLE: u64 = (1 << 53) - 1;
 
 pub(super) fn check_request_size(input: &impl serde::Serialize) -> anyhow::Result<()> {
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        RecordTooLarge,
         serde_json::to_vec(input)?.len() <= 1_048_576,
         "review request exceeds the operation byte budget"
     );
@@ -309,7 +310,7 @@ impl CycleFacts {
     ) -> anyhow::Result<crate::write_error::WriteFailure> {
         let record = crate::families::review_families::record(store, scope, kind, record_id)?;
         let current_revision = super::save::current_revision(&record)?
-            .ok_or_else(|| anyhow::anyhow!("the submitted record has no review revision"))?;
+            .ok_or_else(|| crate::refusal::fault!("the submitted record has no review revision"))?;
         let current_submission = self
             .pending_submission(store, scope, kind, record_id)?
             .map(|proposal| proposal.id);
@@ -331,8 +332,11 @@ pub(super) fn review_submission(
         .list_proposal_definitions(scope)?
         .into_iter()
         .find(|p| p.id == *proposal_id)
-        .ok_or_else(|| anyhow::anyhow!("review submission does not exist"))?;
-    anyhow::ensure!(
+        .ok_or_else(|| {
+            crate::refusal::refuse!(ResourceNotFound, "review submission does not exist")
+        })?;
+    crate::write_error::ensure!(
+        InvalidUpdate,
         proposal.proposal_type == ProposalType::RecordRevision && proposal.record_revision.is_some(),
         "decision-cycle operations address record_revision submissions; other proposals keep their own disposition paths"
     );
@@ -353,12 +357,14 @@ pub(super) fn validated_resubmission(
     let predecessor = proposals
         .iter()
         .find(|p| p.id == *predecessor)
-        .ok_or_else(|| anyhow::anyhow!("revises names no proposal"))?;
-    anyhow::ensure!(
+        .ok_or_else(|| crate::refusal::refuse!(MissingReference, "revises names no proposal"))?;
+    crate::write_error::ensure!(
+        InvalidUpdate,
         predecessor.proposal_type == ProposalType::RecordRevision,
         "a resubmission revises a review submission"
     );
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        InvalidUpdate,
         NodeType::from(predecessor.traceability.target.artifact_type) == kind
             && predecessor.traceability.target.artifact_id == *record_id,
         "a resubmission revises a submission of the same record"
@@ -368,11 +374,13 @@ pub(super) fn validated_resubmission(
         .into_iter()
         .filter(|d| d.proposal_id == predecessor.id)
         .collect();
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        InvalidUpdate,
         rejections.len() == 1,
         "a resubmission answers exactly one disposition of its predecessor"
     );
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        InvalidUpdate,
         rejections[0].decision == DispositionDecision::Rejected,
         "a resubmission answers a rejection"
     );

@@ -3,8 +3,9 @@ use crate::{
     review::publication::with_record_state,
     shards,
     state_store::{RecordStamp, StateStore},
-    write_error::{SourceFailure, WriteFailure},
+    write_error::WriteFailure,
 };
+use provenance_core::protocol::failure::OperationFailure;
 use provenance_core::review::{RequirementEditState, ReviewRecord};
 use provenance_core::threads::DiscussionOrigin;
 use provenance_core::{NodeType, Requirement, ScopeId, StableId};
@@ -133,7 +134,8 @@ impl StateStore {
         complete: impl FnOnce(&Self, Requirement) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         crate::write_error::ensure_actor(&input.actor)?;
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            RecordTooLarge,
             serde_json::to_vec(&input)?.len() <= 1_048_576,
             "review request exceeds the operation byte budget"
         );
@@ -142,10 +144,9 @@ impl StateStore {
             crate::test_probes::at("requirement_save_locked")?;
             let scope_id = input.update.scope_id.clone();
             let scope = &scope_id;
-            anyhow::ensure!(
-                held.manifest()?.scopes.iter().any(|s| s.id == *scope),
-                "review scope is not in the manifest"
-            );
+            if !held.manifest()?.scopes.iter().any(|s| s.id == *scope) {
+                return Err(OperationFailure::UnknownScope.into());
+            }
             let record = held.requirement(scope, &input.update.id)?;
             super::owner_matches(&record, input.update.declared_by.as_deref())?;
             if let Some(origin) = origin {
@@ -191,9 +192,9 @@ impl StateStore {
             return Ok(before.clone());
         }
         if let Some(current_etag) = stale {
-            return Err(SourceFailure::wrap(
-                WriteFailure::RequirementEditConflict { current_etag },
-                anyhow::anyhow!("stale Requirement edit etag"),
+            return Err(crate::refusal::refuse!(
+                (WriteFailure::RequirementEditConflict { current_etag }),
+                "stale Requirement edit etag"
             ));
         }
         let fields =

@@ -95,7 +95,8 @@ fn read_file_versions(
         ])
         .arg(relative)
         .output()?;
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        Fault,
         output.status.success(),
         "git log failed: {}",
         String::from_utf8_lossy(&output.stderr).trim()
@@ -106,7 +107,9 @@ fn read_file_versions(
         let (Some(commit), Some(parents), Some(author), Some(time)) =
             (parts.next(), parts.next(), parts.next(), parts.next())
         else {
-            anyhow::bail!("git log returned an unreadable commit line");
+            return Err(crate::refusal::fault!(
+                "git log returned an unreadable commit line"
+            ));
         };
         versions.push(FileVersion {
             commit: commit.to_owned(),
@@ -198,8 +201,9 @@ fn read_blobs(root: &Utf8Path, names: &str, count: usize) -> anyhow::Result<Vec<
     let output = child.wait_with_output()?;
     writer
         .join()
-        .map_err(|_| anyhow::anyhow!("git cat-file input thread failed"))??;
-    anyhow::ensure!(
+        .map_err(|_| crate::refusal::fault!("git cat-file input thread failed"))??;
+    crate::write_error::ensure!(
+        Fault,
         output.status.success(),
         "git cat-file failed: {}",
         String::from_utf8_lossy(&output.stderr).trim()
@@ -210,7 +214,7 @@ fn read_blobs(root: &Utf8Path, names: &str, count: usize) -> anyhow::Result<Vec<
         let end = rest
             .iter()
             .position(|byte| *byte == b'\n')
-            .ok_or_else(|| anyhow::anyhow!("git cat-file output ended early"))?;
+            .ok_or_else(|| crate::refusal::fault!("git cat-file output ended early"))?;
         let header = std::str::from_utf8(&rest[..end])?;
         rest = &rest[end + 1..];
         if header.ends_with(" missing") {
@@ -221,8 +225,8 @@ fn read_blobs(root: &Utf8Path, names: &str, count: usize) -> anyhow::Result<Vec<
             .rsplit(' ')
             .next()
             .and_then(|size| size.parse::<usize>().ok())
-            .ok_or_else(|| anyhow::anyhow!("git cat-file returned an unreadable header"))?;
-        anyhow::ensure!(rest.len() > size, "git cat-file output ended early");
+            .ok_or_else(|| crate::refusal::fault!("git cat-file returned an unreadable header"))?;
+        crate::write_error::ensure!(Fault, rest.len() > size, "git cat-file output ended early");
         texts.push(Some(String::from_utf8(rest[..size].to_vec())?));
         rest = &rest[size + 1..];
     }
@@ -272,7 +276,7 @@ pub(super) fn file_at_commits(
         Some(prefix) => prefix,
         None => {
             repository_head(root)
-                .ok_or_else(|| anyhow::anyhow!("record history repository is unavailable"))?
+                .ok_or_else(|| crate::refusal::fault!("record history repository is unavailable"))?
                 .prefix
         }
     };

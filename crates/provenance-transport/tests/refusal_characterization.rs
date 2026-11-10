@@ -244,6 +244,51 @@ async fn an_update_of_a_missing_requirement_is_not_found() {
     );
 }
 
+/// Review refusals that the base commit gave as 500 `write_failed`.
+#[tokio::test]
+#[provenance_macros::verifies("rule_caller_refusal_has_declared_kind", examples)]
+async fn a_review_refusal_has_a_declared_kind() {
+    let repo = Repository::new("The shared graph is readable.");
+    support::records::allow_reviewer(&repo);
+    let host = host(&repo, true);
+    let missing = "/requirements/req_shared/submissions/proposal_missing";
+    let mut rows = Vec::new();
+    for (name, path, data) in [
+        (
+            "withdraw with a blank reason",
+            format!("{missing}/withdraw"),
+            json!({"actor":"agent", "declared_by":null, "reason":" "}),
+        ),
+        (
+            "withdraw a missing submission",
+            format!("{missing}/withdraw"),
+            json!({"actor":"agent", "declared_by":null, "reason":"Revise it."}),
+        ),
+        (
+            "decide a missing submission",
+            format!("{missing}/decide"),
+            json!({"actor":{"identity_type":"human","id":"reviewer"},
+                "decision":"rejected", "rationale":"Name the scope.",
+                "canonical_artifact":null,
+                "feedback":{"role":"user","body":"Name the scope."},
+                "declared_by":null}),
+        ),
+    ] {
+        rows.push(row(
+            name,
+            call(&host, "POST", &path, Some(json!({ "data": data }))).await,
+        ));
+    }
+    assert_eq!(
+        Value::Array(rows),
+        json!([
+            {"error":{"field":"request.reason","kind":"invalid_input","reason":"invalid_value"},"row":"withdraw with a blank reason","status":400},
+            {"error":{"kind":"resource_not_found"},"row":"withdraw a missing submission","status":404},
+            {"error":{"kind":"resource_not_found"},"row":"decide a missing submission","status":404}
+        ])
+    );
+}
+
 #[tokio::test]
 async fn each_refusal_keeps_its_kind_status_and_fields() {
     let repo = Repository::new("The shared graph is readable.");

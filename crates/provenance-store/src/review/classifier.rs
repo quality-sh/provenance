@@ -14,12 +14,12 @@ pub fn changed_fields<T: Serialize>(
     let after = provenance_core::model::record_stamps::content_value(after)?;
     let mut names = before
         .as_object()
-        .ok_or_else(|| anyhow::anyhow!("record does not serialize to an object"))?
+        .ok_or_else(|| crate::refusal::fault!("record does not serialize to an object"))?
         .keys()
         .chain(
             after
                 .as_object()
-                .ok_or_else(|| anyhow::anyhow!("record does not serialize to an object"))?
+                .ok_or_else(|| crate::refusal::fault!("record does not serialize to an object"))?
                 .keys(),
         )
         .cloned()
@@ -28,7 +28,8 @@ pub fn changed_fields<T: Serialize>(
     names.dedup();
     names.retain(|name| before.get(name) != after.get(name));
     let facts = review_families::by_kind(kind);
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        Fault,
         names.iter().all(|name| {
             facts.content_fields.contains(&name.as_str())
                 || facts.lifecycle_fields.contains(&name.as_str())
@@ -53,7 +54,7 @@ pub fn content_digest<T: Serialize>(kind: NodeType, record: &T) -> anyhow::Resul
     let value = provenance_core::model::record_stamps::content_value(record)?;
     let object = value
         .as_object()
-        .ok_or_else(|| anyhow::anyhow!("record does not serialize to an object"))?;
+        .ok_or_else(|| crate::refusal::fault!("record does not serialize to an object"))?;
     let content = review_families::by_kind(kind).content_fields;
     let filtered = object
         .iter()
