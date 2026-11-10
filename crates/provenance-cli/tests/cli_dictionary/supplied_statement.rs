@@ -338,8 +338,9 @@ fn git(repo: &Path, arguments: &[&str]) {
 }
 
 /// Implementation-aid test: no active Rule states the alternatives in a Rule
-/// 1.1 finding yet. The test puts the first alternative of the write refusal
-/// into the statement, so the given word must make the write pass.
+/// 1.1 finding yet. The check and the write refusal give the same message,
+/// and the message gives the fixture text `ITEM (n)`. A statement with the
+/// word "item" in place of the rejected word then makes the write pass.
 #[test]
 fn an_unapproved_word_finding_gives_the_dictionary_alternatives() {
     let (_scratch, repo, index_directory) = setup(true);

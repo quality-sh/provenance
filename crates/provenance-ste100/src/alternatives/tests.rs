@@ -44,6 +44,12 @@ fn dictionary() -> DictionaryImport {
             entry("CCPAIR", Noun, Approved, "Two items of one type"),
             entry("ccpair", Verb, Unapproved, "CONNECT (v)"),
             entry("bzas", Noun, Unapproved, " "),
+            entry("bdup", Noun, Unapproved, "TRY (v)"),
+            entry("bdup", Verb, Unapproved, "TRY (v)."),
+            entry("bplum", Noun, Unapproved, "UNIT (n)"),
+            entry("bqq", Noun, Unapproved, "ONE (n)"),
+            entry("bqq far", Noun, Unapproved, "NEAR (prep)"),
+            entry("bqq far from", Noun, Unapproved, "OUT OF (prep)"),
         ],
     }
 }
@@ -113,4 +119,31 @@ fn a_word_with_an_approved_entry_gives_only_the_unapproved_entry() {
 #[test]
 fn an_entry_with_no_text_gives_no_dictionary_sentence() {
     assert_eq!(messages("The bzas stops."), [message("bzas", "")]);
+}
+
+#[test]
+fn text_that_two_entries_give_occurs_one_time() {
+    assert_eq!(
+        messages("The bdup stops."),
+        [message("bdup", " The dictionary gives: TRY (v).")]
+    );
+}
+
+#[test]
+fn a_plural_gives_the_text_of_its_noun() {
+    assert_eq!(
+        messages("The bplums stop."),
+        [message("bplums", " The dictionary gives: UNIT (n).")]
+    );
+}
+
+#[test]
+fn the_longest_phrase_gives_its_text_and_not_the_text_of_a_shorter_match() {
+    assert_eq!(
+        messages("Stop bqq far from the door."),
+        [message(
+            "bqq far from",
+            " The dictionary gives: OUT OF (prep)."
+        )]
+    );
 }

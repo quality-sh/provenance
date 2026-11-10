@@ -127,3 +127,6 @@ pub(super) fn invalid_value(root: &Value, schema: &Value, flag: &str) -> anyhow:
         },
     )
 }
+
+#[cfg(test)]
+mod tests;

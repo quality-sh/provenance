@@ -55,30 +55,56 @@ fn api_rejects_unsupported_methods_and_malformed_flags_before_any_call() {
     assert_eq!(refused["error"]["field"], "input");
 }
 
+/// A repeated header refuses in the text format with the JSON envelope and
+/// nothing after it, so a hint on a header refusal fails the test. A repeated
+/// query with no `query` selector on a route that has forms reads the first
+/// schema of the name: `limit` takes one value, so the hint has no comma
+/// example.
 #[test]
 fn api_refuses_repeated_header_and_query_names() {
     let (_directory, repo) = init();
 
-    for (flag, first, second, field) in [
-        ("--header", "Accept: one", "Accept: two", "header"),
-        ("--header", "If-Match: \"1\"", "if-match: \"2\"", "header"),
-        ("--query", "limit=1", "limit=2", "query"),
+    for (first, second) in [
+        ("Accept: one", "Accept: two"),
+        ("If-Match: \"1\"", "if-match: \"2\""),
     ] {
-        let refused = refusal(&[
+        let text = output(&[
             "api",
             "requirements",
             "--repo",
             &repo,
-            "--format",
-            "json",
-            flag,
+            "--header",
             first,
-            flag,
+            "--header",
             second,
         ]);
-        assert_eq!(refused["error"]["kind"], "invalid_input", "{first}");
-        assert_eq!(refused["error"]["field"], field, "{first}");
+        assert!(!text.status.success(), "{first}");
+        assert_eq!(
+            String::from_utf8_lossy(&text.stderr).trim_end(),
+            "Error: {\"error\":{\"field\":\"header\",\"kind\":\"invalid_input\",\
+             \"reason\":\"invalid_value\"},\"meta\":{}}",
+            "{first}"
+        );
     }
+
+    let refused = refusal(&[
+        "api",
+        "requirements",
+        "--repo",
+        &repo,
+        "--format",
+        "json",
+        "--query",
+        "limit=1",
+        "--query",
+        "limit=2",
+    ]);
+    assert_eq!(
+        refused,
+        json!({"error": {"field": "query",
+            "hint": "--query limit occurs more than one time; give each parameter one time",
+            "kind": "invalid_input", "reason": "invalid_value"}, "meta": {}})
+    );
 }
 
 #[test]
@@ -255,4 +281,33 @@ fn api_repeated_header_and_query_give_the_header_refusal_with_no_hint() {
         json!({"error": {"field": "header", "kind": "invalid_input",
             "reason": "invalid_value"}, "meta": {}})
     );
+}
+
+/// Implementation-aid test: no active Rule states this refusal yet. With no
+/// path, or with a path that no route matches, one use of the parameter also
+/// fails, so the refusal gives no hint.
+#[test]
+fn api_repeated_query_with_no_route_gives_no_hint() {
+    let (_directory, repo) = init();
+
+    for path in [None, Some("nowhere/at_all")] {
+        let mut arguments = vec!["api"];
+        arguments.extend(path);
+        arguments.extend([
+            "--repo",
+            repo.as_str(),
+            "--format",
+            "json",
+            "--query",
+            "a=1",
+            "--query",
+            "a=2",
+        ]);
+        assert_eq!(
+            refusal(&arguments),
+            json!({"error": {"field": "query", "kind": "invalid_input",
+                "reason": "invalid_value"}, "meta": {}}),
+            "{path:?}"
+        );
+    }
 }

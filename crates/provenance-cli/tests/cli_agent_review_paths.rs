@@ -144,7 +144,7 @@ fn invalid_if_match_names_the_edit_etag_form() {
     let (_directory, repo) = init();
     create_requirement(&repo, "req_etag");
 
-    provenance()
+    let refused = provenance()
         .args([
             "req_etag",
             "update",
@@ -155,12 +155,14 @@ fn invalid_if_match_names_the_edit_etag_form() {
             "--description",
             "Changed",
         ])
-        .assert()
-        .failure()
-        .stderr(contains(
-            "--if-match must equal edit.etag from the latest record read; \
-             expected sha256:<64 lowercase hexadecimal characters>",
-        ));
+        .output()
+        .unwrap();
+    assert!(!refused.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&refused.stderr).trim_end(),
+        "error: --if-match must equal edit.etag from the latest record read; \
+         expected sha256:<64 lowercase hexadecimal characters>"
+    );
 }
 
 #[test]
