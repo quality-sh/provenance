@@ -100,7 +100,7 @@ pub async fn dispatch(args: ApiArgs) -> anyhow::Result<()> {
                 repeated_query(&args.queries),
                 failure
                     .get_mut("error")
-                    .and_then(|value| value.as_object_mut()),
+                    .and_then(serde_json::Value::as_object_mut),
             ) {
                 object.insert("hint".into(), hint.into());
             }

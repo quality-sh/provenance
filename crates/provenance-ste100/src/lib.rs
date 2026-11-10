@@ -232,16 +232,18 @@ fn unapproved_word_findings(
         })
         .map(|word_use| {
             let rejected = &text[word_use.span.start..word_use.span.end];
-            let mut message = format!(
-                "The word or phrase \"{rejected}\" is not approved by ASD-STE100 Rule 1.1."
-            );
             let alternatives = alternatives::for_rejected(dictionary, rejected);
-            if !alternatives.is_empty() {
-                message.push_str(&format!(
+            let given = if alternatives.is_empty() {
+                String::new()
+            } else {
+                format!(
                     " The dictionary gives these approved alternatives: {}.",
                     alternatives.join("; ")
-                ));
-            }
+                )
+            };
+            let message = format!(
+                "The word or phrase \"{rejected}\" is not approved by ASD-STE100 Rule 1.1.{given}"
+            );
             Finding {
                 rule: RuleNumber::OneOne,
                 kind: FindingKind::Violation,
