@@ -5,6 +5,7 @@
 //! that no flag assigned. Query parameters keep the canonical parameter
 //! encoding that the shared catalog contract defines.
 
+use super::field_schema;
 use super::fields::{self, Field, Source};
 use crate::catalog_cli::ensure_only_fields;
 use axum::http::{HeaderMap, HeaderName, HeaderValue};
@@ -73,7 +74,7 @@ pub(super) fn parse(
                 let item_schema = if wrap_array {
                     Some(value_schema.clone())
                 } else {
-                    array_item_schema(request, &value_schema).cloned()
+                    field_schema::array_item_schema(request, &value_schema).cloned()
                 };
                 let body = BodyField {
                     wire_name: &wire_field,
@@ -334,7 +335,7 @@ fn parse_plain_value(
         }
         return parsed;
     }
-    if schema_kind(request, field.schema, 0) == Some("object") {
+    if field_schema::names_object(request, field.schema) {
         if let Some(value) = super::plain_object::wrap(request, field.schema, raw) {
             anyhow::ensure!(
                 validates(request, field.schema, &value)?,
@@ -351,21 +352,17 @@ fn parse_plain_value(
 }
 
 fn parse_typed(request: &Value, schema: &Value, flag: &str, raw: &str) -> anyhow::Result<Value> {
-    if accepts_string(request, schema, 0) {
-        let value = Value::String(raw.to_owned());
-        anyhow::ensure!(
-            validates(request, schema, &value)?,
-            "invalid value for --{flag}"
-        );
-        return Ok(value);
+    let refused = || field_schema::invalid_value(request, schema, flag);
+    let value = if field_schema::accepts_string(request, schema) {
+        Value::String(raw.to_owned())
+    } else {
+        provenance_contract::parse_schema_value_in(request, schema, raw).map_err(|_| refused())?
+    };
+    if validates(request, schema, &value)? {
+        Ok(value)
+    } else {
+        Err(refused())
     }
-    let value = provenance_contract::parse_schema_value_in(request, schema, raw)
-        .map_err(|_| anyhow::anyhow!("invalid value for --{flag}"))?;
-    anyhow::ensure!(
-        validates(request, schema, &value)?,
-        "invalid value for --{flag}"
-    );
-    Ok(value)
 }
 
 fn parse_json(request: &Value, schema: &Value, flag: &str, raw: &str) -> anyhow::Result<Value> {
@@ -397,91 +394,6 @@ fn validates(root: &Value, schema: &Value, value: &Value) -> anyhow::Result<bool
         .build(&standalone)
         .map_err(|error| anyhow::anyhow!("invalid catalog field schema: {error}"))?;
     Ok(validator.is_valid(value))
-}
-
-/// Whether one schema admits a plain string, following references and unions.
-fn accepts_string(root: &Value, schema: &Value, depth: usize) -> bool {
-    if depth > 64 {
-        return false;
-    }
-    if let Some(reference) = schema.get("$ref").and_then(Value::as_str) {
-        return resolve(root, reference)
-            .is_some_and(|schema| accepts_string(root, schema, depth + 1));
-    }
-    if let Some(variants) = schema
-        .get("anyOf")
-        .or_else(|| schema.get("oneOf"))
-        .and_then(Value::as_array)
-    {
-        return variants
-            .iter()
-            .any(|schema| accepts_string(root, schema, depth + 1));
-    }
-    schema.get("type").is_some_and(|kind| match kind {
-        Value::String(kind) => kind == "string",
-        Value::Array(kinds) => kinds.iter().any(|kind| kind == "string"),
-        _ => false,
-    }) || schema
-        .get("enum")
-        .and_then(Value::as_array)
-        .is_some_and(|values| values.iter().all(Value::is_string))
-}
-
-/// The item schema of a schema-defined array, following references and unions
-/// that admit exactly one array shape.
-fn array_item_schema<'a>(root: &'a Value, schema: &'a Value) -> Option<&'a Value> {
-    if let Some(reference) = schema.get("$ref").and_then(Value::as_str) {
-        return resolve(root, reference).and_then(|schema| array_item_schema(root, schema));
-    }
-    if schema.get("type") == Some(&json!("array")) {
-        return schema.get("items");
-    }
-    let variants = schema
-        .get("anyOf")
-        .or_else(|| schema.get("oneOf"))
-        .and_then(Value::as_array)?;
-    let mut items = variants
-        .iter()
-        .filter_map(|schema| array_item_schema(root, schema));
-    let item = items.next()?;
-    items.next().is_none().then_some(item)
-}
-
-/// Whether one schema names an object, following references and unions.
-fn schema_kind(root: &Value, schema: &Value, depth: usize) -> Option<&'static str> {
-    if depth > 64 {
-        return None;
-    }
-    if let Some(reference) = schema.get("$ref").and_then(Value::as_str) {
-        return resolve(root, reference).and_then(|schema| schema_kind(root, schema, depth + 1));
-    }
-    if let Some(variants) = schema
-        .get("anyOf")
-        .or_else(|| schema.get("oneOf"))
-        .and_then(Value::as_array)
-    {
-        let mut kind = None;
-        for variant in variants {
-            if variant.get("type") == Some(&json!("null")) {
-                continue;
-            }
-            let current = schema_kind(root, variant, depth + 1)?;
-            if kind.is_some_and(|previous| previous != current) {
-                return None;
-            }
-            kind = Some(current);
-        }
-        return kind;
-    }
-    match schema.get("type").and_then(Value::as_str) {
-        Some("object") => Some("object"),
-        _ => None,
-    }
-}
-
-fn resolve<'a>(root: &'a Value, reference: &str) -> Option<&'a Value> {
-    let name = reference.strip_prefix("#/$defs/")?;
-    root.get("$defs")?.get(name)
 }
 
 fn apply_defaults(definition: &Definition, data: &mut Map<String, Value>) {

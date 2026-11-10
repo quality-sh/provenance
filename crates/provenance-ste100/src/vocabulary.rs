@@ -8,13 +8,20 @@ use crate::sentence;
 use crate::word_class;
 use crate::{DictionaryImport, DictionaryStatus, PartOfSpeech, Span, VocabularyCategory, WordUse};
 
+/// One classified word or phrase, with the indices of the dictionary entries
+/// that set its category.
+pub struct Classified {
+    pub word_use: WordUse,
+    pub entries: Vec<usize>,
+}
+
 /// Classifies each word or phrase by dictionary membership only.
 #[rule("rule_ste_dictionary_finding_categories")]
 pub fn classify(
     text: &str,
     protected: &ProtectedSpans,
     dictionary: &DictionaryImport,
-) -> Vec<WordUse> {
+) -> Vec<Classified> {
     let index = VocabularyIndex::build(dictionary);
     let tokens = scan_tokens(text);
     let sentences = sentence::scan(text, protected);
@@ -28,24 +35,31 @@ pub fn classify(
             continue;
         }
         if let Some(matched) = index.longest_phrase(text, protected, &tokens, position) {
-            uses.push(WordUse {
-                span: Span {
-                    start: token.start,
-                    end: tokens[position + matched.length - 1].end,
+            uses.push(Classified {
+                word_use: WordUse {
+                    span: Span {
+                        start: token.start,
+                        end: tokens[position + matched.length - 1].end,
+                    },
+                    category: matched.category,
                 },
-                category: matched.category,
+                entries: matched.entries,
             });
             position += matched.length;
             continue;
         }
-        uses.push(WordUse {
-            span: Span {
-                start: token.start,
-                end: token.end,
+        let (category, picked) = settle(index.word_matches(&token.folded), || {
+            word_class::guess(text, &tokens, position, &sentences)
+        });
+        uses.push(Classified {
+            word_use: WordUse {
+                span: Span {
+                    start: token.start,
+                    end: token.end,
+                },
+                category,
             },
-            category: settle(&index.word_matches(&token.folded), || {
-                word_class::guess(text, &tokens, position, &sentences)
-            }),
+            entries: picked.iter().map(|found| found.entry).collect(),
         });
         position += 1;
     }
@@ -163,14 +177,24 @@ fn is_identifier_edge(character: Option<char>) -> bool {
 struct PhraseMatch {
     length: usize,
     category: VocabularyCategory,
+    entries: Vec<usize>,
 }
 
-/// One dictionary entry that a token can stand for.
-type EntryMatch = (PartOfSpeech, DictionaryStatus);
+/// One dictionary entry that a token can stand for, with its index in the
+/// dictionary.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct EntryMatch {
+    part_of_speech: PartOfSpeech,
+    status: DictionaryStatus,
+    entry: usize,
+}
+
+/// One dictionary phrase: its words, its status, and its entry index.
+type PhraseEntry = (Vec<String>, DictionaryStatus, usize);
 
 struct VocabularyIndex {
     words: HashMap<String, Vec<EntryMatch>>,
-    phrases: HashMap<String, Vec<(Vec<String>, DictionaryStatus)>>,
+    phrases: HashMap<String, Vec<PhraseEntry>>,
 }
 
 impl VocabularyIndex {
@@ -179,7 +203,7 @@ impl VocabularyIndex {
             words: HashMap::new(),
             phrases: HashMap::new(),
         };
-        for entry in &dictionary.entries {
+        for (position, entry) in dictionary.entries.iter().enumerate() {
             for form in &entry.word_forms {
                 let folded = form.to_lowercase();
                 let words: Vec<String> = folded.split_whitespace().map(str::to_owned).collect();
@@ -187,17 +211,21 @@ impl VocabularyIndex {
                     [] => {}
                     [word] => {
                         let matches = index.words.entry(word.clone()).or_default();
-                        let found = (entry.part_of_speech, entry.status);
+                        let found = EntryMatch {
+                            part_of_speech: entry.part_of_speech,
+                            status: entry.status,
+                            entry: position,
+                        };
                         if !matches.contains(&found) {
                             matches.push(found);
                         }
                     }
                     [first, ..] => {
-                        index
-                            .phrases
-                            .entry(first.clone())
-                            .or_default()
-                            .push((words, entry.status));
+                        index.phrases.entry(first.clone()).or_default().push((
+                            words,
+                            entry.status,
+                            position,
+                        ));
                     }
                 }
             }
@@ -241,22 +269,24 @@ impl VocabularyIndex {
         position: usize,
     ) -> Option<PhraseMatch> {
         let candidates = self.phrases.get(&tokens[position].folded)?;
-        let matching: Vec<&(Vec<String>, DictionaryStatus)> = candidates
+        let matching: Vec<&PhraseEntry> = candidates
             .iter()
-            .filter(|(words, _)| phrase_matches(text, protected, tokens, position, words))
+            .filter(|(words, _, _)| phrase_matches(text, protected, tokens, position, words))
             .collect();
-        let length = matching.iter().map(|(words, _)| words.len()).max()?;
-        let status_present = |wanted: DictionaryStatus| {
-            matching
-                .iter()
-                .any(|(words, status)| words.len() == length && *status == wanted)
-        };
+        let length = matching.iter().map(|(words, _, _)| words.len()).max()?;
+        let longest: Vec<&PhraseEntry> = matching
+            .into_iter()
+            .filter(|(words, _, _)| words.len() == length)
+            .collect();
+        let status_present =
+            |wanted: DictionaryStatus| longest.iter().any(|(_, status, _)| *status == wanted);
         Some(PhraseMatch {
             length,
             category: category_of(
                 status_present(DictionaryStatus::Approved),
                 status_present(DictionaryStatus::Unapproved),
             ),
+            entries: longest.iter().map(|(_, _, entry)| *entry).collect(),
         })
     }
 }
@@ -286,37 +316,41 @@ fn phrase_matches(
     true
 }
 
-fn derives(ending: Inflection, (part_of_speech, status): EntryMatch) -> bool {
-    part_of_speech == ending.part_of_speech()
-        && (ending == Inflection::Plural || status == DictionaryStatus::Unapproved)
+fn derives(ending: Inflection, found: EntryMatch) -> bool {
+    found.part_of_speech == ending.part_of_speech()
+        && (ending == Inflection::Plural || found.status == DictionaryStatus::Unapproved)
 }
 
-/// Gives the category of a word. When the word has approved and unapproved
-/// entries, and each entry is a noun or a verb, the word class from the
-/// sentence picks the entries. Otherwise the word stays uncertain.
+/// Gives the category of a word and the entries that set it. When the word
+/// has approved and unapproved entries, and each entry is a noun or a verb,
+/// the word class from the sentence picks the entries. Otherwise the word
+/// stays uncertain.
 fn settle(
-    matches: &[EntryMatch],
+    matches: Vec<EntryMatch>,
     guess: impl FnOnce() -> Option<word_class::WordClass>,
-) -> VocabularyCategory {
-    let category = status_category(matches);
-    let noun_or_verb = matches.iter().all(|(part_of_speech, _)| {
-        matches!(part_of_speech, PartOfSpeech::Noun | PartOfSpeech::Verb)
+) -> (VocabularyCategory, Vec<EntryMatch>) {
+    let category = status_category(&matches);
+    let noun_or_verb = matches.iter().all(|found| {
+        matches!(
+            found.part_of_speech,
+            PartOfSpeech::Noun | PartOfSpeech::Verb
+        )
     });
     if category != VocabularyCategory::Uncertain || !noun_or_verb {
-        return category;
+        return (category, matches);
     }
     let Some(class) = guess() else {
-        return category;
+        return (category, matches);
     };
     let picked: Vec<EntryMatch> = matches
         .iter()
         .copied()
-        .filter(|(part_of_speech, _)| *part_of_speech == class.part_of_speech())
+        .filter(|found| found.part_of_speech == class.part_of_speech())
         .collect();
     if picked.is_empty() {
-        category
+        (category, matches)
     } else {
-        status_category(&picked)
+        (status_category(&picked), picked)
     }
 }
 
@@ -324,10 +358,10 @@ fn status_category(matches: &[EntryMatch]) -> VocabularyCategory {
     category_of(
         matches
             .iter()
-            .any(|(_, status)| *status == DictionaryStatus::Approved),
+            .any(|found| found.status == DictionaryStatus::Approved),
         matches
             .iter()
-            .any(|(_, status)| *status == DictionaryStatus::Unapproved),
+            .any(|found| found.status == DictionaryStatus::Unapproved),
     )
 }
 

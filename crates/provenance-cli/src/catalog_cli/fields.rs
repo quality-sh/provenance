@@ -183,7 +183,7 @@ pub fn schema_input(
             .as_deref()
             .map(|raw| {
                 provenance_contract::parse_schema_value_in(schema, declaration, raw)
-                    .map_err(|_| anyhow::anyhow!("invalid value for --{name}"))
+                    .map_err(|_| super::field_schema::invalid_value(schema, declaration, &name))
             })
             .transpose()?;
         if let Some(parsed) = parsed {
