@@ -31,11 +31,19 @@ cat > "$fixture/package.json" <<JSON
 }
 JSON
 
-(
-  cd "$fixture"
-  sfw npx --yes "@quality-sh/create-provenance@$version" \
-    --path "$fixture" --package-manager deno
-)
+initialize_deno_fixture() {
+  (
+    cd "$fixture" &&
+      sfw npx --yes "@quality-sh/create-provenance@$version" \
+        --path "$fixture" --package-manager deno
+  )
+}
+
+# npm view can see a version before the registry serves its tarball to npx.
+if ! retry_channel "$channel" initialize_deno_fixture; then
+  channel_failure "$channel" "Deno initialization failed after all packages became visible"
+  exit 1
+fi
 
 node - "$fixture" "$version" <<'JS'
 const { readFileSync } = require("node:fs");

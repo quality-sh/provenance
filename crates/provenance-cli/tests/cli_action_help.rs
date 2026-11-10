@@ -103,6 +103,24 @@ fn update_help_lists_only_the_fields_of_the_existing_record_type() {
 
 #[test]
 #[verifies("rule_create_help_accepted_fields", examples)]
+fn update_help_of_a_source_names_no_archive_field() {
+    let (_directory, repo) = init();
+    provenance()
+        .args(["src_a", "create", "--repo", &repo, "--type", "source"])
+        .args(["--name", "Source A", "--source-type", "project_artifact"])
+        .args(["--url", "https://example.com/a"])
+        .assert()
+        .success();
+
+    let text = help(&repo, &["src_a", "update"]);
+    assert!(text.contains("--url"), "{text}");
+    for flag in ["--status", "--archived-in-commit"] {
+        assert!(!text.contains(flag), "{flag} in\n{text}");
+    }
+}
+
+#[test]
+#[verifies("rule_create_help_accepted_fields", examples)]
 fn header_bound_body_fields_stay_out_of_help_and_are_usage_errors() {
     let (_directory, repo) = init_with_requirement();
 

@@ -110,9 +110,13 @@ behavior. A later declaration application can restate the fields it owns.
 Every review record PATCH takes the current ETag in `If-Match`. Requirement,
 Topic, and Question routes require it. The other routes write without it. The
 server creates the request identity. The member read returns the ETag. The
-response carries the record with its edit state, decision state, and the new
-ETag. A Requirement statement change uses the statement write gate and raises
-the existing Requirement reviews for its Rules. Rule statements use the same
+PATCH response of a Requirement carries the record, its `decision` block, and
+its `edit` block. The `edit` block holds the new ETag. The PATCH response of a
+Rule or Resolution carries only the record. It has no `decision` block and no
+`edit` block. To get the next ETag of a Rule or Resolution, read the record
+again. The CLI adds a review field to the response (see
+[Native CLI](#native-cli)). A Requirement statement change uses the statement
+write gate and raises the existing Requirement reviews for its Rules. Rule statements use the same
 write gate. Reviews keep their before/after values and clearing behavior.
 Requirement and review publication uses more than one shard. The Store resolves
 an interrupted publication. The wire returns `write_failed` when it cannot
@@ -137,7 +141,10 @@ each archive commit that is not in the history of `HEAD`.
 ## Native CLI
 
 Record commands use the resource address. The record ID comes from the
-address, and `--scope` selects the scope. Scalar fields use flags. Arrays and
+address, and `--scope` selects the scope. The CLI response of a Requirement,
+Rule, Resolution, or Topic update adds the review that the update opened:
+`review_url` when a review host runs, or `review_message` when no review host
+runs. The PATCH response has neither field. Scalar fields use flags. Arrays and
 objects use one JSON object on standard input with `--stdin`:
 
 ```sh
