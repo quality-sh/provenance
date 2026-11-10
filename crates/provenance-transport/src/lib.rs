@@ -64,6 +64,8 @@ pub mod snapshot;
 #[cfg(feature = "host")]
 mod ste_onboarding;
 #[cfg(feature = "host")]
+mod test_probes;
+#[cfg(feature = "host")]
 pub use review_page::ReviewPageWrite;
 
 #[cfg(feature = "host")]
