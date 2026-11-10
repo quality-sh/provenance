@@ -7,8 +7,6 @@ use provenance_core::{
 };
 use provenance_macros::verifies;
 
-mod properties;
-
 fn proposal_input(
     scope: &provenance_core::ScopeId,
     id: &str,

@@ -378,5 +378,4 @@ pub(crate) fn manifest_from_bytes(bytes: &[u8]) -> anyhow::Result<Manifest> {
 }
 
 #[cfg(test)]
-#[cfg(feature = "host")]
 mod tests;
