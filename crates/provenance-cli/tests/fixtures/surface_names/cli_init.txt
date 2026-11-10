@@ -1,3 +1,5 @@
+Set up Provenance in a repository and install the agent skills
+
 Usage: provenance init [OPTIONS]
 
 Options:

@@ -1,3 +1,5 @@
+Add the records of one scope export file to the scope
+
 Usage: provenance import [OPTIONS] --input <INPUT>
 
 Options:

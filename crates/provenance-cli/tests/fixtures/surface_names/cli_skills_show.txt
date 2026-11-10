@@ -1,3 +1,5 @@
+Show the text of one bundled agent skill
+
 Usage: provenance skills show [OPTIONS] <NAME>
 
 Arguments:

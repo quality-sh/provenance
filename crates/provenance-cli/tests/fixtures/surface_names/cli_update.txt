@@ -154,3 +154,14 @@ Options:
   -h, --help
           Print help
 
+To archive a record, set the archived status and give the commit that contains the change:
+  provenance <id> update --status archived --archived-in-commit <full_commit_sha> \
+    --if-match <etag>
+
+An archived status is terminal. Archiving a Requirement also archives, in the same write,
+each Requirement, Rule, and Resolution under it that has no other live parent. A child
+that has a different live parent stays live and loses only the link to the archived
+Requirement. Archiving a Topic also archives all the Questions in that Topic. Merge the
+pull request with a merge commit: a squash or rebase merge removes the commit that the
+archive names.
+

@@ -4,15 +4,15 @@ Commands:
   search           Find records across the permitted kinds in the bound scope, or the Rules bound to a source file and symbol.
   check            Check graph validity, statement quality, and binding coverage. Give a statement to check that text with the project dictionary before a write.
   prime            Introduce Provenance domain concepts and actions.
-  init             
-  materialize      
-  export           
-  import           
-  validate         
-  schema           
-  dictionary       
-  swarm-backtrace  
-  skills           
+  init             Set up Provenance in a repository and install the agent skills
+  materialize      Build the local query cache again from the graph files of the repository
+  export           Write the records of one scope as one document
+  import           Add the records of one scope export file to the scope
+  validate         Check one artifact file against its schema and its record checks
+  schema           Show the JSON Schema of an artifact type
+  dictionary       Import and report the ASD-STE100 dictionary that the statement check uses
+  swarm-backtrace  Add the results of a swarm backtrace run to the graph
+  skills           List, show, and install the bundled agent skills
   report           Deterministic report rendering from a versioned report envelope
   review           Serve local review assets and authorized repository operations
   mcp              Serve the MCP tools for one repository on standard input and output
