@@ -53,6 +53,9 @@ class AgentCargoTest(unittest.TestCase):
             "  print(json.dumps({'workflow_run_id': 314, 'html_url': 'https://github.com/quality-sh/provenance/actions/runs/314'}))\n"
             "elif a[:2] == ['run', 'list']:\n"
             "  branch = a[a.index('--branch') + 1]\n"
+            "  lists = sum(1 for line in open(os.environ['FAKE_GH_CALLS']) if line.startswith('[\"run\", \"list\"'))\n"
+            "  if lists <= int(os.environ.get('FAKE_RUN_LIST_MISSES', '0')):\n"
+            "    print('[]'); sys.exit(0)\n"
             "  with open(os.environ['FAKE_GH_PAYLOAD'], 'w') as f: json.dump({'headBranch': branch, 'headSha': branch.split('/')[2].split('-')[0], 'inputs': {'command_key': branch.split('/')[1], 'command_json': ''}}, f)\n"
             "  print(json.dumps([{'databaseId': 314, 'headSha': branch.split('/')[2].split('-')[0], 'workflowName': 'Agent Cargo verification'}]))\n"
             "elif a[:2] == ['run', 'watch'] and '--compact' in a:\n"
@@ -376,6 +379,37 @@ class AgentCargoTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 2)
         self.assertEqual(binary.read_text(), "previous binary")
+
+    def test_watch_polls_every_30_seconds(self):
+        result = self.cargo("check")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        watches = self.calls_matching("watch")
+        self.assertEqual(len(watches), 1)
+        self.assertIn("--interval", watches[0])
+        self.assertEqual(watches[0][watches[0].index("--interval") + 1], "30")
+
+    def test_run_search_sleeps_10_seconds_between_list_calls(self):
+        recorder = (
+            "import json, os, runpy, sys, time\n"
+            "def sleep(seconds):\n"
+            "    with open(os.environ['FAKE_GH_CALLS'], 'a') as f: f.write(json.dumps(['sleep', seconds]) + '\\n')\n"
+            "time.sleep = sleep\n"
+            "sys.argv = [sys.argv[1], 'check']\n"
+            "runpy.run_path(sys.argv[0], run_name='__main__')\n"
+        )
+        env = {**self.env, "FAKE_RUN_LIST_MISSES": "2"}
+
+        result = run(sys.executable, "-c", recorder, str(WRAPPER), cwd=self.repo, env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        search = [
+            call[0] if call[0] == "sleep" else " ".join(call[:2])
+            for call in (json.loads(line) for line in self.calls.read_text().splitlines())
+            if call[0] == "sleep" or call[:2] == ["run", "list"]
+        ]
+        self.assertEqual(search, ["run list", "sleep", "run list", "sleep", "run list"])
+        self.assertEqual(self.calls_matching("sleep"), [["sleep", 10], ["sleep", 10]])
 
     def test_artifact_opt_in_requires_plain_build(self):
         env = {**self.env, "PROVENANCE_CI_ARTIFACT": "1"}
