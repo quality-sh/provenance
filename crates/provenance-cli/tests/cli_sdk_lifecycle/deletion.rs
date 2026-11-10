@@ -7,7 +7,7 @@ fn deleting_a_requirement_removes_its_ids_from_surviving_records() {
     let owner = "spec://typescript/share-links";
     let mut input = document(owner);
     input["requirements"].as_array_mut().unwrap().push(json!({
-        "key": "other", "statement": "Sessions expire"
+        "key": "other", "statement": "The host starts."
     }));
     let initial = sdk(repo, "apply", &input).unwrap();
     let removed = resource_id(&initial, "requirement", "sharing");
