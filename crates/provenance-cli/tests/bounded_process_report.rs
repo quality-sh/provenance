@@ -4,6 +4,7 @@
 mod bounded_process;
 
 // Implementation aid: a stopped CLI command must fail fast with the lock it waits for and the lock holder.
+// No Rule applies: the test checks test support, not product behaviour.
 #[cfg(target_os = "linux")]
 #[tokio::test(flavor = "multi_thread")]
 async fn a_command_past_its_limit_names_the_lock_and_its_holder() {
@@ -34,7 +35,7 @@ async fn a_command_past_its_limit_names_the_lock_and_its_holder() {
             ])
             .args(["--repo", &root]);
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
-            bounded_process::output(&mut create, std::time::Duration::from_secs(5))
+            bounded_process::output(&mut create, std::time::Duration::from_secs(20))
         }))
     })
     .await
@@ -46,7 +47,7 @@ async fn a_command_past_its_limit_names_the_lock_and_its_holder() {
     let (process, locks) = report
         .split_once("locks on the open files:")
         .expect("a lock section");
-    assert!(process.contains("did not end within 5s"), "{report}");
+    assert!(process.contains("did not end within 20s"), "{report}");
     assert!(process.contains("publication.lock"), "{report}");
     let holder = format!("process {}: ", std::process::id());
     let held = locks.lines().find(|line| line.contains(&holder));

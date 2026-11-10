@@ -1,6 +1,5 @@
 use super::{git, init};
-use crate::bounded_process::Bounded;
-use assert_cmd::Command;
+use crate::bounded_process::{provenance, Bounded};
 use provenance_macros::verifies;
 use std::path::Path;
 use std::process::Output;
@@ -75,8 +74,7 @@ fn commit(repo: &Path, message: &str) -> String {
 
 /// Runs `provenance` with the words of `command`, then `extra`, on `repo`.
 fn run(repo: &Path, command: &str, extra: &[&str]) -> Output {
-    Command::cargo_bin("provenance")
-        .unwrap()
+    provenance()
         .args(command.split_whitespace())
         .args(extra)
         .args(["--repo", repo.to_str().unwrap()])

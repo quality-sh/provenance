@@ -1,4 +1,3 @@
-use assert_cmd::assert::OutputAssertExt;
 use bounded_process::Bounded;
 use predicates::str::contains;
 use serde_json::{json, Value};
@@ -354,7 +353,7 @@ fn conflicting_body_sources_are_rejected_without_overwrite() {
             "--supersedes-json conflicts with --supersedes for supersedes",
         ));
 
-    bounded_process::output_with_input(
+    bounded_process::assert_with_input(
         provenance().args([
             "source_stdin_collision",
             "create",
@@ -368,7 +367,6 @@ fn conflicting_body_sources_are_rejected_without_overwrite() {
         ]),
         r#"{"name":"Stdin name"}"#,
     )
-    .assert()
     .failure()
     .stderr(contains("stdin field name conflicts with --name"));
 }

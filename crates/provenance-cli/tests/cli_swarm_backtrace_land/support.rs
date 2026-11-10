@@ -1,9 +1,7 @@
-use crate::bounded_process::Bounded;
-use assert_cmd::Command;
+use crate::bounded_process::{provenance, Bounded};
 
 pub fn init_repo(repo: &str) {
-    Command::cargo_bin("provenance")
-        .unwrap()
+    provenance()
         .args([
             "init",
             "--path",
@@ -19,8 +17,7 @@ pub fn init_repo(repo: &str) {
 }
 
 pub fn create_source(repo: &str) {
-    Command::cargo_bin("provenance")
-        .unwrap()
+    provenance()
         .args([
             "source_codebase",
             "create",

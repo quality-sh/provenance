@@ -27,39 +27,31 @@ pub const LIMIT: Duration = Duration::from_secs(60);
 /// that stays open longer is held by a child process that did not end.
 const PIPE_CLOSE: Duration = Duration::from_secs(10);
 
+/// A command that runs the `provenance` binary of this package.
+pub fn provenance() -> Command {
+    Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
+}
+
 /// Runs a command to its end with the limit of [`LIMIT`].
 pub trait Bounded {
     /// Runs the command and gives its output.
     fn bounded_output(&mut self) -> Output;
 
-    /// Runs the command and gives an assertion on its output.
-    fn bounded_assert(&mut self) -> Assert {
-        self.bounded_output().assert()
-    }
+    /// Runs the command and gives an assertion on its output. A failed
+    /// assertion shows the command.
+    fn bounded_assert(&mut self) -> Assert;
 }
 
 impl Bounded for Command {
     fn bounded_output(&mut self) -> Output {
         output(self, LIMIT)
     }
-}
 
-/// The copy keeps the program, arguments, environment and directory. Use the
-/// standard command for a process that needs data on its standard input.
-impl Bounded for assert_cmd::Command {
-    fn bounded_output(&mut self) -> Output {
-        let mut command = Command::new(self.get_program());
-        command.args(self.get_args());
-        for (key, value) in self.get_envs() {
-            match value {
-                Some(value) => command.env(key, value),
-                None => command.env_remove(key),
-            };
-        }
-        if let Some(directory) = self.get_current_dir() {
-            command.current_dir(directory);
-        }
-        output(&mut command, LIMIT)
+    fn bounded_assert(&mut self) -> Assert {
+        let description = format!("{self:?}");
+        self.bounded_output()
+            .assert()
+            .append_context("command", description)
     }
 }
 
@@ -74,6 +66,18 @@ pub fn output_with_input(command: &mut Command, input: impl Into<Vec<u8>>) -> Ou
     run(command, Some(input.into()), LIMIT)
 }
 
+/// Runs `command` like [`output_with_input`] and gives an assertion on its
+/// output. A failed assertion shows the command and the input.
+pub fn assert_with_input(command: &mut Command, input: impl Into<Vec<u8>>) -> Assert {
+    let description = format!("{command:?}");
+    let input = input.into();
+    let text = String::from_utf8_lossy(&input).into_owned();
+    output_with_input(command, input)
+        .assert()
+        .append_context("command", description)
+        .append_context("stdin", text)
+}
+
 fn run(command: &mut Command, input: Option<Vec<u8>>, limit: Duration) -> Output {
     // As with `assert_cmd`, a process that gets no input reads an empty input.
     command.stdin(if input.is_some() {
@@ -82,6 +86,9 @@ fn run(command: &mut Command, input: Option<Vec<u8>>, limit: Duration) -> Output
         Stdio::null()
     });
     let description = format!("{command:?}");
+    // In its own process group, the process and its child processes stop together.
+    #[cfg(unix)]
+    std::os::unix::process::CommandExt::process_group(command, 0);
     let mut child = command
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -98,17 +105,19 @@ fn run(command: &mut Command, input: Option<Vec<u8>>, limit: Duration) -> Output
     let stderr = drain(child.stderr.take().expect("piped stderr"));
     let Some(status) = wait_until(&mut child, Instant::now() + limit) else {
         let report = process_report::report(child.id());
-        let _ = child.kill();
-        let _ = child.wait();
+        stop_group(&mut child);
+        let deadline = Instant::now() + PIPE_CLOSE;
         panic!(
             "the process did not end within {limit:?}: {description}\n{report}\
              stdout:\n{}\nstderr:\n{}",
-            collected(&stdout),
-            collected(&stderr)
+            collected(&stdout, deadline),
+            collected(&stderr, deadline)
         );
     };
+    // One deadline for the two pipes.
+    let deadline = Instant::now() + PIPE_CLOSE;
     let closed = |pipe: mpsc::Receiver<Vec<u8>>, name: &str| {
-        pipe.recv_timeout(PIPE_CLOSE).unwrap_or_else(|_| {
+        pipe.recv_timeout(left(deadline)).unwrap_or_else(|_| {
             panic!("{description} ended with {status}, but a child process kept its {name} open")
         })
     };
@@ -131,9 +140,12 @@ pub fn wait(child: &mut Child, limit: Duration, what: &str) -> ExitStatus {
     let stderr = child.stderr.take().map(drain);
     let _ = child.kill();
     let _ = child.wait();
+    let deadline = Instant::now() + PIPE_CLOSE;
     let text = |pipe: Option<mpsc::Receiver<Vec<u8>>>| {
-        pipe.as_ref()
-            .map_or_else(|| "(taken by the test)".to_owned(), collected)
+        pipe.as_ref().map_or_else(
+            || "(taken by the test)".to_owned(),
+            |pipe| collected(pipe, deadline),
+        )
     };
     panic!(
         "{what}: process {} did not end within {limit:?}\n{report}stdout:\n{}\nstderr:\n{}",
@@ -141,6 +153,21 @@ pub fn wait(child: &mut Child, limit: Duration, what: &str) -> ExitStatus {
         text(stdout),
         text(stderr)
     );
+}
+
+/// Stops a process that [`run`] started, with its child processes on unix.
+fn stop_group(child: &mut Child) {
+    #[cfg(unix)]
+    {
+        let group = rustix::process::Pid::from_child(child);
+        let _ = rustix::process::kill_process_group(group, rustix::process::Signal::KILL);
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+fn left(deadline: Instant) -> Duration {
+    deadline.saturating_duration_since(Instant::now())
 }
 
 fn wait_until(child: &mut Child, deadline: Instant) -> Option<ExitStatus> {
@@ -167,8 +194,8 @@ fn drain(mut pipe: impl Read + Send + 'static) -> mpsc::Receiver<Vec<u8>> {
 
 /// The output of a stopped process, or a note when a child process still
 /// holds the pipe.
-fn collected(pipe: &mpsc::Receiver<Vec<u8>>) -> String {
-    pipe.recv_timeout(PIPE_CLOSE).map_or_else(
+fn collected(pipe: &mpsc::Receiver<Vec<u8>>, deadline: Instant) -> String {
+    pipe.recv_timeout(left(deadline)).map_or_else(
         |_| "(a child process still holds the pipe)".to_owned(),
         |bytes| String::from_utf8_lossy(&bytes).into_owned(),
     )
