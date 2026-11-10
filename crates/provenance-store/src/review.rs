@@ -41,8 +41,6 @@ mod reads;
 #[cfg(feature = "host")]
 pub use reads::{read_evidence, read_history};
 
-// Clippy treats only a plain `cfg(test)` module as test code, so the host
-// gate is a second attribute.
 #[cfg(test)]
 #[cfg(feature = "host")]
 mod concurrency_tests;

@@ -150,8 +150,6 @@ pub async fn publication_guard(repository: &Repository) -> anyhow::Result<Public
     .map_err(|error| anyhow::anyhow!("publication guard acquisition failed: {error}"))?
 }
 
-// Clippy treats only a plain `cfg(test)` module as test code, so the host
-// gate is a second attribute.
 #[cfg(test)]
 #[cfg(feature = "host")]
 mod tests {
