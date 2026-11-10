@@ -8,10 +8,10 @@ npx --yes @quality-sh/create-provenance
 ```
 
 The initializer detects npm, pnpm, Yarn, Bun, Deno, or Nub. It adds this SDK as
-an exact development dependency, installs the engine for the current platform,
-writes `.provenance/state/`, and confirms that the Provenance check reports
-`ok`. The AGENTS.md section that it writes gives the command for the package
-manager. For npm, the command is
+an exact development dependency, and the package manager installs the engine
+for the current platform. Then the initializer runs `provenance init`. That
+command writes `.provenance/state/` and a Provenance section in AGENTS.md. The
+section gives the command for the package manager. For npm, the command is
 `node node_modules/@quality-sh/provenance/bin/provenance.mjs`.
 
 ## SDK connection

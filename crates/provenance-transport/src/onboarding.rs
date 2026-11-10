@@ -92,6 +92,15 @@ it in the same change.
   https://www.asd-ste100.org/STE_downloads.html#article02-2l. Provenance names
   only its implemented checks and makes no compliance or endorsement claim."#;
 
+/// The bin file of the project package, relative to the directory that
+/// contains `node_modules`. It is a macro so that `concat!` can make each
+/// command a `&'static str`.
+macro_rules! package_bin {
+    () => {
+        "node_modules/@quality-sh/provenance/bin/provenance.mjs"
+    };
+}
+
 /// The command that runs a native Provenance binary from PATH.
 pub const NATIVE_COMMAND: &str = "provenance";
 
@@ -111,7 +120,7 @@ impl Invocation {
             return String::new();
         }
         format!(
-            "\n- The installed skills and the output of each command show commands as\n  `{NATIVE_COMMAND} …`. In this project, run them as `{} …`.",
+            "\n- The installed skills and the output of each command show commands as\n  `{NATIVE_COMMAND} …`. In this project, run them as `{} …`\n  from the directory that contains `node_modules`.",
             self.0
         )
     }
@@ -129,23 +138,23 @@ impl Invocation {
                 anyhow::bail!("TypeScript initialization requires --package-manager")
             }
             // Each command names a file in the project, or asks the package
-            // manager for a binary of the project only. When the package is
-            // missing, the command fails: it does not download a package, run
-            // a cached package, or run a `provenance` executable from PATH.
-            // `npx --no` runs a cached package of the same name and `bunx
-            // --no-install` runs a PATH executable, so npm, Bun and Nub run the
-            // bin file of the package by its path.
+            // manager for a binary of the project only. The npm, Bun and Nub
+            // commands name the bin file of the package by its path, so these
+            // commands cannot download a package, use a cache or use PATH. When
+            // the package is missing, runs showed that the npm, pnpm, Yarn and
+            // Bun commands fail and do not run a `provenance` executable from
+            // PATH. The Deno and Nub commands did not run.
+            // `npx --no` can run a cached package of the same name and `bunx
+            // --no-install` can run a PATH executable, so this code uses neither.
             (InvocationChannel::Typescript, Some(manager)) => Ok(Self(match manager {
-                PackageManager::Npm => {
-                    "node node_modules/@quality-sh/provenance/bin/provenance.mjs"
-                }
+                PackageManager::Npm => concat!("node ", package_bin!()),
                 PackageManager::Pnpm => "pnpm exec ./node_modules/.bin/provenance",
                 PackageManager::Yarn => "yarn run -B provenance",
-                PackageManager::Bun => "bun node_modules/@quality-sh/provenance/bin/provenance.mjs",
+                PackageManager::Bun => concat!("bun ", package_bin!()),
                 PackageManager::Deno => {
                     "deno task --node-modules-dir=manual --eval \"./node_modules/.bin/provenance\""
                 }
-                PackageManager::Nub => "nub node_modules/@quality-sh/provenance/bin/provenance.mjs",
+                PackageManager::Nub => concat!("nub ", package_bin!()),
             })),
         }
     }
