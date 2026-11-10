@@ -21,15 +21,22 @@ fn workspace_root() -> &'static Path {
         .unwrap()
 }
 
-fn git(arguments: &[&str]) -> String {
+/// Runs git in `root`, like the build script: `None` when git fails.
+fn git_in(root: &Path, arguments: &[&str]) -> Option<String> {
     let output = provenance_store::git_process::git()
         .arg("-C")
-        .arg(workspace_root())
+        .arg(root)
         .args(arguments)
         .output()
         .unwrap();
-    assert!(output.status.success(), "git {arguments:?} failed");
-    String::from_utf8(output.stdout).unwrap().trim().to_owned()
+    output
+        .status
+        .success()
+        .then(|| String::from_utf8(output.stdout).unwrap().trim().to_owned())
+}
+
+fn git(arguments: &[&str]) -> String {
+    git_in(workspace_root(), arguments).unwrap_or_else(|| panic!("git {arguments:?} failed"))
 }
 
 /// The text after the binary name in `provenance --version`.
@@ -57,7 +64,9 @@ fn version_flag_names_the_release_and_the_commit_of_the_build() {
     let release = env!("CARGO_PKG_VERSION");
     let head = git(&["rev-parse", "HEAD"]);
     let mut arguments = vec!["--literal-pathspecs", "diff", "--name-only", "HEAD", "--"];
-    let inputs = inputs::paths(workspace_root());
+    let inputs = inputs::paths(workspace_root(), |arguments| {
+        git_in(workspace_root(), arguments)
+    });
     arguments.extend(inputs.iter().map(String::as_str));
     let changes = git(&arguments);
     let mark = if changes.is_empty() { "" } else { "-dirty" };
@@ -96,4 +105,93 @@ fn review_host_start_line_carries_the_build_identity() {
     ] {
         assert!(host.config[field].is_string(), "start line lost {field}");
     }
+}
+
+/// Implementation aid: the version test above uses the same input list as the
+/// build script, so it cannot find a short or wrong list. This test names the
+/// paths that the list must hold and the paths that it must not hold.
+#[test]
+fn build_input_list_names_what_enters_the_binary() {
+    let root = workspace_root();
+    let inputs = inputs::paths(root, |arguments| git_in(root, arguments));
+    for expected in [
+        "Cargo.toml",
+        "Cargo.lock",
+        "skills",
+        "tools/review-assets.json",
+        "crates/provenance-cli/Cargo.toml",
+        "crates/provenance-cli/build.rs",
+        "crates/provenance-cli/build",
+        "crates/provenance-cli/src",
+        "crates/provenance-core/src",
+        "crates/provenance-store/src",
+        "crates/provenance-review/review-assets",
+    ] {
+        assert!(
+            inputs.iter().any(|path| path == expected),
+            "{expected} missing: {inputs:?}"
+        );
+    }
+    for path in &inputs {
+        let name = path.rsplit('/').next().unwrap();
+        assert!(
+            !["tests", "benches", "examples"].contains(&name),
+            "{path} does not enter the binary"
+        );
+    }
+    for generated in [
+        "crates/provenance-cli/skills",
+        "crates/provenance-review/review-assets-generated",
+    ] {
+        assert!(
+            !inputs.iter().any(|path| path == generated),
+            "{generated} is not tracked"
+        );
+    }
+}
+
+/// Implementation aid: a generator that writes an untracked folder into a crate
+/// must not make the next build compile the CLI again. Without a git listing,
+/// the list falls back to every entry on disk, so a build with no git data
+/// still watches its sources.
+#[test]
+fn build_input_list_takes_crate_entries_from_tracked_files() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    for file in [
+        "Cargo.toml",
+        "crates/demo/Cargo.toml",
+        "crates/demo/src/lib.rs",
+        "crates/demo/tests/demo.rs",
+        "crates/demo/generated/copy.md",
+    ] {
+        let path = inputs::absolute(root, file);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, "").unwrap();
+    }
+    git_in(root, &["init", "-q"]).unwrap();
+    git_in(
+        root,
+        &[
+            "add",
+            "Cargo.toml",
+            "crates/demo/Cargo.toml",
+            "crates/demo/src",
+            "crates/demo/tests",
+        ],
+    )
+    .unwrap();
+    assert_eq!(
+        inputs::paths(root, |arguments| git_in(root, arguments)),
+        ["Cargo.toml", "crates/demo/Cargo.toml", "crates/demo/src"]
+    );
+    assert_eq!(
+        inputs::paths(root, |_| None),
+        [
+            "Cargo.toml",
+            "crates/demo/Cargo.toml",
+            "crates/demo/generated",
+            "crates/demo/src"
+        ]
+    );
 }
