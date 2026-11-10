@@ -106,16 +106,23 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # L6 after each write costs about 33 s a case. Linux checks it
+          # after each write; macOS and Windows check it at the end of each
+          # case, so that a night of 100 cases stays inside the job timeout.
           - os: ubuntu-24.04
             system: linux
+            l6: each
           - os: macos-latest
             system: macos
+            l6: end
           - os: windows-latest
             system: windows
+            l6: end
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     env:
       LAYER: cli-${{ matrix.system }}
+      SIMULATION_L6: ${{ matrix.l6 }}
       SIMULATION_FAILURE_DIR: ${{ github.workspace }}/target/simulation/failures
       SIMULATION_STATS_DIR: ${{ github.workspace }}/target/simulation/stats
     steps:
