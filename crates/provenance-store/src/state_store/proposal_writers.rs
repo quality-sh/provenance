@@ -203,6 +203,14 @@ impl StateStore {
             "only a review submission names its actor"
         );
         let mut proposals = self.list_proposal_definitions(&candidate.scope_id)?;
+        // The store names an existing id before the aggregate check, which
+        // refuses it with no declared kind.
+        crate::write_error::ensure!(
+            AlreadyExists,
+            !proposals.iter().any(|record| record.id == candidate.id),
+            "proposal {} already exists and is immutable",
+            candidate.id.as_str()
+        );
         proposals.push(candidate.clone());
         provenance_core::validate_ideation_aggregate(provenance_core::IdeationAggregate {
             legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
