@@ -20,7 +20,19 @@ path = "junit.xml"
 [profile.simulation]
 default-filter = 'package(provenance-simulation) | binary(simulation_cli)'
 fail-fast = false
-slow-timeout = { period = "300s", terminate-after = 24 }
+slow-timeout = { period = "300s", terminate-after = 2 }
+
+[[profile.simulation.overrides]]
+# The random test of a layer runs all of its cases in one test. The engine
+# and the contract jobs have 60 minutes and the CLI jobs 120, with the build
+# in that time, so nextest stops a test before the job timeout and the job
+# still uploads its log and failure files. A Hegel shrink stops at 300 s.
+filter = 'package(provenance-simulation) & test(/^random_/)'
+slow-timeout = { period = "300s", terminate-after = 8 }
+
+[[profile.simulation.overrides]]
+filter = 'binary(simulation_cli) & test(/^random_/)'
+slow-timeout = { period = "300s", terminate-after = 15 }
 
 [test-groups.cargo]
 max-threads = 1

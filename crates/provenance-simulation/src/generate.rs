@@ -2,12 +2,17 @@
 //!
 //! Hegel draws a [`Case`]: the number of engines and a list of [`Step`]s.
 //! The engine shrinks the choice sequence, so a step needs no shrinker of its
-//! own.
+//! own. [`apply`] runs an operation on the store; [`Call`] is the same
+//! operation as a call of the public contract.
 
-use crate::{scope, stable};
+mod apply;
+mod call;
+
+pub use apply::apply;
+pub use call::Call;
+
 use hegel::generators as gs;
 use hegel::{DefaultGenerator, TestCase};
-use provenance_store::repository::Repository;
 use serde::Serialize;
 
 /// The most steps that one case has.
@@ -18,12 +23,46 @@ pub const MAX_STEPS: usize = 40;
 pub enum Step {
     /// Gives `op` to an engine. A busy engine takes a turn instead.
     Write { engine: u8, op: Operation },
+    /// Gives `op` to an engine, gives the engine `turns` turns, then lands
+    /// `outside` outside every engine. So the engine meets a moved base when
+    /// it reads in its section before the outside write and publishes after
+    /// it.
+    WriteOnMovedBase {
+        engine: u8,
+        op: Operation,
+        turns: u8,
+        outside: Operation,
+    },
     /// Lets one engine make its next storage call.
     Turn(u8),
     /// A fault of the storage or of an engine.
     Fault(Fault),
     /// Changes the state outside every engine, as a merge in git does.
     OutsideWrite(Operation),
+}
+
+impl Step {
+    /// The steps that this step stands for: a write on a moved base is a
+    /// write, its turns and an outside write.
+    pub fn expand(&self) -> Vec<Self> {
+        match self {
+            Self::WriteOnMovedBase {
+                engine,
+                op,
+                turns,
+                outside,
+            } => {
+                let mut steps = vec![Self::Write {
+                    engine: *engine,
+                    op: op.clone(),
+                }];
+                steps.extend(std::iter::repeat_n(Self::Turn(*engine), 1 + usize::from(*turns % 3)));
+                steps.push(Self::OutsideWrite(outside.clone()));
+                steps
+            }
+            other => vec![other.clone()],
+        }
+    }
 }
 
 /// A fault that the simulated storage or an engine meets.
@@ -33,8 +72,10 @@ pub enum Fault {
     Refuse,
     /// The next publish lands `landed` keys and its outcome is unknown.
     UnknownOutcome { landed: u8 },
-    /// The engine stops where it is; a new engine takes its place.
-    Stop { engine: u8 },
+    /// The engine stops where it is; a new engine takes its place. The CLI
+    /// layer kills the write process at `at` / 255 of the measured time of
+    /// a write.
+    Stop { engine: u8, at: u8 },
 }
 
 /// A write operation of the engine. Small numbers pick a record, so that
@@ -54,6 +95,21 @@ pub enum Operation {
     WithdrawReview {
         n: u8,
     },
+    /// Rejects a review submission that an earlier operation made. The
+    /// decision lands in a stage.
+    DecideReview {
+        n: u8,
+    },
+    /// Starts a Discussion on the first Requirement, or replies to one that
+    /// an earlier operation started, on the version that it last knew.
+    WriteDiscussion {
+        reply: bool,
+    },
+    /// Archives a Requirement. The archive of its dependents lands in a
+    /// stage.
+    ArchiveRequirement {
+        n: u8,
+    },
     ClaimTopic,
     ReleaseTopic,
     /// Two verification binding writes in one section.
@@ -61,6 +117,15 @@ pub enum Operation {
         first: u8,
         second: u8,
     },
+}
+
+impl Operation {
+    /// Tells if the operation always lands a stage when it succeeds. Other
+    /// review writes stage too, and an archive stages when it archives a
+    /// Requirement that was not archived.
+    pub const fn always_stages(&self) -> bool {
+        matches!(self, Self::DecideReview { .. })
+    }
 }
 
 /// One drawn case.
@@ -77,16 +142,28 @@ impl Case {
         let steps = tc.draw(gs::vecs(gs::default::<Step>()).max_size(MAX_STEPS));
         Self { engines, steps }
     }
+
+    /// The steps of the case with each step expanded.
+    pub fn expanded(&self) -> Vec<Step> {
+        self.steps.iter().flat_map(Step::expand).collect()
+    }
 }
 
 /// The scope of every simulated record.
 pub const SCOPE: &str = "default";
 /// The Requirement in the initial state.
 pub const FIRST_REQUIREMENT: &str = "req_expiry";
+/// The Requirement in the initial state that refines the first one, so an
+/// archive of the first one archives it too.
+pub const DETAIL_REQUIREMENT: &str = "req_expiry_detail";
 /// The Rule in the initial state.
 pub const FIRST_RULE: &str = "rule_expiry";
 /// The Topic in the initial state.
 pub const TOPIC: &str = "topic_owner";
+/// The actor that the manifest lets decide a review.
+pub const DECIDER: &str = "reviewer-lead";
+/// The commit that an archive names.
+pub const ARCHIVE_COMMIT: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 /// The Requirement that `n` picks: the first one or one of three new ones.
 pub fn requirement_id(n: u8) -> String {
@@ -139,6 +216,16 @@ pub enum Effect {
     Withdrawn {
         proposal: String,
     },
+    Decided {
+        proposal: String,
+    },
+    Discussion {
+        id: String,
+        version: u64,
+    },
+    Archived {
+        id: String,
+    },
     Claim {
         holder: Option<String>,
     },
@@ -157,8 +244,10 @@ pub struct Task {
     pub op: Operation,
     /// The etag that a stale update gives.
     pub stale_etag: String,
-    /// The proposal that a withdrawal names.
+    /// The proposal that a withdrawal or a decision names.
     pub proposal: Option<String>,
+    /// The Discussion and the version that a reply names.
+    pub discussion: Option<(String, u64)>,
 }
 
 impl Task {
@@ -182,6 +271,11 @@ impl Task {
     pub fn description(&self) -> String {
         format!("Description from operation {}", self.operation)
     }
+
+    /// The body of a message or a Discussion entry.
+    pub fn body(&self) -> String {
+        format!("Message from operation {}", self.operation)
+    }
 }
 
 /// What the case knows when it gives an operation out.
@@ -189,6 +283,7 @@ impl Task {
 pub struct Context {
     first_etag: String,
     proposals: Vec<String>,
+    discussions: Vec<(String, u64)>,
 }
 
 impl Context {
@@ -196,25 +291,40 @@ impl Context {
         Self {
             first_etag,
             proposals: Vec::new(),
+            discussions: Vec::new(),
         }
     }
 
-    /// Learns the proposals that earlier operations made.
+    /// Learns the proposals and the Discussions that earlier operations made.
     pub fn learn(&mut self, effects: impl IntoIterator<Item = Effect>) {
         for effect in effects {
-            if let Effect::Proposal { id } = effect {
-                if !self.proposals.contains(&id) {
+            match effect {
+                Effect::Proposal { id } if !self.proposals.contains(&id) => {
                     self.proposals.push(id);
                 }
+                Effect::Discussion { id, version } => {
+                    match self.discussions.iter_mut().find(|(known, _)| *known == id) {
+                        Some(known) => known.1 = known.1.max(version),
+                        None => self.discussions.push((id, version)),
+                    }
+                }
+                _ => {}
             }
         }
     }
 
     pub fn task(&self, operation: u64, engine: Option<usize>, op: Operation) -> Task {
+        let pick = |n: u8, count: usize| usize::from(n) % count;
         let proposal = match &op {
-            Operation::WithdrawReview { n } if !self.proposals.is_empty() => {
-                Some(self.proposals[usize::from(*n) % self.proposals.len()].clone())
+            Operation::WithdrawReview { n } | Operation::DecideReview { n }
+                if !self.proposals.is_empty() =>
+            {
+                Some(self.proposals[pick(*n, self.proposals.len())].clone())
             }
+            _ => None,
+        };
+        let discussion = match &op {
+            Operation::WriteDiscussion { reply: true } => self.discussions.last().cloned(),
             _ => None,
         };
         Task {
@@ -223,258 +333,7 @@ impl Context {
             op,
             stale_etag: self.first_etag.clone(),
             proposal,
+            discussion,
         }
-    }
-}
-
-/// Runs one operation on `repository`.
-// One arm per operation; splitting them would hide the list.
-#[allow(clippy::too_many_lines)]
-pub fn apply(repository: &Repository, task: &Task) -> anyhow::Result<Effect> {
-    use provenance_core::{MessageRole, NodeType, RequirementStatus, ThreadParent};
-    use provenance_store::review::{SubmitRecordReview, WithdrawRecordReview};
-    use provenance_store::state_store::{
-        CreateRequirementInput, MaterializeVerificationBindingInput, PostMessageInput,
-        UpdateRequirementInput,
-    };
-    let store = repository.store();
-    let first = || stable(FIRST_REQUIREMENT);
-    Ok(match &task.op {
-        Operation::CreateRequirement { n } => {
-            let id = created_requirement_id(*n);
-            store.create_requirement(CreateRequirementInput {
-                scope_id: scope(),
-                id: stable(&id),
-                statement: "Share links have an owner".into(),
-                description: None,
-                status: RequirementStatus::Active,
-                refines: Vec::new(),
-                depends_on: Vec::new(),
-                supersedes: Vec::new(),
-                spawned_by: None,
-                origin_thread: None,
-                origin_message: None,
-            })?;
-            Effect::Created { id }
-        }
-        Operation::UpdateRequirement { n, stale } => {
-            let id = requirement_id(*n);
-            let etag = if *stale {
-                task.stale_etag.clone()
-            } else {
-                store.requirement_edit_state(&scope(), &stable(&id))?.etag
-            };
-            let description = task.description();
-            store.update_requirement(UpdateRequirementInput {
-                scope_id: scope(),
-                id: stable(&id),
-                expected_etag: Some(etag.clone()),
-                declared_by: None,
-                statement: None,
-                description: Some(description.clone()),
-                status: None,
-                archived_in_commit: None,
-                clear_fields: Vec::new(),
-            })?;
-            Effect::Described {
-                id,
-                description,
-                etag,
-            }
-        }
-        Operation::PostMessage => {
-            let posted = store.post_thread_message(PostMessageInput {
-                scope_id: scope(),
-                parent: ThreadParent {
-                    node_type: NodeType::Requirement,
-                    node_id: first(),
-                },
-                role: MessageRole::User,
-                body: format!("Message from operation {}", task.operation),
-            })?;
-            Effect::Message {
-                id: posted.message.id.as_str().to_owned(),
-            }
-        }
-        Operation::SubmitReview => {
-            let entry = store.submit_record_review(SubmitRecordReview {
-                scope_id: scope(),
-                actor: "reviewer".into(),
-                record_kind: NodeType::Requirement,
-                record_id: first(),
-                declared_by: None,
-                title: "Simulated review".into(),
-                summary: format!("Review from operation {}", task.operation),
-                confidence: None,
-                source_ids: Vec::new(),
-                evidence_references: Vec::new(),
-                builds_on: Vec::new(),
-                expected_revision: None,
-                revises: None,
-            })?;
-            Effect::Proposal {
-                id: entry.proposal_id.as_str().to_owned(),
-            }
-        }
-        Operation::WithdrawReview { .. } => {
-            let Some(proposal) = &task.proposal else {
-                return Ok(Effect::Skipped);
-            };
-            store.withdraw_record_review(WithdrawRecordReview {
-                scope_id: scope(),
-                actor: "reviewer".into(),
-                proposal_id: stable(proposal),
-                declared_by: None,
-                reason: None,
-            })?;
-            Effect::Withdrawn {
-                proposal: proposal.clone(),
-            }
-        }
-        Operation::ClaimTopic => {
-            store.claim_topic(&scope(), &stable(TOPIC), &task.actor())?;
-            Effect::Claim {
-                holder: Some(task.actor()),
-            }
-        }
-        Operation::ReleaseTopic => {
-            store.release_topic(&scope(), &stable(TOPIC), &task.actor())?;
-            Effect::Claim { holder: None }
-        }
-        Operation::BindTwice { first, second } => {
-            let binding = |n: u8| MaterializeVerificationBindingInput {
-                scope_id: scope(),
-                rule_id: stable(FIRST_RULE),
-                key: "simulated-binding".into(),
-                method: provenance_core::VerificationMethod::Examples,
-                declared_by: "test://simulation".into(),
-                file: binding_file(n).into(),
-                symbol: None,
-            };
-            let (first, second) = store.with_repository_publication(|section| {
-                let first = section.materialize_verification_binding(binding(*first));
-                let second = section.materialize_verification_binding(binding(*second));
-                Ok((first.is_ok(), second.is_ok()))
-            })?;
-            Effect::Bound { first, second }
-        }
-    })
-}
-
-/// One operation as a call of the public contract: its name and request.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct Call {
-    pub operation: &'static str,
-    pub request: serde_json::Value,
-}
-
-impl Task {
-    /// The contract call of this operation, or `None` when the contract has
-    /// no operation for it (two binding writes in one section) or when there
-    /// is nothing to act on. An update without `stale` reads the current
-    /// etag from `repository` first, as the engine does.
-    pub fn call(&self, repository: &Repository) -> anyhow::Result<Option<Call>> {
-        use serde_json::json;
-        let call = |operation, request| Some(Call { operation, request });
-        Ok(match &self.op {
-            Operation::CreateRequirement { n } => call(
-                "create-requirement-native",
-                json!({
-                    "scope_id": SCOPE, "id": created_requirement_id(*n),
-                    "statement": "Share links have an owner", "status": "active",
-                    "refines": [], "depends_on": [], "supersedes": [],
-                }),
-            ),
-            Operation::UpdateRequirement { n, stale } => {
-                let id = requirement_id(*n);
-                let etag = if *stale {
-                    self.stale_etag.clone()
-                } else {
-                    repository
-                        .store()
-                        .requirement_edit_state(&scope(), &stable(&id))?
-                        .etag
-                };
-                call(
-                    "update-requirement",
-                    json!({
-                        "id": id, "actor": self.actor(), "expected_etag": etag,
-                        "description": self.description(), "clear_fields": [],
-                    }),
-                )
-            }
-            Operation::PostMessage => call(
-                "post-thread-message",
-                json!({
-                    "scope_id": SCOPE,
-                    "parent": {"node_type": "requirement", "node_id": FIRST_REQUIREMENT},
-                    "role": "user", "body": format!("Message from operation {}", self.operation),
-                }),
-            ),
-            Operation::SubmitReview => call(
-                "submit-record-review",
-                json!({
-                    "scope_id": SCOPE, "actor": "reviewer", "record_kind": "requirement",
-                    "record_id": FIRST_REQUIREMENT, "title": "Simulated review",
-                    "summary": format!("Review from operation {}", self.operation),
-                    "source_ids": [], "evidence_references": [], "builds_on": [],
-                }),
-            ),
-            Operation::WithdrawReview { .. } => self.proposal.as_ref().and_then(|proposal| {
-                call(
-                    "withdraw-record-review",
-                    json!({
-                        "scope_id": SCOPE, "record_kind": "requirement",
-                        "record_id": FIRST_REQUIREMENT, "actor": "reviewer",
-                        "proposal_id": proposal,
-                    }),
-                )
-            }),
-            Operation::ClaimTopic => call(
-                "claim-topic",
-                json!({"scope_id": SCOPE, "id": TOPIC, "actor": self.actor()}),
-            ),
-            Operation::ReleaseTopic => call(
-                "release-topic",
-                json!({"scope_id": SCOPE, "id": TOPIC, "actor": self.actor()}),
-            ),
-            Operation::BindTwice { .. } => None,
-        })
-    }
-
-    /// What a successful contract `call` of this operation did, from its
-    /// `answer`.
-    pub fn effect(&self, call: &Call, answer: &serde_json::Value) -> anyhow::Result<Effect> {
-        let text = |value: &serde_json::Value| {
-            value.as_str().map(str::to_owned).ok_or_else(|| {
-                anyhow::anyhow!("{} answered without an ID: {answer}", call.operation)
-            })
-        };
-        Ok(match &self.op {
-            Operation::CreateRequirement { n } => Effect::Created {
-                id: created_requirement_id(*n),
-            },
-            Operation::UpdateRequirement { n, .. } => Effect::Described {
-                id: requirement_id(*n),
-                description: self.description(),
-                etag: text(&call.request["expected_etag"])?,
-            },
-            Operation::PostMessage => Effect::Message {
-                id: text(&answer["message"]["id"])?,
-            },
-            Operation::SubmitReview => Effect::Proposal {
-                id: text(&answer["proposal_id"])?,
-            },
-            Operation::WithdrawReview { .. } => Effect::Withdrawn {
-                proposal: text(&call.request["proposal_id"])?,
-            },
-            Operation::ClaimTopic => Effect::Claim {
-                holder: Some(self.actor()),
-            },
-            Operation::ReleaseTopic => Effect::Claim { holder: None },
-            Operation::BindTwice { .. } => {
-                anyhow::bail!("the contract has no call for two bindings")
-            }
-        })
     }
 }

@@ -4,8 +4,10 @@
 //! shrunk steps. Hegel prints the drawn values and a
 //! `#[hegel::reproduce_failure("<blob>")]` line after it. The blob is a
 //! choice sequence that replays the case on any system; the seed repeats a
-//! run only on one build. With `SIMULATION_FAILURE_DIR` set, the report is
-//! also written as JSON to `<dir>/<layer>-<law>.json`.
+//! run only on one build. With `SIMULATION_FAILURE_DIR` set, the report of a
+//! random case is also written as JSON to `<dir>/<layer>-<law>.json`. A
+//! planted run writes no file, so that the nightly report opens no issue for
+//! it.
 
 use crate::generate::Case;
 use crate::laws::Violation;
@@ -29,16 +31,40 @@ pub fn seed() -> Option<String> {
         .filter(|seed| !seed.is_empty())
 }
 
-/// The command that runs the case again with the seed of this run.
+/// The random test of each layer.
+fn random_test(layer: &str) -> &'static str {
+    if layer.starts_with("cli-") {
+        "random_cases_keep_the_laws_through_the_cli"
+    } else if layer == "contract" {
+        "random_cases_keep_the_laws_through_the_contract"
+    } else {
+        "random_cases_keep_the_laws"
+    }
+}
+
+/// The command that runs the random test of `layer` again with the seed and
+/// the case count of this run. The random tests are ignored tests, so the
+/// command gives `--run-ignored all`.
 pub fn replay_line(layer: &str, seed: Option<&str>) -> String {
     let seed = seed.unwrap_or("<seed>");
+    let cases = std::env::var("HEGEL_TEST_CASES")
+        .ok()
+        .filter(|cases| !cases.is_empty())
+        .map_or_else(String::new, |cases| format!(" HEGEL_TEST_CASES={cases}"));
+    let (package, binary) = if layer.starts_with("cli-") {
+        ("provenance-cli", "simulation_cli")
+    } else {
+        ("provenance-simulation", layer)
+    };
+    let test = random_test(layer);
     format!(
-        "HEGEL_SEED={seed} cargo nextest run --profile simulation -p provenance-simulation --test {layer}"
+        "HEGEL_SEED={seed}{cases} cargo nextest run --profile simulation --run-ignored all -p {package} --test {binary} -E 'test(={test})'"
     )
 }
 
-/// Fails the test case with the report of `violation`.
-pub fn fail(layer: &str, case: &Case, violation: &Violation) -> ! {
+/// Fails the test case with the report of `violation`. With `write_file`,
+/// the report also goes to the failure directory.
+pub fn fail(layer: &str, case: &Case, violation: &Violation, write_file: bool) -> ! {
     let seed = seed();
     let failure = Failure {
         layer,
@@ -49,12 +75,15 @@ pub fn fail(layer: &str, case: &Case, violation: &Violation) -> ! {
         case,
     };
     let json = serde_json::to_string_pretty(&failure).expect("a failure is JSON");
-    if let Some(directory) = std::env::var_os("SIMULATION_FAILURE_DIR") {
-        let path = std::path::Path::new(&directory).join(format!("{layer}-{}.json", violation.law));
-        if let Err(error) =
-            std::fs::create_dir_all(&directory).and_then(|()| std::fs::write(&path, &json))
-        {
-            eprintln!("could not write {}: {error}", path.display());
+    if write_file {
+        if let Some(directory) = std::env::var_os("SIMULATION_FAILURE_DIR") {
+            let path =
+                std::path::Path::new(&directory).join(format!("{layer}-{}.json", violation.law));
+            if let Err(error) =
+                std::fs::create_dir_all(&directory).and_then(|()| std::fs::write(&path, &json))
+            {
+                eprintln!("could not write {}: {error}", path.display());
+            }
         }
     }
     panic!(
@@ -64,6 +93,12 @@ pub fn fail(layer: &str, case: &Case, violation: &Violation) -> ! {
         seed = failure.seed.as_deref().unwrap_or("none (derandomized or random)"),
         replay = failure.replay,
     );
+}
+
+/// Fails a planted test whose law did not see its planted fault. The
+/// nightly report reads the marker and opens no law issue.
+pub fn check_broken(law: &str, detail: &str) -> ! {
+    panic!("simulation check broken: law {law} did not see its planted fault: {detail}");
 }
 
 /// The text of a panic payload.

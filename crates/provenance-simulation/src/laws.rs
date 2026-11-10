@@ -2,6 +2,7 @@
 //!
 //! | Law | Statement |
 //! | --- | --------- |
+//! | L0 | Each operation finishes in the wait limit, with no panic. |
 //! | L1 | An operation that fails, with no unknown outcome, lands no write. |
 //! | L2 | After an engine stops, the state opens and reads again. |
 //! | L3 | A write that succeeded stays unless a later write changed it. |
@@ -28,10 +29,17 @@ fn broken(law: &'static str, detail: impl Into<String>) -> Result<(), Violation>
     })
 }
 
-/// Checks L1 to L5 on one run.
-pub fn check(run: &Run) -> Result<(), Violation> {
+/// L0: each operation finishes, with no panic.
+fn each_operation_finishes(run: &Run) -> Result<(), Violation> {
     if !run.hung.is_empty() {
-        return broken("L1", format!("engines {:?} did not finish", run.hung));
+        return broken(
+            "L0",
+            format!(
+                "engines {:?} did not finish in {:?}",
+                run.hung,
+                crate::storage::WAIT_LIMIT
+            ),
+        );
     }
     if let Some(done) = run
         .done
@@ -39,10 +47,16 @@ pub fn check(run: &Run) -> Result<(), Violation> {
         .find(|done| matches!(&done.result, Err(text) if text.starts_with("panic:")))
     {
         return broken(
-            "L1",
+            "L0",
             format!("operation {} panicked: {:?}", done.operation, done.result),
         );
     }
+    Ok(())
+}
+
+/// Checks L0 to L5 on one run.
+pub fn check(run: &Run) -> Result<(), Violation> {
+    each_operation_finishes(run)?;
     failed_operations_land_nothing(run)?;
     if let Some(failure) = run.reopen_failures.first() {
         return broken(
@@ -55,10 +69,14 @@ pub fn check(run: &Run) -> Result<(), Violation> {
     the_write_after_a_moved_base_lands(run)
 }
 
-/// Checks one of L1, L3, L4 and L5 on one run; another law checks them all.
+/// Checks one of L0 to L5 on one run; another law checks them all.
 pub fn check_only(run: &Run, law: &str) -> Result<(), Violation> {
     match law {
+        "L0" => each_operation_finishes(run),
         "L1" => failed_operations_land_nothing(run),
+        "L2" => run.reopen_failures.first().map_or(Ok(()), |failure| {
+            broken("L2", format!("the state did not open after a stop: {failure}"))
+        }),
         "L3" => successful_writes_stay(run),
         "L4" => one_winner_per_etag(run),
         "L5" => the_write_after_a_moved_base_lands(run),

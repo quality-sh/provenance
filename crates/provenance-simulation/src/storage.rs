@@ -5,14 +5,24 @@
 //! engine waits until the case gives it the turn. So one engine runs at a
 //! time, and the case alone decides the order. The section lock is part of
 //! the simulation, so an engine that waits for it never blocks its thread.
+//!
+//! Each wait has a limit. When the case waits [`WAIT_LIMIT`] for an engine,
+//! the engine is hung; when an engine waits that long for a turn, it panics.
+//! So a deadlock fails its case in minutes, with the case, and does not hold
+//! the job.
 
 use provenance_store::storage::{
     Atomicity, PublishFailure, Revision, SectionLock, StateKey, StateStorage, StateView,
     StorageError, WriteSet,
 };
+use crate::plant::Plant;
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
+use std::time::{Duration, Instant};
+
+/// The longest wait for one engine or for one turn.
+pub const WAIT_LIMIT: Duration = Duration::from_secs(60);
 
 /// The unwind payload of an engine that a fault stops.
 #[derive(Debug)]
@@ -37,6 +47,10 @@ pub struct Publish {
     pub outcome: Outcome,
     /// How many outside writes landed before this publish.
     pub outside_writes: usize,
+    /// The set lands as one whole set: only a stage gives one.
+    pub whole_set: bool,
+    /// The set names the revision that it was made on.
+    pub on_base: bool,
 }
 
 /// A fault that the next publish meets.
@@ -58,6 +72,12 @@ struct State {
     /// Engines that run an operation.
     busy: BTreeSet<usize>,
     stopping: BTreeSet<usize>,
+    /// Engines that did not settle in the wait limit.
+    hung: BTreeSet<usize>,
+    /// An engine stopped in this case.
+    stopped: bool,
+    /// The planted fault met its first chance.
+    planted: bool,
     publishes: Vec<Publish>,
     outside_writes: usize,
     /// The entries that an engine read before its last moved base (planted
@@ -72,9 +92,7 @@ struct State {
 pub struct World {
     state: Mutex<State>,
     changed: Condvar,
-    /// Planted fault: after a moved base, an engine reads the state from
-    /// before the outside write again.
-    plant_stale_read: bool,
+    plant: Option<Plant>,
 }
 
 thread_local! {
@@ -91,14 +109,14 @@ fn current_engine() -> Option<(usize, u64)> {
 }
 
 impl World {
-    pub fn new(entries: BTreeMap<StateKey, Vec<u8>>, plant_stale_read: bool) -> Arc<Self> {
+    pub fn new(entries: BTreeMap<StateKey, Vec<u8>>, plant: Option<Plant>) -> Arc<Self> {
         Arc::new(Self {
             state: Mutex::new(State {
                 entries,
                 ..State::default()
             }),
             changed: Condvar::new(),
-            plant_stale_read,
+            plant,
         })
     }
 
@@ -143,7 +161,19 @@ impl World {
             operation,
             outcome: Outcome::Landed,
             outside_writes,
+            whole_set: false,
+            on_base: false,
         });
+    }
+
+    /// Notes that an engine of the case stopped.
+    pub fn note_stop(&self) {
+        self.lock().stopped = true;
+    }
+
+    /// The engines that did not settle in the wait limit.
+    pub fn hung(&self) -> Vec<usize> {
+        self.lock().hung.iter().copied().collect()
     }
 
     /// Marks engine `slot` busy before it gets an operation.
@@ -176,14 +206,23 @@ impl World {
         self.lock().stopping.insert(slot);
     }
 
-    /// Waits until engine `slot` waits for a turn or is idle.
+    /// Waits until engine `slot` waits for a turn or is idle. An engine that
+    /// does not settle in the wait limit is hung, and the case gives it no
+    /// more turns.
     pub fn settle(&self, slot: usize) {
+        let deadline = Instant::now() + WAIT_LIMIT;
         let mut state = self.lock();
         while state.busy.contains(&slot) && !state.waiting.contains(&slot) {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                state.hung.insert(slot);
+                break;
+            }
             state = self
                 .changed
-                .wait(state)
-                .unwrap_or_else(PoisonError::into_inner);
+                .wait_timeout(state, left)
+                .unwrap_or_else(PoisonError::into_inner)
+                .0;
         }
         drop(state);
     }
@@ -191,7 +230,7 @@ impl World {
     /// Gives engine `slot` one turn and waits until it settles again.
     pub fn grant(&self, slot: usize) {
         let mut state = self.lock();
-        if !state.waiting.contains(&slot) {
+        if !state.waiting.contains(&slot) || state.hung.contains(&slot) {
             return;
         }
         state.waiting.remove(&slot);
@@ -210,11 +249,19 @@ impl World {
         }
         state.waiting.insert(slot);
         self.changed.notify_all();
+        let deadline = Instant::now() + WAIT_LIMIT;
         while state.turn != Some(slot) {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                state.waiting.remove(&slot);
+                drop(state);
+                panic!("engine {slot} waited {WAIT_LIMIT:?} for a turn");
+            }
             state = self
                 .changed
-                .wait(state)
-                .unwrap_or_else(PoisonError::into_inner);
+                .wait_timeout(state, left)
+                .unwrap_or_else(PoisonError::into_inner)
+                .0;
         }
         if state.stopping.remove(&slot) {
             drop(state);
@@ -223,17 +270,30 @@ impl World {
         Some(state)
     }
 
-    fn read(&self) -> StateView {
-        let Some(mut state) = self.wait_for_turn() else {
-            return StateView::new(self.entries());
+    fn read(&self) -> Result<StateView, StorageError> {
+        let failed = || {
+            Err(StorageError::Read(anyhow::anyhow!(
+                "the simulated storage failed a read (planted)"
+            )))
         };
+        let Some(mut state) = self.wait_for_turn() else {
+            let state = self.lock();
+            if self.plant == Some(Plant::FailReopen) && state.stopped {
+                return failed();
+            }
+            return Ok(StateView::new(state.entries.clone()));
+        };
+        if self.plant == Some(Plant::FailRead) && !state.planted {
+            state.planted = true;
+            return failed();
+        }
         let slot = current_engine().map_or(usize::MAX, |(slot, _)| slot);
         let entries = match state.stale.get(&slot) {
-            Some(old) if self.plant_stale_read => old.clone(),
+            Some(old) if self.plant == Some(Plant::StaleRead) => old.clone(),
             _ => state.entries.clone(),
         };
         state.last_read.insert(slot, entries.clone());
-        StateView::new(entries)
+        Ok(StateView::new(entries))
     }
 
     fn publish(&self, writes: &WriteSet) -> Result<Revision, PublishFailure> {
@@ -241,7 +301,9 @@ impl World {
         let mut state = self.wait_for_turn().unwrap_or_else(|| self.lock());
         let (engine, operation) = current_engine().map_or((None, 0), |(s, o)| (Some(s), o));
         let current = StateView::new(state.entries.clone());
-        let (result, outcome) = if writes.base().is_some_and(|base| base != current.revision()) {
+        let checks_base = self.plant != Some(Plant::NoConcurrencyControl);
+        let moved = writes.base().is_some_and(|base| base != current.revision());
+        let (result, outcome) = if checks_base && moved {
             if let Some(slot) = engine {
                 if let Some(read) = state.last_read.get(&slot).cloned() {
                     state.stale.insert(slot, read);
@@ -257,12 +319,17 @@ impl World {
                 state.stale.remove(&slot);
             }
             match state.armed.take() {
-                Some(Armed::Refuse) => (
-                    Err(PublishFailure::Refused(anyhow::anyhow!(
-                        "the simulated storage refused the set"
-                    ))),
-                    Outcome::Refused,
-                ),
+                Some(Armed::Refuse) => {
+                    if self.plant == Some(Plant::LandRefused) {
+                        writes.apply_to(&mut state.entries);
+                    }
+                    (
+                        Err(PublishFailure::Refused(anyhow::anyhow!(
+                            "the simulated storage refused the set"
+                        ))),
+                        Outcome::Refused,
+                    )
+                }
                 Some(Armed::Unknown { landed }) => {
                     land_prefix(&mut state.entries, writes, landed);
                     (
@@ -273,7 +340,12 @@ impl World {
                     )
                 }
                 None => {
-                    writes.apply_to(&mut state.entries);
+                    let lose = self.plant == Some(Plant::LoseWrite)
+                        && engine.is_some()
+                        && !std::mem::replace(&mut state.planted, true);
+                    if !lose {
+                        writes.apply_to(&mut state.entries);
+                    }
                     let revision = StateView::new(state.entries.clone()).revision().clone();
                     (Ok(revision), Outcome::Landed)
                 }
@@ -285,6 +357,8 @@ impl World {
             operation,
             outcome,
             outside_writes,
+            whole_set: writes.atomicity() == Atomicity::WholeSet,
+            on_base: writes.base().is_some(),
         });
         result
     }
@@ -296,6 +370,9 @@ impl World {
         };
         loop {
             let mut state = self.wait_for_turn().expect("an engine thread");
+            if self.plant == Some(Plant::NoConcurrencyControl) {
+                return Box::new(());
+            }
             if state.holder.is_none() {
                 state.holder = Some(slot);
                 return Box::new(Held {
@@ -352,7 +429,7 @@ pub struct SimulatedStorage(pub Arc<World>);
 
 impl StateStorage for SimulatedStorage {
     fn read_view(&self) -> Result<StateView, StorageError> {
-        Ok(self.0.read())
+        self.0.read()
     }
 
     fn publish(&self, writes: WriteSet) -> Result<(), PublishFailure> {
