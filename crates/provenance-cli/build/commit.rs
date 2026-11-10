@@ -40,7 +40,7 @@ fn commit(root: &Path) -> Option<String> {
     if !same_place(Path::new(&top), root) {
         return None;
     }
-    let inputs = inputs::paths(root);
+    let inputs = inputs::paths(root, |arguments| git(root, arguments));
     watch(root, &inputs);
     let head = short(&git(root, &["rev-parse", "HEAD"])?)?;
     // Without optional locks, git diff does not write the index.
@@ -69,8 +69,16 @@ fn short(hash: &str) -> Option<String> {
 }
 
 /// Runs the build script again when the commit moves or a build input changes.
+/// The HEAD reflog changes on each commit, amend, checkout, and reset, also when
+/// the branch ref is only in `packed-refs` and a commit writes a new loose ref
+/// file. A path that does not exist is not watched, because Cargo then runs the
+/// script on every build.
 fn watch(root: &Path, inputs: &[String]) {
-    let mut names = vec!["HEAD".to_owned(), "packed-refs".to_owned()];
+    let mut names = vec![
+        "HEAD".to_owned(),
+        "packed-refs".to_owned(),
+        "logs/HEAD".to_owned(),
+    ];
     names.extend(git(root, &["symbolic-ref", "-q", "HEAD"]));
     for name in names {
         if let Some(path) = git(root, &["rev-parse", "--git-path", &name]) {
