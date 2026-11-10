@@ -56,11 +56,7 @@ fn refusal(output: &std::process::Output) -> Value {
 
 /// Asserts the code and the start of the cause, and that no spelling of the
 /// temporary directory is on standard error or in the cause.
-fn assert_cause(
-    directory: &tempfile::TempDir,
-    output: &std::process::Output,
-    kind: &str,
-) {
+fn assert_cause(directory: &tempfile::TempDir, output: &std::process::Output, kind: &str) {
     let refusal = refusal(output);
     assert_eq!(refusal["error"]["kind"], kind, "{refusal}");
     let cause = refusal["error"]["cause"].as_str().unwrap_or_default();

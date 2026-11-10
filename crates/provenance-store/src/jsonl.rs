@@ -142,12 +142,13 @@ where
     for (index, line) in contents.lines().enumerate() {
         let value = parse_line(path, index + 1, line)?;
         ensure_no_legacy_retirement(path, index + 1, &value)?;
-        let (record, raw) = RawRecord::deserialize(path, line, index + 1).map_err(|error| {
-            match error.downcast::<serde_json::Error>() {
+        let (record, raw) =
+            RawRecord::deserialize(path, line, index + 1).map_err(|error| match error
+                .downcast::<serde_json::Error>(
+            ) {
                 Ok(error) => located(path, index + 1, &error),
                 Err(error) => error,
-            }
-        })?;
+            })?;
         loaded.push(record, raw);
     }
     Ok(loaded)
@@ -457,7 +458,10 @@ mod tests {
         let state = crate::state_store::readers::StateLineInvalid::find(&message).unwrap();
         assert_eq!(
             (state.line, state.message.as_str()),
-            (1, "nested unknown field `detail.extension` cannot survive a typed record change")
+            (
+                1,
+                "nested unknown field `detail.extension` cannot survive a typed record change"
+            )
         );
         assert_eq!(std::fs::read(path).unwrap(), before);
     }
@@ -486,7 +490,10 @@ mod tests {
         let state = crate::state_store::readers::StateLineInvalid::find(&message).unwrap();
         assert_eq!(
             (state.line, state.message.as_str()),
-            (1, "repeated top-level member `extension` cannot survive a typed record change")
+            (
+                1,
+                "repeated top-level member `extension` cannot survive a typed record change"
+            )
         );
         assert_eq!(std::fs::read(path).unwrap(), before);
     }

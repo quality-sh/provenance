@@ -18,13 +18,16 @@ fn rule(id: &str) -> String {
 /// standard error of `merge-jsonl` on the base, ours and theirs contents.
 fn merge(base: &str, ours: &str, theirs: &str) -> (Option<i32>, bool, Vec<String>) {
     let directory = tempfile::tempdir().unwrap();
-    let sides = [("base.jsonl", base), ("ours.jsonl", ours), ("theirs.jsonl", theirs)].map(
-        |(name, contents)| {
-            let path = directory.path().join(name);
-            std::fs::write(&path, contents).unwrap();
-            path.to_str().unwrap().to_owned()
-        },
-    );
+    let sides = [
+        ("base.jsonl", base),
+        ("ours.jsonl", ours),
+        ("theirs.jsonl", theirs),
+    ]
+    .map(|(name, contents)| {
+        let path = directory.path().join(name);
+        std::fs::write(&path, contents).unwrap();
+        path.to_str().unwrap().to_owned()
+    });
     let output = provenance()
         .arg("merge-jsonl")
         .args(&sides)
