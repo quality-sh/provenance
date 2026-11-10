@@ -32,8 +32,11 @@ filter = 'package(provenance-simulation) & test(/^random_/)'
 slow-timeout = { period = "300s", terminate-after = 8 }
 
 [[profile.simulation.overrides]]
+# 100 cases on Linux took 3,096 s with L6 after each write. The limit is 100
+# minutes; with a build of about 7 minutes, the job of 120 minutes still has
+# the time to report and upload after nextest stops the test.
 filter = 'binary(simulation_cli) & test(/^random_/)'
-slow-timeout = { period = "300s", terminate-after = 15 }
+slow-timeout = { period = "300s", terminate-after = 20 }
 
 [test-groups.cargo]
 max-threads = 1
