@@ -14,6 +14,7 @@ mod discussion;
 pub mod grammar;
 mod help_kind;
 mod removed;
+mod search_text;
 use grammar::{
     ApiArgs, Delivery, DiscussionsArgs, DiscussionsRoute, SearchArgs, TargetArgs, TargetVerb,
 };
@@ -79,10 +80,7 @@ impl Invocation {
         };
         match exposed::find(&[word]) {
             Some(registry::Command::Search) => {
-                let matches = crate::registry_cli::root_word_command(registry::Command::Search)
-                    .try_get_matches_from(arguments)
-                    .unwrap_or_else(|error| error.exit());
-                return Ok(Self::Search(SearchArgs::from_matches(&matches)));
+                return Ok(Self::Search(search_text::parse(arguments)));
             }
             Some(registry::Command::Api) => {
                 let matches = crate::registry_cli::root_word_command(registry::Command::Api)
