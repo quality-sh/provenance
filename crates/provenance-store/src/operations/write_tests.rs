@@ -197,7 +197,7 @@ fn a_rule_declaration_that_names_another_id_is_a_typed_declaration_refusal() {
     assert_eq!(
         error.to_string(),
         format!(
-            "declaration `ready` already resolves to canonical id `{}`",
+            "declaration `example/requirement/ready/rule/ready` already resolves to canonical id `{}`",
             existing.as_str()
         )
     );
@@ -234,7 +234,7 @@ fn two_stored_records_at_one_declaration_address_are_located_at_the_second_line(
     );
     assert_eq!(
         message,
-        "declaration `ready` resolves to more than one canonical id"
+        "declaration `example/requirement/ready` resolves to more than one canonical id"
     );
 }
 
