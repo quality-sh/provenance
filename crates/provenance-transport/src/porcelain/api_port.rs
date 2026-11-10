@@ -78,9 +78,11 @@ fn header_map(
     Ok(map)
 }
 
-/// Whether the query parameter `name` of the public route at `method` and
-/// `path` takes a list of values. The `query` value of the call selects the
-/// form of the route. With no `query` value, each form of the route counts.
+/// Whether one query parameter of a public route takes a list of values.
+///
+/// The route is the one at `method` and `path`. The `query` value of the
+/// call selects the form of the route. With no `query` value, each form of
+/// the route counts.
 pub fn query_takes_list(method: ApiMethod, path: &str, selector: Option<&str>, name: &str) -> bool {
     let Some(matched) = crate::routing::find(&http_method(method), path) else {
         return false;
