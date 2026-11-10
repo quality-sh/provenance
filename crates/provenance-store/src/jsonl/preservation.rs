@@ -1,4 +1,5 @@
 use crate::state_store::message_ids::ShardLine;
+use crate::state_store::readers::located;
 use camino::Utf8Path;
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -27,6 +28,7 @@ impl RawRecord {
         let mut top_level_unknown = Vec::new();
         let mut nested_unknown = None;
         let mut deserializer = serde_json::Deserializer::from_str(line);
+        let at = |error: serde_json::Error| located(path, line_number, &error);
         let record = serde_ignored::deserialize(&mut deserializer, |path| match path {
             serde_ignored::Path::Map {
                 parent: serde_ignored::Path::Root,
@@ -37,9 +39,10 @@ impl RawRecord {
                     nested_unknown = Some(other.to_string());
                 }
             }
-        })?;
-        let known = serde_json::to_value(&record)?;
-        let scan = top_level_members(line)?;
+        })
+        .map_err(at)?;
+        let known = serde_json::to_value(&record).map_err(at)?;
+        let scan = top_level_members(line).map_err(at)?;
         let repeated_member = scan.repeated;
         let missing = top_level_unknown
             .iter()
@@ -236,7 +239,7 @@ struct Scan {
 /// member spans from its name to the comma or closing brace that ends its
 /// value. The raw bytes are kept so a rewritten line can carry a member over
 /// without re-encoding it.
-fn top_level_members(line: &str) -> anyhow::Result<Scan> {
+fn top_level_members(line: &str) -> Result<Scan, serde_json::Error> {
     let bytes = line.as_bytes();
     let mut depth = 0usize;
     let mut root_object = false;
