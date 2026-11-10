@@ -347,7 +347,7 @@ fn decode<O: Operation, T: serde::de::DeserializeOwned>(call: Value) -> Result<T
         let parent = (!path.is_empty() && path != ".").then_some(path);
         let message = error.inner().to_string();
         if let Some((name, accepted)) = unknown_field(&message) {
-            return unknown_field_refusal::<O>(parent, name, accepted);
+            return unknown_field_refusal::<O>(parent.as_deref(), name, accepted);
         }
         // A missing field is named under its parent, as the list check above does.
         let failure = match missing_field(&message) {
@@ -371,7 +371,7 @@ fn decode<O: Operation, T: serde::de::DeserializeOwned>(call: Value) -> Result<T
 /// cite a Source.
 #[provenance_macros::rule("rule_unknown_request_field_names_accepted_fields")]
 fn unknown_field_refusal<O: Operation>(
-    path: Option<String>,
+    path: Option<&str>,
     name: &str,
     accepted: &str,
 ) -> FailureEnvelope {

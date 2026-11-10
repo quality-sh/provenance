@@ -115,11 +115,17 @@ async fn write_rows(repo: &Repository) -> Vec<Value> {
         )
         .await,
     ));
+    rows.extend(discussion_rows(&host).await);
+    rows
+}
+
+async fn discussion_rows(host: &provenance_transport::StatementHost) -> Vec<Value> {
+    let mut rows = Vec::new();
     let parent = "/requirements/req_shared/discussions";
     rows.push(row(
         "start a discussion with an empty body",
         call(
-            &host,
+            host,
             "POST",
             parent,
             Some(json!({"data":{"actor":"reviewer","declared_by":null,"role":"user","body":" "}})),
@@ -127,7 +133,7 @@ async fn write_rows(repo: &Repository) -> Vec<Value> {
         .await,
     ));
     let (status, started) = call(
-        &host,
+        host,
         "POST",
         parent,
         Some(json!({"data":{"actor":"reviewer","declared_by":null,"role":"user","body":"A concern."}})),
@@ -141,7 +147,7 @@ async fn write_rows(repo: &Repository) -> Vec<Value> {
     rows.push(row(
         "reply with an old discussion version",
         call_with_headers(
-            &host,
+            host,
             "POST",
             &format!("{parent}/{id}/messages"),
             Some(json!({"data":{"actor":"agent","declared_by":null,"role":"assistant","body":"Reply."}})),
@@ -152,7 +158,7 @@ async fn write_rows(repo: &Repository) -> Vec<Value> {
     rows.push(row(
         "reply to a missing discussion",
         call_with_headers(
-            &host,
+            host,
             "POST",
             &format!("{parent}/thread_missing/messages"),
             Some(json!({"data":{"actor":"agent","declared_by":null,"role":"assistant","body":"Reply."}})),
@@ -224,108 +230,24 @@ async fn each_refusal_keeps_its_kind_status_and_fields() {
     let mut rows = write_rows(&repo).await;
     rows.extend(read_rows(&repo).await);
     rows.extend(state_rows(&repo).await);
-    let expected = json!([
-        {
-            "error": {
-                "kind": "already_exists"
-            },
-            "row": "create an existing requirement",
-            "status": 409
-        },
-        {
-            "error": {
-                "kind": "missing_reference"
-            },
-            "row": "create with a missing dependency",
-            "status": 400
-        },
-        {
-            "error": {
-                "field": "request.actor",
-                "kind": "invalid_input",
-                "reason": "invalid_value"
-            },
-            "row": "create with a blank actor",
-            "status": 400
-        },
-        {
-            "error": {
-                "current_etag": "<etag>",
-                "kind": "requirement_edit_conflict"
-            },
-            "row": "update with an old etag",
-            "status": 409
-        },
-        {
-            "error": {
-                "kind": "invalid_update",
-                "message": "Requirement req_old is archived; a new link cannot point to it"
-            },
-            "row": "create under an archived parent",
-            "status": 400
-        },
-        {
-            "error": {
-                "kind": "empty_message_body"
-            },
-            "row": "start a discussion with an empty body",
-            "status": 400
-        },
-        {
-            "error": {
-                "kind": "discussion_version_conflict"
-            },
-            "row": "reply with an old discussion version",
-            "status": 409
-        },
-        {
-            "error": {
-                "kind": "resource_not_found"
-            },
-            "row": "reply to a missing discussion",
-            "status": 404
-        },
-        {
-            "error": {
-                "kind": "resource_not_found"
-            },
-            "row": "read a missing requirement",
-            "status": 404
-        },
-        {
-            "error": {
-                "kind": "resource_not_found"
-            },
-            "row": "read a missing history entry",
-            "status": 404
-        },
-        {
-            "error": {
-                "kind": "access_denied"
-            },
-            "row": "write on a read-only host",
-            "status": 403
-        },
-        {
-            "error": {
-                "file": "scopes/default/requirements/req.jsonl",
-                "kind": "invalid_state_file",
-                "line": 3,
-                "message": "missing field `scope_id`"
-            },
-            "row": "read a shard with a bad line",
-            "status": 500
-        },
-        {
-            "error": {
-                "file": "scopes/default/requirements/req.jsonl",
-                "kind": "invalid_state_file",
-                "line": 3,
-                "message": "missing field `scope_id`"
-            },
-            "row": "write to a shard with a bad line",
-            "status": 500
-        }
-    ]);
-    assert_eq!(Value::Array(rows), expected);
+    assert_eq!(Value::Array(rows), expected_rows());
+}
+
+/// The rows on the base commit.
+fn expected_rows() -> Value {
+    json!([
+        {"error":{"kind":"already_exists"},"row":"create an existing requirement","status":409},
+        {"error":{"kind":"missing_reference"},"row":"create with a missing dependency","status":400},
+        {"error":{"field":"request.actor","kind":"invalid_input","reason":"invalid_value"},"row":"create with a blank actor","status":400},
+        {"error":{"current_etag":"<etag>","kind":"requirement_edit_conflict"},"row":"update with an old etag","status":409},
+        {"error":{"kind":"invalid_update","message":"Requirement req_old is archived; a new link cannot point to it"},"row":"create under an archived parent","status":400},
+        {"error":{"kind":"empty_message_body"},"row":"start a discussion with an empty body","status":400},
+        {"error":{"kind":"discussion_version_conflict"},"row":"reply with an old discussion version","status":409},
+        {"error":{"kind":"resource_not_found"},"row":"reply to a missing discussion","status":404},
+        {"error":{"kind":"resource_not_found"},"row":"read a missing requirement","status":404},
+        {"error":{"kind":"resource_not_found"},"row":"read a missing history entry","status":404},
+        {"error":{"kind":"access_denied"},"row":"write on a read-only host","status":403},
+        {"error":{"file":"scopes/default/requirements/req.jsonl","kind":"invalid_state_file","line":3,"message":"missing field `scope_id`"},"row":"read a shard with a bad line","status":500},
+        {"error":{"file":"scopes/default/requirements/req.jsonl","kind":"invalid_state_file","line":3,"message":"missing field `scope_id`"},"row":"write to a shard with a bad line","status":500}
+    ])
 }
