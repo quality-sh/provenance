@@ -35,10 +35,30 @@ Each layer is one job, so a failure names one layer.
 Each law apart from L0 has a planted test: `tests/engine_planted.rs`,
 `tests/contract_planted.rs` and
 `crates/provenance-cli/tests/simulation_cli_planted.rs`. A planted test
-plants the smallest fault that its law must see. If the law does not see it,
-the test fails with "simulation check broken", and the issue says that a
-check is broken, not a law. `tests/storage_contract.rs` runs the storage
-contract suite of `provenance-store` on the simulated storage.
+plants the smallest fault that its law must see. Most faults are in the
+simulated storage, the identity or the repository on disk. Three use a
+stand-in: the CLI L4 test changes the etag that the run recorded, the CLI L7
+test gives the engine a stand-in that refuses a claim, and the O3 test adds
+a second stage to a decision. If the law does not see its fault, the test
+fails with "simulation check broken", and the issue says that a check is
+broken, not a law. `tests/storage_contract.rs` runs the storage contract
+suite of `provenance-store` on the simulated storage.
+
+The probes are fixed cases next to the random test of each layer. A probe
+that breaks a law fails with "simulation probe <test> broke law <law>" and
+the command that runs the probe. It writes no failure file.
+
+A write on a moved base: in the engine and contract layers, the engine
+reads, a write outside lands, and the engine publishes on the moved base.
+The CLI layer cannot stop a process between its read and its publish. For
+an update, it reads the etag, merges the outside write, and sends the
+update with that etag. For another write, it merges the outside write and
+then runs the write, so that write does not meet a moved base.
+
+The job summary gives the counts of the random cases up to the first broken
+law. After a broken law, Hegel shrinks the case; each run of the shrink adds
+only to "shrink runs". A stop of a CLI write counts as "during a write" only
+when the process runs at the kill and has not printed its answer.
 
 ## When a failure issue opens
 
@@ -62,10 +82,17 @@ the shrunk case again and the case passed. This happens in the CLI layer,
 where two processes at once make a case nondeterministic. Use the shrunk
 steps of the issue as a fixed case, and run it more than one time.
 
-An issue "failed without a broken law" means that the job did not succeed
-and no random case wrote a failure file. The build, a probe test or a
-planted test failed, a test panicked outside a law, or the job stopped at
-its time limit. Read the log of the run.
+An issue "probe <test> broke law <law>" gives the replay command of the
+probe. The probe is a fixed case, so the command runs the same case on any
+system.
+
+An issue "a planted fault was not found" opens each time that a planted
+test fails, also on a night with a law issue for the same layer.
+
+An issue "failed without a broken law" means that the job did not succeed,
+and no random case, probe or planted test reported a law or a broken check.
+The build or a probe test failed, a test panicked outside a law, or the job
+stopped at its time limit. Read the log of the run.
 
 ## Replay a case
 
@@ -79,9 +106,9 @@ HEGEL_SEED=<seed> cargo nextest run --profile simulation --run-ignored all \
 The random tests are ignored tests, so the command needs `--run-ignored all`.
 A run with a case count other than 100 also sets `HEGEL_TEST_CASES`. For the
 CLI layer, the package is `provenance-cli` and the test binary is
-`simulation_cli`. The CLI layer checks L6 after each write; set
-`SIMULATION_L6=end` to check it only at the end of each case, as the macOS
-and Windows jobs do.
+`simulation_cli`. The CLI layer checks L6 after each write; the macOS and
+Windows jobs check it only at the end of each case, so the replay command of
+their failures sets `SIMULATION_L6=end`.
 
 ## Start a manual run
 
@@ -95,13 +122,15 @@ the job log and the job summary, and makes no GitHub write.
 
 ## Known failures
 
-- The contract job fails on O1 until GitHub issue 648 is fixed: an update
-  of a Requirement that does not exist answers a write failure (500). A
-  write on a moved base also answers a write failure today, for example a
-  message post whose base moved before its publish. That second cause has
-  the same law and layer, so it adds a comment to the same issue.
-- The engine job can fail on L1 (bead provenance-4ayr).
-- The CLI jobs fail on L6: the state can hold two withdrawals of one
-  review submission, and each read of the Requirement of that submission
-  refuses with `read_failed`. The cases that showed it had a withdrawal on
-  a merged branch and a withdrawal on the main branch.
+Each line names one cause and its tracker. A fix of one cause does not
+change the other lines; remove the line of a cause when its fix merges.
+
+- The contract job can fail on O1 when an update of a Requirement that does
+  not exist answers a write failure (500): GitHub issue 648.
+- The contract job can fail on O1 when a write on a moved base answers a
+  write failure (500), for example a message post whose base moved before
+  its publish: bead provenance-cf0b. This cause has the same law and layer
+  as issue 648, so its failures add comments to the same issue.
+- The engine job can fail on L1: bead provenance-4ayr.
+- The CLI jobs can fail on L6 when the state holds two withdrawals of one
+  review submission: bead provenance-chgs.
