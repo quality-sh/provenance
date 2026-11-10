@@ -359,10 +359,10 @@ fn search_includes_terminal_records_on_request() {
     assert_eq!(ids, ["rule_active", "rule_archived"]);
 }
 
-/// Implementation-aid test: no active Rule states the refusal of a missing
-/// guard yet. The test runs the read that the refusal names and gives its
-/// edit.etag to --if-match, so the named correction must make the update pass.
+/// The test runs the read that the refusal names and gives its edit.etag to
+/// --if-match, so the named correction must make the update pass.
 #[test]
+#[verifies("rule_cli_missing_etag_refusal_names_read", examples)]
 fn missing_if_match_names_the_read_and_the_flag_that_takes_the_etag() {
     let (_directory, repo) = init();
     create_requirement(&repo, "req_unguarded");

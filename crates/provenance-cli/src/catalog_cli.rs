@@ -191,8 +191,10 @@ fn review_read_command(
     format!("provenance {id} --view review{}", context_options(context))
 }
 
-/// Names where the caller reads the edit guard and the flag that takes it,
-/// for an update that the host refused because it had no guard.
+/// Names the record read that gives the edit `ETag`, the flag for the `ETag`
+/// and the `ETag` syntax, for an update that the host refused because it had
+/// no edit guard.
+#[provenance_macros::rule("rule_cli_missing_etag_refusal_names_read")]
 fn missing_guard_hint(id: &str, context: &provenance_transport::repository::RepoContext) -> String {
     format!(
         "this update needs --if-match; run `provenance {id} get --format json{}` \
