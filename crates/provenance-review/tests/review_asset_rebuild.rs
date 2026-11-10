@@ -10,7 +10,7 @@ use std::process::Command;
 fn build_runs_script(package: &Path, target: &Path) -> (bool, String) {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
     let output = Command::new(cargo)
-        .args(["build", "--offline", "-v"])
+        .args(["build", "--offline", "-v", "--color", "never"])
         .current_dir(package)
         .env("CARGO_TARGET_DIR", target)
         .output()
