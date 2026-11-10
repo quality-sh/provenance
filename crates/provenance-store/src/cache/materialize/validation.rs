@@ -71,10 +71,10 @@ impl<'g> UnitReader<'g> {
         if self.pass.is_none() {
             let repository = self.guard.repository();
             let storage = repository.storage();
-            let view = Arc::new(match repository.section() {
-                Some(section) => section.view().read(storage.as_ref(), Clone::clone)?,
-                None => storage.read_view()?,
-            });
+            let view = match repository.section() {
+                Some(section) => section.view().shared(storage.as_ref())?,
+                None => Arc::new(storage.read_view()?),
+            };
             let store = GuardedStore::of_view(ViewStore::new(repository, Arc::clone(&view)));
             self.pass = Some(PassView { view, store });
         }
