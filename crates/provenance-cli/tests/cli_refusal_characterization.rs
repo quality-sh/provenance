@@ -339,3 +339,31 @@ fn api_create_with_source_refs_names_the_unknown_field() {
         ]),
     );
 }
+
+/// 8yzq: `get` on a Withdrawal that names no review submission gives the
+/// file and the line of the Withdrawal.
+#[test]
+#[provenance_macros::verifies("rule_inconsistent_records_refusal_names_records", examples)]
+fn get_names_the_line_of_a_withdrawal_that_names_no_submission() {
+    let (directory, repo) = support::review_paths::init();
+    create_requirement(&repo, "req_a");
+    let path = directory
+        .path()
+        .join(".provenance/state/scopes/default/ideation/withdrawals.jsonl");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let withdrawal = json!({"scope_id":"default","id":"withdrawal_lost",
+        "proposal_id":"proposal_missing","actor":"reviewer","reason":null});
+    std::fs::write(&path, format!("{withdrawal}\n")).unwrap();
+    assert_rows(
+        &[answer(&repo, &["req_a", "get"], "json")],
+        &json!([{
+            "code": 1,
+            "command": "req_a get",
+            "format": "json",
+            "stderr": [
+                "{\"error\":{\"file\":\"scopes/default/ideation/withdrawals.jsonl\",\"kind\":\"invalid_state_file\",\"line\":1,\"message\":\"withdrawal withdrawal_lost names no review submission: proposal_missing\"},\"meta\":{}}"
+            ],
+            "stdout_empty": true
+        }]),
+    );
+}

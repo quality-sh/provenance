@@ -273,7 +273,7 @@ impl WriteError {
     }
     /// A common refusal that a write raised, such as an unknown scope; it
     /// keeps its own kind and status, as a read does.
-    #[provenance_macros::rule("rule_write_keeps_common_refusal_kind")]
+    #[provenance_macros::rule("rule_caller_refusal_has_declared_kind")]
     fn common(&self) -> Option<&OperationFailure> {
         native(&self.0).downcast_ref::<OperationFailure>()
     }
@@ -340,7 +340,7 @@ mod common_tests {
 
     /// Probe: anyhow finds the common refusal below a context layer.
     #[test]
-    #[provenance_macros::verifies("rule_write_keeps_common_refusal_kind", examples)]
+    #[provenance_macros::verifies("rule_caller_refusal_has_declared_kind", examples)]
     fn a_common_refusal_inside_a_write_keeps_its_kind_and_status() {
         let plain = anyhow::Error::from(OperationFailure::UnknownScope);
         let wrapped = Err::<(), _>(OperationFailure::UnknownScope)

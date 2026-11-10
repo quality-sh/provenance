@@ -214,3 +214,42 @@ fn a_read_failure_of_no_known_kind_gives_its_cause_relative_to_the_repository() 
         );
     }
 }
+
+/// A store refusal on a read keeps the kind of the same name: a read kind,
+/// a common kind, or `read_failed` when no read declares it.
+#[test]
+fn a_store_refusal_inside_a_read_keeps_its_kind_and_status() {
+    use crate::write_error::{SourceFailure, WriteFailure};
+    let refusal = |failure| {
+        ReadError(
+            SourceFailure::wrap(failure, anyhow::anyhow!("the store refused"))
+                .context("the read loads its record"),
+        )
+    };
+    let cases = [
+        (
+            refusal(WriteFailure::ResourceNotFound),
+            serde_json::json!({"kind":"resource_not_found"}),
+            404,
+        ),
+        (
+            refusal(WriteFailure::invalid_field("request.id")),
+            serde_json::json!({"kind":"invalid_input","field":"request.id","reason":"invalid_value"}),
+            400,
+        ),
+        (
+            refusal(WriteFailure::AccessDenied),
+            serde_json::json!({"kind":"access_denied"}),
+            403,
+        ),
+        (
+            refusal(WriteFailure::AlreadyExists),
+            serde_json::json!({"kind":"read_failed","cause":"the read loads its record: the store refused"}),
+            500,
+        ),
+    ];
+    for (error, wire, status) in cases {
+        assert_eq!(serde_json::to_value(&error).unwrap(), wire, "{error}");
+        assert_eq!(error.status(), status, "{error}");
+    }
+}

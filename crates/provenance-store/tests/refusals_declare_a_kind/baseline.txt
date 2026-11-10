@@ -42,7 +42,7 @@ review/history/git.rs 8
 review/input.rs 1
 review/native_batch.rs 2
 review/publication.rs 1
-review/save.rs 4
+review/save.rs 3
 review/typed_adoption.rs 2
 stale/git.rs 7
 stale/git/diff.rs 2

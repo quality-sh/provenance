@@ -81,3 +81,34 @@ async fn a_submission_withdrawn_two_times_is_located_at_the_second_withdrawal() 
         )}),
     );
 }
+
+#[tokio::test]
+#[verifies("rule_inconsistent_records_refusal_names_records", examples)]
+async fn a_requirement_stored_on_two_lines_is_located_at_the_second_line() {
+    const REQUIREMENTS: &str = "scopes/default/requirements/req.jsonl";
+    let repo = Repository::new("The shared graph is readable.");
+    let path = repo.dir.path().join(".provenance/state").join(REQUIREMENTS);
+    let text = std::fs::read_to_string(&path).unwrap();
+    let (first, line) = text
+        .lines()
+        .enumerate()
+        .find(|(_, line)| line.contains("\"id\":\"req_shared\""))
+        .map(|(index, line)| (index + 1, line.to_owned()))
+        .unwrap();
+    let second = text.lines().count() + 1;
+    std::fs::write(&path, format!("{text}{line}\n")).unwrap();
+    let (status, failure) = support::resource_http::call_with_headers(
+        &host(&repo, true),
+        "PATCH",
+        "/requirements/req_shared",
+        Some(json!({"data":{"actor":"reviewer", "description":"Edited."}})),
+        &[("if-match", "\"stale\"")],
+    )
+    .await;
+    assert_eq!(status, 500, "{failure}");
+    assert_eq!(
+        failure["error"],
+        json!({"kind":"invalid_state_file", "file":REQUIREMENTS, "line":second,
+            "message":format!("requirement req_shared is stored again; line {first} stores it first")}),
+    );
+}

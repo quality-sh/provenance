@@ -29,14 +29,39 @@ impl StateStore {
         scope: &ScopeId,
         id: &StableId,
     ) -> anyhow::Result<Requirement> {
-        let records = self.list_requirements(scope)?;
-        let matches = records.iter().filter(|r| r.id == *id).collect::<Vec<_>>();
-        anyhow::ensure!(
-            matches.len() == 1 && matches[0].scope_id == *scope,
-            "requirement {} does not exist uniquely in this scope",
-            id.as_str()
-        );
-        Ok(matches[0].clone())
+        let path = shards::requirements_path(&self.layout, scope);
+        let mut matches =
+            crate::state_store::readers::read_jsonl_located::<Requirement>(self, &path)?
+                .into_iter()
+                .filter(|(record, _)| record.id == *id);
+        let Some((record, at)) = matches.next() else {
+            return Err(crate::refusal::refuse!(
+                ResourceNotFound,
+                "requirement {} does not exist in this scope",
+                id.as_str()
+            ));
+        };
+        if let Some((_, second)) = matches.next() {
+            return Err(crate::refusal::state_fault(
+                &second,
+                format!(
+                    "requirement {} is stored again; line {} stores it first",
+                    id.as_str(),
+                    at.line
+                ),
+            ));
+        }
+        if record.scope_id != *scope {
+            return Err(crate::refusal::state_fault(
+                &at,
+                format!(
+                    "requirement {} names scope {}, not the scope of its file",
+                    id.as_str(),
+                    record.scope_id.as_str()
+                ),
+            ));
+        }
+        Ok(record)
     }
 
     pub fn requirement_edit_state(

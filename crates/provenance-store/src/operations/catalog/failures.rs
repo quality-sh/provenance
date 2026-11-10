@@ -4,7 +4,7 @@ use crate::operations::files::FileAccessRefusal;
 use crate::operations::reader::ReadRefusal;
 use crate::stale::git::GitRefusal;
 use crate::state_store::readers::StateLineInvalid;
-use crate::write_error::{failure_cause, in_repository, native};
+use crate::write_error::{failure_cause, in_repository, native, SourceFailure, WriteFailure};
 use provenance_core::protocol::{
     failure::OperationFailure,
     read_failure::{MovedUnit, ReadFailure},
@@ -45,9 +45,21 @@ impl ReadError {
         }
     }
     /// A common refusal that a read handler raised itself, such as an input
-    /// refusal; it keeps its own kind and status.
-    fn common(&self) -> Option<&OperationFailure> {
-        native(&self.0).downcast_ref::<OperationFailure>()
+    /// refusal; it keeps its own kind and status. A store refusal of a common
+    /// kind reads as that common kind.
+    fn common(&self) -> Option<OperationFailure> {
+        let error = native(&self.0);
+        if let Some(error) = error.downcast_ref::<OperationFailure>() {
+            return Some(error.clone());
+        }
+        match &error.downcast_ref::<SourceFailure>()?.failure {
+            WriteFailure::InvalidInput { field, reason } => Some(OperationFailure::InvalidInput {
+                field: field.clone(),
+                reason: reason.clone(),
+            }),
+            WriteFailure::AccessDenied => Some(OperationFailure::AccessDenied),
+            _ => None,
+        }
     }
     /// The closed failure for the native error. An error of no known kind
     /// reads as `ReadFailed`.
@@ -67,6 +79,9 @@ impl ReadError {
         }
         if let Some(error) = error.downcast_ref::<ReadRefusal>() {
             return refusal_failure(error);
+        }
+        if let Some(error) = error.downcast_ref::<SourceFailure>() {
+            return store_refusal(&error.failure).unwrap_or_else(|| self.read_failed());
         }
         StateLineInvalid::find(error).map_or_else(|| self.read_failed(), state_line_failure)
     }
@@ -92,6 +107,26 @@ fn state_line_failure(error: &StateLineInvalid) -> ReadFailure {
         file: error.file(),
         line: error.line,
         message: error.message.clone(),
+    }
+}
+
+/// The read failure of the same name as a store refusal. A store refusal
+/// that no read declares reads as `ReadFailed`.
+fn store_refusal(failure: &WriteFailure) -> Option<ReadFailure> {
+    match failure {
+        WriteFailure::ResourceNotFound => Some(ReadFailure::ResourceNotFound),
+        WriteFailure::FileAccessDenied => Some(ReadFailure::FileAccessDenied),
+        WriteFailure::FileUnavailable => Some(ReadFailure::FileUnavailable),
+        WriteFailure::InvalidStateFile {
+            file,
+            line,
+            message,
+        } => Some(ReadFailure::InvalidStateFile {
+            file: file.clone(),
+            line: *line,
+            message: message.clone(),
+        }),
+        _ => None,
     }
 }
 

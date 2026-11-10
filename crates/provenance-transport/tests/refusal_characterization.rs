@@ -224,6 +224,26 @@ async fn state_rows(repo: &Repository) -> Vec<Value> {
     ]
 }
 
+/// An update of a Requirement that does not exist is `resource_not_found`;
+/// the base commit gave 500 `write_failed`.
+#[tokio::test]
+#[provenance_macros::verifies("rule_caller_refusal_has_declared_kind", examples)]
+async fn an_update_of_a_missing_requirement_is_not_found() {
+    let repo = Repository::new("The shared graph is readable.");
+    let answer = call_with_headers(
+        &host(&repo, true),
+        "PATCH",
+        "/requirements/req_missing",
+        Some(json!({"data":{"actor":"reviewer","description":"Edited."}})),
+        &[("if-match", "\"stale\"")],
+    )
+    .await;
+    assert_eq!(
+        row("update a missing requirement", answer),
+        json!({"error":{"kind":"resource_not_found"},"row":"update a missing requirement","status":404})
+    );
+}
+
 #[tokio::test]
 async fn each_refusal_keeps_its_kind_status_and_fields() {
     let repo = Repository::new("The shared graph is readable.");
