@@ -77,9 +77,11 @@ async fn discussion(repo: &Repository) -> (String, String) {
     )
 }
 
+/// A writable host, because a read-only host cannot build the projection
+/// that a read of hand-written state needs.
 async fn list(repo: &Repository) -> (u16, Value) {
     call(
-        &host(repo, false),
+        &host(repo, true),
         "GET",
         "/requirements/req_shared/discussions",
         None,
@@ -217,7 +219,7 @@ async fn an_archived_rule_with_no_archive_commit_is_located_at_its_line() {
     rule["status"] = json!("archived");
     rows[line] = rule.to_string();
     write(&repo, RULES, &rows);
-    let (status, failure) = call(&host(&repo, false), "GET", "/rules/rule_shared", None).await;
+    let (status, failure) = call(&host(&repo, true), "GET", "/rules/rule_shared", None).await;
     assert_eq!(status, 500, "{failure}");
     assert_eq!(
         failure["error"],
@@ -253,7 +255,7 @@ async fn a_proposal_stored_again_is_located_at_the_second_line() {
     .await;
     assert_eq!(status, 200, "{created}");
     let line = store_again(&repo, PROPOSALS, "id", "proposal_shared");
-    let (status, failure) = call(&host(&repo, false), "GET", "/proposals", None).await;
+    let (status, failure) = call(&host(&repo, true), "GET", "/proposals", None).await;
     assert_eq!(status, 500, "{failure}");
     assert_eq!(
         failure["error"],
