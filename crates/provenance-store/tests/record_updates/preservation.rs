@@ -330,7 +330,21 @@ async fn target_edit_with_nested_unknown_data_is_refused_without_publication() {
         .await
         .unwrap_err();
 
-    assert_eq!(error["kind"], "write_failed");
+    assert_eq!(
+        (&error["kind"], &error["file"], &error["line"]),
+        (
+            &json!("invalid_state_file"),
+            &json!("scopes/default/topics/topic.jsonl"),
+            &json!(1)
+        ),
+        "{error}"
+    );
+    let message = error["message"].as_str().unwrap();
+    assert!(
+        message.starts_with("nested unknown field `links")
+            && message.ends_with("` cannot survive a typed record change"),
+        "{message}"
+    );
     assert_eq!(raw_rows(&fixture, "topics", "topic.jsonl"), vec![original]);
     assert_eq!(state_snapshot(&fixture), before);
 }
@@ -362,7 +376,12 @@ async fn updating_a_row_with_repeated_unknown_members_is_refused_without_publica
         .await
         .unwrap_err();
 
-    assert_eq!(error["kind"], "write_failed");
+    assert_eq!(
+        error,
+        json!({"kind":"invalid_state_file", "file":"scopes/default/sources/source.jsonl",
+            "line":1,
+            "message":"repeated top-level member `extension` cannot survive a typed record change"})
+    );
     assert_eq!(raw_rows(&fixture, "sources", "source.jsonl"), vec![row]);
     assert_eq!(state_snapshot(&fixture), before);
 }
