@@ -320,7 +320,6 @@ impl World {
     }
 }
 
-
 /// The section, held until it drops.
 struct Held {
     world: Arc<World>,

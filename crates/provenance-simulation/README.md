@@ -92,5 +92,11 @@ is 100). The input `seed` sets the seed (the default is the run ID).
 ## Known failures
 
 - The contract job fails on O1 until GitHub issue 648 is fixed: an update
-  of a Requirement that does not exist answers a write failure (500).
+  of a Requirement that does not exist answers a write failure (500). A
+  write on a moved base also answers a write failure today, for example a
+  message post whose base moved before its publish. That second cause has
+  the same law and layer, so it adds a comment to the same issue.
 - The engine job can fail on L1 (bead provenance-4ayr).
+- The CLI jobs fail on L6: after a merge, the state can hold two
+  withdrawals of one review submission, and each read of the Requirement
+  of that submission refuses with `read_failed`.
