@@ -97,6 +97,7 @@ is 100). The input `seed` sets the seed (the default is the run ID).
   message post whose base moved before its publish. That second cause has
   the same law and layer, so it adds a comment to the same issue.
 - The engine job can fail on L1 (bead provenance-4ayr).
-- The CLI jobs fail on L6: after a merge, the state can hold two
-  withdrawals of one review submission, and each read of the Requirement
-  of that submission refuses with `read_failed`.
+- The CLI jobs fail on L6: the state can hold two withdrawals of one
+  review submission, and each read of the Requirement of that submission
+  refuses with `read_failed`. The cases that showed it had a withdrawal on
+  a merged branch and a withdrawal on the main branch.
