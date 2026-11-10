@@ -276,3 +276,66 @@ fn a_bad_state_line_keeps_its_exit_code_and_lines() {
         ]),
     );
 }
+
+/// e92s: `api` create with `source_refs` names the field, the accepted fields
+/// and how to cite a Source.
+#[test]
+#[provenance_macros::verifies("rule_unknown_request_field_names_accepted_fields", examples)]
+fn api_create_with_source_refs_names_the_unknown_field() {
+    let (_directory, repo) = support::review_paths::init();
+    let mut rows = Vec::new();
+    for format in ["text", "json"] {
+        let mut command = provenance();
+        command.args([
+            "api",
+            "requirements",
+            "--method",
+            "post",
+            "--input",
+            "-",
+            "--repo",
+            &repo,
+        ]);
+        if format == "json" {
+            command.args(["--format", "json"]);
+        }
+        let output = command
+            .write_stdin(
+                json!({"actor":"a", "id":"req_b", "statement":"The system stores each record.",
+                    "status":"discovery", "depends_on":[], "supersedes":[], "source_refs":[]})
+                .to_string(),
+            )
+            .output()
+            .unwrap();
+        rows.push(json!({
+            "command": "api requirements",
+            "format": format,
+            "code": output.status.code(),
+            "stdout_empty": output.stdout.is_empty(),
+            "stderr": String::from_utf8(output.stderr).unwrap().lines().collect::<Vec<_>>(),
+        }));
+    }
+    assert_rows(
+        &rows,
+        &json!([
+            {
+                "code": 1,
+                "command": "api requirements",
+                "format": "text",
+                "stderr": [
+                    "Error: {\"error\":{\"field\":\"request.source_refs\",\"kind\":\"invalid_input\",\"message\":\"create-requirement does not take source_refs; accepted fields: `actor`, `id`, `statement`, `description`, `status`, `refines`, `depends_on`, `supersedes`, `spawned_by`, `origin_thread`, `origin_message`, `origin`; to cite a Source, update the record with the Source in relationships.cites\",\"reason\":\"unknown_field\"},\"meta\":{}}"
+                ],
+                "stdout_empty": true
+            },
+            {
+                "code": 1,
+                "command": "api requirements",
+                "format": "json",
+                "stderr": [
+                    "Error: {\"error\":{\"field\":\"request.source_refs\",\"kind\":\"invalid_input\",\"message\":\"create-requirement does not take source_refs; accepted fields: `actor`, `id`, `statement`, `description`, `status`, `refines`, `depends_on`, `supersedes`, `spawned_by`, `origin_thread`, `origin_message`, `origin`; to cite a Source, update the record with the Source in relationships.cites\",\"reason\":\"unknown_field\"},\"meta\":{}}"
+                ],
+                "stdout_empty": true
+            }
+        ]),
+    );
+}

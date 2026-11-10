@@ -346,6 +346,9 @@ fn decode<O: Operation, T: serde::de::DeserializeOwned>(call: Value) -> Result<T
         let path = error.path().to_string();
         let parent = (!path.is_empty() && path != ".").then_some(path);
         let message = error.inner().to_string();
+        if let Some((name, accepted)) = unknown_field(&message) {
+            return unknown_field_refusal::<O>(parent, name, accepted);
+        }
         // A missing field is named under its parent, as the list check above does.
         let failure = match missing_field(&message) {
             Some(name) => OperationFailure::InvalidInput {
@@ -361,6 +364,45 @@ fn decode<O: Operation, T: serde::de::DeserializeOwned>(call: Value) -> Result<T
         };
         FailureEnvelope::new(Some(O::NAME), failure)
     })
+}
+
+/// The refusal of a request field that the operation does not take. The
+/// message names the accepted fields; for `source_refs` it also tells how to
+/// cite a Source.
+#[provenance_macros::rule("rule_unknown_request_field_names_accepted_fields")]
+fn unknown_field_refusal<O: Operation>(
+    path: Option<String>,
+    name: &str,
+    accepted: &str,
+) -> FailureEnvelope {
+    let mut message = format!(
+        "{} does not take {name}; accepted fields: {accepted}",
+        O::NAME
+    );
+    if name == "source_refs" {
+        message.push_str(
+            "; to cite a Source, update the record with the Source in relationships.cites",
+        );
+    }
+    FailureEnvelope::declared(
+        O::NAME,
+        serde_json::json!({
+            "kind":"invalid_input", "field":path, "reason":"unknown_field", "message":message
+        }),
+        400,
+    )
+}
+
+/// The field that a serde "unknown field" error names, and the text that
+/// lists the accepted fields. The `unknown_field_text_is_pinned` test fails if
+/// serde changes this text.
+fn unknown_field(message: &str) -> Option<(&str, &str)> {
+    let (name, rest) = message.strip_prefix("unknown field `")?.split_once("`, ")?;
+    let accepted = rest
+        .strip_prefix("expected one of ")
+        .or_else(|| rest.strip_prefix("expected "))
+        .unwrap_or("none");
+    Some((name, accepted))
 }
 
 /// The field that a serde "missing field" error names. The
@@ -389,5 +431,29 @@ mod tests {
         let message = error.inner().to_string();
         assert_eq!(message, "missing field `actor`");
         assert_eq!(super::missing_field(&message), Some("actor"));
+    }
+
+    #[derive(Debug, serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    #[allow(dead_code)]
+    struct Closed {
+        actor: String,
+        id: String,
+    }
+
+    #[test]
+    fn unknown_field_text_is_pinned() {
+        let call = serde_json::json!({"actor":"a", "id":"b", "source_refs":[]});
+        let error =
+            serde_path_to_error::deserialize::<_, Closed>(call.into_deserializer()).unwrap_err();
+        let message = error.inner().to_string();
+        assert_eq!(
+            message,
+            "unknown field `source_refs`, expected `actor` or `id`"
+        );
+        assert_eq!(
+            super::unknown_field(&message),
+            Some(("source_refs", "`actor` or `id`"))
+        );
     }
 }
