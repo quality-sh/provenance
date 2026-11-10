@@ -7,7 +7,9 @@
 
 #[allow(dead_code)]
 mod support {
-    #[path = "api_process.rs"]
+    // rustfmt reads this path from a directory with the name of the test
+    // file, and the compiler from `tests/support/`; both name one file.
+    #[path = "../support/api_process.rs"]
     pub mod api_process;
     #[path = "../../../provenance-transport/tests/support/catch_up_steps.rs"]
     pub mod catch_up_steps;

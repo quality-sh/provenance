@@ -199,14 +199,14 @@ def main(argv=None):
     one.add_argument("--log", required=True)
     one.add_argument("--failures", required=True)
     one.add_argument("--stats")
-    one.add_argument("--succeeded", action="store_true")
+    one.add_argument("--job-status", default="failure")
     every = commands.add_parser("issues")
     every.add_argument("--artifacts", required=True)
     every.add_argument("--run-url", required=True)
     args = parser.parse_args(argv)
     if args.command == "summary":
         sys.stdout.write(
-            summary(args.layer, args.log, args.failures, args.stats, args.succeeded)
+            summary(args.layer, args.log, args.failures, args.stats, args.job_status == "success")
         )
     else:
         open_issues(args.artifacts, args.run_url)
