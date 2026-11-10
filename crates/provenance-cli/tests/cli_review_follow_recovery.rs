@@ -14,15 +14,12 @@ fn host_loss_reports_unknown_continuity_and_fails() {
     let loss = follow.frame();
     assert_eq!(loss["type"], "disconnected");
     assert_eq!(loss["continuity"], "unknown");
-    let end = std::time::Instant::now() + std::time::Duration::from_secs(15);
-    loop {
-        if let Some(status) = follow.child.try_wait().unwrap() {
-            assert!(!status.success());
-            break;
-        }
-        assert!(std::time::Instant::now() < end);
-        std::thread::sleep(std::time::Duration::from_millis(25));
-    }
+    let status = review_host_support::bounded_process::wait(
+        &mut follow.child,
+        std::time::Duration::from_secs(15),
+        "follow after host loss",
+    );
+    assert!(!status.success());
 }
 
 #[cfg(unix)]
@@ -36,15 +33,12 @@ fn interrupt_stops_a_waiting_follow_command() {
         .status()
         .unwrap();
     assert!(result.success());
-    let end = std::time::Instant::now() + std::time::Duration::from_secs(15);
-    loop {
-        if let Some(status) = follow.child.try_wait().unwrap() {
-            assert!(status.success());
-            break;
-        }
-        assert!(std::time::Instant::now() < end);
-        std::thread::sleep(std::time::Duration::from_millis(25));
-    }
+    let status = review_host_support::bounded_process::wait(
+        &mut follow.child,
+        std::time::Duration::from_secs(15),
+        "follow after SIGINT",
+    );
+    assert!(status.success());
 }
 
 #[test]

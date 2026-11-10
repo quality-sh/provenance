@@ -1,4 +1,3 @@
-use assert_cmd::Command;
 use predicates::prelude::PredicateBooleanExt;
 use predicates::str::contains;
 use provenance_macros::verifies;
@@ -11,6 +10,10 @@ mod dictionary_support;
 
 #[path = "cli_check/archive_commit.rs"]
 mod archive_commit;
+
+#[path = "support/bounded_process.rs"]
+mod bounded_process;
+use bounded_process::Bounded;
 
 #[test]
 fn check_rejects_dangling_artifact_links() {
@@ -328,8 +331,7 @@ fn strict_check_fails_when_a_committed_reference_has_no_loadable_index() {
     init(&repo);
     dictionary_support::write_reference(&repo, dictionary_support::imported_dictionary());
 
-    Command::cargo_bin("provenance")
-        .unwrap()
+    bounded_process::provenance()
         .env("PROVENANCE_STE100_INDEX_DIR", &index_directory)
         .args([
             "check",
@@ -339,7 +341,7 @@ fn strict_check_fails_when_a_committed_reference_has_no_loadable_index() {
             "--format",
             "json",
         ])
-        .assert()
+        .bounded_assert()
         .failure()
         .stderr(contains("no loadable index"))
         .stderr(contains("provenance dictionary import"));
@@ -355,8 +357,7 @@ fn check_without_strict_keeps_the_soft_fallback_for_a_reference_without_an_index
     init(&repo);
     dictionary_support::write_reference(&repo, dictionary_support::imported_dictionary());
 
-    Command::cargo_bin("provenance")
-        .unwrap()
+    bounded_process::provenance()
         .env("PROVENANCE_STE100_INDEX_DIR", &index_directory)
         .args([
             "check",
@@ -365,7 +366,7 @@ fn check_without_strict_keeps_the_soft_fallback_for_a_reference_without_an_index
             "--format",
             "json",
         ])
-        .assert()
+        .bounded_assert()
         .success()
         .stdout(contains(r#""category": "graph""#).and(contains(r#""status": "passed""#)));
 }
@@ -387,8 +388,7 @@ fn strict_check_passes_when_the_referenced_index_is_present() {
     git(&repo, &["add", "."]);
     git(&repo, &["commit", "-m", "initial candidate"]);
 
-    Command::cargo_bin("provenance")
-        .unwrap()
+    bounded_process::provenance()
         .env("PROVENANCE_STE100_INDEX_DIR", &index_directory)
         .args([
             "check",
@@ -398,7 +398,7 @@ fn strict_check_passes_when_the_referenced_index_is_present() {
             "--format",
             "json",
         ])
-        .assert()
+        .bounded_assert()
         .success()
         .stdout(contains(r#""category": "graph""#).and(contains(r#""status": "passed""#)));
 }
@@ -407,8 +407,7 @@ pub(crate) fn git(repo: &Path, arguments: &[&str]) {
     let output = provenance_store::git_process::git()
         .current_dir(repo)
         .args(arguments)
-        .output()
-        .unwrap();
+        .bounded_output();
     assert!(
         output.status.success(),
         "git {arguments:?} failed: {}",
@@ -417,8 +416,7 @@ pub(crate) fn git(repo: &Path, arguments: &[&str]) {
 }
 
 pub(crate) fn init(repo: &Path) {
-    Command::cargo_bin("provenance")
-        .unwrap()
+    bounded_process::provenance()
         .args([
             "init",
             "--path",
@@ -428,13 +426,12 @@ pub(crate) fn init(repo: &Path) {
             "--path-prefix",
             ".",
         ])
-        .assert()
+        .bounded_assert()
         .success();
 }
 
 fn provenance(repo: &Path) -> assert_cmd::assert::Assert {
-    Command::cargo_bin("provenance")
-        .unwrap()
+    bounded_process::provenance()
         .args([
             "check",
             "--repo",
@@ -442,7 +439,7 @@ fn provenance(repo: &Path) -> assert_cmd::assert::Assert {
             "--format",
             "json",
         ])
-        .assert()
+        .bounded_assert()
 }
 
 fn write_jsonl(path: &Path, record: impl AsRef<str>) {
