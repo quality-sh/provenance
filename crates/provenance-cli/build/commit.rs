@@ -5,11 +5,11 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::inputs;
+
 /// Gives `PROVENANCE_BUILD` to the compiler, for example `0.4.0 (6347b4b0)`.
-/// A build with changes to tracked files adds `-dirty` to the commit.
+/// A build with changes to tracked build inputs adds `-dirty` to the commit.
 pub fn publish(crate_root: &Path) {
-    println!("cargo:rerun-if-env-changed=GITHUB_SHA");
-    println!("cargo:rerun-if-env-changed=GITHUB_WORKSPACE");
     let release = std::env::var("CARGO_PKG_VERSION").expect("Cargo package version");
     let build = match checkout_root(crate_root).and_then(|root| commit(&root)) {
         Some(commit) => format!("{release} ({commit})"),
@@ -19,7 +19,7 @@ pub fn publish(crate_root: &Path) {
 }
 
 /// The workspace root that holds this crate in a checkout. A package build
-/// from crates.io has no such root that git or CI names.
+/// from crates.io has no such root that git names.
 fn checkout_root(crate_root: &Path) -> Option<PathBuf> {
     Some(crate_root.parent()?.parent()?.to_path_buf())
 }
@@ -32,42 +32,33 @@ fn same_place(first: &Path, second: &Path) -> bool {
     }
 }
 
+/// The commit of the checkout, with `-dirty` when a path in the build input
+/// list differs from that commit. The same list sets when the script runs
+/// again, so the mark cannot stay from an earlier state of these paths.
 fn commit(root: &Path) -> Option<String> {
-    from_git(root).or_else(|| from_ci(root))
-}
-
-fn from_git(root: &Path) -> Option<String> {
     let top = git(root, &["rev-parse", "--show-toplevel"])?;
     if !same_place(Path::new(&top), root) {
         return None;
     }
-    watch(root);
+    let inputs = inputs::paths(root);
+    watch(root, &inputs);
     let head = short(&git(root, &["rev-parse", "HEAD"])?)?;
-    // Without optional locks, git status does not write the index, so this
-    // build does not change a file that it watches.
-    let changes = git(
-        root,
-        &[
-            "--no-optional-locks",
-            "status",
-            "--porcelain",
-            "--untracked-files=no",
-        ],
-    )?;
+    // Without optional locks, git diff does not write the index.
+    let mut arguments = vec![
+        "--no-optional-locks",
+        "--literal-pathspecs",
+        "diff",
+        "--name-only",
+        "HEAD",
+        "--",
+    ];
+    arguments.extend(inputs.iter().map(String::as_str));
+    let changes = git(root, &arguments)?;
     Some(if changes.is_empty() {
         head
     } else {
         format!("{head}-dirty")
     })
-}
-
-/// A CI checkout without git data still names its commit from the CI environment.
-fn from_ci(root: &Path) -> Option<String> {
-    let workspace = PathBuf::from(std::env::var_os("GITHUB_WORKSPACE")?);
-    if !same_place(&workspace, root) {
-        return None;
-    }
-    short(&std::env::var("GITHUB_SHA").ok()?)
 }
 
 /// The first eight characters of a full commit hash. A fixed length keeps the
@@ -77,13 +68,9 @@ fn short(hash: &str) -> Option<String> {
     full.then(|| hash[..8].to_ascii_lowercase())
 }
 
-/// Runs the build script again when the commit or the index changes.
-fn watch(root: &Path) {
-    let mut names = vec![
-        "HEAD".to_owned(),
-        "index".to_owned(),
-        "packed-refs".to_owned(),
-    ];
+/// Runs the build script again when the commit moves or a build input changes.
+fn watch(root: &Path, inputs: &[String]) {
+    let mut names = vec!["HEAD".to_owned(), "packed-refs".to_owned()];
     names.extend(git(root, &["symbolic-ref", "-q", "HEAD"]));
     for name in names {
         if let Some(path) = git(root, &["rev-parse", "--git-path", &name]) {
@@ -92,6 +79,12 @@ fn watch(root: &Path) {
                 println!("cargo:rerun-if-changed={}", path.display());
             }
         }
+    }
+    for input in inputs {
+        println!(
+            "cargo:rerun-if-changed={}",
+            inputs::absolute(root, input).display()
+        );
     }
 }
 

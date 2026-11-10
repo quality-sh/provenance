@@ -6,30 +6,30 @@
 #[path = "review_host_support/mod.rs"]
 mod review_host_support;
 
+#[path = "../build/inputs.rs"]
+mod inputs;
+
 use assert_cmd::Command;
 use std::path::Path;
 
-/// The commit of this checkout, or nothing when the tests do not run in a git
-/// checkout of this repository, as in a package build from crates.io.
-fn checkout_commit() -> Option<String> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent()?.parent()?;
-    let git = |arguments: &[&str]| {
-        let output = provenance_store::git_process::git()
-            .arg("-C")
-            .arg(root)
-            .args(arguments)
-            .output()
-            .ok()?;
-        output
-            .status
-            .success()
-            .then(|| String::from_utf8(output.stdout).unwrap().trim().to_owned())
-    };
-    let top = git(&["rev-parse", "--show-toplevel"])?;
-    if Path::new(&top).canonicalize().ok()? != root.canonicalize().ok()? {
-        return None;
-    }
-    Some(git(&["rev-parse", "HEAD"])?[..8].to_owned())
+/// The workspace checkout that holds this crate. The tests run in a checkout of
+/// this repository.
+fn workspace_root() -> &'static Path {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .unwrap()
+}
+
+fn git(arguments: &[&str]) -> String {
+    let output = provenance_store::git_process::git()
+        .arg("-C")
+        .arg(workspace_root())
+        .args(arguments)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "git {arguments:?} failed");
+    String::from_utf8(output.stdout).unwrap().trim().to_owned()
 }
 
 /// The text after the binary name in `provenance --version`.
@@ -49,21 +49,24 @@ fn reported_build() -> String {
 }
 
 /// Implementation aid: the release number stays the first token after the name,
-/// because the managed skill stamp and the release checks compare it. A build
-/// from a git checkout then names its commit, with `-dirty` when tracked files
-/// had changes.
+/// because the managed skill stamp and the release checks compare it. The build
+/// then names the commit of this checkout. It adds `-dirty` exactly when git
+/// reports a change to a tracked path in the build input list.
 #[test]
 fn version_flag_names_the_release_and_the_commit_of_the_build() {
     let release = env!("CARGO_PKG_VERSION");
+    let head = git(&["rev-parse", "HEAD"]);
+    let mut arguments = vec!["--literal-pathspecs", "diff", "--name-only", "HEAD", "--"];
+    let inputs = inputs::paths(workspace_root());
+    arguments.extend(inputs.iter().map(String::as_str));
+    let changes = git(&arguments);
+    let mark = if changes.is_empty() { "" } else { "-dirty" };
     let build = reported_build();
-    match checkout_commit() {
-        Some(commit) => assert!(
-            build == format!("{release} ({commit})")
-                || build == format!("{release} ({commit}-dirty)"),
-            "build {build:?} does not name release {release} and commit {commit}"
-        ),
-        None => assert_eq!(build, release),
-    }
+    assert_eq!(
+        build,
+        format!("{release} ({}{mark})", &head[..8]),
+        "changed build inputs: {changes:?}"
+    );
     let short = Command::cargo_bin("provenance")
         .unwrap()
         .arg("-V")

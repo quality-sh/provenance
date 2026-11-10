@@ -1,5 +1,7 @@
 #[path = "build/commit.rs"]
 mod commit;
+#[path = "build/inputs.rs"]
+mod inputs;
 #[path = "build/skills.rs"]
 mod skills;
 
