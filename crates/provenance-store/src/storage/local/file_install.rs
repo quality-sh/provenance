@@ -3,7 +3,7 @@
 
 use super::whole_set::WholeSetHook;
 use super::LocalStateStorage;
-use crate::storage::{Atomicity, PublishFailure, Revision, WriteSet};
+use crate::storage::{Atomicity, PublishFailure, WriteSet};
 
 /// The working-tree file steps that land with a whole set, such as the
 /// replacement of a Source file in a source edit.
@@ -16,7 +16,7 @@ impl LocalStateStorage {
         &self,
         writes: &WriteSet,
         file: FileInstall<'_>,
-    ) -> Result<Revision, PublishFailure> {
+    ) -> Result<(), PublishFailure> {
         if writes.atomicity() != Atomicity::WholeSet {
             return Err(PublishFailure::Refused(anyhow::anyhow!(
                 "a file install lands only with a whole set"

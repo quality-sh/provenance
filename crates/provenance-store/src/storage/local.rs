@@ -1,8 +1,10 @@
 //! The local-disk adapter: canonical state as files under `.provenance/state`.
+//!
+//! A per-key set lands each key under the advisory lock of its shard, with a
+//! temporary file and a rename. A whole set lands as one swap of a changed
+//! copy of the state directory.
 
-use super::{
-    Atomicity, PublishFailure, Revision, StateKey, StateStorage, StateView, StorageError, WriteSet,
-};
+use super::{Atomicity, PublishFailure, StateKey, StateStorage, StateView, StorageError, WriteSet};
 use crate::layout::ProvenanceLayout;
 use crate::shards;
 use camino::Utf8Path;
@@ -63,17 +65,14 @@ impl StateStorage for LocalStateStorage {
         Ok(StateView::new(entries))
     }
 
-    /// Returns the revision of the whole tree after the write. The tree is
-    /// the manifest and each shard of a scope, as [`Self::read_view`] reads
-    /// them; no other entry under `.provenance/state` is in the revision.
-    /// With a base, the adapter has the tree from its read under the lock.
-    /// With no base, it reads and hashes the tree under the lock after the
-    /// write.
+    /// With a base, the adapter reads the tree under the lock and compares
+    /// its keys and bytes with the base before any key lands. With no base,
+    /// it reads nothing.
     ///
     /// A per-key set lands each key with a temporary file and a rename, in
     /// key order. A whole set lands as one swap of the state directory; see
     /// `whole_set`.
-    fn publish(&self, writes: WriteSet) -> Result<Revision, PublishFailure> {
+    fn publish(&self, writes: WriteSet) -> Result<(), PublishFailure> {
         self.publish_with(&writes, &mut whole_set::StatePublication)
     }
 }
@@ -83,38 +82,18 @@ impl LocalStateStorage {
         &self,
         writes: &WriteSet,
         hook: &mut dyn whole_set::WholeSetHook,
-    ) -> Result<Revision, PublishFailure> {
+    ) -> Result<(), PublishFailure> {
         writes.ensure_disjoint()?;
-        let base_tree = match writes.base() {
-            Some(base) => {
-                let view = self
-                    .read_view()
-                    .map_err(|error| PublishFailure::Refused(error.into()))?;
-                if view.revision() != base {
-                    return Err(PublishFailure::BaseMoved {
-                        base: base.clone(),
-                        current: view.revision().clone(),
-                    });
-                }
-                Some(view.into_entries())
-            }
-            None => None,
-        };
-        match writes.atomicity() {
-            Atomicity::WholeSet => self.land_whole_set(writes, hook)?,
-            Atomicity::PerKey => self.land_per_key(writes)?,
+        if writes.base_view().is_some() {
+            let view = self
+                .read_view()
+                .map_err(|error| PublishFailure::Refused(error.into()))?;
+            writes.ensure_base(view.entries())?;
         }
-        base_tree.map_or_else(
-            || {
-                self.read_view()
-                    .map(|view| view.revision().clone())
-                    .map_err(|error| PublishFailure::Started(error.into()))
-            },
-            |mut tree| {
-                writes.apply_to(&mut tree);
-                Ok(Revision::of(&tree))
-            },
-        )
+        match writes.atomicity() {
+            Atomicity::WholeSet => self.land_whole_set(writes, hook),
+            Atomicity::PerKey => self.land_per_key(writes),
+        }
     }
 
     /// A failure that leaves the marker of the transaction began to land:

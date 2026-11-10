@@ -6,6 +6,7 @@
 
 use super::{Atomicity, PublishFailure, Revision, StateKey, StateStorage, StateView, WriteSet};
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 /// One adapter under test.
 pub trait Harness {
@@ -17,7 +18,7 @@ pub trait Harness {
     fn break_key(&mut self, key: &str);
 }
 
-fn publish<H: Harness>(harness: &H, writes: WriteSet) -> Result<Revision, PublishFailure> {
+fn publish<H: Harness>(harness: &H, writes: WriteSet) -> Result<(), PublishFailure> {
     harness.with_storage(|storage| storage.publish(writes))
 }
 
@@ -85,52 +86,46 @@ pub fn revision_follows_every_key_and_byte<H: Harness>(mut harness: H) {
     assert_ne!(read(&harness).revision(), changed.revision());
 }
 
-/// A per-key set lands its puts and deletes, and returns the revision of the
-/// whole tree after the write.
-///
-/// The set has no base, so an adapter reads and
-/// hashes the whole tree after the write lands; the local adapter does this
-/// under the publication lock.
+/// A per-key set with no base lands its puts and deletes.
 pub fn publish_lands_puts_and_deletes<H: Harness>(mut harness: H) {
     harness.seed(&[("manifest.json", b"{}"), (B, b"old")]);
     let writes = WriteSet::new(Atomicity::PerKey)
         .put(key("manifest.json"), b"{\"x\":1}".to_vec())
         .put(key(C), b"new".to_vec())
         .delete(key(B));
-    let revision = publish(&harness, writes).unwrap();
-    let view = read(&harness);
+    publish(&harness, writes).unwrap();
     let after: &[(&str, &[u8])] = &[("manifest.json", b"{\"x\":1}"), (C, b"new")];
-    assert_eq!(view.entries(), &expected(after));
-    assert_eq!(&revision, view.revision());
+    assert_eq!(read(&harness).entries(), &expected(after));
 }
 
-/// A set on the current revision lands and returns the revision of the whole
-/// tree after it. The adapter has the tree from its read of the base.
+/// A set on a view with the stored keys and bytes lands.
 pub fn publish_on_the_current_base_lands<H: Harness>(mut harness: H) {
     harness.seed(&[("manifest.json", b"{}")]);
-    let base = read(&harness).revision().clone();
     let writes = WriteSet::new(Atomicity::PerKey)
-        .on_base(base)
+        .on_base(Arc::new(read(&harness)))
         .put(key(X), b"x".to_vec());
-    let revision = publish(&harness, writes).unwrap();
-    assert_eq!(&revision, read(&harness).revision());
+    publish(&harness, writes).unwrap();
+    let after: &[(&str, &[u8])] = &[("manifest.json", b"{}"), (X, b"x")];
+    assert_eq!(read(&harness).entries(), &expected(after));
 }
 
-/// A set on a revision that moved is refused before any key lands.
+/// A set on a view whose keys and bytes are no longer stored is refused
+/// before any key lands. The failure names the revision of the base and of
+/// the stored state.
 pub fn publish_on_a_moved_base_is_refused<H: Harness>(mut harness: H) {
     harness.seed(&[("manifest.json", b"{}")]);
-    let base = read(&harness).revision().clone();
+    let base = read(&harness);
     harness.seed(&[(X, b"moved")]);
     let moved = read(&harness);
     let writes = WriteSet::new(Atomicity::PerKey)
-        .on_base(base.clone())
+        .on_base(Arc::new(base.clone()))
         .put(key(Y), b"y".to_vec());
     match publish(&harness, writes) {
         Err(PublishFailure::BaseMoved {
             base: from,
             current,
         }) => {
-            assert_eq!(from, base);
+            assert_eq!(&from, base.revision());
             assert_eq!(&current, moved.revision());
         }
         other => panic!("expected BaseMoved, got {other:?}"),
@@ -190,11 +185,9 @@ pub fn a_two_key_whole_set_lands_both_keys<H: Harness>(mut harness: H) {
     let writes = WriteSet::new(Atomicity::WholeSet)
         .put(key(A), b"a".to_vec())
         .put(key(B), b"b".to_vec());
-    let revision = publish(&harness, writes).unwrap();
-    let view = read(&harness);
+    publish(&harness, writes).unwrap();
     let after: &[(&str, &[u8])] = &[("manifest.json", b"{}"), (A, b"a"), (B, b"b")];
-    assert_eq!(view.entries(), &expected(after));
-    assert_eq!(&revision, view.revision());
+    assert_eq!(read(&harness).entries(), &expected(after));
 }
 
 /// A whole set of several keys that fails partway rolls back: no key lands.
@@ -265,6 +258,7 @@ mod tests {
 
     #[test]
     #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
+    #[verifies("rule_adapter_refuses_a_set_on_a_moved_base", examples)]
     fn each_adapter_publish_on_a_moved_base_is_refused() {
         publish_on_a_moved_base_is_refused(local());
         publish_on_a_moved_base_is_refused(Memory::default());
@@ -281,6 +275,8 @@ mod tests {
 
     #[test]
     #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
+    #[verifies("rule_one_key_write_set_lands_whole", examples)]
+    #[verifies("rule_failure_after_landing_starts_is_an_unknown_outcome", examples)]
     fn each_adapter_a_failed_one_key_set_lands_nothing() {
         a_failed_one_key_set_lands_nothing(local());
         a_failed_one_key_set_lands_nothing(Memory::default());
@@ -289,6 +285,7 @@ mod tests {
 
     #[test]
     #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
+    #[verifies("rule_failure_after_landing_starts_is_an_unknown_outcome", examples)]
     fn each_adapter_a_failed_per_key_set_leaves_a_landed_prefix() {
         a_failed_per_key_set_leaves_a_landed_prefix(local());
         a_failed_per_key_set_leaves_a_landed_prefix(Memory::default());

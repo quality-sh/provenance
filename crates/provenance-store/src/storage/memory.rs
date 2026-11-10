@@ -3,10 +3,13 @@
 //! A host that loads a project into memory, such as a Worker, gives the
 //! adapter a persistence that keeps each write set. Tests use the adapter
 //! with no persistence.
+//!
+//! One mutex serializes each call. A set with a persistence goes to the
+//! persistence before the memory changes.
 
 use super::{
-    Atomicity, PublishFailure, Revision, SectionLock, StateKey, StatePersistence, StateStorage,
-    StateView, StorageError, WriteSet,
+    Atomicity, PublishFailure, SectionLock, StateKey, StatePersistence, StateStorage, StateView,
+    StorageError, WriteSet,
 };
 use provenance_macros::rule;
 use std::collections::BTreeMap;
@@ -79,18 +82,10 @@ impl StateStorage for MemoryStateStorage {
     /// lands: the whole set, or the prefix of a per-key set up to a failing
     /// key. When it refuses them, no key changes.
     #[rule("rule_memory_storage_persists_each_publish")]
-    fn publish(&self, writes: WriteSet) -> Result<Revision, PublishFailure> {
+    fn publish(&self, writes: WriteSet) -> Result<(), PublishFailure> {
         writes.ensure_disjoint()?;
         let mut state = self.state();
-        if let Some(base) = writes.base() {
-            let current = Revision::of(&state.entries);
-            if &current != base {
-                return Err(PublishFailure::BaseMoved {
-                    base: base.clone(),
-                    current,
-                });
-            }
-        }
+        writes.ensure_base(&state.entries)?;
         let failing = state.failing.clone();
         let mut landed = state.entries.clone();
         let mut changes: BTreeMap<&StateKey, Option<&Vec<u8>>> = BTreeMap::new();
@@ -115,7 +110,7 @@ impl StateStorage for MemoryStateStorage {
         }
         self.persist(&writes)?;
         state.entries = landed;
-        Ok(Revision::of(&state.entries))
+        Ok(())
     }
 }
 
