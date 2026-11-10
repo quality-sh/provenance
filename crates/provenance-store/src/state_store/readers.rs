@@ -166,17 +166,16 @@ pub fn read_jsonl_located<T: DeserializeOwned>(
 /// A stored record of the shard at `path` that does not agree with itself or
 /// with another record. The refusal is `invalid_state_file` at the second
 /// line with the id `id` when the shard holds it twice, else at its only
-/// line. The shard is read again only here, on the refusal path.
+/// line. The shard is read again only here, on the refusal path. When that
+/// read fails or does not find the id, the refusal is `message` with no line.
 pub fn record_fault(
     store: &StateStore,
     path: &Utf8Path,
     id: &str,
     message: String,
 ) -> anyhow::Error {
-    let rows = match read_jsonl_located::<serde_json::Value>(store, path) {
-        Ok(rows) => rows,
-        Err(error) => return error,
-    };
+    // An error of the second read is not given: it would replace the fault.
+    let rows = read_jsonl_located::<serde_json::Value>(store, path).unwrap_or_default();
     let mut lines = rows
         .into_iter()
         .filter(|(row, _)| row.get("id").and_then(serde_json::Value::as_str) == Some(id))

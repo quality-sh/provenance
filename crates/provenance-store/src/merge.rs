@@ -228,23 +228,41 @@ pub fn merge_records(
     }
 }
 
+/// One side of a three-way merge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MergeSide {
+    Base,
+    Ours,
+    Theirs,
+}
+
+impl std::fmt::Display for MergeSide {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Base => "base",
+            Self::Ours => "ours",
+            Self::Theirs => "theirs",
+        })
+    }
+}
+
 /// Refuses one side of a merge that holds a record id on two rows.
 ///
-/// Call it before [`merge_records`]. The refusal is `invalid_state_file` at
-/// `shard_path` and the line of the second row, and the message names the
-/// side, the id and the line of the first row. A row with no string id is
-/// left to [`merge_records`].
+/// Call it before [`merge_records`], on base, then ours, then theirs. The
+/// rows are checked in their order, as [`merge_records`] checks them, so the
+/// first fault of a side wins. A row with no string id gets the refusal of
+/// [`merge_records`]. A second row with an id is `invalid_state_file` at
+/// `shard_path` and its line, and the message names the side, the id and the
+/// line of the first row.
 pub fn ensure_unique_ids(
     shard_path: &camino::Utf8Path,
-    side: &str,
+    side: MergeSide,
     key: &str,
     rows: &[StoredRow],
 ) -> anyhow::Result<()> {
     let mut first_lines = BTreeMap::new();
     for row in rows {
-        let Some(id) = row.record.get(key).and_then(Value::as_str) else {
-            continue;
-        };
+        let id = string_id(key, &row.record)?;
         if let Some(first) = first_lines.insert(id, row.line_number) {
             return Err(crate::refusal::state_fault(
                 &crate::state_store::message_ids::ShardLine {
@@ -259,6 +277,13 @@ pub fn ensure_unique_ids(
         }
     }
     Ok(())
+}
+
+fn string_id<'a>(key: &str, record: &'a CanonicalRecord) -> anyhow::Result<&'a str> {
+    record
+        .get(key)
+        .and_then(Value::as_str)
+        .ok_or_else(|| crate::refusal::fault!("record is missing string {key}"))
 }
 
 pub fn read_jsonl_records(path: &camino::Utf8Path) -> anyhow::Result<Vec<CanonicalRecord>> {
@@ -284,10 +309,7 @@ fn index_by_id(
 ) -> anyhow::Result<BTreeMap<String, CanonicalRecord>> {
     let mut indexed = BTreeMap::new();
     for record in records {
-        let id = record
-            .get(key)
-            .and_then(Value::as_str)
-            .ok_or_else(|| crate::refusal::fault!("record is missing string {key}"))?;
+        let id = string_id(key, record)?;
         if indexed.contains_key(id) {
             return Err(crate::refusal::fault!("duplicate record id {id}"));
         }

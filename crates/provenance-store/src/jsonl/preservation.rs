@@ -202,7 +202,10 @@ fn unique_id_match(
         .map(|(index, _)| index);
     let first = matching.next();
     if let Some(second) = matching.next() {
-        let line = raw[second].as_ref().map_or(0, |row| row.line_number);
+        let line = raw[second]
+            .as_ref()
+            .expect("the filter keeps only rows that are available")
+            .line_number;
         return Err(crate::refusal::state_fault(
             &crate::state_store::message_ids::ShardLine {
                 path: path.to_owned(),

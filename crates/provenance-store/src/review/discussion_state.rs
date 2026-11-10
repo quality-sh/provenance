@@ -389,8 +389,10 @@ impl StateStore {
             .filter(|record| record.parent_id() == &parent.node_id)
             .collect::<Vec<_>>();
         if matches.len() > 1 {
-            return Err(state_fault(
-                &self.parent_line(path, id, 1)?,
+            return Err(crate::state_store::readers::record_fault(
+                self,
+                path,
+                id,
                 format!("Discussion parent {id} is stored again"),
             ));
         }
@@ -401,8 +403,10 @@ impl StateStore {
             )
         })?;
         if record.parent_scope() != scope {
-            return Err(state_fault(
-                &self.parent_line(path, id, 0)?,
+            return Err(crate::state_store::readers::record_fault(
+                self,
+                path,
+                id,
                 format!(
                     "Discussion parent {id} names scope {}, not the scope of its file",
                     record.parent_scope().as_str()
@@ -410,20 +414,5 @@ impl StateStore {
             ));
         }
         Ok(record.owner_field().map(str::to_owned))
-    }
-
-    /// The line of the record after `skip` earlier records with the id `id`.
-    fn parent_line(
-        &self,
-        path: &camino::Utf8Path,
-        id: &str,
-        skip: usize,
-    ) -> anyhow::Result<ShardLine> {
-        crate::state_store::readers::read_jsonl_located::<serde_json::Value>(self, path)?
-            .into_iter()
-            .filter(|(record, _)| record["id"] == id)
-            .nth(skip)
-            .map(|(_, at)| at)
-            .ok_or_else(|| crate::refusal::fault!("record {id} has no line in its file"))
     }
 }

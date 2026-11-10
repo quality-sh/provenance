@@ -222,14 +222,8 @@ impl StateStore {
             dispositions: &self.list_dispositions(&candidate.scope_id)?,
         })?;
         let path = shards::proposal_cards_path(&self.layout, &candidate.scope_id);
+        // The lifecycle lock holds the shard, so the check above covers it.
         self.mutate_jsonl_records(&path, |records: &mut Vec<ProposalCard>| {
-            if let Some(index) = records.iter().position(|record| record.id == candidate.id) {
-                return Err(crate::refusal::refuse!(
-                    AlreadyExists,
-                    "proposal {} already exists and is immutable",
-                    records[index].id.as_str()
-                ));
-            }
             super::read_budget::ensure_within_read_budget(&candidate)?;
             records.push(candidate.clone());
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
