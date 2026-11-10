@@ -97,10 +97,11 @@ fn verdict(case: &Case, config: Config) -> (Run, Result<(), laws::Violation>) {
     (first, verdict)
 }
 
-/// Runs a random case twice and checks every law. A broken law fails the
-/// test case with a report that names the law and replays the case. A run
-/// of a planted fault or of one law fails with a text that the nightly
-/// report does not read. Returns the first run.
+/// Runs a random case twice, checks every law, and returns the first run.
+///
+/// A broken law fails the test case with a report that names the law and
+/// replays the case. A run of a planted fault or of one law fails with a
+/// text that the nightly report does not read.
 pub fn check_case(layer: &str, case: &Case, config: Config) -> Run {
     let (first, verdict) = verdict(case, config);
     stats::count_case(layer, &first);
@@ -113,9 +114,10 @@ pub fn check_case(layer: &str, case: &Case, config: Config) -> Run {
     first
 }
 
-/// Runs the fixed case of probe `test` twice and checks every law. A broken
-/// law fails the probe with the law and the replay line of the probe, and
-/// writes no failure file. Returns the first run.
+/// Runs the fixed case of probe `test` twice and returns the first run.
+///
+/// A broken law fails the probe with the law and the replay line of the
+/// probe, and writes no failure file.
 pub fn check_probe(layer: &str, test: &str, case: &Case, config: Config) -> Run {
     let (first, verdict) = verdict(case, config);
     report::probe(layer, test, verdict);

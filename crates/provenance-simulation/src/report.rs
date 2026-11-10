@@ -42,9 +42,11 @@ fn random_test(layer: &str) -> &'static str {
     }
 }
 
-/// The command that runs `test` of the test binary of `layer`. The tests
-/// are ignored tests, so the command gives `--run-ignored all`. A CLI run
-/// that checks L6 only at the end of each case gives `SIMULATION_L6=end`.
+/// The command that runs `test` of the test binary of `layer`.
+///
+/// The tests are ignored tests, so the command gives `--run-ignored all`. A
+/// CLI run that checks L6 only at the end of each case gives
+/// `SIMULATION_L6=end`.
 fn test_command(layer: &str, test: &str) -> String {
     let (package, binary, l6) = if layer.starts_with("cli-") {
         let end = std::env::var("SIMULATION_L6").is_ok_and(|l6| l6 == "end");
@@ -103,6 +105,7 @@ pub fn fail(layer: &str, case: &Case, violation: &Violation) -> ! {
 }
 
 /// Fails a run of a planted fault or of one law with the law that it saw.
+///
 /// The text does not match a broken-law line of the nightly report, and the
 /// run writes no failure file.
 pub fn planted_fail(layer: &str, violation: &Violation) -> ! {
@@ -113,9 +116,10 @@ pub fn planted_fail(layer: &str, violation: &Violation) -> ! {
     );
 }
 
-/// Fails probe `test` of `layer` when `verdict` is a broken law. The text
-/// names the law and gives the command that runs the probe. A probe writes
-/// no failure file; the nightly report reads this text.
+/// Fails probe `test` of `layer` when `verdict` is a broken law.
+///
+/// The text names the law and gives the command that runs the probe. A
+/// probe writes no failure file; the nightly report reads this text.
 pub fn probe(layer: &str, test: &str, verdict: Result<(), Violation>) {
     if let Err(violation) = verdict {
         panic!(
