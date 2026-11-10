@@ -35,6 +35,8 @@ impl Task {
     /// no operation for it (two binding writes in one section) or when there
     /// is nothing to act on. An update without `stale` reads the current
     /// etag from `repository` first, as the engine does.
+    // One arm per operation; splitting them would hide the list.
+    #[allow(clippy::too_many_lines)]
     pub fn call(&self, repository: &Repository) -> anyhow::Result<Option<Call>> {
         let call = |operation, request| Some(Call { operation, request });
         let review = |operation, proposal: &String, extra: Value| {
