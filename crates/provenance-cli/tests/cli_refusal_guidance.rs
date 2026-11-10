@@ -3,6 +3,9 @@ mod support {
     pub mod review_paths;
 }
 use support::review_paths::{create_requirement, init, json_output, provenance};
+#[path = "support/bounded_process.rs"]
+mod bounded_process;
+use bounded_process::Bounded;
 
 fn json(repo: &str, args: &[&str]) -> serde_json::Value {
     json_output(provenance().args(args).args(["--repo", repo]))
@@ -58,6 +61,39 @@ fn empty_search_names_text_and_kind_forms() {
     assert!(run(repo, &["search", "--kind", "requirement"])
         .status
         .success());
+}
+
+/// Implementation aid: no Rule states the refusal of search text without --text, and
+/// rule_search_refusal_names_query is about a search with no query.
+#[test]
+fn search_words_without_text_flag_name_the_text_flag() {
+    let cases: [(&[&str], &str, &str); 5] = [
+        (&["some text"], "some text", "--text 'some text'"),
+        (&["it's here"], "it's here", r"--text 'it'\''s here'"),
+        (
+            &["some text", "--kind", "requirement"],
+            "some text",
+            "--text 'some text' --kind requirement",
+        ),
+        (&["some", "text"], "some", "--text 'some text'"),
+        (&["--text", "some", "text"], "text", "--text 'some text'"),
+    ];
+    for (words, found, corrected) in cases {
+        let output = bounded_process::provenance()
+            .arg("search")
+            .args(words)
+            .bounded_output();
+        assert_eq!(output.status.code(), Some(2), "{output:?}");
+        assert!(output.stdout.is_empty(), "{output:?}");
+        assert_eq!(
+            String::from_utf8(output.stderr).unwrap(),
+            format!(
+                "error: unexpected argument '{found}' found\n\n  \
+                 tip: give the search text with --text: provenance search {corrected}\n\n\
+                 For more information, try 'provenance search --help'.\n"
+            ),
+        );
+    }
 }
 
 #[test]
