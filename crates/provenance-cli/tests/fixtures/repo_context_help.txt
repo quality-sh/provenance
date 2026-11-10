@@ -1,4 +1,6 @@
 ===·export·===
+Write·the·records·of·one·scope·as·one·document
+
 Usage:·provenance·export·[OPTIONS]
 
 Options:
@@ -9,6 +11,8 @@ Options:
 ······--output·<OUTPUT>··
 ··-h,·--help·············Print·help
 ===·import·===
+Add·the·records·of·one·scope·export·file·to·the·scope
+
 Usage:·provenance·import·[OPTIONS]·--input·<INPUT>
 
 Options:
@@ -20,6 +24,8 @@ Options:
 ······--dry-run··········Run·each·check·of·the·import·and·write·nothing.
 ··-h,·--help·············Print·help
 ===·swarm-backtrace-land·===
+Add·the·results·of·one·swarm·backtrace·run·to·the·graph·as·proposals
+
 Usage:·provenance·swarm-backtrace·land·[OPTIONS]·--run-dir·<RUN_DIR>
 
 Options:

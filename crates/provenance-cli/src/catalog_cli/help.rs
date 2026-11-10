@@ -51,7 +51,7 @@ pub(super) fn target(
             } else if create && kind == Some(provenance_core::NodeType::Question) {
                 command = command.after_help(QUESTION_GUIDANCE);
             } else if create && kind == Some(provenance_core::NodeType::Requirement) {
-                command = command.after_help(CITE_GUIDANCE);
+                command = command.after_help(CITE_POINTER);
             } else if action == provenance_contract::TargetAction::Update {
                 command = command.after_help(ARCHIVE_GUIDANCE);
             }
@@ -124,7 +124,9 @@ const QUESTION_GUIDANCE: &str =
 const SELECT_TYPE: &str =
     "Select a record type to see its accepted fields:\n  provenance <id> create --type <kind> --help";
 
-// Create takes no citation field, so the help names the update that adds one.
+// Create takes no citation field, so the help names the update that adds one. The
+// help of one record type names no update flag, because it lists only the fields that
+// create accepts for that type.
 const CITE_GUIDANCE: &str = "\
 Create takes no Source citation. To cite a Source on a Requirement, create the
 Requirement, then add the citation with update:
@@ -142,3 +144,7 @@ that has a different live parent stays live and loses only the link to the archi
 Requirement. Archiving a Topic also archives all the Questions in that Topic. Merge the
 pull request with a merge commit: a squash or rebase merge removes the commit that the
 archive names.";
+
+const CITE_POINTER: &str = "\
+Create takes no Source citation. To cite a Source, update the Requirement after create
+and add a cites relationship. The create help with no record type shows the update.";

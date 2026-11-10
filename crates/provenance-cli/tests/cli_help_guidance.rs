@@ -52,14 +52,21 @@ fn submit_help_names_each_record_type_that_submit_accepts() {
 fn create_help_names_the_update_that_cites_a_source() {
     let form = "update --if-match <etag> \\\n    --relationships-json \
                 '{\"cites\":{\"add\":[{\"source_id\":\"<source_id>\",\"clause\":\"<clause>\"}]}}'";
-    for words in [
-        &["record_x", "create"][..],
-        &["record_x", "create", "--type", "requirement"][..],
-    ] {
-        let text = help(words);
-        assert!(text.contains("Create takes no Source citation."), "{text}");
-        assert!(text.contains(form), "{words:?}:\n{text}");
-    }
+    let text = help(&["record_x", "create"]);
+    assert!(text.contains("Create takes no Source citation."), "{text}");
+    assert!(text.contains(form), "{text}");
+
+    // The help of one record type lists only the fields that create accepts for that
+    // type, so it points to the untyped help and names no update flag.
+    let text = help(&["record_x", "create", "--type", "requirement"]);
+    assert!(
+        text.contains(
+            "Create takes no Source citation. To cite a Source, update the Requirement after \
+             create\nand add a cites relationship. The create help with no record type shows \
+             the update."
+        ),
+        "{text}"
+    );
 }
 
 #[test]
