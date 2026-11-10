@@ -1,53 +1,34 @@
-//! The approved alternatives that the imported dictionary gives for an
-//! unapproved word.
+//! The dictionary text that a Rule 1.1 finding gives for a rejected word.
 
-use crate::dictionary::{DictionaryImport, DictionaryStatus};
-use crate::inflection;
+use crate::dictionary::DictionaryImport;
 
-/// Gives the text of the Approved meaning or alternatives column for each
-/// unapproved entry of the rejected word, in dictionary order. A printed form
-/// wins. Otherwise the base forms of a regular ending are used.
-pub fn for_rejected(dictionary: &DictionaryImport, rejected: &str) -> Vec<String> {
-    let folded = rejected
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_lowercase();
-    let printed = matching(dictionary, &[folded.as_str()]);
-    if !printed.is_empty() || folded.contains(' ') {
-        return printed;
-    }
-    let bases: Vec<String> = inflection::base_candidates(&folded)
-        .into_iter()
-        .map(|(base, _)| base)
-        .collect();
-    let bases: Vec<&str> = std::iter::once(folded.strip_suffix("\u{27}s").unwrap_or(&folded))
-        .chain(bases.iter().map(String::as_str))
-        .collect();
-    matching(dictionary, &bases)
-}
-
-fn matching(dictionary: &DictionaryImport, candidates: &[&str]) -> Vec<String> {
-    let mut alternatives: Vec<String> = Vec::new();
-    for entry in &dictionary.entries {
-        let unapproved = entry.status == DictionaryStatus::Unapproved;
-        let matches = entry.word_forms.iter().any(|form| {
-            let form = form.split_whitespace().collect::<Vec<_>>().join(" ");
-            candidates.contains(&form.to_lowercase().as_str())
-        });
+/// Gives the sentence that quotes the "approved meaning or alternatives" text
+/// of the entries that rejected a word, in dictionary order. The column can
+/// hold an approved meaning, an alternative, or a note, so the sentence quotes
+/// it and does not call it an alternative. An entry with no text adds nothing,
+/// and the same text occurs one time.
+pub fn given(dictionary: &DictionaryImport, entries: &[usize]) -> String {
+    let mut ordered = entries.to_vec();
+    ordered.sort_unstable();
+    ordered.dedup();
+    let mut texts: Vec<&str> = Vec::new();
+    for entry in ordered
+        .iter()
+        .filter_map(|index| dictionary.entries.get(*index))
+    {
         let text = entry
             .approved_meaning_or_alternatives
             .trim()
             .trim_end_matches('.');
-        if unapproved
-            && matches
-            && !text.is_empty()
-            && !alternatives.iter().any(|seen| seen == text)
-        {
-            alternatives.push(text.to_owned());
+        if !text.is_empty() && !texts.contains(&text) {
+            texts.push(text);
         }
     }
-    alternatives
+    if texts.is_empty() {
+        String::new()
+    } else {
+        format!(" The dictionary gives: {}.", texts.join("; "))
+    }
 }
 
 #[cfg(test)]

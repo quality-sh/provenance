@@ -5,7 +5,7 @@ use provenance_contract::TargetAction;
 use provenance_porcelain::action::Action;
 use provenance_transport::porcelain::ReplacementError;
 
-mod accepted_values;
+mod field_schema;
 pub mod fields;
 mod help;
 mod input;
@@ -196,8 +196,9 @@ fn review_read_command(
 fn missing_guard_hint(id: &str, context: &provenance_transport::repository::RepoContext) -> String {
     format!(
         "this update needs --if-match; run `provenance {id} get --format json{}` \
-         and give edit.etag to --if-match; expected sha256:<64 lowercase hexadecimal characters>",
-        context_options(Some(context))
+         and give edit.etag to --if-match; expected {}",
+        context_options(Some(context)),
+        input_guard::ETAG_FORM
     )
 }
 

@@ -6,19 +6,39 @@ use provenance_porcelain::api::{ApiArguments, ApiError, ApiRequest};
 use std::collections::BTreeMap;
 use std::io::Read as _;
 
+/// One refused api command, with the correction when the CLI knows it.
+pub struct Refused {
+    pub error: ApiError,
+    pub hint: Option<String>,
+}
+
+impl From<ApiError> for Refused {
+    fn from(error: ApiError) -> Self {
+        Self { error, hint: None }
+    }
+}
+
 /// Translate one parsed api command into the shared semantic request.
 ///
 /// The method flag and the `--input` file or stdin body carry the whole
 /// mutation selection. The options are checked before the body is read, so a
-/// refused call never waits on standard input.
+/// refused call never waits on standard input. The headers are checked
+/// before the queries, so a repeated header wins over a repeated query.
 #[provenance_macros::rule("rule_porcelain_api_body_inputs")]
-pub fn request(args: &ApiArgs) -> Result<ApiRequest, ApiError> {
+pub fn request(args: &ApiArgs) -> Result<ApiRequest, Refused> {
+    let header = pairs(&args.headers, ':', "headers use NAME: VALUE")
+        .map_err(|_| ApiError::invalid_options(Some("header")))?;
+    let query =
+        pairs(&args.queries, '=', "query options use NAME=VALUE").map_err(|name| Refused {
+            error: ApiError::invalid_options(Some("query")),
+            hint: Some(repeated_query_hint(args, &name)),
+        })?;
     let arguments = ApiArguments {
         path: args.path.clone(),
         method: args.method,
         input: args.input.as_ref().map(|_| serde_json::Map::new()),
-        header: pairs(&args.headers, ':', "header", "headers use NAME: VALUE")?,
-        query: pairs(&args.queries, '=', "query", "query options use NAME=VALUE")?,
+        header,
+        query,
         filter: args.filter.clone(),
         limit: args.limit,
     };
@@ -29,12 +49,9 @@ pub fn request(args: &ApiArgs) -> Result<ApiRequest, ApiError> {
     Ok(request)
 }
 
-fn pairs(
-    raw: &[String],
-    separator: char,
-    field: &str,
-    usage: &str,
-) -> Result<BTreeMap<String, String>, ApiError> {
+/// Reads the `NAME<separator>VALUE` options, or gives the name that occurs
+/// more than one time.
+fn pairs(raw: &[String], separator: char, usage: &str) -> Result<BTreeMap<String, String>, String> {
     let mut pairs = BTreeMap::new();
     for entry in raw {
         let Some((name, value)) = entry.split_once(separator) else {
@@ -48,7 +65,7 @@ fn pairs(
             .insert(name.to_owned(), value.trim_start().to_owned())
             .is_some()
         {
-            return Err(ApiError::invalid_options(Some(field)));
+            return Err(name.to_owned());
         }
     }
     Ok(pairs)
@@ -56,20 +73,32 @@ fn pairs(
 
 /// The correction for a query parameter that the caller gave more than once.
 ///
-/// The api takes each query parameter one time. An array parameter takes its
-/// items as one comma-separated value.
-fn repeated_query(raw: &[String]) -> Option<String> {
-    let mut names = std::collections::BTreeSet::new();
-    raw.iter()
-        .filter_map(|entry| entry.split_once('=').map(|(name, _)| name.trim()))
-        .find(|name| !names.insert(*name))
-        .map(|name| {
-            format!(
-                "--query {name} occurs more than one time; give each parameter one time \
-                 and put the items of a list in one comma-separated value, \
-                 for example --query {name}=a,b"
-            )
-        })
+/// The api takes each query parameter one time. Only a parameter whose
+/// query schema is an array takes its items as one comma-separated value.
+fn repeated_query_hint(args: &ApiArgs, name: &str) -> String {
+    let once = format!("--query {name} occurs more than one time; give each parameter one time");
+    let selector = args.queries.iter().find_map(|entry| {
+        entry
+            .split_once('=')
+            .filter(|(key, _)| key.trim() == "query")
+            .map(|(_, value)| value.trim())
+    });
+    let takes_list = args.path.as_deref().is_some_and(|path| {
+        provenance_transport::porcelain::api_port::query_takes_list(
+            args.method.unwrap_or_default(),
+            path,
+            selector,
+            name,
+        )
+    });
+    if takes_list {
+        format!(
+            "{once} and put the items of a list in one comma-separated value, \
+             for example --query {name}=a,b"
+        )
+    } else {
+        once
+    }
 }
 
 fn read_body(input: &str) -> serde_json::Map<String, serde_json::Value> {
@@ -94,22 +123,13 @@ fn read_body(input: &str) -> serde_json::Map<String, serde_json::Value> {
 pub async fn dispatch(args: ApiArgs) -> anyhow::Result<()> {
     let request = match request(&args) {
         Ok(request) => request,
-        Err(error) => {
-            let mut failure = serde_json::to_value(&error.failure)?;
-            if let (Some(hint), Some(object)) = (
-                repeated_query(&args.queries),
-                failure
-                    .get_mut("error")
-                    .and_then(serde_json::Value::as_object_mut),
-            ) {
-                object.insert("hint".into(), hint.into());
-            }
+        Err(refused) => {
             return Err(crate::catalog_cli::refusal::HostRefusal {
-                failure,
-                hint: None,
+                failure: serde_json::to_value(&refused.error.failure)?,
+                hint: refused.hint,
                 text_shows_failure: true,
             }
-            .into());
+            .into())
         }
     };
     provenance_cli::porcelain::dispatch_api(
