@@ -22,7 +22,8 @@ pub enum Ran {
 /// Everything that one case did on disk.
 pub struct CliRun {
     pub groups: Vec<(Ran, Vec<Done>)>,
-    pub entries: BTreeMap<StateKey, Vec<u8>>,
+    /// The final state, or the error of its read.
+    pub entries: Result<BTreeMap<StateKey, Vec<u8>>, String>,
     /// The first failure of the full-rebuild comparison of the reads.
     pub reads: Result<(), String>,
     /// The processes that did not end in the process limit or that
@@ -81,7 +82,11 @@ fn successful_writes_stay(run: &CliRun) -> Result<(), Violation> {
             expected.insert(target, values);
         }
     }
-    let state = final_records(&run.entries).map_err(|error| Violation {
+    let entries = run.entries.as_ref().map_err(|error| Violation {
+        law: "L3",
+        detail: format!("the storage adapter did not read the final state: {error}"),
+    })?;
+    let state = final_records(entries).map_err(|error| Violation {
         law: "L3",
         detail: format!("the final state does not read: {error:#}"),
     })?;

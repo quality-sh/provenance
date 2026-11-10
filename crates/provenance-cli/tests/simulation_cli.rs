@@ -52,6 +52,7 @@ use provenance_simulation::report;
 #[test]
 #[ignore = "random cases run nightly: cargo nextest run --profile simulation --run-ignored all"]
 fn random_cases_keep_the_laws_through_the_cli() {
+    provenance_simulation::stats::record();
     let settings = Settings::new().nondeterminism_strictness(NondeterminismStrictness::Warn);
     Hegel::new(|tc: TestCase| {
         let case = Case::draw(&tc);

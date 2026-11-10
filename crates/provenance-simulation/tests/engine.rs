@@ -14,13 +14,14 @@ use hegel::TestCase;
 use provenance_macros::verifies;
 use provenance_simulation::generate::{Case, Effect, Fault, Operation, Step};
 use provenance_simulation::storage::Outcome;
-use provenance_simulation::{check_case, check_probe, laws, report, run_case, Config, Run};
+use provenance_simulation::{check_case, check_probe, laws, report, run_case, stats, Config, Run};
 use support::cases::{alone, each_operation, moved_base_case, write};
 
 #[hegel::test]
 #[ignore = "random cases run nightly: cargo nextest run --profile simulation --run-ignored all"]
 #[verifies("rule_write_sets_publish_through_the_storage_port", property)]
 fn random_cases_keep_the_laws(tc: TestCase) {
+    stats::record();
     check_case("engine", &Case::draw(&tc), Config::default());
 }
 

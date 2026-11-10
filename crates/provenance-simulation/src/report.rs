@@ -73,6 +73,7 @@ pub fn replay_line(layer: &str, seed: Option<&str>) -> String {
 /// Fails the random test case with the report of `violation`, and writes
 /// the report to the failure directory.
 pub fn fail(layer: &str, case: &Case, violation: &Violation) -> ! {
+    crate::stats::note_broken_law();
     let seed = seed();
     let failure = Failure {
         layer,

@@ -14,7 +14,7 @@ mod support {
 
 use hegel::TestCase;
 use provenance_simulation::generate::{Case, Effect, Operation, Step, SCOPE};
-use provenance_simulation::{check_case, check_probe, laws, report, run_case};
+use provenance_simulation::{check_case, check_probe, laws, report, run_case, stats};
 use provenance_store::repository::Repository;
 use provenance_store::storage::memory::{MemorySectionLock, MemoryStateStorage};
 use serde_json::json;
@@ -27,6 +27,7 @@ use support::contract_laws::contract_laws;
 #[hegel::test]
 #[ignore = "random cases run nightly: cargo nextest run --profile simulation --run-ignored all"]
 fn random_cases_keep_the_laws_through_the_contract(tc: TestCase) {
+    stats::record();
     check_case("contract", &Case::draw(&tc), CONTRACT);
 }
 

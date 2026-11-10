@@ -281,7 +281,7 @@ impl Fixture {
             .iter()
             .map(|(_, done)| done.len())
             .sum::<usize>();
-        stats::add(&layer(), "cases", 1);
+        stats::count_run(&layer());
         // The stop counts show 0 on a night with no stop.
         stats::add(&layer(), "stops during a write", 0);
         stats::add(&layer(), STOPS_THAT_CHANGED, 0);
@@ -312,11 +312,11 @@ pub fn run_cli(case: &Case) -> CliRun {
 
 /// The state of the repository at `root`, read through the local storage
 /// adapter: the manifest and the shards, and no temporary file that a
-/// killed write left.
-pub fn state_entries(root: &Path) -> BTreeMap<StateKey, Vec<u8>> {
+/// killed write left. A read that fails gives its error.
+pub fn state_entries(root: &Path) -> Result<BTreeMap<StateKey, Vec<u8>>, String> {
     let layout = ProvenanceLayout::new(root.to_str().expect("UTF-8"));
     provenance_store::storage::local::LocalStateStorage::new(layout)
         .read_view()
         .map(provenance_store::storage::StateView::into_entries)
-        .unwrap_or_default()
+        .map_err(|error| format!("{error:#}"))
 }

@@ -103,9 +103,7 @@ fn verdict(case: &Case, config: Config) -> (Run, Result<(), laws::Violation>) {
 /// report does not read. Returns the first run.
 pub fn check_case(layer: &str, case: &Case, config: Config) -> Run {
     let (first, verdict) = verdict(case, config);
-    if config.writes_failure_files() {
-        stats::count_case(layer, &first);
-    }
+    stats::count_case(layer, &first);
     if let Err(violation) = verdict {
         if config.writes_failure_files() {
             report::fail(layer, case, &violation);
