@@ -72,17 +72,17 @@ pub(super) const fn declaration(command: WorkspaceCommand) -> Declaration {
     match command {
         WorkspaceCommand::SkillsList => Declaration::named(
             "skills list",
-            "",
+            "List the bundled agent skills",
             Fields::new(SKILLS_LIST_FIELDS, skills_list_schema),
         ),
         WorkspaceCommand::SkillsShow => Declaration::named(
             "skills show",
-            "",
+            "Show the text of one bundled agent skill",
             Fields::new(SKILLS_SHOW_FIELDS, skills_show_schema).target(&["name"]),
         ),
         WorkspaceCommand::SkillsInstall => Declaration::named(
             "skills install",
-            "",
+            "Install the bundled agent skills",
             Fields::new(SKILLS_INSTALL_FIELDS, skills_install_schema),
         ),
         WorkspaceCommand::ReportRender => Declaration::named(

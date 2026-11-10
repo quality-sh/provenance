@@ -57,7 +57,8 @@ cat > "$fixture/package.json" <<'JSON'
 }
 JSON
 
-if ! initialize_npm_fixture; then
+# npm view can see a version before the registry serves its tarball to npx.
+if ! retry_channel "$channel" initialize_npm_fixture; then
   channel_failure "$channel" "npm initialization failed after all packages became visible"
   exit 1
 fi

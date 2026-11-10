@@ -1,3 +1,5 @@
+Show the JSON Schema of one artifact type
+
 Usage: provenance schema show [OPTIONS] <ARTIFACT>
 
 Arguments:

@@ -18,6 +18,10 @@ from pathlib import Path
 
 CHECK_JOBS = {"build": "Build", "check": "Check", "clippy": "Clippy", "test": "Test", "package": "Command"}
 WORKFLOW = "agent-cargo.yml"
+# Each gh poll uses REST calls from the hourly quota that all sessions of the account share.
+WATCH_INTERVAL_SECONDS = 30
+RUN_SEARCH_SLEEP_SECONDS = 10
+RUN_SEARCH_TIMEOUT_SECONDS = 120
 
 
 def command(args, cwd=None, env=None, input_text=None):
@@ -73,7 +77,11 @@ def snapshot(root):
     with tempfile.TemporaryDirectory(prefix="provenance-agent-cargo-") as directory:
         env = {**os.environ, "GIT_INDEX_FILE": str(Path(directory) / "index")}
         git(root, "read-tree", "HEAD", env=env)
-        git(root, "add", "-A", "--", ".", ":(exclude)target", ":(exclude).beads", env=env)
+        # An exclude pathspec that names an ignored target makes git add fail, and
+        # .gitignore does not match a target symlink or file. So add everything,
+        # then set target in the snapshot index back to its HEAD state.
+        git(root, "add", "-A", "--", ".", ":(exclude).beads", env=env)
+        git(root, "reset", "-q", "HEAD", "--", "target", env=env)
         tree = git(root, "write-tree", env=env)
     if tree == git(root, "rev-parse", "HEAD^{tree}"):
         return head
@@ -108,7 +116,7 @@ def push_snapshot(root, sha, repository, branch):
 def pushed_run(root, sha, repository, command_key):
     branch = f"agent-ci/{command_key}/{sha}-{secrets.token_hex(4)}"
     push_snapshot(root, sha, repository, branch)
-    deadline = time.monotonic() + 120
+    deadline = time.monotonic() + RUN_SEARCH_TIMEOUT_SECONDS
     while time.monotonic() < deadline:
         try:
             raw = command([
@@ -121,7 +129,7 @@ def pushed_run(root, sha, repository, command_key):
                 return match["databaseId"]
         except (RuntimeError, ValueError, KeyError):
             pass
-        time.sleep(2)
+        time.sleep(RUN_SEARCH_SLEEP_SECONDS)
     raise RuntimeError(f"No Actions run appeared for {branch}; check the repository's Actions tab")
 
 
@@ -178,7 +186,9 @@ def run_id_for_snapshot(root, sha, repository, args, artifact=False):
 def show_result(run_id, repository, check, custom, artifact=False):
     url = f"https://github.com/{repository}/actions/runs/{run_id}"
     print(f"Remote Cargo: {check} in {url}", flush=True)
-    command(["gh", "run", "watch", str(run_id), "--repo", repository])
+    command([
+        "gh", "run", "watch", str(run_id), "--repo", repository, "--interval", str(WATCH_INTERVAL_SECONDS),
+    ])
     raw = command(["gh", "run", "view", str(run_id), "--json", "jobs", "--repo", repository])
     jobs = json.loads(raw)["jobs"]
     name = "Command" if custom else CHECK_JOBS[check]

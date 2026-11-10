@@ -9,10 +9,14 @@ fn main() {
     let root = std::env::var_os("PROVENANCE_REVIEW_ASSETS_DIR").map_or_else(
         || {
             let generated = std::path::PathBuf::from("review-assets-generated");
-            println!("cargo:rerun-if-changed=review-assets-generated");
             if generated.is_dir() {
+                println!("cargo:rerun-if-changed=review-assets-generated");
                 generated
             } else {
+                // Cargo runs the script on each build when a watched path does not
+                // exist. The package directory exists and changes when the
+                // generated directory is created.
+                println!("cargo:rerun-if-changed=.");
                 std::path::PathBuf::from("review-assets")
             }
         },

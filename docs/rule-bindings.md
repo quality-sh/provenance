@@ -128,12 +128,22 @@ root (`--path dist`) overrides the ignore rules and scans it.
 
 ## Rust attribute forms
 
+A Rust project gets the two attributes from the `provenance-sdk` crate.
+Add this `use` line to each file that has a binding. Without it, the build
+stops with "cannot find attribute `rule`":
+
+```rust
+use provenance_sdk::{rule, verifies};
+```
+
 `#[rule("id")]` and `#[verifies("id", method)]` bind in three spellings:
-plain, qualified through the macros crate
-(`#[provenance_macros::rule("id")]`, and any `path::rule` or `path::verifies`
+plain, qualified through a crate path
+(`#[provenance_sdk::rule("id")]`, and any `path::rule` or `path::verifies`
 name), and wrapped across lines the way rustfmt formats long arguments:
 
 ```rust
+use provenance_sdk::verifies;
+
 #[verifies(
     "rule_this_is_a_long_id_after_rustfmt",
     examples

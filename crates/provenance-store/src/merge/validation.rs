@@ -17,7 +17,7 @@
 use anyhow::Context;
 use camino::Utf8Path;
 use provenance_core::model::relations::{missing_required, required_refusal, RelationOwner};
-use provenance_core::{Question, Requirement, Resolution, Rule, Source, Topic};
+use provenance_core::{Question, Requirement, RequirementReview, Resolution, Rule, Source, Topic};
 use serde_json::Value;
 
 use super::CanonicalRecord;
@@ -28,8 +28,10 @@ use crate::statement_analysis::{analyze_changed_statements, StatementDiagnostic}
 ///
 /// The path is the only thing the merge driver knows about the file: git hands
 /// the driver three temporary files, so only the merged-result path (`%P`)
-/// names the shard. Every state shard sits in a directory named after its
-/// family, which is what the recognizers below match on.
+/// names the shard. The recognizers below match on the family directory. Where
+/// one directory holds more than one family (the review file in the
+/// requirements directory, the discussions file in the threads directory),
+/// they also match on the file name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShardFamily {
     /// `.provenance/state/scopes/<scope>/ideation/landings.jsonl`
@@ -38,7 +40,10 @@ pub enum ShardFamily {
     Discussions,
     /// `.provenance/state/scopes/<scope>/sources/*.jsonl`
     Sources,
-    /// `.provenance/state/scopes/<scope>/requirements/*.jsonl`
+    /// `.provenance/state/scopes/<scope>/requirements/review.jsonl`
+    RequirementReviews,
+    /// `.provenance/state/scopes/<scope>/requirements/*.jsonl`, except the
+    /// review file
     Requirements,
     /// `.provenance/state/scopes/<scope>/resolutions/*.jsonl`
     Resolutions,
@@ -85,6 +90,11 @@ impl ShardFamily {
         let Some(directory) = path.parent() else {
             return Self::Unrecognized;
         };
+        // The review rows are in the requirements directory, but they are not
+        // Requirement records.
+        if path.file_name() == Some("review.jsonl") && is_scoped_family(path, "requirements") {
+            return Self::RequirementReviews;
+        }
         if let Some((_, family)) = SCOPED_FAMILIES
             .iter()
             .find(|(name, _)| is_scoped_family(path, name))
@@ -130,6 +140,9 @@ pub fn validate_merged_records(
     match ShardFamily::for_shard_path(shard_path) {
         ShardFamily::Sources => validate_typed_records::<Source>(records, "source"),
         ShardFamily::Requirements => validate_typed_records::<Requirement>(records, "requirement"),
+        ShardFamily::RequirementReviews => {
+            deserialize_records::<RequirementReview>(records, "requirement review").map(drop)
+        }
         ShardFamily::Resolutions => validate_typed_records::<Resolution>(records, "resolution"),
         ShardFamily::Rules => validate_typed_records::<Rule>(records, "rule"),
         ShardFamily::Topics => validate_typed_records::<Topic>(records, "topic"),
@@ -221,6 +234,7 @@ fn deserialize_records<T: serde::de::DeserializeOwned>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::families::ProjectionFamily;
 
     fn rule(id: &str, requirement_ids: &[&str]) -> Value {
         serde_json::json!({
@@ -267,6 +281,83 @@ mod tests {
                 family
             );
         }
+    }
+
+    // No Rule binding: an aid to the implementation. It shows that the review
+    // file and the Requirement file in the same directory get different kinds.
+    #[test]
+    fn recognizes_the_review_file_in_the_requirements_directory() {
+        assert_eq!(
+            ShardFamily::for_shard_path(Utf8Path::new(
+                ".provenance/state/scopes/default/requirements/review.jsonl"
+            )),
+            ShardFamily::RequirementReviews
+        );
+        assert_eq!(
+            ShardFamily::for_shard_path(Utf8Path::new(
+                ".provenance/state/scopes/default/requirements/req.jsonl"
+            )),
+            ShardFamily::Requirements
+        );
+    }
+
+    /// The kind and key that the driver must select for the shard of each
+    /// store family.
+    fn expected_kind(family: ProjectionFamily) -> (ShardFamily, &'static str) {
+        // No catch-all arm: a new family in the store table stops this test
+        // until it gets an expected kind here.
+        match family {
+            ProjectionFamily::Sources => (ShardFamily::Sources, "id"),
+            ProjectionFamily::Requirements => (ShardFamily::Requirements, "id"),
+            ProjectionFamily::RequirementReviews => (ShardFamily::RequirementReviews, "id"),
+            ProjectionFamily::Resolutions => (ShardFamily::Resolutions, "id"),
+            ProjectionFamily::Rules => (ShardFamily::Rules, "id"),
+            ProjectionFamily::Topics => (ShardFamily::Topics, "id"),
+            ProjectionFamily::Questions => (ShardFamily::Questions, "id"),
+            ProjectionFamily::Discussions => (ShardFamily::Discussions, "discussion_id"),
+            ProjectionFamily::Threads
+            | ProjectionFamily::Messages
+            | ProjectionFamily::Contributions
+            | ProjectionFamily::SynthesisPackets
+            | ProjectionFamily::ProposalCards
+            | ProjectionFamily::AssertionRecords
+            | ProjectionFamily::Dispositions
+            | ProjectionFamily::ImplementationBindings
+            | ProjectionFamily::VerificationBindings
+            | ProjectionFamily::Withdrawals => (ShardFamily::Unrecognized, "id"),
+        }
+    }
+
+    // No Rule binding: an aid to the implementation. The driver keeps its own
+    // list of families beside the store family table. This test finds a family
+    // that the store adds and the driver does not know.
+    #[test]
+    fn selects_the_kind_of_each_store_family_from_its_shard_path() {
+        for family in ProjectionFamily::ALL {
+            let path = format!(".provenance/state/scopes/default/{}", family.shard_suffix());
+            let kind = ShardFamily::for_shard_path(Utf8Path::new(&path));
+            assert_eq!(
+                (kind, kind.record_key()),
+                expected_kind(family),
+                "{family:?} at {path}"
+            );
+        }
+    }
+
+    // No Rule binding: an aid to the implementation. The landings file is not
+    // in the store family table. The driver knows its path, but its rows have
+    // no `id`, so the driver cannot merge it (bead provenance-5mmu).
+    #[test]
+    fn cannot_merge_the_landings_file_because_its_rows_have_no_id() {
+        let path = Utf8Path::new(".provenance/state/scopes/default/ideation/landings.jsonl");
+        let kind = ShardFamily::for_shard_path(path);
+        assert_eq!(kind, ShardFamily::IdeationLandings);
+        assert_eq!(kind.record_key(), "id");
+
+        let batches = [serde_json::json!({ "contributions": [], "synthesis_packets": [] })];
+        let error =
+            super::super::merge_records(kind.record_key(), &[], &batches, &batches).unwrap_err();
+        assert_eq!(error.to_string(), "record is missing string id");
     }
 
     #[test]

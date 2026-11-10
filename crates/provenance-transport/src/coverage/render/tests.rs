@@ -244,3 +244,40 @@ fn a_warning_with_a_location_still_shows_it() {
 
     assert!(markdown.contains("- Warning `UNKNOWN` in `src/payroll.rs`:4: unknown rule"));
 }
+
+#[test]
+fn markdown_counts_each_binding_form_in_one_total() {
+    let mut gone = binding("rule_gone", "src/lib.rs", None);
+    gone.anchor_state = AnchorState::Gone;
+    let native = vec![
+        binding("rule_attribute", "src/lib.rs", None),
+        binding("rule_helper", "src/pay.ts", Some("examples")),
+        binding("rule_decorator", "pay.py", None),
+        gone,
+    ];
+    let comments = vec![comment("rule_comment", "pay.go", Some("examples"))];
+    let report = CoverageScan {
+        report: CoverageReport::new(None, 4, comments, native, Vec::new()),
+        scanned_files: Vec::new(),
+    };
+
+    let markdown = render_coverage(ReportFormat::Markdown, &report).unwrap();
+
+    assert!(
+        markdown.contains("- Bindings: 4\n  - Native bindings: 3\n  - Comment bindings: 1\n"),
+        "{markdown}"
+    );
+}
+
+#[test]
+fn markdown_counts_comment_bindings_as_bindings() {
+    let comments = vec![comment("rule_comment", "pay.py", None)];
+    let report = CoverageScan {
+        report: CoverageReport::new(None, 1, comments, Vec::new(), Vec::new()),
+        scanned_files: Vec::new(),
+    };
+
+    let markdown = render_coverage(ReportFormat::Markdown, &report).unwrap();
+
+    assert!(markdown.contains("- Bindings: 1\n"), "{markdown}");
+}
