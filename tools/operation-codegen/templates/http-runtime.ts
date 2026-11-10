@@ -17,7 +17,7 @@ export class ConnectionError extends ClientError {
 export class OutcomeUnknownError extends ClientError {
   readonly _tag = 'OutcomeUnknownError';
   constructor(cause?: unknown) {
-    super('OutcomeUnknownError', 'The write request went to the host, but its outcome is not known. Read the current state before you send the write again', cause);
+    super('OutcomeUnknownError', 'The outcome of the write request is not known. Read the current state before you send the write again', cause);
   }
 }
 export class MalformedResponseError extends ClientError {
@@ -46,26 +46,40 @@ export class IdentityMismatchError extends ClientError {
   }
 }
 
-// Error codes that show that the connection did not open, so no request went out.
-const UNSENT_CODES = new Set([
-  'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EAI_NONAME', 'EHOSTUNREACH', 'ENETUNREACH', 'EADDRNOTAVAIL',
-  'UND_ERR_CONNECT_TIMEOUT',
-]);
+// System error codes that show that the connection did not open. Linux can also
+// report EHOSTUNREACH or ENETUNREACH on a socket that is already open, so a code
+// counts only when the failed system call is the connect or the name lookup.
+const UNSENT_CODES = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EAI_NONAME', 'EHOSTUNREACH', 'ENETUNREACH', 'EADDRNOTAVAIL']);
+const UNSENT_SYSCALLS = new Set(['connect', 'getaddrinfo']);
+// undici sets this code only when its connect step times out.
+const CONNECT_TIMEOUT = 'UND_ERR_CONNECT_TIMEOUT';
+// undici puts the socket error at most two levels down: TypeError, then the cause,
+// then the errors of an AggregateError. The limit also stops a cause chain that
+// refers to itself.
+const MAX_CAUSE_DEPTH = 4;
 function notSent(cause: unknown, depth = 0): boolean {
-  if (!cause || typeof cause !== 'object' || depth > 4) return false;
+  if (!cause || typeof cause !== 'object' || depth > MAX_CAUSE_DEPTH) return false;
   const code = 'code' in cause ? cause.code : undefined;
-  if (typeof code === 'string' && UNSENT_CODES.has(code)) return true;
+  if (code === CONNECT_TIMEOUT) return true;
+  const syscall = 'syscall' in cause ? cause.syscall : undefined;
+  if (typeof code === 'string' && UNSENT_CODES.has(code) && typeof syscall === 'string' && UNSENT_SYSCALLS.has(syscall)) return true;
   if ('errors' in cause && Array.isArray(cause.errors) && cause.errors.length > 0) {
     return cause.errors.every(error => notSent(error, depth + 1));
   }
   return 'cause' in cause && notSent(cause.cause, depth + 1);
 }
 
-// A write that possibly went to the host has an unknown outcome. Only a read of
-// current state can show its result, so the client does not send it again.
+// After dispatch, a write possibly went to the host, so its outcome is unknown.
+// Only a read of current state can show its result, so the client does not send
+// it again.
+function lostResponse(write: boolean, cause?: unknown): ConnectionError | OutcomeUnknownError {
+  return write ? new OutcomeUnknownError(cause) : new ConnectionError(cause);
+}
+
+// A write fails as not sent only when the cause shows that the connection did not open.
 // @provenance rule: rule_effect_sdk_retains_unknown_writes
-export function transportFailure(write: boolean, cause?: unknown): ConnectionError | OutcomeUnknownError {
-  return write && !notSent(cause) ? new OutcomeUnknownError(cause) : new ConnectionError(cause);
+function transportFailure(write: boolean, cause: unknown): ConnectionError | OutcomeUnknownError {
+  return notSent(cause) ? new ConnectionError(cause) : lostResponse(write, cause);
 }
 
 export async function send(fetcher: typeof fetch, url: string | URL, init: RequestInit, write = false): Promise<Response> {
@@ -85,10 +99,10 @@ export async function readJson(response: Response, signal?: AbortSignal, write =
   const chunks: Uint8Array[] = [];
   let length = 0;
   try {
-    if (signal?.aborted) { await reader.cancel(); throw transportFailure(write); }
+    if (signal?.aborted) { await reader.cancel(); throw lostResponse(write); }
     for (;;) {
       const { done, value } = await reader.read();
-      if (signal?.aborted) throw transportFailure(write);
+      if (signal?.aborted) throw lostResponse(write);
       if (done) break;
       length += value.byteLength;
       if (length > MAX_RESPONSE_BYTES) {
@@ -99,7 +113,8 @@ export async function readJson(response: Response, signal?: AbortSignal, write =
     }
   } catch (cause) {
     if (cause instanceof ClientError) throw cause;
-    throw transportFailure(write, cause);
+    // The response headers arrived, so the request went to the host.
+    throw lostResponse(write, cause);
   } finally { signal?.removeEventListener('abort', abort); await cancellation; reader.releaseLock(); }
   const bytes = new Uint8Array(length);
   let offset = 0;

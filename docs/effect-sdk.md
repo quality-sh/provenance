@@ -86,7 +86,7 @@ Errors use `_tag` as their discriminant:
 | `IdentityMismatchError` | Metadata names a different repository or scope. |
 | `OperationError` | The host returned a validated typed refusal. |
 | `ConnectionError` | The connection or response stream failed. A write was not sent, or the operation is a read. |
-| `OutcomeUnknownError` | A write went to the host, but its response did not arrive. The outcome is not known. |
+| `OutcomeUnknownError` | A write possibly went to the host, and its response did not arrive. The outcome is not known. |
 | `MalformedResponseError` | A response does not match the operation contract. |
 | `InvalidRequestError` | The input cannot be serialized. |
 
@@ -98,8 +98,11 @@ client call also gives this error when the caller aborts its signal after
 dispatch. The write possibly changed the state. Read the current
 state of the addressed resource before you send the write again. A failure
 before dispatch, such as a refused connection or a signal that is aborted before
-the request starts, is a `ConnectionError`. A read that loses its response is
-also a `ConnectionError`. The Store resolves an interrupted publication.
+the request starts, is a `ConnectionError`. The client reports a write as not
+sent only when the failed system call is the connect or the name lookup, or when
+the connect step timed out. A failure after the response headers arrive is never
+a failure before dispatch. A read that loses its response is also a
+`ConnectionError`. The Store resolves an interrupted publication.
 
 When the client cannot identify the cause of a transport failure, such as a
 `TypeError` from a browser `fetch`, it cannot show that the write was not sent.

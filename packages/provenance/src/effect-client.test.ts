@@ -148,7 +148,7 @@ test('a write whose response is lost fails with an outcome-unknown error and is 
   const host = await hostWithLostResponses();
   try {
     const error = await Effect.runPromise(Effect.flip(host.client.answerQuestion({ id: 'question_x', data: { answer: 'Done.' } })));
-    assert.match(error.message, /Read the current state before you send the write again/);
+    assert.equal(error.message, 'The outcome of the write request is not known. Read the current state before you send the write again');
     assert.equal(error._tag, 'OutcomeUnknownError');
     assert.ok(error instanceof OutcomeUnknownError);
     assert.equal(host.received.writes, 1);
