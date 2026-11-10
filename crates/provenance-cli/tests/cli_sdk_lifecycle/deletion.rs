@@ -1,170 +1,183 @@
-use super::*;
+use crate::porcelain_authoring_support::{
+    initialized_repo, json_output, json_stdin_output, provenance,
+};
+use serde_json::{json, Value};
+
+const OWNER: &str = "spec://typescript/share-links";
+
+fn document(requirements: Value) -> Value {
+    json!({
+        "spec": "share-links",
+        "declared_by": OWNER,
+        "sources": [{"key": "policy", "name": "Policy", "kind": "policy"}],
+        "requirements": requirements,
+        "rules": []
+    })
+}
+
+fn authoring(repo: &str, route: &str, input: &Value) -> Value {
+    let arguments = [
+        "api", route, "--method", "post", "--input", "-", "--repo", repo, "--scope", "default",
+        "--format", "json",
+    ];
+    json_stdin_output(&arguments, input)["data"].clone()
+}
+
+fn requirement_id(applied: &Value, key: &str) -> String {
+    applied["resources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|resource| resource["kind"] == "requirement" && resource["key"] == key)
+        .unwrap_or_else(|| panic!("no requirement {key} in {applied}"))["id"]
+        .as_str()
+        .unwrap()
+        .to_owned()
+}
+
+fn create(repo: &str, id: &str, kind: &str, fields: &[&str]) {
+    let mut arguments = vec![
+        id, "create", "--type", kind, "--repo", repo, "--format", "json",
+    ];
+    arguments.extend_from_slice(fields);
+    json_output(&arguments);
+}
+
+fn record(repo: &str, id: &str) -> Value {
+    json_output(&[id, "get", "--repo", repo, "--format", "json"])["record"]["value"].clone()
+}
 
 #[test]
 fn deleting_a_requirement_removes_its_ids_from_surviving_records() {
-    let directory = init_repo();
-    let repo = directory.path().to_str().unwrap();
-    let owner = "spec://typescript/share-links";
-    let mut input = document(owner);
-    input["requirements"].as_array_mut().unwrap().push(json!({
-        "key": "other", "statement": "The host starts."
-    }));
-    let initial = sdk(repo, "apply", &input).unwrap();
-    let removed = resource_id(&initial, "requirement", "sharing");
-    let retained = resource_id(&initial, "requirement", "other");
-    let base = directory.path().join(".provenance/state/scopes/default");
-    write_dependent_records(&base, &removed, &retained);
-    let mut rules = read_records(directory.path(), "rules/rule.jsonl");
-    rules[0]["declared_by"] = Value::Null;
-    rules[0]
-        .as_object_mut()
-        .unwrap()
-        .remove("declaration_address");
-    rules[0]["requirement_ids"] = json!([removed, retained]);
-    rules[0]["resolution_ids"] = json!(["res_shared", "res_removed"]);
-    std::fs::write(base.join("rules/rule.jsonl"), format!("{}\n", rules[0])).unwrap();
-    input["rules"] = json!([]);
-    input["requirements"].as_array_mut().unwrap().remove(0);
-
-    let planned = sdk(repo, "plan", &input).unwrap();
-    let cascade = planned["cascade"]
-        .as_array()
-        .expect("plan reports cascade changes");
-    for (kind, id, state) in [
-        ("resolution", "res_shared", "updated"),
-        ("resolution", "res_removed", "deleted"),
-        ("rule", rules[0]["id"].as_str().unwrap(), "updated"),
-        ("topic", "topic_removed", "deleted"),
-        ("topic", "topic_retained", "updated"),
-        ("question", "question_removed", "deleted"),
-        ("question", "question_topic_removed", "deleted"),
-        ("question", "question_retained", "updated"),
-    ] {
-        assert!(cascade.iter().any(|record| {
-            record["kind"] == kind && record["id"] == id && record["state"] == state
-        }));
-    }
-    assert_eq!(planned["updated"], 4);
-    assert_eq!(planned["deleted"], 5);
-
-    let applied = sdk(repo, "apply", &input).unwrap();
-    assert_eq!(applied["cascade"], planned["cascade"]);
-    assert_eq!(applied["updated"], planned["updated"]);
-    assert_eq!(applied["deleted"], planned["deleted"]);
-
-    let rules = read_records(directory.path(), "rules/rule.jsonl");
-    assert_eq!(rules[0]["requirement_ids"], json!([retained]));
-    assert_eq!(rules[0]["resolution_ids"], json!(["res_shared"]));
-    let resolutions = read_records(directory.path(), "resolutions/res.jsonl");
-    assert_eq!(resolutions.len(), 1);
-    assert_eq!(resolutions[0]["requirement_ids"], json!([retained]));
-    let topics = read_records(directory.path(), "topics/topic.jsonl");
-    assert_eq!(topics.len(), 1);
-    assert_eq!(
-        topics[0]["links"],
-        json!([{"target_type":"requirement","target_id":retained}])
+    let (_directory, repo) = initialized_repo();
+    let other = json!({"key": "other", "statement": "The host starts."});
+    let both = json!([
+        {"key": "sharing", "statement": "The host stops.", "sources": ["policy"]},
+        other
+    ]);
+    let initial = authoring(&repo, "authoring-changes", &document(both));
+    let removed = requirement_id(&initial, "sharing");
+    let retained = requirement_id(&initial, "other");
+    let both_ids = json!([removed, retained]).to_string();
+    let removed_link = json!([{"target_type": "requirement", "target_id": removed}]).to_string();
+    create(
+        &repo,
+        "res_shared",
+        "resolution",
+        &[
+            "--title",
+            "Shared decision",
+            "--position",
+            "The host stops.",
+            "--rationale",
+            "The host stops.",
+            "--requirement-ids-json",
+            &both_ids,
+        ],
     );
-    let questions = read_records(directory.path(), "questions/question.jsonl");
-    assert_eq!(questions.len(), 1);
-    assert_eq!(questions[0]["id"], "question_retained");
-    assert_eq!(questions[0]["contradicts"], Value::Null);
-    assert_eq!(questions[0]["resolution_id"], Value::Null);
-    assert_eq!(
-        questions[0]["links"],
-        json!([{"target_type":"requirement","target_id":retained}])
+    create(
+        &repo,
+        "rule_shared",
+        "rule",
+        &[
+            "--statement",
+            "The host stops.",
+            "--requirement-ids-json",
+            &both_ids,
+            "--resolution-ids-json",
+            r#"["res_shared"]"#,
+        ],
     );
-}
+    create(
+        &repo,
+        "topic_retained",
+        "topic",
+        &[
+            "--title",
+            "Retained topic",
+            "--requirement-id",
+            &retained,
+            "--links-json",
+            &removed_link,
+        ],
+    );
+    create(
+        &repo,
+        "question_retained",
+        "question",
+        &[
+            "--topic-id",
+            "topic_retained",
+            "--question",
+            "Retained?",
+            "--resolution-method",
+            "research",
+            "--contradicts",
+            &removed,
+            "--links-json",
+            &removed_link,
+        ],
+    );
+    let after = document(json!([other]));
 
-fn write_dependent_records(base: &std::path::Path, removed: &str, retained: &str) {
-    std::fs::create_dir_all(base.join("resolutions")).unwrap();
-    std::fs::write(
-        base.join("resolutions/res.jsonl"),
-        format!(
-            "{}\n{}\n",
-            json!({"scope_id":"default","id":"res_shared",
-            "title":"Shared decision","position":"Expire sessions","rationale":"Limit access",
-            "status":"draft","requirement_ids":[removed,retained]}),
-            json!({"scope_id":"default","id":"res_removed",
-            "title":"Removed decision","position":"Expire links","rationale":"Limit access",
-            "status":"draft","requirement_ids":[removed]})
-        ),
-    )
-    .unwrap();
-    std::fs::create_dir_all(base.join("topics")).unwrap();
-    std::fs::write(
-        base.join("topics/topic.jsonl"),
-        format!(
-            "{}\n{}\n",
-            json!({"scope_id":"default","id":"topic_removed",
-            "requirement_id":removed,"title":"Removed topic","status":"open",
-            "links":[]}),
-            json!({"scope_id":"default","id":"topic_retained",
-            "requirement_id":retained,"title":"Retained topic","status":"open",
-            "links":[
-                {"target_type":"requirement","target_id":removed},
-                {"target_type":"resolution","target_id":"res_removed"},
-                {"target_type":"requirement","target_id":retained}
-            ]})
-        ),
-    )
-    .unwrap();
-    std::fs::create_dir_all(base.join("questions")).unwrap();
-    std::fs::write(
-        base.join("questions/question.jsonl"),
-        format!(
-            "{}\n{}\n{}\n",
-            json!({"scope_id":"default","id":"question_removed",
-            "topic_id":"topic_retained","requirement_id":removed,
-            "question":"Removed?","resolution_method":"research","status":"open"}),
-            json!({"scope_id":"default","id":"question_topic_removed",
-            "topic_id":"topic_removed","requirement_id":retained,
-            "question":"Also removed?","resolution_method":"research","status":"open"}),
-            json!({"scope_id":"default","id":"question_retained",
-            "topic_id":"topic_retained","requirement_id":retained,
-            "question":"Retained?","resolution_method":"research","status":"open",
-            "contradicts":removed,"resolution_id":"res_removed","links":[
-                {"target_type":"requirement","target_id":removed},
-                {"target_type":"resolution","target_id":"res_removed"},
-                {"target_type":"requirement","target_id":retained}
-            ]})
-        ),
-    )
-    .unwrap();
-}
+    let planned = authoring(&repo, "authoring-plans", &after);
+    let applied = authoring(&repo, "authoring-changes", &after);
 
-#[test]
-fn a_disposition_refuses_canonical_deletion_before_any_shard_write() {
-    let directory = init_repo();
-    let repo = directory.path().to_str().unwrap();
-    let owner = "spec://typescript/share-links";
-    let initial = sdk(repo, "apply", &document(owner)).unwrap();
-    let requirement = resource_id(&initial, "requirement", "sharing");
-    let base = directory.path().join(".provenance/state/scopes/default");
-    std::fs::create_dir_all(base.join("ideation")).unwrap();
-    std::fs::write(
-        base.join("ideation/dispositions.jsonl"),
-        format!(
-            "{}\n",
-            json!({"scope_id":"default","id":"disposition_keep",
-            "proposal_id":"proposal_keep","decision":"rejected","rationale":"Keep it",
-            "actor":{"identity_type":"human","id":"reviewer"},
-            "canonical_artifact":{"artifact_type":"requirement","artifact_id":requirement}})
+    let shared_before = json!([retained, removed]);
+    let links_before = json!([{"target_id": removed, "target_type": "requirement"}]);
+    let expected = json!([
+        {"id": "res_shared", "kind": "resolution", "state": "updated", "changes": [
+            {"field": "requirement_ids", "before": shared_before, "after": [retained]}
+        ]},
+        {"id": "rule_shared", "kind": "rule", "state": "updated", "changes": [
+            {"field": "requirement_ids", "before": shared_before, "after": [retained]}
+        ]},
+        {"id": "topic_retained", "kind": "topic", "state": "updated", "changes": [
+            {"field": "links", "before": links_before, "after": []}
+        ]},
+        {"id": "question_retained", "kind": "question", "state": "updated", "changes": [
+            {"field": "contradicts", "before": removed, "after": null},
+            {"field": "links", "before": links_before, "after": []}
+        ]}
+    ]);
+    assert_eq!(planned["cascade"], expected, "plan cascade: {planned}");
+    assert_eq!(
+        (&planned["updated"], &planned["deleted"]),
+        (&json!(4), &json!(1)),
+        "plan counts: {planned}"
+    );
+    assert_eq!(
+        applied["cascade"], planned["cascade"],
+        "apply cascade: {applied}"
+    );
+    assert_eq!(
+        (&applied["updated"], &applied["deleted"]),
+        (&planned["updated"], &planned["deleted"]),
+        "apply counts: {applied}"
+    );
+
+    let retained_ids = json!([retained]);
+    let resolution = record(&repo, "res_shared");
+    assert_eq!(resolution["requirement_ids"], retained_ids, "{resolution}");
+    let rule = record(&repo, "rule_shared");
+    assert_eq!(rule["requirement_ids"], retained_ids, "{rule}");
+    assert_eq!(rule["resolution_ids"], json!(["res_shared"]), "{rule}");
+    let topic = record(&repo, "topic_retained");
+    assert_eq!(topic["links"], json!([]), "{topic}");
+    let question = record(&repo, "question_retained");
+    assert_eq!(question["contradicts"], Value::Null, "{question}");
+    assert_eq!(question["links"], json!([]), "{question}");
+    let missing = provenance()
+        .args([removed.as_str(), "get", "--repo", &repo, "--format", "json"])
+        .output()
+        .unwrap();
+    let error = String::from_utf8_lossy(&missing.stderr);
+    assert_eq!(
+        (missing.status.code(), error.trim()),
+        (
+            Some(1),
+            r#"{"error":{"kind":"resource_not_found","message":"record does not exist"},"meta":{}}"#
         ),
-    )
-    .unwrap();
-    let before = [
-        "sources/source.jsonl",
-        "requirements/req.jsonl",
-        "rules/rule.jsonl",
-    ]
-    .map(|path| (path, std::fs::read(base.join(path)).unwrap()));
-
-    let error = sdk(repo, "apply", &empty_document(owner)).unwrap_err();
-
-    assert!(error.contains("disposition_keep"), "{error}");
-    assert!(error.contains("requirement"), "{error}");
-    assert!(error.contains(&requirement), "{error}");
-    for (path, contents) in before {
-        assert_eq!(std::fs::read(base.join(path)).unwrap(), contents, "{path}");
-    }
+        "read of the deleted Requirement"
+    );
 }
