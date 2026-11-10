@@ -3,20 +3,21 @@ name: Simulation
 # Random cases of the write engine, run nightly and on dispatch, never on a
 # pull request. Each job is one layer, so a failure names the layer: the
 # engine, the contract, and the CLI on Linux, macOS and Windows. A broken law
-# opens one issue per layer and law, or comments on the open one.
+# opens one issue per layer and law, or comments on the open one. The steps
+# for a failure issue are in crates/provenance-simulation/README.md.
 on:
   schedule:
     - cron: "41 2 * * *"
   workflow_dispatch:
     inputs:
       cases:
-        description: "Cases per random test (HEGEL_TEST_CASES); empty keeps the default"
+        description: "Cases per random test (HEGEL_TEST_CASES); empty keeps the default of 100"
         required: false
-        default: ""
+        type: number
       seed:
         description: "Seed (HEGEL_SEED); empty uses the run ID"
         required: false
-        default: ""
+        type: number
 
 permissions:
   contents: read
@@ -45,6 +46,7 @@ jobs:
     env:
       LAYER: ${{ matrix.layer }}
       SIMULATION_FAILURE_DIR: ${{ github.workspace }}/target/simulation/failures
+      SIMULATION_STATS_DIR: ${{ github.workspace }}/target/simulation/stats
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-socket-firewall
@@ -68,16 +70,22 @@ jobs:
           mkdir -p target/simulation
           set -o pipefail
           cargo nextest run --locked --profile simulation --run-ignored all \
-            -p provenance-simulation --test "$LAYER" --no-fail-fast 2>&1 \
-            | tee "target/simulation/$LAYER.log"
-      - name: Report broken laws
-        if: failure()
+            -p provenance-simulation --test "$LAYER" --test "${LAYER}_planted" \
+            --no-fail-fast 2>&1 | tee "target/simulation/$LAYER.log"
+      # The summary gives the counts of the random cases on each run, and the
+      # broken laws when the job did not succeed. A job that stops at its
+      # time limit runs the steps with always().
+      - name: Report the counts and the broken laws
+        if: always()
+        env:
+          SUCCEEDED: ${{ job.status == 'success' && '--succeeded' || '' }}
         run: >-
           python3 .github/scripts/simulation_report.py summary
           --layer "$LAYER" --log "target/simulation/$LAYER.log"
-          --failures target/simulation/failures >> "$GITHUB_STEP_SUMMARY"
+          --failures target/simulation/failures --stats target/simulation/stats
+          $SUCCEEDED >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: failure()
+        if: always() && !success()
         with:
           name: simulation-${{ matrix.layer }}
           path: target/simulation
@@ -103,6 +111,7 @@ jobs:
     env:
       LAYER: cli-${{ matrix.system }}
       SIMULATION_FAILURE_DIR: ${{ github.workspace }}/target/simulation/failures
+      SIMULATION_STATS_DIR: ${{ github.workspace }}/target/simulation/stats
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/macos-fix-certs
@@ -142,18 +151,21 @@ jobs:
           cargo nextest run --locked --profile simulation --run-ignored all \
             -p provenance-cli --test simulation_cli --no-fail-fast 2>&1 \
             | tee "target/simulation/$LAYER.log"
-      - name: Report broken laws
-        if: failure()
+      - name: Report the counts and the broken laws
+        if: always()
         shell: bash
+        env:
+          SUCCEEDED: ${{ job.status == 'success' && '--succeeded' || '' }}
         # The Windows image names its Python 3 python.
         run: |
           python=python3
           if [ "$RUNNER_OS" = Windows ]; then python=python; fi
           "$python" .github/scripts/simulation_report.py summary \
             --layer "$LAYER" --log "target/simulation/$LAYER.log" \
-            --failures target/simulation/failures >> "$GITHUB_STEP_SUMMARY"
+            --failures target/simulation/failures --stats target/simulation/stats \
+            $SUCCEEDED >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: failure()
+        if: always() && !success()
         with:
           name: simulation-cli-${{ matrix.system }}
           path: target/simulation
@@ -162,8 +174,11 @@ jobs:
   report:
     name: Open issues for broken laws
     needs: [layer, cli]
-    if: failure()
+    # A layer job that stops at its time limit counts as failed or
+    # cancelled; a cancelled run opens no issue.
+    if: ${{ !cancelled() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       contents: read
       issues: write

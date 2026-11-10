@@ -186,12 +186,13 @@ jobs:
           fi
       - name: Read the workspace crates
         run: cargo metadata --format-version 1 --no-deps --offline > "$RUNNER_TEMP/cargo-metadata.json"
-      - name: Test the test selection and the CI OK decision
+      - name: Test the test selection, the CI OK decision and the simulation report
         env:
           SELECT_TESTS_METADATA: ${{ runner.temp }}/cargo-metadata.json
         run: |
           python3 .github/scripts/select_tests.test.py
           python3 .github/scripts/ci_ok.test.py
+          python3 .github/scripts/simulation_report.test.py
       - name: Select the Rust tests
         id: select
         env:

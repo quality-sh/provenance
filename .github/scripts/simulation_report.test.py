@@ -18,7 +18,10 @@ FAILURE = {
     "detail": "operation 1 met a moved base again",
     "seed": "1234",
     "case": {"engines": 2, "steps": [{"Turn": 0}]},
-    "replay": "HEGEL_SEED=1234 cargo nextest run --profile simulation -p provenance-simulation --test engine",
+    "replay": (
+        "HEGEL_SEED=1234 cargo nextest run --profile simulation --run-ignored all "
+        "-p provenance-simulation --test engine -E 'test(=random_cases_keep_the_laws)'"
+    ),
 }
 LOG = (
     "simulation law L3 broken in layer engine: other\n"
@@ -132,19 +135,68 @@ class ReportTests(unittest.TestCase):
         titles = [call[3] for call in gh.made("create")]
         self.assertEqual(titles, ["Simulation: the simulation layer failed without a broken law"])
 
-    def test_each_layer_and_law_gets_its_own_issue(self):
+    def test_each_layer_gets_its_own_issue(self):
         gh = FakeGh()
-        other = {**FAILURE, "law": "L3"}
+        contract_log = "simulation law L5 broken in layer contract: x\n"
         with tempfile.TemporaryDirectory() as root:
-            layer_artifact(root, [FAILURE, other])
-            layer_artifact(root, [{**FAILURE, "layer": "contract"}], name="simulation-contract")
+            layer_artifact(root, [FAILURE])
+            layer_artifact(
+                root,
+                [{**FAILURE, "layer": "contract"}],
+                log=contract_log,
+                name="simulation-contract",
+            )
             report.open_issues(root, "https://run", run=gh)
         titles = sorted(call[3] for call in gh.made("create"))
         self.assertEqual(titles, [
-            "Simulation: law L3 broken in the engine layer",
             "Simulation: law L5 broken in the contract layer",
             "Simulation: law L5 broken in the engine layer",
         ])
+
+    def test_a_law_that_the_shrink_passed_through_opens_no_issue(self):
+        # The log ends with L5, so the L3 file of a shrink step opens nothing.
+        gh = FakeGh()
+        with tempfile.TemporaryDirectory() as root:
+            layer_artifact(root, [FAILURE, {**FAILURE, "law": "L3"}])
+            report.open_issues(root, "https://run", run=gh)
+        titles = [call[3] for call in gh.made("create")]
+        self.assertEqual(titles, ["Simulation: law L5 broken in the engine layer"])
+
+    def test_a_failure_file_without_a_law_line_still_opens_an_issue(self):
+        gh = FakeGh()
+        with tempfile.TemporaryDirectory() as root:
+            layer_artifact(root, [FAILURE], log="the job stopped at its time limit\n")
+            report.open_issues(root, "https://run", run=gh)
+        titles = [call[3] for call in gh.made("create")]
+        self.assertEqual(titles, ["Simulation: law L5 broken in the engine layer"])
+
+    def test_a_broken_planted_check_opens_no_law_issue(self):
+        gh = FakeGh()
+        log = "simulation check broken: law L3 did not see its planted fault: x\n"
+        with tempfile.TemporaryDirectory() as root:
+            layer_artifact(root, [], log=log, name=None)
+            report.open_issues(root, "https://run", run=gh)
+        created = gh.made("create")
+        self.assertEqual(
+            [call[3] for call in created],
+            ["Simulation: a planted fault was not found in the engine layer"],
+        )
+        self.assertIn("the check itself is broken", created[0][7])
+
+    def test_each_issue_links_the_guide(self):
+        self.assertIn(report.GUIDE, report.describe(FAILURE, "AAEC"))
+        self.assertIn(report.GUIDE, report.describe_run("engine"))
+
+    def test_the_summary_of_a_passed_layer_gives_its_counts(self):
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root) / "cli-linux.json").write_text(json.dumps({"stops": 3}))
+            text = report.summary("cli-linux", "missing", "none", root, succeeded=True)
+        self.assertIn("| stops | 3 |", text)
+
+    def test_the_text_of_a_run_without_a_law_names_each_cause(self):
+        text = report.describe_run("engine")
+        self.assertIn("a probe test or a planted test failed", text)
+        self.assertIn("time limit", text)
 
 
 if __name__ == "__main__":
