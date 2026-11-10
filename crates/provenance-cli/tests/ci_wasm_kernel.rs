@@ -129,10 +129,10 @@ fn wasm_kernel_job_builds_every_store_target_without_host() {
     ] {
         let step = step(&job, name);
         let run = step.split_whitespace().collect::<Vec<_>>().join(" ");
-        assert!(run.contains(command), "the step runs `{command}`:\n{step}");
-        assert!(
-            !run.contains("--features") && !run.contains("--target"),
-            "the step runs the native build with default features:\n{step}"
+        assert_eq!(
+            run,
+            format!("run: {command}"),
+            "the step runs only `{command}`, the native build with default features:\n{step}"
         );
     }
 }
