@@ -7,8 +7,8 @@
 //! required relation list can only fail on a record some side already held,
 //! but holding it is exactly what a merge would launder into canonical state.
 //! A check spanning the whole file can fail on the merge's own doing; the one
-//! such check that exists today, the duplicate id, is refused by `index_by_id`
-//! inside the merge itself.
+//! such check that exists today, the duplicate id, is refused on each side by
+//! `ensure_unique_ids` before the merge, at the line of the second row.
 //!
 //! So before a merged shard is written, its records go back through the check a
 //! direct write would face, and a record that fails it stops the merge instead
@@ -204,11 +204,11 @@ fn validate_typed_records<T: serde::de::DeserializeOwned + RelationOwner>(
 ) -> anyhow::Result<()> {
     for record in deserialize_records::<T>(records, kind)? {
         if let Some(decl) = missing_required(&record) {
-            anyhow::bail!(
+            return Err(crate::refusal::fault!(
                 "merged {kind} {} is refused: {}",
                 record.id().as_str(),
                 required_refusal(decl)
-            );
+            ));
         }
     }
     Ok(())

@@ -367,3 +367,57 @@ fn get_names_the_line_of_a_withdrawal_that_names_no_submission() {
         }]),
     );
 }
+
+/// A merge side that holds one record id on two rows gives the shard, the
+/// side, the line of each row and the id, before the merge starts.
+#[test]
+#[provenance_macros::verifies("rule_inconsistent_records_refusal_names_records", examples)]
+fn merge_jsonl_names_the_side_and_the_lines_of_a_duplicate_id() {
+    let directory = tempfile::tempdir().unwrap();
+    let rule = |id: &str| {
+        json!({"scope_id":"default", "id":id, "statement":"The rule shall hold.",
+            "status":"active", "severity":"high", "requirement_ids":["req_a"]})
+        .to_string()
+    };
+    let sides = [
+        ("base.jsonl", String::new()),
+        (
+            "ours.jsonl",
+            format!("{}\n{}\n", rule("rule_a"), rule("rule_a")),
+        ),
+        ("theirs.jsonl", format!("{}\n", rule("rule_b"))),
+    ]
+    .map(|(name, contents)| {
+        let path = directory.path().join(name);
+        std::fs::write(&path, contents).unwrap();
+        path.to_str().unwrap().to_owned()
+    });
+    let output = provenance()
+        .arg("merge-jsonl")
+        .args(&sides)
+        .args([
+            "--path",
+            ".provenance/state/scopes/default/rules/rule.jsonl",
+        ])
+        .args(["--format", "json"])
+        .output()
+        .unwrap();
+    let row = json!({
+        "command": "merge-jsonl",
+        "code": output.status.code(),
+        "stdout_empty": output.stdout.is_empty(),
+        "stderr": String::from_utf8(output.stderr).unwrap().lines().collect::<Vec<_>>(),
+    });
+    // merge-jsonl takes only the JSON format and prints the error text.
+    assert_rows(
+        &[row],
+        &json!([{
+            "code": 1,
+            "command": "merge-jsonl",
+            "stderr": [
+                "Error: scopes/default/rules/rule.jsonl line 2: ours holds record id rule_a at line 1 and at line 2"
+            ],
+            "stdout_empty": true
+        }]),
+    );
+}

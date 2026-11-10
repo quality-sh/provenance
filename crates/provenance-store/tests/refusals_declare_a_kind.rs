@@ -16,9 +16,7 @@
 //!   `format_err`.
 //!
 //! Test code is not read: test files and directories, and each item that has
-//! a `#[cfg(test)]` attribute. The baseline file gives the count of raw forms
-//! that each file has before its conversion. A count can only go down: the
-//! check fails when a file has more raw forms than its baseline line, or fewer.
+//! a `#[cfg(test)]` attribute.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -285,42 +283,16 @@ fn store_raw_refusals() -> BTreeMap<String, Vec<usize>> {
         .collect()
 }
 
-fn baseline() -> BTreeMap<String, usize> {
-    let path =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/refusals_declare_a_kind/baseline.txt");
-    std::fs::read_to_string(path)
-        .unwrap()
-        .lines()
-        .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
-        .map(|line| {
-            let (file, count) = line.rsplit_once(' ').unwrap();
-            (file.to_owned(), count.parse().unwrap())
-        })
-        .collect()
-}
-
 #[test]
 fn store_code_raises_no_raw_anyhow_refusal() {
-    let found = store_raw_refusals();
-    let baseline = baseline();
-    let mut faults = Vec::new();
-    for (file, lines) in &found {
-        match baseline.get(file) {
-            None => faults.push(format!(
+    let faults: Vec<String> = store_raw_refusals()
+        .iter()
+        .map(|(file, lines)| {
+            format!(
                 "src/{file} lines {lines:?}: use refuse!, fault! or state_fault (src/refusal.rs)"
-            )),
-            Some(count) if *count != lines.len() => faults.push(format!(
-                "src/{file} lines {lines:?}: the baseline gives {count}; it must give {}",
-                lines.len()
-            )),
-            Some(_) => {}
-        }
-    }
-    for file in baseline.keys().filter(|file| !found.contains_key(*file)) {
-        faults.push(format!(
-            "src/{file} has no raw refusal; remove its baseline line"
-        ));
-    }
+            )
+        })
+        .collect();
     assert!(faults.is_empty(), "{}", faults.join("\n"));
 }
 

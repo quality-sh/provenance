@@ -73,6 +73,8 @@ pub struct StoredRow {
     line: String,
     /// The record parsed from that line.
     record: Value,
+    /// The line number of the row in the input file, from 1.
+    line_number: usize,
 }
 
 impl StoredRow {
@@ -103,6 +105,7 @@ pub fn read_jsonl_rows_for_shard(
         rows.push(StoredRow {
             line: line.to_owned(),
             record,
+            line_number: index + 1,
         });
     }
     Ok(rows)
@@ -138,7 +141,7 @@ pub(crate) fn preserved_lines(
                 .find(|row| &row.record == record)
                 .map(|row| row.line.clone())
                 .ok_or_else(|| {
-                    anyhow::anyhow!(
+                    crate::refusal::fault!(
                         "merged record {named} matches no stored line; refusing to re-encode it"
                     )
                 })
@@ -225,6 +228,39 @@ pub fn merge_records(
     }
 }
 
+/// Refuses one side of a merge that holds a record id on two rows.
+///
+/// Call it before [`merge_records`]. The refusal is `invalid_state_file` at
+/// `shard_path` and the line of the second row, and the message names the
+/// side, the id and the line of the first row. A row with no string id is
+/// left to [`merge_records`].
+pub fn ensure_unique_ids(
+    shard_path: &camino::Utf8Path,
+    side: &str,
+    key: &str,
+    rows: &[StoredRow],
+) -> anyhow::Result<()> {
+    let mut first_lines = BTreeMap::new();
+    for row in rows {
+        let Some(id) = row.record.get(key).and_then(Value::as_str) else {
+            continue;
+        };
+        if let Some(first) = first_lines.insert(id, row.line_number) {
+            return Err(crate::refusal::state_fault(
+                &crate::state_store::message_ids::ShardLine {
+                    path: shard_path.to_owned(),
+                    line: row.line_number,
+                },
+                format!(
+                    "{side} holds record id {id} at line {first} and at line {}",
+                    row.line_number
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
 pub fn read_jsonl_records(path: &camino::Utf8Path) -> anyhow::Result<Vec<CanonicalRecord>> {
     Ok(read_jsonl_rows(path)?
         .into_iter()
@@ -251,8 +287,10 @@ fn index_by_id(
         let id = record
             .get(key)
             .and_then(Value::as_str)
-            .ok_or_else(|| anyhow::anyhow!("record is missing string {key}"))?;
-        anyhow::ensure!(!indexed.contains_key(id), "duplicate record id {id}");
+            .ok_or_else(|| crate::refusal::fault!("record is missing string {key}"))?;
+        if indexed.contains_key(id) {
+            return Err(crate::refusal::fault!("duplicate record id {id}"));
+        }
         indexed.insert(id.to_string(), record.clone());
     }
     Ok(indexed)

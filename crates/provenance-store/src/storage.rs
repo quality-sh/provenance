@@ -222,7 +222,7 @@ impl WriteSet {
     pub fn ensure_disjoint(&self) -> Result<(), PublishFailure> {
         let both = self.deletes.iter().find(|key| self.puts.contains_key(*key));
         both.map_or(Ok(()), |key| {
-            Err(PublishFailure::Refused(anyhow::anyhow!(
+            Err(PublishFailure::Refused(crate::refusal::fault!(
                 "the write set puts and deletes `{}`",
                 key.as_str()
             )))

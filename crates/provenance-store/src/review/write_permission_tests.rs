@@ -80,6 +80,10 @@ fn an_unpermitted_staged_write_is_refused_and_publishes_nothing() {
     let before = std::fs::read(&path).unwrap();
     let refused = staged_worker(&store, restate).unwrap_err();
     assert!(format!("{refused:#}").contains("requires a guarded review save"));
+    assert!(matches!(
+        crate::write_error::WriteError(refused).safe(),
+        crate::write_error::WriteFailure::InvalidUpdate { .. }
+    ));
     let other_record = staged_worker(&store, |staged, path| {
         staged.permitting(&[path], "req_b", |permitted| restate(permitted, path))
     })

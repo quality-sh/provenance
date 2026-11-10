@@ -4,8 +4,8 @@ use provenance_macros::rule;
 use provenance_porcelain::merge_jsonl::{MergeJsonlInput, MergeJsonlPort, MergeReport};
 use provenance_porcelain::WorkFuture;
 use provenance_store::merge::{
-    changed_statement_diagnostics, merge_records, read_jsonl_rows, read_jsonl_rows_for_shard,
-    validate_merged_records, MergeOutcome, ShardFamily, StoredRow,
+    changed_statement_diagnostics, ensure_unique_ids, merge_records, read_jsonl_rows,
+    read_jsonl_rows_for_shard, validate_merged_records, MergeOutcome, ShardFamily, StoredRow,
 };
 use provenance_store::statement_analysis::violation_error;
 
@@ -75,6 +75,13 @@ fn merge(
     let key = target_path
         .map_or(ShardFamily::Unrecognized, ShardFamily::for_shard_path)
         .record_key();
+    for (side, path, rows) in [
+        ("base", base, &base_rows),
+        ("ours", ours, &our_rows),
+        ("theirs", theirs, &their_rows),
+    ] {
+        ensure_unique_ids(target_path.unwrap_or(path), side, key, rows)?;
+    }
     let outcome = merge_records(
         key,
         &record_values(&base_rows),

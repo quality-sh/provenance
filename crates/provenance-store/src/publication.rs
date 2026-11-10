@@ -127,7 +127,7 @@ fn publication_lock_identity(layout: &ProvenanceLayout) -> anyhow::Result<String
                 Ok(resolved) => {
                     let root = resolved.join(absolute.strip_prefix(ancestor)?);
                     let root = Utf8PathBuf::from_path_buf(root).map_err(|path| {
-                        anyhow::anyhow!("repository path is not UTF-8: {}", path.display())
+                        crate::refusal::fault!("repository path is not UTF-8: {}", path.display())
                     })?;
                     return Ok(ProvenanceLayout::new(root)
                         .publication_lock_path()
@@ -140,10 +140,10 @@ fn publication_lock_identity(layout: &ProvenanceLayout) -> anyhow::Result<String
                 }
             }
         }
-        anyhow::bail!(
+        Err(crate::refusal::fault!(
             "repository path has no existing ancestor: {}",
             layout.root()
-        )
+        ))
     }
 }
 
@@ -247,7 +247,9 @@ impl crate::state_store::StateStore {
     pub(crate) fn delete_state_keys_under(&self, directory: &Utf8Path) -> anyhow::Result<()> {
         let prefix = format!("{}/", self.state_key(directory)?.as_str());
         let Some(stage) = self.stage() else {
-            anyhow::bail!("only a staged store deletes the keys below {directory}");
+            return Err(crate::refusal::fault!(
+                "only a staged store deletes the keys below {directory}"
+            ));
         };
         #[cfg(all(test, feature = "host"))]
         if stage.reads_files() {
