@@ -156,8 +156,8 @@ macro_rules! row_counted_kind_holds_no_float_field {
             /// as a JSON float, such as `serde_json::Value`, is not refused at
             /// build time; the build without `host` refuses that write with a
             /// fixed error. No current row-counted kind has such a field.
-            #[::provenance_macros::rule("rule_row_counted_records_hold_no_real_column")]
-            #[::provenance_macros::verifies(
+            #[provenance_macros::rule("rule_row_counted_records_hold_no_real_column")]
+            #[provenance_macros::verifies(
                 "rule_row_counted_records_hold_no_real_column",
                 construction
             )]
