@@ -110,8 +110,12 @@ behavior. A later declaration application can restate the fields it owns.
 Every review record PATCH takes the current ETag in `If-Match`. Requirement,
 Topic, and Question routes require it. The other routes write without it. The
 server creates the request identity. The member read returns the ETag. The
-response carries the record with its edit state, decision state, and the new
-ETag. A Requirement statement change uses the statement write gate and raises
+response of a Requirement update carries the record, its `decision` block, and
+its `edit` block. The `edit` block holds the new ETag. The response of a Rule
+or Resolution update carries the record and a link to the review that the
+update opened: `review_url` when a review host runs, or `review_message` when
+no review host runs. It has no `decision` block and no `edit` block. To get the
+next ETag of a Rule or Resolution, read the record again. A Requirement statement change uses the statement write gate and raises
 the existing Requirement reviews for its Rules. Rule statements use the same
 write gate. Reviews keep their before/after values and clearing behavior.
 Requirement and review publication uses more than one shard. The Store resolves

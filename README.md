@@ -102,6 +102,7 @@ these files. See [bundled skill preparation](tools/skills/README.md).
 
 - [Shaping](docs/shaping.md), the refinement method and how agent sessions run it
 - [CLI](docs/cli.md), the full command surface
+- [Rule bindings](docs/rule-bindings.md), how Rust, TypeScript, and other code binds to a Rule
 - [State format](docs/state-format.md) and [cache](docs/cache.md), how storage works
 - [TypeScript SDK POC](docs/typescript-sdk-poc.md), typed declarations, Node verification, and findings
 

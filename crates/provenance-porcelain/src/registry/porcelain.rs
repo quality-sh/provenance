@@ -140,7 +140,11 @@ const fn action_declaration(action: Action) -> Declaration {
         Action::Answer => ("Answer the target Question.", Grammar::Target),
         Action::Claim => ("Claim the target Topic.", Grammar::Target),
         Action::Release => ("Release the target Topic claim.", Grammar::Target),
-        Action::Submit => ("Submit the target Requirement for review.", Grammar::Target),
+        Action::Submit => (
+            "Submit the target Source, Requirement, Resolution, Rule, Topic, or Question for \
+             review.",
+            Grammar::Target,
+        ),
         Action::Discussions => (
             "List addressed Discussions in a scope or under a record.",
             Grammar::NameAndTarget,

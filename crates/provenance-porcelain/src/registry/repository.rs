@@ -145,7 +145,7 @@ pub(super) const fn declaration(command: RepositoryCommand) -> Declaration {
     match command {
         RepositoryCommand::Init => Declaration::named(
             "init",
-            "",
+            "Set up Provenance in a repository and install the agent skills",
             Fields::new(INIT_FIELDS, init_schema).relations(&[
                 Relation::Requires("path_prefix", "scope"),
                 Relation::Conflicts("clear_disposition_actors", "disposition_actor_id"),
@@ -159,16 +159,22 @@ pub(super) const fn declaration(command: RepositoryCommand) -> Declaration {
         .internal(),
         RepositoryCommand::Materialize => Declaration::named(
             "materialize",
-            "",
+            "Build the local query cache again from the graph files of the repository",
             Fields::new(MATERIALIZE_FIELDS, materialize_schema),
         )
         .bound(),
-        RepositoryCommand::Export => {
-            Declaration::named("export", "", Fields::new(EXPORT_FIELDS, export_schema)).bound()
-        }
-        RepositoryCommand::Import => {
-            Declaration::named("import", "", Fields::new(IMPORT_FIELDS, import_schema)).bound()
-        }
+        RepositoryCommand::Export => Declaration::named(
+            "export",
+            "Write the records of one scope as one document",
+            Fields::new(EXPORT_FIELDS, export_schema),
+        )
+        .bound(),
+        RepositoryCommand::Import => Declaration::named(
+            "import",
+            "Add the records of one scope export file to the scope",
+            Fields::new(IMPORT_FIELDS, import_schema),
+        )
+        .bound(),
         // Git runs merge-jsonl as a merge driver.
         RepositoryCommand::MergeJsonl => Declaration::named(
             "merge-jsonl",
@@ -178,12 +184,12 @@ pub(super) const fn declaration(command: RepositoryCommand) -> Declaration {
         .internal(),
         RepositoryCommand::Validate => Declaration::named(
             "validate",
-            "",
+            "Check one artifact file against its schema and its record checks",
             Fields::new(VALIDATE_FIELDS, validate_schema).target(&["artifact"]),
         ),
         RepositoryCommand::SchemaShow => Declaration::named(
             "schema show",
-            "",
+            "Show the JSON Schema of one artifact type",
             Fields::new(SCHEMA_SHOW_FIELDS, schema_show_schema).target(&["artifact"]),
         ),
         RepositoryCommand::DictionaryImport => Declaration::named(

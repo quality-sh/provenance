@@ -25,7 +25,7 @@ pub(super) const fn declaration(command: GraphCommand) -> Declaration {
     match command {
         GraphCommand::SwarmBacktraceLand => Declaration::named(
             "swarm-backtrace land",
-            "",
+            "Add the results of one swarm backtrace run to the graph as proposals",
             Fields::new(SWARM_BACKTRACE_LAND_FIELDS, swarm_backtrace_land_schema),
         )
         .bound(),

@@ -58,6 +58,16 @@ pub fn command_options(declaration: &Declaration) -> (&'static [Field], &'static
 
 /// The description of each CLI command group that has one, by its words.
 pub const GROUP_DESCRIPTIONS: &[(&str, &str)] = &[
+    ("schema", "Show the JSON Schema of an artifact type"),
+    (
+        "dictionary",
+        "Import and report the ASD-STE100 dictionary that the statement check uses",
+    ),
+    (
+        "swarm-backtrace",
+        "Add the results of a swarm backtrace run to the graph",
+    ),
+    ("skills", "List, show, and install the bundled agent skills"),
     (
         "report",
         "Deterministic report rendering from a versioned report envelope",

@@ -64,9 +64,10 @@ Topic one by one; expensive methods claim one question and often stop at a phase
      provenance <parent_requirement_id> --scope <scope> --review-link --no-open --format json
      ```
 
-   - **Claude Desktop or ChatGPT desktop** (MCP tools, no browser pane): open the MCP
-     document view. Call the `get-requirement-document` tool with the parent's ID and show
-     the result to the person. Call it again after each answer lands.
+   - **Claude Desktop or ChatGPT desktop** (MCP tools, no browser pane): read the parent's
+     document through the MCP `api` tool. Call it with
+     `{"path":"requirements/<parent_requirement_id>/document"}` and show the result to the
+     person. Call it again after each answer lands.
 
    - **A plain CLI session** (a terminal, `claude`, `codex`): start or reuse the host so
      that it opens the system browser, then show the parent's tree in that page:
@@ -521,7 +522,12 @@ change the artifact's kind.
    whose construction is the evidence, not on a test. Verification binds to the known
    Rule and does not require an implementation binding.
 
+   A Rust project gets both attributes from the `provenance-sdk` crate. Each file that
+   has a binding needs the `use` line:
+
    ```rust
+   use provenance_sdk::{rule, verifies};
+
    #[rule("rule_<stable_slug>")]
    pub fn <bare_symbol>(...) -> ... { ... }
 
@@ -529,6 +535,23 @@ change the artifact's kind.
    #[verifies("rule_<stable_slug>", exhaustion)]
    fn <bare_symbol>_holds_over_every_input() { ... }
    ```
+
+   A TypeScript project imports the two helpers from the `rules` subpath of the
+   `@quality-sh/provenance` package. `rule` wraps the implementation, and `verifies` goes
+   in a named test function:
+
+   ```ts
+   import { rule, verifies } from "@quality-sh/provenance/rules";
+
+   export const <bareSymbol> = rule("rule_<stable_slug>", (...) => ...);
+
+   test("...", function <bareSymbol>Examples() {
+     verifies("rule_<stable_slug>", "examples");
+   });
+   ```
+
+   [Rule bindings](https://github.com/quality-sh/provenance/blob/main/docs/rule-bindings.md)
+   gives the full rules of each language form.
 
 3. **The check.** The scan reports a binding that cites an unknown Rule, a second primary
    implementation claiming one id, and active Rules with no implementation or no

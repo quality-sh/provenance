@@ -110,7 +110,15 @@ pub(super) fn render_coverage(
     if matches!(format, ReportFormat::Markdown) {
         let mut out = String::from("# Coverage Scan\n\n");
         writeln!(out, "- Files scanned: {}", report.files_scanned)?;
-        writeln!(out, "- Total annotations: {}", report.total_annotations)?;
+        // Bindings and comment annotations are separate lists, so each count has its own
+        // label. One "total" label read as zero bindings above a list of bindings.
+        let bindings = report
+            .bindings
+            .iter()
+            .filter(|binding| binding.site.is_current())
+            .count();
+        writeln!(out, "- Code bindings: {bindings}")?;
+        writeln!(out, "- Comment annotations: {}", report.total_annotations)?;
         writeln!(out, "- Warnings: {}\n", report.warnings.len())?;
         let implementation_modules = implementation_modules(report);
         for report_site in report.sites() {
