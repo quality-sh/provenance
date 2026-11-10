@@ -355,8 +355,9 @@ impl StateStorage for SimulatedStorage {
         Ok(self.0.read())
     }
 
-    fn publish(&self, writes: WriteSet) -> Result<Revision, PublishFailure> {
-        self.0.publish(&writes)
+    fn publish(&self, writes: WriteSet) -> Result<(), PublishFailure> {
+        self.0.publish(&writes)?;
+        Ok(())
     }
 }
 

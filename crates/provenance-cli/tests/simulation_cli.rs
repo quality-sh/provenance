@@ -262,7 +262,9 @@ fn check_case(case: &Case) {
 #[ignore = "random cases run nightly: cargo nextest run --profile simulation --run-ignored all"]
 fn random_cases_keep_the_laws_through_the_cli() {
     let settings = Settings::new().nondeterminism_strictness(NondeterminismStrictness::Warn);
-    Hegel::new(|tc: TestCase| check_case(&Case::draw(&tc))).settings(settings).run();
+    Hegel::new(|tc: TestCase| check_case(&Case::draw(&tc)))
+        .settings(settings)
+        .run();
 }
 
 const fn write(engine: u8, op: Operation) -> Step {
