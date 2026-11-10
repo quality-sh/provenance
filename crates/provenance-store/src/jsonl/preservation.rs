@@ -19,6 +19,7 @@ pub(super) struct RawRecord {
 
 impl RawRecord {
     pub(super) fn deserialize<T: DeserializeOwned + Serialize>(
+        path: &Utf8Path,
         line: &str,
         line_number: usize,
     ) -> anyhow::Result<(T, Self)> {
@@ -44,8 +45,10 @@ impl RawRecord {
             .filter(|name| !scan.members.iter().any(|member| &member.name == *name))
             .collect::<Vec<_>>();
         if !missing.is_empty() {
-            return Err(crate::refusal::fault!(
-                "line {line_number}: stored field names {missing:?} cannot be read back safely"
+            return Err(state_fault(
+                path,
+                line_number,
+                format!("stored field names {missing:?} cannot be read back safely"),
             ));
         }
         let unknown = scan
@@ -77,15 +80,17 @@ impl RawRecord {
 
     fn changed_line<T: Serialize>(self, path: &Utf8Path, record: &T) -> anyhow::Result<String> {
         if let Some(name) = self.repeated_member {
-            return Err(crate::refusal::fault!(
-                "{path} line {}: repeated top-level member `{name}` cannot survive a typed record change",
-                self.line_number
+            return Err(state_fault(
+                path,
+                self.line_number,
+                format!("repeated top-level member `{name}` cannot survive a typed record change"),
             ));
         }
         if let Some(field) = self.nested_unknown {
-            return Err(crate::refusal::fault!(
-                "{path} line {}: nested unknown field `{field}` cannot survive a typed record change",
-                self.line_number
+            return Err(state_fault(
+                path,
+                self.line_number,
+                format!("nested unknown field `{field}` cannot survive a typed record change"),
             ));
         }
         if self.unknown.is_empty() {
@@ -164,15 +169,16 @@ impl<T: Serialize> LoadedRecords<T> {
             }
             lines.push(serde_json::to_string(record)?);
         }
-        if added_without_id
-            && self
-                .raw
-                .iter()
-                .flatten()
-                .any(|raw| raw.id().is_none() && raw.has_unknown())
-        {
-            return Err(crate::refusal::fault!(
-                "{path}: unknown fields cannot survive a typed change to a record without an id"
+        let kept_without_id = self
+            .raw
+            .iter()
+            .flatten()
+            .find(|raw| raw.id().is_none() && raw.has_unknown());
+        if let (true, Some(raw)) = (added_without_id, kept_without_id) {
+            return Err(state_fault(
+                path,
+                raw.line_number,
+                "unknown fields cannot survive a typed change to a record without an id".into(),
             ));
         }
         Ok(lines)
@@ -206,6 +212,18 @@ fn unique_id_match(
         ));
     }
     Ok(first)
+}
+
+/// The stored row at `line` of `path` holds data that a typed change cannot
+/// keep. The refusal is `invalid_state_file` at that row.
+fn state_fault(path: &Utf8Path, line: usize, message: String) -> anyhow::Error {
+    crate::refusal::state_fault(
+        &crate::state_store::message_ids::ShardLine {
+            path: path.to_owned(),
+            line,
+        },
+        message,
+    )
 }
 
 const fn take(raw: &mut [Option<RawRecord>], index: usize) -> RawRecord {
@@ -317,7 +335,11 @@ mod tests {
             .enumerate()
         {
             let (record, raw) =
-                RawRecord::deserialize::<serde_json::Value>(line, index + 1).unwrap();
+                RawRecord::deserialize::<serde_json::Value>(
+                camino::Utf8Path::new("records.jsonl"),
+                line,
+                index + 1,
+            ).unwrap();
             loaded.push(record, raw);
         }
         loaded.records_mut()[0]["n"] = 3.into();

@@ -197,7 +197,7 @@ fn a_read_failure_of_no_known_kind_gives_its_cause_relative_to_the_repository() 
         ),
     ] {
         let error = ReadError(
-            anyhow::anyhow!("{path} line 1: record req_a contains legacy field `retired`")
+            anyhow::anyhow!("read {path}: Is a directory (os error 21)")
                 .context("failed to load requirements"),
         )
         .in_repository(camino::Utf8Path::new(root));
@@ -206,9 +206,8 @@ fn a_read_failure_of_no_known_kind_gives_its_cause_relative_to_the_repository() 
             serde_json::to_value(&error).unwrap(),
             serde_json::json!({
                 "kind": "read_failed",
-                "cause": "failed to load requirements: .provenance/state/scopes/default/\
-                          requirements/req.jsonl line 1: record req_a contains legacy field \
-                          `retired`",
+                "cause": "failed to load requirements: read .provenance/state/scopes/\
+                          default/requirements/req.jsonl: Is a directory (os error 21)",
             }),
             "{path}"
         );

@@ -94,7 +94,8 @@ fn record_from_line<T: DeserializeOwned>(
     serde_json::from_value(value).map_err(|error| located(path, line_number, &error))
 }
 
-/// Refuses a stored record that still holds the removed `retired` field.
+/// Refuses a stored record that still holds the removed `retired` field, as
+/// `invalid_state_file` at its line.
 pub fn ensure_no_legacy_retirement(
     path: &Utf8Path,
     line_number: usize,
@@ -110,9 +111,13 @@ pub fn ensure_no_legacy_retirement(
         .get("id")
         .and_then(serde_json::Value::as_str)
         .map_or_else(|| "record".to_string(), |id| format!("record {id}"));
-    Err(crate::refusal::fault!(
-        "{path} line {line_number}: {name} contains legacy field `retired`; \
-         canonical JSONL requires record-deletion migration 026 before this build can read it"
+    Err(invalid_line(
+        path,
+        line_number,
+        format!(
+            "{name} contains legacy field `retired`; canonical JSONL requires \
+             record-deletion migration 026 before this build can read it"
+        ),
     ))
 }
 

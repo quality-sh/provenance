@@ -142,7 +142,7 @@ where
     for (index, line) in contents.lines().enumerate() {
         let value = parse_line(path, index + 1, line)?;
         ensure_no_legacy_retirement(path, index + 1, &value)?;
-        let (record, raw) = RawRecord::deserialize(line, index + 1).map_err(|error| {
+        let (record, raw) = RawRecord::deserialize(path, line, index + 1).map_err(|error| {
             match error.downcast::<serde_json::Error>() {
                 Ok(error) => located(path, index + 1, &error),
                 Err(error) => error,
