@@ -19,6 +19,8 @@ these copies. See `tools/skills/README.md`.
 
 On configured maintainer hosts, plain `cargo build`, `cargo check`, `cargo clippy`, `cargo test`, and `cargo package` run in GitHub Actions. The command returns the CI result and pushes a public snapshot branch. Stage new files before a check, and keep secrets out of tracked files. Use `PROVENANCE_CI_LOCAL=1 cargo ...` for native Cargo or `PROVENANCE_CI_ARTIFACT=1 cargo build` to receive a dev CLI binary. Public clones do not enable the shim automatically.
 
+The shim gives exit code 0 when the check passes, 1 when the check fails, 2 when it refuses the command or an error stops it, and 3 when the run started but the shim cannot read its result. On exit code 3, read the result with the `gh run view` command that the shim prints, or give the same cargo command again. The file header of `scripts/agent-bin/cargo` gives the limits.
+
 A plain `cargo test` of `provenance-store` or `provenance-transport` alone needs `--features host`, because the engine builds only with that feature.
 
 A plain `cargo test` of `provenance-mcp` alone needs `--features test-fixture`, because without that feature most of its integration tests compile to nothing, so a run that selects one of them passes with 0 tests.

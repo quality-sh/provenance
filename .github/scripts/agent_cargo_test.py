@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -533,6 +534,8 @@ class AgentCargoTest(unittest.TestCase):
         self.assertEqual(self.sleeps(), [30, 201])
         self.assertIn("rate limit", result.stderr)
         self.assertIn("201 s", result.stderr)
+        reset = time.strftime("%H:%M:%S UTC", time.gmtime(CLOCK_START + 30 + 200))
+        self.assertIn(f"GitHub resets it at {reset}", result.stderr)
 
     def test_rate_limit_wait_has_an_upper_limit(self):
         env = {**self.env, "FAKE_API_RUNS": '["rate:7200", "completed"]'}
@@ -541,6 +544,7 @@ class AgentCargoTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.sleeps(), [900])
+        self.assertIn("at most 900 s", result.stderr)
 
     def assert_result_not_known(self, result, run_id="314"):
         self.assertEqual(result.returncode, 3, result.stderr)

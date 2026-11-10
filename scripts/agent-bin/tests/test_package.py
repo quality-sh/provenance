@@ -23,7 +23,7 @@ class PackageTest(unittest.TestCase):
              patch.object(shim, "provenance_root", return_value=Path("/repo")), \
              patch.object(shim, "snapshot", return_value="a" * 40), \
              patch.object(shim, "run_id_for_snapshot", return_value=123) as dispatch, \
-             patch.object(shim, "show_result", return_value=0) as result, \
+             patch.object(shim, "show_result", return_value=(0, {})) as result, \
              patch.object(shim, "real_cargo", side_effect=AssertionError("native Cargo was selected")):
             self.assertEqual(shim.main(), 0)
         self.assertEqual(dispatch.call_args.args[3], args)
@@ -41,7 +41,7 @@ class PackageTest(unittest.TestCase):
              patch.object(shim, "command", return_value='{"workflow_run_id": 123}') as command:
             shim.dispatch(Path("/repo"), "a" * 40, "quality-sh/provenance", '["package"]', "package")
         payload = json.loads(command.call_args.kwargs["input_text"])
-        self.assertEqual(payload["ref"], "agent-snapshot/" + "a" * 40)
+        self.assertRegex(payload["ref"], "^agent-snapshot/" + "a" * 40 + "-[0-9a-f]{8}$")
 
 
 if __name__ == "__main__":
