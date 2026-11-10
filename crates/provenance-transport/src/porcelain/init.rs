@@ -288,9 +288,27 @@ fn build_summary(
 }
 
 impl InitPlan {
+    /// Writes the plan. In an initialized repository it holds the publication
+    /// lock while it writes, so a read waits for init and gets the graph.
     #[rule("rule_init_apply_rolls_back_owned_changes")]
+    #[rule("rule_read_waits_for_repeated_init")]
     pub(super) fn apply(self) -> anyhow::Result<InitEnding> {
         let layout = ProvenanceLayout::new(self.path.clone());
+        // Replacing a file under `.provenance/state` moves the old file away before the new
+        // file goes in. A repository open and the reads of a host (review, HTTP, MCP) take the
+        // publication lock, so they never see that gap. The record id help of the CLI, the
+        // planning reads of init and an older binary take no lock and can see the gap. A new
+        // repository has no `.provenance` and no readers yet.
+        match std::fs::symlink_metadata(layout.provenance_dir()) {
+            Ok(_) => provenance_store::publication::with_repository_publication(&layout, |_| {
+                self.write(&layout)
+            }),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => self.write(&layout),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    fn write(self, layout: &ProvenanceLayout) -> anyhow::Result<InitEnding> {
         self.planned
             .manifest_before
             .recheck(layout.manifest_path().as_std_path())?;
@@ -389,6 +407,9 @@ fn parse_manifest(bytes: &[u8], path: &std::path::Path) -> anyhow::Result<Manife
     serde_json::from_slice::<Manifest>(bytes)
         .with_context(|| format!("failed to parse manifest {}", path.display()))
 }
+
+#[cfg(test)]
+mod lock_tests;
 
 #[cfg(test)]
 mod tests {

@@ -2,6 +2,8 @@
 //! spawned `provenance mcp`. Twin repositories run the same commands, one through the CLI
 //! and one through MCP, and each standard output line of the server is JSON-RPC.
 
+#[path = "support/bounded_process.rs"]
+mod bounded_process;
 #[allow(dead_code)]
 #[path = "cli_dictionary/support.rs"]
 mod dictionary_support;
