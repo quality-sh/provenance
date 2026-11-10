@@ -445,8 +445,7 @@ fn invalid_source_type_lists_the_accepted_values() {
     let stderr = String::from_utf8_lossy(&refused.stderr);
     let listed = stderr
         .split_once("invalid value for --source-type; accepted values: ")
-        .map(|(_, values)| values.trim())
-        .unwrap_or_else(|| panic!("{stderr}"));
+        .map_or_else(|| panic!("{stderr}"), |(_, values)| values.trim());
     let values: Vec<&str> = listed.split(", ").collect();
     assert!(values.contains(&"document"), "{stderr}");
     assert!(!values.contains(&"decision"), "{stderr}");
