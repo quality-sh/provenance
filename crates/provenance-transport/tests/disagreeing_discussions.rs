@@ -1,6 +1,8 @@
 //! Stored Discussions, Threads, parents, Rules and proposals that do not
 //! agree are `invalid_state_file`: the answer names the file and the line of
-//! the record at fault, and a message that names the records.
+//! the record at fault, and a message that names the records. Each test
+//! reaches the check through a write, because a list read of hand-written
+//! state answers `no_projection` first.
 #![cfg(feature = "test-fixture")]
 
 mod support {
@@ -77,18 +79,6 @@ async fn discussion(repo: &Repository) -> (String, String) {
     )
 }
 
-/// A writable host, because a read-only host cannot build the projection
-/// that a read of hand-written state needs.
-async fn list(repo: &Repository) -> (u16, Value) {
-    call(
-        &host(repo, true),
-        "GET",
-        "/requirements/req_shared/discussions",
-        None,
-    )
-    .await
-}
-
 async fn start(repo: &Repository) -> (u16, Value) {
     call(
         &host(repo, true),
@@ -97,6 +87,19 @@ async fn start(repo: &Repository) -> (u16, Value) {
         Some(json!({"data":{"actor":"reviewer","declared_by":null,"role":"user","body":"Again."}})),
     )
     .await
+}
+
+fn proposal(id: &str) -> Value {
+    json!({"data":{
+        "id":id, "proposal_key":"shared",
+        "proposal_type":"requirement_candidate", "title":"Shared",
+        "summary":"Clarify the shared requirement.", "confidence":null,
+        "traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_shared"},
+            "source_ids":[], "evidence_references":[], "supporting_claim_ids":[]},
+        "builds_on":[], "promotion_state":"proposed", "duplicate_of":null,
+        "superseded_by":null, "record_revision":null, "actor":null, "revises":null,
+        "revises_rejection":null
+    }})
 }
 
 fn located(file: &str, line: usize, message: &str) -> Value {
@@ -109,7 +112,7 @@ async fn a_discussion_stored_again_is_located_at_the_second_line() {
     let repo = Repository::new("The shared graph is readable.");
     let (id, _) = discussion(&repo).await;
     let line = store_again(&repo, DISCUSSIONS, "discussion_id", &id);
-    let (status, failure) = list(&repo).await;
+    let (status, failure) = start(&repo).await;
     assert_eq!(status, 500, "{failure}");
     assert_eq!(
         failure["error"],
@@ -130,10 +133,10 @@ async fn a_discussion_that_names_a_missing_thread_or_another_scope_is_located() 
     change_first(&repo, DISCUSSIONS, |row| {
         row["thread_id"] = json!("thread_missing")
     });
-    let (status, missing) = list(&repo).await;
+    let (status, missing) = start(&repo).await;
     write(&repo, DISCUSSIONS, &original);
     change_first(&repo, DISCUSSIONS, |row| row["scope_id"] = json!("other"));
-    let (other_status, other) = list(&repo).await;
+    let (other_status, other) = start(&repo).await;
     assert_eq!((status, other_status), (500, 500), "{missing} {other}");
     assert_eq!(
         [&missing["error"], &other["error"]],
@@ -219,7 +222,14 @@ async fn an_archived_rule_with_no_archive_commit_is_located_at_its_line() {
     rule["status"] = json!("archived");
     rows[line] = rule.to_string();
     write(&repo, RULES, &rows);
-    let (status, failure) = call(&host(&repo, true), "GET", "/rules/rule_shared", None).await;
+    let (status, failure) = support::resource_http::call_with_headers(
+        &host(&repo, true),
+        "PATCH",
+        "/rules/rule_shared",
+        Some(json!({"data":{"actor":"reviewer", "description":"Edited."}})),
+        &[("if-match", "\"stale\"")],
+    )
+    .await;
     assert_eq!(status, 500, "{failure}");
     assert_eq!(
         failure["error"],
@@ -241,21 +251,14 @@ async fn a_proposal_stored_again_is_located_at_the_second_line() {
         &host(&repo, true),
         "POST",
         "/proposals",
-        Some(json!({"data":{
-            "id":"proposal_shared", "proposal_key":"shared",
-            "proposal_type":"requirement_candidate", "title":"Shared",
-            "summary":"Clarify the shared requirement.", "confidence":null,
-            "traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_shared"},
-                "source_ids":[], "evidence_references":[], "supporting_claim_ids":[]},
-            "builds_on":[], "promotion_state":"proposed", "duplicate_of":null,
-            "superseded_by":null, "record_revision":null, "actor":null, "revises":null,
-            "revises_rejection":null
-        }})),
+        Some(proposal("proposal_shared")),
     )
     .await;
     assert_eq!(status, 200, "{created}");
     let line = store_again(&repo, PROPOSALS, "id", "proposal_shared");
-    let (status, failure) = call(&host(&repo, true), "GET", "/proposals", None).await;
+    let mut other = proposal("proposal_other");
+    other["data"]["proposal_key"] = json!("other");
+    let (status, failure) = call(&host(&repo, true), "POST", "/proposals", Some(other)).await;
     assert_eq!(status, 500, "{failure}");
     assert_eq!(
         failure["error"],
