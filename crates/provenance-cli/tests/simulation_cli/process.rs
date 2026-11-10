@@ -359,6 +359,26 @@ pub fn stop_delay(at: u8) -> Duration {
     mean_write_time() * (255 + u32::from(at)) / 510
 }
 
+/// Kills the write process `child` of `task`. The stop is inside the write
+/// when the process runs at the kill and has not printed its answer. A
+/// process that ended or printed its answer before the kill gives its
+/// answer, as a write alone does.
+fn stop(task: &Task, mut child: Child, request: &Request) -> Done {
+    let ended = |result: Result<Value, String>| {
+        provenance_simulation::stats::add(&layer(), "stops after the write ended", 1);
+        let result = result.and_then(|data| effect(task, request, &data));
+        done(task, result, false)
+    };
+    if matches!(child.try_wait(), Ok(Some(_))) {
+        return ended(finish(child, &format!("write {}", request.path)));
+    }
+    let _ = child.kill();
+    match wait_limited(child, "a stopped write") {
+        Ok(output) if !output.stdout.is_empty() => ended(Ok(parse(&output.stdout)["data"].clone())),
+        _ => done(task, Err("stopped".into()), true),
+    }
+}
+
 /// Runs `tasks` at once on `root`. Each etag is read before the first
 /// process starts. With `stop`, each process is killed after that delay.
 pub fn run_at_once(root: &Path, tasks: &[Task], stop: Option<Duration>) -> Vec<Done> {
@@ -377,19 +397,9 @@ pub fn run_at_once(root: &Path, tasks: &[Task], stop: Option<Duration>) -> Vec<D
     for (task, process) in started {
         outcome.push(match (process, stop) {
             (Err(refusal), _) => done(task, Err(refusal), false),
-            (Ok((mut child, request, _)), Some(delay)) => {
+            (Ok((child, request, _)), Some(delay)) => {
                 std::thread::sleep(delay);
-                if matches!(child.try_wait(), Ok(Some(_))) {
-                    // The write ended before the stop: it is a write alone.
-                    provenance_simulation::stats::add(&layer(), "stops after the write ended", 1);
-                    let result = finish(child, &format!("write {}", request.path));
-                    let result = result.and_then(|data| effect(task, &request, &data));
-                    done(task, result, false)
-                } else {
-                    let _ = child.kill();
-                    let _ = wait_limited(child, "a stopped write");
-                    done(task, Err("stopped".into()), true)
-                }
+                stop(task, child, &request)
             }
             (Ok((child, request, started)), None) => {
                 let result = finish(child, &format!("write {}", request.path));

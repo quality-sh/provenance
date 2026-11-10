@@ -89,6 +89,11 @@ fn a_case_with_every_fault_keeps_the_laws() {
         "no outside write: {:?}",
         run.done
     );
+    assert!(
+        run.done.iter().any(|done| done.stopped),
+        "the stop met no engine during an operation: {:?}",
+        run.done
+    );
 }
 
 // No Rule: a probe that an unknown outcome lands a prefix and the laws hold.
