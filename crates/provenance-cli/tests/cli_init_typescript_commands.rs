@@ -52,7 +52,7 @@ fn typescript_init_prints_and_writes_package_manager_commands() {
         commands.extend(provenance_commands(section));
         for command in &commands {
             assert!(
-                command.starts_with(&format!("{prefix} ")),
+                command == prefix || command.starts_with(&format!("{prefix} ")),
                 "{manager}: {command}"
             );
             let address = command[prefix.len()..].split_whitespace().next();
@@ -93,6 +93,9 @@ fn typescript_init_prints_and_writes_package_manager_commands() {
 
         if cfg!(unix) && RUN_WITH_PROJECT_BINARY.contains(&manager) && on_path(executable) {
             run_commands(&repo, manager, prefix, &commands);
+            eprintln!("{manager}: ran the commands");
+        } else {
+            eprintln!("{manager}: checked the text only");
         }
     }
 }
@@ -146,12 +149,18 @@ fn init_typescript(temporary: &Path, repo: &Path, manager: &str, git_identity: b
 
 /// Runs the version and help commands, and each written command that has no
 /// placeholder and does not start a review host, with the package manager.
+/// The skill note names the package manager command alone, with no arguments.
 fn run_commands(repo: &Path, manager: &str, prefix: &str, commands: &[String]) {
     let version = shell(repo, &format!("{prefix} --version"));
+    let version = String::from_utf8_lossy(&version.stdout);
+    let release = format!("provenance {}", env!("CARGO_PKG_VERSION"));
     assert_eq!(
-        String::from_utf8_lossy(&version.stdout),
-        format!("provenance {}\n", env!("CARGO_PKG_VERSION")),
-        "{manager}"
+        version
+            .lines()
+            .next()
+            .and_then(|line| line.split(" (").next()),
+        Some(release.as_str()),
+        "{manager}: {version}"
     );
     let help = shell(repo, &format!("{prefix} --help"));
     assert!(
@@ -160,7 +169,7 @@ fn run_commands(repo: &Path, manager: &str, prefix: &str, commands: &[String]) {
         String::from_utf8_lossy(&help.stdout)
     );
     for command in commands {
-        if command.contains('<') || command.contains(" review ") {
+        if command == prefix || command.contains('<') || command.contains(" review ") {
             continue;
         }
         let output = shell(repo, command);

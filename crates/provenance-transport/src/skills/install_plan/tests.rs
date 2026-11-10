@@ -36,7 +36,9 @@ fn legacy_parent_change_refuses_the_planned_cleanup() {
     let plan = InstallPlan::build(
         crate::skills::TEST_SKILLS,
         directory.path(),
-        InstallRequest::Init,
+        InstallRequest::Init {
+            command: "provenance",
+        },
     )
     .unwrap();
     std::fs::write(legacy.join("user.txt"), "user\n").unwrap();
@@ -60,7 +62,9 @@ fn symlink_creation_failure_uses_the_preplanned_copy() {
     let mut plan = InstallPlan::build(
         crate::skills::TEST_SKILLS,
         directory.path(),
-        InstallRequest::Init,
+        InstallRequest::Init {
+            command: "provenance",
+        },
     )
     .unwrap();
     let action = plan.claude.remove(0);

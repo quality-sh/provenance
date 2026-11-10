@@ -39,7 +39,7 @@ export function createPackedCommands({ temporary, npmCli, isolatedCache }) {
     if (process.platform !== "win32") chmodSync(sentinel, 0o755);
 
     const agents = readFileSync(join(cwd, "AGENTS.md"), "utf8");
-    assert.match(agents, /`npx --no provenance prime --quiet`/);
+    assert.match(agents, /`npx --no -- provenance prime --quiet`/);
     const output = execFileSync(process.execPath, [
       npxCli,
       "--no",

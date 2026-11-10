@@ -5,7 +5,6 @@ use std::io::Write;
 
 const INTRODUCTION: &str =
     "Provenance records requirements, decisions, and the rules that connect them to code.";
-const AGENT_HANDOFF: &str = "Have your agent run provenance prime to get acclimated.";
 
 #[derive(Debug)]
 pub enum InitResult {
@@ -18,6 +17,7 @@ pub enum InitResult {
 pub struct InitEnding {
     result: InitResult,
     notices: Vec<String>,
+    command: &'static str,
 }
 
 impl InitEnding {
@@ -25,6 +25,7 @@ impl InitEnding {
         Self {
             result: InitResult::Already(line),
             notices: warning.into_iter().collect(),
+            command: "provenance",
         }
     }
 
@@ -32,7 +33,14 @@ impl InitEnding {
         Self {
             result: InitResult::Applied(Box::new(summary)),
             notices: warning.into_iter().collect(),
+            command: "provenance",
         }
+    }
+
+    /// Names the command that runs Provenance in the project in the handoff line.
+    pub const fn invoked_as(mut self, command: &'static str) -> Self {
+        self.command = command;
+        self
     }
 
     pub fn with_notice(mut self, notice: Option<String>) -> Self {
@@ -89,7 +97,11 @@ impl InitEnding {
             InitResult::Applied(summary) => summary.write_to(out)?,
         }
         writeln!(out)?;
-        writeln!(out, "{AGENT_HANDOFF}")
+        writeln!(
+            out,
+            "Have your agent run {} prime to get acclimated.",
+            self.command
+        )
     }
 }
 

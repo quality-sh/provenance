@@ -25,7 +25,7 @@ it in the same change.
   To update the native binary, run `cargo install provenance-cli --force`. In a
   TypeScript project, update the `@quality-sh/provenance` development dependency
   with the package manager.
-- Plan: `{command} prime --quiet`
+- Plan: `{command} prime --quiet`{skill_command_note}
 - New obligation: `{command} rule_<slug> create --type rule --scope {selected_scope} --requirement-id <req> --statement "<testable clause>"`
 - Annotate implementation with `rule`, tests with `verifies`. Annotations move
   with code.
@@ -95,6 +95,23 @@ it in the same change.
 pub struct Invocation(&'static str);
 
 impl Invocation {
+    /// The command that runs Provenance in the initialized project.
+    pub const fn command(&self) -> &'static str {
+        self.0
+    }
+
+    /// Tells the agent how to run a skill command in a TypeScript project,
+    /// because the bundled skills show the native command.
+    fn skill_command_note(&self) -> String {
+        if self.0 == "provenance" {
+            return String::new();
+        }
+        format!(
+            "\n- Each command in the installed skills starts with the word provenance. In\n  this project, replace that word with `{}`.",
+            self.0
+        )
+    }
+
     pub(super) fn from_cli(
         channel: InvocationChannel,
         package_manager: Option<PackageManager>,
@@ -108,7 +125,7 @@ impl Invocation {
                 anyhow::bail!("TypeScript initialization requires --package-manager")
             }
             (InvocationChannel::Typescript, Some(manager)) => Ok(Self(match manager {
-                PackageManager::Npm => "npx --no provenance",
+                PackageManager::Npm => "npx --no -- provenance",
                 PackageManager::Pnpm => "pnpm exec ./node_modules/.bin/provenance",
                 PackageManager::Yarn => "yarn run -B provenance",
                 PackageManager::Bun => "bunx --no-install provenance",
@@ -199,6 +216,7 @@ pub fn project(existing: &[u8], invocation: &Invocation, scope: &str) -> anyhow:
 #[rule("rule_init_follow_monitor_guidance")]
 fn instructions(invocation: &Invocation, scope: &str) -> String {
     INSTRUCTIONS
+        .replace("{skill_command_note}", &invocation.skill_command_note())
         .replace("{command}", invocation.0)
         .replace("{selected_scope}", scope)
 }
