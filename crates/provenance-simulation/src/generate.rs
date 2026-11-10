@@ -56,7 +56,10 @@ impl Step {
                     engine: *engine,
                     op: op.clone(),
                 }];
-                steps.extend(std::iter::repeat_n(Self::Turn(*engine), 1 + usize::from(*turns % 3)));
+                steps.extend(std::iter::repeat_n(
+                    Self::Turn(*engine),
+                    1 + usize::from(*turns % 3),
+                ));
                 steps.push(Self::OutsideWrite(outside.clone()));
                 steps
             }

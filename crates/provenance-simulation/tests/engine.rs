@@ -26,7 +26,9 @@ fn random_cases_keep_the_laws(tc: TestCase) {
 }
 
 fn met(run: &Run, outcome: Outcome) -> bool {
-    run.publishes.iter().any(|publish| publish.outcome == outcome)
+    run.publishes
+        .iter()
+        .any(|publish| publish.outcome == outcome)
 }
 
 // No Rule: a probe that the harness can make a moved base; L5 is the law.
@@ -48,28 +50,41 @@ fn the_write_after_a_moved_base_lands() {
 #[ignore = "a probe of the nightly simulation"]
 fn a_case_with_every_fault_keeps_the_laws() {
     let update = Operation::UpdateRequirement { n: 0, stale: false };
-    let case = Case {
-        engines: 3,
-        steps: vec![
-            write(0, update.clone()),
-            write(1, update),
-            Step::Turn(0),
-            Step::Turn(1),
-            Step::Fault(Fault::UnknownOutcome { landed: 1 }),
-            write(2, Operation::ClaimTopic),
-            Step::Fault(Fault::Stop { engine: 1, at: 0 }),
-            Step::Fault(Fault::Refuse),
-            write(1, Operation::SubmitReview),
-            Step::OutsideWrite(Operation::CreateRequirement { n: 1 }),
-            write(0, Operation::PostMessage),
-            write(2, Operation::ReleaseTopic),
-        ],
-    };
+    let mut steps = vec![
+        write(0, update.clone()),
+        write(1, update),
+        Step::Turn(0),
+        Step::Turn(1),
+        Step::Fault(Fault::UnknownOutcome { landed: 1 }),
+        write(2, Operation::ClaimTopic),
+    ];
+    // The claim publishes before the next fault, so it meets the unknown
+    // outcome.
+    steps.extend(std::iter::repeat_n(Step::Turn(2), 50));
+    steps.extend([
+        Step::Fault(Fault::Stop { engine: 1, at: 0 }),
+        Step::Fault(Fault::Refuse),
+        write(1, Operation::SubmitReview),
+        Step::OutsideWrite(Operation::CreateRequirement { n: 1 }),
+        write(0, Operation::PostMessage),
+        write(2, Operation::ReleaseTopic),
+    ]);
+    let case = Case { engines: 3, steps };
     let run = check_case("engine", &case, Config::default());
-    assert!(met(&run, Outcome::Unknown), "no unknown outcome: {:?}", run.publishes);
-    assert!(met(&run, Outcome::Refused), "no refusal: {:?}", run.publishes);
     assert!(
-        run.done.iter().any(|done| done.engine.is_none() && done.result.is_ok()),
+        met(&run, Outcome::Unknown),
+        "no unknown outcome: {:?}",
+        run.publishes
+    );
+    assert!(
+        met(&run, Outcome::Refused),
+        "no refusal: {:?}",
+        run.publishes
+    );
+    assert!(
+        run.done
+            .iter()
+            .any(|done| done.engine.is_none() && done.result.is_ok()),
         "no outside write: {:?}",
         run.done
     );

@@ -96,7 +96,11 @@ impl Task {
                 }),
             ),
             Operation::WithdrawReview { .. } => self.proposal.as_ref().and_then(|proposal| {
-                review("withdraw-record-review", proposal, json!({"actor": "reviewer"}))
+                review(
+                    "withdraw-record-review",
+                    proposal,
+                    json!({"actor": "reviewer"}),
+                )
             }),
             Operation::DecideReview { .. } => self.proposal.as_ref().and_then(|proposal| {
                 review(

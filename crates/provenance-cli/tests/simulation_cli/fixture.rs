@@ -108,7 +108,11 @@ impl Fixture {
         if let Some(before) = before {
             stats::add(&layer(), "stops", 1);
             let changed = state_entries(&self.root()) != before;
-            stats::add(&layer(), "stops after which the state changed", u64::from(changed));
+            stats::add(
+                &layer(),
+                "stops after which the state changed",
+                u64::from(changed),
+            );
         }
         if !done.is_empty() {
             self.groups.push((way, done));
@@ -162,7 +166,10 @@ impl Fixture {
     /// L6 after the last group, when the case checks after each write.
     fn check_reads(&mut self) {
         if l6_after_each_write() {
-            self.l6(&format!("the reads after write group {}", self.groups.len()));
+            self.l6(&format!(
+                "the reads after write group {}",
+                self.groups.len()
+            ));
         }
     }
 
@@ -223,9 +230,17 @@ impl Fixture {
         if !l6_after_each_write() {
             self.l6("the reads at the end of the case");
         }
-        let writes = self.groups.iter().map(|(_, done)| done.len()).sum::<usize>();
+        let writes = self
+            .groups
+            .iter()
+            .map(|(_, done)| done.len())
+            .sum::<usize>();
         stats::add(&layer(), "cases", 1);
-        stats::add(&layer(), "writes", u64::try_from(writes).unwrap_or(u64::MAX));
+        stats::add(
+            &layer(),
+            "writes",
+            u64::try_from(writes).unwrap_or(u64::MAX),
+        );
         let millis = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
         stats::add(&layer(), "case milliseconds", millis);
         CliRun {
@@ -253,4 +268,3 @@ pub fn state_entries(root: &Path) -> BTreeMap<StateKey, Vec<u8>> {
         .map(provenance_store::storage::StateView::into_entries)
         .unwrap_or_default()
 }
-

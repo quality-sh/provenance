@@ -17,7 +17,11 @@ use serde_json::Value;
 pub fn read_list(created: &[String]) -> (Vec<String>, usize) {
     let mut reads: Vec<String> = READS
         .iter()
-        .filter(|path| path.split('?').next().is_some_and(|path| path.matches('/').count() == 1))
+        .filter(|path| {
+            path.split('?')
+                .next()
+                .is_some_and(|path| path.matches('/').count() == 1)
+        })
         .map(|path| (*path).to_owned())
         .collect();
     let lists = reads.len();

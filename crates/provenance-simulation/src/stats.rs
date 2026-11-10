@@ -9,8 +9,7 @@ use crate::Run;
 use std::collections::BTreeMap;
 use std::sync::{Mutex, PoisonError};
 
-static COUNTS: Mutex<BTreeMap<String, BTreeMap<&'static str, u64>>> =
-    Mutex::new(BTreeMap::new());
+static COUNTS: Mutex<BTreeMap<String, BTreeMap<&'static str, u64>>> = Mutex::new(BTreeMap::new());
 
 /// Adds `amount` to the count `name` of `layer` and writes the counts of the
 /// layer.
@@ -46,8 +45,17 @@ pub fn count_case(layer: &str, run: &Run) {
     add(layer, "cases with a moved base", u64::from(moved > 0));
     add(layer, "moved bases", moved);
     add(layer, "refused publishes", count(Outcome::Refused));
-    add(layer, "publishes with an unknown outcome", count(Outcome::Unknown));
-    let stages = number(run.publishes.iter().filter(|publish| publish.whole_set).count());
+    add(
+        layer,
+        "publishes with an unknown outcome",
+        count(Outcome::Unknown),
+    );
+    let stages = number(
+        run.publishes
+            .iter()
+            .filter(|publish| publish.whole_set)
+            .count(),
+    );
     add(layer, "stages", stages);
     let stopped = number(run.done.iter().filter(|done| done.stopped).count());
     add(layer, "stopped operations", stopped);

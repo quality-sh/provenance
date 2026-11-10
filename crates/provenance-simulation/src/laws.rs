@@ -75,7 +75,10 @@ pub fn check_only(run: &Run, law: &str) -> Result<(), Violation> {
         "L0" => each_operation_finishes(run),
         "L1" => failed_operations_land_nothing(run),
         "L2" => run.reopen_failures.first().map_or(Ok(()), |failure| {
-            broken("L2", format!("the state did not open after a stop: {failure}"))
+            broken(
+                "L2",
+                format!("the state did not open after a stop: {failure}"),
+            )
         }),
         "L3" => successful_writes_stay(run),
         "L4" => one_winner_per_etag(run),

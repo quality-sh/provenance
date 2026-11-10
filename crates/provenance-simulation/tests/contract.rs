@@ -67,7 +67,12 @@ fn a_create_source_runs_through_the_contract_on_a_storage_port() {
     .unwrap_or_else(|failure| panic!("{}", serde_json::to_string(&failure).unwrap()));
     assert_eq!(source["id"], "source_one");
     let view = repository.view().unwrap();
-    assert_eq!(view.list_sources(&provenance_simulation::scope()).unwrap().len(), 1);
+    assert_eq!(
+        view.list_sources(&provenance_simulation::scope())
+            .unwrap()
+            .len(),
+        1
+    );
 }
 
 // No Rule: a probe of the plan. A stale `update-requirement` through the

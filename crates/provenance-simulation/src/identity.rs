@@ -1,7 +1,7 @@
 //! The clock and the ID source of a run.
 
-use crate::plant::Plant;
 use crate::generate;
+use crate::plant::Plant;
 use provenance_store::repository::{Clock, IdSource, RepositoryIdentity};
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock};

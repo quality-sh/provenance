@@ -1,8 +1,8 @@
 //! Each operation of the generator as a call of the store.
 
 use super::{
-    binding_file, created_requirement_id, requirement_id, Effect, Operation, Task,
-    ARCHIVE_COMMIT, DECIDER, FIRST_REQUIREMENT, FIRST_RULE, TOPIC,
+    binding_file, created_requirement_id, requirement_id, Effect, Operation, Task, ARCHIVE_COMMIT,
+    DECIDER, FIRST_REQUIREMENT, FIRST_RULE, TOPIC,
 };
 use crate::{scope, stable};
 use provenance_core::{MessageRole, NodeType, RequirementStatus, ThreadParent};
