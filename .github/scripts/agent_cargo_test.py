@@ -11,6 +11,9 @@ WRAPPER = Path(__file__).resolve().parents[2] / "scripts" / "agent-bin" / "cargo
 
 
 def run(*args, cwd, env=None):
+    # Cases that load the shim as a module must not write bytecode next to it:
+    # the shim refuses a snapshot when the worktree has an untracked file.
+    env = {**(os.environ if env is None else env), "PYTHONDONTWRITEBYTECODE": "1"}
     return subprocess.run(args, cwd=cwd, env=env, text=True, capture_output=True, check=False)
 
 
