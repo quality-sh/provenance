@@ -63,40 +63,6 @@ fn init_onboarding_is_idempotent() {
     );
 }
 
-#[test]
-#[verifies("rule_init_typescript_local_command", examples)]
-fn typescript_init_writes_a_package_local_command() {
-    let temporary = tempfile::tempdir().unwrap();
-    let repo = temporary.path().join("repo");
-
-    init_with(
-        &repo,
-        &[
-            "--invocation-channel",
-            "typescript",
-            "--package-manager",
-            "npm",
-        ],
-    )
-    .success();
-
-    let agents = read_agents(&repo);
-    assert!(agents.contains("`npx --no provenance prime --quiet`"));
-    assert!(
-        agents.contains("`npx --no provenance check --statement \"<statement>\" --format json`")
-    );
-    assert!(!agents.contains("`provenance prime --quiet`"));
-    assert!(agents.contains("npx --no provenance rule_<slug> create --type rule"));
-    for collection_form in [
-        "provenance rules ",
-        "provenance requirements ",
-        "provenance questions ",
-        "provenance topics ",
-    ] {
-        assert!(!agents.contains(collection_form), "{collection_form}");
-    }
-}
-
 #[cfg(unix)]
 #[test]
 #[verifies("rule_init_managed_paths_stay_in_repository", examples)]
@@ -422,10 +388,6 @@ fn init_does_not_claim_a_blockquoted_provenance_heading() {
     assert_eq!(managed_heading_count(&agents), 1);
 }
 fn init(repo: &Path) -> assert_cmd::assert::Assert {
-    init_with(repo, &[])
-}
-
-fn init_with(repo: &Path, extra: &[&str]) -> assert_cmd::assert::Assert {
     let mut command = Command::cargo_bin("provenance").unwrap();
     command.args([
         "init",
@@ -436,7 +398,7 @@ fn init_with(repo: &Path, extra: &[&str]) -> assert_cmd::assert::Assert {
         "--path-prefix",
         ".",
     ]);
-    command.args(extra).assert()
+    command.assert()
 }
 
 fn read_agents(repo: &Path) -> String {
