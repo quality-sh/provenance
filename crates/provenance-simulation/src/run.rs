@@ -159,7 +159,21 @@ impl Runner {
                     self.world.settle(slot);
                 }
             }
-            Step::WriteOnMovedBase { .. } => unreachable!("an expanded case"),
+            Step::WriteOnMovedBase {
+                engine,
+                op,
+                outside,
+            } => {
+                let slot = usize::from(engine) % count;
+                self.step(Step::Write { engine, op });
+                for _ in 0..MAX_DRAIN_TURNS {
+                    if !self.world.is_busy(slot) || self.world.waits_to_publish(slot) {
+                        break;
+                    }
+                    self.world.grant(slot);
+                }
+                self.step(Step::OutsideWrite(outside));
+            }
             Step::Turn(engine) => self.world.grant(usize::from(engine) % count),
             Step::Fault(Fault::Refuse) => self.world.arm(Armed::Refuse),
             Step::Fault(Fault::UnknownOutcome { landed }) => self.world.arm(Armed::Unknown {
@@ -241,8 +255,8 @@ impl Runner {
 /// Runs `case` and returns what it did.
 pub fn run_case(case: &Case, config: Config) -> Run {
     let mut runner = Runner::new(case, config);
-    for step in case.expanded() {
-        runner.step(step);
+    for step in &case.steps {
+        runner.step(step.clone());
     }
     runner.finish()
 }

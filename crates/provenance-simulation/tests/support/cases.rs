@@ -14,7 +14,6 @@ pub fn moved_base_case() -> Case {
         steps: vec![Step::WriteOnMovedBase {
             engine: 0,
             op: bind,
-            turns: 1,
             outside: Operation::PostMessage,
         }],
     }

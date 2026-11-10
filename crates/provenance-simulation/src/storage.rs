@@ -53,6 +53,14 @@ pub struct Publish {
     pub on_base: bool,
 }
 
+/// The storage call that an engine waits to make.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Call {
+    Read,
+    Publish,
+    Enter,
+}
+
 /// A fault that the next publish meets.
 #[derive(Debug, Clone, Copy)]
 pub enum Armed {
@@ -67,8 +75,9 @@ struct State {
     armed: Option<Armed>,
     /// The engine that has the turn.
     turn: Option<usize>,
-    /// Engines that wait for a turn.
-    waiting: BTreeSet<usize>,
+    /// Engines that wait for a turn, with the call that each one waits to
+    /// make.
+    waiting: BTreeMap<usize, Call>,
     /// Engines that run an operation.
     busy: BTreeSet<usize>,
     stopping: BTreeSet<usize>,
@@ -187,6 +196,11 @@ impl World {
         self.lock().stopped = true;
     }
 
+    /// Tells if engine `slot` waits to publish.
+    pub fn waits_to_publish(&self, slot: usize) -> bool {
+        self.lock().waiting.get(&slot) == Some(&Call::Publish)
+    }
+
     /// The engines that did not settle in the wait limit.
     pub fn hung(&self) -> Vec<usize> {
         self.lock().hung.iter().copied().collect()
@@ -228,7 +242,7 @@ impl World {
     pub fn settle(&self, slot: usize) {
         let deadline = Instant::now() + WAIT_LIMIT;
         let mut state = self.lock();
-        while state.busy.contains(&slot) && !state.waiting.contains(&slot) {
+        while state.busy.contains(&slot) && !state.waiting.contains_key(&slot) {
             let left = deadline.saturating_duration_since(Instant::now());
             if left.is_zero() {
                 state.hung.insert(slot);
@@ -246,7 +260,7 @@ impl World {
     /// Gives engine `slot` one turn and waits until it settles again.
     pub fn grant(&self, slot: usize) {
         let mut state = self.lock();
-        if !state.waiting.contains(&slot) || state.hung.contains(&slot) {
+        if !state.waiting.contains_key(&slot) || state.hung.contains(&slot) {
             return;
         }
         state.waiting.remove(&slot);
@@ -257,13 +271,13 @@ impl World {
     }
 
     /// Called by an engine before each storage call: waits for the turn.
-    fn wait_for_turn(&self) -> Option<MutexGuard<'_, State>> {
+    fn wait_for_turn(&self, call: Call) -> Option<MutexGuard<'_, State>> {
         let (slot, _) = current_engine()?;
         let mut state = self.lock();
         if state.turn == Some(slot) {
             state.turn = None;
         }
-        state.waiting.insert(slot);
+        state.waiting.insert(slot, call);
         self.changed.notify_all();
         let deadline = Instant::now() + WAIT_LIMIT;
         while state.turn != Some(slot) {
@@ -292,7 +306,7 @@ impl World {
                 "the simulated storage failed a read (planted)"
             )))
         };
-        let Some(mut state) = self.wait_for_turn() else {
+        let Some(mut state) = self.wait_for_turn(Call::Read) else {
             let state = self.lock();
             if self.plant == Some(Plant::FailReopen) && state.stopped {
                 return failed();
@@ -314,7 +328,9 @@ impl World {
 
     fn publish(&self, writes: &WriteSet) -> Result<Revision, PublishFailure> {
         writes.ensure_disjoint()?;
-        let mut state = self.wait_for_turn().unwrap_or_else(|| self.lock());
+        let mut state = self
+            .wait_for_turn(Call::Publish)
+            .unwrap_or_else(|| self.lock());
         let (engine, operation) = current_engine().map_or((None, 0), |(s, o)| (Some(s), o));
         let current = StateView::new(state.entries.clone());
         let checks_base = !self.no_concurrency_control();
@@ -398,7 +414,7 @@ impl World {
             return Box::new(());
         };
         loop {
-            let mut state = self.wait_for_turn().expect("an engine thread");
+            let mut state = self.wait_for_turn(Call::Enter).expect("an engine thread");
             if self.no_concurrency_control() {
                 return Box::new(());
             }

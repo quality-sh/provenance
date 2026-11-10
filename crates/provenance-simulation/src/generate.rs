@@ -23,14 +23,13 @@ pub const MAX_STEPS: usize = 40;
 pub enum Step {
     /// Gives `op` to an engine. A busy engine takes a turn instead.
     Write { engine: u8, op: Operation },
-    /// Gives `op` to an engine, gives the engine `turns` turns, then lands
-    /// `outside` outside every engine. So the engine meets a moved base when
-    /// it reads in its section before the outside write and publishes after
-    /// it.
+    /// Gives `op` to an engine, gives the engine turns until it waits to
+    /// publish, then lands `outside` outside every engine. So the engine
+    /// publishes on a moved base. The CLI layer runs the outside write and
+    /// then the write.
     WriteOnMovedBase {
         engine: u8,
         op: Operation,
-        turns: u8,
         outside: Operation,
     },
     /// Lets one engine make its next storage call.
@@ -42,27 +41,21 @@ pub enum Step {
 }
 
 impl Step {
-    /// The steps that this step stands for: a write on a moved base is a
-    /// write, its turns and an outside write.
+    /// The steps of the CLI layer that this step stands for: a write on a
+    /// moved base is an outside write and then the write.
     pub fn expand(&self) -> Vec<Self> {
         match self {
             Self::WriteOnMovedBase {
                 engine,
                 op,
-                turns,
                 outside,
-            } => {
-                let mut steps = vec![Self::Write {
+            } => vec![
+                Self::OutsideWrite(outside.clone()),
+                Self::Write {
                     engine: *engine,
                     op: op.clone(),
-                }];
-                steps.extend(std::iter::repeat_n(
-                    Self::Turn(*engine),
-                    1 + usize::from(*turns % 3),
-                ));
-                steps.push(Self::OutsideWrite(outside.clone()));
-                steps
-            }
+                },
+            ],
             other => vec![other.clone()],
         }
     }
@@ -146,7 +139,7 @@ impl Case {
         Self { engines, steps }
     }
 
-    /// The steps of the case with each step expanded.
+    /// The steps of the case for the CLI layer, with each step expanded.
     pub fn expanded(&self) -> Vec<Step> {
         self.steps.iter().flat_map(Step::expand).collect()
     }
