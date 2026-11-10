@@ -168,7 +168,7 @@ impl TryFrom<ResolutionInputFields> for ResolutionInput {
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Relations, ProjectionRow)]
+#[derive(Debug, Clone, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
 #[cfg_attr(feature = "schema", schemars(extend("x-provenance-validation-only-any-of" = true, "anyOf" = serde_json::json!([
     {"properties":{"status":{"enum":["draft","review","proposed","approved","rejected","revised","superseded","abandoned"]},"archived_in_commit":{"type":"null"}},"required":["status"]},
     {"properties":{"status":{"const":"archived"},"archived_in_commit":{"type":"object"}},"required":["status","archived_in_commit"]}

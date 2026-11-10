@@ -1,5 +1,53 @@
 #!/usr/bin/env python3
-"""Opt-in Cargo entry point for Provenance's remote verification checks."""
+"""Opt-in Cargo entry point for Provenance's remote verification checks.
+
+The shim pushes a snapshot branch, starts a GitHub Actions run, reads the run
+every WATCH_INTERVAL_SECONDS until it completes, and then gives the result of
+the job. The constants below the imports give each value.
+
+Exit codes:
+  0  The remote check passed.
+  1  The remote check failed: the job or the run has a conclusion that is not
+     success (for example failure or cancelled).
+  2  The shim refused the command, or an error stopped it: for example a
+     failed push or dispatch, a job that did not run, or a bad artifact.
+  3  The result is not known. The shim prints the reason on standard error.
+     - When a run started, the shim prints the run id, the run URL and the
+       `gh run view` command that reads the result. The same cargo command on
+       the same snapshot watches the same run again.
+     - When no run appeared after the push of an agent-ci/ branch, the shim
+       prints the branch and its Actions URL. A run can start later. The same
+       cargo command on the same snapshot looks for a run on the same branch
+       and does not push again. With PROVENANCE_CI_RERUN=1 it pushes a new
+       branch.
+
+The watch:
+  - The total watch has a limit of WATCH_LIMIT_SECONDS. When the run is not
+    complete at the limit, the result is not known.
+  - A rate limit (HTTP 403 or 429) makes the shim wait until the reset time
+    that GitHub gives, for RATE_LIMIT_WAIT_LIMIT_SECONDS at most. A secondary
+    rate limit that gives no time makes it wait
+    SECONDARY_RATE_LIMIT_WAIT_SECONDS.
+  - HTTP 404 (run not found) is read again every WATCH_INTERVAL_SECONDS. After
+    MISSING_RUN_LIMIT_SECONDS of 404 answers, the result is not known.
+  - HTTP 401, an authentication error, a 403 that is not a rate limit, and a
+    missing gh stop the watch at once: the result is not known.
+  - Other errors are read again after the waits in ERROR_BACKOFF_SECONDS.
+  - At the first error after API_ERROR_LIMIT_SECONDS without a successful
+    read, the result is not known.
+
+Snapshot branches:
+  - Each call that pushes writes a record of its branch (with the run id when
+    it is known and the push time) in runs.json, the run record file.
+  - The shim deletes the branch when the run completes, when the dispatch
+    request fails, and when the job did not run.
+  - At the start of each call, the shim looks at SWEEP_RECORD_LIMIT records
+    at most that it did not look at in the last SWEEP_RECHECK_SECONDS. It
+    deletes the branch of a record whose run completed, or that has no run
+    and is older than NO_RUN_BRANCH_AGE_SECONDS. It does not delete the branch
+    of a run that is queued or in progress. An error in this sweep does not
+    stop the call.
+"""
 
 import fcntl
 import hashlib
@@ -12,7 +60,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
+import urllib.parse
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -22,6 +73,34 @@ WORKFLOW = "agent-cargo.yml"
 WATCH_INTERVAL_SECONDS = 30
 RUN_SEARCH_SLEEP_SECONDS = 10
 RUN_SEARCH_TIMEOUT_SECONDS = 120
+ERROR_BACKOFF_SECONDS = (30, 60, 120, 240, 300)
+RATE_LIMIT_WAIT_LIMIT_SECONDS = 900
+SECONDARY_RATE_LIMIT_WAIT_SECONDS = 60
+MISSING_RUN_LIMIT_SECONDS = 300
+API_ERROR_LIMIT_SECONDS = 1800
+WATCH_LIMIT_SECONDS = 120 * 60
+TEST_LOG_LIMIT_BYTES = 4 * 1024 * 1024
+TEST_LOG_TIMEOUT_SECONDS = 120
+SWEEP_RECORD_LIMIT = 3
+SWEEP_RECHECK_SECONDS = 600
+NO_RUN_BRANCH_AGE_SECONDS = 2 * 60 * 60
+BRANCHES = "branches"
+EXIT_PASSED, EXIT_FAILED, EXIT_REFUSED, EXIT_NOT_KNOWN = 0, 1, 2, 3
+
+
+class ApiError(Exception):
+    def __init__(self, status, headers, message):
+        super().__init__(message)
+        self.status = status
+        self.headers = headers
+
+
+class ResultNotKnown(Exception):
+    def __init__(self, reason, run_id=None, branch=None, fix=None):
+        super().__init__(reason)
+        self.run_id = run_id
+        self.branch = branch
+        self.fix = fix
 
 
 def command(args, cwd=None, env=None, input_text=None):
@@ -108,14 +187,79 @@ def state_file(root):
     return base / "runs.json"
 
 
+class RunRecords:
+    """The run record file: run ids by snapshot and command, and the pushed branches.
+
+    The caller holds runs.lock while it uses an instance.
+    """
+
+    def __init__(self, path):
+        self.path = path
+        self.runs = json.loads(path.read_text()) if path.exists() else {}
+        # A record that is not an object cannot name a branch: drop it.
+        branches = self.runs.get(BRANCHES)
+        branches = branches if isinstance(branches, dict) else {}
+        self.runs[BRANCHES] = {name: record for name, record in branches.items() if isinstance(record, dict)}
+
+    @property
+    def branches(self):
+        return self.runs[BRANCHES]
+
+    def save(self):
+        temporary = self.path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(self.runs))
+        temporary.replace(self.path)
+
+    def remember(self, branch, key, sha, repository, run_id=None):
+        now = time.time()
+        record = self.branches.get(branch) or {"pushed": now, "checked": now}
+        record.update(key=key, sha=sha, repository=repository, run_id=run_id)
+        self.branches[branch] = record
+        if run_id is not None:
+            self.runs[key] = run_id
+        self.save()
+
+    def forget(self, branch):
+        if self.branches.pop(branch, None) is not None:
+            self.save()
+
+
+@contextmanager
+def run_records(root):
+    path = state_file(root)
+    with (path.parent / "runs.lock").open("a+") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            yield RunRecords(path)
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def forget_branch(root, branch):
+    with run_records(root) as records:
+        records.forget(branch)
+
+
+def push_url(repository):
+    return os.environ.get("PROVENANCE_CI_PUSH_URL", f"https://github.com/{repository}.git")
+
+
 def push_snapshot(root, sha, repository, branch):
-    push_url = os.environ.get("PROVENANCE_CI_PUSH_URL", f"https://github.com/{repository}.git")
-    git(root, "push", push_url, f"{sha}:refs/heads/{branch}")
+    git(root, "push", push_url(repository), f"{sha}:refs/heads/{branch}")
 
 
-def pushed_run(root, sha, repository, command_key):
-    branch = f"agent-ci/{command_key}/{sha}-{secrets.token_hex(4)}"
-    push_snapshot(root, sha, repository, branch)
+def delete_branch(root, repository, branch, sha):
+    url = push_url(repository)
+    ref = f"refs/heads/{branch}"
+    remote = git(root, "ls-remote", "--heads", url, ref)
+    if not remote:
+        return
+    if remote.split()[0] != sha:
+        raise RuntimeError(f"Remote branch changed; leaving {branch} in place")
+    git(root, "push", f"--force-with-lease={ref}:{sha}", url, f":{ref}")
+
+
+def search_pushed_run(branch, sha, repository):
     deadline = time.monotonic() + RUN_SEARCH_TIMEOUT_SECONDS
     while time.monotonic() < deadline:
         try:
@@ -130,14 +274,37 @@ def pushed_run(root, sha, repository, command_key):
         except (RuntimeError, ValueError, KeyError):
             pass
         time.sleep(RUN_SEARCH_SLEEP_SECONDS)
-    raise RuntimeError(f"No Actions run appeared for {branch}; check the repository's Actions tab")
+    return None
 
 
-def dispatch(root, sha, repository, command_json, command_key):
-    push_snapshot(root, sha, repository, f"agent-snapshot/{sha}")
+def pushed_run(root, sha, repository, command_key, key, records):
+    # A branch of an earlier call that found no run: look for its run again,
+    # and do not push a second branch that can start a second run.
+    branch = next(
+        (name for name, record in records.branches.items() if record.get("key") == key and record.get("run_id") is None),
+        None,
+    )
+    if branch is None:
+        branch = f"agent-ci/{command_key}/{sha}-{secrets.token_hex(4)}"
+        push_snapshot(root, sha, repository, branch)
+        records.remember(branch, key, sha, repository)
+    run_id = search_pushed_run(branch, sha, repository)
+    if run_id is None:
+        raise ResultNotKnown(f"no Actions run appeared for {branch} in {RUN_SEARCH_TIMEOUT_SECONDS} s", branch=branch)
+    records.remember(branch, key, sha, repository, run_id)
+    return run_id
+
+
+def dispatch(root, sha, repository, command_json, command_key, key, records):
+    # Each call pushes its own branch: two pushes that create one branch at the
+    # same time fail with "cannot lock ref". The workflow reads the commit from
+    # snapshot_sha, so the branch name does not change the check.
+    branch = f"agent-snapshot/{sha}-{secrets.token_hex(4)}"
+    push_snapshot(root, sha, repository, branch)
+    records.remember(branch, key, sha, repository)
     payload = json.dumps(
         {
-            "ref": f"agent-snapshot/{sha}",
+            "ref": branch,
             "inputs": {
                 "snapshot_sha": sha,
                 "command_json": command_json,
@@ -145,16 +312,26 @@ def dispatch(root, sha, repository, command_json, command_key):
             },
         }
     )
-    response = command(
-        [
-            "gh", "api", "--method", "POST", "-H", "X-GitHub-Api-Version: 2026-03-10",
-            f"repos/{repository}/actions/workflows/{WORKFLOW}/dispatches", "--input", "-",
-        ],
-        input_text=payload,
-    )
+    try:
+        response = command(
+            [
+                "gh", "api", "--method", "POST", "-H", "X-GitHub-Api-Version: 2026-03-10",
+                f"repos/{repository}/actions/workflows/{WORKFLOW}/dispatches", "--input", "-",
+            ],
+            input_text=payload,
+        )
+    except (RuntimeError, OSError) as error:
+        # The request failed, so no run uses the branch.
+        try:
+            delete_branch(root, repository, branch, sha)
+            records.forget(branch)
+        except (RuntimeError, OSError) as cleanup:
+            print(f"Remote Cargo: branch cleanup skipped: {cleanup}", file=sys.stderr)
+        raise RuntimeError(f"The dispatch request failed: {error}") from None
     run_id = json.loads(response).get("workflow_run_id")
     if not isinstance(run_id, int) or run_id <= 0:
         raise RuntimeError("GitHub did not return a workflow run ID")
+    records.remember(branch, key, sha, repository, run_id)
     return run_id
 
 
@@ -164,72 +341,297 @@ def run_id_for_snapshot(root, sha, repository, args, artifact=False):
         "build-artifact" if artifact else args[0] if not command_json
         else hashlib.sha256(command_json.encode()).hexdigest()[:16]
     )
-    path = state_file(root)
-    with (path.parent / "runs.lock").open("a+") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+    key = f"{repository}:{sha}:{command_key}"
+    with run_records(root) as records:
+        if key in records.runs and os.environ.get("PROVENANCE_CI_RERUN") != "1":
+            return records.runs[key]
+        if command_json:
+            return dispatch(root, sha, repository, command_json, command_key, key, records)
+        if os.environ.get("PROVENANCE_CI_RERUN") == "1":
+            for record in records.branches.values():
+                if record.get("key") == key and record.get("run_id") is None:
+                    record["key"] = None
+        return pushed_run(root, sha, repository, command_key, key, records)
+
+
+def sweep_branches(root, repository):
+    """Deletes the branches that earlier calls left; never stops the call."""
+    try:
+        now = time.time()
+        with run_records(root) as records:
+            due = sorted(
+                (record["checked"], name) for name, record in records.branches.items()
+                if now - record["checked"] >= SWEEP_RECHECK_SECONDS
+            )[:SWEEP_RECORD_LIMIT]
+            picked = {name: dict(records.branches[name]) for _, name in due}
+            for name in picked:
+                records.branches[name]["checked"] = now
+            if picked:
+                records.save()
+        gone = [name for name, record in picked.items() if sweep_record(root, name, record, now)]
+        if gone:
+            with run_records(root) as records:
+                for name in gone:
+                    records.branches.pop(name, None)
+                records.save()
+    except Exception as error:  # The sweep is a cleanup: no error in it can stop the check.
+        print(f"Remote Cargo: branch sweep skipped: {error!r}", file=sys.stderr)
+
+
+def sweep_record(root, branch, record, now):
+    """Deletes the branch when its run completed; gives True when the record can go."""
+    try:
+        old = now - record["pushed"] >= NO_RUN_BRANCH_AGE_SECONDS
+        run_id = record.get("run_id")
+        if run_id is None:
+            done = old
+        else:
+            try:
+                done = api_get(f"repos/{record['repository']}/actions/runs/{run_id}").get("status") == "completed"
+            except ApiError as error:
+                if error.status != 404 or not old:
+                    raise
+                done = True
+        if done:
+            delete_branch(root, record["repository"], branch, record["sha"])
+        return done
+    except Exception as error:  # One bad record must not stop the sweep or the call.
+        print(f"Remote Cargo: branch sweep left {branch}: {error}", file=sys.stderr)
+        return False
+
+
+def parse_response(text):
+    head, separator, body = text.replace("\r\n", "\n").partition("\n\n")
+    lines = head.split("\n")
+    match = re.match(r"HTTP/\S+ (\d{3})", lines[0])
+    if not separator or not match:
+        return None, {}, text
+    headers = {}
+    for line in lines[1:]:
+        name, _, value = line.partition(":")
+        headers[name.strip().lower()] = value.strip()
+    return int(match.group(1)), headers, body
+
+
+def api_get(path):
+    result = subprocess.run(["gh", "api", "-i", path], text=True, capture_output=True, check=False)
+    status, headers, body = parse_response(result.stdout)
+    if result.returncode == 0 and status == 200:
         try:
-            runs = json.loads(path.read_text()) if path.exists() else {}
-            key = f"{repository}:{sha}:{command_key}"
-            if key not in runs or os.environ.get("PROVENANCE_CI_RERUN") == "1":
-                runs[key] = (
-                    dispatch(root, sha, repository, command_json, command_key)
-                    if command_json else pushed_run(root, sha, repository, command_key)
+            return json.loads(body)
+        except ValueError:
+            raise ApiError(status, headers, "GitHub gave a response that is not JSON") from None
+    lines = (result.stderr.strip() or body.strip() or "gh api failed").splitlines()
+    raise ApiError(status, headers, lines[-1])
+
+
+def rate_limit_wait(error, now):
+    if error.status not in (403, 429):
+        return None
+    headers = error.headers
+    if headers.get("retry-after", "").isdigit():
+        reset = int(now) + int(headers["retry-after"])
+    elif headers.get("x-ratelimit-remaining") == "0" and headers.get("x-ratelimit-reset", "").isdigit():
+        reset = int(headers["x-ratelimit-reset"])
+    elif "rate limit" in str(error).lower():
+        reset = int(now) + SECONDARY_RATE_LIMIT_WAIT_SECONDS
+    else:
+        return None
+    wait = min(max(reset - int(now) + 1, WATCH_INTERVAL_SECONDS), RATE_LIMIT_WAIT_LIMIT_SECONDS)
+    return wait, reset
+
+
+def lasting_error(error):
+    """Gives True for an API error that does not go away when the shim waits."""
+    if error.status == 401:
+        return True
+    if error.status == 403:
+        return rate_limit_wait(error, time.time()) is None
+    return error.status is None and re.search(r"auth login|authentication|bad credentials", str(error), re.I) is not None
+
+
+class RunReader:
+    """Reads a run from the GitHub API and waits after a transient error."""
+
+    def __init__(self, run_id):
+        self.run_id = run_id
+        self.started = time.monotonic()
+        self.last_read = self.started
+        self.last_state = "not read"
+        self.missing_since = None
+        self.errors = 0
+
+    def read(self, path):
+        while True:
+            try:
+                value = api_get(path)
+            except OSError as error:
+                raise ResultNotKnown(
+                    f"the shim cannot start gh: {error}", self.run_id, fix="make gh available on PATH",
+                ) from None
+            except ApiError as error:
+                self.wait_after(error)
+                continue
+            self.last_read = time.monotonic()
+            self.missing_since = None
+            self.errors = 0
+            return value
+
+    def check_watch_limit(self):
+        if time.monotonic() - self.started >= WATCH_LIMIT_SECONDS:
+            raise ResultNotKnown(
+                f"the run is not complete after {WATCH_LIMIT_SECONDS // 60} minutes; "
+                f"the last state that the shim read is {self.last_state}",
+                self.run_id,
+            )
+
+    def wait_after(self, error):
+        now = time.monotonic()
+        if lasting_error(error):
+            raise ResultNotKnown(
+                f"GitHub API error that waiting does not correct: {error}", self.run_id,
+                fix="correct the cause (for example, see `gh auth status` and the token permissions)",
+            )
+        self.check_watch_limit()
+        if now - self.last_read >= API_ERROR_LIMIT_SECONDS:
+            raise ResultNotKnown(
+                f"no successful read of the run in {API_ERROR_LIMIT_SECONDS // 60} minutes; last error: {error}",
+                self.run_id,
+            )
+        if error.status == 404:
+            self.missing_since = now if self.missing_since is None else self.missing_since
+            if now - self.missing_since >= MISSING_RUN_LIMIT_SECONDS:
+                raise ResultNotKnown(
+                    f"GitHub gave HTTP 404 (run not found) for {MISSING_RUN_LIMIT_SECONDS // 60} minutes", self.run_id
                 )
-                temporary = path.with_suffix(".tmp")
-                temporary.write_text(json.dumps(runs))
-                temporary.replace(path)
-            return runs[key]
-        finally:
-            fcntl.flock(lock, fcntl.LOCK_UN)
+            wait = WATCH_INTERVAL_SECONDS
+            reason = "GitHub gave HTTP 404 (run not found)"
+        else:
+            self.missing_since = None
+            limit = rate_limit_wait(error, time.time())
+            if limit is not None:
+                wait, reset = limit
+                at = time.strftime("%H:%M:%S UTC", time.gmtime(reset))
+                reason = f"GitHub API rate limit ({error}); GitHub resets it at {at}; the wait is {wait} s"
+                reason += f" (at most {RATE_LIMIT_WAIT_LIMIT_SECONDS} s)" if wait == RATE_LIMIT_WAIT_LIMIT_SECONDS else ""
+            else:
+                wait = ERROR_BACKOFF_SECONDS[min(self.errors, len(ERROR_BACKOFF_SECONDS) - 1)]
+                self.errors += 1
+                reason = f"GitHub API error: {error}"
+        print(f"Remote Cargo: {reason}. The run continues; next read in {wait} s.", file=sys.stderr, flush=True)
+        time.sleep(wait)
+
+
+def wait_for_run(reader, repository):
+    while True:
+        run = reader.read(f"repos/{repository}/actions/runs/{reader.run_id}")
+        reader.last_state = run.get("status")
+        if reader.last_state == "completed":
+            return run
+        reader.check_watch_limit()
+        time.sleep(WATCH_INTERVAL_SECONDS)
+
+
+def test_counts(run_id, repository, job_id):
+    """Sums the cargo test result lines of the job log with one API call."""
+    read = f"gh run view {run_id} --repo {repository} --job {job_id} --log"
+    try:
+        process = subprocess.Popen(
+            ["gh", "api", f"repos/{repository}/actions/jobs/{job_id}/logs"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        return [f"Remote Cargo: test counts are not available; read the log with {read}"]
+    timer = threading.Timer(TEST_LOG_TIMEOUT_SECONDS, process.kill)
+    timer.start()
+    try:
+        data = process.stdout.read(TEST_LOG_LIMIT_BYTES + 1)
+        if len(data) > TEST_LOG_LIMIT_BYTES:
+            process.kill()
+            limit = f"{TEST_LOG_LIMIT_BYTES // (1024 * 1024)} MiB"
+            return [f"Remote Cargo: test counts skipped: the job log is larger than {limit}; read it with {read}"]
+        if process.wait():
+            return [f"Remote Cargo: test counts are not available; read the log with {read}"]
+    finally:
+        timer.cancel()
+        process.stdout.close()
+        process.wait()
+    totals = [0, 0, 0]
+    binaries = 0
+    pattern = r"test result: \w+\. (\d+) passed; (\d+) failed; (\d+) ignored"
+    for match in re.finditer(pattern, data.decode("utf-8", "replace")):
+        binaries += 1
+        totals = [total + int(count) for total, count in zip(totals, match.groups())]
+    if binaries == 0:
+        return [f"Remote Cargo: test counts not found: the job log has no `test result:` line; read the log with {read}"]
+    passed, failed, ignored = totals
+    return [
+        f"Remote Cargo: tests: {passed} passed, {failed} failed, {ignored} ignored in {binaries} test binaries",
+        f"Remote Cargo: to find one test, run: {read} | grep 'test <name> '",
+    ]
 
 
 def show_result(run_id, repository, check, custom, artifact=False):
     url = f"https://github.com/{repository}/actions/runs/{run_id}"
     print(f"Remote Cargo: {check} in {url}", flush=True)
-    command([
-        "gh", "run", "watch", str(run_id), "--repo", repository, "--interval", str(WATCH_INTERVAL_SECONDS),
-    ])
-    raw = command(["gh", "run", "view", str(run_id), "--json", "jobs", "--repo", repository])
-    jobs = json.loads(raw)["jobs"]
+    reader = RunReader(run_id)
+    run = wait_for_run(reader, repository)
+    jobs = reader.read(f"repos/{repository}/actions/runs/{run_id}/jobs?per_page=100")["jobs"]
     name = "Command" if custom else CHECK_JOBS[check]
     job = next((item for item in jobs if item["name"] == name), None)
     if job is None:
-        raise RuntimeError(f"The remote {check} job did not run: {url}")
-    if job["conclusion"] != "success":
+        print(f"Remote Cargo: The remote {check} job did not run (run conclusion: {run.get('conclusion')}): {url}", file=sys.stderr)
+        return EXIT_REFUSED, run
+    # A run can be cancelled after its job passed: then the check did not pass.
+    conclusion = job["conclusion"] if job["conclusion"] != "success" else run.get("conclusion")
+    if conclusion != "success":
         try:
             logs = command(
-                ["gh", "run", "view", str(run_id), "--job", str(job["databaseId"]), "--log-failed", "--repo", repository]
+                ["gh", "run", "view", str(run_id), "--job", str(job["id"]), "--log-failed", "--repo", repository]
             )
-        except RuntimeError:
+        except (RuntimeError, OSError):
             logs = f"Failed-step logs are unavailable; inspect {url}"
         if logs:
             print(logs)
-        print(f"Remote Cargo: {check} failed ({job['conclusion']})")
-        return 1
+        print(f"Remote Cargo: {check} failed ({conclusion})")
+        return EXIT_FAILED, run
     print(f"Remote Cargo: {check} passed")
+    print(f"Remote Cargo: run {run_id}, job {name}: {job['conclusion']}, {url}")
+    if check == "test":
+        print("\n".join(test_counts(run_id, repository, job["id"])))
     if check == "build" and not artifact:
         print("Build outputs remain on the CI runner; no local target files were created.")
-    return 0
+    return EXIT_PASSED, run
 
 
-def cleanup_completed_branch(root, sha, run_id, repository):
-    raw = command([
-        "gh", "run", "view", str(run_id), "--json", "headBranch,headSha,status", "--repo", repository,
-    ])
-    run = json.loads(raw)
-    branch = run.get("headBranch")
-    if run.get("status") != "completed" or run.get("headSha") != sha:
+def report_not_known(error, repository):
+    print(f"Remote Cargo: result not known: {error}", file=sys.stderr)
+    if error.run_id is None:
+        query = urllib.parse.quote(f"branch:{error.branch}")
+        print(f"Remote Cargo: a run can start later: https://github.com/{repository}/actions?query={query}", file=sys.stderr)
+        print(
+            f"Remote Cargo: if you give the same cargo command again, the shim looks for a run on {error.branch} "
+            "again and does not push again. To push a new branch, set PROVENANCE_CI_RERUN=1.",
+            file=sys.stderr,
+        )
         return
-    if not isinstance(branch, str) or not re.fullmatch(rf"agent-ci/(build|build-artifact|check|clippy|test|package)/{sha}-[0-9a-f]{{8}}", branch):
+    print(f"Remote Cargo: run {error.run_id} continues: https://github.com/{repository}/actions/runs/{error.run_id}", file=sys.stderr)
+    read = (
+        f"read the result with `gh run view {error.run_id} --repo {repository}`, "
+        "or give the same cargo command again to watch this run again."
+    )
+    print(f"Remote Cargo: {error.fix}, then {read}" if error.fix else f"Remote Cargo: {read}", file=sys.stderr)
+
+
+def cleanup_completed_branch(root, sha, run, repository):
+    branch = run.get("head_branch")
+    if run.get("status") != "completed" or run.get("head_sha") != sha:
         return
-    push_url = os.environ.get("PROVENANCE_CI_PUSH_URL", f"https://github.com/{repository}.git")
-    ref = f"refs/heads/{branch}"
-    remote = git(root, "ls-remote", "--heads", push_url, ref)
-    if not remote:
+    pattern = rf"(agent-ci/(build|build-artifact|check|clippy|test|package)|agent-snapshot)/{sha}-[0-9a-f]{{8}}"
+    if not isinstance(branch, str) or not re.fullmatch(pattern, branch):
         return
-    if remote.split()[0] != sha:
-        raise RuntimeError(f"Remote branch changed; leaving {branch} in place")
-    git(root, "push", f"--force-with-lease={ref}:{sha}", push_url, f":{ref}")
+    delete_branch(root, repository, branch, sha)
+    forget_branch(root, branch)
 
 
 def download_build(root, sha, run_id, repository):
@@ -271,19 +673,23 @@ def main():
     if artifact and (platform.system() != "Linux" or platform.machine() not in ("x86_64", "AMD64")):
         raise RuntimeError("The dev binary requires a Linux x86_64 host")
     repository = os.environ.get("PROVENANCE_CI_REPO", "quality-sh/provenance")
+    sweep_branches(root, repository)
     sha = snapshot(root)
     print(f"Remote Cargo: verifying snapshot {sha}", flush=True)
-    run_id = run_id_for_snapshot(root, sha, repository, args, artifact)
-    result = show_result(run_id, repository, args[0], len(args) != 1, artifact)
     try:
-        if result == 0 and artifact:
+        run_id = run_id_for_snapshot(root, sha, repository, args, artifact)
+        result, run = show_result(run_id, repository, args[0], len(args) != 1, artifact)
+    except ResultNotKnown as error:
+        report_not_known(error, repository)
+        return EXIT_NOT_KNOWN
+    try:
+        if result == EXIT_PASSED and artifact:
             download_build(root, sha, run_id, repository)
     finally:
-        if len(args) == 1:
-            try:
-                cleanup_completed_branch(root, sha, run_id, repository)
-            except (RuntimeError, OSError, ValueError, KeyError) as error:
-                print(f"Remote Cargo: branch cleanup skipped: {error}", file=sys.stderr)
+        try:
+            cleanup_completed_branch(root, sha, run, repository)
+        except (RuntimeError, OSError, ValueError, KeyError) as error:
+            print(f"Remote Cargo: branch cleanup skipped: {error}", file=sys.stderr)
     return result
 
 
@@ -292,4 +698,4 @@ if __name__ == "__main__":
         sys.exit(main())
     except (RuntimeError, OSError, ValueError, KeyError, json.JSONDecodeError) as error:
         print(f"Remote Cargo: {error}", file=sys.stderr)
-        sys.exit(2)
+        sys.exit(EXIT_REFUSED)

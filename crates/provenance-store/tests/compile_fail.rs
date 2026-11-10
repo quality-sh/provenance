@@ -29,6 +29,13 @@ fn staged_and_read_only_capabilities_hold_at_compile_time() {
 }
 
 #[test]
+#[verifies("rule_row_counted_records_hold_no_real_column", examples)]
+fn row_counted_kind_with_float_field_does_not_build() {
+    let cases = trybuild::TestCases::new();
+    cases.compile_fail("tests/compile_fail/row_counted_float_field.rs");
+}
+
+#[test]
 #[verifies("rule_store_has_no_wire_contract", examples)]
 fn store_has_no_wire_contract() {
     let cases = trybuild::TestCases::new();

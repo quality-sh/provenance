@@ -1,7 +1,11 @@
-use assert_cmd::Command;
+use bounded_process::Bounded;
 use predicates::str::contains;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
+use std::process::{Command, Output};
+
+#[path = "support/bounded_process.rs"]
+mod bounded_process;
 
 fn provenance() -> Command {
     Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
@@ -20,13 +24,23 @@ fn init() -> (tempfile::TempDir, String) {
             "--path-prefix",
             ".",
         ])
-        .assert()
+        .bounded_assert()
         .success();
     (directory, repo)
 }
 
 fn output(command: &mut Command) -> Value {
-    let output = command.args(["--format", "json"]).output().unwrap();
+    json_data(&command.args(["--format", "json"]).bounded_output())
+}
+
+fn output_with_input(command: &mut Command, input: String) -> Value {
+    json_data(&bounded_process::output_with_input(
+        command.args(["--format", "json"]),
+        input,
+    ))
+}
+
+fn json_data(output: &Output) -> Value {
     assert!(
         output.status.success(),
         "{}",
@@ -40,7 +54,7 @@ fn create_source(repo: &str, id: &str) {
         .args([
             id, "create", "--type", "source", "--repo", repo, "--name", id,
         ])
-        .assert()
+        .bounded_assert()
         .success();
 }
 
@@ -77,20 +91,17 @@ fn repeated_array_flags_equal_the_canonical_json_request() {
         "--supersedes",
         "source_old_b",
     ]));
-    let stdin = output(
-        provenance()
-            .args([
-                "api", "sources", "--method", "post", "--input", "-", "--repo", &repo,
-            ])
-            .write_stdin(
-                json!({
-                    "id": "source_stdin",
-                    "name": "Stdin",
-                    "source_type": "policy",
-                    "supersedes": ["source_old_a", "source_old_b"]
-                })
-                .to_string(),
-            ),
+    let stdin = output_with_input(
+        provenance().args([
+            "api", "sources", "--method", "post", "--input", "-", "--repo", &repo,
+        ]),
+        json!({
+            "id": "source_stdin",
+            "name": "Stdin",
+            "source_type": "policy",
+            "supersedes": ["source_old_a", "source_old_b"]
+        })
+        .to_string(),
     );
 
     assert_eq!(flags["data"]["supersedes"], stdin["data"]["supersedes"]);
@@ -106,24 +117,21 @@ fn canonical_json_flags_express_empty_arrays_and_nested_deltas() {
     create_requirement(&repo, "req_target_a");
     create_requirement(&repo, "req_target_b");
 
-    let owner = output(
-        provenance()
-            .args([
-                "req_owner",
-                "create",
-                "--type",
-                "requirement",
-                "--repo",
-                &repo,
-                "--stdin",
-                "--description",
-                "Created from mixed input",
-                "--depends-on-json",
-                "[]",
-            ])
-            .write_stdin(
-                json!({"statement": "The system records the first statement."}).to_string(),
-            ),
+    let owner = output_with_input(
+        provenance().args([
+            "req_owner",
+            "create",
+            "--type",
+            "requirement",
+            "--repo",
+            &repo,
+            "--stdin",
+            "--description",
+            "Created from mixed input",
+            "--depends-on-json",
+            "[]",
+        ]),
+        json!({"statement": "The system records the first statement."}).to_string(),
     );
     assert_eq!(owner["data"]["description"], "Created from mixed input");
     assert!(owner["data"]["depends_on"].is_null());
@@ -296,7 +304,7 @@ fn repeated_alias_items_accumulate_but_competing_spellings_fail() {
             "--status",
             "active",
         ])
-        .assert()
+        .bounded_assert()
         .failure()
         .stderr(contains(
             "--requirement-ids conflicts with --requirement-id for requirement_ids",
@@ -319,7 +327,7 @@ fn conflicting_body_sources_are_rejected_without_overwrite() {
             "--name",
             "Second",
         ])
-        .assert()
+        .bounded_assert()
         .failure()
         .stderr(contains(
             "--name is assigned more than once for body field name",
@@ -340,14 +348,14 @@ fn conflicting_body_sources_are_rejected_without_overwrite() {
             "--supersedes-json",
             "[]",
         ])
-        .assert()
+        .bounded_assert()
         .failure()
         .stderr(contains(
             "--supersedes-json conflicts with --supersedes for supersedes",
         ));
 
-    provenance()
-        .args([
+    bounded_process::assert_with_input(
+        provenance().args([
             "source_stdin_collision",
             "create",
             "--type",
@@ -357,11 +365,11 @@ fn conflicting_body_sources_are_rejected_without_overwrite() {
             "--stdin",
             "--name",
             "Flag name",
-        ])
-        .write_stdin(r#"{"name":"Stdin name"}"#)
-        .assert()
-        .failure()
-        .stderr(contains("stdin field name conflicts with --name"));
+        ]),
+        r#"{"name":"Stdin name"}"#,
+    )
+    .failure()
+    .stderr(contains("stdin field name conflicts with --name"));
 }
 
 #[test]
@@ -380,7 +388,7 @@ fn malformed_or_schema_invalid_json_flags_are_rejected() {
             "--supersedes-json",
             "[",
         ])
-        .assert()
+        .bounded_assert()
         .failure()
         .stderr(contains("invalid JSON value for --supersedes-json"));
 
@@ -397,7 +405,7 @@ fn malformed_or_schema_invalid_json_flags_are_rejected() {
             "--supersedes-json",
             r#"{"not":"an array"}"#,
         ])
-        .assert()
+        .bounded_assert()
         .failure()
         .stderr(contains("invalid value for --supersedes-json"));
 }
@@ -416,7 +424,7 @@ fn existing_header_preconditions_remain_required() {
             "--description",
             "No precondition",
         ])
-        .assert()
+        .bounded_assert()
         .failure()
         .stderr(contains("If-Match"));
 }
@@ -437,8 +445,7 @@ fn invalid_source_type_lists_the_accepted_values() {
             &repo,
         ])
         .args(["--name", "Bad type", "--source-type", "decision"])
-        .output()
-        .unwrap();
+        .bounded_output();
     assert!(!refused.status.success());
     let listed = "policy, document, legislation, company_agreement, system_state, \
                   external_integration, domain_knowledge, project_artifact, incident, api_spec";
@@ -455,7 +462,7 @@ fn invalid_source_type_lists_the_accepted_values() {
                 "source",
             ])
             .args(["--repo", &repo, "--name", value, "--source-type", value])
-            .assert()
+            .bounded_assert()
             .success();
     }
 }
@@ -476,8 +483,7 @@ fn invalid_requirement_status_lists_the_schema_values() {
             &repo,
         ])
         .args(["--statement", "The system stops.", "--status", "bogus"])
-        .output()
-        .unwrap();
+        .bounded_output();
     assert!(!refused.status.success());
     assert_eq!(
         String::from_utf8_lossy(&refused.stderr).trim_end(),
