@@ -165,13 +165,14 @@ pub(super) const fn declaration(command: RepositoryCommand) -> Declaration {
         .bound(),
         RepositoryCommand::Export => Declaration::named(
             "export",
-            "Write the records of one scope as one document",
+            "Write the records of one scope as a scope export file",
             Fields::new(EXPORT_FIELDS, export_schema),
         )
         .bound(),
         RepositoryCommand::Import => Declaration::named(
             "import",
-            "Add the records of one scope export file to the scope",
+            "Replace the records of one scope with a scope export file and delete each \
+             record that is not in the file",
             Fields::new(IMPORT_FIELDS, import_schema),
         )
         .bound(),
