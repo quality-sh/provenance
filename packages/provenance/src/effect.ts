@@ -4,6 +4,6 @@ export * from './generated/effect-contract.js';
 export * from './generated/effect-matchers.js';
 export { InvalidRequestError, type ClientFailure } from './effect-runtime.js';
 export {
-  ConnectionError, IdentityMismatchError, MalformedResponseError, OperationError, ProtocolMismatchError,
-  COMPATIBILITY, PROTOCOL_VERSION, MAX_RESPONSE_BYTES, type components,
+  ConnectionError, IdentityMismatchError, MalformedResponseError, OperationError, OutcomeUnknownError,
+  ProtocolMismatchError, COMPATIBILITY, PROTOCOL_VERSION, MAX_RESPONSE_BYTES, type components,
 } from './generated/client.js';

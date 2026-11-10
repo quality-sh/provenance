@@ -138,7 +138,9 @@ The exported OpenAPI and all wire validators retain the condition: an Archived
 Rule requires its commit stamp, and other statuses refuse a non-null stamp.
 
 The catalog mutation annotation remains available to generated consumers. A
-write returns success, a typed operation error, or a transport error. Clients
+write returns success, a typed operation error, or a transport error. A write
+that possibly went to the host and lost its response fails with
+`OutcomeUnknownError`; the caller reads current state before a retry. Clients
 keep no uncertain-write ledger and never replay a mutation. Response bodies are
 bounded to 16 MiB, and public error messages do not include raw bodies.
 The write fixture checks plan without mutation, apply, verification completion,
