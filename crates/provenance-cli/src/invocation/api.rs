@@ -95,12 +95,21 @@ pub async fn dispatch(args: ApiArgs) -> anyhow::Result<()> {
     let request = match request(&args) {
         Ok(request) => request,
         Err(error) => {
+            let mut failure = serde_json::to_value(&error.failure)?;
+            if let (Some(hint), Some(object)) = (
+                repeated_query(&args.queries),
+                failure
+                    .get_mut("error")
+                    .and_then(|value| value.as_object_mut()),
+            ) {
+                object.insert("hint".into(), hint.into());
+            }
             return Err(crate::catalog_cli::refusal::HostRefusal {
-                failure: serde_json::to_value(&error.failure)?,
-                hint: repeated_query(&args.queries),
+                failure,
+                hint: None,
                 text_shows_failure: true,
             }
-            .into())
+            .into());
         }
     };
     provenance_cli::porcelain::dispatch_api(
