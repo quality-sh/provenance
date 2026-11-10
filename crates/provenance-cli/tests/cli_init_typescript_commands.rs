@@ -289,7 +289,7 @@ fn typescript_project(temporary: &Path, git_identity: bool) -> PathBuf {
         ""
     };
     std::fs::write(temporary.join("gitconfig"), identity).unwrap();
-    let git = std::process::Command::new("git")
+    let git = provenance_store::git_process::git()
         .args(["init", "--quiet"])
         .current_dir(&repo)
         .env("GIT_CONFIG_GLOBAL", temporary.join("gitconfig"))
