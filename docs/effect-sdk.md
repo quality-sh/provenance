@@ -85,16 +85,30 @@ Errors use `_tag` as their discriminant:
 | `ProtocolMismatchError` | The compatibility tuple differs. No operation was sent. |
 | `IdentityMismatchError` | Metadata names a different repository or scope. |
 | `OperationError` | The host returned a validated typed refusal. |
-| `ConnectionError` | The connection or response stream failed. |
+| `ConnectionError` | The connection or response stream failed. A write was not sent, or the operation is a read. |
+| `OutcomeUnknownError` | A write went to the host, but its response did not arrive. The outcome is not known. |
 | `MalformedResponseError` | A response does not match the operation contract. |
 | `InvalidRequestError` | The input cannot be serialized. |
 
-The clients do not retry mutations and keep no uncertain-write ledger. A lost
-response is a `ConnectionError`. The Store resolves an interrupted publication.
-The caller can read the addressed resource to obtain current state.
+The clients do not retry mutations and keep no uncertain-write ledger. A write
+fails with `OutcomeUnknownError` when the request possibly went to the host and
+its response did not arrive. For example, the connection closes before the
+response, the response stream fails, or the host sends a redirect. A Promise
+client call also gives this error when the caller aborts its signal after
+dispatch. The write possibly changed the state. Read the current
+state of the addressed resource before you send the write again. A failure
+before dispatch, such as a refused connection or a signal that is aborted before
+the request starts, is a `ConnectionError`. A read that loses its response is
+also a `ConnectionError`. The Store resolves an interrupted publication.
+
+When the client cannot identify the cause of a transport failure, such as a
+`TypeError` from a browser `fetch`, it cannot show that the write was not sent.
+The write then fails with `OutcomeUnknownError`.
 
 Interrupting an Effect aborts the request and waits for response cleanup. A
-fiber interruption can replace a typed result with an interruption cause.
+fiber interruption can replace a typed result with an interruption cause. An
+interrupted write gives an interruption cause, not `OutcomeUnknownError`, but its
+outcome is also not known. Read the current state before you send it again.
 
 ## Schemas
 

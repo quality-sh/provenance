@@ -6,7 +6,7 @@ import * as Exit from 'effect/Exit';
 import * as Fiber from 'effect/Fiber';
 import { createServer, type RequestListener } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { COMPATIBILITY, EffectHttpClient } from './effect.js';
+import { COMPATIBILITY, EffectHttpClient, OutcomeUnknownError } from './effect.js';
 import { verifies } from './rules.js';
 
 const metadata = (repository = 'fixture', scope = 'default') => Response.json({
@@ -150,6 +150,7 @@ test('a write whose response is lost fails with an outcome-unknown error and is 
     const error = await Effect.runPromise(Effect.flip(host.client.answerQuestion({ id: 'question_x', data: { answer: 'Done.' } })));
     assert.match(error.message, /Read the current state before you send the write again/);
     assert.equal(error._tag, 'OutcomeUnknownError');
+    assert.ok(error instanceof OutcomeUnknownError);
     assert.equal(host.received.writes, 1);
   } finally { await host.close(); }
 });

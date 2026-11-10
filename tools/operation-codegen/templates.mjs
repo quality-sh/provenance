@@ -62,6 +62,8 @@ function queryImplementationCall(op, variants) {
   return `{ ${tsFields(op.parameters ?? [], required).join('; ')} }`;
 }
 
+const writes = op => op['x-operation-mutates'] === true;
+
 function tsRequest(path, method, op) {
   let url = `this.baseUrl + '${path}'`;
   for (const parameter of (op.parameters ?? []).filter(parameter => parameter.in === 'path')) {
@@ -82,7 +84,7 @@ ${query.map(parameter => `    if (call[${JSON.stringify(propertyName(parameter))
   return `    const url = new URL(${url});${queryCode}
     const response = await send(this.fetcher, url, {
       method: '${method.toUpperCase()}', headers: { ${headerCode} }${body}, signal: options.signal,
-    });`;
+    }${writes(op) ? ', true' : ''});`;
 }
 
 export function typescriptClient(document, compatibility) {
@@ -117,7 +119,7 @@ export function typescriptClient(document, compatibility) {
     const contract = ${contracts} : undefined;
     if (contract === undefined) throw new TypeError('Invalid query selector');
 ${tsRequest(path, method, op)}
-    const value = await readJson(response, options.signal);
+    const value = await readJson(response, options.signal${writes(op) ? ', true' : ''});
     if (!response.ok) {
       checked(value, contract.failure);
       throw new OperationError<${failureUnion}>(response.status, value as ${failureUnion});
@@ -129,7 +131,7 @@ ${tsRequest(path, method, op)}
     return `  async ${op.operationId}(call: ${tsCall(op)}, options: { signal?: AbortSignal } = {}): Promise<components['schemas']['${success}']> {
     const validate = await import('./validators/${op.operationId}.mjs');
 ${tsRequest(path, method, op)}
-    const value = await readJson(response, options.signal);
+    const value = await readJson(response, options.signal${writes(op) ? ', true' : ''});
     if (!response.ok) {
       checked(value, validate.${failure});
       throw new OperationError(response.status, value as components['schemas']['${failure}']);
@@ -141,7 +143,7 @@ ${tsRequest(path, method, op)}
   return `// Generated from OpenAPI. Do not edit.
 import type { components } from './schema.js';
 import { send, readJson, checked, ConnectionError, OperationError, ProtocolMismatchError, IdentityMismatchError } from './runtime.js';
-export { ConnectionError, MalformedResponseError, OperationError, ProtocolMismatchError, IdentityMismatchError, MAX_RESPONSE_BYTES } from './runtime.js';
+export { ConnectionError, OutcomeUnknownError, MalformedResponseError, OperationError, ProtocolMismatchError, IdentityMismatchError, MAX_RESPONSE_BYTES } from './runtime.js';
 export type { components } from './schema.js';
 export const COMPATIBILITY = ${JSON.stringify(compatibility)} as const;
 export const PROTOCOL_VERSION = COMPATIBILITY.wire;

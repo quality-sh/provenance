@@ -62,7 +62,7 @@ export interface components { readonly schemas: {
   readonly GetDocumentFailure: { readonly error: { readonly kind: 'resource_not_found' }; readonly meta: unknown };
 } }
 export type OperationFailure = { readonly mutable: string[] };
-export { ConnectionError, IdentityMismatchError, MalformedResponseError, OperationError, ProtocolMismatchError } from './runtime.js';
+export { ConnectionError, IdentityMismatchError, MalformedResponseError, OperationError, OutcomeUnknownError, ProtocolMismatchError } from './runtime.js';
 export class HttpClient {
   static connect(_baseUrl: string, _fetch?: typeof fetch, _options?: unknown): Promise<HttpClient> { return Promise.resolve(new HttpClient()); }
   static connectWithBearer(_baseUrl: string, _bearer: string, _fetch?: typeof fetch, _options?: unknown): Promise<HttpClient> { return Promise.resolve(new HttpClient()); }
