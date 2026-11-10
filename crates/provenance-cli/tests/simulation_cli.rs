@@ -21,6 +21,7 @@
 
 #[allow(dead_code)]
 mod support {
+    pub mod api_process;
     #[path = "../../../provenance-transport/tests/support/catch_up_steps.rs"]
     pub mod catch_up_steps;
     #[path = "../../../provenance-transport/tests/support/transcript.rs"]

@@ -4,6 +4,7 @@
 //! does not end in it is killed, and its case breaks L0, so a stopped
 //! process fails its case in minutes and does not hold the job.
 
+use crate::support::api_process;
 use crate::support::catch_up_steps::{Answer, Surface};
 use provenance_simulation::generate::{
     created_requirement_id, requirement_id, Effect, Operation, Task, FIRST_REQUIREMENT, TOPIC,
@@ -81,7 +82,9 @@ pub fn wait_limited(mut child: Child, what: &str) -> Result<Output, String> {
 pub fn output(mut command: Command, what: &str) -> Result<Output, String> {
     command.stdin(Stdio::null());
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let child = command.spawn().map_err(|error| format!("{what}: {error}"))?;
+    let child = command
+        .spawn()
+        .map_err(|error| format!("{what}: {error}"))?;
     wait_limited(child, what)
 }
 
@@ -178,7 +181,8 @@ fn finish(child: Child, what: &str) -> Result<Value, String> {
     Err(format!("refused {}: {stderr}", refusal_kind(&stderr)))
 }
 
-/// The `provenance api` reads of the full-rebuild oracle.
+/// The `provenance api` reads of the full-rebuild oracle, through the
+/// shared command of `support/api_process.rs`, with the process limit.
 pub struct Reads(pub String);
 
 impl Surface for Reads {
@@ -189,17 +193,9 @@ impl Surface for Reads {
         _: Option<Value>,
         _: &'a [(&'a str, &'a str)],
     ) -> Answer<'a> {
-        let path = path.trim_start_matches('/');
-        let (path, query) = path.split_once('?').unwrap_or((path, ""));
-        let mut command = Command::new(binary());
-        command.args(["api", path, "--repo", &self.0, "--format", "json"]);
-        command.args(["--method", method]);
-        for pair in query.split('&').filter(|pair| !pair.is_empty()) {
-            command.args(["--query", pair]);
-        }
+        let command = api_process::command(binary(), &self.0, (method, path), &[], false);
         let answer = match output(command, &format!("read {path}")) {
-            Ok(output) if output.status.success() => (200, parse(&output.stdout)),
-            Ok(output) => (1, json!(String::from_utf8_lossy(&output.stderr))),
+            Ok(output) => api_process::answer(&output),
             Err(text) => (1, json!(text)),
         };
         Box::pin(async move { answer })
