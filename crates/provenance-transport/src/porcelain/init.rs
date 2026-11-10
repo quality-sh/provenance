@@ -289,12 +289,13 @@ fn build_summary(
 
 impl InitPlan {
     #[rule("rule_init_apply_rolls_back_owned_changes")]
-    #[rule("rule_init_reads_get_whole_state")]
     pub(super) fn apply(self) -> anyhow::Result<InitEnding> {
         let layout = ProvenanceLayout::new(self.path.clone());
         // Replacing a file under `.provenance/state` moves the old file away before the new
-        // file goes in. Readers take the publication lock, so a write under that lock is never
-        // seen half done. A new repository has no `.provenance` and no readers yet.
+        // file goes in. A repository open and the reads of a host (review, HTTP, MCP) take the
+        // publication lock, so they never see that gap. The record id help of the CLI, the
+        // planning reads of init and an older binary take no lock and can see the gap. A new
+        // repository has no `.provenance` and no readers yet.
         match std::fs::symlink_metadata(layout.provenance_dir()) {
             Ok(_) => provenance_store::publication::with_repository_publication(&layout, |_| {
                 self.write(&layout)

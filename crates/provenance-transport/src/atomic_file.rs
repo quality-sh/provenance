@@ -198,6 +198,7 @@ fn commit_prepared(path: &Path, expected: &FileSnapshot, temporary: &Path) -> an
         FileSnapshot::Regular { .. } => {
             let backup = displace_to_backup(path)
                 .map_err(|error| displacement_error(path, "replacement", error))?;
+            crate::test_probes::at("file_displaced");
             let displaced = FileSnapshot::read(&backup)?;
             if &displaced != expected {
                 restore_displaced(&backup, path)?;
