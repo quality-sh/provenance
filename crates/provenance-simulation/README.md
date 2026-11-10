@@ -1,0 +1,91 @@
+# provenance-simulation
+
+This crate is the nightly simulation of the write engine. It draws random
+sequences of writes and faults, runs them, and checks laws on the result. No
+pull request check runs it. The workflow `.github/workflows/simulation.yml`
+runs it each night at 02:41 UTC and on a manual start.
+
+## Layers
+
+Each layer is one job, so a failure names one layer.
+
+| Layer | What runs each write |
+| --- | --- |
+| `engine` | Two or three real engines over one simulated storage. The case decides the order of each storage call. |
+| `contract` | The same engines, with each write sent through `provenance_contract::invoke_with`. |
+| `cli-linux`, `cli-macos`, `cli-windows` | One `provenance api` process for each write, on a repository on disk (`crates/provenance-cli/tests/simulation_cli.rs`). |
+
+## Laws
+
+| Law | Layers | What it checks |
+| --- | --- | --- |
+| L0 | all | Each operation or process ends in its time limit, with no panic. |
+| L1 | engine, contract | An operation that fails, with no unknown outcome, lands no write. |
+| L2 | engine, contract | After an engine stops, the state opens and reads again. |
+| L3 | all | A write that succeeded stays unless a later write changed it. |
+| L4 | all | Of two writes on one etag, at most one succeeds. |
+| L5 | engine, contract | After a moved base, the next write of the section lands. |
+| L6 | CLI | The reads after each write equal the reads after a full rebuild. |
+| L7 | CLI | Each answer of one writer has the answer kind that the engine gives. |
+| L8 | engine, contract | One case gives the same final bytes each time. |
+| O1 | contract | No answer is a write failure (500) unless a fault met the operation. |
+| O2 | contract | The times of the messages increase in the order that they landed. |
+| O3 | contract | A stage lands as one whole set on the revision where it started. |
+
+Each law apart from L0 has a planted test (`tests/engine_planted.rs`,
+`tests/contract_planted.rs` and the planted tests of `simulation_cli.rs`).
+A planted test plants the smallest fault that its law must see. If the law
+does not see it, the test fails with "simulation check broken", and the
+issue says that a check is broken, not a law.
+
+## When a failure issue opens
+
+The report job opens one issue for each layer and law, with the label
+`simulation`. A second night with the same failure adds a comment.
+
+1. Read the issue. It gives the law, the detail, the seed, the shrunk steps,
+   the replay command and the replay blob.
+2. Replay the case on your computer. Use the blob, because it replays on any
+   system and any build:
+   paste the `#[hegel::reproduce_failure("<blob>")]` line from the issue on
+   the random test of the layer, above `fn`, and run the replay command of
+   the issue. The seed repeats the run only on the same build.
+3. File a bead for the fault, with the issue as its external reference.
+4. Fix the engine. Do not change the law to make the case pass. If the law
+   itself is wrong, that is a decision for the owner.
+5. Close the issue after a night passes with no failure of that law.
+
+A blob of "not printed; the case was not reproduced" means that Hegel ran
+the shrunk case again and the case passed. This happens in the CLI layer,
+where two processes at once make a case nondeterministic. Use the shrunk
+steps of the issue as a fixed case, and run it more than one time.
+
+An issue "failed without a broken law" means that the job did not succeed
+and no random case wrote a failure file. The build, a probe test or a
+planted test failed, a test panicked outside a law, or the job stopped at
+its time limit. Read the log of the run.
+
+## Replay a case
+
+The replay command of an issue has this form:
+
+```sh
+HEGEL_SEED=<seed> cargo nextest run --profile simulation --run-ignored all \
+  -p provenance-simulation --test engine -E 'test(=random_cases_keep_the_laws)'
+```
+
+The random tests are ignored tests, so the command needs `--run-ignored all`.
+For the CLI layer, the package is `provenance-cli` and the test binary is
+`simulation_cli`.
+
+## Start a manual run
+
+In the Actions tab, open the workflow "Simulation" and click "Run workflow".
+The input `cases` sets the number of cases for each random test (the default
+is 100). The input `seed` sets the seed (the default is the run ID).
+
+## Known failures
+
+- The contract job fails on O1 until GitHub issue 648 is fixed: an update
+  of a Requirement that does not exist answers a write failure (500).
+- The engine job can fail on L1 (bead provenance-4ayr).
