@@ -23,16 +23,21 @@ pub enum Ran {
 pub struct CliRun {
     pub groups: Vec<(Ran, Vec<Done>)>,
     pub entries: BTreeMap<StateKey, Vec<u8>>,
-    /// The result of the full-rebuild comparison of the reads at the end.
+    /// The first failure of the full-rebuild comparison of the reads.
     pub reads: Result<(), String>,
+    /// The processes that did not end in the process limit.
+    pub hung: Vec<String>,
 }
 
 const fn broken(law: &'static str, detail: String) -> Result<(), Violation> {
     Err(Violation { law, detail })
 }
 
-/// Checks L3, L4, L6 and L7.
+/// Checks L0, L3, L4, L6 and L7.
 pub fn check(case: &Case, run: &CliRun) -> Result<(), Violation> {
+    if let Some(process) = run.hung.first() {
+        return broken("L0", process.clone());
+    }
     successful_writes_stay(run)?;
     one_winner_per_etag(run)?;
     if let Err(detail) = &run.reads {
@@ -182,8 +187,18 @@ fn apply_public(repository: &Repository, task: &Task) -> anyhow::Result<Effect> 
     }
 }
 
+/// The answer kind of `done`: success, or the kind of its refusal.
+fn answer(done: &Done) -> Result<(), Option<&str>> {
+    done.result
+        .as_ref()
+        .map(|_| ())
+        .map_err(|_| done.kind.as_deref())
+}
+
 /// L7: the writes of one writer, before the first write at once, stop or
-/// merge, get the answer kind that the engine gives the same writes.
+/// merge, get the answer kind that the engine gives the same writes. A
+/// write that the simulation did not send, because the read of its etag
+/// refused, has no CLI answer to compare.
 fn one_writer_answers_as_the_engine(case: &Case, run: &CliRun) -> Result<(), Violation> {
     let alone = run.groups.iter().take_while(|(way, _)| *way == Ran::Alone);
     let alone: Vec<&Done> = alone.flat_map(|(_, done)| done).collect();
@@ -205,10 +220,15 @@ fn one_writer_answers_as_the_engine(case: &Case, run: &CliRun) -> Result<(), Vio
             let detail = format!("the engine did not answer operation {}", cli.operation);
             return broken("L7", detail);
         };
-        if cli.result.is_ok() != engine.result.is_ok() {
+        if cli.kind.as_deref() == Some(crate::process::NOT_SENT) {
+            continue;
+        }
+        if answer(cli) != answer(engine) {
             let (operation, op) = (cli.operation, &cli.op);
-            let (cli, engine) = (&cli.result, &engine.result);
-            let detail = format!("operation {operation} ({op:?}): CLI {cli:?}, engine {engine:?}");
+            let (kinds, cli, engine) = ((answer(cli), answer(engine)), &cli.result, &engine.result);
+            let detail = format!(
+                "operation {operation} ({op:?}): answer kinds {kinds:?}; CLI {cli:?}, engine {engine:?}"
+            );
             return broken("L7", detail);
         }
     }

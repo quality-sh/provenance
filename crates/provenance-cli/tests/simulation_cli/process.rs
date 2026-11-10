@@ -1,4 +1,8 @@
-//! The `provenance api` processes of the CLI simulation.
+//! The `provenance api` and git processes of the CLI simulation.
+//!
+//! Each wait for a process has the limit [`PROCESS_LIMIT`]. A process that
+//! does not end in it is killed, and its case breaks L0, so a stopped
+//! process fails its case in minutes and does not hold the job.
 
 use crate::support::catch_up_steps::{Answer, Surface};
 use provenance_simulation::generate::{
@@ -6,23 +10,90 @@ use provenance_simulation::generate::{
 };
 use provenance_simulation::Done;
 use serde_json::{json, Value};
-use std::io::Write as _;
+use std::cell::RefCell;
+use std::io::{Read, Write as _};
 use std::path::Path;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Command, Output, Stdio};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+
+/// The longest wait for one process.
+pub const PROCESS_LIMIT: Duration = Duration::from_secs(120);
+
+thread_local! {
+    /// The processes of this case that did not end in the limit.
+    static HUNG: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Takes the processes that did not end in the limit since the last call.
+pub fn take_hung() -> Vec<String> {
+    HUNG.with(|hung| std::mem::take(&mut *hung.borrow_mut()))
+}
+
+/// The layer name of this system, for example `cli-linux`.
+pub fn layer() -> String {
+    format!("cli-{}", std::env::consts::OS)
+}
 
 pub fn binary() -> &'static Path {
     assert_cmd::cargo::cargo_bin!("provenance")
 }
 
+/// Reads a pipe of a child on its own thread.
+fn read_pipe(pipe: Option<impl Read + Send + 'static>) -> std::thread::JoinHandle<Vec<u8>> {
+    std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        if let Some(mut pipe) = pipe {
+            let _ = pipe.read_to_end(&mut bytes);
+        }
+        bytes
+    })
+}
+
+/// Waits for `child` for the process limit. At the limit, kills it, notes
+/// `what` as hung and refuses.
+pub fn wait_limited(mut child: Child, what: &str) -> Result<Output, String> {
+    let stdout = read_pipe(child.stdout.take());
+    let stderr = read_pipe(child.stderr.take());
+    let deadline = Instant::now() + PROCESS_LIMIT;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(5)),
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                let text = format!("{what} did not end in {PROCESS_LIMIT:?}");
+                HUNG.with(|hung| hung.borrow_mut().push(text.clone()));
+                return Err(text);
+            }
+            Err(error) => return Err(format!("{what}: {error}")),
+        }
+    };
+    Ok(Output {
+        status,
+        stdout: stdout.join().unwrap_or_default(),
+        stderr: stderr.join().unwrap_or_default(),
+    })
+}
+
+/// Runs `command` to its end, for the process limit at most.
+pub fn output(mut command: Command, what: &str) -> Result<Output, String> {
+    command.stdin(Stdio::null());
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let child = command.spawn().map_err(|error| format!("{what}: {error}"))?;
+    wait_limited(child, what)
+}
+
 pub fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
-    let output = provenance_store::git_process::git()
+    let mut command = provenance_store::git_process::git();
+    command
         .args(["-c", "user.name=Simulation"])
         .args(["-c", "user.email=simulation@example.com"])
         .args(["-c", "commit.gpgsign=false"])
         .args(args)
-        .current_dir(dir)
-        .output()
-        .map_err(|error| format!("{error}"))?;
+        .current_dir(dir);
+    let output = output(command, &format!("git {args:?}"))?;
     let text = |bytes: &[u8]| String::from_utf8_lossy(bytes).trim().to_owned();
     if output.status.success() {
         Ok(text(&output.stdout))
@@ -40,6 +111,25 @@ pub fn commit(dir: &Path, message: &str) -> Result<String, String> {
 fn parse(bytes: &[u8]) -> Value {
     serde_json::from_slice(bytes).unwrap_or(Value::Null)
 }
+
+/// The kind of a refusal on standard error, or `no_kind`.
+fn refusal_kind(stderr: &str) -> String {
+    let error = parse(stderr.trim_start_matches("Error: ").as_bytes());
+    error["error"]["kind"]
+        .as_str()
+        .unwrap_or("no_kind")
+        .to_owned()
+}
+
+/// The kind at the start of a refusal text: `refused <kind>: ...`.
+fn kind_of(text: &str) -> Option<String> {
+    let rest = text.strip_prefix("refused ")?;
+    rest.split_once(": ").map(|(kind, _)| kind.to_owned())
+}
+
+/// The kind of a write that the simulation did not send, because the read
+/// of its etag refused.
+pub const NOT_SENT: &str = "not_sent";
 
 /// One public API call of a write.
 pub struct Request {
@@ -79,15 +169,13 @@ impl Request {
 }
 
 /// The data of a success, or the text of a refusal with its kind first.
-fn finish(child: Child) -> Result<Value, String> {
-    let output = child.wait_with_output().expect("the CLI ends");
+fn finish(child: Child, what: &str) -> Result<Value, String> {
+    let output = wait_limited(child, what)?;
     if output.status.success() {
         return Ok(parse(&output.stdout)["data"].clone());
     }
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-    let error = parse(stderr.trim_start_matches("Error: ").as_bytes());
-    let kind = error["error"]["kind"].as_str().unwrap_or("no_kind");
-    Err(format!("refused {kind}: {stderr}"))
+    Err(format!("refused {}: {stderr}", refusal_kind(&stderr)))
 }
 
 /// The `provenance api` reads of the full-rebuild oracle.
@@ -109,11 +197,10 @@ impl Surface for Reads {
         for pair in query.split('&').filter(|pair| !pair.is_empty()) {
             command.args(["--query", pair]);
         }
-        let output = command.output().expect("the CLI reads");
-        let answer = if output.status.success() {
-            (200, parse(&output.stdout))
-        } else {
-            (1, json!(String::from_utf8_lossy(&output.stderr)))
+        let answer = match output(command, &format!("read {path}")) {
+            Ok(output) if output.status.success() => (200, parse(&output.stdout)),
+            Ok(output) => (1, json!(String::from_utf8_lossy(&output.stderr))),
+            Err(text) => (1, json!(text)),
         };
         Box::pin(async move { answer })
     }
@@ -133,17 +220,18 @@ pub fn etag(root: &Path, id: &str) -> Result<String, String> {
     let path = format!("requirements/{id}");
     let mut command = Command::new(binary());
     command.args(["api", &path, "--format", "json"]);
-    let output = command.arg("--repo").arg(root).output();
-    let output = output.map_err(|error| format!("{error}"))?;
+    command.arg("--repo").arg(root);
+    let output = output(command, &format!("read {path}"))?;
     let answer = parse(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     let etag = answer["data"]["edit"]["etag"].as_str().map(str::to_owned);
-    etag.ok_or_else(|| format!("refused read: {stderr}"))
+    etag.ok_or_else(|| format!("refused {NOT_SENT}: the etag read refused: {stderr}"))
 }
 
 /// The public API call of `task` on the repository at `root`, or `None` when
-/// the API has no route for it (thread messages, two bindings in a section)
-/// or when there is nothing to act on.
+/// the simulation sends no route for it (thread messages, two bindings in a
+/// section, decisions, Discussions and archives) or when there is nothing to
+/// act on.
 fn request(root: &Path, task: &Task) -> Option<Result<Request, String>> {
     let actor = task.actor();
     let review = format!("requirements/{FIRST_REQUIREMENT}");
@@ -187,7 +275,11 @@ fn request(root: &Path, task: &Task) -> Option<Result<Request, String>> {
         Operation::ReleaseTopic => {
             Request::post(format!("topics/{TOPIC}/release"), json!({"actor": actor}))
         }
-        Operation::PostMessage | Operation::BindTwice { .. } => return None,
+        Operation::PostMessage
+        | Operation::BindTwice { .. }
+        | Operation::DecideReview { .. }
+        | Operation::WriteDiscussion { .. }
+        | Operation::ArchiveRequirement { .. } => return None,
     }))
 }
 
@@ -212,25 +304,47 @@ fn effect(task: &Task, request: &Request, data: &Value) -> Result<Effect, String
             holder: Some(task.actor()),
         },
         Operation::ReleaseTopic => Effect::Claim { holder: None },
-        Operation::PostMessage | Operation::BindTwice { .. } => Effect::Skipped,
+        _ => Effect::Skipped,
     })
 }
 
 fn done(task: &Task, result: Result<Effect, String>, stopped: bool) -> Done {
+    let kind = result.as_ref().err().and_then(|text| kind_of(text));
     Done {
         engine: task.engine,
         operation: task.operation,
         op: task.op.clone(),
         target: task.target(),
         result,
+        kind,
         stopped,
     }
 }
 
+/// The total time and the count of the writes that ran to their end.
+static WRITE_TIMES: Mutex<(Duration, u32)> = Mutex::new((Duration::ZERO, 0));
+
+/// The mean time of a write process in this test process, or one second
+/// before the first write ends.
+fn mean_write_time() -> Duration {
+    let (total, count) = *WRITE_TIMES
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if count == 0 {
+        Duration::from_secs(1)
+    } else {
+        total / count
+    }
+}
+
+/// When a stop at `at` kills a write: `at` / 255 of the mean write time.
+pub fn stop_delay(at: u8) -> Duration {
+    mean_write_time() * u32::from(at) / 255
+}
+
 /// Runs `tasks` at once on `root`. Each etag is read before the first
-/// process starts. With `stop`, each process stops after that many
-/// milliseconds.
-pub fn run_at_once(root: &Path, tasks: &[Task], stop: Option<u64>) -> Vec<Done> {
+/// process starts. With `stop`, each process is killed after that delay.
+pub fn run_at_once(root: &Path, tasks: &[Task], stop: Option<Duration>) -> Vec<Done> {
     let mut prepared = Vec::new();
     for task in tasks {
         if let Some(request) = request(root, task) {
@@ -239,21 +353,31 @@ pub fn run_at_once(root: &Path, tasks: &[Task], stop: Option<u64>) -> Vec<Done> 
     }
     let mut started = Vec::new();
     for (task, request) in prepared {
-        let process = request.map(|request| (request.spawn(root), request));
+        let process = request.map(|request| (request.spawn(root), request, Instant::now()));
         started.push((task, process));
     }
     let mut outcome = Vec::new();
     for (task, process) in started {
         outcome.push(match (process, stop) {
             (Err(refusal), _) => done(task, Err(refusal), false),
-            (Ok((mut child, _)), Some(millis)) => {
-                std::thread::sleep(std::time::Duration::from_millis(millis));
+            (Ok((mut child, _, _)), Some(delay)) => {
+                std::thread::sleep(delay);
+                if matches!(child.try_wait(), Ok(Some(_))) {
+                    provenance_simulation::stats::add(&layer(), "stops after the write ended", 1);
+                }
                 let _ = child.kill();
-                let _ = child.wait();
+                let _ = wait_limited(child, "a stopped write");
                 done(task, Err("stopped".into()), true)
             }
-            (Ok((child, request)), None) => {
-                let result = finish(child);
+            (Ok((child, request, started)), None) => {
+                let result = finish(child, &format!("write {}", request.path));
+                if tasks.len() == 1 {
+                    let mut times = WRITE_TIMES
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    times.0 += started.elapsed();
+                    times.1 += 1;
+                }
                 let result = result.and_then(|data| effect(task, &request, &data));
                 done(task, result, false)
             }

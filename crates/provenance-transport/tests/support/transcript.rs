@@ -141,9 +141,20 @@ fn answer(status: u16, body: &Value, root: &str) -> Value {
 /// Every read of [`READS`] through `surface`, in order, with the values
 /// that [`answer`] keeps.
 pub async fn read_all(surface: &impl Surface, repo: &Repository) -> Vec<Value> {
+    read_paths(surface, repo, READS).await
+}
+
+/// Each read of `paths` through `surface`, in order, with the values that
+/// [`answer`] keeps.
+pub async fn read_paths(
+    surface: &impl Surface,
+    repo: &Repository,
+    paths: &[impl AsRef<str>],
+) -> Vec<Value> {
     let root = repo.dir.path().to_str().unwrap().to_owned();
     let mut answers = Vec::new();
-    for path in READS {
+    for path in paths {
+        let path = path.as_ref();
         let (status, body) = surface.call("GET", path, None, &[]).await;
         answers.push(json!({"read": path, "answer": answer(status, &body, &root)}));
     }

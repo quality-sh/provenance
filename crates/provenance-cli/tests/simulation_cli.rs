@@ -1,19 +1,23 @@
 //! The cases of the simulation through the real CLI on disk.
 //!
 //! Each write is one `provenance api` process on a fixture repository. A
-//! `Turn` starts the next two writes at once. A `Stop` stops a write process.
-//! An outside write runs on a git branch, and git merges it back through
-//! `provenance merge-jsonl`. The run keeps these laws:
+//! `Turn` starts the next two writes at once. A `Stop` kills a write process
+//! during its measured write time. An outside write runs on a git branch,
+//! and git merges it back through `provenance merge-jsonl`. The run keeps
+//! these laws:
 //!
 //! | Law | Statement |
 //! | --- | --------- |
+//! | L0 | Each process ends in the process limit. |
 //! | L3 | A write that succeeded stays unless a later write changed it. |
 //! | L4 | Of two writes on one etag, at most one succeeds. |
-//! | L6 | The reads at the end equal the reads after a full rebuild. |
+//! | L6 | The reads after each write equal the reads after a full rebuild. |
 //! | L7 | Each answer of one writer has the answer kind of the engine. |
 //!
 //! The nightly workflow runs this target on Linux, macOS and Windows. Two
-//! processes at once make a case nondeterministic, so Hegel only warns.
+//! processes at once make a case nondeterministic, so Hegel only warns. CI
+//! does not run these tests: the ci profile of nextest leaves out this
+//! binary.
 
 #[allow(dead_code)]
 mod support {
@@ -27,23 +31,32 @@ mod support {
 mod laws;
 #[path = "simulation_cli/process.rs"]
 mod process;
+#[path = "simulation_cli/reads.rs"]
+mod reads;
 
 use hegel::{Hegel, NondeterminismStrictness, Settings, TestCase};
 use laws::{check, CliRun, Ran};
-use process::{binary, commit, etag, git, now, run_at_once, Reads};
+use process::{binary, commit, etag, git, layer, run_at_once, stop_delay, take_hung};
 use provenance_simulation::generate::{
-    Case, Context, Fault, Operation, Step, Task, FIRST_REQUIREMENT,
+    Case, Context, Effect, Fault, Operation, Step, Task, FIRST_REQUIREMENT,
 };
-use provenance_simulation::{report, run_case, Config, Done};
+use provenance_simulation::laws::Violation;
+use provenance_simulation::{report, run_case, stats, Config, Done};
 use provenance_store::layout::ProvenanceLayout;
-use provenance_store::storage::StateKey;
+use provenance_store::storage::{StateKey, StateStorage};
 use provenance_transport::fixture::records::Repository;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use support::transcript::{assert_same, copy_without_projection, read_all};
+use std::time::Instant;
 
 /// The arguments of the merge driver after the program.
 const MERGE_ARGUMENTS: &str = "merge-jsonl %O %A %B --output %A --path %P";
+
+/// When L6 is checked: after each write, or only at the end of a case when
+/// `SIMULATION_L6` is `end`.
+fn l6_after_each_write() -> bool {
+    std::env::var("SIMULATION_L6").map_or(true, |value| value != "end")
+}
 
 /// One fixture repository with the initial state of the simulation, and
 /// the case that runs on it.
@@ -55,6 +68,8 @@ struct Fixture {
     serial: u64,
     engines: u8,
     groups: Vec<(Ran, Vec<Done>)>,
+    /// The first L6 failure of the case.
+    reads: Result<(), String>,
 }
 
 impl Fixture {
@@ -95,6 +110,7 @@ impl Fixture {
             serial: 0,
             engines: engines.max(1),
             groups: Vec::new(),
+            reads: Ok(()),
         }
     }
 
@@ -113,14 +129,21 @@ impl Fixture {
     }
 
     /// Runs the writes of `pending` in the way `way`.
-    fn run(&mut self, way: Ran, pending: Vec<(u8, Operation)>, stop: Option<u64>) {
+    fn run(&mut self, way: Ran, pending: Vec<(u8, Operation)>, stop: Option<u8>) {
         let mut tasks = Vec::new();
         for (engine, op) in pending {
             tasks.push(self.task(Some(engine), op));
         }
-        let done = run_at_once(&self.root(), &tasks, stop);
+        let before = (way == Ran::Stopped).then(|| state_entries(&self.root()));
+        let done = run_at_once(&self.root(), &tasks, stop.map(stop_delay));
+        if let Some(before) = before {
+            stats::add(&layer(), "stops", 1);
+            let changed = state_entries(&self.root()) != before;
+            stats::add(&layer(), "stops after which the state changed", u64::from(changed));
+        }
         if !done.is_empty() {
             self.groups.push((way, done));
+            self.check_reads();
         }
     }
 
@@ -147,103 +170,119 @@ impl Fixture {
         let _ = git(&root, &["worktree", "remove", "--force", branch_text]);
         if !outcome.is_empty() {
             self.groups.push((Ran::Outside, outcome));
+            self.check_reads();
         }
     }
 
-    /// L6: the reads at the end equal the reads after a full rebuild.
-    fn reads(&self) -> Result<(), String> {
-        let reads = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let caught_up = Reads(self.root().display().to_string());
-            let caught_up = now(read_all(&caught_up, &self.repo));
-            let copy = copy_without_projection(&self.repo);
-            let rebuilt = Reads(copy.dir.path().display().to_string());
-            let rebuilt = now(read_all(&rebuilt, &copy));
-            assert_same(&caught_up, &rebuilt, "the reads at the end of the case");
-        }));
-        reads.map_err(|payload| report::panic_text(&*payload))
+    /// The Requirements that a create of the case made.
+    fn created(&self) -> Vec<String> {
+        let mut created: Vec<String> = self
+            .groups
+            .iter()
+            .flat_map(|(_, done)| done)
+            .filter_map(|done| match &done.result {
+                Ok(Effect::Created { id }) => Some(id.clone()),
+                _ => None,
+            })
+            .collect();
+        created.sort();
+        created.dedup();
+        created
+    }
+
+    /// L6 after the last group, when the case checks after each write.
+    fn check_reads(&mut self) {
+        if l6_after_each_write() {
+            self.l6(&format!("the reads after write group {}", self.groups.len()));
+        }
+    }
+
+    /// Checks L6 and keeps the first failure.
+    fn l6(&mut self, context: &str) {
+        if self.reads.is_err() {
+            return;
+        }
+        let started = Instant::now();
+        self.reads = reads::check_reads(&self.repo, &self.created(), context);
+        let millis = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+        stats::add(&layer(), "L6 checks", 1);
+        stats::add(&layer(), "L6 milliseconds", millis);
     }
 }
 
-/// The step after the last one: it runs the writes that wait, one by one.
-const END: Step = Step::Fault(Fault::Refuse);
-
 /// Runs `case` on a new fixture repository.
 fn run_cli(case: &Case) -> CliRun {
+    let started = Instant::now();
+    take_hung();
     let mut fixture = Fixture::new(case.engines);
     let engines = fixture.engines;
     let mut pending: Vec<(u8, Operation)> = Vec::new();
-    for step in case.steps.iter().chain(std::iter::once(&END)) {
-        if let Step::Write { engine, op } = step {
+    // `None` is the end of the case: it runs the writes that wait, one by one.
+    let steps = case.expanded();
+    for step in steps.iter().map(Some).chain(std::iter::once(None)) {
+        if let Some(Step::Write { engine, op }) = step {
             pending.push((*engine, op.clone()));
             continue;
         }
-        if matches!(step, Step::Turn(_)) && pending.len() >= 2 {
+        if matches!(step, Some(Step::Turn(_))) && pending.len() >= 2 {
             let both = pending.drain(..2).collect();
             fixture.run(Ran::AtOnce, both, None);
         }
         let mut stopped = None;
-        if let Step::Fault(Fault::Stop { engine }) = step {
+        if let Some(Step::Fault(Fault::Stop { engine, at })) = step {
             let slot = engine % engines;
             if let Some(index) = pending.iter().position(|(e, _)| e % engines == slot) {
-                stopped = Some((pending.remove(index), u64::from(*engine) * 3 % 60));
+                stopped = Some((pending.remove(index), *at));
             }
         }
         for one in std::mem::take(&mut pending) {
             fixture.run(Ran::Alone, vec![one], None);
         }
-        if let Some((one, millis)) = stopped {
-            fixture.run(Ran::Stopped, vec![one], Some(millis));
+        if let Some((one, at)) = stopped {
+            fixture.run(Ran::Stopped, vec![one], Some(at));
         }
-        if let Step::OutsideWrite(op) = step {
+        if let Some(Step::OutsideWrite(op)) = step {
             fixture.write_outside(op.clone());
         }
     }
+    if !l6_after_each_write() {
+        fixture.l6("the reads at the end of the case");
+    }
+    let writes = fixture.groups.iter().map(|(_, done)| done.len()).sum::<usize>();
+    stats::add(&layer(), "cases", 1);
+    stats::add(&layer(), "writes", u64::try_from(writes).unwrap_or(u64::MAX));
+    let millis = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+    stats::add(&layer(), "case milliseconds", millis);
     CliRun {
-        reads: fixture.reads(),
+        hung: take_hung(),
+        reads: fixture.reads.clone(),
         entries: state_entries(&fixture.root()),
         groups: fixture.groups,
     }
 }
 
-/// The canonical state files of the repository at `root`.
+/// The state of the repository at `root`, read through the local storage
+/// adapter: the manifest and the shards, and no temporary file that a
+/// killed write left.
 fn state_entries(root: &Path) -> BTreeMap<StateKey, Vec<u8>> {
-    let state = root.join(".provenance/state");
-    let mut found = BTreeMap::new();
-    let mut directories = vec![state.clone()];
-    while let Some(directory) = directories.pop() {
-        for entry in std::fs::read_dir(&directory).expect("a state directory") {
-            let path = entry.expect("an entry").path();
-            if path.is_dir() {
-                directories.push(path);
-                continue;
-            }
-            let key = path.strip_prefix(&state).expect("a path in the state");
-            let key = key.to_str().expect("UTF-8").replace('\\', "/");
-            let key = StateKey::new(key).expect("a state key");
-            found.insert(key, std::fs::read(&path).expect("a state file"));
-        }
-    }
-    found
+    let layout = ProvenanceLayout::new(root.to_str().expect("UTF-8"));
+    provenance_store::storage::local::LocalStateStorage::new(layout)
+        .read_view()
+        .map(provenance_store::storage::StateView::into_entries)
+        .unwrap_or_default()
 }
 
-/// Runs `case` through the CLI and fails with the report of a broken law.
-fn check_case(case: &Case) {
-    let Err(violation) = check(case, &run_cli(case)) else {
-        return;
-    };
-    let layer = format!("cli-{}", std::env::consts::OS);
+/// Fails the case with the report of `violation`.
+fn fail(case: &Case, violation: &Violation) -> ! {
+    let layer = layer();
     let seed = report::seed();
-    let shown = seed.clone().unwrap_or_else(|| "<seed>".into());
-    let replay = format!(
-        "HEGEL_SEED={shown} cargo nextest run --profile simulation --run-ignored all -p provenance-cli --test simulation_cli"
-    );
     let failure = report::Failure {
         layer: &layer,
         law: violation.law,
         detail: &violation.detail,
+        replay: report::replay_line(&layer, seed.as_deref()),
         seed,
         case,
-        replay,
     };
     let json = serde_json::to_string_pretty(&failure).expect("a failure is JSON");
     if let Some(directory) = std::env::var_os("SIMULATION_FAILURE_DIR") {
@@ -258,13 +297,20 @@ fn check_case(case: &Case) {
     panic!("simulation law {law} broken in layer {layer}: {text}");
 }
 
+// No Rule: L3, L4, L6 and L7 have their basis tests; this is the random
+// check of the plan on each system.
 #[test]
 #[ignore = "random cases run nightly: cargo nextest run --profile simulation --run-ignored all"]
 fn random_cases_keep_the_laws_through_the_cli() {
     let settings = Settings::new().nondeterminism_strictness(NondeterminismStrictness::Warn);
-    Hegel::new(|tc: TestCase| check_case(&Case::draw(&tc)))
-        .settings(settings)
-        .run();
+    Hegel::new(|tc: TestCase| {
+        let case = Case::draw(&tc);
+        if let Err(violation) = check(&case, &run_cli(&case)) {
+            fail(&case, &violation);
+        }
+    })
+    .settings(settings)
+    .run();
 }
 
 const fn write(engine: u8, op: Operation) -> Step {
@@ -275,7 +321,8 @@ const fn update(n: u8) -> Operation {
     Operation::UpdateRequirement { n, stale: false }
 }
 
-/// Probe: every operation with a public route writes alone through the CLI.
+// No Rule: a probe that every operation with a public route writes alone
+// through the CLI.
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn each_operation_writes_through_the_cli() {
@@ -296,7 +343,7 @@ fn each_operation_writes_through_the_cli() {
     check(&case, &run).unwrap();
 }
 
-/// Probe: two updates at once on one etag; one wins and the other conflicts.
+// No Rule: a probe that two updates at once on one etag have one winner.
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn two_updates_at_once_have_one_winner() {
@@ -310,8 +357,8 @@ fn two_updates_at_once_have_one_winner() {
     check(&case, &run).unwrap();
 }
 
-/// Probe: a write on a branch merges through `provenance merge-jsonl`, and a
-/// stopped write leaves a state that reads.
+// No Rule: a probe that a write on a branch merges through `provenance
+// merge-jsonl`, and that a stopped write leaves a state that reads.
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn a_merged_branch_and_a_stopped_write_keep_the_laws() {
@@ -319,7 +366,7 @@ fn a_merged_branch_and_a_stopped_write_keep_the_laws() {
         write(0, update(0)),
         Step::OutsideWrite(Operation::CreateRequirement { n: 0 }),
         write(1, Operation::ClaimTopic),
-        Step::Fault(Fault::Stop { engine: 1 }),
+        Step::Fault(Fault::Stop { engine: 1, at: 128 }),
     ];
     let case = Case { engines: 2, steps };
     let run = run_cli(&case);
