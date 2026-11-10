@@ -2,9 +2,10 @@
 //! read or a write of its family refuses with `invalid_state_file`, and the
 //! refusal gives the file and the line of the row.
 //!
-//! No Rule states the kind of a row that the store cannot read. These tests
-//! pin the full refusal, so that a change of kind, file, line or text is seen.
+//! A row that the store cannot read back as one record does not parse as a
+//! record, so `rule_state_parse_refusal_names_the_line` states this refusal.
 
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 
 mod support {
@@ -76,6 +77,7 @@ fn update(repo: &str) -> std::process::Output {
 }
 
 #[test]
+#[verifies("rule_state_parse_refusal_names_the_line", examples)]
 fn a_typed_change_of_a_row_with_a_repeated_member_refuses_at_the_row() {
     let (_directory, repo) = repository(|row| {
         format!(
@@ -92,10 +94,10 @@ fn a_typed_change_of_a_row_with_a_repeated_member_refuses_at_the_row() {
 }
 
 #[test]
+#[verifies("rule_state_parse_refusal_names_the_line", examples)]
 fn each_read_and_write_of_a_row_with_the_retired_field_refuses_at_the_row() {
-    let (_directory, repo) = repository(|row| {
-        format!("{},\"retired\":true}}", row.strip_suffix('}').unwrap())
-    });
+    let (_directory, repo) =
+        repository(|row| format!("{},\"retired\":true}}", row.strip_suffix('}').unwrap()));
     let create = provenance()
         .args([
             "req_b",

@@ -1,6 +1,7 @@
-//! Characterization: the kind, status and fields of each refusal that the HTTP
-//! routes give on the base commit. Later changes to the store refusals keep
-//! these rows unchanged.
+//! The kind, status and fields of each refusal that the HTTP routes give.
+//! `each_refusal_keeps_its_kind_status_and_fields` is a characterization with
+//! no Rule: its rows pin refusals that the store conversion keeps. The other
+//! tests pin caller refusals that have a declared kind.
 #![cfg(feature = "test-fixture")]
 
 mod support {
@@ -224,8 +225,7 @@ async fn state_rows(repo: &Repository) -> Vec<Value> {
     ]
 }
 
-/// An update of a Requirement that does not exist is `resource_not_found`;
-/// the base commit gave 500 `write_failed`.
+/// An update of a Requirement that does not exist is `resource_not_found`.
 #[tokio::test]
 #[provenance_macros::verifies("rule_caller_refusal_has_declared_kind", examples)]
 async fn an_update_of_a_missing_requirement_is_not_found() {
@@ -244,7 +244,8 @@ async fn an_update_of_a_missing_requirement_is_not_found() {
     );
 }
 
-/// Review refusals that the base commit gave as 500 `write_failed`.
+/// A review write with a blank reason, or on a submission that does not
+/// exist, has a declared kind.
 #[tokio::test]
 #[provenance_macros::verifies("rule_caller_refusal_has_declared_kind", examples)]
 async fn a_review_refusal_has_a_declared_kind() {
@@ -304,7 +305,8 @@ fn proposal(id: &str, extra: &Value) -> Value {
     json!({ "data": data })
 }
 
-/// Proposal refusals that the base commit gave as 500 `write_failed`.
+/// A proposal that exists, or a duplicate or superseded proposal with no
+/// target, has a declared kind.
 #[tokio::test]
 #[provenance_macros::verifies("rule_caller_refusal_has_declared_kind", examples)]
 async fn a_proposal_refusal_has_a_declared_kind() {
@@ -328,6 +330,10 @@ async fn a_proposal_refusal_has_a_declared_kind() {
             "create a duplicate proposal with no duplicate_of",
             proposal("proposal_twin", &json!({"promotion_state":"duplicate"})),
         ),
+        (
+            "create a superseded proposal with no superseded_by",
+            proposal("proposal_old", &json!({"promotion_state":"superseded"})),
+        ),
     ] {
         rows.push(row(
             name,
@@ -338,7 +344,8 @@ async fn a_proposal_refusal_has_a_declared_kind() {
         Value::Array(rows),
         json!([
             {"error":{"kind":"already_exists"},"row":"create an existing proposal","status":409},
-            {"error":{"field":"request.duplicate_of","kind":"invalid_input","reason":"invalid_value"},"row":"create a duplicate proposal with no duplicate_of","status":400}
+            {"error":{"field":"request.duplicate_of","kind":"invalid_input","reason":"invalid_value"},"row":"create a duplicate proposal with no duplicate_of","status":400},
+            {"error":{"field":"request.superseded_by","kind":"invalid_input","reason":"invalid_value"},"row":"create a superseded proposal with no superseded_by","status":400}
         ])
     );
 }
@@ -352,7 +359,7 @@ async fn each_refusal_keeps_its_kind_status_and_fields() {
     assert_eq!(Value::Array(rows), expected_rows());
 }
 
-/// The rows on the base commit.
+/// The expected rows of `each_refusal_keeps_its_kind_status_and_fields`.
 fn expected_rows() -> Value {
     json!([
         {"error":{"kind":"already_exists"},"row":"create an existing requirement","status":409},

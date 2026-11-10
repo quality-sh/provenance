@@ -54,7 +54,7 @@ mod support {
     pub mod resource_http;
 }
 
-/// e92s: a create that carries `source_refs` names the field, lists the
+/// A create that carries `source_refs` names the field, lists the
 /// accepted fields and tells how to cite a Source.
 #[cfg(feature = "test-fixture")]
 #[tokio::test]
@@ -69,22 +69,14 @@ async fn an_unknown_request_field_names_itself_and_the_accepted_fields() {
     }});
     let (status, failure) = call(&host, "POST", "/requirements", Some(body)).await;
     assert_eq!(status, 400, "{failure}");
-    let error = &failure["error"];
-    assert_eq!(error["kind"], "invalid_input", "{failure}");
-    assert_eq!(error["field"], "request.source_refs", "{failure}");
-    assert_eq!(error["reason"], "unknown_field", "{failure}");
-    let message = error["message"].as_str().unwrap();
-    assert!(
-        message.starts_with("create-requirement does not take source_refs; accepted fields: "),
-        "{message}"
-    );
-    for field in ["`actor`", "`statement`", "`depends_on`"] {
-        assert!(message.contains(field), "{message}");
-    }
-    assert!(
-        message.ends_with(
-            "; to cite a Source, update the record with the Source in relationships.cites"
-        ),
-        "{message}"
+    assert_eq!(
+        failure["error"],
+        serde_json::json!({
+            "kind":"invalid_input", "field":"request.source_refs", "reason":"unknown_field",
+            "message":"create-requirement does not take source_refs; accepted fields: `actor`, \
+                `id`, `statement`, `description`, `status`, `refines`, `depends_on`, \
+                `supersedes`, `spawned_by`, `origin_thread`, `origin_message`, `origin`; to \
+                cite a Source, update the record with the Source in relationships.cites"
+        })
     );
 }

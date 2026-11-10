@@ -1,5 +1,5 @@
-//! Characterization: the transport refusal rows as MCP error objects on the
-//! base commit. Later changes to the store refusals keep these rows unchanged.
+//! Characterization with no Rule: the transport refusal rows as MCP error
+//! objects. The rows pin refusals that the store conversion keeps.
 #![cfg(feature = "test-fixture")]
 
 #[allow(dead_code)]

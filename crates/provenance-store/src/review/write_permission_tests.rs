@@ -79,11 +79,15 @@ fn an_unpermitted_staged_write_is_refused_and_publishes_nothing() {
     let path = shards::requirements_path(&store.layout, &scope());
     let before = std::fs::read(&path).unwrap();
     let refused = staged_worker(&store, restate).unwrap_err();
-    assert!(format!("{refused:#}").contains("requires a guarded review save"));
-    assert!(matches!(
-        crate::write_error::WriteError(refused).safe(),
-        crate::write_error::WriteFailure::InvalidUpdate { .. }
-    ));
+    // A public write of an enrolled record takes the guarded review save, so
+    // the test reads the wire answer of the store error directly.
+    let refused = crate::write_error::WriteError(refused);
+    assert_eq!(refused.status(), 400);
+    assert_eq!(
+        serde_json::to_value(&refused).unwrap(),
+        serde_json::json!({"kind":"invalid_update",
+            "message":"enrolled record req_a requires a guarded review save"})
+    );
     let other_record = staged_worker(&store, |staged, path| {
         staged.permitting(&[path], "req_b", |permitted| restate(permitted, path))
     })

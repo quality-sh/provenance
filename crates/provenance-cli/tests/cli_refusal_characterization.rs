@@ -1,6 +1,6 @@
-//! Characterization: the exit code and the standard error lines of each
-//! refused record command on the base commit, in text and in JSON format.
-//! Later changes to the store refusals keep these rows unchanged.
+//! The exit code and the standard error lines of each refused record command,
+//! in text and in JSON format. A test with no Rule is a characterization: its
+//! rows pin refusals that the store conversion keeps.
 
 use serde_json::{json, Value};
 
@@ -147,7 +147,7 @@ fn each_refused_record_command_keeps_its_exit_code_and_lines() {
     );
 }
 
-/// memu: a new link to an archived Requirement is `invalid_update` with the reason.
+/// A new link to an archived Requirement is `invalid_update` with the reason.
 #[test]
 fn a_new_link_to_an_archived_parent_keeps_its_reason() {
     let (_directory, repo) = support::review_paths::init();
@@ -277,7 +277,7 @@ fn a_bad_state_line_keeps_its_exit_code_and_lines() {
     );
 }
 
-/// e92s: `api` create with `source_refs` names the field, the accepted fields
+/// `api` create with `source_refs` names the field, the accepted fields
 /// and how to cite a Source.
 #[test]
 #[provenance_macros::verifies("rule_unknown_request_field_names_accepted_fields", examples)]
@@ -340,7 +340,7 @@ fn api_create_with_source_refs_names_the_unknown_field() {
     );
 }
 
-/// 8yzq: `get` on a Withdrawal that names no review submission gives the
+/// `get` on a Withdrawal that names no review submission gives the
 /// file and the line of the Withdrawal.
 #[test]
 #[provenance_macros::verifies("rule_inconsistent_records_refusal_names_records", examples)]

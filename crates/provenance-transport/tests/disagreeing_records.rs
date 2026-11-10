@@ -1,6 +1,6 @@
 //! Stored records that do not agree are `invalid_state_file`: the answer
 //! names the file and the line of the record at fault, and a message that
-//! names the records (8yzq).
+//! names the records.
 #![cfg(feature = "test-fixture")]
 
 mod support {

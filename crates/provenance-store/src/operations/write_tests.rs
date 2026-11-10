@@ -192,14 +192,20 @@ fn a_rule_declaration_that_names_another_id_is_a_typed_declaration_refusal() {
     store.apply_typed_spec(&scope, document()).unwrap();
     let mut input = document();
     input.rules[0].id = Some("rule_other".into());
+    let existing = store.list_rules(&scope).unwrap()[0].id.clone();
     let error = WriteError(store.apply_typed_spec(&scope, input).unwrap_err());
-    assert!(
-        error
-            .to_string()
-            .contains("already resolves to canonical id"),
-        "{error}"
+    assert_eq!(
+        error.to_string(),
+        format!(
+            "declaration `ready` already resolves to canonical id `{}`",
+            existing.as_str()
+        )
     );
-    assert!(matches!(error.safe(), WriteFailure::InvalidDeclaration));
+    assert_eq!(error.status(), 400);
+    assert_eq!(
+        serde_json::to_value(&error).unwrap(),
+        json!({"kind":"invalid_declaration"})
+    );
 }
 
 #[test]
@@ -226,9 +232,9 @@ fn two_stored_records_at_one_declaration_address_are_located_at_the_second_line(
         (file.as_str(), line),
         ("scopes/default/requirements/req.jsonl", 2)
     );
-    assert!(
-        message.ends_with("resolves to more than one canonical id"),
-        "{message}"
+    assert_eq!(
+        message,
+        "declaration `ready` resolves to more than one canonical id"
     );
 }
 

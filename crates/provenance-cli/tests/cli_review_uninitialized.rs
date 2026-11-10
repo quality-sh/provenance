@@ -1,5 +1,8 @@
-//! Characterization (pzm2): `provenance review` on a directory with no graph
-//! refuses before it serves a request, in the foreground and with `--detach`.
+//! Characterization with no Rule: `provenance review` on a directory with no
+//! graph refuses before it serves a request, in the foreground and with
+//! `--detach`. The manifest open that gives this refusal also holds a
+//! converted fault (a manifest path that is not a file), so the test keeps
+//! the refusal of a missing graph the same.
 
 mod support {
     pub mod review_paths;

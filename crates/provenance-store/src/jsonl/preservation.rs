@@ -312,6 +312,8 @@ fn top_level_members(line: &str) -> anyhow::Result<Scan> {
 mod tests {
     use super::{top_level_members, LoadedRecords, RawRecord};
 
+    /// Implementation aid with no Rule: the test builds the stored rows
+    /// directly.
     #[test]
     fn a_changed_record_with_a_stored_id_twice_is_located_at_the_second_line() {
         let mut loaded = LoadedRecords::default();
