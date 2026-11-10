@@ -133,10 +133,7 @@ impl World {
 
     /// The planted faults that turn off the section lock and the base check.
     const fn no_concurrency_control(&self) -> bool {
-        matches!(
-            self.plant,
-            Some(Plant::NoConcurrencyControl | Plant::ClockBackwards)
-        )
+        matches!(self.plant, Some(Plant::NoConcurrencyControl))
     }
 
     fn lock(&self) -> MutexGuard<'_, State> {
@@ -366,7 +363,11 @@ impl World {
                         Outcome::Unknown,
                     )
                 }
-                None if state.broken.as_ref().is_some_and(|key| touches(writes, key)) => {
+                None if state
+                    .broken
+                    .as_ref()
+                    .is_some_and(|key| touches(writes, key)) =>
+                {
                     let broken = state.broken.clone().expect("a broken key");
                     let landed = match writes.atomicity() {
                         Atomicity::PerKey => keys_in_order(writes)
@@ -390,6 +391,9 @@ impl World {
                         && !std::mem::replace(&mut state.planted, true);
                     if !lose {
                         writes.apply_to(&mut state.entries);
+                    }
+                    if self.plant == Some(Plant::BackdateMessage) {
+                        backdate_newest_message(&mut state.entries, writes);
                     }
                     let revision = StateView::new(state.entries.clone()).revision().clone();
                     (Ok(revision), Outcome::Landed)
@@ -430,6 +434,36 @@ impl World {
     }
 }
 
+/// Planted fault: sets the time of the newest message in each message shard
+/// that `writes` puts to zero.
+fn backdate_newest_message(entries: &mut BTreeMap<StateKey, Vec<u8>>, writes: &WriteSet) {
+    let shards = writes.puts().keys().filter(|key| {
+        key.as_str().contains("/threads/") && !key.as_str().ends_with("/threads.jsonl")
+    });
+    for key in shards {
+        let Some(bytes) = entries.get_mut(key) else {
+            continue;
+        };
+        let mut rows: Vec<serde_json::Value> = String::from_utf8_lossy(bytes)
+            .lines()
+            .filter_map(|line| serde_json::from_str(line).ok())
+            .collect();
+        let newest = rows
+            .iter_mut()
+            .filter(|row| row.get("body").is_some())
+            .max_by_key(|row| row["created_at"].as_i64());
+        if let Some(row) = newest {
+            row["created_at"] = 0.into();
+        }
+        let mut backdated = Vec::new();
+        for row in rows {
+            backdated.extend(serde_json::to_vec(&row).expect("JSON"));
+            backdated.push(b'\n');
+        }
+        *bytes = backdated;
+    }
+}
+
 /// Tells if `writes` puts or deletes `key`.
 fn touches(writes: &WriteSet, key: &StateKey) -> bool {
     writes.puts().contains_key(key) || writes.deletes().contains(key)
@@ -437,7 +471,11 @@ fn touches(writes: &WriteSet, key: &StateKey) -> bool {
 
 /// The keys of `writes` in key order.
 fn keys_in_order(writes: &WriteSet) -> Vec<&StateKey> {
-    let mut keys: Vec<&StateKey> = writes.deletes().iter().chain(writes.puts().keys()).collect();
+    let mut keys: Vec<&StateKey> = writes
+        .deletes()
+        .iter()
+        .chain(writes.puts().keys())
+        .collect();
     keys.sort();
     keys
 }

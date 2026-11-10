@@ -11,11 +11,11 @@ mod support {
     pub mod contract_laws;
 }
 
-use provenance_simulation::generate::{Case, Effect, Operation, Step, Task};
+use provenance_simulation::generate::{Case, Effect, Operation, Task};
 use provenance_simulation::laws::Violation;
 use provenance_simulation::{report, run_case, Config, Plant};
 use provenance_store::repository::Repository;
-use support::cases::{alone, write};
+use support::cases::alone;
 use support::contract::{apply_contract, CONTRACT};
 use support::contract_laws::{
     message_times_increase, no_write_failure_without_a_fault, stages_land_whole,
@@ -52,21 +52,16 @@ fn a_failed_read_breaks_o1() {
     expect_law(no_write_failure_without_a_fault(&run), "O1");
 }
 
-// No Rule: proof that O2 can fail. Two writers post at once with no section
-// lock and a clock that goes back, so the second message to land has the
-// earlier time.
+// No Rule: proof that O2 can fail. The storage sets the time of each
+// message that it lands to zero, so the second message has no later time.
 #[test]
 #[ignore = "a planted fault of the nightly simulation"]
-fn messages_that_land_out_of_time_order_break_o2() {
-    let mut steps = vec![
-        write(0, Operation::PostMessage),
-        write(1, Operation::PostMessage),
-    ];
-    for _ in 0..100 {
-        steps.extend([Step::Turn(0), Step::Turn(1)]);
-    }
-    let case = Case { engines: 2, steps };
-    let run = run_case(&case, planted(Some(Plant::ClockBackwards), "O2"));
+fn messages_without_later_times_break_o2() {
+    let case = Case {
+        engines: 2,
+        steps: alone(&[Operation::PostMessage, Operation::PostMessage]),
+    };
+    let run = run_case(&case, planted(Some(Plant::BackdateMessage), "O2"));
     expect_law(message_times_increase(&run), "O2");
 }
 

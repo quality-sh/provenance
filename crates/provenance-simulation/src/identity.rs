@@ -50,10 +50,6 @@ pub const INITIAL_STATE_IDS: u64 = 1 << 32;
 pub fn identity(plant: Option<Plant>) -> RepositoryIdentity {
     let clock: Arc<dyn Clock> = match plant {
         Some(Plant::SharedClock) => SHARED_CLOCK.clone(),
-        Some(Plant::ClockBackwards) => Arc::new(CountingClock {
-            seconds: AtomicI64::new(START_SECONDS),
-            step: -1,
-        }),
         _ => Arc::new(CountingClock {
             seconds: AtomicI64::new(START_SECONDS),
             step: 1,

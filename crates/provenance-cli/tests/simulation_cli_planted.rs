@@ -104,7 +104,10 @@ fn a_changed_projection_row_breaks_l6() {
         steps: vec![write(0, update(0))],
     };
     let mut fixture = run_steps(&case);
-    let (from, to) = (b"Description from operation 1", b"Xescription from operation 1");
+    let (from, to) = (
+        b"Description from operation 1",
+        b"Xescription from operation 1",
+    );
     let mut changed = 0;
     let cache = fixture.repo.layout.cache_dir();
     for entry in std::fs::read_dir(cache.as_std_path()).expect("a projection directory") {
@@ -113,7 +116,10 @@ fn a_changed_projection_row_breaks_l6() {
             continue;
         };
         let mut at = 0;
-        while let Some(found) = bytes[at..].windows(from.len()).position(|part| part == from) {
+        while let Some(found) = bytes[at..]
+            .windows(from.len())
+            .position(|part| part == from)
+        {
             let start = at + found;
             bytes[start..start + to.len()].copy_from_slice(to);
             at = start + to.len();

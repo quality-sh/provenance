@@ -15,10 +15,9 @@ pub enum Plant {
     NoConcurrencyControl,
     /// The first read of an engine fails (O1).
     FailRead,
-    /// The clock goes back one second at each read, the section lock holds
-    /// nothing and a publish lands on any base, so two writers can land
-    /// messages out of time order (O2).
-    ClockBackwards,
+    /// The storage sets the time of the newest message of each set that it
+    /// lands to zero, so a later message has no later time (O2).
+    BackdateMessage,
     /// The clock continues from the last run, so two runs of one case write
     /// other times (L8).
     SharedClock,
