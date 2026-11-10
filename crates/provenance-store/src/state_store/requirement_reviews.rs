@@ -166,10 +166,12 @@ impl RequirementReviewInput {
     }
 }
 
-/// Milliseconds since the Unix epoch.
+/// Milliseconds since the Unix epoch. The time crate reads the clock through
+/// JavaScript on wasm32, so this also works in a Worker.
+#[rule("rule_store_time_works_in_a_worker")]
 pub fn now_millis() -> anyhow::Result<i64> {
-    let duration = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?;
-    i64::try_from(duration.as_millis()).map_err(Into::into)
+    let nanos = time::OffsetDateTime::now_utc().unix_timestamp_nanos();
+    i64::try_from(nanos / 1_000_000).map_err(Into::into)
 }
 
 /// Identifies one review by the Rule and the exact change that raised it.
