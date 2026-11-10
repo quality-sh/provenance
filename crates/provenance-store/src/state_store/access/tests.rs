@@ -227,3 +227,61 @@ fn a_fenced_store_refuses_a_read_outside_its_directories() {
         "{error:#}"
     );
 }
+
+/// The full reads and the hashes of the state tree that `run` makes on this
+/// thread.
+fn tree_reads_and_hashes<R>(run: impl FnOnce() -> R) -> (R, [usize; 2]) {
+    let counts = std::rc::Rc::new(std::cell::Cell::new([0, 0]));
+    for (label, index) in [("state_tree_read", 0), ("state_tree_hashed", 1)] {
+        let counts = counts.clone();
+        crate::test_probes::arm(label, move || {
+            let mut now = counts.get();
+            now[index] += 1;
+            counts.set(now);
+            Ok(())
+        });
+    }
+    let result = run();
+    crate::test_probes::disarm("state_tree_read");
+    crate::test_probes::disarm("state_tree_hashed");
+    (result, counts.get())
+}
+
+/// Implementation aid: a record save reads the tree for the section view and
+/// for the base check, and hashes nothing. No Rule binds it.
+#[test]
+fn a_record_save_in_a_live_section_reads_the_tree_twice_and_hashes_nothing() {
+    let (_dir, store, scope) = seeded_source_requirement_store();
+    let repository = open(&store.layout);
+    let counts = crate::publication::with_publication_guard(&repository, |guard| {
+        let live = guard.repository().store();
+        let (saved, counts) = tree_reads_and_hashes(|| {
+            live.update_requirement(serde_json::from_value(serde_json::json!({
+                "scope_id": scope.as_str(), "id": "req_overtime", "description": "Changed"
+            }))?)
+        });
+        assert_eq!(saved?.description.as_deref(), Some("Changed"));
+        Ok(counts)
+    })
+    .unwrap();
+    assert_eq!(counts, [2, 0], "full reads and hashes of the state tree");
+}
+
+/// Implementation aid: a per-key write with no view in the section reads and
+/// hashes nothing. No Rule binds it.
+#[test]
+fn a_per_key_write_before_any_read_in_the_section_reads_and_hashes_nothing() {
+    let (_dir, store, _scope) = seeded_source_requirement_store();
+    let repository = open(&store.layout);
+    let path = store.layout.state_dir().join("write_probe.jsonl");
+    let counts = crate::publication::with_publication_guard(&repository, |guard| {
+        let live = guard.repository().store();
+        let (written, counts) =
+            tree_reads_and_hashes(|| live.publish_shard(&path, b"\"written\"\n".to_vec()));
+        written?;
+        Ok(counts)
+    })
+    .unwrap();
+    assert_eq!(counts, [0, 0], "full reads and hashes of the state tree");
+    assert_eq!(std::fs::read_to_string(path).unwrap(), "\"written\"\n");
+}

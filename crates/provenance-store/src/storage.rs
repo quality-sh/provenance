@@ -68,6 +68,8 @@ impl Revision {
     /// with their lengths, so no two trees share a revision by a shift of
     /// bytes between a key and its contents.
     pub fn of(entries: &BTreeMap<StateKey, Vec<u8>>) -> Self {
+        // The probe only counts hashes in lib tests, and it cannot fail there.
+        drop(crate::test_probes::at("state_tree_hashed"));
         let mut digest = Sha256::new();
         for (key, bytes) in entries {
             digest.update((key.0.len() as u64).to_le_bytes());

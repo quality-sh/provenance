@@ -54,6 +54,7 @@ impl LocalStateStorage {
 
 impl StateStorage for LocalStateStorage {
     fn read_view(&self) -> Result<StateView, StorageError> {
+        crate::test_probes::at("state_tree_read").map_err(StorageError::Read)?;
         let mut entries = BTreeMap::new();
         let state = self.layout.state_dir();
         if state.try_exists().map_err(read_error(&state))? {
