@@ -31,7 +31,7 @@ pub fn request(args: &ApiArgs) -> Result<ApiRequest, Refused> {
     let query =
         pairs(&args.queries, '=', "query options use NAME=VALUE").map_err(|name| Refused {
             error: ApiError::invalid_options(Some("query")),
-            hint: Some(repeated_query_hint(args, &name)),
+            hint: repeated_query_hint(args, &name),
         })?;
     let arguments = ApiArguments {
         path: args.path.clone(),
@@ -71,34 +71,34 @@ fn pairs(raw: &[String], separator: char, usage: &str) -> Result<BTreeMap<String
     Ok(pairs)
 }
 
-/// The correction for a query parameter that the caller gave more than once.
+/// The correction for a query parameter that the caller gave more than once,
+/// when a route matches the path. With no path or no route, one use of the
+/// parameter also fails, so there is no correction to give.
 ///
 /// The api takes each query parameter one time. Only a parameter whose
 /// query schema is an array takes its items as one comma-separated value.
-fn repeated_query_hint(args: &ApiArgs, name: &str) -> String {
-    let once = format!("--query {name} occurs more than one time; give each parameter one time");
+fn repeated_query_hint(args: &ApiArgs, name: &str) -> Option<String> {
     let selector = args.queries.iter().find_map(|entry| {
         entry
             .split_once('=')
             .filter(|(key, _)| key.trim() == "query")
             .map(|(_, value)| value.trim())
     });
-    let takes_list = args.path.as_deref().is_some_and(|path| {
-        provenance_transport::porcelain::api_port::query_takes_list(
-            args.method.unwrap_or_default(),
-            path,
-            selector,
-            name,
-        )
-    });
-    if takes_list {
+    let takes_list = provenance_transport::porcelain::api_port::query_takes_list(
+        args.method.unwrap_or_default(),
+        args.path.as_deref()?,
+        selector,
+        name,
+    )?;
+    let once = format!("--query {name} occurs more than one time; give each parameter one time");
+    Some(if takes_list {
         format!(
             "{once} and put the items of a list in one comma-separated value, \
              for example --query {name}=a,b"
         )
     } else {
         once
-    }
+    })
 }
 
 fn read_body(input: &str) -> serde_json::Map<String, serde_json::Value> {

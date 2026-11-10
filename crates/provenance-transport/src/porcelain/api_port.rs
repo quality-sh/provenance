@@ -78,16 +78,19 @@ fn header_map(
     Ok(map)
 }
 
-/// Whether one query parameter of a public route takes a list of values.
+/// Whether one query parameter of a public route takes a list of values, or
+/// `None` when no route matches `method` and `path`.
 ///
-/// The route is the one at `method` and `path`. The `query` value of the
-/// call selects the form of the route. With no `query` value, each form of
-/// the route counts.
-pub fn query_takes_list(method: ApiMethod, path: &str, selector: Option<&str>, name: &str) -> bool {
-    let Some(matched) = crate::routing::find(&http_method(method), path) else {
-        return false;
-    };
-    let definition = matched.definition;
+/// The `query` value of the call selects the form of the route. With no
+/// `query` value, the first schema of each name in the forms of the route
+/// counts.
+pub fn query_takes_list(
+    method: ApiMethod,
+    path: &str,
+    selector: Option<&str>,
+    name: &str,
+) -> Option<bool> {
+    let definition = crate::routing::find(&http_method(method), path)?.definition;
     let variants = definition.query_variants();
     let parameters = match selector {
         Some(_) if !variants.is_empty() => variants
@@ -97,11 +100,11 @@ pub fn query_takes_list(method: ApiMethod, path: &str, selector: Option<&str>, n
             .collect(),
         _ => definition.parameters(),
     };
-    parameters.iter().any(|parameter| {
+    Some(parameters.iter().any(|parameter| {
         parameter.name == name
             && parameter.location == "query"
             && parameter.schema.get("type").and_then(Value::as_str) == Some("array")
-    })
+    }))
 }
 
 const fn http_method(method: ApiMethod) -> axum::http::Method {

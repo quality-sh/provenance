@@ -93,10 +93,13 @@ pub(super) fn names_object(root: &Value, schema: &Value) -> bool {
 }
 
 /// The closed set of values of the schema, in schema order, when each branch
-/// is an `enum` or a `const`. Otherwise `None`.
+/// that is not `null` is an `enum` or a `const`. Otherwise `None`.
 fn closed_values(root: &Value, schema: &Value) -> Option<Vec<String>> {
     let mut values: Vec<String> = Vec::new();
     for branch in branches(root, schema) {
+        if branch.get("type").and_then(Value::as_str) == Some("null") {
+            continue;
+        }
         let words: Vec<&Value> = match (branch.get("enum"), branch.get("const")) {
             (Some(Value::Array(words)), _) => words.iter().collect(),
             (None, Some(word)) => vec![word],
