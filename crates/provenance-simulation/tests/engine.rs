@@ -14,15 +14,14 @@ use hegel::TestCase;
 use provenance_macros::verifies;
 use provenance_simulation::generate::{Case, Effect, Fault, Operation, Step};
 use provenance_simulation::storage::Outcome;
-use provenance_simulation::{check_case, laws, run_case, stats, Config, Run};
+use provenance_simulation::{check_case, check_probe, laws, report, run_case, Config, Run};
 use support::cases::{alone, each_operation, moved_base_case, write};
 
 #[hegel::test]
 #[ignore = "random cases run nightly: cargo nextest run --profile simulation --run-ignored all"]
 #[verifies("rule_write_sets_publish_through_the_storage_port", property)]
 fn random_cases_keep_the_laws(tc: TestCase) {
-    let run = check_case("engine", &Case::draw(&tc), Config::default());
-    stats::count_case("engine", &run);
+    check_case("engine", &Case::draw(&tc), Config::default());
 }
 
 fn met(run: &Run, outcome: Outcome) -> bool {
@@ -42,7 +41,8 @@ fn the_write_after_a_moved_base_lands() {
         "{:?}",
         run.done
     );
-    laws::check(&run).unwrap();
+    let test = "the_write_after_a_moved_base_lands";
+    report::probe("engine", test, laws::check(&run));
 }
 
 // No Rule: a probe that each fault of the generator meets an engine.
@@ -70,7 +70,8 @@ fn a_case_with_every_fault_keeps_the_laws() {
         write(2, Operation::ReleaseTopic),
     ]);
     let case = Case { engines: 3, steps };
-    let run = check_case("engine", &case, Config::default());
+    let test = "a_case_with_every_fault_keeps_the_laws";
+    let run = check_probe("engine", test, &case, Config::default());
     assert!(
         met(&run, Outcome::Unknown),
         "no unknown outcome: {:?}",
@@ -105,7 +106,8 @@ fn an_unknown_outcome_lands_a_prefix_and_keeps_the_laws() {
         };
         let run = run_case(&case, Config::default());
         assert!(met(&run, Outcome::Unknown), "the fault met a publish");
-        laws::check(&run).unwrap();
+        let test = "an_unknown_outcome_lands_a_prefix_and_keeps_the_laws";
+        report::probe("engine", test, laws::check(&run));
     }
 }
 
@@ -118,7 +120,8 @@ fn each_operation_runs_on_the_engine() {
         engines: 2,
         steps: alone(&ops),
     };
-    let run = check_case("engine", &case, Config::default());
+    let test = "each_operation_runs_on_the_engine";
+    let run = check_probe("engine", test, &case, Config::default());
     let ran: Vec<_> = run.done.iter().map(|done| &done.op).collect();
     assert_eq!(ran, ops.iter().collect::<Vec<_>>());
     for done in &run.done {

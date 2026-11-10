@@ -47,8 +47,8 @@ pub struct Config {
 }
 
 impl Config {
-    /// A run of a planted fault or of one law writes no failure file, so
-    /// that the nightly report opens no issue for it.
+    /// A run of a planted fault or of one law writes no failure file and
+    /// no count, so that the nightly report opens no issue for it.
     pub const fn writes_failure_files(&self) -> bool {
         self.plant.is_none() && self.only_law.is_none()
     }
@@ -81,10 +81,9 @@ pub struct Run {
     pub entries: BTreeMap<StateKey, Vec<u8>>,
 }
 
-/// Runs `case` twice and checks every law; a broken law fails the test case
-/// with a report that names the law and replays the case. Returns the first
-/// run.
-pub fn check_case(layer: &str, case: &Case, config: Config) -> Run {
+/// Runs `case` twice and checks the laws of `config`. Returns the first run
+/// and the first broken law.
+fn verdict(case: &Case, config: Config) -> (Run, Result<(), laws::Violation>) {
     let first = run_case(case, config);
     let layer_laws = |run: &Run| config.layer_laws.map_or(Ok(()), |laws| laws(run));
     let verdict = match config.only_law {
@@ -95,8 +94,32 @@ pub fn check_case(layer: &str, case: &Case, config: Config) -> Run {
         Some(law) if law.starts_with('O') => layer_laws(&first),
         Some(law) => laws::check_only(&first, law),
     };
-    if let Err(violation) = verdict {
-        report::fail(layer, case, &violation, config.writes_failure_files());
+    (first, verdict)
+}
+
+/// Runs a random case twice and checks every law. A broken law fails the
+/// test case with a report that names the law and replays the case. A run
+/// of a planted fault or of one law fails with a text that the nightly
+/// report does not read. Returns the first run.
+pub fn check_case(layer: &str, case: &Case, config: Config) -> Run {
+    let (first, verdict) = verdict(case, config);
+    if config.writes_failure_files() {
+        stats::count_case(layer, &first);
     }
+    if let Err(violation) = verdict {
+        if config.writes_failure_files() {
+            report::fail(layer, case, &violation);
+        }
+        report::planted_fail(layer, &violation);
+    }
+    first
+}
+
+/// Runs the fixed case of probe `test` twice and checks every law. A broken
+/// law fails the probe with the law and the replay line of the probe, and
+/// writes no failure file. Returns the first run.
+pub fn check_probe(layer: &str, test: &str, case: &Case, config: Config) -> Run {
+    let (first, verdict) = verdict(case, config);
+    report::probe(layer, test, verdict);
     first
 }

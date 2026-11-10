@@ -14,7 +14,7 @@ mod support {
 
 use hegel::TestCase;
 use provenance_simulation::generate::{Case, Effect, Operation, Step, SCOPE};
-use provenance_simulation::{check_case, laws, run_case, stats};
+use provenance_simulation::{check_case, check_probe, laws, report, run_case};
 use provenance_store::repository::Repository;
 use provenance_store::storage::memory::{MemorySectionLock, MemoryStateStorage};
 use serde_json::json;
@@ -27,8 +27,7 @@ use support::contract_laws::contract_laws;
 #[hegel::test]
 #[ignore = "random cases run nightly: cargo nextest run --profile simulation --run-ignored all"]
 fn random_cases_keep_the_laws_through_the_contract(tc: TestCase) {
-    let run = check_case("contract", &Case::draw(&tc), CONTRACT);
-    stats::count_case("contract", &run);
+    check_case("contract", &Case::draw(&tc), CONTRACT);
 }
 
 /// A repository over the memory storage with one scope and nothing else.
@@ -98,8 +97,9 @@ fn a_stale_update_through_the_contract_is_a_conflict() {
         matches!(results[1], Err(text) if text.starts_with(&refusal_prefix(409))),
         "{results:?}"
     );
-    laws::check(&run).unwrap();
-    contract_laws(&run).unwrap();
+    let test = "a_stale_update_through_the_contract_is_a_conflict";
+    let verdict = laws::check(&run).and_then(|()| contract_laws(&run));
+    report::probe("contract", test, verdict);
 }
 
 // No Rule: a probe that each operation of the generator answers through the
@@ -123,5 +123,6 @@ fn each_operation_runs_through_the_contract() {
             done.result
         );
     }
-    check_case("contract", &case, CONTRACT);
+    let test = "each_operation_runs_through_the_contract";
+    check_probe("contract", test, &case, CONTRACT);
 }

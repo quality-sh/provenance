@@ -6,8 +6,8 @@
 //! choice sequence that replays the case on any system; the seed repeats a
 //! run only on one build. With `SIMULATION_FAILURE_DIR` set, the report of a
 //! random case is also written as JSON to `<dir>/<layer>-<law>.json`. A
-//! planted run writes no file, so that the nightly report opens no issue for
-//! it.
+//! planted run and a probe write no file. A probe that breaks a law prints
+//! the law and the command that runs the probe.
 
 use crate::generate::Case;
 use crate::laws::Violation;
@@ -42,29 +42,37 @@ fn random_test(layer: &str) -> &'static str {
     }
 }
 
+/// The command that runs `test` of the test binary of `layer`. The tests
+/// are ignored tests, so the command gives `--run-ignored all`. A CLI run
+/// that checks L6 only at the end of each case gives `SIMULATION_L6=end`.
+fn test_command(layer: &str, test: &str) -> String {
+    let (package, binary, l6) = if layer.starts_with("cli-") {
+        let end = std::env::var("SIMULATION_L6").is_ok_and(|l6| l6 == "end");
+        let l6 = if end { "SIMULATION_L6=end " } else { "" };
+        ("provenance-cli", "simulation_cli", l6)
+    } else {
+        ("provenance-simulation", layer, "")
+    };
+    format!(
+        "{l6}cargo nextest run --profile simulation --run-ignored all -p {package} --test {binary} -E 'test(={test})'"
+    )
+}
+
 /// The command that runs the random test of `layer` again with the seed and
-/// the case count of this run. The random tests are ignored tests, so the
-/// command gives `--run-ignored all`.
+/// the case count of this run.
 pub fn replay_line(layer: &str, seed: Option<&str>) -> String {
     let seed = seed.unwrap_or("<seed>");
     let cases = std::env::var("HEGEL_TEST_CASES")
         .ok()
         .filter(|cases| !cases.is_empty())
         .map_or_else(String::new, |cases| format!(" HEGEL_TEST_CASES={cases}"));
-    let (package, binary) = if layer.starts_with("cli-") {
-        ("provenance-cli", "simulation_cli")
-    } else {
-        ("provenance-simulation", layer)
-    };
-    let test = random_test(layer);
-    format!(
-        "HEGEL_SEED={seed}{cases} cargo nextest run --profile simulation --run-ignored all -p {package} --test {binary} -E 'test(={test})'"
-    )
+    let command = test_command(layer, random_test(layer));
+    format!("HEGEL_SEED={seed}{cases} {command}")
 }
 
-/// Fails the test case with the report of `violation`. With `write_file`,
-/// the report also goes to the failure directory.
-pub fn fail(layer: &str, case: &Case, violation: &Violation, write_file: bool) -> ! {
+/// Fails the random test case with the report of `violation`, and writes
+/// the report to the failure directory.
+pub fn fail(layer: &str, case: &Case, violation: &Violation) -> ! {
     let seed = seed();
     let failure = Failure {
         layer,
@@ -75,15 +83,13 @@ pub fn fail(layer: &str, case: &Case, violation: &Violation, write_file: bool) -
         case,
     };
     let json = serde_json::to_string_pretty(&failure).expect("a failure is JSON");
-    if write_file {
-        if let Some(directory) = std::env::var_os("SIMULATION_FAILURE_DIR") {
-            let path =
-                std::path::Path::new(&directory).join(format!("{layer}-{}.json", violation.law));
-            if let Err(error) =
-                std::fs::create_dir_all(&directory).and_then(|()| std::fs::write(&path, &json))
-            {
-                eprintln!("could not write {}: {error}", path.display());
-            }
+    if let Some(directory) = std::env::var_os("SIMULATION_FAILURE_DIR") {
+        let path =
+            std::path::Path::new(&directory).join(format!("{layer}-{}.json", violation.law));
+        if let Err(error) =
+            std::fs::create_dir_all(&directory).and_then(|()| std::fs::write(&path, &json))
+        {
+            eprintln!("could not write {}: {error}", path.display());
         }
     }
     panic!(
@@ -93,6 +99,31 @@ pub fn fail(layer: &str, case: &Case, violation: &Violation, write_file: bool) -
         seed = failure.seed.as_deref().unwrap_or("none (derandomized or random)"),
         replay = failure.replay,
     );
+}
+
+/// Fails a run of a planted fault or of one law with the law that it saw.
+/// The text does not match a broken-law line of the nightly report, and the
+/// run writes no failure file.
+pub fn planted_fail(layer: &str, violation: &Violation) -> ! {
+    panic!(
+        "planted run in layer {layer}: law {law} reported: {detail}",
+        law = violation.law,
+        detail = violation.detail,
+    );
+}
+
+/// Fails probe `test` of `layer` when `verdict` is a broken law. The text
+/// names the law and gives the command that runs the probe. A probe writes
+/// no failure file; the nightly report reads this text.
+pub fn probe(layer: &str, test: &str, verdict: Result<(), Violation>) {
+    if let Err(violation) = verdict {
+        panic!(
+            "simulation probe {test} broke law {law} in layer {layer}: {detail}\nreplay: {replay}",
+            law = violation.law,
+            detail = violation.detail.replace('\n', " "),
+            replay = test_command(layer, test),
+        );
+    }
 }
 
 /// Fails a planted test whose law did not see its planted fault. The

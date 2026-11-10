@@ -45,34 +45,7 @@ use hegel::{Hegel, NondeterminismStrictness, Settings, TestCase};
 use laws::{check, Ran};
 use process::layer;
 use provenance_simulation::generate::{Case, Fault, Operation, Step};
-use provenance_simulation::laws::Violation;
 use provenance_simulation::report;
-use std::path::Path;
-
-/// Fails the case with the report of `violation`.
-fn fail(case: &Case, violation: &Violation) -> ! {
-    let layer = layer();
-    let seed = report::seed();
-    let failure = report::Failure {
-        layer: &layer,
-        law: violation.law,
-        detail: &violation.detail,
-        replay: report::replay_line(&layer, seed.as_deref()),
-        seed,
-        case,
-    };
-    let json = serde_json::to_string_pretty(&failure).expect("a failure is JSON");
-    if let Some(directory) = std::env::var_os("SIMULATION_FAILURE_DIR") {
-        let path = Path::new(&directory).join(format!("{layer}-{}.json", violation.law));
-        let written = std::fs::create_dir_all(&directory);
-        if let Err(error) = written.and_then(|()| std::fs::write(path, &json)) {
-            eprintln!("could not write the failure: {error}");
-        }
-    }
-    let (law, detail, replay) = (violation.law, &violation.detail, &failure.replay);
-    let text = format!("{detail}\nreplay: {replay}\nsteps: {json}");
-    panic!("simulation law {law} broken in layer {layer}: {text}");
-}
 
 // No Rule: L3, L4, L6 and L7 have their basis tests; this is the random
 // check of the plan on each system.
@@ -83,7 +56,7 @@ fn random_cases_keep_the_laws_through_the_cli() {
     Hegel::new(|tc: TestCase| {
         let case = Case::draw(&tc);
         if let Err(violation) = check(&case, &run_cli(&case)) {
-            fail(&case, &violation);
+            report::fail(&layer(), &case, &violation);
         }
     })
     .settings(settings)
@@ -117,7 +90,8 @@ fn each_operation_writes_through_the_cli() {
     let done: Vec<_> = run.groups.iter().flat_map(|(_, done)| done).collect();
     assert_eq!(done.len(), 7, "{done:?}");
     assert!(done.iter().all(|done| done.result.is_ok()), "{done:?}");
-    check(&case, &run).unwrap();
+    let test = "each_operation_writes_through_the_cli";
+    report::probe(&layer(), test, check(&case, &run));
 }
 
 // No Rule: a probe that two updates at once on one etag have one winner.
@@ -131,7 +105,8 @@ fn two_updates_at_once_have_one_winner() {
     assert_eq!(*way, Ran::AtOnce);
     let won = done.iter().filter(|done| done.result.is_ok()).count();
     assert_eq!(won, 1, "{done:?}");
-    check(&case, &run).unwrap();
+    let test = "two_updates_at_once_have_one_winner";
+    report::probe(&layer(), test, check(&case, &run));
 }
 
 // No Rule: a probe that a write on a branch merges through `provenance
@@ -151,5 +126,6 @@ fn a_merged_branch_and_a_stopped_write_keep_the_laws() {
     assert_eq!(ways, [Ran::Alone, Ran::Outside, Ran::Stopped]);
     let (_, outside) = &run.groups[1];
     assert!(outside[0].result.is_ok(), "{outside:?}");
-    check(&case, &run).unwrap();
+    let test = "a_merged_branch_and_a_stopped_write_keep_the_laws";
+    report::probe(&layer(), test, check(&case, &run));
 }

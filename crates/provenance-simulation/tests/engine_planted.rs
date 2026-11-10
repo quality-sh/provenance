@@ -103,7 +103,7 @@ fn random_planted_cases_repeat_by_seed_and_replay_by_blob() {
         (&second.0, &second.1),
         "one seed gives one report"
     );
-    if !message.contains("simulation law L5") {
+    if !message.contains("law L5 reported") {
         report::check_broken("L5", &message);
     }
     let report = first.join("\n");
