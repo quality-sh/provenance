@@ -11,24 +11,39 @@ use std::process::Output;
 #[allow(dead_code)]
 mod dictionary_support;
 
+/// The bin file of the project package.
+const PACKAGE_BIN: &str = "node_modules/@quality-sh/provenance/bin/provenance.mjs";
+
 /// The package manager, the executable that the test looks for on PATH, and
 /// the command that runs the project package through that package manager.
 const MANAGERS: [(&str, &str, &str); 6] = [
-    ("npm", "npx", "npx --no -- provenance"),
+    (
+        "npm",
+        "node",
+        "node node_modules/@quality-sh/provenance/bin/provenance.mjs",
+    ),
     ("pnpm", "pnpm", "pnpm exec ./node_modules/.bin/provenance"),
     ("yarn", "yarn", "yarn run -B provenance"),
-    ("bun", "bunx", "bunx --no-install provenance"),
+    (
+        "bun",
+        "bun",
+        "bun node_modules/@quality-sh/provenance/bin/provenance.mjs",
+    ),
     (
         "deno",
         "deno",
         "deno task --node-modules-dir=manual --eval \"./node_modules/.bin/provenance\"",
     ),
-    ("nub", "nub", "nub exec provenance"),
+    (
+        "nub",
+        "nub",
+        "nub node_modules/@quality-sh/provenance/bin/provenance.mjs",
+    ),
 ];
 
-/// Yarn and Nub find a binary only through a real package installation, so
-/// this test does not run their commands.
-const RUN_WITH_PROJECT_BINARY: [&str; 4] = ["npm", "pnpm", "bun", "deno"];
+/// Yarn finds a binary only through a real package installation, so this test
+/// does not run its commands with the project binary.
+const RUN_WITH_PROJECT_BINARY: [&str; 5] = ["npm", "pnpm", "bun", "deno", "nub"];
 
 #[test]
 #[verifies("rule_init_typescript_local_command", examples)]
@@ -140,20 +155,28 @@ fn typescript_skill_conflict_names_the_package_manager_command() {
     assert_eq!(std::fs::read_to_string(skill).unwrap(), edited);
 }
 
-/// When the project package is missing, the npm command fails and does not run
-/// a `provenance` executable from PATH. The npm cache of this run is empty, so
-/// the result does not depend on the npx cache of the host.
+/// When the project package is missing, the command of each package manager on
+/// this host fails and does not run a `provenance` executable from PATH. The
+/// npm cache of each run is empty, so the result does not depend on the npx
+/// cache of the host.
 #[cfg(unix)]
 #[test]
 #[verifies("rule_init_typescript_local_command", examples)]
-fn npm_command_does_not_select_a_provenance_executable_from_path() {
+fn missing_package_command_does_not_select_a_provenance_executable_from_path() {
+    for (manager, executable, prefix) in MANAGERS {
+        if on_path(executable) {
+            assert_missing_package_fails(manager, prefix);
+            eprintln!("{manager}: the command failed and the PATH executable did not run");
+        } else {
+            eprintln!("{manager}: {executable} is not on PATH, so the test did not run it");
+        }
+    }
+}
+
+#[cfg(unix)]
+fn assert_missing_package_fails(manager: &str, prefix: &str) {
     use std::os::unix::fs::PermissionsExt;
 
-    let (manager, executable, prefix) = MANAGERS[0];
-    if !on_path(executable) {
-        eprintln!("{manager}: {executable} is not on PATH, so the test did not run it");
-        return;
-    }
     let temporary = tempfile::tempdir().unwrap();
     let project = temporary.path().join("project");
     std::fs::create_dir(&project).unwrap();
@@ -187,7 +210,7 @@ fn npm_command_does_not_select_a_provenance_executable_from_path() {
 
     assert!(
         !output.status.success(),
-        "{}",
+        "{manager}: {}",
         String::from_utf8_lossy(&output.stdout)
     );
     assert!(!selected.exists(), "{manager}: the PATH executable ran");
@@ -280,9 +303,9 @@ fn printed(output: &Output) -> String {
 /// directory, with or without a user identity.
 fn typescript_project(temporary: &Path, git_identity: bool) -> PathBuf {
     let repo = temporary.join("repo");
-    std::fs::create_dir_all(repo.join("node_modules/.bin")).unwrap();
+    std::fs::create_dir(&repo).unwrap();
     write_package_json(&repo);
-    link_project_binary(&repo.join("node_modules/.bin/provenance"));
+    link_project_binary(&repo);
     let identity = if git_identity {
         "[user]\n\temail = reviewer@example.com\n"
     } else {
@@ -382,7 +405,7 @@ fn provenance_commands(markdown: &str) -> Vec<String> {
 fn names_provenance_program(word: &str) -> bool {
     matches!(
         word.trim_matches('"'),
-        "provenance" | "./node_modules/.bin/provenance"
+        "provenance" | "./node_modules/.bin/provenance" | PACKAGE_BIN
     )
 }
 
@@ -414,16 +437,27 @@ fn shell(directory: &Path, command: &str) -> std::process::Command {
     shell
 }
 
-/// Puts the CLI under test where the package manager installs the package binary.
+/// Puts the CLI under test where the package manager installs the package
+/// binary, and a bin file that starts it where the package has its bin file.
 #[cfg(unix)]
-fn link_project_binary(path: &Path) {
-    std::os::unix::fs::symlink(
-        PathBuf::from(assert_cmd::cargo::cargo_bin!("provenance")),
-        path,
+fn link_project_binary(repo: &Path) {
+    let cli = PathBuf::from(assert_cmd::cargo::cargo_bin!("provenance"));
+    std::fs::create_dir_all(repo.join("node_modules/.bin")).unwrap();
+    std::os::unix::fs::symlink(&cli, repo.join("node_modules/.bin/provenance")).unwrap();
+    let bin = repo.join(PACKAGE_BIN);
+    std::fs::create_dir_all(bin.parent().unwrap()).unwrap();
+    std::fs::write(
+        bin,
+        format!(
+            "import {{ spawnSync }} from \"node:child_process\";\n\
+             const result = spawnSync({:?}, process.argv.slice(2), {{ stdio: \"inherit\" }});\n\
+             process.exit(result.status ?? 1);\n",
+            cli.display().to_string()
+        ),
     )
     .unwrap();
 }
 
 /// This host does not run the commands, so the project needs no binary.
 #[cfg(not(unix))]
-fn link_project_binary(_path: &Path) {}
+fn link_project_binary(_repo: &Path) {}
