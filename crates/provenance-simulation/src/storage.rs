@@ -120,6 +120,14 @@ impl World {
         })
     }
 
+    /// The planted faults that turn off the section lock and the base check.
+    fn no_concurrency_control(&self) -> bool {
+        matches!(
+            self.plant,
+            Some(Plant::NoConcurrencyControl | Plant::ClockBackwards)
+        )
+    }
+
     fn lock(&self) -> MutexGuard<'_, State> {
         self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
@@ -301,7 +309,7 @@ impl World {
         let mut state = self.wait_for_turn().unwrap_or_else(|| self.lock());
         let (engine, operation) = current_engine().map_or((None, 0), |(s, o)| (Some(s), o));
         let current = StateView::new(state.entries.clone());
-        let checks_base = self.plant != Some(Plant::NoConcurrencyControl);
+        let checks_base = !self.no_concurrency_control();
         let moved = writes.base().is_some_and(|base| base != current.revision());
         let (result, outcome) = if checks_base && moved {
             if let Some(slot) = engine {
@@ -319,17 +327,12 @@ impl World {
                 state.stale.remove(&slot);
             }
             match state.armed.take() {
-                Some(Armed::Refuse) => {
-                    if self.plant == Some(Plant::LandRefused) {
-                        writes.apply_to(&mut state.entries);
-                    }
-                    (
-                        Err(PublishFailure::Refused(anyhow::anyhow!(
-                            "the simulated storage refused the set"
-                        ))),
-                        Outcome::Refused,
-                    )
-                }
+                Some(Armed::Refuse) => (
+                    Err(PublishFailure::Refused(anyhow::anyhow!(
+                        "the simulated storage refused the set"
+                    ))),
+                    Outcome::Refused,
+                ),
                 Some(Armed::Unknown { landed }) => {
                     land_prefix(&mut state.entries, writes, landed);
                     (
@@ -370,7 +373,7 @@ impl World {
         };
         loop {
             let mut state = self.wait_for_turn().expect("an engine thread");
-            if self.plant == Some(Plant::NoConcurrencyControl) {
+            if self.no_concurrency_control() {
                 return Box::new(());
             }
             if state.holder.is_none() {

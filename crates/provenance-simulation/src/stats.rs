@@ -15,15 +15,18 @@ static COUNTS: Mutex<BTreeMap<String, BTreeMap<&'static str, u64>>> =
 /// Adds `amount` to the count `name` of `layer` and writes the counts of the
 /// layer.
 pub fn add(layer: &str, name: &'static str, amount: u64) {
-    let mut counts = COUNTS.lock().unwrap_or_else(PoisonError::into_inner);
-    let layer_counts = counts.entry(layer.to_owned()).or_default();
-    *layer_counts.entry(name).or_default() += amount;
+    let json = {
+        let mut counts = COUNTS.lock().unwrap_or_else(PoisonError::into_inner);
+        let layer_counts = counts.entry(layer.to_owned()).or_default();
+        *layer_counts.entry(name).or_default() += amount;
+        serde_json::to_string_pretty(layer_counts).expect("counts are JSON")
+    };
     let Some(directory) = std::env::var_os("SIMULATION_STATS_DIR") else {
         return;
     };
     let path = std::path::Path::new(&directory).join(format!("{layer}.json"));
-    let json = serde_json::to_string_pretty(layer_counts).expect("counts are JSON");
-    if let Err(error) = std::fs::create_dir_all(&directory).and_then(|()| std::fs::write(&path, json)) {
+    let written = std::fs::create_dir_all(&directory).and_then(|()| std::fs::write(&path, json));
+    if let Err(error) = written {
         eprintln!("could not write {}: {error}", path.display());
     }
 }

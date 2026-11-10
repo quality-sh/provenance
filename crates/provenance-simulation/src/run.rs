@@ -91,115 +91,160 @@ fn spawn_engine(
 /// The most turns that the end of a case gives before it gives up.
 const MAX_DRAIN_TURNS: usize = 10_000;
 
-/// Runs `case` and returns what it did.
-pub fn run_case(case: &Case, config: Config) -> Run {
-    let setup = initial_state();
-    let world = World::new(setup.entries.clone(), config.plant);
-    let identity = identity(config.plant);
-    let done = Arc::new(Mutex::new(Vec::new()));
-    let count = usize::from(case.engines.max(1));
-    let apply = config.apply.unwrap_or(generate::apply);
-    let mut reopen_failures = Vec::new();
-    let mut engines: Vec<Option<Engine>> = (0..count)
-        .map(|slot| {
-            let repository = open(&identity, &world).expect("the initial state opens");
-            Some(spawn_engine(slot, repository, world.clone(), done.clone(), apply))
-        })
-        .collect();
-    let mut hung = Vec::new();
-    let mut serial = 0_u64;
-    let mut context = Context::new(setup.first_etag);
-    for step in case.expanded() {
+/// The engines of one run and what they did.
+struct Runner {
+    world: Arc<World>,
+    identity: RepositoryIdentity,
+    done: Arc<Mutex<Vec<Done>>>,
+    apply: Apply,
+    engines: Vec<Option<Engine>>,
+    reopen_failures: Vec<String>,
+    hung: Vec<usize>,
+    serial: u64,
+    context: Context,
+}
+
+impl Runner {
+    fn new(case: &Case, config: Config) -> Self {
+        let setup = initial_state();
+        let mut runner = Self {
+            world: World::new(setup.entries, config.plant),
+            identity: identity(config.plant),
+            done: Arc::new(Mutex::new(Vec::new())),
+            apply: config.apply.unwrap_or(generate::apply),
+            engines: Vec::new(),
+            reopen_failures: Vec::new(),
+            hung: Vec::new(),
+            serial: 0,
+            context: Context::new(setup.first_etag),
+        };
+        for slot in 0..usize::from(case.engines.max(1)) {
+            let repository =
+                open(&runner.identity, &runner.world).expect("the initial state opens");
+            let engine = runner.spawn(slot, repository);
+            runner.engines.push(Some(engine));
+        }
+        runner
+    }
+
+    fn spawn(&self, slot: usize, repository: Repository) -> Engine {
+        spawn_engine(
+            slot,
+            repository,
+            self.world.clone(),
+            self.done.clone(),
+            self.apply,
+        )
+    }
+
+    /// The task of the next operation.
+    fn task(&mut self, engine: Option<usize>, op: generate::Operation) -> Task {
+        self.serial += 1;
+        self.context.learn(effects(&self.done));
+        self.context.task(self.serial, engine, op)
+    }
+
+    fn step(&mut self, step: Step) {
+        let count = self.engines.len();
         match step {
             Step::Write { engine, op } => {
                 let slot = usize::from(engine) % count;
-                if world.is_busy(slot) {
-                    world.grant(slot);
-                } else if let Some(engine) = &engines[slot] {
-                    serial += 1;
-                    context.learn(effects(&done));
-                    let task = context.task(serial, Some(slot), op);
-                    world.start(slot);
+                if self.world.is_busy(slot) {
+                    self.world.grant(slot);
+                } else if self.engines[slot].is_some() {
+                    let task = self.task(Some(slot), op);
+                    self.world.start(slot);
+                    let engine = self.engines[slot].as_ref().expect("an engine");
                     engine.tasks.send(task).expect("the engine thread runs");
-                    world.settle(slot);
+                    self.world.settle(slot);
                 }
             }
             Step::WriteOnMovedBase { .. } => unreachable!("an expanded case"),
-            Step::Turn(engine) => world.grant(usize::from(engine) % count),
-            Step::Fault(Fault::Refuse) => world.arm(Armed::Refuse),
-            Step::Fault(Fault::UnknownOutcome { landed }) => world.arm(Armed::Unknown {
+            Step::Turn(engine) => self.world.grant(usize::from(engine) % count),
+            Step::Fault(Fault::Refuse) => self.world.arm(Armed::Refuse),
+            Step::Fault(Fault::UnknownOutcome { landed }) => self.world.arm(Armed::Unknown {
                 landed: usize::from(landed % 4),
             }),
-            Step::Fault(Fault::Stop { engine, .. }) => {
-                let slot = usize::from(engine) % count;
-                world.note_stop();
-                if world.is_busy(slot) {
-                    world.stop(slot);
-                    world.grant(slot);
-                }
-                if let Some(old) = engines[slot].take() {
-                    if world.is_busy(slot) {
-                        // The engine waits outside a storage call; keep it.
-                        engines[slot] = Some(old);
-                        continue;
-                    }
-                    drop(old.tasks);
-                    if !join(old.thread) {
-                        hung.push(slot);
-                    }
-                }
-                match open(&identity, &world).and_then(|repository| {
-                    read_all(&repository)?;
-                    Ok(repository)
-                }) {
-                    Ok(repository) => {
-                        engines[slot] = Some(spawn_engine(
-                            slot,
-                            repository,
-                            world.clone(),
-                            done.clone(),
-                            apply,
-                        ));
-                    }
-                    Err(error) => reopen_failures.push(format!("{error:#}")),
-                }
-            }
+            Step::Fault(Fault::Stop { engine, .. }) => self.stop(usize::from(engine) % count),
             Step::OutsideWrite(op) => {
-                serial += 1;
-                context.learn(effects(&done));
-                let task = context.task(serial, None, op);
-                let outcome = write_outside(&identity, &world, &task);
-                done.lock()
+                let task = self.task(None, op);
+                let outcome = write_outside(&self.identity, &self.world, &task);
+                self.done
+                    .lock()
                     .unwrap_or_else(PoisonError::into_inner)
                     .push(outcome);
             }
         }
     }
-    let busy = drain(&world);
-    for slot in &busy {
-        world.stop(*slot);
-        world.grant(*slot);
-    }
-    hung.extend(busy);
-    for (slot, engine) in engines.into_iter().enumerate() {
-        if let Some(engine) = engine {
-            drop(engine.tasks);
-            if !join(engine.thread) {
-                hung.push(slot);
+
+    /// Stops engine `slot` and opens a new engine in its place.
+    fn stop(&mut self, slot: usize) {
+        self.world.note_stop();
+        if self.world.is_busy(slot) {
+            self.world.stop(slot);
+            self.world.grant(slot);
+        }
+        if let Some(old) = self.engines[slot].take() {
+            if self.world.is_busy(slot) {
+                // The engine waits outside a storage call; keep it.
+                self.engines[slot] = Some(old);
+                return;
+            }
+            drop(old.tasks);
+            if !join(old.thread) {
+                self.hung.push(slot);
             }
         }
+        match open(&self.identity, &self.world).and_then(|repository| {
+            read_all(&repository)?;
+            Ok(repository)
+        }) {
+            Ok(repository) => self.engines[slot] = Some(self.spawn(slot, repository)),
+            Err(error) => self.reopen_failures.push(format!("{error:#}")),
+        }
     }
-    hung.extend(world.hung());
-    hung.sort_unstable();
-    hung.dedup();
-    let done = done.lock().unwrap_or_else(PoisonError::into_inner).clone();
-    Run {
-        done,
-        publishes: world.publishes(),
-        reopen_failures,
-        hung,
-        entries: world.entries(),
+
+    /// Lets each busy engine end, then ends each engine thread.
+    fn finish(mut self) -> Run {
+        let busy = drain(&self.world);
+        for slot in &busy {
+            self.world.stop(*slot);
+            self.world.grant(*slot);
+        }
+        self.hung.extend(busy);
+        for (slot, engine) in std::mem::take(&mut self.engines).into_iter().enumerate() {
+            if let Some(engine) = engine {
+                drop(engine.tasks);
+                if !join(engine.thread) {
+                    self.hung.push(slot);
+                }
+            }
+        }
+        self.hung.extend(self.world.hung());
+        self.hung.sort_unstable();
+        self.hung.dedup();
+        let done = self
+            .done
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        Run {
+            done,
+            publishes: self.world.publishes(),
+            reopen_failures: self.reopen_failures,
+            hung: self.hung,
+            entries: self.world.entries(),
+        }
     }
+}
+
+/// Runs `case` and returns what it did.
+pub fn run_case(case: &Case, config: Config) -> Run {
+    let mut runner = Runner::new(case, config);
+    for step in case.expanded() {
+        runner.step(step);
+    }
+    runner.finish()
 }
 
 /// Gives the busy engines turns until each one is idle; returns those that

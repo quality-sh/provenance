@@ -6,8 +6,6 @@
 pub enum Plant {
     /// After a moved base, an engine reads the old state again (L5).
     StaleRead,
-    /// An armed refusal lands the set and then answers a refusal (L1).
-    LandRefused,
     /// After a stop, a read outside every engine fails (L2).
     FailReopen,
     /// The first set that an engine publishes answers that it landed, but
@@ -17,7 +15,9 @@ pub enum Plant {
     NoConcurrencyControl,
     /// The first read of an engine fails (O1).
     FailRead,
-    /// The clock goes back one second at each read (O2).
+    /// The clock goes back one second at each read, the section lock holds
+    /// nothing and a publish lands on any base, so two writers can land
+    /// messages out of time order (O2).
     ClockBackwards,
     /// The clock continues from the last run, so two runs of one case write
     /// other times (L8).

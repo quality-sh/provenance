@@ -21,7 +21,10 @@ fn first_parent() -> ThreadParent {
 }
 
 /// An update of one Requirement that changes only what `change` sets.
-fn requirement_update(id: &str, change: impl FnOnce(&mut UpdateRequirementInput)) -> UpdateRequirementInput {
+fn requirement_update(
+    id: &str,
+    change: impl FnOnce(&mut UpdateRequirementInput),
+) -> UpdateRequirementInput {
     let mut update = UpdateRequirementInput {
         scope_id: scope(),
         id: stable(id),

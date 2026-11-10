@@ -225,7 +225,8 @@ fn one_writer_answers_as_the_engine(case: &Case, run: &CliRun) -> Result<(), Vio
         }
         if answer(cli) != answer(engine) {
             let (operation, op) = (cli.operation, &cli.op);
-            let (kinds, cli, engine) = ((answer(cli), answer(engine)), &cli.result, &engine.result);
+            let kinds = (answer(cli), answer(engine));
+            let (cli, engine) = (&cli.result, &engine.result);
             let detail = format!(
                 "operation {operation} ({op:?}): answer kinds {kinds:?}; CLI {cli:?}, engine {engine:?}"
             );
