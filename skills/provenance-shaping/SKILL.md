@@ -64,8 +64,8 @@ Topic one by one; expensive methods claim one question and often stop at a phase
      provenance <parent_requirement_id> --scope <scope> --review-link --no-open --format json
      ```
 
-   - **Claude Desktop or ChatGPT desktop** (MCP tools, no browser pane): read the parent's
-     document through the MCP `api` tool. Call it with
+   - **Claude Desktop or ChatGPT desktop** (MCP tools, no browser pane): open the MCP
+     document view. Call the `api` tool with
      `{"path":"requirements/<parent_requirement_id>/document"}` and show the result to the
      person. Call it again after each answer lands.
 
