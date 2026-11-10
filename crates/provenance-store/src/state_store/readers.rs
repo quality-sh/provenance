@@ -35,7 +35,7 @@ impl StateLineInvalid {
 
 /// The shard path below the state directory, or only its file name when the
 /// shard is not below a state directory.
-pub(crate) fn state_file(path: &Utf8Path) -> String {
+pub fn state_file(path: &Utf8Path) -> String {
     below_state(path)
         .or_else(|| path.file_name().map(str::to_owned))
         .unwrap_or_default()
