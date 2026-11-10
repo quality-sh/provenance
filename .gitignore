@@ -44,3 +44,6 @@ packages/*/LICENSE
 /.claude/skills/provenance-grounded-writing
 /.claude/skills/provenance-shaping
 /.claude/skills/provenance-swarm-backtrace
+
+# Hegel example database of local simulation runs
+.hegel/

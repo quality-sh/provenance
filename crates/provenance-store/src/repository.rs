@@ -28,7 +28,9 @@ use std::path::Path;
 use std::sync::Arc;
 
 mod identity;
-pub use identity::{RepositoryHistory, RepositoryIdentity};
+pub use identity::{
+    Clock, IdSource, RandomIds, RepositoryHistory, RepositoryIdentity, SystemClock,
+};
 
 /// One opened repository. A clone shares the open; one open per command or host.
 #[derive(Clone, Debug)]

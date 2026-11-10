@@ -90,6 +90,6 @@ pub(super) fn validated_actor(actor: &str) -> anyhow::Result<String> {
     Ok(actor.trim().to_string())
 }
 
-pub(super) fn now_ms() -> anyhow::Result<i64> {
-    super::super::requirement_reviews::now_millis()
+pub(super) fn now_ms(store: &crate::state_store::StateStore) -> anyhow::Result<i64> {
+    super::super::requirement_reviews::now_millis(&*store.clock())
 }

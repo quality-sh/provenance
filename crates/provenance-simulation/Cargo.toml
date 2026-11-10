@@ -1,0 +1,26 @@
+[package]
+name = "provenance-simulation"
+version.workspace = true
+edition.workspace = true
+description = "Internal part of Provenance: nightly simulation of the write engine"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+camino.workspace = true
+hegeltest.workspace = true
+provenance-core.workspace = true
+provenance-store.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+time.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+provenance-macros.workspace = true

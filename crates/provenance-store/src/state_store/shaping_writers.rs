@@ -20,7 +20,7 @@ impl StateStore {
         actor: &str,
     ) -> anyhow::Result<TopicClaim> {
         let actor = validated_actor(actor)?;
-        let claimed_at = now_ms()?;
+        let claimed_at = now_ms(self)?;
         self.with_repository_publication(|held| {
             let current_topic = held
                 .list_topics(scope_id)?
@@ -93,7 +93,7 @@ impl StateStore {
         actor: &str,
     ) -> anyhow::Result<Question> {
         let actor = validated_actor(actor)?;
-        let claimed_at = now_ms()?;
+        let claimed_at = now_ms(self)?;
         self.mutate_question(scope_id, id, |question| {
             let status = ShapingStatus::Question(question.status);
             if let Some(blocking) = claim_blocking_status(status) {

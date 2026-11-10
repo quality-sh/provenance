@@ -10,6 +10,14 @@ default-filter = 'not binary(cli_skills_single_source)'
 # target/nextest/ci/junit.xml; CI uploads it for TAG, the test aggregator.
 path = "junit.xml"
 
+# The nightly simulation. Its random cases are ignored tests, so a pull
+# request never runs them; the workflow passes --run-ignored all and sets
+# HEGEL_SEED and HEGEL_TEST_CASES.
+[profile.simulation]
+default-filter = 'package(provenance-simulation) or binary(simulation_cli)'
+fail-fast = false
+slow-timeout = { period = "300s", terminate-after = 24 }
+
 [test-groups.cargo]
 max-threads = 1
 

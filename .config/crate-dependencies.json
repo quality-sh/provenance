@@ -63,6 +63,7 @@
       "provenance-review",
       "provenance-scanner",
       "provenance-sdk",
+      "provenance-simulation",
       "provenance-ste100",
       "provenance-store",
       "provenance-transport",
@@ -102,6 +103,7 @@
       "provenance-review",
       "provenance-scanner",
       "provenance-sdk",
+      "provenance-simulation",
       "provenance-transport",
       "remove_dir_all",
       "reqwest",
@@ -139,6 +141,7 @@
       "provenance-review",
       "provenance-scanner",
       "provenance-sdk",
+      "provenance-simulation",
       "remove_dir_all",
       "reqwest",
       "rmcp",
@@ -183,6 +186,7 @@
       "provenance-review",
       "provenance-scanner",
       "provenance-sdk",
+      "provenance-simulation",
       "provenance-ste100",
       "provenance-store",
       "provenance-transport",
@@ -222,6 +226,7 @@
       "provenance-review",
       "provenance-scanner",
       "provenance-sdk",
+      "provenance-simulation",
       "provenance-ste100",
       "remove_dir_all",
       "reqwest",
@@ -427,6 +432,15 @@
       "dev-dependencies": [
         "tempfile",
         "tokio"
+      ]
+    },
+    "provenance-simulation": {
+      "dependencies": [
+        "provenance-core",
+        "provenance-store"
+      ],
+      "dev-dependencies": [
+        "provenance-macros"
       ]
     },
     "provenance-ste100": {
