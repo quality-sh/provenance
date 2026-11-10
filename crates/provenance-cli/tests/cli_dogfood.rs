@@ -114,26 +114,6 @@ fn note_without_session_env_records_null_session() {
     assert!(notes[0]["session_id"].is_null());
 }
 
-#[test]
-fn note_accepts_any_known_subcommand_as_surface() {
-    let temp = tempfile::tempdir().unwrap();
-
-    note_cmd(temp.path())
-        .args([
-            "dogfood",
-            "note",
-            "--surface",
-            "check",
-            "--category",
-            "missing",
-            "--severity",
-            "workaround",
-            "the bindings check has no way to ignore vendored code",
-        ])
-        .assert()
-        .success();
-}
-
 /// Implementation aid: no Rule in the graph owns the dogfood surface names. The test
 /// pins that a note can name each command that a user can type: a root word, a
 /// record-id action, `api`, and `general`.
@@ -141,6 +121,7 @@ fn note_accepts_any_known_subcommand_as_surface() {
 fn note_accepts_each_command_that_a_user_can_type_as_surface() {
     for surface in [
         "api",
+        "check",
         "get",
         "search",
         "trace",
@@ -175,7 +156,7 @@ fn note_accepts_each_command_that_a_user_can_type_as_surface() {
 fn note_rejects_unknown_surface_and_lists_valid_ones() {
     let temp = tempfile::tempdir().unwrap();
 
-    note_cmd(temp.path())
+    let output = note_cmd(temp.path())
         .args([
             "dogfood",
             "note",
@@ -192,12 +173,55 @@ fn note_rejects_unknown_surface_and_lists_valid_ones() {
         .stderr(predicates::str::contains(
             "unknown surface `not-a-real-surface`",
         ))
-        .stderr(predicates::str::contains("prime"))
-        .stderr(predicates::str::contains("api"))
-        .stderr(predicates::str::contains("trace"))
-        .stderr(predicates::str::contains("general"));
+        .get_output()
+        .stderr
+        .clone();
+
+    let stderr = String::from_utf8(output).unwrap();
+    let (_, list) = stderr
+        .split_once("valid surfaces: ")
+        .expect("the error lists the valid surfaces");
+    let surfaces: Vec<&str> = list.trim_end().split(", ").collect();
+    let mut sorted = surfaces.clone();
+    sorted.sort_unstable();
+    sorted.dedup();
+    assert_eq!(surfaces, sorted, "the list is sorted with no duplicate");
+    for surface in ["api", "trace", "prime", "general"] {
+        assert!(
+            surfaces.contains(&surface),
+            "`{surface}` is not an entry of {surfaces:?}"
+        );
+    }
 
     assert!(!temp.path().join("notes.jsonl").exists());
+}
+
+/// Implementation aid: no Rule in the graph owns the dogfood surface names. The test
+/// pins that only the first word of a command is a surface: a later word, such as
+/// `note` of `dogfood note` or `install` of `skills install`, is refused.
+#[test]
+fn note_rejects_a_later_word_of_a_command_as_surface() {
+    for surface in ["note", "install"] {
+        let temp = tempfile::tempdir().unwrap();
+        note_cmd(temp.path())
+            .args([
+                "dogfood",
+                "note",
+                "--surface",
+                surface,
+                "--category",
+                "bug",
+                "--severity",
+                "annoyance",
+                "a later word is not a surface",
+            ])
+            .assert()
+            .code(1)
+            .stderr(predicates::str::contains(format!(
+                "unknown surface `{surface}`"
+            )));
+        assert!(!temp.path().join("notes.jsonl").exists());
+    }
 }
 
 #[test]
