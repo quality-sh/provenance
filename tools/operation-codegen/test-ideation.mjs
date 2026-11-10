@@ -70,7 +70,7 @@ export async function checkIdeation({ HttpClient, OperationError }, fixture) {
   assert.equal(created.data.id, proposal.id);
   await assert.rejects(client.createProposal({ data: proposal }), error => {
     assert.ok(error instanceof OperationError);
-    assert.equal(error.failure.error.kind, 'write_failed');
+    assert.equal(error.failure.error.kind, 'already_exists');
     return true;
   });
 
