@@ -250,11 +250,10 @@ fn raw_refusals(source: &str) -> Vec<usize> {
             if !(kind && mark(tokens.get(at + 4), ',') && condition) {
                 found.push(line);
             }
-        } else if current == Some("Error") && path_word(&tokens, at + 1) == Some("msg") {
-            found.push(line);
-        } else if current == Some("anyhow")
-            && path_word(&tokens, at + 1) == Some("Error")
-            && path_word(&tokens, at + 4) == Some("new")
+        } else if (current == Some("Error") && path_word(&tokens, at + 1) == Some("msg"))
+            || (current == Some("anyhow")
+                && path_word(&tokens, at + 1) == Some("Error")
+                && path_word(&tokens, at + 4) == Some("new"))
         {
             found.push(line);
         } else if current == Some("use") && word(tokens.get(at + 1)) == Some("anyhow") {
