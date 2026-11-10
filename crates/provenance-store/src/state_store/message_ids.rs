@@ -2,7 +2,9 @@ use crate::repository::IdSource;
 use provenance_core::StableId;
 use provenance_macros::rule;
 
-/// A new Message identity from the ID source of the store.
+/// A new Message identity: `msg_` and a UUID from the ID source of the
+/// store. The default ID source gives random UUIDs.
+#[rule("rule_message_id_is_random")]
 pub fn new_message_id(ids: &dyn IdSource) -> StableId {
     StableId::new(format!("msg_{}", ids.new_uuid())).expect("a prefixed UUID is a stable ID")
 }

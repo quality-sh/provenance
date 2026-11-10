@@ -38,7 +38,6 @@ impl Clock for SystemClock {
 pub struct RandomIds;
 
 impl IdSource for RandomIds {
-    #[rule("rule_message_id_is_random")]
     fn new_uuid(&self) -> uuid::Uuid {
         uuid::Uuid::new_v4()
     }
