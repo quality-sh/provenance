@@ -5,8 +5,8 @@ use clap::{
     builder::{PossibleValue, PossibleValuesParser, TypedValueParser, ValueParser},
     Arg, ArgAction, ArgMatches, Command,
 };
-use provenance_macros::rule;
 use provenance_cli::cli_options::{self, flag_name, GLOBAL_OPTIONS, GROUP_DESCRIPTIONS};
+use provenance_macros::rule;
 use provenance_porcelain::registry::{
     self, Binding, Declaration, Field, FieldValue, Input, Relation,
 };
@@ -133,7 +133,9 @@ fn value_parser(field: &Field) -> ValueParser {
         FieldValue::Count => clap::value_parser!(usize).into(),
         FieldValue::RecordKind => ClosedSet::parser(field, |value| {
             let kind = provenance_core::NodeType::parse(value).ok()?;
-            provenance_core::NodeType::ALL.contains(&kind).then_some(kind)
+            provenance_core::NodeType::ALL
+                .contains(&kind)
+                .then_some(kind)
         }),
         FieldValue::ApiMethod => {
             ClosedSet::parser(field, provenance_porcelain::api::ApiMethod::parse)
@@ -196,7 +198,9 @@ impl<T: Clone + Send + Sync + 'static> TypedValueParser for ClosedSet<T> {
     }
 
     fn possible_values(&self) -> Option<Box<dyn Iterator<Item = PossibleValue> + '_>> {
-        Some(Box::new(self.values.iter().copied().map(PossibleValue::new)))
+        Some(Box::new(
+            self.values.iter().copied().map(PossibleValue::new),
+        ))
     }
 }
 

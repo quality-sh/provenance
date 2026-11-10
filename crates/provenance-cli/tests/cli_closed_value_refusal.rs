@@ -16,7 +16,10 @@ fn refusal(args: &[&str]) -> (Option<i32>, String) {
         .args(args)
         .output()
         .unwrap();
-    assert!(output.stdout.is_empty(), "{args:?} wrote to standard output");
+    assert!(
+        output.stdout.is_empty(),
+        "{args:?} wrote to standard output"
+    );
     (
         output.status.code(),
         String::from_utf8_lossy(&output.stderr).into_owned(),
@@ -63,7 +66,10 @@ fn create_type_refusal_lists_the_record_kinds() {
 fn api_method_refusal_lists_the_methods() {
     assert_eq!(
         refusal(&["api", "requirements", "--method", "bogus"]),
-        (Some(2), clap_refusal("--method <METHOD>", "get, post, patch"))
+        (
+            Some(2),
+            clap_refusal("--method <METHOD>", "get, post, patch")
+        )
     );
 }
 
