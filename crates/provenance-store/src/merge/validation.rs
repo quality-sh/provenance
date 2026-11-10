@@ -17,7 +17,7 @@
 use anyhow::Context;
 use camino::Utf8Path;
 use provenance_core::model::relations::{missing_required, required_refusal, RelationOwner};
-use provenance_core::{Question, Requirement, Resolution, Rule, Source, Topic};
+use provenance_core::{Question, Requirement, RequirementReview, Resolution, Rule, Source, Topic};
 use serde_json::Value;
 
 use super::CanonicalRecord;
@@ -38,7 +38,10 @@ pub enum ShardFamily {
     Discussions,
     /// `.provenance/state/scopes/<scope>/sources/*.jsonl`
     Sources,
-    /// `.provenance/state/scopes/<scope>/requirements/*.jsonl`
+    /// `.provenance/state/scopes/<scope>/requirements/review.jsonl`
+    RequirementReviews,
+    /// `.provenance/state/scopes/<scope>/requirements/*.jsonl`, except the
+    /// review file
     Requirements,
     /// `.provenance/state/scopes/<scope>/resolutions/*.jsonl`
     Resolutions,
@@ -85,6 +88,11 @@ impl ShardFamily {
         let Some(directory) = path.parent() else {
             return Self::Unrecognized;
         };
+        // The review rows are in the requirements directory, but they are not
+        // Requirement records.
+        if path.file_name() == Some("review.jsonl") && is_scoped_family(path, "requirements") {
+            return Self::RequirementReviews;
+        }
         if let Some((_, family)) = SCOPED_FAMILIES
             .iter()
             .find(|(name, _)| is_scoped_family(path, name))
@@ -130,6 +138,9 @@ pub fn validate_merged_records(
     match ShardFamily::for_shard_path(shard_path) {
         ShardFamily::Sources => validate_typed_records::<Source>(records, "source"),
         ShardFamily::Requirements => validate_typed_records::<Requirement>(records, "requirement"),
+        ShardFamily::RequirementReviews => {
+            deserialize_records::<RequirementReview>(records, "requirement review").map(drop)
+        }
         ShardFamily::Resolutions => validate_typed_records::<Resolution>(records, "resolution"),
         ShardFamily::Rules => validate_typed_records::<Rule>(records, "rule"),
         ShardFamily::Topics => validate_typed_records::<Topic>(records, "topic"),
@@ -267,6 +278,22 @@ mod tests {
                 family
             );
         }
+    }
+
+    #[test]
+    fn recognizes_the_review_file_in_the_requirements_directory() {
+        assert_eq!(
+            ShardFamily::for_shard_path(Utf8Path::new(
+                ".provenance/state/scopes/default/requirements/review.jsonl"
+            )),
+            ShardFamily::RequirementReviews
+        );
+        assert_eq!(
+            ShardFamily::for_shard_path(Utf8Path::new(
+                ".provenance/state/scopes/default/requirements/req.jsonl"
+            )),
+            ShardFamily::Requirements
+        );
     }
 
     #[test]
