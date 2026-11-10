@@ -31,10 +31,10 @@ impl ReviewStateSnapshot {
         let (manifest, settings) = manifest_and_settings(guard, &guarded)?;
         let repository = guard.repository();
         let storage = repository.storage();
-        let view = match repository.section() {
-            Some(section) => section.view().shared(storage.as_ref()).ok(),
-            None => storage.read_view().ok().map(Arc::new),
-        };
+        let view = repository.section().map_or_else(
+            || storage.read_view().ok().map(Arc::new),
+            |section| section.view().shared(storage.as_ref()).ok(),
+        );
         let Some(view) = view else {
             return Self::of_records(&guarded, manifest, settings)
                 .map(|snapshot| ReviewStateCapture(Captured::Read(Box::new(snapshot))));
