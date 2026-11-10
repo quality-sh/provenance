@@ -16,9 +16,10 @@ fn root() -> Value {
 }
 
 /// Protects the flat walk into nested unions: the values of each level are
-/// listed, an inner array counts as a branch, and two arrays at two levels
-/// give no item schema. The former `array_item_schema` did not go into a
-/// nested union, and the former `collect` went into both union keywords.
+/// listed, an inner array counts as a branch, and each array of a nested
+/// union counts. The former `array_item_schema` did not count a nested union
+/// with two arrays, so it gave the item schema of the outer array for the
+/// third schema here.
 #[test]
 fn nested_unions_are_one_flat_set_of_branches() {
     let root = root();
@@ -42,7 +43,10 @@ fn nested_unions_are_one_flat_set_of_branches() {
     );
     let two_arrays = json!({"anyOf": [
         {"type": "array", "items": {"type": "string"}},
-        {"anyOf": [{"type": "array", "items": {"type": "integer"}}]},
+        {"anyOf": [
+            {"type": "array", "items": {"type": "integer"}},
+            {"type": "array", "items": {"type": "boolean"}},
+        ]},
     ]});
     assert_eq!(array_item_schema(&root, &two_arrays), None);
     let string = json!({"anyOf": [{"anyOf": [{"type": "integer"}, {"type": ["null", "string"]}]}]});
