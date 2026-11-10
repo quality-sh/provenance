@@ -41,9 +41,13 @@ mod reads;
 #[cfg(feature = "host")]
 pub use reads::{read_evidence, read_history};
 
-#[cfg(all(test, feature = "host"))]
+// Clippy treats only a plain `cfg(test)` module as test code, so the host
+// gate is a second attribute.
+#[cfg(test)]
+#[cfg(feature = "host")]
 mod concurrency_tests;
-#[cfg(all(test, feature = "host"))]
+#[cfg(test)]
+#[cfg(feature = "host")]
 mod recovery_tests;
 
 mod discussion_input;
@@ -68,7 +72,8 @@ mod discussion_page;
 mod discussion_reads;
 mod discussion_removal;
 mod typed_adoption;
-#[cfg(all(test, feature = "host"))]
+#[cfg(test)]
+#[cfg(feature = "host")]
 mod typed_adoption_tests;
 #[cfg(feature = "host")]
 pub use discussion_discovery::{read_discussion_conversation, read_discussion_list};
@@ -76,7 +81,8 @@ pub use discussion_discovery::{read_discussion_conversation, read_discussion_lis
 pub use discussion_messages::{read_discussion_message, read_discussion_messages};
 #[cfg(feature = "host")]
 pub use discussion_reads::{read_discussion, read_discussions};
-#[cfg(all(test, feature = "host"))]
+#[cfg(test)]
+#[cfg(feature = "host")]
 mod discussion_recovery_tests;
 
 mod decision_input;
@@ -93,7 +99,9 @@ mod decision_reads;
 pub(crate) use decision_reads::DocumentReviewState;
 mod decision_state;
 
-#[cfg(all(test, feature = "host"))]
+#[cfg(test)]
+#[cfg(feature = "host")]
 mod decision_tests;
-#[cfg(all(test, feature = "host"))]
+#[cfg(test)]
+#[cfg(feature = "host")]
 mod write_permission_tests;

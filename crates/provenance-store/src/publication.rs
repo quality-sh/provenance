@@ -332,7 +332,11 @@ impl crate::state_store::StateStore {
     }
 }
 
-#[cfg(all(test, unix, feature = "host"))]
+// Clippy treats only a plain `cfg(test)` module as test code, so the host
+// gate is a second attribute.
+#[cfg(test)]
+#[cfg(all(unix, feature = "host"))]
 mod containment_tests;
-#[cfg(all(test, feature = "host"))]
+#[cfg(test)]
+#[cfg(feature = "host")]
 mod tests;

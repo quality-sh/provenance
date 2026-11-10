@@ -17,7 +17,10 @@ mod section_view;
 pub use guarded_readers::ViewStore;
 pub use section_view::{SectionView, StateEntry};
 
-#[cfg(all(test, feature = "host"))]
+// Clippy treats only a plain `cfg(test)` module as test code, so the host
+// gate is a second attribute.
+#[cfg(test)]
+#[cfg(feature = "host")]
 mod tests;
 
 impl StateStore {

@@ -184,7 +184,10 @@ impl StateStore {
     }
 }
 
-#[cfg(all(test, feature = "host"))]
+// Clippy treats only a plain `cfg(test)` module as test code, so the host
+// gate is a second attribute.
+#[cfg(test)]
+#[cfg(feature = "host")]
 mod tests {
     use super::*;
     use crate::layout::ProvenanceLayout;

@@ -416,5 +416,8 @@ fn gate_failure(error: anyhow::Error) -> OpenFailure {
     }
 }
 
-#[cfg(all(test, feature = "host"))]
+// Clippy treats only a plain `cfg(test)` module as test code, so the host
+// gate is a second attribute.
+#[cfg(test)]
+#[cfg(feature = "host")]
 mod stage_recovery_tests;
