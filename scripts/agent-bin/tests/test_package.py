@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 loader = importlib.machinery.SourceFileLoader("agent_cargo", str(Path(__file__).parents[1] / "cargo"))
 spec = importlib.util.spec_from_loader(loader.name, loader)
@@ -39,7 +39,8 @@ class PackageTest(unittest.TestCase):
     def test_dispatch_uses_the_snapshot_workflow(self):
         with patch.object(shim, "push_snapshot"), \
              patch.object(shim, "command", return_value='{"workflow_run_id": 123}') as command:
-            shim.dispatch(Path("/repo"), "a" * 40, "quality-sh/provenance", '["package"]', "package")
+            records = MagicMock()
+            shim.dispatch(Path("/repo"), "a" * 40, "quality-sh/provenance", '["package"]', "package", "key", records)
         payload = json.loads(command.call_args.kwargs["input_text"])
         self.assertRegex(payload["ref"], "^agent-snapshot/" + "a" * 40 + "-[0-9a-f]{8}$")
 
