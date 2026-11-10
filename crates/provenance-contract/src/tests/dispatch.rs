@@ -40,12 +40,12 @@ async fn statement_call_is_closed_and_refuses_invalid_payloads() {
         (
             json!({"request":{"statement":"text", "base_revision":"x"}}),
             "request.base_revision",
-            "invalid_value",
+            "unknown_field",
         ),
         (
             json!({"request":{"statement":"text"},"context":{"repository":"/tmp"}}),
             "context",
-            "invalid_value",
+            "unknown_field",
         ),
     ] {
         let error = invoke("check-statement", SDK_PROTOCOL_VERSION, value)
