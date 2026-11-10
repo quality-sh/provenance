@@ -133,7 +133,7 @@ fn init_summary_structure_stays_pinned_in_one_module() {
         fs::read_to_string(workspace.join("crates/provenance-transport/src/porcelain/init.rs"))
             .expect("read init handler");
 
-    assert!(summary.contains("Have your agent run provenance prime to get acclimated."));
+    assert!(summary.contains("\"Have your agent run {} prime to get acclimated.\""));
     assert!(!summary.contains("Next steps"));
     assert!(summary.contains("New"));
     assert!(summary.contains("Changed"));
