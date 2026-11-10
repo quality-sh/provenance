@@ -175,8 +175,16 @@ pub fn record_fault(
     id: &str,
     message: String,
 ) -> anyhow::Error {
-    // An error of the second read is not given: it would replace the fault.
-    let rows = read_jsonl_located::<serde_json::Value>(store, path).unwrap_or_default();
+    // Inside a held section the second read cannot take the section again,
+    // so it reads through the held store. An error of the second read is not
+    // given: it would replace the fault.
+    let rows = read_jsonl_located::<serde_json::Value>(store, path)
+        .or_else(|_| {
+            store
+                .state_text(path)?
+                .map_or_else(|| Ok(Vec::new()), |contents| records_of(path, &contents))
+        })
+        .unwrap_or_default();
     let mut lines = rows
         .into_iter()
         .filter(|(row, _)| row.get("id").and_then(serde_json::Value::as_str) == Some(id))
