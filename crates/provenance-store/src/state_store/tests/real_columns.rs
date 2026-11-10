@@ -4,8 +4,9 @@
 //! check counts column by column is built with every field set, so a new
 //! field fails to compile here until the test sets it. With every number set,
 //! the row holds no REAL column and the write check counts it with no `SQLite`.
+//! A REAL column itself counts only in the host build.
 
-use crate::state_store::read_budget::ReadBudget;
+use crate::state_store::read_budget::{column_bytes, ReadBudget};
 use provenance_core::model::projection_row::ColumnValue;
 use provenance_core::model::ProjectionRow;
 use provenance_core::{
@@ -204,4 +205,35 @@ fn rule_and_binding_rows_hold_no_real_column() {
         file: "src/tests.rs".into(),
         symbol: Some("rows_hold_no_real_column".into()),
     });
+}
+
+#[cfg(not(feature = "host"))]
+#[test]
+#[verifies("rule_row_counted_records_hold_no_real_column", examples)]
+fn real_column_is_refused_without_host() {
+    let error = column_bytes(&ColumnValue::Real(0.5)).unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "only the host build counts the bytes of a REAL column"
+    );
+}
+
+#[cfg(feature = "host")]
+#[tokio::test]
+#[verifies("rule_row_counted_records_hold_no_real_column", conformance)]
+async fn real_column_counts_as_sqlite_casts_it() {
+    let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+    for real in [0.5, -0.1, 1.0, 1e300, f64::MIN_POSITIVE, 123_456.789] {
+        let expected: i64 = sqlx::query_scalar("SELECT length(CAST(? AS BLOB))")
+            .bind(real)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            column_bytes(&ColumnValue::Real(real)).unwrap(),
+            usize::try_from(expected).unwrap(),
+            "{real}"
+        );
+    }
+    pool.close().await;
 }
