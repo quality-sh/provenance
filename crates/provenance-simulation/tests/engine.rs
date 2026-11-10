@@ -7,7 +7,7 @@
 use hegel::{Hegel, Settings, TestCase, Verbosity};
 use provenance_macros::verifies;
 use provenance_simulation::generate::{Case, Fault, Operation, Step};
-use provenance_simulation::{check_case, laws, report, run_case, Config};
+use provenance_simulation::{check_case, laws, report, run_case, storage, Config};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::{Arc, Mutex};
 
@@ -159,4 +159,42 @@ fn random_planted_cases_repeat_by_seed_and_replay_by_blob() {
         .unwrap_or_else(|| panic!("a reproduce_failure line in {report}"));
     let (_, replayed) = planted_run(Settings::new().database(None), Some(&blob));
     assert_eq!(replayed, message, "the blob replays the shrunk case");
+}
+
+#[test]
+fn an_unknown_outcome_lands_a_prefix_and_keeps_the_laws() {
+    for landed in 0..3 {
+        let case = Case {
+            engines: 2,
+            steps: vec![
+                Step::Fault(Fault::UnknownOutcome { landed }),
+                Step::Write {
+                    engine: 0,
+                    op: Operation::PostMessage,
+                },
+                Step::Write {
+                    engine: 1,
+                    op: Operation::UpdateRequirement { n: 0, stale: false },
+                },
+            ],
+        };
+        let run = run_case(&case, Config::default());
+        assert!(
+            run.publishes
+                .iter()
+                .any(|publish| publish.outcome == storage::Outcome::Unknown),
+            "the fault met a publish"
+        );
+        laws::check(&run).unwrap();
+    }
+}
+
+#[test]
+fn one_law_is_checked_alone() {
+    let run = run_case(&moved_base_case(), PLANTED);
+    for law in ["L1", "L3", "L4"] {
+        laws::check_only(&run, law).unwrap();
+    }
+    assert_eq!(laws::check_only(&run, "L5").unwrap_err().law, "L5");
+    assert_eq!(laws::check_only(&run, "every").unwrap_err().law, "L5");
 }
