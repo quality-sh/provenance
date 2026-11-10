@@ -5,8 +5,9 @@
 use std::path::Path;
 use std::process::Command;
 
-/// Builds the package and tells if Cargo ran its build script.
-fn build_runs_script(package: &Path, target: &Path) -> bool {
+/// Builds the package. Returns whether Cargo ran its build script, and the
+/// Cargo output.
+fn build_runs_script(package: &Path, target: &Path) -> (bool, String) {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
     let output = Command::new(cargo)
         .args(["build", "--offline", "-v"])
@@ -14,11 +15,12 @@ fn build_runs_script(package: &Path, target: &Path) -> bool {
         .env("CARGO_TARGET_DIR", target)
         .output()
         .unwrap();
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     assert!(output.status.success(), "{stderr}");
-    stderr
-        .lines()
-        .any(|line| line.trim_start().starts_with("Running") && line.contains("build-script-build"))
+    let ran = stderr.lines().any(|line| {
+        line.trim_start().starts_with("Running") && line.contains("build-script-build")
+    });
+    (ran, stderr)
 }
 
 #[test]
@@ -49,18 +51,25 @@ fn a_build_without_a_change_does_not_run_the_asset_script_again() {
     .unwrap();
     std::fs::write(package.join("review-assets/index.html"), "<!doctype html>").unwrap();
 
-    assert!(build_runs_script(&package, &target), "the first build");
+    let (ran, output) = build_runs_script(&package, &target);
     assert!(
-        !build_runs_script(&package, &target),
-        "a build with no change ran the asset script again"
+        ran,
+        "the first build did not run the asset script:\n{output}"
+    );
+    let (ran, output) = build_runs_script(&package, &target);
+    assert!(
+        !ran,
+        "a build with no change ran the asset script again:\n{output}"
     );
 
     let generated = package.join("review-assets-generated");
     std::fs::create_dir(&generated).unwrap();
     std::fs::write(generated.join("index.html"), "<!doctype html>").unwrap();
+    let (ran, output) = build_runs_script(&package, &target);
     assert!(
-        build_runs_script(&package, &target),
-        "the generated directory did not start the asset script"
+        ran,
+        "the generated directory did not start the asset script:\n{output}"
     );
-    assert!(!build_runs_script(&package, &target), "the build after it");
+    let (ran, output) = build_runs_script(&package, &target);
+    assert!(!ran, "the build after it ran the asset script:\n{output}");
 }
