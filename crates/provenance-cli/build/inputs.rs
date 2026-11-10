@@ -29,10 +29,10 @@ const NOT_IN_BINARY: [&str; 3] = ["tests", "benches", "examples"];
 /// files, each crate adds all of its top-level entries on disk.
 pub fn paths(root: &Path, git: impl Fn(&[&str]) -> Option<String>) -> Vec<String> {
     let mut paths: Vec<String> = ROOT_INPUTS.iter().map(|&path| path.to_owned()).collect();
-    let entries = match git(&["ls-files", "-z", "--", "crates"]) {
-        Some(tracked) => tracked_entries(&tracked),
-        None => entries_on_disk(root),
-    };
+    let entries = git(&["ls-files", "-z", "--", "crates"]).map_or_else(
+        || entries_on_disk(root),
+        |tracked| tracked_entries(&tracked),
+    );
     paths.extend(
         entries
             .into_iter()
