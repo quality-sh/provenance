@@ -21,7 +21,7 @@ On configured maintainer hosts, plain `cargo build`, `cargo check`, `cargo clipp
 
 A plain `cargo test` of `provenance-store` or `provenance-transport` alone needs `--features host`, because the engine builds only with that feature.
 
-A plain `cargo test` of `provenance-mcp` alone needs `--features test-fixture`, because without that feature most of its integration tests compile to nothing and the run passes with 0 tests.
+A plain `cargo test` of `provenance-mcp` alone needs `--features test-fixture`, because without that feature most of its integration tests compile to nothing, so a run that selects one of them passes with 0 tests.
 
 ## Code standards
 
