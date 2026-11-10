@@ -8,61 +8,33 @@ use serde_json::Value;
 mod support {
     pub mod review_paths;
 }
-use support::review_paths::{create_requirement, json_output, provenance};
+use support::review_paths::{create_requirement, provenance};
 
 const REQUIREMENTS: &str = ".provenance/state/scopes/default/requirements/req.jsonl";
-/// An update reads the stage of the live state, so the cause names the live
-/// shard.
-const REPEATED_MEMBER: &str = ".provenance/state/scopes/default/requirements/req.jsonl line 1: \
-    repeated top-level member `extension` cannot survive a typed record change";
-const LEGACY_FIELD: &str = ".provenance/state/scopes/default/requirements/req.jsonl line 1: \
-    record req_a contains legacy field `retired`; canonical JSONL requires record-deletion \
-    migration 026 before this build can read it";
 
-/// Replaces the first requirement row with the output of `change`.
-fn change_requirement_row(directory: &tempfile::TempDir, change: impl FnOnce(&str) -> String) {
+/// The start of the cause. The rest is the text of the operating system.
+const CAUSE: &str = "failed to persist temporary file: ";
+
+/// A repository whose requirement shard is a directory, so that a write of
+/// the family fails with an I/O error of no known kind.
+fn shard_is_a_directory() -> (tempfile::TempDir, String) {
+    let (directory, repo) = support::review_paths::init();
+    create_requirement(&repo, "req_a");
     let path = directory.path().join(REQUIREMENTS);
-    let text = std::fs::read_to_string(&path).unwrap();
-    let row = change(text.lines().next().unwrap());
-    std::fs::write(&path, row + "\n").unwrap();
-}
-
-/// A repository whose requirement row repeats an unknown top-level member, so
-/// that a typed change of the row fails with no known kind.
-fn repeated_member() -> (tempfile::TempDir, String) {
-    let (directory, repo) = support::review_paths::init();
-    create_requirement(&repo, "req_a");
-    change_requirement_row(&directory, |row| {
-        format!(
-            "{},\"extension\":1,\"extension\":2}}",
-            row.strip_suffix('}').unwrap()
-        )
-    });
+    std::fs::remove_file(&path).unwrap();
+    std::fs::create_dir(&path).unwrap();
     (directory, repo)
 }
 
-/// A repository whose requirement row holds the removed `retired` field, so
-/// that each read and write of the family fails with no known kind.
-fn legacy_field() -> (tempfile::TempDir, String) {
-    let (directory, repo) = support::review_paths::init();
-    create_requirement(&repo, "req_a");
-    change_requirement_row(&directory, |row| {
-        format!("{},\"retired\":true}}", row.strip_suffix('}').unwrap())
-    });
-    (directory, repo)
-}
-
-fn update(repo: &str, json: bool) -> std::process::Output {
-    let read = json_output(provenance().args(["req_a", "get", "--repo", repo, "--format", "json"]));
-    let etag = read["edit"]["etag"].as_str().unwrap().to_owned();
+fn create(repo: &str, json: bool) -> std::process::Output {
     let mut command = provenance();
     command.args([
-        "req_a",
-        "update",
+        "req_b",
+        "create",
+        "--type",
+        "requirement",
         "--repo",
         repo,
-        "--if-match",
-        &etag,
         "--statement",
         "The system records two topics.",
     ]);
@@ -82,18 +54,17 @@ fn refusal(output: &std::process::Output) -> Value {
     serde_json::from_str(object).unwrap_or_else(|error| panic!("{error}: {text}"))
 }
 
-/// Asserts the code and the exact cause, and that no spelling of the
+/// Asserts the code and the start of the cause, and that no spelling of the
 /// temporary directory is on standard error or in the cause.
 fn assert_cause(
     directory: &tempfile::TempDir,
     output: &std::process::Output,
     kind: &str,
-    expected: &str,
 ) {
     let refusal = refusal(output);
     assert_eq!(refusal["error"]["kind"], kind, "{refusal}");
     let cause = refusal["error"]["cause"].as_str().unwrap_or_default();
-    assert_eq!(cause, expected, "{refusal}");
+    assert!(cause.starts_with(CAUSE), "{refusal}");
     let text = String::from_utf8_lossy(&output.stderr);
     let canonical = std::fs::canonicalize(directory.path()).unwrap();
     for root in [directory.path(), canonical.as_path()] {
@@ -111,53 +82,20 @@ fn assert_cause(
 #[test]
 #[verifies("rule_unclassified_refusal_gives_cause", examples)]
 fn text_mode_prints_the_cause_of_a_write_failure_of_no_known_kind() {
-    let (directory, repo) = repeated_member();
-    let output = update(&repo, false);
+    let (directory, repo) = shard_is_a_directory();
+    let output = create(&repo, false);
     let text = String::from_utf8_lossy(&output.stderr).into_owned();
     assert!(text.starts_with("Error: "), "{text}");
     assert_eq!(text.lines().count(), 1, "{text}");
-    assert_cause(&directory, &output, "write_failed", REPEATED_MEMBER);
+    assert_cause(&directory, &output, "write_failed");
 }
 
 #[test]
 #[verifies("rule_unclassified_refusal_gives_cause", examples)]
 fn json_mode_gives_the_cause_of_a_write_failure_of_no_known_kind() {
-    let (directory, repo) = repeated_member();
-    let output = update(&repo, true);
-    assert_cause(&directory, &output, "write_failed", REPEATED_MEMBER);
+    let (directory, repo) = shard_is_a_directory();
+    let output = create(&repo, true);
+    assert_cause(&directory, &output, "write_failed");
     let refusal = refusal(&output);
     assert_eq!(refusal["meta"], serde_json::json!({}), "{refusal}");
-}
-
-#[test]
-#[verifies("rule_unclassified_refusal_gives_cause", examples)]
-fn a_create_gives_the_write_failed_cause_of_a_legacy_field() {
-    let (directory, repo) = legacy_field();
-    let output = provenance()
-        .args([
-            "req_b",
-            "create",
-            "--type",
-            "requirement",
-            "--repo",
-            &repo,
-            "--statement",
-            "The system keeps review feedback available.",
-            "--format",
-            "json",
-        ])
-        .output()
-        .unwrap();
-    assert_cause(&directory, &output, "write_failed", LEGACY_FIELD);
-}
-
-#[test]
-#[verifies("rule_unclassified_refusal_gives_cause", examples)]
-fn an_api_read_gives_the_read_failed_cause_of_a_legacy_field() {
-    let (directory, repo) = legacy_field();
-    let output = provenance()
-        .args(["api", "/requirements/req_a", "--repo", &repo])
-        .output()
-        .unwrap();
-    assert_cause(&directory, &output, "read_failed", LEGACY_FIELD);
 }

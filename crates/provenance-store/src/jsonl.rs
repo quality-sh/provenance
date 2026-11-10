@@ -453,11 +453,12 @@ mod tests {
                 Ok(())
             },
         )
-        .unwrap_err()
-        .to_string();
-
-        assert!(message.contains("nested unknown field"), "{message}");
-        assert!(message.contains("detail.extension"), "{message}");
+        .unwrap_err();
+        let state = crate::state_store::readers::StateLineInvalid::find(&message).unwrap();
+        assert_eq!(
+            (state.line, state.message.as_str()),
+            (1, "nested unknown field `detail.extension` cannot survive a typed record change")
+        );
         assert_eq!(std::fs::read(path).unwrap(), before);
     }
 
@@ -481,11 +482,12 @@ mod tests {
                 Ok(())
             },
         )
-        .unwrap_err()
-        .to_string();
-
-        assert!(message.contains("repeated top-level member"), "{message}");
-        assert!(message.contains("extension"), "{message}");
+        .unwrap_err();
+        let state = crate::state_store::readers::StateLineInvalid::find(&message).unwrap();
+        assert_eq!(
+            (state.line, state.message.as_str()),
+            (1, "repeated top-level member `extension` cannot survive a typed record change")
+        );
         assert_eq!(std::fs::read(path).unwrap(), before);
     }
 }
