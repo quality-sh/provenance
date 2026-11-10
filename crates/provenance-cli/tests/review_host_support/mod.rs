@@ -1,5 +1,7 @@
 #![allow(dead_code, clippy::duplicated_attributes)]
 
+#[path = "../support/bounded_process.rs"]
+pub mod bounded_process;
 pub mod detached;
 pub mod resolution;
 pub mod waits;
@@ -82,17 +84,7 @@ impl Host {
     }
 
     pub fn wait(&mut self, timeout: Duration) -> std::process::ExitStatus {
-        let deadline = std::time::Instant::now() + timeout;
-        loop {
-            if let Some(status) = self.child.try_wait().unwrap() {
-                return status;
-            }
-            assert!(
-                std::time::Instant::now() < deadline,
-                "host shutdown timed out"
-            );
-            std::thread::sleep(Duration::from_millis(25));
-        }
+        bounded_process::wait(&mut self.child, timeout, "host shutdown timed out")
     }
 
     pub const fn take_stderr(&mut self) -> std::process::ChildStderr {

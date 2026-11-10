@@ -1,4 +1,5 @@
 use super::support::{create_source, init_repo, write_run_dir};
+use crate::bounded_process::Bounded;
 use assert_cmd::Command;
 use predicates::prelude::PredicateBooleanExt;
 use std::io::Write;
@@ -27,7 +28,7 @@ fn swarm_backtrace_land_writes_run_dir_outputs_end_to_end() {
             "--format",
             "json",
         ])
-        .assert()
+        .bounded_assert()
         .success()
         .stdout(predicates::str::contains(r#""contributions": 2"#))
         .stdout(predicates::str::contains(r#""synthesis_packets": 1"#))
@@ -39,7 +40,7 @@ fn swarm_backtrace_land_writes_run_dir_outputs_end_to_end() {
         .args([
             "export", "--repo", &repo, "--scope", "default", "--format", "json",
         ])
-        .assert()
+        .bounded_assert()
         .success()
         .stdout(predicates::str::contains("contrib_backtrace_extract_auth"))
         .stdout(predicates::str::contains("synth_backtrace_auth"))
@@ -63,7 +64,7 @@ fn swarm_backtrace_land_writes_run_dir_outputs_end_to_end() {
             "--format",
             "json",
         ])
-        .assert()
+        .bounded_assert()
         .success()
         .stdout(predicates::str::contains(
             r#""promotion_state": "asserted""#,
@@ -94,7 +95,7 @@ fn swarm_backtrace_land_cannot_replace_asserted_run_outputs() {
             "--format",
             "json",
         ])
-        .assert()
+        .bounded_assert()
         .success();
     write_run_dir(&run_dir, "Updated extracted finding.");
     let merge_path = run_dir.join("merge/merged.json");
@@ -118,7 +119,7 @@ fn swarm_backtrace_land_cannot_replace_asserted_run_outputs() {
             "--format",
             "json",
         ])
-        .assert()
+        .bounded_assert()
         .failure()
         .stderr(predicates::str::contains("referenced by an assertion"));
 
@@ -128,7 +129,7 @@ fn swarm_backtrace_land_cannot_replace_asserted_run_outputs() {
         .args([
             "export", "--repo", &repo, "--scope", "default", "--format", "json",
         ])
-        .assert()
+        .bounded_assert()
         .success()
         .stdout(predicates::str::contains("Original extracted finding."))
         .stdout(predicates::str::contains("Updated extracted finding.").not())
@@ -160,7 +161,7 @@ fn identical_proposal_and_assertion_relanding_without_replace_is_rejected() {
                 "--format",
                 "json",
             ])
-            .assert()
+            .bounded_assert()
     };
     land().success();
     std::fs::remove_dir_all(run_dir.join("extractors")).unwrap();
@@ -181,8 +182,7 @@ fn identical_proposal_and_assertion_relanding_without_replace_is_rejected() {
         .args([
             "export", "--repo", &repo, "--scope", "default", "--format", "json",
         ])
-        .output()
-        .unwrap();
+        .bounded_output();
     assert!(output.status.success());
     let export: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(export["proposal_cards"].as_array().unwrap().len(), 1);
@@ -212,7 +212,7 @@ fn check_rejects_landing_overlays_that_rewrite_asserted_evidence() {
                 "--run-dir",
                 run_dir.to_str().unwrap(),
             ])
-            .assert()
+            .bounded_assert()
             .success();
 
         let landings = std::path::Path::new(&repo)
@@ -250,7 +250,7 @@ fn check_rejects_landing_overlays_that_rewrite_asserted_evidence() {
         Command::cargo_bin("provenance")
             .unwrap()
             .args(["check", "--repo", &repo, "--format", "json"])
-            .assert()
+            .bounded_assert()
             .failure()
             .stderr(predicates::str::contains("referenced by an assertion"));
     }

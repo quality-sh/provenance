@@ -1,3 +1,5 @@
+#[path = "support/bounded_process.rs"]
+mod bounded_process;
 #[path = "cli_swarm_backtrace_land/conflict_atomicity.rs"]
 mod conflict_atomicity;
 #[path = "export_fixture_support/mod.rs"]

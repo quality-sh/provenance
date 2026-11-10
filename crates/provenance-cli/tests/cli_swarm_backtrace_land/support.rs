@@ -1,3 +1,4 @@
+use crate::bounded_process::Bounded;
 use assert_cmd::Command;
 
 pub fn init_repo(repo: &str) {
@@ -12,7 +13,7 @@ pub fn init_repo(repo: &str) {
             "--path-prefix",
             ".",
         ])
-        .assert()
+        .bounded_assert()
         .success();
     crate::export_fixture_support::make_default_scope_portable(repo);
 }
@@ -40,7 +41,7 @@ pub fn create_source(repo: &str) {
             "--format",
             "json",
         ])
-        .assert()
+        .bounded_assert()
         .success();
 }
 

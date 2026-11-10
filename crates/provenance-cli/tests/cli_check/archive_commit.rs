@@ -1,4 +1,5 @@
 use super::{git, init};
+use crate::bounded_process::Bounded;
 use assert_cmd::Command;
 use provenance_macros::verifies;
 use std::path::Path;
@@ -68,8 +69,7 @@ fn commit(repo: &Path, message: &str) -> String {
     let head = provenance_store::git_process::git()
         .current_dir(repo)
         .args(["rev-parse", "HEAD"])
-        .output()
-        .unwrap();
+        .bounded_output();
     String::from_utf8(head.stdout).unwrap().trim().to_owned()
 }
 
@@ -80,8 +80,7 @@ fn run(repo: &Path, command: &str, extra: &[&str]) -> Output {
         .args(command.split_whitespace())
         .args(extra)
         .args(["--repo", repo.to_str().unwrap()])
-        .output()
-        .unwrap()
+        .bounded_output()
 }
 
 fn cli(repo: &Path, command: &str, extra: &[&str]) -> String {

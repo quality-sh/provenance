@@ -12,6 +12,10 @@ mod dictionary_support;
 #[path = "cli_check/archive_commit.rs"]
 mod archive_commit;
 
+#[path = "support/bounded_process.rs"]
+mod bounded_process;
+use bounded_process::Bounded;
+
 #[test]
 fn check_rejects_dangling_artifact_links() {
     let dir = tempfile::tempdir().unwrap();
@@ -407,8 +411,7 @@ pub(crate) fn git(repo: &Path, arguments: &[&str]) {
     let output = provenance_store::git_process::git()
         .current_dir(repo)
         .args(arguments)
-        .output()
-        .unwrap();
+        .bounded_output();
     assert!(
         output.status.success(),
         "git {arguments:?} failed: {}",
@@ -428,7 +431,7 @@ pub(crate) fn init(repo: &Path) {
             "--path-prefix",
             ".",
         ])
-        .assert()
+        .bounded_assert()
         .success();
 }
 
@@ -442,7 +445,7 @@ fn provenance(repo: &Path) -> assert_cmd::assert::Assert {
             "--format",
             "json",
         ])
-        .assert()
+        .bounded_assert()
 }
 
 fn write_jsonl(path: &Path, record: impl AsRef<str>) {
