@@ -1,4 +1,3 @@
-use assert_cmd::Command;
 use predicates::prelude::*;
 use {provenance_macros::verifies, std::path::Path};
 
@@ -373,6 +372,20 @@ fn init_preserves_a_following_setext_section() {
 }
 
 #[test]
+#[verifies("rule_init_native_command", examples)]
+fn native_init_writes_no_package_manager_command_item() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+
+    init(&repo).success();
+
+    let agents = read_agents(&repo);
+    assert!(agents.contains("- Run `provenance --version` before"));
+    assert!(!agents.contains("The installed skills and the output of each command"));
+    assert!(!agents.contains("In this project, run them as"));
+}
+
+#[test]
 #[verifies("rule_init_owns_agents_provenance_section", examples)]
 fn init_does_not_claim_a_blockquoted_provenance_heading() {
     let temporary = tempfile::tempdir().unwrap();
@@ -388,17 +401,7 @@ fn init_does_not_claim_a_blockquoted_provenance_heading() {
     assert_eq!(managed_heading_count(&agents), 1);
 }
 fn init(repo: &Path) -> assert_cmd::assert::Assert {
-    let mut command = Command::cargo_bin("provenance").unwrap();
-    command.args([
-        "init",
-        "--path",
-        repo.to_str().unwrap(),
-        "--scope",
-        "default",
-        "--path-prefix",
-        ".",
-    ]);
-    command.assert()
+    dictionary_support::init_command(repo, &[]).assert()
 }
 
 fn read_agents(repo: &Path) -> String {

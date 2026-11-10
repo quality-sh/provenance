@@ -31,21 +31,40 @@ fn init(repo: &Path) -> assert_cmd::assert::Assert {
 }
 
 fn init_with(repo: &Path, extra: &[&str]) -> assert_cmd::assert::Assert {
-    let mut command = Command::cargo_bin("provenance").unwrap();
+    offline_init(repo, extra).assert()
+}
+
+fn offline_init(repo: &Path, extra: &[&str]) -> Command {
+    let mut command = dictionary_support::init_command(repo, extra);
     let (assets, indexes) = offline_dictionary_env();
     command
         .env("PROVENANCE_STE100_ASSET_DIR", assets)
         .env("PROVENANCE_STE100_INDEX_DIR", indexes);
-    command.args([
-        "init",
-        "--path",
-        repo.to_str().unwrap(),
-        "--scope",
-        "default",
-        "--path-prefix",
-        ".",
-    ]);
-    command.args(extra).assert()
+    command
+}
+
+#[test]
+#[verifies("rule_init_native_command", examples)]
+#[verifies("rule_init_configures_human_reviewer", examples)]
+fn native_init_without_a_reviewer_prints_the_native_read_only_warning() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+    let git_config = temporary.path().join("gitconfig");
+    std::fs::write(&git_config, "").unwrap();
+
+    let output = offline_init(&repo, &[])
+        .env("GIT_CONFIG_GLOBAL", &git_config)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let warning = format!(
+        "Warning: No reviewer is configured. Review will be read-only. Add a reviewer with `provenance init --path {} --disposition-actor-id <reviewer-id>`.",
+        repo.display()
+    );
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(stderr.lines().any(|line| line == warning), "{stderr}");
 }
 
 #[test]

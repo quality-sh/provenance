@@ -31,8 +31,11 @@ pub fn provenance() -> Command {
     Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
 }
 
-pub fn init(repo: &Path) {
-    provenance()
+/// Builds an `init` of `repo` in scope "default" with the path prefix ".",
+/// followed by `extra`.
+pub fn init_command(repo: &Path, extra: &[&str]) -> Command {
+    let mut command = provenance();
+    command
         .args([
             "init",
             "--path",
@@ -42,8 +45,12 @@ pub fn init(repo: &Path) {
             "--path-prefix",
             ".",
         ])
-        .assert()
-        .success();
+        .args(extra);
+    command
+}
+
+pub fn init(repo: &Path) {
+    init_command(repo, &[]).assert().success();
 }
 
 /// Creates one Requirement with the index directory set on the child process.

@@ -43,6 +43,7 @@ export function createPackedCommands({ temporary, npmCli, isolatedCache }) {
     const output = execFileSync(process.execPath, [
       npxCli,
       "--no",
+      "--",
       "provenance",
       "check",
       "--repo",
