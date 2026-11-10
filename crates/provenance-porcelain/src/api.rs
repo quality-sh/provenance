@@ -31,6 +31,9 @@ pub enum ApiMethod {
 }
 
 impl ApiMethod {
+    /// Every method, in the order that a refusal lists them.
+    pub const ALL: [Self; 3] = [Self::Get, Self::Post, Self::Patch];
+
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Get => "get",
@@ -42,12 +45,9 @@ impl ApiMethod {
     /// Parse one method name in any letter case, as discovery prints
     /// uppercase names and HTTP clients accept either case.
     pub fn parse(value: &str) -> Option<Self> {
-        match value.to_ascii_lowercase().as_str() {
-            "get" => Some(Self::Get),
-            "post" => Some(Self::Post),
-            "patch" => Some(Self::Patch),
-            _ => None,
-        }
+        Self::ALL
+            .into_iter()
+            .find(|method| method.as_str().eq_ignore_ascii_case(value))
     }
 }
 

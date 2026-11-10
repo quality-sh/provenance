@@ -2,10 +2,11 @@
 
 use clap::CommandFactory as _;
 use clap::{
-    builder::{PossibleValuesParser, ValueParser},
+    builder::{PossibleValue, PossibleValuesParser, TypedValueParser, ValueParser},
     Arg, ArgAction, ArgMatches, Command,
 };
 use provenance_cli::cli_options::{self, flag_name, GLOBAL_OPTIONS, GROUP_DESCRIPTIONS};
+use provenance_macros::rule;
 use provenance_porcelain::registry::{
     self, Binding, Declaration, Field, FieldValue, Input, Relation,
 };
@@ -121,14 +122,23 @@ pub fn with_global_flags(command: Command) -> Command {
     )
 }
 
+/// When a flag value is not in the closed set of its registry field, the refusal shows
+/// each value of that set, in the order of `Field::closed_values`.
+///
+/// The catalog record flags get their list through `field_schema::invalid_value`.
+#[rule("rule_cli_closed_value_refusal_lists_values")]
 fn value_parser(field: &Field) -> ValueParser {
     if !field.values.is_empty() {
         return PossibleValuesParser::new(field.values).into();
     }
     match field.value {
         FieldValue::Count => clap::value_parser!(usize).into(),
-        FieldValue::RecordKind => ValueParser::new(parse_kind),
-        FieldValue::ApiMethod => ValueParser::new(parse_api_method),
+        FieldValue::RecordKind => {
+            ClosedSet::parser(field, |value| provenance_core::NodeType::parse(value).ok())
+        }
+        FieldValue::ApiMethod => {
+            ClosedSet::parser(field, provenance_porcelain::api::ApiMethod::parse)
+        }
         FieldValue::CatalogLimit => ValueParser::new(parse_catalog_limit),
         FieldValue::Port => clap::value_parser!(u16).into(),
         FieldValue::Switch | FieldValue::Text | FieldValue::Pairs(_) | FieldValue::Object => {
@@ -150,13 +160,46 @@ fn relate(mut arg: Arg, name: &str, relations: &[Relation]) -> Arg {
     arg
 }
 
-fn parse_kind(value: &str) -> Result<provenance_core::NodeType, String> {
-    provenance_core::NodeType::parse(value).map_err(|_| "unsupported record type".to_owned())
+/// The parser of a closed set whose values a parse function reads, for example in any
+/// letter case. A value that the function refuses gets the refusal of the possible
+/// values parser, so clap shows each value of the set.
+#[derive(Clone)]
+struct ClosedSet<T> {
+    values: Vec<&'static str>,
+    parse: fn(&str) -> Option<T>,
 }
 
-fn parse_api_method(value: &str) -> Result<provenance_porcelain::api::ApiMethod, String> {
-    provenance_porcelain::api::ApiMethod::parse(value)
-        .ok_or_else(|| "unsupported method".to_owned())
+impl<T: Clone + Send + Sync + 'static> ClosedSet<T> {
+    fn parser(field: &Field, parse: fn(&str) -> Option<T>) -> ValueParser {
+        ValueParser::new(Self {
+            values: field.closed_values(),
+            parse,
+        })
+    }
+}
+
+impl<T: Clone + Send + Sync + 'static> TypedValueParser for ClosedSet<T> {
+    type Value = T;
+
+    fn parse_ref(
+        &self,
+        command: &Command,
+        arg: Option<&Arg>,
+        value: &std::ffi::OsStr,
+    ) -> Result<T, clap::Error> {
+        if let Some(parsed) = value.to_str().and_then(self.parse) {
+            return Ok(parsed);
+        }
+        let listed = PossibleValuesParser::new(self.values.iter().copied());
+        let value = listed.parse_ref(command, arg, value)?;
+        unreachable!("the parse function accepts each listed value, but refused {value}")
+    }
+
+    fn possible_values(&self) -> Option<Box<dyn Iterator<Item = PossibleValue> + '_>> {
+        Some(Box::new(
+            self.values.iter().copied().map(PossibleValue::new),
+        ))
+    }
 }
 
 fn parse_catalog_limit(value: &str) -> Result<usize, String> {
