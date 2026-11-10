@@ -306,7 +306,7 @@ function assertStrictCommittedEditGate(project, environment, npmCli, version) {
     rule: "1.1",
     disposition: "violation",
     span: { start: 4, end: 18 },
-    message: "The word or phrase \"bunapprovedaaa\" is not approved by ASD-STE100 Rule 1.1.",
+    message: "The word or phrase \"bunapprovedaaa\" is not approved by ASD-STE100 Rule 1.1. The dictionary gives these approved alternatives: ITEM (n).",
   }]);
 }
 

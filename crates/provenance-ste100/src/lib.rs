@@ -3,6 +3,7 @@
 //!
 //! Deterministic descriptive-text checks from ASD-STE100 Issue 9.
 
+mod alternatives;
 mod contracted_verbs;
 mod dictionary;
 mod inflection;
@@ -231,13 +232,21 @@ fn unapproved_word_findings(
         })
         .map(|word_use| {
             let rejected = &text[word_use.span.start..word_use.span.end];
+            let mut message = format!(
+                "The word or phrase \"{rejected}\" is not approved by ASD-STE100 Rule 1.1."
+            );
+            let alternatives = alternatives::for_rejected(dictionary, rejected);
+            if !alternatives.is_empty() {
+                message.push_str(&format!(
+                    " The dictionary gives these approved alternatives: {}.",
+                    alternatives.join("; ")
+                ));
+            }
             Finding {
                 rule: RuleNumber::OneOne,
                 kind: FindingKind::Violation,
                 span: word_use.span,
-                message: format!(
-                    "The word or phrase \"{rejected}\" is not approved by ASD-STE100 Rule 1.1."
-                ),
+                message,
             }
         })
         .collect()

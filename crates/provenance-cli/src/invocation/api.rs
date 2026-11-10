@@ -54,6 +54,24 @@ fn pairs(
     Ok(pairs)
 }
 
+/// The correction for a query parameter that the caller gave more than once.
+///
+/// The api takes each query parameter one time. An array parameter takes its
+/// items as one comma-separated value.
+fn repeated_query(raw: &[String]) -> Option<String> {
+    let mut names = std::collections::BTreeSet::new();
+    raw.iter()
+        .filter_map(|entry| entry.split_once('=').map(|(name, _)| name.trim()))
+        .find(|name| !names.insert(*name))
+        .map(|name| {
+            format!(
+                "--query {name} occurs more than one time; give each parameter one time \
+                 and put the items of a list in one comma-separated value, \
+                 for example --query {name}=a,b"
+            )
+        })
+}
+
 fn read_body(input: &str) -> serde_json::Map<String, serde_json::Value> {
     let text = if input == "-" {
         let mut text = String::new();
@@ -79,7 +97,7 @@ pub async fn dispatch(args: ApiArgs) -> anyhow::Result<()> {
         Err(error) => {
             return Err(crate::catalog_cli::refusal::HostRefusal {
                 failure: serde_json::to_value(&error.failure)?,
-                hint: None,
+                hint: repeated_query(&args.queries),
                 text_shows_failure: true,
             }
             .into())

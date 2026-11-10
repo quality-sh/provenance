@@ -351,21 +351,17 @@ fn parse_plain_value(
 }
 
 fn parse_typed(request: &Value, schema: &Value, flag: &str, raw: &str) -> anyhow::Result<Value> {
-    if accepts_string(request, schema, 0) {
-        let value = Value::String(raw.to_owned());
-        anyhow::ensure!(
-            validates(request, schema, &value)?,
-            "invalid value for --{flag}"
-        );
-        return Ok(value);
+    let refused = || super::accepted_values::invalid_value(request, schema, flag);
+    let value = if accepts_string(request, schema, 0) {
+        Value::String(raw.to_owned())
+    } else {
+        provenance_contract::parse_schema_value_in(request, schema, raw).map_err(|_| refused())?
+    };
+    if validates(request, schema, &value)? {
+        Ok(value)
+    } else {
+        Err(refused())
     }
-    let value = provenance_contract::parse_schema_value_in(request, schema, raw)
-        .map_err(|_| anyhow::anyhow!("invalid value for --{flag}"))?;
-    anyhow::ensure!(
-        validates(request, schema, &value)?,
-        "invalid value for --{flag}"
-    );
-    Ok(value)
 }
 
 fn parse_json(request: &Value, schema: &Value, flag: &str, raw: &str) -> anyhow::Result<Value> {
@@ -479,7 +475,7 @@ fn schema_kind(root: &Value, schema: &Value, depth: usize) -> Option<&'static st
     }
 }
 
-fn resolve<'a>(root: &'a Value, reference: &str) -> Option<&'a Value> {
+pub(super) fn resolve<'a>(root: &'a Value, reference: &str) -> Option<&'a Value> {
     let name = reference.strip_prefix("#/$defs/")?;
     root.get("$defs")?.get(name)
 }

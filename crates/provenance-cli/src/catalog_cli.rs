@@ -5,6 +5,7 @@ use provenance_contract::TargetAction;
 use provenance_porcelain::action::Action;
 use provenance_transport::porcelain::ReplacementError;
 
+mod accepted_values;
 pub mod fields;
 mod help;
 mod input;
@@ -190,6 +191,16 @@ fn review_read_command(
     format!("provenance {id} --view review{}", context_options(context))
 }
 
+/// Names where the caller reads the edit guard and the flag that takes it,
+/// for an update that the host refused because it had no guard.
+fn missing_guard_hint(id: &str, context: &provenance_transport::repository::RepoContext) -> String {
+    format!(
+        "this update needs --if-match; run `provenance {id} get --format json{}` \
+         and give edit.etag to --if-match; expected sha256:<64 lowercase hexadecimal characters>",
+        context_options(Some(context))
+    )
+}
+
 fn actionable_failure(
     failure: &provenance_core::protocol::failure::ErasedFailure,
     record_id: Option<&str>,
@@ -226,6 +237,11 @@ fn actionable_failure(
                 "review_submission_conflict" | "requirement_edit_conflict" | "record_edit_conflict",
             ),
         ) => Some(format!("run `{}`", review_read_command(id, Some(context)))),
+        (Some(id), Some("invalid_input"))
+            if error["field"] == "If-Match" && error["reason"] == "required" =>
+        {
+            Some(missing_guard_hint(id, context))
+        }
         _ => None,
     };
     HostRefusal {
