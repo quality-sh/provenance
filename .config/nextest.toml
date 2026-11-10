@@ -4,15 +4,19 @@ test-threads = 8
 # The single-source process tests run a full nested Cargo build. The
 # distribution shard of the Default-features CLI test runs them once per CI
 # run; the other shard runs the rest of the provenance-cli tests.
-default-filter = 'not binary(cli_skills_single_source)'
+# The simulation tests run only in the nightly simulation workflow, with the
+# simulation profile. CI compiles them, but no CI job runs them.
+default-filter = 'not binary(cli_skills_single_source) & not package(provenance-simulation) & not binary(simulation_cli)'
 
 [profile.ci.junit]
 # target/nextest/ci/junit.xml; CI uploads it for TAG, the test aggregator.
 path = "junit.xml"
 
-# The nightly simulation. Its random cases are ignored tests, so a pull
-# request never runs them; the workflow passes --run-ignored all and sets
-# HEGEL_SEED and HEGEL_TEST_CASES. simulation_cli runs the CLI layer.
+# The nightly simulation. The ci profile leaves out every test of
+# provenance-simulation and of simulation_cli, so no CI job runs them. The
+# random cases are also ignored tests, so a plain cargo test does not run
+# them. The workflow passes --run-ignored all and sets HEGEL_SEED and
+# HEGEL_TEST_CASES. simulation_cli runs the CLI layer.
 [profile.simulation]
 default-filter = 'package(provenance-simulation) | binary(simulation_cli)'
 fail-fast = false

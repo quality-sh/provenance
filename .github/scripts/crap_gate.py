@@ -296,12 +296,15 @@ def validate_report(report, lcov_path, expected_version, allow_platform_only=Fal
     return _validate_perfect_coverage(entries, lcov, allow_platform_only)
 
 
-def _arguments():
+def _arguments(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cargo-crap", default="cargo-crap")
     scope = parser.add_mutually_exclusive_group(required=True)
     scope.add_argument("--workspace", action="store_true")
     scope.add_argument("--path")
+    # A list of workspace packages: the workspace without the packages that
+    # the gate leaves out.
+    scope.add_argument("--package", action="append")
     parser.add_argument("--lcov", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--threshold", type=float, required=True)
@@ -312,14 +315,18 @@ def _arguments():
         action="store_true",
         help="accept functions whose cfg attribute excludes the Linux host",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def _tool_args(args):
     command = [args.cargo_crap]
-    command.append("--workspace" if args.workspace else "--path")
-    if not args.workspace:
-        command.append(args.path)
+    if args.workspace:
+        command.append("--workspace")
+    elif args.package:
+        for package in args.package:
+            command.extend(["-p", package])
+    else:
+        command.extend(["--path", args.path])
     command.extend(
         [
             "--lcov",

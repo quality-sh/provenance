@@ -89,7 +89,11 @@ class WorkflowWiringTests(unittest.TestCase):
     def test_the_shards_run_every_cli_test(self):
         # The ci profile leaves out the distribution test, so the other shard
         # runs everything else and the distribution shard runs only that test.
-        self.assertIn("default-filter = 'not binary(cli_skills_single_source)'", NEXTEST.read_text())
+        self.assertIn(
+            "default-filter = 'not binary(cli_skills_single_source) & "
+            "not package(provenance-simulation) & not binary(simulation_cli)'",
+            NEXTEST.read_text(),
+        )
         job = self.job(SHARDS)
         self.assertIn("fail-fast: false", job)
         self.assertIn(
