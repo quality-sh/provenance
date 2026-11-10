@@ -268,7 +268,9 @@ fn cli_get_rejects_an_unknown_returned_kind() {
         ])
         .assert()
         .failure()
-        .stderr(predicates::str::contains("unsupported record type"));
+        .stderr(predicates::str::contains(
+            "[possible values: source, requirement, resolution, rule, topic, question]",
+        ));
 }
 
 #[test]
