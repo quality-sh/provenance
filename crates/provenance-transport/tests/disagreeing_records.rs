@@ -142,7 +142,17 @@ async fn a_message_id_on_two_lines_is_located_at_the_second_line() {
         .unwrap()
         .to_owned();
     std::fs::write(&path, format!("{line}\n{text}")).unwrap();
-    let (status, failure) = call(&host(&repo, false), "GET", "/messages", None).await;
+    let discussion = started["data"]["discussion_id"].as_str().unwrap();
+    let (status, failure) = support::resource_http::call_with_headers(
+        &host(&repo, true),
+        "POST",
+        &format!("/requirements/req_shared/discussions/{discussion}/messages"),
+        Some(
+            json!({"data":{"actor":"agent","declared_by":null,"role":"assistant","body":"Reply."}}),
+        ),
+        &[("if-match", "\"1\"")],
+    )
+    .await;
     assert_eq!(status, 500, "{failure}");
     let file = format!("scopes/default/threads/{shard}");
     assert_eq!(

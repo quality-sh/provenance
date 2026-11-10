@@ -291,7 +291,7 @@ async fn a_review_refusal_has_a_declared_kind() {
 
 fn proposal(id: &str, extra: &Value) -> Value {
     let mut data = json!({
-        "scope_id":"default", "id":id, "proposal_key":"shared", "proposal_type":"requirement_candidate",
+        "id":id, "proposal_key":"shared", "proposal_type":"requirement_candidate",
         "title":"Shared", "summary":"Clarify the shared requirement.", "confidence":null,
         "traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_shared"},
             "source_ids":[], "evidence_references":[], "supporting_claim_ids":[]},

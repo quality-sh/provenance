@@ -110,10 +110,10 @@ pub fn ensure_no_legacy_retirement(
         .get("id")
         .and_then(serde_json::Value::as_str)
         .map_or_else(|| "record".to_string(), |id| format!("record {id}"));
-    return Err(crate::refusal::fault!(
+    Err(crate::refusal::fault!(
         "{path} line {line_number}: {name} contains legacy field `retired`; \
          canonical JSONL requires record-deletion migration 026 before this build can read it"
-    ));
+    ))
 }
 
 /// The records of the shard at `path`, read through `store`; no records
