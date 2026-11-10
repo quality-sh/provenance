@@ -1,11 +1,15 @@
 use clap::Parser;
 
+/// The build identity: the release number, then the commit for a build from a
+/// git checkout, for example `0.4.0 (6347b4b0)`.
+pub const BUILD: &str = env!("PROVENANCE_BUILD");
+
 // The root parser. Every command under it comes from the registry. A doc comment here
 // would become the about line of `provenance --help`.
 #[derive(Parser)]
 #[command(
     name = "provenance",
-    version,
+    version = BUILD,
     subcommand_required = true,
     arg_required_else_help = true,
     after_help = concat!(
