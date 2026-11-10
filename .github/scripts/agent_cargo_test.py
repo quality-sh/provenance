@@ -1,13 +1,173 @@
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
 
 WRAPPER = Path(__file__).resolve().parents[2] / "scripts" / "agent-bin" / "cargo"
+CLOCK_START = 1_800_000_000
+
+# A fake gh. FAKE_API_RUNS is a JSON list of the answers that the run read gives
+# in sequence (the last answer repeats): queued, in_progress, completed, 500,
+# 404, 401, 403, rate:<seconds until reset>, retry:<retry-after seconds>,
+# 429:<seconds until reset>, secondary (a secondary rate limit that only the
+# message names), network (no HTTP answer), notjson (200 with an HTML body),
+# auth (gh is not logged in) or vanish (gh removes itself, then in_progress).
+# FAKE_RUN_STATES gives a fixed answer for each run id in a JSON object.
+# "gh run watch" reads the same sequence and stops with an error at the first
+# error answer, as the real gh does.
+FAKE_GH = r"""#!/usr/bin/env python3
+import json, os, re, sys
+from pathlib import Path
+
+calls = os.environ['FAKE_GH_CALLS']
+with open(calls, 'a') as f: f.write(json.dumps(sys.argv[1:]) + '\n')
+a = sys.argv[1:]
+state = Path(os.environ['FAKE_GH_STATE'])
+state.mkdir(exist_ok=True)
+
+def record(run_id):
+    path = state / f'run-{run_id}.json'
+    return json.loads(path.read_text()) if path.exists() else {'branch': None, 'sha': None, 'command_key': 'check', 'command_json': ''}
+
+def answer(run_id):
+    fixed = json.loads(os.environ.get('FAKE_RUN_STATES', '{}'))
+    if run_id in fixed:
+        return fixed[run_id]
+    counter = state / f'reads-{run_id}'
+    count = int(counter.read_text()) if counter.exists() else 0
+    counter.write_text(str(count + 1))
+    answers = json.loads(os.environ.get('FAKE_API_RUNS', '["completed"]'))
+    return answers[min(count, len(answers) - 1)]
+
+def respond(status, headers, body):
+    reason = {200: 'OK', 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 429: 'Too Many Requests', 500: 'Internal Server Error'}[status]
+    lines = [f'HTTP/2.0 {status} {reason}', 'Content-Type: application/json'] + [f'{k}: {v}' for k, v in headers.items()]
+    sys.stdout.write('\r\n'.join(lines) + '\r\n\r\n' + (body if isinstance(body, str) else json.dumps(body)))
+    if status != 200:
+        sys.stderr.write(f'gh: {body["message"]} (HTTP {status})\n')
+        sys.exit(1)
+
+def run_answer(run_id, value):
+    if value == '500':
+        respond(500, {}, {'message': 'Server Error'})
+    if value == '404':
+        respond(404, {}, {'message': 'Not Found'})
+    if value == '401':
+        respond(401, {}, {'message': 'Bad credentials'})
+    if value == '403':
+        respond(403, {}, {'message': 'Resource not accessible by integration'})
+    if value.startswith('rate:') or value.startswith('429:'):
+        reset = int(os.environ['FAKE_NOW']) + int(value.split(':')[1])
+        respond(int(value[:3].replace('rat', '403')), {'X-Ratelimit-Remaining': '0', 'X-Ratelimit-Reset': str(reset)}, {'message': 'API rate limit exceeded'})
+    if value.startswith('retry:'):
+        respond(403, {'Retry-After': value.split(':')[1]}, {'message': 'You have exceeded a secondary rate limit'})
+    if value == 'secondary':
+        respond(403, {}, {'message': 'You have exceeded a secondary rate limit. Please wait a few minutes before you try again.'})
+    if value == 'network':
+        sys.exit('error connecting to api.github.com')
+    if value == 'auth':
+        sys.stderr.write('To get started with GitHub CLI, please run:  gh auth login\n'); sys.exit(4)
+    if value == 'notjson':
+        respond(200, {}, '<html>unicorn</html>')
+    if value == 'vanish':
+        os.remove(sys.argv[0]); value = 'in_progress'
+    run = record(run_id)
+    done = os.environ.get('FAKE_RUN_CONCLUSION', 'success')
+    respond(200, {}, {'id': int(run_id), 'status': value, 'conclusion': done if value == 'completed' else None,
+                      'head_branch': run['branch'], 'head_sha': run['sha'],
+                      'html_url': f'https://github.com/quality-sh/provenance/actions/runs/{run_id}'})
+
+def job_names(run):
+    return ['Command'] if run['command_json'] else [run['command_key'].split('-')[0].capitalize()]
+
+def conclusion(name):
+    if name == 'Build':
+        return os.environ.get('FAKE_BUILD_RESULT', 'success')
+    return os.environ.get('FAKE_TEST_RESULT', 'success') if name in ('Test', 'Command') else 'success'
+
+if a[0] == 'api' and 'dispatches' in ' '.join(a):
+    if os.environ.get('FAKE_DISPATCH_ERROR') == '1': sys.exit('gh: Server Error (HTTP 500)')
+    payload = json.loads(sys.stdin.read())
+    with open(os.environ['FAKE_GH_PAYLOAD'], 'w') as f: json.dump(payload, f)
+    # Two dispatches can arrive at the same time: take the next free run id
+    # with an exclusive create.
+    run_id = 314
+    while True:
+        try:
+            fd = os.open(state / f'run-{run_id}.json', os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            break
+        except FileExistsError:
+            run_id += 1
+    inputs = payload['inputs']
+    with os.fdopen(fd, 'w') as f: json.dump({'branch': payload['ref'], 'sha': inputs['snapshot_sha'], 'command_key': inputs['command_key'], 'command_json': inputs['command_json']}, f)
+    print(json.dumps({'workflow_run_id': run_id, 'html_url': f'https://github.com/quality-sh/provenance/actions/runs/{run_id}'}))
+elif a[:2] == ['run', 'list']:
+    branch = a[a.index('--branch') + 1]
+    lists = sum(1 for line in open(calls) if line.startswith('["run", "list"'))
+    if lists <= int(os.environ.get('FAKE_RUN_LIST_MISSES', '0')):
+        print('[]'); sys.exit(0)
+    sha = branch.split('/')[2].split('-')[0]
+    with open(os.environ['FAKE_GH_PAYLOAD'], 'w') as f: json.dump({'headBranch': branch, 'headSha': sha, 'inputs': {'command_key': branch.split('/')[1], 'command_json': ''}}, f)
+    (state / 'run-314.json').write_text(json.dumps({'branch': branch, 'sha': sha, 'command_key': branch.split('/')[1], 'command_json': ''}))
+    print(json.dumps([{'databaseId': 314, 'headSha': sha, 'workflowName': 'Agent Cargo verification'}]))
+elif a[0] == 'api' and '-i' in a and re.fullmatch(r'repos/[^/]+/[^/]+/actions/runs/\d+', a[-1]):
+    run_id = a[-1].rsplit('/', 1)[1]
+    run_answer(run_id, answer(run_id))
+elif a[0] == 'api' and '-i' in a and re.fullmatch(r'repos/[^/]+/[^/]+/actions/runs/\d+/jobs(\?.*)?', a[-1]):
+    run = record(a[-1].split('/')[5])
+    names = [] if os.environ.get('FAKE_NO_JOB') == '1' else job_names(run)
+    respond(200, {}, {'jobs': [{'name': name, 'id': i, 'conclusion': conclusion(name)} for i, name in enumerate(names, 1)]})
+elif a[0] == 'api' and re.fullmatch(r'repos/[^/]+/[^/]+/actions/jobs/\d+/logs', a[-1]):
+    if os.environ.get('FAKE_JOB_LOG_ERROR') == '1': sys.exit('gh: Not Found (HTTP 404)')
+    log = os.environ.get('FAKE_JOB_LOG')
+    sys.stdout.write(Path(log).read_text() if log else
+        '2026-11-10T00:00:01Z running 3 tests\n'
+        '2026-11-10T00:00:02Z test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s\n'
+        '2026-11-10T00:00:03Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.01s\n')
+elif a[:2] == ['run', 'watch']:
+    if '--compact' in a: sys.exit('unsupported watch flag')
+    while True:
+        value = answer(a[2])
+        if value != 'in_progress' and value != 'completed':
+            sys.exit(f'failed to get run: HTTP {value.split(":")[0].replace("rate", "403")}')
+        if value == 'completed':
+            break
+elif a[:2] == ['run', 'view'] and '--json' in a:
+    run = record(a[2])
+    print(json.dumps({'headBranch': run['branch'], 'headSha': run['sha'], 'status': 'completed', 'jobs': [{'name': name, 'databaseId': i, 'conclusion': conclusion(name)} for i, name in enumerate(job_names(run), 1)]}))
+elif a[:2] == ['run', 'view'] and '--log-failed' in a:
+    if os.environ.get('FAKE_LOG_ERROR') == '1': sys.exit(1)
+    print('remote test failure')
+elif a[:2] == ['run', 'download']:
+    dest = Path(a[a.index('--dir') + 1])
+    dest.mkdir(parents=True, exist_ok=True)
+    broken = os.environ.get('FAKE_BINARY_BROKEN') == '1'
+    (dest / 'provenance').write_text('#!/bin/sh\n' + ('exit 1\n' if broken else 'echo provenance 0.2.2\n'))
+else:
+    sys.exit(f'fake gh: unexpected call {a}')
+"""
+
+# Runs the shim with a fake clock: time.sleep records the wait and moves the
+# clock, so a test of a long watch takes no real time.
+CLOCK = r"""
+import json, os, runpy, sys, time
+now = [float(os.environ['FAKE_NOW'])]
+def sleep(seconds):
+    with open(os.environ['FAKE_GH_CALLS'], 'a') as f: f.write(json.dumps(['sleep', seconds]) + '\n')
+    now[0] += seconds
+    os.environ['FAKE_NOW'] = str(int(now[0]))
+time.sleep = sleep
+time.time = lambda: now[0]
+time.monotonic = lambda: now[0]
+sys.argv = sys.argv[1:]
+runpy.run_path(sys.argv[0], run_name='__main__')
+"""
 
 
 def run(*args, cwd, env=None):
@@ -46,39 +206,7 @@ class AgentCargoTest(unittest.TestCase):
         self.assertEqual(bare.returncode, 0, bare.stderr)
 
         fake_gh = self.bin / "gh"
-        fake_gh.write_text(
-            "#!/usr/bin/env python3\n"
-            "import json, os, sys\n"
-            "with open(os.environ['FAKE_GH_CALLS'], 'a') as f: f.write(json.dumps(sys.argv[1:]) + '\\n')\n"
-            "a = sys.argv[1:]\n"
-            "if a[0] == 'api' and 'dispatches' in ' '.join(a):\n"
-            "  with open(os.environ['FAKE_GH_PAYLOAD'], 'w') as f: f.write(sys.stdin.read())\n"
-            "  print(json.dumps({'workflow_run_id': 314, 'html_url': 'https://github.com/quality-sh/provenance/actions/runs/314'}))\n"
-            "elif a[:2] == ['run', 'list']:\n"
-            "  branch = a[a.index('--branch') + 1]\n"
-            "  lists = sum(1 for line in open(os.environ['FAKE_GH_CALLS']) if line.startswith('[\"run\", \"list\"'))\n"
-            "  if lists <= int(os.environ.get('FAKE_RUN_LIST_MISSES', '0')):\n"
-            "    print('[]'); sys.exit(0)\n"
-            "  with open(os.environ['FAKE_GH_PAYLOAD'], 'w') as f: json.dump({'headBranch': branch, 'headSha': branch.split('/')[2].split('-')[0], 'inputs': {'command_key': branch.split('/')[1], 'command_json': ''}}, f)\n"
-            "  print(json.dumps([{'databaseId': 314, 'headSha': branch.split('/')[2].split('-')[0], 'workflowName': 'Agent Cargo verification'}]))\n"
-            "elif a[:2] == ['run', 'watch'] and '--compact' in a:\n"
-            "  sys.exit('unsupported watch flag')\n"
-            "elif a[:2] == ['run', 'view'] and '--json' in a:\n"
-            "  result = os.environ.get('FAKE_TEST_RESULT', 'success')\n"
-            "  payload = json.load(open(os.environ['FAKE_GH_PAYLOAD']))\n"
-            "  inputs = payload['inputs']\n"
-            "  names = ['Command'] if inputs.get('command_json') else [inputs['command_key'].split('-')[0].capitalize()]\n"
-            "  print(json.dumps({'headBranch': payload.get('headBranch'), 'headSha': payload.get('headSha'), 'status': 'completed', 'jobs': [{'name': name, 'databaseId': i, 'conclusion': os.environ.get('FAKE_BUILD_RESULT', 'success') if name == 'Build' else result if name in ('Test', 'Command') else 'success'} for i, name in enumerate(names, 1)]}))\n"
-            "elif a[:2] == ['run', 'view'] and '--log-failed' in a:\n"
-            "  if os.environ.get('FAKE_LOG_ERROR') == '1': sys.exit(1)\n"
-            "  print('remote test failure')\n"
-            "elif a[:2] == ['run', 'download']:\n"
-            "  from pathlib import Path\n"
-            "  dest = Path(a[a.index('--dir') + 1])\n"
-            "  dest.mkdir(parents=True, exist_ok=True)\n"
-            "  broken = os.environ.get('FAKE_BINARY_BROKEN') == '1'\n"
-            "  (dest / 'provenance').write_text('#!/bin/sh\\n' + ('exit 1\\n' if broken else 'echo provenance 0.2.2\\n'))\n"
-        )
+        fake_gh.write_text(FAKE_GH)
         fake_gh.chmod(0o755)
         fake_cargo = self.bin / "cargo"
         fake_cargo.write_text('#!/bin/sh\necho LOCAL "$@"\n')
@@ -90,6 +218,8 @@ class AgentCargoTest(unittest.TestCase):
                 "PATH": str(self.bin) + os.pathsep + self.env.get("PATH", ""),
                 "FAKE_GH_CALLS": str(self.calls),
                 "FAKE_GH_PAYLOAD": str(self.payload),
+                "FAKE_GH_STATE": str(self.root / "gh-state"),
+                "FAKE_NOW": str(CLOCK_START),
                 "PROVENANCE_CI_REPO": "quality-sh/provenance",
                 "PROVENANCE_CI_PUSH_URL": str(self.remote),
                 "PROVENANCE_CI_STATE_DIR": str(self.root / "state"),
@@ -103,6 +233,12 @@ class AgentCargoTest(unittest.TestCase):
 
     def cargo(self, *args, env=None, cwd=None):
         return run(sys.executable, str(WRAPPER), *args, cwd=cwd or self.repo, env=env or self.env)
+
+    def cargo_with_clock(self, *args, env=None):
+        return run(sys.executable, "-c", CLOCK, str(WRAPPER), *args, cwd=self.repo, env=env or self.env)
+
+    def sleeps(self):
+        return [call[1] for call in self.calls_matching("sleep") if call[0] == "sleep"]
 
     def calls_matching(self, word):
         if not self.calls.exists():
@@ -383,27 +519,20 @@ class AgentCargoTest(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertEqual(binary.read_text(), "previous binary")
 
-    def test_watch_polls_every_30_seconds(self):
-        result = self.cargo("check")
+    def test_watch_reads_the_run_every_30_seconds(self):
+        env = {**self.env, "FAKE_API_RUNS": '["in_progress", "in_progress", "completed"]'}
+
+        result = self.cargo_with_clock("check", env=env)
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        watches = self.calls_matching("watch")
-        self.assertEqual(len(watches), 1)
-        self.assertIn("--interval", watches[0])
-        self.assertEqual(watches[0][watches[0].index("--interval") + 1], "30")
+        self.assertEqual(self.calls_matching("watch"), [])
+        self.assertEqual(len(self.calls_matching("actions/runs/314\"")), 3)
+        self.assertEqual(self.sleeps(), [30, 30])
 
     def test_run_search_sleeps_10_seconds_between_list_calls(self):
-        recorder = (
-            "import json, os, runpy, sys, time\n"
-            "def sleep(seconds):\n"
-            "    with open(os.environ['FAKE_GH_CALLS'], 'a') as f: f.write(json.dumps(['sleep', seconds]) + '\\n')\n"
-            "time.sleep = sleep\n"
-            "sys.argv = [sys.argv[1], 'check']\n"
-            "runpy.run_path(sys.argv[0], run_name='__main__')\n"
-        )
         env = {**self.env, "FAKE_RUN_LIST_MISSES": "2"}
 
-        result = run(sys.executable, "-c", recorder, str(WRAPPER), cwd=self.repo, env=env)
+        result = self.cargo_with_clock("check", env=env)
 
         self.assertEqual(result.returncode, 0, result.stderr)
         search = [
@@ -412,7 +541,399 @@ class AgentCargoTest(unittest.TestCase):
             if call[0] == "sleep" or call[:2] == ["run", "list"]
         ]
         self.assertEqual(search, ["run list", "sleep", "run list", "sleep", "run list"])
-        self.assertEqual(self.calls_matching("sleep"), [["sleep", 10], ["sleep", 10]])
+        self.assertEqual(self.sleeps(), [10, 10])
+
+    def test_api_errors_during_the_watch_do_not_stop_it(self):
+        env = {**self.env, "FAKE_API_RUNS": '["in_progress", "500", "404", "in_progress", "completed"]'}
+
+        result = self.cargo_with_clock("check", env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Remote Cargo: check passed", result.stdout)
+        self.assertIn("HTTP 500", result.stderr)
+        self.assertIn("not found", result.stderr)
+        self.assertEqual(self.sleeps(), [30, 30, 30, 30])
+
+    def test_consecutive_api_errors_back_off(self):
+        env = {**self.env, "FAKE_API_RUNS": '["500", "500", "500", "completed"]'}
+
+        result = self.cargo_with_clock("check", env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.sleeps(), [30, 60, 120])
+
+    def test_rate_limit_waits_until_the_reset_time(self):
+        env = {**self.env, "FAKE_API_RUNS": '["in_progress", "rate:200", "completed"]'}
+
+        result = self.cargo_with_clock("check", env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.sleeps(), [30, 201])
+        self.assertIn("rate limit", result.stderr)
+        self.assertIn("201 s", result.stderr)
+        reset = time.strftime("%H:%M:%S UTC", time.gmtime(CLOCK_START + 30 + 200))
+        self.assertIn(f"GitHub resets it at {reset}", result.stderr)
+
+    def test_rate_limit_wait_has_an_upper_limit(self):
+        env = {**self.env, "FAKE_API_RUNS": '["rate:7200", "completed"]'}
+
+        result = self.cargo_with_clock("check", env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.sleeps(), [900])
+        self.assertIn("at most 900 s", result.stderr)
+
+    def assert_result_not_known(self, result, run_id="314"):
+        self.assertEqual(result.returncode, 3, result.stderr)
+        self.assertIn(f"https://github.com/quality-sh/provenance/actions/runs/{run_id}", result.stderr)
+        self.assertIn(f"gh run view {run_id} --repo quality-sh/provenance", result.stderr)
+
+    def test_run_that_is_never_found_gives_up_with_its_url(self):
+        env = {**self.env, "FAKE_API_RUNS": '["404"]'}
+
+        result = self.cargo_with_clock("check", env=env)
+
+        self.assert_result_not_known(result)
+        self.assertIn("not found", result.stderr)
+        self.assertEqual(self.sleeps(), [30] * 10)
+
+    def test_api_errors_give_up_after_the_total_limit(self):
+        env = {**self.env, "FAKE_API_RUNS": '["500"]'}
+
+        result = self.cargo_with_clock("check", env=env)
+
+        self.assert_result_not_known(result)
+        self.assertEqual(self.sleeps(), [30, 60, 120, 240, 300, 300, 300, 300, 300])
+
+    def test_run_that_never_appears_after_the_push_is_not_known(self):
+        env = {**self.env, "FAKE_RUN_LIST_MISSES": "1000"}
+
+        result = self.cargo_with_clock("check", env=env)
+
+        self.assertEqual(result.returncode, 3, result.stderr)
+        self.assertIn("agent-ci/check/", result.stderr)
+        self.assertIn("https://github.com/quality-sh/provenance/actions?query=branch%3A", result.stderr)
+
+    def test_success_prints_the_run_and_the_test_counts(self):
+        result = self.cargo_with_clock("test", "-p", "provenance-macros")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("https://github.com/quality-sh/provenance/actions/runs/314", result.stdout)
+        self.assertIn("job Command: success", result.stdout)
+        self.assertIn("5 passed, 0 failed, 1 ignored in 2 test binaries", result.stdout)
+        self.assertIn("gh run view 314 --repo quality-sh/provenance --job 1 --log", result.stdout)
+        self.assertEqual(len(self.calls_matching("/logs")), 1)
+
+    def test_test_counts_skip_a_large_job_log(self):
+        log = self.root / "large.log"
+        log.write_text("x" * (5 * 1024 * 1024))
+        env = {**self.env, "FAKE_JOB_LOG": str(log)}
+
+        result = self.cargo_with_clock("test", env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("larger than 4 MiB", result.stdout)
+        self.assertIn("gh run view 314 --repo quality-sh/provenance --job 1 --log", result.stdout)
+
+    def test_check_command_reads_no_job_log(self):
+        result = self.cargo_with_clock("check")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.calls_matching("/logs"), [])
+
+    def concurrent_calls(self, *args, separate_clones):
+        # A pre-receive hook holds each push until two pushes arrive, so both
+        # calls push at the same time, as two workers on one commit do.
+        barrier = self.root / "barrier"
+        barrier.mkdir()
+        hook = self.remote / "hooks/pre-receive"
+        hook.write_text(
+            "#!/bin/sh\n"
+            f"touch {barrier}/$$\n"
+            "for i in $(seq 100); do\n"
+            f"  [ \"$(ls {barrier} | wc -l)\" -ge 2 ] && exit 0\n"
+            "  sleep 0.1\n"
+            "done\n"
+        )
+        hook.chmod(0o755)
+        envs = [
+            {**self.env, "PROVENANCE_CI_STATE_DIR": str(self.root / (f"state-{n}" if separate_clones else "state"))}
+            for n in range(2)
+        ]
+        processes = [
+            subprocess.Popen(
+                [sys.executable, "-c", CLOCK, str(WRAPPER), *args], cwd=self.repo,
+                env={**env, "PYTHONDONTWRITEBYTECODE": "1"}, text=True,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+            for env in envs
+        ]
+        outputs = [process.communicate(timeout=60) for process in processes]
+        return [(process.returncode, *output) for process, output in zip(processes, outputs)]
+
+    def test_two_calls_on_one_commit_from_two_clones_each_watch_their_own_run(self):
+        results = self.concurrent_calls("test", "-p", "provenance-macros", separate_clones=True)
+
+        for code, stdout, stderr in results:
+            self.assertEqual(code, 0, stderr)
+        dispatches = [call for call in self.calls_matching("dispatches")]
+        self.assertEqual(len(dispatches), 2)
+        urls = sorted(next(line for line in stdout.splitlines() if "/actions/runs/" in line) for _, stdout, _ in results)
+        self.assertIn("/runs/314", urls[0])
+        self.assertIn("/runs/315", urls[1])
+
+    def test_two_calls_on_one_commit_in_one_clone_share_one_run(self):
+        results = self.concurrent_calls("test", "-p", "provenance-macros", separate_clones=False)
+
+        for code, stdout, stderr in results:
+            self.assertEqual(code, 0, stderr)
+            self.assertIn("/actions/runs/314", stdout)
+        self.assertEqual(len(self.calls_matching("dispatches")), 1)
+
+    def test_dispatch_snapshot_branch_is_removed_after_the_run(self):
+        result = self.cargo_with_clock("test", "-p", "provenance-macros")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        refs = run("git", "for-each-ref", "--format=%(refname)", "refs/heads/agent-snapshot", cwd=self.remote)
+        self.assertEqual(refs.stdout.strip(), "")
+
+    def test_retry_after_header_sets_the_wait(self):
+        env = {**self.env, "FAKE_API_RUNS": '["retry:120", "completed"]'}
+
+        result = self.cargo_with_clock("check", env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.sleeps(), [121])
+        self.assertIn("rate limit", result.stderr)
+
+    def test_http_429_waits_until_the_reset_time(self):
+        env = {**self.env, "FAKE_API_RUNS": '["429:100", "completed"]'}
+
+        result = self.cargo_with_clock("check", env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.sleeps(), [101])
+
+    def test_secondary_rate_limit_named_only_in_the_message_waits_a_fixed_time(self):
+        env = {**self.env, "FAKE_API_RUNS": '["secondary", "completed"]'}
+
+        result = self.cargo_with_clock("check", env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.sleeps(), [61])
+        self.assertIn("secondary rate limit", result.stderr)
+
+    def test_network_error_is_read_again(self):
+        env = {**self.env, "FAKE_API_RUNS": '["network", "completed"]'}
+
+        result = self.cargo_with_clock("check", env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.sleeps(), [30])
+        self.assertIn("error connecting to api.github.com", result.stderr)
+
+    def test_answer_that_is_not_json_is_read_again(self):
+        env = {**self.env, "FAKE_API_RUNS": '["notjson", "completed"]'}
+
+        result = self.cargo_with_clock("check", env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.sleeps(), [30])
+        self.assertIn("not JSON", result.stderr)
+
+    def test_cancelled_job_does_not_pass(self):
+        env = {**self.env, "FAKE_TEST_RESULT": "cancelled", "FAKE_RUN_CONCLUSION": "cancelled"}
+
+        result = self.cargo_with_clock("test", env=env)
+
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertNotIn("passed", result.stdout)
+        self.assertIn("test failed (cancelled)", result.stdout)
+
+    def test_cancelled_run_does_not_pass_when_its_job_passed(self):
+        env = {**self.env, "FAKE_RUN_CONCLUSION": "cancelled"}
+
+        result = self.cargo_with_clock("test", env=env)
+
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertNotIn("passed", result.stdout)
+        self.assertIn("test failed (cancelled)", result.stdout)
+
+    def assert_watch_stopped_at_once(self, answer):
+        env = {**self.env, "FAKE_API_RUNS": json.dumps(["in_progress", answer])}
+
+        result = self.cargo_with_clock("check", env=env)
+
+        self.assert_result_not_known(result)
+        self.assertEqual(self.sleeps(), [30])
+        self.assertIn("run 314 continues", result.stderr)
+        self.assertIn("then read the result with", result.stderr)
+        return result
+
+    def test_http_401_stops_the_watch_at_once(self):
+        result = self.assert_watch_stopped_at_once("401")
+        self.assertIn("Bad credentials", result.stderr)
+
+    def test_authentication_error_stops_the_watch_at_once(self):
+        result = self.assert_watch_stopped_at_once("auth")
+        self.assertIn("gh auth status", result.stderr)
+
+    def test_http_403_that_is_not_a_rate_limit_stops_the_watch_at_once(self):
+        result = self.assert_watch_stopped_at_once("403")
+        self.assertIn("Resource not accessible", result.stderr)
+
+    def test_missing_gh_during_the_watch_gives_result_not_known(self):
+        # Only the fake gh is on PATH, so the shim cannot find a real gh.
+        tools = self.root / "tools"
+        tools.mkdir()
+        for name in ("git", "python3"):
+            (tools / name).symlink_to(shutil.which(name))
+        env = {**self.env, "PATH": f"{self.bin}{os.pathsep}{tools}", "FAKE_API_RUNS": '["vanish"]'}
+
+        result = self.cargo_with_clock("check", env=env)
+
+        self.assert_result_not_known(result)
+        self.assertIn("cannot start gh", result.stderr)
+
+    def test_watch_gives_up_at_the_total_limit(self):
+        env = {**self.env, "FAKE_API_RUNS": '["queued"]'}
+
+        result = self.cargo_with_clock("check", env=env)
+
+        self.assert_result_not_known(result)
+        self.assertIn("not complete after 120 minutes", result.stderr)
+        self.assertIn("last state that the shim read is queued", result.stderr)
+        self.assertEqual(sum(self.sleeps()), 120 * 60)
+
+    def test_passed_test_without_result_lines_says_the_counts_are_not_found(self):
+        log = self.root / "empty.log"
+        log.write_text("2026-11-10T00:00:01Z Finished test profile\n")
+        env = {**self.env, "FAKE_JOB_LOG": str(log)}
+
+        result = self.cargo_with_clock("test", env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("test counts not found", result.stdout)
+        self.assertIn("gh run view 314 --repo quality-sh/provenance --job 1 --log", result.stdout)
+        self.assertNotIn("0 passed", result.stdout)
+
+    def remote_branches(self, prefix):
+        refs = run("git", "for-each-ref", "--format=%(refname:short)", f"refs/heads/{prefix}", cwd=self.remote)
+        self.assertEqual(refs.returncode, 0, refs.stderr)
+        return refs.stdout.split()
+
+    def records(self):
+        return json.loads((self.root / "state/runs.json").read_text()).get("branches", {})
+
+    def test_failed_dispatch_deletes_its_branch(self):
+        env = {**self.env, "FAKE_DISPATCH_ERROR": "1"}
+
+        result = self.cargo_with_clock("test", "-p", "provenance-macros", env=env)
+
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("dispatch request failed", result.stderr)
+        self.assertEqual(self.remote_branches("agent-snapshot"), [])
+        self.assertEqual(self.records(), {})
+
+    def test_job_that_did_not_run_deletes_its_branch(self):
+        env = {**self.env, "FAKE_NO_JOB": "1"}
+
+        result = self.cargo_with_clock("test", "-p", "provenance-macros", env=env)
+
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("job did not run", result.stderr)
+        self.assertEqual(self.remote_branches("agent-snapshot"), [])
+        self.assertEqual(self.records(), {})
+
+    def test_branch_is_recorded_with_its_run_when_the_watch_does_not_end(self):
+        env = {**self.env, "FAKE_API_RUNS": '["500"]'}
+
+        result = self.cargo_with_clock("test", "-p", "provenance-macros", env=env)
+
+        self.assertEqual(result.returncode, 3, result.stderr)
+        [branch] = self.remote_branches("agent-snapshot")
+        record = self.records()[branch]
+        self.assertEqual(record["run_id"], 314)
+        self.assertEqual(record["pushed"], CLOCK_START)
+
+    def test_same_command_after_no_run_appeared_does_not_push_again(self):
+        first = self.cargo_with_clock("check", env={**self.env, "FAKE_RUN_LIST_MISSES": "1000"})
+        self.assertEqual(first.returncode, 3, first.stderr)
+        self.assertIn("does not push again", first.stderr)
+        self.assertNotIn("run started", first.stderr)
+        [branch] = self.remote_branches("agent-ci")
+
+        second = self.cargo_with_clock("check")
+
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertEqual({call[call.index("--branch") + 1] for call in self.calls_matching("list")}, {branch})
+        self.assertEqual(self.remote_branches("agent-ci"), [])
+        self.assertEqual(self.records(), {})
+
+    def seed_records(self, records):
+        sha = self.git("rev-parse", "HEAD")
+        state = self.root / "state"
+        state.mkdir(exist_ok=True)
+        branches = {}
+        for n, (run_id, age) in enumerate(records):
+            branch = f"agent-snapshot/{sha}-{n:08x}"
+            pushed = run("git", "push", str(self.remote), f"HEAD:refs/heads/{branch}", cwd=self.repo)
+            self.assertEqual(pushed.returncode, 0, pushed.stderr)
+            branches[branch] = {
+                "key": f"quality-sh/provenance:{sha}:k{n}", "sha": sha, "repository": "quality-sh/provenance",
+                "run_id": run_id, "pushed": CLOCK_START - age, "checked": CLOCK_START - age,
+            }
+        (state / "runs.json").write_text(json.dumps({"branches": branches}))
+        return list(branches)
+
+    def test_sweep_deletes_branches_of_completed_runs_only(self):
+        hour = 60 * 60
+        completed, running, queued, young, old = self.seed_records(
+            [(500, hour), (501, hour), (502, hour), (None, hour), (None, 3 * hour)]
+        )
+        env = {**self.env, "FAKE_RUN_STATES": '{"500": "completed", "501": "in_progress", "502": "queued"}'}
+
+        result = self.cargo_with_clock("check", env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        sweep_reads = [call for call in self.calls_matching("actions/runs/50")]
+        self.assertLessEqual(len(sweep_reads), 3)
+        # The oldest three records first: the old one without a run, then two runs.
+        self.assertEqual(sorted(self.remote_branches("agent-snapshot")), sorted([running, queued, young]))
+        self.assertEqual(set(self.records()), {running, queued, young})
+
+    def test_sweep_skips_records_that_it_looked_at_a_short_time_ago(self):
+        [running] = self.seed_records([(501, 60)])
+        env = {**self.env, "FAKE_RUN_STATES": '{"501": "completed"}'}
+
+        result = self.cargo_with_clock("check", env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.calls_matching("actions/runs/501"), [])
+        self.assertEqual(self.remote_branches("agent-snapshot"), [running])
+
+    def test_sweep_error_does_not_stop_the_call(self):
+        state = self.root / "state"
+        state.mkdir()
+        (state / "runs.json").write_text(json.dumps({"branches": {"agent-snapshot/x": {"run_id": 1}}}))
+
+        result = self.cargo_with_clock("check")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Remote Cargo: check passed", result.stdout)
+        sweep_lines = [line for line in result.stderr.splitlines() if "sweep" in line]
+        self.assertEqual(len(sweep_lines), 1, result.stderr)
+
+    def test_sweep_read_error_keeps_the_record(self):
+        [branch] = self.seed_records([(500, 60 * 60)])
+        env = {**self.env, "FAKE_RUN_STATES": '{"500": "500"}'}
+
+        result = self.cargo_with_clock("check", env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.remote_branches("agent-snapshot"), [branch])
+        self.assertIn(branch, self.records())
+        self.assertEqual(len(self.calls_matching("actions/runs/500")), 1)
 
     def test_artifact_opt_in_requires_plain_build(self):
         env = {**self.env, "PROVENANCE_CI_ARTIFACT": "1"}
