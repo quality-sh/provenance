@@ -149,7 +149,7 @@ pub async fn read_all(surface: &impl Surface, repo: &Repository) -> Vec<Value> {
 pub async fn read_paths(
     surface: &impl Surface,
     repo: &Repository,
-    paths: &[impl AsRef<str>],
+    paths: &[impl AsRef<str> + Sync],
 ) -> Vec<Value> {
     let root = repo.dir.path().to_str().unwrap().to_owned();
     let mut answers = Vec::new();
