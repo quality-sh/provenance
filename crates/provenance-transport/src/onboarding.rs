@@ -128,15 +128,24 @@ impl Invocation {
             (InvocationChannel::Typescript, None) => {
                 anyhow::bail!("TypeScript initialization requires --package-manager")
             }
+            // Each command names a file in the project, or asks the package
+            // manager for a binary of the project only. When the package is
+            // missing, the command fails: it does not download a package, run
+            // a cached package, or run a `provenance` executable from PATH.
+            // `npx --no` runs a cached package of the same name and `bunx
+            // --no-install` runs a PATH executable, so npm, Bun and Nub run the
+            // bin file of the package by its path.
             (InvocationChannel::Typescript, Some(manager)) => Ok(Self(match manager {
-                PackageManager::Npm => "npx --no -- provenance",
+                PackageManager::Npm => {
+                    "node node_modules/@quality-sh/provenance/bin/provenance.mjs"
+                }
                 PackageManager::Pnpm => "pnpm exec ./node_modules/.bin/provenance",
                 PackageManager::Yarn => "yarn run -B provenance",
-                PackageManager::Bun => "bunx --no-install provenance",
+                PackageManager::Bun => "bun node_modules/@quality-sh/provenance/bin/provenance.mjs",
                 PackageManager::Deno => {
                     "deno task --node-modules-dir=manual --eval \"./node_modules/.bin/provenance\""
                 }
-                PackageManager::Nub => "nub exec provenance",
+                PackageManager::Nub => "nub node_modules/@quality-sh/provenance/bin/provenance.mjs",
             })),
         }
     }

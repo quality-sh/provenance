@@ -66,12 +66,14 @@ continues to work.
 # install the development dependency and set up the repository
 npx --yes @quality-sh/create-provenance
 
-# put something in the graph
-npx provenance req_exports create --type requirement --scope default \
+# put something in the graph (the npm form; AGENTS.md has the form for your
+# package manager)
+node node_modules/@quality-sh/provenance/bin/provenance.mjs req_exports create \
+  --type requirement --scope default \
   --statement "The system must complete each export in one minute."
 
 # see where things stand
-npx provenance prime
+node node_modules/@quality-sh/provenance/bin/provenance.mjs prime
 ```
 
 ### Essential commands

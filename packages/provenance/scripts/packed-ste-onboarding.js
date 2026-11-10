@@ -8,8 +8,9 @@ import {
   readdirSync,
   writeFileSync,
 } from "node:fs";
-import { delimiter, dirname, join, resolve } from "node:path";
+import { delimiter, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { npmCommand, packageBin } from "./packed-install-commands.js";
 
 const sleep = new Int32Array(new SharedArrayBuffer(4));
 const fixture = fileURLToPath(
@@ -17,6 +18,7 @@ const fixture = fileURLToPath(
 );
 const fixtureServer = fileURLToPath(new URL("./packed-ste-fixture-server.js", import.meta.url));
 const rejectedStatement = "The bunapprovedaaa item stops.";
+const handoff = `Have your agent run ${npmCommand} prime to get acclimated.`;
 
 export function verifyPackedSteOnboarding({
   archiveDirectory,
@@ -83,8 +85,8 @@ export function verifyPackedSteOnboarding({
     assert.match(first, /(?:^|\n)Initialized Provenance for scope "default" in /);
     assert.equal(first.match(/Provenance records requirements, decisions, and the rules that connect them to code\./g)?.length, 1);
     assert.match(first, /\nNew\n/);
-    assert.equal(first.match(/Have your agent run npx --no -- provenance prime to get acclimated\./g)?.length, 1);
-    assert.ok(first.endsWith("Have your agent run npx --no -- provenance prime to get acclimated.\n"));
+    assert.equal(first.split(handoff).length - 1, 1);
+    assert.ok(first.endsWith(`${handoff}\n`));
     assertSingleDictionaryRequest(server.requests());
 
     const packageLocalEntry = join(
@@ -101,9 +103,9 @@ export function verifyPackedSteOnboarding({
       initializer, packageLocalEntry,
     });
     assertAgentInstructions(project);
-    assertLocalEngines(project, environment, engineManifest, binaryName, version, npmCli);
-    assertPreflightAndWriteGate(project, environment, npmCli);
-    assertStrictCommittedEditGate(project, environment, npmCli, version);
+    assertLocalEngines(project, environment, engineManifest, binaryName, version);
+    assertPreflightAndWriteGate(project, environment);
+    assertStrictCommittedEditGate(project, environment, version);
     assertSingleDictionaryRequest(server.requests());
     assert.equal(existsSync(sentinel.selected), false, "the stale global CLI must stay unused");
   } finally {
@@ -139,8 +141,8 @@ function assertRepeatedInitializationPreservesScope({
       });
       assert.match(rerun, /(?:^|\n)Provenance is already set up for scope "default" in /);
       assert.equal(rerun.match(/Provenance records requirements, decisions, and the rules that connect them to code\./g)?.length, 1);
-      assert.equal(rerun.match(/Have your agent run npx --no -- provenance prime to get acclimated\./g)?.length, 1);
-      assert.ok(rerun.endsWith("Have your agent run npx --no -- provenance prime to get acclimated.\n"));
+      assert.equal(rerun.split(handoff).length - 1, 1);
+      assert.ok(rerun.endsWith(`${handoff}\n`));
       assert.deepEqual(JSON.parse(readFileSync(manifestPath, "utf8")).scopes, [
         { id: "default", path_prefix: prefix },
       ], "repeated npm initialization must preserve the configured scope");
@@ -172,8 +174,8 @@ function assertAgentInstructions(project) {
   const agents = readFileSync(join(project, "AGENTS.md"), "utf8");
   for (const expected of [
     "provenance-grounded-writing",
-    'npx --no -- provenance check --statement "<statement>" --format json',
-    "npx --no -- provenance prime --quiet",
+    `${npmCommand} check --statement "<statement>" --format json`,
+    `${npmCommand} prime --quiet`,
     "Write graph state only through the Provenance CLI or SDK",
     "Do not edit\n  `.provenance/state` directly",
     "ASD owns ASD-STE100. STEMG maintains it",
@@ -196,7 +198,7 @@ function assertAgentInstructions(project) {
   assert.equal(compatible, installed, "both agent skill roots must expose grounded writing");
 }
 
-function assertLocalEngines(project, environment, engineManifest, binaryName, version, npmCli) {
+function assertLocalEngines(project, environment, engineManifest, binaryName, version) {
   const platformBinary = join(
     project,
     "node_modules",
@@ -215,7 +217,7 @@ function assertLocalEngines(project, environment, engineManifest, binaryName, ve
     new RegExp(`^provenance ${version.replaceAll(".", "\\.")}( \\([0-9a-f]{8}(-dirty)?\\))?$`),
   );
 
-  const check = runProvenance(npmCli, project, environment, [
+  const check = runProvenance(project, environment, [
     "check", "--repo", ".", "--format", "json",
   ]);
   assert.equal(check.status, 0, check.stderr);
@@ -224,9 +226,8 @@ function assertLocalEngines(project, environment, engineManifest, binaryName, ve
   assert.ok(categories.every(category => category.status === "passed"));
 }
 
-function assertPreflightAndWriteGate(project, environment, npmCli) {
+function assertPreflightAndWriteGate(project, environment) {
   const preflight = runProvenance(
-    npmCli,
     project,
     environment,
     ["api", "statement-checks", "--method", "post", "--input", "-", "--format", "json"],
@@ -241,7 +242,7 @@ function assertPreflightAndWriteGate(project, environment, npmCli) {
     ".provenance", "state", "scopes", "default", "requirements", "req.jsonl",
   );
   const beforeWrite = existsSync(shard) ? readFileSync(shard, "utf8") : undefined;
-  const rejected = runProvenance(npmCli, project, environment, [
+  const rejected = runProvenance(project, environment, [
     "req_rejected_by_dictionary", "create", "--type", "requirement",
     "--repo", ".",
     "--scope", "default",
@@ -256,11 +257,11 @@ function assertPreflightAndWriteGate(project, environment, npmCli) {
   assert.equal(afterWrite, beforeWrite, "a rejected write must not change requirement state");
 }
 
-function assertStrictCommittedEditGate(project, environment, npmCli, version) {
+function assertStrictCommittedEditGate(project, environment, version) {
   git(project, ["init", "--initial-branch", "main"]);
   git(project, ["config", "user.email", "packed@example.test"]);
   git(project, ["config", "user.name", "Packed release gate"]);
-  const created = runProvenance(npmCli, project, environment, [
+  const created = runProvenance(project, environment, [
     "req_packed_manual_edit", "create", "--type", "requirement",
     "--repo", ".",
     "--scope", "default",
@@ -286,7 +287,7 @@ function assertStrictCommittedEditGate(project, environment, npmCli, version) {
   writeFileSync(shard, rewritten);
   const candidate = commit(project, "Commit a bad manual statement edit");
 
-  const strict = runProvenance(npmCli, project, environment, [
+  const strict = runProvenance(project, environment, [
     "check", "--repo", ".", "--strict", "--base", base, "--format", "json",
   ]);
   assert.notEqual(strict.status, 0, "the project-local strict CI command must block findings");
@@ -310,9 +311,9 @@ function assertStrictCommittedEditGate(project, environment, npmCli, version) {
   }]);
 }
 
-function runProvenance(npmCli, cwd, env, args, input) {
+function runProvenance(cwd, env, args, input) {
   const result = spawnSync(process.execPath, [
-    join(dirname(npmCli), "npx-cli.js"), "--no", "provenance", ...args,
+    packageBin, ...args,
   ], { cwd, env, input, encoding: "utf8" });
   if (result.error) throw result.error;
   return result;
