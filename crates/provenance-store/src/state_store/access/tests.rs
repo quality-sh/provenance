@@ -231,6 +231,14 @@ fn a_fenced_store_refuses_a_read_outside_its_directories() {
 /// The full reads and the hashes of the state tree that `run` makes on this
 /// thread.
 fn tree_reads_and_hashes<R>(run: impl FnOnce() -> R) -> (R, [usize; 2]) {
+    let counts = count_tree_reads_and_hashes();
+    let result = run();
+    (result, stop_counting(&counts))
+}
+
+/// Counts the full reads and the hashes of the state tree on this thread
+/// until [`stop_counting`].
+fn count_tree_reads_and_hashes() -> std::rc::Rc<std::cell::Cell<[usize; 2]>> {
     let counts = std::rc::Rc::new(std::cell::Cell::new([0, 0]));
     for (label, index) in [("state_tree_read", 0), ("state_tree_hashed", 1)] {
         let counts = counts.clone();
@@ -241,10 +249,13 @@ fn tree_reads_and_hashes<R>(run: impl FnOnce() -> R) -> (R, [usize; 2]) {
             Ok(())
         });
     }
-    let result = run();
+    counts
+}
+
+fn stop_counting(counts: &std::cell::Cell<[usize; 2]>) -> [usize; 2] {
     crate::test_probes::disarm("state_tree_read");
     crate::test_probes::disarm("state_tree_hashed");
-    (result, counts.get())
+    counts.get()
 }
 
 /// Implementation aid: a record save reads the tree for the section view and
@@ -284,4 +295,23 @@ fn a_per_key_write_before_any_read_in_the_section_reads_and_hashes_nothing() {
     .unwrap();
     assert_eq!(counts, [0, 0], "full reads and hashes of the state tree");
     assert_eq!(std::fs::read_to_string(path).unwrap(), "\"written\"\n");
+}
+
+/// Implementation aid: a capture and a catch-up pass under one guard read
+/// the state tree once. No Rule binds it.
+#[tokio::test]
+async fn a_capture_and_a_catch_up_under_one_guard_read_the_tree_once() {
+    let (_dir, store, _scope) = seeded_source_requirement_store();
+    let repository = open(&store.layout);
+    crate::cache::catch_up_state(&repository).await.unwrap();
+    let cache = crate::cache::open_cache(&store.layout).await.unwrap();
+    let guard = publication_guard(&repository).await.unwrap();
+    let counting = count_tree_reads_and_hashes();
+    let captured = crate::review_changes::ReviewStateSnapshot::capture(&guard);
+    let caught_up = crate::cache::catch_up_with_guard(&guard, cache.pool()).await;
+    let counts = stop_counting(&counting);
+    drop(guard);
+    captured.unwrap();
+    caught_up.unwrap();
+    assert_eq!(counts[0], 1, "full reads of the state tree");
 }
