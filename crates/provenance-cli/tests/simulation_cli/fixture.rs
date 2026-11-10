@@ -18,6 +18,9 @@ use std::time::Instant;
 /// The arguments of the merge driver after the program.
 const MERGE_ARGUMENTS: &str = "merge-jsonl %O %A %B --output %A --path %P";
 
+/// The count of the stops during a write after which the state changed.
+const STOPS_THAT_CHANGED: &str = "stops during a write after which the state changed";
+
 /// When L6 is checked: after each write, or only at the end of a case when
 /// `SIMULATION_L6` is `end`.
 fn l6_after_each_write() -> bool {
@@ -108,8 +111,7 @@ impl Fixture {
         if let Some(before) = before.filter(|_| done.iter().any(|done| done.stopped)) {
             stats::add(&layer(), "stops during a write", 1);
             let changed = state_entries(&self.root()) != before;
-            let name = "stops during a write after which the state changed";
-            stats::add(&layer(), name, u64::from(changed));
+            stats::add(&layer(), STOPS_THAT_CHANGED, u64::from(changed));
         }
         if !done.is_empty() {
             self.groups.push((way, done));
@@ -233,6 +235,10 @@ impl Fixture {
             .map(|(_, done)| done.len())
             .sum::<usize>();
         stats::add(&layer(), "cases", 1);
+        // The stop counts show 0 on a night with no stop.
+        stats::add(&layer(), "stops during a write", 0);
+        stats::add(&layer(), STOPS_THAT_CHANGED, 0);
+        stats::add(&layer(), "stops after the write ended", 0);
         stats::add(
             &layer(),
             "writes",
