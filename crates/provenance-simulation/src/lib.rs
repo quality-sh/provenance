@@ -22,6 +22,12 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::JoinHandle;
 use storage::{Armed, SimulatedSectionLock, SimulatedStorage, Stopped, World};
 
+/// Runs one operation of an engine; a layer above the engine gives its own.
+pub type Apply = fn(&Repository, &Task) -> anyhow::Result<Effect>;
+
+/// The laws that one layer checks in addition to [`laws::check`].
+pub type LayerLaws = fn(&Run) -> Result<(), laws::Violation>;
+
 /// How a case runs.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Config {
@@ -29,6 +35,10 @@ pub struct Config {
     pub plant_stale_read: bool,
     /// Checks this one law only, as a test of a planted fault does.
     pub only_law: Option<&'static str>,
+    /// How an engine runs an operation; `None` calls the store directly.
+    pub apply: Option<Apply>,
+    /// The laws of the layer, checked after the laws of every layer.
+    pub layer_laws: Option<LayerLaws>,
 }
 
 /// What one operation gave.
@@ -67,7 +77,7 @@ impl Clock for CountingClock {
 }
 
 /// IDs that count up.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct CountingIds(AtomicU64);
 
 impl IdSource for CountingIds {
@@ -78,13 +88,22 @@ impl IdSource for CountingIds {
 
 /// The identity that every engine of one run shares: one clock, one ID source.
 fn identity() -> RepositoryIdentity {
+    identity_with_ids(0)
+}
+
+/// The first ID of the initial state. The IDs of a run start at 1, so they
+/// never meet an ID that the initial state holds.
+const INITIAL_STATE_IDS: u64 = 1 << 32;
+
+/// An identity whose IDs count up after `start`.
+fn identity_with_ids(start: u64) -> RepositoryIdentity {
     RepositoryIdentity::new(
         camino::Utf8PathBuf::from("/simulated"),
         provenance_core::ScopeId::new(generate::SCOPE).expect("a scope"),
         provenance_store::settings::Settings::default(),
     )
     .with_clock(Arc::new(CountingClock(AtomicI64::new(1_000_000_000))))
-    .with_ids(Arc::new(CountingIds::default()))
+    .with_ids(Arc::new(CountingIds(AtomicU64::new(start))))
 }
 
 /// Opens a repository over `world`.
@@ -106,13 +125,14 @@ fn spawn_engine(
     repository: Repository,
     world: Arc<World>,
     done: Arc<Mutex<Vec<Done>>>,
+    apply: Apply,
 ) -> Engine {
     let (tasks, inbox) = channel::<Task>();
     let thread = std::thread::spawn(move || {
         for task in inbox {
             storage::set_engine(Some((slot, task.operation)));
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                generate::apply(&repository, &task)
+                apply(&repository, &task)
             }));
             storage::set_engine(None);
             let stopped = matches!(&result, Err(payload) if payload.is::<Stopped>());
@@ -153,11 +173,18 @@ pub fn run_case(case: &Case, config: Config) -> Run {
     let identity = identity();
     let done = Arc::new(Mutex::new(Vec::new()));
     let count = usize::from(case.engines.max(1));
+    let apply = config.apply.unwrap_or(generate::apply);
     let mut reopen_failures = Vec::new();
     let mut engines: Vec<Option<Engine>> = (0..count)
         .map(|slot| {
             let repository = open(&identity, &world).expect("the initial state opens");
-            Some(spawn_engine(slot, repository, world.clone(), done.clone()))
+            Some(spawn_engine(
+                slot,
+                repository,
+                world.clone(),
+                done.clone(),
+                apply,
+            ))
         })
         .collect();
     let mut serial = 0_u64;
@@ -202,8 +229,13 @@ pub fn run_case(case: &Case, config: Config) -> Run {
                     Ok(repository)
                 }) {
                     Ok(repository) => {
-                        engines[slot] =
-                            Some(spawn_engine(slot, repository, world.clone(), done.clone()));
+                        engines[slot] = Some(spawn_engine(
+                            slot,
+                            repository,
+                            world.clone(),
+                            done.clone(),
+                            apply,
+                        ));
                     }
                     Err(error) => reopen_failures.push(format!("{error:#}")),
                 }
@@ -345,7 +377,7 @@ fn initial_state() -> InitialState {
     ]);
     let storage = Arc::new(MemoryStateStorage::new(entries));
     let repository = Repository::with_storage(
-        identity(),
+        identity_with_ids(INITIAL_STATE_IDS),
         storage.clone(),
         Arc::new(MemorySectionLock::default()),
     )
@@ -423,7 +455,15 @@ pub fn final_records(entries: &BTreeMap<StateKey, Vec<u8>>) -> anyhow::Result<Fi
 pub fn check_case(layer: &str, case: &Case, config: Config) {
     let first = run_case(case, config);
     let verdict = config.only_law.map_or_else(
-        || laws::check(&first).and_then(|()| laws::check_same(&first, &run_case(case, config))),
+        || {
+            laws::check(&first)
+                .and_then(|()| {
+                    config
+                        .layer_laws
+                        .map_or(Ok(()), |layer_laws| layer_laws(&first))
+                })
+                .and_then(|()| laws::check_same(&first, &run_case(case, config)))
+        },
         |law| laws::check_only(&first, law),
     );
     if let Err(violation) = verdict {

@@ -23,4 +23,5 @@ time.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+provenance-contract.workspace = true
 provenance-macros.workspace = true

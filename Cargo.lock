@@ -2726,6 +2726,7 @@ dependencies = [
  "anyhow",
  "camino",
  "hegeltest",
+ "provenance-contract",
  "provenance-core",
  "provenance-macros",
  "provenance-store",

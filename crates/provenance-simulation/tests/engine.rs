@@ -21,6 +21,8 @@ fn random_cases_keep_the_laws(tc: TestCase) {
 const PLANTED: Config = Config {
     plant_stale_read: true,
     only_law: None,
+    apply: None,
+    layer_laws: None,
 };
 
 /// The planted property checks only the law the planted fault breaks, so a
@@ -28,6 +30,8 @@ const PLANTED: Config = Config {
 const PLANTED_L5: Config = Config {
     plant_stale_read: true,
     only_law: Some("L5"),
+    apply: None,
+    layer_laws: None,
 };
 
 /// A section that meets a moved base: the engine enters the section and

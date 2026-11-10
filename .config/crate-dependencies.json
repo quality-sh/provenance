@@ -440,6 +440,7 @@
         "provenance-store"
       ],
       "dev-dependencies": [
+        "provenance-contract",
         "provenance-macros"
       ]
     },
