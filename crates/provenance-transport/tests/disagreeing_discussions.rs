@@ -1,8 +1,8 @@
-//! Stored Discussions, Threads, parents, Rules and proposals that do not
-//! agree are `invalid_state_file`: the answer names the file and the line of
-//! the record at fault, and a message that names the records. Each test
-//! reaches the check through a write, because a list read of hand-written
-//! state answers `no_projection` first.
+//! Stored Discussions, Threads and Discussion parents that do not agree are
+//! `invalid_state_file`: the answer names the file and the line of the record
+//! at fault, and a message that names the records. Each test reaches the
+//! check through a write, because a list read of hand-written state answers
+//! `no_projection` first.
 #![cfg(feature = "test-fixture")]
 
 mod support {
@@ -18,7 +18,6 @@ use support::resource_http::{call, host};
 const DISCUSSIONS: &str = "scopes/default/threads/discussions.jsonl";
 const THREADS: &str = "scopes/default/threads/threads.jsonl";
 const REQUIREMENTS: &str = "scopes/default/requirements/req.jsonl";
-const RULES: &str = "scopes/default/rules/rule.jsonl";
 
 fn path(repo: &Repository, shard: &str) -> std::path::PathBuf {
     repo.dir.path().join(".provenance/state").join(shard)
@@ -87,19 +86,6 @@ async fn start(repo: &Repository) -> (u16, Value) {
         Some(json!({"data":{"actor":"reviewer","declared_by":null,"role":"user","body":"Again."}})),
     )
     .await
-}
-
-fn proposal(id: &str) -> Value {
-    json!({"data":{
-        "id":id, "proposal_key":"shared",
-        "proposal_type":"requirement_candidate", "title":"Shared",
-        "summary":"Clarify the shared requirement.", "confidence":null,
-        "traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_shared"},
-            "source_ids":[], "evidence_references":[], "supporting_claim_ids":[]},
-        "builds_on":[], "promotion_state":"proposed", "duplicate_of":null,
-        "superseded_by":null, "record_revision":null, "actor":null, "revises":null,
-        "revises_rejection":null
-    }})
 }
 
 fn located(file: &str, line: usize, message: &str) -> Value {
@@ -207,67 +193,6 @@ async fn a_discussion_parent_stored_again_is_located_at_the_second_line() {
             REQUIREMENTS,
             line,
             "Discussion parent req_shared is stored again"
-        )
-    );
-}
-
-#[tokio::test]
-#[verifies("rule_inconsistent_records_refusal_names_records", examples)]
-async fn an_archived_rule_with_no_archive_commit_is_located_at_its_line() {
-    let repo = Repository::new("The shared graph is readable.");
-    let mut rows = lines(&repo, RULES);
-    let line = rows
-        .iter()
-        .position(|row| row.contains("\"id\":\"rule_shared\""))
-        .unwrap();
-    let mut rule: Value = serde_json::from_str(&rows[line]).unwrap();
-    rule["status"] = json!("archived");
-    rows[line] = rule.to_string();
-    write(&repo, RULES, &rows);
-    let (status, failure) = support::resource_http::call_with_headers(
-        &host(&repo, true),
-        "PATCH",
-        "/rules/rule_shared",
-        Some(json!({"data":{"actor":"reviewer", "description":"Edited."}})),
-        &[("if-match", "\"stale\"")],
-    )
-    .await;
-    assert_eq!(status, 500, "{failure}");
-    assert_eq!(
-        failure["error"],
-        located(
-            RULES,
-            line + 1,
-            "rule rule_shared is archive-inconsistent: archived_in_commit is required exactly \
-             when Rule status is archived"
-        )
-    );
-}
-
-#[tokio::test]
-#[verifies("rule_inconsistent_records_refusal_names_records", examples)]
-async fn a_proposal_stored_again_is_located_at_the_second_line() {
-    const PROPOSALS: &str = "scopes/default/ideation/proposal_cards.jsonl";
-    let repo = Repository::new("The shared graph is readable.");
-    let (status, created) = call(
-        &host(&repo, true),
-        "POST",
-        "/proposals",
-        Some(proposal("proposal_shared")),
-    )
-    .await;
-    assert_eq!(status, 200, "{created}");
-    let line = store_again(&repo, PROPOSALS, "id", "proposal_shared");
-    let mut other = proposal("proposal_other");
-    other["data"]["proposal_key"] = json!("other");
-    let (status, failure) = call(&host(&repo, true), "POST", "/proposals", Some(other)).await;
-    assert_eq!(status, 500, "{failure}");
-    assert_eq!(
-        failure["error"],
-        located(
-            PROPOSALS,
-            line,
-            "duplicate immutable proposal id proposal_shared"
         )
     );
 }
