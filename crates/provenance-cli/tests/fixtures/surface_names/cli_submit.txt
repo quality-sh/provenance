@@ -1,4 +1,4 @@
-Submit the target Requirement for review.
+Submit the target Source, Requirement, Resolution, Rule, Topic, or Question for review.
 
 Usage: provenance [OPTIONS] <TARGET> [ACTION]
 

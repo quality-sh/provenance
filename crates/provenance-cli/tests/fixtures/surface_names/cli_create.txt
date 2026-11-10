@@ -18,3 +18,8 @@ Options:
 Select a record type to see its accepted fields:
   provenance <id> create --type <kind> --help
 
+Create takes no Source citation. To cite a Source on a Requirement,
+update the Requirement after create:
+  provenance <id> update --if-match <etag> \
+    --relationships-json '{"cites":{"add":[{"source_id":"<source_id>","clause":"<clause>"}]}}'
+

@@ -84,6 +84,7 @@ jobs:
               - ".github/workflows/release-smoke.yml"
               - ".github/scripts/**/*.sh"
               - ".github/scripts/**/*.py"
+              - "scripts/agent-bin/**"
             bench:
               - *ci
               - ".github/workflows/benchmarks.yml"
@@ -1510,6 +1511,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           python3 scripts/agent-bin/tests/test_package.py
+          python3 .github/scripts/agent_cargo_test.py
           python3 .github/scripts/test_release_crates.py
       - name: Test release smoke helpers
         if: runner.os == 'Linux'

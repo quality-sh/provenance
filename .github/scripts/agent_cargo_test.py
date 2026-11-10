@@ -11,6 +11,9 @@ WRAPPER = Path(__file__).resolve().parents[2] / "scripts" / "agent-bin" / "cargo
 
 
 def run(*args, cwd, env=None):
+    # Cases that load the shim as a module must not write bytecode next to it:
+    # the shim refuses a snapshot when the worktree has an untracked file.
+    env = {**(os.environ if env is None else env), "PYTHONDONTWRITEBYTECODE": "1"}
     return subprocess.run(args, cwd=cwd, env=env, text=True, capture_output=True, check=False)
 
 
@@ -53,6 +56,9 @@ class AgentCargoTest(unittest.TestCase):
             "  print(json.dumps({'workflow_run_id': 314, 'html_url': 'https://github.com/quality-sh/provenance/actions/runs/314'}))\n"
             "elif a[:2] == ['run', 'list']:\n"
             "  branch = a[a.index('--branch') + 1]\n"
+            "  lists = sum(1 for line in open(os.environ['FAKE_GH_CALLS']) if line.startswith('[\"run\", \"list\"'))\n"
+            "  if lists <= int(os.environ.get('FAKE_RUN_LIST_MISSES', '0')):\n"
+            "    print('[]'); sys.exit(0)\n"
             "  with open(os.environ['FAKE_GH_PAYLOAD'], 'w') as f: json.dump({'headBranch': branch, 'headSha': branch.split('/')[2].split('-')[0], 'inputs': {'command_key': branch.split('/')[1], 'command_json': ''}}, f)\n"
             "  print(json.dumps([{'databaseId': 314, 'headSha': branch.split('/')[2].split('-')[0], 'workflowName': 'Agent Cargo verification'}]))\n"
             "elif a[:2] == ['run', 'watch'] and '--compact' in a:\n"
@@ -260,6 +266,67 @@ class AgentCargoTest(unittest.TestCase):
         branches = [call[call.index("--branch") + 1] for call in self.calls_matching("list")]
         self.assertTrue(any(branch.startswith("agent-ci/build-artifact/") for branch in branches))
 
+    def test_check_after_an_artifact_download_snapshots_the_change(self):
+        (self.repo / ".gitignore").write_text("target/\n")
+        self.git("add", ".gitignore")
+        self.git("commit", "-m", "ignore target")
+        artifact = self.cargo("build", env={**self.env, "PROVENANCE_CI_ARTIFACT": "1"})
+        self.assertEqual(artifact.returncode, 0, artifact.stderr)
+        self.assertTrue((self.repo / "target/debug/provenance").is_file())
+        (self.repo / "src.rs").write_text("after\n")
+
+        result = self.cargo("check")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(self.payload.read_text())
+        snapshot = payload["headSha"]
+        self.assertEqual(self.git("show", f"{snapshot}:src.rs"), "after")
+        self.assertEqual(self.git("ls-tree", "-r", "--name-only", snapshot, "--", "target"), "")
+
+    def check_snapshot_entries(self, ignore_target):
+        if ignore_target:
+            (self.repo / ".gitignore").write_text("target/\n")
+            self.git("add", ".gitignore")
+            self.git("commit", "-m", "ignore target")
+        (self.repo / "src.rs").write_text("after\n")
+
+        result = self.cargo("check")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        snapshot = json.loads(self.payload.read_text())["headSha"]
+        self.assertEqual(self.git("show", f"{snapshot}:src.rs"), "after")
+        return self.git("ls-tree", "-r", "--name-only", snapshot).splitlines()
+
+    def test_snapshot_leaves_out_a_target_directory(self):
+        built = self.repo / "target/debug/provenance"
+        built.parent.mkdir(parents=True)
+        built.write_text("local binary")
+
+        entries = self.check_snapshot_entries(ignore_target=False)
+
+        self.assertEqual(sorted(entries), [".github/workflows/agent-cargo.yml", "Cargo.toml", "src.rs"], entries)
+
+    def test_snapshot_leaves_out_a_target_symlink(self):
+        shared = self.root / "shared-target"
+        shared.mkdir()
+        (self.repo / "target").symlink_to(shared, target_is_directory=True)
+
+        entries = self.check_snapshot_entries(ignore_target=True)
+
+        self.assertEqual(sorted(entries), [".github/workflows/agent-cargo.yml", ".gitignore", "Cargo.toml", "src.rs"], entries)
+
+    def test_snapshot_leaves_out_a_target_file(self):
+        (self.repo / "target").write_text("local file")
+
+        entries = self.check_snapshot_entries(ignore_target=True)
+
+        self.assertEqual(sorted(entries), [".github/workflows/agent-cargo.yml", ".gitignore", "Cargo.toml", "src.rs"], entries)
+
+    def test_snapshot_without_target_holds_the_change(self):
+        entries = self.check_snapshot_entries(ignore_target=True)
+
+        self.assertEqual(sorted(entries), [".github/workflows/agent-cargo.yml", ".gitignore", "Cargo.toml", "src.rs"], entries)
+
     def test_shared_target_symlink_keeps_binary_in_worktree_git_dir(self):
         shared = self.root / "shared-target"
         shared_binary = shared / "debug/provenance"
@@ -315,6 +382,37 @@ class AgentCargoTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 2)
         self.assertEqual(binary.read_text(), "previous binary")
+
+    def test_watch_polls_every_30_seconds(self):
+        result = self.cargo("check")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        watches = self.calls_matching("watch")
+        self.assertEqual(len(watches), 1)
+        self.assertIn("--interval", watches[0])
+        self.assertEqual(watches[0][watches[0].index("--interval") + 1], "30")
+
+    def test_run_search_sleeps_10_seconds_between_list_calls(self):
+        recorder = (
+            "import json, os, runpy, sys, time\n"
+            "def sleep(seconds):\n"
+            "    with open(os.environ['FAKE_GH_CALLS'], 'a') as f: f.write(json.dumps(['sleep', seconds]) + '\\n')\n"
+            "time.sleep = sleep\n"
+            "sys.argv = [sys.argv[1], 'check']\n"
+            "runpy.run_path(sys.argv[0], run_name='__main__')\n"
+        )
+        env = {**self.env, "FAKE_RUN_LIST_MISSES": "2"}
+
+        result = run(sys.executable, "-c", recorder, str(WRAPPER), cwd=self.repo, env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        search = [
+            call[0] if call[0] == "sleep" else " ".join(call[:2])
+            for call in (json.loads(line) for line in self.calls.read_text().splitlines())
+            if call[0] == "sleep" or call[:2] == ["run", "list"]
+        ]
+        self.assertEqual(search, ["run list", "sleep", "run list", "sleep", "run list"])
+        self.assertEqual(self.calls_matching("sleep"), [["sleep", 10], ["sleep", 10]])
 
     def test_artifact_opt_in_requires_plain_build(self):
         env = {**self.env, "PROVENANCE_CI_ARTIFACT": "1"}
