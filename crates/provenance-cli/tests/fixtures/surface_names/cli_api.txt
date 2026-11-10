@@ -11,7 +11,7 @@ Options:
       --scope <SCOPE>    [default: default]
       --format <FORMAT>  [possible values: json]
       --quiet            
-      --method <METHOD>  
+      --method <METHOD>  [possible values: get, post, patch]
       --input <INPUT>    The JSON body: the data object, without the HTTP {"data": ...} wrapper. Give a JSON file, or "-" for standard input.
       --header <HEADER>  A request header, as NAME: VALUE.
       --query <QUERY>    A query parameter, as NAME=VALUE.
