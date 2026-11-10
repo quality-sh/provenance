@@ -60,7 +60,7 @@ pub fn no_write_failure_without_a_fault(run: &Run) -> Result<(), Violation> {
 /// publish, have increasing times.
 pub fn message_times_increase(run: &Run) -> Result<(), Violation> {
     let messages = open_entries(&run.entries)
-        .and_then(|repository| Ok(repository.view()?.list_messages(&scope())?))
+        .and_then(|repository| repository.view()?.list_messages(&scope()))
         .map_err(|error| Violation {
             law: "O2",
             detail: format!("the messages of the final state did not read: {error:#}"),
