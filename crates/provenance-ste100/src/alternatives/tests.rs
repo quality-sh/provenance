@@ -1,11 +1,12 @@
-//! Implementation-aid tests: no active Rule states the dictionary text in a
-//! Rule 1.1 finding yet. Each test pins the full message for one shape of
-//! match, with an in-memory dictionary.
+//! Each test pins the full message for one shape of match, with an in-memory
+//! dictionary. The tests with no Rule binding are implementation-aid tests:
+//! they pin an empty text and repeated text, which the Rule does not state.
 
 use crate::{
     check_descriptive_with_dictionary, DictionaryEntry, DictionaryImport, DictionaryImportIdentity,
     DictionaryStatus, PartOfSpeech, RuleNumber, StandardIssue,
 };
+use provenance_macros::verifies;
 
 fn entry(
     form: &str,
@@ -71,6 +72,7 @@ fn message(rejected: &str, given: &str) -> String {
 }
 
 #[test]
+#[verifies("rule_ste_word_refusal_gives_dictionary_text", examples)]
 fn two_entries_give_their_text_in_dictionary_order_with_a_separator() {
     assert_eq!(
         messages("The bzorp stops."),
@@ -82,6 +84,7 @@ fn two_entries_give_their_text_in_dictionary_order_with_a_separator() {
 }
 
 #[test]
+#[verifies("rule_ste_word_refusal_gives_dictionary_text", examples)]
 fn an_inflected_form_gives_only_the_entries_of_its_word_class() {
     assert_eq!(
         messages("The lamp bglinted."),
@@ -90,6 +93,7 @@ fn an_inflected_form_gives_only_the_entries_of_its_word_class() {
 }
 
 #[test]
+#[verifies("rule_ste_word_refusal_gives_dictionary_text", examples)]
 fn a_possessive_gives_the_text_of_its_base_word() {
     assert_eq!(
         messages("The bzax's cover stops."),
@@ -98,6 +102,7 @@ fn a_possessive_gives_the_text_of_its_base_word() {
 }
 
 #[test]
+#[verifies("rule_ste_word_refusal_gives_dictionary_text", examples)]
 fn a_phrase_gives_the_text_of_the_phrase_entry() {
     assert_eq!(
         messages("Stop bb far from the door."),
@@ -109,6 +114,7 @@ fn a_phrase_gives_the_text_of_the_phrase_entry() {
 }
 
 #[test]
+#[verifies("rule_ste_word_refusal_gives_dictionary_text", examples)]
 fn a_word_with_an_approved_entry_gives_only_the_unapproved_entry() {
     assert_eq!(
         messages("You must ccpair the panel."),
@@ -130,6 +136,7 @@ fn text_that_two_entries_give_occurs_one_time() {
 }
 
 #[test]
+#[verifies("rule_ste_word_refusal_gives_dictionary_text", examples)]
 fn a_plural_gives_the_text_of_its_noun() {
     assert_eq!(
         messages("The bplums stop."),
@@ -138,6 +145,7 @@ fn a_plural_gives_the_text_of_its_noun() {
 }
 
 #[test]
+#[verifies("rule_ste_word_refusal_gives_dictionary_text", examples)]
 fn the_longest_phrase_gives_its_text_and_not_the_text_of_a_shorter_match() {
     assert_eq!(
         messages("Stop bqq far from the door."),

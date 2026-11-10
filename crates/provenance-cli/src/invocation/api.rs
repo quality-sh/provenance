@@ -71,12 +71,13 @@ fn pairs(raw: &[String], separator: char, usage: &str) -> Result<BTreeMap<String
     Ok(pairs)
 }
 
-/// The correction for a query parameter that the caller gave more than once,
-/// when a route matches the path. With no path or no route, one use of the
-/// parameter also fails, so there is no correction to give.
+/// Names a query parameter that the caller gave more than once to a catalog
+/// route, and shows one comma-separated value when the parameter takes a list.
 ///
-/// The api takes each query parameter one time. Only a parameter whose
-/// query schema is an array takes its items as one comma-separated value.
+/// With no path or no route, one use of the parameter also fails, so there is
+/// no correction to give. Only a parameter whose query schema is an array
+/// takes its items as one comma-separated value.
+#[provenance_macros::rule("rule_api_repeated_query_refusal_names_parameter")]
 fn repeated_query_hint(args: &ApiArgs, name: &str) -> Option<String> {
     let selector = args.queries.iter().find_map(|entry| {
         entry
