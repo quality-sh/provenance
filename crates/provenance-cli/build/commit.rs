@@ -95,13 +95,18 @@ fn watch(root: &Path) {
     }
 }
 
+/// Runs git like `provenance_store::git_process::git`, which a build script cannot
+/// use: on Windows the command opens no console window.
 fn git(root: &Path, arguments: &[&str]) -> Option<String> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(arguments)
-        .output()
-        .ok()?;
+    #[cfg_attr(not(windows), allow(unused_mut))]
+    let mut command = Command::new("git");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt as _;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    let output = command.arg("-C").arg(root).args(arguments).output().ok()?;
     if !output.status.success() {
         return None;
     }

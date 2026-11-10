@@ -14,7 +14,7 @@ use std::path::Path;
 fn checkout_commit() -> Option<String> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent()?.parent()?;
     let git = |arguments: &[&str]| {
-        let output = std::process::Command::new("git")
+        let output = provenance_store::git_process::git()
             .arg("-C")
             .arg(root)
             .args(arguments)
