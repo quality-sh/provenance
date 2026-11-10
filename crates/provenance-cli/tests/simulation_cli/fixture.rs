@@ -5,7 +5,7 @@ use crate::laws::{CliRun, Ran};
 use crate::process::{binary, commit, etag, git, layer, run_at_once, stop_delay, take_l0_breaks};
 use crate::reads;
 use provenance_simulation::generate::{
-    Case, Context, Effect, Fault, Operation, Step, Task, FIRST_REQUIREMENT,
+    requirement_id, Case, Context, Effect, Fault, Operation, Step, Task, FIRST_REQUIREMENT,
 };
 use provenance_simulation::{run_case, stats, Config, Done};
 use provenance_store::layout::ProvenanceLayout;
@@ -20,6 +20,10 @@ const MERGE_ARGUMENTS: &str = "merge-jsonl %O %A %B --output %A --path %P";
 
 /// The count of the stops during a write after which the state changed.
 const STOPS_THAT_CHANGED: &str = "stops during a write after which the state changed";
+/// The count of the updates sent with the etag of a read before a merge.
+const MOVED_ETAG_UPDATES: &str = "updates with the etag of a read before a merge";
+/// The count of those updates that refused.
+const MOVED_ETAG_REFUSALS: &str = "updates with the etag of a read before a merge that refused";
 
 /// When L6 is checked: after each write, or only at the end of a case when
 /// `SIMULATION_L6` is `end`.
@@ -106,17 +110,40 @@ impl Fixture {
         for (engine, op) in pending {
             tasks.push(self.task(Some(engine), op));
         }
+        self.run_tasks(way, &tasks, stop);
+    }
+
+    /// Reads the etag of Requirement `n`, merges `outside` from a branch, and
+    /// then sends an update of the Requirement with the etag of that read.
+    /// So the update names an etag that the outside write can have moved.
+    fn update_on_moved_etag(&mut self, engine: u8, n: u8, outside: Operation) {
+        let read = etag(&self.root(), &requirement_id(n));
+        self.write_outside(outside);
+        let op = Operation::UpdateRequirement { n, stale: true };
+        let mut task = self.task(Some(engine), op);
+        if let Ok(etag) = read {
+            task.stale_etag = etag;
+        }
+        let refused = self.run_tasks(Ran::Alone, &[task], None);
+        stats::add(&layer(), MOVED_ETAG_UPDATES, 1);
+        stats::add(&layer(), MOVED_ETAG_REFUSALS, u64::from(refused));
+    }
+
+    /// Runs `tasks` in the way `way`; tells if a write refused.
+    fn run_tasks(&mut self, way: Ran, tasks: &[Task], stop: Option<u8>) -> bool {
         let before = (way == Ran::Stopped).then(|| state_entries(&self.root()));
-        let done = run_at_once(&self.root(), &tasks, stop.map(stop_delay));
+        let done = run_at_once(&self.root(), tasks, stop.map(stop_delay));
         if let Some(before) = before.filter(|_| done.iter().any(|done| done.stopped)) {
             stats::add(&layer(), "stops during a write", 1);
             let changed = state_entries(&self.root()) != before;
             stats::add(&layer(), STOPS_THAT_CHANGED, u64::from(changed));
         }
+        let refused = done.iter().any(|done| done.result.is_err());
         if !done.is_empty() {
             self.groups.push((way, done));
             self.check_reads();
         }
+        refused
     }
 
     /// Runs `op` on a branch from the last merge and merges it back.
@@ -192,7 +219,19 @@ pub fn run_steps(case: &Case) -> Fixture {
     let engines = fixture.engines;
     let mut pending: Vec<(u8, Operation)> = Vec::new();
     // `None` is the end of the case: it runs the writes that wait, one by one.
-    let steps = case.expanded();
+    // An update on a moved base keeps its step; another write on a moved base
+    // is an outside write and then the write.
+    let steps: Vec<Step> = case
+        .steps
+        .iter()
+        .flat_map(|step| match step {
+            Step::WriteOnMovedBase {
+                op: Operation::UpdateRequirement { .. },
+                ..
+            } => vec![step.clone()],
+            other => other.expand(),
+        })
+        .collect();
     for step in steps.iter().map(Some).chain(std::iter::once(None)) {
         if let Some(Step::Write { engine, op }) = step {
             pending.push((*engine, op.clone()));
@@ -218,6 +257,14 @@ pub fn run_steps(case: &Case) -> Fixture {
         if let Some(Step::OutsideWrite(op)) = step {
             fixture.write_outside(op.clone());
         }
+        if let Some(Step::WriteOnMovedBase {
+            engine,
+            op: Operation::UpdateRequirement { n, .. },
+            outside,
+        }) = step
+        {
+            fixture.update_on_moved_etag(*engine, *n, outside.clone());
+        }
     }
     fixture
 }
@@ -239,6 +286,8 @@ impl Fixture {
         stats::add(&layer(), "stops during a write", 0);
         stats::add(&layer(), STOPS_THAT_CHANGED, 0);
         stats::add(&layer(), "stops after the write ended", 0);
+        stats::add(&layer(), MOVED_ETAG_UPDATES, 0);
+        stats::add(&layer(), MOVED_ETAG_REFUSALS, 0);
         stats::add(
             &layer(),
             "writes",

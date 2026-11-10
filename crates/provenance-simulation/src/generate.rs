@@ -25,8 +25,9 @@ pub enum Step {
     Write { engine: u8, op: Operation },
     /// Gives `op` to an engine, gives the engine turns until it waits to
     /// publish, then lands `outside` outside every engine. So the engine
-    /// publishes on a moved base. The CLI layer runs the outside write and
-    /// then the write.
+    /// publishes on a moved base. The CLI layer reads the etag of an update,
+    /// merges the outside write, and sends the update with that etag; it
+    /// runs another write after the outside write.
     WriteOnMovedBase {
         engine: u8,
         op: Operation,
@@ -41,8 +42,9 @@ pub enum Step {
 }
 
 impl Step {
-    /// The steps of the CLI layer that this step stands for: a write on a
-    /// moved base is an outside write and then the write.
+    /// The steps that this step stands for when a layer cannot stop a
+    /// write before its publish: a write on a moved base is an outside
+    /// write and then the write.
     pub fn expand(&self) -> Vec<Self> {
         match self {
             Self::WriteOnMovedBase {
