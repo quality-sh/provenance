@@ -55,3 +55,9 @@ slow-timeout = { period = "30s", terminate-after = 2 }
 # about a minute, not at the job timeout.
 filter = 'package(provenance-transport) & (binary(host_queue) | binary(host_invocation))'
 slow-timeout = { period = "30s", terminate-after = 2 }
+
+[[profile.default.overrides]]
+# The review record test takes about 8s. One CI run stalled in it for more than
+# 80 minutes. A stall must fail the test in minutes and not hold the job.
+filter = 'package(provenance-cli) & binary(cli_agent_review_records)'
+slow-timeout = { period = "60s", terminate-after = 3 }
