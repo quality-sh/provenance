@@ -84,6 +84,7 @@ jobs:
               - ".github/workflows/release-smoke.yml"
               - ".github/scripts/**/*.sh"
               - ".github/scripts/**/*.py"
+              - "scripts/agent-bin/**"
             bench:
               - *ci
               - ".github/workflows/benchmarks.yml"
