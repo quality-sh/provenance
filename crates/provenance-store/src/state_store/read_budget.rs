@@ -7,7 +7,6 @@ use provenance_core::model::projection_row::ColumnValue;
 use provenance_core::model::ProjectionRow;
 use provenance_macros::rule;
 use serde::Serialize;
-use std::sync::OnceLock;
 
 const RECORD_BYTES: usize = 65_536;
 const RESOURCE_RECORD_BYTES: usize = 1_048_576 - 16_384;
@@ -30,50 +29,6 @@ pub const fn record_bytes() -> usize {
     RECORD_BYTES
 }
 
-/// Counts the bytes that the supported read gives a REAL column.
-///
-/// The count is `length(CAST(real AS BLOB))` in the `SQLite` of the
-/// projection. The host answers with libsqlite3, and a Worker with the SQL
-/// of its Durable Object.
-///
-/// The process has one counter, which [`set_real_bytes`] sets. With the
-/// `host` feature, libsqlite3 is the counter when nothing sets one. Without
-/// `host`, the crate has no counter: a Worker calls [`set_real_bytes`] when
-/// it starts. A write that counts a REAL column before that is refused, and
-/// the error names `set_real_bytes`.
-pub trait RealBytes: Send + Sync + std::fmt::Debug {
-    /// The byte count of `real` as the SQLite of the projection casts it.
-    fn of(&self, real: f64) -> anyhow::Result<usize>;
-}
-
-static REAL_BYTES: OnceLock<Box<dyn RealBytes>> = OnceLock::new();
-
-/// Sets the REAL byte counter of this process.
-///
-/// Set it before the first write that counts a REAL column. Returns `false`,
-/// and keeps the first counter, when a counter is already set. With the
-/// `host` feature, libsqlite3 is the counter when none is set.
-///
-/// Without `host`, a Worker calls this function when it starts. Until then,
-/// each write that counts a REAL column fails with an error that names this
-/// function.
-pub fn set_real_bytes(counter: Box<dyn RealBytes>) -> bool {
-    REAL_BYTES.set(counter).is_ok()
-}
-
-fn real_bytes(real: f64) -> anyhow::Result<usize> {
-    #[cfg(feature = "host")]
-    let counter = REAL_BYTES.get_or_init(|| Box::new(SqliteRealBytes));
-    #[cfg(not(feature = "host"))]
-    let counter = REAL_BYTES.get().ok_or_else(|| {
-        anyhow::anyhow!(
-            "no REAL byte counter is set: a Worker must call set_real_bytes when it starts, \
-             before the first write that counts a REAL column"
-        )
-    })?;
-    counter.of(real)
-}
-
 /// The row or payload byte accounting one supported read applies to a kind.
 pub trait ReadBudget: Serialize {
     /// The stored bytes the supported reads account for this record.
@@ -91,67 +46,72 @@ pub trait ReadBudget: Serialize {
 /// The byte count `length(CAST(column AS BLOB))` reports for one column
 /// value: `SQLite` renders a null as absent, an integer as its decimal text,
 /// text as its UTF-8 bytes, and a real through `SQLite`'s own conversion.
-fn column_bytes(value: &ColumnValue) -> anyhow::Result<usize> {
+///
+/// Only a REAL column needs `SQLite` to count it, so only the host build,
+/// which has libsqlite3, counts one. The host count stays as a defence for a
+/// field that is `Eq` but serializes as a JSON float, which
+/// `row_counted_kind_holds_no_float_field!` does not refuse.
+pub(super) fn column_bytes(value: &ColumnValue) -> anyhow::Result<usize> {
     match value {
         ColumnValue::Null => Ok(0),
         ColumnValue::Text(text) => Ok(text.len()),
         ColumnValue::Integer(integer) => Ok(integer.to_string().len()),
-        ColumnValue::Real(real) => real_bytes(*real),
+        #[cfg(feature = "host")]
+        ColumnValue::Real(real) => sqlite_real_bytes(*real),
+        #[cfg(not(feature = "host"))]
+        ColumnValue::Real(_) => Err(anyhow::anyhow!(
+            "only the host build counts the bytes of a REAL column"
+        )),
     }
 }
 
-/// The libsqlite3 answer: the same REAL-to-BLOB conversion as the projection.
+/// The byte count of `real` as libsqlite3 casts it to a BLOB, the same
+/// conversion as the projection.
 #[cfg(feature = "host")]
-#[derive(Debug)]
-struct SqliteRealBytes;
+fn sqlite_real_bytes(real: f64) -> anyhow::Result<usize> {
+    use libsqlite3_sys as sqlite;
 
-#[cfg(feature = "host")]
-impl RealBytes for SqliteRealBytes {
-    fn of(&self, real: f64) -> anyhow::Result<usize> {
-        use libsqlite3_sys as sqlite;
-
-        let mut connection = std::ptr::null_mut();
-        let mut statement = std::ptr::null_mut();
-        // Use the same REAL-to-BLOB conversion as the supported read. Formatting
-        // the number in Rust, or even with SQLite printf, can give another size.
-        let result = unsafe {
-            (|| {
-                anyhow::ensure!(
-                    sqlite::sqlite3_open(c":memory:".as_ptr(), &raw mut connection)
-                        == sqlite::SQLITE_OK,
-                    "cannot open SQLite for REAL byte accounting"
-                );
-                anyhow::ensure!(
-                    sqlite::sqlite3_prepare_v2(
-                        connection,
-                        c"SELECT CAST(? AS BLOB)".as_ptr(),
-                        -1,
-                        &raw mut statement,
-                        std::ptr::null_mut(),
-                    ) == sqlite::SQLITE_OK,
-                    "cannot prepare SQLite REAL byte accounting"
-                );
-                anyhow::ensure!(
-                    sqlite::sqlite3_bind_double(statement, 1, real) == sqlite::SQLITE_OK,
-                    "cannot bind SQLite REAL for byte accounting"
-                );
-                anyhow::ensure!(
-                    sqlite::sqlite3_step(statement) == sqlite::SQLITE_ROW,
-                    "cannot read SQLite REAL byte count"
-                );
-                Ok(usize::try_from(sqlite::sqlite3_column_bytes(statement, 0))?)
-            })()
-        };
-        unsafe {
-            if !statement.is_null() {
-                sqlite::sqlite3_finalize(statement);
-            }
-            if !connection.is_null() {
-                sqlite::sqlite3_close(connection);
-            }
+    let mut connection = std::ptr::null_mut();
+    let mut statement = std::ptr::null_mut();
+    // Use the same REAL-to-BLOB conversion as the supported read. Formatting
+    // the number in Rust, or even with SQLite printf, can give another size.
+    let result = unsafe {
+        (|| {
+            anyhow::ensure!(
+                sqlite::sqlite3_open(c":memory:".as_ptr(), &raw mut connection)
+                    == sqlite::SQLITE_OK,
+                "cannot open SQLite for REAL byte accounting"
+            );
+            anyhow::ensure!(
+                sqlite::sqlite3_prepare_v2(
+                    connection,
+                    c"SELECT CAST(? AS BLOB)".as_ptr(),
+                    -1,
+                    &raw mut statement,
+                    std::ptr::null_mut(),
+                ) == sqlite::SQLITE_OK,
+                "cannot prepare SQLite REAL byte accounting"
+            );
+            anyhow::ensure!(
+                sqlite::sqlite3_bind_double(statement, 1, real) == sqlite::SQLITE_OK,
+                "cannot bind SQLite REAL for byte accounting"
+            );
+            anyhow::ensure!(
+                sqlite::sqlite3_step(statement) == sqlite::SQLITE_ROW,
+                "cannot read SQLite REAL byte count"
+            );
+            Ok(usize::try_from(sqlite::sqlite3_column_bytes(statement, 0))?)
+        })()
+    };
+    unsafe {
+        if !statement.is_null() {
+            sqlite::sqlite3_finalize(statement);
         }
-        result
+        if !connection.is_null() {
+            sqlite::sqlite3_close(connection);
+        }
     }
+    result
 }
 
 /// Refuses the mutation before publication when any supported read would
@@ -184,9 +144,36 @@ pub fn ensure_slice_within_read_budget<T: ReadBudget>(records: &[T]) -> anyhow::
     Ok(())
 }
 
+/// Fails the build when `$kind` is not `Eq`. `projection_budget!` calls it for
+/// each record kind that the write check counts column by column.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! row_counted_kind_holds_no_float_field {
+    ($kind:ty) => {
+        const _: () = {
+            /// Refuses a row-counted kind with an `f32` or `f64` field, because
+            /// such a kind is not `Eq`. A field type that is `Eq` but serializes
+            /// as a JSON float, such as `serde_json::Value`, is not refused at
+            /// build time; the build without `host` refuses that write with a
+            /// fixed error. No current row-counted kind has such a field.
+            #[provenance_macros::rule("rule_row_counted_records_hold_no_real_column")]
+            #[provenance_macros::verifies(
+                "rule_row_counted_records_hold_no_real_column",
+                construction
+            )]
+            trait HoldsNoFloatField: ::core::cmp::Eq {}
+            impl<T: ::core::cmp::Eq> HoldsNoFloatField for T {}
+            const fn holds_no_float_field<T: HoldsNoFloatField>() {}
+            holds_no_float_field::<$kind>();
+        };
+    };
+}
+
 macro_rules! projection_budget {
     ($($kind:ty),+ $(,)?) => {
         $(
+            $crate::row_counted_kind_holds_no_float_field!($kind);
+
             impl ReadBudget for $kind {
                 fn read_bytes(&self) -> anyhow::Result<usize> {
                     self.row()?.iter().map(column_bytes).sum()
