@@ -130,6 +130,18 @@ fn lockstep_updates() -> Case {
     Case { engines: 2, steps }
 }
 
+// No Rule: proof that L1 can fail. The storage lands the set of an armed
+// refusal and answers a refusal, so the update fails and its write landed.
+#[test]
+#[ignore = "a planted fault of the nightly simulation"]
+fn a_refusal_that_lands_the_set_breaks_l1() {
+    let mut steps = vec![Step::Fault(Fault::Refuse)];
+    steps.extend(alone(&[Operation::UpdateRequirement { n: 0, stale: false }]));
+    let case = Case { engines: 2, steps };
+    let run = run_case(&case, planted(Plant::LandRefused, "L1"));
+    expect_law(laws::check_only(&run, "L1"), "L1");
+}
+
 // No Rule: proof that L2 can fail. After a stop, the reads of the new
 // engine fail.
 #[test]

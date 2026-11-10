@@ -4,6 +4,8 @@
 /// A fault that a test plants in the simulated storage or in the identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Plant {
+    /// An armed refusal lands the set and then answers a refusal (L1).
+    LandRefused,
     /// After a moved base, an engine reads the old state again (L5).
     StaleRead,
     /// After a stop, a read outside every engine fails (L2).

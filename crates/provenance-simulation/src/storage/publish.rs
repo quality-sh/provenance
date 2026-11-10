@@ -60,12 +60,17 @@ impl World {
                 state.stale.remove(&slot);
             }
             match state.armed.take() {
-                Some(Armed::Refuse) => (
-                    Err(PublishFailure::Refused(anyhow::anyhow!(
+                Some(Armed::Refuse) => {
+                    let refused = Err(PublishFailure::Refused(anyhow::anyhow!(
                         "the simulated storage refused the set"
-                    ))),
-                    Outcome::Refused,
-                ),
+                    )));
+                    if self.plant == Some(Plant::LandRefused) {
+                        writes.apply_to(&mut state.entries);
+                        (refused, Outcome::Landed)
+                    } else {
+                        (refused, Outcome::Refused)
+                    }
+                }
                 Some(Armed::Unknown { landed }) => {
                     land_prefix(&mut state.entries, writes, landed);
                     (
