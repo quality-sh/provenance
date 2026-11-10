@@ -69,6 +69,8 @@ fn api_refuses_repeated_header_and_query_names() {
             "requirements",
             "--repo",
             &repo,
+            "--format",
+            "json",
             flag,
             first,
             flag,
