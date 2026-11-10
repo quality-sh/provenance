@@ -157,8 +157,10 @@ fn invalid_if_match_names_the_edit_etag_form() {
         ])
         .assert()
         .failure()
-        .stderr(contains("--if-match must equal data.edit.etag"))
-        .stderr(contains("sha256:<64 lowercase hexadecimal characters>"));
+        .stderr(contains(
+            "--if-match must equal edit.etag from the latest record read; \
+             expected sha256:<64 lowercase hexadecimal characters>",
+        ));
 }
 
 #[test]
@@ -381,7 +383,26 @@ fn missing_if_match_names_the_read_and_the_flag_that_takes_the_etag() {
     assert_eq!(refused["error"]["field"], "If-Match");
     assert_eq!(refused["error"]["reason"], "required");
     let hint = refused["error"]["hint"].as_str().unwrap_or_default();
-    assert!(hint.contains("give edit.etag to --if-match"), "{refused}");
+    assert_eq!(
+        hint,
+        format!(
+            "this update needs --if-match; run `provenance req_unguarded get --format json \
+             --scope default --repo {repo}` and give edit.etag to --if-match; \
+             expected sha256:<64 lowercase hexadecimal characters>"
+        )
+    );
+    let text = provenance()
+        .args(["req_unguarded", "update", "--repo", &repo])
+        .args(["--description", "Changed"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&text.stderr).trim_end(),
+        format!(
+            "Error: {{\"error\":{{\"field\":\"If-Match\",\"kind\":\"invalid_input\",\
+             \"reason\":\"required\"}},\"meta\":{{}}}}; {hint}"
+        )
+    );
 
     let read = hint.split('`').nth(1).unwrap_or_default();
     let words: Vec<&str> = read.split_whitespace().skip(1).collect();

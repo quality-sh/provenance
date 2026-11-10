@@ -49,3 +49,6 @@ fn matching(dictionary: &DictionaryImport, candidates: &[&str]) -> Vec<String> {
     }
     alternatives
 }
+
+#[cfg(test)]
+mod tests;

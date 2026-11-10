@@ -421,8 +421,8 @@ fn existing_header_preconditions_remain_required() {
 }
 
 /// Implementation-aid test: no active Rule states this refusal yet. The test
-/// creates a Source with each value that the refusal lists, so the list must
-/// hold only values that the create accepts.
+/// pins the full list in schema order, and creates a Source with each listed
+/// value, so the list must hold only values that the create accepts.
 #[test]
 fn invalid_source_type_lists_the_accepted_values() {
     let (_directory, repo) = init();
@@ -434,36 +434,53 @@ fn invalid_source_type_lists_the_accepted_values() {
             "source",
             "--repo",
             &repo,
-            "--name",
-            "Bad type",
-            "--source-type",
-            "decision",
         ])
+        .args(["--name", "Bad type", "--source-type", "decision"])
         .output()
         .unwrap();
     assert!(!refused.status.success());
-    let stderr = String::from_utf8_lossy(&refused.stderr);
-    let listed = stderr
-        .split_once("invalid value for --source-type; accepted values: ")
-        .map_or_else(|| panic!("{stderr}"), |(_, values)| values.trim());
-    let values: Vec<&str> = listed.split(", ").collect();
-    assert!(values.contains(&"document"), "{stderr}");
-    assert!(!values.contains(&"decision"), "{stderr}");
-    for (index, value) in values.iter().enumerate() {
+    let listed = "policy, document, legislation, company_agreement, system_state, \
+                  external_integration, domain_knowledge, project_artifact, incident, api_spec";
+    assert_eq!(
+        String::from_utf8_lossy(&refused.stderr).trim_end(),
+        format!("error: invalid value for --source-type; accepted values: {listed}")
+    );
+    for (index, value) in listed.split(", ").enumerate() {
         provenance()
             .args([
                 &format!("source_type_{index}"),
                 "create",
                 "--type",
                 "source",
-                "--repo",
-                &repo,
-                "--name",
-                value,
-                "--source-type",
-                value,
             ])
+            .args(["--repo", &repo, "--name", value, "--source-type", value])
             .assert()
             .success();
     }
+}
+
+/// Implementation-aid test: no active Rule states this refusal yet. The
+/// `--status` list of a Requirement is the closed set of the schema, in its
+/// order.
+#[test]
+fn invalid_requirement_status_lists_the_schema_values() {
+    let (_directory, repo) = init();
+    let refused = provenance()
+        .args([
+            "req_bad_status",
+            "create",
+            "--type",
+            "requirement",
+            "--repo",
+            &repo,
+        ])
+        .args(["--statement", "The system stops.", "--status", "bogus"])
+        .output()
+        .unwrap();
+    assert!(!refused.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&refused.stderr).trim_end(),
+        "error: invalid value for --status; accepted values: \
+         active, discovery, refinement, resolved, archived"
+    );
 }

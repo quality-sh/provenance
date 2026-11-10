@@ -1,4 +1,6 @@
-use super::{directory_file, envelope, init, json as read_json, provenance, refusal, seed_source};
+use super::{
+    directory_file, envelope, init, json as read_json, output, provenance, refusal, seed_source,
+};
 use serde_json::{json, Value};
 use std::io::Read as _;
 use std::process::{Command, Stdio};
@@ -138,31 +140,48 @@ fn api_refuses_a_stdin_body_before_reading_it() {
     }
 }
 
+const LIST_HINT: &str = "--query relations occurs more than one time; give each parameter one \
+     time and put the items of a list in one comma-separated value, for example \
+     --query relations=a,b";
+const ONE_VALUE_HINT: &str =
+    "--query query occurs more than one time; give each parameter one time";
+
 /// Implementation-aid test: no active Rule states this refusal yet. It pins
-/// that a repeated query parameter names the parameter and a form that works,
-/// and that the named form then reads the record.
+/// that a repeated list parameter names the parameter and the comma form, in
+/// the JSON format and the text format, and that the named form then reads
+/// the record.
 #[test]
 fn api_repeated_query_names_the_parameter_and_the_comma_form() {
     let (_directory, repo) = init();
     seed_source(&repo);
-
-    let refused = refusal(&[
+    let repeated = [
         "api",
         "sources/source_api",
         "--repo",
         &repo,
-        "--format",
-        "json",
         "--query",
         "query=neighbors",
         "--query",
         "relations=cites",
         "--query",
         "relations=refines",
-    ]);
-    assert_eq!(refused["error"]["field"], "query");
-    let hint = refused["error"]["hint"].as_str().unwrap_or_default();
-    assert!(hint.contains("--query relations=a,b"), "{refused}");
+    ];
+
+    let refused = refusal(&[&repeated[..], &["--format", "json"]].concat());
+    assert_eq!(
+        refused,
+        json!({"error": {"field": "query", "hint": LIST_HINT, "kind": "invalid_input",
+            "reason": "invalid_value"}, "meta": {}})
+    );
+    let text = output(&repeated);
+    assert!(!text.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&text.stderr).trim_end(),
+        format!(
+            "Error: {{\"error\":{{\"field\":\"query\",\"kind\":\"invalid_input\",\
+             \"reason\":\"invalid_value\"}},\"meta\":{{}}}}; {LIST_HINT}"
+        )
+    );
 
     let read = read_json(&[
         "api",
@@ -177,4 +196,61 @@ fn api_repeated_query_names_the_parameter_and_the_comma_form() {
         "relations=cites,refines",
     ]);
     assert_eq!(read["data"]["id"], "source_api");
+}
+
+/// Implementation-aid test: no active Rule states this refusal yet. A
+/// parameter that takes one value refuses the comma form, so the hint gives
+/// no comma example, and one use of the parameter then reads the record.
+#[test]
+fn api_repeated_one_value_query_gives_no_comma_example() {
+    let (_directory, repo) = init();
+    seed_source(&repo);
+
+    let refused = refusal(&[
+        "api",
+        "sources/source_api",
+        "--repo",
+        &repo,
+        "--format",
+        "json",
+        "--query",
+        "query=neighbors",
+        "--query",
+        "query=stale",
+    ]);
+    assert_eq!(
+        refused,
+        json!({"error": {"field": "query", "hint": ONE_VALUE_HINT, "kind": "invalid_input",
+            "reason": "invalid_value"}, "meta": {}})
+    );
+
+    let read = read_json(&[
+        "api",
+        "sources/source_api",
+        "--repo",
+        &repo,
+        "--format",
+        "json",
+        "--query",
+        "query=neighbors",
+    ]);
+    assert_eq!(read["data"]["id"], "source_api");
+}
+
+/// Implementation-aid test: no active Rule states this refusal yet. A
+/// repeated header wins over a repeated query, and its refusal has no query
+/// hint.
+#[test]
+fn api_repeated_header_and_query_give_the_header_refusal_with_no_hint() {
+    let (_directory, repo) = init();
+
+    let refused = refusal(&[
+        "api", "sources", "--repo", &repo, "--format", "json", "--header", "X: 1", "--header",
+        "X: 2", "--query", "a=1", "--query", "a=2",
+    ]);
+    assert_eq!(
+        refused,
+        json!({"error": {"field": "header", "kind": "invalid_input",
+            "reason": "invalid_value"}, "meta": {}})
+    );
 }
