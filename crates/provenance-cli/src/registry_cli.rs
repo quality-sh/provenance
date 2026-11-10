@@ -122,8 +122,10 @@ pub fn with_global_flags(command: Command) -> Command {
     )
 }
 
-/// The parser of one field. The parser of a field with a closed set refuses a value
-/// outside the set with each value of the set, from the closed set of the registry.
+/// When a flag value is not in the closed set of its registry field, the refusal shows
+/// each value of that set, in the order of `Field::closed_values`.
+///
+/// The catalog record flags get their list through `field_schema::invalid_value`.
 #[rule("rule_cli_closed_value_refusal_lists_values")]
 fn value_parser(field: &Field) -> ValueParser {
     if !field.values.is_empty() {
@@ -131,12 +133,9 @@ fn value_parser(field: &Field) -> ValueParser {
     }
     match field.value {
         FieldValue::Count => clap::value_parser!(usize).into(),
-        FieldValue::RecordKind => ClosedSet::parser(field, |value| {
-            let kind = provenance_core::NodeType::parse(value).ok()?;
-            provenance_core::NodeType::ALL
-                .contains(&kind)
-                .then_some(kind)
-        }),
+        FieldValue::RecordKind => {
+            ClosedSet::parser(field, |value| provenance_core::NodeType::parse(value).ok())
+        }
         FieldValue::ApiMethod => {
             ClosedSet::parser(field, provenance_porcelain::api::ApiMethod::parse)
         }
@@ -192,9 +191,8 @@ impl<T: Clone + Send + Sync + 'static> TypedValueParser for ClosedSet<T> {
             return Ok(parsed);
         }
         let listed = PossibleValuesParser::new(self.values.iter().copied());
-        listed.parse_ref(command, arg, value).and_then(|_| {
-            Err(clap::Error::new(clap::error::ErrorKind::InvalidValue).with_cmd(command))
-        })
+        let value = listed.parse_ref(command, arg, value)?;
+        unreachable!("the parse function accepts each listed value, but refused {value}")
     }
 
     fn possible_values(&self) -> Option<Box<dyn Iterator<Item = PossibleValue> + '_>> {

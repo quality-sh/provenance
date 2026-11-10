@@ -1,5 +1,6 @@
-//! A CLI flag or positional argument whose value comes from a closed set refuses a
-//! value outside that set, and the refusal shows each value of the set.
+//! A CLI flag whose value comes from a closed set refuses a value outside that set,
+//! and the refusal shows each value of the set. The `skills show` refusal also shows
+//! its list, but no Rule covers a positional argument.
 
 use assert_cmd::Command;
 use provenance_cli::cli_options::{self, flag_name, GLOBAL_OPTIONS};
@@ -73,7 +74,8 @@ fn api_method_refusal_lists_the_methods() {
     );
 }
 
-#[verifies("rule_cli_closed_value_refusal_lists_values", examples)]
+/// Implementation aid: no Rule covers a positional argument; the test pins the list in
+/// the `skills show` refusal.
 #[test]
 fn skills_show_refusal_lists_the_bundled_skills() {
     assert_eq!(
@@ -85,6 +87,50 @@ fn skills_show_refusal_lists_the_bundled_skills() {
                 .to_owned()
         )
     );
+}
+
+/// Implementation aid: the Rule is about refusals. The test shows that each closed-set
+/// flag still accepts its value in a different letter case: the command gets past the
+/// parse and stops because the directory has no graph.
+#[test]
+fn closed_set_flags_accept_a_value_in_any_letter_case() {
+    for args in [
+        &["search", "--text", "a", "--kind", "RULE"][..],
+        &["search", "--text", "a", "--kind", " rule "],
+        &["rule_y", "create", "--type", "Rule"],
+        &["api", "requirements", "--method", "GET"],
+    ] {
+        assert_eq!(
+            refusal(args),
+            (
+                Some(1),
+                "Error: Provenance graph is not initialized; run `provenance init`\n".to_owned()
+            ),
+            "{args:?}"
+        );
+    }
+}
+
+/// Implementation aid: no Rule covers the help layout. In the help of each record type,
+/// `--type` does not list the types, so each option keeps its help on its own row.
+#[test]
+fn per_type_create_help_keeps_one_row_for_each_option() {
+    for kind in KINDS.split(", ") {
+        let output = Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
+            .args(["record_x", "create", "--type", kind, "--help"])
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(0), "{kind}");
+        let help = String::from_utf8_lossy(&output.stdout);
+        let repo = help
+            .lines()
+            .find(|line| line.trim_start().starts_with("--repo <REPO>"))
+            .unwrap_or_else(|| panic!("{kind} help has no --repo row:\n{help}"));
+        assert!(
+            repo.ends_with("[default: .]"),
+            "{kind} help moves the option help to the next line:\n{help}"
+        );
+    }
 }
 
 /// The command line of one declared command up to its fields: its words, or a record
@@ -110,8 +156,11 @@ fn bogus_line(declaration: &Declaration, field: &Field) -> Vec<String> {
     line
 }
 
-/// Each declared field of each command that the CLI shows, and each shared option, with
-/// its closed set from the registry: every field that the CLI gives a closed-set parser.
+/// Each declared field of each command that the CLI shows, and each shared option, that
+/// has a closed set in the registry gives a refusal that lists the set. The test reads the
+/// expected list from `Field::closed_values`, which is also the source of the parser, so it
+/// does not prove that the list is correct; the tests above pin the lists by hand. It does
+/// not cover the catalog record flags, `skills show`, or the `[ACTION]` argument.
 #[verifies("rule_cli_closed_value_refusal_lists_values", examples)]
 #[test]
 fn each_declared_closed_set_field_lists_its_values() {
