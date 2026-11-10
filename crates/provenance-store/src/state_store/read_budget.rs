@@ -91,6 +91,12 @@ pub trait ReadBudget: Serialize {
 /// The byte count `length(CAST(column AS BLOB))` reports for one column
 /// value: `SQLite` renders a null as absent, an integer as its decimal text,
 /// text as its UTF-8 bytes, and a real through `SQLite`'s own conversion.
+///
+/// Only a REAL column needs `SQLite` to count it. No record kind that the
+/// write check counts column by column has a float field:
+/// `projection_budget!` requires each such kind to be `Eq`, which `f32` and
+/// `f64` are not.
+#[rule("rule_row_counted_records_hold_no_real_column")]
 fn column_bytes(value: &ColumnValue) -> anyhow::Result<usize> {
     match value {
         ColumnValue::Null => Ok(0),
@@ -187,6 +193,12 @@ pub fn ensure_slice_within_read_budget<T: ReadBudget>(records: &[T]) -> anyhow::
 macro_rules! projection_budget {
     ($($kind:ty),+ $(,)?) => {
         $(
+            // A float field makes the kind not `Eq`, so this fails to build.
+            const _: () = {
+                const fn holds_no_float_field<T: Eq>() {}
+                holds_no_float_field::<$kind>();
+            };
+
             impl ReadBudget for $kind {
                 fn read_bytes(&self) -> anyhow::Result<usize> {
                     self.row()?.iter().map(column_bytes).sum()
