@@ -8,7 +8,7 @@
 //!
 //! | Law | Statement |
 //! | --- | --------- |
-//! | L0 | Each process ends in the process limit. |
+//! | L0 | Each process ends in the process limit, with no panic. |
 //! | L3 | A write that succeeded stays unless a later write changed it. |
 //! | L4 | Of two writes on one etag, at most one succeeds. |
 //! | L6 | The reads after each write equal the reads after a full rebuild. |

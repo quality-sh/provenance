@@ -2,7 +2,8 @@
 //!
 //! Each wait for a process has the limit [`PROCESS_LIMIT`]. A process that
 //! does not end in it is killed, and its case breaks L0, so a stopped
-//! process fails its case in minutes and does not hold the job.
+//! process fails its case in minutes and does not hold the job. A process
+//! that panics also breaks L0.
 
 use crate::support::api_process;
 use crate::support::catch_up_steps::{Answer, Surface};
@@ -22,13 +23,26 @@ use std::time::{Duration, Instant};
 pub const PROCESS_LIMIT: Duration = Duration::from_secs(120);
 
 thread_local! {
-    /// The processes of this case that did not end in the limit.
-    static HUNG: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    /// The processes of this case that did not end in the limit or that
+    /// panicked.
+    static L0_BREAKS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
 }
 
-/// Takes the processes that did not end in the limit since the last call.
-pub fn take_hung() -> Vec<String> {
-    HUNG.with(|hung| std::mem::take(&mut *hung.borrow_mut()))
+/// Takes the processes that did not end in the limit or that panicked since
+/// the last call.
+pub fn take_l0_breaks() -> Vec<String> {
+    L0_BREAKS.with(|breaks| std::mem::take(&mut *breaks.borrow_mut()))
+}
+
+fn note_l0_break(text: String) {
+    L0_BREAKS.with(|breaks| breaks.borrow_mut().push(text));
+}
+
+/// Tells if a process panicked: a Rust panic exits with code 101 and prints
+/// "panicked at" on standard error.
+fn panicked(output: &Output) -> bool {
+    output.status.code() == Some(101)
+        || String::from_utf8_lossy(&output.stderr).contains("panicked at")
 }
 
 /// The layer name of this system, for example `cli-linux`.
@@ -52,7 +66,8 @@ fn read_pipe(pipe: Option<impl Read + Send + 'static>) -> std::thread::JoinHandl
 }
 
 /// Waits for `child` for the process limit. At the limit, kills it, notes
-/// `what` as hung and refuses.
+/// `what` as an L0 break and refuses. A process that panicked is also an L0
+/// break.
 pub fn wait_limited(mut child: Child, what: &str) -> Result<Output, String> {
     let stdout = read_pipe(child.stdout.take());
     let stderr = read_pipe(child.stderr.take());
@@ -65,17 +80,22 @@ pub fn wait_limited(mut child: Child, what: &str) -> Result<Output, String> {
                 let _ = child.kill();
                 let _ = child.wait();
                 let text = format!("{what} did not end in {PROCESS_LIMIT:?}");
-                HUNG.with(|hung| hung.borrow_mut().push(text.clone()));
+                note_l0_break(text.clone());
                 return Err(text);
             }
             Err(error) => return Err(format!("{what}: {error}")),
         }
     };
-    Ok(Output {
+    let output = Output {
         status,
         stdout: stdout.join().unwrap_or_default(),
         stderr: stderr.join().unwrap_or_default(),
-    })
+    };
+    if panicked(&output) {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        note_l0_break(format!("{what} panicked: {}", stderr.trim()));
+    }
+    Ok(output)
 }
 
 /// Runs `command` to its end, for the process limit at most.

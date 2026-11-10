@@ -25,8 +25,9 @@ pub struct CliRun {
     pub entries: BTreeMap<StateKey, Vec<u8>>,
     /// The first failure of the full-rebuild comparison of the reads.
     pub reads: Result<(), String>,
-    /// The processes that did not end in the process limit.
-    pub hung: Vec<String>,
+    /// The processes that did not end in the process limit or that
+    /// panicked.
+    pub l0_breaks: Vec<String>,
 }
 
 const fn broken(law: &'static str, detail: String) -> Result<(), Violation> {
@@ -35,7 +36,7 @@ const fn broken(law: &'static str, detail: String) -> Result<(), Violation> {
 
 /// Checks L0, L3, L4, L6 and L7.
 pub fn check(case: &Case, run: &CliRun) -> Result<(), Violation> {
-    if let Some(process) = run.hung.first() {
+    if let Some(process) = run.l0_breaks.first() {
         return broken("L0", process.clone());
     }
     successful_writes_stay(run)?;

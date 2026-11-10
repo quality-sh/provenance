@@ -2,7 +2,7 @@
 //! it.
 
 use crate::laws::{CliRun, Ran};
-use crate::process::{binary, commit, etag, git, layer, run_at_once, stop_delay, take_hung};
+use crate::process::{binary, commit, etag, git, layer, run_at_once, stop_delay, take_l0_breaks};
 use crate::reads;
 use provenance_simulation::generate::{
     Case, Context, Effect, Fault, Operation, Step, Task, FIRST_REQUIREMENT,
@@ -187,7 +187,7 @@ impl Fixture {
 
 /// Runs the steps of `case` on a new fixture repository.
 pub fn run_steps(case: &Case) -> Fixture {
-    take_hung();
+    take_l0_breaks();
     let mut fixture = Fixture::new(case.engines);
     let engines = fixture.engines;
     let mut pending: Vec<(u8, Operation)> = Vec::new();
@@ -247,7 +247,7 @@ impl Fixture {
         let millis = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
         stats::add(&layer(), "case milliseconds", millis);
         CliRun {
-            hung: take_hung(),
+            l0_breaks: take_l0_breaks(),
             reads: self.reads.clone(),
             entries: state_entries(&self.root()),
             groups: self.groups,
