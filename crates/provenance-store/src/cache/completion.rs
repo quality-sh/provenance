@@ -133,8 +133,10 @@ async fn acquire_close_lock(path: &Path) -> anyhow::Result<File> {
         .with_context(|| format!("open cache close lock {}", path.display()))?;
     while let Err(error) = file.try_lock_exclusive() {
         if error.raw_os_error() != fs2::lock_contended_error().raw_os_error() {
-            return Err(anyhow::Error::new(error)
-                .context(format!("acquire cache close lock {}", path.display())));
+            return Err(crate::refusal::caused(
+                error,
+                format!("acquire cache close lock {}", path.display()),
+            ));
         }
         tokio::time::sleep(CLOSE_LOCK_RETRY).await;
     }

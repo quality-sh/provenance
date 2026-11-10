@@ -75,7 +75,7 @@ fn apply(staged: &ProvenanceLayout, writes: &WriteSet) -> anyhow::Result<()> {
         let path = state.join(key.as_str());
         match std::fs::remove_file(crate::long_path::extended(&path)?) {
             Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
-                return Err(anyhow::Error::new(error).context(format!("remove {path}")));
+                return Err(crate::refusal::caused(error, format!("remove {path}")));
             }
             _ => {}
         }

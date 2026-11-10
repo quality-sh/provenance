@@ -79,7 +79,10 @@ fn read_through_rename(path: &Utf8Path) -> anyhow::Result<Vec<u8>> {
                 std::thread::sleep(std::time::Duration::from_millis(u64::from(attempt) * 5));
             }
             Err(error) => {
-                return Err(anyhow::Error::new(error).context(format!("read manifest {path}")))
+                return Err(crate::refusal::caused(
+                    error,
+                    format!("read manifest {path}"),
+                ))
             }
         }
     }

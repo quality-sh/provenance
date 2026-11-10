@@ -175,7 +175,7 @@ pub(crate) fn revision_source_blobs(
         let entry = std::str::from_utf8(entry).context("git ls-tree wrote a non-UTF-8 entry")?;
         let (meta, path) = entry
             .split_once('\t')
-            .context("git ls-tree wrote an entry without a path")?;
+            .ok_or_else(|| crate::refusal::fault!("git ls-tree wrote an entry without a path"))?;
         let mut fields = meta.split(' ');
         let (Some(_mode), Some(kind), Some(object)) = (fields.next(), fields.next(), fields.next())
         else {
@@ -216,7 +216,7 @@ pub(crate) fn read_blobs(
         let header_end = rest
             .iter()
             .position(|byte| *byte == b'\n')
-            .context("git cat-file omitted an object header")?;
+            .ok_or_else(|| crate::refusal::fault!("git cat-file omitted an object header"))?;
         let header = std::str::from_utf8(&rest[..header_end])?;
         let size = match header.split(' ').collect::<Vec<_>>().as_slice() {
             [id, "blob", size] if *id == object => size.parse::<usize>()?,
@@ -229,7 +229,7 @@ pub(crate) fn read_blobs(
         let body_start = header_end + 1;
         let body = rest
             .get(body_start..body_start + size)
-            .context("git cat-file wrote a short object")?;
+            .ok_or_else(|| crate::refusal::fault!("git cat-file wrote a short object"))?;
         files.push(RevisionFile {
             content: String::from_utf8(body.to_vec())
                 .with_context(|| format!("read blob {path} as UTF-8"))?,
@@ -237,7 +237,7 @@ pub(crate) fn read_blobs(
         });
         rest = rest
             .get(body_start + size + 1..)
-            .context("git cat-file omitted an object terminator")?;
+            .ok_or_else(|| crate::refusal::fault!("git cat-file omitted an object terminator"))?;
     }
     Ok(files)
 }
@@ -271,7 +271,10 @@ fn cat_file<'o>(
         .stderr(Stdio::piped())
         .spawn()
         .with_context(|| format!("run {operation}"))?;
-    let mut stdin = child.stdin.take().context("open git cat-file input")?;
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| crate::refusal::fault!("open git cat-file input"))?;
     let mut request = String::new();
     for object in objects {
         request.push_str(object);

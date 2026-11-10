@@ -112,8 +112,12 @@ fn diff_lines(
     for line in text.lines().filter(|line| line.starts_with("@@ ")) {
         let mut fields = line.split_whitespace();
         let _marker = fields.next();
-        let old = fields.next().context("malformed git diff hunk")?;
-        let new = fields.next().context("malformed git diff hunk")?;
+        let old = fields
+            .next()
+            .ok_or_else(|| crate::refusal::fault!("malformed git diff hunk"))?;
+        let new = fields
+            .next()
+            .ok_or_else(|| crate::refusal::fault!("malformed git diff hunk"))?;
         old_lines.push(parse_hunk_span(old, '-')?);
         new_lines.push(parse_hunk_span(new, '+')?);
     }
@@ -123,7 +127,7 @@ fn diff_lines(
 pub(super) fn parse_hunk_span(field: &str, prefix: char) -> anyhow::Result<LineSpan> {
     let coordinates = field
         .strip_prefix(prefix)
-        .context("malformed git diff hunk coordinates")?;
+        .ok_or_else(|| crate::refusal::fault!("malformed git diff hunk coordinates"))?;
     let (start, count) = coordinates.split_once(',').unwrap_or((coordinates, "1"));
     Ok(LineSpan {
         start: start.parse()?,

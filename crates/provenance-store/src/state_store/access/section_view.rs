@@ -255,11 +255,15 @@ impl StateStore {
 }
 
 fn not_found(path: &Utf8Path) -> anyhow::Error {
-    anyhow::Error::new(std::io::Error::from(std::io::ErrorKind::NotFound))
-        .context(format!("read {path}"))
+    crate::refusal::caused(
+        std::io::Error::from(std::io::ErrorKind::NotFound),
+        format!("read {path}"),
+    )
 }
 
 fn invalid_text(path: &Utf8Path) -> anyhow::Error {
-    anyhow::Error::new(std::io::Error::from(std::io::ErrorKind::InvalidData))
-        .context(format!("read {path}: the file is not UTF-8"))
+    crate::refusal::caused(
+        std::io::Error::from(std::io::ErrorKind::InvalidData),
+        format!("read {path}: the file is not UTF-8"),
+    )
 }

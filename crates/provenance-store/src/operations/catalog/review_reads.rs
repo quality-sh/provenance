@@ -163,7 +163,7 @@ review_read!(
             match page.result.next_cursor {
                 Some(next) => cursor = Some(next),
                 None => {
-                    return Err(anyhow::Error::new(
+                    return Err(anyhow::Error::from(
                         provenance_core::protocol::read_failure::ReadFailure::ResourceNotFound,
                     )
                     .into())

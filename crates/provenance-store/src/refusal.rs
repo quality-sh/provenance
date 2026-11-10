@@ -9,7 +9,9 @@
 //!   kind and status on a read and on a write.
 //! - `fault!("...")`, or `ensure!(Fault, condition, "...")`: a broken code
 //!   invariant. It reads as `write_failed` or `read_failed` (500) and keeps
-//!   its text as the cause.
+//!   its text as the cause. [`caused`] is the same fault for a native error,
+//!   such as an I/O error, with a context above it. `?` on a native error
+//!   also gives this fault, with no context.
 //! - [`state_fault`] at a known line, or `readers::record_fault` at the line
 //!   of a record id: stored records that the store cannot read or that do not
 //!   agree. It reads as `invalid_state_file` with the file and the line of
@@ -84,6 +86,19 @@ pub fn state_fault(at: &ShardLine, message: String) -> anyhow::Error {
 
 /// A refusal of a common kind. The caller gets the kind and the status of
 /// `failure`; a context on the error does not change them.
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 pub fn common(failure: OperationFailure) -> anyhow::Error {
     failure.into()
+}
+
+/// A declared fault that keeps the native `error` below `context`. It reads
+/// as `write_failed` or `read_failed` (500), and the cause gives both texts.
+/// A probe that knows the type of `error` can still give it a kind.
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
+pub fn caused<E, C>(error: E, context: C) -> anyhow::Error
+where
+    E: std::error::Error + Send + Sync + 'static,
+    C: std::fmt::Display + Send + Sync + 'static,
+{
+    anyhow::Error::new(error).context(context)
 }

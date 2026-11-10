@@ -185,7 +185,7 @@ pub(crate) fn write_file_atomic(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result
 fn remove_file(path: &Utf8Path) -> anyhow::Result<()> {
     match std::fs::remove_file(crate::long_path::extended(path)?) {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
-            Err(anyhow::Error::new(error).context(format!("remove {path}")))
+            Err(crate::refusal::caused(error, format!("remove {path}")))
         }
         _ => Ok(()),
     }
@@ -236,5 +236,5 @@ fn read_tree(
 }
 
 fn read_error(path: &Utf8Path) -> impl Fn(std::io::Error) -> StorageError + '_ {
-    move |error| StorageError::Read(anyhow::Error::new(error).context(format!("read {path}")))
+    move |error| StorageError::Read(crate::refusal::caused(error, format!("read {path}")))
 }

@@ -1,22 +1,40 @@
 //! Implementation aid: no Rule states the form of a store error. This check
 //! finds a raw anyhow refusal in store code before review, so that each new
-//! error is a declared refusal, a declared fault or a located state fault
-//! (`src/refusal.rs`). It does not judge if the kind of a refusal is correct;
-//! the review of each converted site does that.
+//! error has one of the declared forms of `src/refusal.rs`. It does not judge
+//! if the kind of a refusal is correct; the review of each site does that.
 //!
-//! The check reads the Rust tokens of each file below `src`, without comments
-//! and strings, and refuses these forms outside `src/refusal.rs` and
-//! `src/write_error.rs`:
+//! The check reads the Rust tokens of each file below `src`, without comments,
+//! strings and character literals, and refuses these forms outside
+//! `src/refusal.rs` and `src/write_error.rs`:
 //!
 //! - `bail!`, `anyhow!` and `format_err!`.
-//! - anyhow `ensure!`: an `ensure!` whose first argument is not a kind name
-//!   followed by a comma, as the typed `write_error::ensure!` has.
-//! - `Error::msg`, which includes `anyhow::Error::msg`.
+//! - anyhow `ensure!`: an `ensure!` whose arguments do not start with a kind
+//!   name, a comma and a condition, as the typed `write_error::ensure!` does.
+//! - `Error::msg`, which includes `anyhow::Error::msg`, and
+//!   `anyhow::Error::new`.
 //! - A `use anyhow::...` that imports `bail`, `ensure`, `anyhow` or
 //!   `format_err`.
 //!
-//! Test code is not read: test files and directories, and each item that has
-//! a `#[cfg(test)]` attribute.
+//! Test code is not read: test files and directories, `test_support.rs`, and
+//! each item whose `cfg` needs `test` (`cfg(test)` or `cfg(all(test, ...))`).
+//! An item under `cfg(any(test, ...))` is read, because a fixture build has it.
+//!
+//! The check cannot find these errors with no declared kind:
+//!
+//! - `.context(...)` or `.with_context(...)` on an `Option`. A text rule cannot
+//!   tell an `Option` from a `Result`, and on a `Result` the call keeps the
+//!   native cause, which is correct.
+//! - `?` on a native error, such as an I/O, serde or git error. By design, it
+//!   gives a fault with its cause.
+//! - Text in another error type: `std::io::Error::other("...")`,
+//!   `io::Error::new(kind, "...")`, or a `thiserror` type that no probe in
+//!   `WriteError::safe` or `ReadError::safe` knows.
+//! - A name that an alias hides, such as `use anyhow::Error as E; E::msg(...)`,
+//!   `use anyhow::Error; Error::new(...)` or `<anyhow::Error>::msg(...)`.
+//! - `fault!(...)` for an error that a caller can cause. The check cannot judge
+//!   a kind.
+//! - Errors of other crates, such as the refusals of `provenance-core` and of
+//!   the transport porcelain. The check reads only `provenance-store/src`.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -84,7 +102,8 @@ fn tokens(source: &str) -> Vec<(Token, usize)> {
         } else if c == '\'' {
             // A character literal gives no token. A lifetime gives a mark.
             if next == Some('\\') {
-                at += 2;
+                // Skip the quote, the backslash and the escaped character.
+                at += 3;
                 while at < chars.len() && chars[at] != '\'' {
                     at += 1;
                 }
@@ -136,6 +155,13 @@ const fn mark(token: Option<&(Token, usize)>, expected: char) -> bool {
     matches!(token, Some((Token::Mark(found), _)) if *found == expected)
 }
 
+/// The word after the `::` that starts at `at`.
+fn path_word(tokens: &[(Token, usize)], at: usize) -> Option<&str> {
+    (mark(tokens.get(at), ':') && mark(tokens.get(at + 1), ':'))
+        .then(|| word(tokens.get(at + 2)))
+        .flatten()
+}
+
 /// The index after the item that starts at `at`: after its first `;` at
 /// depth zero, or after the block of its first `{`.
 fn item_end(tokens: &[(Token, usize)], mut at: usize) -> usize {
@@ -176,7 +202,7 @@ const fn group_end(tokens: &[(Token, usize)], mut at: usize) -> usize {
     at
 }
 
-/// The tokens without the items that a `#[cfg(test)]` attribute selects.
+/// The tokens without the items whose `cfg` attribute needs `test`.
 fn without_test_items(tokens: &[(Token, usize)]) -> Vec<(Token, usize)> {
     let mut kept = Vec::new();
     let mut at = 0;
@@ -189,7 +215,12 @@ fn without_test_items(tokens: &[(Token, usize)]) -> Vec<(Token, usize)> {
             let words: Vec<&str> = (at + 2..close)
                 .filter_map(|index| word(tokens.get(index)))
                 .collect();
-            if words.contains(&"test") && !words.contains(&"not") {
+            let needs_test = matches!(words.as_slice(), ["cfg", "test"])
+                || (words.get(1) == Some(&"all")
+                    && words.contains(&"test")
+                    && !words.contains(&"any")
+                    && !words.contains(&"not"));
+            if needs_test {
                 at = item_end(tokens, close);
                 continue;
             }
@@ -211,15 +242,19 @@ fn raw_refusals(source: &str) -> Vec<usize> {
         if bang && current.is_some_and(|name| RAW_MACROS.contains(&name)) {
             found.push(line);
         } else if bang && current == Some("ensure") {
+            // Strings give no token, so `ensure!(FLAG, "text")` has no
+            // condition after its comma.
             let kind = word(tokens.get(at + 3))
                 .is_some_and(|name| name.starts_with(|c: char| c.is_ascii_uppercase()));
-            if !(kind && mark(tokens.get(at + 4), ',')) {
+            let condition = !mark(tokens.get(at + 5), ')') && !mark(tokens.get(at + 5), ',');
+            if !(kind && mark(tokens.get(at + 4), ',') && condition) {
                 found.push(line);
             }
-        } else if current == Some("Error")
-            && mark(tokens.get(at + 1), ':')
-            && mark(tokens.get(at + 2), ':')
-            && word(tokens.get(at + 3)) == Some("msg")
+        } else if current == Some("Error") && path_word(&tokens, at + 1) == Some("msg") {
+            found.push(line);
+        } else if current == Some("anyhow")
+            && path_word(&tokens, at + 1) == Some("Error")
+            && path_word(&tokens, at + 4) == Some("new")
         {
             found.push(line);
         } else if current == Some("use") && word(tokens.get(at + 1)) == Some("anyhow") {
@@ -241,10 +276,7 @@ fn is_test_path(relative: &Path) -> bool {
         part == "tests"
             || part.ends_with("_tests")
             || part.ends_with("_tests.rs")
-            || matches!(
-                part.as_ref(),
-                "tests.rs" | "test_support.rs" | "test_probes.rs" | "fixture_probe.rs"
-            )
+            || matches!(part.as_ref(), "tests.rs" | "test_support.rs")
     })
 }
 
@@ -288,9 +320,7 @@ fn store_code_raises_no_raw_anyhow_refusal() {
     let faults: Vec<String> = store_raw_refusals()
         .iter()
         .map(|(file, lines)| {
-            format!(
-                "src/{file} lines {lines:?}: use refuse!, fault! or state_fault (src/refusal.rs)"
-            )
+            format!("src/{file} lines {lines:?}: use a declared form of src/refusal.rs")
         })
         .collect();
     assert!(faults.is_empty(), "{}", faults.join("\n"));
@@ -318,6 +348,44 @@ mod tests {
 }
 #[cfg(not(test))]
 fn c() { let _ = anyhow::format_err!("text"); }
+#[cfg(all(test, feature = "host"))]
+fn d() { bail!("test code") }
+#[cfg(any(test, feature = "test-fixture"))]
+fn e() { bail!("fixture code") }
 "#;
-    assert_eq!(raw_refusals(source), vec![2, 4, 7, 8, 13, 20]);
+    assert_eq!(raw_refusals(source), vec![2, 4, 7, 8, 13, 20, 24]);
+}
+
+#[test]
+fn the_scan_finds_each_import_and_each_untyped_ensure() {
+    let source = r#"
+use anyhow::ensure;
+use anyhow::anyhow;
+use anyhow::Context as _;
+fn a(condition: bool) -> anyhow::Result<()> {
+    ensure!(condition, "text");
+    ensure!(FLAG, "text");
+    ensure!(FLAG, "text {}", 1);
+    ensure!(Fault, condition, "typed");
+    let _ = anyhow::Error::new(std::io::Error::other("x"));
+    let _ = std::io::Error::new(std::io::ErrorKind::Other, "x");
+    Ok(())
+}
+"#;
+    assert_eq!(raw_refusals(source), vec![2, 3, 6, 7, 8, 10]);
+}
+
+#[test]
+fn raw_strings_character_literals_and_lifetimes_hide_no_form() {
+    let source = r##"
+fn a<'a>(text: &'a str) -> &'a str {
+    let _ = r#"bail!("in a raw string")"#;
+    let _ = br"anyhow!(1)";
+    let _ = '"';
+    let _ = '\'';
+    let _ = anyhow::anyhow!("after the literals");
+    text
+}
+"##;
+    assert_eq!(raw_refusals(source), vec![7]);
 }
