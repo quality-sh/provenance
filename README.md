@@ -67,11 +67,12 @@ continues to work.
 npx --yes @quality-sh/create-provenance
 
 # put something in the graph
-npx provenance req_exports create --type requirement --scope default \
+npx @quality-sh/provenance req_exports create \
+  --type requirement --scope default \
   --statement "The system must complete each export in one minute."
 
 # see where things stand
-npx provenance prime
+npx @quality-sh/provenance prime
 ```
 
 ### Essential commands

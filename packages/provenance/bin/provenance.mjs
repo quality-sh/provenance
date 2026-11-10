@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-// The package the quick start installs owns the `provenance` command, so
-// `npx provenance` always reaches this file and never a package of the same
-// name on the registry. It finds the engine and hands over the command line
-// unchanged: every decision below this point belongs to Rust.
+// The package the quick start installs owns the `provenance` command. The
+// command that init writes for npm, Bun and Nub runs this file by its path, so
+// it never reaches a package of the same name on the registry. It finds the
+// engine and hands over the command line unchanged: every decision below this
+// point belongs to Rust.
 // @provenance rule: rule_sdk_package_supplies_engine
 import { spawnSync } from "node:child_process";
 import { resolveEnginePath } from "../dist/engine-path.js";

@@ -8,9 +8,11 @@ npx --yes @quality-sh/create-provenance
 ```
 
 The initializer detects npm, pnpm, Yarn, Bun, Deno, or Nub. It adds this SDK as
-an exact development dependency, installs the engine for the current platform,
-writes `.provenance/state/`, and confirms that `npx provenance check` reports
-`ok`.
+an exact development dependency, and the package manager installs the engine
+for the current platform. Then the initializer runs `provenance init`. That
+command writes `.provenance/state/` and a Provenance section in AGENTS.md. The
+section gives the command for the package manager. For npm, the command is
+`node node_modules/@quality-sh/provenance/bin/provenance.mjs`.
 
 ## SDK connection
 
@@ -48,13 +50,16 @@ automatically.
 
 ## Consumer CI
 
-Install the locked project dependencies before each check. Use `npx --no` in
-CI. This command invokes only the `provenance` executable installed in the
-project. It does not approve a registry installation for a missing executable.
+Install the locked project dependencies before each check. Then run the bin
+file of the installed package. This command runs only the package installed in
+the project. If the package is missing, the command fails. It does not install
+a package from the registry, run a package from the npx cache, or run a
+`provenance` executable from PATH.
 
 ```sh
 npm ci
-npx --no provenance check --repo . --strict --base "$BASE_SHA" --format json
+node node_modules/@quality-sh/provenance/bin/provenance.mjs check --repo . \
+  --strict --base "$BASE_SHA" --format json
 ```
 
 The check runs the graph, statement, and Rule binding checks. With `--strict`,
@@ -381,10 +386,11 @@ compile Rust, or require a global CLI. This binary is used by explicit CLI
 commands. SDK operations instead check their configured HTTP host protocol.
 
 This package owns the `provenance` command and forwards it to that engine
-unchanged, so `npx provenance` runs what the install supplied. When the platform
-package is absent, after `npm install --omit=optional` or on a host with no
-published engine, the command names the missing package and the supported
-targets rather than reaching the registry for a command of the same name.
+unchanged, so the command that init writes runs what the install supplied.
+When the platform package is absent, after `npm install --omit=optional` or on
+a host with no published engine, the command names the missing package and the
+supported targets rather than reaching the registry for a command of the same
+name.
 
 Published targets follow the release target inventory. An unsupported host
 fails with the supported target list. `PROVENANCE_BIN` selects a development

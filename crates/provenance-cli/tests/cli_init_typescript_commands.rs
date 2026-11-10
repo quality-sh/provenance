@@ -10,25 +10,15 @@ use std::process::Output;
 #[path = "cli_dictionary/support.rs"]
 #[allow(dead_code)]
 mod dictionary_support;
+#[path = "cli_init_typescript/support.rs"]
+#[allow(dead_code)]
+mod support;
 
-/// The package manager, the executable that the test looks for on PATH, and
-/// the command that runs the project package through that package manager.
-const MANAGERS: [(&str, &str, &str); 6] = [
-    ("npm", "npx", "npx --no -- provenance"),
-    ("pnpm", "pnpm", "pnpm exec ./node_modules/.bin/provenance"),
-    ("yarn", "yarn", "yarn run -B provenance"),
-    ("bun", "bunx", "bunx --no-install provenance"),
-    (
-        "deno",
-        "deno",
-        "deno task --node-modules-dir=manual --eval \"./node_modules/.bin/provenance\"",
-    ),
-    ("nub", "nub", "nub exec provenance"),
-];
+use support::{link_project_binary, on_path, shell, write_package_json, MANAGERS, PACKAGE_BIN};
 
-/// Yarn and Nub find a binary only through a real package installation, so
-/// this test does not run their commands.
-const RUN_WITH_PROJECT_BINARY: [&str; 4] = ["npm", "pnpm", "bun", "deno"];
+/// Yarn finds a binary only through a real package installation, so this test
+/// does not run its commands with the project binary.
+const RUN_WITH_PROJECT_BINARY: [&str; 5] = ["npm", "pnpm", "bun", "deno", "nub"];
 
 #[test]
 #[verifies("rule_init_typescript_local_command", examples)]
@@ -140,65 +130,12 @@ fn typescript_skill_conflict_names_the_package_manager_command() {
     assert_eq!(std::fs::read_to_string(skill).unwrap(), edited);
 }
 
-/// When the project package is missing, the npm command fails and does not run
-/// a `provenance` executable from PATH. The npm cache of this run is empty, so
-/// the result does not depend on the npx cache of the host.
-#[cfg(unix)]
-#[test]
-#[verifies("rule_init_typescript_local_command", examples)]
-fn npm_command_does_not_select_a_provenance_executable_from_path() {
-    use std::os::unix::fs::PermissionsExt;
-
-    let (manager, executable, prefix) = MANAGERS[0];
-    if !on_path(executable) {
-        eprintln!("{manager}: {executable} is not on PATH, so the test did not run it");
-        return;
-    }
-    let temporary = tempfile::tempdir().unwrap();
-    let project = temporary.path().join("project");
-    std::fs::create_dir(&project).unwrap();
-    write_package_json(&project);
-    let sentinel_directory = temporary.path().join("sentinel");
-    std::fs::create_dir(&sentinel_directory).unwrap();
-    let selected = temporary.path().join("selected");
-    let sentinel = sentinel_directory.join("provenance");
-    std::fs::write(
-        &sentinel,
-        format!(
-            "#!/bin/sh\nprintf selected > '{}'\nexit 42\n",
-            selected.display()
-        ),
-    )
-    .unwrap();
-    std::fs::set_permissions(&sentinel, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let cache = temporary.path().join("npm-cache");
-    std::fs::create_dir(&cache).unwrap();
-    let path = format!(
-        "{}:{}",
-        sentinel_directory.display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
-
-    let output = shell(&project, &format!("{prefix} --version"))
-        .env("PATH", path)
-        .env("npm_config_cache", &cache)
-        .output()
-        .unwrap();
-
-    assert!(
-        !output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stdout)
-    );
-    assert!(!selected.exists(), "{manager}: the PATH executable ran");
-}
-
 /// Checks the managed AGENTS.md section and returns its Provenance commands.
 fn section_commands(label: &str, repo: &Path, prefix: &str) -> Vec<String> {
     let agents = std::fs::read_to_string(repo.join("AGENTS.md")).unwrap();
     let section = agents.split_once("## Provenance\n").unwrap().1;
     let note = format!(
-        "- The installed skills and the output of each command show commands as\n  `provenance …`. In this project, run them as `{prefix} …`.\n"
+        "- The installed skills and the output of each command show commands as\n  `provenance …`. In this project, run them as `{prefix} …`\n  from the directory that contains `node_modules`.\n"
     );
     assert!(
         section.contains(&format!(
@@ -280,9 +217,9 @@ fn printed(output: &Output) -> String {
 /// directory, with or without a user identity.
 fn typescript_project(temporary: &Path, git_identity: bool) -> PathBuf {
     let repo = temporary.join("repo");
-    std::fs::create_dir_all(repo.join("node_modules/.bin")).unwrap();
+    std::fs::create_dir(&repo).unwrap();
     write_package_json(&repo);
-    link_project_binary(&repo.join("node_modules/.bin/provenance"));
+    link_project_binary(&repo);
     let identity = if git_identity {
         "[user]\n\temail = reviewer@example.com\n"
     } else {
@@ -298,14 +235,6 @@ fn typescript_project(temporary: &Path, git_identity: bool) -> PathBuf {
         .unwrap();
     assert!(git.success());
     repo
-}
-
-fn write_package_json(directory: &Path) {
-    std::fs::write(
-        directory.join("package.json"),
-        "{\"name\":\"project\",\"version\":\"1.0.0\",\"private\":true}\n",
-    )
-    .unwrap();
 }
 
 /// The dictionary download fails, so init prints the dictionary warning.
@@ -382,7 +311,7 @@ fn provenance_commands(markdown: &str) -> Vec<String> {
 fn names_provenance_program(word: &str) -> bool {
     matches!(
         word.trim_matches('"'),
-        "provenance" | "./node_modules/.bin/provenance"
+        "provenance" | "./node_modules/.bin/provenance" | PACKAGE_BIN
     )
 }
 
@@ -396,34 +325,3 @@ fn handoff_command(printed: &str) -> Option<String> {
             .to_owned(),
     )
 }
-
-fn on_path(executable: &str) -> bool {
-    std::process::Command::new(executable)
-        .arg("--version")
-        .output()
-        .is_ok_and(|output| output.status.success())
-}
-
-fn shell(directory: &Path, command: &str) -> std::process::Command {
-    let mut shell = std::process::Command::new("sh");
-    shell
-        .args(["-c", command])
-        .current_dir(directory)
-        .env("npm_config_update_notifier", "false")
-        .stdin(std::process::Stdio::null());
-    shell
-}
-
-/// Puts the CLI under test where the package manager installs the package binary.
-#[cfg(unix)]
-fn link_project_binary(path: &Path) {
-    std::os::unix::fs::symlink(
-        PathBuf::from(assert_cmd::cargo::cargo_bin!("provenance")),
-        path,
-    )
-    .unwrap();
-}
-
-/// This host does not run the commands, so the project needs no binary.
-#[cfg(not(unix))]
-fn link_project_binary(_path: &Path) {}

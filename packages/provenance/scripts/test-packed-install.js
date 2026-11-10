@@ -40,7 +40,7 @@ const typescriptManifest = JSON.parse(
   readFileSync(join(typescriptRoot, "package.json"), "utf8"),
 );
 const { provenance, verifyGeneratedCommandIgnoresStaleGlobal } = createPackedCommands({
-  temporary, npmCli, isolatedCache,
+  temporary, isolatedCache,
 });
 
 mkdirSync(archiveDirectory);
