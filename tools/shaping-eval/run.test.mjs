@@ -15,6 +15,7 @@ test('real CLI fixture contains the grounded active Rule negative control', asyn
     assert.deepEqual(graph.requirements.find(r => r.id === 'req_health').refines, ['req_robot']);
     assert.equal(graph.rules.find(r => r.id === 'rule_negative_control').status, 'active');
     assert.equal(graph.resolutions.find(r => r.id === 'res_negative_control').status, 'proposed');
+    assert.deepEqual(graph.rules.find(r => r.id === 'rule_negative_control').resolution_ids ?? [], []);
     assert.match(graph.rules.find(r => r.id === 'rule_negative_control').source_document, /Owner brief/);
     assert.deepEqual(score(graph).findings, []);
   } finally { await rm(workspace, { recursive: true, force: true }); }
