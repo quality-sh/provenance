@@ -32,11 +32,13 @@ Each layer is one job, so a failure names one layer.
 | O2 | contract | The times of the messages increase in the order that they landed. |
 | O3 | contract | A stage lands as one whole set on the revision where it started. |
 
-Each law apart from L0 has a planted test (`tests/engine_planted.rs`,
-`tests/contract_planted.rs` and the planted tests of `simulation_cli.rs`).
-A planted test plants the smallest fault that its law must see. If the law
-does not see it, the test fails with "simulation check broken", and the
-issue says that a check is broken, not a law.
+Each law apart from L0 has a planted test: `tests/engine_planted.rs`,
+`tests/contract_planted.rs` and
+`crates/provenance-cli/tests/simulation_cli_planted.rs`. A planted test
+plants the smallest fault that its law must see. If the law does not see it,
+the test fails with "simulation check broken", and the issue says that a
+check is broken, not a law. `tests/storage_contract.rs` runs the storage
+contract suite of `provenance-store` on the simulated storage.
 
 ## When a failure issue opens
 
@@ -75,8 +77,11 @@ HEGEL_SEED=<seed> cargo nextest run --profile simulation --run-ignored all \
 ```
 
 The random tests are ignored tests, so the command needs `--run-ignored all`.
-For the CLI layer, the package is `provenance-cli` and the test binary is
-`simulation_cli`.
+A run with a case count other than 100 also sets `HEGEL_TEST_CASES`. For the
+CLI layer, the package is `provenance-cli` and the test binary is
+`simulation_cli`. The CLI layer checks L6 after each write; set
+`SIMULATION_L6=end` to check it only at the end of each case, as the macOS
+and Windows jobs do.
 
 ## Start a manual run
 
