@@ -110,6 +110,7 @@ impl StateStorage for MemoryStateStorage {
         }
         self.persist(&writes)?;
         state.entries = landed;
+        drop(state);
         Ok(())
     }
 }
