@@ -103,6 +103,24 @@ impl StateStore {
         }
     }
 
+    /// The clock that the writes of this store read: the one of the
+    /// repository identity, or the system clock for a layout-level store.
+    pub(crate) fn clock(&self) -> std::sync::Arc<dyn crate::repository::Clock> {
+        self.identity.as_ref().map_or_else(
+            || std::sync::Arc::new(crate::repository::SystemClock) as _,
+            |identity| identity.clock().clone(),
+        )
+    }
+
+    /// The source of the IDs that the writes of this store make: the one of
+    /// the repository identity, or random IDs for a layout-level store.
+    pub(crate) fn ids(&self) -> std::sync::Arc<dyn crate::repository::IdSource> {
+        self.identity.as_ref().map_or_else(
+            || std::sync::Arc::new(crate::repository::RandomIds) as _,
+            |identity| identity.ids().clone(),
+        )
+    }
+
     /// The project dictionary that the statement checks of this store use:
     /// the one of the repository identity, or, for a layout-level store, the
     /// one that the reference in the layout names.

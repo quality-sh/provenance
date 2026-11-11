@@ -180,7 +180,7 @@ impl StateStore {
             let root = message.expect("a started Discussion has a root Message").id;
             Discussion {
                 scope_id: scope.clone(),
-                discussion_id: super::new_id(),
+                discussion_id: super::new_id(&*self.ids()),
                 parent: input.parent,
                 thread_id: thread.id,
                 root_message_id: root.clone(),

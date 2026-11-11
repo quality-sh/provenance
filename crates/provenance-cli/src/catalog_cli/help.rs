@@ -43,7 +43,9 @@ pub(super) fn target(
             allowed.remove("id-json");
             command = command.mut_args(|arg| {
                 let hidden = !allowed.contains(arg.get_id().as_str());
-                arg.hide(hidden)
+                // The per-type help already has the type, so it does not list the types.
+                let given_type = kind.is_some() && arg.get_id() == "type";
+                arg.hide(hidden).hide_possible_values(given_type)
             });
             let create = action == provenance_contract::TargetAction::Create;
             if needs_type {

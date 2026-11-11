@@ -50,7 +50,7 @@ impl StateStore {
                 })?;
             (|| -> anyhow::Result<VerificationRun> {
                 crate::test_probes::at("verification_binding_published")?;
-                let started_at = now_millis()?;
+                let started_at = now_millis(&*held.clock())?;
                 let path = held.layout.verification_runs_path(&scope_id);
                 let lock_path = held.layout.verification_runs_lock_path(&scope_id);
                 let run = crate::jsonl::mutate_jsonl_locked(
@@ -109,7 +109,7 @@ impl StateStore {
             status == VerificationRunStatus::Failed || input.error.is_none(),
             "a passed verification cannot carry an error"
         );
-        let completed_at = now_millis()?;
+        let completed_at = now_millis(&*self.clock())?;
         self.with_repository_publication(|held| {
             let path = held.layout.verification_runs_path(scope_id);
             let lock_path = held.layout.verification_runs_lock_path(scope_id);

@@ -93,7 +93,7 @@ impl StateStore {
         let cycle = facts.next_cycle(input.record_kind, &input.record_id)?;
         let proposal = self.create_proposal_card(CreateProposalCardInput {
             scope_id: scope,
-            id: new_id(),
+            id: new_id(&*self.ids()),
             proposal_key: review_proposal_key(input.record_kind, &input.record_id, cycle),
             proposal_type: ProposalType::RecordRevision,
             title: input.title,

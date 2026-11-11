@@ -12,9 +12,9 @@ pub(crate) use resource_read::RequirementResourceSnapshot;
 mod save;
 pub use input::{ListEdit, RequirementRelations, SaveRequirement};
 
-/// Creates the identity of a review record.
-fn new_id() -> provenance_core::StableId {
-    provenance_core::StableId::new(uuid::Uuid::new_v4().to_string())
+/// Creates the identity of a review record from the ID source of the store.
+fn new_id(ids: &dyn crate::repository::IdSource) -> provenance_core::StableId {
+    provenance_core::StableId::new(ids.new_uuid().to_string())
         .expect("UUID uses valid stable ID characters")
 }
 

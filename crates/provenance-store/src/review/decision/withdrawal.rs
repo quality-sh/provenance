@@ -106,7 +106,7 @@ impl StateStore {
         let withdrawal = self.permitting(&[&path], "*", |store| {
             store.create_withdrawal(Withdrawal {
                 scope_id: input.scope_id.clone(),
-                id: new_id(),
+                id: new_id(&*store.ids()),
                 proposal_id: input.proposal_id.clone(),
                 actor: input.actor.clone(),
                 reason: input.reason.clone(),

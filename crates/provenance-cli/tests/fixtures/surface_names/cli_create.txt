@@ -11,7 +11,7 @@ Options:
       --scope <SCOPE>    [default: default]
       --format <FORMAT>  [possible values: json]
       --quiet            
-      --type <TYPE>      
+      --type <TYPE>      [possible values: source, requirement, resolution, rule, topic, question]
       --stdin            
   -h, --help             Print help
 

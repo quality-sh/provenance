@@ -73,7 +73,15 @@ pub fn show(skills: &'static [EmbeddedSkill], name: &str) -> anyhow::Result<&'st
             return Ok(skill.content);
         }
     }
-    anyhow::bail!("unknown skill: {name}")
+    let mut names = skills
+        .iter()
+        .map(skill_name)
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    names.sort_unstable();
+    anyhow::bail!(
+        "unknown skill: {name}; accepted values: {}",
+        names.join(", ")
+    )
 }
 
 pub fn install(

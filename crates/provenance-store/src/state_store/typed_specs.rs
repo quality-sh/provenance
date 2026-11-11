@@ -119,7 +119,7 @@ impl StateStore {
         if changes.is_empty() {
             return Ok(());
         }
-        let changed_at = requirement_reviews::now_millis()?;
+        let changed_at = requirement_reviews::now_millis(&*self.clock())?;
         let mut reviews = Vec::new();
         for change in changes {
             let mut rule_ids = self.rule_ids_for_requirement(scope_id, &change.requirement_id)?;

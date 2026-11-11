@@ -186,12 +186,13 @@ jobs:
           fi
       - name: Read the workspace crates
         run: cargo metadata --format-version 1 --no-deps --offline > "$RUNNER_TEMP/cargo-metadata.json"
-      - name: Test the test selection and the CI OK decision
+      - name: Test the test selection, the CI OK decision and the simulation report
         env:
           SELECT_TESTS_METADATA: ${{ runner.temp }}/cargo-metadata.json
         run: |
           python3 .github/scripts/select_tests.test.py
           python3 .github/scripts/ci_ok.test.py
+          python3 .github/scripts/simulation_report.test.py
       - name: Select the Rust tests
         id: select
         env:
@@ -909,6 +910,10 @@ jobs:
       # defaults omit tests/**, benches/**, and examples/**. These patterns
       # also omit build-script code, generated clients, dedicated test
       # modules under src, and explicitly named test-fixture support.
+      # The gate also leaves out the crate provenance-simulation: only the
+      # nightly simulation workflow runs its tests, so CI has no coverage of
+      # it. cargo-crap matches an exclude pattern in each crate directory, so
+      # the workspace scope names each other package instead.
       # A pull request that ran selected tests checks each selected crate.
       # Its coverage is complete: a test that can run code of a selected
       # crate belongs to a crate that depends on it, which is selected too.
@@ -916,6 +921,8 @@ jobs:
         env:
           TEST_SCOPE: ${{ needs.changes.outputs.test-scope }}
           CRATE_DIRS: ${{ needs.changes.outputs.crate-dirs }}
+          UNGATED_PACKAGE: provenance-simulation
+          UNGATED_DIRECTORY: crates/provenance-simulation
         run: |
           scopes=("--workspace")
           if [[ "$TEST_SCOPE" == some ]]; then
@@ -923,8 +930,17 @@ jobs:
           fi
           status=0
           for scope in "${scopes[@]}"; do
+            if [[ "$scope" == "$UNGATED_DIRECTORY" ]]; then
+              echo "The CRAP gate leaves out $scope."
+              continue
+            fi
             if [[ "$scope" == --workspace ]]; then
-              arguments=(--workspace) report=target/crap/crap-report.json
+              arguments=() report=target/crap/crap-report.json
+              packages=$(cargo metadata --format-version 1 --no-deps --offline \
+                | jq -r --arg ungated "$UNGATED_PACKAGE" '.packages[].name | select(. != $ungated)')
+              for package in $packages; do
+                arguments+=(--package "$package")
+              done
             else
               arguments=(--path "$scope") report="target/crap/crap-report-${scope##*/}.json"
             fi

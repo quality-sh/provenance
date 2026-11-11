@@ -103,9 +103,9 @@ fn discussion_write_refuses_repeated_actor_without_creating_a_discussion() {
     assert_eq!(list["result"]["entries"], json!([]));
 }
 
-/// Implementation-aid test: no active Rule states this refusal yet. A query
-/// parameter flag with a closed set lists the set, in schema order, as a
-/// body flag does.
+/// A query parameter flag with a closed set lists the set, in schema order, as
+/// a body flag does.
+#[verifies("rule_cli_closed_value_refusal_lists_values", examples)]
 #[test]
 fn invalid_discussion_status_lists_the_accepted_values() {
     let directory = fixture();

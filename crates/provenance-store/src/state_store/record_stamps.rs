@@ -5,7 +5,7 @@ use provenance_core::{
     NodeType, Stamp,
 };
 use serde::{de::DeserializeOwned, Serialize};
-use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+use time::format_description::well_known::Rfc3339;
 
 use super::read_budget::{ensure_slice_within_read_budget, ensure_within_read_budget, ReadBudget};
 use super::{RecordStamp, StateStore};
@@ -140,7 +140,7 @@ impl StateStore {
         provenance_core::model::record_stamps::validate_commit(&commit)?;
         Ok(Some(Stamp {
             commit,
-            at: OffsetDateTime::now_utc().format(&Rfc3339)?,
+            at: self.clock().now().format(&Rfc3339)?,
         }))
     }
 

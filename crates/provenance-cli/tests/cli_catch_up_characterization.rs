@@ -9,6 +9,7 @@
 
 #[allow(dead_code)]
 mod support {
+    pub mod api_process;
     #[path = "../../../provenance-transport/tests/support/catch_up_steps.rs"]
     pub mod catch_up_steps;
     #[path = "../../../provenance-transport/tests/support/transcript.rs"]
@@ -20,6 +21,7 @@ use provenance_transport::fixture::records::Repository;
 use serde_json::{json, Map, Value};
 use std::io::Write as _;
 use std::process::Stdio;
+use support::api_process;
 use support::catch_up_steps::{write, Answer, Surface, STEPS};
 use support::transcript::{assert_same, copy_without_projection, read_all};
 
@@ -28,19 +30,6 @@ mod initialization;
 
 fn binary() -> &'static std::path::Path {
     assert_cmd::cargo::cargo_bin!("provenance")
-}
-
-/// The path without its leading `/`, and the query pairs of the path.
-fn split(path: &str) -> (&str, Vec<(&str, &str)>) {
-    let path = path.trim_start_matches('/');
-    let Some((path, query)) = path.split_once('?') else {
-        return (path, Vec::new());
-    };
-    let pairs = query
-        .split('&')
-        .map(|pair| pair.split_once('=').unwrap())
-        .collect();
-    (path, pairs)
 }
 
 /// The `provenance api` command, one process for each call.
@@ -54,20 +43,8 @@ impl Cli {
         data: Option<&Value>,
         headers: &[(&str, &str)],
     ) -> (u16, Value) {
-        let (path, query) = split(path);
-        let mut command = std::process::Command::new(binary());
-        command.args([
-            "api", path, "--repo", &self.0, "--format", "json", "--method", method,
-        ]);
-        for (name, value) in query {
-            command.args(["--query", &format!("{name}={value}")]);
-        }
-        for (name, value) in headers {
-            command.args(["--header", &format!("{name}: {value}")]);
-        }
-        if data.is_some() {
-            command.args(["--input", "-"]);
-        }
+        let mut command =
+            api_process::command(binary(), &self.0, (method, path), headers, data.is_some());
         let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -79,15 +56,7 @@ impl Cli {
             stdin.write_all(data.to_string().as_bytes()).unwrap();
         }
         drop(stdin);
-        let output = child.wait_with_output().unwrap();
-        let text = |bytes: &[u8]| String::from_utf8(bytes.to_vec()).unwrap();
-        if output.status.success() {
-            (200, serde_json::from_slice(&output.stdout).unwrap())
-        } else {
-            let stderr = text(&output.stderr);
-            let stderr = serde_json::from_str(&stderr).unwrap_or(Value::String(stderr));
-            (1, json!({"stdout": text(&output.stdout), "stderr": stderr}))
-        }
+        api_process::answer(&child.wait_with_output().unwrap())
     }
 }
 
@@ -141,7 +110,7 @@ impl Surface for Mcp {
         headers: &'a [(&'a str, &'a str)],
     ) -> Answer<'a> {
         Box::pin(async move {
-            let (path, query) = split(path);
+            let (path, query) = api_process::split(path);
             let mut arguments = Map::new();
             arguments.insert("path".into(), json!(path));
             arguments.insert("method".into(), json!(method.to_ascii_lowercase()));

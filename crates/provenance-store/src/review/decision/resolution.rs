@@ -82,7 +82,7 @@ impl StateStore {
                 "stale review selection"
             ));
         }
-        let disposition_id = new_id();
+        let disposition_id = new_id(&*self.ids());
         let path = shards::dispositions_path(&self.layout, &input.scope_id);
         self.permitting(&[&path], "*", |store| {
             store.create_disposition(CreateDispositionInput {
