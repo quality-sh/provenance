@@ -153,7 +153,7 @@ impl LocalStateStorage {
 /// same directory and a rename.
 pub(crate) fn write_file_atomic(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<()> {
     let Some(parent) = path.parent() else {
-        anyhow::bail!("{path} has no parent directory");
+        return Err(crate::refusal::fault!("{path} has no parent directory"));
     };
     std::fs::create_dir_all(parent)?;
     let mut temp = tempfile::NamedTempFile::new_in(crate::long_path::extended(parent)?)?;
@@ -165,7 +165,7 @@ pub(crate) fn write_file_atomic(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result
 fn remove_file(path: &Utf8Path) -> anyhow::Result<()> {
     match std::fs::remove_file(crate::long_path::extended(path)?) {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
-            Err(anyhow::Error::new(error).context(format!("remove {path}")))
+            Err(crate::refusal::caused(error, format!("remove {path}")))
         }
         _ => Ok(()),
     }
@@ -204,7 +204,7 @@ fn read_tree(
                 read_tree(&path, &key, entries)?;
             }
         } else if holds_keys || (!kind.is_file() && shards::is_canonical_key(&key)) {
-            return Err(StorageError::Read(anyhow::anyhow!(
+            return Err(StorageError::Read(crate::refusal::fault!(
                 "unsupported state entry: {path}"
             )));
         } else if kind.is_file() && shards::is_canonical_key(&key) {
@@ -216,5 +216,5 @@ fn read_tree(
 }
 
 fn read_error(path: &Utf8Path) -> impl Fn(std::io::Error) -> StorageError + '_ {
-    move |error| StorageError::Read(anyhow::Error::new(error).context(format!("read {path}")))
+    move |error| StorageError::Read(crate::refusal::caused(error, format!("read {path}")))
 }

@@ -5,7 +5,7 @@
 #[cfg(feature = "host")]
 use crate::layout::ProvenanceLayout;
 use crate::publication::{protect_rows, WritePermissions};
-use crate::state_store::readers::{ensure_no_legacy_retirement, located, parse_line};
+use crate::state_store::readers::{ensure_no_legacy_retirement, parse_line};
 use crate::state_store::StateStore;
 use camino::Utf8Path;
 #[cfg(feature = "host")]
@@ -36,9 +36,9 @@ impl AdvisoryLock {
             .create(true)
             .truncate(false)
             .open(path)
-            .map_err(|error| anyhow::anyhow!("open advisory lock {path}: {error}"))?;
+            .map_err(|error| crate::refusal::fault!("open advisory lock {path}: {error}"))?;
         file.lock_exclusive()
-            .map_err(|error| anyhow::anyhow!("acquire advisory lock {path}: {error}"))?;
+            .map_err(|error| crate::refusal::fault!("acquire advisory lock {path}: {error}"))?;
         Ok(Self { file })
     }
 }
@@ -142,12 +142,7 @@ where
     for (index, line) in contents.lines().enumerate() {
         let value = parse_line(path, index + 1, line)?;
         ensure_no_legacy_retirement(path, index + 1, &value)?;
-        let (record, raw) = RawRecord::deserialize(line, index + 1).map_err(|error| {
-            match error.downcast::<serde_json::Error>() {
-                Ok(error) => located(path, index + 1, &error),
-                Err(error) => error,
-            }
-        })?;
+        let (record, raw) = RawRecord::deserialize(path, line, index + 1)?;
         loaded.push(record, raw);
     }
     Ok(loaded)
@@ -453,11 +448,15 @@ mod tests {
                 Ok(())
             },
         )
-        .unwrap_err()
-        .to_string();
-
-        assert!(message.contains("nested unknown field"), "{message}");
-        assert!(message.contains("detail.extension"), "{message}");
+        .unwrap_err();
+        let state = crate::state_store::readers::StateLineInvalid::find(&message).unwrap();
+        assert_eq!(
+            (state.line, state.message.as_str()),
+            (
+                1,
+                "nested unknown field `detail.extension` cannot survive a typed record change"
+            )
+        );
         assert_eq!(std::fs::read(path).unwrap(), before);
     }
 
@@ -481,11 +480,15 @@ mod tests {
                 Ok(())
             },
         )
-        .unwrap_err()
-        .to_string();
-
-        assert!(message.contains("repeated top-level member"), "{message}");
-        assert!(message.contains("extension"), "{message}");
+        .unwrap_err();
+        let state = crate::state_store::readers::StateLineInvalid::find(&message).unwrap();
+        assert_eq!(
+            (state.line, state.message.as_str()),
+            (
+                1,
+                "repeated top-level member `extension` cannot survive a typed record change"
+            )
+        );
         assert_eq!(std::fs::read(path).unwrap(), before);
     }
 }

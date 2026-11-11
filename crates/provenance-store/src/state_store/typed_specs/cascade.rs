@@ -193,7 +193,8 @@ impl Cascade {
                     })
                 }
             };
-            anyhow::ensure!(
+            crate::write_error::ensure!(
+                InvalidUpdate,
                 survives,
                 "cannot delete canonical {} {} because disposition {} names it",
                 canonical_kind(artifact.artifact_type),

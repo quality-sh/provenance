@@ -3,18 +3,20 @@
 //! submission or a decision must pass against the scope.
 
 use super::cycle_index::CycleIndex;
-use crate::state_store::StateStore;
+use crate::refusal::state_fault;
+use crate::state_store::{message_ids::ShardLine, StateStore};
 use provenance_core::{
     review::{CycleEntry, CycleFact},
     DispositionDecision, DispositionRecord, NodeType, ProposalCard, ProposalType, ScopeId,
-    StableId,
+    StableId, Withdrawal,
 };
 use provenance_macros::rule;
 
 const MAX_SAFE_CYCLE: u64 = (1 << 53) - 1;
 
 pub(super) fn check_request_size(input: &impl serde::Serialize) -> anyhow::Result<()> {
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        RecordTooLarge,
         serde_json::to_vec(input)?.len() <= 1_048_576,
         "review request exceeds the operation byte budget"
     );
@@ -74,6 +76,38 @@ pub(super) fn cycle_of(proposal: &ProposalCard) -> Option<u64> {
         .and_then(|cycle| cycle.parse().ok())
 }
 
+/// Refuses a Withdrawal that names no review submission, and a second
+/// Withdrawal of one submission, at the line of the Withdrawal at fault.
+#[rule("rule_inconsistent_records_refusal_names_records")]
+fn check_withdrawals(
+    submission_ids: &std::collections::HashSet<&str>,
+    located: &[(Withdrawal, ShardLine)],
+) -> anyhow::Result<()> {
+    let mut withdrawn = std::collections::BTreeMap::new();
+    for (withdrawal, at) in located {
+        let proposal = withdrawal.proposal_id.as_str();
+        if !submission_ids.contains(proposal) {
+            return Err(state_fault(
+                at,
+                format!(
+                    "withdrawal {} names no review submission: {proposal}",
+                    withdrawal.id.as_str()
+                ),
+            ));
+        }
+        if let Some(first) = withdrawn.insert(proposal, withdrawal.id.as_str()) {
+            return Err(state_fault(
+                at,
+                format!(
+                    "review submission {proposal} is withdrawn two times: {first} and {}",
+                    withdrawal.id.as_str()
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// The review state of one scope, read from its records.
 pub(super) struct CycleFacts {
     /// Every Proposal of the scope, in stored order.
@@ -99,20 +133,12 @@ impl CycleFacts {
             .iter()
             .map(|proposal| proposal.id.as_str())
             .collect::<std::collections::HashSet<_>>();
-        let withdrawals = store.list_withdrawals(scope)?;
-        let mut withdrawn = std::collections::BTreeSet::new();
-        for withdrawal in &withdrawals {
-            anyhow::ensure!(
-                submission_ids.contains(withdrawal.proposal_id.as_str()),
-                "withdrawal {} names no review submission",
-                withdrawal.id.as_str()
-            );
-            anyhow::ensure!(
-                withdrawn.insert(withdrawal.proposal_id.as_str()),
-                "review submission {} is withdrawn twice",
-                withdrawal.proposal_id.as_str()
-            );
-        }
+        let located = store.list_withdrawals_located(scope)?;
+        check_withdrawals(&submission_ids, &located)?;
+        let withdrawals = located
+            .into_iter()
+            .map(|(withdrawal, _)| withdrawal)
+            .collect::<Vec<_>>();
         let feedback = store
             .list_discussions(scope)?
             .into_iter()
@@ -231,8 +257,9 @@ impl CycleFacts {
     pub(super) fn next_cycle(&self, kind: NodeType, record_id: &StableId) -> anyhow::Result<u64> {
         let next = u64::try_from(self.of_record(kind, record_id).count())?
             .checked_add(1)
-            .ok_or_else(|| anyhow::anyhow!("review cycle overflow"))?;
-        anyhow::ensure!(
+            .ok_or_else(|| crate::refusal::fault!("review cycle overflow"))?;
+        crate::write_error::ensure!(
+            Fault,
             next <= MAX_SAFE_CYCLE,
             "review cycle exceeds the safe integer limit"
         );
@@ -283,7 +310,7 @@ impl CycleFacts {
     ) -> anyhow::Result<crate::write_error::WriteFailure> {
         let record = crate::families::review_families::record(store, scope, kind, record_id)?;
         let current_revision = super::save::current_revision(&record)?
-            .ok_or_else(|| anyhow::anyhow!("the submitted record has no review revision"))?;
+            .ok_or_else(|| crate::refusal::fault!("the submitted record has no review revision"))?;
         let current_submission = self
             .pending_submission(store, scope, kind, record_id)?
             .map(|proposal| proposal.id);
@@ -305,8 +332,11 @@ pub(super) fn review_submission(
         .list_proposal_definitions(scope)?
         .into_iter()
         .find(|p| p.id == *proposal_id)
-        .ok_or_else(|| anyhow::anyhow!("review submission does not exist"))?;
-    anyhow::ensure!(
+        .ok_or_else(|| {
+            crate::refusal::refuse!(ResourceNotFound, "review submission does not exist")
+        })?;
+    crate::write_error::ensure!(
+        InvalidUpdate,
         proposal.proposal_type == ProposalType::RecordRevision && proposal.record_revision.is_some(),
         "decision-cycle operations address record_revision submissions; other proposals keep their own disposition paths"
     );
@@ -327,12 +357,14 @@ pub(super) fn validated_resubmission(
     let predecessor = proposals
         .iter()
         .find(|p| p.id == *predecessor)
-        .ok_or_else(|| anyhow::anyhow!("revises names no proposal"))?;
-    anyhow::ensure!(
+        .ok_or_else(|| crate::refusal::refuse!(MissingReference, "revises names no proposal"))?;
+    crate::write_error::ensure!(
+        InvalidUpdate,
         predecessor.proposal_type == ProposalType::RecordRevision,
         "a resubmission revises a review submission"
     );
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        InvalidUpdate,
         NodeType::from(predecessor.traceability.target.artifact_type) == kind
             && predecessor.traceability.target.artifact_id == *record_id,
         "a resubmission revises a submission of the same record"
@@ -342,11 +374,13 @@ pub(super) fn validated_resubmission(
         .into_iter()
         .filter(|d| d.proposal_id == predecessor.id)
         .collect();
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        InvalidUpdate,
         rejections.len() == 1,
         "a resubmission answers exactly one disposition of its predecessor"
     );
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        InvalidUpdate,
         rejections[0].decision == DispositionDecision::Rejected,
         "a resubmission answers a rejection"
     );

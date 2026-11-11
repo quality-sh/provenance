@@ -133,9 +133,9 @@ impl DeclarationRecord for Source {
 fn source_type(kind: &str) -> anyhow::Result<SourceType> {
     SourceType::parse(kind).or_else(|_| match kind.to_ascii_lowercase().as_str() {
         "linear" | "github" | "jira" => Ok(SourceType::ExternalIntegration),
-        _ => Err(crate::write_error::SourceFailure::wrap(
-            crate::write_error::WriteFailure::InvalidDeclaration,
-            anyhow::anyhow!("source kind `{kind}` is not supported"),
+        _ => Err(crate::refusal::refuse!(
+            InvalidDeclaration,
+            "source kind `{kind}` is not supported"
         )),
     })
 }

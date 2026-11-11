@@ -57,7 +57,8 @@ fn finish_without_transaction(
 
 fn read_replacement(transaction: &Utf8Path, expected: [u8; 32]) -> anyhow::Result<Vec<u8>> {
     let replacement = read_regular_file(&transaction.join("replacement"))?;
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        Fault,
         <[u8; 32]>::from(Sha256::digest(&replacement)) == expected,
         "source-edit recovery replacement digest differs from its marker"
     );
@@ -211,7 +212,8 @@ fn complete_install_phase(
     if staged.state_dir().exists() {
         install_staged_state(layout, &staged)?;
     } else {
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            Fault,
             layout.state_dir().exists(),
             "source-edit recovery found no state"
         );
@@ -225,7 +227,8 @@ fn install_staged_state(
     layout: &ProvenanceLayout,
     staged: &ProvenanceLayout,
 ) -> anyhow::Result<()> {
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        Fault,
         !layout.state_dir().exists(),
         "source-edit recovery found both staged and live state"
     );
@@ -237,7 +240,7 @@ fn install_staged_state(
 fn clean_unmarked_transactions(layout: &ProvenanceLayout) -> anyhow::Result<()> {
     for entry in std::fs::read_dir(layout.source_edit_transactions_dir())? {
         let path = Utf8PathBuf::from_path_buf(entry?.path()).map_err(|path| {
-            anyhow::anyhow!("source-edit transaction is not UTF-8: {}", path.display())
+            crate::refusal::fault!("source-edit transaction is not UTF-8: {}", path.display())
         })?;
         let transaction = validate_transaction(layout, &path)?;
         let record: PreparedSourceRecord = serde_json::from_slice(&read_regular_file(
@@ -262,14 +265,16 @@ fn validate_transaction(
     let parent = dunce::canonicalize(layout.source_edit_transactions_dir())?;
     let candidate_parent = transaction
         .parent()
-        .ok_or_else(|| anyhow::anyhow!("source-edit transaction has no parent"))?;
-    anyhow::ensure!(
+        .ok_or_else(|| crate::refusal::fault!("source-edit transaction has no parent"))?;
+    crate::write_error::ensure!(
+        Fault,
         dunce::canonicalize(candidate_parent)? == parent,
         "source-edit transaction is outside its transaction directory"
     );
     require_real_directory(transaction)?;
-    Utf8PathBuf::from_path_buf(dunce::canonicalize(transaction)?)
-        .map_err(|path| anyhow::anyhow!("source-edit transaction is not UTF-8: {}", path.display()))
+    Utf8PathBuf::from_path_buf(dunce::canonicalize(transaction)?).map_err(|path| {
+        crate::refusal::fault!("source-edit transaction is not UTF-8: {}", path.display())
+    })
 }
 
 fn validate_recovery_tree(transaction: &Utf8Path) -> anyhow::Result<()> {
@@ -284,7 +289,8 @@ fn validate_recovery_tree(transaction: &Utf8Path) -> anyhow::Result<()> {
 
 fn require_real_directory(path: &Utf8Path) -> anyhow::Result<()> {
     let metadata = std::fs::symlink_metadata(path)?;
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        Fault,
         metadata.is_dir() && !metadata.file_type().is_symlink(),
         "source-edit recovery path is not a real directory: {path}"
     );
@@ -296,7 +302,8 @@ fn require_real_directory_if_present(path: &Utf8Path) -> anyhow::Result<()> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error.into()),
         Ok(metadata) => {
-            anyhow::ensure!(
+            crate::write_error::ensure!(
+                Fault,
                 metadata.is_dir() && !metadata.file_type().is_symlink(),
                 "source-edit recovery path is not a real directory: {path}"
             );
@@ -307,7 +314,8 @@ fn require_real_directory_if_present(path: &Utf8Path) -> anyhow::Result<()> {
 
 fn read_regular_file(path: &Utf8Path) -> anyhow::Result<Vec<u8>> {
     let metadata = std::fs::symlink_metadata(path)?;
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        Fault,
         metadata.is_file() && !metadata.file_type().is_symlink(),
         "source-edit recovery path is not a real file: {path}"
     );
@@ -321,14 +329,17 @@ fn validate_missing_transaction(
     let parent = dunce::canonicalize(layout.source_edit_transactions_dir())?;
     let candidate_parent = transaction
         .parent()
-        .ok_or_else(|| anyhow::anyhow!("source-edit transaction has no parent"))?;
-    anyhow::ensure!(
+        .ok_or_else(|| crate::refusal::fault!("source-edit transaction has no parent"))?;
+    crate::write_error::ensure!(
+        Fault,
         dunce::canonicalize(candidate_parent)? == parent,
         "source-edit transaction is outside its transaction directory"
     );
     match std::fs::symlink_metadata(transaction) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error.into()),
-        Ok(_) => anyhow::bail!("source-edit transaction still exists"),
+        Ok(_) => Err(crate::refusal::fault!(
+            "source-edit transaction still exists"
+        )),
     }
 }

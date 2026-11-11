@@ -1,6 +1,7 @@
 #![cfg(feature = "test-fixture")]
 
 mod support {
+    pub mod ideation;
     pub mod records;
 }
 
@@ -14,6 +15,7 @@ use provenance_store::{
 use provenance_transport::StatementHost;
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
+use support::ideation::{contribution, synthesis};
 use support::records::Repository;
 use tower::ServiceExt as _;
 
@@ -266,36 +268,13 @@ async fn nullable_patch_fields_distinguish_omission_clear_and_value() {
     assert!(cleared["data"]["url"].is_null());
 }
 
-fn contribution() -> Value {
-    json!({
-        "id":"contribution_round2",
-        "target":{"artifact_type":"requirement","artifact_id":"req_shared"},
-        "participant_slot":"reviewer", "stance":"support",
-        "strongest_finding":"Original finding", "evidence_references":[],
-        "material_claims":[], "risks":[], "objections":[], "challenges":[],
-        "suggested_artifact_changes":[], "unsupported_recommendations":[],
-        "uncertainty":{"level":"low","rationale":"Direct evidence"},
-        "open_questions":[]
-    })
-}
-
-fn synthesis() -> Value {
-    json!({
-        "id":"synthesis_round2",
-        "target":{"artifact_type":"requirement","artifact_id":"req_shared"},
-        "summary":"Original summary", "consensus":[], "contested_claims":[],
-        "minority_objections":[], "evidence_gaps":[], "unsupported_speculation":[],
-        "open_questions":[], "suggested_artifacts":[], "required_human_decisions":[]
-    })
-}
-
 #[tokio::test]
 async fn contribution_and_synthesis_patches_merge_partial_inputs() {
     let repo = Repository::new("The shared graph is readable.");
     let host = host(&repo);
     for (path, data) in [
-        ("/contributions", contribution()),
-        ("/synthesis-packets", synthesis()),
+        ("/contributions", contribution("contribution_round2")),
+        ("/synthesis-packets", synthesis("synthesis_round2")),
     ] {
         let (status, value) = call(&host, "POST", path, Some(json!({"data":data}))).await;
         assert_eq!(status, 200, "{value}");

@@ -1,3 +1,5 @@
+use crate::state_store::message_ids::ShardLine;
+use crate::state_store::readers::located;
 use camino::Utf8Path;
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -19,12 +21,14 @@ pub(super) struct RawRecord {
 
 impl RawRecord {
     pub(super) fn deserialize<T: DeserializeOwned + Serialize>(
+        path: &Utf8Path,
         line: &str,
         line_number: usize,
     ) -> anyhow::Result<(T, Self)> {
         let mut top_level_unknown = Vec::new();
         let mut nested_unknown = None;
         let mut deserializer = serde_json::Deserializer::from_str(line);
+        let at = |error: serde_json::Error| located(path, line_number, &error);
         let record = serde_ignored::deserialize(&mut deserializer, |path| match path {
             serde_ignored::Path::Map {
                 parent: serde_ignored::Path::Root,
@@ -35,18 +39,21 @@ impl RawRecord {
                     nested_unknown = Some(other.to_string());
                 }
             }
-        })?;
-        let known = serde_json::to_value(&record)?;
-        let scan = top_level_members(line)?;
+        })
+        .map_err(at)?;
+        let known = serde_json::to_value(&record).map_err(at)?;
+        let scan = top_level_members(line).map_err(at)?;
         let repeated_member = scan.repeated;
         let missing = top_level_unknown
             .iter()
             .filter(|name| !scan.members.iter().any(|member| &member.name == *name))
             .collect::<Vec<_>>();
-        anyhow::ensure!(
-            missing.is_empty(),
-            "line {line_number}: stored field names {missing:?} cannot be read back safely"
-        );
+        if !missing.is_empty() {
+            return Err(crate::refusal::state_fault(
+                &ShardLine::new(path, line_number),
+                format!("stored field names {missing:?} cannot be read back safely"),
+            ));
+        }
         let unknown = scan
             .members
             .into_iter()
@@ -76,22 +83,23 @@ impl RawRecord {
 
     fn changed_line<T: Serialize>(self, path: &Utf8Path, record: &T) -> anyhow::Result<String> {
         if let Some(name) = self.repeated_member {
-            anyhow::bail!(
-                "{path} line {}: repeated top-level member `{name}` cannot survive a typed record change",
-                self.line_number
-            );
+            return Err(crate::refusal::state_fault(
+                &ShardLine::new(path, self.line_number),
+                format!("repeated top-level member `{name}` cannot survive a typed record change"),
+            ));
         }
         if let Some(field) = self.nested_unknown {
-            anyhow::bail!(
-                "{path} line {}: nested unknown field `{field}` cannot survive a typed record change",
-                self.line_number
-            );
+            return Err(crate::refusal::state_fault(
+                &ShardLine::new(path, self.line_number),
+                format!("nested unknown field `{field}` cannot survive a typed record change"),
+            ));
         }
         if self.unknown.is_empty() {
             return serde_json::to_string(record).map_err(Into::into);
         }
         let mut typed = serde_json::to_string(record)?;
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            Fault,
             typed.ends_with('}'),
             "a changed record with stored unknown fields must serialize as an object"
         );
@@ -162,16 +170,16 @@ impl<T: Serialize> LoadedRecords<T> {
             }
             lines.push(serde_json::to_string(record)?);
         }
-        if added_without_id
-            && self
-                .raw
-                .iter()
-                .flatten()
-                .any(|raw| raw.id().is_none() && raw.has_unknown())
-        {
-            anyhow::bail!(
-                "{path}: unknown fields cannot survive a typed change to a record without an id"
-            );
+        let kept_without_id = self
+            .raw
+            .iter()
+            .flatten()
+            .find(|raw| raw.id().is_none() && raw.has_unknown());
+        if let (true, Some(raw)) = (added_without_id, kept_without_id) {
+            return Err(crate::refusal::state_fault(
+                &ShardLine::new(path, raw.line_number),
+                "unknown fields cannot survive a typed change to a record without an id".into(),
+            ));
         }
         Ok(lines)
     }
@@ -193,8 +201,15 @@ fn unique_id_match(
         .filter(|(_, candidate)| candidate.as_ref().and_then(RawRecord::id) == Some(id))
         .map(|(index, _)| index);
     let first = matching.next();
-    if first.is_some() && matching.next().is_some() {
-        anyhow::bail!("{path}: duplicate record id `{id}` prevents a safe typed change");
+    if let Some(second) = matching.next() {
+        let line = raw[second]
+            .as_ref()
+            .expect("the filter keeps only rows that are available")
+            .line_number;
+        return Err(crate::refusal::state_fault(
+            &ShardLine::new(path, line),
+            format!("duplicate record id `{id}` prevents a safe typed change"),
+        ));
     }
     Ok(first)
 }
@@ -224,7 +239,7 @@ struct Scan {
 /// member spans from its name to the comma or closing brace that ends its
 /// value. The raw bytes are kept so a rewritten line can carry a member over
 /// without re-encoding it.
-fn top_level_members(line: &str) -> anyhow::Result<Scan> {
+fn top_level_members(line: &str) -> Result<Scan, serde_json::Error> {
     let bytes = line.as_bytes();
     let mut depth = 0usize;
     let mut root_object = false;
@@ -298,7 +313,71 @@ fn top_level_members(line: &str) -> anyhow::Result<Scan> {
 
 #[cfg(test)]
 mod tests {
-    use super::top_level_members;
+    use super::{top_level_members, LoadedRecords, RawRecord};
+
+    /// Implementation aid with no Rule: the test builds the stored rows
+    /// directly.
+    #[test]
+    fn a_changed_record_with_a_stored_id_twice_is_located_at_the_second_line() {
+        let mut loaded = LoadedRecords::default();
+        for (index, line) in [r#"{"id":"one","n":1}"#, r#"{"id":"one","n":2}"#]
+            .into_iter()
+            .enumerate()
+        {
+            let (record, raw) = RawRecord::deserialize::<serde_json::Value>(
+                camino::Utf8Path::new("records.jsonl"),
+                line,
+                index + 1,
+            )
+            .unwrap();
+            loaded.push(record, raw);
+        }
+        loaded.records_mut()[0]["n"] = 3.into();
+        let error = loaded
+            .into_lines(camino::Utf8Path::new("state/scopes/default/records.jsonl"))
+            .unwrap_err();
+        let state = crate::state_store::readers::StateLineInvalid::find(&error).unwrap();
+        assert_eq!(
+            (state.line, state.message.as_str()),
+            (2, "duplicate record id `one` prevents a safe typed change")
+        );
+    }
+
+    /// Implementation aid with no Rule: the test builds the stored rows
+    /// directly.
+    #[test]
+    fn a_changed_record_without_an_id_is_located_at_the_kept_row_with_unknown_fields() {
+        #[derive(serde::Deserialize, serde::Serialize)]
+        struct Row {
+            n: u32,
+        }
+        let mut loaded = LoadedRecords::default();
+        for (index, line) in [r#"{"n":1}"#, r#"{"n":2,"extension":true}"#]
+            .into_iter()
+            .enumerate()
+        {
+            let (record, raw) = RawRecord::deserialize::<Row>(
+                camino::Utf8Path::new("records.jsonl"),
+                line,
+                index + 1,
+            )
+            .unwrap();
+            loaded.push(record, raw);
+        }
+        loaded.records_mut()[1].n = 3;
+        let error = loaded
+            .into_lines(camino::Utf8Path::new("state/scopes/default/records.jsonl"))
+            .unwrap_err();
+        let state = crate::state_store::readers::StateLineInvalid::find(&error).unwrap();
+        assert_eq!(
+            (state.path.as_str(), state.line, state.message.as_str()),
+            (
+                "state/scopes/default/records.jsonl",
+                2,
+                "unknown fields cannot survive a typed change to a record without an id"
+            )
+        );
+    }
 
     #[test]
     fn collects_members_in_written_order_with_raw_bytes() {

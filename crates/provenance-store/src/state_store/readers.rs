@@ -24,9 +24,7 @@ impl StateLineInvalid {
     /// the shard is not below a state directory. A refusal that leaves the
     /// host gives this value and never an absolute path.
     pub fn file(&self) -> String {
-        below_state(&self.path)
-            .or_else(|| self.path.file_name().map(str::to_owned))
-            .unwrap_or_default()
+        state_file(&self.path)
     }
 
     /// The first unparsable state line in the cause chain of `error`.
@@ -35,22 +33,21 @@ impl StateLineInvalid {
     }
 }
 
+/// The shard path below the state directory, or only its file name when the
+/// shard is not below a state directory.
+pub fn state_file(path: &Utf8Path) -> String {
+    below_state(path)
+        .or_else(|| path.file_name().map(str::to_owned))
+        .unwrap_or_default()
+}
+
 /// Names the shard and its line when a stored line is not one JSON record.
 pub fn located(path: &Utf8Path, line_number: usize, error: &serde_json::Error) -> anyhow::Error {
     let text = error.to_string();
     let message = text
         .rfind(" at line ")
         .map_or(text.as_str(), |at| &text[..at]);
-    invalid_line(path, line_number, message.to_owned())
-}
-
-fn invalid_line(path: &Utf8Path, line: usize, message: String) -> anyhow::Error {
-    StateLineInvalid {
-        path: path.to_owned(),
-        line: u64::try_from(line).unwrap_or(u64::MAX),
-        message,
-    }
-    .into()
+    crate::refusal::state_fault(&ShardLine::new(path, line_number), message.to_owned())
 }
 
 /// The shard path below the state directory, with `/` between its parts on
@@ -94,7 +91,8 @@ fn record_from_line<T: DeserializeOwned>(
     serde_json::from_value(value).map_err(|error| located(path, line_number, &error))
 }
 
-/// Refuses a stored record that still holds the removed `retired` field.
+/// Refuses a stored record that still holds the removed `retired` field, as
+/// `invalid_state_file` at its line.
 pub fn ensure_no_legacy_retirement(
     path: &Utf8Path,
     line_number: usize,
@@ -110,10 +108,13 @@ pub fn ensure_no_legacy_retirement(
         .get("id")
         .and_then(serde_json::Value::as_str)
         .map_or_else(|| "record".to_string(), |id| format!("record {id}"));
-    anyhow::bail!(
-        "{path} line {line_number}: {name} contains legacy field `retired`; \
-         canonical JSONL requires record-deletion migration 026 before this build can read it"
-    )
+    Err(crate::refusal::state_fault(
+        &ShardLine::new(path, line_number),
+        format!(
+            "{name} contains legacy field `retired`; canonical JSONL requires \
+             record-deletion migration 026 before this build can read it"
+        ),
+    ))
 }
 
 /// The records of the shard at `path`, read through `store`; no records
@@ -122,15 +123,69 @@ fn read_records<T: DeserializeOwned>(
     store: &StateStore,
     path: &Utf8Path,
 ) -> anyhow::Result<Vec<T>> {
-    let Some(contents) = store.state_text(path)? else {
-        return Ok(Vec::new());
-    };
-    let mut records = Vec::new();
-    for (index, line) in contents.lines().enumerate() {
-        let value = parse_line(path, index + 1, line)?;
-        records.push(record_from_line(path, index + 1, value)?);
+    Ok(store
+        .state_text(path)?
+        .map(|contents| records_of(path, &contents))
+        .transpose()?
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(record, _)| record)
+        .collect())
+}
+
+/// The one loop over the lines of a shard: each line becomes a record with
+/// its line.
+fn records_of<T: DeserializeOwned>(
+    path: &Utf8Path,
+    contents: &str,
+) -> anyhow::Result<Vec<(T, ShardLine)>> {
+    contents
+        .lines()
+        .enumerate()
+        .map(|(index, line)| {
+            let value = parse_line(path, index + 1, line)?;
+            Ok((
+                record_from_line(path, index + 1, value)?,
+                ShardLine::new(path, index + 1),
+            ))
+        })
+        .collect()
+}
+
+/// The records of the shard at `path`, each with its line, so that a check
+/// over records that do not agree can name the record at fault.
+pub fn read_jsonl_located<T: DeserializeOwned>(
+    store: &StateStore,
+    path: &Utf8Path,
+) -> anyhow::Result<Vec<(T, ShardLine)>> {
+    store.state_path_access(path, |held| {
+        held.state_text(path)?
+            .map_or_else(|| Ok(Vec::new()), |contents| records_of(path, &contents))
+    })
+}
+
+/// A stored record of the shard at `path` that does not agree with itself or
+/// with another record. The refusal is `invalid_state_file` at the second
+/// line with the id `id` when the shard holds it twice, else at its only
+/// line. The shard is read again only here, on the refusal path. When that
+/// read fails or does not find the id, the refusal is `message` with no line.
+pub fn record_fault(
+    store: &StateStore,
+    path: &Utf8Path,
+    id: &str,
+    message: String,
+) -> anyhow::Error {
+    // An error of the second read is not given: it would replace the fault.
+    let rows = read_jsonl_located::<serde_json::Value>(store, path).unwrap_or_default();
+    let mut lines = rows
+        .into_iter()
+        .filter(|(row, _)| row.get("id").and_then(serde_json::Value::as_str) == Some(id))
+        .map(|(_, line)| line);
+    let first = lines.next();
+    match lines.next().or(first) {
+        Some(at) => crate::refusal::state_fault(&at, message),
+        None => crate::refusal::fault!("{message}"),
     }
-    Ok(records)
 }
 
 pub fn read_jsonl<T: DeserializeOwned>(
@@ -164,16 +219,7 @@ fn read_message_shard_lines<T: DeserializeOwned>(
         let contents = store
             .read_state_text(&path)
             .with_context(|| format!("failed to read message shard {}", path.as_str()))?;
-        for (index, line) in contents.lines().enumerate() {
-            let value = parse_line(&path, index + 1, line)?;
-            records.push((
-                record_from_line(&path, index + 1, value)?,
-                ShardLine {
-                    path: path.clone(),
-                    line: index + 1,
-                },
-            ));
-        }
+        records.extend(records_of(&path, &contents)?);
     }
     Ok(records)
 }
@@ -212,7 +258,7 @@ fn message_shard_paths_in(store: &StateStore, scope: &ScopeId) -> anyhow::Result
         .expect("threads path must have a parent")
         .to_path_buf();
     let names = store.state_keys_under(&threads_dir, StateEntry::File, |path| {
-        anyhow::anyhow!("non-UTF-8 message shard path: {}", path.display())
+        crate::refusal::fault!("non-UTF-8 message shard path: {}", path.display())
     })?;
     Ok(names
         .into_iter()

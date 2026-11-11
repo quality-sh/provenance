@@ -143,7 +143,7 @@ impl Listed {
         mut arguments: Map<String, Value>,
     ) -> Result<(Call, Map<String, Value>), CallToolResult> {
         let wrong_tool = match &self.runner {
-            Runner::Get => tools::get_refusal(&arguments),
+            Runner::Get => tools::get_refusal(&self.tool.input_schema, &arguments),
             Runner::Discussions(_) => tools::discussions_refusal(&arguments),
             Runner::Change(input) => tools::change_refusal(input, &arguments),
             Runner::Trace | Runner::Search | Runner::Api | Runner::Check => None,

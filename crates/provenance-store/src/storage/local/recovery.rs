@@ -63,7 +63,8 @@ pub fn recover_pending_publication(layout: &ProvenanceLayout) -> anyhow::Result<
     let transaction_dir = validated_transaction_dir(layout, &marker.transaction_dir)?;
     let backup = transaction_dir.join("backup-state");
     if !layout.state_dir().exists() {
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            Fault,
             backup.exists(),
             "publication recovery found neither live state nor backup state"
         );
@@ -104,22 +105,24 @@ fn recovery_dir_inside_cache(
     )?;
     let parent = candidate
         .parent()
-        .ok_or_else(|| anyhow::anyhow!("publication marker transaction has no parent"))?;
+        .ok_or_else(|| crate::refusal::fault!("publication marker transaction has no parent"))?;
     let canonical_parent = dunce::canonicalize(parent)?;
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        Fault,
         canonical_parent == canonical_container.as_std_path(),
-        OUTSIDE_REPOSITORY_CACHE
+        "{OUTSIDE_REPOSITORY_CACHE}"
     );
     let name = candidate
         .file_name()
-        .ok_or_else(|| anyhow::anyhow!(OUTSIDE_REPOSITORY_CACHE))?;
+        .ok_or_else(|| crate::refusal::fault!("{OUTSIDE_REPOSITORY_CACHE}"))?;
     let contained = canonical_container.join(name);
     if recovery_use == RecoveryUse::Touched {
         let resolved = canonical_utf8(candidate, "import transaction path")?;
-        anyhow::ensure!(resolved == contained, OUTSIDE_REPOSITORY_CACHE);
-        anyhow::ensure!(
+        crate::write_error::ensure!(Fault, resolved == contained, "{OUTSIDE_REPOSITORY_CACHE}");
+        crate::write_error::ensure!(
+            Fault,
             std::fs::symlink_metadata(&resolved)?.is_dir(),
-            TRANSACTION_NOT_A_DIRECTORY
+            "{TRANSACTION_NOT_A_DIRECTORY}"
         );
     }
     Ok(contained)
@@ -155,7 +158,7 @@ fn ensure_written_path_has_no_symlinks(
                         .ok()
                 })
         })
-        .ok_or_else(|| anyhow::anyhow!(OUTSIDE_REPOSITORY_CACHE))?;
+        .ok_or_else(|| crate::refusal::fault!("{OUTSIDE_REPOSITORY_CACHE}"))?;
     let mut written = written_container.to_path_buf();
     let component_count = relative.components().count();
     for (index, component) in relative.components().enumerate() {
@@ -165,13 +168,21 @@ fn ensure_written_path_has_no_symlinks(
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
                 Err(error) => return Err(error.into()),
                 Ok(metadata) => {
-                    anyhow::ensure!(!metadata.file_type().is_symlink(), TRANSACTION_HAS_SYMLINK);
+                    crate::write_error::ensure!(
+                        Fault,
+                        !metadata.file_type().is_symlink(),
+                        "{TRANSACTION_HAS_SYMLINK}"
+                    );
                     continue;
                 }
             }
         }
         let metadata = std::fs::symlink_metadata(&written)?;
-        anyhow::ensure!(!metadata.file_type().is_symlink(), TRANSACTION_HAS_SYMLINK);
+        crate::write_error::ensure!(
+            Fault,
+            !metadata.file_type().is_symlink(),
+            "{TRANSACTION_HAS_SYMLINK}"
+        );
     }
     Ok(())
 }
@@ -228,7 +239,8 @@ pub fn create_real_directory(path: &Utf8Path) -> anyhow::Result<()> {
         Err(error) => return Err(error.into()),
     }
     let metadata = std::fs::symlink_metadata(path)?;
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        Fault,
         metadata.file_type().is_dir() && !metadata.file_type().is_symlink(),
         "publication lock path contains a symlink component: {path}"
     );

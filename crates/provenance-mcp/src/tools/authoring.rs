@@ -245,7 +245,9 @@ pub async fn call(
         Ok(request) => request,
         Err(refused) => return refused,
     };
-    let written = match write(host, &route, &request, (replace_parent, with_parent)).await {
+    let fields = accepted_fields(&schema);
+    let parents = (replace_parent, with_parent);
+    let written = match write(host, &route, &request, &fields, parents).await {
         Ok(written) => written,
         Err(refused) => return refused,
     };
@@ -265,11 +267,13 @@ pub async fn call(
 }
 
 /// The written record, or the failure of the write, and a note for the reader. With
-/// both parent fields, the write replaces one Requirement parent.
+/// both parent fields, the write replaces one Requirement parent. `fields` are the
+/// fields that the call takes.
 async fn write(
     host: &StatementHost,
     route: &TargetRoute,
     request: &Value,
+    fields: &[String],
     (replace_parent, with_parent): (Option<Value>, Option<Value>),
 ) -> Result<(Result<Value, ErasedFailure>, Option<String>), CallToolResult> {
     let replacing = replace_parent.is_some() || with_parent.is_some();
@@ -281,8 +285,14 @@ async fn write(
     let (data, query, headers) =
         split(route.definition, request, &route.target).map_err(crate::surface::failure_result)?;
     if let Some(name) = query.keys().next() {
+        let takes = fields
+            .iter()
+            .filter(|field| !query.contains_key(*field))
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ");
         let message = format!(
-            "the {} action on a {} record does not take {name}",
+            "the {} action on a {} record does not take {name}; it takes: {takes}",
             route.action.as_str(),
             route.kind.as_str()
         );
@@ -339,7 +349,10 @@ fn field_refusal(
         (
             name.clone(),
             "unknown_field",
-            format!("{on} does not take {name}"),
+            format!(
+                "{on} does not take {name}; it takes: {}",
+                accepted_fields(schema).join(", ")
+            ),
         )
     } else {
         let required = schema["required"].as_array()?;
@@ -358,6 +371,14 @@ fn field_refusal(
         "message": message,
         "schema": schema,
     })))
+}
+
+/// The property names of `schema`, in its order.
+fn accepted_fields(schema: &Value) -> Vec<String> {
+    schema["properties"]
+        .as_object()
+        .map(|properties| properties.keys().cloned().collect())
+        .unwrap_or_default()
 }
 
 /// The refusal of a target or type whose record kind the action does not take.

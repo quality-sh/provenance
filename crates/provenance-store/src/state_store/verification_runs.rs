@@ -1,4 +1,4 @@
-use crate::write_error::{publication_started, SourceFailure, WriteFailure};
+use crate::write_error::publication_started;
 use provenance_core::{
     validate_optional_commit_pin, ScopeId, StableId, VerificationMethod, VerificationRun,
     VerificationRunStatus,
@@ -29,13 +29,13 @@ impl StateStore {
             "declared_by must not be empty"
         );
         let file = input.file.ok_or_else(|| {
-            SourceFailure::wrap(
-                WriteFailure::InvalidVerificationTarget,
-                anyhow::anyhow!("file is required for a durable verification binding"),
+            crate::refusal::refuse!(
+                InvalidVerificationTarget,
+                "file is required for a durable verification binding"
             )
         })?;
         let commit = validate_optional_commit_pin(input.commit)
-            .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidVerificationTarget, error))?;
+            .map_err(|error| crate::refusal::refuse!(InvalidVerificationTarget, "{error:#}"))?;
         self.with_repository_publication(|held| {
             let rule_id = verification_rule(held, &scope_id, input.rule, input.declaration)?;
             let binding =
@@ -101,9 +101,9 @@ impl StateStore {
     ) -> anyhow::Result<VerificationRun> {
         self.ensure_writable()?;
         let run_id = StableId::new(input.run)
-            .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidCompletion, error))?;
+            .map_err(|error| crate::refusal::refuse!(InvalidCompletion, "{error:#}"))?;
         let status = VerificationRunStatus::parse_completion(&input.status)
-            .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidCompletion, error))?;
+            .map_err(|error| crate::refusal::refuse!(InvalidCompletion, "{error:#}"))?;
         crate::write_error::ensure!(
             InvalidCompletion,
             status == VerificationRunStatus::Failed || input.error.is_none(),
@@ -121,12 +121,10 @@ impl StateStore {
                         .iter_mut()
                         .find(|run| run.scope_id == *scope_id && run.id == run_id)
                         .ok_or_else(|| {
-                            SourceFailure::wrap(
-                                WriteFailure::InvalidCompletion,
-                                anyhow::anyhow!(
-                                    "verification run `{}` does not exist",
-                                    run_id.as_str()
-                                ),
+                            crate::refusal::refuse!(
+                                InvalidCompletion,
+                                "verification run `{}` does not exist",
+                                run_id.as_str()
                             )
                         })?;
                     crate::write_error::ensure!(
@@ -240,16 +238,16 @@ fn verification_rule(
     let rules = store.list_rules(scope_id)?;
     let rule_id = match (rule, declaration) {
         (Some(rule), None) => {
-            let rule_id = StableId::new(rule).map_err(|error| {
-                SourceFailure::wrap(WriteFailure::InvalidVerificationTarget, error)
-            })?;
+            let rule_id = StableId::new(rule)
+                .map_err(|error| crate::refusal::refuse!(InvalidVerificationTarget, "{error:#}"))?;
             let rule = rules
                 .iter()
                 .find(|rule| rule.id == rule_id)
                 .ok_or_else(|| {
-                    SourceFailure::wrap(
-                        WriteFailure::InvalidVerificationTarget,
-                        anyhow::anyhow!("rule `{}` does not exist", rule_id.as_str()),
+                    crate::refusal::refuse!(
+                        InvalidVerificationTarget,
+                        "rule `{}` does not exist",
+                        rule_id.as_str()
                     )
                 })?;
             rule.id.clone()
@@ -262,27 +260,25 @@ fn verification_rule(
                         && rule.declaration_address.as_ref() == Some(&declaration.address)
                 })
                 .ok_or_else(|| {
-                    SourceFailure::wrap(
-                        WriteFailure::InvalidVerificationTarget,
-                        anyhow::anyhow!(
-                            "declaration owned by `{}` at `{}` has not been applied",
-                            declaration.declared_by,
-                            declaration.address.segments().join("/")
-                        ),
+                    crate::refusal::refuse!(
+                        InvalidVerificationTarget,
+                        "declaration owned by `{}` at `{}` has not been applied",
+                        declaration.declared_by,
+                        declaration.address.segments().join("/")
                     )
                 })?;
             rule.id.clone()
         }
         (Some(_), Some(_)) => {
-            return Err(SourceFailure::wrap(
-                WriteFailure::InvalidVerificationTarget,
-                anyhow::anyhow!("begin verification accepts either rule or declaration, not both"),
+            return Err(crate::refusal::refuse!(
+                InvalidVerificationTarget,
+                "begin verification accepts either rule or declaration, not both"
             ))
         }
         (None, None) => {
-            return Err(SourceFailure::wrap(
-                WriteFailure::InvalidVerificationTarget,
-                anyhow::anyhow!("begin verification requires either rule or declaration"),
+            return Err(crate::refusal::refuse!(
+                InvalidVerificationTarget,
+                "begin verification requires either rule or declaration"
             ))
         }
     };
@@ -297,7 +293,7 @@ fn next_run_id(records: &[VerificationRun], started_at: i64) -> anyhow::Result<S
         candidate = format!("{base}_{suffix}");
         suffix = suffix
             .checked_add(1)
-            .ok_or_else(|| anyhow::anyhow!("verification run id suffix overflow"))?;
+            .ok_or_else(|| crate::refusal::fault!("verification run id suffix overflow"))?;
     }
     StableId::new(candidate)
 }

@@ -113,14 +113,15 @@ impl StageLock {
         let _section = self
             .sections
             .lock()
-            .map_err(|_| anyhow::anyhow!("a staged section of {} panicked", self.root))?;
+            .map_err(|_| crate::refusal::fault!("a staged section of {} panicked", self.root))?;
         let _holder = enter(self.identity.clone(), HolderKind::Stage);
         operation()
     }
 
     /// Refuses when a staged section panicked.
     pub(crate) fn ensure_intact(&self) -> anyhow::Result<()> {
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            Fault,
             !self.sections.is_poisoned(),
             "a staged section of {} panicked; the stage is not published",
             self.root

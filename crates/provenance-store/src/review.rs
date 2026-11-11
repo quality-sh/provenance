@@ -18,6 +18,25 @@ fn new_id(ids: &dyn crate::repository::IdSource) -> provenance_core::StableId {
         .expect("UUID uses valid stable ID characters")
 }
 
+/// Refuses a review write to a scope that the manifest does not hold, with
+/// the common `unknown_scope`.
+fn ensure_manifest_scope(
+    held: &crate::state_store::StateStore,
+    scope: &provenance_core::ScopeId,
+) -> anyhow::Result<()> {
+    if held
+        .manifest()?
+        .scopes
+        .iter()
+        .any(|known| known.id == *scope)
+    {
+        return Ok(());
+    }
+    Err(crate::refusal::common(
+        provenance_core::protocol::failure::OperationFailure::UnknownScope,
+    ))
+}
+
 fn owner_matches(record: &impl serde::Serialize, owner: Option<&str>) -> anyhow::Result<()> {
     let value = serde_json::to_value(record)?;
     let saved_owner = value
@@ -25,9 +44,9 @@ fn owner_matches(record: &impl serde::Serialize, owner: Option<&str>) -> anyhow:
         .or_else(|| value.get("made_by"))
         .and_then(serde_json::Value::as_str);
     if saved_owner != owner {
-        return Err(crate::write_error::SourceFailure::wrap(
-            crate::write_error::WriteFailure::record_ownership_conflict(saved_owner),
-            anyhow::anyhow!("declared_by must match the existing owner"),
+        return Err(crate::refusal::refuse!(
+            (crate::write_error::WriteFailure::record_ownership_conflict(saved_owner)),
+            "declared_by must match the existing owner"
         ));
     }
     Ok(())

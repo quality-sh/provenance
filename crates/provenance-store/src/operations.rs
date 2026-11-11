@@ -68,12 +68,8 @@ pub fn begin_verification(
     repository: &Repository,
     mut input: BeginVerificationInput,
 ) -> anyhow::Result<provenance_core::VerificationRun> {
-    let method = provenance_scanner::Verification::from_str(&input.method).map_err(|error| {
-        write_error::SourceFailure::wrap(
-            write_error::WriteFailure::InvalidVerificationTarget,
-            error,
-        )
-    })?;
+    let method = provenance_scanner::Verification::from_str(&input.method)
+        .map_err(|error| crate::refusal::refuse!(InvalidVerificationTarget, "{error:#}"))?;
     normalize_verification_context(repository.working_tree(), &mut input)?;
     repository
         .store()
@@ -137,9 +133,9 @@ fn normalize_verification_context(
     input: &mut BeginVerificationInput,
 ) -> anyhow::Result<()> {
     let file = input.file.as_ref().ok_or_else(|| {
-        write_error::SourceFailure::wrap(
-            write_error::WriteFailure::InvalidVerificationTarget,
-            anyhow::anyhow!("file is required for a durable verification binding"),
+        crate::refusal::refuse!(
+            InvalidVerificationTarget,
+            "file is required for a durable verification binding"
         )
     })?;
     let relative = files::native_relative(repo, file)?;

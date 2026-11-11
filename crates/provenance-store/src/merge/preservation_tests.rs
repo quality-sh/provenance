@@ -26,14 +26,17 @@ fn an_untouched_row_keeps_our_line_and_an_adopted_row_keeps_theirs() {
     let ours_shared = StoredRow {
         line: r#"{"id":"rule_shared","note" : "ours kept this"}"#.into(),
         record: serde_json::json!({"id":"rule_shared","note":"ours kept this"}),
+        line_number: 1,
     };
     let theirs_shared = StoredRow {
         line: r#"{"note":"ours kept this","id":"rule_shared"}"#.into(),
         record: ours_shared.record.clone(),
+        line_number: 1,
     };
     let adopted = StoredRow {
         line: r#"{"id":"rule_added","note":"theirs moved it in"}"#.into(),
         record: serde_json::json!({"id":"rule_added","note":"theirs moved it in"}),
+        line_number: 2,
     };
 
     let shared_record = ours_shared.record.clone();
@@ -62,6 +65,7 @@ fn a_record_no_side_stored_is_refused_instead_of_reencoded() {
         &[StoredRow {
             line: r#"{"id":"rule_theirs"}"#.into(),
             record: serde_json::json!({"id":"rule_theirs"}),
+            line_number: 1,
         }],
         &[serde_json::json!({"id":"rule_ghost"})],
     )

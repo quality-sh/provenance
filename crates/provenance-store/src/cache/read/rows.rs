@@ -43,10 +43,14 @@ fn column_value(row: &SqliteRow, index: usize) -> anyhow::Result<ColumnValue> {
         "INTEGER" => ColumnValue::Integer(read::<i64>(raw)?),
         "REAL" => ColumnValue::Real(read::<f64>(raw)?),
         "TEXT" => ColumnValue::Text(read::<String>(raw)?),
-        other => anyhow::bail!("column {index} holds a {other} value, which no record field takes"),
+        other => {
+            return Err(crate::refusal::fault!(
+                "column {index} holds a {other} value, which no record field takes"
+            ))
+        }
     })
 }
 
 fn read<'r, T: Decode<'r, sqlx::Sqlite>>(raw: SqliteValueRef<'r>) -> anyhow::Result<T> {
-    T::decode(raw).map_err(|error| anyhow::anyhow!(error))
+    T::decode(raw).map_err(|error| crate::refusal::fault!("{error}"))
 }

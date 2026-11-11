@@ -81,12 +81,7 @@ impl StateStore {
             .list_topics(&scope_id)?
             .into_iter()
             .find(|topic| topic.id == topic_id)
-            .ok_or_else(|| {
-                crate::write_error::SourceFailure::wrap(
-                    crate::write_error::WriteFailure::MissingReference,
-                    anyhow::anyhow!("topic does not exist"),
-                )
-            })?;
+            .ok_or_else(|| crate::refusal::refuse!(MissingReference, "topic does not exist"))?;
         if let Some(resolution_id) = &resolution_id {
             self.ensure_node_exists(
                 &scope_id,

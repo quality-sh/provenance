@@ -106,9 +106,9 @@ pub(super) async fn resolve(
             RecordResolution::Ambiguous
         });
     };
-    let node = node(snapshot, *node_type, id)
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("record identity index points to a missing record"))?;
+    let node = node(snapshot, *node_type, id).await?.ok_or_else(|| {
+        crate::refusal::fault!("record identity index points to a missing record")
+    })?;
     Ok(RecordResolution::Found(node))
 }
 

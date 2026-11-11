@@ -172,7 +172,9 @@ impl StateStore {
     pub(crate) fn stage_changes(&self) -> anyhow::Result<crate::storage::WriteSet> {
         match &self.access {
             Access::Staged { stage, .. } => Ok(stage.changes()),
-            _ => anyhow::bail!("only a staged store has stage changes"),
+            _ => Err(crate::refusal::fault!(
+                "only a staged store has stage changes"
+            )),
         }
     }
 
@@ -196,7 +198,8 @@ impl StateStore {
     /// refuses as it does for every write.
     pub(crate) fn ensure_holds_live_section(&self) -> anyhow::Result<()> {
         self.ensure_not_view()?;
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            Fault,
             matches!(self.access, Access::Section { .. }),
             "a staged write needs the store that holds the live section"
         );
@@ -260,7 +263,7 @@ impl StateStore {
             Storage::Layout | Storage::Shared { local: true, .. } => {
                 Ok(LocalStateStorage::new(self.layout.clone()))
             }
-            Storage::Shared { local: false, .. } => Err(anyhow::anyhow!(
+            Storage::Shared { local: false, .. } => Err(crate::refusal::fault!(
                 "this operation needs the local storage adapter, because it changes a file in \
                  the working tree; this repository keeps its state in another adapter"
             )),
@@ -287,7 +290,9 @@ impl StateStore {
                 stage: Arc::clone(stage),
             },
             Access::Lock | Access::Section { .. } | Access::ReadOnly | Access::View(_) => {
-                anyhow::bail!("a review write permission needs a staged store")
+                return Err(crate::refusal::fault!(
+                    "a review write permission needs a staged store"
+                ))
             }
         };
         run(&self.section_store(access))
@@ -378,7 +383,7 @@ impl StateStore {
                 let root = state_dir
                     .parent()
                     .and_then(Utf8Path::parent)
-                    .ok_or_else(|| anyhow::anyhow!("state path has no repository root"))?;
+                    .ok_or_else(|| crate::refusal::fault!("state path has no repository root"))?;
                 crate::publication::with_repository_publication_checked(
                     &ProvenanceLayout::new(root),
                     || Ok(()),
@@ -446,7 +451,8 @@ impl StateStore {
 
     /// Refuses a write through a read-only store or a view store.
     pub(crate) fn ensure_writable(&self) -> anyhow::Result<()> {
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            Fault,
             !matches!(self.access, Access::ReadOnly),
             "a read-only store of {} cannot write",
             self.layout.root()
@@ -455,7 +461,8 @@ impl StateStore {
     }
 
     fn ensure_not_view(&self) -> anyhow::Result<()> {
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            Fault,
             !matches!(self.access, Access::View(_)),
             "a view store of {} cannot write",
             self.layout.root()

@@ -83,9 +83,9 @@ impl<'g> UnitReader<'g> {
 
     /// The view of this pass. [`Self::global`] reads it first.
     fn pass(&self) -> anyhow::Result<&PassView> {
-        self.pass
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("the catch-up read no view before it hashed a scope"))
+        self.pass.as_ref().ok_or_else(|| {
+            crate::refusal::fault!("the catch-up read no view before it hashed a scope")
+        })
     }
 
     /// The bytes of one unit in the view. `known` is the pair the
@@ -121,7 +121,7 @@ impl<'g> UnitReader<'g> {
             let bytes = pass
                 .view
                 .get(&key)
-                .ok_or_else(|| anyhow::anyhow!("missing manifest: {path}"))?;
+                .ok_or_else(|| crate::refusal::fault!("missing manifest: {path}"))?;
             return Ok((crate::state_store::manifest_from_bytes(bytes)?, digests));
         }
         let manifest = pass.store.manifest()?;

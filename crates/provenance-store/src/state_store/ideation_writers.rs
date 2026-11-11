@@ -48,9 +48,9 @@ impl StateStore {
                 .into_iter()
                 .find(|record| record.id == input.id);
             let Some(existing) = existing else {
-                return Err(crate::write_error::SourceFailure::wrap(
-                    crate::write_error::WriteFailure::ResourceNotFound,
-                    anyhow::anyhow!("contribution does not exist"),
+                return Err(crate::refusal::refuse!(
+                    ResourceNotFound,
+                    "contribution does not exist"
                 ));
             };
             held.write_contribution(merge_contribution(existing, input), true)
@@ -108,7 +108,7 @@ impl StateStore {
                 .any(|record| record.id == contribution.id)
         });
         if landed {
-            anyhow::ensure!(replace, "contribution already exists");
+            crate::write_error::ensure!(AlreadyExists, replace, "contribution already exists");
             self.write_ideation_batch(
                 &scope_id,
                 super::IdeationLandingBatch {
@@ -128,7 +128,7 @@ impl StateStore {
                 .iter()
                 .position(|record| record.id == contribution.id)
             {
-                anyhow::ensure!(replace, "contribution already exists");
+                crate::write_error::ensure!(AlreadyExists, replace, "contribution already exists");
                 super::ideation_batches::ensure_asserted_contribution_unchanged(
                     &records[index],
                     &contribution,
@@ -189,9 +189,9 @@ impl StateStore {
                 .into_iter()
                 .find(|record| record.id == input.id);
             let Some(existing) = existing else {
-                return Err(crate::write_error::SourceFailure::wrap(
-                    crate::write_error::WriteFailure::ResourceNotFound,
-                    anyhow::anyhow!("synthesis packet does not exist"),
+                return Err(crate::refusal::refuse!(
+                    ResourceNotFound,
+                    "synthesis packet does not exist"
                 ));
             };
             held.write_synthesis_packet(merge_synthesis(existing, input), true)
@@ -246,7 +246,7 @@ impl StateStore {
                 .any(|record| record.id == synthesis_packet.id)
         });
         if landed {
-            anyhow::ensure!(replace, "synthesis packet already exists");
+            crate::write_error::ensure!(AlreadyExists, replace, "synthesis packet already exists");
             self.write_ideation_batch(
                 &scope_id,
                 super::IdeationLandingBatch {
@@ -266,7 +266,11 @@ impl StateStore {
                 .iter()
                 .position(|record| record.id == synthesis_packet.id)
             {
-                anyhow::ensure!(replace, "synthesis packet already exists");
+                crate::write_error::ensure!(
+                    AlreadyExists,
+                    replace,
+                    "synthesis packet already exists"
+                );
                 super::ideation_batches::ensure_asserted_synthesis_unchanged(
                     &records[index],
                     &synthesis_packet,

@@ -1,7 +1,6 @@
 //! A new parent link cannot point at an archived Requirement.
 
 use super::StateStore;
-use crate::write_error::WriteFailure;
 use provenance_core::{review::ReviewRecord, RequirementStatus, StableId};
 
 impl StateStore {
@@ -27,10 +26,11 @@ impl StateStore {
                 parent.status == RequirementStatus::Archived && added.contains(&parent.id)
             });
         archived.map_or(Ok(()), |parent| {
-            Err(WriteFailure::invalid_update(anyhow::anyhow!(
+            Err(crate::refusal::refuse!(
+                InvalidUpdate,
                 "Requirement {} is archived; a new link cannot point to it",
                 parent.id.as_str()
-            )))
+            ))
         })
     }
 }

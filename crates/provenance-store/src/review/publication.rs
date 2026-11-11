@@ -27,7 +27,8 @@ pub(super) fn with_record_state<R>(
             let result = prepare(staged)?;
             let changes = staged.stage_changes()?;
             for key in changes.puts().keys().chain(changes.deletes()) {
-                anyhow::ensure!(
+                crate::write_error::ensure!(
+                    Fault,
                     allowed.contains(Utf8Path::new(key.as_str())),
                     "review write changes a non-record file: {}",
                     key.as_str()

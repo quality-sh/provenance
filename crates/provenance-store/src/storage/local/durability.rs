@@ -15,11 +15,12 @@ pub fn sync_directory(path: &Utf8Path) -> anyhow::Result<()> {
 
 pub fn sync_tree(path: &Utf8Path) -> anyhow::Result<()> {
     for entry in std::fs::read_dir(path)
-        .map_err(|error| anyhow::anyhow!("list publication tree {path}: {error}"))?
+        .map_err(|error| crate::refusal::fault!("list publication tree {path}: {error}"))?
     {
         let entry = entry?;
-        let child = Utf8PathBuf::from_path_buf(entry.path())
-            .map_err(|path| anyhow::anyhow!("publication path is not UTF-8: {}", path.display()))?;
+        let child = Utf8PathBuf::from_path_buf(entry.path()).map_err(|path| {
+            crate::refusal::fault!("publication path is not UTF-8: {}", path.display())
+        })?;
         if entry.file_type()?.is_dir() {
             sync_tree(&child)?;
         } else {
@@ -30,9 +31,12 @@ pub fn sync_tree(path: &Utf8Path) -> anyhow::Result<()> {
                 .read(true)
                 .write(cfg!(windows))
                 .open(&child)
-                .map_err(|error| anyhow::anyhow!("sync publication file {child}: {error}"))?;
-            file.sync_all()
-                .map_err(|error| anyhow::anyhow!("sync publication file {child}: {error}"))?;
+                .map_err(|error| {
+                    crate::refusal::fault!("sync publication file {child}: {error}")
+                })?;
+            file.sync_all().map_err(|error| {
+                crate::refusal::fault!("sync publication file {child}: {error}")
+            })?;
         }
     }
     sync_directory(path)

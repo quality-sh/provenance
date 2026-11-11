@@ -70,7 +70,7 @@ where
     let mut bytes = 0;
     for id in ids.into_iter().take(limit) {
         let value = record(id.clone()).await?.ok_or_else(|| {
-            anyhow::anyhow!("resource page candidate disappeared inside snapshot")
+            crate::refusal::fault!("resource page candidate disappeared inside snapshot")
         })?;
         let size = serde_json::to_vec(&value)?.len();
         if size > crate::cache::read::page::RESOURCE_RECORD_BYTES {
