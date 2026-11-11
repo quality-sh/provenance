@@ -23,7 +23,7 @@ impl StateStore {
             }
             let rule_ids = held.rule_ids_for_requirement(&input.scope_id, &input.id)?;
             held.list_requirement_reviews(&input.scope_id)?;
-            let changed_at = super::super::requirement_reviews::now_millis()?;
+            let changed_at = super::super::requirement_reviews::now_millis(&*held.clock())?;
             let path = shards::requirements_path(&held.layout, &input.scope_id);
             let mut before = String::new();
             let mut was_archived = false;

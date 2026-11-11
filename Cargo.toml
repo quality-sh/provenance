@@ -15,6 +15,7 @@ members = [
     "crates/provenance-http-client",
     "crates/provenance-report",
     "crates/provenance-review",
+    "crates/provenance-simulation",
 ]
 resolver = "2"
 
@@ -88,6 +89,9 @@ ureq = { version = "2.12", default-features = false, features = ["tls"] }
 url = "2.5"
 uuid = { version = "1.10", features = ["v4"] }
 toml = "0.8"
+# Hegel is in beta: a minor version can break, so the pin is exact. The static
+# engine links the engine as a locked dependency instead of a nested build.
+hegeltest = { version = "=0.50.3", features = ["static-engine"] }
 trybuild = "1.0"
 predicates = "3.1"
 provenance-contract = { path = "crates/provenance-contract", version = "0.4.0" }

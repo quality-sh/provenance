@@ -1,10 +1,12 @@
+use crate::repository::IdSource;
 use provenance_core::StableId;
 use provenance_macros::rule;
 
-/// New Message identities use random UUIDs so independent stores can merge them.
+/// A new Message identity: `msg_` and a UUID from the ID source of the
+/// store. The default ID source gives random UUIDs.
 #[rule("rule_message_id_is_random")]
-pub fn new_message_id() -> StableId {
-    StableId::new(format!("msg_{}", uuid::Uuid::new_v4())).expect("a prefixed UUID is a stable ID")
+pub fn new_message_id(ids: &dyn IdSource) -> StableId {
+    StableId::new(format!("msg_{}", ids.new_uuid())).expect("a prefixed UUID is a stable ID")
 }
 
 /// Message times follow the write clock and increase within a scope.

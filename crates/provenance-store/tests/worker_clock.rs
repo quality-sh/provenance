@@ -2,9 +2,21 @@
 //! through JavaScript on wasm32. The standard library clock panics in a
 //! Worker, so only the local adapter, which never runs there, may name it.
 
+#[path = "support/memory.rs"]
+mod memory;
+
+use memory::{id, initial_state, scope};
+use provenance_core::{MessageRole, NodeType, RequirementStatus, ThreadParent};
 use provenance_macros::verifies;
+use provenance_store::repository::{
+    Clock, IdSource, Repository, RepositoryHistory, RepositoryIdentity,
+};
+use provenance_store::settings::Settings;
+use provenance_store::state_store::{CreateRequirementInput, PostMessageInput};
+use provenance_store::storage::memory::{MemorySectionLock, MemoryStateStorage};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 const STD_CLOCK: &str = "SystemTime";
 
@@ -70,4 +82,106 @@ fn the_scan_finds_the_std_clock_and_skips_the_local_adapter() {
     ));
     assert!(is_local_adapter(&root.join("storage/local.rs"), &root));
     assert!(!is_local_adapter(&root.join("storage/memory.rs"), &root));
+}
+
+/// A clock that always reads one time.
+#[derive(Debug)]
+struct FixedClock(time::OffsetDateTime);
+
+impl Clock for FixedClock {
+    fn now(&self) -> time::OffsetDateTime {
+        self.0
+    }
+}
+
+/// IDs that count up from one.
+#[derive(Debug, Default)]
+struct CountingIds(std::sync::atomic::AtomicU64);
+
+impl IdSource for CountingIds {
+    fn new_uuid(&self) -> uuid::Uuid {
+        let next = self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+        uuid::Uuid::from_u128(u128::from(next))
+    }
+}
+
+/// A history whose head is one fixed commit, so writes stamp records.
+#[derive(Debug)]
+struct OneCommit;
+
+impl RepositoryHistory for OneCommit {
+    fn head(&self) -> anyhow::Result<Option<String>> {
+        Ok(Some("a".repeat(40)))
+    }
+    fn complete_head(&self) -> anyhow::Result<Option<String>> {
+        self.head()
+    }
+    fn commit_exists(&self, _commit: &str) -> anyhow::Result<bool> {
+        Ok(true)
+    }
+    fn is_ancestor(&self, _commit: &str, _head: &str) -> anyhow::Result<bool> {
+        Ok(true)
+    }
+}
+
+// No Rule binding: this test is an implementation aid for the simulation,
+// and the owner declined a Rule for the clock and ID source (2026-11-10).
+#[test]
+fn record_stamps_and_message_ids_come_from_the_identity() {
+    let at = time::OffsetDateTime::from_unix_timestamp(981_173_106).unwrap();
+    let identity = RepositoryIdentity::new(
+        camino::Utf8PathBuf::from("/simulated"),
+        scope(),
+        Settings::default(),
+    )
+    .with_history(Arc::new(OneCommit))
+    .with_clock(Arc::new(FixedClock(at)))
+    .with_ids(Arc::new(CountingIds::default()));
+    let repository = Repository::with_storage(
+        identity,
+        Arc::new(MemoryStateStorage::new(initial_state().into_entries())),
+        Arc::new(MemorySectionLock::default()),
+    )
+    .unwrap();
+    let store = repository.store();
+
+    let requirement = store
+        .create_requirement(CreateRequirementInput {
+            scope_id: scope(),
+            id: id("req_owner"),
+            statement: "Share links have an owner".into(),
+            description: None,
+            status: RequirementStatus::Active,
+            refines: Vec::new(),
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
+    assert_eq!(requirement.created.unwrap().at, "2001-02-03T04:05:06Z");
+
+    let posted = store
+        .post_thread_message(PostMessageInput {
+            scope_id: scope(),
+            parent: ThreadParent {
+                node_type: NodeType::Requirement,
+                node_id: id("req_expiry"),
+            },
+            role: MessageRole::User,
+            body: "Who owns a link?".into(),
+        })
+        .unwrap();
+    // The counting source gives every new ID of the write, the Thread's too.
+    assert!(
+        posted
+            .message
+            .id
+            .as_str()
+            .starts_with("msg_00000000-0000-0000-0000-00000000000"),
+        "the message ID comes from the counting source: {}",
+        posted.message.id.as_str()
+    );
+    assert_eq!(posted.message.created_at, at.unix_timestamp() * 1000);
 }

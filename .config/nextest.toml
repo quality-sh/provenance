@@ -4,11 +4,39 @@ test-threads = 8
 # The single-source process tests run a full nested Cargo build. The
 # distribution shard of the Default-features CLI test runs them once per CI
 # run; the other shard runs the rest of the provenance-cli tests.
-default-filter = 'not binary(cli_skills_single_source)'
+# The simulation tests run only in the nightly simulation workflow, with the
+# simulation profile. CI compiles them, but no CI job runs them.
+default-filter = 'not binary(cli_skills_single_source) & not package(provenance-simulation) & not binary(/^simulation_cli/)'
 
 [profile.ci.junit]
 # target/nextest/ci/junit.xml; CI uploads it for TAG, the test aggregator.
 path = "junit.xml"
+
+# The nightly simulation. The ci profile leaves out every test of
+# provenance-simulation, simulation_cli and simulation_cli_planted, so no CI
+# job runs them. The
+# random cases are also ignored tests, so a plain cargo test does not run
+# them. The workflow passes --run-ignored all and sets HEGEL_SEED and
+# HEGEL_TEST_CASES. simulation_cli runs the CLI layer.
+[profile.simulation]
+default-filter = 'package(provenance-simulation) | binary(/^simulation_cli/)'
+fail-fast = false
+slow-timeout = { period = "300s", terminate-after = 2 }
+
+[[profile.simulation.overrides]]
+# The random test of a layer runs all of its cases in one test. The engine
+# and the contract jobs have 60 minutes and the CLI jobs 120, with the build
+# in that time, so nextest stops a test before the job timeout and the job
+# still uploads its log and failure files. A Hegel shrink stops at 300 s.
+filter = 'package(provenance-simulation) & test(/^random_/)'
+slow-timeout = { period = "300s", terminate-after = 8 }
+
+[[profile.simulation.overrides]]
+# 100 cases on Linux took 3,096 s with L6 after each write. The limit is 100
+# minutes; with a build of about 7 minutes, the job of 120 minutes still has
+# the time to report and upload after nextest stops the test.
+filter = 'binary(simulation_cli) & test(/^random_/)'
+slow-timeout = { period = "300s", terminate-after = 20 }
 
 [test-groups.cargo]
 max-threads = 1
