@@ -177,9 +177,12 @@ pub(super) fn read_jsonl_located_held<T: DeserializeOwned>(
 /// line. The shard is read again only here, on the refusal path. When that
 /// read fails or does not find the id, the refusal is `message` with no line.
 ///
-/// Each caller gives a record of a read of the shard at `path`. So a hand
-/// edit or a branch merge cannot make the fallback: the second read gets the
-/// same lines. Only a write between the two reads can.
+/// Each caller passes the id of a record that it read from the shard at
+/// `path`: the Discussion parent check (`discussion_state.rs`), the origin
+/// Thread check (`thread_origins.rs`), the Rule archive check
+/// (`family_readers.rs`), the canonical artifact index
+/// (`canonical_artifacts.rs`) and the shared declaration address
+/// (`typed_specs.rs`). No state that reaches the fallback is known.
 pub fn record_fault(
     store: &StateStore,
     path: &Utf8Path,
