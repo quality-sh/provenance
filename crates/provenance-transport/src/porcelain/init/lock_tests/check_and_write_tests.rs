@@ -169,15 +169,13 @@ fn a_graph_write_after_the_plan_makes_init_refuse_and_write_nothing() {
     reject_a_proposal_as_reviewer(&repo).unwrap();
     let before = targets(&repo);
 
-    let result = plan.apply();
-
-    let error = match result {
-        Err(error) => error,
-        Ok(_) => panic!(
+    let Err(error) = plan.apply() else {
+        panic!(
             "init wrote a planned state that is not valid; the repository check then gives: {}",
             check(&repo).map_or_else(|error| format!("{error:#}"), |()| "no error".to_owned())
-        ),
+        );
     };
+
     assert_eq!(format!("{error:#}"), REFUSAL);
     assert_eq!(targets(&repo), before, "the refused init changed a file");
     assert!(lock_is_free(&layout), "init kept the publication lock");
