@@ -6,3 +6,5 @@
 #[path = "cli_sdk_lifecycle/deletion.rs"]
 mod deletion;
 mod porcelain_authoring_support;
+#[path = "cli_sdk_lifecycle/plan_apply.rs"]
+mod plan_apply;
