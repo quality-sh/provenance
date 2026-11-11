@@ -343,6 +343,42 @@ mod tests {
         );
     }
 
+    /// Implementation aid with no Rule: the test builds the stored rows
+    /// directly.
+    #[test]
+    fn a_changed_record_without_an_id_is_located_at_the_kept_row_with_unknown_fields() {
+        #[derive(serde::Deserialize, serde::Serialize)]
+        struct Row {
+            n: u32,
+        }
+        let mut loaded = LoadedRecords::default();
+        for (index, line) in [r#"{"n":1}"#, r#"{"n":2,"extension":true}"#]
+            .into_iter()
+            .enumerate()
+        {
+            let (record, raw) = RawRecord::deserialize::<Row>(
+                camino::Utf8Path::new("records.jsonl"),
+                line,
+                index + 1,
+            )
+            .unwrap();
+            loaded.push(record, raw);
+        }
+        loaded.records_mut()[1].n = 3;
+        let error = loaded
+            .into_lines(camino::Utf8Path::new("state/scopes/default/records.jsonl"))
+            .unwrap_err();
+        let state = crate::state_store::readers::StateLineInvalid::find(&error).unwrap();
+        assert_eq!(
+            (state.path.as_str(), state.line, state.message.as_str()),
+            (
+                "state/scopes/default/records.jsonl",
+                2,
+                "unknown fields cannot survive a typed change to a record without an id"
+            )
+        );
+    }
+
     #[test]
     fn collects_members_in_written_order_with_raw_bytes() {
         let scan =
