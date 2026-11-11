@@ -334,10 +334,12 @@ mod tests {
         .unwrap_err();
         assert!(mutation_completed);
         let publication = error.downcast_ref::<PublicationStarted>().unwrap();
-        assert!(publication
-            .0
-            .downcast_ref::<crate::storage::local::durability::ReplaceFailed>()
-            .is_some());
+        let text = format!("{:#}", publication.0);
+        assert!(text.starts_with("failed to persist temporary file: "));
+        for entry in std::fs::read_dir(root).unwrap() {
+            let name = entry.unwrap().file_name();
+            assert!(!name.to_string_lossy().starts_with(".tmp"), "{name:?}");
+        }
         assert!(matches!(
             WriteError(error).safe(),
             WriteFailure::WriteFailed { .. }
