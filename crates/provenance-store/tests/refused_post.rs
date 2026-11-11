@@ -6,7 +6,7 @@
 mod memory;
 
 use memory::{id, initial_state, scope};
-use provenance_core::{MessageRole, NodeType, ThreadParent};
+use provenance_core::{Message, MessageRole, NodeType, Thread, ThreadParent};
 use provenance_macros::verifies;
 use provenance_store::repository::{Repository, RepositoryIdentity};
 use provenance_store::settings::Settings;
@@ -87,8 +87,8 @@ fn a_refused_post_lands_no_thread_and_no_message() {
         WriteFailure::WriteFailed { .. }
     ));
     assert!(!holds_threads(&storage));
-    assert!(store.list_threads(&scope()).unwrap().is_empty());
-    assert!(store.list_messages(&scope()).unwrap().is_empty());
+    assert_eq!(store.list_threads(&scope()).unwrap(), [] as [Thread; 0]);
+    assert_eq!(store.list_messages(&scope()).unwrap(), [] as [Message; 0]);
 
     persistence.refuse.store(false, SeqCst);
     let posted = store.post_thread_message(post()).unwrap();
