@@ -130,6 +130,31 @@ impl Field {
         self.required = true;
         self
     }
+
+    /// The closed set of values that the field accepts, in the order that a refusal
+    /// lists them. The list is empty when the field takes any value of its type.
+    pub fn closed_values(&self) -> Vec<&'static str> {
+        if !self.values.is_empty() {
+            return self.values.to_vec();
+        }
+        match self.value {
+            FieldValue::RecordKind => provenance_core::NodeType::ALL
+                .into_iter()
+                .map(provenance_core::NodeType::as_str)
+                .collect(),
+            FieldValue::ApiMethod => crate::api::ApiMethod::ALL
+                .into_iter()
+                .map(crate::api::ApiMethod::as_str)
+                .collect(),
+            FieldValue::Switch
+            | FieldValue::Text
+            | FieldValue::Count
+            | FieldValue::CatalogLimit
+            | FieldValue::Port
+            | FieldValue::Pairs(_)
+            | FieldValue::Object => Vec::new(),
+        }
+    }
 }
 
 /// A relation between two fields of one command, by field name.

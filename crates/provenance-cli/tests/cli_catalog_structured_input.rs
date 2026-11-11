@@ -1,5 +1,6 @@
 use bounded_process::Bounded;
 use predicates::str::contains;
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::process::{Command, Output};
 
@@ -428,9 +429,9 @@ fn existing_header_preconditions_remain_required() {
         .stderr(contains("If-Match"));
 }
 
-/// Implementation-aid test: no active Rule states this refusal yet. The test
-/// pins the full list in schema order, and creates a Source with each listed
-/// value, so the list must hold only values that the create accepts.
+/// The test pins the full list in schema order, and creates a Source with each
+/// listed value, so the list must hold only values that the create accepts.
+#[verifies("rule_cli_closed_value_refusal_lists_values", examples)]
 #[test]
 fn invalid_source_type_lists_the_accepted_values() {
     let (_directory, repo) = init();
@@ -466,9 +467,9 @@ fn invalid_source_type_lists_the_accepted_values() {
     }
 }
 
-/// Implementation-aid test: no active Rule states this refusal yet. The
-/// `--status` list of a Requirement is the closed set of the schema, in its
+/// The `--status` list of a Requirement is the closed set of the schema, in its
 /// order.
+#[verifies("rule_cli_closed_value_refusal_lists_values", examples)]
 #[test]
 fn invalid_requirement_status_lists_the_schema_values() {
     let (_directory, repo) = init();
