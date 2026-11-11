@@ -123,8 +123,10 @@ async fn answers(repo: &Repository) -> Vec<Value> {
         (
             "POST",
             "/proposals/proposal_b/assertions",
-            Some(json!({"data":{"id":"assertion_b", "synthesis_packet_id":"synthesis_evidence",
-                "supporting_claim_ids":[]}})),
+            Some(
+                json!({"data":{"id":"assertion_b", "synthesis_packet_id":"synthesis_evidence",
+                "supporting_claim_ids":[]}}),
+            ),
         ),
         (
             "POST",
@@ -138,8 +140,10 @@ async fn answers(repo: &Repository) -> Vec<Value> {
     let mut answers = Vec::new();
     for (method, path, body) in requests.into_iter().chain(reads) {
         let (status, answer) = call(&writer, method, path, body).await;
-        answers.push(json!({"request":format!("{method} {path}"), "status":status,
-            "error":answer["error"], "freshness_error":answer["meta"]["freshness_error"]}));
+        answers.push(
+            json!({"request":format!("{method} {path}"), "status":status,
+            "error":answer["error"], "freshness_error":answer["meta"]["freshness_error"]}),
+        );
     }
     answers
 }

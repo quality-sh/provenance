@@ -130,7 +130,10 @@ fn ensure_batch_evidence_unchanged(
 }
 
 fn ids<T: ImmutableRecord>(records: &[T]) -> BTreeSet<String> {
-    records.iter().map(|record| record.id().to_owned()).collect()
+    records
+        .iter()
+        .map(|record| record.id().to_owned())
+        .collect()
 }
 
 fn insert_all<'a, T>(
