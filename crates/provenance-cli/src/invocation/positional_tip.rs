@@ -69,7 +69,9 @@ mod tests {
                 command = command.find_subcommand(word).unwrap().clone();
             }
             assert!(
-                command.get_arguments().any(|arg| arg.get_long() == Some(*flag)),
+                command
+                    .get_arguments()
+                    .any(|arg| arg.get_long() == Some(*flag)),
                 "{words:?} --{flag}"
             );
         }
