@@ -10,14 +10,17 @@
 //! - `bail!`, `anyhow!` and `format_err!`.
 //! - anyhow `ensure!`: an `ensure!` whose arguments do not start with a kind
 //!   name, a comma and a condition, as the typed `write_error::ensure!` does.
-//! - `Error::msg`, which includes `anyhow::Error::msg`, and
-//!   `anyhow::Error::new`.
+//! - `Error::msg`, which includes `anyhow::Error::msg`, `anyhow::Error::new`,
+//!   and a call of `anyhow::Error::from`.
+//! - `anyhow::ensure!`, with any arguments.
 //! - A `use anyhow::...` that imports `bail`, `ensure`, `anyhow` or
 //!   `format_err`.
 //!
 //! Test code is not read: test files and directories, `test_support.rs`, and
 //! each item whose `cfg` needs `test` (`cfg(test)` or `cfg(all(test, ...))`).
 //! An item under `cfg(any(test, ...))` is read, because a fixture build has it.
+//! A `cfg` attribute on a match arm, a field, a variant or a statement hides
+//! nothing: only an attribute before an item keyword hides the item.
 //!
 //! The check cannot find these errors with no declared kind:
 //!
@@ -25,7 +28,8 @@
 //!   tell an `Option` from a `Result`, and on a `Result` the call keeps the
 //!   native cause, which is correct.
 //! - `?` on a native error, such as an I/O, serde or git error. By design, it
-//!   gives a fault with its cause.
+//!   gives a fault with its cause. `map_err(anyhow::Error::from)` and `into()`
+//!   are the same conversion.
 //! - Text in another error type: `std::io::Error::other("...")`,
 //!   `io::Error::new(kind, "...")`, or a `thiserror` type that no probe in
 //!   `WriteError::safe` or `ReadError::safe` knows.
@@ -35,6 +39,13 @@
 //!   a kind.
 //! - Errors of other crates, such as the refusals of `provenance-core` and of
 //!   the transport porcelain. The check reads only `provenance-store/src`.
+//! - A bare `ensure!` whose first argument is a constant with an upper-case
+//!   name, such as `ensure!(READY, MESSAGE)`. The check takes the first word
+//!   as a kind name when it starts with an upper-case letter.
+//! - A production file with a test name: the check skips each file or
+//!   directory named `tests`, `tests.rs`, `test_support.rs`, `*_tests` or
+//!   `*_tests.rs`, in any directory, and does not read the module.
+//! - A file that a `#[path]` attribute brings in from outside `src`.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -202,6 +213,20 @@ const fn group_end(tokens: &[(Token, usize)], mut at: usize) -> usize {
     at
 }
 
+/// The words that can start an item after its attributes.
+const ITEM_WORDS: [&str; 15] = [
+    "fn", "mod", "impl", "use", "struct", "enum", "const", "static", "type", "pub", "trait",
+    "macro_rules", "extern", "unsafe", "async",
+];
+
+/// The index of the first token after the attributes that start at `at`.
+fn after_attributes(tokens: &[(Token, usize)], mut at: usize) -> usize {
+    while mark(tokens.get(at), '#') && mark(tokens.get(at + 1), '[') {
+        at = group_end(tokens, at + 1);
+    }
+    at
+}
+
 /// The tokens without the items whose `cfg` attribute needs `test`.
 fn without_test_items(tokens: &[(Token, usize)]) -> Vec<(Token, usize)> {
     let mut kept = Vec::new();
@@ -220,8 +245,11 @@ fn without_test_items(tokens: &[(Token, usize)]) -> Vec<(Token, usize)> {
                     && words.contains(&"test")
                     && !words.contains(&"any")
                     && !words.contains(&"not"));
-            if needs_test {
-                at = item_end(tokens, close);
+            let item = after_attributes(tokens, close);
+            if needs_test
+                && word(tokens.get(item)).is_some_and(|name| ITEM_WORDS.contains(&name))
+            {
+                at = item_end(tokens, item);
                 continue;
             }
         }
@@ -247,13 +275,16 @@ fn raw_refusals(source: &str) -> Vec<usize> {
             let kind = word(tokens.get(at + 3))
                 .is_some_and(|name| name.starts_with(|c: char| c.is_ascii_uppercase()));
             let condition = !mark(tokens.get(at + 5), ')') && !mark(tokens.get(at + 5), ',');
-            if !(kind && mark(tokens.get(at + 4), ',') && condition) {
+            let anyhow_path = at >= 3 && word(tokens.get(at - 3)) == Some("anyhow");
+            if anyhow_path || !(kind && mark(tokens.get(at + 4), ',') && condition) {
                 found.push(line);
             }
         } else if (current == Some("Error") && path_word(&tokens, at + 1) == Some("msg"))
             || (current == Some("anyhow")
                 && path_word(&tokens, at + 1) == Some("Error")
-                && path_word(&tokens, at + 4) == Some("new"))
+                && (path_word(&tokens, at + 4) == Some("new")
+                    || (path_word(&tokens, at + 4) == Some("from")
+                        && mark(tokens.get(at + 7), '('))))
         {
             found.push(line);
         } else if current == Some("use") && word(tokens.get(at + 1)) == Some("anyhow") {
@@ -387,4 +418,28 @@ fn a<'a>(text: &'a str) -> &'a str {
 }
 "##;
     assert_eq!(raw_refusals(source), vec![7]);
+}
+
+#[test]
+fn a_test_cfg_hides_only_an_item() {
+    let source = r#"
+fn a(x: u8) -> anyhow::Result<u8> {
+    let value = match x {
+        #[cfg(test)]
+        0 => 1,
+        _ => { bail!("after a test arm") }
+    };
+    #[cfg(test)]
+    let _ = 1;
+    let _ = anyhow::Error::from(std::io::Error::other("x"));
+    let _ = std::io::Error::from(std::io::ErrorKind::NotFound);
+    let _ = std::fs::read("x").map_err(anyhow::Error::from);
+    anyhow::ensure!(READY, MESSAGE);
+    Ok(value)
+}
+#[cfg(test)]
+#[allow(dead_code)]
+fn b() { bail!("test code") }
+"#;
+    assert_eq!(raw_refusals(source), vec![6, 10, 13]);
 }
