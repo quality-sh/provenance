@@ -108,19 +108,25 @@ pub struct InitSection<'a> {
     base: Arc<StateView>,
 }
 
-/// Runs `body` in one hold of the publication lock of `layout`.
+/// Runs `body` in one hold of the publication lock of `layout`, with the
+/// section of that hold.
 ///
 /// The hold finishes an interrupted publication and reads the canonical
-/// state before `body` starts. The repository must have a `.provenance`
-/// directory.
+/// state before `body` starts. A directory with no `.provenance` has no graph
+/// and no readers: `body` then gets `None`, and no lock is taken and no path
+/// is created.
 pub fn with_init_section<R>(
     layout: &ProvenanceLayout,
-    body: impl FnOnce(&InitSection<'_>) -> anyhow::Result<R>,
+    body: impl FnOnce(Option<&InitSection<'_>>) -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
-    crate::publication::with_repository_publication(layout, |store| {
-        let base = Arc::new(store.storage().read_view()?);
-        body(&InitSection { store, base })
-    })
+    match std::fs::symlink_metadata(layout.provenance_dir()) {
+        Ok(_) => crate::publication::with_repository_publication(layout, |store| {
+            let base = Arc::new(store.storage().read_view()?);
+            body(Some(&InitSection { store, base }))
+        }),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => body(None),
+        Err(error) => Err(error.into()),
+    }
 }
 
 impl InitSection<'_> {

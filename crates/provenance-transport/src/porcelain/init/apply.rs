@@ -19,26 +19,22 @@ impl InitPlan {
     #[rule("rule_read_waits_for_repeated_init")]
     pub(in crate::porcelain) fn apply(self) -> anyhow::Result<InitEnding> {
         let layout = ProvenanceLayout::new(self.path.clone());
-        // A new repository has no `.provenance`, no graph and no readers.
-        // `prepare_init` validated its plan with no lock, so that a refused
-        // plan creates no path.
-        match std::fs::symlink_metadata(layout.provenance_dir()) {
-            Ok(_) => provenance_store::repository_init::with_init_section(&layout, |section| {
+        provenance_store::repository_init::with_init_section(&layout, |section| {
+            if let Some(section) = section {
                 self.check_in(section, &layout)?;
-                self.write(|_, bytes| section.publish_manifest(bytes.to_vec()))
-            }),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                let manifest_path = layout.manifest_path();
-                self.planned
-                    .manifest_before
-                    .recheck(manifest_path.as_std_path())?;
-                let before = self.planned.manifest_before.clone();
-                self.write(|rollback, bytes| {
-                    rollback.replace(manifest_path.as_std_path(), &before, bytes)
-                })
+                return self.write(|_, bytes| section.publish_manifest(bytes.to_vec()));
             }
-            Err(error) => Err(error.into()),
-        }
+            // A new repository: `prepare_init` validated its plan with no
+            // lock, so that a refused plan creates no path.
+            let manifest_path = layout.manifest_path();
+            self.planned
+                .manifest_before
+                .recheck(manifest_path.as_std_path())?;
+            let before = self.planned.manifest_before.clone();
+            self.write(|rollback, bytes| {
+                rollback.replace(manifest_path.as_std_path(), &before, bytes)
+            })
+        })
     }
 
     /// Refuses a changed manifest or a planned manifest that the graph refuses.
