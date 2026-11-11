@@ -1,6 +1,7 @@
 use super::ideation_batches::{
     ensure_asserted_contribution_unchanged, ensure_asserted_synthesis_unchanged, overlay_records,
 };
+use super::immutable_ids::ImmutableRecord;
 use super::message_ids::ShardLine;
 use super::shared_parses::read_jsonl_shared;
 use super::{IdeationLandingBatch, StateStore};
@@ -39,40 +40,12 @@ impl StateStore {
             read_jsonl_shared(self, &shards::contributions_path(&self.layout, scope))?;
         let mut synthesis_packets: Vec<SynthesisPacket> =
             read_jsonl_shared(self, &shards::synthesis_packets_path(&self.layout, scope))?;
-        let direct_proposals: Vec<ProposalCard> =
-            read_jsonl_shared(self, &shards::proposal_cards_path(&self.layout, scope))?;
-        let direct_assertions: Vec<AssertionRecord> =
-            read_jsonl_shared(self, &shards::assertion_records_path(&self.layout, scope))?;
-        let mut assertions_in_order = direct_assertions.clone();
-        let direct_dispositions: Vec<DispositionRecord> =
-            read_jsonl_shared(self, &shards::dispositions_path(&self.layout, scope))?;
-        let mut proposals = BTreeSet::new();
-        let mut assertions = BTreeSet::new();
-        let mut dispositions = BTreeSet::new();
-        let path = shards::proposal_cards_path(&self.layout, scope);
-        insert_all(
-            "proposal",
-            &direct_proposals,
-            |r| r.id.as_str(),
-            &mut proposals,
-            |id, message| super::readers::record_fault(self, &path, id, message),
-        )?;
-        let path = shards::assertion_records_path(&self.layout, scope);
-        insert_all(
-            "assertion",
-            &direct_assertions,
-            |r| r.id.as_str(),
-            &mut assertions,
-            |id, message| super::readers::record_fault(self, &path, id, message),
-        )?;
-        let path = shards::dispositions_path(&self.layout, scope);
-        insert_all(
-            "disposition",
-            &direct_dispositions,
-            |r| r.id.as_str(),
-            &mut dispositions,
-            |id, message| super::readers::record_fault(self, &path, id, message),
-        )?;
+        // Each read refuses an id that its file holds two times.
+        let direct_assertions: Vec<AssertionRecord> = self.read_immutable(scope)?;
+        let mut proposals = ids(&self.read_immutable::<ProposalCard>(scope)?);
+        let mut assertions = ids(&direct_assertions);
+        let mut dispositions = ids(&self.read_immutable::<DispositionRecord>(scope)?);
+        let mut assertions_in_order = direct_assertions;
         let landings = shards::ideation_landings_path(&self.layout, scope);
         for (index, batch) in self.list_ideation_landings(scope)?.into_iter().enumerate() {
             let at = ShardLine::new(&landings, index + 1);
@@ -154,6 +127,10 @@ fn ensure_batch_evidence_unchanged(
         }
     }
     Ok(())
+}
+
+fn ids<T: ImmutableRecord>(records: &[T]) -> BTreeSet<String> {
+    records.iter().map(|record| record.id().to_owned()).collect()
 }
 
 fn insert_all<'a, T>(

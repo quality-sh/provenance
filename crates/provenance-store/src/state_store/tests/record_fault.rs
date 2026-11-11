@@ -3,10 +3,10 @@
 //! refusal is the first fault with no line, and the second error is not
 //! given.
 //!
-//! The first read of a shard refuses a bad line first, so the tests make
-//! these two shard states with a direct call. No test shows that a public
-//! surface reaches the fallback, and no test shows that none can. No Rule
-//! states this fallback.
+//! Each caller of `record_fault` reads its record from the same shard, so a
+//! hand edit or a branch merge cannot make these two shard states; only a
+//! write between the two reads can. The tests make them with a direct call.
+//! No Rule states this fallback.
 
 use crate::state_store::readers::{record_fault, StateLineInvalid};
 

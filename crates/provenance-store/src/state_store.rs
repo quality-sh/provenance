@@ -7,6 +7,7 @@ mod ideation_batches;
 mod ideation_edits;
 mod ideation_targets;
 mod ideation_validation;
+mod immutable_ids;
 mod ideation_writers;
 mod implementation_bindings;
 mod inputs;
@@ -371,10 +372,7 @@ impl StateStore {
     }
     pub fn list_proposal_definitions(&self, scope: &ScopeId) -> anyhow::Result<Vec<ProposalCard>> {
         self.with_repository_read(|held| {
-            let mut records = shared_parses::read_jsonl_shared(
-                held,
-                &shards::proposal_cards_path(&held.layout, scope),
-            )?;
+            let mut records = held.read_immutable(scope)?;
             for batch in held.list_ideation_landings(scope)? {
                 overlay_records(&mut records, batch.proposals, |record| record.id.as_str());
             }
