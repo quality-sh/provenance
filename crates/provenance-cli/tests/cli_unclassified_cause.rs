@@ -95,3 +95,20 @@ fn json_mode_gives_the_cause_of_a_write_failure_of_no_known_kind() {
     let refusal = refusal(&output);
     assert_eq!(refusal["meta"], serde_json::json!({}), "{refusal}");
 }
+
+/// A requirement shard that is not UTF-8 is a fault of no known kind. Its
+/// cause names the shard by its path relative to the repository.
+#[test]
+#[verifies("rule_unclassified_refusal_gives_cause", examples)]
+fn the_cause_of_a_write_failure_gives_the_shard_path_relative_to_the_repository() {
+    let (directory, repo) = support::review_paths::init();
+    create_requirement(&repo, "req_a");
+    std::fs::write(directory.path().join(REQUIREMENTS), b"\xff\n").unwrap();
+    let refusal = refusal(&create(&repo, true));
+    assert_eq!(
+        refusal["error"],
+        serde_json::json!({"kind":"write_failed",
+            "cause":format!("read {REQUIREMENTS}: the file is not UTF-8: invalid data")}),
+        "{refusal}"
+    );
+}
