@@ -150,16 +150,18 @@ impl StateStore {
             supporting_claim_ids: input.supporting_claim_ids,
         };
         self.ensure_proposal_not_disposed(&input.scope_id, &assertion.proposal_id)?;
+        let mut assertions = self.list_assertion_records(&input.scope_id)?;
+        // The list holds the assertions of the landing batches too, which
+        // the aggregate check refuses with no declared kind.
+        crate::write_error::ensure!(
+            AlreadyExists,
+            !assertions.iter().any(|record| {
+                record.id == assertion.id || record.proposal_id == assertion.proposal_id
+            }),
+            "assertion identity or proposal assertion already exists"
+        );
         let path = shards::assertion_records_path(&self.layout, &input.scope_id);
         self.mutate_jsonl_records(&path, |records: &mut Vec<AssertionRecord>| {
-            crate::write_error::ensure!(
-                AlreadyExists,
-                !records.iter().any(|record| {
-                    record.id == assertion.id || record.proposal_id == assertion.proposal_id
-                }),
-                "assertion identity or proposal assertion already exists"
-            );
-            let mut assertions = self.list_assertion_records(&input.scope_id)?;
             assertions.push(assertion.clone());
             provenance_core::validate_ideation_aggregate(provenance_core::IdeationAggregate {
                 legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
@@ -279,6 +281,21 @@ impl StateStore {
                 );
             }
         }
+        // The store names an existing id, and a proposal that has a
+        // disposition, before the gate, which refuses both with no declared
+        // kind.
+        crate::write_error::ensure!(
+            AlreadyExists,
+            !dispositions.iter().any(|record| record.id == disposition.id),
+            "disposition already exists"
+        );
+        crate::write_error::ensure!(
+            InvalidUpdate,
+            !dispositions
+                .iter()
+                .any(|record| record.proposal_id == disposition.proposal_id),
+            "proposal already has an authoritative disposition"
+        );
         validate_disposition_write_gate(
             &disposition,
             &proposals,
@@ -300,11 +317,6 @@ impl StateStore {
         self.mutate_jsonl_records(
             &dispositions_path,
             |records: &mut Vec<DispositionRecord>| {
-                crate::write_error::ensure!(
-                    AlreadyExists,
-                    !records.iter().any(|record| record.id == disposition.id),
-                    "disposition already exists"
-                );
                 super::read_budget::ensure_within_read_budget(&disposition)?;
                 records.push(disposition.clone());
                 records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));

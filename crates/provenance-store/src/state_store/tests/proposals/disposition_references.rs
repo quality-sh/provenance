@@ -317,7 +317,7 @@ fn duplicate_disposition_cannot_mutate_frozen_external_action() {
         .unwrap_err()
         .to_string();
 
-    assert!(error.contains("authoritative disposition"), "{error}");
+    assert!(error.contains("disposition already exists"), "{error}");
     assert_eq!(
         store.list_dispositions(&scope).unwrap()[0]
             .external_action

@@ -122,7 +122,7 @@ export async function checkIdeation({ HttpClient, OperationError }, fixture) {
     },
   }), error => {
     assert.ok(error instanceof OperationError);
-    assert.equal(error.failure.error.kind, 'write_failed');
+    assert.equal(error.failure.error.kind, 'invalid_update');
     return true;
   });
 }
