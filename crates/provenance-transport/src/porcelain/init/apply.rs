@@ -45,11 +45,7 @@ impl InitPlan {
     }
 
     /// Refuses a changed manifest or a planned manifest that the graph refuses.
-    fn check_in(
-        &self,
-        section: &InitSection<'_>,
-        layout: &ProvenanceLayout,
-    ) -> anyhow::Result<()> {
+    fn check_in(&self, section: &InitSection<'_>, layout: &ProvenanceLayout) -> anyhow::Result<()> {
         anyhow::ensure!(
             section.manifest_bytes()? == self.planned.manifest_before.bytes(),
             "{} changed after initialization was planned; retry",

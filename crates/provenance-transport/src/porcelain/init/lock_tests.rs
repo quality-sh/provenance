@@ -136,7 +136,10 @@ fn second_init_holds_the_publication_lock_while_it_moves_a_file_away() {
         manifest_while_stopped.contains("\"reviewer\""),
         "{manifest_while_stopped}"
     );
-    assert!(!lock_free, "init moved a file away without the publication lock");
+    assert!(
+        !lock_free,
+        "init moved a file away without the publication lock"
+    );
     assert!(lock_is_free(&layout), "init kept the publication lock");
     let after = manifest_text(&layout);
     assert!(after.contains("new-reviewer"), "{after}");

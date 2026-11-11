@@ -146,6 +146,7 @@ impl InitSection<'_> {
         let writes = WriteSet::new(Atomicity::PerKey)
             .put(StateKey::new(MANIFEST_KEY)?, bytes)
             .on_base(Arc::clone(&self.base));
-        self.store.publish_through(writes, |writes| self.store.storage().publish(writes))
+        self.store
+            .publish_through(writes, |writes| self.store.storage().publish(writes))
     }
 }
