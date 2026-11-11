@@ -2,7 +2,7 @@
 
 use super::grammar::SearchArgs;
 use clap::error::{ContextKind, ContextValue, ErrorKind};
-use clap::Command;
+use clap::{Arg, Command};
 use provenance_porcelain::registry;
 
 /// Parses the search command. When clap refuses a word that is not a flag, or a word
@@ -95,13 +95,21 @@ fn corrected(command: &Command, arguments: &[String]) -> Option<String> {
         let (name, inline) = long
             .split_once('=')
             .map_or((long, None), |(name, value)| (name, Some(value)));
-        let value = separate_value(command, name, inline.is_some(), &mut rest)?;
+        let declaration = command
+            .get_arguments()
+            .find(|arg| arg.get_long() == Some(name))?;
+        let value = match inline {
+            None if declaration.get_action().takes_values() => {
+                Some(value_after(declaration, &mut rest)?.as_str())
+            }
+            _ => None,
+        };
         if name == "text" {
-            text.extend(inline.or(value.map(String::as_str)));
+            text.extend(inline.or(value));
             continue;
         }
         flags.push(shell_word(argument));
-        flags.extend(value.map(|value| shell_word(value)));
+        flags.extend(value.map(shell_word));
     }
     let text = text.join(" ");
     if text.trim().is_empty() {
@@ -115,24 +123,13 @@ fn corrected(command: &Command, arguments: &[String]) -> Option<String> {
     Some(line)
 }
 
-/// The word after a long flag that clap reads as the value of the flag. `None` is a flag
-/// that search does not declare, or a missing value, or a word that clap does not read as
-/// the value.
-fn separate_value<'a>(
-    command: &Command,
-    name: &str,
-    inline: bool,
+/// The word after a flag, when clap reads it as the value of the flag.
+fn value_after<'a>(
+    declaration: &Arg,
     rest: &mut impl Iterator<Item = &'a String>,
-) -> Option<Option<&'a String>> {
-    let declaration = command
-        .get_arguments()
-        .find(|arg| arg.get_long() == Some(name))?;
-    if inline || !declaration.get_action().takes_values() {
-        return Some(None);
-    }
+) -> Option<&'a String> {
     rest.next()
         .filter(|value| !value.starts_with('-') || declaration.is_allow_hyphen_values_set())
-        .map(Some)
 }
 
 /// The value as one word of a POSIX shell, in single quotes only when the shell reads a
