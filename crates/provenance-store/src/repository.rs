@@ -16,7 +16,7 @@ use crate::state_store::StateStore;
 #[cfg(feature = "host")]
 use crate::storage::local::{LocalSectionLock, LocalStateStorage};
 use crate::storage::{SectionLock, StateKey, StateStorage};
-use crate::write_error::{SourceFailure, WriteError, WriteFailure};
+use crate::write_error::WriteError;
 use camino::Utf8Path;
 #[cfg(feature = "host")]
 use camino::Utf8PathBuf;
@@ -104,7 +104,7 @@ pub struct ScopeMismatch {
 
 impl From<ScopeMismatch> for WriteError {
     fn from(mismatch: ScopeMismatch) -> Self {
-        Self(SourceFailure::wrap(WriteFailure::ScopeMismatch, mismatch))
+        Self(crate::refusal::refuse!(ScopeMismatch, "{mismatch}"))
     }
 }
 

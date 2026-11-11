@@ -1,4 +1,4 @@
-use crate::write_error::{publication_started, SourceFailure, WriteFailure};
+use crate::write_error::publication_started;
 use provenance_core::{
     validate_optional_commit_pin, ScopeId, StableId, VerificationMethod, VerificationRun,
     VerificationRunStatus,
@@ -35,7 +35,7 @@ impl StateStore {
             )
         })?;
         let commit = validate_optional_commit_pin(input.commit)
-            .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidVerificationTarget, error))?;
+            .map_err(|error| crate::refusal::refuse!(InvalidVerificationTarget, "{error:#}"))?;
         self.with_repository_publication(|held| {
             let rule_id = verification_rule(held, &scope_id, input.rule, input.declaration)?;
             let binding =
@@ -101,9 +101,9 @@ impl StateStore {
     ) -> anyhow::Result<VerificationRun> {
         self.ensure_writable()?;
         let run_id = StableId::new(input.run)
-            .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidCompletion, error))?;
+            .map_err(|error| crate::refusal::refuse!(InvalidCompletion, "{error:#}"))?;
         let status = VerificationRunStatus::parse_completion(&input.status)
-            .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidCompletion, error))?;
+            .map_err(|error| crate::refusal::refuse!(InvalidCompletion, "{error:#}"))?;
         crate::write_error::ensure!(
             InvalidCompletion,
             status == VerificationRunStatus::Failed || input.error.is_none(),
@@ -239,7 +239,7 @@ fn verification_rule(
     let rule_id = match (rule, declaration) {
         (Some(rule), None) => {
             let rule_id = StableId::new(rule).map_err(|error| {
-                SourceFailure::wrap(WriteFailure::InvalidVerificationTarget, error)
+                crate::refusal::refuse!(InvalidVerificationTarget, "{error:#}")
             })?;
             let rule = rules
                 .iter()

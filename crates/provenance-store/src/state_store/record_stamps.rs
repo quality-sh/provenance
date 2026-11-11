@@ -101,7 +101,7 @@ impl<T> GraphRecord for T where
 }
 
 fn invalid_update(error: anyhow::Error) -> anyhow::Error {
-    crate::write_error::WriteFailure::invalid_update(error)
+    crate::refusal::refuse!(InvalidUpdate, "{error}")
 }
 
 pub trait StoredReviewRecord {}

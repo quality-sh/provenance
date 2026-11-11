@@ -1,24 +1,27 @@
-//! The four forms of a store error. Each form has one way to make it.
+//! The four forms of a store error, and the makers of each form.
 //!
-//! - `refuse!(Kind, "...")`, or `ensure!(Kind, condition, "...")` from
-//!   `write_error`: a refusal that the input or the state of a caller can
-//!   cause. It has a declared `WriteFailure` kind. A read refuses with a
-//!   `ReadFailure` value.
+//! - `refuse!(Kind, "...")`, `refuse!((failure), "...")` for a failure with
+//!   fields, or `ensure!(Kind, condition, "...")` from `write_error`: a
+//!   refusal that the input or the state of a caller can cause. It has a
+//!   declared `WriteFailure` kind. A read refuses with a `ReadFailure` value.
 //! - [`common`]: a refusal of a common kind of the operation protocol, such
 //!   as `unknown_scope` or `invalid_input` on a request field. It keeps its
 //!   kind and status on a read and on a write.
 //! - `fault!("...")`, or `ensure!(Fault, condition, "...")`: a broken code
 //!   invariant. It reads as `write_failed` or `read_failed` (500) and keeps
 //!   its text as the cause. [`caused`] is the same fault for a native error,
-//!   such as an I/O error, with a context above it. `?` on a native error
-//!   also gives this fault, with no context.
-//! - [`state_fault`] at a known line, or `readers::record_fault` at the line
-//!   of a record id: stored records that the store cannot read or that do not
-//!   agree. It reads as `invalid_state_file` with the file and the line of
-//!   the record at fault.
+//!   such as an I/O error, with a context above it. `?` or `.context(...)` on
+//!   a native `Result` also gives this fault.
+//! - [`state_fault`] at a known line, `readers::located` for a serde error at
+//!   a known line, or `readers::record_fault` at the line of a record id:
+//!   stored records that the store cannot read or that do not agree. It reads
+//!   as `invalid_state_file` with the file and the line of the record at
+//!   fault.
 //!
-//! The `refusals_declare_a_kind` test refuses a raw anyhow refusal outside this
-//! file and `write_error.rs`.
+//! Outside `write_error.rs`, only `typed_specs/decision.rs` builds a
+//! `SourceFailure` directly, with `SourceFailure::wrap`, to keep the typed
+//! error of a typed-spec check below its kind. The `refusals_declare_a_kind`
+//! test refuses a raw anyhow refusal outside this file and `write_error.rs`.
 
 use crate::state_store::message_ids::ShardLine;
 use crate::state_store::readers::StateLineInvalid;

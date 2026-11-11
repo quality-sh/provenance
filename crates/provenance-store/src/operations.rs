@@ -68,12 +68,8 @@ pub fn begin_verification(
     repository: &Repository,
     mut input: BeginVerificationInput,
 ) -> anyhow::Result<provenance_core::VerificationRun> {
-    let method = provenance_scanner::Verification::from_str(&input.method).map_err(|error| {
-        write_error::SourceFailure::wrap(
-            write_error::WriteFailure::InvalidVerificationTarget,
-            error,
-        )
-    })?;
+    let method = provenance_scanner::Verification::from_str(&input.method)
+        .map_err(|error| crate::refusal::refuse!(InvalidVerificationTarget, "{error:#}"))?;
     normalize_verification_context(repository.working_tree(), &mut input)?;
     repository
         .store()

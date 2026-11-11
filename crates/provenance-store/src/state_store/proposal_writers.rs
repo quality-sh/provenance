@@ -224,7 +224,8 @@ impl StateStore {
             dispositions: &self.list_dispositions(&candidate.scope_id)?,
         })?;
         let path = shards::proposal_cards_path(&self.layout, &candidate.scope_id);
-        // The lifecycle lock holds the shard, so the check above covers it.
+        // The publication section orders each write of this shard, so the
+        // check above covers it.
         self.mutate_jsonl_records(&path, |records: &mut Vec<ProposalCard>| {
             super::read_budget::ensure_within_read_budget(&candidate)?;
             records.push(candidate.clone());

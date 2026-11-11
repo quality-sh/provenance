@@ -61,12 +61,7 @@ impl StateStore {
                     input.clear_fields.contains(&SourceClearField::CommitPin),
                 )?;
                 record.commit_pin = validate_optional_commit_pin(record.commit_pin.take())
-                    .map_err(|error| {
-                        crate::write_error::SourceFailure::wrap(
-                            crate::write_error::WriteFailure::InvalidCommitPin,
-                            error,
-                        )
-                    })?;
+                    .map_err(|error| crate::refusal::refuse!(InvalidCommitPin, "{error:#}"))?;
                 Ok(record.clone())
             },
         )?;
