@@ -1,7 +1,9 @@
-//! Repository initialization before a repository can be opened: manifest
-//! planning, recovery of an interrupted publication, validation of the
-//! planned manifest against the state already on disk, and the one hold of
-//! the publication lock in which init checks and writes.
+//! Repository initialization before a repository can be opened.
+//!
+//! This module plans the manifest, recovers an interrupted publication,
+//! validates the planned manifest against the state already on disk, and
+//! gives init the one hold of the publication lock in which it checks and
+//! writes.
 
 use crate::layout::ProvenanceLayout;
 use crate::state_store::StateStore;
@@ -96,17 +98,21 @@ pub fn validate_planned_manifest<R>(
 /// The key of the manifest in a view of the canonical state.
 const MANIFEST_KEY: &str = "manifest.json";
 
-/// One hold of the publication lock of an initialized repository. Init reads
-/// the manifest, validates its plan against the graph and writes in it, so
-/// no other write of the graph lands between the check and the write.
+/// One hold of the publication lock of an initialized repository.
+///
+/// Init reads the manifest, validates its plan against the graph and writes
+/// in it, so no other write of the graph lands between the check and the
+/// write.
 pub struct InitSection<'a> {
     store: &'a StateStore,
     base: Arc<StateView>,
 }
 
-/// Takes the publication lock of the repository at `layout` one time,
-/// finishes an interrupted publication, reads the canonical state, and runs
-/// `body` in that hold. The repository must have a `.provenance` directory.
+/// Runs `body` in one hold of the publication lock of `layout`.
+///
+/// The hold finishes an interrupted publication and reads the canonical
+/// state before `body` starts. The repository must have a `.provenance`
+/// directory.
 pub fn with_init_section<R>(
     layout: &ProvenanceLayout,
     body: impl FnOnce(&InitSection<'_>) -> anyhow::Result<R>,
@@ -130,10 +136,12 @@ impl InitSection<'_> {
         self.store
     }
 
-    /// Publishes `bytes` as the manifest in a one-key per-key write set: one
-    /// rename over `manifest.json`, with no backup step. A stop leaves the
-    /// old manifest or the new manifest. The store refuses the set when the
-    /// canonical state is not the state that the hold read at its start.
+    /// Publishes `bytes` as the manifest in a one-key per-key write set.
+    ///
+    /// The write is one rename over `manifest.json`, with no backup step, so
+    /// a stop leaves the old manifest or the new manifest. The store refuses
+    /// the set when the canonical state is not the state that the hold read
+    /// at its start.
     pub fn publish_manifest(&self, bytes: Vec<u8>) -> anyhow::Result<()> {
         let writes = WriteSet::new(Atomicity::PerKey)
             .put(StateKey::new(MANIFEST_KEY)?, bytes)

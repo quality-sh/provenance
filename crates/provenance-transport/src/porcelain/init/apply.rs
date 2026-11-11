@@ -9,13 +9,14 @@ use provenance_store::layout::ProvenanceLayout;
 use provenance_store::repository_init::InitSection;
 
 impl InitPlan {
-    /// Writes the plan: the skills, AGENTS.md, .gitignore, the dictionary
-    /// reference, and the manifest last. In an initialized repository, init
-    /// holds the publication lock one time: it checks that the manifest did
-    /// not change after the plan, validates the planned manifest against the
-    /// graph, writes the project files, and publishes the manifest through
-    /// the store. A read waits for init and gets the graph. A stop before the
-    /// manifest leaves the old manifest.
+    /// Writes the plan, with the manifest last.
+    ///
+    /// In an initialized repository, init holds the publication lock one
+    /// time: it checks that the manifest did not change after the plan,
+    /// validates the planned manifest against the graph, writes the skills,
+    /// AGENTS.md, .gitignore and the dictionary reference, and publishes the
+    /// manifest through the store. A read waits for init and gets the graph.
+    /// A stop before the manifest leaves the old manifest.
     #[rule("rule_init_apply_rolls_back_owned_changes")]
     #[rule("rule_read_waits_for_repeated_init")]
     #[rule("rule_init_validates_planned_repository")]
@@ -43,8 +44,7 @@ impl InitPlan {
         }
     }
 
-    /// Refuses the plan when the manifest changed after the plan, or when the
-    /// graph in the section does not allow the planned manifest.
+    /// Refuses a changed manifest or a planned manifest that the graph refuses.
     fn check_in(
         &self,
         section: &InitSection<'_>,
@@ -61,8 +61,9 @@ impl InitPlan {
         Ok(())
     }
 
-    /// Writes the project files, then the manifest with `write_manifest`. On
-    /// a failure, init restores each project file that it wrote.
+    /// Writes the project files, then the manifest with `write_manifest`.
+    ///
+    /// On a failure, init restores each project file that it wrote.
     fn write(
         self,
         write_manifest: impl FnOnce(&mut FileRollbackJournal, &[u8]) -> anyhow::Result<()>,
