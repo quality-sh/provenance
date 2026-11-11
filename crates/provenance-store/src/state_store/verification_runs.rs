@@ -238,9 +238,8 @@ fn verification_rule(
     let rules = store.list_rules(scope_id)?;
     let rule_id = match (rule, declaration) {
         (Some(rule), None) => {
-            let rule_id = StableId::new(rule).map_err(|error| {
-                crate::refusal::refuse!(InvalidVerificationTarget, "{error:#}")
-            })?;
+            let rule_id = StableId::new(rule)
+                .map_err(|error| crate::refusal::refuse!(InvalidVerificationTarget, "{error:#}"))?;
             let rule = rules
                 .iter()
                 .find(|rule| rule.id == rule_id)

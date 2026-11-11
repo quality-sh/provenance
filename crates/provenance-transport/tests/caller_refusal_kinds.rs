@@ -186,9 +186,21 @@ async fn a_second_assertion_or_disposition_has_a_declared_kind() {
     let (status, created) = call(&host, "POST", dispositions, Some(first)).await;
     assert_eq!(status, 200, "{created}");
     for (name, path, body) in [
-        ("a second disposition", dispositions, disposition("disposition_a")),
-        ("a disposition of a decided proposal", dispositions, disposition("disposition_b")),
-        ("an assertion of a disposed proposal", assertions, assertion("assertion_b")),
+        (
+            "a second disposition",
+            dispositions,
+            disposition("disposition_a"),
+        ),
+        (
+            "a disposition of a decided proposal",
+            dispositions,
+            disposition("disposition_b"),
+        ),
+        (
+            "an assertion of a disposed proposal",
+            assertions,
+            assertion("assertion_b"),
+        ),
     ] {
         rows.push(row(name, call(&host, "POST", path, Some(body)).await));
     }

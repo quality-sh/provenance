@@ -215,8 +215,21 @@ const fn group_end(tokens: &[(Token, usize)], mut at: usize) -> usize {
 
 /// The words that can start an item after its attributes.
 const ITEM_WORDS: [&str; 15] = [
-    "fn", "mod", "impl", "use", "struct", "enum", "const", "static", "type", "pub", "trait",
-    "macro_rules", "extern", "unsafe", "async",
+    "fn",
+    "mod",
+    "impl",
+    "use",
+    "struct",
+    "enum",
+    "const",
+    "static",
+    "type",
+    "pub",
+    "trait",
+    "macro_rules",
+    "extern",
+    "unsafe",
+    "async",
 ];
 
 /// The index of the first token after the attributes that start at `at`.
@@ -246,9 +259,7 @@ fn without_test_items(tokens: &[(Token, usize)]) -> Vec<(Token, usize)> {
                     && !words.contains(&"any")
                     && !words.contains(&"not"));
             let item = after_attributes(tokens, close);
-            if needs_test
-                && word(tokens.get(item)).is_some_and(|name| ITEM_WORDS.contains(&name))
-            {
+            if needs_test && word(tokens.get(item)).is_some_and(|name| ITEM_WORDS.contains(&name)) {
                 at = item_end(tokens, item);
                 continue;
             }

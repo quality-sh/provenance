@@ -57,12 +57,19 @@ async fn a_change_field_that_the_record_kind_does_not_take_names_the_fields_it_t
         let error = refused(&session, "change", arguments).await;
         assert_eq!(
             (&error["kind"], &error["field"], &error["reason"]),
-            (&json!("invalid_input"), &json!(field), &json!("unknown_field")),
+            (
+                &json!("invalid_input"),
+                &json!(field),
+                &json!("unknown_field")
+            ),
             "{error}"
         );
         assert_eq!(
             error["message"],
-            format!("{on} does not take {field}; it takes: {}", takes(&error["schema"])),
+            format!(
+                "{on} does not take {field}; it takes: {}",
+                takes(&error["schema"])
+            ),
             "{error}"
         );
     }
@@ -84,11 +91,11 @@ async fn get_with_notify_names_the_fields_that_get_takes() {
     assert_eq!(
         error,
         json!({"kind":"invalid_input", "field":"notify", "reason":"unknown_field",
-            "message":format!(
-                "get does not take notify; it takes: {}; register a client thread with the \
-                 change tool, action notify",
-                takes(&input)
-            )})
+        "message":format!(
+            "get does not take notify; it takes: {}; register a client thread with the \
+             change tool, action notify",
+            takes(&input)
+        )})
     );
     session.close().await;
 }

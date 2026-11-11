@@ -287,7 +287,9 @@ impl StateStore {
         // kind.
         crate::write_error::ensure!(
             AlreadyExists,
-            !dispositions.iter().any(|record| record.id == disposition.id),
+            !dispositions
+                .iter()
+                .any(|record| record.id == disposition.id),
             "disposition already exists"
         );
         crate::write_error::ensure!(
