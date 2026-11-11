@@ -14,7 +14,7 @@ mod support {
 
 use provenance_macros::verifies;
 use serde_json::json;
-use support::ideation_ids::{answers, ideation_repository, state_path, IDEATION};
+use support::ideation_ids::{answers, copy_row, ideation_repository, IDEATION};
 
 #[tokio::test]
 #[verifies("rule_inconsistent_records_refusal_names_records", examples)]
@@ -25,17 +25,10 @@ async fn an_ideation_id_on_two_lines_is_located_at_the_second_line() {
         ("dispositions.jsonl", "disposition", "disposition_a"),
     ] {
         let repo = ideation_repository().await;
-        let path = state_path(&repo, name);
-        let text = std::fs::read_to_string(&path).unwrap();
-        let row = text
-            .lines()
-            .find(|line| line.contains(&format!("\"id\":\"{id}\"")))
-            .unwrap()
-            .to_owned();
-        let second = text.lines().count() + 1;
-        std::fs::write(&path, format!("{text}{row}\n")).unwrap();
+        let (first, second) = copy_row(&repo, name, id);
         let file = format!("{IDEATION}/{name}");
-        let message = format!("duplicate immutable {kind} id {id}");
+        let message =
+            format!("duplicate immutable {kind} id {id} at line {first} and at line {second}");
         let refusal = json!({"kind":"invalid_state_file", "file":file, "line":second,
             "message":message});
         let answers = answers(&repo).await;

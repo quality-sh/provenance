@@ -15,7 +15,7 @@ use super::message_ids::ShardLine;
 use camino::Utf8PathBuf;
 use provenance_core::{AssertionRecord, DispositionRecord, ProposalCard, ScopeId};
 use serde::de::DeserializeOwned;
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 
 /// A family of ideation records whose ids are immutable.
 pub(super) trait ImmutableRecord: DeserializeOwned + Clone + Send + 'static {
@@ -53,14 +53,18 @@ pub(super) struct ImmutableRows<T> {
 
 impl<T: ImmutableRecord> ImmutableRows<T> {
     /// The records, or `invalid_state_file` at the second line of an id
-    /// that the file holds two times.
+    /// that the file holds two times. The message names the first line and
+    /// the second line of the id.
     pub(super) fn unique(self) -> anyhow::Result<Vec<T>> {
-        let mut seen = BTreeSet::new();
+        let mut first_lines = BTreeMap::new();
         for (record, line) in &self.rows {
-            if !seen.insert(record.id()) {
+            if let Some(first) = first_lines.insert(record.id(), *line) {
+                let (kind, id) = (T::KIND, record.id());
                 return Err(crate::refusal::state_fault(
                     &ShardLine::new(&self.path, *line),
-                    format!("duplicate immutable {} id {}", T::KIND, record.id()),
+                    format!(
+                        "duplicate immutable {kind} id {id} at line {first} and at line {line}"
+                    ),
                 ));
             }
         }
