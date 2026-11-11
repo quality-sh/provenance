@@ -3,9 +3,10 @@
 //! refusal is the first fault with no line, and the second error is not
 //! given.
 //!
-//! A caller cannot make these states through a public surface, because the
-//! first read of the same shard refuses a bad line first. So the tests call
-//! the store directly. No Rule states this fallback.
+//! The first read of a shard refuses a bad line first, so the tests make
+//! these two shard states with a direct call. No test shows that a public
+//! surface reaches the fallback, and no test shows that none can. No Rule
+//! states this fallback.
 
 use crate::state_store::readers::{record_fault, StateLineInvalid};
 
