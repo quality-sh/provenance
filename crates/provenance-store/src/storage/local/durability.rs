@@ -10,36 +10,23 @@ pub struct ReplaceFailed(#[source] std::io::Error);
 /// directory. The target has all of the new bytes or keeps its old bytes. A
 /// handle that a reader has open on the target does not make the replace fail
 /// when that handle lets other handles delete the file, as `std::fs` handles
-/// do. After a failure, the temporary file is deleted. The caller syncs the
-/// temporary file before the call and the directory after it.
+/// do. The temporary file stays open until the rename returns. After a
+/// failure, the temporary file is deleted. The caller syncs the temporary file
+/// before the call and the directory after it.
 pub fn replace_file(temporary: tempfile::NamedTempFile, target: &Utf8Path) -> anyhow::Result<()> {
     let target = crate::long_path::extended(target)?;
-    let mut path = temporary.into_temp_path();
-    clear_temporary_attribute(&path)
-        .and_then(|()| std::fs::rename(&path, target))
-        .map_err(ReplaceFailed)?;
-    path.disable_cleanup(true);
-    Ok(())
-}
-
-/// On Windows, `tempfile` creates the file with `FILE_ATTRIBUTE_TEMPORARY`,
-/// and a rename keeps the attribute on the target. With that attribute the
-/// system can keep the bytes in memory and not write them to the disk.
-#[cfg(windows)]
-fn clear_temporary_attribute(path: &std::path::Path) -> std::io::Result<()> {
-    use std::os::windows::ffi::OsStrExt as _;
-    use windows_sys::Win32::Storage::FileSystem::{SetFileAttributesW, FILE_ATTRIBUTE_NORMAL};
-    let wide: Vec<u16> = path.as_os_str().encode_wide().chain([0]).collect();
-    // SAFETY: `wide` is a UTF-16 path that ends with a NUL and lives for the call.
-    if unsafe { SetFileAttributesW(wide.as_ptr(), FILE_ATTRIBUTE_NORMAL) } == 0 {
-        return Err(std::io::Error::last_os_error());
-    }
-    Ok(())
-}
-
-#[cfg(not(windows))]
-#[allow(clippy::unnecessary_wraps)]
-const fn clear_temporary_attribute(_path: &std::path::Path) -> std::io::Result<()> {
+    // On Windows, `keep` clears the temporary attribute that `tempfile` sets.
+    // A rename keeps the attributes of the file, and with that attribute the
+    // system can keep the bytes in memory and not write them to the disk.
+    let (file, path) = temporary
+        .keep()
+        .map_err(|failure| ReplaceFailed(failure.error))?;
+    let renamed = std::fs::rename(&path, target);
+    drop(file);
+    renamed.map_err(|error| {
+        let _ = std::fs::remove_file(&path);
+        ReplaceFailed(error)
+    })?;
     Ok(())
 }
 
