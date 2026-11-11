@@ -5,7 +5,7 @@
 
 use crate::layout::ProvenanceLayout;
 use crate::state_store::StateStore;
-use crate::storage::StateView;
+use crate::storage::{Atomicity, StateKey, StateView, WriteSet};
 use camino::Utf8PathBuf;
 use provenance_core::{Manifest, RepoPathPrefix, Scope, ScopeId};
 use std::sync::Arc;
@@ -121,12 +121,23 @@ impl InitSection<'_> {
     /// The bytes of the manifest when the hold started, or `None` when the
     /// repository has no manifest.
     pub fn manifest_bytes(&self) -> anyhow::Result<Option<&[u8]>> {
-        Ok(self.base.get(&crate::storage::StateKey::new(MANIFEST_KEY)?))
+        Ok(self.base.get(&StateKey::new(MANIFEST_KEY)?))
     }
 
     /// The store that holds the section, for the validation of the planned
     /// manifest.
     pub const fn store(&self) -> &StateStore {
         self.store
+    }
+
+    /// Publishes `bytes` as the manifest in a one-key per-key write set: one
+    /// rename over `manifest.json`, with no backup step. A stop leaves the
+    /// old manifest or the new manifest. The store refuses the set when the
+    /// canonical state is not the state that the hold read at its start.
+    pub fn publish_manifest(&self, bytes: Vec<u8>) -> anyhow::Result<()> {
+        let writes = WriteSet::new(Atomicity::PerKey)
+            .put(StateKey::new(MANIFEST_KEY)?, bytes)
+            .on_base(Arc::clone(&self.base));
+        self.store.publish_through(writes, |writes| self.store.storage().publish(writes))
     }
 }

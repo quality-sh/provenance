@@ -1,4 +1,5 @@
-//! Init and readers of the state: a read never sees the manifest moved away.
+//! Init and readers of the state: a second init writes in one hold of the
+//! publication lock, so a read waits for init and gets the graph.
 use super::{prepare_init, InitOptions, InitPlan};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_store::layout::ProvenanceLayout;
@@ -58,6 +59,12 @@ fn manifest_text(layout: &ProvenanceLayout) -> String {
     String::from_utf8(std::fs::read(layout.manifest_path()).unwrap()).unwrap()
 }
 
+/// A person changes AGENTS.md, so a second init moves it to a backup file
+/// and moves the new file in.
+fn change_agents(repo: &Utf8Path) {
+    std::fs::write(repo.join("AGENTS.md"), "# Team notes\n").unwrap();
+}
+
 /// Opens the repository as the review follow and the commands do, on its own thread.
 fn open_on_a_thread(repo: &Utf8Path) -> mpsc::Receiver<anyhow::Result<Vec<String>>> {
     let (sender, receiver) = mpsc::channel();
@@ -73,13 +80,13 @@ fn open_on_a_thread(repo: &Utf8Path) -> mpsc::Receiver<anyhow::Result<Vec<String
 }
 
 /// An init on its own thread that stopped when it first moved a file away.
+/// The manifest goes last, through the store, which moves no file away.
 struct StoppedInit {
     resume: mpsc::Sender<()>,
     finished: mpsc::Receiver<anyhow::Result<()>>,
 }
 
 impl StoppedInit {
-    /// The first file that a second init replaces is the manifest.
     fn start(plan: InitPlan) -> Self {
         let (stopped_sender, stopped) = mpsc::channel();
         let (resume, resume_receiver) = mpsc::channel::<()>();
@@ -96,7 +103,7 @@ impl StoppedInit {
         });
         stopped
             .recv_timeout(LIMIT)
-            .expect("init did not move the manifest away");
+            .expect("init did not move a file away");
         Self { resume, finished }
     }
 
@@ -108,38 +115,41 @@ impl StoppedInit {
     }
 }
 
-/// While a second init has the manifest moved away, it holds the publication
-/// lock, so a holder of the lock waits for init. The manifest lands when init
-/// continues, and the lock is then free.
+/// While a second init has AGENTS.md moved away, it holds the publication
+/// lock, so a holder of the lock waits for init, and the old manifest is in
+/// place. The new manifest lands when init continues, and the lock is then
+/// free.
 /// This test has no Rule binding: it does no read, and it checks the lock that
 /// the read test depends on.
 #[test]
-fn second_init_holds_the_publication_lock_while_the_manifest_is_away() {
+fn second_init_holds_the_publication_lock_while_it_moves_a_file_away() {
     let (_directory, repo, layout) = initialized();
+    change_agents(&repo);
     let plan = prepare_init(&repo, options("new-reviewer")).unwrap();
 
     let init = StoppedInit::start(plan);
-    let manifest_away = !layout.manifest_path().exists();
+    let manifest_while_stopped = manifest_text(&layout);
     let lock_free = lock_is_free(&layout);
     init.resume().unwrap();
 
-    assert!(manifest_away, "init stopped with the manifest in place");
     assert!(
-        !lock_free,
-        "init moved the manifest away without the publication lock"
+        manifest_while_stopped.contains("\"reviewer\""),
+        "{manifest_while_stopped}"
     );
+    assert!(!lock_free, "init moved a file away without the publication lock");
     assert!(lock_is_free(&layout), "init kept the publication lock");
     let after = manifest_text(&layout);
     assert!(after.contains("new-reviewer"), "{after}");
 }
 
 /// A repository open, the read of the review follow and of the commands,
-/// starts while a second init has the manifest moved away. The read waits for
-/// init and gets the graph from after init; it does not get an error.
+/// starts while a second init has a file moved away. The read waits for init
+/// and gets the graph from after init; it does not get an error.
 #[test]
 #[provenance_macros::verifies("rule_read_waits_for_repeated_init", examples)]
-fn a_read_while_init_moves_the_manifest_gets_a_graph() {
+fn a_read_while_a_second_init_writes_gets_the_graph_after_init() {
     let (_directory, repo, layout) = initialized();
+    change_agents(&repo);
     let plan = prepare_init(&repo, options("new-reviewer")).unwrap();
 
     let init = StoppedInit::start(plan);
@@ -178,21 +188,23 @@ fn tree(root: &Utf8Path) -> BTreeMap<String, Option<Vec<u8>>> {
     entries
 }
 
-/// A second init fails after it moved the manifest away, while it holds the
-/// publication lock. The files are as they were before that init, no new path
-/// stays, and the lock is free: a following read and a following init work.
+/// A second init fails after it moved AGENTS.md away and wrote it again,
+/// while it holds the publication lock, and before it writes the manifest.
+/// The files are as they were before that init, no new path stays, and the
+/// lock is free: a following read and a following init work.
 #[test]
 #[provenance_macros::verifies("rule_init_apply_rolls_back_owned_changes", examples)]
 fn a_failed_second_init_restores_the_state_and_frees_the_lock() {
     let (_directory, repo, layout) = initialized();
-    // Init writes AGENTS.md again after the manifest. Every temporary name of
-    // that write is taken, so init fails after the manifest moved.
-    std::fs::remove_file(repo.join("AGENTS.md")).unwrap();
+    // Init writes AGENTS.md and then .gitignore again. Every temporary name
+    // of the .gitignore write is taken, so init fails after AGENTS.md moved.
+    change_agents(&repo);
+    std::fs::write(repo.join(".gitignore"), "target/\n").unwrap();
     let plan = prepare_init(&repo, options("new-reviewer")).unwrap();
     let occupied: Vec<Utf8PathBuf> = (0..100_u8)
         .map(|attempt| {
             repo.join(format!(
-                ".AGENTS.md.provenance-{}-{attempt}.tmp",
+                "..gitignore.provenance-{}-{attempt}.tmp",
                 std::process::id()
             ))
         })

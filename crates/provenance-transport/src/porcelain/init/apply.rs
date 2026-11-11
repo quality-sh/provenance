@@ -9,28 +9,35 @@ use provenance_store::layout::ProvenanceLayout;
 use provenance_store::repository_init::InitSection;
 
 impl InitPlan {
-    /// Writes the plan. In an initialized repository, init holds the
-    /// publication lock one time: it checks that the manifest did not change
-    /// after the plan, validates the planned manifest against the graph, and
-    /// writes. A read waits for init and gets the graph.
+    /// Writes the plan: the skills, AGENTS.md, .gitignore, the dictionary
+    /// reference, and the manifest last. In an initialized repository, init
+    /// holds the publication lock one time: it checks that the manifest did
+    /// not change after the plan, validates the planned manifest against the
+    /// graph, writes the project files, and publishes the manifest through
+    /// the store. A read waits for init and gets the graph. A stop before the
+    /// manifest leaves the old manifest.
     #[rule("rule_init_apply_rolls_back_owned_changes")]
     #[rule("rule_read_waits_for_repeated_init")]
     #[rule("rule_init_validates_planned_repository")]
     pub(in crate::porcelain) fn apply(self) -> anyhow::Result<InitEnding> {
         let layout = ProvenanceLayout::new(self.path.clone());
-        // A new repository has no `.provenance`, no graph and no readers yet.
+        // A new repository has no `.provenance`, no graph and no readers.
         // `prepare_init` validated its plan with no lock, so that a refused
         // plan creates no path.
         match std::fs::symlink_metadata(layout.provenance_dir()) {
             Ok(_) => provenance_store::repository_init::with_init_section(&layout, |section| {
                 self.check_in(section, &layout)?;
-                self.write(&layout)
+                self.write(|_, bytes| section.publish_manifest(bytes.to_vec()))
             }),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                let manifest_path = layout.manifest_path();
                 self.planned
                     .manifest_before
-                    .recheck(layout.manifest_path().as_std_path())?;
-                self.write(&layout)
+                    .recheck(manifest_path.as_std_path())?;
+                let before = self.planned.manifest_before.clone();
+                self.write(|rollback, bytes| {
+                    rollback.replace(manifest_path.as_std_path(), &before, bytes)
+                })
             }
             Err(error) => Err(error.into()),
         }
@@ -54,7 +61,12 @@ impl InitPlan {
         Ok(())
     }
 
-    fn write(self, layout: &ProvenanceLayout) -> anyhow::Result<InitEnding> {
+    /// Writes the project files, then the manifest with `write_manifest`. On
+    /// a failure, init restores each project file that it wrote.
+    fn write(
+        self,
+        write_manifest: impl FnOnce(&mut FileRollbackJournal, &[u8]) -> anyhow::Result<()>,
+    ) -> anyhow::Result<InitEnding> {
         self.skills.recheck()?;
         self.planned
             .agents_before
@@ -65,14 +77,6 @@ impl InitPlan {
         self.dictionary.recheck(&self.path)?;
         let mut rollback = FileRollbackJournal::within(self.path.as_std_path());
         let result = (|| -> anyhow::Result<InstallReport> {
-            if self.planned.manifest_before.bytes() != Some(self.planned.manifest_bytes.as_slice())
-            {
-                rollback.replace(
-                    layout.manifest_path().as_std_path(),
-                    &self.planned.manifest_before,
-                    &self.planned.manifest_bytes,
-                )?;
-            }
             let skills = self.skills.apply_in(&mut rollback)?;
             let agents_path = self.path.join("AGENTS.md");
             if self.planned.agents_before.bytes() != Some(self.planned.agents_bytes.as_slice()) {
@@ -93,6 +97,10 @@ impl InitPlan {
                 )?;
             }
             self.dictionary.apply_in(&self.path, &mut rollback)?;
+            if self.planned.manifest_before.bytes() != Some(self.planned.manifest_bytes.as_slice())
+            {
+                write_manifest(&mut rollback, &self.planned.manifest_bytes)?;
+            }
             Ok(skills)
         })();
         let skills = match result {
