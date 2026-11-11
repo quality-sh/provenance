@@ -24,6 +24,7 @@ const CHILD: &str = "porcelain::init::lock_tests::stop_tests::stopped_second_ini
 /// The child process: a second init that stops at once when it moves file
 /// number `STOP_AT` to its backup file, before it moves the new file in.
 #[test]
+#[ignore = "the child process of the stop test of this module"]
 fn stopped_second_init_child() {
     let (Ok(root), Ok(stop_at)) = (std::env::var(ROOT), std::env::var(STOP_AT)) else {
         return;
@@ -61,7 +62,7 @@ fn repository_with_changed_files() -> (tempfile::TempDir, Utf8PathBuf) {
 /// Returns `false` when init made fewer moves and ended.
 fn stop_second_init(repo: &Utf8Path, stop_at: usize) -> bool {
     let status = std::process::Command::new(std::env::current_exe().unwrap())
-        .args([CHILD, "--exact", "--nocapture"])
+        .args([CHILD, "--exact", "--ignored", "--nocapture"])
         .env(ROOT, repo.as_str())
         .env(STOP_AT, stop_at.to_string())
         .status()
