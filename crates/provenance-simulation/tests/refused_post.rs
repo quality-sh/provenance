@@ -13,7 +13,7 @@ const MOST_TURNS: usize = 8;
 
 const THREADS: &str = "scopes/default/threads/threads.jsonl";
 
-fn post(engine: u8) -> Step {
+const fn post(engine: u8) -> Step {
     Step::Write {
         engine,
         op: Operation::PostMessage,
