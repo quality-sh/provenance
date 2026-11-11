@@ -27,37 +27,30 @@ pub trait GraphRecord:
     /// Refuses a live status after archive for each stored lifecycle record.
     #[provenance_macros::rule("rule_archive_is_terminal_for_each_record")]
     fn validate_write(&self, previous: Option<&Self>) -> anyhow::Result<()> {
-        match (self.clone().into(), previous.cloned().map(Into::into)) {
+        let checked = match (self.clone().into(), previous.cloned().map(Into::into)) {
             (ReviewRecord::Requirement(record), Some(ReviewRecord::Requirement(previous))) => {
-                record
-                    .validate_transition(&previous)
-                    .map_err(invalid_update)
+                record.validate_transition(&previous)
             }
-            (ReviewRecord::Requirement(record), None) => {
-                record.validate_archive().map_err(invalid_update)
+            (ReviewRecord::Requirement(record), None) => record.validate_archive(),
+            (ReviewRecord::Resolution(record), Some(ReviewRecord::Resolution(previous))) => {
+                record.validate_transition(&previous)
             }
-            (ReviewRecord::Resolution(record), Some(ReviewRecord::Resolution(previous))) => record
-                .validate_transition(&previous)
-                .map_err(invalid_update),
-            (ReviewRecord::Resolution(record), None) => {
-                record.validate_archive().map_err(invalid_update)
-            }
+            (ReviewRecord::Resolution(record), None) => record.validate_archive(),
             (ReviewRecord::Rule(rule), Some(ReviewRecord::Rule(previous))) => {
-                rule.validate_transition(&previous).map_err(invalid_update)
+                rule.validate_transition(&previous)
             }
-            (ReviewRecord::Rule(rule), None) => rule.validate_archive().map_err(invalid_update),
+            (ReviewRecord::Rule(rule), None) => rule.validate_archive(),
             (ReviewRecord::Topic(topic), Some(ReviewRecord::Topic(previous))) => {
-                topic.validate_transition(&previous).map_err(invalid_update)
+                topic.validate_transition(&previous)
             }
-            (ReviewRecord::Topic(topic), None) => topic.validate_archive().map_err(invalid_update),
-            (ReviewRecord::Question(question), Some(ReviewRecord::Question(previous))) => question
-                .validate_transition(&previous)
-                .map_err(invalid_update),
-            (ReviewRecord::Question(question), None) => {
-                question.validate_archive().map_err(invalid_update)
+            (ReviewRecord::Topic(topic), None) => topic.validate_archive(),
+            (ReviewRecord::Question(question), Some(ReviewRecord::Question(previous))) => {
+                question.validate_transition(&previous)
             }
+            (ReviewRecord::Question(question), None) => question.validate_archive(),
             _ => Ok(()),
-        }
+        };
+        checked.map_err(|error| crate::refusal::refuse!(InvalidUpdate, "{error}"))
     }
     fn set_stamps(&mut self, previous: Option<&Self>, stamp: Option<&Stamp>) -> anyhow::Result<()> {
         let mut value = serde_json::to_value(&*self)?;
@@ -98,10 +91,6 @@ impl<T> GraphRecord for T where
         + ReviewRecordKind
         + StoredReviewRecord
 {
-}
-
-fn invalid_update(error: anyhow::Error) -> anyhow::Error {
-    crate::refusal::refuse!(InvalidUpdate, "{error}")
 }
 
 pub trait StoredReviewRecord {}

@@ -112,7 +112,7 @@ fn state_line_failure(error: &StateLineInvalid) -> ReadFailure {
 
 /// The read failure of the same name as a store refusal. A store refusal
 /// that no read declares reads as `ReadFailed`.
-fn store_refusal(failure: &WriteFailure) -> Option<ReadFailure> {
+const fn store_refusal(failure: &WriteFailure) -> Option<ReadFailure> {
     match failure {
         WriteFailure::ResourceNotFound => Some(ReadFailure::ResourceNotFound),
         _ => None,

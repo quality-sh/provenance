@@ -160,15 +160,12 @@ review_read!(
             {
                 return Ok(entry);
             }
-            match page.result.next_cursor {
-                Some(next) => cursor = Some(next),
-                None => {
-                    let missing: anyhow::Error =
-                        provenance_core::protocol::read_failure::ReadFailure::ResourceNotFound
-                            .into();
-                    return Err(missing.into());
-                }
-            }
+            let Some(next) = page.result.next_cursor else {
+                let missing: anyhow::Error =
+                    provenance_core::protocol::read_failure::ReadFailure::ResourceNotFound.into();
+                return Err(missing.into());
+            };
+            cursor = Some(next);
         }
     }
 );
