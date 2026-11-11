@@ -191,6 +191,14 @@ fn tree(root: &Utf8Path) -> BTreeMap<String, Option<Vec<u8>>> {
     entries
 }
 
+/// Each file and folder of `repo` that init can write. The cache folder holds
+/// the locks and the derived cache, which init does not write.
+fn targets(repo: &Utf8Path) -> BTreeMap<String, Option<Vec<u8>>> {
+    let mut entries = tree(repo);
+    entries.retain(|name, _| !name.starts_with(".provenance/cache"));
+    entries
+}
+
 /// A second init fails after it moved AGENTS.md away and wrote it again,
 /// while it holds the publication lock, and before it writes the manifest.
 /// The files are as they were before that init, no new path stays, and the
@@ -279,4 +287,5 @@ fn init_through_the_port(
 }
 
 mod check_and_write_tests;
+mod moved_state_tests;
 mod stop_tests;

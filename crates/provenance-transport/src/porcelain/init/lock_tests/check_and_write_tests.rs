@@ -2,7 +2,7 @@
 //! the graph and writes it in one hold of the publication lock.
 use super::{
     change_agents, init_input, init_through_the_port, initialized, lock_is_free, manifest_text,
-    options, tree,
+    options, targets,
 };
 use crate::porcelain::init::prepare_init;
 use camino::Utf8Path;
@@ -24,7 +24,7 @@ const WRITE_LIMIT: Duration = Duration::from_secs(5);
 type Write = Arc<Mutex<Option<JoinHandle<anyhow::Result<()>>>>>;
 
 /// The Requirement that the proposal of the write targets.
-fn add_the_target_requirement(repo: &Utf8Path) -> anyhow::Result<()> {
+pub(super) fn add_the_target_requirement(repo: &Utf8Path) -> anyhow::Result<()> {
     let store = Repository::open(repo, "default")?.store();
     store.create_requirement(CreateRequirementInput {
         scope_id: ScopeId::new("default")?,
@@ -181,14 +181,6 @@ fn a_graph_write_after_the_plan_makes_init_refuse_and_write_nothing() {
     assert_eq!(format!("{error:#}"), REFUSAL);
     assert_eq!(targets(&repo), before, "the refused init changed a file");
     assert!(lock_is_free(&layout), "init kept the publication lock");
-}
-
-/// Each file and folder of `repo` that init can write. The cache folder holds
-/// the locks and the derived cache, which init does not write.
-fn targets(repo: &Utf8Path) -> std::collections::BTreeMap<String, Option<Vec<u8>>> {
-    let mut entries = tree(repo);
-    entries.retain(|name, _| !name.starts_with(".provenance/cache"));
-    entries
 }
 
 /// The refusal of init for the disposition by "reviewer".
