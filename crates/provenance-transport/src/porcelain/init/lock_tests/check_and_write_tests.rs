@@ -1,6 +1,10 @@
 //! Init and a write of the graph: init validates its planned manifest against
 //! the graph and writes it in one hold of the publication lock.
-use super::{init_input, init_through_the_port, initialized, manifest_text};
+use super::{
+    change_agents, init_input, init_through_the_port, initialized, lock_is_free, manifest_text,
+    options, tree,
+};
+use crate::porcelain::init::prepare_init;
 use camino::Utf8Path;
 use provenance_core::{
     DispositionActor, DispositionDecision, IdeationTarget, IdeationTargetType, IdentityType,
@@ -147,3 +151,46 @@ fn a_write_during_init_does_not_land_between_the_check_and_the_write_of_init() {
     );
     check(&repo).unwrap();
 }
+
+/// A second init plans the reviewer list "new-reviewer". After the plan and
+/// before the write, "reviewer" rejects a proposal, which the old manifest
+/// allows. Init refuses the planned manifest, because the graph then has a
+/// disposition by an actor that the planned list does not allow. The
+/// manifest, AGENTS.md, .gitignore, the skill files and the dictionary
+/// reference do not change, and the lock is free.
+#[test]
+#[provenance_macros::verifies("rule_init_validates_planned_repository", examples)]
+fn a_graph_write_after_the_plan_makes_init_refuse_and_write_nothing() {
+    let (_directory, repo, layout) = initialized();
+    add_the_target_requirement(&repo).unwrap();
+    change_agents(&repo);
+    std::fs::write(repo.join(".gitignore"), "target/\n").unwrap();
+    let plan = prepare_init(&repo, options("new-reviewer")).unwrap();
+    reject_a_proposal_as_reviewer(&repo).unwrap();
+    let before = targets(&repo);
+
+    let result = plan.apply();
+
+    let error = match result {
+        Err(error) => error,
+        Ok(_) => panic!(
+            "init wrote a planned state that is not valid; the repository check then gives: {}",
+            check(&repo).map_or_else(|error| format!("{error:#}"), |()| "no error".to_owned())
+        ),
+    };
+    assert_eq!(format!("{error:#}"), REFUSAL);
+    assert_eq!(targets(&repo), before, "the refused init changed a file");
+    assert!(lock_is_free(&layout), "init kept the publication lock");
+}
+
+/// Each file and folder of `repo` that init can write. The cache folder holds
+/// the locks and the derived cache, which init does not write.
+fn targets(repo: &Utf8Path) -> std::collections::BTreeMap<String, Option<Vec<u8>>> {
+    let mut entries = tree(repo);
+    entries.retain(|name, _| !name.starts_with(".provenance/cache"));
+    entries
+}
+
+/// The refusal of init for the disposition by "reviewer".
+const REFUSAL: &str =
+    "the planned Provenance state is not valid: disposition actor is not in the repository allowlist";
