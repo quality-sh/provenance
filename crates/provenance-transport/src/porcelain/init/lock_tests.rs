@@ -233,3 +233,34 @@ fn a_failed_second_init_restores_the_state_and_frees_the_lock() {
     let after = manifest_text(&layout);
     assert!(after.contains("new-reviewer"), "{after}");
 }
+
+/// The input of an init of the scope `default` at the root of `repo`, as the
+/// CLI gives it.
+fn init_input(repo: &Utf8Path, actors: &[&str]) -> provenance_porcelain::init::InitInput {
+    provenance_porcelain::init::InitInput {
+        path: repo.to_string(),
+        scope: Some("default".to_owned()),
+        path_prefix: Some(".".to_owned()),
+        disposition_actor_id: actors.iter().map(|actor| (*actor).to_owned()).collect(),
+        clear_disposition_actors: false,
+        ste_pdf: None,
+        invocation_channel: provenance_porcelain::init::InvocationChannel::Native,
+        package_manager: None,
+    }
+}
+
+/// Runs `InitPort::init`, the port that the CLI and the MCP host call. Init
+/// runs on a thread of the blocking pool, and a probe is local to its thread,
+/// so `arm` runs on each new thread of the runtime.
+fn init_through_the_port(
+    input: provenance_porcelain::init::InitInput,
+    arm: impl Fn() + Send + Sync + 'static,
+) -> anyhow::Result<provenance_porcelain::init::InitReport> {
+    use provenance_porcelain::init::InitPort as _;
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .on_thread_start(arm)
+        .build()?;
+    runtime.block_on(crate::porcelain::SetupPort::new(crate::skills::TEST_SKILLS).init(input))
+}
+
+mod check_and_write_tests;

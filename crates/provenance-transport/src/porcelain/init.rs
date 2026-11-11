@@ -114,6 +114,7 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
     )?;
     crate::check::validate_planned_manifest(path, &manifest)
         .context("the planned Provenance state is not valid")?;
+    crate::test_probes::at("init_validated");
     let dictionary =
         crate::ste_onboarding::prepare(path, ste_pdf.as_deref(), invocation.command())?;
     let scope_ids: Vec<String> = manifest
