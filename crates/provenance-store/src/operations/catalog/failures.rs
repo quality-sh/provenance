@@ -115,17 +115,6 @@ fn state_line_failure(error: &StateLineInvalid) -> ReadFailure {
 fn store_refusal(failure: &WriteFailure) -> Option<ReadFailure> {
     match failure {
         WriteFailure::ResourceNotFound => Some(ReadFailure::ResourceNotFound),
-        WriteFailure::FileAccessDenied => Some(ReadFailure::FileAccessDenied),
-        WriteFailure::FileUnavailable => Some(ReadFailure::FileUnavailable),
-        WriteFailure::InvalidStateFile {
-            file,
-            line,
-            message,
-        } => Some(ReadFailure::InvalidStateFile {
-            file: file.clone(),
-            line: *line,
-            message: message.clone(),
-        }),
         _ => None,
     }
 }

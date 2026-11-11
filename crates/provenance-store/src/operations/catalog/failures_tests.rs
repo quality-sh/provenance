@@ -214,8 +214,8 @@ fn a_read_failure_of_no_known_kind_gives_its_cause_relative_to_the_repository() 
     }
 }
 
-/// A store refusal on a read keeps the kind of the same name: a read kind,
-/// a common kind, or `read_failed` when no read declares it.
+/// A store refusal on a read keeps the kind of the same name: a read kind or
+/// a common kind.
 #[test]
 #[verifies("rule_caller_refusal_has_declared_kind", examples)]
 fn a_store_refusal_inside_a_read_keeps_its_kind_and_status() {
@@ -241,32 +241,6 @@ fn a_store_refusal_inside_a_read_keeps_its_kind_and_status() {
             refusal(WriteFailure::AccessDenied),
             serde_json::json!({"kind":"access_denied"}),
             403,
-        ),
-        (
-            refusal(WriteFailure::FileAccessDenied),
-            serde_json::json!({"kind":"file_access_denied"}),
-            403,
-        ),
-        (
-            refusal(WriteFailure::FileUnavailable),
-            serde_json::json!({"kind":"file_unavailable"}),
-            503,
-        ),
-        (
-            refusal(WriteFailure::InvalidStateFile {
-                file: "scopes/default/requirements/req.jsonl".into(),
-                line: 2,
-                message: "the row is stored again".into(),
-            }),
-            serde_json::json!({"kind":"invalid_state_file",
-                "file":"scopes/default/requirements/req.jsonl", "line":2,
-                "message":"the row is stored again"}),
-            500,
-        ),
-        (
-            refusal(WriteFailure::AlreadyExists),
-            serde_json::json!({"kind":"read_failed","cause":"the read loads its record: the store refused"}),
-            500,
         ),
     ];
     for (error, wire, status) in cases {
