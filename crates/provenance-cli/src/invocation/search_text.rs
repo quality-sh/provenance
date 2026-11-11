@@ -5,49 +5,69 @@ use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::Command;
 use provenance_porcelain::registry;
 
-/// Parses the search command. When clap refuses a word that is not a flag, the refusal
-/// gives the same command with the search text in `--text`. Each other refusal of clap
-/// stays as clap gives it.
+/// Parses the search command. When clap refuses a word that is not a flag, or a word
+/// after `--`, the refusal says that the search text goes in `--text`. Each other
+/// refusal of clap stays as clap gives it.
 pub(super) fn parse(arguments: &[String]) -> SearchArgs {
     let command = crate::registry_cli::root_word_command(registry::Command::Search);
     let error = match command.clone().try_get_matches_from(arguments) {
         Ok(matches) => return SearchArgs::from_matches(&matches),
         Err(error) => error,
     };
-    let Some(word) = unexpected_word(&error) else {
+    let Some(word) = unexpected_word(&error, arguments) else {
         error.exit()
     };
     refuse(&word, &command, arguments)
 }
 
-/// The word of an unexpected argument that does not start with a hyphen.
-fn unexpected_word(error: &clap::Error) -> Option<String> {
+/// The word of an unexpected argument that clap reads as a value: a word that does not
+/// start with a hyphen, or a word after `--`.
+fn unexpected_word(error: &clap::Error, arguments: &[String]) -> Option<String> {
     if error.kind() != ErrorKind::UnknownArgument {
         return None;
     }
-    match error.get(ContextKind::InvalidArg) {
-        Some(ContextValue::String(word)) if !word.starts_with('-') => Some(word.clone()),
-        _ => None,
-    }
+    let Some(ContextValue::String(word)) = error.get(ContextKind::InvalidArg) else {
+        return None;
+    };
+    (!word.starts_with('-') || escaped(word, arguments)).then(|| word.clone())
+}
+
+/// Whether the first copy of the word in the arguments comes after the first `--`.
+fn escaped(word: &str, arguments: &[String]) -> bool {
+    let mut rest = arguments.iter().skip(1);
+    let before = rest
+        .by_ref()
+        .take_while(|argument| *argument != "--")
+        .any(|argument| argument == word);
+    !before && rest.any(|argument| argument == word)
 }
 
 fn refuse(word: &str, command: &Command, arguments: &[String]) -> ! {
+    let tip = corrected(command, arguments)
+        .map(|line| format!(": {line}"))
+        .unwrap_or_default();
     clap::Error::raw(
         ErrorKind::UnknownArgument,
         format!(
             "unexpected argument '{word}' found\n\n  \
-             tip: give the search text with --text: {}\n\n\
-             For more information, try 'provenance search --help'.\n",
-            corrected(command, arguments)
+             tip: give the search text with --text{tip}\n\n\
+             For more information, try 'provenance search --help'.\n"
         ),
     )
+    .with_cmd(command)
     .exit()
 }
 
 /// The command with the search text in `--text`. The text joins the words that are not
 /// flags and the value of `--text`, in the order of the arguments, with one space. The
-/// other flags follow it in their order.
-fn corrected(command: &Command, arguments: &[String]) -> String {
+/// other flags follow it in their order, without `--help` and `-h`. There is no command
+/// when the text is empty, or when a flag or its value can read differently to clap.
+///
+/// This walk is not `grammar::positional_word`. That walk finds a command word, and it
+/// takes the word after each flag that is not a switch, as its callers expect. This walk
+/// must read each flag value as clap reads it, or give no command, because a wrong
+/// command searches for a text that the caller did not type.
+fn corrected(command: &Command, arguments: &[String]) -> Option<String> {
     let mut text = Vec::new();
     let mut flags = Vec::new();
     let mut command_word = false;
@@ -68,42 +88,68 @@ fn corrected(command: &Command, arguments: &[String]) -> String {
             command_word = true;
             continue;
         }
-        let long = argument.strip_prefix("--").unwrap_or_default();
+        if argument == "--help" || argument == "-h" {
+            continue;
+        }
+        let long = argument.strip_prefix("--")?;
         let (name, inline) = long
             .split_once('=')
             .map_or((long, None), |(name, value)| (name, Some(value)));
-        let takes_value = command
-            .get_arguments()
-            .any(|arg| arg.get_long() == Some(name) && arg.get_action().takes_values());
-        let value = match (takes_value, inline) {
-            (true, None) => rest.next(),
-            _ => None,
-        };
+        let value = separate_value(command, name, inline.is_some(), &mut rest)?;
         if name == "text" {
-            text.extend(inline.or_else(|| value.map(String::as_str)));
+            text.extend(inline.or(value.map(String::as_str)));
             continue;
         }
-        flags.push(quoted(argument, false));
-        flags.extend(value.map(|value| quoted(value, false)));
+        flags.push(shell_word(argument));
+        flags.extend(value.map(|value| shell_word(value)));
     }
-    let mut line = format!("provenance search --text {}", quoted(&text.join(" "), true));
+    let text = text.join(" ");
+    if text.trim().is_empty() {
+        return None;
+    }
+    let mut line = format!("provenance search --text {}", quoted_text(&text));
     for flag in flags {
         line.push(' ');
         line.push_str(&flag);
     }
-    line
+    Some(line)
 }
 
-/// The value as one word of a POSIX shell. A value with a character that the shell
-/// reads gets single quotes, and each single quote in it becomes `'\''`.
-fn quoted(value: &str, always: bool) -> String {
+/// The word after a long flag that clap reads as the value of the flag. `None` is a flag
+/// that search does not declare, or a missing value, or a word that clap does not read as
+/// the value.
+fn separate_value<'a>(
+    command: &Command,
+    name: &str,
+    inline: bool,
+    rest: &mut impl Iterator<Item = &'a String>,
+) -> Option<Option<&'a String>> {
+    let declaration = command
+        .get_arguments()
+        .find(|arg| arg.get_long() == Some(name))?;
+    if inline || !declaration.get_action().takes_values() {
+        return Some(None);
+    }
+    rest.next()
+        .filter(|value| !value.starts_with('-') || declaration.is_allow_hyphen_values_set())
+        .map(Some)
+}
+
+/// The value as one word of a POSIX shell, in single quotes only when the shell reads a
+/// character in it.
+fn shell_word(value: &str) -> String {
     let plain = !value.is_empty()
         && value
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || "-_./:=@%+,".contains(c));
-    if plain && !always {
+    if plain {
         value.to_owned()
     } else {
-        format!("'{}'", value.replace('\'', r"'\''"))
+        quoted_text(value)
     }
+}
+
+/// The value in single quotes for a POSIX shell. Each single quote in it becomes `'\''`.
+fn quoted_text(value: &str) -> String {
+    format!("'{}'", value.replace('\'', r"'\''"))
 }
