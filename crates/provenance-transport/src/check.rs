@@ -286,6 +286,12 @@ pub fn validate_planned_manifest(repo: &Utf8Path, manifest: &Manifest) -> anyhow
     )
 }
 
+/// Validates the state that `held`, a store in the init section, reads
+/// against the manifest `init` plans to write.
+pub fn validate_planned_manifest_in(held: &StateStore, manifest: &Manifest) -> anyhow::Result<()> {
+    validate_locked(held, manifest, true)
+}
+
 /// Finishes an interrupted publication before `init` reads the repository.
 pub fn recover_before_init(repo: &Utf8Path) -> anyhow::Result<()> {
     provenance_store::repository_init::recover_before_init(&ProvenanceLayout::new(repo))

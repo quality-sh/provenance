@@ -1,11 +1,14 @@
 //! Repository initialization before a repository can be opened: manifest
-//! planning, recovery of an interrupted publication, and validation of the
-//! planned manifest against the state already on disk.
+//! planning, recovery of an interrupted publication, validation of the
+//! planned manifest against the state already on disk, and the one hold of
+//! the publication lock in which init checks and writes.
 
 use crate::layout::ProvenanceLayout;
 use crate::state_store::StateStore;
+use crate::storage::StateView;
 use camino::Utf8PathBuf;
 use provenance_core::{Manifest, RepoPathPrefix, Scope, ScopeId};
+use std::sync::Arc;
 
 /// Plans the scope and reviewer settings before initialization writes files.
 pub fn plan_manifest(
@@ -87,5 +90,43 @@ pub fn validate_planned_manifest<R>(
             crate::publication::with_read_only_validation(layout, |store| validate(store, manifest))
         }
         Err(error) => Err(error.into()),
+    }
+}
+
+/// The key of the manifest in a view of the canonical state.
+const MANIFEST_KEY: &str = "manifest.json";
+
+/// One hold of the publication lock of an initialized repository. Init reads
+/// the manifest, validates its plan against the graph and writes in it, so
+/// no other write of the graph lands between the check and the write.
+pub struct InitSection<'a> {
+    store: &'a StateStore,
+    base: Arc<StateView>,
+}
+
+/// Takes the publication lock of the repository at `layout` one time,
+/// finishes an interrupted publication, reads the canonical state, and runs
+/// `body` in that hold. The repository must have a `.provenance` directory.
+pub fn with_init_section<R>(
+    layout: &ProvenanceLayout,
+    body: impl FnOnce(&InitSection<'_>) -> anyhow::Result<R>,
+) -> anyhow::Result<R> {
+    crate::publication::with_repository_publication(layout, |store| {
+        let base = Arc::new(store.storage().read_view()?);
+        body(&InitSection { store, base })
+    })
+}
+
+impl InitSection<'_> {
+    /// The bytes of the manifest when the hold started, or `None` when the
+    /// repository has no manifest.
+    pub fn manifest_bytes(&self) -> anyhow::Result<Option<&[u8]>> {
+        Ok(self.base.get(&crate::storage::StateKey::new(MANIFEST_KEY)?))
+    }
+
+    /// The store that holds the section, for the validation of the planned
+    /// manifest.
+    pub const fn store(&self) -> &StateStore {
+        self.store
     }
 }
