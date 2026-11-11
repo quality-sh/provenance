@@ -185,3 +185,32 @@ fn refusal_without_a_table_flag_stays_as_clap_gives_it() {
         ),
     );
 }
+
+#[test]
+fn positional_value_refusal_gives_no_tip_when_the_flag_is_present() {
+    let cases: [(&[&str], &str, &str); 5] = [
+        (
+            &["import", "x.json", "--input", "y.json"],
+            "x.json",
+            "import [OPTIONS] --input <INPUT>",
+        ),
+        (
+            &["import", "--input", "y.json", "x.json"],
+            "x.json",
+            "import [OPTIONS] --input <INPUT>",
+        ),
+        (&["init", "--path", "a", "b"], "b", "init [OPTIONS]"),
+        (&["prime", "--format", "json", "x"], "x", "prime [OPTIONS]"),
+        (&["prime", "--format=json", "x"], "x", "prime [OPTIONS]"),
+    ];
+    for (words, found, usage) in cases {
+        assert_refusal(
+            words,
+            &format!(
+                "error: unexpected argument '{found}' found\n\n\
+                 Usage: provenance{SUFFIX} {usage}\n\n\
+                 For more information, try '--help'.\n"
+            ),
+        );
+    }
+}
