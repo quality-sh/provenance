@@ -8,15 +8,16 @@ use provenance_porcelain::registry;
 /// Parses the search command. When clap refuses a word that is not a flag, the refusal
 /// gives the same command with the search text in `--text`. Each other refusal of clap
 /// stays as clap gives it.
-pub(super) fn parse(arguments: Vec<String>) -> SearchArgs {
+pub(super) fn parse(arguments: &[String]) -> SearchArgs {
     let command = crate::registry_cli::root_word_command(registry::Command::Search);
-    match command.clone().try_get_matches_from(&arguments) {
-        Ok(matches) => SearchArgs::from_matches(&matches),
-        Err(error) => match unexpected_word(&error) {
-            Some(word) => refuse(&word, &command, &arguments),
-            None => error.exit(),
-        },
-    }
+    let error = match command.clone().try_get_matches_from(arguments) {
+        Ok(matches) => return SearchArgs::from_matches(&matches),
+        Err(error) => error,
+    };
+    let Some(word) = unexpected_word(&error) else {
+        error.exit()
+    };
+    refuse(&word, &command, arguments)
 }
 
 /// The word of an unexpected argument that does not start with a hyphen.
@@ -67,13 +68,10 @@ fn corrected(command: &Command, arguments: &[String]) -> String {
             command_word = true;
             continue;
         }
-        let (name, inline) = match argument.strip_prefix("--") {
-            Some(long) => match long.split_once('=') {
-                Some((name, value)) => (name, Some(value)),
-                None => (long, None),
-            },
-            None => ("", None),
-        };
+        let long = argument.strip_prefix("--").unwrap_or_default();
+        let (name, inline) = long
+            .split_once('=')
+            .map_or((long, None), |(name, value)| (name, Some(value)));
         let takes_value = command
             .get_arguments()
             .any(|arg| arg.get_long() == Some(name) && arg.get_action().takes_values());
@@ -82,7 +80,7 @@ fn corrected(command: &Command, arguments: &[String]) -> String {
             _ => None,
         };
         if name == "text" {
-            text.extend(inline.or(value.map(String::as_str)));
+            text.extend(inline.or_else(|| value.map(String::as_str)));
             continue;
         }
         flags.push(quoted(argument, false));

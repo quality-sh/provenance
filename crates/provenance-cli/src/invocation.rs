@@ -80,7 +80,7 @@ impl Invocation {
         };
         match exposed::find(&[word]) {
             Some(registry::Command::Search) => {
-                return Ok(Self::Search(search_text::parse(arguments)));
+                return Ok(Self::Search(search_text::parse(&arguments)));
             }
             Some(registry::Command::Api) => {
                 let matches = crate::registry_cli::root_word_command(registry::Command::Api)
