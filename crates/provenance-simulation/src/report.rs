@@ -87,8 +87,7 @@ pub fn fail(layer: &str, case: &Case, violation: &Violation) -> ! {
     };
     let json = serde_json::to_string_pretty(&failure).expect("a failure is JSON");
     if let Some(directory) = std::env::var_os("SIMULATION_FAILURE_DIR") {
-        let path =
-            std::path::Path::new(&directory).join(format!("{layer}-{}.json", violation.law));
+        let path = std::path::Path::new(&directory).join(format!("{layer}-{}.json", violation.law));
         if let Err(error) =
             std::fs::create_dir_all(&directory).and_then(|()| std::fs::write(&path, &json))
         {

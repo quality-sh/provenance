@@ -136,7 +136,10 @@ fn lockstep_updates() -> Case {
 #[ignore = "a planted fault of the nightly simulation"]
 fn a_refusal_that_lands_the_set_breaks_l1() {
     let mut steps = vec![Step::Fault(Fault::Refuse)];
-    steps.extend(alone(&[Operation::UpdateRequirement { n: 0, stale: false }]));
+    steps.extend(alone(&[Operation::UpdateRequirement {
+        n: 0,
+        stale: false,
+    }]));
     let case = Case { engines: 2, steps };
     let run = run_case(&case, planted(Plant::LandRefused, "L1"));
     expect_law(laws::check_only(&run, "L1"), "L1");
