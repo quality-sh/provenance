@@ -1,4 +1,5 @@
 use super::support::{create_system_source, export_scope, import_scope, init_repo, write_json};
+use provenance_macros::verifies;
 use std::path::PathBuf;
 
 #[test]
@@ -197,4 +198,34 @@ fn add_modern_lifecycle(lifecycle: &mut serde_json::Value) {
         "canonical_artifact": {"artifact_type": "source", "artifact_id": "source_a"},
         "external_action": {"system": "github", "scope": "acme/payroll", "kind": "deployment", "key": "prod-44"}
     }]);
+}
+
+/// An import into a scope whose `proposal_cards.jsonl` holds `proposal_a` on
+/// two lines refuses at the second line, and the file does not change. The
+/// review-portability check of the import reads the stored proposals first.
+#[test]
+#[verifies("rule_inconsistent_records_refusal_names_records", examples)]
+fn import_into_a_scope_with_a_proposal_id_on_two_lines_refuses_at_the_second_line() {
+    let fixture = ModernLifecycleFixture::new();
+    fixture.import_lifecycle().success();
+    let cards = fixture
+        .repo
+        .join(".provenance/state/scopes/default/ideation/proposal_cards.jsonl");
+    let text = std::fs::read_to_string(&cards).unwrap();
+    assert_eq!(text.lines().count(), 1, "{text}");
+    let stored = format!("{text}{text}");
+    std::fs::write(&cards, &stored).unwrap();
+    let output = fixture
+        .import_value("repair.json", &fixture.lifecycle)
+        .get_output()
+        .clone();
+    let answer = (
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout).into_owned(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+        std::fs::read_to_string(&cards).unwrap(),
+    );
+    let refusal = "Error: scopes/default/ideation/proposal_cards.jsonl line 2: \
+        duplicate immutable proposal id proposal_a at line 1 and at line 2\n";
+    assert_eq!(answer, (Some(1), String::new(), refusal.to_owned(), stored));
 }

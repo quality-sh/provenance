@@ -101,6 +101,10 @@ impl StateStore {
     }
 
     /// [`Self::read_immutable`] through this store, which holds the section.
+    ///
+    /// [`StateStore::import_scope`] reads the stored files here. The porcelain
+    /// import reads them before, in its review-portability check and its
+    /// snapshot, so on that path an id on two lines refuses there first.
     pub(super) fn read_immutable_held<T: ImmutableRecord>(
         &self,
         scope: &ScopeId,
