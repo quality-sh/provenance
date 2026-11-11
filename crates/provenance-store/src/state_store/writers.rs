@@ -1,6 +1,5 @@
 use super::{CreateRequirementInput, CreateSourceInput, StateStore};
 use crate::shards;
-use crate::write_error::{SourceFailure, WriteFailure};
 use provenance_core::{validate_optional_commit_pin, NodeType, Requirement, Source, StableId};
 
 impl StateStore {
@@ -30,7 +29,7 @@ impl StateStore {
             origin_message.as_ref(),
         )?;
         let commit_pin = validate_optional_commit_pin(commit_pin)
-            .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidCommitPin, error))?;
+            .map_err(|error| crate::refusal::refuse!(InvalidCommitPin, "{error:#}"))?;
         for older in &supersedes {
             self.ensure_node_exists(&scope_id, NodeType::Source, older, "--supersedes")?;
         }

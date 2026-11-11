@@ -52,6 +52,11 @@ fn commit(repo: &Repository) -> String {
 /// A Requirement committed without a description, then committed with one. Returns
 /// the repository and the two commit ids.
 fn repository_with_description_change() -> (Repository, String, String) {
+    repository_with_description("Shared detail")
+}
+
+/// Like [`repository_with_description_change`], with `description`.
+fn repository_with_description(description: &str) -> (Repository, String, String) {
     let repo = Repository::new("The shared graph is readable.");
     let store = repo.open().store();
     let create: CreateReviewRequirement = serde_json::from_value(json!({
@@ -69,7 +74,7 @@ fn repository_with_description_change() -> (Repository, String, String) {
             .requirement_edit_state(&scope(), &sid("req_described"))
             .unwrap()
             .etag,
-        "update":{"scope_id":"default","id":"req_described","description":"Shared detail"},
+        "update":{"scope_id":"default","id":"req_described","description":description},
         "relationships":null
     }))
     .unwrap();
@@ -157,6 +162,74 @@ async fn evidence_refuses_an_offset_outside_the_selected_text() {
     assert_eq!(failure["error"]["kind"], "invalid_input", "{failure}");
     assert_eq!(failure["error"]["field"], "offset", "{failure}");
     assert_eq!(failure["error"]["reason"], "invalid_value", "{failure}");
+}
+
+/// An offset inside a character of the selected text is `invalid_input` on
+/// the field `offset`.
+#[tokio::test]
+#[verifies("rule_caller_refusal_has_declared_kind", examples)]
+async fn evidence_refuses_an_offset_inside_a_character() {
+    let (repo, _, assigned) = repository_with_description("Shared d\u{e9}tail");
+    let path = format!(
+        "/requirements/req_described/history/{assigned}/evidence/after?field=description&offset=10"
+    );
+    let (status, failure) = call(&host(&repo, false), "GET", &path, None).await;
+    assert_eq!(status, 400, "{failure}");
+    assert_eq!(
+        failure["error"],
+        json!({"kind":"invalid_input", "field":"offset", "reason":"invalid_value"})
+    );
+}
+
+/// Characterization with no Rule: a committed line that holds the removed
+/// `domain_id` member. The evidence read gives the old raw value and never a
+/// 500, because a read keeps a member that it does not know; only a typed
+/// change of such a row is refused.
+#[tokio::test]
+async fn evidence_of_a_removed_domain_id_member_is_its_old_value() {
+    let (repo, _, _) = repository_with_description_change();
+    let path = repo
+        .dir
+        .path()
+        .join(".provenance/state/scopes/default/requirements/req.jsonl");
+    let original = std::fs::read_to_string(&path).unwrap();
+    let with_member = original
+        .lines()
+        .map(|line| {
+            let mut record: serde_json::Value = serde_json::from_str(line).unwrap();
+            if record["id"] == "req_described" {
+                record["domain_id"] = json!("domain_old");
+            }
+            record.to_string()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    std::fs::write(&path, with_member).unwrap();
+    commit(&repo);
+    std::fs::write(&path, original).unwrap();
+    let removed = commit(&repo);
+    let host = host(&repo, false);
+    let base = format!("/requirements/req_described/history/{removed}/evidence");
+    let mut answers = Vec::new();
+    for side in ["before", "after"] {
+        let (status, body) = call(
+            &host,
+            "GET",
+            &format!("{base}/{side}?field=domain_id"),
+            None,
+        )
+        .await;
+        answers.push(json!({"side": side, "status": status,
+            "json_text": body["data"]["json_text"], "error": body["error"]}));
+    }
+    assert_eq!(
+        json!(answers),
+        json!([
+            {"side":"before","status":200,"json_text":"\"domain_old\"","error":null},
+            {"side":"after","status":200,"json_text":"null","error":null}
+        ])
+    );
 }
 
 // Implementation aid: the native invoke path has no query-string bounds, so

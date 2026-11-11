@@ -12,7 +12,6 @@
 //! self-referencing relation is covered without a new list.
 
 use super::StateStore;
-use crate::write_error::WriteFailure;
 use provenance_core::model::relations::{
     cycle_in, cycle_refusal, kind_word, missing_required, required_refusal, RecordFront,
     RelationOwner,
@@ -84,12 +83,13 @@ fn ensure_archives<T>(
 fn ensure_required<T: RelationOwner>(records: &[T]) -> anyhow::Result<()> {
     for record in records {
         if let Some(decl) = missing_required(record) {
-            return Err(WriteFailure::invalid_update(anyhow::anyhow!(
+            return Err(crate::refusal::refuse!(
+                InvalidUpdate,
                 "{} {} is refused: {}",
                 kind_word(T::OWNER),
                 record.id().as_str(),
                 required_refusal(decl)
-            )));
+            ));
         }
     }
     Ok(())
@@ -99,10 +99,11 @@ fn ensure_required<T: RelationOwner>(records: &[T]) -> anyhow::Result<()> {
 fn ensure_acyclic<T: RelationOwner>(records: &[T]) -> anyhow::Result<()> {
     for name in chain_names::<T>() {
         if let Some(cycle) = cycle_in(records, name) {
-            return Err(WriteFailure::invalid_update(anyhow::anyhow!(
+            return Err(crate::refusal::refuse!(
+                InvalidUpdate,
                 "{}",
                 cycle_refusal(name, &cycle)
-            )));
+            ));
         }
     }
     Ok(())

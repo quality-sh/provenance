@@ -1,6 +1,6 @@
 use super::read_budget::ensure_within_read_budget;
 use super::{ProposalDemand, StateStore, TopicClaim, UpdateQuestionInput};
-use crate::{shards, write_error::WriteFailure};
+use crate::shards;
 use provenance_core::{Question, QuestionStatus, ScopeId, StableId, Topic, TopicStatus};
 
 pub(super) mod artifact_links;
@@ -26,19 +26,15 @@ impl StateStore {
                 .list_topics(scope_id)?
                 .into_iter()
                 .find(|topic| &topic.id == id)
-                .ok_or_else(|| {
-                    crate::write_error::SourceFailure::wrap(
-                        crate::write_error::WriteFailure::MissingReference,
-                        anyhow::anyhow!("topic does not exist"),
-                    )
-                })?;
+                .ok_or_else(|| crate::refusal::refuse!(MissingReference, "topic does not exist"))?;
             if let Some(blocking) =
                 claim_blocking_status(ShapingStatus::Topic(current_topic.status))
             {
-                return Err(WriteFailure::invalid_update(anyhow::anyhow!(
+                return Err(crate::refusal::refuse!(
+                    InvalidUpdate,
                     "topic {} is {blocking} and cannot be claimed",
                     current_topic.id.as_str()
-                )));
+                ));
             }
             let surfaced_proposals =
                 held.surface_proposals(scope_id, &ProposalDemand::for_topic(&current_topic))?;
@@ -97,10 +93,11 @@ impl StateStore {
         self.mutate_question(scope_id, id, |question| {
             let status = ShapingStatus::Question(question.status);
             if let Some(blocking) = claim_blocking_status(status) {
-                return Err(WriteFailure::invalid_update(anyhow::anyhow!(
+                return Err(crate::refusal::refuse!(
+                    InvalidUpdate,
                     "question {} is {blocking} and cannot be claimed",
                     question.id.as_str()
-                )));
+                ));
             }
             ensure_claim_holder(
                 "question",
@@ -244,12 +241,7 @@ impl StateStore {
             let topic = records
                 .iter_mut()
                 .find(|topic| &topic.id == id)
-                .ok_or_else(|| {
-                    crate::write_error::SourceFailure::wrap(
-                        crate::write_error::WriteFailure::MissingReference,
-                        anyhow::anyhow!("topic does not exist"),
-                    )
-                })?;
+                .ok_or_else(|| crate::refusal::refuse!(MissingReference, "topic does not exist"))?;
             mutate(topic)?;
             let topic = topic.clone();
             ensure_within_read_budget(&topic)?;
@@ -279,10 +271,7 @@ impl StateStore {
                 .iter_mut()
                 .find(|question| &question.id == id)
                 .ok_or_else(|| {
-                    crate::write_error::SourceFailure::wrap(
-                        crate::write_error::WriteFailure::MissingReference,
-                        anyhow::anyhow!("question does not exist"),
-                    )
+                    crate::refusal::refuse!(MissingReference, "question does not exist")
                 })?;
             mutate(question)?;
             let question = question.clone();

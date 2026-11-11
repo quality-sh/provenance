@@ -6,22 +6,20 @@ mod knowledge;
 mod resolutions;
 mod shaping;
 
-use crate::write_error::{SourceFailure, WriteFailure};
+use crate::write_error::WriteFailure;
 pub use inputs::*;
 use provenance_core::model::relations::RelationOwner;
 use provenance_core::ScopeId;
 
 fn invalid(message: &str) -> anyhow::Error {
-    WriteFailure::invalid_update(anyhow::anyhow!("{message}"))
+    crate::refusal::refuse!(InvalidUpdate, "{message}")
 }
 
 fn owner_matches(saved: Option<&str>, supplied: Option<&str>) -> anyhow::Result<()> {
     if saved != supplied {
-        return Err(SourceFailure::wrap(
-            WriteFailure::record_ownership_conflict(saved),
-            anyhow::anyhow!(
-                "declared_by must match the existing owner; omit it for a manual record"
-            ),
+        return Err(crate::refusal::refuse!(
+            (WriteFailure::record_ownership_conflict(saved)),
+            "declared_by must match the existing owner; omit it for a manual record"
         ));
     }
     Ok(())
@@ -55,10 +53,7 @@ fn set<T>(target: &mut T, value: Option<T>) {
 }
 
 fn missing() -> anyhow::Error {
-    SourceFailure::wrap(
-        WriteFailure::MissingReference,
-        anyhow::anyhow!("record does not exist"),
-    )
+    crate::refusal::refuse!(MissingReference, "record does not exist")
 }
 
 fn validate_final_relations<T: RelationOwner>(

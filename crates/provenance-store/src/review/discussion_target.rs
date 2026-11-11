@@ -1,8 +1,5 @@
 use super::{DiscussionAction, WriteDiscussion};
-use crate::{
-    state_store::StateStore,
-    write_error::{SourceFailure, WriteFailure},
-};
+use crate::state_store::StateStore;
 use provenance_core::{threads::Discussion, MessageRole, NodeType, ScopeId, StableId};
 use serde::{Deserialize, Serialize};
 
@@ -33,10 +30,7 @@ impl StateStore {
                 .into_iter()
                 .find(|discussion| discussion.discussion_id == input.discussion_id)
                 .ok_or_else(|| {
-                    SourceFailure::wrap(
-                        WriteFailure::ResourceNotFound,
-                        anyhow::anyhow!("Discussion does not exist"),
-                    )
+                    crate::refusal::refuse!(ResourceNotFound, "Discussion does not exist")
                 })?;
             let parent = head.parent.clone();
             crate::write_error::ensure!(

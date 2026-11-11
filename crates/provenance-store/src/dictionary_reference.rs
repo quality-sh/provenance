@@ -114,7 +114,8 @@ pub fn set_project_dictionary(
     layout: &ProvenanceLayout,
     import: &DictionaryImport,
 ) -> anyhow::Result<Utf8PathBuf> {
-    let directory = index_directory().context("no machine data directory is available")?;
+    let directory = index_directory()
+        .ok_or_else(|| crate::refusal::fault!("no machine data directory is available"))?;
     provenance_ste100::store_dictionary_index(import, &directory)
         .context("store the dictionary index")?;
     let path = dictionary_reference_path(layout);

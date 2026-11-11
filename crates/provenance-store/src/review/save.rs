@@ -3,7 +3,7 @@ use crate::{
     review::publication::with_record_state,
     shards,
     state_store::{RecordStamp, StateStore},
-    write_error::{SourceFailure, WriteFailure},
+    write_error::WriteFailure,
 };
 use provenance_core::review::{RequirementEditState, ReviewRecord};
 use provenance_core::threads::DiscussionOrigin;
@@ -29,14 +29,39 @@ impl StateStore {
         scope: &ScopeId,
         id: &StableId,
     ) -> anyhow::Result<Requirement> {
-        let records = self.list_requirements(scope)?;
-        let matches = records.iter().filter(|r| r.id == *id).collect::<Vec<_>>();
-        anyhow::ensure!(
-            matches.len() == 1 && matches[0].scope_id == *scope,
-            "requirement {} does not exist uniquely in this scope",
-            id.as_str()
-        );
-        Ok(matches[0].clone())
+        let path = shards::requirements_path(&self.layout, scope);
+        let mut matches =
+            crate::state_store::readers::read_jsonl_located::<Requirement>(self, &path)?
+                .into_iter()
+                .filter(|(record, _)| record.id == *id);
+        let Some((record, at)) = matches.next() else {
+            return Err(crate::refusal::refuse!(
+                ResourceNotFound,
+                "requirement {} does not exist uniquely in this scope",
+                id.as_str()
+            ));
+        };
+        if let Some((_, second)) = matches.next() {
+            return Err(crate::refusal::state_fault(
+                &second,
+                format!(
+                    "requirement {} is stored again; line {} stores it first",
+                    id.as_str(),
+                    at.line
+                ),
+            ));
+        }
+        if record.scope_id != *scope {
+            return Err(crate::refusal::state_fault(
+                &at,
+                format!(
+                    "requirement {} names scope {}, not the scope of its file",
+                    id.as_str(),
+                    record.scope_id.as_str()
+                ),
+            ));
+        }
+        Ok(record)
     }
 
     pub fn requirement_edit_state(
@@ -108,7 +133,8 @@ impl StateStore {
         complete: impl FnOnce(&Self, Requirement) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         crate::write_error::ensure_actor(&input.actor)?;
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            RecordTooLarge,
             serde_json::to_vec(&input)?.len() <= 1_048_576,
             "review request exceeds the operation byte budget"
         );
@@ -117,10 +143,7 @@ impl StateStore {
             crate::test_probes::at("requirement_save_locked")?;
             let scope_id = input.update.scope_id.clone();
             let scope = &scope_id;
-            anyhow::ensure!(
-                held.manifest()?.scopes.iter().any(|s| s.id == *scope),
-                "review scope is not in the manifest"
-            );
+            super::ensure_manifest_scope(held, scope)?;
             let record = held.requirement(scope, &input.update.id)?;
             super::owner_matches(&record, input.update.declared_by.as_deref())?;
             if let Some(origin) = origin {
@@ -166,9 +189,9 @@ impl StateStore {
             return Ok(before.clone());
         }
         if let Some(current_etag) = stale {
-            return Err(SourceFailure::wrap(
-                WriteFailure::RequirementEditConflict { current_etag },
-                anyhow::anyhow!("stale Requirement edit etag"),
+            return Err(crate::refusal::refuse!(
+                (WriteFailure::RequirementEditConflict { current_etag }),
+                "stale Requirement edit etag"
             ));
         }
         let fields =

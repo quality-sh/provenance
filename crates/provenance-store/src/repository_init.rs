@@ -16,10 +16,12 @@ pub fn plan_manifest(
     clear_actors: bool,
     selected_actor: Option<String>,
 ) -> anyhow::Result<Manifest> {
-    anyhow::ensure!(
-        actor_ids.iter().all(|id| !id.trim().is_empty()),
-        "disposition actor IDs must not be empty"
-    );
+    if actor_ids.iter().any(|id| id.trim().is_empty()) {
+        return Err(crate::refusal::refuse!(
+            (crate::write_error::WriteFailure::invalid_field("actor_ids")),
+            "disposition actor IDs must not be empty"
+        ));
+    }
     let is_new = existing.is_none();
     let mut manifest = match existing {
         Some(manifest) => manifest,

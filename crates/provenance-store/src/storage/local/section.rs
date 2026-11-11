@@ -97,7 +97,8 @@ pub fn prepare_publication_lock(layout: &ProvenanceLayout) -> anyhow::Result<()>
     let provenance = layout.provenance_dir();
     create_real_directory(&provenance)?;
     let canonical_provenance = canonical_utf8(&provenance, "provenance path")?;
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        Fault,
         canonical_provenance == canonical_root.join(".provenance"),
         "repository provenance directory is outside the repository"
     );
@@ -114,7 +115,7 @@ pub fn canonical_utf8(path: &Utf8Path, description: &str) -> anyhow::Result<Utf8
     let resolved =
         dunce::canonicalize(path).with_context(|| format!("resolve {description} {path}"))?;
     Utf8PathBuf::from_path_buf(resolved)
-        .map_err(|path| anyhow::anyhow!("{description} is not UTF-8: {}", path.display()))
+        .map_err(|path| crate::refusal::fault!("{description} is not UTF-8: {}", path.display()))
 }
 
 fn prepare_transaction_dirs(layout: &ProvenanceLayout) -> anyhow::Result<()> {

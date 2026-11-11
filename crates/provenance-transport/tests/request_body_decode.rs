@@ -47,3 +47,36 @@ async fn well_formed_body_with_invalid_envelope_keeps_the_invalid_value_reason()
         assert_eq!(failure["error"]["reason"], "invalid_value", "{failure}");
     }
 }
+
+#[cfg(feature = "test-fixture")]
+mod support {
+    pub mod records;
+    pub mod resource_http;
+}
+
+/// A create that carries `source_refs` names the field, lists the
+/// accepted fields and tells how to cite a Source.
+#[cfg(feature = "test-fixture")]
+#[tokio::test]
+#[verifies("rule_unknown_request_field_names_accepted_fields", examples)]
+async fn an_unknown_request_field_names_itself_and_the_accepted_fields() {
+    use support::resource_http::{call, host};
+    let repo = support::records::Repository::new("The shared graph is readable.");
+    let host = host(&repo, true);
+    let body = serde_json::json!({"data":{
+        "actor":"reviewer", "id":"req_new", "statement":"The system stores each record.",
+        "status":"discovery", "depends_on":[], "supersedes":[], "source_refs":[]
+    }});
+    let (status, failure) = call(&host, "POST", "/requirements", Some(body)).await;
+    assert_eq!(status, 400, "{failure}");
+    assert_eq!(
+        failure["error"],
+        serde_json::json!({
+            "kind":"invalid_input", "field":"request.source_refs", "reason":"unknown_field",
+            "message":"create-requirement does not take source_refs; accepted fields: `actor`, \
+                `id`, `statement`, `description`, `status`, `refines`, `depends_on`, \
+                `supersedes`, `spawned_by`, `origin_thread`, `origin_message`, `origin`; to \
+                cite a Source, update the record with the Source in relationships.cites"
+        })
+    );
+}

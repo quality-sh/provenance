@@ -79,7 +79,10 @@ fn read_through_rename(path: &Utf8Path) -> anyhow::Result<Vec<u8>> {
                 std::thread::sleep(std::time::Duration::from_millis(u64::from(attempt) * 5));
             }
             Err(error) => {
-                return Err(anyhow::Error::new(error).context(format!("read manifest {path}")))
+                return Err(crate::refusal::caused(
+                    error,
+                    format!("read manifest {path}"),
+                ))
             }
         }
     }
@@ -242,7 +245,7 @@ fn ensure_file_list_unchanged(
         .expect("different file lists have a changed entry");
     Err(UnitHashError::at(
         &changed.1,
-        anyhow::anyhow!("canonical file list changed during hashing"),
+        crate::refusal::fault!("canonical file list changed during hashing"),
     ))
 }
 
@@ -329,7 +332,10 @@ fn collect(
 }
 
 fn unsupported(path: &Utf8Path) -> UnitHashError {
-    UnitHashError::at(path, anyhow::anyhow!("unsupported state entry: {path}"))
+    UnitHashError::at(
+        path,
+        crate::refusal::fault!("unsupported state entry: {path}"),
+    )
 }
 
 /// The canonical path whose bytes could not be hashed.

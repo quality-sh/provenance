@@ -68,7 +68,8 @@ pub fn revision_digest_from_stored_rows(
 ) -> anyhow::Result<String> {
     let mut by_key = std::collections::BTreeMap::new();
     for (scope_id, family, content_digest, record_count) in rows {
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            Fault,
             !content_digest.is_empty(),
             "family `{family}` scope `{scope_id}` has no stored content digest"
         );
@@ -91,7 +92,7 @@ pub fn revision_digest_from_stored_rows(
                 by_key
                     .get(&(family.family_name(), scope_id))
                     .ok_or_else(|| {
-                        anyhow::anyhow!(
+                        crate::refusal::fault!(
                             "no stored digest row for family `{}` scope `{scope_id}`",
                             family.family_name()
                         )

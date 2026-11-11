@@ -98,7 +98,7 @@ async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<
                 let node = nodes::page_node(ctx.snapshot(), kind, &id)
                     .await?
                     .ok_or_else(|| {
-                        anyhow::anyhow!("search candidate disappeared inside snapshot")
+                        crate::refusal::fault!("search candidate disappeared inside snapshot")
                     })?;
                 let contains_text = needle.as_ref().is_none_or(|needle| {
                     node.searchable_text()

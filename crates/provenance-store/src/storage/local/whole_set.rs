@@ -75,7 +75,7 @@ fn apply(staged: &ProvenanceLayout, writes: &WriteSet) -> anyhow::Result<()> {
         let path = state.join(key.as_str());
         match std::fs::remove_file(crate::long_path::extended(&path)?) {
             Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
-                return Err(anyhow::Error::new(error).context(format!("remove {path}")));
+                return Err(crate::refusal::caused(error, format!("remove {path}")));
             }
             _ => {}
         }
@@ -101,7 +101,7 @@ fn publish_staged_state(
     let backup = transaction.join("backup-state");
     hook.prepared(live, transaction)?;
     std::fs::rename(live.state_dir(), &backup).map_err(|error| {
-        anyhow::anyhow!("move live state {} to backup: {error}", live.state_dir())
+        crate::refusal::fault!("move live state {} to backup: {error}", live.state_dir())
     })?;
     install_staged_state(live, staged, transaction, &backup, hook)?;
     let install_state = install_file(live, staged, &backup, hook)?;
@@ -122,7 +122,7 @@ fn install_staged_state(
         .and_then(|()| crate::test_probes::at("state_before_install"))
         .and_then(|()| {
             std::fs::rename(staged.state_dir(), live.state_dir()).map_err(|error| {
-                anyhow::anyhow!("install staged state {}: {error}", staged.state_dir())
+                crate::refusal::fault!("install staged state {}: {error}", staged.state_dir())
             })
         })
         .and_then(|()| crate::test_probes::at("state_after_install_rename"))
@@ -202,12 +202,13 @@ fn rollback_publication(
     crate::test_probes::at("state_before_rollback")?;
     if live.state_dir().exists() {
         std::fs::rename(live.state_dir(), staged.state_dir()).map_err(|error| {
-            anyhow::anyhow!("return live state to stage during rollback: {error}")
+            crate::refusal::fault!("return live state to stage during rollback: {error}")
         })?;
     }
     if backup.exists() {
-        std::fs::rename(backup, live.state_dir())
-            .map_err(|error| anyhow::anyhow!("restore backup state during rollback: {error}"))?;
+        std::fs::rename(backup, live.state_dir()).map_err(|error| {
+            crate::refusal::fault!("restore backup state during rollback: {error}")
+        })?;
     }
     sync_directory(&live.provenance_dir())
 }
@@ -274,8 +275,9 @@ pub fn copy_directory(source: &Utf8Path, destination: &Utf8Path) -> anyhow::Resu
     std::fs::create_dir_all(destination)?;
     for entry in std::fs::read_dir(source)? {
         let entry = entry?;
-        let source_path = Utf8PathBuf::from_path_buf(entry.path())
-            .map_err(|path| anyhow::anyhow!("state path is not UTF-8: {}", path.display()))?;
+        let source_path = Utf8PathBuf::from_path_buf(entry.path()).map_err(|path| {
+            crate::refusal::fault!("state path is not UTF-8: {}", path.display())
+        })?;
         let target = destination.join(entry.file_name().to_string_lossy().as_ref());
         let file_type = std::fs::symlink_metadata(&source_path)?.file_type();
         if file_type.is_dir() {
@@ -283,7 +285,9 @@ pub fn copy_directory(source: &Utf8Path, destination: &Utf8Path) -> anyhow::Resu
         } else if file_type.is_file() {
             std::fs::copy(source_path, target)?;
         } else {
-            anyhow::bail!("unsupported state entry: {source_path}");
+            return Err(crate::refusal::fault!(
+                "unsupported state entry: {source_path}"
+            ));
         }
     }
     Ok(())

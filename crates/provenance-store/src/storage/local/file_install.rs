@@ -18,7 +18,7 @@ impl LocalStateStorage {
         file: FileInstall<'_>,
     ) -> Result<(), PublishFailure> {
         if writes.atomicity() != Atomicity::WholeSet {
-            return Err(PublishFailure::Refused(anyhow::anyhow!(
+            return Err(PublishFailure::Refused(crate::refusal::fault!(
                 "a file install lands only with a whole set"
             )));
         }

@@ -93,7 +93,7 @@ impl StateStorage for MemoryStateStorage {
         changes.extend(writes.puts().iter().map(|(key, bytes)| (key, Some(bytes))));
         for (key, bytes) in changes {
             if failing.as_ref() == Some(key) {
-                let error = anyhow::anyhow!("the key `{}` failed to land", key.as_str());
+                let error = crate::refusal::fault!("the key `{}` failed to land", key.as_str());
                 return Err(match writes.atomicity() {
                     Atomicity::WholeSet => PublishFailure::Refused(error),
                     Atomicity::PerKey => {

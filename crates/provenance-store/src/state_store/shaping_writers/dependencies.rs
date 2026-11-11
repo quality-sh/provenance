@@ -1,6 +1,5 @@
 //! Validate Question prerequisites before the record is published.
 use crate::state_store::StateStore;
-use crate::write_error::{SourceFailure, WriteFailure};
 use provenance_core::{ScopeId, StableId};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -26,12 +25,10 @@ impl StateStore {
                 "a Question cannot depend on itself"
             );
             let question = by_id.get(dependency.as_str()).ok_or_else(|| {
-                SourceFailure::wrap(
-                    WriteFailure::MissingReference,
-                    anyhow::anyhow!(
-                        "prerequisite Question does not exist: {}",
-                        dependency.as_str()
-                    ),
+                crate::refusal::refuse!(
+                    MissingReference,
+                    "prerequisite Question does not exist: {}",
+                    dependency.as_str()
                 )
             })?;
             crate::write_error::ensure!(

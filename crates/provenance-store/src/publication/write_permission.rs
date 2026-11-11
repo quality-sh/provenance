@@ -75,7 +75,8 @@ pub fn protect_rows<T: Serialize>(
                 .iter()
                 .any(|discussion| discussion["thread_id"] == message["thread_id"])
             {
-                anyhow::ensure!(
+                crate::write_error::ensure!(
+                    InvalidUpdate,
                     before
                         .iter()
                         .filter(|m| m["id"] == message["id"])
@@ -114,7 +115,8 @@ pub fn protect_rows<T: Serialize>(
         if !permissions.allows(path, id) {
             let old = before.iter().filter(|r| r["id"] == id).collect::<Vec<_>>();
             let new = after.iter().filter(|r| r["id"] == id).collect::<Vec<_>>();
-            anyhow::ensure!(
+            crate::write_error::ensure!(
+                InvalidUpdate,
                 old.len() == 1 && new.len() == 1 && old == new,
                 "enrolled record {id} requires a guarded review save"
             );

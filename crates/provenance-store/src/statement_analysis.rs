@@ -67,12 +67,19 @@ pub struct StatementViolationReport<'a> {
     pub diagnostics: &'a [StatementDiagnostic],
 }
 
+/// Statements that the analyzer refuses. The text is the JSON of a
+/// [`StatementViolationReport`], which the CLI prints as it is.
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+pub(crate) struct StatementViolations(String);
+
 pub fn violation_error(diagnostics: &[StatementDiagnostic]) -> anyhow::Error {
     let report = StatementViolationReport {
         error: "asd_ste100_violations",
         diagnostics,
     };
-    anyhow::anyhow!(serde_json::to_string(&report).expect("statement report is serializable"))
+    StatementViolations(serde_json::to_string(&report).expect("statement report is serializable"))
+        .into()
 }
 
 /// Checks only added records and records whose statement bytes changed.

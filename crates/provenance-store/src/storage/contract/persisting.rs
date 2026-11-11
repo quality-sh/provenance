@@ -17,7 +17,7 @@ struct Kept {
 impl StatePersistence for Kept {
     fn persist(&self, writes: &WriteSet) -> Result<(), PublishFailure> {
         if self.refuse.load(SeqCst) {
-            return Err(PublishFailure::Refused(anyhow::anyhow!("refused")));
+            return Err(PublishFailure::Refused(crate::refusal::fault!("refused")));
         }
         self.sets.lock().unwrap().push(writes.clone());
         Ok(())

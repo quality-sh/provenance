@@ -33,9 +33,13 @@ impl StateStore {
                     .next()
                     .filter(|m| m.scope_id == *scope)
                     .ok_or_else(|| {
-                        anyhow::anyhow!("origin Message does not exist in this scope")
+                        crate::refusal::refuse!(
+                            MissingReference,
+                            "origin Message does not exist in this scope"
+                        )
                     })?;
-                anyhow::ensure!(
+                crate::write_error::ensure!(
+                    Fault,
                     matches.next().is_none(),
                     "origin Message identity is not unique"
                 );
@@ -50,11 +54,20 @@ impl StateStore {
         let container = matches
             .next()
             .filter(|t| t.scope_id == *scope)
-            .ok_or_else(|| anyhow::anyhow!("origin Thread does not exist in this scope"))?;
-        anyhow::ensure!(
-            matches.next().is_none(),
-            "origin Thread identity is not unique"
-        );
+            .ok_or_else(|| {
+                crate::refusal::refuse!(
+                    MissingReference,
+                    "origin Thread does not exist in this scope"
+                )
+            })?;
+        if matches.next().is_some() {
+            return Err(super::readers::record_fault(
+                self,
+                &crate::shards::threads_path(&self.layout, scope),
+                thread.as_str(),
+                "origin Thread identity is not unique".to_owned(),
+            ));
+        }
         self.ensure_node_exists(
             scope,
             container.parent.node_type,
@@ -62,12 +75,14 @@ impl StateStore {
             "origin parent",
         )?;
         if let Some(message) = origin_message {
-            anyhow::ensure!(
+            crate::write_error::ensure!(
+                InvalidUpdate,
                 message.thread_id == *thread,
                 "origin Message does not belong to this Thread and scope"
             );
         } else {
-            anyhow::ensure!(
+            crate::write_error::ensure!(
+                InvalidUpdate,
                 !self
                     .list_discussions(scope)?
                     .iter()

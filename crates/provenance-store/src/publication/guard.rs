@@ -66,7 +66,8 @@ impl SectionHandle {
     /// Refuses after the section ended.
     #[rule("rule_section_repository_stops_with_its_section")]
     pub(crate) fn ensure_open(&self) -> anyhow::Result<()> {
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            Fault,
             self.open.load(Ordering::Acquire),
             "the publication section of this repository handle has ended"
         );
@@ -147,7 +148,7 @@ pub async fn publication_guard(repository: &Repository) -> anyhow::Result<Public
         })
     })
     .await
-    .map_err(|error| anyhow::anyhow!("publication guard acquisition failed: {error}"))?
+    .map_err(|error| crate::refusal::fault!("publication guard acquisition failed: {error}"))?
 }
 
 #[cfg(test)]

@@ -12,7 +12,8 @@ impl StateStore {
         input: PostMessageInput,
     ) -> anyhow::Result<PostMessageResult> {
         self.with_repository_publication(|held| {
-            anyhow::ensure!(
+            crate::write_error::ensure!(
+                InvalidUpdate,
                 !held
                     .list_discussions(&input.scope_id)?
                     .iter()
@@ -160,7 +161,7 @@ fn next_thread_id(threads: &[Thread], base_id: &str) -> anyhow::Result<StableId>
         candidate = format!("{base_id}_{suffix}");
         suffix = suffix
             .checked_add(1)
-            .ok_or_else(|| anyhow::anyhow!("thread id suffix overflow for {base_id}"))?;
+            .ok_or_else(|| crate::refusal::fault!("thread id suffix overflow for {base_id}"))?;
     }
     StableId::new(candidate)
 }

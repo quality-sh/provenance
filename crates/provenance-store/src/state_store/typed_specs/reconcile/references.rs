@@ -24,12 +24,8 @@ fn canonical_ids(ids: &[String]) -> anyhow::Result<Vec<StableId>> {
     let mut resolved = ids
         .iter()
         .map(|id| {
-            StableId::new(id.clone()).map_err(|error| {
-                crate::write_error::SourceFailure::wrap(
-                    crate::write_error::WriteFailure::InvalidDeclaration,
-                    error,
-                )
-            })
+            StableId::new(id.clone())
+                .map_err(|error| crate::refusal::refuse!(InvalidDeclaration, "{error:#}"))
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
     resolved.sort_by(|a, b| a.as_str().cmp(b.as_str()));
@@ -62,12 +58,10 @@ pub(super) fn apply_requirement(
         record.supersedes = ids_of(keys, requirement_ids);
     }
     if let Some(resolution) = &declaration.spawned_by {
-        record.spawned_by = Some(StableId::new(resolution.clone()).map_err(|error| {
-            crate::write_error::SourceFailure::wrap(
-                crate::write_error::WriteFailure::InvalidDeclaration,
-                error,
-            )
-        })?);
+        record.spawned_by = Some(
+            StableId::new(resolution.clone())
+                .map_err(|error| crate::refusal::refuse!(InvalidDeclaration, "{error:#}"))?,
+        );
     }
     Ok(())
 }

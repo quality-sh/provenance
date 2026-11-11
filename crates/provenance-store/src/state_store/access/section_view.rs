@@ -255,7 +255,7 @@ impl StateStore {
         let relative: Utf8PathBuf = path
             .strip_prefix(&state)
             .map_err(|_| {
-                anyhow::anyhow!("{path} is not canonical state, so a view does not hold it")
+                crate::refusal::fault!("{path} is not canonical state, so a view does not hold it")
             })?
             .to_path_buf();
         Ok(relative.iter().collect::<Vec<_>>().join("/"))
@@ -263,11 +263,15 @@ impl StateStore {
 }
 
 fn not_found(path: &Utf8Path) -> anyhow::Error {
-    anyhow::Error::new(std::io::Error::from(std::io::ErrorKind::NotFound))
-        .context(format!("read {path}"))
+    crate::refusal::caused(
+        std::io::Error::from(std::io::ErrorKind::NotFound),
+        format!("read {path}"),
+    )
 }
 
 fn invalid_text(path: &Utf8Path) -> anyhow::Error {
-    anyhow::Error::new(std::io::Error::from(std::io::ErrorKind::InvalidData))
-        .context(format!("read {path}: the file is not UTF-8"))
+    crate::refusal::caused(
+        std::io::Error::from(std::io::ErrorKind::InvalidData),
+        format!("read {path}: the file is not UTF-8"),
+    )
 }

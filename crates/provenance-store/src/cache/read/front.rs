@@ -42,7 +42,7 @@ fn intern(owner: NodeType, name: &str) -> anyhow::Result<&'static str> {
     declaration_for(owner, name)
         .map(|decl| decl.name)
         .ok_or_else(|| {
-            anyhow::anyhow!(
+            crate::refusal::fault!(
                 "relation row names `{name}` on {owner:?}, which no declaration carries"
             )
         })

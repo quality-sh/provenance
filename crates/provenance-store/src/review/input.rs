@@ -109,12 +109,12 @@ impl<'de> Deserialize<'de> for CitesEdit {
 fn split_delta(
     mut fields: serde_json::Map<String, Value>,
     what: &str,
-) -> Result<(Value, Value), anyhow::Error> {
-    for name in fields.keys() {
-        anyhow::ensure!(
-            name == "add" || name == "remove",
-            "unknown {what} delta field: {name}"
-        );
+) -> Result<(Value, Value), String> {
+    if let Some(name) = fields
+        .keys()
+        .find(|name| *name != "add" && *name != "remove")
+    {
+        return Err(format!("unknown {what} delta field: {name}"));
     }
     let none = Value::Array(Vec::new());
     let add = fields.remove("add").unwrap_or_else(|| none.clone());

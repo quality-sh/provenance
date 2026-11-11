@@ -29,13 +29,13 @@ impl OwnershipDecision {
     }
 
     pub(super) fn refuse(self) -> anyhow::Result<()> {
-        Err(crate::write_error::SourceFailure::wrap(
-            crate::write_error::WriteFailure::OwnershipConflict {
+        Err(crate::refusal::refuse!(
+            (crate::write_error::WriteFailure::OwnershipConflict {
                 conflicts: self.conflicts,
-            },
-            anyhow::anyhow!(self
-                .refusal
-                .unwrap_or_else(|| "typed declaration ownership conflict".to_string())),
+            }),
+            "{}",
+            self.refusal
+                .unwrap_or_else(|| "typed declaration ownership conflict".to_string())
         ))
     }
 }
@@ -46,12 +46,7 @@ pub(super) fn decide(
     current: &CurrentTypedState,
     ids: &DesiredTypedIds,
 ) -> anyhow::Result<OwnershipDecision> {
-    let adopted = validate_targets(input, current).map_err(|error| {
-        crate::write_error::SourceFailure::wrap(
-            crate::write_error::WriteFailure::InvalidDeclaration,
-            error,
-        )
-    })?;
+    let adopted = validate_targets(input, current)?;
     let relationships = DesiredRelationships::new(input, ids)?;
     let mut decision = OwnershipDecision {
         conflicts: Vec::new(),

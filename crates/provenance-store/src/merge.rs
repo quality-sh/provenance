@@ -73,6 +73,8 @@ pub struct StoredRow {
     line: String,
     /// The record parsed from that line.
     record: Value,
+    /// The line number of the row in the input file, from 1.
+    line_number: usize,
 }
 
 impl StoredRow {
@@ -103,6 +105,7 @@ pub fn read_jsonl_rows_for_shard(
         rows.push(StoredRow {
             line: line.to_owned(),
             record,
+            line_number: index + 1,
         });
     }
     Ok(rows)
@@ -138,7 +141,7 @@ pub(crate) fn preserved_lines(
                 .find(|row| &row.record == record)
                 .map(|row| row.line.clone())
                 .ok_or_else(|| {
-                    anyhow::anyhow!(
+                    crate::refusal::fault!(
                         "merged record {named} matches no stored line; refusing to re-encode it"
                     )
                 })
@@ -225,6 +228,61 @@ pub fn merge_records(
     }
 }
 
+/// One side of a three-way merge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MergeSide {
+    Base,
+    Ours,
+    Theirs,
+}
+
+impl std::fmt::Display for MergeSide {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Base => "base",
+            Self::Ours => "ours",
+            Self::Theirs => "theirs",
+        })
+    }
+}
+
+/// Refuses one side of a merge that holds a record id on two rows.
+///
+/// Call it before [`merge_records`], on base, then ours, then theirs. The
+/// rows are checked in their order, as [`merge_records`] checks them, so the
+/// first fault of a side wins. A row with no string id gets the refusal of
+/// [`merge_records`]. A second row with an id is `invalid_state_file` at
+/// `shard_path` and its line, and the message names the side, the id and the
+/// line of the first row.
+pub fn ensure_unique_ids(
+    shard_path: &camino::Utf8Path,
+    side: MergeSide,
+    key: &str,
+    rows: &[StoredRow],
+) -> anyhow::Result<()> {
+    let mut first_lines = BTreeMap::new();
+    for row in rows {
+        let id = string_id(key, &row.record)?;
+        if let Some(first) = first_lines.insert(id, row.line_number) {
+            return Err(crate::refusal::state_fault(
+                &crate::state_store::message_ids::ShardLine::new(shard_path, row.line_number),
+                format!(
+                    "{side} holds record id {id} at line {first} and at line {}",
+                    row.line_number
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn string_id<'a>(key: &str, record: &'a CanonicalRecord) -> anyhow::Result<&'a str> {
+    record
+        .get(key)
+        .and_then(Value::as_str)
+        .ok_or_else(|| crate::refusal::fault!("record is missing string {key}"))
+}
+
 pub fn read_jsonl_records(path: &camino::Utf8Path) -> anyhow::Result<Vec<CanonicalRecord>> {
     Ok(read_jsonl_rows(path)?
         .into_iter()
@@ -248,11 +306,8 @@ fn index_by_id(
 ) -> anyhow::Result<BTreeMap<String, CanonicalRecord>> {
     let mut indexed = BTreeMap::new();
     for record in records {
-        let id = record
-            .get(key)
-            .and_then(Value::as_str)
-            .ok_or_else(|| anyhow::anyhow!("record is missing string {key}"))?;
-        anyhow::ensure!(!indexed.contains_key(id), "duplicate record id {id}");
+        let id = string_id(key, record)?;
+        crate::write_error::ensure!(Fault, !indexed.contains_key(id), "duplicate record id {id}");
         indexed.insert(id.to_string(), record.clone());
     }
     Ok(indexed)
