@@ -336,7 +336,7 @@ mod tests {
         let publication = error.downcast_ref::<PublicationStarted>().unwrap();
         assert!(publication
             .0
-            .downcast_ref::<tempfile::PersistError>()
+            .downcast_ref::<crate::storage::local::durability::ReplaceFailed>()
             .is_some());
         assert!(matches!(
             WriteError(error).safe(),

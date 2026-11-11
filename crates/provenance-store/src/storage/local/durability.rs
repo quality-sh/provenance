@@ -1,5 +1,48 @@
 use camino::{Utf8Path, Utf8PathBuf};
 
+/// A failure of [`replace_file`]. It has the text of a `tempfile` persist
+/// failure, and its source is the I/O error.
+#[derive(Debug, thiserror::Error)]
+#[error("failed to persist temporary file: {0}")]
+pub struct ReplaceFailed(#[source] std::io::Error);
+
+/// Replaces the file at `target` with `temporary`, a file in the same
+/// directory. The target has all of the new bytes or keeps its old bytes. A
+/// handle that a reader has open on the target does not make the replace fail
+/// when that handle lets other handles delete the file, as `std::fs` handles
+/// do. After a failure, the temporary file is deleted. The caller syncs the
+/// temporary file before the call and the directory after it.
+pub fn replace_file(temporary: tempfile::NamedTempFile, target: &Utf8Path) -> anyhow::Result<()> {
+    let target = crate::long_path::extended(target)?;
+    let mut path = temporary.into_temp_path();
+    clear_temporary_attribute(&path)
+        .and_then(|()| std::fs::rename(&path, target))
+        .map_err(ReplaceFailed)?;
+    path.disable_cleanup(true);
+    Ok(())
+}
+
+/// On Windows, `tempfile` creates the file with `FILE_ATTRIBUTE_TEMPORARY`,
+/// and a rename keeps the attribute on the target. With that attribute the
+/// system can keep the bytes in memory and not write them to the disk.
+#[cfg(windows)]
+fn clear_temporary_attribute(path: &std::path::Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt as _;
+    use windows_sys::Win32::Storage::FileSystem::{SetFileAttributesW, FILE_ATTRIBUTE_NORMAL};
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain([0]).collect();
+    // SAFETY: `wide` is a UTF-16 path that ends with a NUL and lives for the call.
+    if unsafe { SetFileAttributesW(wide.as_ptr(), FILE_ATTRIBUTE_NORMAL) } == 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+#[allow(clippy::unnecessary_wraps)]
+const fn clear_temporary_attribute(_path: &std::path::Path) -> std::io::Result<()> {
+    Ok(())
+}
+
 /// Flushes directory metadata where the platform supports it.
 ///
 /// Windows has no equivalent call in this module. On Windows, file contents are flushed, but a
