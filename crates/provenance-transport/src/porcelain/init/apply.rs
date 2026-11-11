@@ -9,17 +9,14 @@ use provenance_store::layout::ProvenanceLayout;
 use provenance_store::repository_init::InitSection;
 
 impl InitPlan {
-    /// Writes the plan, with the manifest last.
+    /// Writes the plan and restores each file that it wrote when a write
+    /// fails. In an initialized repository, a read waits for init and gets
+    /// the graph from after init.
     ///
-    /// In an initialized repository, init holds the publication lock one
-    /// time: it checks that the manifest did not change after the plan,
-    /// validates the planned manifest against the graph, writes the skills,
-    /// AGENTS.md, .gitignore and the dictionary reference, and publishes the
-    /// manifest through the store. A read waits for init and gets the graph.
-    /// A stop before the manifest leaves the old manifest.
+    /// The manifest is the last write, so a stop or a failure before it leaves
+    /// the old manifest.
     #[rule("rule_init_apply_rolls_back_owned_changes")]
     #[rule("rule_read_waits_for_repeated_init")]
-    #[rule("rule_init_validates_planned_repository")]
     pub(in crate::porcelain) fn apply(self) -> anyhow::Result<InitEnding> {
         let layout = ProvenanceLayout::new(self.path.clone());
         // A new repository has no `.provenance`, no graph and no readers.

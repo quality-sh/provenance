@@ -282,14 +282,22 @@ pub fn validate_planned_manifest(repo: &Utf8Path, manifest: &Manifest) -> anyhow
     provenance_store::repository_init::validate_planned_manifest(
         &ProvenanceLayout::new(repo),
         manifest,
-        |store, manifest| validate_locked(store, manifest, true),
+        validate_planned_manifest_in,
     )
 }
 
-/// Validates the state that `held`, a store in the init section, reads
-/// against the manifest `init` plans to write.
-pub fn validate_planned_manifest_in(held: &StateStore, manifest: &Manifest) -> anyhow::Result<()> {
-    validate_locked(held, manifest, true)
+/// Validates the planned manifest and its disposition actor allowlist against
+/// the graph that `store` reads, before init writes a target.
+///
+/// `store` must hold the publication lock, or read a repository with no
+/// `.provenance`: init in an initialized repository calls this in the hold in
+/// which it writes, and a new repository has no graph that can change.
+#[rule("rule_init_validates_planned_repository")]
+pub fn validate_planned_manifest_in(
+    store: &StateStore,
+    manifest: &Manifest,
+) -> anyhow::Result<()> {
+    validate_locked(store, manifest, true)
 }
 
 /// Finishes an interrupted publication before `init` reads the repository.
