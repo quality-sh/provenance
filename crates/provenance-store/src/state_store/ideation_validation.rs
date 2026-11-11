@@ -40,11 +40,15 @@ impl StateStore {
             read_jsonl_shared(self, &shards::contributions_path(&self.layout, scope))?;
         let mut synthesis_packets: Vec<SynthesisPacket> =
             read_jsonl_shared(self, &shards::synthesis_packets_path(&self.layout, scope))?;
-        // Each read refuses an id that its file holds two times.
-        let direct_assertions: Vec<AssertionRecord> = self.read_immutable(scope)?;
-        let mut proposals = ids(&self.read_immutable::<ProposalCard>(scope)?);
+        let direct_proposals = self.read_immutable_rows::<ProposalCard>(scope)?;
+        let direct_assertions = self.read_immutable_rows::<AssertionRecord>(scope)?;
+        let direct_dispositions = self.read_immutable_rows::<DispositionRecord>(scope)?;
+        // A line that does not parse in one of the three files refuses before
+        // an id on two lines in another file.
+        let mut proposals = ids(&direct_proposals.unique()?);
+        let direct_assertions = direct_assertions.unique()?;
         let mut assertions = ids(&direct_assertions);
-        let mut dispositions = ids(&self.read_immutable::<DispositionRecord>(scope)?);
+        let mut dispositions = ids(&direct_dispositions.unique()?);
         let mut assertions_in_order = direct_assertions;
         let landings = shards::ideation_landings_path(&self.layout, scope);
         for (index, batch) in self.list_ideation_landings(scope)?.into_iter().enumerate() {

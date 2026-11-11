@@ -1,16 +1,17 @@
 //! The ideation records whose ids are immutable: proposals, assertions and
 //! dispositions.
 //!
-//! Each read of the file of one of these families comes here. A hand edit or
-//! a branch merge can put one id on two lines. The read then refuses with
+//! The list reader of each of these families, the ideation scope check and
+//! the scope import read the file of the family here. A hand edit or a
+//! branch merge can put one id on two lines. The read then refuses with
 //! `invalid_state_file` at the second line, before a check over the records
 //! that does not know the lines.
 
-use super::message_ids::ShardLine;
 use super::readers::{read_jsonl_located, read_jsonl_located_held};
 use super::shared_parses::shared;
 use super::{ProvenanceLayout, StateStore};
 use crate::shards;
+use super::message_ids::ShardLine;
 use camino::Utf8PathBuf;
 use provenance_core::{AssertionRecord, DispositionRecord, ProposalCard, ScopeId};
 use serde::de::DeserializeOwned;
@@ -43,15 +44,56 @@ immutable_record!(ProposalCard, "proposal", proposal_cards_path);
 immutable_record!(AssertionRecord, "assertion", assertion_records_path);
 immutable_record!(DispositionRecord, "disposition", dispositions_path);
 
+/// The rows of the file of one family, each with its line, before the check
+/// of the ids.
+pub(super) struct ImmutableRows<T> {
+    path: Utf8PathBuf,
+    rows: Vec<(T, usize)>,
+}
+
+impl<T: ImmutableRecord> ImmutableRows<T> {
+    /// The records, or `invalid_state_file` at the second line of an id
+    /// that the file holds two times.
+    pub(super) fn unique(self) -> anyhow::Result<Vec<T>> {
+        let mut seen = BTreeSet::new();
+        for (record, line) in &self.rows {
+            if !seen.insert(record.id()) {
+                return Err(crate::refusal::state_fault(
+                    &ShardLine::new(&self.path, *line),
+                    format!("duplicate immutable {} id {}", T::KIND, record.id()),
+                ));
+            }
+        }
+        Ok(self.rows.into_iter().map(|(record, _)| record).collect())
+    }
+}
+
 impl StateStore {
+    /// The rows of the file of `T` in `scope`, with no records of the
+    /// landing batches. A catch-up pass keeps this parse. The kept parse
+    /// holds the lines and no result of the check, so each read checks the
+    /// ids again.
+    pub(super) fn read_immutable_rows<T: ImmutableRecord>(
+        &self,
+        scope: &ScopeId,
+    ) -> anyhow::Result<ImmutableRows<T>> {
+        let path = T::path(&self.layout, scope);
+        let rows = shared(self, &path, || {
+            Ok(read_jsonl_located::<T>(self, &path)?
+                .into_iter()
+                .map(|(record, at)| (record, at.line))
+                .collect::<Vec<_>>())
+        })?;
+        Ok(ImmutableRows { path, rows })
+    }
+
     /// The records of the file of `T` in `scope`, with no records of the
     /// landing batches. An id on two lines refuses at the second line.
     pub(super) fn read_immutable<T: ImmutableRecord>(
         &self,
         scope: &ScopeId,
     ) -> anyhow::Result<Vec<T>> {
-        let path = T::path(&self.layout, scope);
-        shared(self, &path, || unique_ids(read_jsonl_located(self, &path)?))
+        self.read_immutable_rows(scope)?.unique()
     }
 
     /// [`Self::read_immutable`] through this store, which holds the section.
@@ -60,19 +102,10 @@ impl StateStore {
         scope: &ScopeId,
     ) -> anyhow::Result<Vec<T>> {
         let path = T::path(&self.layout, scope);
-        unique_ids(read_jsonl_located_held(self, &path)?)
+        let rows = read_jsonl_located_held::<T>(self, &path)?
+            .into_iter()
+            .map(|(record, at)| (record, at.line))
+            .collect();
+        ImmutableRows { path, rows }.unique()
     }
-}
-
-fn unique_ids<T: ImmutableRecord>(rows: Vec<(T, ShardLine)>) -> anyhow::Result<Vec<T>> {
-    let mut seen = BTreeSet::new();
-    for (record, at) in &rows {
-        if !seen.insert(record.id()) {
-            return Err(crate::refusal::state_fault(
-                at,
-                format!("duplicate immutable {} id {}", T::KIND, record.id()),
-            ));
-        }
-    }
-    Ok(rows.into_iter().map(|(record, _)| record).collect())
 }
