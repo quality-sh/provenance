@@ -2,9 +2,7 @@
 //! a Requirement, for each state of the records that the deletion removes.
 //! Each case prints the full plan answer and the full apply answer.
 
-use crate::porcelain_authoring_support::{
-    initialized_repo, json_output, json_stdin_output, provenance,
-};
+use crate::porcelain_authoring_support::{json_output, json_stdin_output, provenance};
 use serde_json::{json, Value};
 
 const OWNER: &str = "spec://typescript/share-links";
@@ -28,6 +26,20 @@ fn both(statement: &str) -> Value {
 
 fn after() -> Value {
     document(&json!([{"key": "other", "statement": "The host starts."}]))
+}
+
+/// An initialized repository whose reviewer is `reviewer`.
+fn initialized_repo() -> (tempfile::TempDir, String) {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_string_lossy().into_owned();
+    provenance()
+        .args([
+            "init", "--path", &repo, "--scope", "default", "--path-prefix", ".",
+            "--disposition-actor-id", "reviewer",
+        ])
+        .assert()
+        .success();
+    (directory, repo)
 }
 
 struct Answer {
@@ -100,9 +112,9 @@ fn create(repo: &str, id: &str, kind: &str, fields: &[&str]) {
     json_output(&arguments);
 }
 
-fn submit(repo: &str, id: &str) -> String {
+fn submit(repo: &str, id: &str, declared_by: Option<&str>) -> String {
     let body = json!({
-        "actor": "agent", "declared_by": null, "title": "Review",
+        "actor": "agent", "declared_by": declared_by, "title": "Review",
         "summary": "Review the record.", "confidence": null,
         "source_ids": [], "evidence_references": [], "builds_on": [],
         "expected_revision": null, "revises": null
@@ -124,7 +136,15 @@ fn pending(repo: &str, collection: &str, id: &str) -> String {
         .to_owned()
 }
 
-fn decide(repo: &str, collection: &str, kind: &str, id: &str, proposal: &str, accept: bool) {
+fn decide(
+    repo: &str,
+    collection: &str,
+    kind: &str,
+    id: &str,
+    proposal: &str,
+    accept: bool,
+    declared_by: Option<&str>,
+) {
     let body = if accept {
         json!({
             "actor": {"identity_type": "human", "id": "reviewer"},
@@ -138,16 +158,16 @@ fn decide(repo: &str, collection: &str, kind: &str, id: &str, proposal: &str, ac
             "rationale": "The statement needs one precise condition.",
             "canonical_artifact": null,
             "feedback": {"role": "user", "body": "Name the condition."},
-            "declared_by": null
+            "declared_by": declared_by
         })
     };
     let path = format!("{collection}/{id}/submissions/{proposal}/decide");
     api(repo, &path, "post", Some(&body));
 }
 
-fn withdraw(repo: &str, collection: &str, id: &str, proposal: &str) {
+fn withdraw(repo: &str, collection: &str, id: &str, proposal: &str, declared_by: Option<&str>) {
     let path = format!("{collection}/{id}/submissions/{proposal}/withdraw");
-    api(repo, &path, "post", Some(&json!({"actor": "agent"})));
+    api(repo, &path, "post", Some(&json!({"actor": "agent", "declared_by": declared_by})));
 }
 
 /// Runs the plan, then the apply, of the deletion document and prints both
@@ -269,7 +289,7 @@ fn accepted_resolution_made_with_create_below_the_deleted_requirement() {
     let removed = typed_requirement(&repo);
     shared_resolution(&repo, "res_only", &removed);
     let proposal = pending(&repo, "resolutions", "res_only");
-    decide(&repo, "resolutions", "resolution", "res_only", &proposal, true);
+    decide(&repo, "resolutions", "resolution", "res_only", &proposal, true, None);
     observe("create_resolution_accepted", &repo, &[("resolutions", "res_only")]);
 }
 
@@ -279,7 +299,7 @@ fn rejected_resolution_made_with_create_below_the_deleted_requirement() {
     let removed = typed_requirement(&repo);
     shared_resolution(&repo, "res_only", &removed);
     let proposal = pending(&repo, "resolutions", "res_only");
-    decide(&repo, "resolutions", "resolution", "res_only", &proposal, false);
+    decide(&repo, "resolutions", "resolution", "res_only", &proposal, false, None);
     observe("create_resolution_rejected", &repo, &[("resolutions", "res_only")]);
 }
 
@@ -289,7 +309,7 @@ fn withdrawn_resolution_made_with_create_below_the_deleted_requirement() {
     let removed = typed_requirement(&repo);
     shared_resolution(&repo, "res_only", &removed);
     let proposal = pending(&repo, "resolutions", "res_only");
-    withdraw(&repo, "resolutions", "res_only", &proposal);
+    withdraw(&repo, "resolutions", "res_only", &proposal, None);
     observe("create_resolution_withdrawn", &repo, &[("resolutions", "res_only")]);
 }
 
@@ -305,7 +325,7 @@ fn typed_requirement_without_submission() {
 fn typed_requirement_with_pending_submission() {
     let (_directory, repo) = initialized_repo();
     let removed = typed_requirement(&repo);
-    submit(&repo, &removed);
+    submit(&repo, &removed, Some(OWNER));
     observe("typed_submitted", &repo, &[("requirements", &removed)]);
 }
 
@@ -313,8 +333,8 @@ fn typed_requirement_with_pending_submission() {
 fn typed_requirement_with_accepted_submission() {
     let (_directory, repo) = initialized_repo();
     let removed = typed_requirement(&repo);
-    let proposal = submit(&repo, &removed);
-    decide(&repo, "requirements", "requirement", &removed, &proposal, true);
+    let proposal = submit(&repo, &removed, Some(OWNER));
+    decide(&repo, "requirements", "requirement", &removed, &proposal, true, Some(OWNER));
     observe("typed_accepted", &repo, &[("requirements", &removed)]);
 }
 
@@ -322,8 +342,8 @@ fn typed_requirement_with_accepted_submission() {
 fn typed_requirement_with_rejected_submission() {
     let (_directory, repo) = initialized_repo();
     let removed = typed_requirement(&repo);
-    let proposal = submit(&repo, &removed);
-    decide(&repo, "requirements", "requirement", &removed, &proposal, false);
+    let proposal = submit(&repo, &removed, Some(OWNER));
+    decide(&repo, "requirements", "requirement", &removed, &proposal, false, Some(OWNER));
     observe("typed_rejected", &repo, &[("requirements", &removed)]);
 }
 
@@ -331,8 +351,8 @@ fn typed_requirement_with_rejected_submission() {
 fn typed_requirement_with_withdrawn_submission() {
     let (_directory, repo) = initialized_repo();
     let removed = typed_requirement(&repo);
-    let proposal = submit(&repo, &removed);
-    withdraw(&repo, "requirements", &removed, &proposal);
+    let proposal = submit(&repo, &removed, Some(OWNER));
+    withdraw(&repo, "requirements", &removed, &proposal, Some(OWNER));
     observe("typed_withdrawn", &repo, &[("requirements", &removed)]);
 }
 
