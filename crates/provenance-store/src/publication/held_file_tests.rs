@@ -1,14 +1,17 @@
 //! Writes while a reader has a file of the state open. A reader such as a
 //! second repository open, an editor or a virus scanner can have the
-//! publication marker or a shard open when a write replaces it.
+//! publication marker or a shard open when a write replaces it. On Linux and
+//! macOS a rename always replaces an open file, so these tests can fail only
+//! on Windows.
 
 use super::*;
 use crate::state_store::RecordStamp::ResolveFromRepository as StampFromGit;
-use crate::storage::local::LocalStateStorage;
-use crate::storage::{StateKey, StateStorage};
 
 /// This test has no Rule: no active Rule states that a write passes while a
 /// reader has a file of the state open.
+///
+/// The test uses a private surface because no public call stops between two
+/// writes of the publication marker, so only the probe can hold it open there.
 ///
 /// The probe opens the publication marker when the publication has moved the
 /// live state to its backup, and keeps the handle until the publication
@@ -56,27 +59,49 @@ fn a_publication_passes_while_a_reader_has_the_marker_open() {
 /// This test has no Rule: no active Rule states that a write passes while a
 /// reader has a file of the state open.
 ///
-/// A reader keeps the shard open while a one-key set replaces it.
+/// A reader keeps the thread and message shards open while a public write of
+/// a message replaces each of them as a one-key set.
 #[test]
-fn a_one_key_write_passes_while_a_reader_has_the_shard_open() {
+fn a_message_write_passes_while_a_reader_has_the_shards_open() {
     let directory = tempfile::tempdir().unwrap();
-    let root = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
-    let layout = ProvenanceLayout::new(root);
-    let key = StateKey::new("scopes/default/sources/source.jsonl").unwrap();
-    let shard = layout.state_dir().join(key.as_str());
-    std::fs::create_dir_all(shard.parent().unwrap()).unwrap();
-    std::fs::write(layout.manifest_path(), b"{}").unwrap();
-    std::fs::write(&shard, b"{\"id\":\"before\"}\n").unwrap();
-    let storage = LocalStateStorage::new(layout.clone());
-    let after = b"{\"id\":\"after\"}\n".to_vec();
-    let held = std::fs::File::open(&shard).unwrap();
-    let writes = WriteSet::new(Atomicity::PerKey).put(key.clone(), after.clone());
-    with_repository_publication(&layout, |_| Ok(storage.publish(writes)))
-        .unwrap()
-        .unwrap_or_else(|error| panic!("{error:#}"));
-    let view = with_repository_publication(&layout, |_| Ok(storage.read_view()))
-        .unwrap()
+    let repository = crate::cache::tests::fixtures::initialized(directory.path());
+    let store = repository.store();
+    let scope = provenance_core::ScopeId::new("default").unwrap();
+    store
+        .create_requirement(
+            serde_json::from_value(serde_json::json!({
+                "scope_id": "default", "id": "req_a",
+                "statement": "The system stores records.",
+                "status": "discovery", "depends_on": [], "supersedes": [],
+                "description": null, "refines": [],
+                "spawned_by": null, "origin_thread": null, "origin_message": null
+            }))
+            .unwrap(),
+        )
         .unwrap();
-    drop(held);
-    assert_eq!(view.entries().get(&key), Some(&after));
+    let message = |body: &str| {
+        serde_json::from_value(serde_json::json!({
+            "scope_id": "default",
+            "parent": {"node_type": "requirement", "node_id": "req_a"},
+            "role": "user", "body": body
+        }))
+        .unwrap()
+    };
+    store.post_thread_message(message("first")).unwrap();
+    let layout = repository.layout();
+    let threads_path = crate::shards::threads_path(layout, &scope);
+    let messages_path = crate::shards::messages_path(layout, &scope);
+    let threads = std::fs::File::open(threads_path).unwrap();
+    let messages = std::fs::File::open(messages_path).unwrap();
+    store
+        .post_thread_message(message("second"))
+        .unwrap_or_else(|error| panic!("{error:#}"));
+    let read = crate::repository::Repository::open(directory.path(), "default")
+        .unwrap()
+        .store()
+        .list_messages(&scope)
+        .unwrap();
+    drop((threads, messages));
+    let bodies: Vec<_> = read.iter().map(|message| message.body.as_str()).collect();
+    assert_eq!(bodies, ["first", "second"]);
 }
