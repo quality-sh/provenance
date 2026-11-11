@@ -220,6 +220,25 @@ class ReportValidationTests(unittest.TestCase):
             self.gate.validate_report(report([entry()], version="0.6.0"), self.lcov, "0.5.0")
 
 
+class ToolArgumentTests(unittest.TestCase):
+    def tool_args(self, *scope):
+        gate = load_gate()
+        args = gate._arguments(
+            [*scope, "--lcov", "lcov.info", "--report", "report.json", "--threshold", "30"]
+        )
+        return gate._tool_args(args)
+
+    def test_each_scope_gives_its_cargo_crap_arguments(self):
+        self.assertEqual(self.tool_args("--workspace")[1:2], ["--workspace"])
+        self.assertEqual(
+            self.tool_args("--path", "crates/one")[1:3], ["--path", "crates/one"]
+        )
+        self.assertEqual(
+            self.tool_args("--package", "one", "--package", "two")[1:5],
+            ["-p", "one", "-p", "two"],
+        )
+
+
 class NativeGateTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -369,6 +388,12 @@ class WorkflowWiringTests(unittest.TestCase):
         self.assertIn("--threshold 30", self.job)
         self.assertIn("--allow-unmeasured-platform-code", self.job)
         self.assertIn("--workspace", self.job)
+        # CI runs no simulation test, so the gate leaves out that crate: on
+        # the workspace and on each selected crate directory.
+        self.assertIn("UNGATED_PACKAGE: provenance-simulation", self.job)
+        self.assertIn("UNGATED_DIRECTORY: crates/provenance-simulation", self.job)
+        self.assertIn('if [[ "$scope" == "$UNGATED_DIRECTORY" ]]; then', self.job)
+        self.assertIn('arguments+=(--package "$package")', self.job)
         self.assertIn("--exclude 'build.rs'", self.job)
         self.assertIn("--exclude 'build/**'", self.job)
         self.assertIn("--exclude 'src/fixture.rs'", self.job)

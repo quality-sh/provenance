@@ -639,6 +639,7 @@ class WorkflowWiringTests(unittest.TestCase):
         changes = self.job("changes", "generate-operations")
         self.assertIn("python3 .github/scripts/select_tests.test.py", changes)
         self.assertIn("python3 .github/scripts/ci_ok.test.py", changes)
+        self.assertIn("python3 .github/scripts/simulation_report.test.py", changes)
         self.assertIn("python3 .github/scripts/select_tests.py", changes)
         for output in ("test-scope", "test-crates", "test-packages", "test-filter"):
             self.assertIn(f"{output}: ${{{{ steps.select.outputs.{output} }}}}", changes)

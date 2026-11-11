@@ -5,7 +5,43 @@ use crate::dictionary_reference::ProjectDictionary;
 use crate::settings::Settings;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::ScopeId;
+use provenance_macros::rule;
 use std::sync::Arc;
+
+/// The time source of the writes of a repository.
+pub trait Clock: Send + Sync + std::fmt::Debug {
+    /// The current time.
+    fn now(&self) -> time::OffsetDateTime;
+}
+
+/// The source of the random identities that writes give new records.
+pub trait IdSource: Send + Sync + std::fmt::Debug {
+    /// A new UUID.
+    fn new_uuid(&self) -> uuid::Uuid;
+}
+
+/// The system clock, read through the time crate.
+#[derive(Debug, Default)]
+pub struct SystemClock;
+
+impl Clock for SystemClock {
+    /// The time crate reads the clock through JavaScript on wasm32, so this
+    /// also works in a Worker.
+    #[rule("rule_store_time_works_in_a_worker")]
+    fn now(&self) -> time::OffsetDateTime {
+        time::OffsetDateTime::now_utc()
+    }
+}
+
+/// Random version 4 UUIDs, so independent stores can merge their records.
+#[derive(Debug, Default)]
+pub struct RandomIds;
+
+impl IdSource for RandomIds {
+    fn new_uuid(&self) -> uuid::Uuid {
+        uuid::Uuid::new_v4()
+    }
+}
 
 /// The commit history of the working tree of a repository.
 ///
@@ -35,13 +71,16 @@ pub struct RepositoryIdentity {
     settings: Arc<Settings>,
     dictionary: Option<Arc<ProjectDictionary>>,
     history: Option<Arc<dyn RepositoryHistory>>,
+    clock: Arc<dyn Clock>,
+    ids: Arc<dyn IdSource>,
 }
 
 impl RepositoryIdentity {
     /// The identity of a repository whose working tree is `root`, with the
     /// selected scope and the settings that the host read.
     /// The identity has no project dictionary and no history until the
-    /// `with_` methods give them.
+    /// `with_` methods give them. It reads the system clock and makes random
+    /// IDs until `with_clock` and `with_ids` give other sources.
     pub fn new(root: Utf8PathBuf, scope: ScopeId, settings: Settings) -> Self {
         Self {
             root,
@@ -49,7 +88,33 @@ impl RepositoryIdentity {
             settings: Arc::new(settings),
             dictionary: None,
             history: None,
+            clock: Arc::new(SystemClock),
+            ids: Arc::new(RandomIds),
         }
+    }
+
+    /// This identity with the clock that its writes read.
+    #[must_use]
+    pub fn with_clock(mut self, clock: Arc<dyn Clock>) -> Self {
+        self.clock = clock;
+        self
+    }
+
+    /// This identity with the source of the IDs that its writes make.
+    #[must_use]
+    pub fn with_ids(mut self, ids: Arc<dyn IdSource>) -> Self {
+        self.ids = ids;
+        self
+    }
+
+    /// The clock that the writes read.
+    pub fn clock(&self) -> &Arc<dyn Clock> {
+        &self.clock
+    }
+
+    /// The source of the IDs that the writes make.
+    pub fn ids(&self) -> &Arc<dyn IdSource> {
+        &self.ids
     }
 
     /// This identity with the commit history of its working tree.

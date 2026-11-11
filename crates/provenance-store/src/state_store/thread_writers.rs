@@ -83,10 +83,9 @@ impl StateStore {
         body: String,
     ) -> anyhow::Result<Message> {
         let existing = self.list_messages(scope_id)?;
-        let now_ms =
-            i64::try_from(time::OffsetDateTime::now_utc().unix_timestamp_nanos() / 1_000_000)?;
+        let now_ms = super::requirement_reviews::now_millis(&*self.clock())?;
         let created_at = next_message_time(now_ms, existing.iter().map(|m| m.created_at).max())?;
-        let id = new_message_id();
+        let id = new_message_id(&*self.ids());
         let message = Message {
             scope_id: scope_id.clone(),
             id,

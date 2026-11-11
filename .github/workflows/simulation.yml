@@ -1,0 +1,225 @@
+name: Simulation
+
+# Random cases of the write engine, run nightly and on dispatch, never on a
+# pull request. Each job is one layer, so a failure names the layer: the
+# engine, the contract, and the CLI on Linux, macOS and Windows. A broken law
+# opens one issue per layer and law, or comments on the open one. The steps
+# for a failure issue are in crates/provenance-simulation/README.md.
+on:
+  schedule:
+    - cron: "41 2 * * *"
+  workflow_dispatch:
+    inputs:
+      cases:
+        description: "Cases per random test (HEGEL_TEST_CASES); empty keeps the default of 100"
+        required: false
+        type: number
+      seed:
+        description: "Seed (HEGEL_SEED); empty uses the run ID"
+        required: false
+        type: number
+      report:
+        description: "issues opens or comments on issues; print prints them and makes no GitHub write"
+        required: false
+        type: choice
+        options:
+          - issues
+          - print
+        default: issues
+
+permissions:
+  contents: read
+
+concurrency:
+  group: simulation-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  HEGEL_SEED: ${{ inputs.seed || github.run_id }}
+  HEGEL_TEST_CASES: ${{ inputs.cases }}
+  # The blob replays a shrunk case on any system; print it with the failure.
+  HEGEL_PRINT_BLOB: "true"
+
+jobs:
+  layer:
+    # The engine and the contract layers run the same cases on Linux: they
+    # have no file or process code.
+    name: Simulation of the ${{ matrix.layer }} layer
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - layer: engine
+            tests: --test engine --test engine_planted --test storage_contract
+          - layer: contract
+            tests: --test contract --test contract_planted
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      LAYER: ${{ matrix.layer }}
+      LAYER_TESTS: ${{ matrix.tests }}
+      SIMULATION_FAILURE_DIR: ${{ github.workspace }}/target/simulation/failures
+      SIMULATION_STATS_DIR: ${{ github.workspace }}/target/simulation/stats
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          prefix-key: v1
+          shared-key: simulation
+          add-job-id-key: "false"
+      - name: Fetch crates through Socket Firewall
+        run: sfw cargo fetch --locked
+      - name: Install nextest
+        uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2
+        with:
+          tool: nextest@0.9.143
+      - name: Run the simulation
+        shell: bash
+        run: |
+          mkdir -p target/simulation
+          set -o pipefail
+          read -ra binaries <<< "$LAYER_TESTS"
+          cargo nextest run --locked --profile simulation --run-ignored all \
+            -p provenance-simulation "${binaries[@]}" \
+            --no-fail-fast 2>&1 | tee "target/simulation/$LAYER.log"
+      # The summary gives the counts of the random cases on each run, and the
+      # broken laws when the job did not succeed; the log shows it too. A job
+      # that stops at its time limit runs the steps with always().
+      - name: Report the counts and the broken laws
+        if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: >-
+          python3 .github/scripts/simulation_report.py summary
+          --layer "$LAYER" --log "target/simulation/$LAYER.log"
+          --failures target/simulation/failures --stats target/simulation/stats
+          --job-status "$JOB_STATUS" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always() && !success()
+        with:
+          name: simulation-${{ matrix.layer }}
+          path: target/simulation
+          if-no-files-found: ignore
+
+  cli:
+    # Each write is a provenance api process on a repository on disk, so this
+    # layer runs on each system that the CLI ships for. The layer name names
+    # the system, so each system has its own issue.
+    name: Simulation of the CLI layer on ${{ matrix.system }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # L6 after each write costs about 33 s a case. Linux checks it
+          # after each write; macOS and Windows check it at the end of each
+          # case, so that a night of 100 cases stays inside the job timeout.
+          - os: ubuntu-24.04
+            system: linux
+            l6: each
+          - os: macos-latest
+            system: macos
+            l6: end
+          - os: windows-latest
+            system: windows
+            l6: end
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    env:
+      LAYER: cli-${{ matrix.system }}
+      SIMULATION_L6: ${{ matrix.l6 }}
+      SIMULATION_FAILURE_DIR: ${{ github.workspace }}/target/simulation/failures
+      SIMULATION_STATS_DIR: ${{ github.workspace }}/target/simulation/stats
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/macos-fix-certs
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          prefix-key: v1
+          shared-key: simulation-cli
+          add-job-id-key: "false"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+      - name: Fetch crates through Socket Firewall
+        env:
+          # Cargo on Windows checks certificate revocation with schannel, and
+          # the revocation status of the firewall's intercepted TLS chain is
+          # unknown. Only this firewalled fetch turns the check off.
+          CARGO_HTTP_CHECK_REVOKE: ${{ runner.os == 'Windows' && 'false' || 'true' }}
+        run: sfw cargo fetch --locked
+      - name: Generate the operation source
+        shell: bash
+        run: |
+          sfw npm ci --prefix tools/operation-codegen
+          node tools/operation-codegen/ensure-generated.mjs
+      - name: Install nextest
+        uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2
+        with:
+          tool: nextest@0.9.143
+      - name: Run the simulation
+        shell: bash
+        run: |
+          mkdir -p target/simulation
+          set -o pipefail
+          cargo nextest run --locked --profile simulation --run-ignored all \
+            -p provenance-cli --test simulation_cli --test simulation_cli_planted \
+            --no-fail-fast 2>&1 | tee "target/simulation/$LAYER.log"
+      - name: Report the counts and the broken laws
+        if: always()
+        shell: bash
+        env:
+          JOB_STATUS: ${{ job.status }}
+        # The Windows image names its Python 3 python.
+        run: |
+          python=python3
+          if [ "$RUNNER_OS" = Windows ]; then python=python; fi
+          "$python" .github/scripts/simulation_report.py summary \
+            --layer "$LAYER" --log "target/simulation/$LAYER.log" \
+            --failures target/simulation/failures --stats target/simulation/stats \
+            --job-status "$JOB_STATUS" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always() && !success()
+        with:
+          name: simulation-cli-${{ matrix.system }}
+          path: target/simulation
+          if-no-files-found: ignore
+
+  report:
+    name: Open issues for broken laws
+    needs: [layer, cli]
+    # A layer job that stops at its time limit counts as failed or
+    # cancelled; a cancelled run opens no issue.
+    if: ${{ !cancelled() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: simulation-*
+          path: target/simulation
+      # The schedule has no inputs, so it opens issues. A manual start with
+      # report "print" prints each issue and comment in the log and the
+      # summary, and makes no GitHub write.
+      - name: Open or update one issue per layer and law, or print them
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REPORT_MODE: ${{ inputs.report || 'issues' }}
+        run: |
+          set -o pipefail
+          python3 .github/scripts/simulation_report.py issues \
+            --artifacts target/simulation --run-url "$RUN_URL" --mode "$REPORT_MODE" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
