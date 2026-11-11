@@ -9,7 +9,7 @@ mod support {
 
 use provenance_macros::verifies;
 use serde_json::{json, Value};
-use support::records::Repository;
+use support::records::{allow_reviewer, Repository};
 use support::resource_http::{call, host};
 
 /// The status and the error object of one answer, under the name of its row.
@@ -122,6 +122,108 @@ async fn a_topic_or_question_discussion_that_names_an_owner_is_an_invalid_update
         json!([
             {"error":refusal,"row":"/topics/topic_shared","status":400},
             {"error":refusal,"row":"/questions/question_shared","status":400}
+        ])
+    );
+}
+
+/// Evidence for an assertion of `proposal_decided`: a contribution with one
+/// claim and a synthesis packet that suggests the proposal.
+fn evidence() -> [(&'static str, Value); 2] {
+    let target = json!({"artifact_type":"requirement","artifact_id":"req_shared"});
+    [
+        (
+            "/contributions",
+            json!({"data":{
+                "id":"contribution_evidence", "target":target,
+                "participant_slot":"reviewer", "stance":"support", "strongest_finding":"Observed",
+                "evidence_references":[{"reference_id":"evidence_a","evidence_type":"source","summary":"Pinned"}],
+                "material_claims":[{"claim_id":"claim_a","statement":"Observed",
+                    "evidence_type":"source","evidence_reference_ids":["evidence_a"]}],
+                "risks":[], "objections":[], "challenges":[], "suggested_artifact_changes":[],
+                "unsupported_recommendations":[], "uncertainty":{"level":"low","rationale":"Direct"},
+                "open_questions":[]
+            }}),
+        ),
+        (
+            "/synthesis-packets",
+            json!({"data":{
+                "id":"synthesis_evidence", "target":target, "summary":"Adjudicated",
+                "consensus":[], "contested_claims":[], "minority_objections":[],
+                "evidence_gaps":[], "unsupported_speculation":[], "open_questions":[],
+                "suggested_artifacts":[{"proposal_id":"proposal_decided","proposal_key":"decided",
+                    "proposal_type":"requirement_candidate","summary":"Candidate",
+                    "origin_participant_slots":["reviewer"]}],
+                "required_human_decisions":[]
+            }}),
+        ),
+    ]
+}
+
+fn assertion(id: &str) -> Value {
+    json!({"data":{"id":id, "synthesis_packet_id":"synthesis_evidence",
+        "supporting_claim_ids":["claim_a"]}})
+}
+
+fn disposition(id: &str) -> Value {
+    json!({"data":{"id":id, "decision":"rejected", "rationale":"Reviewed",
+        "actor":{"identity_type":"human","id":"reviewer"}}})
+}
+
+/// A second assertion or disposition, and an assertion or a disposition of a
+/// proposal that has a disposition, have a declared kind. No route creates a
+/// proposal that a packet qualifies, so the test creates the proposal and its
+/// assertion in one store call, as a swarm landing does.
+#[tokio::test]
+#[verifies("rule_caller_refusal_has_declared_kind", examples)]
+async fn a_second_assertion_or_disposition_has_a_declared_kind() {
+    let repo = Repository::new("The shared graph is readable.");
+    allow_reviewer(&repo);
+    let host = host(&repo, true);
+    for (path, body) in evidence() {
+        let (status, created) = call(&host, "POST", path, Some(body)).await;
+        assert_eq!(status, 200, "{path}: {created}");
+    }
+    let proposal = serde_json::from_value(json!({
+        "scope_id":"default", "id":"proposal_decided", "proposal_key":"decided",
+        "proposal_type":"requirement_candidate", "title":"Decided",
+        "summary":"Clarify the shared requirement.",
+        "traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_shared"},
+            "source_ids":[], "evidence_references":[], "supporting_claim_ids":["claim_a"]},
+        "builds_on":[], "promotion_state":"proposed"
+    }))
+    .unwrap();
+    let mut first = assertion("assertion_a")["data"].clone();
+    first["scope_id"] = json!("default");
+    first["proposal_id"] = json!("proposal_decided");
+    repo.open()
+        .store()
+        .create_asserted_proposal(proposal, serde_json::from_value(first).unwrap())
+        .unwrap();
+    let assertions = "/proposals/proposal_decided/assertions";
+    let dispositions = "/proposals/proposal_decided/dispositions";
+    let second = call(&host, "POST", assertions, Some(assertion("assertion_a"))).await;
+    let mut rows = vec![row("a second assertion", second)];
+    let first = disposition("disposition_a");
+    let (status, created) = call(&host, "POST", dispositions, Some(first)).await;
+    assert_eq!(status, 200, "{created}");
+    for (name, path, body) in [
+        ("a second disposition", dispositions, disposition("disposition_a")),
+        ("a disposition of a decided proposal", dispositions, disposition("disposition_b")),
+        ("an assertion of a disposed proposal", assertions, assertion("assertion_b")),
+    ] {
+        rows.push(row(name, call(&host, "POST", path, Some(body)).await));
+    }
+    assert_eq!(
+        Value::Array(rows),
+        json!([
+            {"error":{"kind":"already_exists"},"row":"a second assertion","status":409},
+            {"error":{"kind":"already_exists"},"row":"a second disposition","status":409},
+            {"error":{"kind":"invalid_update",
+                "message":"proposal already has an authoritative disposition"},
+                "row":"a disposition of a decided proposal","status":400},
+            {"error":{"kind":"invalid_update",
+                "message":"a disposed proposal cannot re-enter assertion"},
+                "row":"an assertion of a disposed proposal","status":400}
         ])
     );
 }
