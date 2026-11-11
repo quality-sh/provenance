@@ -11,8 +11,13 @@ pub struct ReplaceFailed(#[source] std::io::Error);
 /// handle that a reader has open on the target does not make the replace fail
 /// when that handle lets other handles delete the file, as `std::fs` handles
 /// do. The temporary file stays open until the rename returns. After a
-/// failure, the temporary file is deleted. The caller syncs the temporary file
-/// before the call and the directory after it.
+/// failure, the temporary file is deleted.
+///
+/// This function does not sync. The writers of the publication marker and of
+/// the Source edit marker sync the temporary file before the call and the
+/// directory after it. `write_file_atomic` syncs neither: a whole-set
+/// publication syncs the staged tree after all of its writes, and a one-key
+/// write and a JSONL file write do not sync.
 pub fn replace_file(temporary: tempfile::NamedTempFile, target: &Utf8Path) -> anyhow::Result<()> {
     let target = crate::long_path::extended(target)?;
     // On Windows, `keep` clears the temporary attribute that `tempfile` sets.
