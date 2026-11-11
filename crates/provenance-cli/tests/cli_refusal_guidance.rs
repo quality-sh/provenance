@@ -63,8 +63,8 @@ fn empty_search_names_text_and_kind_forms() {
         .success());
 }
 
-/// Implementation aid: no Rule states the refusal of search text without --text, and
-/// rule_search_refusal_names_query is about a search with no query.
+/// Implementation aid: no Rule states the refusal of search text without `--text`, and
+/// `rule_search_refusal_names_query` is about a search with no query.
 #[test]
 fn search_words_without_text_flag_name_the_text_flag() {
     let cases: [(&[&str], &str, &str); 5] = [
