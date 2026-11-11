@@ -1,9 +1,11 @@
-//! A stored row that the store cannot read is state of the repository. A
-//! read or a write of its family refuses with `invalid_state_file`, and the
-//! refusal gives the file and the line of the row.
+//! A stored row that the store cannot use is state of the repository. The
+//! refusal is `invalid_state_file`, and it gives the file and the line of
+//! the row.
 //!
-//! A row that the store cannot read back as one record does not parse as a
-//! record, so `rule_state_parse_refusal_names_the_line` states this refusal.
+//! Each read of a row with the `retired` field refuses, so that row does not
+//! parse as a record, and `rule_state_parse_refusal_names_the_line` states
+//! its refusal. A row with a repeated member parses, and only a typed change
+//! of it refuses.
 
 use provenance_macros::verifies;
 use serde_json::{json, Value};
@@ -76,8 +78,9 @@ fn update(repo: &str) -> std::process::Output {
         .unwrap()
 }
 
+/// No Rule states the refusal of a row that parses but that a typed change
+/// cannot keep. The `get` in `update` reads the row with no refusal.
 #[test]
-#[verifies("rule_state_parse_refusal_names_the_line", examples)]
 fn a_typed_change_of_a_row_with_a_repeated_member_refuses_at_the_row() {
     let (_directory, repo) = repository(|row| {
         format!(
