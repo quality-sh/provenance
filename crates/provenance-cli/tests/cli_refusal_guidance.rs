@@ -68,18 +68,38 @@ fn empty_search_names_text_and_kind_forms() {
 #[test]
 fn search_words_without_text_flag_name_the_text_flag() {
     let cases: [(&[&str], &str, Option<&str>); 15] = [
-        (&["search", "some text"], "some text", Some("--text 'some text'")),
-        (&["search", "it's here"], "it's here", Some(r"--text 'it'\''s here'")),
+        (
+            &["search", "some text"],
+            "some text",
+            Some("--text 'some text'"),
+        ),
+        (
+            &["search", "it's here"],
+            "it's here",
+            Some(r"--text 'it'\''s here'"),
+        ),
         (
             &["search", "some text", "--kind", "requirement"],
             "some text",
             Some("--text 'some text' --kind requirement"),
         ),
-        (&["search", "some", "text"], "some", Some("--text 'some text'")),
-        (&["search", "--text", "some", "text"], "text", Some("--text 'some text'")),
+        (
+            &["search", "some", "text"],
+            "some",
+            Some("--text 'some text'"),
+        ),
+        (
+            &["search", "--text", "some", "text"],
+            "text",
+            Some("--text 'some text'"),
+        ),
         (&["search", "--", "x"], "x", Some("--text 'x'")),
         (&["search", "--", "-x"], "-x", Some("--text '-x'")),
-        (&["--repo", "r", "search", "x"], "x", Some("--text 'x' --repo r")),
+        (
+            &["--repo", "r", "search", "x"],
+            "x",
+            Some("--text 'x' --repo r"),
+        ),
         (&["search", "x", "--help"], "x", Some("--text 'x'")),
         (&["search", "x", "-h"], "x", Some("--text 'x'")),
         (&["help", "search", "x"], "x", Some("--text 'x'")),
@@ -114,7 +134,11 @@ fn assert_refusal(words: &[&str], error: &str) {
     let output = bounded_process::provenance().args(words).bounded_output();
     assert_eq!(output.status.code(), Some(2), "{words:?} {output:?}");
     assert!(output.stdout.is_empty(), "{words:?} {output:?}");
-    assert_eq!(String::from_utf8(output.stderr).unwrap(), error, "{words:?}");
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        error,
+        "{words:?}"
+    );
 }
 
 #[test]
