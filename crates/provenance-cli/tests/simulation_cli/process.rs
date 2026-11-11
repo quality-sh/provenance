@@ -363,7 +363,7 @@ pub fn stop_delay(at: u8) -> Duration {
 /// when the process runs at the kill and has not printed its answer. A
 /// process that ended or printed its answer before the kill gives its
 /// answer, as a write alone does.
-fn stop(task: &Task, mut child: Child, request: &Request) -> Done {
+fn stop_write(task: &Task, mut child: Child, request: &Request) -> Done {
     let ended = |result: Result<Value, String>| {
         provenance_simulation::stats::add(&layer(), "stops after the write ended", 1);
         let result = result.and_then(|data| effect(task, request, &data));
@@ -399,7 +399,7 @@ pub fn run_at_once(root: &Path, tasks: &[Task], stop: Option<Duration>) -> Vec<D
             (Err(refusal), _) => done(task, Err(refusal), false),
             (Ok((child, request, _)), Some(delay)) => {
                 std::thread::sleep(delay);
-                stop(task, child, &request)
+                stop_write(task, child, &request)
             }
             (Ok((child, request, started)), None) => {
                 let result = finish(child, &format!("write {}", request.path));
