@@ -98,7 +98,12 @@ fn discussions_status_refusal_ends_with_a_newline() {
 #[test]
 fn positional_value_refusal_names_the_flag() {
     let cases: [(&[&str], &str, &str, &str); 9] = [
-        (&["check", ""], "", "the statement with --statement", "check [OPTIONS]"),
+        (
+            &["check", ""],
+            "",
+            "the statement with --statement",
+            "check [OPTIONS]",
+        ),
         (
             &["import", "x.json"],
             "x.json",

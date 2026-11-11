@@ -14,13 +14,22 @@ pub async fn dispatch_root(
     args: DiscussionsArgs,
     matches: &clap::ArgMatches,
 ) -> anyhow::Result<()> {
-    if let Some(id) = args.discussion_id {
-        anyhow::bail!(
+    match (args.discussion_id, args.action) {
+        (Some(id), Some(_)) => anyhow::bail!(
             "`provenance discussions <discussion-id> get` was removed. Use \
              `provenance {id} discussion`"
-        );
+        ),
+        // One word without `get` can be a Discussion ID, a record ID or a status, so the
+        // refusal does not put the word in a command.
+        (Some(word), None) => anyhow::bail!(
+            "`provenance discussions` does not take the value `{word}`. Use \
+             `provenance <discussion-id> discussion` to read one Discussion, \
+             `provenance <record-id> discussions` to list the Discussions of one record, or \
+             `provenance discussions --status <status>` to list the Discussions with a status"
+        ),
+        (None, Some(_)) => anyhow::bail!("get requires a Discussion ID"),
+        (None, None) => {}
     }
-    anyhow::ensure!(args.action.is_none(), "get requires a Discussion ID");
     let action = Action::Discussions;
     let schema = discussion::input_schema(action);
     let input = crate::catalog_cli::fields::schema_input(&schema, matches, &["target"], &[])

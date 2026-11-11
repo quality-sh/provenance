@@ -1,6 +1,6 @@
 Find records across the permitted kinds in the bound scope, or the Rules bound to a source file and symbol.
 
-Usage: provenance [OPTIONS] <COMMAND>
+Usage: provenance search [OPTIONS]
 
 Arguments:
   <COMMAND>  [possible values: search]
