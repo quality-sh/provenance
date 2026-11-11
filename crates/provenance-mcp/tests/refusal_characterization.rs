@@ -1,5 +1,5 @@
 //! Characterization with no Rule: the transport refusal rows as MCP error
-//! objects. The rows pin refusals that the store conversion keeps.
+//! objects. The rows pin the kind and the fields of each refusal.
 #![cfg(feature = "test-fixture")]
 
 #[allow(dead_code)]

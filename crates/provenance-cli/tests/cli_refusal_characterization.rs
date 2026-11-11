@@ -1,6 +1,6 @@
 //! The exit code and the standard error lines of each refused record command,
 //! in text and in JSON format. A test with no Rule is a characterization: its
-//! rows pin refusals that the store conversion keeps.
+//! rows pin the kind, the text and the exit code of each refusal.
 
 use serde_json::{json, Value};
 

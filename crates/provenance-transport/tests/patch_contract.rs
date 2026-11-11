@@ -1,5 +1,6 @@
 #![cfg(feature = "test-fixture")]
 mod support {
+    pub mod ideation;
     pub mod records;
     pub mod resource_http;
 }
@@ -16,16 +17,7 @@ async fn read(host: &provenance_transport::StatementHost, path: &str) -> Value {
 }
 
 async fn create_contribution(host: &provenance_transport::StatementHost) {
-    let data = json!({
-        "id":"contribution_patch_contract",
-        "target":{"artifact_type":"requirement","artifact_id":"req_shared"},
-        "participant_slot":"reviewer", "stance":"support",
-        "strongest_finding":"Original finding", "evidence_references":[],
-        "material_claims":[], "risks":[], "objections":[], "challenges":[],
-        "suggested_artifact_changes":[], "unsupported_recommendations":[],
-        "uncertainty":{"level":"low","rationale":"Direct evidence"},
-        "open_questions":[]
-    });
+    let data = support::ideation::contribution("contribution_patch_contract");
     let (status, value) = call(host, "POST", "/contributions", Some(json!({"data": data}))).await;
     assert_eq!(status, 200, "{value}");
 }

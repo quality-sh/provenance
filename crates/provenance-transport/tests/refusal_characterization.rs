@@ -1,7 +1,7 @@
 //! The kind, status and fields of each refusal that the HTTP routes give.
 //! `each_refusal_keeps_its_kind_status_and_fields` is a characterization with
-//! no Rule: its rows pin refusals that the store conversion keeps. The other
-//! tests pin caller refusals that have a declared kind.
+//! no Rule: its rows pin the kind, the status and the fields of each refusal.
+//! The other tests pin caller refusals that have a declared kind.
 #![cfg(feature = "test-fixture")]
 
 mod support {

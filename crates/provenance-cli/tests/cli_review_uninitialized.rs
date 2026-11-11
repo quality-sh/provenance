@@ -1,8 +1,8 @@
 //! Characterization with no Rule: `provenance review` on a directory with no
 //! graph refuses before it serves a request, in the foreground and with
-//! `--detach`. The manifest open that gives this refusal also holds a
-//! converted fault (a manifest path that is not a file), so the test keeps
-//! the refusal of a missing graph the same.
+//! `--detach`. The manifest open that gives this refusal also refuses a
+//! manifest path that is not a file, and this test pins the refusal of a
+//! missing graph.
 
 mod support {
     pub mod review_paths;

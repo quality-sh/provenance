@@ -339,11 +339,9 @@ async fn target_edit_with_nested_unknown_data_is_refused_without_publication() {
         ),
         "{error}"
     );
-    let message = error["message"].as_str().unwrap();
-    assert!(
-        message.starts_with("nested unknown field `links")
-            && message.ends_with("` cannot survive a typed record change"),
-        "{message}"
+    assert_eq!(
+        error["message"],
+        "nested unknown field `links.0.extension` cannot survive a typed record change"
     );
     assert_eq!(raw_rows(&fixture, "topics", "topic.jsonl"), vec![original]);
     assert_eq!(state_snapshot(&fixture), before);

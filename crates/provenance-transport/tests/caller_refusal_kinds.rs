@@ -3,41 +3,20 @@
 #![cfg(feature = "test-fixture")]
 
 mod support {
+    pub mod ideation;
     pub mod records;
     pub mod resource_http;
 }
 
 use provenance_macros::verifies;
 use serde_json::{json, Value};
+use support::ideation::{contribution, synthesis};
 use support::records::{allow_reviewer, Repository};
 use support::resource_http::{call, host};
 
 /// The status and the error object of one answer, under the name of its row.
 fn row(name: &str, (status, body): (u16, Value)) -> Value {
     json!({"row": name, "status": status, "error": body["error"]})
-}
-
-fn contribution() -> Value {
-    json!({
-        "id":"contribution_shared",
-        "target":{"artifact_type":"requirement","artifact_id":"req_shared"},
-        "participant_slot":"reviewer", "stance":"support",
-        "strongest_finding":"Original finding", "evidence_references":[],
-        "material_claims":[], "risks":[], "objections":[], "challenges":[],
-        "suggested_artifact_changes":[], "unsupported_recommendations":[],
-        "uncertainty":{"level":"low","rationale":"Direct evidence"},
-        "open_questions":[]
-    })
-}
-
-fn synthesis() -> Value {
-    json!({
-        "id":"synthesis_shared",
-        "target":{"artifact_type":"requirement","artifact_id":"req_shared"},
-        "summary":"Original summary", "consensus":[], "contested_claims":[],
-        "minority_objections":[], "evidence_gaps":[], "unsupported_speculation":[],
-        "open_questions":[], "suggested_artifacts":[], "required_human_decisions":[]
-    })
 }
 
 #[tokio::test]
@@ -47,8 +26,8 @@ async fn a_second_create_of_an_ideation_record_already_exists() {
     let host = host(&repo, true);
     let mut rows = Vec::new();
     for (path, data) in [
-        ("/contributions", contribution()),
-        ("/synthesis-packets", synthesis()),
+        ("/contributions", contribution("contribution_shared")),
+        ("/synthesis-packets", synthesis("synthesis_shared")),
     ] {
         let body = json!({ "data": data });
         let (status, created) = call(&host, "POST", path, Some(body.clone())).await;
