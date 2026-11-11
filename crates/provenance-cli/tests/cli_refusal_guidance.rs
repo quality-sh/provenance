@@ -121,12 +121,17 @@ fn search_words_without_text_flag_name_the_text_flag() {
             ),
         );
     }
+    // Clap writes the name of the executable file in the usage line. On Windows, this
+    // name has the `.exe` suffix.
+    let suffix = std::env::consts::EXE_SUFFIX;
     assert_refusal(
         &["search", "-x"],
-        "error: unexpected argument '-x' found\n\n  \
-         tip: to pass '-x' as a value, use '-- -x'\n\n\
-         Usage: provenance [OPTIONS] <COMMAND>\n\n\
-         For more information, try '--help'.\n",
+        &format!(
+            "error: unexpected argument '-x' found\n\n  \
+             tip: to pass '-x' as a value, use '-- -x'\n\n\
+             Usage: provenance{suffix} [OPTIONS] <COMMAND>\n\n\
+             For more information, try '--help'.\n"
+        ),
     );
 }
 
