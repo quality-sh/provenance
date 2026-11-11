@@ -67,33 +67,54 @@ fn empty_search_names_text_and_kind_forms() {
 /// `rule_search_refusal_names_query` is about a search with no query.
 #[test]
 fn search_words_without_text_flag_name_the_text_flag() {
-    let cases: [(&[&str], &str, &str); 5] = [
-        (&["some text"], "some text", "--text 'some text'"),
-        (&["it's here"], "it's here", r"--text 'it'\''s here'"),
+    let cases: [(&[&str], &str, Option<&str>); 15] = [
+        (&["search", "some text"], "some text", Some("--text 'some text'")),
+        (&["search", "it's here"], "it's here", Some(r"--text 'it'\''s here'")),
         (
-            &["some text", "--kind", "requirement"],
+            &["search", "some text", "--kind", "requirement"],
             "some text",
-            "--text 'some text' --kind requirement",
+            Some("--text 'some text' --kind requirement"),
         ),
-        (&["some", "text"], "some", "--text 'some text'"),
-        (&["--text", "some", "text"], "text", "--text 'some text'"),
+        (&["search", "some", "text"], "some", Some("--text 'some text'")),
+        (&["search", "--text", "some", "text"], "text", Some("--text 'some text'")),
+        (&["search", "--", "x"], "x", Some("--text 'x'")),
+        (&["search", "--", "-x"], "-x", Some("--text '-x'")),
+        (&["--repo", "r", "search", "x"], "x", Some("--text 'x' --repo r")),
+        (&["search", "x", "--help"], "x", Some("--text 'x'")),
+        (&["search", "x", "-h"], "x", Some("--text 'x'")),
+        (&["help", "search", "x"], "x", Some("--text 'x'")),
+        (&["search", ""], "", None),
+        (&["search", "x", "--bogus", "v"], "x", None),
+        (&["search", "x", "--kind", "--limit", "5"], "x", None),
+        (&["search", "x", "-y"], "x", None),
     ];
     for (words, found, corrected) in cases {
-        let output = bounded_process::provenance()
-            .arg("search")
-            .args(words)
-            .bounded_output();
-        assert_eq!(output.status.code(), Some(2), "{output:?}");
-        assert!(output.stdout.is_empty(), "{output:?}");
-        assert_eq!(
-            String::from_utf8(output.stderr).unwrap(),
-            format!(
+        let tip = corrected
+            .map(|corrected| format!(": provenance search {corrected}"))
+            .unwrap_or_default();
+        assert_refusal(
+            words,
+            &format!(
                 "error: unexpected argument '{found}' found\n\n  \
-                 tip: give the search text with --text: provenance search {corrected}\n\n\
+                 tip: give the search text with --text{tip}\n\n\
                  For more information, try 'provenance search --help'.\n"
             ),
         );
     }
+    assert_refusal(
+        &["search", "-x"],
+        "error: unexpected argument '-x' found\n\n  \
+         tip: to pass '-x' as a value, use '-- -x'\n\n\
+         Usage: provenance [OPTIONS] <COMMAND>\n\n\
+         For more information, try '--help'.\n",
+    );
+}
+
+fn assert_refusal(words: &[&str], error: &str) {
+    let output = bounded_process::provenance().args(words).bounded_output();
+    assert_eq!(output.status.code(), Some(2), "{words:?} {output:?}");
+    assert!(output.stdout.is_empty(), "{words:?} {output:?}");
+    assert_eq!(String::from_utf8(output.stderr).unwrap(), error, "{words:?}");
 }
 
 #[test]
