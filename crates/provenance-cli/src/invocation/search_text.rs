@@ -86,10 +86,7 @@ fn corrected(command: &Command, arguments: &[String]) -> String {
         flags.push(quoted(argument, false));
         flags.extend(value.map(|value| quoted(value, false)));
     }
-    let mut line = format!(
-        "provenance search --text {}",
-        quoted(&text.join(" "), true)
-    );
+    let mut line = format!("provenance search --text {}", quoted(&text.join(" "), true));
     for flag in flags {
         line.push(' ');
         line.push_str(&flag);
