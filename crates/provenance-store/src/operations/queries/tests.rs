@@ -28,6 +28,7 @@ mod live;
 mod order;
 mod pinned;
 mod reader;
+mod reader_outputs;
 mod stamp;
 mod symbol_pages;
 mod symbols;
