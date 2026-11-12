@@ -39,6 +39,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import traceback
 from pathlib import Path
 
 CLOCK_TICKS = os.sysconf("SC_CLK_TCK") if hasattr(os, "sysconf") else 100
@@ -196,26 +197,34 @@ class Watcher:
         age = top.age(now)
         members = tree(processes, top.pid)
         self.write(f"::group::Stuck test: {label} (process {top.pid}, {age:.0f} s)")
-        self.write(f"The test process {top.pid} ran {age:.0f} s, past the limit of {self.limit:g} s.")
-        self.write(f"Its tree has {len(members)} processes.")
-        files = {}
-        for pid, depth in members:
-            process = processes.get(pid)
-            if process:
-                self.describe(process, depth, now, files)
-        self.write_locks(files, processes)
-        self.write_backtraces([pid for pid, _ in members])
-        self.write("::endgroup::")
-        # The error line comes before the stop: when the tree ends, the test
-        # step ends, and the job can stop the watcher soon after.
-        self.write(
-            f"::error title={escape('Stuck test ' + label, title=True)}::"
-            + escape(
-                f"The test {label} ran {age:.0f} s, past the limit of {self.limit:g} s. "
-                f"The log group 'Stuck test: {label}' gives the report. The watcher stops its process tree."
+        try:
+            self.write(f"The test process {top.pid} ran {age:.0f} s, past the limit of {self.limit:g} s.")
+            self.write(f"Its tree has {len(members)} processes.")
+            files = {}
+            for pid, depth in members:
+                process = processes.get(pid)
+                if process:
+                    self.describe(process, depth, now, files)
+            self.write_locks(files, processes)
+            self.write_backtraces([pid for pid, _ in members])
+        except Exception as error:  # The stop below must occur after any fault of the report.
+            place = traceback.extract_tb(error.__traceback__)[-1]
+            self.write(
+                f"The report is not complete: {error!r} at line {place.lineno} ({place.name}). "
+                "The watcher stops the tree."
             )
-        )
-        self.write(stop(pid for pid, _ in tree(snapshot(), top.pid)))
+        finally:
+            self.write("::endgroup::")
+            # The error line comes before the stop: when the tree ends, the
+            # test step ends, and the job can stop the watcher.
+            self.write(
+                f"::error title={escape('Stuck test ' + label, title=True)}::"
+                + escape(
+                    f"The test {label} ran {age:.0f} s, past the limit of {self.limit:g} s. "
+                    f"The log group 'Stuck test: {label}' gives the report. The watcher stops its process tree."
+                )
+            )
+            self.write(stop(pid for pid, _ in tree(snapshot(), top.pid)))
 
     def describe(self, process, depth, now, files):
         indent = "  " * depth
@@ -224,7 +233,12 @@ class Watcher:
             f"state {process.state}, program {process.exe or process.comm}"
         )
         self.write(f"{indent}  command line: {process.command}")
-        for task in sorted(os.listdir(f"/proc/{process.pid}/task"), key=int) if os.path.isdir(f"/proc/{process.pid}/task") else []:
+        try:
+            tasks = sorted(os.listdir(f"/proc/{process.pid}/task"), key=int)
+        except OSError as error:
+            self.write(f"{indent}  threads: ({error.strerror or error})")
+            tasks = []
+        for task in tasks:
             base = f"/proc/{process.pid}/task/{task}"
             stat = read(f"{base}/stat")
             state = stat[stat.rfind(")") + 2 :].split(" ", 1)[0] if ")" in stat else "?"
@@ -310,6 +324,8 @@ class Watcher:
                 lines = (result.stdout + result.stderr).splitlines()
             except subprocess.TimeoutExpired:
                 lines = [f"({tool} did not end in {BACKTRACE_LIMIT} s)"]
+            except OSError as error:
+                lines = [f"({tool} did not start: {error.strerror or error})"]
             for line in demangle(lines[:LINES_PER_BACKTRACE]):
                 self.write(f"  {line}")
             if len(lines) > LINES_PER_BACKTRACE:

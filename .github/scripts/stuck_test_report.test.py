@@ -11,6 +11,8 @@ machine has, so the script cannot read or stop a process that the test did
 not start.
 """
 
+import importlib.util
+import io
 import os
 from pathlib import Path
 import shutil
@@ -20,11 +22,18 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 SCRIPT = Path(__file__).with_name("stuck_test_report.py")
 LIMIT = 2
 INTERVAL = 0.2
 SERVER = "stuck_case_server"
+
+# The import of the script writes no bytecode file into the checkout.
+sys.dont_write_bytecode = True
+_spec = importlib.util.spec_from_file_location("stuck_test_report", SCRIPT)
+report_module = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(report_module)
 
 
 def gone(pid):
@@ -116,6 +125,63 @@ class StuckTestReportTests(unittest.TestCase):
         self.addCleanup(watcher.wait)
         self.addCleanup(watcher.kill)
         return watcher
+
+    def check_until_report(self, watcher):
+        """Runs the checks of a watcher in this process until it writes a report.
+
+        This process is the parent of the tree, so the watcher can read the
+        system call of each thread also when it is not root.
+        """
+        deadline = time.monotonic() + 30
+        while "::error" not in watcher.out.getvalue():
+            self.assertLess(time.monotonic(), deadline, watcher.out.getvalue())
+            watcher.check()
+            time.sleep(INTERVAL)
+        return watcher.out.getvalue()
+
+    def watcher_here(self):
+        return report_module.Watcher(LIMIT, [SERVER], str(self.directory), os.getuid(), False, io.StringIO())
+
+    def started_tree(self):
+        """The tree with its two flock processes and the fake server."""
+        tree = self.start_tree()
+        wait_for(lambda: len(children(tree.pid)) == 2, 10, "two flock processes")
+        flocks = sorted(children(tree.pid))
+        wait_for(lambda: any(children(pid) for pid in flocks), 10, "the fake server")
+        holder = next(pid for pid in flocks if children(pid))
+        waiter = next(pid for pid in flocks if pid != holder)
+        return tree, holder, waiter, children(holder)[0]
+
+    def test_a_fault_of_the_report_does_not_prevent_the_stop(self):
+        tree, holder, waiter, server = self.started_tree()
+        fault = RuntimeError("a fault of the lock section")
+        with mock.patch.object(report_module.Watcher, "write_locks", side_effect=fault):
+            report = self.check_until_report(self.watcher_here())
+        self.assertEqual(tree.wait(timeout=10), -signal.SIGKILL)
+        wait_for(lambda: all(gone(pid) for pid in (holder, waiter, server)), 10, "the end of the tree")
+        # The report keeps what it wrote before the fault, gives the fault,
+        # and then the error line and the stop follow.
+        self.assertRegex(report, rf"process {server}, parent {holder}, ")
+        self.assertRegex(
+            report,
+            r"The report is not complete: RuntimeError\('a fault of the lock section'\) at line \d+ \(\w+\)\. "
+            r"The watcher stops the tree\.\n::endgroup::\n::error title=Stuck test stuck_case waits_for_the_lock::"
+            r".*\nThe watcher killed the tree of 4 processes\.\n$",
+        )
+        self.assertNotIn("locks on the open files", report)
+
+    def test_a_process_that_ends_during_the_report_does_not_stop_the_report(self):
+        # The values of this process, with the id of a process that ended.
+        ended = subprocess.Popen(["true"])
+        ended.wait()
+        watcher = self.watcher_here()
+        process = report_module.Process(os.getpid())
+        process.pid = ended.pid
+        watcher.describe(process, 0, report_module.uptime(), {})
+        report = watcher.out.getvalue()
+        self.assertIn("threads: (No such file or directory)", report)
+        self.assertIn("open files: (No such file or directory)", report)
+        self.assertIn("listening ports: none", report)
 
     def test_a_stuck_test_gets_one_report_and_its_tree_is_stopped(self):
         tree = self.start_tree()
