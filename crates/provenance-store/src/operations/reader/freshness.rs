@@ -25,8 +25,7 @@ use provenance_macros::rule;
 
 /// The fault of a read of a read database other than the file. It ends
 /// when the row readers run on the port.
-const NOT_A_FILE: &str =
-    "the row readers read only the read database file under .provenance/cache";
+const NOT_A_FILE: &str = "the row readers read only the read database file under .provenance/cache";
 
 pub(super) struct Freshness {
     pub(super) check: Check,
