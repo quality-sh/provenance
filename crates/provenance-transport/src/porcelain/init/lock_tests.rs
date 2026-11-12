@@ -172,6 +172,18 @@ fn a_read_while_a_second_init_writes_gets_the_graph_after_init() {
     assert_eq!(actors, ["new-reviewer"]);
 }
 
+/// The key of `path` in the map of [`tree`]: the components of the path
+/// below `root`, joined with `/`. The key is the same on each platform and
+/// for each separator in `path`.
+fn key(root: &Utf8Path, path: &Utf8Path) -> String {
+    path.strip_prefix(root)
+        .unwrap()
+        .components()
+        .map(|component| component.as_str())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 /// Every file and folder under `root`, with the bytes of each file.
 fn tree(root: &Utf8Path) -> BTreeMap<String, Option<Vec<u8>>> {
     let mut entries = BTreeMap::new();
@@ -179,7 +191,7 @@ fn tree(root: &Utf8Path) -> BTreeMap<String, Option<Vec<u8>>> {
     while let Some(folder) = folders.pop() {
         for entry in folder.read_dir_utf8().unwrap() {
             let path = entry.unwrap().into_path();
-            let name = path.strip_prefix(root).unwrap().to_string();
+            let name = key(root, &path);
             if path.is_dir() {
                 entries.insert(name, None);
                 folders.push(path);
@@ -195,7 +207,7 @@ fn tree(root: &Utf8Path) -> BTreeMap<String, Option<Vec<u8>>> {
 /// the locks and the derived cache, which init does not write.
 fn targets(repo: &Utf8Path) -> BTreeMap<String, Option<Vec<u8>>> {
     let mut entries = tree(repo);
-    entries.retain(|name, _| !name.starts_with(".provenance/cache"));
+    entries.retain(|name, _| !Utf8Path::new(name).starts_with(".provenance/cache"));
     entries
 }
 

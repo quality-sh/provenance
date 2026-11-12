@@ -1,7 +1,7 @@
 //! Init and a writer that takes no lock: the state moves during the hold of
 //! init, so the store refuses the manifest and init restores its files.
 use super::check_and_write_tests::add_the_target_requirement;
-use super::{change_agents, initialized, lock_is_free, options, targets};
+use super::{change_agents, initialized, key, lock_is_free, options, targets};
 use crate::porcelain::init::prepare_init;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_store::layout::ProvenanceLayout;
@@ -21,7 +21,11 @@ fn revision(layout: &ProvenanceLayout) -> Revision {
 
 /// The one shard of the Requirement of the repository.
 fn requirement_shard(layout: &ProvenanceLayout) -> Utf8PathBuf {
-    let folder = layout.state_dir().join("scopes/default/requirements");
+    let folder = layout
+        .state_dir()
+        .join("scopes")
+        .join("default")
+        .join("requirements");
     let mut shards: Vec<Utf8PathBuf> = folder
         .read_dir_utf8()
         .unwrap()
@@ -94,10 +98,7 @@ fn a_state_change_without_the_lock_during_init_refuses_the_manifest_and_restores
     // Only the hand edit stays: no skill file, dictionary reference,
     // temporary file or backup file of init.
     let mut expected = before;
-    expected.insert(
-        shard.strip_prefix(&repo).unwrap().to_string(),
-        Some(std::fs::read(&shard).unwrap()),
-    );
+    expected.insert(key(&repo, &shard), Some(std::fs::read(&shard).unwrap()));
     assert_eq!(targets(&repo), expected);
     assert!(lock_is_free(&layout), "init kept the publication lock");
 }
