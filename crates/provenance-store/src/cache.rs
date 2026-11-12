@@ -3,6 +3,7 @@ pub(crate) mod completion;
 #[cfg(feature = "host")]
 pub(crate) mod connection;
 mod gaps;
+#[cfg(feature = "host")]
 mod health;
 mod impact;
 mod materialize;
@@ -21,6 +22,7 @@ pub use connection::{
     CacheConnection, WalSwitchRetry, COMPLETION_DEADLINE,
 };
 pub use gaps::*;
+#[cfg(feature = "host")]
 pub use health::*;
 pub use impact::*;
 #[cfg(test)]

@@ -51,7 +51,7 @@ pub fn page_work_steps(steps: u64) -> u64 {
     PAGE_WORK_STEPS.with(Cell::get).unwrap_or(steps)
 }
 
-#[cfg(all(not(test), feature = "host"))]
+#[cfg(any(not(test), not(feature = "host")))]
 pub const fn page_work_steps(steps: u64) -> u64 {
     steps
 }

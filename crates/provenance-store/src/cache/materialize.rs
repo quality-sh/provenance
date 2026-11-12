@@ -13,9 +13,11 @@ mod validation;
 #[cfg(test)]
 #[cfg(feature = "host")]
 pub use catch_up::catch_up_with_guard;
+#[cfg(feature = "host")]
 pub use catch_up::catch_up_work;
 pub use catch_up::{catch_up_state, CatchUpReport};
 pub use record_rows::SEARCH_TEXT;
+#[cfg(feature = "host")]
 pub use units::unit_stored_digest;
 pub use units::{scope_ids, unit_digest, units_for, Unit, UnitHashError};
 #[cfg(feature = "host")]
