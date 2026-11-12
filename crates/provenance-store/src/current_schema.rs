@@ -2,7 +2,7 @@
 
 use sha2::{Digest, Sha256};
 use sqlx::sqlite::SqlitePoolOptions;
-use sqlx::{Executor, Sqlite, SqlitePool, Transaction};
+use sqlx::{Executor, Sqlite, SqliteConnection, Transaction};
 
 const DDL: &str = include_str!("../current_cache.sql");
 
@@ -12,18 +12,18 @@ pub enum Compatibility {
     RebuildRequired,
 }
 
-pub async fn compatibility(pool: &SqlitePool) -> anyhow::Result<Compatibility> {
+pub async fn compatibility(connection: &mut SqliteConnection) -> anyhow::Result<Compatibility> {
     let table: Option<String> = sqlx::query_scalar(
         "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = '_cache_metadata'",
     )
-    .fetch_optional(pool)
+    .fetch_optional(&mut *connection)
     .await?;
     if table.is_none() {
         return Ok(Compatibility::RebuildRequired);
     }
     let stored: Option<String> =
         match sqlx::query_scalar("SELECT schema_digest FROM _cache_metadata WHERE only_row = 1")
-            .fetch_optional(pool)
+            .fetch_optional(&mut *connection)
             .await
         {
             Ok(stored) => stored,
@@ -33,7 +33,7 @@ pub async fn compatibility(pool: &SqlitePool) -> anyhow::Result<Compatibility> {
             Err(error) => return Err(error.into()),
         };
     let expected = expected_catalog().await?;
-    let live = catalog(pool).await?;
+    let live = catalog(connection).await?;
     Ok(
         if stored.as_deref() == Some(expected.digest().as_str()) && &live == expected {
             Compatibility::Current
@@ -110,18 +110,20 @@ async fn build_expected_catalog() -> anyhow::Result<SchemaCatalog> {
     for statement in DDL.split(';').map(str::trim).filter(|sql| !sql.is_empty()) {
         pool.execute(statement).await?;
     }
-    let expected = catalog(&pool).await;
+    let mut connection = pool.acquire().await?;
+    let expected = catalog(&mut connection).await;
+    drop(connection);
     pool.close().await;
     expected
 }
 
-async fn catalog(pool: &SqlitePool) -> anyhow::Result<SchemaCatalog> {
+async fn catalog(connection: &mut SqliteConnection) -> anyhow::Result<SchemaCatalog> {
     let rows: Vec<(String, String, String, Option<String>)> = sqlx::query_as(
         "SELECT type, name, tbl_name, sql FROM sqlite_schema \
          WHERE name NOT LIKE 'sqlite_%' AND name <> '_cache_metadata' \
          ORDER BY type, name, tbl_name",
     )
-    .fetch_all(pool)
+    .fetch_all(connection)
     .await?;
     Ok(SchemaCatalog(
         rows.into_iter()

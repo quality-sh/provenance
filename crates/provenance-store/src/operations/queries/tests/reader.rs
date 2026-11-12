@@ -2,6 +2,8 @@
 //! the handles put their words on it, and a canonical edit moves the
 //! serial under catch-up.
 
+mod adapter;
+mod characterization;
 mod freshness;
 mod guard;
 #[cfg(unix)]
@@ -306,10 +308,15 @@ async fn a_table_handle_puts_its_word_in_attested() {
     );
 
     let pool = open_cache(&store.layout()).await.unwrap();
-    let snapshot = ReadSnapshot::open(pool.pool(), &store.scope)
-        .await
-        .unwrap()
-        .expect("a revision");
+    let snapshot = ReadSnapshot::open(
+        crate::read_database::file::begin(pool.pool())
+            .await
+            .unwrap(),
+        &store.scope,
+    )
+    .await
+    .unwrap()
+    .expect("a revision");
     let _rules = snapshot.table::<Rule>();
     let context = crate::operations::reader::ReadContext::for_test(snapshot, store.repository());
     let _store = context
