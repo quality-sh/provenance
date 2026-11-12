@@ -129,7 +129,8 @@ pub type WriteWork<'a> = Box<dyn FnOnce(Transaction) -> SqlFuture<'a, ()> + Send
 pub trait ReadDatabase: Send + Sync + Debug {
     /// Runs `work` in one read transaction. Each row that the work reads
     /// is from one committed state of the database. When the store cannot
-    /// open the database, the error comes before the work starts.
+    /// open the database, the error is [`Unopened`] and comes before the
+    /// work starts.
     fn read<'a>(&'a self, work: ReadWork<'a>) -> SqlFuture<'a, ()>;
 
     /// Runs `work` in one write transaction, and makes the database when
@@ -142,7 +143,11 @@ pub trait ReadDatabase: Send + Sync + Debug {
     /// The store completes its connection once, after the read, so a
     /// failure of that completion is the failure of the read. When `write`
     /// fails, `read` does not run.
-    fn write_then_read<'a>(&'a self, write: WriteWork<'a>, read: ReadWork<'a>) -> SqlFuture<'a, ()> {
+    fn write_then_read<'a>(
+        &'a self,
+        write: WriteWork<'a>,
+        read: ReadWork<'a>,
+    ) -> SqlFuture<'a, ()> {
         Box::pin(async move {
             self.write(write).await?;
             self.read(read).await
@@ -158,6 +163,21 @@ pub trait ReadDatabase: Send + Sync + Debug {
 
     /// Where the database is, for the text of a refusal.
     fn location(&self) -> String;
+}
+
+/// The store could not open the database, so the work did not start. A
+/// read of an absent database fails with this error, and the store makes
+/// nothing. Its text is the text of its cause.
+#[derive(Debug, thiserror::Error)]
+#[error("{0:#}")]
+pub struct Unopened(pub anyhow::Error);
+
+impl Unopened {
+    /// The cause, when `error` says that the store could not open the
+    /// database; otherwise `error` itself.
+    pub fn cause(error: anyhow::Error) -> Result<anyhow::Error, anyhow::Error> {
+        error.downcast::<Self>().map(|unopened| unopened.0)
+    }
 }
 
 /// Whether a store error says that a table that the statement names is

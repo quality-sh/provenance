@@ -17,7 +17,7 @@ use crate::layout::ProvenanceLayout;
 use crate::operations::read_policy::FreshnessPolicy;
 use crate::operations::stamp;
 use crate::publication::{publication_guard, PublicationGuard};
-use crate::read_database::{ReadDatabase, ReadWork, Transaction};
+use crate::read_database::{ReadDatabase, ReadWork, Transaction, Unopened};
 use crate::repository::Repository;
 use provenance_core::protocol::{Stamp, StampPolicy, Stamped};
 use provenance_macros::rule;
@@ -77,11 +77,6 @@ where
             })
         })
     }
-
-    /// Whether the work of the read has started.
-    const fn started(&self) -> bool {
-        self.run.is_none()
-    }
 }
 
 impl Freshness {
@@ -130,11 +125,12 @@ impl Freshness {
             }
         };
         if let Err(failure) = outcome {
-            return Err(if reading.started() {
-                failure
-            } else {
-                unopened(repository.layout(), policy, error.as_deref(), failure)
-            });
+            return Err(unopened(
+                repository.layout(),
+                policy,
+                error.as_deref(),
+                failure,
+            ));
         }
         let (result, stamp) = reading.answer.ok_or_else(|| {
             crate::refusal::fault!("the read database ended a read without its work")
@@ -184,23 +180,26 @@ async fn open_snapshot(
         })
 }
 
-/// The refusal of a read whose database did not open.
+/// The refusal of a read whose database did not open. Any other failure,
+/// such as a transaction that did not begin, is the failure of the read.
 fn unopened(
     layout: &ProvenanceLayout,
     policy: StampPolicy,
     because: Option<&str>,
     failure: anyhow::Error,
 ) -> anyhow::Error {
+    let cause = match Unopened::cause(failure) {
+        Ok(cause) => cause,
+        Err(failure) => return failure,
+    };
     match (policy, because) {
         (StampPolicy::CatchUpFailed, Some(text)) => ReadRefusal::NoProjection {
             database: layout.cache_db_path(),
             because: format!(" (catch-up failed: {text})"),
         }
         .into(),
-        (StampPolicy::AnnotateOnly | StampPolicy::RefuseStale, _) => {
-            no_projection(layout, &failure)
-        }
-        _ => failure,
+        (StampPolicy::AnnotateOnly | StampPolicy::RefuseStale, _) => no_projection(layout, &cause),
+        _ => cause,
     }
 }
 

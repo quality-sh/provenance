@@ -7,7 +7,7 @@
 
 use super::{
     ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement, Transaction,
-    WriteWork,
+    Unopened, WriteWork,
 };
 use crate::cache::{open_cache, open_stored_cache, CacheConnection};
 use crate::layout::ProvenanceLayout;
@@ -34,7 +34,9 @@ impl FileReadDatabase {
 impl ReadDatabase for FileReadDatabase {
     fn read<'a>(&'a self, work: ReadWork<'a>) -> SqlFuture<'a, ()> {
         Box::pin(async move {
-            let connection = open_stored_cache(&self.layout).await?;
+            let connection = open_stored_cache(&self.layout)
+                .await
+                .map_err(|error| anyhow::Error::new(Unopened(error)))?;
             let outcome = async {
                 let transaction = begin(connection.pool()).await?;
                 work(transaction).await
