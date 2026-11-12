@@ -158,8 +158,7 @@ pub(crate) fn write_file_atomic(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result
     std::fs::create_dir_all(parent)?;
     let mut temp = tempfile::NamedTempFile::new_in(crate::long_path::extended(parent)?)?;
     temp.write_all(bytes)?;
-    temp.persist(crate::long_path::extended(path)?)?;
-    Ok(())
+    durability::replace_file(temp, path)
 }
 
 fn remove_file(path: &Utf8Path) -> anyhow::Result<()> {
