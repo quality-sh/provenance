@@ -84,7 +84,8 @@ fn write_temporary<'a>(
 }
 
 fn parent_of(path: &Utf8Path) -> anyhow::Result<&Utf8Path> {
-    path.parent().ok_or_else(|| crate::refusal::fault!("{path} has no parent directory"))
+    path.parent()
+        .ok_or_else(|| crate::refusal::fault!("{path} has no parent directory"))
 }
 
 /// Syncs `directory`. A relative path of one name, such as the file that git
