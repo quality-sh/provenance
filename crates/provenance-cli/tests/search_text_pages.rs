@@ -1,7 +1,8 @@
 //! Text search pages through the CLI JSON form on repositories with more than
 //! 512 records of one kind: a kind filter, two kinds, a search over many
 //! pages, letter case, the characters `%` and `_`, a search with no text, a
-//! text across two pieces, and candidates that fail the check of each piece.
+//! text across two pieces, candidates that fail the check of each piece, and a
+//! large record that does not hold the text.
 //!
 //! These tests have no Rule, because no active Rule states that a page holds a
 //! record when more records match.
@@ -10,8 +11,8 @@
 mod search_repository;
 
 use search_repository::{
-    all_pages, ids, page, plain_sources, repository, requirement, requirement_node, search_json,
-    source, source_node, without_stamp,
+    all_pages, binary, ids, page, plain_sources, repository, requirement, requirement_node,
+    search_json, source, source_node, without_stamp,
 };
 use serde_json::Value;
 
@@ -90,11 +91,13 @@ fn matches_over_many_pages_come_back_once_each_in_kind_and_id_order() {
     let directory = tempfile::tempdir().unwrap();
     let mut sources = plain_sources(520);
     let mut expected = Vec::new();
+    // In id order, a record that does not match comes after each match, so a
+    // row that SQL skips is at each page boundary.
     for index in 0..120 {
         let id = format!("source_b{index:03}");
         sources.push(source(&id, &format!("Needle {index:03}")));
+        sources.push(source(&format!("{id}_x"), "Plain"));
         expected.push(id);
-        sources.push(source(&format!("source_c{index:03}"), "Plain"));
     }
     let mut requirements = Vec::new();
     for index in 0..3 {
@@ -157,6 +160,8 @@ fn percent_and_underscore_in_the_text_are_plain_characters() {
     }
 }
 
+/// A characterization test: it pins the pages of a search with no text, which
+/// the SQL test of the search text keeps.
 #[test]
 fn search_with_no_text_reads_each_record_of_the_kind_in_id_order() {
     let directory = tempfile::tempdir().unwrap();
@@ -180,6 +185,8 @@ fn search_with_no_text_reads_each_record_of_the_kind_in_id_order() {
     assert_eq!(pages.len(), 3);
 }
 
+/// A characterization test: it pins that a text across two pieces finds no
+/// record, which the SQL test of the search text keeps.
 #[test]
 fn text_across_two_pieces_finds_no_record() {
     let directory = tempfile::tempdir().unwrap();
@@ -190,6 +197,9 @@ fn text_across_two_pieces_finds_no_record() {
     assert_eq!(answer, page(&version(&repo), 50, false, Vec::new()));
 }
 
+/// A characterization test: it pins an empty first page with a continuation
+/// when 512 candidates fail the check of each piece, which the SQL test of the
+/// search text keeps.
 #[test]
 fn candidates_that_fail_the_piece_check_keep_a_continuation() {
     let directory = tempfile::tempdir().unwrap();
@@ -206,5 +216,40 @@ fn candidates_that_fail_the_piece_check_keep_a_continuation() {
             page(&version, 50, true, Vec::new()),
             page(&version, 50, false, Vec::new()),
         ]
+    );
+}
+
+/// SQL does not select a record over the record byte limit that does not hold
+/// the text, so that record does not stop a text search. A search with no
+/// text reads that record and gives the refusal.
+#[test]
+fn a_large_record_that_does_not_hold_the_text_does_not_stop_the_search() {
+    let directory = tempfile::tempdir().unwrap();
+    let sources = vec![
+        source("source_large", &"x".repeat(70_000)),
+        source("source_needle", "Needle record"),
+    ];
+    let repo = repository(directory.path(), sources, Vec::new());
+
+    let (answer, has_cursor) = first_page(&repo, &["--text", "needle"]);
+    assert!(!has_cursor);
+    assert_eq!(
+        answer,
+        page(
+            &answer["protocol_version"],
+            50,
+            false,
+            vec![source_node("source_needle", "Needle record")]
+        )
+    );
+
+    let output = assert_cmd::Command::new(binary())
+        .args(["search", "--repo", &repo, "--kind", "source"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        "Error: canonical record exceeds the page record budget\n"
     );
 }
