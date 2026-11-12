@@ -9,10 +9,10 @@ use clap::error::{ContextKind, ContextValue, ErrorKind};
 const FLAGS: &[(&[&str], &str, &str)] = &[
     (&["check"], "the statement", "statement"),
     (&["import"], "the scope export file", "input"),
-    (&["export"], "the output file", "output"),
-    (&["init"], "the repository path", "path"),
+    (&["export"], "the scope export file", "output"),
+    (&["init"], "the repository", "path"),
     (&["validate"], "the artifact file", "input"),
-    (&["dictionary", "import"], "the dictionary PDF file", "pdf"),
+    (&["dictionary", "import"], "the PDF file", "pdf"),
     (&["prime"], "the format", "format"),
     (&["mcp"], "the repository", "repo"),
     (&["review"], "the repository", "repo"),

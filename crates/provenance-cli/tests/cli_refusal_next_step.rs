@@ -113,13 +113,13 @@ fn positional_value_refusal_names_the_flag() {
         (
             &["export", "out.json"],
             "out.json",
-            "the output file with --output",
+            "the scope export file with --output",
             "export [OPTIONS]",
         ),
         (
             &["init", "sub"],
             "sub",
-            "the repository path with --path",
+            "the repository with --path",
             "init [OPTIONS]",
         ),
         (
@@ -131,7 +131,7 @@ fn positional_value_refusal_names_the_flag() {
         (
             &["dictionary", "import", "x.pdf"],
             "x.pdf",
-            "the dictionary PDF file with --pdf",
+            "the PDF file with --pdf",
             "dictionary import [OPTIONS] --pdf <PDF>",
         ),
         (
