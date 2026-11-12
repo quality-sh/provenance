@@ -29,7 +29,6 @@ pub use crate::storage::local::{
 };
 #[cfg(all(test, unix, feature = "host"))]
 use crate::storage::local::{validate_missing_transaction_dir, validated_transaction_dir};
-#[cfg(feature = "host")]
 pub use guard::publication_guard;
 pub(crate) use guard::SectionHandle;
 pub use guard::{with_publication_guard, PublicationGuard};

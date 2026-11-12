@@ -52,8 +52,7 @@ fn assert_fault(failed: &anyhow::Error, text: &str) {
 async fn get(
     repository: &Repository,
     policy: FreshnessPolicy,
-) -> anyhow::Result<provenance_core::protocol::Stamped<provenance_core::protocol::GetResult>>
-{
+) -> anyhow::Result<provenance_core::protocol::Stamped<provenance_core::protocol::GetResult>> {
     crate::operations::reader::answer(repository, ReadPolicy::with_freshness(policy), |ctx| {
         Box::pin(async move {
             crate::operations::queries::records::get(ctx, super::get_query("req_overtime")).await
@@ -114,13 +113,17 @@ async fn a_read_over_another_adapter_answers_under_every_policy() {
     assert!(refused.to_string().contains("; moved: "), "{refused}");
     let moved = get(&repository, FreshnessPolicy::CatchUp).await.unwrap();
     assert_eq!(moved.stamp.serial, caught.stamp.serial + 1);
-    let other = crate::review::read_discussion_list(&repository, ReadPolicy::default(), discussions())
-        .await
-        .unwrap();
-    let file =
-        crate::review::read_discussion_list(&store.repository(), ReadPolicy::default(), discussions())
+    let other =
+        crate::review::read_discussion_list(&repository, ReadPolicy::default(), discussions())
             .await
             .unwrap();
+    let file = crate::review::read_discussion_list(
+        &store.repository(),
+        ReadPolicy::default(),
+        discussions(),
+    )
+    .await
+    .unwrap();
     assert_eq!(
         serde_json::to_value(&other.result).unwrap(),
         serde_json::to_value(&file.result).unwrap()
@@ -141,7 +144,9 @@ async fn materialize_and_catch_up_write_another_adapter() {
     add_requirement(&store, "req_after_the_rebuild");
     let caught = crate::cache::catch_up_state(&repository).await.unwrap();
     assert_eq!((caught.serial, caught.revision_committed), (2, true));
-    let file = crate::cache::catch_up_state(&store.repository()).await.unwrap();
+    let file = crate::cache::catch_up_state(&store.repository())
+        .await
+        .unwrap();
     assert_eq!(
         (file.serial, file.digest, file.revision_committed),
         (caught.serial, caught.digest, false)
@@ -249,7 +254,9 @@ async fn a_commit_that_fails_after_the_report_is_a_failed_catch_up() {
     add_requirement(&store, "req_after_the_read");
     let repository = over(
         &store,
-        Some(Arc::new(LateCommitFails(FileReadDatabase::new(store.layout())))),
+        Some(Arc::new(LateCommitFails(FileReadDatabase::new(
+            store.layout(),
+        )))),
     );
     let read = get(&repository, FreshnessPolicy::CatchUp).await.unwrap();
     assert_eq!(read.stamp.policy, StampPolicy::CatchUpFailed);

@@ -357,4 +357,5 @@ impl UnitHashError {
 }
 
 #[cfg(test)]
+#[cfg(feature = "host")]
 mod tests;

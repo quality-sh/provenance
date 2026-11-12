@@ -11,10 +11,10 @@ use super::{is_missing_table, ReadDatabase, SqlRow, SqlValue, Statement, Unopene
 
 pub mod handles;
 pub mod limits;
-pub mod projection;
-pub mod sequence;
 #[cfg(any(test, feature = "test-fixture"))]
 mod other;
+pub mod projection;
+pub mod sequence;
 
 #[cfg(any(test, feature = "test-fixture"))]
 pub use other::{Other, OtherTransaction};

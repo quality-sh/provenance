@@ -4,6 +4,10 @@
 //! takes the transaction for the span of one statement and never across
 //! two handles at once, which is how the operations read: one statement at
 //! a time. The row readers behind the handles live in `cache::read`.
+//!
+//! The snapshot builds without `host`; the reads that finish and stamp it
+//! need `host`.
+#![cfg_attr(not(feature = "host"), allow(dead_code))]
 
 use crate::cache::quoted;
 use crate::operations::stamp::{stored_revision, StoredRevision};
