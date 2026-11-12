@@ -193,6 +193,9 @@ port_cases!(
     limits::a_list_of_the_most_values_runs,
     projection::a_catch_up_makes_and_follows_the_projection,
     projection::a_schema_that_is_not_current_is_made_again,
+    sequence::a_write_then_read_reads_its_write,
+    sequence::a_failed_write_stops_the_read,
+    sequence::a_failed_read_keeps_the_write,
 );
 
 /// The limit case finds an adapter that ignores `LIMIT`.
@@ -277,7 +280,7 @@ async fn a_read_keeps_no_writes() {
 
 #[tokio::test]
 async fn a_read_answers_from_one_committed_state() {
-    contract::a_read_answers_from_one_committed_state(File::default()).await;
+    contract::sequence::a_read_answers_from_one_committed_state(File::default()).await;
 }
 
 #[tokio::test]

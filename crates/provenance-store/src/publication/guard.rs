@@ -114,13 +114,15 @@ pub fn with_publication_guard<R>(
 
 /// Acquires the publication lock for an async holder.
 ///
-/// The blocking wait runs on the blocking pool. Pending-publication recovery
+/// With `host`, the blocking wait runs on the blocking pool. Without it,
+/// the section lock of the repository is a lock that the process holds,
+/// and the wait runs in place. Pending-publication recovery
 /// runs before the caller sees the guard. The guard adds no holder entry: it
 /// can move to another thread, and a synchronous section on any thread then
 /// waits for it. As under a synchronous guard, the stores of the guard's
 /// repository read and write one view of the section, and they refuse after
 /// the guard drops.
-#[cfg(feature = "host")]
+#[cfg_attr(not(feature = "host"), allow(clippy::unused_async))]
 pub async fn publication_guard(repository: &Repository) -> anyhow::Result<PublicationGuard> {
     let key = super::publication_lock_identity(repository.layout())?;
     // The lock waits on the blocking pool, so a stage body that blocks on this guard would
@@ -134,7 +136,7 @@ pub async fn publication_guard(repository: &Repository) -> anyhow::Result<Public
         });
     }
     let repository = repository.clone();
-    tokio::task::spawn_blocking(move || {
+    let acquire = move || -> anyhow::Result<PublicationGuard> {
         let lock = repository.section_lock().acquire()?;
         let section = SectionHandle {
             open: Arc::new(AtomicBool::new(true)),
@@ -146,9 +148,13 @@ pub async fn publication_guard(repository: &Repository) -> anyhow::Result<Public
             _lock: Some(std::sync::Mutex::new(held)),
             repository: repository.within_section(section),
         })
-    })
-    .await
-    .map_err(|error| crate::refusal::fault!("publication guard acquisition failed: {error}"))?
+    };
+    #[cfg(not(feature = "host"))]
+    return acquire();
+    #[cfg(feature = "host")]
+    tokio::task::spawn_blocking(acquire)
+        .await
+        .map_err(|error| crate::refusal::fault!("publication guard acquisition failed: {error}"))?
 }
 
 #[cfg(test)]

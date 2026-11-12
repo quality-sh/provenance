@@ -1732,6 +1732,13 @@ jobs:
             cargo check --locked -p "$crate" --target "$TARGET"
             echo "::endgroup::"
           done
+      # The read database contract and the wrapper that its cases use build
+      # for the target, so an adapter outside this repository can run them
+      # there: the schema, catch-up, snapshot and handle cases.
+      - name: Check the store with its contract fixtures for the target
+        env:
+          TARGET: ${{ steps.kernel.outputs.target }}
+        run: cargo check --locked -p provenance-store --target "$TARGET" --features test-fixture
       # The check above builds for the target only. These tests run the engine
       # without host on the memory adapter, which has no state files.
       - name: Test the store on the memory adapter without host
