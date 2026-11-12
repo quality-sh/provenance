@@ -7,11 +7,11 @@
 //! `invalid_state_file` at the second line, before a check over the records
 //! that does not know the lines.
 
+use super::message_ids::ShardLine;
 use super::readers::{read_jsonl_located, read_jsonl_located_held};
 use super::shared_parses::shared;
 use super::{ProvenanceLayout, StateStore};
 use crate::shards;
-use super::message_ids::ShardLine;
 use camino::Utf8PathBuf;
 use provenance_core::{AssertionRecord, DispositionRecord, ProposalCard, ScopeId};
 use serde::de::DeserializeOwned;

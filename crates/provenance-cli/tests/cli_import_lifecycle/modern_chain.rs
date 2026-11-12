@@ -200,9 +200,19 @@ fn add_modern_lifecycle(lifecycle: &mut serde_json::Value) {
     }]);
 }
 
-/// An import into a scope whose `proposal_cards.jsonl` holds `proposal_a` on
-/// two lines refuses at the second line, and the file does not change. The
-/// review-portability check of the import reads the stored proposals first.
+/// The exit code, the standard output and the standard error of a command.
+fn answer(output: &std::process::Output) -> (Option<i32>, String, String) {
+    (
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout).into_owned(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    )
+}
+
+/// With `proposal_a` on two lines of `proposal_cards.jsonl`, `provenance
+/// check` and an import that replaces the scope refuse at the second line,
+/// and the file does not change. The review-portability check of the import
+/// reads the stored proposals first.
 #[test]
 #[verifies("rule_inconsistent_records_refusal_names_records", examples)]
 fn import_into_a_scope_with_a_proposal_id_on_two_lines_refuses_at_the_second_line() {
@@ -215,17 +225,21 @@ fn import_into_a_scope_with_a_proposal_id_on_two_lines_refuses_at_the_second_lin
     assert_eq!(text.lines().count(), 1, "{text}");
     let stored = format!("{text}{text}");
     std::fs::write(&cards, &stored).unwrap();
-    let output = fixture
+    let check = super::support::provenance()
+        .args(["check", "--repo", fixture.repo.to_str().unwrap()])
+        .output()
+        .unwrap();
+    let import = fixture
         .import_value("repair.json", &fixture.lifecycle)
         .get_output()
         .clone();
-    let answer = (
-        output.status.code(),
-        String::from_utf8_lossy(&output.stdout).into_owned(),
-        String::from_utf8_lossy(&output.stderr).into_owned(),
+    let answers = (
+        answer(&check),
+        answer(&import),
         std::fs::read_to_string(&cards).unwrap(),
     );
     let refusal = "Error: scopes/default/ideation/proposal_cards.jsonl line 2: \
         duplicate immutable proposal id proposal_a at line 1 and at line 2\n";
-    assert_eq!(answer, (Some(1), String::new(), refusal.to_owned(), stored));
+    let refused = (Some(1), String::new(), refusal.to_owned());
+    assert_eq!(answers, (refused.clone(), refused, stored));
 }
