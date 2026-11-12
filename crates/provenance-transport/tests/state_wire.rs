@@ -180,7 +180,7 @@ fn a_publish_to_an_object_that_does_not_answer_is_refused() {
 #[test]
 fn each_state_wire_example_replays_against_the_fixture() {
     let fixture = Fixture::spawn();
-    let directory = concat!(env!("CARGO_MANIFEST_DIR"), "/../../contracts/state-wire");
+    let directory = concat!(env!("CARGO_MANIFEST_DIR"), "/contracts/state-wire");
     let mut names: Vec<_> = std::fs::read_dir(directory)
         .unwrap()
         .map(|entry| entry.unwrap().path())
