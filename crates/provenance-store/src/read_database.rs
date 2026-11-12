@@ -137,6 +137,18 @@ pub trait ReadDatabase: Send + Sync + Debug {
     /// or ends without the commit, the transaction rolls back.
     fn write<'a>(&'a self, work: WriteWork<'a>) -> SqlFuture<'a, ()>;
 
+    /// Runs `write` as [`ReadDatabase::write`] does and, when it succeeds,
+    /// `read` as [`ReadDatabase::read`] does, over one open of the store.
+    /// The store completes its connection once, after the read, so a
+    /// failure of that completion is the failure of the read. When `write`
+    /// fails, `read` does not run.
+    fn write_then_read<'a>(&'a self, write: WriteWork<'a>, read: ReadWork<'a>) -> SqlFuture<'a, ()> {
+        Box::pin(async move {
+            self.write(write).await?;
+            self.read(read).await
+        })
+    }
+
     /// The maximum number of values that one statement can bind.
     fn max_bound_values(&self) -> usize;
 

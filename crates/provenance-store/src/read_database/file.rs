@@ -1,8 +1,8 @@
 //! The file adapter: the CLI's `SQLite` file under `.provenance/cache`.
 //!
-//! Each call opens the file, runs the work in one transaction, and
-//! completes the connection before it gives its result, as
-//! [`CacheConnection`] does. A read opens the stored file and does not
+//! Each call opens the file, runs the work in one transaction (a write
+//! and then a read, for `write_then_read`), and completes the connection
+//! before it gives its result, as [`CacheConnection`] does. A read opens the stored file and does not
 //! make it. A write makes the file when it is absent and uses WAL mode.
 
 use super::{
@@ -48,6 +48,24 @@ impl ReadDatabase for FileReadDatabase {
         Box::pin(async move {
             let connection = open_cache(&self.layout).await?;
             let outcome = run_write(&connection, work).await;
+            connection.settle(outcome).await
+        })
+    }
+
+    /// The read runs on the connection of the write, as the read after a
+    /// catch-up did on that connection before the port.
+    fn write_then_read<'a>(
+        &'a self,
+        write: WriteWork<'a>,
+        read: ReadWork<'a>,
+    ) -> SqlFuture<'a, ()> {
+        Box::pin(async move {
+            let connection = open_cache(&self.layout).await?;
+            let outcome = async {
+                run_write(&connection, write).await?;
+                read(begin(connection.pool()).await?).await
+            }
+            .await;
             connection.settle(outcome).await
         })
     }

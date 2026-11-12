@@ -9,7 +9,7 @@ use super::{family_rows, relation_rows, stamp, validation};
 use crate::cache::{revision_digest_from_stored_rows, ProjectionFamily};
 use crate::current_schema::{self, Compatibility};
 use crate::publication;
-use crate::read_database::{ReadDatabase, Transaction as Lent};
+use crate::read_database::{ReadDatabase, Transaction as Lent, WriteWork};
 use crate::repository::Repository;
 use provenance_core::ScopeId;
 use sqlx::{Sqlite, SqliteConnection};
@@ -52,17 +52,24 @@ pub async fn catch_up_with_guard(
     database: &dyn ReadDatabase,
 ) -> anyhow::Result<CatchUpReport> {
     let mut report = None;
-    let slot = &mut report;
-    database
-        .write(Box::new(move |transaction| {
-            Box::pin(async move {
-                *slot = Some(pass(&guard, transaction).await?);
-                drop(guard);
-                Ok(())
-            })
-        }))
-        .await?;
+    database.write(catch_up_work(guard, &mut report)).await?;
     report.ok_or_else(|| crate::refusal::fault!("the read database ended a write without its work"))
+}
+
+/// The work of one catch-up pass under `guard`, in a write of the read
+/// database. The work frees `guard` when it ends, and puts the report of a
+/// pass that succeeded in `report`.
+pub(crate) fn catch_up_work(
+    guard: publication::PublicationGuard,
+    report: &mut Option<CatchUpReport>,
+) -> WriteWork<'_> {
+    Box::new(move |transaction| {
+        Box::pin(async move {
+            *report = Some(pass(&guard, transaction).await?);
+            drop(guard);
+            Ok(())
+        })
+    })
 }
 
 /// What the rows of a pass found.
