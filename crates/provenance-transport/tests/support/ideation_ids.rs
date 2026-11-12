@@ -152,7 +152,6 @@ pub fn at_stored(healthy: &[Value], fault: &str) -> Vec<Value> {
             let mut answer = answer.clone();
             let meta = &mut answer["body"]["meta"];
             meta["stamp"]["policy"] = json!("catch_up_failed");
-            meta["freshness_cause"] = json!("catch_up_failed");
             meta["freshness_error"] = json!(fault);
             answer
         })

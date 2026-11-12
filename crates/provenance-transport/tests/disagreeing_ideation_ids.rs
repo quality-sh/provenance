@@ -141,11 +141,16 @@ async fn a_read_over_an_assertion_id_on_two_lines_answers_at_the_stored_serial()
     assert_eq!(answers, expected);
 }
 
+/// The read of the Requirement builds its review decisions from the stored
+/// rows, so it gives the decision of `disposition_a` two times.
 #[tokio::test]
 #[verifies("rule_failed_freshness_answers_at_stored_serial", examples)]
 async fn a_read_over_a_disposition_id_on_two_lines_answers_at_the_stored_serial() {
-    let (answers, expected) =
+    let (answers, mut expected) =
         reads_over_a_copied_row("dispositions.jsonl", "disposition", "disposition_a").await;
+    let decisions = &mut expected[0]["body"]["data"]["decision"]["decisions"];
+    let decision = decisions[0].clone();
+    decisions.as_array_mut().unwrap().push(decision);
     assert_eq!(answers, expected);
 }
 

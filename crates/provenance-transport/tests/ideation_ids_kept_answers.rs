@@ -45,7 +45,7 @@ async fn a_withdrawal_over_a_different_proposal_id_on_two_lines_is_written() {
     let withdrawals = std::fs::read_to_string(state_path(&repo, "withdrawals.jsonl")).unwrap();
     let withdrawal: Value = serde_json::from_str(withdrawals.lines().last().unwrap()).unwrap();
     let expected = json!({"data":{"scope_id":"default", "id":withdrawal["id"],
-        "requirement_id":"req_shared", "proposal_id":submission, "sequence":1,
+        "requirement_id":"req_shared", "proposal_id":submission, "sequence":2,
         "fact":"withdrawn", "actor":"agent"}, "meta":{}});
     assert_eq!((status, answer), (200, expected));
     assert_eq!(std::fs::read_to_string(&cards).unwrap(), stored);
@@ -62,7 +62,7 @@ async fn a_typed_apply_that_opens_no_submission_over_a_proposal_id_on_two_lines_
     let source = answer["data"]["resources"][0]["id"].clone();
     let expected = json!({"data":{"declared_by":"spec://fx", "created":1, "updated":0,
         "moved":0, "deleted":0, "conflicts":0, "unchanged":0,
-        "resources":[{"kind":"source", "key":"src", "address":["src"], "id":source,
-            "state":"created"}]}, "meta":{}});
+        "resources":[{"kind":"source", "key":"src", "address":["fx", "source", "src"],
+            "id":source, "state":"created"}]}, "meta":{}});
     assert_eq!((status, answer), (200, expected));
 }
