@@ -31,7 +31,8 @@ fn located(name: &str, kind: &str, id: &str, (first, second): (usize, usize)) ->
 /// of `req_shared` loads (`loaded`) or does not load.
 fn expected(refusal: &Value, loaded: bool) -> Vec<Value> {
     let refused = |request: &str| {
-        json!({"request":request, "status":500, "error":refusal, "freshness_error":null})
+        json!({"request":request, "status":500, "error":refusal,
+            "freshness_error":null})
     };
     let file = refusal["file"].as_str().unwrap();
     let (line, message) = (&refusal["line"], refusal["message"].as_str().unwrap());

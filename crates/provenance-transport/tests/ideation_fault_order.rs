@@ -25,7 +25,8 @@ async fn a_bad_line_in_the_proposal_file_refuses_before_one_in_the_assertion_fil
             "message":message})
     };
     let refused = |request: &str, error: Value| {
-        json!({"request":request, "status":500, "error":error, "freshness_error":null})
+        json!({"request":request, "status":500, "error":error,
+            "freshness_error":null})
     };
     let stale = |request: &str| {
         json!({"request":request, "status":200, "error":null,
