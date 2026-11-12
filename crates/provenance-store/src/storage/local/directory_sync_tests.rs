@@ -169,7 +169,10 @@ fn started_text(result: Result<(), PublishFailure>) -> String {
 
 /// The complete text of a failed sync of `directory`.
 fn sync_failed(directory: &Utf8Path) -> String {
-    format!("sync {directory}: {}", std::io::Error::from_raw_os_error(13))
+    format!(
+        "sync {directory}: {}",
+        std::io::Error::from_raw_os_error(13)
+    )
 }
 
 /// A directory that is closed to reads. The drop opens it again, so that a
