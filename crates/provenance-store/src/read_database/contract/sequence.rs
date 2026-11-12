@@ -115,7 +115,7 @@ pub async fn a_read_answers_from_one_committed_state<H: Harness>(harness: H) {
 }
 
 /// A write that inserts `n` into `sequenced` and commits.
-fn insert(n: i64) -> WriteWork<'static> {
+fn insert<'a>(n: i64) -> WriteWork<'a> {
     Box::new(move |mut transaction| {
         Box::pin(async move {
             transaction
