@@ -44,6 +44,7 @@ of the job. The watcher reports each test binary one time.
 
 import argparse
 import os
+import secrets
 import shutil
 import signal
 import subprocess
@@ -57,6 +58,10 @@ CLOCK_TICKS = os.sysconf("SC_CLK_TCK") if hasattr(os, "sysconf") else 100
 LINES_PER_BACKTRACE = 400
 # The first words of the last line of the watcher, which it writes at SIGTERM.
 STOP_LINE = "The watcher stops."
+# The first character of each line of the log of the watcher: a workflow
+# command of the watcher, or report text, which can hold any value.
+COMMAND = "!"
+TEXT = " "
 # One deadline in seconds for the install of the backtrace tool and all the
 # backtraces of one report. In the real CI run, the install took 9.1 s, and
 # the install and the backtraces of 2 processes and 8 threads took less than
@@ -236,7 +241,13 @@ class Watcher:
         )
 
     def write(self, text):
-        self.out.write(text + "\n")
+        """Writes one line of report text. A newline or a carriage return in a value becomes visible."""
+        self.out.write(TEXT + text.replace("\r", "\\r").replace("\n", "\\n") + "\n")
+        self.out.flush()
+
+    def command(self, text):
+        """Writes one workflow command of the watcher. `finish` writes it outside the report text."""
+        self.out.write(COMMAND + text.replace("\r", "%0D").replace("\n", "%0A") + "\n")
         self.out.flush()
 
     def report(self, processes, top, now):
@@ -244,7 +255,7 @@ class Watcher:
         age = top.age(now)
         members = tree(processes, top.pid)
         self.deadline = time.monotonic() + REPORT_DEADLINE
-        self.write(f"::group::Stuck test: {label} (process {top.pid}, {age:.0f} s)")
+        self.command(f"::group::Stuck test: {label} (process {top.pid}, {age:.0f} s)")
         try:
             self.write(f"The test process {top.pid} ran {age:.0f} s, past the limit of {self.limit:g} s.")
             self.write(f"Its tree has {len(members)} processes.")
@@ -273,10 +284,10 @@ class Watcher:
                 "The watcher stops the tree."
             )
         finally:
-            self.write("::endgroup::")
+            self.command("::endgroup::")
             # The error line comes before the stop: when the tree ends, the
             # test step ends, and the job can stop the watcher.
-            self.write(
+            self.command(
                 f"::error title={escape('Stuck test ' + label, title=True)}::"
                 + escape(
                     f"The test {label} ran {age:.0f} s, past the limit of {self.limit:g} s. "
@@ -600,6 +611,32 @@ def warning(text):
     print(f"::warning title=Stuck test report::{escape(text)}")
 
 
+def render(lines):
+    """The log for the job log: the commands of the watcher, and the report text between stop-commands lines.
+
+    The runner does not run a workflow command in the text between
+    `::stop-commands::<token>` and `::<token>::`. The token is random, so a
+    value in the report text cannot end that block.
+    """
+    token = secrets.token_hex(16)
+    out, inside = [], False
+    for line in lines:
+        if line.startswith(COMMAND):
+            if inside:
+                out.append(f"::{token}::")
+                inside = False
+            out.append(line[len(COMMAND):])
+        else:
+            if not inside:
+                out.append(f"::stop-commands::{token}")
+                inside = True
+            # A line with no mark (for example a Python traceback) is text too.
+            out.append(line[len(TEXT):] if line.startswith(TEXT) else line)
+    if inside:
+        out.append(f"::{token}::")
+    return "".join(line + "\n" for line in out)
+
+
 def finish(_arguments):
     """Stops the watcher and writes its log. Always gives exit code 0."""
     log, pid_file = state_files()
@@ -620,18 +657,20 @@ def finish(_arguments):
         while time.monotonic() < deadline and running(pid, start):
             time.sleep(0.2)
     pid_file.unlink()
-    text = log.read_text(errors="replace") if log.exists() else ""
-    sys.stdout.write(text)
+    lines = log.read_text(errors="replace").split("\n") if log.exists() else []
+    if lines and not lines[-1]:
+        lines.pop()
+    sys.stdout.write(render(lines))
     if not alive:
         warning(
             "The watcher was not alive at the stop. A test of this step that ran past the limit "
             "after the watcher ended has no report. The log of the watcher is above."
         )
-    elif STOP_LINE not in text:
+    elif not any(line.startswith(TEXT + STOP_LINE) for line in lines):
         warning(f"The watcher was alive at the stop, but it did not end in {FINISH_LIMIT:g} s.")
     else:
         print("The watcher was alive at the stop.")
-        if "::error" not in text:
+        if not any(line.startswith(COMMAND + "::error ") for line in lines):
             print("No test ran past the limit.")
     return 0
 

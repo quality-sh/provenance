@@ -67,6 +67,11 @@ def children(pid):
     return found
 
 
+def logged(watcher):
+    """The log of an in-process watcher without the mark of each line."""
+    return "".join(line[1:] + "\n" for line in watcher.out.getvalue().splitlines())
+
+
 def pids_of(program):
     """The processes whose program file is `program`."""
     found = []
@@ -104,7 +109,7 @@ class StuckTestReportTests(unittest.TestCase):
         self.environment = {**os.environ, "RUNNER_TEMP": str(self.directory)}
         self.environment.pop("GITHUB_ACTIONS", None)
 
-    def start_tree(self):
+    def start_tree(self, test_name="waits_for_the_lock"):
         script = (
             f'flock "{self.lock}" sh -c \'touch "$0"; exec "$1" 300\' "{self.marker}" "{self.server}" & '
             f'until [ -e "{self.marker}" ]; do :; done; '
@@ -113,7 +118,7 @@ class StuckTestReportTests(unittest.TestCase):
         # The script comes on standard input, so the command line looks like
         # the command line of a test binary: the test name and options.
         tree = subprocess.Popen(
-            [str(self.binary), "-s", "waits_for_the_lock", "--exact"],
+            [str(self.binary), "-s", test_name, "--exact"],
             stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True,
             start_new_session=True,
         )
@@ -128,6 +133,34 @@ class StuckTestReportTests(unittest.TestCase):
             [sys.executable, str(SCRIPT), *arguments],
             cwd=self.directory, env=self.environment, text=True, capture_output=True, check=True,
         ).stdout
+
+    def finish(self):
+        """The output of finish, after a check that only the watcher and finish give workflow commands.
+
+        Gives the output without the stop-commands lines.
+        """
+        output = self.script("finish")
+        kept, token = [], None
+        for line in output.splitlines():
+            if token:
+                if line == f"::{token}::":
+                    token = None
+                else:
+                    kept.append(line)
+                continue
+            started = re.fullmatch(r"::stop-commands::([0-9a-f]{32})", line)
+            if started:
+                token = started[1]
+                continue
+            self.assertRegex(
+                line,
+                r"^(::group::Stuck test: |::endgroup::$|::error title=Stuck test |::warning title=Stuck test report::"
+                r"|The watcher was alive at the stop\.$|No test ran past the limit\.$)",
+                output,
+            )
+            kept.append(line)
+        self.assertIsNone(token, output)
+        return output, "".join(line + "\n" for line in kept)
 
     def watcher(self, limit):
         """A watcher in the background; the test stops it, also when an assertion fails."""
@@ -147,11 +180,11 @@ class StuckTestReportTests(unittest.TestCase):
         system call of each thread also when it is not root.
         """
         deadline = time.monotonic() + 30
-        while "::error" not in watcher.out.getvalue():
-            self.assertLess(time.monotonic(), deadline, watcher.out.getvalue())
+        while "::error" not in logged(watcher):
+            self.assertLess(time.monotonic(), deadline, logged(watcher))
             watcher.check()
             time.sleep(INTERVAL)
-        return watcher.out.getvalue()
+        return logged(watcher)
 
     def watcher_here(self):
         return report_module.Watcher(LIMIT, [SERVER], str(self.directory), os.getuid(), False, io.StringIO())
@@ -205,7 +238,7 @@ class StuckTestReportTests(unittest.TestCase):
             began = time.monotonic()
             watcher.check()
             took = time.monotonic() - began
-        report = watcher.out.getvalue()
+        report = logged(watcher)
         self.assertEqual(tree.wait(timeout=10), -signal.SIGKILL)
         # The report deadline, plus the reads of /proc and the stop.
         self.assertLess(took, deadline + 8, report)
@@ -256,7 +289,7 @@ class StuckTestReportTests(unittest.TestCase):
         wait_for(lambda: report_module.Process(host).age(report_module.uptime()) > LIMIT + 1, 10, "the age of the host")
         watcher.check()
         # Its age alone does not start a report.
-        self.assertEqual(watcher.out.getvalue(), "")
+        self.assertEqual(logged(watcher), "")
 
         tree, holder, waiter, server = self.started_tree()
         report = self.check_until_report(watcher)
@@ -281,7 +314,7 @@ class StuckTestReportTests(unittest.TestCase):
         process = report_module.Process(os.getpid())
         process.pid = ended.pid
         watcher.describe(process, 0, report_module.uptime(), {})
-        report = watcher.out.getvalue()
+        report = logged(watcher)
         self.assertIn("threads: (No such file or directory)", report)
         self.assertIn("open files: (No such file or directory)", report)
         self.assertIn("listening ports: none", report)
@@ -304,7 +337,7 @@ class StuckTestReportTests(unittest.TestCase):
         finally:
             # The job stops the watcher when the test step ends. When a wait
             # above fails, this stops the watcher before the test fails.
-            report = self.script("finish")
+            report = self.finish()[1]
 
         self.assertEqual(report.count("::group::Stuck test: stuck_case waits_for_the_lock"), 1, report)
         self.assertIn(f"(process {tree.pid}, ", report)
@@ -383,7 +416,7 @@ class StuckTestReportTests(unittest.TestCase):
         pid_file.write_text(f"{watcher.pid} {start}")
         watcher.kill()
         log.write_text(first + watcher.communicate(timeout=10)[0])
-        report = self.script("finish")
+        report = self.finish()[1]
         self.assertIn("Watching the processes below", report)
         self.assertNotIn("The watcher stops.", report)
         self.assertNotIn("No test ran past the limit.", report)
@@ -404,13 +437,34 @@ class StuckTestReportTests(unittest.TestCase):
         try:
             time.sleep(2)
         finally:
-            report = self.script("finish")
+            report = self.finish()[1]
         self.assertIsNone(tree.poll())
         match = re.search(r"It looked at the processes (\d+) times\. The largest age of a test binary that it saw was (\d+) s\.", report)
         self.assertIsNotNone(match, report)
         self.assertGreater(int(match[1]), 2)
         self.assertIn(int(match[2]), (1, 2, 3))
         self.assertTrue(report.endswith("The watcher was alive at the stop.\nNo test ran past the limit.\n"), report)
+
+    def test_a_value_in_the_report_cannot_give_a_workflow_command(self):
+        tree = self.start_tree("waits_for_the_lock\n::error::a false error\r::endgroup::")
+        wait_for(lambda: len(children(tree.pid)) == 2, 10, "two flock processes")
+        self.script(
+            "start", "--limit", str(LIMIT), "--watch", SERVER, "--root", str(self.directory), "--interval", str(INTERVAL)
+        )
+        try:
+            self.assertEqual(tree.wait(timeout=30), -signal.SIGKILL)
+        finally:
+            output, report = self.finish()
+        # The value stays on its line, with a visible escape, in the report text.
+        self.assertIn(
+            f"  command line: {self.binary} -s waits_for_the_lock\\n::error::a false error\\r::endgroup:: --exact\n",
+            report,
+        )
+        self.assertEqual([line for line in output.splitlines() if line.startswith("::error")], [
+            line for line in output.splitlines() if line.startswith("::error title=Stuck test stuck_case waits_for_the_lock::")
+        ])
+        self.assertEqual(sum(line.startswith("::error") for line in output.splitlines()), 1, output)
+        self.assertEqual(sum(line == "::endgroup::" for line in output.splitlines()), 1, output)
 
     def test_a_young_test_and_a_watched_name_outside_the_root_get_no_report(self):
         # A process with the watched name whose program is outside the root,
