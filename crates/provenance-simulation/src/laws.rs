@@ -143,11 +143,30 @@ struct Expected {
     value: Option<Effect>,
 }
 
+/// The records that an operation writes, each with the value that the
+/// record holds when the operation succeeds.
+fn writes(done: &Done) -> Vec<(Target, Option<Effect>)> {
+    let effect = done.result.clone().ok();
+    let mut writes: Vec<_> = done
+        .target
+        .iter()
+        .map(|target| (target.clone(), effect.clone()))
+        .collect();
+    if done.op.clears_the_claim() {
+        let cleared = effect.map(|_| Effect::Claim { holder: None });
+        writes.push((Target::Claim, cleared));
+    }
+    writes
+}
+
 /// L3: the last write that landed on a record decides it.
 fn successful_writes_stay(run: &Run) -> Result<(), Violation> {
     let mut expected: BTreeMap<Target, Expected> = BTreeMap::new();
     for done in &run.done {
-        let Some(target) = &done.target else { continue };
+        let writes = writes(done);
+        if writes.is_empty() {
+            continue;
+        }
         let publishes: Vec<_> = publishes_of(run, done).collect();
         let Some(&(at, last)) = publishes
             .iter()
@@ -157,9 +176,11 @@ fn successful_writes_stay(run: &Run) -> Result<(), Violation> {
             continue;
         };
         let certain = last.outcome == Outcome::Landed && !done.stopped && done.result.is_ok();
-        let value = certain.then(|| done.result.clone().ok()).flatten();
-        if expected.get(target).is_none_or(|old| old.at < at) {
-            expected.insert(target.clone(), Expected { at, value });
+        for (target, value) in writes {
+            let value = value.filter(|_| certain);
+            if expected.get(&target).is_none_or(|old| old.at < at) {
+                expected.insert(target, Expected { at, value });
+            }
         }
     }
     let state = crate::final_records(&run.entries).map_err(|error| Violation {

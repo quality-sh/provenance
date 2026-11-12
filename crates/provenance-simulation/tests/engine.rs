@@ -153,12 +153,12 @@ fn each_operation_runs_on_the_engine() {
     }
 }
 
-// No Rule: a probe of the model of L3. The archive of the Requirement of the
-// Topic archives the Topic and clears its claim (rule_claim_cleared_on_exit).
-// The archive reads the state after the outside claim and lands after it, so
-// the final state has no claim, and L3 holds.
+/// The archive of the Requirement of the Topic archives the Topic, so the
+/// Topic leaves the claimable state and holds no claim. The archive reads the
+/// state after the outside claim and lands after it, and L3 holds.
 #[test]
 #[ignore = "a probe of the nightly simulation"]
+#[verifies("rule_claim_cleared_on_exit", examples)]
 fn an_archive_after_an_outside_claim_clears_the_claim_and_keeps_l3() {
     let case = Case {
         engines: 2,

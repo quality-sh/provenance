@@ -124,6 +124,13 @@ impl Operation {
     pub const fn always_stages(&self) -> bool {
         matches!(self, Self::DecideReview { .. })
     }
+
+    /// Tells if the operation clears the claim of the Topic when it lands.
+    /// An archive of the first Requirement archives its Topic, and an
+    /// archived Topic holds no claim.
+    pub fn clears_the_claim(&self) -> bool {
+        matches!(self, Self::ArchiveRequirement { n } if requirement_id(*n) == FIRST_REQUIREMENT)
+    }
 }
 
 /// One drawn case.

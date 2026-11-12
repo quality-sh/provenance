@@ -170,6 +170,36 @@ fn a_lost_write_breaks_l3() {
     expect_law(laws::check_only(&run, "L3"), "L3");
 }
 
+/// The outside claim, then an archive of the Requirement of the Topic by
+/// engine 0, each one alone.
+fn claim_then_archive() -> Case {
+    let mut steps = vec![Step::OutsideWrite(Operation::ClaimTopic)];
+    steps.extend(alone(&[Operation::ArchiveRequirement { n: 0 }]));
+    Case { engines: 2, steps }
+}
+
+// No Rule: proof that L3 sees a claim that an archive leaves. The storage
+// drops the archive and answers that it landed, so the Topic keeps the claim.
+#[test]
+#[ignore = "a planted fault of the nightly simulation"]
+fn an_archive_that_leaves_the_claim_breaks_l3() {
+    let run = run_case(&claim_then_archive(), planted(Plant::LoseWrite, "L3"));
+    expect_law(laws::check_only(&run, "L3"), "L3");
+}
+
+// No Rule: proof that L3 sees a claim that is lost with no archive. The
+// storage drops the claim of engine 0 and answers that it landed.
+#[test]
+#[ignore = "a planted fault of the nightly simulation"]
+fn a_lost_claim_breaks_l3() {
+    let case = Case {
+        engines: 2,
+        steps: alone(&[Operation::ClaimTopic]),
+    };
+    let run = run_case(&case, planted(Plant::LoseWrite, "L3"));
+    expect_law(laws::check_only(&run, "L3"), "L3");
+}
+
 // No Rule: proof that L4 can fail. With no section lock and no base check,
 // two updates on one etag both succeed.
 #[test]
