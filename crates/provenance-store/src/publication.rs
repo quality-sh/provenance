@@ -335,4 +335,7 @@ impl crate::state_store::StateStore {
 mod containment_tests;
 #[cfg(test)]
 #[cfg(feature = "host")]
+mod held_file_tests;
+#[cfg(test)]
+#[cfg(feature = "host")]
 mod tests;
