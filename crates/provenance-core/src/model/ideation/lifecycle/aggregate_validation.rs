@@ -1,6 +1,6 @@
 use super::{
     assertion_validation, effective_proposal_state, legacy_validation, lineage_validation,
-    validate_proposal_intrinsic, AssertionRecord, IdeationAggregate,
+    validate_proposal_intrinsic, AssertionRecord, DuplicateImmutableId, IdeationAggregate,
 };
 use crate::model::{
     disposition_requires_prior_assertion, validate_disposition_intrinsic, DispositionActorRefusal,
@@ -226,12 +226,18 @@ fn validate_disposition_links(aggregate: &IdeationAggregate<'_>) -> anyhow::Resu
 }
 
 fn ensure_immutable_ids<'a, T: 'a>(
-    kind: &str,
+    kind: &'static str,
     records: impl IntoIterator<Item = (&'a str, &'a T)>,
 ) -> anyhow::Result<()> {
     let mut seen = std::collections::BTreeSet::new();
     for (id, _) in records {
-        anyhow::ensure!(seen.insert(id), "duplicate immutable {kind} id {id}");
+        if !seen.insert(id) {
+            return Err(DuplicateImmutableId {
+                kind,
+                id: id.to_owned(),
+            }
+            .into());
+        }
     }
     Ok(())
 }

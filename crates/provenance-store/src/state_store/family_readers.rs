@@ -97,26 +97,12 @@ macro_rules! canonical_reader {
     };
     ($record:ty, $path:ident, $list:ident, assertion_records) => {
         pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
-            self.with_repository_read(|held| {
-                let mut records: Vec<$record> = held.read_immutable(scope)?;
-                for batch in held.list_ideation_landings(scope)? {
-                    overlay_records(&mut records, batch.assertions, |record| record.id.as_str());
-                }
-                Ok(records)
-            })
+            Ok(self.listed::<$record>(scope)?.into_records())
         }
     };
     ($record:ty, $path:ident, $list:ident, dispositions) => {
         pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
-            self.with_repository_read(|held| {
-                let mut records: Vec<$record> = held.read_immutable(scope)?;
-                for batch in held.list_ideation_landings(scope)? {
-                    overlay_records(&mut records, batch.dispositions, |record| {
-                        record.id.as_str()
-                    });
-                }
-                Ok(records)
-            })
+            Ok(self.listed::<$record>(scope)?.into_records())
         }
     };
 }

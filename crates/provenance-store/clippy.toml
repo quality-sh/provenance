@@ -1,0 +1,6 @@
+# Each aggregate check of the ideation records goes through
+# `IdeationRecords::validate` in `state_store/immutable_ids.rs`, which gives
+# the file and the line of an id that its file holds on two lines.
+disallowed-methods = [
+    { path = "provenance_core::validate_ideation_aggregate", reason = "use IdeationRecords::validate, which locates an immutable id on two lines" },
+]

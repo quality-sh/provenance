@@ -1,15 +1,14 @@
 use super::ideation_batches::{
     ensure_asserted_contribution_unchanged, ensure_asserted_synthesis_unchanged, overlay_records,
 };
-use super::immutable_ids::ImmutableRecord;
+use super::immutable_ids::{IdeationRecords, ImmutableRecord};
 use super::message_ids::ShardLine;
 use super::shared_parses::read_jsonl_shared;
 use super::{IdeationLandingBatch, StateStore};
 use crate::refusal::state_fault;
 use crate::shards;
 use provenance_core::{
-    AssertionRecord, Contribution, DispositionRecord, IdeationAggregate, ProposalCard, ScopeId,
-    SynthesisPacket,
+    AssertionRecord, Contribution, DispositionRecord, ProposalCard, ScopeId, SynthesisPacket,
 };
 use std::collections::BTreeSet;
 
@@ -88,18 +87,18 @@ impl StateStore {
             });
             assertions_in_order.extend(batch.assertions);
         }
-        let proposals = self.list_proposal_definitions(scope)?;
-        let assertions = self.list_assertion_records(scope)?;
-        let dispositions = self.list_dispositions(scope)?;
-        provenance_core::validate_ideation_aggregate(IdeationAggregate {
-            legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
+        let proposals = self.listed(scope)?;
+        let assertions = self.listed(scope)?;
+        let dispositions = self.listed(scope)?;
+        IdeationRecords {
             disposition_actor_ids,
             contributions: &contributions,
             synthesis_packets: &synthesis_packets,
             proposals: &proposals,
             assertions: &assertions,
             dispositions: &dispositions,
-        })?;
+        }
+        .validate()?;
         let canonical_artifacts = self.canonical_artifact_index(scope)?;
         for disposition in &dispositions {
             canonical_artifacts.ensure_exists(disposition.canonical_artifact.as_ref())?;

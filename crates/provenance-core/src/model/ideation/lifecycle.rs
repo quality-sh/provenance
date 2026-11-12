@@ -74,6 +74,17 @@ pub struct IdeationAggregate<'a> {
     pub dispositions: &'a [DispositionRecord],
 }
 
+/// The refusal of [`validate_ideation_aggregate`] when two records of one
+/// family have the same immutable id.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("duplicate immutable {kind} id {id}")]
+pub struct DuplicateImmutableId {
+    /// The name of the family: `contribution`, `synthesis packet`,
+    /// `proposal`, `assertion` or `disposition`.
+    pub kind: &'static str,
+    pub id: String,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LegacyProposalPolicy {
     ModernOnly,

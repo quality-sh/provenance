@@ -158,17 +158,10 @@ pub fn read_jsonl_located<T: DeserializeOwned>(
     store: &StateStore,
     path: &Utf8Path,
 ) -> anyhow::Result<Vec<(T, ShardLine)>> {
-    store.state_path_access(path, |held| read_jsonl_located_held(held, path))
-}
-
-/// [`read_jsonl_located`] through `store`, which holds the section.
-pub(super) fn read_jsonl_located_held<T: DeserializeOwned>(
-    store: &StateStore,
-    path: &Utf8Path,
-) -> anyhow::Result<Vec<(T, ShardLine)>> {
-    store
-        .state_text(path)?
-        .map_or_else(|| Ok(Vec::new()), |contents| records_of(path, &contents))
+    store.state_path_access(path, |held| {
+        held.state_text(path)?
+            .map_or_else(|| Ok(Vec::new()), |contents| records_of(path, &contents))
+    })
 }
 
 /// A stored record of the shard at `path` that does not agree with itself or

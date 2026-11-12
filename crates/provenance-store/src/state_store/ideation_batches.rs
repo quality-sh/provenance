@@ -1,8 +1,9 @@
+use super::immutable_ids::{IdeationRecords, Listed};
 use super::read_budget::ensure_slice_within_read_budget;
 use super::{ensure_new_ids_assignable, read_ideation_landings, IdeationLandingBatch, StateStore};
 use crate::shards;
 use provenance_core::{
-    AssertionRecord, Contribution, IdeationAggregate, ProposalCard, ScopeId, SynthesisPacket,
+    AssertionRecord, Contribution, DispositionRecord, ProposalCard, ScopeId, SynthesisPacket,
 };
 use provenance_macros::rule;
 use std::collections::BTreeSet;
@@ -71,9 +72,9 @@ impl StateStore {
             let mut contributions = self.list_contributions(scope)?;
             let mut synthesis_packets = self.list_synthesis_packets(scope)?;
             self.ensure_batch_targets_exist(scope, &contributions, &synthesis_packets, &incoming)?;
-            let mut proposals = self.list_proposal_definitions(scope)?;
-            let mut assertions = self.list_assertion_records(scope)?;
-            let mut dispositions = self.list_dispositions(scope)?;
+            let mut proposals: Listed<ProposalCard> = self.listed(scope)?;
+            let mut assertions: Listed<AssertionRecord> = self.listed(scope)?;
+            let mut dispositions: Listed<DispositionRecord> = self.listed(scope)?;
             ensure_new_ids_assignable(&contributions, &incoming.contributions, |record| {
                 record.id.as_str()
             })?;
@@ -133,15 +134,15 @@ impl StateStore {
             )?;
             validate_batch_proposals(&incoming.proposals)?;
             let manifest = self.manifest()?;
-            provenance_core::validate_ideation_aggregate(IdeationAggregate {
-                legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
+            IdeationRecords {
                 disposition_actor_ids: &manifest.disposition_actor_ids,
                 contributions: &contributions,
                 synthesis_packets: &synthesis_packets,
                 proposals: &proposals,
                 assertions: &assertions,
                 dispositions: &dispositions,
-            })?;
+            }
+            .validate()?;
             for disposition in &incoming.dispositions {
                 crate::write_error::ensure!(
                     InvalidUpdate,

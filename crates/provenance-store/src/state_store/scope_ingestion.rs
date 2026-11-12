@@ -361,9 +361,9 @@ fn read_ideation_records_held(
     let mut records = StoredIdeationRecords {
         contributions: read_jsonl_held(store, &shards::contributions_path(layout, scope))?,
         synthesis_packets: read_jsonl_held(store, &shards::synthesis_packets_path(layout, scope))?,
-        proposals: store.read_immutable_held(scope)?,
-        assertions: store.read_immutable_held(scope)?,
-        dispositions: store.read_immutable_held(scope)?,
+        proposals: read_jsonl_held(store, &shards::proposal_cards_path(layout, scope))?,
+        assertions: read_jsonl_held(store, &shards::assertion_records_path(layout, scope))?,
+        dispositions: read_jsonl_held(store, &shards::dispositions_path(layout, scope))?,
     };
     let landings: Vec<IdeationLandingBatch> =
         read_jsonl_held(store, &shards::ideation_landings_path(layout, scope))?;
