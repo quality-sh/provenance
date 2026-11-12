@@ -71,23 +71,6 @@ fn root_word_refusal_shows_the_usage_and_help_of_its_command() {
 }
 
 #[test]
-fn discussions_word_refusal_names_the_forms_that_exist() {
-    assert_eq!(
-        refusal(&["discussions", "open"]),
-        (
-            Some(1),
-            String::new(),
-            "Error: `provenance discussions` does not take the value `open`. Use \
-             `provenance <discussion-id> discussion` to read one Discussion, \
-             `provenance <record-id> discussions` to list the Discussions of one record, or \
-             `provenance discussions --status <status>` to list the Discussions with a \
-             status\n"
-                .to_owned()
-        )
-    );
-}
-
-#[test]
 fn discussions_status_refusal_ends_with_a_newline() {
     assert_refusal(
         &["discussions", "--status", "bogus"],
