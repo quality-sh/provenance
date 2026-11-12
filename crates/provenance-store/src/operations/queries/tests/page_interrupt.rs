@@ -6,7 +6,9 @@
 //! bound. With no steps, the file stops the first statement of the page
 //! that runs 1,000 steps of the engine. The records of each test make that
 //! statement the one that the test names, and keep each statement before
-//! it under 1,000 steps. The page budget refusal is the typed
+//! it under 1,000 steps. A page whose statement walks an index in the
+//! order of the page stops at its limit, so those pages ask for more rows
+//! than the test writes. The page budget refusal is the typed
 //! `page_budget_exceeded` failure, which the transport answers with 409.
 
 use super::{repository_at, root_of, seeded_store};
@@ -90,10 +92,13 @@ fn many_requirements(store: &StateStore, scope: &provenance_core::ScopeId) {
     }
 }
 
+/// A page of the Discussions of `req_overtime`. Its limit is over
+/// [`MANY`], so the statement walks every row and does not stop at the
+/// limit.
 fn discussions_query() -> DiscussionQuery {
     DiscussionQuery {
         parent: parent(),
-        limit: 10,
+        limit: 200,
         cursor: None,
     }
 }
@@ -242,7 +247,7 @@ async fn a_discussion_list_past_the_bound_is_the_page_budget_refusal() {
                 parent: None,
                 allowed_parent_kinds: vec![NodeType::Requirement],
                 status: DiscussionStatusFilter::All,
-                limit: 10,
+                limit: 200,
                 cursor: None,
             },
         )
