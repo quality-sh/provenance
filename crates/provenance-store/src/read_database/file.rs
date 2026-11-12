@@ -90,6 +90,7 @@ async fn run_write(connection: &CacheConnection, work: WriteWork<'_>) -> anyhow:
 
 /// Begins one transaction on an open pool of the file.
 pub(crate) async fn begin(pool: &SqlitePool) -> anyhow::Result<Transaction> {
+    crate::test_probes::at("read_database_begin")?;
     Ok(Box::new(FileTransaction(pool.begin().await?)))
 }
 
