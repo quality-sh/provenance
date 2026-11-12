@@ -6,9 +6,12 @@
 
 use camino::Utf8PathBuf;
 use provenance_store::layout::ProvenanceLayout;
-use provenance_store::read_database::contract::{self, Harness};
+use provenance_store::read_database::contract::{self, handles, Harness};
 use provenance_store::read_database::file::FileReadDatabase;
-use provenance_store::read_database::ReadDatabase;
+use provenance_store::read_database::{
+    ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement, Transaction,
+    WriteWork,
+};
 
 /// A file database in a new cache directory of its own.
 struct File {
@@ -40,6 +43,107 @@ impl Harness for File {
         Box::new(FileReadDatabase::new(self.layout.clone()))
     }
 }
+
+/// The file adapter with only the port in view: its transactions give
+/// no `SQLx` transaction, as the adapter of a Durable Object has none. A
+/// reader that passes over it needs nothing but the port.
+struct PortOnly {
+    file: File,
+    database: PortOnlyDatabase,
+}
+
+impl Default for PortOnly {
+    fn default() -> Self {
+        let file = File::default();
+        Self {
+            database: PortOnlyDatabase(file.database.clone()),
+            file,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct PortOnlyDatabase(FileReadDatabase);
+
+struct PortOnlyTransaction(Transaction);
+
+impl Harness for PortOnly {
+    fn database(&self) -> &dyn ReadDatabase {
+        &self.database
+    }
+
+    fn reopen(&self) -> Box<dyn ReadDatabase> {
+        self.file.reopen()
+    }
+}
+
+fn hidden(transaction: Transaction) -> Transaction {
+    Box::new(PortOnlyTransaction(transaction))
+}
+
+impl ReadDatabase for PortOnlyDatabase {
+    fn read<'a>(&'a self, work: ReadWork<'a>) -> SqlFuture<'a, ()> {
+        self.0
+            .read(Box::new(move |transaction| work(hidden(transaction))))
+    }
+
+    fn write<'a>(&'a self, work: WriteWork<'a>) -> SqlFuture<'a, ()> {
+        self.0
+            .write(Box::new(move |transaction| work(hidden(transaction))))
+    }
+
+    fn max_bound_values(&self) -> usize {
+        self.0.max_bound_values()
+    }
+
+    fn cursor_key(&self) -> anyhow::Result<[u8; 32]> {
+        self.0.cursor_key()
+    }
+
+    fn location(&self) -> String {
+        self.0.location()
+    }
+}
+
+impl SqlTransaction for PortOnlyTransaction {
+    fn fetch<'a>(&'a mut self, sql: &'a str, values: &'a [SqlValue]) -> SqlFuture<'a, Vec<SqlRow>> {
+        self.0.fetch(sql, values)
+    }
+
+    fn execute<'a>(&'a mut self, sql: &'a str, values: &'a [SqlValue]) -> SqlFuture<'a, u64> {
+        self.0.execute(sql, values)
+    }
+
+    fn attempt<'a>(
+        &'a mut self,
+        statements: &'a [Statement],
+    ) -> SqlFuture<'a, Result<(), anyhow::Error>> {
+        self.0.attempt(statements)
+    }
+
+    fn commit(self: Box<Self>) -> SqlFuture<'static, ()> {
+        self.0.commit()
+    }
+}
+
+macro_rules! handle_cases {
+    ($($case:ident),* $(,)?) => {
+        $(
+            #[tokio::test]
+            async fn $case() {
+                handles::$case(File::default()).await;
+                handles::$case(PortOnly::default()).await;
+            }
+        )*
+    };
+}
+
+handle_cases!(
+    the_list_handles_read_the_projection,
+    the_document_handle_reads_the_projection,
+    the_discussion_handle_reads_the_projection,
+    the_message_handle_reads_the_projection,
+);
 
 #[tokio::test]
 async fn a_write_keeps_each_value_class() {
