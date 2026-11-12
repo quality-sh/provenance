@@ -14,9 +14,10 @@
 //! sets with plain mutexes, so the future a read runs is `Send`; the
 //! operations read one statement at a time, so no lock is contended.
 //!
-//! The freshness step owns the read's cache connection, and its
-//! `complete` method is the read's one completion point: whatever
-//! the answer is, the connection closes in order before it leaves.
+//! The read itself is one read of the repository's read database, and the
+//! `complete` method of the freshness step is its one completion point:
+//! whatever the answer is, the read database completes its connection
+//! before the answer leaves.
 
 mod cursor;
 mod freshness;
@@ -25,7 +26,6 @@ mod refuse_stale;
 mod snapshot;
 
 pub(crate) use cursor::{Cursor, Position};
-pub(crate) use freshness::is_missing_table;
 pub use live::{Disturbed, Live, LiveHandle};
 pub use refuse_stale::MovedUnit;
 pub use snapshot::{ReadSnapshot, RecordIdentities, RecordIdentity, Relations, Table};
@@ -167,8 +167,8 @@ impl ReadContext {
 /// pinned snapshot, then the stamp. Every query answer leaves through here,
 /// so every answer carries a stamp.
 ///
-/// The freshness step owns the read's connection, and its awaited close is
-/// the read's one completion point: no answer or refusal leaves before it.
+/// The read of the read database is the read's one completion point: no
+/// answer or refusal leaves before its connection completes.
 #[rule("rule_query_answer_carries_a_stamp")]
 pub async fn answer<R: Send>(
     repository: &Repository,

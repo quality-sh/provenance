@@ -29,9 +29,15 @@ fn refusal(args: &[&str]) -> (Option<i32>, String) {
 
 /// The full refusal that clap gives for a value outside the possible values.
 fn clap_refusal(arg: &str, values: &str) -> String {
+    help_refusal(arg, values, "--help")
+}
+
+/// The refusal for a value outside the possible values, with the help command that it
+/// names.
+fn help_refusal(arg: &str, values: &str, help: &str) -> String {
     format!(
         "error: invalid value 'bogus' for '{arg}'\n  [possible values: {values}]\n\n\
-         For more information, try '--help'.\n"
+         For more information, try '{help}'.\n"
     )
 }
 
@@ -40,7 +46,10 @@ fn clap_refusal(arg: &str, values: &str) -> String {
 fn search_kind_refusal_lists_the_record_kinds() {
     assert_eq!(
         refusal(&["search", "--text", "a", "--kind", "bogus"]),
-        (Some(2), clap_refusal("--kind <KIND>", KINDS))
+        (
+            Some(2),
+            help_refusal("--kind <KIND>", KINDS, "provenance search --help")
+        )
     );
 }
 
@@ -69,7 +78,11 @@ fn api_method_refusal_lists_the_methods() {
         refusal(&["api", "requirements", "--method", "bogus"]),
         (
             Some(2),
-            clap_refusal("--method <METHOD>", "get, post, patch")
+            help_refusal(
+                "--method <METHOD>",
+                "get, post, patch",
+                "provenance api --help"
+            )
         )
     );
 }

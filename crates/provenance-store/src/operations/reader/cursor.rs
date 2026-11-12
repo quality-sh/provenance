@@ -6,7 +6,6 @@ use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::io::{Read, Write};
 
 type Signature = Hmac<Sha256>;
 
@@ -148,25 +147,9 @@ fn check_revision(ctx: &ReadContext, payload: &Payload) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// The key of the read database that signs this read's cursors.
 fn signing_key(ctx: &ReadContext) -> anyhow::Result<Vec<u8>> {
-    let dir = crate::layout::ProvenanceLayout::new(ctx.repo().to_owned()).cache_dir();
-    let path = dir.join("read-cursor.key");
-    if !path.exists() {
-        let mut file = tempfile::NamedTempFile::new_in(crate::long_path::extended(&dir)?)?;
-        file.write_all(uuid::Uuid::new_v4().as_bytes())?;
-        file.write_all(uuid::Uuid::new_v4().as_bytes())?;
-        match file.persist_noclobber(crate::long_path::extended(&path)?) {
-            Ok(_) => {}
-            Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(error) => return Err(error.into()),
-        }
-    }
-    let mut bytes = Vec::new();
-    std::fs::File::open(path)?
-        .take(33)
-        .read_to_end(&mut bytes)?;
-    crate::write_error::ensure!(Fault, bytes.len() == 32, "invalid cursor signing key");
-    Ok(bytes)
+    Ok(ctx.repository().read_database()?.cursor_key()?.to_vec())
 }
 
 #[cfg(test)]

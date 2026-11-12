@@ -63,6 +63,7 @@ pub fn initial_state() -> InitialState {
         identity_with_ids(INITIAL_STATE_IDS),
         storage.clone(),
         Arc::new(MemorySectionLock::default()),
+        None,
     )
     .expect("the initial state opens");
     let store = repository.store();
@@ -102,6 +103,7 @@ pub fn open_entries(entries: &BTreeMap<StateKey, Vec<u8>>) -> anyhow::Result<Rep
         identity(None),
         Arc::new(MemoryStateStorage::new(entries.clone())),
         Arc::new(MemorySectionLock::default()),
+        None,
     )?)
 }
 

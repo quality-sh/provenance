@@ -14,6 +14,8 @@
 //! - `publication`, `jsonl`, `shards` and `layout` are the sections, stages
 //!   and shard paths of the engine.
 //! - `families` holds the record family table.
+//! - `read_database` is the port to the SQL store of the projection, and its
+//!   file adapter.
 //! - `cache::connection` manages the SQLite connections.
 //! - `cache::materialize` and `cache::read` are the projection.
 //!
@@ -43,6 +45,7 @@ pub mod merge;
 #[cfg(feature = "host")]
 pub mod operations;
 pub mod publication;
+pub mod read_database;
 pub(crate) mod refusal;
 pub mod repository;
 #[cfg(feature = "host")]

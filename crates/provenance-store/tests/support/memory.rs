@@ -159,6 +159,7 @@ pub fn memory_repository_over(
         identity,
         storage.clone(),
         Arc::new(MemorySectionLock::default()),
+        None,
     )
     .unwrap();
     (storage, repository)

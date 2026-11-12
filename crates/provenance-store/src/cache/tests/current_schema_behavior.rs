@@ -89,7 +89,9 @@ async fn a_current_digest_does_not_hide_a_missing_table() {
         .unwrap();
 
     assert_eq!(
-        current_schema::compatibility(cache.pool()).await.unwrap(),
+        current_schema::compatibility(&mut cache.pool().acquire().await.unwrap())
+            .await
+            .unwrap(),
         Compatibility::RebuildRequired
     );
     cache.close().await.unwrap();
@@ -106,7 +108,9 @@ async fn a_current_digest_does_not_hide_a_missing_index() {
         .unwrap();
 
     assert_eq!(
-        current_schema::compatibility(cache.pool()).await.unwrap(),
+        current_schema::compatibility(&mut cache.pool().acquire().await.unwrap())
+            .await
+            .unwrap(),
         Compatibility::RebuildRequired
     );
     cache.close().await.unwrap();
