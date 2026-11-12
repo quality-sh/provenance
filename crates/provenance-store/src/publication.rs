@@ -279,7 +279,7 @@ impl crate::state_store::StateStore {
     /// stage. A store with a section view puts the view as the base of a set
     /// that has no base, and applies the set to the view once it lands. Any
     /// other store publishes through its adapter.
-    fn publish_set(&self, writes: WriteSet) -> anyhow::Result<()> {
+    pub(crate) fn publish_set(&self, writes: WriteSet) -> anyhow::Result<()> {
         if let Some(stage) = self.stage() {
             writes
                 .ensure_disjoint()

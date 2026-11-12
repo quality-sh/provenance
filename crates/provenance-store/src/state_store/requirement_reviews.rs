@@ -1,4 +1,5 @@
-use provenance_core::{RequirementReview, ScopeId, StableId};
+use camino::Utf8PathBuf;
+use provenance_core::{RequirementReview, ScopeId, StableId, VerificationRun};
 use provenance_macros::rule;
 use sha2::{Digest, Sha256};
 
@@ -83,30 +84,38 @@ impl StateStore {
     }
 
     /// Clears earlier reviews with the fresh run and its time, and keeps each reason.
+    ///
+    /// Gives the new bytes of the reviews shard, or nothing when the scope
+    /// has no reviews shard. The caller holds the section and publishes the
+    /// bytes.
     #[rule("rule_review_cleared_by_later_run")]
     #[cfg_attr(not(feature = "host"), allow(dead_code))]
-    pub(crate) fn clear_requirement_reviews(
+    pub(crate) fn cleared_requirement_reviews(
         &self,
-        scope: &ScopeId,
-        rule_id: &StableId,
-        run_id: &StableId,
-        ran_at: i64,
-    ) -> anyhow::Result<()> {
-        let path = shards::requirement_reviews_path(&self.layout, scope);
+        run: &VerificationRun,
+    ) -> anyhow::Result<Option<(Utf8PathBuf, Vec<u8>)>> {
+        let path = shards::requirement_reviews_path(&self.layout, &run.scope_id);
         if !self.state_exists(&path)? {
-            return Ok(());
+            return Ok(None);
         }
-        self.mutate_jsonl_records(&path, |records: &mut Vec<RequirementReview>| {
-            for record in records.iter_mut().filter(|record| {
-                record.rule_id == *rule_id
-                    && record.cleared_at.is_none()
-                    && record.changed_at <= ran_at
-            }) {
-                record.cleared_at = Some(ran_at);
-                record.cleared_by_run = Some(run_id.clone());
-            }
-            Ok(())
-        })
+        let contents = self.state_text(&path)?;
+        let bytes = crate::jsonl::mutate_jsonl_bytes(
+            self,
+            &path,
+            contents.as_deref(),
+            |records: &mut Vec<RequirementReview>| {
+                for record in records.iter_mut().filter(|record| {
+                    record.rule_id == run.rule_id
+                        && record.cleared_at.is_none()
+                        && record.changed_at <= run.started_at
+                }) {
+                    record.cleared_at = Some(run.started_at);
+                    record.cleared_by_run = Some(run.id.clone());
+                }
+                Ok(true)
+            },
+        )?;
+        Ok(bytes.map(|bytes| (path, bytes)))
     }
 
     /// Every review ever raised in this scope, cleared ones included.

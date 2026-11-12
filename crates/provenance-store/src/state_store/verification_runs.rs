@@ -1,4 +1,5 @@
-use crate::write_error::publication_started;
+use crate::storage::{Atomicity, WriteSet};
+use crate::write_error::{publication_started, PublicationStarted};
 use provenance_core::{
     validate_optional_commit_pin, ScopeId, StableId, VerificationMethod, VerificationRun,
     VerificationRunStatus,
@@ -7,6 +8,7 @@ use sha2::{Digest, Sha256};
 use std::io::{BufRead, BufReader, Read};
 
 use super::requirement_reviews::now_millis;
+use super::verification_bindings::BindingChange;
 use super::{
     BeginVerificationInput, CompleteVerificationInput, MaterializeVerificationBindingInput,
     StateStore,
@@ -16,6 +18,11 @@ impl StateStore {
     /// The caller parses the method word; this function receives it typed and
     /// writes it only through `VerificationMethod::to_string()` at the
     /// run-row edge.
+    ///
+    /// The checks come first. Then the run row goes into the cache, and the
+    /// binding and the cleared reviews publish as one per-key write set. When
+    /// the storage refuses the set, the run row is removed again. When the
+    /// outcome of the set is not known, the run row stays.
     pub fn begin_verification(
         &self,
         scope_id: ScopeId,
@@ -38,60 +45,99 @@ impl StateStore {
             .map_err(|error| crate::refusal::refuse!(InvalidVerificationTarget, "{error:#}"))?;
         self.with_repository_publication(|held| {
             let rule_id = verification_rule(held, &scope_id, input.rule, input.declaration)?;
-            let binding =
-                held.materialize_verification_binding(MaterializeVerificationBindingInput {
-                    scope_id: scope_id.clone(),
-                    rule_id: rule_id.clone(),
-                    key: input.key,
-                    method,
-                    declared_by: input.declared_by.clone(),
-                    file: file.clone(),
-                    symbol: input.symbol.clone(),
-                })?;
-            (|| -> anyhow::Result<VerificationRun> {
-                crate::test_probes::at("verification_binding_published")?;
-                let started_at = now_millis(&*held.clock())?;
-                let path = held.layout.verification_runs_path(&scope_id);
-                let lock_path = held.layout.verification_runs_lock_path(&scope_id);
-                let run = crate::jsonl::mutate_jsonl_locked(
-                    &path,
-                    &lock_path,
-                    |records: &mut Vec<VerificationRun>| {
-                        let id = next_run_id(records, started_at)?;
-                        let run = VerificationRun {
-                            scope_id,
-                            id,
-                            binding_id: Some(binding.id),
-                            rule_id,
-                            method: method.to_string(),
-                            declared_by: input.declared_by,
-                            file: Some(file),
-                            symbol: input.symbol,
-                            commit,
-                            status: VerificationRunStatus::Running,
-                            started_at,
-                            completed_at: None,
-                            error: None,
-                        };
-                        records.push(run.clone());
-                        records.sort_by(|left, right| {
-                            left.started_at
-                                .cmp(&right.started_at)
-                                .then(left.id.as_str().cmp(right.id.as_str()))
-                        });
-                        Ok(run)
-                    },
-                )?;
-                held.clear_requirement_reviews(
-                    &run.scope_id,
-                    &run.rule_id,
-                    &run.id,
-                    run.started_at,
-                )?;
-                Ok(run)
-            })()
-            .map_err(publication_started)
+            let change = MaterializeVerificationBindingInput {
+                scope_id: scope_id.clone(),
+                rule_id: rule_id.clone(),
+                key: input.key,
+                method,
+                declared_by: input.declared_by.clone(),
+                file: file.clone(),
+                symbol: input.symbol.clone(),
+            };
+            let binding = held.verification_binding_change(change)?;
+            let binding_id = binding.binding.id.clone();
+            let run = held.add_run_row(&scope_id, |id, started_at| VerificationRun {
+                scope_id: scope_id.clone(),
+                id,
+                binding_id: Some(binding_id),
+                rule_id,
+                method: method.to_string(),
+                declared_by: input.declared_by,
+                file: Some(file),
+                symbol: input.symbol,
+                commit,
+                status: VerificationRunStatus::Running,
+                started_at,
+                completed_at: None,
+                error: None,
+            });
+            // A failure of the run row keeps the answer `write_failed`.
+            let run = run.map_err(publication_started)?;
+            if let Err(error) = held.publish_begin_set(binding, &run) {
+                return Err(held.withdraw_refused_run(&run, error));
+            }
+            Ok(run)
         })
+    }
+
+    /// Adds the run that `run` makes from the next free run id and the start
+    /// time of the clock as a new row of the cache.
+    fn add_run_row(
+        &self,
+        scope_id: &ScopeId,
+        run: impl FnOnce(StableId, i64) -> VerificationRun,
+    ) -> anyhow::Result<VerificationRun> {
+        let started_at = now_millis(&*self.clock())?;
+        let path = self.layout.verification_runs_path(scope_id);
+        let lock_path = self.layout.verification_runs_lock_path(scope_id);
+        crate::jsonl::mutate_jsonl_locked(
+            &path,
+            &lock_path,
+            |records: &mut Vec<VerificationRun>| {
+                let run = run(next_run_id(records, started_at)?, started_at);
+                records.push(run.clone());
+                records.sort_by(|left, right| {
+                    left.started_at
+                        .cmp(&right.started_at)
+                        .then(left.id.as_str().cmp(right.id.as_str()))
+                });
+                Ok(run)
+            },
+        )
+    }
+
+    /// Publishes the binding and the reviews that `run` clears as one
+    /// per-key write set.
+    fn publish_begin_set(
+        &self,
+        binding: BindingChange,
+        run: &VerificationRun,
+    ) -> anyhow::Result<()> {
+        let mut writes = WriteSet::new(Atomicity::PerKey)
+            .put(self.state_key(&binding.path)?, binding.bytes);
+        if let Some((path, bytes)) = self.cleared_requirement_reviews(run)? {
+            writes = writes.put(self.state_key(&path)?, bytes);
+        }
+        self.publish_set(writes)
+    }
+
+    /// Removes the row of `run` when no key of its write set landed, and
+    /// gives `error` as a write failure. When landing began, the row stays.
+    /// When the removal fails, the row stays and the answer is `error`.
+    fn withdraw_refused_run(&self, run: &VerificationRun, error: anyhow::Error) -> anyhow::Error {
+        if error.downcast_ref::<PublicationStarted>().is_none() {
+            let path = self.layout.verification_runs_path(&run.scope_id);
+            let lock_path = self.layout.verification_runs_lock_path(&run.scope_id);
+            let _removed = crate::jsonl::mutate_jsonl_locked(
+                &path,
+                &lock_path,
+                |records: &mut Vec<VerificationRun>| {
+                    records.retain(|record| record.id != run.id);
+                    Ok(())
+                },
+            );
+        }
+        publication_started(error)
     }
 
     pub fn complete_verification(
