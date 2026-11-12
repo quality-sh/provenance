@@ -89,3 +89,9 @@ slow-timeout = { period = "30s", terminate-after = 2 }
 # 80 minutes. A stall must fail the test in minutes and not hold the job.
 filter = 'package(provenance-cli) & binary(cli_agent_review_records)'
 slow-timeout = { period = "60s", terminate-after = 3 }
+
+[[profile.ci.overrides]]
+# Throwaway: provenance-s9wr probe output on a pass.
+filter = 'binary(s9wr_swap_probe)'
+success-output = "immediate"
+slow-timeout = { period = "300s", terminate-after = 4 }
