@@ -21,11 +21,11 @@ pub struct ReplaceFailed(#[source] std::io::Error);
 /// directory is durable before the call returns.
 pub fn write_synced_file(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<()> {
     let (temporary, parent, first_made) = write_temporary(path, bytes)?;
-    temporary.as_file().sync_all()?;
+    temporary.as_file().sync_all().map_err(sync_failure(path))?;
     replace_file(temporary, path)?;
     let last = first_made.and_then(Utf8Path::parent).unwrap_or(parent);
     for directory in parent.ancestors() {
-        sync_directory(directory_or_current(directory))?;
+        sync_parent(directory)?;
         if directory == last {
             break;
         }
@@ -39,7 +39,7 @@ pub fn write_synced_file(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<()> {
 pub fn remove_synced_file(path: &Utf8Path) -> anyhow::Result<()> {
     let parent = parent_of(path)?;
     match std::fs::remove_file(crate::long_path::extended(path)?) {
-        Ok(()) => sync_directory(directory_or_current(parent)),
+        Ok(()) => sync_parent(parent),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(crate::refusal::caused(error, format!("remove {path}"))),
     }
@@ -83,15 +83,26 @@ fn parent_of(path: &Utf8Path) -> anyhow::Result<&Utf8Path> {
     path.parent().ok_or_else(|| crate::refusal::fault!("{path} has no parent directory"))
 }
 
-/// The directory to sync for `directory`. A relative path of one name, such
-/// as the file that git gives to a merge driver, has an empty parent: the
-/// current directory.
-fn directory_or_current(directory: &Utf8Path) -> &Utf8Path {
-    if directory.as_str().is_empty() {
+/// Syncs `directory`. A relative path of one name, such as the file that git
+/// gives to a merge driver, has an empty parent: the current directory.
+fn sync_parent(directory: &Utf8Path) -> anyhow::Result<()> {
+    let directory = if directory.as_str().is_empty() {
         Utf8Path::new(".")
     } else {
         directory
-    }
+    };
+    #[cfg(unix)]
+    std::fs::File::open(directory)
+        .and_then(|opened| opened.sync_all())
+        .map_err(sync_failure(directory))?;
+    #[cfg(not(unix))]
+    let _ = directory;
+    Ok(())
+}
+
+/// A failed sync of `path`, with the path and the I/O error.
+fn sync_failure(path: &Utf8Path) -> impl FnOnce(std::io::Error) -> anyhow::Error + '_ {
+    move |error| crate::refusal::caused(error, format!("sync {path}"))
 }
 
 /// Replaces the file at `target` with `temporary`, a file in the same
