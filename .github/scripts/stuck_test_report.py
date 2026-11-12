@@ -20,8 +20,9 @@ example a `provenance` that is installed in a different place) is reported
 and stopped only as a member of the tree of a stuck test binary. Its name
 alone, also when it is a watched name (`--watch`), does not select it.
 
-Only a test binary (a program below `target/<directory>/deps/`) with no test
-binary above it starts a report, when it is older than the limit. A watched
+Only a test binary (a program in `target/<profile>/deps/`, or in
+`target/<profile>/build/<package>/<hash>/out/` in the new layout of Cargo)
+with no test binary above it starts a report, when it is older than the limit. A watched
 process never starts a report by its age: a server that a test starts lives
 as long as its test, and a review host can make its own session and have the
 init process as its parent.
@@ -192,8 +193,16 @@ class Watcher:
         return process.uid == self.uid and process.exe.startswith(self.target)
 
     def test_binary(self, process):
-        """A program below `target/<directory>/deps/`, as Cargo writes a test binary."""
-        return self.below_target(process) and os.path.basename(os.path.dirname(process.exe)) == "deps"
+        """A program where Cargo writes a test binary, and not a build script.
+
+        Up to Rust 1.99 that is `target/<profile>/deps/<file>`. From Rust 1.100,
+        with the new layout of the build directory, it is
+        `target/<profile>/build/<package>/<hash>/out/<file>`.
+        """
+        if not self.below_target(process) or process.name.startswith("build-script-"):
+            return False
+        parts = process.exe[len(self.target):].split(os.sep)
+        return parts[-2:-1] == ["deps"] or (len(parts) >= 5 and parts[-2] == "out" and parts[-5] == "build")
 
     def watched(self, process):
         return self.below_target(process) and process.name in self.names

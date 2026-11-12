@@ -3,7 +3,7 @@
 
 Each test makes its own workspace root, a temporary directory, and gives it
 to the script. The fake test binary is a copy of sh below
-`<root>/target/debug/deps/`. It starts two `flock` processes on one file: the
+`<root>/target/debug/build/stuck-case/<hash>/out/`. It starts two `flock` processes on one file: the
 first holds the lock and runs a fake server (a copy of sleep below
 `<root>/target/debug/`) that waits, the second waits for the lock. The
 watched name is the name of the fake server, which no other process on the
@@ -24,6 +24,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import types
 import unittest
 from unittest import mock
 
@@ -99,9 +100,10 @@ class StuckTestReportTests(unittest.TestCase):
     def setUp(self):
         self.directory = Path(tempfile.mkdtemp(prefix="stuck-test-report-"))
         self.addCleanup(shutil.rmtree, self.directory, ignore_errors=True)
-        deps = self.directory / "target" / "debug" / "deps"
-        deps.mkdir(parents=True)
-        self.binary = deps / "stuck_case-0123456789abcdef"
+        # The place of a test binary in the new layout of the Cargo build directory.
+        out = self.directory / "target" / "debug" / "build" / "stuck-case" / "0123456789abcdef" / "out"
+        out.mkdir(parents=True)
+        self.binary = out / "stuck_case-0123456789abcdef"
         self.server = self.directory / "target" / "debug" / SERVER
         shutil.copy2(shutil.which("sh"), self.binary)
         shutil.copy2(shutil.which("sleep"), self.server)
@@ -281,6 +283,31 @@ class StuckTestReportTests(unittest.TestCase):
             self.assertRegex(report, rf"thread {waiter} flock: state S, wait channel \w*lock\w*, system call flock \(73\)\n")
         else:
             self.assertRegex(report, rf"thread {server} {SERVER[:15]}: state S, wait channel hrtimer_nanosleep, system call \d+\n")
+
+    def test_a_test_binary_is_in_the_old_or_the_new_layout_of_cargo(self):
+        watcher = self.watcher_here()
+        target = os.path.realpath(self.directory) + "/target/"
+
+        def program(path, uid=os.getuid()):
+            return types.SimpleNamespace(exe=target + path, uid=uid, name=path.rsplit("/", 1)[-1])
+
+        for path in (
+            "debug/deps/cli_init-0123456789abcdef",
+            "llvm-cov-target/debug/deps/cli_init-0123456789abcdef",
+            "debug/build/provenance-cli/0123456789abcdef/out/cli_init",
+            "llvm-cov-target/debug/build/provenance-cli/0123456789abcdef/out/cli_init-0123456789abcdef",
+        ):
+            self.assertTrue(watcher.test_binary(program(path)), path)
+        for path in (
+            "debug/provenance",
+            "debug/build/provenance-cli/0123456789abcdef/out/build-script-build",
+            "debug/build/provenance-cli-0123456789abcdef/build-script-build",
+            "debug/build/provenance-cli/0123456789abcdef/out/generated/tool",
+        ):
+            self.assertFalse(watcher.test_binary(program(path)), path)
+        self.assertFalse(watcher.test_binary(program("debug/deps/cli_init-0123456789abcdef", uid=os.getuid() + 1)))
+        outside = types.SimpleNamespace(exe="/usr/bin/cli_init", uid=os.getuid(), name="cli_init")
+        self.assertFalse(watcher.test_binary(outside))
 
     def test_the_system_call_has_a_name_only_on_x86_64(self):
         self.assertEqual(report_module.system_call("202 0x1 0x2 0x3 0x4 0x5 0x6 0x7ffd 0x7f12", "x86_64"), "futex (202)")
