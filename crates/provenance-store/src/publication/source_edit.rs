@@ -203,7 +203,10 @@ pub(super) fn write_marker(
     layout: &ProvenanceLayout,
     marker: &SourceEditMarker,
 ) -> anyhow::Result<()> {
-    write_synced_file(&layout.source_edit_marker_path(), &serde_json::to_vec(marker)?)
+    write_synced_file(
+        &layout.source_edit_marker_path(),
+        &serde_json::to_vec(marker)?,
+    )
 }
 
 pub(super) fn finish(layout: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {

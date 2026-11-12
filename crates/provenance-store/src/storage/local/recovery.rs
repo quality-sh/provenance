@@ -31,7 +31,10 @@ pub fn write_publication_marker(
         transaction_dir,
         phase,
     };
-    write_synced_file(&layout.publication_marker_path(), &serde_json::to_vec(&marker)?)
+    write_synced_file(
+        &layout.publication_marker_path(),
+        &serde_json::to_vec(&marker)?,
+    )
 }
 
 pub fn clear_publication_marker(layout: &ProvenanceLayout) -> anyhow::Result<()> {
