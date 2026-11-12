@@ -59,8 +59,7 @@ impl Cli {
             headers,
             data.is_some(),
         );
-        let kind = if method == "GET" { "read" } else { "write" };
-        let what = format!("{}, {kind} {method} {path}", self.label);
+        let what = named(&self.label, method, path);
         let input = data.map(|data| data.to_string().into_bytes());
         api_process::answer(&bounded_process::output_named(&mut command, input, &what))
     }
@@ -79,14 +78,33 @@ impl Surface for Cli {
     }
 }
 
-/// The `api` tool of one `provenance mcp` process.
+/// The name of one call in a failure: `label`, the read or the write, the
+/// method and the path.
+fn named(label: &str, method: &str, path: &str) -> String {
+    let kind = if method == "GET" { "read" } else { "write" };
+    format!("{label}, {kind} {method} {path}")
+}
+
+/// Waits for `future` for the time limit of `bounded_process`. Past the
+/// limit the test fails with `what`.
+async fn within<T>(what: &str, future: impl std::future::Future<Output = T>) -> T {
+    let limit = bounded_process::LIMIT;
+    tokio::time::timeout(limit, future)
+        .await
+        .unwrap_or_else(|_| panic!("{what}: no answer within {limit:?}"))
+}
+
+/// The `api` tool of one `provenance mcp` process. The process stops when
+/// the value drops, also when a call fails the test at the time limit.
 struct Mcp {
     client: Client,
     _child: tokio::process::Child,
 }
 
 impl Mcp {
-    async fn spawn(repo: &Repository) -> Self {
+    /// Starts `provenance mcp` on `repo` and connects to it within the time
+    /// limit. A failure starts with `label`.
+    async fn spawn(repo: &Repository, label: &str) -> Self {
         let mut child = tokio::process::Command::new(binary())
             .args(["mcp", "--repo", repo.dir.path().to_str().unwrap()])
             .stdin(Stdio::piped())
@@ -97,17 +115,30 @@ impl Mcp {
             .unwrap();
         let stdin = child.stdin.take().unwrap();
         let stdout = child.stdout.take().unwrap();
-        let client = Client::connect(tokio::io::join(stdout, stdin))
-            .await
-            .unwrap();
+        let connect = Client::connect(tokio::io::join(stdout, stdin));
+        let what = format!("{label}, connect");
+        let client = within(&what, connect).await.unwrap();
         Self {
             client,
             _child: child,
         }
     }
+
+    /// The calls of the step and the side that `label` names.
+    fn side(&self, label: String) -> McpSide<'_> {
+        McpSide { mcp: self, label }
+    }
 }
 
-impl Surface for Mcp {
+/// The calls of one step and one side through an [`Mcp`]. Each call has the
+/// time limit of `bounded_process`.
+struct McpSide<'a> {
+    mcp: &'a Mcp,
+    /// The step and the side of the test that make the calls.
+    label: String,
+}
+
+impl Surface for McpSide<'_> {
     fn call<'a>(
         &'a self,
         method: &'a str,
@@ -116,6 +147,7 @@ impl Surface for Mcp {
         headers: &'a [(&'a str, &'a str)],
     ) -> Answer<'a> {
         Box::pin(async move {
+            let what = named(&self.label, method, path);
             let (path, query) = api_process::split(path);
             let mut arguments = Map::new();
             arguments.insert("path".into(), json!(path));
@@ -137,7 +169,8 @@ impl Surface for Mcp {
             if let Some(data) = data {
                 arguments.insert("input".into(), data);
             }
-            let result = self.client.call("api", Value::Object(arguments)).await;
+            let call = self.mcp.client.call("api", Value::Object(arguments));
+            let result = within(&what, call).await;
             let status = if result["isError"] == json!(true) {
                 1
             } else {
@@ -187,12 +220,15 @@ async fn cli_reads_after_each_write_equal_a_full_rebuild() {
 #[tokio::test]
 async fn mcp_reads_after_each_write_equal_a_full_rebuild() {
     let repo = fixture();
-    let mcp = Mcp::spawn(&repo).await;
+    let mcp = Mcp::spawn(&repo, "MCP before step 0, caught-up side").await;
     for step in 0..STEPS {
-        write(&mcp, &state(&repo), step).await;
-        let caught_up = read_all(&mcp, &repo).await;
+        let side = mcp.side(format!("MCP step {step}, caught-up side"));
+        write(&side, &state(&repo), step).await;
+        let caught_up = read_all(&side, &repo).await;
         let copy = copy_without_projection(&repo);
-        let rebuilt = read_all(&Mcp::spawn(&copy).await, &copy).await;
+        let label = format!("MCP step {step}, full-rebuild side");
+        let rebuilt = Mcp::spawn(&copy, &label).await;
+        let rebuilt = read_all(&rebuilt.side(label), &copy).await;
         assert_same(&caught_up, &rebuilt, &format!("MCP step {step}"));
     }
 }
