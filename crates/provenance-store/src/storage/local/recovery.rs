@@ -1,4 +1,5 @@
-use super::{durability::sync_directory, section::canonical_utf8};
+use super::durability::{replace_file, sync_directory};
+use super::section::canonical_utf8;
 use crate::layout::ProvenanceLayout;
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -37,7 +38,7 @@ pub fn write_publication_marker(
         tempfile::NamedTempFile::new_in(crate::long_path::extended(layout.cache_dir())?)?;
     temporary.write_all(&serde_json::to_vec(&marker)?)?;
     temporary.as_file().sync_all()?;
-    temporary.persist(crate::long_path::extended(&path)?)?;
+    replace_file(temporary, &path)?;
     sync_directory(&layout.cache_dir())
 }
 
