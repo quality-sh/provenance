@@ -7,7 +7,7 @@
 use camino::Utf8PathBuf;
 use provenance_store::layout::ProvenanceLayout;
 use provenance_store::operations::stamp::stored_revision;
-use provenance_store::read_database::contract::{self, handles, Harness};
+use provenance_store::read_database::contract::{self, Harness, Other};
 use provenance_store::read_database::file::FileReadDatabase;
 use provenance_store::read_database::{
     ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement, Transaction,
@@ -45,30 +45,51 @@ impl Harness for File {
     }
 }
 
-/// The file adapter with only the port in view: its transactions give
-/// no `SQLx` transaction, as the adapter of a Durable Object has none. A
+/// The file adapter behind another transaction type: the crate finds no
+/// `SQLx` transaction in it, as with the adapter of a Durable Object. A
 /// reader that passes over it needs nothing but the port.
 struct PortOnly {
     file: File,
-    database: PortOnlyDatabase,
+    database: Other<FileReadDatabase>,
 }
 
 impl Default for PortOnly {
     fn default() -> Self {
         let file = File::default();
         Self {
-            database: PortOnlyDatabase(file.database.clone()),
+            database: Other(file.database.clone()),
             file,
         }
     }
 }
 
-#[derive(Debug)]
-struct PortOnlyDatabase(FileReadDatabase);
-
-struct PortOnlyTransaction(Transaction);
-
 impl Harness for PortOnly {
+    fn database(&self) -> &dyn ReadDatabase {
+        &self.database
+    }
+
+    fn reopen(&self) -> Box<dyn ReadDatabase> {
+        Box::new(Other(FileReadDatabase::new(self.file.layout.clone())))
+    }
+}
+
+/// The file adapter with a fault: it ignores the `LIMIT` of a statement.
+struct NoLimit {
+    file: File,
+    database: NoLimitDatabase,
+}
+
+impl Default for NoLimit {
+    fn default() -> Self {
+        let file = File::default();
+        Self {
+            database: NoLimitDatabase(file.database.clone()),
+            file,
+        }
+    }
+}
+
+impl Harness for NoLimit {
     fn database(&self) -> &dyn ReadDatabase {
         &self.database
     }
@@ -78,19 +99,62 @@ impl Harness for PortOnly {
     }
 }
 
-fn hidden(transaction: Transaction) -> Transaction {
-    Box::new(PortOnlyTransaction(transaction))
+#[derive(Debug)]
+struct NoLimitDatabase(FileReadDatabase);
+
+struct NoLimitTransaction(Transaction);
+
+/// The statement with each `LIMIT n` read as no limit; the bound value of
+/// the limit stays bound.
+fn without_limit(sql: &str) -> String {
+    let mut parts = sql.split(" LIMIT ");
+    let mut text = parts.next().unwrap_or_default().to_owned();
+    for part in parts {
+        let end = part.find(char::is_whitespace).unwrap_or(part.len());
+        let (limit, rest) = part.split_at(end);
+        text.push_str(&format!(" LIMIT -1 + 0 * ({limit}){rest}"));
+    }
+    text
 }
 
-impl ReadDatabase for PortOnlyDatabase {
+impl SqlTransaction for NoLimitTransaction {
+    fn fetch<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, Vec<SqlRow>> {
+        Box::pin(async move { self.0.fetch(&without_limit(sql), values).await })
+    }
+
+    fn execute<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, u64> {
+        self.0.execute(sql, values)
+    }
+
+    fn attempt<'a>(
+        &'a mut self,
+        statements: &'a [Statement],
+    ) -> SqlFuture<'a, Result<(), anyhow::Error>> {
+        self.0.attempt(statements)
+    }
+
+    fn commit(self: Box<Self>) -> SqlFuture<'static, ()> {
+        self.0.commit()
+    }
+
+    fn bound_work(&mut self, steps: u64) -> SqlFuture<'_, ()> {
+        self.0.bound_work(steps)
+    }
+
+    fn max_list_values(&self) -> usize {
+        self.0.max_list_values()
+    }
+}
+
+impl ReadDatabase for NoLimitDatabase {
     fn read<'a>(&'a self, work: ReadWork<'a>) -> SqlFuture<'a, ()> {
-        self.0
-            .read(Box::new(move |transaction| work(hidden(transaction))))
+        self.0.read(Box::new(move |lent| {
+            work(Box::new(NoLimitTransaction(lent)))
+        }))
     }
 
     fn write<'a>(&'a self, work: WriteWork<'a>) -> SqlFuture<'a, ()> {
-        self.0
-            .write(Box::new(move |transaction| work(hidden(transaction))))
+        self.0.write(work)
     }
 
     fn max_bound_values(&self) -> usize {
@@ -106,45 +170,35 @@ impl ReadDatabase for PortOnlyDatabase {
     }
 }
 
-impl SqlTransaction for PortOnlyTransaction {
-    fn fetch<'a>(&'a mut self, sql: &'a str, values: &'a [SqlValue]) -> SqlFuture<'a, Vec<SqlRow>> {
-        self.0.fetch(sql, values)
-    }
-
-    fn execute<'a>(&'a mut self, sql: &'a str, values: &'a [SqlValue]) -> SqlFuture<'a, u64> {
-        self.0.execute(sql, values)
-    }
-
-    fn attempt<'a>(
-        &'a mut self,
-        statements: &'a [Statement],
-    ) -> SqlFuture<'a, Result<(), anyhow::Error>> {
-        self.0.attempt(statements)
-    }
-
-    fn commit(self: Box<Self>) -> SqlFuture<'static, ()> {
-        self.0.commit()
-    }
-}
-
-macro_rules! handle_cases {
-    ($($case:ident),* $(,)?) => {
+macro_rules! port_cases {
+    ($($module:ident :: $case:ident),* $(,)?) => {
         $(
             #[tokio::test]
             async fn $case() {
-                handles::$case(File::default()).await;
-                handles::$case(PortOnly::default()).await;
+                contract::$module::$case(File::default()).await;
+                contract::$module::$case(PortOnly::default()).await;
             }
         )*
     };
 }
 
-handle_cases!(
-    the_list_handles_read_the_projection,
-    the_document_handle_reads_the_projection,
-    the_discussion_handle_reads_the_projection,
-    the_message_handle_reads_the_projection,
+port_cases!(
+    handles::the_list_handles_read_the_projection,
+    handles::the_document_handle_reads_the_projection,
+    handles::the_discussion_handle_reads_the_projection,
+    handles::the_message_handle_reads_the_projection,
+    limits::a_bounded_read_runs_the_statements_within_its_bound,
+    limits::a_statement_past_the_bound_stops_for_the_budget,
+    limits::a_limit_bounds_the_rows,
+    limits::a_list_of_the_most_values_runs,
 );
+
+/// The limit case finds an adapter that ignores `LIMIT`.
+#[tokio::test]
+#[should_panic(expected = "assertion `left == right` failed")]
+async fn the_limit_case_refuses_an_adapter_that_ignores_limit() {
+    contract::limits::a_limit_bounds_the_rows(NoLimit::default()).await;
+}
 
 #[tokio::test]
 async fn a_read_of_an_absent_database_refuses_before_its_work() {
@@ -173,7 +227,7 @@ async fn a_database_with_no_revision_table_holds_no_revision() {
         .write(Box::new(|mut transaction| {
             Box::pin(async move {
                 transaction
-                    .execute("CREATE TABLE unrelated (n INTEGER)", &[])
+                    .execute("CREATE TABLE unrelated (n INTEGER)", Vec::new())
                     .await?;
                 transaction.commit().await
             })

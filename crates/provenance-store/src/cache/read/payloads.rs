@@ -90,7 +90,7 @@ impl<T: PayloadRow> Payloads<'_, T> {
         if let Some(owner) = owner {
             values.push(owner.as_str().into());
         }
-        let rows = self.snapshot.fetch(&sql, &values).await?;
+        let rows = self.snapshot.fetch(&sql, values).await?;
         let Some(row) = rows.first() else {
             return Ok(None);
         };
@@ -116,7 +116,7 @@ impl<T: PayloadRow> Payloads<'_, T> {
             values.push(owner.as_str().into());
         }
         values.push(SqlValue::Integer(i64::try_from(limit)?));
-        page_ids(&self.snapshot.fetch(&sql, &values).await?)
+        page_ids(self.snapshot.fetch(&sql, values).await?)
     }
 }
 

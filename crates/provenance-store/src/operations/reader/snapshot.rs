@@ -15,9 +15,8 @@ use provenance_macros::rule;
 use sqlx::Sqlite;
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
 use std::sync::{Mutex, PoisonError};
-use tokio::sync::MutexGuard;
+use tokio::sync::{MappedMutexGuard, MutexGuard};
 
 /// One read transaction at one revision.
 ///
@@ -27,6 +26,8 @@ use tokio::sync::MutexGuard;
 #[rule("rule_stamp_attests_every_table_read")]
 pub struct ReadSnapshot {
     tx: tokio::sync::Mutex<Transaction>,
+    /// The most values of one list that a statement of the read binds.
+    list_values: usize,
     scope: ScopeId,
     revision: StoredRevision,
     attested: Mutex<BTreeSet<&'static str>>,
@@ -43,6 +44,7 @@ impl ReadSnapshot {
             return Ok(None);
         };
         Ok(Some(Self {
+            list_values: tx.max_list_values(),
             tx: tokio::sync::Mutex::new(tx),
             scope: scope.clone(),
             revision,
@@ -99,9 +101,15 @@ impl ReadSnapshot {
     pub(crate) async fn fetch(
         &self,
         sql: &str,
-        values: &[SqlValue],
+        values: Vec<SqlValue>,
     ) -> anyhow::Result<Vec<crate::read_database::SqlRow>> {
         self.transaction().await.fetch(sql, values).await
+    }
+
+    /// The most values of one list that a statement of the read binds; a
+    /// reader puts a longer list in more statements.
+    pub(crate) const fn list_values(&self) -> usize {
+        self.list_values
     }
 
     /// The scope as the value that a statement binds.
@@ -110,9 +118,11 @@ impl ReadSnapshot {
     }
 
     /// The `SQLx` transaction of the file adapter, for the span of one
-    /// statement of a reader that still runs `SQLx` directly.
-    pub(crate) async fn connection(&self) -> FileConnection<'_> {
-        FileConnection(self.tx.lock().await)
+    /// statement of a reader that still runs `SQLx` directly. A read of
+    /// another adapter refuses here with a fault.
+    pub(crate) async fn connection(&self) -> anyhow::Result<FileConnection<'_>> {
+        MutexGuard::try_map(self.tx.lock().await, |tx| tx.sqlx())
+            .map_err(|_| crate::refusal::fault!("{NOT_A_FILE}"))
     }
 
     async fn count_rows(&self, table: &str) -> anyhow::Result<i64> {
@@ -120,7 +130,7 @@ impl ReadSnapshot {
         let rows = self
             .transaction()
             .await
-            .fetch(&sql, &[SqlValue::from(self.scope.as_str())])
+            .fetch(&sql, vec![self.scope_value()])
             .await?;
         one_row(&rows)?.integer(0)
     }
@@ -138,23 +148,12 @@ impl ReadSnapshot {
 
 /// The transaction of a snapshot as the `SQLx` transaction of the file
 /// adapter. Only the readers that run `SQLx` take it.
-pub struct FileConnection<'s>(MutexGuard<'s, Transaction>);
+pub type FileConnection<'s> = MappedMutexGuard<'s, sqlx::Transaction<'static, Sqlite>>;
 
-const NOT_A_FILE: &str = "the readers that run SQLx read the file adapter";
-
-impl Deref for FileConnection<'_> {
-    type Target = sqlx::Transaction<'static, Sqlite>;
-
-    fn deref(&self) -> &Self::Target {
-        self.0.sqlx_ref().expect(NOT_A_FILE)
-    }
-}
-
-impl DerefMut for FileConnection<'_> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.0.sqlx().expect(NOT_A_FILE)
-    }
-}
+/// The fault of a read of another adapter that reaches a reader that runs
+/// `SQLx`. It ends when the discussion reads run on the port.
+const NOT_A_FILE: &str =
+    "the discussion reads read only the read database file under .provenance/cache";
 
 /// One record table at the snapshot's revision, typed by the record it
 /// holds. The marker is a function type, so the handle is `Send` and
@@ -218,7 +217,7 @@ impl RecordIdentities<'_> {
             .fetch(
                 "SELECT scope_id, node_type FROM record_identities \
                  WHERE id = ? ORDER BY scope_id, node_type",
-                &[SqlValue::from(id)],
+                vec![SqlValue::from(id)],
             )
             .await?;
         rows.iter()

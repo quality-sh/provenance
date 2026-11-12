@@ -1,5 +1,5 @@
 use crate::operations::reader::ReadSnapshot;
-use crate::read_database::{SqlColumns, SqlValue};
+use crate::read_database::{SqlColumns, SqlRow};
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::{Message, ScopeId, StableId, Thread, ThreadParent};
 use serde::de::DeserializeOwned;
@@ -23,26 +23,26 @@ fn word<T: DeserializeOwned>(text: &str) -> anyhow::Result<T> {
     ))?)
 }
 
-fn thread(row: &[SqlValue]) -> anyhow::Result<Thread> {
+fn thread(mut row: SqlRow) -> anyhow::Result<Thread> {
     Ok(Thread {
         scope_id: ScopeId::new(row.text(0)?)?,
-        id: StableId::new(row.text(1)?)?,
+        id: StableId::new(row.take_text(1)?)?,
         parent: ThreadParent {
             node_type: word(row.text(2)?)?,
-            node_id: StableId::new(row.text(3)?)?,
+            node_id: StableId::new(row.take_text(3)?)?,
         },
         status: word(row.text(4)?)?,
         created_at: row.integer(5)?,
     })
 }
 
-fn message(row: &[SqlValue]) -> anyhow::Result<Message> {
+fn message(mut row: SqlRow) -> anyhow::Result<Message> {
     Ok(Message {
         scope_id: ScopeId::new(row.text(0)?)?,
-        id: StableId::new(row.text(1)?)?,
-        thread_id: StableId::new(row.text(2)?)?,
+        id: StableId::new(row.take_text(1)?)?,
+        thread_id: StableId::new(row.take_text(2)?)?,
         role: word(row.text(3)?)?,
-        body: row.text(4)?.to_owned(),
+        body: row.take_text(4)?,
         created_at: row.integer(5)?,
     })
 }
@@ -55,8 +55,8 @@ impl ReadSnapshot {
             "SELECT {} FROM threads WHERE scope_id = ? ORDER BY created_at, id",
             THREAD_COLUMNS.join(", ")
         );
-        let rows = self.fetch(&sql, &[self.scope_value()]).await?;
-        rows.iter().map(|row| thread(row)).collect()
+        let rows = self.fetch(&sql, vec![self.scope_value()]).await?;
+        rows.into_iter().map(thread).collect()
     }
 
     /// All messages at the graph revision, in logical order with ID ties.
@@ -66,15 +66,15 @@ impl ReadSnapshot {
             "SELECT {} FROM messages WHERE scope_id = ? ORDER BY created_at, id",
             MESSAGE_COLUMNS.join(", ")
         );
-        let rows = self.fetch(&sql, &[self.scope_value()]).await?;
-        rows.iter().map(|row| message(row)).collect()
+        let rows = self.fetch(&sql, vec![self.scope_value()]).await?;
+        rows.into_iter().map(message).collect()
     }
 
     pub(crate) async fn page_thread(&self, id: &str) -> anyhow::Result<Option<Thread>> {
         self.attest("threads");
         let rows = self.page_row("threads", &THREAD_COLUMNS, id).await?;
-        rows.iter()
-            .map(|row| thread(row))
+        rows.into_iter()
+            .map(thread)
             .collect::<anyhow::Result<Vec<_>>>()
             .map(|mut rows| rows.pop())
     }
@@ -82,8 +82,8 @@ impl ReadSnapshot {
     pub(crate) async fn page_message(&self, id: &str) -> anyhow::Result<Option<Message>> {
         self.attest("messages");
         let rows = self.page_row("messages", &MESSAGE_COLUMNS, id).await?;
-        rows.iter()
-            .map(|row| message(row))
+        rows.into_iter()
+            .map(message)
             .collect::<anyhow::Result<Vec<_>>>()
             .map(|mut rows| rows.pop())
     }
@@ -96,7 +96,7 @@ impl ReadSnapshot {
         columns: &[&str],
         id: &str,
     ) -> anyhow::Result<Vec<crate::read_database::SqlRow>> {
-        let values = [self.scope_value(), id.into()];
+        let values = vec![self.scope_value(), id.into()];
         let sizes = self
             .fetch(
                 &format!(
@@ -104,7 +104,7 @@ impl ReadSnapshot {
                     super::page::byte_expression(columns),
                     crate::cache::quoted(table)
                 ),
-                &values,
+                values.clone(),
             )
             .await?;
         let maximum = i64::try_from(super::page::RECORD_BYTES)?;
@@ -117,6 +117,6 @@ impl ReadSnapshot {
             "SELECT {} FROM {table} WHERE scope_id = ? AND id = ? LIMIT 1",
             columns.join(", ")
         );
-        self.fetch(&sql, &values).await
+        self.fetch(&sql, values).await
     }
 }

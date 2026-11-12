@@ -8,10 +8,9 @@
 //! Each relation name is interned to the `&'static str` its declaration
 //! carries, so a row naming an undeclared relation refuses the hop.
 
-use super::BIND_CHUNK;
 use crate::cache::serde_name;
 use crate::operations::reader::Relations;
-use crate::read_database::{SqlColumns, SqlValue};
+use crate::read_database::{SqlColumns, SqlRow, SqlValue};
 use provenance_core::model::relations::{declaration_for, RelationEndpoint, RelationSource, LINKS};
 use provenance_core::{NodeType, StableId};
 use std::collections::{BTreeMap, BTreeSet};
@@ -78,7 +77,7 @@ impl SqlFront {
         let snapshot = relations.snapshot();
         for (node_type, ids) in by_kind(frontier).into_values() {
             let word = serde_name(&node_type)?;
-            for chunk in ids.chunks(BIND_CHUNK) {
+            for chunk in ids.chunks(snapshot.list_values()) {
                 let marks = vec!["?"; chunk.len()].join(", ");
                 let out = format!(
                     "SELECT owner_id, relation, target_type, target_id FROM relations \
@@ -94,9 +93,9 @@ impl SqlFront {
                     .into_iter()
                     .chain(chunk.iter().map(|id| SqlValue::from(*id)))
                     .collect();
-                for (sql, outward) in [(out, true), (into, false)] {
-                    let rows = snapshot.fetch(&sql, &values).await?;
-                    for row in &rows {
+                for (sql, outward, values) in [(out, true, values.clone()), (into, false, values)] {
+                    let rows = snapshot.fetch(&sql, values).await?;
+                    for row in rows {
                         front.take(node_type, row, outward)?;
                     }
                 }
@@ -107,13 +106,15 @@ impl SqlFront {
 
     /// Files one fetched row: an out row under its owner, an in row under
     /// its target, the other end as the endpoint.
-    fn take(&mut self, kind: NodeType, row: &[SqlValue], outward: bool) -> anyhow::Result<()> {
-        let anchor = row.text(0)?;
-        let name = row.text(1)?;
+    fn take(&mut self, kind: NodeType, mut row: SqlRow, outward: bool) -> anyhow::Result<()> {
+        // The columns are read in their order; the name is checked as
+        // text first and read again after the ids move out of the row.
+        let anchor = row.take_text(0)?;
+        row.text(1)?;
         let other_type = NodeType::parse(row.text(2)?)?;
-        let other_id = StableId::new(row.text(3)?)?;
+        let other_id = StableId::new(row.take_text(3)?)?;
         let owner = if outward { kind } else { other_type };
-        let relation = intern(owner, name)?;
+        let relation = intern(owner, row.text(1)?)?;
         let endpoint = RelationEndpoint {
             node_type: other_type,
             id: other_id,
@@ -123,7 +124,7 @@ impl SqlFront {
         } else {
             &mut self.incoming
         };
-        rows.entry(key(kind, anchor))
+        rows.entry((kind.rank(), anchor))
             .or_default()
             .push((relation, endpoint));
         Ok(())

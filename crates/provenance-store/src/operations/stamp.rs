@@ -70,7 +70,7 @@ pub async fn stored_revision(
     let revision = transaction
         .fetch(
             "SELECT serial, digest FROM projection_revision ORDER BY serial DESC LIMIT 1",
-            &[],
+            Vec::new(),
         )
         .await;
     let revision = match revision {
@@ -83,7 +83,7 @@ pub async fn stored_revision(
     };
     let (serial, digest) = (row.integer(0)?, row.text(1)?.to_owned());
     let instance = transaction
-        .fetch("SELECT instance_id FROM projection_instance", &[])
+        .fetch("SELECT instance_id FROM projection_instance", Vec::new())
         .await?;
     let instance_id = instance
         .first()

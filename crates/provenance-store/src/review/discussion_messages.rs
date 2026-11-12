@@ -56,7 +56,7 @@ async fn message(
          JOIN threads t ON t.scope_id=m.scope_id AND t.id=m.thread_id {join} \
          WHERE m.scope_id=? AND t.parent_type=? AND t.parent_id=? AND {condition} AND m.id=?"
     );
-    let mut tx = ctx.snapshot().connection().await;
+    let mut tx = ctx.snapshot().connection().await?;
     let row: Option<(String, String, String, i64, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(sql))
         .bind(ctx.snapshot().scope().as_str())
         .bind(kind)
@@ -130,7 +130,7 @@ async fn check_address(ctx: &ReadContext, query: &DiscussionMessagesQuery) -> an
         DiscussionSelector::Legacy { thread_id } => ("SELECT EXISTS(SELECT 1 FROM threads WHERE scope_id=? AND parent_type=? AND parent_id=? AND id=?)", thread_id.as_str()),
     };
     let kind = super::discussion_state::discussion_kind_word(query.parent.node_type);
-    let mut tx = ctx.snapshot().connection().await;
+    let mut tx = ctx.snapshot().connection().await?;
     let exists: bool = sqlx::query_scalar(address_sql)
         .bind(ctx.snapshot().scope().as_str())
         .bind(kind)
@@ -179,17 +179,17 @@ async fn message_keys(
 ) -> anyhow::Result<Vec<(String, i64, i64)>> {
     let (join, selector, condition) = selector_sql(&query.selector);
     let kind = super::discussion_state::discussion_kind_word(query.parent.node_type);
-    let mut tx = ctx.snapshot().connection().await;
+    let mut tx = ctx.snapshot().connection().await?;
     let keys: Vec<(String, i64, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT m.id,m.created_at,length(CAST(m.body AS BLOB))+length(m.id)+length(m.thread_id)+256 FROM messages m JOIN threads t ON t.scope_id=m.scope_id AND t.id=m.thread_id {join} WHERE m.scope_id=? AND t.parent_type=? AND t.parent_id=? AND {condition} AND (m.created_at>? OR (m.created_at=? AND m.id>?)) ORDER BY m.created_at,m.id LIMIT ?")))
         .bind(ctx.snapshot().scope().as_str()).bind(kind).bind(query.parent.node_id.as_str()).bind(selector)
-        .bind(position.counter).bind(position.counter).bind(&position.id).bind(i64::try_from(query.limit+1)?).fetch_all(&mut **tx).await.map_err(anyhow::Error::from).map_err(reader::page_error)?;
+        .bind(position.counter).bind(position.counter).bind(&position.id).bind(i64::try_from(query.limit+1)?).fetch_all(&mut **tx).await.map_err(crate::read_database::file::statement_error).map_err(reader::page_error)?;
     drop(tx);
     Ok(keys)
 }
 
 /// Loads one message of the page by id.
 async fn page_message(ctx: &ReadContext, id: &str, created_at: i64) -> anyhow::Result<Message> {
-    let mut tx = ctx.snapshot().connection().await;
+    let mut tx = ctx.snapshot().connection().await?;
     let (thread, role, body): (String, String, String) =
         sqlx::query_as("SELECT thread_id,role,body FROM messages WHERE scope_id=? AND id=?")
             .bind(ctx.snapshot().scope().as_str())

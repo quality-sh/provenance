@@ -1,7 +1,6 @@
 //! The lookups of one typed table handle, and the kind of a bare id.
 
 use super::rows::{decode, id_column, select_columns};
-use super::BIND_CHUNK;
 use crate::cache::materialize::SEARCH_TEXT;
 use crate::cache::quoted;
 use crate::operations::reader::{ReadSnapshot, Table};
@@ -23,9 +22,12 @@ impl<K: ProjectionRow> Table<'_, K> {
         );
         let rows = self
             .snapshot()
-            .fetch(&sql, &[self.snapshot().scope_value(), id.as_str().into()])
+            .fetch(
+                &sql,
+                vec![self.snapshot().scope_value(), id.as_str().into()],
+            )
             .await?;
-        rows.first().map(|row| decode::<K>(row)).transpose()
+        rows.into_iter().next().map(decode::<K>).transpose()
     }
 
     /// The records with the given ids that count under the view, one per
@@ -42,7 +44,7 @@ impl<K: ProjectionRow> Table<'_, K> {
     /// view, in id order.
     pub async fn by_field(&self, column: &'static str, values: &[&str]) -> anyhow::Result<Vec<K>> {
         let rows = self.rows_in(&select_columns::<K>(), column, values).await?;
-        in_id_order(&rows)
+        in_id_order(rows)
     }
 
     /// Reads query-page records only after every stored row passes the
@@ -59,14 +61,14 @@ impl<K: ProjectionRow> Table<'_, K> {
         values.dedup();
         let expression = super::page::byte_expression(K::COLUMNS);
         let maximum = i64::try_from(super::page::RECORD_BYTES)?;
-        for chunk in values.chunks(BIND_CHUNK) {
+        for chunk in values.chunks(self.snapshot().list_values()) {
             let marks = vec!["?"; chunk.len()].join(", ");
             let sql = format!(
                 "SELECT {expression} AS record_bytes FROM {} WHERE scope_id = ? AND {} IN ({marks})",
                 quoted(K::TABLE),
                 quoted(column)
             );
-            let rows = self.snapshot().fetch(&sql, &self.bound(chunk)).await?;
+            let rows = self.snapshot().fetch(&sql, self.bound(chunk)).await?;
             let sizes = rows
                 .iter()
                 .map(|row| row.integer(0))
@@ -115,7 +117,7 @@ impl<K: ProjectionRow> Table<'_, K> {
         // holds across the chunked statements.
         let mut candidates: Vec<String> = Vec::new();
         let wanted = i64::try_from(limit + 1)?;
-        for chunk in values.chunks(BIND_CHUNK) {
+        for chunk in values.chunks(self.snapshot().list_values()) {
             let marks = vec!["?"; chunk.len()].join(", ");
             let sql = format!(
                 "SELECT id FROM {} WHERE scope_id = ? AND {} IN ({marks}){filter} ORDER BY id LIMIT ?",
@@ -124,9 +126,9 @@ impl<K: ProjectionRow> Table<'_, K> {
             );
             let mut values = self.bound(chunk);
             values.push(SqlValue::Integer(wanted));
-            let rows = self.snapshot().fetch(&sql, &values).await?;
-            for row in &rows {
-                candidates.push(row.text(0)?.to_owned());
+            let rows = self.snapshot().fetch(&sql, values).await?;
+            for mut row in rows {
+                candidates.push(row.take_text(0)?);
             }
         }
         candidates.sort();
@@ -153,13 +155,13 @@ impl<K: ProjectionRow> Table<'_, K> {
         let wanted: Vec<&str> = ids.iter().map(String::as_str).collect();
         let expression = super::page::byte_expression(K::COLUMNS);
         let maximum = i64::try_from(super::page::RECORD_BYTES)?;
-        for chunk in wanted.chunks(BIND_CHUNK) {
+        for chunk in wanted.chunks(self.snapshot().list_values()) {
             let marks = vec!["?"; chunk.len()].join(", ");
             let sql = format!(
                 "SELECT {expression} AS record_bytes FROM {} WHERE scope_id = ? AND id IN ({marks})",
                 quoted(K::TABLE)
             );
-            let rows = self.snapshot().fetch(&sql, &self.bound(chunk)).await?;
+            let rows = self.snapshot().fetch(&sql, self.bound(chunk)).await?;
             let sizes = rows
                 .iter()
                 .map(|row| row.integer(0))
@@ -171,7 +173,7 @@ impl<K: ProjectionRow> Table<'_, K> {
             }
         }
         let rows = self.rows_in(&select_columns::<K>(), "id", &wanted).await?;
-        in_id_order(&rows)
+        in_id_order(rows)
     }
 
     /// The given ids that name a row that counts under the view, in id
@@ -180,8 +182,8 @@ impl<K: ProjectionRow> Table<'_, K> {
         let wanted: Vec<&str> = ids.iter().map(StableId::as_str).collect();
         let rows = self.rows_in("id", "id", &wanted).await?;
         let mut found = rows
-            .iter()
-            .map(|row| Ok(row.text(0)?.to_owned()))
+            .into_iter()
+            .map(|mut row| row.take_text(0))
             .collect::<anyhow::Result<Vec<_>>>()?;
         found.sort_unstable();
         found.into_iter().map(StableId::new).collect()
@@ -202,14 +204,14 @@ impl<K: ProjectionRow> Table<'_, K> {
         values.sort_unstable();
         values.dedup();
         let mut rows = Vec::new();
-        for chunk in values.chunks(BIND_CHUNK) {
+        for chunk in values.chunks(self.snapshot().list_values()) {
             let marks = vec!["?"; chunk.len()].join(", ");
             let sql = format!(
                 "SELECT {select} FROM {} WHERE scope_id = ? AND {} IN ({marks})",
                 quoted(K::TABLE),
                 quoted(column)
             );
-            rows.extend(self.snapshot().fetch(&sql, &self.bound(chunk)).await?);
+            rows.extend(self.snapshot().fetch(&sql, self.bound(chunk)).await?);
         }
         Ok(rows)
     }
@@ -222,7 +224,10 @@ impl<K: ProjectionRow> Table<'_, K> {
         );
         let rows = self
             .snapshot()
-            .fetch(&sql, &[self.snapshot().scope_value(), id.as_str().into()])
+            .fetch(
+                &sql,
+                vec![self.snapshot().scope_value(), id.as_str().into()],
+            )
             .await?;
         Ok(!rows.is_empty())
     }
@@ -241,10 +246,10 @@ impl<K: ProjectionRow> Table<'_, K> {
             .snapshot()
             .fetch(
                 &sql,
-                &[self.snapshot().scope_value(), needle.to_lowercase().into()],
+                vec![self.snapshot().scope_value(), needle.to_lowercase().into()],
             )
             .await?;
-        rows.iter().map(|row| decode::<K>(row)).collect()
+        rows.into_iter().map(decode::<K>).collect()
     }
 
     /// The scope, then each value of one chunk, as a statement binds them.
@@ -256,10 +261,10 @@ impl<K: ProjectionRow> Table<'_, K> {
 }
 
 /// The records that the rows hold, in id order.
-fn in_id_order<K: ProjectionRow>(rows: &[SqlRow]) -> anyhow::Result<Vec<K>> {
+fn in_id_order<K: ProjectionRow>(rows: Vec<SqlRow>) -> anyhow::Result<Vec<K>> {
     let id = id_column::<K>()?;
     let mut records = rows
-        .iter()
+        .into_iter()
         .map(|row| Ok((row.text(id)?.to_owned(), decode::<K>(row)?)))
         .collect::<anyhow::Result<Vec<_>>>()?;
     records.sort_by(|left, right| left.0.cmp(&right.0));
@@ -283,11 +288,11 @@ impl Table<'_, ImplementationBinding> {
         file: &str,
     ) -> anyhow::Result<Vec<ImplementationSymbolSite>> {
         let rows = symbol_rows(self, "rule_id, symbol", file).await?;
-        rows.iter()
-            .map(|row| {
+        rows.into_iter()
+            .map(|mut row| {
                 Ok(ImplementationSymbolSite {
-                    rule_id: row.text(0)?.to_owned(),
-                    symbol: row.text(1)?.to_owned(),
+                    rule_id: row.take_text(0)?,
+                    symbol: row.take_text(1)?,
                 })
             })
             .collect()
@@ -300,12 +305,12 @@ impl Table<'_, VerificationBinding> {
         file: &str,
     ) -> anyhow::Result<Vec<VerificationSymbolSite>> {
         let rows = symbol_rows(self, "rule_id, symbol, method", file).await?;
-        rows.iter()
-            .map(|row| {
+        rows.into_iter()
+            .map(|mut row| {
                 Ok(VerificationSymbolSite {
-                    rule_id: row.text(0)?.to_owned(),
-                    symbol: row.optional_text(1)?.map(str::to_owned),
-                    method: row.text(2)?.to_owned(),
+                    rule_id: row.take_text(0)?,
+                    symbol: row.take_optional_text(1)?,
+                    method: row.take_text(2)?,
                 })
             })
             .collect()
@@ -326,7 +331,7 @@ async fn symbol_rows<K: ProjectionRow>(
     );
     let snapshot = table.snapshot();
     snapshot
-        .fetch(&sql, &[snapshot.scope_value(), file.into()])
+        .fetch(&sql, vec![snapshot.scope_value(), file.into()])
         .await
 }
 

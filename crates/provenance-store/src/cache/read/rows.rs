@@ -6,7 +6,7 @@
 //! one would print as `1`.
 
 use crate::cache::quoted;
-use crate::read_database::SqlValue;
+use crate::read_database::{SqlRow, SqlValue};
 use provenance_core::model::{ColumnValue, ProjectionRow};
 
 /// The quoted column list of one record type, for a select.
@@ -18,18 +18,29 @@ pub fn select_columns<K: ProjectionRow>() -> String {
         .join(", ")
 }
 
-/// The record a row holds, read column by column.
-pub(super) fn decode<K: ProjectionRow>(row: &[SqlValue]) -> anyhow::Result<K> {
+/// The record a row holds, read column by column. The values move out of
+/// the row, so no text is copied.
+pub(super) fn decode<K: ProjectionRow>(row: SqlRow) -> anyhow::Result<K> {
     crate::test_probes::at("query_row_hydrated")?;
     K::from_row(&column_values::<K>(row)?)
 }
 
 /// The row's values in `COLUMNS` order, each in the storage class the
-/// database reports.
-pub fn column_values<K: ProjectionRow>(row: &[SqlValue]) -> anyhow::Result<Vec<ColumnValue>> {
-    (0..K::COLUMNS.len())
-        .map(|index| column_value(row, index))
-        .collect()
+/// database reports. The first column that no field takes, in column
+/// order, refuses the row.
+pub fn column_values<K: ProjectionRow>(row: SqlRow) -> anyhow::Result<Vec<ColumnValue>> {
+    let wanted = K::COLUMNS.len();
+    let len = row.len();
+    let mut values = Vec::with_capacity(wanted);
+    for (index, value) in row.into_iter().take(wanted).enumerate() {
+        values.push(column_value(value, index)?);
+    }
+    if len < wanted {
+        return Err(crate::refusal::fault!(
+            "column index out of bounds: the len is {len}, but the index is {len}"
+        ));
+    }
+    Ok(values)
 }
 
 /// The index of a record type's `id` column in its select list.
@@ -40,21 +51,15 @@ pub(super) fn id_column<K: ProjectionRow>() -> anyhow::Result<usize> {
         .ok_or_else(|| crate::refusal::fault!("no column found for name: id"))
 }
 
-fn column_value(row: &[SqlValue], index: usize) -> anyhow::Result<ColumnValue> {
-    Ok(match row.get(index) {
-        Some(SqlValue::Null) => ColumnValue::Null,
-        Some(SqlValue::Integer(value)) => ColumnValue::Integer(*value),
-        Some(SqlValue::Real(value)) => ColumnValue::Real(*value),
-        Some(SqlValue::Text(value)) => ColumnValue::Text(value.clone()),
-        Some(SqlValue::Blob(_)) => {
+fn column_value(value: SqlValue, index: usize) -> anyhow::Result<ColumnValue> {
+    Ok(match value {
+        SqlValue::Null => ColumnValue::Null,
+        SqlValue::Integer(value) => ColumnValue::Integer(value),
+        SqlValue::Real(value) => ColumnValue::Real(value),
+        SqlValue::Text(value) => ColumnValue::Text(value),
+        SqlValue::Blob(_) => {
             return Err(crate::refusal::fault!(
                 "column {index} holds a BLOB value, which no record field takes"
-            ))
-        }
-        None => {
-            return Err(crate::refusal::fault!(
-                "column index out of bounds: the len is {}, but the index is {index}",
-                row.len()
             ))
         }
     })

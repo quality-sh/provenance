@@ -151,7 +151,7 @@ impl ReadSnapshot {
                          ON r.scope_id = ?1 AND r.owner_id = a.id
                          WHERE r.owner_type = 'requirement' AND r.relation = 'refines')
                          SELECT COUNT(*) FROM ancestors",
-                            &[self.scope_value(), root.as_str().into()],
+                            vec![self.scope_value(), root.as_str().into()],
                         )
                         .await?;
                     let depth = one_row(&rows)?.integer(0)?;
@@ -217,7 +217,7 @@ impl ReadSnapshot {
                 .map(|(kind, id)| format!("{}:{}", kind.as_str(), id.as_str()))
                 .collect::<Vec<_>>(),
         )?;
-        let sets_values = [self.scope_value(), root.into(), hidden.into()];
+        let sets_values = vec![self.scope_value(), root.into(), hidden.into()];
         let overflow = self
             .fetch(
                 &format!(
@@ -226,23 +226,20 @@ impl ReadSnapshot {
             OR (SELECT count(*) FROM branch) > 4096 OR (SELECT count(*) FROM ancestors) > 4096 \
             OR (SELECT count(*) FROM decisions) > 4096"
                 ),
-                &sets_values,
+                sets_values.clone(),
             )
             .await?;
         if one_row(&overflow)?.integer(0)? != 0 {
             return Err(ReadFailure::PageBudgetExceeded.into());
         }
-        let [scope, root, hidden] = sets_values;
-        let values = [
-            scope,
-            root,
-            hidden,
+        let mut values = sets_values;
+        values.extend([
             SqlValue::Integer(i64::from(after.stage)),
             SqlValue::Integer(i64::from(after.rank)),
             SqlValue::Integer(after.counter),
             after.id.as_str().into(),
             SqlValue::Integer(i64::try_from(limit)?),
-        ];
+        ]);
         let rows = self
             .fetch(
                 &format!(
@@ -250,21 +247,25 @@ impl ReadSnapshot {
             WHERE (stage, rank, counter, id) > (?4, ?5, ?6, ?7) \
             ORDER BY stage, rank, counter, id LIMIT ?8"
                 ),
-                &values,
+                values,
             )
             .await?;
-        rows.iter()
-            .map(|row| {
+        rows.into_iter()
+            .map(|mut row| {
+                let kind = row.take_text(1)?;
+                let stage = u8::try_from(row.integer(0)?)?;
+                let rank = u8::try_from(row.integer(4)?)?;
+                let counter = row.integer(3)?;
+                let id = row
+                    .take_optional_text(2)?
+                    .ok_or(ReadFailure::PageRecordTooLarge)?;
                 Ok((
-                    row.text(1)?.to_owned(),
+                    kind,
                     Position {
-                        stage: u8::try_from(row.integer(0)?)?,
-                        rank: u8::try_from(row.integer(4)?)?,
-                        counter: row.integer(3)?,
-                        id: row
-                            .optional_text(2)?
-                            .ok_or(ReadFailure::PageRecordTooLarge)?
-                            .to_owned(),
+                        stage,
+                        rank,
+                        counter,
+                        id,
                     },
                 ))
             })

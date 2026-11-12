@@ -2,7 +2,7 @@
 use super::rows::{decode, select_columns};
 use crate::cache::quoted;
 use crate::operations::reader::{ReadSnapshot, Table};
-use crate::read_database::{SqlColumns, SqlRow, SqlValue};
+use crate::read_database::{OverBudget, SqlColumns, SqlRow, SqlValue};
 use provenance_core::model::ProjectionRow;
 use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
 use provenance_core::protocol::read_failure::ReadFailure;
@@ -12,20 +12,16 @@ pub const RECORD_BYTES: usize = 65_536;
 pub const PAGE_BYTES: usize = 1_048_576;
 pub const RESOURCE_RECORD_BYTES: usize = PAGE_BYTES - 16_384;
 
+/// The engine steps that the statements of one page may run, joins and
+/// sorts included.
+pub const PAGE_WORK_STEPS: u64 = 10_000_000;
+
 impl ReadSnapshot {
-    /// Limits `SQLite` work in this page transaction, including joins and sorts.
+    /// Bounds the work of the statements that follow in this page
+    /// transaction to [`PAGE_WORK_STEPS`].
     #[rule("rule_query_pages_bound_shared_reads")]
     pub(crate) async fn bound_page_work(&self) -> anyhow::Result<()> {
-        let mut tx = self.connection().await;
-        let mut handle = tx.lock_handle().await?;
-        let mut calls = 0;
-        handle.set_progress_handler(1000, move || {
-            calls += 1;
-            calls <= 10_000
-        });
-        drop(handle);
-        drop(tx);
-        Ok(())
+        self.transaction().await.bound_work(PAGE_WORK_STEPS).await
     }
 }
 
@@ -42,10 +38,10 @@ pub fn check_limit(limit: usize) -> anyhow::Result<()> {
     .into())
 }
 
+/// The page budget refusal for a statement that the store stopped for
+/// the work bound; any other error as it is.
 pub fn page_error(error: anyhow::Error) -> anyhow::Error {
-    if error.downcast_ref::<sqlx::Error>().is_some_and(
-        |error| matches!(error, sqlx::Error::Database(db) if db.code().as_deref() == Some("9")),
-    ) {
+    if error.downcast_ref::<OverBudget>().is_some() {
         ReadFailure::PageBudgetExceeded.into()
     } else {
         error
@@ -91,7 +87,7 @@ impl<K: ProjectionRow> Table<'_, K> {
     /// `bytes`.
     async fn record_within(&self, id: &str, bytes: usize) -> anyhow::Result<Option<K>> {
         let snapshot = self.snapshot();
-        let values = [snapshot.scope_value(), id.into()];
+        let values = vec![snapshot.scope_value(), id.into()];
         let sizes = snapshot
             .fetch(
                 &format!(
@@ -99,7 +95,7 @@ impl<K: ProjectionRow> Table<'_, K> {
                     byte_expression(K::COLUMNS),
                     quoted(K::TABLE)
                 ),
-                &values,
+                values.clone(),
             )
             .await?;
         let maximum = i64::try_from(bytes)?;
@@ -115,10 +111,10 @@ impl<K: ProjectionRow> Table<'_, K> {
                     select_columns::<K>(),
                     quoted(K::TABLE)
                 ),
-                &values,
+                values,
             )
             .await?;
-        rows.first().map(|row| decode::<K>(row)).transpose()
+        rows.into_iter().next().map(decode::<K>).transpose()
     }
 
     /// Reads at most `limit` candidate IDs strictly after the previous key.
@@ -133,12 +129,12 @@ impl<K: ProjectionRow> Table<'_, K> {
             exclude_terminal,
         );
         let sql = id_page_sql(K::TABLE, &filter);
-        let values = [
+        let values = vec![
             self.snapshot().scope_value(),
             after.into(),
             SqlValue::Integer(i64::try_from(limit)?),
         ];
-        page_ids(&self.snapshot().fetch(&sql, &values).await?)
+        page_ids(self.snapshot().fetch(&sql, values).await?)
     }
 }
 
@@ -156,17 +152,16 @@ impl Table<'_, provenance_core::VerificationBinding> {
             values.push(rule.as_str().into());
         }
         values.push(SqlValue::Integer(i64::try_from(limit)?));
-        page_ids(&self.snapshot().fetch(&sql, &values).await?)
+        page_ids(self.snapshot().fetch(&sql, values).await?)
     }
 }
 
 /// The ids of one keyset page. An id that the page gives as NULL is over
 /// the id ceiling and refuses the page.
-pub fn page_ids(rows: &[SqlRow]) -> anyhow::Result<Vec<String>> {
-    rows.iter()
-        .map(|row| {
-            row.optional_text(0)?
-                .map(str::to_owned)
+pub fn page_ids(rows: Vec<SqlRow>) -> anyhow::Result<Vec<String>> {
+    rows.into_iter()
+        .map(|mut row| {
+            row.take_optional_text(0)?
                 .ok_or_else(|| ReadFailure::PageRecordTooLarge.into())
         })
         .collect()

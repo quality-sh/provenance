@@ -120,12 +120,12 @@ async fn assert_rows_read_as_written<K: ProjectionRow + Serialize>(
             .to_string();
         let mut tx = crate::read_database::file::begin(pool).await.unwrap();
         let rows = tx
-            .fetch(&sql, &[scope.into(), id.as_str().into()])
+            .fetch(&sql, vec![scope.into(), id.as_str().into()])
             .await
             .unwrap();
         drop(tx);
         assert_eq!(
-            column_values::<K>(&rows[0]).unwrap(),
+            column_values::<K>(rows[0].clone()).unwrap(),
             record.row().unwrap(),
             "{}: {id} reads back in other storage classes",
             K::TABLE

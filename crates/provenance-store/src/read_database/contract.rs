@@ -14,6 +14,13 @@ use std::pin::pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::Poll;
 
+#[cfg(feature = "host")]
+pub mod handles;
+pub mod limits;
+mod other;
+
+pub use other::{Other, OtherTransaction};
+
 /// One adapter under test.
 pub trait Harness {
     /// The database under test. Nothing has written it at the start.
@@ -34,10 +41,8 @@ async fn write(database: &dyn ReadDatabase, statements: Vec<Statement>) -> anyho
     database
         .write(Box::new(move |mut transaction| {
             Box::pin(async move {
-                for statement in &statements {
-                    transaction
-                        .execute(&statement.sql, &statement.values)
-                        .await?;
+                for Statement { sql, values } in statements {
+                    transaction.execute(&sql, values).await?;
                 }
                 transaction.commit().await
             })
@@ -52,7 +57,7 @@ async fn fetch(database: &dyn ReadDatabase, sql: &'static str) -> Vec<SqlRow> {
     database
         .read(Box::new(move |mut transaction| {
             Box::pin(async move {
-                *slot = transaction.fetch(sql, &[]).await?;
+                *slot = transaction.fetch(sql, Vec::new()).await?;
                 Ok(())
             })
         }))
@@ -162,7 +167,7 @@ pub async fn a_missing_table_is_reported_as_missing<H: Harness>(harness: H) {
                     "SELECT n FROM absent_table",
                     "SELECT absent_column FROM present",
                 ] {
-                    let failed = transaction.fetch(sql, &[]).await.unwrap_err();
+                    let failed = transaction.fetch(sql, Vec::new()).await.unwrap_err();
                     slot.push(is_missing_table(&failed));
                 }
                 Ok(())
@@ -243,7 +248,7 @@ pub async fn a_write_that_fails_after_its_commit_keeps_the_commit<H: Harness>(ha
         .write(Box::new(|mut transaction| {
             Box::pin(async move {
                 transaction
-                    .execute("INSERT INTO kept (n) VALUES (1)", &[])
+                    .execute("INSERT INTO kept (n) VALUES (1)", Vec::new())
                     .await?;
                 transaction.commit().await?;
                 Err(WorkFailed.into())
@@ -273,7 +278,7 @@ pub async fn a_read_keeps_no_writes<H: Harness>(harness: H) {
                 // A store may refuse the statement; either way it keeps
                 // nothing.
                 let _ = transaction
-                    .execute("INSERT INTO kept (n) VALUES (1)", &[])
+                    .execute("INSERT INTO kept (n) VALUES (1)", Vec::new())
                     .await;
                 Ok(())
             })
@@ -300,7 +305,7 @@ pub async fn a_write_without_its_commit_keeps_nothing<H: Harness>(harness: H) {
         .write(Box::new(|mut transaction| {
             Box::pin(async move {
                 transaction
-                    .execute("INSERT INTO kept (n) VALUES (1)", &[])
+                    .execute("INSERT INTO kept (n) VALUES (1)", Vec::new())
                     .await?;
                 Ok(())
             })
@@ -340,15 +345,15 @@ pub async fn a_read_answers_from_one_committed_state<H: Harness>(harness: H) {
     let read = database.read(Box::new(move |mut transaction| {
         Box::pin(async move {
             let sql = "SELECT n FROM pinned ORDER BY n";
-            slot.push(integers(&transaction.fetch(sql, &[]).await?));
+            slot.push(integers(&transaction.fetch(sql, Vec::new()).await?));
             first_read.store(true, Ordering::SeqCst);
             for _ in 0..MOST_STATEMENTS {
                 if committed.load(Ordering::SeqCst) {
                     break;
                 }
-                slot.push(integers(&transaction.fetch(sql, &[]).await?));
+                slot.push(integers(&transaction.fetch(sql, Vec::new()).await?));
             }
-            slot.push(integers(&transaction.fetch(sql, &[]).await?));
+            slot.push(integers(&transaction.fetch(sql, Vec::new()).await?));
             Ok(())
         })
     }));
@@ -397,12 +402,12 @@ pub async fn an_attempt_keeps_all_or_none<H: Harness>(harness: H) {
                     )
                 };
                 transaction
-                    .execute("INSERT INTO attempted (n) VALUES (1)", &[])
+                    .execute("INSERT INTO attempted (n) VALUES (1)", Vec::new())
                     .await?;
                 let failed = transaction.attempt(&[insert(2), insert(1)]).await?;
                 let kept = transaction.attempt(&[insert(3), insert(4)]).await?;
                 transaction
-                    .execute("INSERT INTO attempted (n) VALUES (5)", &[])
+                    .execute("INSERT INTO attempted (n) VALUES (5)", Vec::new())
                     .await?;
                 *slot = vec![failed.is_err(), kept.is_err()];
                 transaction.commit().await
@@ -487,169 +492,4 @@ pub fn the_cursor_key_stays_the_same<H: Harness>(harness: &H) {
     let first = harness.database().cursor_key().unwrap();
     assert_eq!(harness.database().cursor_key().unwrap(), first);
     assert_eq!(harness.reopen().cursor_key().unwrap(), first);
-}
-
-/// The snapshot handles over the projection tables. The cases run each
-/// handle in one read of the port, so a store that passes them answers
-/// the reads that the operations make.
-#[cfg(feature = "host")]
-pub mod handles {
-    use super::{statement, write, Harness, Statement};
-    use crate::operations::reader::{Position, ReadSnapshot};
-    use provenance_core::{Requirement, ScopeId, StableId};
-
-    const SCHEMA: &str = include_str!("../../current_cache.sql");
-
-    /// The projection schema, then one revision, two requirements (the
-    /// child refines the root), and a thread on the root with one message.
-    fn projection() -> Vec<Statement> {
-        let mut statements: Vec<Statement> = SCHEMA
-            .split(';')
-            .filter(|sql| !sql.trim().is_empty())
-            .map(|sql| statement(sql, Vec::new()))
-            .collect();
-        let requirement = "INSERT INTO requirements (scope_id, id, statement, status, \
-            source_refs, refines, depends_on, supersedes, search_text) \
-            VALUES ('default', ?, ?, 'active', '[]', ?, '[]', '[]', '')";
-        for sql in [
-            "INSERT INTO projection_instance (only_row, instance_id) VALUES (1, 'instance')",
-            "INSERT INTO projection_revision (serial, digest) VALUES (1, 'sha256:revision')",
-            "INSERT INTO relations VALUES \
-             ('default', 'requirement', 'req_child', 'refines', 'requirement', 'req_root')",
-            "INSERT INTO threads VALUES \
-             ('default', 'thread_one', 'requirement', 'req_root', 'active', 5, '{}')",
-            "INSERT INTO messages VALUES \
-             ('default', 'message_one', 'thread_one', 'user', 'Hello', 7, '{}')",
-        ] {
-            statements.push(statement(sql, Vec::new()));
-        }
-        for (id, refines) in [("req_root", "[]"), ("req_child", r#"["req_root"]"#)] {
-            let values = vec![id.into(), format!("{id} statement").into(), refines.into()];
-            statements.push(statement(requirement, values));
-        }
-        statements
-    }
-
-    /// Writes the projection, then runs `read` over a snapshot of it and
-    /// gives its answer as text.
-    async fn answer<H, F>(harness: &H, read: F) -> String
-    where
-        H: Harness + Sync,
-        F: for<'s> FnOnce(
-                &'s ReadSnapshot,
-            ) -> std::pin::Pin<
-                Box<dyn std::future::Future<Output = anyhow::Result<String>> + Send + 's>,
-            > + Send,
-    {
-        let database = harness.database();
-        write(database, projection()).await.unwrap();
-        let mut answer = String::new();
-        let slot = &mut answer;
-        database
-            .read(Box::new(move |transaction| {
-                Box::pin(async move {
-                    let scope = ScopeId::new("default")?;
-                    let snapshot = ReadSnapshot::open(transaction, &scope)
-                        .await?
-                        .expect("a revision");
-                    *slot = read(&snapshot).await?;
-                    Ok(())
-                })
-            }))
-            .await
-            .unwrap();
-        answer
-    }
-
-    fn ids(records: &[Requirement]) -> Vec<&str> {
-        records.iter().map(|record| record.id.as_str()).collect()
-    }
-
-    /// A list handle gives the ids of a table in id order, and its records.
-    pub async fn the_list_handles_read_the_projection<H: Harness + Send + Sync>(harness: H) {
-        let answer = answer(&harness, |snapshot| {
-            Box::pin(async move {
-                let table = snapshot.table::<Requirement>();
-                let page = table.search_ids("", 10, false).await?;
-                let wanted = [StableId::new("req_root")?, StableId::new("req_none")?];
-                let found = table.by_ids(&wanted).await?;
-                let record = table.record(&StableId::new("req_child")?).await?;
-                Ok(format!(
-                    "{page:?} {:?} {:?} {}",
-                    ids(&found),
-                    record.map(|record| record.refines),
-                    table.count().await?
-                ))
-            })
-        })
-        .await;
-        assert_eq!(
-            answer,
-            r#"["req_child", "req_root"] ["req_root"] Some([StableId("req_root")]) 2"#
-        );
-    }
-
-    /// The document handle gives the keys of a requirement's document:
-    /// its members, then its threads, then their messages.
-    pub async fn the_document_handle_reads_the_projection<H: Harness + Send + Sync>(harness: H) {
-        let answer = answer(&harness, |snapshot| {
-            Box::pin(async move {
-                let keys = snapshot
-                    .document_keys("req_root", &Position::default(), 50, false, &[])
-                    .await?;
-                Ok(keys
-                    .iter()
-                    .map(|(kind, key)| {
-                        format!(
-                            "{kind} {} {} {} {}",
-                            key.stage, key.rank, key.counter, key.id
-                        )
-                    })
-                    .collect::<Vec<_>>()
-                    .join("; "))
-            })
-        })
-        .await;
-        assert_eq!(
-            answer,
-            "requirement 0 0 0 req_root; requirement 0 2 0 req_child; \
-             thread 2 1 5 thread_one; message 3 1 7 message_one"
-        );
-    }
-
-    /// The discussion handle gives each thread and one thread by id.
-    pub async fn the_discussion_handle_reads_the_projection<H: Harness + Send + Sync>(harness: H) {
-        let answer = answer(&harness, |snapshot| {
-            Box::pin(async move {
-                let all = snapshot.threads().await?;
-                let one = snapshot.page_thread("thread_one").await?;
-                let none = snapshot.page_thread("thread_none").await?;
-                Ok(format!("{all:?} {} {none:?}", one == all.first().cloned()))
-            })
-        })
-        .await;
-        assert_eq!(
-            answer,
-            "[Thread { scope_id: ScopeId(\"default\"), id: StableId(\"thread_one\"), \
-             parent: ThreadParent { node_type: Requirement, node_id: StableId(\"req_root\") }, \
-             status: Active, created_at: 5 }] true None"
-        );
-    }
-
-    /// The message handle gives each message and one message by id.
-    pub async fn the_message_handle_reads_the_projection<H: Harness + Send + Sync>(harness: H) {
-        let answer = answer(&harness, |snapshot| {
-            Box::pin(async move {
-                let all = snapshot.messages().await?;
-                let one = snapshot.page_message("message_one").await?;
-                Ok(format!("{all:?} {}", one == all.first().cloned()))
-            })
-        })
-        .await;
-        assert_eq!(
-            answer,
-            "[Message { scope_id: ScopeId(\"default\"), id: StableId(\"message_one\"), \
-             thread_id: StableId(\"thread_one\"), role: User, body: \"Hello\", created_at: 7 }] true"
-        );
-    }
 }
