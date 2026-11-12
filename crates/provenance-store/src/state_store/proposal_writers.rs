@@ -165,8 +165,6 @@ impl StateStore {
         self.mutate_jsonl_records(&path, |records: &mut Vec<AssertionRecord>| {
             assertions.push(assertion.clone());
             IdeationRecords {
-                store: self,
-                scope: &input.scope_id,
                 disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
                 contributions: &self.list_contributions(&input.scope_id)?,
                 synthesis_packets: &self.list_synthesis_packets(&input.scope_id)?,
@@ -174,7 +172,7 @@ impl StateStore {
                 assertions: &assertions,
                 dispositions: &self.list_dispositions(&input.scope_id)?,
             }
-            .validate()?;
+            .validate(self, &input.scope_id)?;
             super::read_budget::ensure_within_read_budget(&assertion)?;
             records.push(assertion.clone());
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
@@ -218,8 +216,6 @@ impl StateStore {
         );
         proposals.push(candidate.clone());
         IdeationRecords {
-            store: self,
-            scope: &candidate.scope_id,
             disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
             contributions: &self.list_contributions(&candidate.scope_id)?,
             synthesis_packets: &self.list_synthesis_packets(&candidate.scope_id)?,
@@ -227,7 +223,7 @@ impl StateStore {
             assertions: &self.list_assertion_records(&candidate.scope_id)?,
             dispositions: &self.list_dispositions(&candidate.scope_id)?,
         }
-        .validate()?;
+        .validate(self, &candidate.scope_id)?;
         let path = shards::proposal_cards_path(&self.layout, &candidate.scope_id);
         // The publication section orders each write of this shard, so the
         // check above covers it.
@@ -313,8 +309,6 @@ impl StateStore {
         )?;
         dispositions.push(disposition.clone());
         IdeationRecords {
-            store: self,
-            scope: &scope_id,
             disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
             contributions: &self.list_contributions(&scope_id)?,
             synthesis_packets: &self.list_synthesis_packets(&scope_id)?,
@@ -322,7 +316,7 @@ impl StateStore {
             assertions: &assertions,
             dispositions: &dispositions,
         }
-        .validate()?;
+        .validate(self, &scope_id)?;
         let dispositions_path = shards::dispositions_path(&self.layout, &scope_id);
         self.mutate_jsonl_records(
             &dispositions_path,

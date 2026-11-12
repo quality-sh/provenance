@@ -20,8 +20,6 @@ use provenance_core::{
 /// The ideation records of one scope for the aggregate check of a write or
 /// of the scope check.
 pub(super) struct IdeationRecords<'a> {
-    pub(super) store: &'a StateStore,
-    pub(super) scope: &'a ScopeId,
     pub(super) disposition_actor_ids: &'a [String],
     pub(super) contributions: &'a [Contribution],
     pub(super) synthesis_packets: &'a [SynthesisPacket],
@@ -31,15 +29,15 @@ pub(super) struct IdeationRecords<'a> {
 }
 
 impl IdeationRecords<'_> {
-    /// [`provenance_core::validate_ideation_aggregate`] over these records,
-    /// with the shipped legacy policy. When the aggregate check finds a
-    /// duplicate id, this reads the file of that kind again with its lines.
-    /// When that read shows the id on two lines, the refusal is the located
-    /// refusal. The file can change between the read of the records and the
-    /// second read. Then the second read can fail or show the id on one line,
-    /// and the refusal is the refusal of the aggregate check, with no file
-    /// and no line.
-    pub(super) fn validate(&self) -> anyhow::Result<()> {
+    /// [`provenance_core::validate_ideation_aggregate`] over these records of
+    /// `scope` in `store`, with the shipped legacy policy. When the aggregate
+    /// check finds a duplicate id, this reads the file of that kind again
+    /// with its lines. When that read shows the id on two lines, the refusal
+    /// is the located refusal. The file can change between the read of the
+    /// records and the second read. Then the second read can fail or show the
+    /// id on one line, and the refusal is the refusal of the aggregate check,
+    /// with no file and no line.
+    pub(super) fn validate(&self, store: &StateStore, scope: &ScopeId) -> anyhow::Result<()> {
         provenance_core::validate_ideation_aggregate(IdeationAggregate {
             legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
             disposition_actor_ids: self.disposition_actor_ids,
@@ -53,8 +51,8 @@ impl IdeationRecords<'_> {
             let located = error
                 .downcast_ref::<DuplicateImmutableId>()
                 .and_then(|duplicate| {
-                    let path = kind_path(self.store, self.scope, duplicate.kind);
-                    located_duplicate(self.store, &path, duplicate.kind, &duplicate.id)
+                    let path = kind_path(store, scope, duplicate.kind);
+                    located_duplicate(store, &path, duplicate.kind, &duplicate.id)
                 });
             located.unwrap_or(error)
         })

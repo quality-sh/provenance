@@ -149,8 +149,6 @@ impl StateStore {
                 contributions.push(contribution.clone());
             }
             IdeationRecords {
-                store: self,
-                scope: &scope_id,
                 disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
                 contributions: &contributions,
                 synthesis_packets: &self.list_synthesis_packets(&scope_id)?,
@@ -158,7 +156,7 @@ impl StateStore {
                 assertions: &self.list_assertion_records(&scope_id)?,
                 dispositions: &self.list_dispositions(&scope_id)?,
             }
-            .validate()?;
+            .validate(self, &scope_id)?;
             super::read_budget::ensure_within_read_budget(&contribution)?;
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
             Ok(contribution)
@@ -293,8 +291,6 @@ impl StateStore {
                 synthesis_packets.push(synthesis_packet.clone());
             }
             IdeationRecords {
-                store: self,
-                scope: &scope_id,
                 disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
                 contributions: &self.list_contributions(&scope_id)?,
                 synthesis_packets: &synthesis_packets,
@@ -302,7 +298,7 @@ impl StateStore {
                 assertions: &self.list_assertion_records(&scope_id)?,
                 dispositions: &self.list_dispositions(&scope_id)?,
             }
-            .validate()?;
+            .validate(self, &scope_id)?;
             super::read_budget::ensure_within_read_budget(&synthesis_packet)?;
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
             Ok(synthesis_packet)

@@ -116,8 +116,6 @@ impl StateStore {
         let assertions = self.list_assertion_records(scope)?;
         let dispositions = self.list_dispositions(scope)?;
         IdeationRecords {
-            store: self,
-            scope,
             disposition_actor_ids,
             contributions: &contributions,
             synthesis_packets: &synthesis_packets,
@@ -125,7 +123,7 @@ impl StateStore {
             assertions: &assertions,
             dispositions: &dispositions,
         }
-        .validate()?;
+        .validate(self, scope)?;
         let canonical_artifacts = self.canonical_artifact_index(scope)?;
         for disposition in &dispositions {
             canonical_artifacts.ensure_exists(disposition.canonical_artifact.as_ref())?;

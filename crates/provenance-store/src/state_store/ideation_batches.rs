@@ -133,8 +133,6 @@ impl StateStore {
             validate_batch_proposals(&incoming.proposals)?;
             let manifest = self.manifest()?;
             IdeationRecords {
-                store: self,
-                scope,
                 disposition_actor_ids: &manifest.disposition_actor_ids,
                 contributions: &contributions,
                 synthesis_packets: &synthesis_packets,
@@ -142,7 +140,7 @@ impl StateStore {
                 assertions: &assertions,
                 dispositions: &dispositions,
             }
-            .validate()?;
+            .validate(self, scope)?;
             for disposition in &incoming.dispositions {
                 crate::write_error::ensure!(
                     InvalidUpdate,
