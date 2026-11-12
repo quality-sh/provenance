@@ -112,7 +112,7 @@ fn without_limit(sql: &str) -> String {
     for part in parts {
         let end = part.find(char::is_whitespace).unwrap_or(part.len());
         let (limit, rest) = part.split_at(end);
-        text.push_str(&format!(" LIMIT -1 + 0 * ({limit}){rest}"));
+        text = text + " LIMIT -1 + 0 * (" + limit + ")" + rest;
     }
     text
 }
