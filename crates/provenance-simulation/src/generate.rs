@@ -248,17 +248,30 @@ pub struct Task {
     pub discussion: Option<(String, u64)>,
 }
 
-impl Task {
-    /// The record that the operation writes.
-    pub fn target(&self) -> Option<Target> {
-        match &self.op {
-            Operation::CreateRequirement { n } => Some(Target::Exists(created_requirement_id(*n))),
-            Operation::UpdateRequirement { n, .. } => Some(Target::Description(requirement_id(*n))),
-            Operation::ClaimTopic | Operation::ReleaseTopic => Some(Target::Claim),
-            _ => None,
-        }
+impl Operation {
+    /// The records that the operation writes when it lands, for the laws
+    /// that follow a record. With `effect`, the effect of a success, each
+    /// record has the value that it then holds. With no effect, the value is
+    /// not known.
+    ///
+    /// An archive of the first Requirement archives its Topic, and an
+    /// archived Topic holds no claim.
+    pub fn writes(&self, effect: Option<&Effect>) -> Vec<(Target, Option<Effect>)> {
+        let target = match self {
+            Self::CreateRequirement { n } => Target::Exists(created_requirement_id(*n)),
+            Self::UpdateRequirement { n, .. } => Target::Description(requirement_id(*n)),
+            Self::ClaimTopic | Self::ReleaseTopic => Target::Claim,
+            Self::ArchiveRequirement { n } if requirement_id(*n) == FIRST_REQUIREMENT => {
+                let cleared = effect.map(|_| Effect::Claim { holder: None });
+                return vec![(Target::Claim, cleared)];
+            }
+            _ => return Vec::new(),
+        };
+        vec![(target, effect.cloned())]
     }
+}
 
+impl Task {
     /// The actor of a claim: each engine is its own agent.
     pub fn actor(&self) -> String {
         self.engine
