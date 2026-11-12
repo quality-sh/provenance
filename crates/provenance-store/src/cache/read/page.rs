@@ -143,7 +143,8 @@ impl<K: ProjectionRow> Table<'_, K> {
         limit: usize,
         exclude_terminal: bool,
     ) -> anyhow::Result<Vec<String>> {
-        self.text_search_ids(after, limit, exclude_terminal, None).await
+        self.text_search_ids(after, limit, exclude_terminal, None)
+            .await
     }
 
     /// Reads at most `limit` candidate IDs strictly after the previous key.
