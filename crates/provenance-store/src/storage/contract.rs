@@ -256,6 +256,8 @@ pub fn a_failed_whole_set_lands_no_key<H: Harness>(mut harness: H) {
 
 #[cfg(all(test, feature = "host"))]
 mod local_harness;
+#[cfg(feature = "host")]
+pub mod remote_harness;
 
 #[cfg(all(test, feature = "host"))]
 mod tests {

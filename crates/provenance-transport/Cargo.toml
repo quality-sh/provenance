@@ -88,9 +88,19 @@ name = "existing-root-host-fixture"
 path = "src/bin/existing-root-host-fixture.rs"
 required-features = ["host", "test-fixture"]
 
+[[bin]]
+name = "object-fixture"
+path = "src/bin/object-fixture.rs"
+required-features = ["host", "test-fixture"]
+
 [[test]]
 name = "local_host"
 path = "tests/local_host.rs"
+required-features = ["test-fixture"]
+
+[[test]]
+name = "state_wire"
+path = "tests/state_wire.rs"
 required-features = ["test-fixture"]
 
 # Each test uses the adapters, so each test needs host.

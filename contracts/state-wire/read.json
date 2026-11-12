@@ -1,0 +1,67 @@
+{
+  "description": "A seed replaces the whole state and makes the project. A read gives every key with its bytes as base64, and its revision as the ETag. A read that names the stored revision in If-None-Match gives 304.",
+  "exchanges": [
+    {
+      "request": {
+        "method": "PUT",
+        "path": "/projects/read/sessions/main/state",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "entries": {
+            "manifest.json": "eyJzY29wZXMiOltdfQ==",
+            "scopes/default/rules/rule.jsonl": "",
+            "scopes/default/sources/source.jsonl": "eyJpZCI6ImEifQ0KeyJpZCI6ImIifQ==",
+            "scopes/default/threads/2026-10.jsonl": "//4gcmF3"
+          }
+        }
+      },
+      "response": {
+        "status": 204,
+        "headers": {},
+        "body": null
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/projects/read/sessions/main/state",
+        "headers": {},
+        "body": null
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"sha256:1de84b9c3e4fde2ed80c5d395ce2779f7dcb3bf0d6180120f1e2d265365b8cf4\""
+        },
+        "body": {
+          "revision": "sha256:1de84b9c3e4fde2ed80c5d395ce2779f7dcb3bf0d6180120f1e2d265365b8cf4",
+          "entries": {
+            "manifest.json": "eyJzY29wZXMiOltdfQ==",
+            "scopes/default/rules/rule.jsonl": "",
+            "scopes/default/sources/source.jsonl": "eyJpZCI6ImEifQ0KeyJpZCI6ImIifQ==",
+            "scopes/default/threads/2026-10.jsonl": "//4gcmF3"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/projects/read/sessions/main/state",
+        "headers": {
+          "If-None-Match": "\"sha256:1de84b9c3e4fde2ed80c5d395ce2779f7dcb3bf0d6180120f1e2d265365b8cf4\""
+        },
+        "body": null
+      },
+      "response": {
+        "status": 304,
+        "headers": {
+          "etag": "\"sha256:1de84b9c3e4fde2ed80c5d395ce2779f7dcb3bf0d6180120f1e2d265365b8cf4\""
+        },
+        "body": null
+      }
+    }
+  ]
+}

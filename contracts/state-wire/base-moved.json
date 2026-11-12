@@ -1,0 +1,73 @@
+{
+  "description": "A write set on a revision that is no longer stored is refused with 409, and no key lands. The failure names the base revision and the stored revision.",
+  "exchanges": [
+    {
+      "request": {
+        "method": "PUT",
+        "path": "/projects/base-moved/sessions/main/state",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "entries": {
+            "manifest.json": "e30=",
+            "scopes/a/topics/topic.jsonl": "bW92ZWQ="
+          }
+        }
+      },
+      "response": {
+        "status": 204,
+        "headers": {},
+        "body": null
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/projects/base-moved/sessions/main/state",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "base_revision": "sha256:1403ca0b13a95fe4c2d9fbb85ea908c4c61c18856539735b9673ffeffa47df6d",
+          "atomicity": "per_key",
+          "puts": {
+            "scopes/a/topics/other.jsonl": "eQ=="
+          },
+          "deletes": []
+        }
+      },
+      "response": {
+        "status": 409,
+        "headers": {},
+        "body": {
+          "base_moved": {
+            "base": "sha256:1403ca0b13a95fe4c2d9fbb85ea908c4c61c18856539735b9673ffeffa47df6d",
+            "current": "sha256:24d1ba41cd8befbc44a1fd2521bf95df98f5a5e0cbb62b4614486be700592b0a"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/projects/base-moved/sessions/main/state",
+        "headers": {},
+        "body": null
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"sha256:24d1ba41cd8befbc44a1fd2521bf95df98f5a5e0cbb62b4614486be700592b0a\""
+        },
+        "body": {
+          "revision": "sha256:24d1ba41cd8befbc44a1fd2521bf95df98f5a5e0cbb62b4614486be700592b0a",
+          "entries": {
+            "manifest.json": "e30=",
+            "scopes/a/topics/topic.jsonl": "bW92ZWQ="
+          }
+        }
+      }
+    }
+  ]
+}

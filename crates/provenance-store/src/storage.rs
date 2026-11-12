@@ -19,13 +19,15 @@
 //! permissions. An adapter keeps keys and bytes only.
 //!
 //! The port and the memory adapter build without the `host` feature. The
-//! local-disk adapter needs it.
+//! local-disk adapter and the remote adapter need it.
 
 #[cfg(any(test, feature = "test-fixture"))]
 pub mod contract;
 #[cfg(feature = "host")]
 pub mod local;
 pub mod memory;
+#[cfg(feature = "host")]
+pub mod remote;
 
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -86,6 +88,12 @@ impl Revision {
 
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+
+    /// A revision that another process computed, such as an object.
+    #[cfg(feature = "host")]
+    pub(crate) const fn named(revision: String) -> Self {
+        Self(revision)
     }
 }
 

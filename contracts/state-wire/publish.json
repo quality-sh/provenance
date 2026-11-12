@@ -1,0 +1,71 @@
+{
+  "description": "A write set on the stored revision lands its puts and deletes.",
+  "exchanges": [
+    {
+      "request": {
+        "method": "PUT",
+        "path": "/projects/publish/sessions/main/state",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "entries": {
+            "manifest.json": "e30=",
+            "scopes/a/rules/rule.jsonl": "b2xk"
+          }
+        }
+      },
+      "response": {
+        "status": 204,
+        "headers": {},
+        "body": null
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/projects/publish/sessions/main/state",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "base_revision": "sha256:0d2d0a0f39e5ff8b0f315babd8271f19baad4ff8ff6ff32def7e404759d3c559",
+          "atomicity": "whole_set",
+          "puts": {
+            "manifest.json": "eyJ4IjoxfQ==",
+            "scopes/a/sources/source.jsonl": "bmV3"
+          },
+          "deletes": [
+            "scopes/a/rules/rule.jsonl"
+          ]
+        }
+      },
+      "response": {
+        "status": 204,
+        "headers": {},
+        "body": null
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/projects/publish/sessions/main/state",
+        "headers": {},
+        "body": null
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"sha256:918413cabbdecbf1d2682bdd2b2f91de3132722413a7890055ef9367625d15ee\""
+        },
+        "body": {
+          "revision": "sha256:918413cabbdecbf1d2682bdd2b2f91de3132722413a7890055ef9367625d15ee",
+          "entries": {
+            "manifest.json": "eyJ4IjoxfQ==",
+            "scopes/a/sources/source.jsonl": "bmV3"
+          }
+        }
+      }
+    }
+  ]
+}
