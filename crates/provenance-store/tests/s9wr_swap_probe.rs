@@ -34,6 +34,25 @@ enum Reader {
     HeldShards,
     /// A thread keeps every state file open for 5 ms, closes, and opens again.
     HeldLoop,
+    /// The writer keeps a handle on the state directory itself, as the
+    /// recursive watch of the review host does.
+    HeldStateDir,
+    /// The writer keeps a handle on `state/scopes`, a directory below.
+    HeldSubdir,
+}
+
+/// Opens a directory handle. Windows needs backup semantics for a
+/// directory; the share mode of `std` lets other handles read, write and
+/// delete.
+fn open_directory(path: &Utf8Path) -> std::fs::File {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.custom_flags(0x0200_0000);
+    }
+    options.open(path).unwrap()
 }
 
 fn message(body: &str) -> provenance_store::state_store::PostMessageInput {
@@ -110,7 +129,7 @@ fn spawn_reader(
     let layout = ProvenanceLayout::new(root.clone());
     let state = layout.state_dir();
     let body: Box<dyn Fn() + Send> = match reader {
-        Reader::None | Reader::HeldShards => return None,
+        Reader::None | Reader::HeldShards | Reader::HeldStateDir | Reader::HeldSubdir => return None,
         Reader::ReadFiles => Box::new(move || {
             let (mut files, mut dirs) = (Vec::new(), Vec::new());
             files_below(&state, &mut files, &mut dirs);
@@ -182,13 +201,14 @@ fn scenario(reader: Reader) -> String {
     let mut passed = 0_usize;
     let started = std::time::Instant::now();
     for index in 0..TRIES {
-        let held: Vec<_> = if matches!(reader, Reader::HeldShards) {
-            message_shards(&layout.state_dir())
+        let held: Vec<_> = match reader {
+            Reader::HeldShards => message_shards(&layout.state_dir())
                 .iter()
                 .map(|path| std::fs::File::open(path).unwrap())
-                .collect()
-        } else {
-            Vec::new()
+                .collect(),
+            Reader::HeldStateDir => vec![open_directory(&layout.state_dir())],
+            Reader::HeldSubdir => vec![open_directory(&layout.scopes_dir())],
+            _ => Vec::new(),
         };
         let result = repository.stage(false, None, |staged| {
             staged
@@ -256,6 +276,8 @@ fn s9wr_swap_probe() {
         Reader::ReadView,
         Reader::HeldLoop,
         Reader::HeldShards,
+        Reader::HeldStateDir,
+        Reader::HeldSubdir,
     ]
     .into_iter()
     .map(scenario)
