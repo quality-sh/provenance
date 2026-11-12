@@ -58,12 +58,12 @@ impl Bounded for Command {
 /// Runs `command` with piped output. Past `limit` the test fails with the
 /// report of the process and the output that it wrote.
 pub fn output(command: &mut Command, limit: Duration) -> Output {
-    run(command, None, limit, "")
+    run(command, None, limit, None)
 }
 
 /// Runs `command` like [`output`] with `input` on its standard input.
 pub fn output_with_input(command: &mut Command, input: impl Into<Vec<u8>>) -> Output {
-    run(command, Some(input.into()), LIMIT, "")
+    run(command, Some(input.into()), LIMIT, None)
 }
 
 /// Runs `command` like [`output_with_input`] and gives an assertion on its
@@ -79,23 +79,29 @@ pub fn assert_with_input(command: &mut Command, input: impl Into<Vec<u8>>) -> As
 }
 
 /// Runs `command` like [`output`], with `input` on its standard input when
-/// the caller gives it. Each failure starts with `what`, for example the
-/// step of the test that runs the command.
+/// the caller gives it. Each failure names `what`, for example the step of
+/// the test that runs the command.
 pub fn output_named(command: &mut Command, input: Option<Vec<u8>>, what: &str) -> Output {
-    run(command, input, LIMIT, what)
+    run(command, input, LIMIT, Some(what))
 }
 
-fn run(command: &mut Command, input: Option<Vec<u8>>, limit: Duration, what: &str) -> Output {
+/// Runs `command` to its end or to `limit`. Each failure names `what` when
+/// the caller gives it, and the command.
+fn run(
+    command: &mut Command,
+    input: Option<Vec<u8>>,
+    limit: Duration,
+    what: Option<&str>,
+) -> Output {
     // As with `assert_cmd`, a process that gets no input reads an empty input.
     command.stdin(if input.is_some() {
         Stdio::piped()
     } else {
         Stdio::null()
     });
-    let description = if what.is_empty() {
-        format!("{command:?}")
-    } else {
-        format!("{what}: {command:?}")
+    let description = match what {
+        Some(what) => format!("{what}: {command:?}"),
+        None => format!("{command:?}"),
     };
     // In its own process group, the process and its child processes stop together.
     #[cfg(unix)]
