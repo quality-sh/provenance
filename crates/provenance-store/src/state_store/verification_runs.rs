@@ -56,8 +56,9 @@ impl StateStore {
             };
             let binding = held.verification_binding_change(change)?;
             let binding_id = binding.binding.id.clone();
-            let run = held.add_run_row(&scope_id, |id, started_at| VerificationRun {
-                scope_id: scope_id.clone(),
+            let scope = &binding.binding.scope_id;
+            let run = held.add_run_row(scope, |id, started_at| VerificationRun {
+                scope_id,
                 id,
                 binding_id: Some(binding_id),
                 rule_id,
