@@ -7,7 +7,7 @@
 
 use super::{expected, Harness, StateStorage};
 use crate::storage::remote::wire::{self, SeedBody, MAIN_SESSION};
-use crate::storage::remote::RemoteStateStorage;
+use crate::storage::remote::{RemoteStateStorage, Unsent};
 use crate::storage::StateKey;
 use std::collections::BTreeMap;
 
@@ -46,7 +46,7 @@ impl Remote {
         let answer = self
             .storage
             .send(method, path, &[], Some(body))
-            .map_err(|failure| failure.into_error())
+            .map_err(Unsent::into_error)
             .unwrap();
         assert_eq!(answer.status, 204, "{:#}", answer.failure_error());
     }

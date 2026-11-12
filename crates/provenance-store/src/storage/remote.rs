@@ -124,11 +124,12 @@ impl StateStorage for RemoteStateStorage {
                 | StateFailure::InvalidInput { .. }
                 | StateFailure::Refused { .. },
             ) => PublishFailure::Refused(answer.failure_error()),
-            Some(StateFailure::Started { .. }) => PublishFailure::Started(answer.failure_error()),
             None if (400..500).contains(&answer.status) => {
                 PublishFailure::Refused(answer.failure_error())
             }
-            None => PublishFailure::Started(answer.failure_error()),
+            Some(StateFailure::Started { .. }) | None => {
+                PublishFailure::Started(answer.failure_error())
+            }
         })
     }
 }
@@ -230,19 +231,22 @@ fn exchange(
     body: Option<&[u8]>,
 ) -> Result<Answer, Unsent> {
     let mut stream = connect(address).map_err(Unsent::Request)?;
-    let mut request = format!(
-        "{method} {path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nAccept: application/json\r\n",
-        address.host
+    let mut lines = vec![
+        format!("{method} {path} HTTP/1.1"),
+        format!("Host: {}", address.host),
+        "Connection: close".to_owned(),
+        "Accept: application/json".to_owned(),
+    ];
+    lines.extend(
+        headers
+            .iter()
+            .map(|(name, value)| format!("{name}: {value}")),
     );
-    for (name, value) in headers {
-        request.push_str(&format!("{name}: {value}\r\n"));
-    }
     if let Some(body) = body {
-        request.push_str("Content-Type: application/json\r\n");
-        request.push_str(&format!("Content-Length: {}\r\n", body.len()));
+        lines.push("Content-Type: application/json".to_owned());
+        lines.push(format!("Content-Length: {}", body.len()));
     }
-    request.push_str("\r\n");
-    let mut bytes = request.into_bytes();
+    let mut bytes = format!("{}\r\n\r\n", lines.join("\r\n")).into_bytes();
     bytes.extend_from_slice(body.unwrap_or_default());
     stream
         .write_all(&bytes)
