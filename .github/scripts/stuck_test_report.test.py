@@ -66,6 +66,19 @@ def children(pid):
     return found
 
 
+def pids_of(program):
+    """The processes whose program file is `program`."""
+    found = []
+    for entry in os.listdir("/proc"):
+        if entry.isdigit():
+            try:
+                if os.readlink(f"/proc/{entry}/exe") == str(program):
+                    found.append(int(entry))
+            except OSError:
+                continue
+    return found
+
+
 def stop_group(pid):
     try:
         os.killpg(pid, signal.SIGKILL)
@@ -224,6 +237,40 @@ class StuckTestReportTests(unittest.TestCase):
                 report,
             )
         self.assertNotIn("not complete", report)
+
+    def test_a_detached_watched_process_is_in_the_report_but_not_stopped(self):
+        # A copy of the server below target/ that makes its own session and
+        # has no parent in this test (setsid -f forks, and its parent ends),
+        # as a review host does.
+        program = self.directory / "target" / "release" / SERVER
+        program.parent.mkdir()
+        shutil.copy2(shutil.which("sleep"), program)
+        subprocess.run(["setsid", "-f", str(program), "300"], check=True)
+        wait_for(lambda: pids_of(program), 10, "the detached server")
+        (host,) = pids_of(program)
+        self.addCleanup(os.kill, host, signal.SIGKILL)
+        self.assertNotEqual(Path(f"/proc/{host}/stat").read_text().rsplit(") ", 1)[1].split()[1], str(os.getpid()))
+
+        watcher = self.watcher_here()
+        wait_for(lambda: report_module.Process(host).age(report_module.uptime()) > LIMIT + 1, 10, "the age of the host")
+        watcher.check()
+        # Its age alone does not start a report.
+        self.assertEqual(watcher.out.getvalue(), "")
+
+        tree, holder, waiter, server = self.started_tree()
+        report = self.check_until_report(watcher)
+        self.assertEqual(tree.wait(timeout=10), -signal.SIGKILL)
+        self.assertEqual(report.count("::group::"), 1, report)
+        self.assertIn("::group::Stuck test: stuck_case waits_for_the_lock", report)
+        self.assertIn(
+            f"Watched processes below {os.path.realpath(self.directory)}/target/ that are not below this test: "
+            "1, with 1 processes in their trees. The watcher does not stop them.\n"
+            f"process {host} (not below this test), parent ",
+            report,
+        )
+        self.assertIn(f"command line: {program} 300\n", report)
+        self.assertIn("The watcher killed the tree of 4 processes.\n", report)
+        self.assertFalse(gone(host))
 
     def test_a_process_that_ends_during_the_report_does_not_stop_the_report(self):
         # The values of this process, with the id of a process that ended.

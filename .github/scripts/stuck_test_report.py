@@ -13,25 +13,33 @@ and the kernel stack of a thread, and a debugger can attach to a process,
 only to the parent of that process or to root. `finish` stops the watcher
 and writes its log to the job log.
 
-At each interval the watcher reads from `/proc` only the processes whose
-program file is below the `target/` directory of the workspace root
-(`--root`). A process with a different program file is never read, reported
-or stopped, also when its name is a watched name. A test binary is the top
-process of a tree whose program file is below `target/`. The limit applies
-to the top process only: a server that a test starts lives as long as its
-test.
+At each interval the watcher selects from `/proc` only the processes of the
+user of `start` whose program file is below the `target/` directory of the
+workspace root (`--root`). A process with a different program file (for
+example a `provenance` that is installed in a different place) is reported
+and stopped only as a member of the tree of a stuck test binary. Its name
+alone, also when it is a watched name (`--watch`), does not select it.
 
-When a top process is older than the limit, the watcher writes one report in
-a log group: for each process of the tree, its parent, age, state and command
-line; for each thread, its state, kernel wait channel, system call, kernel
-stack and user backtrace; the open files and sockets; and the lines of
-`/proc/locks` on those files with the holder and the waiter of each lock.
+Only a test binary (a program below `target/<directory>/deps/`) with no test
+binary above it starts a report, when it is older than the limit. A watched
+process never starts a report by its age: a server that a test starts lives
+as long as its test, and a review host can make its own session and have the
+init process as its parent.
+
+The report is one log group: for each process of the tree of the test
+binary, its parent, age, state and command line; for each thread, its state,
+kernel wait channel, system call, kernel stack and user backtrace; the open
+files and sockets; and the lines of `/proc/locks` on those files with the
+holder and the waiter of each lock. Then the same facts for each watched
+process below `target/` that is not in that tree, with its own tree, marked
+as not below this test: a test can wait for a lock that such a process holds.
 The install of the backtrace tool and the backtraces have one deadline for
 the report (`REPORT_DEADLINE`); past it the report says that the backtraces
 are not complete. An `::error` line names the test binary and its age, also
-when the report has a fault. The watcher then kills
-the tree, so the test runner reports the test as failed and runs the other
-tests. The watcher reports each top process one time.
+when the report has a fault. The watcher then kills the tree of the test
+binary only, so the test runner reports the test as failed and runs the
+other tests. The cleanup of the runner stops the other processes at the end
+of the job. The watcher reports each test binary one time.
 """
 
 import argparse
@@ -138,6 +146,16 @@ def tree(processes, top):
     return order
 
 
+def ancestors(processes, process):
+    """The processes above `process`, from its parent to the highest one in `processes`."""
+    seen = {process.pid}
+    parent = processes.get(process.ppid)
+    while parent and parent.pid not in seen:
+        seen.add(parent.pid)
+        yield parent
+        parent = processes.get(parent.ppid)
+
+
 def escape(text, title=False):
     text = text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
     return text.replace(":", "%3A").replace(",", "%2C") if title else text
@@ -156,22 +174,33 @@ class Watcher:
         self.deadline = 0.0
 
     def below_target(self, process):
-        return process.exe.startswith(self.target) and not process.name.startswith("build-script-")
+        return process.uid == self.uid and process.exe.startswith(self.target)
+
+    def test_binary(self, process):
+        """A program below `target/<directory>/deps/`, as Cargo writes a test binary."""
+        return self.below_target(process) and os.path.basename(os.path.dirname(process.exe)) == "deps"
+
+    def watched(self, process):
+        return self.below_target(process) and process.name in self.names
 
     def tops(self, processes):
-        """The test binaries and the watched processes with no test binary above them."""
-        tops = []
-        for process in processes.values():
-            if process.uid != self.uid:
-                continue
-            if not self.below_target(process):
-                continue
-            parent = processes.get(process.ppid)
-            while parent and not self.below_target(parent):
-                parent = processes.get(parent.ppid)
-            if parent is None:
-                tops.append(process)
-        return tops
+        """The test binaries with no test binary above them. Only these start a report."""
+        return [
+            process for process in processes.values()
+            if self.test_binary(process) and not any(self.test_binary(above) for above in ancestors(processes, process))
+        ]
+
+    def others(self, processes, members):
+        """The highest watched processes that are not in the tree of the stuck test."""
+        outside = [
+            process for process in processes.values()
+            if self.watched(process) and process.pid not in members
+        ]
+        pids = {process.pid for process in outside}
+        return [
+            process for process in sorted(outside, key=lambda process: process.pid)
+            if not any(above.pid in pids for above in ancestors(processes, process))
+        ]
 
     def check(self):
         processes = snapshot()
@@ -214,8 +243,19 @@ class Watcher:
                 process = processes.get(pid)
                 if process:
                     self.describe(process, depth, now, files)
+            others = self.others(processes, {pid for pid, _ in members})
+            other_members = [member for other in others for member in tree(processes, other.pid)]
+            self.write(
+                f"Watched processes below {self.target} that are not below this test: "
+                + (f"{len(others)}, with {len(other_members)} processes in their trees." if others else "none.")
+                + (" The watcher does not stop them." if others else "")
+            )
+            for pid, depth in other_members:
+                process = processes.get(pid)
+                if process:
+                    self.describe(process, depth, now, files, " (not below this test)")
             self.write_locks(files, processes)
-            self.write_backtraces([pid for pid, _ in members])
+            self.write_backtraces([pid for pid, _ in members + other_members])
         except Exception as error:  # The stop below must occur after any fault of the report.
             place = traceback.extract_tb(error.__traceback__)[-1]
             self.write(
@@ -235,10 +275,10 @@ class Watcher:
             )
             self.write(stop(pid for pid, _ in tree(snapshot(), top.pid)))
 
-    def describe(self, process, depth, now, files):
+    def describe(self, process, depth, now, files, mark=""):
         indent = "  " * depth
         self.write(
-            f"{indent}process {process.pid}, parent {process.ppid}, age {process.age(now):.0f} s, "
+            f"{indent}process {process.pid}{mark}, parent {process.ppid}, age {process.age(now):.0f} s, "
             f"state {process.state}, program {process.exe or process.comm}"
         )
         self.write(f"{indent}  command line: {process.command}")
