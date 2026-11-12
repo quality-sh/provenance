@@ -58,10 +58,19 @@ update_input!(UpdateRuleInput, RuleClearField {
     source_section: String, archived_in_commit: provenance_core::ArchivedStamp,
     requirement_ids: ListEdit, resolution_ids: ListEdit
 });
-update_input!(UpdateTopicInput, TopicClearField {}, {
-    title: String, status: TopicStatus, links: Vec<ArtifactLink>,
-    archived_in_commit: provenance_core::ArchivedStamp
-});
+pub use topic::{TopicClearField, UpdateTopicInput};
+
+// A topic has no field to clear, so its clear enum has no variants, and the
+// Deserialize derive of that enum makes one more enum with no variants.
+#[allow(clippy::empty_enums)]
+mod topic {
+    use super::{ArtifactLink, Deserialize, ScopeId, Serialize, StableId, TopicStatus};
+
+    update_input!(UpdateTopicInput, TopicClearField {}, {
+        title: String, status: TopicStatus, links: Vec<ArtifactLink>,
+        archived_in_commit: provenance_core::ArchivedStamp
+    });
+}
 update_input!(EditQuestionInput, QuestionClearField { ResolutionId, Contradicts }, {
     question: String, resolution_method: ResolutionMethod, status: QuestionStatus,
     depends_on: Vec<StableId>,

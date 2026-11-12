@@ -34,8 +34,7 @@ pub(super) async fn impact(
     }
     let mut frontier: Vec<(NodeType, StableId)> = kind_of(snapshot, &id)
         .await?
-        .map(|node_type| vec![(node_type, id)])
-        .unwrap_or_default();
+        .map_or_default(|node_type| vec![(node_type, id)]);
     let mut seen: BTreeSet<Key> = frontier
         .iter()
         .map(|(node_type, id)| nodes::key(*node_type, id))

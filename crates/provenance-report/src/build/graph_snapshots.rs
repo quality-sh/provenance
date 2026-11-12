@@ -314,8 +314,7 @@ fn diff_records<'a, T>(
     for change in &mut changes[first_change..] {
         change.superseded_by = replacements
             .get(&change.id)
-            .map(|ids| ids.iter().cloned().collect())
-            .unwrap_or_default();
+            .map_or_default(|ids| ids.iter().cloned().collect());
     }
     for record in base {
         if !head_ids.contains(id(record)) {

@@ -167,8 +167,7 @@ fn push_version(
     let changed_fields = match previous.map(|previous| content(&previous.record)) {
         None => after
             .as_object()
-            .map(|fields| fields.keys().cloned().collect())
-            .unwrap_or_default(),
+            .map_or_default(|fields| fields.keys().cloned().collect()),
         Some(before) => {
             let mut names = before
                 .as_object()

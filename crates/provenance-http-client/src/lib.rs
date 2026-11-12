@@ -3,7 +3,9 @@
 //!
 //! Connection-based client generated from the operation `OpenAPI` contract.
 // Pinned Typify emits these conditional forms and explicit default helpers.
+// It also emits an enum with no variants for a schema with no values or no fields.
 #[allow(
+    clippy::empty_enums,
     clippy::if_not_else,
     clippy::missing_const_for_fn,
     clippy::derivable_impls,

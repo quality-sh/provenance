@@ -74,16 +74,13 @@ impl ActionInput {
             .as_object()
             .cloned()
             .unwrap_or_default();
-        let required = schema["required"]
-            .as_array()
-            .map(|fields| {
-                fields
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(str::to_owned)
-                    .collect()
-            })
-            .unwrap_or_default();
+        let required = schema["required"].as_array().map_or_default(|fields| {
+            fields
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect()
+        });
         self.actions.push(ActionFields {
             action,
             properties,

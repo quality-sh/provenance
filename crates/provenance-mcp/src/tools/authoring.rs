@@ -377,8 +377,7 @@ fn field_refusal(
 fn accepted_fields(schema: &Value) -> Vec<String> {
     schema["properties"]
         .as_object()
-        .map(|properties| properties.keys().cloned().collect())
-        .unwrap_or_default()
+        .map_or_default(|properties| properties.keys().cloned().collect())
 }
 
 /// The refusal of a target or type whose record kind the action does not take.
