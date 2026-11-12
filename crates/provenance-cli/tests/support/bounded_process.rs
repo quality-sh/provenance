@@ -99,10 +99,10 @@ fn run(
     } else {
         Stdio::null()
     });
-    let description = match what {
-        Some(what) => format!("{what}: {command:?}"),
-        None => format!("{command:?}"),
-    };
+    let description = what.map_or_else(
+        || format!("{command:?}"),
+        |what| format!("{what}: {command:?}"),
+    );
     // In its own process group, the process and its child processes stop together.
     #[cfg(unix)]
     std::os::unix::process::CommandExt::process_group(command, 0);
