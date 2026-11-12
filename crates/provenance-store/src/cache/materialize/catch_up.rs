@@ -65,7 +65,7 @@ pub async fn catch_up_with_guard(
 /// and puts the report in `report`. When it fails, the guard stays in
 /// `guard`, so the caller frees it after the store has completed its
 /// connection.
-pub(crate) fn catch_up_work<'a>(
+pub fn catch_up_work<'a>(
     guard: &'a mut Option<publication::PublicationGuard>,
     report: &'a mut Option<CatchUpReport>,
 ) -> WriteWork<'a> {

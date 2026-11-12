@@ -118,7 +118,7 @@ async fn until(flag: &AtomicBool) {
 /// A read of a database that nothing has written fails with [`Unopened`]
 /// before its work starts, and makes nothing: a second read fails in the
 /// same way.
-pub async fn a_read_of_an_absent_database_refuses_before_its_work<H: Harness>(harness: &H) {
+pub async fn a_read_of_an_absent_database_refuses_before_its_work<H: Harness + Sync>(harness: &H) {
     for attempt in 0..2 {
         let mut started = false;
         let slot = &mut started;
@@ -141,9 +141,10 @@ pub async fn a_read_of_an_absent_database_refuses_before_its_work<H: Harness>(ha
 }
 
 /// A statement that names an absent table fails with an error that
-/// [`is_missing_table`] knows: the engine reads a database with no
-/// revision table as one that holds no revision. No other failure reads as
-/// a missing table.
+/// [`is_missing_table`] knows, and no other failure does.
+///
+/// The engine reads a database with no revision table as one that holds
+/// no revision.
 pub async fn a_missing_table_is_reported_as_missing<H: Harness>(harness: H) {
     let database = harness.database();
     write(
@@ -313,8 +314,10 @@ pub async fn a_write_without_its_commit_keeps_nothing<H: Harness>(harness: H) {
 }
 
 /// Every row that a read gets is from the state that was committed when
-/// its first statement ran, also when a write commits while the read runs.
-/// The write runs beside the read, never inside its work: it starts after
+/// its first statement ran.
+///
+/// A write commits while the read runs. It runs beside the read, never
+/// inside its work: it starts after
 /// the first statement of the read, and the read goes on until the write
 /// has committed, or for a fixed number of statements. A store that runs a
 /// read to its end in one call runs the write after it.

@@ -10,8 +10,9 @@ mod stamp;
 mod units;
 mod validation;
 
+#[cfg(test)]
 pub use catch_up::catch_up_with_guard;
-pub(crate) use catch_up::catch_up_work;
+pub use catch_up::catch_up_work;
 pub use catch_up::{catch_up_state, CatchUpReport};
 pub use record_rows::SEARCH_TEXT;
 pub use units::unit_stored_digest;
