@@ -11,7 +11,7 @@
 
 use crate::cache::quoted;
 use crate::operations::stamp::{stored_revision, StoredRevision};
-pub(crate) use crate::read_database::one_row;
+pub use crate::read_database::one_row;
 use crate::read_database::{SqlColumns, SqlValue, Transaction};
 use futures_util::lock::MutexGuard;
 use provenance_core::model::ProjectionRow;

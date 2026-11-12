@@ -216,7 +216,7 @@ pub(super) async fn version_changed(
 }
 
 /// The validator version that the projection records, when it records one.
-pub(crate) async fn stored_version(
+pub async fn stored_version(
     transaction: &mut crate::read_database::Transaction,
 ) -> anyhow::Result<Option<i64>> {
     use crate::read_database::SqlColumns as _;

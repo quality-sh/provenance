@@ -11,9 +11,10 @@ pub enum Compatibility {
     RebuildRequired,
 }
 
-/// Whether the schema of the database in `transaction` is the current
-/// schema: its metadata row names the current digest and its catalog is
-/// the current catalog.
+/// Whether the schema of the database in `transaction` is current.
+///
+/// It is current when its metadata row names the current digest and its
+/// catalog is the current catalog.
 pub async fn compatibility(transaction: &mut Transaction) -> anyhow::Result<Compatibility> {
     let table = transaction
         .fetch(

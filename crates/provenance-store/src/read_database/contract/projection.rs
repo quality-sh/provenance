@@ -1,5 +1,6 @@
-//! Cases on the projection that the engine keeps in the read database:
-//! the catch-up and the schema check, run as the engine runs them, over a
+//! Cases on the projection that the engine keeps in the read database.
+//!
+//! The catch-up and the schema check run as the engine runs them, over a
 //! repository whose state is in memory and whose read database is the
 //! adapter under test.
 
@@ -50,7 +51,7 @@ fn repository<H: Harness>(harness: &H) -> Repository {
 
 /// The serial, and whether the pass rebuilt, committed and made the schema
 /// again.
-fn outcome(report: &CatchUpReport) -> (i64, bool, bool, bool) {
+const fn outcome(report: &CatchUpReport) -> (i64, bool, bool, bool) {
     (
         report.serial,
         report.rebuilt,
@@ -67,6 +68,8 @@ async fn requirement_ids(database: &dyn ReadDatabase) -> Vec<SqlValue> {
         .collect()
 }
 
+/// A catch-up makes the projection and then follows the state.
+///
 /// A catch-up over an empty store makes the schema and the first revision.
 /// A second pass with no change commits nothing, and a pass after a
 /// publish commits the next revision with the published rows.
@@ -101,10 +104,11 @@ pub async fn a_catch_up_makes_and_follows_the_projection<H: Harness>(harness: H)
     );
 }
 
-/// The schema check finds a schema that is not the current one, and the
-/// catch-up then makes the schema again: a missing index, a missing
-/// table, a metadata row with another digest, and no metadata table. A
-/// rebuild over a current schema keeps it.
+/// A schema that is not current is made again.
+///
+/// The schema check finds a missing index, a missing table, a metadata row
+/// with another digest, and no metadata table, and the catch-up then makes
+/// the schema again. A rebuild over a current schema keeps it.
 pub async fn a_schema_that_is_not_current_is_made_again<H: Harness>(harness: H) {
     let repository = repository(&harness);
     let first = catch_up_state(&repository).await.unwrap();

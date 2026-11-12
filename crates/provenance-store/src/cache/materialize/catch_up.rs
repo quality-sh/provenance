@@ -65,8 +65,9 @@ pub async fn catch_up_with_guard(
 /// of the read database. When the pass succeeds, the work frees the guard
 /// and puts the report in `report`. When it fails, the guard stays in
 /// `guard`, so the caller frees it after the store has completed its
-/// connection. A statement of the pass binds at most `bound_values`
-/// values.
+/// connection.
+///
+/// A statement of the pass binds at most `bound_values` values.
 pub fn catch_up_work<'a>(
     guard: &'a mut Option<publication::PublicationGuard>,
     report: &'a mut Option<CatchUpReport>,

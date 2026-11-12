@@ -152,9 +152,10 @@ pub trait ReadDatabase: Send + Sync + Debug {
     /// reported.
     fn write<'a>(&'a self, work: WriteWork<'a>) -> SqlFuture<'a, ()>;
 
-    /// Runs `write` as [`ReadDatabase::write`] does and, when it succeeds,
-    /// `read` as [`ReadDatabase::read`] does. The read sees what the write
-    /// committed.
+    /// Runs `write` and then, when it succeeds, `read`.
+    ///
+    /// Each runs as [`ReadDatabase::write`] and [`ReadDatabase::read`] do,
+    /// and the read sees what the write committed.
     ///
     /// The outer error is the failure of the write, its commit included;
     /// then `read` does not run. The inner error is the failure of the

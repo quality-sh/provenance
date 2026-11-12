@@ -164,8 +164,10 @@ pub async fn a_write_then_read_reads_its_write<H: Harness>(harness: H) {
     assert_eq!(seen, Some(vec![1]));
 }
 
-/// When the write of `write_then_read` fails, the outer error is its
-/// error, the read does not run, and the write keeps nothing.
+/// A write of `write_then_read` that fails stops the read.
+///
+/// The outer error is the error of the write, the read does not run, and
+/// the write keeps nothing.
 pub async fn a_failed_write_stops_the_read<H: Harness>(harness: H) {
     let database = harness.database();
     sequenced(database).await;
@@ -190,8 +192,9 @@ pub async fn a_failed_write_stops_the_read<H: Harness>(harness: H) {
     );
 }
 
-/// When the read of `write_then_read` fails, the inner error is its error,
-/// and the write stays committed.
+/// A read of `write_then_read` that fails keeps the write.
+///
+/// The inner error is the error of the read, and the write stays committed.
 pub async fn a_failed_read_keeps_the_write<H: Harness>(harness: H) {
     let database = harness.database();
     sequenced(database).await;

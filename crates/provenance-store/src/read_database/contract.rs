@@ -25,8 +25,9 @@ pub trait Harness {
     fn database(&self) -> &dyn ReadDatabase;
     /// A second adapter over the same store, as a later process opens it.
     fn reopen(&self) -> Box<dyn ReadDatabase>;
-    /// Whether a write can commit while a read of the store is open. A
-    /// store whose read runs to its end in one call says no, and then the
+    /// Whether a write can commit while a read of the store is open.
+    ///
+    /// A store whose read runs to its end in one call says no, and then the
     /// write runs after the read.
     fn reads_interleave(&self) -> bool {
         true
