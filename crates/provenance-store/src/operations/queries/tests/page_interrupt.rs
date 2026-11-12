@@ -60,13 +60,10 @@ fn parent() -> ThreadParent {
 }
 
 fn write_discussion(store: &StateStore, action: Value) -> Discussion {
+    let mut input = json!({"scope_id": "default", "parent": parent(), "actor": "ben"});
+    input["action"] = action;
     store
-        .write_discussion(
-            serde_json::from_value(json!({
-                "scope_id": "default", "parent": parent(), "actor": "ben", "action": action
-            }))
-            .unwrap(),
-        )
+        .write_discussion(serde_json::from_value(input).unwrap())
         .unwrap()
 }
 

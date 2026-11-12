@@ -168,9 +168,8 @@ async fn an_adapter_that_allows_no_values_in_a_list_is_refused() {
     let opened =
         crate::operations::reader::ReadSnapshot::open(Box::new(NoList(transaction)), &store.scope)
             .await;
-    let failed = match opened {
-        Ok(_) => panic!("the snapshot opened"),
-        Err(failed) => failed,
+    let Err(failed) = opened else {
+        panic!("the snapshot opened");
     };
     cache.close().await.unwrap();
     assert_fault(
