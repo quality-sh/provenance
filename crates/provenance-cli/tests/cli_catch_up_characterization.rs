@@ -25,7 +25,7 @@ use serde_json::{json, Map, Value};
 use std::process::Stdio;
 use support::api_process;
 use support::catch_up_steps::{write, Answer, Surface, STEPS};
-use support::transcript::{assert_same, copy_without_projection, read_all, read_paths, READS};
+use support::transcript::{assert_same, copy_without_projection, read_all};
 
 #[path = "../../provenance-store/tests/support/initialization.rs"]
 mod initialization;
@@ -168,39 +168,6 @@ fn cli(repo: &Repository, step: usize, side: &str) -> Cli {
     }
 }
 
-/// The number of groups of reads that run at the same time.
-const READ_GROUPS: usize = 4;
-
-/// Each read of [`READS`] through `cli` on `repo`, with the answers in the
-/// order of [`READS`]. The first read runs alone: it catches up the
-/// projection, or makes it on a copy with no projection. The other reads
-/// find no change after the first read, so they run in [`READ_GROUPS`]
-/// groups at the same time, each group in order.
-async fn read_side(cli: &Cli, repo: &Repository) -> Vec<Value> {
-    let mut answers = read_paths(cli, repo, &READS[..1]).await;
-    let read = |paths: &[&str]| {
-        tokio::runtime::Builder::new_current_thread()
-            .build()
-            .unwrap()
-            .block_on(read_paths(cli, repo, paths))
-    };
-    let read = &read;
-    let rest = &READS[1..];
-    std::thread::scope(|scope| {
-        let groups: Vec<_> = rest
-            .chunks(rest.len().div_ceil(READ_GROUPS))
-            .map(|group| scope.spawn(move || read(group)))
-            .collect();
-        for group in groups {
-            match group.join() {
-                Ok(group) => answers.extend(group),
-                Err(panic) => std::panic::resume_unwind(panic),
-            }
-        }
-    });
-    answers
-}
-
 /// Implementation aid: characterization of the CLI read answers after each
 /// change, made before the catch-up change. No Rule binds it.
 #[tokio::test]
@@ -208,9 +175,9 @@ async fn cli_reads_after_each_write_equal_a_full_rebuild() {
     let repo = fixture();
     for step in 0..STEPS {
         write(&cli(&repo, step, "caught-up"), &state(&repo), step).await;
-        let caught_up = read_side(&cli(&repo, step, "caught-up"), &repo).await;
+        let caught_up = read_all(&cli(&repo, step, "caught-up"), &repo).await;
         let copy = copy_without_projection(&repo);
-        let rebuilt = read_side(&cli(&copy, step, "full-rebuild"), &copy).await;
+        let rebuilt = read_all(&cli(&copy, step, "full-rebuild"), &copy).await;
         assert_same(&caught_up, &rebuilt, &format!("CLI step {step}"));
     }
 }
