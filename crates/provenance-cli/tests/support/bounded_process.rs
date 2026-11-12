@@ -181,7 +181,13 @@ fn left(deadline: Instant) -> Duration {
     deadline.saturating_duration_since(Instant::now())
 }
 
+/// The longest sleep between two reads of the process status. The sleep
+/// starts at 1 ms and doubles to this value, so that a process that ends in
+/// a few milliseconds does not wait for a long sleep.
+const POLL_MAX: Duration = Duration::from_millis(25);
+
 fn wait_until(child: &mut Child, deadline: Instant) -> Option<ExitStatus> {
+    let mut sleep = Duration::from_millis(1);
     loop {
         if let Some(status) = child.try_wait().expect("read the process status") {
             return Some(status);
@@ -189,7 +195,8 @@ fn wait_until(child: &mut Child, deadline: Instant) -> Option<ExitStatus> {
         if Instant::now() >= deadline {
             return None;
         }
-        std::thread::sleep(Duration::from_millis(25));
+        std::thread::sleep(sleep);
+        sleep = (sleep * 2).min(POLL_MAX);
     }
 }
 
