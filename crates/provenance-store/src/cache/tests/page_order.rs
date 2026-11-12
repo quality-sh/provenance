@@ -185,7 +185,7 @@ async fn id_pages_return_every_id_in_order() {
         let after = walked.last().cloned().unwrap_or_default();
         let page = snapshot
             .table::<Rule>()
-            .search_ids(&after, 3, false)
+            .page_ids(&after, 3, false, None)
             .await
             .unwrap();
         assert!(page.len() <= 3);
@@ -250,12 +250,12 @@ async fn the_window_that_reaches_an_over_long_id_refuses() {
     let limit = 2;
     let window = limit + 1;
     assert_eq!(
-        table.search_ids("", window, false).await.unwrap(),
+        table.page_ids("", window, false, None).await.unwrap(),
         ["rule_page_00", "rule_page_01", "rule_page_02"]
     );
     assert_eq!(
         table
-            .search_ids("rule_page_01", window, false)
+            .page_ids("rule_page_01", window, false, None)
             .await
             .unwrap(),
         ["rule_page_02", "rule_page_03", "rule_page_04"]
@@ -263,7 +263,7 @@ async fn the_window_that_reaches_an_over_long_id_refuses() {
     // The page holds `rule_page_04` and `rule_page_05`. Only the extra row
     // is over-long.
     let error = table
-        .search_ids("rule_page_03", window, false)
+        .page_ids("rule_page_03", window, false, None)
         .await
         .unwrap_err();
     assert_eq!(
@@ -271,7 +271,7 @@ async fn the_window_that_reaches_an_over_long_id_refuses() {
         Some(&ReadFailure::PageRecordTooLarge)
     );
     assert_eq!(
-        table.search_ids(&long, window, false).await.unwrap(),
+        table.page_ids(&long, window, false, None).await.unwrap(),
         ["rule_page_07", "rule_page_08", "rule_schads_pay_001"]
     );
     drop(snapshot);

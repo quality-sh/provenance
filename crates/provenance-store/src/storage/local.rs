@@ -1,16 +1,19 @@
 //! The local-disk adapter: canonical state as files under `.provenance/state`.
 //!
-//! A per-key set lands each key under the advisory lock of its shard, with a
-//! temporary file and a rename. A whole set lands as one swap of a changed
-//! copy of the state directory.
+//! A per-key set lands each key under the advisory lock of its shard. A put
+//! is a temporary file, a sync of it, a rename, and a sync of its directory
+//! and of each directory that the put made. A delete is a remove and a sync
+//! of its directory. A whole set lands as one swap of a changed copy of the
+//! state directory.
 
 use super::{Atomicity, PublishFailure, StateKey, StateStorage, StateView, StorageError, WriteSet};
 use crate::layout::ProvenanceLayout;
 use crate::shards;
 use camino::Utf8Path;
 use std::collections::BTreeMap;
-use std::io::Write;
 
+#[cfg(all(test, unix))]
+mod directory_sync_tests;
 pub(crate) mod durability;
 #[cfg(any(unix, windows))]
 mod file_install;
@@ -41,8 +44,13 @@ pub(crate) use whole_set::copy_directory;
 /// A per-key set takes the advisory lock of each key it changes, which other
 /// processes take to change that shard. Each key lands with a temporary file
 /// and a rename, so one key lands completely or not at all, and the keys land
-/// one by one, in key order. A whole set lands as one swap of a changed copy
-/// of the state directory, so every key lands or no key lands.
+/// one by one, in key order. The adapter syncs the file before the rename,
+/// and after the rename its directory and each directory that the put made.
+/// After a delete, it syncs the directory. Thus on Unix, a key that landed
+/// keeps its new bytes, or stays deleted, after a power loss. On Windows, a
+/// directory has no sync: the file sync occurs, but a power loss can lose a
+/// rename, a new directory or a delete. A whole set lands as one swap of a
+/// changed copy of the state directory, so every key lands or no key lands.
 #[derive(Clone, Debug)]
 pub struct LocalStateStorage {
     layout: ProvenanceLayout,
@@ -69,8 +77,10 @@ impl StateStorage for LocalStateStorage {
     /// its keys and bytes with the base before any key lands. With no base,
     /// it reads nothing.
     ///
-    /// A per-key set lands each key with a temporary file and a rename, in
-    /// key order. A whole set lands as one swap of the state directory; see
+    /// A per-key set lands each key in key order: a put with a temporary
+    /// file and a rename, a delete with a remove. It syncs as
+    /// `durability::write_synced_file` and `durability::remove_synced_file`
+    /// state. A whole set lands as one swap of the state directory; see
     /// `whole_set`.
     fn publish(&self, writes: WriteSet) -> Result<(), PublishFailure> {
         self.publish_with(&writes, &mut whole_set::StatePublication)
@@ -140,33 +150,12 @@ impl LocalStateStorage {
             let path = self.layout.state_dir().join(key.as_str());
             bytes
                 .map_or_else(
-                    || remove_file(&path),
-                    |bytes| write_file_atomic(&path, bytes),
+                    || durability::remove_synced_file(&path),
+                    |bytes| durability::write_synced_file(&path, bytes),
                 )
                 .map_err(PublishFailure::Started)?;
         }
         Ok(())
-    }
-}
-
-/// Replaces the file at `path` with `bytes` through a temporary file in the
-/// same directory and a rename.
-pub(crate) fn write_file_atomic(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<()> {
-    let Some(parent) = path.parent() else {
-        return Err(crate::refusal::fault!("{path} has no parent directory"));
-    };
-    std::fs::create_dir_all(parent)?;
-    let mut temp = tempfile::NamedTempFile::new_in(crate::long_path::extended(parent)?)?;
-    temp.write_all(bytes)?;
-    durability::replace_file(temp, path)
-}
-
-fn remove_file(path: &Utf8Path) -> anyhow::Result<()> {
-    match std::fs::remove_file(crate::long_path::extended(path)?) {
-        Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
-            Err(crate::refusal::caused(error, format!("remove {path}")))
-        }
-        _ => Ok(()),
     }
 }
 

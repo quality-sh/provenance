@@ -179,6 +179,7 @@ pub fn scope_phrase(scopes: &[String]) -> String {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "host")]
     #[test]
     fn completed_init_report_keeps_notices_apart_from_summary() {
         let report = InitEnding::already(

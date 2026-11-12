@@ -122,18 +122,20 @@ async fn a_bounded_empty_search_page_can_continue_to_an_unloaded_match() {
     let (dir, store, scope) = seeded_store();
     let path = crate::shards::requirements_path(&store.layout, &scope);
     let mut record = json!(store.list_requirements(&scope).unwrap()[0]);
+    // Each record before the last holds the text only across two pieces: the
+    // SQL test selects it and the check of each piece refuses it.
     for i in 0..700 {
         record["id"] = json!(format!("req_{i:03}"));
         record["description"] = if i == 699 {
-            json!("the needle")
+            json!("the \u{1}plain needle")
         } else {
-            Value::Null
+            json!("plain")
         };
         crate::cache::tests::fixtures::append_record(&path, &record);
     }
     let first = search(
         &root_of(&dir),
-        json!({"text":"needle","node_types":["requirement"]}),
+        json!({"text":"\u{1}plain","node_types":["requirement"]}),
     )
     .await
     .unwrap();
@@ -144,7 +146,7 @@ async fn a_bounded_empty_search_page_can_continue_to_an_unloaded_match() {
     assert_eq!(first["has_more"], true);
     let second = search(
         &root_of(&dir),
-        json!({"text":"needle","node_types":["requirement"],"cursor":first["next_cursor"]}),
+        json!({"text":"\u{1}plain","node_types":["requirement"],"cursor":first["next_cursor"]}),
     )
     .await
     .unwrap();
