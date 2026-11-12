@@ -13,11 +13,13 @@ and the kernel stack of a thread, and a debugger can attach to a process,
 only to the parent of that process or to root. `finish` stops the watcher
 and writes its log to the job log.
 
-At each interval the watcher reads the processes of the job from `/proc`.
-A test binary is the top process of a tree whose program file is below the
-`target/` directory. A watched process (for example `provenance`) that has
-no test binary above it is also a top process. The limit applies to the top
-process only: a server that a test starts lives as long as its test.
+At each interval the watcher reads from `/proc` only the processes whose
+program file is below the `target/` directory of the workspace root
+(`--root`). A process with a different program file is never read, reported
+or stopped, also when its name is a watched name. A test binary is the top
+process of a tree whose program file is below `target/`. The limit applies
+to the top process only: a server that a test starts lives as long as its
+test.
 
 When a top process is older than the limit, the watcher writes one report in
 a log group: for each process of the tree, its parent, age, state and command
@@ -137,15 +139,15 @@ class Watcher:
     def __init__(self, limit, names, root, uid, install_tool, out):
         self.limit = limit
         self.names = set(names)
-        self.root = os.path.realpath(root) + os.sep
+        self.target = os.path.join(os.path.realpath(root), "target") + os.sep
         self.uid = uid
         self.install_tool = install_tool
         self.out = out
         self.reported = set()
         self.tool = None
 
-    def below_root(self, process):
-        return process.exe.startswith(self.root) and not process.name.startswith("build-script-")
+    def below_target(self, process):
+        return process.exe.startswith(self.target) and not process.name.startswith("build-script-")
 
     def tops(self, processes):
         """The test binaries and the watched processes with no test binary above them."""
@@ -153,10 +155,10 @@ class Watcher:
         for process in processes.values():
             if process.uid != self.uid:
                 continue
-            if not (self.below_root(process) or process.name in self.names):
+            if not self.below_target(process):
                 continue
             parent = processes.get(process.ppid)
-            while parent and not self.below_root(parent):
+            while parent and not self.below_target(parent):
                 parent = processes.get(parent.ppid)
             if parent is None:
                 tops.append(process)
@@ -175,7 +177,7 @@ class Watcher:
         """Checks at each interval until SIGTERM. A report in progress completes first."""
         stopping = []
         signal.signal(signal.SIGTERM, lambda *_: stopping.append(True))
-        self.write(f"Watching the processes below {self.root} and {sorted(self.names)} with a limit of {self.limit:g} s.")
+        self.write(f"Watching the processes below {self.target} with a limit of {self.limit:g} s.")
         while not stopping:
             try:
                 self.check()
@@ -492,7 +494,7 @@ def main(argv=None):
         command = commands.add_parser(name)
         command.add_argument("--limit", type=float, required=True, help="seconds that a test process can run")
         command.add_argument("--watch", action="append", default=[], help="a process name to watch")
-        command.add_argument("--root", default="target", help="the directory of the test binaries")
+        command.add_argument("--root", default=".", help="the workspace root; the test binaries are below its target/ directory")
         command.add_argument("--interval", type=float, default=15.0, help="seconds between two checks")
     commands.choices["watch"].add_argument("--uid", type=int, default=os.getuid())
     commands.choices["watch"].add_argument("--install-tool", action="store_true")
