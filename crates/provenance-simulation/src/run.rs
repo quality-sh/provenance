@@ -73,7 +73,6 @@ fn spawn_engine(
                 .push(Done {
                     engine: Some(slot),
                     operation: task.operation,
-                    target: task.target(),
                     op: task.op,
                     result,
                     kind,
@@ -327,7 +326,6 @@ fn write_outside(identity: &RepositoryIdentity, world: &Arc<World>, task: &Task)
     Done {
         engine: None,
         operation: task.operation,
-        target: task.target(),
         op: task.op.clone(),
         result,
         kind,

@@ -21,7 +21,7 @@ pub use plant::Plant;
 pub use run::{answer_kind, run_case};
 pub use state::{final_records, open_entries, FinalRecords};
 
-use generate::{Case, Effect, Operation, Target, Task};
+use generate::{Case, Effect, Operation, Task};
 use provenance_store::repository::Repository;
 use provenance_store::storage::StateKey;
 use serde::Serialize;
@@ -61,7 +61,6 @@ pub struct Done {
     pub engine: Option<usize>,
     pub operation: u64,
     pub op: Operation,
-    pub target: Option<Target>,
     pub result: Result<Effect, String>,
     /// The kind of the public answer to a refusal, for example
     /// `requirement_edit_conflict`.
