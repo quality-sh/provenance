@@ -145,9 +145,10 @@ impl Freshness {
 }
 
 /// Runs the check of the freshness step, then pins the snapshot. The row
-/// readers run on the port, so the snapshot of any adapter opens; the
-/// schema check of `annotate_only` and the discussion reads still read
-/// the file adapter and refuse another with a fault.
+/// readers run on the port, so the snapshot of any adapter opens. Three
+/// steps still need the file adapter and refuse another with a fault: the
+/// catch-up pass, the schema check that `annotate_only` and `refuse_stale`
+/// run, and the discussion reads.
 async fn open_snapshot(
     mut transaction: Transaction,
     check: Check,

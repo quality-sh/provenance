@@ -5,8 +5,7 @@
 //! projection runs, so a store that passes them can hold the projection.
 //! No case runs one port call inside the work of another, and no work
 //! waits on anything but its own transaction, so a store whose
-//! transaction is one synchronous call, as a Durable Object's is, can
-//! pass them.
+//! transaction is one synchronous call can pass them.
 
 use super::{is_missing_table, ReadDatabase, SqlRow, SqlValue, Statement, Unopened};
 use std::future::Future;
@@ -17,8 +16,10 @@ use std::task::Poll;
 #[cfg(feature = "host")]
 pub mod handles;
 pub mod limits;
+#[cfg(any(test, feature = "test-fixture"))]
 mod other;
 
+#[cfg(any(test, feature = "test-fixture"))]
 pub use other::{Other, OtherTransaction};
 
 /// One adapter under test.

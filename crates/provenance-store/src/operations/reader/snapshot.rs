@@ -38,14 +38,21 @@ impl ReadSnapshot {
     /// Takes one read transaction of the read database. Its first read
     /// is the stored revision, which pins the snapshot: every row read
     /// later in the transaction is at that serial. `None` means the
-    /// database holds no revision.
+    /// database holds no revision. An adapter that allows no values in a
+    /// list is refused with a fault before the first read.
     #[rule("rule_read_answers_from_one_pinned_transaction")]
     pub(crate) async fn open(mut tx: Transaction, scope: &ScopeId) -> anyhow::Result<Option<Self>> {
+        let list_values = tx.max_list_values();
+        if list_values == 0 {
+            return Err(crate::refusal::fault!(
+                "the read database adapter allows no values in a list"
+            ));
+        }
         let Some(revision) = stored_revision(tx.as_mut()).await? else {
             return Ok(None);
         };
         Ok(Some(Self {
-            list_values: tx.max_list_values(),
+            list_values,
             tx: tokio::sync::Mutex::new(tx),
             scope: scope.clone(),
             revision,

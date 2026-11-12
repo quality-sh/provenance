@@ -10,8 +10,8 @@ use provenance_store::operations::stamp::stored_revision;
 use provenance_store::read_database::contract::{self, Harness, Other};
 use provenance_store::read_database::file::FileReadDatabase;
 use provenance_store::read_database::{
-    ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement, Transaction,
-    WriteWork,
+    OverBudget, ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement,
+    Transaction, WriteWork,
 };
 
 /// A file database in a new cache directory of its own.
@@ -46,8 +46,8 @@ impl Harness for File {
 }
 
 /// The file adapter behind another transaction type: the crate finds no
-/// `SQLx` transaction in it, as with the adapter of a Durable Object. A
-/// reader that passes over it needs nothing but the port.
+/// `SQLx` transaction in it. A reader that passes over it needs nothing
+/// but the port.
 struct PortOnly {
     file: File,
     database: Other<FileReadDatabase>,
@@ -187,8 +187,8 @@ port_cases!(
     handles::the_document_handle_reads_the_projection,
     handles::the_discussion_handle_reads_the_projection,
     handles::the_message_handle_reads_the_projection,
+    handles::a_stopped_page_statement_is_the_page_budget_refusal,
     limits::a_bounded_read_runs_the_statements_within_its_bound,
-    limits::a_statement_past_the_bound_stops_for_the_budget,
     limits::a_limit_bounds_the_rows,
     limits::a_list_of_the_most_values_runs,
 );
@@ -291,4 +291,83 @@ async fn the_projection_statement_forms_run() {
 #[test]
 fn the_cursor_key_stays_the_same() {
     contract::the_cursor_key_stays_the_same(&File::default());
+}
+
+/// Makes the database of `file`, with one table.
+async fn made(file: &File) {
+    file.database
+        .write(Box::new(|mut transaction| {
+            Box::pin(async move {
+                transaction
+                    .execute("CREATE TABLE made (n INTEGER)", Vec::new())
+                    .await?;
+                transaction.commit().await
+            })
+        }))
+        .await
+        .unwrap();
+}
+
+/// A query whose work grows with `n`: it counts from 1 to `n`.
+const COUNT_TO: &str = "WITH RECURSIVE count_to (n) AS (SELECT 1 UNION ALL \
+                        SELECT n + 1 FROM count_to WHERE n < ?) SELECT COUNT(*) FROM count_to";
+
+/// The count to `n` in one read of the file, after the work bound `bound`
+/// when there is one.
+async fn count_to(file: &File, bound: Option<u64>, n: i64) -> anyhow::Result<Vec<SqlRow>> {
+    let mut rows = None;
+    let slot = &mut rows;
+    file.database
+        .read(Box::new(move |mut transaction| {
+            Box::pin(async move {
+                if let Some(steps) = bound {
+                    transaction.bound_work(steps).await?;
+                }
+                *slot = Some(
+                    transaction
+                        .fetch(COUNT_TO, vec![SqlValue::Integer(n)])
+                        .await,
+                );
+                Ok(())
+            })
+        }))
+        .await?;
+    rows.expect("the read ran its work")
+}
+
+/// The file stops a statement while it runs once its work passes the
+/// bound, and the error is `OverBudget`. Without the bound, the same
+/// statement runs. The shared contract does not hold this, because it
+/// does not yet say what another adapter must do at the bound.
+#[tokio::test]
+async fn the_file_stops_a_statement_past_the_bound() {
+    let file = File::default();
+    made(&file).await;
+    let stopped = count_to(&file, Some(100_000), 1_000_000).await.unwrap_err();
+    assert!(
+        stopped.downcast_ref::<OverBudget>().is_some(),
+        "not OverBudget: {stopped:#}"
+    );
+    let unbounded = count_to(&file, None, 1_000_000).await.unwrap();
+    assert_eq!(unbounded, vec![vec![SqlValue::Integer(1_000_000)]]);
+}
+
+/// The file puts at most 500 values in one list, as the readers did before
+/// they ran on the port, so a chunked list runs the same statements.
+#[tokio::test]
+async fn the_file_puts_500_values_in_one_list() {
+    let file = File::default();
+    made(&file).await;
+    let mut most = 0;
+    let slot = &mut most;
+    file.database
+        .read(Box::new(move |transaction| {
+            Box::pin(async move {
+                *slot = transaction.max_list_values();
+                Ok(())
+            })
+        }))
+        .await
+        .unwrap();
+    assert_eq!(most, 500);
 }

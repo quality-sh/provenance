@@ -3,7 +3,7 @@
 //!
 //! This crate is the repository engine. It owns the use cases and calls storage through a
 //! port. The engine runs where its storage is: in the process over local disk now, and as
-//! Wasm in a Durable Object over the SQLite of that object later.
+//! Wasm over a store that is not a local file later.
 //!
 //! The areas of the crate:
 //!

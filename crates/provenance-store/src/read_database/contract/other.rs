@@ -1,7 +1,7 @@
 //! Another adapter over the store of an adapter: it runs the same SQL, but
 //! its transaction is its own type, so the crate finds no `SQLx`
-//! transaction in it, as with the adapter of a Durable Object. Code that
-//! passes over it needs nothing but the port.
+//! transaction in it, as with an adapter over a store that is not a local
+//! file. Code that passes over it needs nothing but the port.
 
 use crate::read_database::{
     ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement, Transaction,

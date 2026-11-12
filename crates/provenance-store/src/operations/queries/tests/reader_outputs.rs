@@ -348,15 +348,20 @@ async fn each_reader_gives_the_same_lines_through_the_port_alone() {
 }
 
 /// The readers name no `SQLx` item, so only the port runs their
-/// statements.
+/// statements: not `cache/read.rs`, and no file under `cache/read` at any
+/// depth.
 #[test]
 fn the_row_readers_name_no_sqlx() {
-    let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/cache/read");
+    let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut pending = vec![source.join("cache/read.rs"), source.join("cache/read")];
     let mut named = Vec::new();
-    for entry in std::fs::read_dir(&directory).unwrap() {
-        let path = entry.unwrap().path();
-        if std::fs::read_to_string(&path).unwrap().contains("sqlx") {
-            named.push(path.file_name().unwrap().to_string_lossy().into_owned());
+    while let Some(path) = pending.pop() {
+        if path.is_dir() {
+            for entry in std::fs::read_dir(&path).unwrap() {
+                pending.push(entry.unwrap().path());
+            }
+        } else if std::fs::read_to_string(&path).unwrap().contains("sqlx") {
+            named.push(path.strip_prefix(&source).unwrap().display().to_string());
         }
     }
     assert_eq!(named, Vec::<String>::new());

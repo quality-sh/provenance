@@ -3,11 +3,11 @@
 //! The engine runs SQL text through this port and decodes the rows that it
 //! gets back. The named queries stay above the port, as the snapshot
 //! handles and the catch-up. Each store has an adapter: the file adapter
-//! keeps the CLI's `SQLite` file under `.provenance/cache`, and a Durable
-//! Object keeps the same tables in its own `SQLite`.
+//! keeps the CLI's `SQLite` file under `.provenance/cache`, and an adapter
+//! over a store that is not a local file keeps the same tables there.
 //!
 //! A transaction is lent to one piece of work and ends when the work ends,
-//! because the object's store runs a transaction over one closure. The
+//! so a store that runs a transaction over one closure can hold it. The
 //! work owns the transaction while it runs: a read drops it, and a write
 //! commits it at its end. The store completes its connection after the
 //! work ends, so a lock that the work frees after its commit is free while
@@ -110,11 +110,10 @@ pub trait SqlTransaction: Any + Send {
     /// Bounds the work of the statements that follow in this transaction
     /// to about `steps` steps of the store's engine.
     ///
-    /// A statement that passes the bound stops, and its error is
-    /// [`OverBudget`]. The file counts the steps of the `SQLite` engine. A
-    /// store that cannot stop a statement can meet the bound in another
-    /// way, such as the limit that its platform puts on the work of one
-    /// request, and gives [`OverBudget`] when it can see that stop.
+    /// When the store stops a statement for the bound, the error of the
+    /// statement is [`OverBudget`]. The file adapter counts the steps of
+    /// the `SQLite` engine and stops a statement at the bound while it
+    /// runs. The contract does not yet say what another adapter must do.
     fn bound_work(&mut self, steps: u64) -> SqlFuture<'_, ()>;
 
     /// The most values of one list that a reader binds in one statement;

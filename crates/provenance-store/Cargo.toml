@@ -176,7 +176,7 @@ required-features = ["host"]
 
 [[test]]
 name = "read_database_contract"
-required-features = ["host"]
+required-features = ["host", "test-fixture"]
 
 [[test]]
 name = "read_settings"

@@ -1,8 +1,16 @@
 //! The limits that the readers put on a read: the work bound of a page,
 //! the `LIMIT` of a page statement, and the size of a bound list.
+//!
+//! For the work bound, the contract holds only that a bound that the work
+//! does not reach changes nothing. It does not yet say whether an adapter
+//! must stop a statement while it runs; the file adapter does, and its own
+//! tests hold that. When an adapter stops a statement for the bound, its
+//! error is [`OverBudget`](crate::read_database::OverBudget), and
+//! [`super::handles`] holds that a page gives the page budget refusal for
+//! it.
 
 use super::{integers, statement, write, Harness};
-use crate::read_database::{OverBudget, ReadDatabase, SqlRow, SqlValue, Transaction};
+use crate::read_database::{ReadDatabase, SqlRow, SqlValue, Transaction};
 
 /// A query whose work grows with `n`: it counts from 1 to `n`.
 const COUNT_TO: &str = "WITH RECURSIVE count_to (n) AS (SELECT 1 UNION ALL \
@@ -71,37 +79,6 @@ pub async fn a_bounded_read_runs_the_statements_within_its_bound<H: Harness>(har
     .await
     .unwrap();
     assert_eq!(rows, (100, vec![1, 2, 3, 4, 5]));
-}
-
-/// A statement whose work passes the bound stops, and its error is
-/// [`OverBudget`]. Without the bound, the same statement runs.
-pub async fn a_statement_past_the_bound_stops_for_the_budget<H: Harness>(harness: H) {
-    let database = harness.database();
-    numbers(database).await;
-    let stopped = read(database, |transaction| {
-        Box::pin(async move {
-            transaction.bound_work(100_000).await?;
-            transaction
-                .fetch(COUNT_TO, vec![SqlValue::Integer(1_000_000)])
-                .await
-        })
-    })
-    .await
-    .unwrap_err();
-    assert!(
-        stopped.downcast_ref::<OverBudget>().is_some(),
-        "not OverBudget: {stopped:#}"
-    );
-    let unbounded = read(database, |transaction| {
-        Box::pin(async move {
-            transaction
-                .fetch(COUNT_TO, vec![SqlValue::Integer(1_000_000)])
-                .await
-        })
-    })
-    .await
-    .unwrap();
-    assert_eq!(count(&unbounded), 1_000_000);
 }
 
 /// A statement gives at most the rows that its `LIMIT` names, bound or

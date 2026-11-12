@@ -21,7 +21,8 @@ impl ReadSnapshot {
     /// transaction to [`PAGE_WORK_STEPS`].
     #[rule("rule_query_pages_bound_shared_reads")]
     pub(crate) async fn bound_page_work(&self) -> anyhow::Result<()> {
-        self.transaction().await.bound_work(PAGE_WORK_STEPS).await
+        let steps = crate::test_probes::page_work_steps(PAGE_WORK_STEPS);
+        self.transaction().await.bound_work(steps).await
     }
 }
 

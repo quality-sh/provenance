@@ -114,3 +114,67 @@ async fn a_read_of_another_adapter_runs_the_moved_readers() {
     .unwrap();
     assert_eq!(after.stamp.serial, stored.stamp.serial);
 }
+
+/// A transaction of the file that allows no values in a list.
+struct NoList(crate::read_database::Transaction);
+
+impl crate::read_database::SqlTransaction for NoList {
+    fn fetch<'a>(
+        &'a mut self,
+        sql: &'a str,
+        values: Vec<crate::read_database::SqlValue>,
+    ) -> crate::read_database::SqlFuture<'a, Vec<crate::read_database::SqlRow>> {
+        self.0.fetch(sql, values)
+    }
+
+    fn execute<'a>(
+        &'a mut self,
+        sql: &'a str,
+        values: Vec<crate::read_database::SqlValue>,
+    ) -> crate::read_database::SqlFuture<'a, u64> {
+        self.0.execute(sql, values)
+    }
+
+    fn attempt<'a>(
+        &'a mut self,
+        statements: &'a [crate::read_database::Statement],
+    ) -> crate::read_database::SqlFuture<'a, Result<(), anyhow::Error>> {
+        self.0.attempt(statements)
+    }
+
+    fn commit(self: Box<Self>) -> crate::read_database::SqlFuture<'static, ()> {
+        self.0.commit()
+    }
+
+    fn bound_work(&mut self, steps: u64) -> crate::read_database::SqlFuture<'_, ()> {
+        self.0.bound_work(steps)
+    }
+
+    fn max_list_values(&self) -> usize {
+        0
+    }
+}
+
+/// An adapter that allows no values in a list is refused with a fault when
+/// the snapshot opens, and does not panic at its first list.
+#[tokio::test]
+async fn an_adapter_that_allows_no_values_in_a_list_is_refused() {
+    let store = test_stores::seeded_queries();
+    get_through(&store, ReadPolicy::default()).await.unwrap();
+    let cache = crate::cache::open_cache(&store.layout()).await.unwrap();
+    let transaction = crate::read_database::file::begin(cache.pool())
+        .await
+        .unwrap();
+    let opened =
+        crate::operations::reader::ReadSnapshot::open(Box::new(NoList(transaction)), &store.scope)
+            .await;
+    let failed = match opened {
+        Ok(_) => panic!("the snapshot opened"),
+        Err(failed) => failed,
+    };
+    cache.close().await.unwrap();
+    assert_fault(
+        &failed,
+        "the read database adapter allows no values in a list",
+    );
+}

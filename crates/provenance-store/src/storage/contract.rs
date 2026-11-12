@@ -239,9 +239,9 @@ pub fn a_two_key_whole_set_lands_both_keys<H: Harness>(mut harness: H) {
 /// A whole set of several keys that fails partway rolls back: no key lands.
 ///
 /// The local adapter lands the set on a copy of the state directory, so a
-/// key that fails leaves the live directory as it was. The Durable Object
-/// adapter must run it too: a statement that fails inside its transaction
-/// rolls back every earlier statement of the set.
+/// key that fails leaves the live directory as it was. An adapter over a
+/// store that is not a local file must run it too: a statement that fails
+/// inside its transaction rolls back every earlier statement of the set.
 pub fn a_failed_whole_set_lands_no_key<H: Harness>(mut harness: H) {
     harness.seed(&[("manifest.json", b"{}")]);
     harness.break_key(B);
