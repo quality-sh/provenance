@@ -90,11 +90,13 @@ fn matches_over_many_pages_come_back_once_each_in_kind_and_id_order() {
     let directory = tempfile::tempdir().unwrap();
     let mut sources = plain_sources(520);
     let mut expected = Vec::new();
+    // In id order, a record that does not match comes after each match, so a
+    // row that SQL skips is at each page boundary.
     for index in 0..120 {
         let id = format!("source_b{index:03}");
         sources.push(source(&id, &format!("Needle {index:03}")));
+        sources.push(source(&format!("{id}_x"), "Plain"));
         expected.push(id);
-        sources.push(source(&format!("source_c{index:03}"), "Plain"));
     }
     let mut requirements = Vec::new();
     for index in 0..3 {
