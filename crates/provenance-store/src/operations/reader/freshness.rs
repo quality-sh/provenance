@@ -23,6 +23,11 @@ use crate::repository::Repository;
 use provenance_core::protocol::{Stamp, StampPolicy, Stamped};
 use provenance_macros::rule;
 
+/// The fault of a read of a read database other than the file. It ends
+/// when the row readers run on the port.
+const NOT_A_FILE: &str =
+    "the row readers read only the read database file under .provenance/cache";
+
 pub(super) struct Freshness {
     pub(super) check: Check,
     pub(super) policy: StampPolicy,
@@ -144,13 +149,18 @@ impl Freshness {
     }
 }
 
-/// Runs the check of the freshness step, then pins the snapshot.
+/// Runs the check of the freshness step, then pins the snapshot. Until the
+/// row readers run on the port, they read the transaction of the file
+/// adapter, so a read of another adapter refuses here.
 async fn open_snapshot(
     mut transaction: Transaction,
     check: Check,
     repository: &Repository,
     because: Option<&str>,
 ) -> anyhow::Result<ReadSnapshot> {
+    if transaction.sqlx_ref().is_none() {
+        return Err(crate::refusal::fault!("{NOT_A_FILE}"));
+    }
     let layout = repository.layout();
     match check {
         Check::CatchUp(_) | Check::None => {}

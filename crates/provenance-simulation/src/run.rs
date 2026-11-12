@@ -19,6 +19,7 @@ fn open(identity: &RepositoryIdentity, world: &Arc<World>) -> anyhow::Result<Rep
         identity.clone(),
         Arc::new(SimulatedStorage(world.clone())),
         Arc::new(SimulatedSectionLock(world.clone())),
+        None,
     )?)
 }
 
@@ -305,6 +306,7 @@ fn write_outside(identity: &RepositoryIdentity, world: &Arc<World>, task: &Task)
         identity.clone(),
         storage.clone(),
         Arc::new(MemorySectionLock::default()),
+        None,
     )
     .map_err(anyhow::Error::from)
     .and_then(|repository| generate::apply(&repository, task));
