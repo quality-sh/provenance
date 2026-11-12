@@ -75,7 +75,11 @@ pub async fn ideation_repository() -> (Repository, Vec<Value>) {
     let reads = read_answers(&repo).await;
     for read in &reads {
         assert_eq!(read["status"], 200, "{read}");
-        assert_eq!(read["body"]["meta"]["freshness_error"], Value::Null, "{read}");
+        assert_eq!(
+            read["body"]["meta"]["freshness_error"],
+            Value::Null,
+            "{read}"
+        );
     }
     (repo, reads)
 }

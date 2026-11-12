@@ -36,7 +36,10 @@ fn refused_writes(refusal: &Value) -> Vec<Value> {
 /// The `freshness_error` of a read over the fault `refusal`.
 fn freshness(refusal: &Value) -> String {
     let (file, line) = (refusal["file"].as_str().unwrap(), &refusal["line"]);
-    format!("{file} line {line}: {}", refusal["message"].as_str().unwrap())
+    format!(
+        "{file} line {line}: {}",
+        refusal["message"].as_str().unwrap()
+    )
 }
 
 #[tokio::test]
@@ -161,6 +164,11 @@ async fn a_read_over_ids_on_two_lines_in_two_files_names_the_proposal_file() {
     let (repo, healthy) = ideation_repository().await;
     let lines = copy_row(&repo, "proposal_cards.jsonl", "proposal_a");
     copy_row(&repo, "assertions.jsonl", "assertion_a");
-    let fault = freshness(&located("proposal_cards.jsonl", "proposal", "proposal_a", lines));
+    let fault = freshness(&located(
+        "proposal_cards.jsonl",
+        "proposal",
+        "proposal_a",
+        lines,
+    ));
     assert_eq!(read_answers(&repo).await, at_stored(&healthy, &fault));
 }

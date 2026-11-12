@@ -240,7 +240,9 @@ fn check_and_export_name_the_two_lines_of_a_proposal_id() {
         .unwrap();
     let output = fixture.root.join("export.json");
     let export = super::support::provenance()
-        .args(["export", "--repo", repo, "--scope", "default", "--format", "json"])
+        .args([
+            "export", "--repo", repo, "--scope", "default", "--format", "json",
+        ])
         .arg("--output")
         .arg(&output)
         .output()

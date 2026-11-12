@@ -51,8 +51,18 @@ macro_rules! immutable_record {
 }
 
 immutable_record!(ProposalCard, "proposal", proposal_cards_path, proposals);
-immutable_record!(AssertionRecord, "assertion", assertion_records_path, assertions);
-immutable_record!(DispositionRecord, "disposition", dispositions_path, dispositions);
+immutable_record!(
+    AssertionRecord,
+    "assertion",
+    assertion_records_path,
+    assertions
+);
+immutable_record!(
+    DispositionRecord,
+    "disposition",
+    dispositions_path,
+    dispositions
+);
 
 /// The id and the line of each row of the file of one family.
 pub(super) struct IdLines {
