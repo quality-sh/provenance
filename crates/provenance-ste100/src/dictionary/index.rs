@@ -298,6 +298,11 @@ mod tests {
             matches!(error, DictionaryIndexError::DigestMismatch { .. }),
             "unexpected error: {error:?}"
         );
+        let expected = format!(
+            "the index file at {} does not match its recorded data digest",
+            path.display()
+        );
+        assert_eq!(error.to_string(), expected);
         std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
     }
 
@@ -340,6 +345,11 @@ mod tests {
             matches!(error, DictionaryIndexError::IdentityMismatch { .. }),
             "unexpected error: {error:?}"
         );
+        let expected = format!(
+            "the index file at {} records a different import identity",
+            other_path.display()
+        );
+        assert_eq!(error.to_string(), expected);
         std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
     }
 
@@ -371,6 +381,12 @@ mod tests {
             error,
             DictionaryIndexError::InvalidStructure { .. }
         ));
+        assert!(
+            error
+                .to_string()
+                .contains(" has invalid dictionary structure: "),
+            "{error}"
+        );
         std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
     }
 }
