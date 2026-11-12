@@ -1,6 +1,6 @@
 //! One fetched hop of the `relations` table as a `RelationSource`.
 //!
-//! sqlx is async and the traversal core is not, so the front is fetched
+//! The read database is async and the traversal core is not, so the front is fetched
 //! first: two indexed queries per owner kind and per chunk of the
 //! frontier, out rows over `idx_relations_out` and in rows over
 //! `idx_relations_in`. `related_nodes` and `flow_neighbors` then run
@@ -11,9 +11,9 @@
 use super::BIND_CHUNK;
 use crate::cache::serde_name;
 use crate::operations::reader::Relations;
+use crate::read_database::{SqlColumns, SqlValue};
 use provenance_core::model::relations::{declaration_for, RelationEndpoint, RelationSource, LINKS};
 use provenance_core::{NodeType, StableId};
-use sqlx::Row;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// A record key the maps can order: node rank, then id.
@@ -90,17 +90,12 @@ impl SqlFront {
                      WHERE scope_id = ? AND target_type = ? AND target_id IN ({marks}) \
                      ORDER BY target_id, owner_type, owner_id, relation"
                 );
+                let values: Vec<SqlValue> = [snapshot.scope_value(), word.as_str().into()]
+                    .into_iter()
+                    .chain(chunk.iter().map(|id| SqlValue::from(*id)))
+                    .collect();
                 for (sql, outward) in [(out, true), (into, false)] {
-                    let mut query = sqlx::query(sqlx::AssertSqlSafe(sql))
-                        .bind(snapshot.scope().as_str())
-                        .bind(word.as_str());
-                    for id in chunk {
-                        query = query.bind(*id);
-                    }
-                    let rows = {
-                        let mut tx = snapshot.connection().await;
-                        query.fetch_all(&mut **tx).await?
-                    };
+                    let rows = snapshot.fetch(&sql, &values).await?;
                     for row in &rows {
                         front.take(node_type, row, outward)?;
                     }
@@ -112,18 +107,13 @@ impl SqlFront {
 
     /// Files one fetched row: an out row under its owner, an in row under
     /// its target, the other end as the endpoint.
-    fn take(
-        &mut self,
-        kind: NodeType,
-        row: &sqlx::sqlite::SqliteRow,
-        outward: bool,
-    ) -> anyhow::Result<()> {
-        let anchor: String = row.try_get(0)?;
-        let name: String = row.try_get(1)?;
-        let other_type = NodeType::parse(&row.try_get::<String, _>(2)?)?;
-        let other_id = StableId::new(row.try_get::<String, _>(3)?)?;
+    fn take(&mut self, kind: NodeType, row: &[SqlValue], outward: bool) -> anyhow::Result<()> {
+        let anchor = row.text(0)?;
+        let name = row.text(1)?;
+        let other_type = NodeType::parse(row.text(2)?)?;
+        let other_id = StableId::new(row.text(3)?)?;
         let owner = if outward { kind } else { other_type };
-        let relation = intern(owner, &name)?;
+        let relation = intern(owner, name)?;
         let endpoint = RelationEndpoint {
             node_type: other_type,
             id: other_id,
@@ -133,7 +123,7 @@ impl SqlFront {
         } else {
             &mut self.incoming
         };
-        rows.entry(key(kind, &anchor))
+        rows.entry(key(kind, anchor))
             .or_default()
             .push((relation, endpoint));
         Ok(())

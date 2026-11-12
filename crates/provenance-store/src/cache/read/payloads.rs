@@ -1,12 +1,12 @@
 //! Typed canonical payload reads for collaboration projection tables.
 
-use super::page::{id_page_sql, RESOURCE_RECORD_BYTES};
+use super::page::{id_page_sql, page_ids, RESOURCE_RECORD_BYTES};
 use crate::operations::reader::ReadSnapshot;
+use crate::read_database::{SqlColumns, SqlValue};
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::{AssertionRecord, DispositionRecord, StableId};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use sqlx::Row;
 use std::marker::PhantomData;
 
 mod sealed {
@@ -82,25 +82,24 @@ impl<T: PayloadRow> Payloads<'_, T> {
              FROM {} WHERE scope_id = ? AND id = ?{filter}",
             crate::cache::quoted(T::TABLE)
         );
-        let mut query = sqlx::query(sqlx::AssertSqlSafe(sql))
-            .bind(i64::try_from(RESOURCE_RECORD_BYTES)?)
-            .bind(self.snapshot.scope().as_str())
-            .bind(id);
+        let mut values = vec![
+            SqlValue::Integer(i64::try_from(RESOURCE_RECORD_BYTES)?),
+            self.snapshot.scope_value(),
+            id.into(),
+        ];
         if let Some(owner) = owner {
-            query = query.bind(owner.as_str());
+            values.push(owner.as_str().into());
         }
-        let row = {
-            let mut tx = self.snapshot.connection().await;
-            query.fetch_optional(&mut **tx).await?
+        let rows = self.snapshot.fetch(&sql, &values).await?;
+        let Some(row) = rows.first() else {
+            return Ok(None);
         };
-        let Some(row) = row else { return Ok(None) };
-        let size: i64 = row.try_get(0)?;
-        if size > i64::try_from(RESOURCE_RECORD_BYTES)? {
+        if row.integer(0)? > i64::try_from(RESOURCE_RECORD_BYTES)? {
             return Err(ReadFailure::PageRecordTooLarge.into());
         }
-        let payload: Option<String> = row.try_get(1)?;
         Ok(Some(serde_json::from_str(
-            payload.as_deref().ok_or(ReadFailure::PageRecordTooLarge)?,
+            row.optional_text(1)?
+                .ok_or(ReadFailure::PageRecordTooLarge)?,
         )?))
     }
 
@@ -112,23 +111,12 @@ impl<T: PayloadRow> Payloads<'_, T> {
     ) -> anyhow::Result<Vec<String>> {
         let filter = owner.map_or("", |_| " AND proposal_id = ?");
         let sql = id_page_sql(T::TABLE, filter);
-        let mut query = sqlx::query(sqlx::AssertSqlSafe(sql))
-            .bind(self.snapshot.scope().as_str())
-            .bind(after);
+        let mut values = vec![self.snapshot.scope_value(), after.into()];
         if let Some(owner) = owner {
-            query = query.bind(owner.as_str());
+            values.push(owner.as_str().into());
         }
-        query = query.bind(i64::try_from(limit)?);
-        let rows = {
-            let mut tx = self.snapshot.connection().await;
-            query.fetch_all(&mut **tx).await?
-        };
-        rows.iter()
-            .map(|row| {
-                row.try_get::<Option<String>, _>("id")?
-                    .ok_or_else(|| ReadFailure::PageRecordTooLarge.into())
-            })
-            .collect()
+        values.push(SqlValue::Integer(i64::try_from(limit)?));
+        page_ids(&self.snapshot.fetch(&sql, &values).await?)
     }
 }
 

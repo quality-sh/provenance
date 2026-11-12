@@ -94,6 +94,20 @@ impl ReadSnapshot {
         self.tx.lock().await
     }
 
+    /// Runs one statement of the read and gives its rows.
+    pub(crate) async fn fetch(
+        &self,
+        sql: &str,
+        values: &[SqlValue],
+    ) -> anyhow::Result<Vec<crate::read_database::SqlRow>> {
+        self.transaction().await.fetch(sql, values).await
+    }
+
+    /// The scope as the value that a statement binds.
+    pub(crate) fn scope_value(&self) -> SqlValue {
+        SqlValue::from(self.scope.as_str())
+    }
+
     /// The `SQLx` transaction of the file adapter, for the span of one
     /// statement of a reader that still runs `SQLx` directly.
     pub(crate) async fn connection(&self) -> FileConnection<'_> {
