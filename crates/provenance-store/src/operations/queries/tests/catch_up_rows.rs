@@ -40,27 +40,17 @@ async fn pass(store: &TestStore, label: &str, lines: &mut Vec<String>) {
     .await
     .unwrap();
     for table in tables {
-        let counted = sqlx::query(sqlx::AssertSqlSafe(format!(
+        let row = sqlx::query(sqlx::AssertSqlSafe(format!(
             "SELECT count(*), coalesce(max(rowid), 0) FROM \"{table}\""
         )))
         .fetch_one(cache.pool())
-        .await;
-        let text = match counted {
-            Ok(row) => format!(
-                "count {} last rowid {}",
-                row.get::<i64, _>(0),
-                row.get::<i64, _>(1)
-            ),
-            Err(_) => {
-                let count: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
-                    "SELECT count(*) FROM \"{table}\""
-                )))
-                .fetch_one(cache.pool())
-                .await
-                .unwrap();
-                format!("count {count}")
-            }
-        };
+        .await
+        .unwrap();
+        let text = format!(
+            "count {} last rowid {}",
+            row.get::<i64, _>(0),
+            row.get::<i64, _>(1)
+        );
         lines.push(format!("  {table}: {text}"));
     }
     cache.close().await.unwrap();

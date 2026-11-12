@@ -165,7 +165,7 @@ fn kinds() -> Vec<NodeType> {
 /// discussion ids in the order the pages gave them.
 async fn pages(repository: &Repository, limit: usize) -> (Vec<serde_json::Value>, Vec<String>) {
     let (mut pages, mut ids, mut cursor) = (Vec::new(), Vec::new(), None);
-    for _ in 0..DISCUSSIONS.len() + 1 {
+    for _ in 0..=DISCUSSIONS.len() {
         let answer = read_discussion_list(
             repository,
             policy(),
