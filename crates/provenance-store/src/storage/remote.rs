@@ -346,40 +346,4 @@ fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_base_gives_its_host_port_and_path_prefix() {
-        let address = Address::parse("http://objects.internal/kernel/").unwrap();
-        assert_eq!(address.connect, "objects.internal:80");
-        assert_eq!(address.host, "objects.internal");
-        assert_eq!(address.prefix, "/kernel");
-        let address = Address::parse("http://127.0.0.1:8080").unwrap();
-        assert_eq!(address.connect, "127.0.0.1:8080");
-        assert_eq!(address.prefix, "");
-        for base in ["https://a", "http://", "http://u@a", "a:1"] {
-            assert!(Address::parse(base).is_err(), "{base}");
-        }
-    }
-
-    #[test]
-    fn the_storage_refuses_a_bad_project_or_session_name() {
-        assert!(RemoteStateStorage::new("http://a", "a/b", "main").is_err());
-        assert!(RemoteStateStorage::new("http://a", "a", "").is_err());
-        let storage = RemoteStateStorage::new("http://a/base", "p", "main").unwrap();
-        assert_eq!(storage.session, "/base/projects/p/sessions/main");
-    }
-
-    #[test]
-    fn an_answer_gives_its_status_and_body() {
-        let answer = parse_answer(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}").unwrap();
-        assert_eq!((answer.status, answer.body.as_slice()), (200, &b"{}"[..]));
-        let chunked =
-            b"HTTP/1.1 404 Not Found\r\ntransfer-encoding: chunked\r\n\r\n2\r\n{}\r\n0\r\n\r\n";
-        let answer = parse_answer(chunked).unwrap();
-        assert_eq!((answer.status, answer.body.as_slice()), (404, &b"{}"[..]));
-        assert!(parse_answer(b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\n{}").is_err());
-        assert!(parse_answer(b"HTTP/1.1 200 OK\r\n").is_err());
-    }
-}
+mod tests;

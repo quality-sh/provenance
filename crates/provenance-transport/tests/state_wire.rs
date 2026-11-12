@@ -11,7 +11,7 @@ use provenance_store::storage::contract::{
     empty_state_reads_as_an_empty_view, publish_lands_puts_and_deletes,
     publish_on_a_base_with_changed_bytes_is_refused, publish_on_a_moved_base_is_refused,
     publish_on_the_current_base_lands, publish_refuses_a_put_and_delete_of_one_key,
-    revision_follows_every_key_and_byte, view_returns_every_key_with_its_bytes,
+    revision_follows_every_key_and_byte, view_returns_every_key_with_its_bytes, Harness as _,
 };
 use provenance_store::storage::remote::RemoteStateStorage;
 use provenance_store::storage::{
@@ -234,4 +234,25 @@ fn replay(agent: &ureq::Agent, url: &str, exchange: &Value, at: &str) {
         serde_json::from_str(&text).unwrap()
     };
     assert_eq!(body, expected["body"], "{at}");
+}
+
+/// An implementation aid with no Rule binding: no Rule gives a size of
+/// state. This repository's state is about 3 MB, so a seed, a read and a
+/// publish of a state over 2 MB go through the object whole.
+#[test]
+fn a_state_over_two_megabytes_is_seeded_read_and_published() {
+    let fixture = Fixture::spawn();
+    let mut project = fixture.project("large");
+    let big: Vec<u8> = (0..5_000_000_u32).map(|n| u8::try_from(n % 251).unwrap()).collect();
+    project.seed(&[("scopes/a/rules/seeded.jsonl", &big)]);
+    let storage = project.storage();
+    let view = storage.read_view().unwrap();
+    assert_eq!(view.entries()[&key("scopes/a/rules/seeded.jsonl")], big);
+    let writes = WriteSet::new(Atomicity::WholeSet)
+        .on_base(Arc::new(view))
+        .put(key("scopes/a/rules/published.jsonl"), big.clone());
+    storage.publish(writes).unwrap();
+    let view = storage.read_view().unwrap();
+    assert_eq!(view.entries().len(), 2);
+    assert_eq!(view.entries()[&key("scopes/a/rules/published.jsonl")], big);
 }
