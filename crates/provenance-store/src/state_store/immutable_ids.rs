@@ -1,7 +1,8 @@
 //! The located refusal of an immutable ideation id on two lines of its file.
 //!
 //! A hand edit or a branch merge can put one id on two lines of the file of
-//! a proposal, an assertion or a disposition. Each aggregate check of the
+//! a contribution, a synthesis packet, a proposal, an assertion or a
+//! disposition. Each aggregate check of the
 //! ideation records in the store goes through [`IdeationRecords::validate`],
 //! which refuses that state with `invalid_state_file` at the second line.
 //! The ideation scope check gives the same refusal. The message names the
@@ -32,8 +33,7 @@ pub(super) struct IdeationRecords<'a> {
 impl IdeationRecords<'_> {
     /// [`provenance_core::validate_ideation_aggregate`] over these records,
     /// with the shipped legacy policy. When the aggregate check finds a
-    /// duplicate proposal, assertion or disposition id, this reads the file
-    /// of that family again with its lines. When that read shows the id on
+    /// duplicate id, this reads the file of that family again with its lines. When that read shows the id on
     /// two lines, the refusal is the located refusal. The file can change
     /// between the read of the records and the second read. Then the second
     /// read can fail or show the id on one line, and the refusal is the
@@ -63,6 +63,8 @@ impl IdeationRecords<'_> {
 /// The file of the ideation family `kind` in `scope`.
 fn family_path(store: &StateStore, scope: &ScopeId, kind: &str) -> Option<Utf8PathBuf> {
     match kind {
+        "contribution" => Some(shards::contributions_path(&store.layout, scope)),
+        "synthesis packet" => Some(shards::synthesis_packets_path(&store.layout, scope)),
         "proposal" => Some(shards::proposal_cards_path(&store.layout, scope)),
         "assertion" => Some(shards::assertion_records_path(&store.layout, scope)),
         "disposition" => Some(shards::dispositions_path(&store.layout, scope)),

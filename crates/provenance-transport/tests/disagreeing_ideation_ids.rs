@@ -1,4 +1,5 @@
-//! A proposal, assertion or disposition id is immutable. When a hand edit
+//! A contribution, synthesis packet, proposal, assertion or disposition id
+//! is immutable. When a hand edit
 //! or a branch merge puts one id on two lines of its file, each ideation
 //! write refuses with `invalid_state_file` at the second line, and the
 //! message names the two lines. Each read answers at the stored serial, and
@@ -66,6 +67,34 @@ async fn a_disposition_id_on_two_lines_refuses_each_write_at_the_second_line() {
     let (repo, _) = ideation_repository().await;
     let lines = copy_row(&repo, "dispositions.jsonl", "disposition_a");
     let refusal = located("dispositions.jsonl", "disposition", "disposition_a", lines);
+    assert_eq!(write_answers(&repo).await, refused_writes(&refusal));
+}
+
+#[tokio::test]
+#[verifies("rule_inconsistent_records_refusal_names_records", examples)]
+async fn a_contribution_id_on_two_lines_refuses_each_write_at_the_second_line() {
+    let (repo, _) = ideation_repository().await;
+    let lines = copy_row(&repo, "contributions.jsonl", "contribution_evidence");
+    let refusal = located(
+        "contributions.jsonl",
+        "contribution",
+        "contribution_evidence",
+        lines,
+    );
+    assert_eq!(write_answers(&repo).await, refused_writes(&refusal));
+}
+
+#[tokio::test]
+#[verifies("rule_inconsistent_records_refusal_names_records", examples)]
+async fn a_synthesis_packet_id_on_two_lines_refuses_each_write_at_the_second_line() {
+    let (repo, _) = ideation_repository().await;
+    let lines = copy_row(&repo, "synthesis_packets.jsonl", "synthesis_evidence");
+    let refusal = located(
+        "synthesis_packets.jsonl",
+        "synthesis packet",
+        "synthesis_evidence",
+        lines,
+    );
     assert_eq!(write_answers(&repo).await, refused_writes(&refusal));
 }
 
@@ -171,4 +200,28 @@ async fn a_read_over_ids_on_two_lines_in_two_files_names_the_proposal_file() {
         lines,
     ));
     assert_eq!(read_answers(&repo).await, at_stored(&healthy, &fault));
+}
+
+#[tokio::test]
+#[verifies("rule_failed_freshness_answers_at_stored_serial", examples)]
+async fn a_read_over_a_contribution_id_on_two_lines_answers_at_the_stored_serial() {
+    let (answers, expected) = reads_over_a_copied_row(
+        "contributions.jsonl",
+        "contribution",
+        "contribution_evidence",
+    )
+    .await;
+    assert_eq!(answers, expected);
+}
+
+#[tokio::test]
+#[verifies("rule_failed_freshness_answers_at_stored_serial", examples)]
+async fn a_read_over_a_synthesis_packet_id_on_two_lines_answers_at_the_stored_serial() {
+    let (answers, expected) = reads_over_a_copied_row(
+        "synthesis_packets.jsonl",
+        "synthesis packet",
+        "synthesis_evidence",
+    )
+    .await;
+    assert_eq!(answers, expected);
 }
