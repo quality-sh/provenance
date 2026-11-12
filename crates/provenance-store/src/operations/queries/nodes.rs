@@ -154,8 +154,8 @@ pub(super) async fn counting(
     Ok(found)
 }
 
-/// Bounded candidate IDs for canonical substring search. With a needle, each
-/// candidate holds the needle in its joined search text.
+/// Bounded candidate IDs for canonical substring search. With a needle in
+/// lowercase, each candidate holds the needle in its joined search text.
 pub(super) async fn search_ids(
     snapshot: &ReadSnapshot,
     node_type: NodeType,
@@ -167,7 +167,7 @@ pub(super) async fn search_ids(
     for_kind!(node_type, K => {
         snapshot
             .table::<K>()
-            .text_search_ids(after, limit, exclude_terminal, needle)
+            .page_ids(after, limit, exclude_terminal, needle)
             .await
     })
 }

@@ -117,7 +117,7 @@ async fn projection_page<K: ProjectionRow>(
     ctx.snapshot().bound_page_work().await?;
     let table = ctx.snapshot().table::<K>();
     let ids = table
-        .search_ids(&position.id, request.limit + 1, request.exclude_terminal)
+        .page_ids(&position.id, request.limit + 1, request.exclude_terminal, None)
         .await?;
     let table = &table;
     let (items, position, has_more) = collect_page(ids, request.limit, position, |id| async move {

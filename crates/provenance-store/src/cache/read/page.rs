@@ -137,20 +137,10 @@ impl<K: ProjectionRow> Table<'_, K> {
     }
 
     /// Reads at most `limit` candidate IDs strictly after the previous key.
-    pub(crate) async fn search_ids(
-        &self,
-        after: &str,
-        limit: usize,
-        exclude_terminal: bool,
-    ) -> anyhow::Result<Vec<String>> {
-        self.text_search_ids(after, limit, exclude_terminal, None)
-            .await
-    }
-
-    /// Reads at most `limit` candidate IDs strictly after the previous key.
-    /// With a needle, a candidate holds the lowercased needle in its search
-    /// text. The search text joins all pieces, so the caller checks each piece.
-    pub(crate) async fn text_search_ids(
+    /// With a needle, a candidate holds the needle in its search text. The
+    /// caller gives the needle in lowercase. The search text joins all pieces,
+    /// so the caller checks each piece.
+    pub(crate) async fn page_ids(
         &self,
         after: &str,
         limit: usize,
@@ -170,7 +160,7 @@ impl<K: ProjectionRow> Table<'_, K> {
             .bind(self.snapshot().scope().as_str())
             .bind(after);
         if let Some(needle) = needle {
-            query = query.bind(needle.to_lowercase());
+            query = query.bind(needle);
         }
         query = query.bind(i64::try_from(limit)?);
         let mut tx = self.snapshot().connection().await;
