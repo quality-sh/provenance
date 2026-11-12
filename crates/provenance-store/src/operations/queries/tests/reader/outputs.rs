@@ -215,7 +215,7 @@ async fn refused_pass(lines: &mut Vec<String>) {
 }
 
 fn compare(lines: &[String]) {
-    let actual: String = lines.iter().map(|line| format!("{line}\n")).collect();
+    let actual = lines.join("\n") + "\n";
     if actual != EXPECTED {
         println!("=== FRESHNESS OUTPUTS\n{actual}=== END FRESHNESS OUTPUTS");
         for (index, (left, right)) in actual.lines().zip(EXPECTED.lines()).enumerate() {

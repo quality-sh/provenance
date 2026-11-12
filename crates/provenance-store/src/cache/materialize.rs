@@ -21,7 +21,7 @@ pub use record_rows::SEARCH_TEXT;
 pub use units::unit_stored_digest;
 pub use units::{scope_ids, unit_digest, units_for, Unit, UnitHashError};
 #[cfg(feature = "host")]
-pub(crate) use validation::stored_version as stored_validation_version;
+pub use validation::stored_version as stored_validation_version;
 
 use super::MaterializeReport;
 use crate::current_schema::{self, Compatibility};
