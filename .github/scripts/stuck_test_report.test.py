@@ -113,7 +113,7 @@ class StuckTestReportTests(unittest.TestCase):
         self.script("start", "--limit", str(LIMIT), "--watch", "provenance", "--interval", str(INTERVAL))
         self.assertEqual(tree.wait(timeout=30), -signal.SIGKILL)
         wait_for(lambda: all(gone(pid) for pid in (holder, waiter, provenance)), 10, "the end of the tree")
-        time.sleep(5 * INTERVAL)
+        # The job stops the watcher as soon as the test step ends.
         report = self.script("finish")
 
         self.assertEqual(report.count("::group::Stuck test: stuck_case waits_for_the_lock"), 1, report)
@@ -122,8 +122,10 @@ class StuckTestReportTests(unittest.TestCase):
         self.assertRegex(
             report,
             r"::error title=Stuck test stuck_case waits_for_the_lock::The test stuck_case waits_for_the_lock "
-            rf"ran \d+ s, past the limit of {LIMIT} s\. .*The watcher killed the tree of 4 processes\.",
+            rf"ran \d+ s, past the limit of {LIMIT} s\. .*The watcher stops its process tree\.\n"
+            r"The watcher killed the tree of 4 processes\.\n",
         )
+        self.assertNotIn("No test ran past the limit.", report)
         self.assertIn("::endgroup::", report)
         for pid, parent, program in (
             (tree.pid, os.getpid(), self.binary),

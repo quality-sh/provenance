@@ -43,6 +43,9 @@ CLOCK_TICKS = os.sysconf("SC_CLK_TCK") if hasattr(os, "sysconf") else 100
 BACKTRACE_LIMIT = 120
 INSTALL_LIMIT = 240
 LINES_PER_BACKTRACE = 400
+# How long `finish` waits for a report in progress: the install and one
+# backtrace of each process of a small tree.
+FINISH_LIMIT = 600
 
 # The x86_64 numbers of the system calls in which a test process can wait.
 SYSTEM_CALLS = {
@@ -169,13 +172,18 @@ class Watcher:
                 self.report(processes, top, now)
 
     def run(self, interval):
+        """Checks at each interval until SIGTERM. A report in progress completes first."""
+        stopping = []
+        signal.signal(signal.SIGTERM, lambda *_: stopping.append(True))
         self.write(f"Watching the processes below {self.root} and {sorted(self.names)} with a limit of {self.limit:g} s.")
-        while True:
+        while not stopping:
             try:
                 self.check()
             except Exception as error:  # A failed check must not stop the watch.
                 self.write(f"The check failed: {error!r}")
-            time.sleep(interval)
+            deadline = time.monotonic() + interval
+            while not stopping and time.monotonic() < deadline:
+                time.sleep(min(0.2, interval))
 
     def write(self, text):
         self.out.write(text + "\n")
@@ -196,14 +204,16 @@ class Watcher:
         self.write_locks(files, processes)
         self.write_backtraces([pid for pid, _ in members])
         self.write("::endgroup::")
-        stopped = stop(pid for pid, _ in tree(snapshot(), top.pid))
+        # The error line comes before the stop: when the tree ends, the test
+        # step ends, and the job can stop the watcher soon after.
         self.write(
             f"::error title={escape('Stuck test ' + label, title=True)}::"
             + escape(
                 f"The test {label} ran {age:.0f} s, past the limit of {self.limit:g} s. "
-                f"The log group 'Stuck test: {label}' gives the report. {stopped}"
+                f"The log group 'Stuck test: {label}' gives the report. The watcher stops its process tree."
             )
         )
+        self.write(stop(pid for pid, _ in tree(snapshot(), top.pid)))
 
     def describe(self, process, depth, now, files):
         indent = "  " * depth
@@ -298,10 +308,22 @@ class Watcher:
                 lines = (result.stdout + result.stderr).splitlines()
             except subprocess.TimeoutExpired:
                 lines = [f"({tool} did not end in {BACKTRACE_LIMIT} s)"]
-            for line in lines[:LINES_PER_BACKTRACE]:
+            for line in demangle(lines[:LINES_PER_BACKTRACE]):
                 self.write(f"  {line}")
             if len(lines) > LINES_PER_BACKTRACE:
                 self.write(f"  ({len(lines) - LINES_PER_BACKTRACE} more lines are not shown)")
+
+
+def demangle(lines):
+    """Rust symbol names in a readable form, when binutils gives c++filt."""
+    if not lines or not shutil.which("c++filt"):
+        return lines
+    try:
+        result = subprocess.run(["c++filt"], input="\n".join(lines), capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return lines
+    demangled = result.stdout.splitlines()
+    return demangled if result.returncode == 0 and len(demangled) == len(lines) else lines
 
 
 def test_label(process):
@@ -428,6 +450,11 @@ def start(arguments):
     return 0
 
 
+def running(pid):
+    stat = read(f"/proc/{pid}/stat")
+    return not stat.startswith("(") and stat.rsplit(") ", 1)[-1][:1] != "Z"
+
+
 def finish(_arguments):
     log, pid_file = state_files()
     if pid_file.exists():
@@ -435,23 +462,26 @@ def finish(_arguments):
         try:
             os.kill(pid, signal.SIGTERM)
         except PermissionError:
-            subprocess.run(["sudo", "-n", "kill", str(pid)], check=False)
+            subprocess.run(["sudo", "-n", "kill", "-TERM", str(pid)], check=False)
         except ProcessLookupError:
             pass
+        # The watcher completes a report in progress before it ends.
+        deadline = time.monotonic() + FINISH_LIMIT
+        while time.monotonic() < deadline and running(pid):
+            time.sleep(0.2)
         pid_file.unlink()
     if not log.exists():
         print("The stuck test report did not run.")
         return 0
     text = log.read_text(errors="replace")
     sys.stdout.write(text)
-    if "::error " not in text:
+    if "::error" not in text:
         print("No test ran past the limit.")
     return 0
 
 
 def watch(arguments):
     watcher = Watcher(arguments.limit, arguments.watch, arguments.root, arguments.uid, arguments.install_tool, sys.stdout)
-    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     watcher.run(arguments.interval)
 
 
