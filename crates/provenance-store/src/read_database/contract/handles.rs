@@ -1,8 +1,9 @@
-//! The snapshot handles over the projection tables. The cases run each
-//! handle in one read of the port, so a store that passes them gives the
-//! handles the rows that the file gives. They do not cover the work bound
-//! of a page (see [`super::limits`]) or the discussion reads that still
-//! run `SQLx` on the file.
+//! The snapshot handles over the projection tables.
+//!
+//! The cases run each handle in one read of the port, so a store that
+//! passes them gives the handles the rows that the file gives. They do not
+//! cover the work bound of a page (see [`super::limits`]) or the
+//! discussion reads that still run `SQLx` on the file.
 
 use super::{statement, write, Harness, Statement};
 use crate::operations::reader::{Position, ReadSnapshot};

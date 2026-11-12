@@ -106,12 +106,13 @@ pub trait SqlTransaction: Any + Send {
     fn commit(self: Box<Self>) -> SqlFuture<'static, ()>;
 
     /// Bounds the work of the statements that follow in this transaction
-    /// to about `steps` steps of the store's engine. A statement that
-    /// passes the bound stops, and its error is [`OverBudget`]. The file
-    /// counts the steps of the `SQLite` engine. A store that cannot stop a
-    /// statement can meet the bound in another way, such as the limit
-    /// that its platform puts on the work of one request, and gives
-    /// [`OverBudget`] when it can see that stop.
+    /// to about `steps` steps of the store's engine.
+    ///
+    /// A statement that passes the bound stops, and its error is
+    /// [`OverBudget`]. The file counts the steps of the `SQLite` engine. A
+    /// store that cannot stop a statement can meet the bound in another
+    /// way, such as the limit that its platform puts on the work of one
+    /// request, and gives [`OverBudget`] when it can see that stop.
     fn bound_work(&mut self, steps: u64) -> SqlFuture<'_, ()>;
 
     /// The most values of one list that a reader binds in one statement;
