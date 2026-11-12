@@ -121,3 +121,31 @@ fn a_stop_at_each_file_move_of_a_second_init_leaves_the_old_manifest() {
     }
     assert_eq!(stops, MOVES, "the number of file moves of the second init");
 }
+
+/// A first init in a new directory writes the manifest last, so a stop after
+/// the project files and before the manifest leaves the project files and no
+/// `.provenance` folder. A first init moves no file away, so the test makes
+/// that state: it removes `.provenance` after a first init with no dictionary
+/// import. The next command says that the graph is not initialized, and the
+/// next init writes the manifest and keeps the project files.
+#[test]
+fn a_first_init_that_stops_before_the_manifest_leaves_a_repository_that_init_completes() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = Utf8PathBuf::from_path_buf(directory.path().join("repo")).unwrap();
+    std::fs::create_dir_all(&repo).unwrap();
+    init_through_the_port(init_input(&repo, &["reviewer"]), || {}).unwrap();
+    let agents = std::fs::read(repo.join("AGENTS.md")).unwrap();
+    let gitignore = std::fs::read(repo.join(".gitignore")).unwrap();
+    std::fs::remove_dir_all(repo.join(".provenance")).unwrap();
+
+    let error = reviewers(&repo).expect_err("the repository opened with no manifest");
+    assert_eq!(
+        format!("{error:#}"),
+        "Provenance graph is not initialized; run `provenance init`"
+    );
+    init_through_the_port(init_input(&repo, &["reviewer"]), || {}).unwrap();
+
+    assert_eq!(reviewers(&repo).unwrap(), ["reviewer"]);
+    assert_eq!(std::fs::read(repo.join("AGENTS.md")).unwrap(), agents);
+    assert_eq!(std::fs::read(repo.join(".gitignore")).unwrap(), gitignore);
+}
