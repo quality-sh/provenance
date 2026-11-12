@@ -52,8 +52,13 @@ impl Cli {
         data: Option<&Value>,
         headers: &[(&str, &str)],
     ) -> (u16, Value) {
-        let mut command =
-            api_process::command(binary(), &self.repo, (method, path), headers, data.is_some());
+        let mut command = api_process::command(
+            binary(),
+            &self.repo,
+            (method, path),
+            headers,
+            data.is_some(),
+        );
         let kind = if method == "GET" { "read" } else { "write" };
         let what = format!("{}, {kind} {method} {path}", self.label);
         let input = data.map(|data| data.to_string().into_bytes());
