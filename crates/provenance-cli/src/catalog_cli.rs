@@ -284,8 +284,14 @@ pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) {
     }
 }
 
+/// Exits with a usage refusal: exit code 2 and the text of the error, which ends with a
+/// newline.
 pub fn usage_error(error: impl std::fmt::Display) -> ! {
-    clap::Error::raw(clap::error::ErrorKind::InvalidValue, error.to_string()).exit()
+    let mut text = error.to_string();
+    if !text.ends_with('\n') {
+        text.push('\n');
+    }
+    clap::Error::raw(clap::error::ErrorKind::InvalidValue, text).exit()
 }
 
 /// Exits with the CLI text of an action that cannot be selected. The CLI names the

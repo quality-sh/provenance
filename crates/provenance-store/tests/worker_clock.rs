@@ -141,6 +141,7 @@ fn record_stamps_and_message_ids_come_from_the_identity() {
         identity,
         Arc::new(MemoryStateStorage::new(initial_state().into_entries())),
         Arc::new(MemorySectionLock::default()),
+        None,
     )
     .unwrap();
     let store = repository.store();

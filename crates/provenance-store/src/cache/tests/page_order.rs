@@ -171,10 +171,15 @@ async fn id_pages_return_every_id_in_order() {
 
     catch_up_state(&open(&layout)).await.unwrap();
     let cache = open_cache(&layout).await.unwrap();
-    let snapshot = ReadSnapshot::open(cache.pool(), &scope)
-        .await
-        .unwrap()
-        .expect("a revision");
+    let snapshot = ReadSnapshot::open(
+        crate::read_database::file::begin(cache.pool())
+            .await
+            .unwrap(),
+        &scope,
+    )
+    .await
+    .unwrap()
+    .expect("a revision");
     let mut walked: Vec<String> = Vec::new();
     loop {
         let after = walked.last().cloned().unwrap_or_default();
@@ -232,10 +237,15 @@ async fn the_window_that_reaches_an_over_long_id_refuses() {
         .execute(cache.pool())
         .await
         .unwrap();
-    let snapshot = ReadSnapshot::open(cache.pool(), &scope)
-        .await
-        .unwrap()
-        .expect("a revision");
+    let snapshot = ReadSnapshot::open(
+        crate::read_database::file::begin(cache.pool())
+            .await
+            .unwrap(),
+        &scope,
+    )
+    .await
+    .unwrap()
+    .expect("a revision");
     let table = snapshot.table::<Rule>();
     let limit = 2;
     let window = limit + 1;
