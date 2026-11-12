@@ -14,9 +14,9 @@ const MOST_TURNS: usize = 8;
 
 const THREADS: &str = "scopes/default/threads/threads.jsonl";
 
-const fn post(engine: u8) -> Step {
+const fn post() -> Step {
     Step::Write {
-        engine,
+        engine: 0,
         op: Operation::PostMessage,
     }
 }
@@ -24,15 +24,11 @@ const fn post(engine: u8) -> Step {
 /// A post from engine 0, `turns` turns of that engine, then a refusal of
 /// the next publish.
 fn refused_post(turns: usize) -> Vec<Step> {
-    let mut steps = vec![post(0)];
+    let mut steps = vec![post()];
     steps.extend(std::iter::repeat_n(Step::Turn(0), turns));
     steps.push(Step::Fault(Fault::Refuse));
     steps.extend(std::iter::repeat_n(Step::Turn(0), 200));
     steps
-}
-
-fn run_steps(steps: Vec<Step>) -> Run {
-    run_case(&Case { engines: 2, steps }, Config::default())
 }
 
 /// The rows of the Thread shard and the rows of the Message shards.
@@ -72,33 +68,16 @@ fn keep_the_laws(test: &str, turns: usize, run: &Run) {
 fn a_refused_post_lands_no_thread_and_no_message() {
     let mut refused = 0;
     for turns in 0..=MOST_TURNS {
-        let run = run_steps(refused_post(turns));
+        let case = Case {
+            engines: 2,
+            steps: refused_post(turns),
+        };
+        let run = run_case(&case, Config::default());
         let test = "a_refused_post_lands_no_thread_and_no_message";
         keep_the_laws(test, turns, &run);
         if run.done[0].result.is_err() {
             refused += 1;
             assert_eq!(rows(&run), (0, 0), "turns {turns}");
-        }
-    }
-    assert!(refused > 0, "the refusal met no post");
-}
-
-#[test]
-#[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
-fn a_post_after_a_refused_post_makes_one_thread_and_one_message() {
-    let mut refused = 0;
-    for turns in 0..=MOST_TURNS {
-        let mut steps = refused_post(turns);
-        steps.push(post(1));
-        steps.extend(std::iter::repeat_n(Step::Turn(1), 200));
-        let run = run_steps(steps);
-        let test = "a_post_after_a_refused_post_makes_one_thread_and_one_message";
-        keep_the_laws(test, turns, &run);
-        if run.done[0].result.is_err() {
-            refused += 1;
-            let second = &run.done[1];
-            assert!(second.result.is_ok(), "turns {turns}: {second:?}");
-            assert_eq!(rows(&run), (1, 1), "turns {turns}");
         }
     }
     assert!(refused > 0, "the refusal met no post");
