@@ -16,10 +16,12 @@ mod support {
     pub mod transcript;
 }
 
+#[path = "support/bounded_process.rs"]
+mod bounded_process;
+
 use provenance_mcp::Client;
 use provenance_transport::fixture::records::Repository;
 use serde_json::{json, Map, Value};
-use std::io::Write as _;
 use std::process::Stdio;
 use support::api_process;
 use support::catch_up_steps::{write, Answer, Surface, STEPS};
@@ -32,8 +34,15 @@ fn binary() -> &'static std::path::Path {
     assert_cmd::cargo::cargo_bin!("provenance")
 }
 
-/// The `provenance api` command, one process for each call.
-struct Cli(String);
+/// The `provenance api` command, one process for each call. Each call has
+/// the time limit of `bounded_process`. A call that does not end in the
+/// limit fails the test with the step, the side, the read or the write, and
+/// the command.
+struct Cli {
+    repo: String,
+    /// The step and the side of the test that make the calls.
+    label: String,
+}
 
 impl Cli {
     fn run(
@@ -44,19 +53,11 @@ impl Cli {
         headers: &[(&str, &str)],
     ) -> (u16, Value) {
         let mut command =
-            api_process::command(binary(), &self.0, (method, path), headers, data.is_some());
-        let mut child = command
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .unwrap();
-        let mut stdin = child.stdin.take().unwrap();
-        if let Some(data) = data {
-            stdin.write_all(data.to_string().as_bytes()).unwrap();
-        }
-        drop(stdin);
-        api_process::answer(&child.wait_with_output().unwrap())
+            api_process::command(binary(), &self.repo, (method, path), headers, data.is_some());
+        let kind = if method == "GET" { "read" } else { "write" };
+        let what = format!("{}, {kind} {method} {path}", self.label);
+        let input = data.map(|data| data.to_string().into_bytes());
+        api_process::answer(&bounded_process::output_named(&mut command, input, &what))
     }
 }
 
@@ -153,8 +154,13 @@ fn state(repo: &Repository) -> std::path::PathBuf {
     repo.layout.state_dir().into_std_path_buf()
 }
 
-fn cli(repo: &Repository) -> Cli {
-    Cli(repo.dir.path().to_str().unwrap().to_owned())
+/// The CLI calls of `step` on `repo`, for the side of the test that `side`
+/// names.
+fn cli(repo: &Repository, step: usize, side: &str) -> Cli {
+    Cli {
+        repo: repo.dir.path().to_str().unwrap().to_owned(),
+        label: format!("CLI step {step}, {side} side"),
+    }
 }
 
 /// Implementation aid: characterization of the CLI read answers after each
@@ -163,10 +169,10 @@ fn cli(repo: &Repository) -> Cli {
 async fn cli_reads_after_each_write_equal_a_full_rebuild() {
     let repo = fixture();
     for step in 0..STEPS {
-        write(&cli(&repo), &state(&repo), step).await;
-        let caught_up = read_all(&cli(&repo), &repo).await;
+        write(&cli(&repo, step, "caught-up"), &state(&repo), step).await;
+        let caught_up = read_all(&cli(&repo, step, "caught-up"), &repo).await;
         let copy = copy_without_projection(&repo);
-        let rebuilt = read_all(&cli(&copy), &copy).await;
+        let rebuilt = read_all(&cli(&copy, step, "full-rebuild"), &copy).await;
         assert_same(&caught_up, &rebuilt, &format!("CLI step {step}"));
     }
 }
