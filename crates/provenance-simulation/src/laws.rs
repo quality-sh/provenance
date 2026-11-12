@@ -147,7 +147,10 @@ struct Expected {
 fn successful_writes_stay(run: &Run) -> Result<(), Violation> {
     let mut expected: BTreeMap<Target, Expected> = BTreeMap::new();
     for done in &run.done {
-        let Some(target) = &done.target else { continue };
+        let writes = done.op.writes(done.result.as_ref().ok());
+        if writes.is_empty() {
+            continue;
+        }
         let publishes: Vec<_> = publishes_of(run, done).collect();
         let Some(&(at, last)) = publishes
             .iter()
@@ -157,9 +160,11 @@ fn successful_writes_stay(run: &Run) -> Result<(), Violation> {
             continue;
         };
         let certain = last.outcome == Outcome::Landed && !done.stopped && done.result.is_ok();
-        let value = certain.then(|| done.result.clone().ok()).flatten();
-        if expected.get(target).is_none_or(|old| old.at < at) {
-            expected.insert(target.clone(), Expected { at, value });
+        for (target, value) in writes {
+            let value = value.filter(|_| certain);
+            if expected.get(&target).is_none_or(|old| old.at < at) {
+                expected.insert(target, Expected { at, value });
+            }
         }
     }
     let state = crate::final_records(&run.entries).map_err(|error| Violation {
