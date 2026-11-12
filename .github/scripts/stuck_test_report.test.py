@@ -3,9 +3,10 @@
 
 Each test makes its own workspace root, a temporary directory, and gives it
 to the script. The fake test binary is a copy of sh below
-`<root>/target/debug/build/stuck-case/<hash>/out/`. It starts two `flock` processes on one file: the
-first holds the lock and runs a fake server (a copy of sleep below
-`<root>/target/debug/`) that waits, the second waits for the lock. The
+`<root>/target/debug/build/stuck-case/<hash>/out/`. It starts two `flock`
+processes on one file: the first holds the lock and runs a fake server (a
+copy of sleep below `<root>/target/debug/`) that waits, the second waits
+for the lock. The
 watched name is the name of the fake server, which no other process on the
 machine has, so the script cannot read or stop a process that the test did
 not start.
