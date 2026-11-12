@@ -7,18 +7,19 @@ use std::io::Write;
 #[error("failed to persist temporary file: {0}")]
 pub struct ReplaceFailed(#[source] std::io::Error);
 
-/// Writes `bytes` to the file at `path` in this order: write a temporary file
-/// in the directory of `path`, sync the temporary file, replace `path` with
-/// it, and sync the directory. After the call returns, the file has all of
-/// the new bytes, also after a power loss. If a step fails, the steps after
-/// it do not occur. A failed sync gives the I/O error text with no added
-/// text. If the directory sync fails, `path` has the new bytes, but a power
-/// loss can lose them.
+/// Writes `bytes` to the file at `path` in this order: make the directory of
+/// `path` if it does not exist, write a temporary file in that directory,
+/// sync the temporary file, replace `path` with it, and sync the directory.
+/// If the call made directories, it then syncs each directory above the
+/// directory of `path` up to the parent of the highest new directory, deepest
+/// first. On Unix, after the call returns, a power loss cannot lose the new
+/// bytes of the file or the entry of a new directory. On Windows, a directory
+/// has no sync in this module: the file sync occurs, but a power loss can
+/// lose the rename and the entry of a new directory.
 ///
-/// If the call makes the directory of `path` or a directory above it, it
-/// syncs each directory from the directory of `path` up to the parent of the
-/// highest new directory, deepest first, so that the entry of each new
-/// directory is durable before the call returns.
+/// If a step fails, the steps after it do not occur. A failed sync gives
+/// `sync <path>` and the I/O error. If a directory sync fails, `path` has the
+/// new bytes, but a power loss can lose them.
 pub fn write_synced_file(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<()> {
     let (temporary, parent, first_made) = write_temporary(path, bytes)?;
     temporary.as_file().sync_all().map_err(sync_failure(path))?;
@@ -33,9 +34,12 @@ pub fn write_synced_file(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Removes the file at `path` and then syncs its directory, so that the
-/// remove is durable before the call returns. A file that does not exist is a
-/// success with no sync.
+/// Removes the file at `path` and then syncs its directory. On Unix, after
+/// the call returns, a power loss cannot bring the file back. On Windows, a
+/// power loss can bring the file back. A file that does not exist is a
+/// success with no sync. A failed remove gives `remove <path>` and the I/O
+/// error, and a failed sync gives `sync <path>` and the I/O error. If the
+/// sync fails, the file is removed, but a power loss can bring it back.
 pub fn remove_synced_file(path: &Utf8Path) -> anyhow::Result<()> {
     let parent = parent_of(path)?;
     match std::fs::remove_file(crate::long_path::extended(path)?) {
@@ -113,7 +117,7 @@ fn sync_failure(path: &Utf8Path) -> impl FnOnce(std::io::Error) -> anyhow::Error
 /// failure, the temporary file is deleted.
 ///
 /// This function does not sync. [`write_synced_file`] syncs the temporary
-/// file before the call and the directory after it. [`write_staged_file`]
+/// file before the call and the directories after it. [`write_staged_file`]
 /// does not sync: its caller syncs the staged tree after all of its writes.
 fn replace_file(temporary: tempfile::NamedTempFile, target: &Utf8Path) -> anyhow::Result<()> {
     let target = crate::long_path::extended(target)?;
