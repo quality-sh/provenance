@@ -9,21 +9,22 @@
 //! [`PublishFailure::BaseMoved`].
 //!
 //! The adapter speaks HTTP/1.1 with no TLS, one request for each
-//! connection. The object base is an `http://` address on a private network,
-//! such as the address of the objects in a container.
+//! connection; [`http`] gives what its client does not support. The object
+//! base is an `http://` address on a private network, such as the address of
+//! the objects in a container.
 
+mod http;
 pub mod wire;
 
 use super::{PublishFailure, Revision, StateStorage, StateView, StorageError, WriteSet};
 use crate::refusal::fault;
 use anyhow::Context as _;
-use std::io::{Read as _, Write as _};
-use std::net::{TcpStream, ToSocketAddrs as _};
 use std::sync::{Mutex, PoisonError};
 use std::time::Duration;
 use wire::{PublishBody, StateBody, StateFailure};
 
-/// How long the adapter waits to connect, to send and for the answer.
+/// The time limit of one exchange: to connect, to send the request and to
+/// read the whole answer.
 const TIMEOUT: Duration = Duration::from_secs(60);
 
 /// The canonical state of `session` of `project` at an object base.
@@ -32,6 +33,8 @@ pub struct RemoteStateStorage {
     address: Address,
     /// The path of the session, below the host.
     session: String,
+    /// The time limit of one exchange.
+    timeout: Duration,
     /// The last view read, sent back as `If-None-Match`.
     last: Mutex<Option<StateView>>,
 }
@@ -52,8 +55,16 @@ impl RemoteStateStorage {
         Ok(Self {
             session: format!("{}{}", address.prefix, wire::session_path(project, session)),
             address,
+            timeout: TIMEOUT,
             last: Mutex::new(None),
         })
+    }
+
+    /// The same storage with another time limit for each exchange.
+    #[cfg(test)]
+    const fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
     }
 
     fn last(&self) -> std::sync::MutexGuard<'_, Option<StateView>> {
@@ -70,7 +81,7 @@ impl RemoteStateStorage {
         body: Option<&[u8]>,
     ) -> Result<Answer, Unsent> {
         let path = format!("{}{path}", self.session);
-        exchange(&self.address, method, &path, headers, body)
+        http::exchange(&self.address, self.timeout, method, &path, headers, body)
     }
 }
 
@@ -146,10 +157,21 @@ struct Address {
 }
 
 impl Address {
+    /// Refuses a base that does not start with `http://`, and a base with
+    /// a space, a control character, `?` or `#`, which would break the
+    /// request line or the `Host` header.
     fn parse(base: &str) -> anyhow::Result<Self> {
         let rest = base
             .strip_prefix("http://")
             .ok_or_else(|| fault!("the object base `{base}` does not start with `http://`"))?;
+        if rest
+            .chars()
+            .any(|c| c.is_whitespace() || c.is_control() || c == '?' || c == '#')
+        {
+            return Err(fault!(
+                "the object base {base:?} has a space, a control character, `?` or `#`"
+            ));
+        }
         let (host, prefix) = rest.split_once('/').unwrap_or((rest, ""));
         if host.is_empty() || host.contains('@') {
             return Err(fault!(
@@ -220,129 +242,6 @@ impl Unsent {
             Self::Answer(error) => PublishFailure::Started(error),
         }
     }
-}
-
-/// Sends one request on a new connection and reads the whole answer.
-fn exchange(
-    address: &Address,
-    method: &str,
-    path: &str,
-    headers: &[(&str, String)],
-    body: Option<&[u8]>,
-) -> Result<Answer, Unsent> {
-    let mut stream = connect(address).map_err(Unsent::Request)?;
-    let mut lines = vec![
-        format!("{method} {path} HTTP/1.1"),
-        format!("Host: {}", address.host),
-        "Connection: close".to_owned(),
-        "Accept: application/json".to_owned(),
-    ];
-    lines.extend(
-        headers
-            .iter()
-            .map(|(name, value)| format!("{name}: {value}")),
-    );
-    if let Some(body) = body {
-        lines.push("Content-Type: application/json".to_owned());
-        lines.push(format!("Content-Length: {}", body.len()));
-    }
-    let mut bytes = format!("{}\r\n\r\n", lines.join("\r\n")).into_bytes();
-    bytes.extend_from_slice(body.unwrap_or_default());
-    stream
-        .write_all(&bytes)
-        .and_then(|()| stream.flush())
-        .with_context(|| format!("could not send {method} {path} to {}", address.host))
-        .map_err(Unsent::Request)?;
-    let mut raw = Vec::new();
-    stream
-        .read_to_end(&mut raw)
-        .context("could not read the answer")
-        .and_then(|_| parse_answer(&raw))
-        .with_context(|| format!("no answer to {method} {path} from {}", address.host))
-        .map_err(Unsent::Answer)
-}
-
-fn connect(address: &Address) -> anyhow::Result<TcpStream> {
-    let mut last = None;
-    for socket in address
-        .connect
-        .to_socket_addrs()
-        .with_context(|| format!("could not resolve {}", address.connect))?
-    {
-        match TcpStream::connect_timeout(&socket, TIMEOUT) {
-            Ok(stream) => {
-                stream.set_read_timeout(Some(TIMEOUT))?;
-                stream.set_write_timeout(Some(TIMEOUT))?;
-                return Ok(stream);
-            }
-            Err(error) => last = Some(error),
-        }
-    }
-    let error = last.map_or_else(|| fault!("{} has no address", address.connect), Into::into);
-    Err(error.context(format!("could not connect to {}", address.connect)))
-}
-
-/// The status and body of a whole HTTP/1.1 answer.
-fn parse_answer(raw: &[u8]) -> anyhow::Result<Answer> {
-    let end = find(raw, b"\r\n\r\n").ok_or_else(|| fault!("the answer has no end of its head"))?;
-    let head = std::str::from_utf8(&raw[..end]).context("the answer head is not UTF-8")?;
-    let mut lines = head.split("\r\n");
-    let status = lines
-        .next()
-        .and_then(|line| line.split(' ').nth(1))
-        .and_then(|code| code.parse::<u16>().ok())
-        .ok_or_else(|| fault!("the answer has no status"))?;
-    let mut length = None;
-    let mut chunked = false;
-    for line in lines {
-        let (name, value) = line
-            .split_once(':')
-            .ok_or_else(|| fault!("an answer header has no `:`"))?;
-        let value = value.trim();
-        if name.eq_ignore_ascii_case("content-length") {
-            length = Some(value.parse::<usize>().context("a bad Content-Length")?);
-        } else if name.eq_ignore_ascii_case("transfer-encoding") {
-            chunked = value.eq_ignore_ascii_case("chunked");
-        }
-    }
-    let rest = &raw[end + 4..];
-    let body = match (chunked, length) {
-        (true, _) => dechunk(rest)?,
-        (false, Some(length)) => rest
-            .get(..length)
-            .ok_or_else(|| fault!("the answer body ended early"))?
-            .to_vec(),
-        (false, None) => rest.to_vec(),
-    };
-    Ok(Answer { status, body })
-}
-
-/// The body of a chunked answer.
-fn dechunk(mut rest: &[u8]) -> anyhow::Result<Vec<u8>> {
-    let mut body = Vec::new();
-    loop {
-        let end = find(rest, b"\r\n").ok_or_else(|| fault!("a chunk has no size line"))?;
-        let size = std::str::from_utf8(&rest[..end])
-            .ok()
-            .and_then(|line| line.split(';').next())
-            .and_then(|size| usize::from_str_radix(size.trim(), 16).ok())
-            .ok_or_else(|| fault!("a chunk has a bad size"))?;
-        rest = &rest[end + 2..];
-        if size == 0 {
-            return Ok(body);
-        }
-        if rest.len() < size + 2 {
-            return Err(fault!("the answer body ended early"));
-        }
-        body.extend_from_slice(&rest[..size]);
-        rest = &rest[size + 2..];
-    }
-}
-
-fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    haystack
-        .windows(needle.len())
-        .position(|window| window == needle)
 }
 
 #[cfg(test)]

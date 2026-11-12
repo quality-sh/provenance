@@ -1,0 +1,89 @@
+{
+  "description": "A per-key set that fails after its first key landed gives 500 started, and the keys before the failing key stay landed. The first exchange is the fixture's route that makes a key fail; an object's own test makes the key fail in its own way. The message is free text.",
+  "exchanges": [
+    {
+      "request": {
+        "method": "PUT",
+        "path": "/projects/started/sessions/main/state",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "entries": {
+            "manifest.json": "e30="
+          }
+        }
+      },
+      "response": {
+        "status": 204,
+        "headers": {},
+        "body": null
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "path": "/projects/started/sessions/main/failing-key",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "key": "scopes/a/rules/two.jsonl"
+        }
+      },
+      "response": {
+        "status": 204,
+        "headers": {},
+        "body": null
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/projects/started/sessions/main/state",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "atomicity": "per_key",
+          "puts": {
+            "scopes/a/rules/one.jsonl": "b25l",
+            "scopes/a/rules/two.jsonl": "dHdv"
+          },
+          "deletes": []
+        }
+      },
+      "response": {
+        "status": 500,
+        "headers": {},
+        "body": {
+          "started": {
+            "message": "the key `scopes/a/rules/two.jsonl` failed to land"
+          }
+        },
+        "body_match": "structure"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/projects/started/sessions/main/state",
+        "headers": {},
+        "body": null
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"sha256:ad7b91db9fe14dff5e97e2ae403136057ca9912e0fd7d83e20a6772ebfc652d0\""
+        },
+        "body": {
+          "revision": "sha256:ad7b91db9fe14dff5e97e2ae403136057ca9912e0fd7d83e20a6772ebfc652d0",
+          "entries": {
+            "manifest.json": "e30=",
+            "scopes/a/rules/one.jsonl": "b25l"
+          }
+        }
+      }
+    }
+  ]
+}

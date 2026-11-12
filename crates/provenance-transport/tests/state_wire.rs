@@ -81,7 +81,6 @@ fn the_remote_adapter_publishes_through_the_storage_port() {
 
 #[test]
 #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
-#[verifies("rule_stage_lands_as_one_whole_set", examples)]
 fn the_remote_adapter_lands_a_two_key_whole_set_and_rolls_back_a_failed_one() {
     let fixture = Fixture::spawn();
     a_two_key_whole_set_lands_both_keys(fixture.project("two"));
@@ -106,18 +105,20 @@ fn the_remote_adapter_reads_one_view_of_every_key() {
     revision_follows_every_key_and_byte(fixture.project("revision"));
 }
 
-/// Two writers that read the same view and publish on it at the same time:
-/// one set lands and the other gets `BaseMoved`.
+/// Two writers publish on one base view at the same time: a barrier
+/// releases both publishes together. One set lands and the other gets
+/// `BaseMoved`.
 #[test]
 #[verifies("rule_adapter_refuses_a_set_on_a_moved_base", examples)]
 fn of_two_concurrent_publishes_on_one_base_one_gets_base_moved() {
     let fixture = Fixture::spawn();
     let project = fixture.project("race");
+    let base = Arc::new(project.storage().read_view().unwrap());
     let barrier = Arc::new(Barrier::new(2));
     let results: Vec<_> = ["scopes/a/rules/one.jsonl", "scopes/a/rules/two.jsonl"]
         .map(|written| {
             let storage = RemoteStateStorage::new(&fixture.url, "race", "main").unwrap();
-            let base = Arc::new(storage.read_view().unwrap());
+            let base = Arc::clone(&base);
             let barrier = Arc::clone(&barrier);
             std::thread::spawn(move || {
                 let writes = WriteSet::new(Atomicity::WholeSet)
@@ -141,6 +142,9 @@ fn of_two_concurrent_publishes_on_one_base_one_gets_base_moved() {
 
 /// Only session `main` exists: another session reads as an unknown target
 /// and refuses a write.
+///
+/// An implementation aid with no Rule binding: no Rule names the sessions
+/// of an object yet. The plan's Phase 2 result asks for this behaviour.
 #[test]
 fn a_session_other_than_main_is_an_unknown_target() {
     let fixture = Fixture::spawn();
@@ -160,6 +164,9 @@ fn a_session_other_than_main_is_an_unknown_target() {
 
 /// A publish that cannot reach the object is refused: no key can have
 /// landed.
+///
+/// An implementation aid with no Rule binding: no Rule says which failures
+/// refuse a set. A request that was never sent cannot have landed a key.
 #[test]
 fn a_publish_to_an_object_that_does_not_answer_is_refused() {
     let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -176,7 +183,12 @@ fn a_publish_to_an_object_that_does_not_answer_is_refused() {
 
 /// Each `contracts/state-wire` example gets its recorded answers from the
 /// fixture, so the examples that provenance-web replays against the object
-/// are what the remote adapter speaks.
+/// are what the remote adapter speaks. A response with `"body_match":
+/// "structure"` matches a body with the same keys and JSON types, whatever
+/// its text.
+///
+/// An implementation aid with no Rule binding: it keeps the examples and
+/// the fixture in step. No Rule records the wire format.
 #[test]
 fn each_state_wire_example_replays_against_the_fixture() {
     let fixture = Fixture::spawn();
@@ -190,7 +202,7 @@ fn each_state_wire_example_replays_against_the_fixture() {
         })
         .collect();
     names.sort();
-    assert!(names.len() >= 5, "{names:?}");
+    assert!(names.len() >= 7, "{names:?}");
     let agent = ureq::AgentBuilder::new().redirects(0).build();
     for path in names {
         let example: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
@@ -233,7 +245,39 @@ fn replay(agent: &ureq::Agent, url: &str, exchange: &Value, at: &str) {
     } else {
         serde_json::from_str(&text).unwrap()
     };
-    assert_eq!(body, expected["body"], "{at}");
+    match expected["body_match"].as_str() {
+        None => assert_eq!(body, expected["body"], "{at}"),
+        Some("structure") => assert!(
+            same_structure(&body, &expected["body"]),
+            "{at}: {body} does not have the structure of {}",
+            expected["body"]
+        ),
+        Some(other) => panic!("{at}: unknown body_match `{other}`"),
+    }
+}
+
+/// True when `actual` has the keys of `expected` at each level, arrays of
+/// the same length and the same JSON types. Text values are not compared.
+fn same_structure(actual: &Value, expected: &Value) -> bool {
+    match (actual, expected) {
+        (Value::Object(actual), Value::Object(expected)) => {
+            actual.len() == expected.len()
+                && expected.iter().all(|(name, value)| {
+                    actual
+                        .get(name)
+                        .is_some_and(|found| same_structure(found, value))
+                })
+        }
+        (Value::Array(actual), Value::Array(expected)) => {
+            actual.len() == expected.len()
+                && actual
+                    .iter()
+                    .zip(expected)
+                    .all(|(found, value)| same_structure(found, value))
+        }
+        (Value::String(_), Value::String(_)) => true,
+        _ => actual == expected,
+    }
 }
 
 /// An implementation aid with no Rule binding: no Rule gives a size of
@@ -243,7 +287,9 @@ fn replay(agent: &ureq::Agent, url: &str, exchange: &Value, at: &str) {
 fn a_state_over_two_megabytes_is_seeded_read_and_published() {
     let fixture = Fixture::spawn();
     let mut project = fixture.project("large");
-    let big: Vec<u8> = (0..5_000_000_u32).map(|n| u8::try_from(n % 251).unwrap()).collect();
+    let big: Vec<u8> = (0..5_000_000_u32)
+        .map(|n| u8::try_from(n % 251).unwrap())
+        .collect();
     project.seed(&[("scopes/a/rules/seeded.jsonl", &big)]);
     let storage = project.storage();
     let view = storage.read_view().unwrap();

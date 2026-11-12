@@ -202,6 +202,8 @@ impl PublishBody {
 mod tests {
     use super::*;
 
+    /// An implementation aid with no Rule binding: a name goes into a path
+    /// as it is, so a name must need no encoding.
     #[test]
     fn names_are_one_to_64_letters_digits_underscores_and_hyphens() {
         assert!(is_name("a"));
@@ -212,6 +214,8 @@ mod tests {
         }
     }
 
+    /// An implementation aid with no Rule binding: no Rule records the wire
+    /// format. It pins the failure shape that the object must send.
     #[test]
     fn a_failure_names_its_kind_on_the_wire() {
         let moved = StateFailure::BaseMoved {
@@ -228,6 +232,8 @@ mod tests {
         );
     }
 
+    /// An implementation aid with no Rule binding: it keeps the adapter from
+    /// taking a body whose revision does not match its keys and bytes.
     #[test]
     fn a_state_body_with_another_revision_is_refused() {
         let body = StateBody {

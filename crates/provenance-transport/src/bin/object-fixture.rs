@@ -6,11 +6,15 @@
 //! a project while the fixture runs. Session `main` is the only session:
 //! another session is an unknown target.
 //!
+//! Each route checks the target (the project and the session) before it
+//! reads the body, so a request to an unknown target gets 404 whatever its
+//! body. A body can be as large as [`BODY_LIMIT`].
+//!
 //! Only the fixture has `PUT <session>/failing-key {"key": <key>}`. It makes
 //! each later landing of that key fail, as the storage contract needs.
 
 use axum::body::Bytes;
-use axum::extract::{Path, State};
+use axum::extract::{DefaultBodyLimit, Path, State};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::put;
@@ -25,6 +29,10 @@ use std::collections::{BTreeMap, HashMap};
 use std::io::Write as _;
 use std::sync::{Arc, Mutex, PoisonError};
 use tokio::io::AsyncReadExt as _;
+
+/// The largest request body: well above the state of this repository,
+/// which is about 3 MB.
+const BODY_LIMIT: usize = 64 * 1024 * 1024;
 
 /// The state of one project, in session `main`.
 #[derive(Debug, Default)]
@@ -64,6 +72,7 @@ fn router() -> Router {
             "/projects/{project}/sessions/{session}/failing-key",
             put(fail_on),
         )
+        .layer(DefaultBodyLimit::max(BODY_LIMIT))
         .with_state(Projects::default())
 }
 
@@ -113,12 +122,10 @@ async fn publish(
     Path((project, session)): Path<(String, String)>,
     body: Bytes,
 ) -> Response {
-    let decoded = parse::<PublishBody>(&body).and_then(|body| body.decode().map_err(invalid));
-    answer(decoded.and_then(|(base, writes)| {
-        with_project(&projects, &project, &session, |stored| {
-            land(stored, base.as_deref(), &writes)?;
-            Ok(StatusCode::NO_CONTENT.into_response())
-        })
+    answer(with_project(&projects, &project, &session, |stored| {
+        let (base, writes) = parse::<PublishBody>(&body)?.decode().map_err(invalid)?;
+        land(stored, base.as_deref(), &writes)?;
+        Ok(StatusCode::NO_CONTENT.into_response())
     }))
 }
 
@@ -132,13 +139,11 @@ async fn fail_on(
     struct Failing {
         key: String,
     }
-    let key = parse::<Failing>(&body)
-        .and_then(|failing| StateKey::new(failing.key).map_err(|error| invalid(error.to_string())));
-    answer(key.and_then(|key| {
-        with_project(&projects, &project, &session, |stored| {
-            stored.failing = Some(key);
-            Ok(StatusCode::NO_CONTENT.into_response())
-        })
+    answer(with_project(&projects, &project, &session, |stored| {
+        let failing = parse::<Failing>(&body)?;
+        let key = StateKey::new(failing.key).map_err(|error| invalid(error.to_string()))?;
+        stored.failing = Some(key);
+        Ok(StatusCode::NO_CONTENT.into_response())
     }))
 }
 

@@ -161,6 +161,55 @@ fn an_answer_ends_at_its_length_while_the_connection_stays_open() {
     );
 }
 
+/// An implementation aid with no Rule binding: an object that sends one
+/// byte at a time cannot hold a request open past the one time limit of
+/// the exchange.
+#[test]
+fn an_object_that_drips_bytes_meets_the_time_limit_of_the_exchange() {
+    let url = stand_in(|mut stream| {
+        stream
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 1000\r\n\r\n")
+            .unwrap();
+        for _ in 0..100 {
+            std::thread::sleep(Duration::from_millis(200));
+            if stream.write_all(b" ").is_err() {
+                return;
+            }
+        }
+    });
+    let started = Instant::now();
+    let writes = WriteSet::new(Atomicity::PerKey)
+        .put(StateKey::new("manifest.json").unwrap(), b"{}".to_vec());
+    let outcome = storage(&url)
+        .with_timeout(Duration::from_secs(1))
+        .publish(writes);
+    assert!(
+        matches!(outcome, Err(PublishFailure::Started(_))),
+        "{outcome:?}"
+    );
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "{:?}",
+        started.elapsed()
+    );
+}
+
+/// An implementation aid with no Rule binding: the client reads only the
+/// framing it states in its module documentation.
+#[test]
+fn an_answer_the_client_does_not_read_is_refused() {
+    for raw in [
+        "HTTP/1.1 200 OK\r\nTransfer-Encoding: gzip\r\n\r\nxx",
+        "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n folded\r\n\r\n{}",
+        "HTTP/1.1 200 OK\r\nContent-Length: 2, 2\r\n\r\n{}",
+        "HTTP/1.1 101 Switching Protocols\r\n\r\n",
+        "SSH-2.0\r\n\r\n",
+    ] {
+        let outcome = storage(&answering(raw)).read_view();
+        assert!(matches!(outcome, Err(StorageError::Read(_))), "{raw:?}");
+    }
+}
+
 /// An implementation aid with no Rule binding: an object can send interim
 /// answers before the final one.
 #[test]

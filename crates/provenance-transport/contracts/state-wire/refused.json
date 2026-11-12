@@ -1,5 +1,5 @@
 {
-  "description": "A write set that puts and deletes one key is refused with 422, and no key lands.",
+  "description": "A write set that puts and deletes one key is refused with 422, and no key lands. The message is free text.",
   "exchanges": [
     {
       "request": {
@@ -44,7 +44,8 @@
           "refused": {
             "message": "the write set puts and deletes `scopes/a/ideation/landings.jsonl`"
           }
-        }
+        },
+        "body_match": "structure"
       }
     },
     {

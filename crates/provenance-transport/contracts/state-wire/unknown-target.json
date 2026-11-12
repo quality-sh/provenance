@@ -1,5 +1,5 @@
 {
-  "description": "A project that was never seeded and a session other than main are unknown targets: 404.",
+  "description": "A project that was never seeded and a session other than main are unknown targets: 404. The object checks the target before the body, so a bad body sent to an unknown target also gets 404.",
   "exchanges": [
     {
       "request": {
@@ -63,6 +63,44 @@
             "manifest.json": "eyJ4IjoxfQ=="
           },
           "deletes": []
+        }
+      },
+      "response": {
+        "status": 404,
+        "headers": {},
+        "body": {
+          "unknown_target": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/projects/unknown-target/sessions/x/state",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "not": "a write set"
+        }
+      },
+      "response": {
+        "status": 404,
+        "headers": {},
+        "body": {
+          "unknown_target": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/projects/never-seeded/sessions/main/state",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "not": "a write set"
         }
       },
       "response": {

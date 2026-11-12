@@ -1,0 +1,94 @@
+{
+  "description": "A body that is not a write set, and a write set with bytes that are not base64, give 400 invalid_input, and no key lands. The message is free text.",
+  "exchanges": [
+    {
+      "request": {
+        "method": "PUT",
+        "path": "/projects/invalid-input/sessions/main/state",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "entries": {
+            "manifest.json": "e30="
+          }
+        }
+      },
+      "response": {
+        "status": 204,
+        "headers": {},
+        "body": null
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/projects/invalid-input/sessions/main/state",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "atomicity": "sideways",
+          "puts": {},
+          "deletes": []
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {},
+        "body": {
+          "invalid_input": {
+            "message": "unknown variant `sideways`"
+          }
+        },
+        "body_match": "structure"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/projects/invalid-input/sessions/main/state",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "atomicity": "per_key",
+          "puts": {
+            "manifest.json": "not base64!"
+          },
+          "deletes": []
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {},
+        "body": {
+          "invalid_input": {
+            "message": "the bytes of `manifest.json` are not base64"
+          }
+        },
+        "body_match": "structure"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/projects/invalid-input/sessions/main/state",
+        "headers": {},
+        "body": null
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"sha256:1403ca0b13a95fe4c2d9fbb85ea908c4c61c18856539735b9673ffeffa47df6d\""
+        },
+        "body": {
+          "revision": "sha256:1403ca0b13a95fe4c2d9fbb85ea908c4c61c18856539735b9673ffeffa47df6d",
+          "entries": {
+            "manifest.json": "e30="
+          }
+        }
+      }
+    }
+  ]
+}
