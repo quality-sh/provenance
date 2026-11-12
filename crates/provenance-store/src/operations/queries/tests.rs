@@ -26,6 +26,7 @@ mod lifecycle_visibility;
 mod limits;
 mod live;
 mod order;
+mod page_budget;
 mod pinned;
 mod reader;
 mod reader_outputs;

@@ -8,18 +8,19 @@ use super::comparison::test_stores::TestStore;
 use crate::cache::read::payloads::PayloadRow;
 use crate::cache::{catch_up_state, open_cache, CacheConnection};
 use crate::operations::reader::{kind_of, Position, ReadSnapshot, SqlFront};
+use crate::read_database::contract::OtherTransaction;
 use provenance_core::model::relations::RelationSource;
 use provenance_core::{
     DispositionRecord, ImplementationBinding, NodeType, Requirement, Rule, Source, StableId,
     VerificationBinding,
 };
 use serde::Serialize;
-use sqlx::SqlitePool;
 use std::fmt::Debug;
 
-const EXPECTED: &str = include_str!("reader_outputs.txt");
+mod gaps;
+mod seed;
 
-const DISPOSITION: &str = r#"{"scope_id":"default","id":"ID","proposal_id":"PROPOSAL","decision":"accepted","actor":{"identity_type":"human","id":"reader"}}"#;
+const EXPECTED: &str = include_str!("reader_outputs.txt");
 
 fn sid(value: &str) -> StableId {
     StableId::new(value).unwrap()
@@ -40,92 +41,22 @@ fn debug_line<T: Debug>(label: &str, result: anyhow::Result<T>) -> String {
     }
 }
 
-async fn run(pool: &SqlitePool, sql: &str, values: &[&str]) {
-    let mut query = sqlx::query(sqlx::AssertSqlSafe(sql));
-    for value in values {
-        query = query.bind(*value);
-    }
-    query.execute(pool).await.unwrap();
-}
-
-/// Rows the pinned store has none of, and rows that make a reader refuse.
-async fn seed(pool: &SqlitePool) {
-    let thread =
-        "INSERT INTO threads (scope_id, id, parent_type, parent_id, status, created_at, payload) \
-                  VALUES ('default', ?, 'requirement', ?, ?, ?, '{}')";
-    run(pool, thread, &["thread_b", "req_top", "active", "20"]).await;
-    run(pool, thread, &["thread_a", "req_top", "resolved", "20"]).await;
-    run(pool, thread, &["thread_c", "req_left", "archived", "10"]).await;
-    let message =
-        "INSERT INTO messages (scope_id, id, thread_id, role, body, created_at, payload) \
-                   VALUES ('default', ?, ?, ?, ?, ?, '{}')";
-    run(
-        pool,
-        message,
-        &["message_b", "thread_a", "user", "first", "5"],
-    )
-    .await;
-    run(
-        pool,
-        message,
-        &["message_a", "thread_b", "assistant", "second", "5"],
-    )
-    .await;
-    run(
-        pool,
-        message,
-        &["message_c", "thread_a", "system", "third", "1"],
-    )
-    .await;
-    let large = "x".repeat(70_000);
-    run(
-        pool,
-        message,
-        &["message_large", "thread_c", "user", &large, "30"],
-    )
-    .await;
-    let disposition = "INSERT INTO dispositions (scope_id, id, proposal_id, decision, rationale, actor, payload) \
-                       VALUES ('default', ?, ?, 'accepted', '', 'reader', ?)";
-    for (id, proposal) in [
-        ("disposition_b", "proposal_one"),
-        ("disposition_a", "proposal_two"),
-        ("disposition_c", "proposal_one"),
-    ] {
-        let payload = DISPOSITION
-            .replace("\"ID\"", &format!("\"{id}\""))
-            .replace("PROPOSAL", proposal);
-        run(pool, disposition, &[id, proposal, &payload]).await;
-    }
-    let huge = format!("{{\"padding\":\"{}\"}}", "y".repeat(1_100_000));
-    run(
-        pool,
-        disposition,
-        &["disposition_huge", "proposal_one", &huge],
-    )
-    .await;
-    let long_id = format!("disposition_z{}", "z".repeat(1100));
-    run(pool, disposition, &[&long_id, "proposal_two", "{}"]).await;
-    run(
-        pool,
-        "UPDATE sources SET name = CAST(name AS BLOB) WHERE id = 'source_award_2019'",
-        &[],
-    )
-    .await;
-}
-
-async fn snapshot_of(store: &TestStore) -> (CacheConnection, ReadSnapshot) {
+/// The snapshot of the seeded store. With `port_only`, its transaction is
+/// behind another type, so a reader that reaches for `SQLx` fails.
+async fn snapshot_of(store: &TestStore, port_only: bool) -> (CacheConnection, ReadSnapshot) {
     catch_up_state(&store.repository()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
-    seed(pool.pool()).await;
-    let snapshot = ReadSnapshot::open(
-        crate::read_database::file::begin(pool.pool())
-            .await
-            .unwrap(),
-        &store.scope,
-    )
-    .await
-    .unwrap()
-    .expect("a revision");
+    seed::seed(pool.pool()).await;
+    let mut transaction = crate::read_database::file::begin(pool.pool())
+        .await
+        .unwrap();
+    if port_only {
+        transaction = Box::new(OtherTransaction(transaction));
+    }
+    let snapshot = ReadSnapshot::open(transaction, &store.scope)
+        .await
+        .unwrap()
+        .expect("a revision");
     (pool, snapshot)
 }
 
@@ -365,20 +296,22 @@ async fn discussions(snapshot: &ReadSnapshot, lines: &mut Vec<String>) {
     ));
 }
 
-/// The readers give the same rows, in the same order, with the same
-/// refusals, as the expected lines hold.
-#[tokio::test]
-async fn each_reader_gives_the_expected_rows_and_refusals() {
-    let store = TestStore::pinned();
-    let (pool, snapshot) = snapshot_of(&store).await;
+/// Every line that the readers give over the snapshot, in order.
+async fn lines_of(snapshot: &ReadSnapshot) -> Vec<String> {
     let mut lines = Vec::new();
-    records(&snapshot, &mut lines).await;
-    pages(&snapshot, &mut lines).await;
-    graph(&snapshot, &mut lines).await;
-    discussions(&snapshot, &mut lines).await;
-    let (_, attested) = snapshot.finish();
-    lines.push(format!("attested: {attested:?}"));
-    pool.close().await.unwrap();
+    records(snapshot, &mut lines).await;
+    pages(snapshot, &mut lines).await;
+    graph(snapshot, &mut lines).await;
+    discussions(snapshot, &mut lines).await;
+    gaps::chunks(snapshot, &mut lines).await;
+    gaps::ceilings(snapshot, &mut lines).await;
+    gaps::limits(snapshot, &mut lines).await;
+    lines
+}
+
+/// Compares the lines with the expected file, and prints them all on a
+/// difference.
+fn compare(lines: &[String]) {
     let actual = lines.join("\n") + "\n";
     if actual != EXPECTED {
         println!("=== READER OUTPUTS\n{actual}=== END READER OUTPUTS");
@@ -387,4 +320,44 @@ async fn each_reader_gives_the_expected_rows_and_refusals() {
         }
         panic!("the reader outputs differ in their line count");
     }
+}
+
+/// The lines over a snapshot of the seeded store, with its attested set.
+async fn read_all(port_only: bool) -> Vec<String> {
+    let store = TestStore::pinned();
+    let (pool, snapshot) = snapshot_of(&store, port_only).await;
+    let mut lines = lines_of(&snapshot).await;
+    let (_, attested) = snapshot.finish();
+    lines.push(format!("attested: {attested:?}"));
+    pool.close().await.unwrap();
+    lines
+}
+
+/// The readers give the same rows, in the same order, with the same
+/// refusals, as the expected lines hold.
+#[tokio::test]
+async fn each_reader_gives_the_expected_rows_and_refusals() {
+    compare(&read_all(false).await);
+}
+
+/// Over a transaction that is not the file's own type, every reader gives
+/// the same lines: no reader needs `SQLx`.
+#[tokio::test]
+async fn each_reader_gives_the_same_lines_through_the_port_alone() {
+    compare(&read_all(true).await);
+}
+
+/// The readers name no `SQLx` item, so only the port runs their
+/// statements.
+#[test]
+fn the_row_readers_name_no_sqlx() {
+    let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/cache/read");
+    let mut named = Vec::new();
+    for entry in std::fs::read_dir(&directory).unwrap() {
+        let path = entry.unwrap().path();
+        if std::fs::read_to_string(&path).unwrap().contains("sqlx") {
+            named.push(path.file_name().unwrap().to_string_lossy().into_owned());
+        }
+    }
+    assert_eq!(named, Vec::<String>::new());
 }

@@ -23,7 +23,7 @@ rule page_record: {"scope_id":"default","id":"rule_overtime_001","name":"Overtim
 rule resource_record: {"scope_id":"default","id":"rule_penalty_001","statement":"rule_penalty_001 statement","status":"active","severity":"high","requirement_ids":["req_penalty"]}
 rule resource_record absent: null
 rule search_ids: ["rule_over_002","rule_over_003","rule_over_004"]
-rule search_ids after: ["rule_penalty_001","rule_twin_record"]
+rule search_ids after: ["rule_penalty_001","rule_twin_record","rule_wide"]
 verification ids: ["bind_ver_a","bind_ver_b","bind_ver_c","bind_ver_d"]
 verification ids for rule: ["bind_ver_a","bind_ver_b","bind_ver_c"]
 disposition record: {"scope_id":"default","id":"disposition_a","proposal_id":"proposal_two","decision":"accepted","actor":{"identity_type":"human","id":"reader"}}
@@ -47,10 +47,40 @@ document_keys after hidden: [["thread",{"stage":2,"rank":1,"counter":20,"id":"th
 document roots rule_overtime_001: ["req_overtime"]
 document roots source_schads: ["req_overtime"]
 document roots req_left: ["req_left"]
-threads: [{"scope_id":"default","id":"thread_c","parent":{"node_type":"requirement","node_id":"req_left"},"status":"archived","created_at":10},{"scope_id":"default","id":"thread_a","parent":{"node_type":"requirement","node_id":"req_top"},"status":"resolved","created_at":20},{"scope_id":"default","id":"thread_b","parent":{"node_type":"requirement","node_id":"req_top"},"status":"active","created_at":20}]
+threads: [{"scope_id":"default","id":"thread_c","parent":{"node_type":"requirement","node_id":"req_left"},"status":"archived","created_at":10},{"scope_id":"default","id":"thread_a","parent":{"node_type":"requirement","node_id":"req_top"},"status":"resolved","created_at":20},{"scope_id":"default","id":"thread_b","parent":{"node_type":"requirement","node_id":"req_top"},"status":"active","created_at":20},{"scope_id":"default","id":"thread_zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz","parent":{"node_type":"requirement","node_id":"req_bottom"},"status":"active","created_at":40}]
 messages: [{"scope_id":"default","id":"message_c","thread_id":"thread_a","role":"system","body":"third","created_at":1},{"scope_id":"default","id":"message_a","thread_id":"thread_b","role":"assistant","body":"second","created_at":5},{"scope_id":"default","id":"message_b","thread_id":"thread_a","role":"user","body":"first","created_at":5},{"scope_id":"default","id":"message_large","thread_id":"thread_c","role":"user","body":"xxxxxxxxxx","created_at":30}]
 page_thread: {"scope_id":"default","id":"thread_a","parent":{"node_type":"requirement","node_id":"req_top"},"status":"resolved","created_at":20}
 page_thread absent: null
 page_message: {"scope_id":"default","id":"message_c","thread_id":"thread_a","role":"system","body":"third","created_at":1}
 page_message large: refused: canonical record exceeds the page record budget
+chunked by_ids: "rule_over_002,rule_overtime_001,rule_penalty_001,rule_twin_record"
+chunked by_field: "rule_over_002,rule_overtime_001,rule_penalty_001,rule_twin_record"
+chunked checked_by_ids: "rule_over_002,rule_overtime_001,rule_penalty_001,rule_twin_record"
+chunked page_by_ids 1: ["rule_over_002",true]
+chunked page_by_ids 3: ["rule_over_002,rule_overtime_001,rule_penalty_001",true]
+chunked page_by_ids 10: ["rule_over_002,rule_overtime_001,rule_penalty_001,rule_twin_record",false]
+chunked ids_that_count: ["rule_over_002","rule_overtime_001","rule_penalty_001","rule_twin_record"]
+chunked front req_top: 0 out, 4 in
+chunked front req_overtime: 1 out, 14 in
+chunked front req_pad_300: 0 out, 0 in
+wide statement bytes: 80000
+wide page_record: refused: canonical record exceeds the page record budget
+wide resource_record: ["rule_wide",80000]
+wide record: ["rule_wide",80000]
+wide checked_by_ids: refused: canonical record exceeds the page record budget
+wide checked_by_field: refused: canonical record exceeds the page record budget
+wide page_by_ids 1: ["rule_twin_record",true]
+wide page_by_ids 2: refused: canonical record exceeds the page record budget
+long thread id document_keys: refused: canonical record exceeds the page record budget
+long thread id page_thread: 1108
+document_keys limit 1: [["requirement",{"stage":0,"rank":0,"counter":0,"id":"req_top"}]]
+document_keys limit 2: [["requirement",{"stage":0,"rank":0,"counter":0,"id":"req_top"}],["requirement",{"stage":0,"rank":2,"counter":0,"id":"req_left"}]]
+document_keys limit 6: [["requirement",{"stage":0,"rank":0,"counter":0,"id":"req_top"}],["requirement",{"stage":0,"rank":2,"counter":0,"id":"req_left"}],["requirement",{"stage":0,"rank":2,"counter":0,"id":"req_right"}],["requirement",{"stage":0,"rank":2,"counter":0,"id":"req_twin_record"}],["rule",{"stage":0,"rank":4,"counter":0,"id":"rule_twin_record"}],["thread",{"stage":2,"rank":1,"counter":10,"id":"thread_c"}]]
+document_keys after thread_c limit 2: [["thread",{"stage":2,"rank":1,"counter":20,"id":"thread_a"}],["thread",{"stage":2,"rank":1,"counter":20,"id":"thread_b"}]]
+long thread id document_keys limit 1: [["requirement",{"stage":0,"rank":0,"counter":0,"id":"req_bottom"}]]
+rule search_ids after limit 1: ["rule_penalty_001"]
+rule search_ids after limit 2: ["rule_over_004","rule_over_005"]
+verification ids limit 2: ["bind_ver_a","bind_ver_b"]
+verification ids after limit 1: ["bind_ver_b"]
+requirement page_by_field limit 1: [["req_bottom"],true]
 attested: {"dispositions", "implementation_bindings", "messages", "questions", "relations", "requirements", "resolutions", "rules", "sources", "threads", "topics", "verification_bindings"}
