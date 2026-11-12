@@ -16,6 +16,8 @@ pub(crate) mod durability;
 mod file_install;
 mod recovery;
 mod section;
+#[cfg(all(test, unix))]
+mod sync_order_tests;
 pub(crate) mod whole_set;
 #[cfg(any(unix, windows))]
 pub(crate) use file_install::FileInstall;
