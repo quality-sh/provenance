@@ -191,6 +191,8 @@ port_cases!(
     limits::a_bounded_read_runs_the_statements_within_its_bound,
     limits::a_limit_bounds_the_rows,
     limits::a_list_of_the_most_values_runs,
+    projection::a_catch_up_makes_and_follows_the_projection,
+    projection::a_schema_that_is_not_current_is_made_again,
 );
 
 /// The limit case finds an adapter that ignores `LIMIT`.

@@ -16,6 +16,8 @@ use std::task::Poll;
 #[cfg(feature = "host")]
 pub mod handles;
 pub mod limits;
+#[cfg(feature = "host")]
+pub mod projection;
 #[cfg(any(test, feature = "test-fixture"))]
 mod other;
 
