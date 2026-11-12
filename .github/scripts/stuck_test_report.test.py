@@ -342,6 +342,26 @@ class StuckTestReportTests(unittest.TestCase):
         self.assertRegex(report, rf"process {holder}: flock .* holds a FLOCK WRITE lock on {self.lock}")
         self.assertRegex(report, rf"process {waiter}: flock .* waits for a FLOCK WRITE lock on {self.lock}")
 
+    def test_the_stop_sends_no_signal_to_a_process_with_a_different_start_time(self):
+        # The id of a live process with a start time that is not its own:
+        # the state after the snapshot when a different process got the id.
+        other = subprocess.Popen([str(self.server), "300"])
+        self.addCleanup(other.wait)
+        self.addCleanup(other.kill)
+        wait_for(lambda: report_module.Process(other.pid).exe == str(self.server), 10, "the exec of the server")
+        snapshot = report_module.Process(other.pid)
+        snapshot.start -= 1
+        self.assertFalse(report_module.send(snapshot, signal.SIGKILL))
+        self.assertEqual(
+            report_module.stop(snapshot),
+            f"The test process {other.pid} ended before the stop. The watcher sent no signal.",
+        )
+        time.sleep(0.5)
+        self.assertIsNone(other.poll())
+        # With its own start time, the stop kills it.
+        self.assertEqual(report_module.stop(report_module.Process(other.pid)), "The watcher killed the tree of 1 processes.")
+        self.assertEqual(other.wait(timeout=10), -signal.SIGKILL)
+
     def test_finish_with_no_start_gives_a_warning(self):
         result = subprocess.run(
             [sys.executable, str(SCRIPT), "finish"], env=self.environment, text=True, capture_output=True,

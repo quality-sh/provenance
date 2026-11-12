@@ -283,7 +283,7 @@ class Watcher:
                     f"The log group 'Stuck test: {label}' gives the report. The watcher stops its process tree."
                 )
             )
-            self.write(stop(pid for pid, _ in tree(snapshot(), top.pid)))
+            self.write(stop(top))
 
     def describe(self, process, depth, now, files, mark=""):
         indent = "  " * depth
@@ -507,23 +507,53 @@ def install_tool(write, remaining):
     return None
 
 
-def stop(pids):
-    """Stops each process first, so that none starts a new child, then kills each one."""
-    pids = list(pids)
-    for sent in (signal.SIGSTOP, signal.SIGKILL):
-        for pid in pids:
-            try:
-                os.kill(pid, sent)
-            except OSError:
-                pass
+def send(process, number):
+    """Sends a signal to `process` only if its id still has the start time of the snapshot.
+
+    A different start time means that the process ended and a different
+    process got its id. A pidfd keeps the check and the signal on one process.
+    """
+    try:
+        handle = os.pidfd_open(process.pid)
+    except OSError:
+        return False
+    try:
+        if Process(process.pid).start != process.start:
+            return False
+        signal.pidfd_send_signal(handle, number)
+        return True
+    except (OSError, ValueError, IndexError):
+        return False
+    finally:
+        os.close(handle)
+
+
+def stop(top):
+    """Stops the tree of `top`: each process first, so that none starts a new child, then kills each one."""
+    processes = snapshot()
+    current = processes.get(top.pid)
+    if current is None or current.start != top.start:
+        return f"The test process {top.pid} ended before the stop. The watcher sent no signal."
+    stopped = {}
+    # A child that a process started before its stop is in the next snapshot.
+    for _ in range(10):
+        new = [processes[pid] for pid, _ in tree(processes, top.pid) if pid in processes and pid not in stopped]
+        if not new:
+            break
+        for process in new:
+            if send(process, signal.SIGSTOP):
+                stopped[process.pid] = process
+        processes = snapshot()
+    for process in stopped.values():
+        send(process, signal.SIGKILL)
     deadline = time.monotonic() + 10
-    alive = pids
+    alive = sorted(stopped)
     while alive and time.monotonic() < deadline:
-        alive = [pid for pid in alive if os.path.exists(f"/proc/{pid}") and read(f"/proc/{pid}/stat").split(") ")[-1][:1] != "Z"]
+        alive = [pid for pid in alive if running(pid, stopped[pid].start)]
         time.sleep(0.1)
     if alive:
-        return f"The watcher killed the tree of {len(pids)} processes; {alive} did not end in 10 s."
-    return f"The watcher killed the tree of {len(pids)} processes."
+        return f"The watcher killed the tree of {len(stopped)} processes; {alive} did not end in 10 s."
+    return f"The watcher killed the tree of {len(stopped)} processes."
 
 
 def state_files():
