@@ -266,7 +266,9 @@ impl StateStore {
     }
 
     /// Saves `update` on the etag that it gives. An update with no etag
-    /// saves on the current etag of the record.
+    /// saves on the current etag of the record. The read of the current
+    /// etag comes first in each case, so an input that the read refuses gets
+    /// that refusal.
     fn save_record(
         &self,
         update: UpdateRequirementInput,
@@ -274,10 +276,8 @@ impl StateStore {
     ) -> anyhow::Result<Requirement> {
         let scope = update.scope_id.clone();
         let id = update.id.clone();
-        let expected_etag = match update.expected_etag.clone() {
-            Some(etag) => etag,
-            None => self.requirement_edit_state(&scope, &id)?.etag,
-        };
+        let current = self.requirement_edit_state(&scope, &id)?.etag;
+        let expected_etag = update.expected_etag.clone().unwrap_or(current);
         self.save_requirement(SaveRequirement {
             actor: AUTHORING_ACTOR.to_owned(),
             expected_etag,
