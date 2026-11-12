@@ -193,6 +193,7 @@ jobs:
           python3 .github/scripts/select_tests.test.py
           python3 .github/scripts/ci_ok.test.py
           python3 .github/scripts/simulation_report.test.py
+          python3 .github/scripts/stuck_test_report.test.py
       - name: Select the Rust tests
         id: select
         env:
@@ -563,6 +564,12 @@ jobs:
         uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2
         with:
           tool: cargo-llvm-cov@0.9.1
+      # A test process that runs longer than the limit gets a report of its
+      # process tree in this log and is then stopped, so the other tests run.
+      # The slowest test of this step took 540 s (run 43227115462).
+      - name: Start the stuck test report
+        if: runner.os == 'Linux'
+        run: python3 .github/scripts/stuck_test_report.py start --limit 900 --watch provenance
       - name: Test concurrently with coverage
         if: runner.os == 'Linux'
         shell: bash
@@ -589,6 +596,9 @@ jobs:
           # each corrupt profile path and merges the remaining valid profiles.
           # Test failures still fail this command; an entirely invalid set fails too.
           cargo llvm-cov nextest "${packages[@]}" --all-features --no-fail-fast --lcov --failure-mode all --output-path target/crap/lcov.info -E "($TEST_FILTER) & not ($COMPILE_FAIL_TESTS)"
+      - name: Show the stuck test report
+        if: always() && runner.os == 'Linux'
+        run: python3 .github/scripts/stuck_test_report.py finish
       # These facts show if the runner ran out of memory. When the runner
       # itself shuts down, this step does not run; read the SAMPLE lines.
       - name: Show memory facts after a failed test run
@@ -700,9 +710,13 @@ jobs:
           - shard: distribution
             tests: --ignore-default-filter --test cli_skills_single_source
             minutes: 30
+            # The limit of the stuck test report, in seconds. The slowest test
+            # took 907 s in the distribution shard and 431 s in the other shard.
+            stuck-limit: 1380
           - shard: other
             tests: ""
             minutes: 25
+            stuck-limit: 720
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-socket-firewall
@@ -730,6 +744,8 @@ jobs:
           tool: nextest@0.9.143
       - name: Install Codex for the review notify tests
         run: sfw npm install --global --no-audit --no-fund @openai/codex@0.159.1
+      - name: Start the stuck test report
+        run: python3 .github/scripts/stuck_test_report.py start --limit ${{ matrix.stuck-limit }} --watch provenance
       - name: Test the CLI with default features
         env:
           SHARD: ${{ matrix.shard }}
@@ -745,6 +761,9 @@ jobs:
             echo "::error title=Default-features CLI test timeout::The $SHARD shard did not finish in $MINUTES minutes. The nextest output above names the tests that were still running."
           fi
           exit "$status"
+      - name: Show the stuck test report
+        if: always()
+        run: python3 .github/scripts/stuck_test_report.py finish
       - name: Test documentation
         if: matrix.shard == 'other'
         timeout-minutes: 10
@@ -850,6 +869,9 @@ jobs:
         uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2
         with:
           tool: nextest@0.9.143
+      # The slowest compile-fail test took 88 s.
+      - name: Start the stuck test report
+        run: python3 .github/scripts/stuck_test_report.py start --limit 600 --watch provenance
       - name: Test compile-time refusals
         shell: bash
         run: >-
@@ -857,6 +879,9 @@ jobs:
           -p provenance-core -p provenance-macros -p provenance-sdk -p provenance-store
           --test compile_fail --test relation_derive_refusals --test projection_row_refusals
           --all-features --no-fail-fast -E "$COMPILE_FAIL_TESTS"
+      - name: Show the stuck test report
+        if: always()
+        run: python3 .github/scripts/stuck_test_report.py finish
       - name: Measure the trybuild builds
         if: always()
         shell: bash

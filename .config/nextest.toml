@@ -7,6 +7,11 @@ test-threads = 8
 # The simulation tests run only in the nightly simulation workflow, with the
 # simulation profile. CI compiles them, but no CI job runs them.
 default-filter = 'not binary(cli_skills_single_source) & not package(provenance-simulation) & not binary(/^simulation_cli/)'
+# Nextest stops a test after 25 minutes and reports it as TIMEOUT, so that no
+# test holds a job to its job limit. On Linux the stuck test report of CI
+# stops a test before this bound (at most 1,380 s). The slowest tests of a
+# full main run took 682 s on Windows, 357 s on macOS and 907 s on Linux.
+slow-timeout = { period = "60s", terminate-after = 25 }
 
 [profile.ci.junit]
 # target/nextest/ci/junit.xml; CI uploads it for TAG, the test aggregator.
