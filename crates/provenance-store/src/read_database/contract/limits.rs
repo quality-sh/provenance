@@ -5,9 +5,9 @@
 //! does not reach changes nothing. It does not yet say whether an adapter
 //! must stop a statement while it runs; the file adapter does, and its own
 //! tests hold that. When an adapter stops a statement for the bound, its
-//! error is [`OverBudget`](crate::read_database::OverBudget), and
-//! [`super::handles`] holds that a page gives the page budget refusal for
-//! it.
+//! error is [`OverBudget`](crate::read_database::OverBudget), and a case
+//! of the handles (with `host`) holds that a page gives the page budget
+//! refusal for it.
 
 use super::{integers, statement, write, Harness};
 use crate::read_database::{ReadDatabase, SqlRow, SqlValue, Transaction};
