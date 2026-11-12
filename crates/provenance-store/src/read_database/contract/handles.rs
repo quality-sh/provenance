@@ -182,7 +182,7 @@ impl SqlTransaction for Stopping {
     fn fetch<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, Vec<SqlRow>> {
         if self.bounded {
             Box::pin(async {
-                Err(OverBudget(anyhow::anyhow!("the store stopped the statement")).into())
+                Err(OverBudget(crate::refusal::fault!("the store stopped the statement")).into())
             })
         } else {
             self.inner.fetch(sql, values)
