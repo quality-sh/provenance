@@ -42,7 +42,9 @@ test gives the engine a stand-in that refuses a claim, and the O3 test adds
 a second stage to a decision. If the law does not see its fault, the test
 fails with "simulation check broken", and the issue says that a check is
 broken, not a law. `tests/storage_contract.rs` runs the storage contract
-suite of `provenance-store` on the simulated storage.
+suite of `provenance-store` on the simulated storage. `tests/refused_post.rs`
+runs fixed cases of a message post whose publish is refused, in the engine
+job.
 
 The probes are fixed cases next to the random test of each layer. A probe
 that breaks a law fails with "simulation probe <test> broke law <law>" and
