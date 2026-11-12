@@ -30,6 +30,9 @@ enum Reader {
     OpenRepository,
     /// Opens a full view through the public call (reads under the lock).
     ReadView,
+    /// As `OpenRepository`, in a repository with a project dictionary
+    /// reference at `.provenance/state/dictionary.json`.
+    OpenRepositoryWithDictionary,
     /// The writer keeps the thread and message shards open during each write.
     HeldShards,
     /// A thread keeps every state file open for 5 ms, closes, and opens again.
@@ -141,7 +144,7 @@ fn spawn_reader(
             let (mut files, mut dirs) = (Vec::new(), Vec::new());
             files_below(&state, &mut files, &mut dirs);
         }),
-        Reader::OpenRepository => {
+        Reader::OpenRepository | Reader::OpenRepositoryWithDictionary => {
             let errors = Arc::clone(&errors);
             Box::new(move || {
                 if Repository::open(root.as_std_path(), "default").is_err() {
@@ -186,6 +189,13 @@ fn scenario(reader: Reader) -> String {
     let root = Utf8PathBuf::from_path_buf(temp.path().to_path_buf()).unwrap();
     let layout = ProvenanceLayout::new(root.clone());
     store.post_thread_message(message("first")).unwrap();
+    if matches!(reader, Reader::OpenRepositoryWithDictionary) {
+        std::fs::write(
+            layout.state_dir().join("dictionary.json"),
+            br#"{"issue":9,"source_sha256":"d1f4ea9e7cd6e46b47aa9057209f99e78c0e9cfc4e27a5b07895b05c1a166431","data_sha256":"1f60c843dc1c05fe564b06d57b041a9c13b8f5d7b26d56b26e64d83e30e90387","extractor_version":"0.4.0","technical_names":["action","anchor","base"]}"#,
+        )
+        .unwrap();
+    }
     let repository = Repository::open(root.as_std_path(), "default").unwrap();
     let stop = Arc::new(AtomicBool::new(false));
     let reader_errors = Arc::new(AtomicU64::new(0));
@@ -273,6 +283,7 @@ fn s9wr_swap_probe() {
         Reader::ReadFiles,
         Reader::ListDirectories,
         Reader::OpenRepository,
+        Reader::OpenRepositoryWithDictionary,
         Reader::ReadView,
         Reader::HeldLoop,
         Reader::HeldShards,
