@@ -170,6 +170,61 @@ class StuckTestReportTests(unittest.TestCase):
         )
         self.assertNotIn("locks on the open files", report)
 
+    def fake_tool(self, body):
+        """A fake eu-stack: a shell script with the given body."""
+        tools = self.directory / "tools"
+        tools.mkdir(exist_ok=True)
+        tool = tools / "eu-stack"
+        tool.write_text("#!/bin/sh\n" + body + "\n")
+        tool.chmod(0o755)
+        return str(tool)
+
+    def test_a_backtrace_tool_that_does_not_end_stops_at_the_report_deadline(self):
+        tree, holder, waiter, server = self.started_tree()
+        tool = self.fake_tool("sleep 300 & wait")
+        deadline = 2
+        with mock.patch.object(report_module, "find_tool", return_value=tool), \
+                mock.patch.object(report_module, "REPORT_DEADLINE", deadline):
+            watcher = self.watcher_here()
+            # The tree is old enough for a report at the first check.
+            wait_for(lambda: report_module.Process(tree.pid).age(report_module.uptime()) > LIMIT, 10, "the limit")
+            began = time.monotonic()
+            watcher.check()
+            took = time.monotonic() - began
+        report = watcher.out.getvalue()
+        self.assertEqual(tree.wait(timeout=10), -signal.SIGKILL)
+        # The report deadline, plus the reads of /proc and the stop.
+        self.assertLess(took, deadline + 8, report)
+        self.assertIn(f"user backtrace of process {tree.pid} (eu-stack):\n", report)
+        self.assertIn(f"  (eu-stack did not end before the report deadline of {deadline} s)\n", report)
+        # The tree order: each parent before its children, brothers by id.
+        rest = [pid for flock in sorted((holder, waiter)) for pid in ((holder, server) if flock == holder else (waiter,))]
+        self.assertIn(
+            f"The user backtraces are not complete: the report deadline of {deadline} s passed "
+            f"before the backtrace of process {', '.join(map(str, rest))}.\n",
+            report,
+        )
+        self.assertRegex(report, r"\n::endgroup::\n::error title=Stuck test .*\nThe watcher killed the tree of 4 processes\.\n$")
+
+    def test_a_backtrace_gives_readable_rust_names(self):
+        if not shutil.which("c++filt"):
+            self.skipTest("binutils gives c++filt")
+        tree, holder, waiter, server = self.started_tree()
+        tool = self.fake_tool(
+            'echo "PID $2 - process"; '
+            "echo '  #1  0x00005619364c0976 _RNvMs_NtNtCs8ZKwes1zzDd_3std6thread6threadNtB4_6Thread4park'"
+        )
+        with mock.patch.object(report_module, "find_tool", return_value=tool):
+            report = self.check_until_report(self.watcher_here())
+        self.assertEqual(tree.wait(timeout=10), -signal.SIGKILL)
+        for pid in (tree.pid, holder, waiter, server):
+            self.assertIn(
+                f"user backtrace of process {pid} (eu-stack):\n  PID {pid} - process\n"
+                "    #1  0x00005619364c0976 <std[68c81ae915296b05]::thread::thread::Thread>::park\n",
+                report,
+            )
+        self.assertNotIn("not complete", report)
+
     def test_a_process_that_ends_during_the_report_does_not_stop_the_report(self):
         # The values of this process, with the id of a process that ended.
         ended = subprocess.Popen(["true"])

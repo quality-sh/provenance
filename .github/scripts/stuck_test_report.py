@@ -26,7 +26,10 @@ a log group: for each process of the tree, its parent, age, state and command
 line; for each thread, its state, kernel wait channel, system call, kernel
 stack and user backtrace; the open files and sockets; and the lines of
 `/proc/locks` on those files with the holder and the waiter of each lock.
-An `::error` line names the test binary and its age. The watcher then kills
+The install of the backtrace tool and the backtraces have one deadline for
+the report (`REPORT_DEADLINE`); past it the report says that the backtraces
+are not complete. An `::error` line names the test binary and its age, also
+when the report has a fault. The watcher then kills
 the tree, so the test runner reports the test as failed and runs the other
 tests. The watcher reports each top process one time.
 """
@@ -43,12 +46,16 @@ import traceback
 from pathlib import Path
 
 CLOCK_TICKS = os.sysconf("SC_CLK_TCK") if hasattr(os, "sysconf") else 100
-BACKTRACE_LIMIT = 120
-INSTALL_LIMIT = 240
 LINES_PER_BACKTRACE = 400
-# How long `finish` waits for a report in progress: the install and one
-# backtrace of each process of a small tree.
-FINISH_LIMIT = 600
+# One deadline in seconds for the install of the backtrace tool and all the
+# backtraces of one report. In the real CI run, the install took 9.1 s, and
+# the install and the backtraces of 2 processes and 8 threads took less than
+# 12 s. Past the deadline the report says that the backtraces are not
+# complete, and the watcher stops the tree.
+REPORT_DEADLINE = 60
+# How long `finish` waits for a report in progress: the deadline, the reads
+# of /proc and the stop.
+FINISH_LIMIT = REPORT_DEADLINE + 60
 
 # The x86_64 numbers of the system calls in which a test process can wait.
 SYSTEM_CALLS = {
@@ -146,6 +153,7 @@ class Watcher:
         self.out = out
         self.reported = set()
         self.tool = None
+        self.deadline = 0.0
 
     def below_target(self, process):
         return process.exe.startswith(self.target) and not process.name.startswith("build-script-")
@@ -196,6 +204,7 @@ class Watcher:
         label = test_label(top)
         age = top.age(now)
         members = tree(processes, top.pid)
+        self.deadline = time.monotonic() + REPORT_DEADLINE
         self.write(f"::group::Stuck test: {label} (process {top.pid}, {age:.0f} s)")
         try:
             self.write(f"The test process {top.pid} ran {age:.0f} s, past the limit of {self.limit:g} s.")
@@ -299,49 +308,83 @@ class Watcher:
         if not lines:
             self.write("  none")
 
+    def remaining(self):
+        return self.deadline - time.monotonic()
+
     def backtrace_tool(self):
         if self.tool is None:
             self.tool = find_tool()
             if not self.tool:
                 self.write("user backtraces: the runner has no eu-stack, gdb or lldb.")
                 if self.install_tool:
-                    self.tool = install_tool(self.write)
+                    self.tool = install_tool(self.write, self.remaining)
         return self.tool
 
     def write_backtraces(self, pids):
         tool = self.backtrace_tool()
         if not tool:
+            if self.remaining() <= 0:
+                self.write(f"The user backtraces are not complete: the report deadline of {REPORT_DEADLINE:g} s passed.")
             return
-        for pid in pids:
+        name = os.path.basename(tool)
+        for index, pid in enumerate(pids):
+            if self.remaining() <= 0:
+                self.write(
+                    f"The user backtraces are not complete: the report deadline of {REPORT_DEADLINE:g} s passed "
+                    f"before the backtrace of process {', '.join(str(left) for left in pids[index:])}."
+                )
+                return
             command = {
-                "eu-stack": ["eu-stack", "-p", str(pid)],
-                "gdb": ["gdb", "-p", str(pid), "-batch", "-nx", "-ex", "thread apply all bt"],
-                "lldb": ["lldb", "-p", str(pid), "--batch", "-o", "thread backtrace all"],
-            }[tool]
-            self.write(f"user backtrace of process {pid} ({tool}):")
-            try:
-                result = subprocess.run(command, capture_output=True, text=True, errors="replace", timeout=BACKTRACE_LIMIT)
-                lines = (result.stdout + result.stderr).splitlines()
-            except subprocess.TimeoutExpired:
-                lines = [f"({tool} did not end in {BACKTRACE_LIMIT} s)"]
-            except OSError as error:
-                lines = [f"({tool} did not start: {error.strerror or error})"]
-            for line in demangle(lines[:LINES_PER_BACKTRACE]):
+                "eu-stack": [tool, "-p", str(pid)],
+                "gdb": [tool, "-p", str(pid), "-batch", "-nx", "-ex", "thread apply all bt"],
+                "lldb": [tool, "-p", str(pid), "--batch", "-o", "thread backtrace all"],
+            }[name]
+            self.write(f"user backtrace of process {pid} ({name}):")
+            code, output = run_limited(command, self.remaining())
+            lines = output.splitlines()
+            if code is None:
+                lines.append(f"({name} did not end before the report deadline of {REPORT_DEADLINE:g} s)")
+            for line in demangle(lines[:LINES_PER_BACKTRACE], self.remaining()):
                 self.write(f"  {line}")
             if len(lines) > LINES_PER_BACKTRACE:
                 self.write(f"  ({len(lines) - LINES_PER_BACKTRACE} more lines are not shown)")
 
 
-def demangle(lines):
+def run_limited(command, seconds, environment=None, text_input=None):
+    """Runs a command for at most `seconds`. Gives its exit code and its output.
+
+    The exit code is None when the command did not end in time. The command
+    runs in a new session, so that the stop at the limit also stops its
+    children, and the read of its output ends.
+    """
+    if seconds <= 0:
+        return None, ""
+    try:
+        child = subprocess.Popen(
+            command, stdin=subprocess.PIPE if text_input is not None else subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=environment,
+            text=True, errors="replace", start_new_session=True,
+        )
+    except OSError as error:
+        return 127, f"({os.path.basename(command[0])} did not start: {error.strerror or error})"
+    try:
+        output = child.communicate(text_input, timeout=seconds)[0]
+        return child.returncode, output
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(child.pid, signal.SIGKILL)
+        except OSError:
+            pass
+        return None, child.communicate()[0]
+
+
+def demangle(lines, seconds):
     """Rust symbol names in a readable form, when binutils gives c++filt."""
     if not lines or not shutil.which("c++filt"):
         return lines
-    try:
-        result = subprocess.run(["c++filt"], input="\n".join(lines), capture_output=True, text=True, timeout=60)
-    except (OSError, subprocess.TimeoutExpired):
-        return lines
-    demangled = result.stdout.splitlines()
-    return demangled if result.returncode == 0 and len(demangled) == len(lines) else lines
+    code, output = run_limited(["c++filt"], min(seconds, 10), text_input="\n".join(lines))
+    demangled = output.splitlines()
+    return demangled if code == 0 and len(demangled) == len(lines) else lines
 
 
 def test_label(process):
@@ -395,26 +438,21 @@ def address(text):
 
 def find_tool():
     for tool in ("eu-stack", "gdb", "lldb"):
-        if shutil.which(tool):
-            return tool
+        path = shutil.which(tool)
+        if path:
+            return path
     return None
 
 
-def install_tool(write):
-    """Installs elfutils for eu-stack. Only a job with a stuck test pays for it."""
+def install_tool(write, remaining):
+    """Installs elfutils for eu-stack before the report deadline. Only a job with a stuck test pays for it."""
     began = time.monotonic()
     environment = {**os.environ, "DEBIAN_FRONTEND": "noninteractive"}
     install = ["apt-get", "install", "-y", "--no-install-recommends", "elfutils"]
     for commands in ([install], [["apt-get", "update"], install]):
-        try:
-            if all(
-                subprocess.run(command, env=environment, capture_output=True, timeout=INSTALL_LIMIT).returncode == 0
-                for command in commands
-            ):
-                write(f"Installed elfutils for eu-stack in {time.monotonic() - began:.1f} s.")
-                return find_tool()
-        except (OSError, subprocess.TimeoutExpired):
-            pass
+        if all(run_limited(command, remaining(), environment)[0] == 0 for command in commands):
+            write(f"Installed elfutils for eu-stack in {time.monotonic() - began:.1f} s.")
+            return find_tool()
     write(f"The install of elfutils failed after {time.monotonic() - began:.1f} s.")
     return None
 
