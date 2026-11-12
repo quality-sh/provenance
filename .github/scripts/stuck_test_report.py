@@ -55,6 +55,8 @@ from pathlib import Path
 
 CLOCK_TICKS = os.sysconf("SC_CLK_TCK") if hasattr(os, "sysconf") else 100
 LINES_PER_BACKTRACE = 400
+# The first words of the last line of the watcher, which it writes at SIGTERM.
+STOP_LINE = "The watcher stops."
 # One deadline in seconds for the install of the backtrace tool and all the
 # backtraces of one report. In the real CI run, the install took 9.1 s, and
 # the install and the backtraces of 2 processes and 8 threads took less than
@@ -172,6 +174,8 @@ class Watcher:
         self.reported = set()
         self.tool = None
         self.deadline = 0.0
+        self.checks = 0
+        self.largest_age = 0.0
 
     def below_target(self, process):
         return process.uid == self.uid and process.exe.startswith(self.target)
@@ -205,7 +209,9 @@ class Watcher:
     def check(self):
         processes = snapshot()
         now = uptime()
+        self.checks += 1
         for top in self.tops(processes):
+            self.largest_age = max(self.largest_age, top.age(now))
             key = (top.pid, top.start)
             if top.age(now) > self.limit and key not in self.reported:
                 self.reported.add(key)
@@ -224,6 +230,10 @@ class Watcher:
             deadline = time.monotonic() + interval
             while not stopping and time.monotonic() < deadline:
                 time.sleep(min(0.2, interval))
+        self.write(
+            f"{STOP_LINE} It looked at the processes {self.checks} times. "
+            f"The largest age of a test binary that it saw was {self.largest_age:.0f} s."
+        )
 
     def write(self, text):
         self.out.write(text + "\n")
@@ -541,20 +551,34 @@ def start(arguments):
         command = ["sudo", "-n", "--"] + command
     with open(log, "wb") as output:
         watcher = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
-    pid_file.write_text(str(watcher.pid))
+    # The start time identifies the process, also if a different process gets its id.
+    pid_file.write_text(f"{watcher.pid} {Process(watcher.pid).start}")
     print(f"Started the stuck test report (process {watcher.pid}, limit {arguments.limit:g} s, log {log}).")
     return 0
 
 
-def running(pid):
-    stat = read(f"/proc/{pid}/stat")
-    return not stat.startswith("(") and stat.rsplit(") ", 1)[-1][:1] != "Z"
+def running(pid, start=None):
+    """True when the process `pid` runs, is not a zombie and, if given, has the start time `start`."""
+    try:
+        process = Process(pid)
+    except (OSError, ValueError, IndexError):
+        return False
+    return process.state != "Z" and (start is None or process.start == start)
+
+
+def warning(text):
+    print(f"::warning title=Stuck test report::{escape(text)}")
 
 
 def finish(_arguments):
+    """Stops the watcher and writes its log. Always gives exit code 0."""
     log, pid_file = state_files()
-    if pid_file.exists():
-        pid = int(pid_file.read_text())
+    if not pid_file.exists():
+        warning("The stuck test report did not start, so no test of this step was watched.")
+        return 0
+    pid, start = (int(field) for field in pid_file.read_text().split())
+    alive = running(pid, start)
+    if alive:
         try:
             os.kill(pid, signal.SIGTERM)
         except PermissionError:
@@ -563,16 +587,22 @@ def finish(_arguments):
             pass
         # The watcher completes a report in progress before it ends.
         deadline = time.monotonic() + FINISH_LIMIT
-        while time.monotonic() < deadline and running(pid):
+        while time.monotonic() < deadline and running(pid, start):
             time.sleep(0.2)
-        pid_file.unlink()
-    if not log.exists():
-        print("The stuck test report did not run.")
-        return 0
-    text = log.read_text(errors="replace")
+    pid_file.unlink()
+    text = log.read_text(errors="replace") if log.exists() else ""
     sys.stdout.write(text)
-    if "::error" not in text:
-        print("No test ran past the limit.")
+    if not alive:
+        warning(
+            "The watcher was not alive at the stop. A test of this step that ran past the limit "
+            "after the watcher ended has no report. The log of the watcher is above."
+        )
+    elif STOP_LINE not in text:
+        warning(f"The watcher was alive at the stop, but it did not end in {FINISH_LIMIT:g} s.")
+    else:
+        print("The watcher was alive at the stop.")
+        if "::error" not in text:
+            print("No test ran past the limit.")
     return 0
 
 

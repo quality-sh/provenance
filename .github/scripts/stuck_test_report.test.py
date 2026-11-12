@@ -15,6 +15,7 @@ import importlib.util
 import io
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import subprocess
@@ -315,6 +316,12 @@ class StuckTestReportTests(unittest.TestCase):
             r"The watcher killed the tree of 4 processes\.\n",
         )
         self.assertNotIn("No test ran past the limit.", report)
+        self.assertRegex(
+            report,
+            r"\nThe watcher stops\. It looked at the processes \d+ times\. "
+            rf"The largest age of a test binary that it saw was \d+ s\.\nThe watcher was alive at the stop\.\n$",
+        )
+        self.assertNotIn("::warning", report)
         self.assertIn("::endgroup::", report)
         for pid, parent, program in (
             (tree.pid, os.getpid(), self.binary),
@@ -334,6 +341,56 @@ class StuckTestReportTests(unittest.TestCase):
         self.assertIn("listening ports: none", report)
         self.assertRegex(report, rf"process {holder}: flock .* holds a FLOCK WRITE lock on {self.lock}")
         self.assertRegex(report, rf"process {waiter}: flock .* waits for a FLOCK WRITE lock on {self.lock}")
+
+    def test_finish_with_no_start_gives_a_warning(self):
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "finish"], env=self.environment, text=True, capture_output=True,
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(
+            result.stdout,
+            "::warning title=Stuck test report::The stuck test report did not start, "
+            "so no test of this step was watched.\n",
+        )
+
+    def test_finish_after_the_watcher_died_gives_a_warning(self):
+        # The state that start leaves, with the id and start time of a
+        # watcher that ended before the stop.
+        watcher = self.watcher(LIMIT)
+        first = watcher.stdout.readline()
+        start = report_module.Process(watcher.pid).start
+        log, pid_file = self.directory / "stuck-test-report.log", self.directory / "stuck-test-report.pid"
+        pid_file.write_text(f"{watcher.pid} {start}")
+        watcher.kill()
+        log.write_text(first + watcher.communicate(timeout=10)[0])
+        report = self.script("finish")
+        self.assertIn("Watching the processes below", report)
+        self.assertNotIn("The watcher stops.", report)
+        self.assertNotIn("No test ran past the limit.", report)
+        self.assertTrue(
+            report.endswith(
+                "::warning title=Stuck test report::The watcher was not alive at the stop. A test of this step "
+                "that ran past the limit after the watcher ended has no report. The log of the watcher is above.\n"
+            ),
+            report,
+        )
+        self.assertFalse(pid_file.exists())
+
+    def test_a_quiet_watcher_says_how_much_it_saw(self):
+        tree = self.start_tree()
+        self.script(
+            "start", "--limit", "300", "--watch", SERVER, "--root", str(self.directory), "--interval", str(INTERVAL)
+        )
+        try:
+            time.sleep(2)
+        finally:
+            report = self.script("finish")
+        self.assertIsNone(tree.poll())
+        match = re.search(r"It looked at the processes (\d+) times\. The largest age of a test binary that it saw was (\d+) s\.", report)
+        self.assertIsNotNone(match, report)
+        self.assertGreater(int(match[1]), 2)
+        self.assertIn(int(match[2]), (1, 2, 3))
+        self.assertTrue(report.endswith("The watcher was alive at the stop.\nNo test ran past the limit.\n"), report)
 
     def test_a_young_test_and_a_watched_name_outside_the_root_get_no_report(self):
         # A process with the watched name whose program is outside the root,
