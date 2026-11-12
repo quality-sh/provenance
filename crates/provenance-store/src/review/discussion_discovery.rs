@@ -264,8 +264,9 @@ fn first_by_id(mut rows: Vec<SqlRow>, wanted: usize) -> anyhow::Result<Vec<SqlRo
         row.text(0)?;
     }
     rows.sort_by(|left, right| {
-        let id = |row: &SqlRow| row.text(0).map(str::to_owned).unwrap_or_default();
-        id(left).cmp(&id(right))
+        left.text(0)
+            .unwrap_or_default()
+            .cmp(right.text(0).unwrap_or_default())
     });
     rows.truncate(wanted);
     Ok(rows)
