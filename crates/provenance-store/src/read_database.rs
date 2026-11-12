@@ -2,13 +2,11 @@
 //!
 //! The engine runs SQL text through this port and decodes the rows that it
 //! gets back. The named queries stay above the port, as the snapshot
-//! handles and the catch-up. Each store has an adapter: the file adapter
-//! keeps the CLI's `SQLite` file under `.provenance/cache`, and an adapter
-//! over a store that is not a local file keeps the same tables there.
+//! handles and the catch-up. Each store has an adapter. The file adapter
+//! keeps the CLI's `SQLite` file under `.provenance/cache`.
 //!
-//! A transaction is lent to one piece of work and ends when the work ends,
-//! so a store that runs a transaction over one closure can hold it. The
-//! work owns the transaction while it runs: a read drops it, and a write
+//! A transaction is lent to one piece of work and ends when the work ends.
+//! The work owns the transaction while it runs: a read drops it, and a write
 //! commits it at its end. The store completes its connection after the
 //! work ends, so a lock that the work frees after its commit is free while
 //! the connection closes.
