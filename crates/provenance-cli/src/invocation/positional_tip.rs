@@ -44,17 +44,53 @@ pub(super) fn with_tip(mut error: clap::Error, arguments: &[String]) -> clap::Er
 }
 
 /// The value and the flag of the table for the command that the arguments select. The
-/// parse ignores errors, so it selects the command that clap refused a value for.
+/// parse ignores errors, so it selects the command that clap refused a value for. When
+/// the arguments already give the flag, there is no tip, because the refused value is
+/// one value too many.
 fn flag(arguments: &[String]) -> Option<(&'static str, &'static str)> {
     let matches = super::root_command()
         .ignore_errors(true)
         .try_get_matches_from(arguments)
         .ok()?;
     let (words, _) = crate::registry_cli::selected(&matches);
-    FLAGS
+    let (_, thing, flag) = FLAGS
         .iter()
-        .find(|(command, _, _)| *command == words.as_slice())
-        .map(|(_, thing, flag)| (*thing, *flag))
+        .find(|(command, _, _)| *command == words.as_slice())?;
+    let short = declared(&words, flag).and_then(|arg| arg.get_short());
+    let given = arguments
+        .iter()
+        .skip(1)
+        .take_while(|argument| *argument != "--")
+        .any(|argument| names_flag(argument, flag, short));
+    (!given).then_some((*thing, *flag))
+}
+
+/// The argument of the command that has the long name `flag`.
+fn declared(words: &[&str], flag: &str) -> Option<clap::Arg> {
+    let mut command = super::root_command();
+    command.build();
+    for word in words {
+        command = command.find_subcommand(word)?.clone();
+    }
+    command
+        .get_arguments()
+        .find(|arg| arg.get_long() == Some(flag))
+        .cloned()
+}
+
+/// True when one argument gives the flag by its long name or by its short name, with or
+/// without an attached value.
+fn names_flag(argument: &str, flag: &str, short: Option<char>) -> bool {
+    if let Some(long) = argument.strip_prefix("--") {
+        return match long.strip_prefix(flag) {
+            Some(rest) => rest.is_empty() || rest.starts_with('='),
+            None => false,
+        };
+    }
+    let Some(shorts) = argument.strip_prefix('-') else {
+        return false;
+    };
+    short.is_some_and(|short| shorts.starts_with(short))
 }
 
 #[cfg(test)]
@@ -63,17 +99,8 @@ mod tests {
     #[test]
     fn each_flag_is_declared_by_its_command() {
         for (words, _, flag) in super::FLAGS {
-            let mut command = super::super::root_command();
-            command.build();
-            for word in *words {
-                command = command.find_subcommand(word).unwrap().clone();
-            }
-            assert!(
-                command
-                    .get_arguments()
-                    .any(|arg| arg.get_long() == Some(*flag)),
-                "{words:?} --{flag}"
-            );
+            let declared = super::declared(words, flag);
+            assert!(declared.is_some(), "{words:?} --{flag}");
         }
     }
 }
