@@ -19,14 +19,7 @@ pub async fn dispatch_root(
             "`provenance discussions <discussion-id> get` was removed. Use \
              `provenance {id} discussion`"
         ),
-        // One word without `get` can be a Discussion ID, a record ID or a status, so the
-        // refusal does not put the word in a command.
-        (Some(word), None) => anyhow::bail!(
-            "`provenance discussions` does not take the value `{word}`. Use \
-             `provenance <discussion-id> discussion` to read one Discussion, \
-             `provenance <record-id> discussions` to list the Discussions of one record, or \
-             `provenance discussions --status <status>` to list the Discussions with a status"
-        ),
+        (Some(word), None) => return Err(word_refusal(&word)),
         (None, Some(_)) => anyhow::bail!("get requires a Discussion ID"),
         (None, None) => {}
     }
@@ -46,6 +39,23 @@ pub async fn dispatch_root(
         .execute_discussion(action, request)
         .await?;
     print(&outcome, args.common.format())
+}
+
+/// The refusal of `provenance discussions <word>`. The word can be a Discussion ID, so
+/// the refusal gives the command that reads the Discussion with that ID. The word can
+/// also be a record ID or a status, so the refusal also gives the commands that list
+/// Discussions.
+fn word_refusal(word: &str) -> anyhow::Error {
+    let read = if word.is_empty() {
+        "`provenance <discussion-id> discussion` to read one Discussion".to_owned()
+    } else {
+        format!("`provenance {word} discussion` to read the Discussion `{word}`")
+    };
+    anyhow::anyhow!(
+        "`provenance discussions` does not take a Discussion ID. Use {read}, \
+         `provenance <record-id> discussions` to list the Discussions of one record, or \
+         `provenance discussions --status <status>` to list the Discussions with a status"
+    )
 }
 
 pub async fn dispatch_target(
