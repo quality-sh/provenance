@@ -10,12 +10,14 @@ mod stamp;
 mod units;
 mod validation;
 
+#[cfg(feature = "host")]
+pub use catch_up::catch_up_state;
 #[cfg(test)]
 #[cfg(feature = "host")]
 pub use catch_up::catch_up_with_guard;
 #[cfg(feature = "host")]
 pub use catch_up::catch_up_work;
-pub use catch_up::{catch_up_state, CatchUpReport};
+pub use catch_up::CatchUpReport;
 pub use record_rows::SEARCH_TEXT;
 #[cfg(feature = "host")]
 pub use units::unit_stored_digest;
@@ -27,9 +29,11 @@ use super::MaterializeReport;
 use crate::current_schema::{self, Compatibility};
 use crate::publication;
 use crate::read_database::{ReadDatabase, SqlColumns, Transaction as Lent};
+#[cfg(feature = "host")]
 use crate::repository::Repository;
 use provenance_macros::rule;
 
+#[cfg(feature = "host")]
 pub async fn materialize_empty_state(repository: &Repository) -> anyhow::Result<MaterializeReport> {
     let guard = publication::publication_guard(repository).await?;
     let _held = &guard;
@@ -53,6 +57,7 @@ pub async fn materialize_empty_state(repository: &Repository) -> anyhow::Result<
     })
 }
 
+#[cfg(feature = "host")]
 async fn initialize_empty(mut transaction: Lent) -> anyhow::Result<bool> {
     crate::test_probes::at("prepare_current_schema_under_guard")?;
     let tx = &mut transaction;
@@ -66,6 +71,7 @@ async fn initialize_empty(mut transaction: Lent) -> anyhow::Result<bool> {
     Ok(true)
 }
 
+#[cfg(feature = "host")]
 pub async fn materialize_state(repository: &Repository) -> anyhow::Result<MaterializeReport> {
     let guard = publication::publication_guard(repository).await?;
     materialize_with_guard(&guard, repository.read_database()?).await
@@ -77,6 +83,7 @@ pub async fn materialize_state(repository: &Repository) -> anyhow::Result<Materi
 /// guard. The serial is the stored serial plus one. The connection is
 /// complete before the report or the failure leaves, however the body
 /// ends.
+#[cfg(feature = "host")]
 pub(super) async fn materialize_with_guard(
     guard: &publication::PublicationGuard,
     database: &dyn ReadDatabase,

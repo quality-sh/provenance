@@ -34,10 +34,9 @@ pub(crate) use materialize::catch_up_work;
 pub(crate) use materialize::stored_validation_version;
 #[cfg(feature = "host")]
 pub(crate) use materialize::unit_stored_digest;
-pub use materialize::{
-    catch_up_state, materialize_empty_state, materialize_state, scope_ids, unit_digest, units_for,
-    CatchUpReport, Unit, UnitHashError,
-};
+#[cfg(feature = "host")]
+pub use materialize::{catch_up_state, materialize_empty_state, materialize_state};
+pub use materialize::{scope_ids, unit_digest, units_for, CatchUpReport, Unit, UnitHashError};
 pub use prime::*;
 pub use projection_digest::{
     family_content_digests, revision_digest, revision_digest_from_stored_rows, FamilyContentDigest,

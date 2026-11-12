@@ -11,6 +11,7 @@ use crate::current_schema::{self, Compatibility};
 use crate::publication;
 use crate::read_database::{ReadDatabase, Transaction as Lent, WriteWork};
 use crate::read_database::{SqlColumns, SqlValue};
+#[cfg(feature = "host")]
 use crate::repository::Repository;
 use provenance_core::ScopeId;
 use std::collections::{BTreeMap, BTreeSet};
@@ -39,6 +40,7 @@ pub struct CatchUpReport {
     pub cache_recreated: bool,
 }
 
+#[cfg(feature = "host")]
 pub async fn catch_up_state(repository: &Repository) -> anyhow::Result<CatchUpReport> {
     let guard = publication::publication_guard(repository).await?;
     catch_up_with_guard(guard, repository.read_database()?).await

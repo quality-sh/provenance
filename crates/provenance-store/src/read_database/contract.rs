@@ -6,12 +6,15 @@
 //! No case runs one port call inside the work of another, and no work
 //! waits on anything but its own transaction.
 
-use super::{is_missing_table, ReadDatabase, SqlRow, SqlValue, Statement, Unopened};
+use super::{
+    is_missing_table, ReadDatabase, SqlFuture, SqlRow, SqlValue, Statement, Transaction, Unopened,
+};
 
 pub mod handles;
 pub mod limits;
 #[cfg(any(test, feature = "test-fixture"))]
 mod other;
+#[cfg(feature = "host")]
 pub mod projection;
 pub mod sequence;
 
@@ -26,11 +29,27 @@ pub trait Harness {
     fn reopen(&self) -> Box<dyn ReadDatabase>;
     /// Whether a write can commit while a read of the store is open.
     ///
-    /// A store whose read runs to its end in one call says no, and then the
-    /// write runs after the read.
+    /// This answer changes one check of one case,
+    /// [`sequence::a_read_answers_from_one_committed_state`]: with `true`,
+    /// the write that the case starts beside the read must commit before
+    /// the read ends. With `false`, the case does not check when that write
+    /// commits. A store whose read runs to its end in one call says no, and
+    /// then the write runs after the read.
+    ///
+    /// The rest of that case runs with either answer: the write starts
+    /// after the first statement of the read, every row that the read gets
+    /// must be from the state committed before it, the write must succeed,
+    /// and a later read must find the rows of both writes. So a store whose
+    /// read sees a write that commits while it is open fails the case with
+    /// either answer. No other case reads this answer.
     fn reads_interleave(&self) -> bool {
         true
     }
+    /// Makes the commit of the write `transaction` fail, so that the write
+    /// keeps nothing. The work commits after this call, as every write
+    /// work does. A store that commits in the work fails that commit; a
+    /// store that makes its commit durable after the work fails it there.
+    fn fail_commit<'a>(&'a self, transaction: &'a mut Transaction) -> SqlFuture<'a, ()>;
 }
 
 fn statement(sql: &str, values: Vec<SqlValue>) -> Statement {

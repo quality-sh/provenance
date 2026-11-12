@@ -3,6 +3,9 @@
 //! The catch-up and the schema check run as the engine runs them, over a
 //! repository whose state is in memory and whose read database is the
 //! adapter under test.
+//!
+//! The cases build with `host` only: each pass takes the publication
+//! guard, whose wait for the section lock runs on the blocking pool.
 
 use super::{fetch, statement, write, Harness};
 use crate::cache::{catch_up_state, materialize_state, CatchUpReport};

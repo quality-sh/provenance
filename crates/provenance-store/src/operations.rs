@@ -233,7 +233,6 @@ fn clean_file_commit(repo: &Utf8Path, file: &Utf8Path) -> Option<String> {
     Some(String::from_utf8(head.stdout).ok()?.trim().to_string())
 }
 
-#[cfg(feature = "host")]
 #[cfg(test)]
 #[cfg(feature = "host")]
 mod write_tests;

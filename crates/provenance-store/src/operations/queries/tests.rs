@@ -11,6 +11,7 @@ mod comparison;
 mod concurrent;
 mod cursor;
 mod dangling_targets;
+mod discussion_chunks;
 mod discussion_outputs;
 mod document;
 mod document_lifecycle;

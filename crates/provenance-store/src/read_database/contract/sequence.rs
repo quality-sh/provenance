@@ -192,6 +192,46 @@ pub async fn a_failed_write_stops_the_read<H: Harness>(harness: H) {
     );
 }
 
+/// A write whose commit fails keeps nothing, and fails.
+///
+/// Serial 1 is kept. A work writes the next serial and commits, and the
+/// harness makes that commit fail. [`ReadDatabase::write`] then fails, and
+/// [`ReadDatabase::write_then_read`] fails with the outer error and does
+/// not run its read. A later read finds serial 1 only, so a caller that
+/// stamps a read with the serial it finds never stamps one that was not
+/// kept.
+pub async fn a_write_whose_commit_fails_keeps_nothing<H: Harness + Sync>(harness: H) {
+    let database = harness.database();
+    sequenced(database).await;
+    database.write(insert(1)).await.unwrap();
+    let failing = |n: i64| -> WriteWork<'_> {
+        let harness = &harness;
+        Box::new(move |mut transaction| {
+            Box::pin(async move {
+                transaction
+                    .execute(
+                        "INSERT INTO sequenced (n) VALUES (?)",
+                        vec![SqlValue::Integer(n)],
+                    )
+                    .await?;
+                harness.fail_commit(&mut transaction).await?;
+                transaction.commit().await
+            })
+        })
+    };
+    database.write(failing(2)).await.unwrap_err();
+    let mut seen = None;
+    database
+        .write_then_read(failing(2), read_into(&mut seen))
+        .await
+        .unwrap_err();
+    assert_eq!(seen, None, "the read ran after a write that failed");
+    assert_eq!(
+        integers(&fetch(database, "SELECT n FROM sequenced ORDER BY n").await),
+        vec![1]
+    );
+}
+
 /// A read of `write_then_read` that fails keeps the write.
 ///
 /// The inner error is the error of the read, and the write stays committed.

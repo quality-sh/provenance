@@ -1732,13 +1732,6 @@ jobs:
             cargo check --locked -p "$crate" --target "$TARGET"
             echo "::endgroup::"
           done
-      # The read database contract and the wrapper that its cases use build
-      # for the target, so an adapter outside this repository can run them
-      # there: the schema, catch-up, snapshot and handle cases.
-      - name: Check the store with its contract fixtures for the target
-        env:
-          TARGET: ${{ steps.kernel.outputs.target }}
-        run: cargo check --locked -p provenance-store --target "$TARGET" --features test-fixture
       # The check above builds for the target only. These tests run the engine
       # without host on the memory adapter, which has no state files.
       - name: Test the store on the memory adapter without host
@@ -1755,6 +1748,40 @@ jobs:
         run: cargo clippy --locked -p provenance-transport --all-targets -- -D warnings
       - name: Test the store library without host
         run: cargo test --locked -p provenance-store --lib
+
+  # The read database contract and the wrapper that its cases use build for
+  # the kernel target, so an adapter outside this repository can run them
+  # there. This is a job of its own: the wasm-kernel job checks the kernel
+  # crates with their default features only.
+  wasm-contract-fixtures:
+    timeout-minutes: 30
+    name: Wasm contract fixtures
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - name: Read the kernel target from the policy
+        id: kernel
+        run: echo "target=$(jq -r '.kernel.target' .config/crate-dependencies.json)" >> "$GITHUB_OUTPUT"
+      - name: Add the target
+        env:
+          TARGET: ${{ steps.kernel.outputs.target }}
+        run: rustup target add "$TARGET"
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: wasm-contract-fixtures
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Fetch crates through Socket Firewall
+        run: sfw cargo fetch --locked
+      - name: Check the store with its contract fixtures for the target
+        env:
+          TARGET: ${{ steps.kernel.outputs.target }}
+        run: cargo check --locked -p provenance-store --target "$TARGET" --features test-fixture
 
   # The one status the branch ruleset requires. Conditional jobs skip when a
   # pull request leaves their inputs untouched, and a skipped matrix job never
@@ -1793,6 +1820,7 @@ jobs:
       - repository-file-access
       - skills-install
       - wasm-kernel
+      - wasm-contract-fixtures
     if: always()
     runs-on: ubuntu-24.04
     steps:
