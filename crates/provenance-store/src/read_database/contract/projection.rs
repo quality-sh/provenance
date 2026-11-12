@@ -80,7 +80,17 @@ pub async fn a_catch_up_makes_and_follows_the_projection<H: Harness>(harness: H)
 
     repository
         .store()
-        .create_requirement(serde_json::from_value(requirement("req_second")).unwrap())
+        .create_requirement(
+            serde_json::from_value(serde_json::json!({
+                "scope_id": "default",
+                "id": "req_second",
+                "statement": "Share links expire",
+                "status": "active",
+                "depends_on": [],
+                "supersedes": [],
+            }))
+            .unwrap(),
+        )
         .unwrap();
     let next = catch_up_state(&repository).await.unwrap();
     assert_eq!(outcome(&next), (2, false, true, false));
