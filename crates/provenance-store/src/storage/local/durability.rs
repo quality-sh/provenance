@@ -33,6 +33,18 @@ pub fn write_synced_file(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Removes the file at `path` and then syncs its directory, so that the
+/// remove is durable before the call returns. A file that does not exist is a
+/// success with no sync.
+pub fn remove_synced_file(path: &Utf8Path) -> anyhow::Result<()> {
+    let parent = parent_of(path)?;
+    match std::fs::remove_file(crate::long_path::extended(path)?) {
+        Ok(()) => sync_directory(directory_or_current(parent)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(crate::refusal::caused(error, format!("remove {path}"))),
+    }
+}
+
 /// Writes `bytes` to the file at `path` in a staged tree, with a temporary
 /// file and a replace, and does not sync. The caller syncs the tree with
 /// [`sync_tree`] one time, after all of its writes and before it uses the

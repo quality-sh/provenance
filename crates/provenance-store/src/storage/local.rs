@@ -143,21 +143,12 @@ impl LocalStateStorage {
             let path = self.layout.state_dir().join(key.as_str());
             bytes
                 .map_or_else(
-                    || remove_file(&path),
+                    || durability::remove_synced_file(&path),
                     |bytes| durability::write_synced_file(&path, bytes),
                 )
                 .map_err(PublishFailure::Started)?;
         }
         Ok(())
-    }
-}
-
-fn remove_file(path: &Utf8Path) -> anyhow::Result<()> {
-    match std::fs::remove_file(crate::long_path::extended(path)?) {
-        Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
-            Err(crate::refusal::caused(error, format!("remove {path}")))
-        }
-        _ => Ok(()),
     }
 }
 
