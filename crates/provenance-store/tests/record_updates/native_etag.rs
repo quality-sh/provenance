@@ -53,7 +53,10 @@ async fn native_requirement_updates_with_no_etag_save_on_the_current_etag() {
             .unwrap();
         assert_eq!(updated["description"], description);
     }
-    assert_eq!(stored(&fixture).description.as_deref(), Some("Second writer"));
+    assert_eq!(
+        stored(&fixture).description.as_deref(),
+        Some("Second writer")
+    );
 }
 
 #[tokio::test]
@@ -62,18 +65,27 @@ async fn a_native_requirement_update_on_a_stale_etag_is_refused() {
     fixture.requirement().await;
     let etag = current_etag(&fixture);
     fixture
-        .call("update-requirement-native", update(Some(&etag), "First writer"))
+        .call(
+            "update-requirement-native",
+            update(Some(&etag), "First writer"),
+        )
         .await
         .unwrap();
     let after_first = current_etag(&fixture);
     let second = fixture
-        .call("update-requirement-native", update(Some(&etag), "Second writer"))
+        .call(
+            "update-requirement-native",
+            update(Some(&etag), "Second writer"),
+        )
         .await;
     assert_eq!(
         second,
         Err(json!({"kind":"requirement_edit_conflict","current_etag":after_first}))
     );
-    assert_eq!(stored(&fixture).description.as_deref(), Some("First writer"));
+    assert_eq!(
+        stored(&fixture).description.as_deref(),
+        Some("First writer")
+    );
     assert_eq!(current_etag(&fixture), after_first);
 }
 
@@ -83,7 +95,10 @@ async fn a_stale_native_update_gets_the_refusal_of_the_public_update() {
     fixture.requirement().await;
     let etag = current_etag(&fixture);
     fixture
-        .call("update-requirement-native", update(Some(&etag), "First writer"))
+        .call(
+            "update-requirement-native",
+            update(Some(&etag), "First writer"),
+        )
         .await
         .unwrap();
     let input: UpdateRequirementInput =
@@ -115,13 +130,19 @@ async fn a_stale_native_update_after_a_status_change_keeps_the_status() {
         .unwrap();
     let after_status = current_etag(&fixture);
     let stale = fixture
-        .call("update-requirement-native", update(Some(&etag), "Stale writer"))
+        .call(
+            "update-requirement-native",
+            update(Some(&etag), "Stale writer"),
+        )
         .await;
     assert_eq!(
         stale,
         Err(json!({"kind":"requirement_edit_conflict","current_etag":after_status}))
     );
     let requirement = stored(&fixture);
-    assert_eq!(requirement.status, provenance_core::RequirementStatus::Refinement);
+    assert_eq!(
+        requirement.status,
+        provenance_core::RequirementStatus::Refinement
+    );
     assert_eq!(requirement.description, None);
 }
