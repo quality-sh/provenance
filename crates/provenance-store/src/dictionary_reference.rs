@@ -109,6 +109,11 @@ pub fn load_project_dictionary(layout: &ProvenanceLayout) -> Option<ProjectDicti
 }
 
 /// Stores the index in the machine data directory and writes the project reference.
+///
+/// The reference write makes the state directory if it does not exist, writes
+/// a temporary file, syncs it, renames it over the reference and syncs the
+/// directory. A stop during the write keeps the old reference or gives the
+/// new one, and never a part of a file.
 #[cfg(feature = "host")]
 pub fn set_project_dictionary(
     layout: &ProvenanceLayout,
@@ -119,10 +124,9 @@ pub fn set_project_dictionary(
     provenance_ste100::store_dictionary_index(import, &directory)
         .context("store the dictionary index")?;
     let path = dictionary_reference_path(layout);
-    std::fs::create_dir_all(layout.state_dir().as_std_path())
-        .context("create the project state directory")?;
     let reference = reference_bytes(layout, &import.identity)?;
-    std::fs::write(path.as_std_path(), reference).context("write the dictionary reference")?;
+    crate::storage::local::durability::write_synced_file(&path, &reference)
+        .context("write the dictionary reference")?;
     Ok(path)
 }
 

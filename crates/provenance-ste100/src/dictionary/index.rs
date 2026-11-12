@@ -1,5 +1,6 @@
 use std::{
     fs::OpenOptions,
+    io::Write,
     path::{Path, PathBuf},
 };
 
@@ -61,6 +62,12 @@ impl std::fmt::Display for DictionaryIndexError {
 impl std::error::Error for DictionaryIndexError {}
 
 /// Stores one import as a reusable index file named by its identity.
+///
+/// The function writes a staged file, syncs it, renames it over the index
+/// file and syncs the directory. A stored index that is different or does not
+/// load stays until the rename replaces it, so a reader always finds an index
+/// file. On Windows, a directory has no sync, and a power loss can lose the
+/// rename.
 #[rule("rule_ste_dictionary_import_reuse")]
 pub fn store_dictionary_index(
     import: &DictionaryImport,
@@ -77,20 +84,35 @@ pub fn store_dictionary_index(
         .open(&lock_path)
         .map_err(|error| io_error(&lock_path, &error))?;
     FileExt::lock_exclusive(&lock).map_err(|error| io_error(&lock_path, &error))?;
-    match load_dictionary_index(directory, &import.identity) {
-        Ok(stored) if stored == *import => return Ok(path),
-        Ok(_) => std::fs::remove_file(&path).map_err(|error| io_error(&path, &error))?,
-        Err(DictionaryIndexError::NotFound { .. }) => {}
-        Err(_) => std::fs::remove_file(&path).map_err(|error| io_error(&path, &error))?,
+    if load_dictionary_index(directory, &import.identity).is_ok_and(|stored| stored == *import) {
+        return Ok(path);
     }
     let contents = serde_json::to_vec(import).map_err(|error| DictionaryIndexError::Io {
         path: path.clone(),
         message: error.to_string(),
     })?;
     let staged = path.with_extension("partial");
-    std::fs::write(&staged, contents).map_err(|error| io_error(&staged, &error))?;
+    write_synced(&staged, &contents).map_err(|error| io_error(&staged, &error))?;
     std::fs::rename(&staged, &path).map_err(|error| io_error(&path, &error))?;
+    sync_directory(directory).map_err(|error| io_error(directory, &error))?;
     Ok(path)
+}
+
+/// Writes `contents` to a new file at `path` and syncs the file.
+fn write_synced(path: &Path, contents: &[u8]) -> std::io::Result<()> {
+    let mut file = std::fs::File::create(path)?;
+    file.write_all(contents)?;
+    file.sync_all()
+}
+
+/// Syncs `directory`, so that a power loss cannot lose a rename in it. On
+/// Windows, a directory has no sync.
+fn sync_directory(directory: &Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    std::fs::File::open(directory)?.sync_all()?;
+    #[cfg(not(unix))]
+    let _ = directory;
+    Ok(())
 }
 
 /// Loads a stored index only when it matches the requested identity.
