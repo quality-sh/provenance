@@ -145,7 +145,7 @@ impl Incoming {
                 (204 | 304, _) => Vec::new(),
                 (_, Framing::Length(length)) => self.take(length)?,
                 (_, Framing::Chunked) => self.dechunk()?,
-                (_, Framing::Close) => self.to_close()?,
+                (_, Framing::Close) => self.until_close()?,
             };
             return Ok(Answer { status, body });
         }
@@ -245,7 +245,7 @@ impl Incoming {
     }
 
     /// Every byte up to the close of the connection.
-    fn to_close(&mut self) -> anyhow::Result<Vec<u8>> {
+    fn until_close(&mut self) -> anyhow::Result<Vec<u8>> {
         while self.read()? > 0 {}
         let bytes = self.buffer[self.at..].to_vec();
         self.at = self.buffer.len();
@@ -270,13 +270,12 @@ impl Incoming {
             self.at = 0;
         }
         self.stream.set_read_timeout(Some(left(self.deadline)?))?;
-        let mut piece = [0; PIECE];
-        let read = self
-            .stream
-            .read(&mut piece)
-            .context("could not read the answer")?;
-        self.buffer.extend_from_slice(&piece[..read]);
-        Ok(read)
+        let start = self.buffer.len();
+        self.buffer.resize(start + PIECE, 0);
+        let read = self.stream.read(&mut self.buffer[start..]);
+        self.buffer
+            .truncate(start + read.as_ref().map_or(0, |read| *read));
+        read.context("could not read the answer")
     }
 }
 
