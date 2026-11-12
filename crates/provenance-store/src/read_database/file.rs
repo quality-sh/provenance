@@ -85,7 +85,7 @@ impl ReadDatabase for FileReadDatabase {
 
 async fn run_write(connection: &CacheConnection, work: WriteWork<'_>) -> anyhow::Result<()> {
     let transaction = begin(connection.pool()).await?;
-    work(transaction).await?.commit().await
+    work(transaction).await
 }
 
 /// Begins one transaction on an open pool of the file.
@@ -96,11 +96,7 @@ pub(crate) async fn begin(pool: &SqlitePool) -> anyhow::Result<Transaction> {
 struct FileTransaction(sqlx::Transaction<'static, Sqlite>);
 
 impl SqlTransaction for FileTransaction {
-    fn fetch<'a>(
-        &'a mut self,
-        sql: &'a str,
-        values: &'a [SqlValue],
-    ) -> SqlFuture<'a, Vec<SqlRow>> {
+    fn fetch<'a>(&'a mut self, sql: &'a str, values: &'a [SqlValue]) -> SqlFuture<'a, Vec<SqlRow>> {
         Box::pin(async move {
             let rows = bound(sql, values).fetch_all(&mut *self.0).await?;
             rows.iter().map(decode).collect()
@@ -143,6 +139,10 @@ impl SqlTransaction for FileTransaction {
 
     fn sqlx(&mut self) -> Option<&mut sqlx::Transaction<'static, Sqlite>> {
         Some(&mut self.0)
+    }
+
+    fn sqlx_ref(&self) -> Option<&sqlx::Transaction<'static, Sqlite>> {
+        Some(&self.0)
     }
 }
 

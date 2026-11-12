@@ -1,19 +1,22 @@
 //! The pinned snapshot a read answers from, and the handles that read it.
 //!
-//! sqlx executes on `&mut` the connection, so every handle method takes
-//! the transaction for the span of one statement and never across two
-//! handles at once, which is how the operations read: one statement at a
-//! time. The row readers behind the handles live in `cache::read`.
+//! A transaction runs one statement at a time, so every handle method
+//! takes the transaction for the span of one statement and never across
+//! two handles at once, which is how the operations read: one statement at
+//! a time. The row readers behind the handles live in `cache::read`.
 
 use crate::cache::quoted;
 use crate::operations::stamp::{stored_revision, StoredRevision};
+use crate::read_database::{SqlColumns, SqlValue, Transaction};
 use provenance_core::model::ProjectionRow;
 use provenance_core::ScopeId;
 use provenance_macros::rule;
-use sqlx::{Sqlite, SqlitePool, Transaction};
+use sqlx::Sqlite;
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
+use std::ops::{Deref, DerefMut};
 use std::sync::{Mutex, PoisonError};
+use tokio::sync::MutexGuard;
 
 /// One read transaction at one revision.
 ///
@@ -22,21 +25,20 @@ use std::sync::{Mutex, PoisonError};
 /// every table the read opened.
 #[rule("rule_stamp_attests_every_table_read")]
 pub struct ReadSnapshot {
-    tx: tokio::sync::Mutex<Transaction<'static, Sqlite>>,
+    tx: tokio::sync::Mutex<Transaction>,
     scope: ScopeId,
     revision: StoredRevision,
     attested: Mutex<BTreeSet<&'static str>>,
 }
 
 impl ReadSnapshot {
-    /// Begins a read transaction on one pooled connection. Its first read
+    /// Takes one read transaction of the read database. Its first read
     /// is the stored revision, which pins the snapshot: every row read
     /// later in the transaction is at that serial. `None` means the
     /// database holds no revision.
     #[rule("rule_read_answers_from_one_pinned_transaction")]
-    pub(crate) async fn open(pool: &SqlitePool, scope: &ScopeId) -> anyhow::Result<Option<Self>> {
-        let mut tx = pool.begin().await?;
-        let Some(revision) = stored_revision(&mut tx).await? else {
+    pub(crate) async fn open(mut tx: Transaction, scope: &ScopeId) -> anyhow::Result<Option<Self>> {
+        let Some(revision) = stored_revision(tx.as_mut()).await? else {
             return Ok(None);
         };
         Ok(Some(Self {
@@ -88,22 +90,24 @@ impl ReadSnapshot {
     }
 
     /// The transaction, for the span of one statement.
-    pub(crate) async fn connection(
-        &self,
-    ) -> tokio::sync::MutexGuard<'_, Transaction<'static, Sqlite>> {
+    pub(crate) async fn transaction(&self) -> MutexGuard<'_, Transaction> {
         self.tx.lock().await
     }
 
+    /// The `SQLx` transaction of the file adapter, for the span of one
+    /// statement of a reader that still runs `SQLx` directly.
+    pub(crate) async fn connection(&self) -> FileConnection<'_> {
+        FileConnection(self.tx.lock().await)
+    }
+
     async fn count_rows(&self, table: &str) -> anyhow::Result<i64> {
-        let mut tx = self.connection().await;
-        let count: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
-            "SELECT COUNT(*) FROM {} WHERE scope_id = ?",
-            quoted(table)
-        )))
-        .bind(self.scope.as_str())
-        .fetch_one(&mut **tx)
-        .await?;
-        Ok(count)
+        let sql = format!("SELECT COUNT(*) FROM {} WHERE scope_id = ?", quoted(table));
+        let rows = self
+            .transaction()
+            .await
+            .fetch(&sql, &[SqlValue::from(self.scope.as_str())])
+            .await?;
+        one_row(&rows)?.integer(0)
     }
 
     /// Ends the read and hands back what the stamp needs. The transaction
@@ -114,6 +118,26 @@ impl ReadSnapshot {
             .into_inner()
             .unwrap_or_else(PoisonError::into_inner);
         (self.revision, attested)
+    }
+}
+
+/// The transaction of a snapshot as the `SQLx` transaction of the file
+/// adapter. Only the readers that run `SQLx` take it.
+pub struct FileConnection<'s>(MutexGuard<'s, Transaction>);
+
+const NOT_A_FILE: &str = "the readers that run SQLx read the file adapter";
+
+impl Deref for FileConnection<'_> {
+    type Target = sqlx::Transaction<'static, Sqlite>;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.sqlx_ref().expect(NOT_A_FILE)
+    }
+}
+
+impl DerefMut for FileConnection<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.0.sqlx().expect(NOT_A_FILE)
     }
 }
 
@@ -172,22 +196,32 @@ impl ReadSnapshot {
 
 impl RecordIdentities<'_> {
     pub async fn resolve(&self, id: &str) -> anyhow::Result<Vec<RecordIdentity>> {
-        let mut tx = self.snapshot.connection().await;
-        let rows: Vec<(String, String)> = sqlx::query_as(
-            "SELECT scope_id, node_type FROM record_identities \
-             WHERE id = ? ORDER BY scope_id, node_type",
-        )
-        .bind(id)
-        .fetch_all(&mut **tx)
-        .await?;
-        drop(tx);
-        rows.into_iter()
-            .map(|(scope_id, node_type)| {
+        let rows = self
+            .snapshot
+            .transaction()
+            .await
+            .fetch(
+                "SELECT scope_id, node_type FROM record_identities \
+                 WHERE id = ? ORDER BY scope_id, node_type",
+                &[SqlValue::from(id)],
+            )
+            .await?;
+        rows.iter()
+            .map(|row| {
                 Ok(RecordIdentity {
-                    scope_id: ScopeId::new(scope_id)?,
-                    node_type: provenance_core::NodeType::parse(&node_type)?,
+                    scope_id: ScopeId::new(row.text(0)?)?,
+                    node_type: provenance_core::NodeType::parse(row.text(1)?)?,
                 })
             })
             .collect()
     }
+}
+
+/// The one row of a statement that gives exactly one, as an aggregate does.
+pub fn one_row(rows: &[crate::read_database::SqlRow]) -> anyhow::Result<&[SqlValue]> {
+    rows.first().map(Vec::as_slice).ok_or_else(|| {
+        crate::refusal::fault!(
+            "no rows returned by a query that expected to return at least one row"
+        )
+    })
 }

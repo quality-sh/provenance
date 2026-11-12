@@ -22,10 +22,15 @@ fn sid(value: &str) -> StableId {
 async fn snapshot_of(store: &TestStore) -> (CacheConnection, ReadSnapshot) {
     catch_up_state(&store.repository()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
-    let snapshot = ReadSnapshot::open(pool.pool(), &store.scope)
-        .await
-        .unwrap()
-        .expect("a revision");
+    let snapshot = ReadSnapshot::open(
+        crate::read_database::file::begin(pool.pool())
+            .await
+            .unwrap(),
+        &store.scope,
+    )
+    .await
+    .unwrap()
+    .expect("a revision");
     (pool, snapshot)
 }
 

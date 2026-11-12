@@ -53,10 +53,15 @@ async fn assert_fronts_agree(store: &TestStore) {
 
     catch_up_state(&store.repository()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
-    let snapshot = ReadSnapshot::open(pool.pool(), scope)
-        .await
-        .unwrap()
-        .expect("a revision");
+    let snapshot = ReadSnapshot::open(
+        crate::read_database::file::begin(pool.pool())
+            .await
+            .unwrap(),
+        scope,
+    )
+    .await
+    .unwrap()
+    .expect("a revision");
     let sql = SqlFront::hop(&snapshot.relations(), &frontier)
         .await
         .unwrap();
@@ -100,10 +105,15 @@ async fn a_lookup_outside_the_frontier_is_an_invariant_violation() {
     let store = TestStore::pinned();
     catch_up_state(&store.repository()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
-    let snapshot = ReadSnapshot::open(pool.pool(), &store.scope)
-        .await
-        .unwrap()
-        .expect("a revision");
+    let snapshot = ReadSnapshot::open(
+        crate::read_database::file::begin(pool.pool())
+            .await
+            .unwrap(),
+        &store.scope,
+    )
+    .await
+    .unwrap()
+    .expect("a revision");
     let sql = SqlFront::hop(
         &snapshot.relations(),
         &[(NodeType::Requirement, sid("req_overtime"))],
@@ -128,10 +138,15 @@ async fn a_relation_row_with_an_undeclared_name_is_refused() {
     .execute(pool.pool())
     .await
     .unwrap();
-    let snapshot = ReadSnapshot::open(pool.pool(), &store.scope)
-        .await
-        .unwrap()
-        .expect("a revision");
+    let snapshot = ReadSnapshot::open(
+        crate::read_database::file::begin(pool.pool())
+            .await
+            .unwrap(),
+        &store.scope,
+    )
+    .await
+    .unwrap()
+    .expect("a revision");
     let refused = SqlFront::hop(
         &snapshot.relations(),
         &[(NodeType::Requirement, sid("req_overtime"))],

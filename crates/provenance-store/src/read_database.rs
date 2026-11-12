@@ -9,7 +9,9 @@
 //! A transaction is lent to one piece of work and ends when the work ends,
 //! because the object's store runs a transaction over one closure. The
 //! work owns the transaction while it runs: a read drops it, and a write
-//! gives it back for the commit.
+//! commits it at its end. The store completes its connection after the
+//! work ends, so a lock that the work frees after its commit is free while
+//! the connection closes.
 
 pub mod contract;
 #[cfg(feature = "host")]
@@ -81,8 +83,7 @@ pub struct Statement {
 /// The transaction that a piece of work runs in.
 pub trait SqlTransaction: Send {
     /// Runs one statement and gives its rows.
-    fn fetch<'a>(&'a mut self, sql: &'a str, values: &'a [SqlValue])
-        -> SqlFuture<'a, Vec<SqlRow>>;
+    fn fetch<'a>(&'a mut self, sql: &'a str, values: &'a [SqlValue]) -> SqlFuture<'a, Vec<SqlRow>>;
 
     /// Runs one statement and gives the number of rows that it changed.
     fn execute<'a>(&'a mut self, sql: &'a str, values: &'a [SqlValue]) -> SqlFuture<'a, u64>;
@@ -96,14 +97,19 @@ pub trait SqlTransaction: Send {
         statements: &'a [Statement],
     ) -> SqlFuture<'a, Result<(), anyhow::Error>>;
 
-    /// Commits the transaction. Only the adapter calls this, after write
-    /// work gives the transaction back.
+    /// Commits the transaction. Write work calls this at its end.
     fn commit(self: Box<Self>) -> SqlFuture<'static, ()>;
 
     /// The `SQLx` transaction of the file adapter, for the code that still
     /// runs `SQLx` directly. Other adapters have none.
     #[cfg(feature = "host")]
     fn sqlx(&mut self) -> Option<&mut sqlx::Transaction<'static, sqlx::Sqlite>> {
+        None
+    }
+
+    /// The `SQLx` transaction of the file adapter, to read through.
+    #[cfg(feature = "host")]
+    fn sqlx_ref(&self) -> Option<&sqlx::Transaction<'static, sqlx::Sqlite>> {
         None
     }
 }
@@ -115,9 +121,9 @@ pub type Transaction = Box<dyn SqlTransaction>;
 /// it.
 pub type ReadWork<'a> = Box<dyn FnOnce(Transaction) -> SqlFuture<'a, ()> + Send + 'a>;
 
-/// Work over a write transaction. The work gives the transaction back to
-/// be committed. An error rolls the transaction back.
-pub type WriteWork<'a> = Box<dyn FnOnce(Transaction) -> SqlFuture<'a, Transaction> + Send + 'a>;
+/// Work over a write transaction. The work commits the transaction. A
+/// work that fails, or that ends without the commit, keeps nothing.
+pub type WriteWork<'a> = Box<dyn FnOnce(Transaction) -> SqlFuture<'a, ()> + Send + 'a>;
 
 /// The read database of one repository.
 pub trait ReadDatabase: Send + Sync + Debug {
@@ -127,8 +133,8 @@ pub trait ReadDatabase: Send + Sync + Debug {
     fn read<'a>(&'a self, work: ReadWork<'a>) -> SqlFuture<'a, ()>;
 
     /// Runs `work` in one write transaction, and makes the database when
-    /// it is absent. The transaction commits when the work gives it back,
-    /// and rolls back when the work fails.
+    /// it is absent. The work commits the transaction; when the work fails
+    /// or ends without the commit, the transaction rolls back.
     fn write<'a>(&'a self, work: WriteWork<'a>) -> SqlFuture<'a, ()>;
 
     /// The maximum number of values that one statement can bind.

@@ -230,10 +230,15 @@ async fn projection_counts_match_canonical_over_the_repository_state() {
     let scope = &store.scope;
     catch_up_state(&store.repository()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
-    let snapshot = reader::ReadSnapshot::open(pool.pool(), scope)
-        .await
-        .unwrap()
-        .expect("a revision");
+    let snapshot = reader::ReadSnapshot::open(
+        crate::read_database::file::begin(pool.pool())
+            .await
+            .unwrap(),
+        scope,
+    )
+    .await
+    .unwrap()
+    .expect("a revision");
     assert_count::<Source>(&snapshot, state.list_sources(scope).unwrap().len()).await;
     assert_count::<Requirement>(&snapshot, state.list_requirements(scope).unwrap().len()).await;
     assert_count::<Resolution>(&snapshot, state.list_resolutions(scope).unwrap().len()).await;

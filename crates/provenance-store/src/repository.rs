@@ -9,6 +9,7 @@
 use crate::layout::with_initialized_graph;
 use crate::layout::{GraphNotInitialized, ProvenanceLayout};
 use crate::publication::SectionHandle;
+use crate::read_database::ReadDatabase;
 use crate::settings::{Settings, SettingsError};
 #[cfg(feature = "host")]
 use crate::stale::revision_scans::KeptScans;
@@ -51,6 +52,9 @@ struct Inner {
     /// Whether `storage` is the local adapter of `layout`, which `open`
     /// makes.
     local: bool,
+    /// The store of the projection. Without `host` a repository has none
+    /// until the caller gives one.
+    read_database: Option<Arc<dyn ReadDatabase>>,
     /// The source scans of the last commit range that a stale or evidence
     /// query of this open read. Each clone of the handle shares them.
     #[cfg(feature = "host")]
@@ -170,6 +174,12 @@ impl Repository {
         Self {
             inner: Arc::new(Inner {
                 layout: ProvenanceLayout::new(identity.working_tree().to_owned()),
+                #[cfg(feature = "host")]
+                read_database: Some(Arc::new(crate::read_database::file::FileReadDatabase::new(
+                    ProvenanceLayout::new(identity.working_tree().to_owned()),
+                ))),
+                #[cfg(not(feature = "host"))]
+                read_database: None,
                 identity,
                 storage,
                 section_lock,
@@ -293,6 +303,34 @@ impl Repository {
     #[cfg(feature = "host")]
     pub(crate) fn kept_scans(&self) -> &KeptScans {
         &self.inner.kept_scans
+    }
+
+    /// This repository with its projection in `read_database`, as a new
+    /// open. Without this call, a repository with `host` keeps its
+    /// projection in the file of its cache directory.
+    #[must_use]
+    pub fn with_read_database(&self, read_database: Arc<dyn ReadDatabase>) -> Self {
+        Self {
+            inner: Arc::new(Inner {
+                identity: self.inner.identity.clone(),
+                layout: self.inner.layout.clone(),
+                storage: Arc::clone(&self.inner.storage),
+                section_lock: Arc::clone(&self.inner.section_lock),
+                local: self.inner.local,
+                read_database: Some(read_database),
+                #[cfg(feature = "host")]
+                kept_scans: KeptScans::new(),
+            }),
+            section: self.section.clone(),
+        }
+    }
+
+    /// The store of the projection of this repository.
+    pub fn read_database(&self) -> anyhow::Result<&dyn ReadDatabase> {
+        self.inner
+            .read_database
+            .as_deref()
+            .ok_or_else(|| crate::refusal::fault!("this repository has no read database"))
     }
 
     /// The lock that serializes the sections of this repository.

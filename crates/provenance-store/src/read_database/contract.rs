@@ -31,7 +31,7 @@ async fn write(database: &dyn ReadDatabase, statements: Vec<Statement>) -> anyho
                         .execute(&statement.sql, &statement.values)
                         .await?;
                 }
-                Ok(transaction)
+                transaction.commit().await
             })
         }))
         .await
@@ -110,7 +110,37 @@ pub async fn a_failed_write_keeps_nothing<H: Harness>(harness: H) {
     )
     .await;
     assert!(failed.is_err());
-    assert_eq!(fetch(database, "SELECT n FROM kept").await, Vec::<SqlRow>::new());
+    assert_eq!(
+        fetch(database, "SELECT n FROM kept").await,
+        Vec::<SqlRow>::new()
+    );
+}
+
+/// A write whose work ends without the commit keeps none of its
+/// statements.
+pub async fn a_write_without_its_commit_keeps_nothing<H: Harness>(harness: H) {
+    let database = harness.database();
+    write(
+        database,
+        vec![statement("CREATE TABLE kept (n INTEGER)", Vec::new())],
+    )
+    .await
+    .unwrap();
+    database
+        .write(Box::new(|mut transaction| {
+            Box::pin(async move {
+                transaction
+                    .execute("INSERT INTO kept (n) VALUES (1)", &[])
+                    .await?;
+                Ok(())
+            })
+        }))
+        .await
+        .unwrap();
+    assert_eq!(
+        fetch(database, "SELECT n FROM kept").await,
+        Vec::<SqlRow>::new()
+    );
 }
 
 /// Every row that a read gets is from the state that was committed when
@@ -176,12 +206,16 @@ pub async fn an_attempt_keeps_all_or_none<H: Harness>(harness: H) {
                         vec![SqlValue::Integer(n)],
                     )
                 };
-                transaction.execute("INSERT INTO attempted (n) VALUES (1)", &[]).await?;
+                transaction
+                    .execute("INSERT INTO attempted (n) VALUES (1)", &[])
+                    .await?;
                 let failed = transaction.attempt(&[insert(2), insert(1)]).await?;
                 let kept = transaction.attempt(&[insert(3), insert(4)]).await?;
-                transaction.execute("INSERT INTO attempted (n) VALUES (5)", &[]).await?;
+                transaction
+                    .execute("INSERT INTO attempted (n) VALUES (5)", &[])
+                    .await?;
                 *slot = vec![failed.is_err(), kept.is_err()];
-                Ok(transaction)
+                transaction.commit().await
             })
         }))
         .await
@@ -207,7 +241,10 @@ pub async fn the_projection_statement_forms_run<H: Harness>(harness: H) {
     write(
         database,
         vec![
-            statement("CREATE TABLE wide (a INTEGER, b INTEGER, c INTEGER)", Vec::new()),
+            statement(
+                "CREATE TABLE wide (a INTEGER, b INTEGER, c INTEGER)",
+                Vec::new(),
+            ),
             statement(
                 &format!("INSERT INTO wide (a, b, c) VALUES {placeholders}"),
                 values,
@@ -256,7 +293,7 @@ pub async fn the_projection_statement_forms_run<H: Harness>(harness: H) {
 
 /// The cursor key is 32 bytes, and it stays the same for a later adapter
 /// over the same store.
-pub async fn the_cursor_key_stays_the_same<H: Harness>(harness: H) {
+pub fn the_cursor_key_stays_the_same<H: Harness>(harness: &H) {
     let first = harness.database().cursor_key().unwrap();
     assert_eq!(harness.database().cursor_key().unwrap(), first);
     assert_eq!(harness.reopen().cursor_key().unwrap(), first);

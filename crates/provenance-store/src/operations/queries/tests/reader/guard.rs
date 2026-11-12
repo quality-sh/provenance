@@ -91,10 +91,15 @@ async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
     let pool = open_cache(&layout).await.unwrap();
     let second_pool = open_cache(&layout).await.unwrap();
 
-    let first = ReadSnapshot::open(pool.pool(), &store.scope)
-        .await
-        .unwrap()
-        .expect("a revision");
+    let first = ReadSnapshot::open(
+        crate::read_database::file::begin(pool.pool())
+            .await
+            .unwrap(),
+        &store.scope,
+    )
+    .await
+    .unwrap()
+    .expect("a revision");
     let before = first.table::<Requirement>().count().await.unwrap();
     assert_eq!(before, 1);
 
@@ -105,10 +110,12 @@ async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
         RequirementStatus::Active,
     );
     let guard = publication_guard(&open(&layout)).await.unwrap();
-    let report = catch_up_with_guard(&guard, second_pool.pool())
-        .await
-        .unwrap();
-    drop(guard);
+    let report = catch_up_with_guard(
+        guard,
+        &crate::read_database::file::FileReadDatabase::new(layout.clone()),
+    )
+    .await
+    .unwrap();
     assert_eq!(report.serial, first.serial() + 1);
 
     assert_eq!(
@@ -116,10 +123,15 @@ async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
         before,
         "the open snapshot still reads its own serial"
     );
-    let second = ReadSnapshot::open(second_pool.pool(), &store.scope)
-        .await
-        .unwrap()
-        .expect("a revision");
+    let second = ReadSnapshot::open(
+        crate::read_database::file::begin(second_pool.pool())
+            .await
+            .unwrap(),
+        &store.scope,
+    )
+    .await
+    .unwrap()
+    .expect("a revision");
     assert_eq!(second.serial(), first.serial() + 1);
     assert_eq!(
         second.table::<Requirement>().count().await.unwrap(),

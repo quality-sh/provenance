@@ -52,6 +52,11 @@ async fn a_failed_write_keeps_nothing() {
 }
 
 #[tokio::test]
+async fn a_write_without_its_commit_keeps_nothing() {
+    contract::a_write_without_its_commit_keeps_nothing(File::default()).await;
+}
+
+#[tokio::test]
 async fn a_read_answers_from_one_committed_state() {
     contract::a_read_answers_from_one_committed_state(File::default()).await;
 }
@@ -66,7 +71,7 @@ async fn the_projection_statement_forms_run() {
     contract::the_projection_statement_forms_run(File::default()).await;
 }
 
-#[tokio::test]
-async fn the_cursor_key_stays_the_same() {
-    contract::the_cursor_key_stays_the_same(File::default()).await;
+#[test]
+fn the_cursor_key_stays_the_same() {
+    contract::the_cursor_key_stays_the_same(&File::default());
 }
