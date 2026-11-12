@@ -74,14 +74,37 @@ pub struct IdeationAggregate<'a> {
     pub dispositions: &'a [DispositionRecord],
 }
 
+/// The kind of an ideation record whose id is immutable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IdeationRecordKind {
+    Contribution,
+    SynthesisPacket,
+    Proposal,
+    Assertion,
+    Disposition,
+}
+
+impl std::fmt::Display for IdeationRecordKind {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::Contribution => "contribution",
+            Self::SynthesisPacket => "synthesis packet",
+            Self::Proposal => "proposal",
+            Self::Assertion => "assertion",
+            Self::Disposition => "disposition",
+        })
+    }
+}
+
 /// The refusal of [`validate_ideation_aggregate`] when two records of one
-/// family have the same immutable id.
+/// kind have the same immutable id.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("duplicate immutable {kind} id {id}")]
+#[non_exhaustive]
 pub struct DuplicateImmutableId {
-    /// The name of the family: `contribution`, `synthesis packet`,
-    /// `proposal`, `assertion` or `disposition`.
-    pub kind: &'static str,
+    /// The kind of the two records.
+    pub kind: IdeationRecordKind,
+    /// The id that the two records have.
     pub id: String,
 }
 

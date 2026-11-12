@@ -2,11 +2,11 @@
 //!
 //! A hand edit or a branch merge can put one id on two lines of the file of
 //! a contribution, a synthesis packet, a proposal, an assertion or a
-//! disposition. Each aggregate check of the
-//! ideation records in the store goes through [`IdeationRecords::validate`],
-//! which refuses that state with `invalid_state_file` at the second line.
-//! The ideation scope check gives the same refusal. The message names the
-//! two lines.
+//! disposition. Each aggregate check of the ideation records in the store
+//! goes through [`IdeationRecords::validate`], which refuses that state with
+//! `invalid_state_file` at the second line. The ideation scope check gives
+//! the same refusal for the proposal, assertion and disposition files. The
+//! message names the two lines.
 
 use super::readers::{read_jsonl_located, record_fault};
 use super::StateStore;
@@ -14,7 +14,7 @@ use crate::shards;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{
     AssertionRecord, Contribution, DispositionRecord, DuplicateImmutableId, IdeationAggregate,
-    ProposalCard, ScopeId, SynthesisPacket,
+    IdeationRecordKind, ProposalCard, ScopeId, SynthesisPacket,
 };
 
 /// The ideation records of one scope for the aggregate check of a write or
@@ -33,11 +33,12 @@ pub(super) struct IdeationRecords<'a> {
 impl IdeationRecords<'_> {
     /// [`provenance_core::validate_ideation_aggregate`] over these records,
     /// with the shipped legacy policy. When the aggregate check finds a
-    /// duplicate id, this reads the file of that family again with its lines. When that read shows the id on
-    /// two lines, the refusal is the located refusal. The file can change
-    /// between the read of the records and the second read. Then the second
-    /// read can fail or show the id on one line, and the refusal is the
-    /// refusal of the aggregate check, with no file and no line.
+    /// duplicate id, this reads the file of that kind again with its lines.
+    /// When that read shows the id on two lines, the refusal is the located
+    /// refusal. The file can change between the read of the records and the
+    /// second read. Then the second read can fail or show the id on one line,
+    /// and the refusal is the refusal of the aggregate check, with no file
+    /// and no line.
     pub(super) fn validate(&self) -> anyhow::Result<()> {
         provenance_core::validate_ideation_aggregate(IdeationAggregate {
             legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
@@ -52,7 +53,7 @@ impl IdeationRecords<'_> {
             let located = error
                 .downcast_ref::<DuplicateImmutableId>()
                 .and_then(|duplicate| {
-                    let path = family_path(self.store, self.scope, duplicate.kind)?;
+                    let path = kind_path(self.store, self.scope, duplicate.kind);
                     located_duplicate(self.store, &path, duplicate.kind, &duplicate.id)
                 });
             located.unwrap_or(error)
@@ -60,25 +61,25 @@ impl IdeationRecords<'_> {
     }
 }
 
-/// The file of the ideation family `kind` in `scope`.
-fn family_path(store: &StateStore, scope: &ScopeId, kind: &str) -> Option<Utf8PathBuf> {
+/// The file of the records of the kind `kind` in `scope`.
+fn kind_path(store: &StateStore, scope: &ScopeId, kind: IdeationRecordKind) -> Utf8PathBuf {
+    let layout = &store.layout;
     match kind {
-        "contribution" => Some(shards::contributions_path(&store.layout, scope)),
-        "synthesis packet" => Some(shards::synthesis_packets_path(&store.layout, scope)),
-        "proposal" => Some(shards::proposal_cards_path(&store.layout, scope)),
-        "assertion" => Some(shards::assertion_records_path(&store.layout, scope)),
-        "disposition" => Some(shards::dispositions_path(&store.layout, scope)),
-        _ => None,
+        IdeationRecordKind::Contribution => shards::contributions_path(layout, scope),
+        IdeationRecordKind::SynthesisPacket => shards::synthesis_packets_path(layout, scope),
+        IdeationRecordKind::Proposal => shards::proposal_cards_path(layout, scope),
+        IdeationRecordKind::Assertion => shards::assertion_records_path(layout, scope),
+        IdeationRecordKind::Disposition => shards::dispositions_path(layout, scope),
     }
 }
 
-/// The refusal of the scope check for the id `id` of the family `kind`,
+/// The refusal of the scope check for the id `id` of the kind `kind`,
 /// which the file at `path` holds two times. When the file does not show the
 /// id on two lines, the refusal is the refusal of [`record_fault`].
 pub(super) fn duplicate_fault(
     store: &StateStore,
     path: &Utf8Path,
-    kind: &str,
+    kind: IdeationRecordKind,
     id: &str,
 ) -> anyhow::Error {
     located_duplicate(store, path, kind, id).unwrap_or_else(|| {
@@ -92,7 +93,7 @@ pub(super) fn duplicate_fault(
 fn located_duplicate(
     store: &StateStore,
     path: &Utf8Path,
-    kind: &str,
+    kind: IdeationRecordKind,
     id: &str,
 ) -> Option<anyhow::Error> {
     let rows = read_jsonl_located::<serde_json::Value>(store, path).ok()?;

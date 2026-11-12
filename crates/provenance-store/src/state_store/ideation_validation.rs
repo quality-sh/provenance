@@ -8,7 +8,8 @@ use super::{IdeationLandingBatch, StateStore};
 use crate::refusal::state_fault;
 use crate::shards;
 use provenance_core::{
-    AssertionRecord, Contribution, DispositionRecord, ProposalCard, ScopeId, SynthesisPacket,
+    AssertionRecord, Contribution, DispositionRecord, IdeationRecordKind, ProposalCard, ScopeId,
+    SynthesisPacket,
 };
 use std::collections::BTreeSet;
 
@@ -55,7 +56,7 @@ impl StateStore {
             &direct_proposals,
             |r| r.id.as_str(),
             &mut proposals,
-            |id, _| duplicate_fault(self, &path, "proposal", id),
+            |id, _| duplicate_fault(self, &path, IdeationRecordKind::Proposal, id),
         )?;
         let path = shards::assertion_records_path(&self.layout, scope);
         insert_all(
@@ -63,7 +64,7 @@ impl StateStore {
             &direct_assertions,
             |r| r.id.as_str(),
             &mut assertions,
-            |id, _| duplicate_fault(self, &path, "assertion", id),
+            |id, _| duplicate_fault(self, &path, IdeationRecordKind::Assertion, id),
         )?;
         let path = shards::dispositions_path(&self.layout, scope);
         insert_all(
@@ -71,7 +72,7 @@ impl StateStore {
             &direct_dispositions,
             |r| r.id.as_str(),
             &mut dispositions,
-            |id, _| duplicate_fault(self, &path, "disposition", id),
+            |id, _| duplicate_fault(self, &path, IdeationRecordKind::Disposition, id),
         )?;
         let landings = shards::ideation_landings_path(&self.layout, scope);
         for (index, batch) in self.list_ideation_landings(scope)?.into_iter().enumerate() {
