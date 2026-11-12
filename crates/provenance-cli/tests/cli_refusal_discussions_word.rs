@@ -88,7 +88,14 @@ fn discussions_id_refusal_gives_a_command_that_reads_the_discussion() {
     );
     let start = success(
         repo,
-        &["req_a", "discuss", "--body", "Opening text", "--format", "json"],
+        &[
+            "req_a",
+            "discuss",
+            "--body",
+            "Opening text",
+            "--format",
+            "json",
+        ],
     );
     let start: serde_json::Value = serde_json::from_str(&start).unwrap();
     let id = start["receipt"]["discussion_id"].as_str().unwrap();

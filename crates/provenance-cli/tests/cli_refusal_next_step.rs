@@ -1,8 +1,6 @@
 //! Each refusal names the command that it refuses and the form that corrects the request.
 //!
-//! Implementation aid: no active Rule states these refusal texts.
-//! `rule_cli_closed_value_refusal_lists_values` is in review, and
-//! `rule_cli_one_discussion_read_form` states the read form, not the text of a refusal.
+//! Implementation aid: no active Rule states the text of these refusals.
 
 #[path = "support/bounded_process.rs"]
 mod bounded_process;
@@ -71,11 +69,52 @@ fn root_word_refusal_shows_the_usage_and_help_of_its_command() {
 }
 
 #[test]
-fn discussions_status_refusal_ends_with_a_newline() {
+fn usage_error_refusal_ends_with_a_newline() {
     assert_refusal(
         &["discussions", "--status", "bogus"],
         "error: invalid value for --status; accepted values: active, resolved, all\n",
     );
+    assert_refusal(
+        &["api", "requirements", "--header", "bad"],
+        "error: headers use NAME: VALUE\n",
+    );
+}
+
+#[test]
+fn refusal_after_a_global_flag_names_the_same_command() {
+    assert_refusal(
+        &["--quiet", "import", "x.json"],
+        &format!(
+            "error: unexpected argument 'x.json' found\n\n  \
+             tip: give the scope export file with --input\n\n\
+             Usage: provenance{SUFFIX} import [OPTIONS] --input <INPUT>\n\n\
+             For more information, try '--help'.\n"
+        ),
+    );
+    assert_refusal(
+        &["--repo", "r", "import", "x.json"],
+        &format!(
+            "error: unexpected argument '--repo' found\n\n  \
+             tip: 'import --repo' exists\n\n\
+             Usage: provenance{SUFFIX} [OPTIONS] <COMMAND>\n\n\
+             For more information, try '--help'.\n"
+        ),
+    );
+    let commands = [
+        ("search", "search [OPTIONS]"),
+        ("api", "api [OPTIONS] [PATH]"),
+    ];
+    for (name, usage) in commands {
+        assert_refusal(
+            &["--repo", "r", name, "--bogus"],
+            &format!(
+                "error: unexpected argument '--bogus' found\n\n  \
+                 tip: to pass '--bogus' as a value, use '-- --bogus'\n\n\
+                 Usage: provenance{SUFFIX} {usage}\n\n\
+                 For more information, try 'provenance {name} --help'.\n"
+            ),
+        );
+    }
 }
 
 #[test]
