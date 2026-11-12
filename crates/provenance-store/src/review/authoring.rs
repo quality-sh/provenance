@@ -265,6 +265,8 @@ impl StateStore {
         )
     }
 
+    /// Saves `update` on the etag that it gives. An update with no etag
+    /// saves on the current etag of the record.
     fn save_record(
         &self,
         update: UpdateRequirementInput,
@@ -272,7 +274,10 @@ impl StateStore {
     ) -> anyhow::Result<Requirement> {
         let scope = update.scope_id.clone();
         let id = update.id.clone();
-        let expected_etag = self.requirement_edit_state(&scope, &id)?.etag;
+        let expected_etag = match update.expected_etag.clone() {
+            Some(etag) => etag,
+            None => self.requirement_edit_state(&scope, &id)?.etag,
+        };
         self.save_requirement(SaveRequirement {
             actor: AUTHORING_ACTOR.to_owned(),
             expected_etag,
