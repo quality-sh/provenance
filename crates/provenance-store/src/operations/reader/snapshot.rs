@@ -7,6 +7,7 @@
 
 use crate::cache::quoted;
 use crate::operations::stamp::{stored_revision, StoredRevision};
+use crate::read_database::file::FileSqlx as _;
 use crate::read_database::{SqlColumns, SqlValue, Transaction};
 use provenance_core::model::ProjectionRow;
 use provenance_core::ScopeId;

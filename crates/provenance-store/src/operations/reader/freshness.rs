@@ -17,6 +17,7 @@ use crate::layout::ProvenanceLayout;
 use crate::operations::read_policy::FreshnessPolicy;
 use crate::operations::stamp;
 use crate::publication::{publication_guard, PublicationGuard};
+use crate::read_database::file::FileSqlx as _;
 use crate::read_database::{ReadDatabase, ReadWork, Transaction, Unopened};
 use crate::repository::Repository;
 use provenance_core::protocol::{Stamp, StampPolicy, Stamped};

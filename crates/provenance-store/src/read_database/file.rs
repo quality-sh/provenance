@@ -14,6 +14,7 @@ use crate::layout::ProvenanceLayout;
 use sqlx::query::Query;
 use sqlx::sqlite::{SqliteArguments, SqliteRow};
 use sqlx::{Row, Sqlite, SqlitePool, TypeInfo, ValueRef};
+use std::any::Any;
 use std::io::{Read, Write};
 
 /// The maximum number of values that one statement binds in the file.
@@ -157,13 +158,27 @@ impl SqlTransaction for FileTransaction {
     fn commit(self: Box<Self>) -> SqlFuture<'static, ()> {
         Box::pin(async move { Ok(self.0.commit().await?) })
     }
+}
 
+/// The `SQLx` transaction of the file adapter, for the code that still runs
+/// `SQLx` directly until the next pull requests move it onto the port. It
+/// is private to the crate; a transaction of another adapter has none.
+pub(crate) trait FileSqlx {
+    fn sqlx(&mut self) -> Option<&mut sqlx::Transaction<'static, Sqlite>>;
+    fn sqlx_ref(&self) -> Option<&sqlx::Transaction<'static, Sqlite>>;
+}
+
+impl FileSqlx for dyn SqlTransaction {
     fn sqlx(&mut self) -> Option<&mut sqlx::Transaction<'static, Sqlite>> {
-        Some(&mut self.0)
+        let any: &mut dyn Any = self;
+        any.downcast_mut::<FileTransaction>()
+            .map(|transaction| &mut transaction.0)
     }
 
     fn sqlx_ref(&self) -> Option<&sqlx::Transaction<'static, Sqlite>> {
-        Some(&self.0)
+        let any: &dyn Any = self;
+        any.downcast_ref::<FileTransaction>()
+            .map(|transaction| &transaction.0)
     }
 }
 

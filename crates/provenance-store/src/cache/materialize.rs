@@ -20,6 +20,7 @@ pub use units::{scope_ids, unit_digest, units_for, Unit, UnitHashError};
 use super::MaterializeReport;
 use crate::current_schema::{self, Compatibility};
 use crate::publication;
+use crate::read_database::file::FileSqlx as _;
 use crate::read_database::{ReadDatabase, Transaction as Lent};
 use crate::repository::Repository;
 use provenance_macros::rule;

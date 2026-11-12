@@ -17,6 +17,7 @@ pub mod contract;
 #[cfg(feature = "host")]
 pub mod file;
 
+use std::any::Any;
 use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
@@ -80,8 +81,9 @@ pub struct Statement {
     pub values: Vec<SqlValue>,
 }
 
-/// The transaction that a piece of work runs in.
-pub trait SqlTransaction: Send {
+/// The transaction that a piece of work runs in. It is `Any` so that the
+/// crate can find the transaction of its own file adapter.
+pub trait SqlTransaction: Any + Send {
     /// Runs one statement and gives its rows.
     fn fetch<'a>(&'a mut self, sql: &'a str, values: &'a [SqlValue]) -> SqlFuture<'a, Vec<SqlRow>>;
 
@@ -99,19 +101,6 @@ pub trait SqlTransaction: Send {
 
     /// Commits the transaction. Write work calls this at its end.
     fn commit(self: Box<Self>) -> SqlFuture<'static, ()>;
-
-    /// The `SQLx` transaction of the file adapter, for the code that still
-    /// runs `SQLx` directly. Other adapters have none.
-    #[cfg(feature = "host")]
-    fn sqlx(&mut self) -> Option<&mut sqlx::Transaction<'static, sqlx::Sqlite>> {
-        None
-    }
-
-    /// The `SQLx` transaction of the file adapter, to read through.
-    #[cfg(feature = "host")]
-    fn sqlx_ref(&self) -> Option<&sqlx::Transaction<'static, sqlx::Sqlite>> {
-        None
-    }
 }
 
 /// A transaction lent to one piece of work.
