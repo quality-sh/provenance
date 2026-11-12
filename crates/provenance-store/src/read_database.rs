@@ -16,6 +16,8 @@
 pub mod contract;
 #[cfg(feature = "host")]
 pub mod file;
+#[cfg(test)]
+mod tests;
 
 use std::any::Any;
 use std::fmt::Debug;
