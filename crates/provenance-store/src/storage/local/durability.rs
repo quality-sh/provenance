@@ -14,44 +14,72 @@ pub struct ReplaceFailed(#[source] std::io::Error);
 /// it do not occur. A failed sync gives the I/O error text with no added
 /// text. If the directory sync fails, `path` has the new bytes, but a power
 /// loss can lose them.
+///
+/// If the call makes the directory of `path` or a directory above it, it
+/// syncs each directory from the directory of `path` up to the parent of the
+/// highest new directory, deepest first, so that the entry of each new
+/// directory is durable before the call returns.
 pub fn write_synced_file(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<()> {
-    let (temporary, parent) = write_temporary(path, bytes)?;
+    let (temporary, parent, first_made) = write_temporary(path, bytes)?;
     temporary.as_file().sync_all()?;
     replace_file(temporary, path)?;
-    // A relative path of one name, such as the file that git gives to a
-    // merge driver, has an empty parent: the current directory.
-    if parent.as_str().is_empty() {
-        sync_directory(Utf8Path::new("."))
-    } else {
-        sync_directory(parent)
+    let last = first_made.and_then(Utf8Path::parent).unwrap_or(parent);
+    for directory in parent.ancestors() {
+        sync_directory(directory_or_current(directory))?;
+        if directory == last {
+            break;
+        }
     }
+    Ok(())
 }
 
 /// Writes `bytes` to the file at `path` in a staged tree, with a temporary
 /// file and a replace, and does not sync. The caller syncs the tree with
 /// [`sync_tree`] one time, after all of its writes and before it uses the
-/// tree.
+/// tree. That sync also covers each directory that this call makes.
 pub(in crate::storage::local) fn write_staged_file(
     path: &Utf8Path,
     bytes: &[u8],
 ) -> anyhow::Result<()> {
-    let (temporary, _) = write_temporary(path, bytes)?;
+    let (temporary, _, _) = write_temporary(path, bytes)?;
     replace_file(temporary, path)
 }
 
-/// A temporary file with `bytes` in the directory of `path`, which this
-/// function makes if it does not exist, and that directory.
+/// A temporary file with `bytes` in the directory of `path`, that directory,
+/// and the highest directory that this function made, if it made one. The
+/// function makes the directory of `path` and each directory above it that
+/// does not exist.
 fn write_temporary<'a>(
     path: &'a Utf8Path,
     bytes: &[u8],
-) -> anyhow::Result<(tempfile::NamedTempFile, &'a Utf8Path)> {
-    let Some(parent) = path.parent() else {
-        return Err(crate::refusal::fault!("{path} has no parent directory"));
-    };
+) -> anyhow::Result<(tempfile::NamedTempFile, &'a Utf8Path, Option<&'a Utf8Path>)> {
+    let parent = parent_of(path)?;
+    let mut first_made = None;
+    for directory in parent.ancestors() {
+        if directory.as_str().is_empty() || crate::long_path::extended(directory)?.try_exists()? {
+            break;
+        }
+        first_made = Some(directory);
+    }
     std::fs::create_dir_all(parent)?;
     let mut temporary = tempfile::NamedTempFile::new_in(crate::long_path::extended(parent)?)?;
     temporary.write_all(bytes)?;
-    Ok((temporary, parent))
+    Ok((temporary, parent, first_made))
+}
+
+fn parent_of(path: &Utf8Path) -> anyhow::Result<&Utf8Path> {
+    path.parent().ok_or_else(|| crate::refusal::fault!("{path} has no parent directory"))
+}
+
+/// The directory to sync for `directory`. A relative path of one name, such
+/// as the file that git gives to a merge driver, has an empty parent: the
+/// current directory.
+fn directory_or_current(directory: &Utf8Path) -> &Utf8Path {
+    if directory.as_str().is_empty() {
+        Utf8Path::new(".")
+    } else {
+        directory
+    }
 }
 
 /// Replaces the file at `target` with `temporary`, a file in the same
