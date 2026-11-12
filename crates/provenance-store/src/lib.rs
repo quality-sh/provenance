@@ -2,8 +2,7 @@
 //! change without compatibility shims. Use `provenance-sdk` for Rust.
 //!
 //! This crate is the repository engine. It owns the use cases and calls storage through a
-//! port. The engine runs where its storage is: in the process over local disk now, and as
-//! Wasm over a store that is not a local file later.
+//! port. The engine runs where its storage is. Today that is the process, over local disk.
 //!
 //! The areas of the crate:
 //!

@@ -4,8 +4,7 @@
 //! The cases use only the port: the SQL that they run is the SQL that the
 //! projection runs, so a store that passes them can hold the projection.
 //! No case runs one port call inside the work of another, and no work
-//! waits on anything but its own transaction, so a store whose
-//! transaction is one synchronous call can pass them.
+//! waits on anything but its own transaction.
 
 use super::{is_missing_table, ReadDatabase, SqlRow, SqlValue, Statement, Unopened};
 

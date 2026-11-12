@@ -1,6 +1,6 @@
 //! Another adapter over the store of an adapter: it runs the same SQL, but
-//! its transaction is its own type, as with an adapter over a store that is
-//! not a local file. Code that passes over it needs nothing but the port.
+//! its transaction is its own type. Code that passes over it needs nothing
+//! but the port.
 
 use crate::read_database::{
     ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement, Transaction,

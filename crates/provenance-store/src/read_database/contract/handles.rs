@@ -170,6 +170,12 @@ pub async fn the_message_handle_reads_the_projection<H: Harness + Send + Sync>(h
     );
 }
 
+/// The error of the store for a statement that it stopped, below
+/// [`OverBudget`].
+#[derive(Debug, thiserror::Error)]
+#[error("the store stopped the statement")]
+struct Stopped;
+
 /// A transaction that stops each statement after
 /// [`SqlTransaction::bound_work`] with [`OverBudget`], as an adapter does
 /// when a statement passes the bound.
@@ -181,9 +187,7 @@ struct Stopping {
 impl SqlTransaction for Stopping {
     fn fetch<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, Vec<SqlRow>> {
         if self.bounded {
-            Box::pin(async {
-                Err(OverBudget(crate::refusal::fault!("the store stopped the statement")).into())
-            })
+            Box::pin(async { Err(OverBudget(Stopped.into()).into()) })
         } else {
             self.inner.fetch(sql, values)
         }
