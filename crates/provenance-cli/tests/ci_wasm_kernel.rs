@@ -2,7 +2,8 @@
 //! crate dependency policy names as a kernel crate, for the policy target and
 //! with default features, and the required `CI OK` job needs that job. The
 //! same job runs the memory adapter tests of the store without `host`, lints
-//! every store target without `host` and runs the store library unit tests.
+//! every store target and every transport target without `host` and runs the
+//! store library unit tests.
 
 use provenance_macros::verifies;
 use std::{fs, path::PathBuf};
@@ -113,7 +114,8 @@ fn wasm_kernel_job_runs_the_memory_adapter_tests_without_host() {
 
 /// Implementation aid: no proposed Rule covers the CI wiring of the store
 /// targets without `host`. This test shows that CI lints every store target
-/// and runs the library unit tests with default features.
+/// and every transport target and runs the store library unit tests with
+/// default features.
 #[test]
 fn wasm_kernel_job_builds_every_store_target_without_host() {
     let job = job(&workflow(), "wasm-kernel");
@@ -121,6 +123,10 @@ fn wasm_kernel_job_builds_every_store_target_without_host() {
         (
             "Lint all store targets without host",
             "cargo clippy --locked -p provenance-store --all-targets -- -D warnings",
+        ),
+        (
+            "Lint all transport targets without host",
+            "cargo clippy --locked -p provenance-transport --all-targets -- -D warnings",
         ),
         (
             "Test the store library without host",
