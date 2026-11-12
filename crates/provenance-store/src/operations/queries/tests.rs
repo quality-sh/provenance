@@ -7,6 +7,7 @@ use provenance_core::{Manifest, NodeType, RepoPathPrefix, RequirementStatus, Sco
 
 mod binding_pages;
 mod budgets;
+mod catch_up_rows;
 mod comparison;
 mod concurrent;
 mod cursor;
