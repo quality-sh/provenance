@@ -4,7 +4,15 @@
 
 use provenance_macros::verifies;
 use provenance_store::storage::contract::remote_harness::Remote;
-use provenance_store::storage::contract::*;
+use provenance_store::storage::contract::{
+    a_failed_one_key_set_lands_nothing, a_failed_per_key_set_leaves_a_landed_prefix,
+    a_failed_whole_set_lands_no_key, a_one_key_set_lands_all_of_its_bytes,
+    a_two_key_whole_set_lands_both_keys, a_whole_set_on_a_moved_base_is_refused,
+    empty_state_reads_as_an_empty_view, publish_lands_puts_and_deletes,
+    publish_on_a_base_with_changed_bytes_is_refused, publish_on_a_moved_base_is_refused,
+    publish_on_the_current_base_lands, publish_refuses_a_put_and_delete_of_one_key,
+    revision_follows_every_key_and_byte, view_returns_every_key_with_its_bytes,
+};
 use provenance_store::storage::remote::RemoteStateStorage;
 use provenance_store::storage::{
     Atomicity, PublishFailure, StateKey, StateStorage, StorageError, WriteSet,

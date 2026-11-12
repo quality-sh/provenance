@@ -76,11 +76,60 @@ impl RemoteStateStorage {
 
 impl StateStorage for RemoteStateStorage {
     fn read_view(&self) -> Result<StateView, StorageError> {
-        Err(StorageError::Read(fault!("not built")))
+        let last = self.last().clone();
+        let headers: Vec<_> = last
+            .iter()
+            .map(|view| ("If-None-Match", wire::entity_tag(view.revision().as_str())))
+            .collect();
+        let answer = self
+            .send("GET", "/state", &headers, None)
+            .map_err(|failure| StorageError::Read(failure.into_error()))?;
+        let view = match answer.status {
+            304 => last.ok_or_else(|| fault!("the object answered 304 to a first read")),
+            200 => serde_json::from_slice::<StateBody>(&answer.body)
+                .context("the object answered a state body that is not valid")
+                .and_then(|body| body.decode().map_err(|error| fault!("{error}")))
+                .map(StateView::new),
+            _ => Err(answer.failure_error()),
+        }
+        .map_err(|error| StorageError::Read(error.context("could not read the remote state")))?;
+        *self.last() = Some(view.clone());
+        Ok(view)
     }
 
-    fn publish(&self, _writes: WriteSet) -> Result<(), PublishFailure> {
-        Err(PublishFailure::Refused(fault!("not built")))
+    /// Refuses a set that puts and deletes one key before it sends the set.
+    /// A failure to connect or to send refuses the set. A failure after the
+    /// set was sent is [`PublishFailure::Started`]: the object can have
+    /// landed it.
+    fn publish(&self, writes: WriteSet) -> Result<(), PublishFailure> {
+        writes.ensure_disjoint()?;
+        let body = serde_json::to_vec(&PublishBody::of(&writes))
+            .map_err(|error| PublishFailure::Refused(error.into()))?;
+        let answer = self
+            .send("POST", "/state", &[], Some(&body))
+            .map_err(Unsent::into_publish_failure)?;
+        if answer.status == 204 {
+            return Ok(());
+        }
+        Err(match answer.failure() {
+            Some(StateFailure::BaseMoved { base, current }) => PublishFailure::BaseMoved {
+                base: writes
+                    .base()
+                    .cloned()
+                    .unwrap_or_else(|| Revision::named(base)),
+                current: Revision::named(current),
+            },
+            Some(
+                StateFailure::UnknownTarget {}
+                | StateFailure::InvalidInput { .. }
+                | StateFailure::Refused { .. },
+            ) => PublishFailure::Refused(answer.failure_error()),
+            Some(StateFailure::Started { .. }) => PublishFailure::Started(answer.failure_error()),
+            None if (400..500).contains(&answer.status) => {
+                PublishFailure::Refused(answer.failure_error())
+            }
+            None => PublishFailure::Started(answer.failure_error()),
+        })
     }
 }
 
