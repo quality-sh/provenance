@@ -66,10 +66,11 @@ STOP_LINE = "The watcher stops."
 COMMAND = "!"
 TEXT = " "
 # One deadline in seconds for the install of the backtrace tool and all the
-# backtraces of one report. In the real CI run, the install took 9.1 s, and
-# the install and the backtraces of 2 processes and 8 threads took less than
-# 12 s. Past the deadline the report says that the backtraces are not
-# complete, and the watcher stops the tree.
+# backtraces of one report. In two real CI runs (43238889152 and
+# 43314923410) the install took 9.1 s and 5.7 s, and the install, the
+# backtraces of 2 processes and 8 threads and the stop took less than 12 s.
+# Past the deadline the report says that the backtraces are not complete,
+# and the watcher stops the tree.
 REPORT_DEADLINE = 60
 # How long `finish` waits for a report in progress: the deadline, the reads
 # of /proc and the stop.
