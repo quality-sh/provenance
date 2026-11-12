@@ -1,5 +1,6 @@
 //! Page limits apply before record decoding and transport serialization.
 use super::rows::{decode, select_columns};
+use crate::cache::materialize::SEARCH_TEXT;
 use crate::cache::quoted;
 use crate::operations::reader::{ReadSnapshot, Table};
 use provenance_core::model::ProjectionRow;
@@ -142,18 +143,37 @@ impl<K: ProjectionRow> Table<'_, K> {
         limit: usize,
         exclude_terminal: bool,
     ) -> anyhow::Result<Vec<String>> {
-        let filter = crate::families::projection_families::exclude_terminal_predicate(
+        self.text_search_ids(after, limit, exclude_terminal, None).await
+    }
+
+    /// Reads at most `limit` candidate IDs strictly after the previous key.
+    /// With a needle, a candidate holds the lowercased needle in its search
+    /// text. The search text joins all pieces, so the caller checks each piece.
+    pub(crate) async fn text_search_ids(
+        &self,
+        after: &str,
+        limit: usize,
+        exclude_terminal: bool,
+        needle: Option<&str>,
+    ) -> anyhow::Result<Vec<String>> {
+        let terminal = crate::families::projection_families::exclude_terminal_predicate(
             K::TABLE,
             exclude_terminal,
         );
+        let text = needle.map_or_else(String::new, |_| {
+            format!(" AND instr({}, ?) > 0", quoted(SEARCH_TEXT))
+        });
+        let filter = format!("{terminal}{text}");
         let sql = id_page_sql(K::TABLE, &filter);
-        let mut tx = self.snapshot().connection().await;
-        let rows = sqlx::query(sqlx::AssertSqlSafe(sql))
+        let mut query = sqlx::query(sqlx::AssertSqlSafe(sql))
             .bind(self.snapshot().scope().as_str())
-            .bind(after)
-            .bind(i64::try_from(limit)?)
-            .fetch_all(&mut **tx)
-            .await?;
+            .bind(after);
+        if let Some(needle) = needle {
+            query = query.bind(needle.to_lowercase());
+        }
+        query = query.bind(i64::try_from(limit)?);
+        let mut tx = self.snapshot().connection().await;
+        let rows = query.fetch_all(&mut **tx).await?;
         drop(tx);
         rows.iter()
             .map(|row| {

@@ -154,18 +154,20 @@ pub(super) async fn counting(
     Ok(found)
 }
 
-/// Bounded candidate IDs for canonical substring search.
+/// Bounded candidate IDs for canonical substring search. With a needle, each
+/// candidate holds the needle in its joined search text.
 pub(super) async fn search_ids(
     snapshot: &ReadSnapshot,
     node_type: NodeType,
     after: &str,
     limit: usize,
     exclude_terminal: bool,
+    needle: Option<&str>,
 ) -> anyhow::Result<Vec<String>> {
     for_kind!(node_type, K => {
         snapshot
             .table::<K>()
-            .search_ids(after, limit, exclude_terminal)
+            .text_search_ids(after, limit, exclude_terminal, needle)
             .await
     })
 }
