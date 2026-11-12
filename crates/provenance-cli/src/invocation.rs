@@ -13,7 +13,9 @@ mod api;
 mod discussion;
 pub mod grammar;
 mod help_kind;
+mod positional_tip;
 mod removed;
+mod search_text;
 use grammar::{
     ApiArgs, Delivery, DiscussionsArgs, DiscussionsRoute, SearchArgs, TargetArgs, TargetVerb,
 };
@@ -75,19 +77,16 @@ impl Invocation {
             return Self::parse(help_arguments(arguments));
         }
         let Some(word) = grammar::command_word(&arguments) else {
-            return Ok(Self::parse_root(arguments));
+            return Ok(Self::parse_root(&arguments));
         };
         match exposed::find(&[word]) {
             Some(registry::Command::Search) => {
-                let matches = crate::registry_cli::root_word_command(registry::Command::Search)
-                    .try_get_matches_from(arguments)
-                    .unwrap_or_else(|error| error.exit());
-                return Ok(Self::Search(SearchArgs::from_matches(&matches)));
+                return Ok(Self::Search(search_text::parse(&arguments)));
             }
             Some(registry::Command::Api) => {
-                let matches = crate::registry_cli::root_word_command(registry::Command::Api)
-                    .try_get_matches_from(arguments)
-                    .unwrap_or_else(|error| error.exit());
+                let matches =
+                    crate::registry_cli::root_word_matches(registry::Command::Api, &arguments)
+                        .unwrap_or_else(|error| error.exit());
                 return Ok(Self::Api(ApiArgs::from_matches(&matches)));
             }
             Some(
@@ -98,7 +97,7 @@ impl Invocation {
                 | registry::Command::Workspace(_)
                 | registry::Command::Dogfood(_),
             ) => {
-                return Ok(Self::parse_root(arguments));
+                return Ok(Self::parse_root(&arguments));
             }
             Some(
                 registry::Command::Get
@@ -126,7 +125,7 @@ impl Invocation {
             .get_subcommands()
             .any(|command| command.get_name() == word)
         {
-            return Ok(Self::parse_root(arguments));
+            return Ok(Self::parse_root(&arguments));
         }
         if is_collection(word) {
             refuse_collection_word(word);
@@ -137,10 +136,10 @@ impl Invocation {
 
     /// Parses a root command: a built-in command, or a registry command that the root
     /// parser shows with the built-in commands.
-    fn parse_root(arguments: Vec<String>) -> Self {
+    fn parse_root(arguments: &[String]) -> Self {
         let matches = root_command()
             .try_get_matches_from(arguments)
-            .unwrap_or_else(|error| error.exit());
+            .unwrap_or_else(|error| positional_tip::with_tip(error, arguments).exit());
         let (words, selected) = crate::registry_cli::selected(&matches);
         if let Some(server) = Server::find(&words) {
             return Self::Server(

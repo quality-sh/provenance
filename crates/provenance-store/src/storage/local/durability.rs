@@ -1,5 +1,40 @@
 use camino::{Utf8Path, Utf8PathBuf};
 
+/// A failure of [`replace_file`]. It has the text of a `tempfile` persist
+/// failure, and its source is the I/O error.
+#[derive(Debug, thiserror::Error)]
+#[error("failed to persist temporary file: {0}")]
+pub struct ReplaceFailed(#[source] std::io::Error);
+
+/// Replaces the file at `target` with `temporary`, a file in the same
+/// directory. The target has all of the new bytes or keeps its old bytes. A
+/// handle that a reader has open on the target does not make the replace fail
+/// when that handle lets other handles delete the file, as `std::fs` handles
+/// do. The temporary file stays open until the rename returns. After a
+/// failure, the temporary file is deleted.
+///
+/// This function does not sync. The writers of the publication marker and of
+/// the Source edit marker sync the temporary file before the call and the
+/// directory after it. `write_file_atomic` syncs neither: a whole-set
+/// publication syncs the staged tree after all of its writes, and a one-key
+/// write and a JSONL file write do not sync.
+pub fn replace_file(temporary: tempfile::NamedTempFile, target: &Utf8Path) -> anyhow::Result<()> {
+    let target = crate::long_path::extended(target)?;
+    // On Windows, `keep` clears the temporary attribute that `tempfile` sets.
+    // A rename keeps the attributes of the file, and with that attribute the
+    // system can keep the bytes in memory and not write them to the disk.
+    let (file, path) = temporary
+        .keep()
+        .map_err(|failure| ReplaceFailed(failure.error))?;
+    let renamed = std::fs::rename(&path, target);
+    drop(file);
+    renamed.map_err(|error| {
+        let _ = std::fs::remove_file(&path);
+        ReplaceFailed(error)
+    })?;
+    Ok(())
+}
+
 /// Flushes directory metadata where the platform supports it.
 ///
 /// Windows has no equivalent call in this module. On Windows, file contents are flushed, but a

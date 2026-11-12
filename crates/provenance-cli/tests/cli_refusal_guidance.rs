@@ -3,6 +3,9 @@ mod support {
     pub mod review_paths;
 }
 use support::review_paths::{create_requirement, init, json_output, provenance};
+#[path = "support/bounded_process.rs"]
+mod bounded_process;
+use bounded_process::Bounded;
 
 fn json(repo: &str, args: &[&str]) -> serde_json::Value {
     json_output(provenance().args(args).args(["--repo", repo]))
@@ -58,6 +61,89 @@ fn empty_search_names_text_and_kind_forms() {
     assert!(run(repo, &["search", "--kind", "requirement"])
         .status
         .success());
+}
+
+/// Implementation aid: no Rule states the refusal of search text without `--text`, and
+/// `rule_search_refusal_names_query` is about a search with no query.
+#[test]
+fn search_words_without_text_flag_name_the_text_flag() {
+    let cases: [(&[&str], &str, Option<&str>); 15] = [
+        (
+            &["search", "some text"],
+            "some text",
+            Some("--text 'some text'"),
+        ),
+        (
+            &["search", "it's here"],
+            "it's here",
+            Some(r"--text 'it'\''s here'"),
+        ),
+        (
+            &["search", "some text", "--kind", "requirement"],
+            "some text",
+            Some("--text 'some text' --kind requirement"),
+        ),
+        (
+            &["search", "some", "text"],
+            "some",
+            Some("--text 'some text'"),
+        ),
+        (
+            &["search", "--text", "some", "text"],
+            "text",
+            Some("--text 'some text'"),
+        ),
+        (&["search", "--", "x"], "x", Some("--text 'x'")),
+        (&["search", "--", "-x"], "-x", Some("--text '-x'")),
+        (
+            &["--repo", "r", "search", "x"],
+            "x",
+            Some("--text 'x' --repo r"),
+        ),
+        (&["search", "x", "--help"], "x", Some("--text 'x'")),
+        (&["search", "x", "-h"], "x", Some("--text 'x'")),
+        (&["help", "search", "x"], "x", Some("--text 'x'")),
+        (&["search", ""], "", None),
+        (&["search", "x", "--bogus", "v"], "x", None),
+        (&["search", "x", "--kind", "--limit", "5"], "x", None),
+        (&["search", "x", "-y"], "x", None),
+    ];
+    for (words, found, corrected) in cases {
+        let tip = corrected
+            .map(|corrected| format!(": provenance search {corrected}"))
+            .unwrap_or_default();
+        assert_refusal(
+            words,
+            &format!(
+                "error: unexpected argument '{found}' found\n\n  \
+                 tip: give the search text with --text{tip}\n\n\
+                 For more information, try 'provenance search --help'.\n"
+            ),
+        );
+    }
+    // Clap writes the name of the executable file in the usage line. On Windows, this
+    // name has the `.exe` suffix.
+    let suffix = std::env::consts::EXE_SUFFIX;
+    assert_refusal(
+        &["search", "-x"],
+        &format!(
+            "error: unexpected argument '-x' found\n\n  \
+             tip: to pass '-x' as a value, use '-- -x'\n\n\
+             Usage: provenance{suffix} search [OPTIONS]\n\n\
+             For more information, try 'provenance search --help'.\n"
+        ),
+    );
+}
+
+fn assert_refusal(words: &[&str], error: &str) {
+    let output = bounded_process::provenance().args(words).bounded_output();
+    assert_eq!(output.status.code(), Some(2), "{words:?} {output:?}");
+    assert!(output.stdout.is_empty(), "{words:?} {output:?}");
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        error,
+        "{words:?}"
+    );
 }
 
 #[test]

@@ -1,8 +1,8 @@
 //! The stored revision a read answers at, and the stamp built from it.
 
 use super::reader::ReadContext;
+use crate::read_database::{is_missing_table, SqlColumns, SqlTransaction};
 use provenance_core::protocol::{Stamp, StampPolicy};
-use sqlx::SqliteConnection;
 
 /// The reader logic version the stamp carries.
 ///
@@ -58,31 +58,42 @@ pub fn seal(context: ReadContext, policy: StampPolicy) -> Stamp {
     )
 }
 
-/// Reads the stored revision on one connection.
+/// Reads the stored revision in one transaction.
 ///
 /// Inside an open transaction this is the first read, so it pins the
 /// snapshot every later row comes from. `None` means the database was
 /// never materialized, or predates the revision tables and so holds no
 /// revision either.
 pub async fn stored_revision(
-    connection: &mut SqliteConnection,
+    transaction: &mut dyn SqlTransaction,
 ) -> anyhow::Result<Option<StoredRevision>> {
-    let revision: Result<Option<(i64, String)>, sqlx::Error> = sqlx::query_as(
-        "SELECT serial, digest FROM projection_revision ORDER BY serial DESC LIMIT 1",
-    )
-    .fetch_optional(&mut *connection)
-    .await;
+    let revision = transaction
+        .fetch(
+            "SELECT serial, digest FROM projection_revision ORDER BY serial DESC LIMIT 1",
+            &[],
+        )
+        .await;
     let revision = match revision {
-        Ok(revision) => revision,
-        Err(error) if super::reader::is_missing_table(&error) => None,
-        Err(error) => return Err(error.into()),
+        Ok(rows) => rows,
+        Err(error) if is_missing_table(&error) => return Ok(None),
+        Err(error) => return Err(error),
     };
-    let Some((serial, digest)) = revision else {
+    let Some(row) = revision.first() else {
         return Ok(None);
     };
-    let instance_id: String = sqlx::query_scalar("SELECT instance_id FROM projection_instance")
-        .fetch_one(&mut *connection)
+    let (serial, digest) = (row.integer(0)?, row.text(1)?.to_owned());
+    let instance = transaction
+        .fetch("SELECT instance_id FROM projection_instance", &[])
         .await?;
+    let instance_id = instance
+        .first()
+        .ok_or_else(|| {
+            crate::refusal::fault!(
+                "no rows returned by a query that expected to return at least one row"
+            )
+        })?
+        .text(0)?
+        .to_owned();
     Ok(Some(StoredRevision {
         serial,
         digest,

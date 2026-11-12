@@ -150,17 +150,12 @@ where
 
 /// Writes one JSONL shard while the caller holds the publication lock. It
 /// carries no write permission, so it cannot change an enrolled row.
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", any(test, feature = "test-fixture")))]
 pub(crate) fn write_jsonl_atomic_under_publication<T: Serialize>(
     path: &Utf8Path,
     records: &[T],
 ) -> anyhow::Result<()> {
     protect_rows(&files_of(path), path, records, &WritePermissions::none())?;
-    write_jsonl_atomic_unlocked(path, records)
-}
-
-#[cfg(feature = "host")]
-fn write_jsonl_atomic_unlocked<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyhow::Result<()> {
     let lines = records
         .iter()
         .map(to_stable_json)
@@ -334,10 +329,12 @@ mod tests {
         .unwrap_err();
         assert!(mutation_completed);
         let publication = error.downcast_ref::<PublicationStarted>().unwrap();
-        assert!(publication
-            .0
-            .downcast_ref::<tempfile::PersistError>()
-            .is_some());
+        let text = format!("{:#}", publication.0);
+        assert!(text.starts_with("failed to persist temporary file: "));
+        for entry in std::fs::read_dir(root).unwrap() {
+            let name = entry.unwrap().file_name();
+            assert!(!name.to_string_lossy().starts_with(".tmp"), "{name:?}");
+        }
         assert!(matches!(
             WriteError(error).safe(),
             WriteFailure::WriteFailed { .. }

@@ -304,13 +304,12 @@ async fn a_capture_and_a_catch_up_under_one_guard_read_the_tree_once() {
     let (_dir, store, _scope) = seeded_source_requirement_store();
     let repository = open(&store.layout);
     crate::cache::catch_up_state(&repository).await.unwrap();
-    let cache = crate::cache::open_cache(&store.layout).await.unwrap();
+    let cache = crate::read_database::file::FileReadDatabase::new(store.layout.clone());
     let guard = publication_guard(&repository).await.unwrap();
     let counting = count_tree_reads_and_hashes();
     let captured = crate::review_changes::ReviewStateSnapshot::capture(&guard);
-    let caught_up = crate::cache::catch_up_with_guard(&guard, cache.pool()).await;
+    let caught_up = crate::cache::catch_up_with_guard(guard, &cache).await;
     let counts = stop_counting(&counting);
-    drop(guard);
     captured.unwrap();
     caught_up.unwrap();
     assert_eq!(counts[0], 1, "full reads of the state tree");

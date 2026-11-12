@@ -45,6 +45,7 @@ fn empty_repository() -> Repository {
         provenance_simulation::bare_identity(),
         Arc::new(MemoryStateStorage::new(entries)),
         Arc::new(MemorySectionLock::default()),
+        None,
     )
     .expect("the repository opens")
 }
