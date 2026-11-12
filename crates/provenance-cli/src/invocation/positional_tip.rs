@@ -72,10 +72,10 @@ fn declared(words: &[&str], flag: &str) -> Option<clap::Arg> {
     for word in words {
         command = command.find_subcommand(word)?.clone();
     }
-    command
+    let arg = command
         .get_arguments()
-        .find(|arg| arg.get_long() == Some(flag))
-        .cloned()
+        .find(|arg| arg.get_long() == Some(flag))?;
+    Some(arg.clone())
 }
 
 /// True when one argument gives the flag by its long name or by its short name, with or
