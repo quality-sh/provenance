@@ -1,14 +1,22 @@
 //! The contract that every read database adapter satisfies.
 //!
-//! Each case takes a fresh harness, whose database holds no table. The
-//! cases use only the port: the SQL that they run is the SQL that the
+//! Each case takes a fresh harness, whose database nothing has written.
+//! The cases use only the port: the SQL that they run is the SQL that the
 //! projection runs, so a store that passes them can hold the projection.
+//! No case runs one port call inside the work of another, and no work
+//! waits on anything but its own transaction, so a store whose
+//! transaction is one synchronous call, as a Durable Object's is, can
+//! pass them.
 
-use super::{ReadDatabase, SqlRow, SqlValue, Statement};
+use super::{is_missing_table, ReadDatabase, SqlRow, SqlValue, Statement, Unopened};
+use std::future::Future;
+use std::pin::pin;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::task::Poll;
 
 /// One adapter under test.
 pub trait Harness {
-    /// The database under test. It holds no table at the start.
+    /// The database under test. Nothing has written it at the start.
     fn database(&self) -> &dyn ReadDatabase;
     /// A second adapter over the same store, as a later process opens it.
     fn reopen(&self) -> Box<dyn ReadDatabase>;
@@ -62,6 +70,108 @@ fn integers(rows: &[SqlRow]) -> Vec<i64> {
         .collect()
 }
 
+/// The error of a work that fails on purpose.
+#[derive(Debug, thiserror::Error)]
+#[error("the work failed after its commit")]
+struct WorkFailed;
+
+/// Runs both futures until both end. Each poll polls `first` before
+/// `second`.
+async fn both<A, B>(first: impl Future<Output = A>, second: impl Future<Output = B>) -> (A, B) {
+    let (mut first, mut second) = (pin!(first), pin!(second));
+    let (mut a, mut b) = (None, None);
+    std::future::poll_fn(|context| {
+        if a.is_none() {
+            if let Poll::Ready(value) = first.as_mut().poll(context) {
+                a = Some(value);
+            }
+        }
+        if b.is_none() {
+            if let Poll::Ready(value) = second.as_mut().poll(context) {
+                b = Some(value);
+            }
+        }
+        match (a.take(), b.take()) {
+            (Some(a), Some(b)) => Poll::Ready((a, b)),
+            (left, right) => {
+                (a, b) = (left, right);
+                Poll::Pending
+            }
+        }
+    })
+    .await
+}
+
+/// Ends when `flag` is on.
+async fn until(flag: &AtomicBool) {
+    std::future::poll_fn(|context| {
+        if flag.load(Ordering::SeqCst) {
+            Poll::Ready(())
+        } else {
+            context.waker().wake_by_ref();
+            Poll::Pending
+        }
+    })
+    .await;
+}
+
+/// A read of a database that nothing has written fails with [`Unopened`]
+/// before its work starts, and makes nothing: a second read fails in the
+/// same way.
+pub async fn a_read_of_an_absent_database_refuses_before_its_work<H: Harness>(harness: &H) {
+    for attempt in 0..2 {
+        let mut started = false;
+        let slot = &mut started;
+        let failed = harness
+            .database()
+            .read(Box::new(move |_| {
+                Box::pin(async move {
+                    *slot = true;
+                    Ok(())
+                })
+            }))
+            .await
+            .unwrap_err();
+        assert!(!started, "read {attempt}");
+        assert!(
+            failed.downcast_ref::<Unopened>().is_some(),
+            "read {attempt}: {failed:#}"
+        );
+    }
+}
+
+/// A statement that names an absent table fails with an error that
+/// [`is_missing_table`] knows: the engine reads a database with no
+/// revision table as one that holds no revision. No other failure reads as
+/// a missing table.
+pub async fn a_missing_table_is_reported_as_missing<H: Harness>(harness: H) {
+    let database = harness.database();
+    write(
+        database,
+        vec![statement("CREATE TABLE present (n INTEGER)", Vec::new())],
+    )
+    .await
+    .unwrap();
+    let mut failures = Vec::new();
+    let slot = &mut failures;
+    database
+        .read(Box::new(move |mut transaction| {
+            Box::pin(async move {
+                for sql in [
+                    "SELECT n FROM absent_table",
+                    "SELECT absent_column FROM present",
+                ] {
+                    let failed = transaction.fetch(sql, &[]).await.unwrap_err();
+                    slot.push(is_missing_table(&failed));
+                }
+                Ok(())
+            })
+        }))
+        .await
+        .unwrap();
+    assert_eq!(failures, vec![true, false]);
+}
+
 /// A write keeps each value with its storage class, and a later read gives
 /// it back unchanged.
 pub async fn a_write_keeps_each_value_class<H: Harness>(harness: H) {
@@ -109,7 +219,66 @@ pub async fn a_failed_write_keeps_nothing<H: Harness>(harness: H) {
         ],
     )
     .await;
-    assert!(failed.is_err());
+    let failed = failed.unwrap_err();
+    assert!(is_missing_table(&failed), "{failed:#}");
+    assert_eq!(
+        fetch(database, "SELECT n FROM kept").await,
+        Vec::<SqlRow>::new()
+    );
+}
+
+/// A write whose work commits and then fails keeps what it committed, and
+/// gives the error of the work. Catch-up relies on it: a pass that fails
+/// after its commit has still published its revision.
+pub async fn a_write_that_fails_after_its_commit_keeps_the_commit<H: Harness>(harness: H) {
+    let database = harness.database();
+    write(
+        database,
+        vec![statement("CREATE TABLE kept (n INTEGER)", Vec::new())],
+    )
+    .await
+    .unwrap();
+    let failed = database
+        .write(Box::new(|mut transaction| {
+            Box::pin(async move {
+                transaction
+                    .execute("INSERT INTO kept (n) VALUES (1)", &[])
+                    .await?;
+                transaction.commit().await?;
+                Err(WorkFailed.into())
+            })
+        }))
+        .await
+        .unwrap_err();
+    assert!(failed.downcast_ref::<WorkFailed>().is_some(), "{failed:#}");
+    assert_eq!(
+        integers(&fetch(database, "SELECT n FROM kept").await),
+        vec![1]
+    );
+}
+
+/// A read keeps nothing that its work writes.
+pub async fn a_read_keeps_no_writes<H: Harness>(harness: H) {
+    let database = harness.database();
+    write(
+        database,
+        vec![statement("CREATE TABLE kept (n INTEGER)", Vec::new())],
+    )
+    .await
+    .unwrap();
+    database
+        .read(Box::new(|mut transaction| {
+            Box::pin(async move {
+                // A store may refuse the statement; either way it keeps
+                // nothing.
+                let _ = transaction
+                    .execute("INSERT INTO kept (n) VALUES (1)", &[])
+                    .await;
+                Ok(())
+            })
+        }))
+        .await
+        .unwrap();
     assert_eq!(
         fetch(database, "SELECT n FROM kept").await,
         Vec::<SqlRow>::new()
@@ -144,8 +313,13 @@ pub async fn a_write_without_its_commit_keeps_nothing<H: Harness>(harness: H) {
 }
 
 /// Every row that a read gets is from the state that was committed when
-/// the read started, also when a write commits while the read runs.
+/// its first statement ran, also when a write commits while the read runs.
+/// The write runs beside the read, never inside its work: it starts after
+/// the first statement of the read, and the read goes on until the write
+/// has committed, or for a fixed number of statements. A store that runs a
+/// read to its end in one call runs the write after it.
 pub async fn a_read_answers_from_one_committed_state<H: Harness>(harness: H) {
+    const MOST_STATEMENTS: usize = 1000;
     let database = harness.database();
     write(
         database,
@@ -156,26 +330,39 @@ pub async fn a_read_answers_from_one_committed_state<H: Harness>(harness: H) {
     )
     .await
     .unwrap();
+    let (first_read, committed) = (AtomicBool::new(false), AtomicBool::new(false));
+    let (first_read, committed) = (&first_read, &committed);
     let mut seen = Vec::new();
     let slot = &mut seen;
-    database
-        .read(Box::new(move |mut transaction| {
-            Box::pin(async move {
-                let sql = "SELECT n FROM pinned ORDER BY n";
-                let before = transaction.fetch(sql, &[]).await?;
-                write(
-                    database,
-                    vec![statement("INSERT INTO pinned (n) VALUES (2)", Vec::new())],
-                )
-                .await?;
-                let after = transaction.fetch(sql, &[]).await?;
-                *slot = vec![integers(&before), integers(&after)];
-                Ok(())
-            })
-        }))
-        .await
-        .unwrap();
-    assert_eq!(seen, vec![vec![1], vec![1]]);
+    let read = database.read(Box::new(move |mut transaction| {
+        Box::pin(async move {
+            let sql = "SELECT n FROM pinned ORDER BY n";
+            slot.push(integers(&transaction.fetch(sql, &[]).await?));
+            first_read.store(true, Ordering::SeqCst);
+            for _ in 0..MOST_STATEMENTS {
+                if committed.load(Ordering::SeqCst) {
+                    break;
+                }
+                slot.push(integers(&transaction.fetch(sql, &[]).await?));
+            }
+            slot.push(integers(&transaction.fetch(sql, &[]).await?));
+            Ok(())
+        })
+    }));
+    let later = async {
+        until(first_read).await;
+        let written = write(
+            database,
+            vec![statement("INSERT INTO pinned (n) VALUES (2)", Vec::new())],
+        )
+        .await;
+        committed.store(true, Ordering::SeqCst);
+        written
+    };
+    let (read, written) = both(read, later).await;
+    read.unwrap();
+    written.unwrap();
+    assert!(seen.iter().all(|rows| rows == &[1]), "{seen:?}");
     assert_eq!(
         integers(&fetch(database, "SELECT n FROM pinned ORDER BY n").await),
         vec![1, 2]

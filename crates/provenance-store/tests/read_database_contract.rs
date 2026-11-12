@@ -6,6 +6,7 @@
 
 use camino::Utf8PathBuf;
 use provenance_store::layout::ProvenanceLayout;
+use provenance_store::operations::stamp::stored_revision;
 use provenance_store::read_database::contract::{self, Harness};
 use provenance_store::read_database::file::FileReadDatabase;
 use provenance_store::read_database::ReadDatabase;
@@ -42,6 +43,54 @@ impl Harness for File {
 }
 
 #[tokio::test]
+async fn a_read_of_an_absent_database_refuses_before_its_work() {
+    let file = File::default();
+    contract::a_read_of_an_absent_database_refuses_before_its_work(&file).await;
+    let database = file.layout.cache_db_path();
+    let made: Vec<String> = ["", "-wal", "-shm", "-journal"]
+        .into_iter()
+        .map(|suffix| format!("{database}{suffix}"))
+        .filter(|path| std::path::Path::new(path).exists())
+        .collect();
+    assert_eq!(made, Vec::<String>::new());
+}
+
+#[tokio::test]
+async fn a_missing_table_is_reported_as_missing() {
+    contract::a_missing_table_is_reported_as_missing(File::default()).await;
+}
+
+/// The engine reads a database whose revision table is absent as one that
+/// holds no revision, through the port.
+#[tokio::test]
+async fn a_database_with_no_revision_table_holds_no_revision() {
+    let file = File::default();
+    file.database
+        .write(Box::new(|mut transaction| {
+            Box::pin(async move {
+                transaction
+                    .execute("CREATE TABLE unrelated (n INTEGER)", &[])
+                    .await?;
+                transaction.commit().await
+            })
+        }))
+        .await
+        .unwrap();
+    let mut revision = None;
+    let slot = &mut revision;
+    file.database
+        .read(Box::new(move |mut transaction| {
+            Box::pin(async move {
+                *slot = Some(stored_revision(transaction.as_mut()).await?);
+                Ok(())
+            })
+        }))
+        .await
+        .unwrap();
+    assert_eq!(revision, Some(None));
+}
+
+#[tokio::test]
 async fn a_write_keeps_each_value_class() {
     contract::a_write_keeps_each_value_class(File::default()).await;
 }
@@ -54,6 +103,16 @@ async fn a_failed_write_keeps_nothing() {
 #[tokio::test]
 async fn a_write_without_its_commit_keeps_nothing() {
     contract::a_write_without_its_commit_keeps_nothing(File::default()).await;
+}
+
+#[tokio::test]
+async fn a_write_that_fails_after_its_commit_keeps_the_commit() {
+    contract::a_write_that_fails_after_its_commit_keeps_the_commit(File::default()).await;
+}
+
+#[tokio::test]
+async fn a_read_keeps_no_writes() {
+    contract::a_read_keeps_no_writes(File::default()).await;
 }
 
 #[tokio::test]
