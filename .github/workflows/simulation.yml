@@ -50,7 +50,7 @@ jobs:
       matrix:
         include:
           - layer: engine
-            tests: --test engine --test engine_planted --test storage_contract
+            tests: --test engine --test engine_planted --test storage_contract --test refused_post
           - layer: contract
             tests: --test contract --test contract_planted
     runs-on: ubuntu-24.04

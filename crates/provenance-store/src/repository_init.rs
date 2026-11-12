@@ -1,11 +1,16 @@
-//! Repository initialization before a repository can be opened: manifest
-//! planning, recovery of an interrupted publication, and validation of the
-//! planned manifest against the state already on disk.
+//! Repository initialization before a repository can be opened.
+//!
+//! This module plans the manifest, recovers an interrupted publication,
+//! validates the planned manifest against the state already on disk, and
+//! gives init the one hold of the publication lock in which it checks and
+//! writes.
 
 use crate::layout::ProvenanceLayout;
 use crate::state_store::StateStore;
+use crate::storage::{Atomicity, StateKey, StateView, WriteSet};
 use camino::Utf8PathBuf;
 use provenance_core::{Manifest, RepoPathPrefix, Scope, ScopeId};
+use std::sync::Arc;
 
 /// Plans the scope and reviewer settings before initialization writes files.
 pub fn plan_manifest(
@@ -87,5 +92,67 @@ pub fn validate_planned_manifest<R>(
             crate::publication::with_read_only_validation(layout, |store| validate(store, manifest))
         }
         Err(error) => Err(error.into()),
+    }
+}
+
+/// The key of the manifest in a view of the canonical state.
+const MANIFEST_KEY: &str = "manifest.json";
+
+/// One hold of the publication lock of an initialized repository.
+///
+/// Init reads the manifest, validates its plan against the graph and writes
+/// in it, so no other write of the graph lands between the check and the
+/// write.
+pub struct InitSection<'a> {
+    store: &'a StateStore,
+    base: Arc<StateView>,
+}
+
+/// Runs `body` in one hold of the publication lock of `layout`, with the
+/// section of that hold.
+///
+/// The hold finishes an interrupted publication and reads the canonical
+/// state before `body` starts. A directory with no `.provenance` has no graph
+/// and no readers: `body` then gets `None`, and no lock is taken and no path
+/// is created.
+pub fn with_init_section<R>(
+    layout: &ProvenanceLayout,
+    body: impl FnOnce(Option<&InitSection<'_>>) -> anyhow::Result<R>,
+) -> anyhow::Result<R> {
+    match std::fs::symlink_metadata(layout.provenance_dir()) {
+        Ok(_) => crate::publication::with_repository_publication(layout, |store| {
+            let base = Arc::new(store.storage().read_view()?);
+            body(Some(&InitSection { store, base }))
+        }),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => body(None),
+        Err(error) => Err(error.into()),
+    }
+}
+
+impl InitSection<'_> {
+    /// The bytes of the manifest when the hold started, or `None` when the
+    /// repository has no manifest.
+    pub fn manifest_bytes(&self) -> anyhow::Result<Option<&[u8]>> {
+        Ok(self.base.get(&StateKey::new(MANIFEST_KEY)?))
+    }
+
+    /// The store that holds the section, for the validation of the planned
+    /// manifest.
+    pub const fn store(&self) -> &StateStore {
+        self.store
+    }
+
+    /// Publishes `bytes` as the manifest in a one-key per-key write set.
+    ///
+    /// The write is one rename over `manifest.json`, with no backup step, so
+    /// a stop leaves the old manifest or the new manifest. The store refuses
+    /// the set when the canonical state is not the state that the hold read
+    /// at its start.
+    pub fn publish_manifest(&self, bytes: Vec<u8>) -> anyhow::Result<()> {
+        let writes = WriteSet::new(Atomicity::PerKey)
+            .put(StateKey::new(MANIFEST_KEY)?, bytes)
+            .on_base(Arc::clone(&self.base));
+        self.store
+            .publish_through(writes, |writes| self.store.storage().publish(writes))
     }
 }
