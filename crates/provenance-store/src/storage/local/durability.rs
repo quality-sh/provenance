@@ -18,7 +18,13 @@ pub fn write_synced_file(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<()> {
     let (temporary, parent) = write_temporary(path, bytes)?;
     temporary.as_file().sync_all()?;
     replace_file(temporary, path)?;
-    sync_directory(parent)
+    // A relative path of one name, such as the file that git gives to a
+    // merge driver, has an empty parent: the current directory.
+    if parent.as_str().is_empty() {
+        sync_directory(Utf8Path::new("."))
+    } else {
+        sync_directory(parent)
+    }
 }
 
 /// Writes `bytes` to the file at `path` in a staged tree, with a temporary
