@@ -571,7 +571,7 @@ jobs:
       # deadline and 10 s for the stop. The job has no step limit.
       - name: Start the stuck test report
         if: runner.os == 'Linux'
-        run: python3 .github/scripts/stuck_test_report.py start --limit 900 --watch provenance
+        run: python3 .github/scripts/stuck_test_report.py start --limit 900 --watch provenance --root "$GITHUB_WORKSPACE"
       - name: Test concurrently with coverage
         if: runner.os == 'Linux'
         shell: bash
@@ -752,7 +752,7 @@ jobs:
       - name: Install Codex for the review notify tests
         run: sfw npm install --global --no-audit --no-fund @openai/codex@0.159.1
       - name: Start the stuck test report
-        run: python3 .github/scripts/stuck_test_report.py start --limit ${{ matrix.stuck-limit }} --watch provenance
+        run: python3 .github/scripts/stuck_test_report.py start --limit ${{ matrix.stuck-limit }} --watch provenance --root "$GITHUB_WORKSPACE"
       - name: Test the CLI with default features
         env:
           SHARD: ${{ matrix.shard }}
@@ -879,7 +879,7 @@ jobs:
       # The slowest compile-fail test took 88.4 s (run 43196942490). The stop
       # comes at most 86 s after the limit, far before the job limit.
       - name: Start the stuck test report
-        run: python3 .github/scripts/stuck_test_report.py start --limit 600 --watch provenance
+        run: python3 .github/scripts/stuck_test_report.py start --limit 600 --watch provenance --root "$GITHUB_WORKSPACE"
       - name: Test compile-time refusals
         shell: bash
         run: >-

@@ -15,9 +15,11 @@ import importlib.util
 import io
 import os
 from pathlib import Path
+import platform
 import re
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -271,6 +273,40 @@ class StuckTestReportTests(unittest.TestCase):
                 report,
             )
         self.assertNotIn("not complete", report)
+        # This process is the parent of the tree, so the system call of each
+        # thread is readable: the server sleeps and the waiter waits for the lock.
+        if platform.machine() == "x86_64":
+            self.assertIn(f"thread {server} {SERVER[:15]}: state S, wait channel hrtimer_nanosleep, "
+                          "system call clock_nanosleep (230)\n", report)
+            self.assertRegex(report, rf"thread {waiter} flock: state S, wait channel \w*lock\w*, system call flock \(73\)\n")
+        else:
+            self.assertRegex(report, rf"thread {server} {SERVER[:15]}: state S, wait channel hrtimer_nanosleep, system call \d+\n")
+
+    def test_the_system_call_has_a_name_only_on_x86_64(self):
+        self.assertEqual(report_module.system_call("202 0x1 0x2 0x3 0x4 0x5 0x6 0x7ffd 0x7f12", "x86_64"), "futex (202)")
+        self.assertEqual(report_module.system_call("98 0x1 0x2 0x3 0x4 0x5 0x6 0x7ffd 0x7f12", "aarch64"), "98")
+        self.assertEqual(report_module.system_call("-1 0x7ffd 0x7f12", "aarch64"), "none (blocked outside a system call)")
+        self.assertEqual(report_module.system_call("running", "x86_64"), "running")
+        self.assertEqual(report_module.system_call("(Permission denied)", "x86_64"), "(Permission denied)")
+
+    def test_the_report_gives_the_sockets_of_a_process(self):
+        listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.addCleanup(listener.close)
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        port = listener.getsockname()[1]
+        left, right = socket.socketpair()
+        self.addCleanup(left.close)
+        self.addCleanup(right.close)
+        watcher = self.watcher_here()
+        watcher.describe(report_module.Process(os.getpid()), 0, report_module.uptime(), {})
+        report = logged(watcher)
+        inode = os.fstat(listener.fileno()).st_ino
+        self.assertIn(
+            f"  file {listener.fileno()}: socket:[{inode}] tcp 127.0.0.1:{port} to 0.0.0.0:0 LISTEN\n", report
+        )
+        self.assertIn(f"  file {left.fileno()}: socket:[{os.fstat(left.fileno()).st_ino}] unix (no path) state 03\n", report)
+        self.assertRegex(report, rf"\n  listening ports: (.*, )?127\.0\.0\.1:{port}(, .*)?\n")
 
     def test_a_detached_watched_process_is_in_the_report_but_not_stopped(self):
         # A copy of the server below target/ that makes its own session and
@@ -366,10 +402,12 @@ class StuckTestReportTests(unittest.TestCase):
         self.assertIn(f"command line: {self.binary} -s waits_for_the_lock --exact\n", report)
         self.assertIn(f"command line: {self.server} 300\n", report)
         # Each thread shows its wait. The wait channel is readable for each
-        # process of the same user; the system call only for root or a parent.
-        self.assertRegex(report, rf"thread {tree.pid} stuck_case-0123: state S, wait channel \w+, system call ")
-        self.assertRegex(report, rf"thread {server} {SERVER[:15]}: state S, wait channel hrtimer_nanosleep, system call ")
-        self.assertRegex(report, rf"thread {waiter} flock: state S, wait channel \w*lock\w*, system call ")
+        # process of the same user; the system call only for root (the
+        # watcher in CI) or a parent (the in-process tests below).
+        call = r"(\((Operation not permitted|Permission denied)\)|\w+ \(\d+\)|\d+)\n"
+        self.assertRegex(report, rf"thread {tree.pid} stuck_case-0123: state S, wait channel \w+, system call {call}")
+        self.assertRegex(report, rf"thread {server} {SERVER[:15]}: state S, wait channel hrtimer_nanosleep, system call {call}")
+        self.assertRegex(report, rf"thread {waiter} flock: state S, wait channel \w*lock\w*, system call {call}")
         self.assertRegex(report, rf"file 3: {self.lock}")
         self.assertIn("listening ports: none", report)
         self.assertRegex(report, rf"process {holder}: flock .* holds a FLOCK WRITE lock on {self.lock}")

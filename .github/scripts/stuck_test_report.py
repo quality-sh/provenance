@@ -3,13 +3,13 @@
 
 A CI job gives the limit and the names of the processes to watch:
 
-    stuck_test_report.py start --limit 900 --watch provenance
+    stuck_test_report.py start --limit 900 --watch provenance --root "$GITHUB_WORKSPACE"
     ... the test step ...
     stuck_test_report.py finish
 
 `start` starts the watcher in the background and returns. The watcher runs as
 root when `sudo -n` is available, because the kernel gives the system call
-and the kernel stack of a thread, and a debugger can attach to a process,
+and the kernel stack of a thread, and eu-stack can attach to a process,
 only to the parent of that process or to root. `finish` stops the watcher
 and writes its log to the job log.
 
@@ -44,6 +44,7 @@ of the job. The watcher reports each test binary one time.
 
 import argparse
 import os
+import platform
 import secrets
 import shutil
 import signal
@@ -125,8 +126,8 @@ class Process:
     def name(self):
         return os.path.basename(self.exe) if self.exe else self.comm
 
-    def age(self, now):
-        return now - self.start / CLOCK_TICKS
+    def age(self, clock):
+        return clock - self.start / CLOCK_TICKS
 
 
 def snapshot():
@@ -213,14 +214,14 @@ class Watcher:
 
     def check(self):
         processes = snapshot()
-        now = uptime()
+        clock = uptime()
         self.checks += 1
         for top in self.tops(processes):
-            self.largest_age = max(self.largest_age, top.age(now))
+            self.largest_age = max(self.largest_age, top.age(clock))
             key = (top.pid, top.start)
-            if top.age(now) > self.limit and key not in self.reported:
+            if top.age(clock) > self.limit and key not in self.reported:
                 self.reported.add(key)
-                self.report(processes, top, now)
+                self.report(processes, top, clock)
 
     def run(self, interval):
         """Checks at each interval until SIGTERM. A report in progress completes first."""
@@ -250,9 +251,9 @@ class Watcher:
         self.out.write(COMMAND + text.replace("\r", "%0D").replace("\n", "%0A") + "\n")
         self.out.flush()
 
-    def report(self, processes, top, now):
+    def report(self, processes, top, clock):
         label = test_label(top)
-        age = top.age(now)
+        age = top.age(clock)
         members = tree(processes, top.pid)
         self.deadline = time.monotonic() + REPORT_DEADLINE
         self.command(f"::group::Stuck test: {label} (process {top.pid}, {age:.0f} s)")
@@ -263,7 +264,7 @@ class Watcher:
             for pid, depth in members:
                 process = processes.get(pid)
                 if process:
-                    self.describe(process, depth, now, files)
+                    self.describe(process, depth, clock, files)
             others = self.others(processes, {pid for pid, _ in members})
             other_members = [member for other in others for member in tree(processes, other.pid)]
             self.write(
@@ -274,7 +275,7 @@ class Watcher:
             for pid, depth in other_members:
                 process = processes.get(pid)
                 if process:
-                    self.describe(process, depth, now, files, " (not below this test)")
+                    self.describe(process, depth, clock, files, " (not below this test)")
             self.write_locks(files, processes)
             self.write_backtraces([pid for pid, _ in members + other_members])
         except Exception as error:  # The stop below must occur after any fault of the report.
@@ -296,10 +297,10 @@ class Watcher:
             )
             self.write(stop(top))
 
-    def describe(self, process, depth, now, files, mark=""):
+    def describe(self, process, depth, clock, files, mark=""):
         indent = "  " * depth
         self.write(
-            f"{indent}process {process.pid}{mark}, parent {process.ppid}, age {process.age(now):.0f} s, "
+            f"{indent}process {process.pid}{mark}, parent {process.ppid}, age {process.age(clock):.0f} s, "
             f"state {process.state}, program {process.exe or process.comm}"
         )
         self.write(f"{indent}  command line: {process.command}")
@@ -376,7 +377,7 @@ class Watcher:
         if self.tool is None:
             self.tool = find_tool()
             if not self.tool:
-                self.write("user backtraces: the runner has no eu-stack, gdb or lldb.")
+                self.write("user backtraces: the runner has no eu-stack.")
                 if self.install_tool:
                     self.tool = install_tool(self.write, self.remaining)
         return self.tool
@@ -387,7 +388,6 @@ class Watcher:
             if self.remaining() <= 0:
                 self.write(f"The user backtraces are not complete: the report deadline of {REPORT_DEADLINE:g} s passed.")
             return
-        name = os.path.basename(tool)
         for index, pid in enumerate(pids):
             if self.remaining() <= 0:
                 self.write(
@@ -395,16 +395,11 @@ class Watcher:
                     f"before the backtrace of process {', '.join(str(left) for left in pids[index:])}."
                 )
                 return
-            command = {
-                "eu-stack": [tool, "-p", str(pid)],
-                "gdb": [tool, "-p", str(pid), "-batch", "-nx", "-ex", "thread apply all bt"],
-                "lldb": [tool, "-p", str(pid), "--batch", "-o", "thread backtrace all"],
-            }[name]
-            self.write(f"user backtrace of process {pid} ({name}):")
-            code, output = run_limited(command, self.remaining())
+            self.write(f"user backtrace of process {pid} (eu-stack):")
+            code, output = run_limited([tool, "-p", str(pid)], self.remaining())
             lines = output.splitlines()
             if code is None:
-                lines.append(f"({name} did not end before the report deadline of {REPORT_DEADLINE:g} s)")
+                lines.append(f"(eu-stack did not end before the report deadline of {REPORT_DEADLINE:g} s)")
             for line in demangle(lines[:LINES_PER_BACKTRACE], self.remaining()):
                 self.write(f"  {line}")
             if len(lines) > LINES_PER_BACKTRACE:
@@ -458,13 +453,18 @@ def test_label(process):
     return f"{name} {arguments[0]}" if arguments else name
 
 
-def system_call(text):
+def system_call(text, machine=platform.machine()):
+    """The system call from `/proc/<pid>/task/<tid>/syscall`: the name and number on x86_64, else the number."""
     if text.startswith("("):
         return text
     first = text.split(" ", 1)[0]
     if first.lstrip("-").isdigit():
         number = int(first)
-        return f"{SYSTEM_CALLS.get(number, 'number')} ({number})" if number >= 0 else "none (blocked outside a system call)"
+        if number < 0:
+            return "none (blocked outside a system call)"
+        if machine == "x86_64":
+            return f"{SYSTEM_CALLS.get(number, 'number')} ({number})"
+        return str(number)
     return first or "?"
 
 
@@ -498,11 +498,8 @@ def address(text):
 
 
 def find_tool():
-    for tool in ("eu-stack", "gdb", "lldb"):
-        path = shutil.which(tool)
-        if path:
-            return path
-    return None
+    """The path of eu-stack. The runner image has no backtrace tool, and the install gives eu-stack."""
+    return shutil.which("eu-stack")
 
 
 def install_tool(write, remaining):
@@ -519,7 +516,7 @@ def install_tool(write, remaining):
 
 
 def send(process, number):
-    """Sends a signal to `process` only if its id still has the start time of the snapshot.
+    """Sends a signal to `process` only if its id has the start time of the snapshot.
 
     A different start time means that the process ended and a different
     process got its id. A pidfd keeps the check and the signal on one process.
@@ -687,7 +684,7 @@ def main(argv=None):
         command = commands.add_parser(name)
         command.add_argument("--limit", type=float, required=True, help="seconds that a test process can run")
         command.add_argument("--watch", action="append", default=[], help="a process name to watch")
-        command.add_argument("--root", default=".", help="the workspace root; the test binaries are below its target/ directory")
+        command.add_argument("--root", required=True, help="the workspace root; the test binaries are below its target/ directory")
         command.add_argument("--interval", type=float, default=15.0, help="seconds between two checks")
     commands.choices["watch"].add_argument("--uid", type=int, default=os.getuid())
     commands.choices["watch"].add_argument("--install-tool", action="store_true")
