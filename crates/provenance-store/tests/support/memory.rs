@@ -8,7 +8,7 @@
 #![allow(dead_code)]
 
 use provenance_core::{Manifest, RepoPathPrefix, Scope, ScopeId, StableId};
-use provenance_store::repository::{Repository, RepositoryIdentity};
+use provenance_store::repository::{Clock, Repository, RepositoryIdentity, SystemClock};
 use provenance_store::settings::Settings;
 use provenance_store::storage::memory::{MemorySectionLock, MemoryStateStorage};
 use provenance_store::storage::{
@@ -151,10 +151,21 @@ pub fn memory_repository_over(
     initial: StateView,
     persistence: Arc<dyn StatePersistence>,
 ) -> (Arc<MemoryStateStorage>, Repository) {
+    memory_repository_at(root, initial, persistence, Arc::new(SystemClock))
+}
+
+/// Like [`memory_repository_over`], but the writes read the time from `clock`.
+pub fn memory_repository_at(
+    root: &std::path::Path,
+    initial: StateView,
+    persistence: Arc<dyn StatePersistence>,
+    clock: Arc<dyn Clock>,
+) -> (Arc<MemoryStateStorage>, Repository) {
     let storage = Arc::new(MemoryStateStorage::loaded(initial, persistence));
     let working_tree =
         camino::Utf8PathBuf::from_path_buf(dunce::canonicalize(root).unwrap()).unwrap();
-    let identity = RepositoryIdentity::new(working_tree, scope(), Settings::default());
+    let identity =
+        RepositoryIdentity::new(working_tree, scope(), Settings::default()).with_clock(clock);
     let repository = Repository::with_storage(
         identity,
         storage.clone(),
