@@ -157,6 +157,8 @@ fn percent_and_underscore_in_the_text_are_plain_characters() {
     }
 }
 
+/// A characterization test: it pins the pages of a search with no text, which
+/// the SQL test of the search text keeps.
 #[test]
 fn search_with_no_text_reads_each_record_of_the_kind_in_id_order() {
     let directory = tempfile::tempdir().unwrap();
@@ -180,6 +182,8 @@ fn search_with_no_text_reads_each_record_of_the_kind_in_id_order() {
     assert_eq!(pages.len(), 3);
 }
 
+/// A characterization test: it pins that a text across two pieces finds no
+/// record, which the SQL test of the search text keeps.
 #[test]
 fn text_across_two_pieces_finds_no_record() {
     let directory = tempfile::tempdir().unwrap();
@@ -190,6 +194,9 @@ fn text_across_two_pieces_finds_no_record() {
     assert_eq!(answer, page(&version(&repo), 50, false, Vec::new()));
 }
 
+/// A characterization test: it pins an empty first page with a continuation
+/// when 512 candidates fail the check of each piece, which the SQL test of the
+/// search text keeps.
 #[test]
 fn candidates_that_fail_the_piece_check_keep_a_continuation() {
     let directory = tempfile::tempdir().unwrap();
