@@ -201,14 +201,34 @@ fn cli(repo: &Repository, step: usize, side: &str) -> Cli {
     }
 }
 
+/// Writes `label` to the output of the test when a panic drops this value.
+struct Context<'a>(&'a str);
+
+impl Drop for Context<'_> {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            eprintln!("the failure above is in {}", self.0);
+        }
+    }
+}
+
+/// Runs the writes of `step` through `surface`. The failure text of a
+/// refused write gives no step and no side, so the output of the test then
+/// also gives `label`.
+async fn write_step(surface: &impl Surface, label: &str, state: &std::path::Path, step: usize) {
+    let _context = Context(label);
+    write(surface, state, step).await;
+}
+
 /// Implementation aid: characterization of the CLI read answers after each
 /// change, made before the catch-up change. No Rule binds it.
 #[tokio::test]
 async fn cli_reads_after_each_write_equal_a_full_rebuild() {
     let repo = fixture();
     for step in 0..STEPS {
-        write(&cli(&repo, step, "caught-up"), &state(&repo), step).await;
-        let caught_up = read_all(&cli(&repo, step, "caught-up"), &repo).await;
+        let caught_up = cli(&repo, step, "caught-up");
+        write_step(&caught_up, &caught_up.label, &state(&repo), step).await;
+        let caught_up = read_all(&caught_up, &repo).await;
         let copy = copy_without_projection(&repo);
         let rebuilt = read_all(&cli(&copy, step, "full-rebuild"), &copy).await;
         assert_same(&caught_up, &rebuilt, &format!("CLI step {step}"));
@@ -223,7 +243,7 @@ async fn mcp_reads_after_each_write_equal_a_full_rebuild() {
     let mcp = Mcp::spawn(&repo, "MCP before step 0, caught-up side").await;
     for step in 0..STEPS {
         let side = mcp.side(format!("MCP step {step}, caught-up side"));
-        write(&side, &state(&repo), step).await;
+        write_step(&side, &side.label, &state(&repo), step).await;
         let caught_up = read_all(&side, &repo).await;
         let copy = copy_without_projection(&repo);
         let label = format!("MCP step {step}, full-rebuild side");
