@@ -1,9 +1,9 @@
 //! The file adapter: the CLI's `SQLite` file under `.provenance/cache`.
 //!
-//! Each call opens the file, runs the work in one transaction (a write
-//! and then a read, for `write_then_read`), and completes the connection
-//! before it gives its result, as [`CacheConnection`] does. A read opens the stored file and does not
-//! make it. A write makes the file when it is absent and uses WAL mode.
+//! Each call opens the file once, runs its work (a write and then a read,
+//! for `write_then_read`), and completes the connection before it gives
+//! its result, as [`CacheConnection`] does. A read opens the stored file
+//! and does not make it. A write makes the file in WAL mode.
 
 use super::{
     ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement, Transaction,
