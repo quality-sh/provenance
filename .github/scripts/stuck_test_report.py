@@ -43,6 +43,7 @@ of the job. The watcher reports each test binary one time.
 """
 
 import argparse
+import functools
 import os
 import platform
 import secrets
@@ -120,7 +121,11 @@ class Process:
             self.exe = os.readlink(f"/proc/{pid}/exe").removesuffix(" (deleted)")
         except OSError:
             self.exe = ""
-        self.command = read(f"/proc/{pid}/cmdline").replace("\0", " ").strip()
+
+    @functools.cached_property
+    def command(self):
+        """The command line, read only for a process of a report."""
+        return read(f"/proc/{self.pid}/cmdline").replace("\0", " ").strip()
 
     @property
     def name(self):
