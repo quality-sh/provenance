@@ -230,8 +230,9 @@ pub(super) async fn run(
 /// cannot both create the file. On a file still in DELETE mode the open
 /// waits for the switch to WAL, at most the retry's deadline plus one
 /// busy timeout (`cache::WalSwitchRetry`); once the file is WAL the switch
-/// costs nothing. The pass frees the guard when it ends, and the read runs
-/// on the same open of the database, which completes after the read. An
+/// costs nothing. A pass that succeeds frees the guard when it ends, and
+/// the read runs on the same open of the database, which completes after
+/// the read. A pass that fails frees the guard after that completion. An
 /// error of the pass is the error of the freshness step; an error after it
 /// is the error of the read.
 #[rule("rule_read_holds_guard_for_freshness_only")]
@@ -244,13 +245,15 @@ where
     R: Send,
     F: for<'c> FnOnce(&'c ReadContext) -> ReadFuture<'c, R> + Send,
 {
+    let mut guard = Some(guard);
     let mut report = None;
     let outcome = database
         .write_then_read(
-            catch_up_work(guard, &mut report),
+            catch_up_work(&mut guard, &mut report),
             reading.work(Check::None, StampPolicy::CatchUp, None),
         )
         .await;
+    drop(guard);
     match outcome {
         Err(failure) if report.is_none() => Err(failure),
         outcome => Ok(outcome),
