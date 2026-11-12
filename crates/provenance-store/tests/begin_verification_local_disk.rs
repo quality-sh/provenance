@@ -7,6 +7,7 @@
 mod memory;
 
 use memory::{initial_state, key, scope, shard};
+use provenance_core::{VerificationBinding, VerificationRun};
 use provenance_store::operations::begin_verification;
 use provenance_store::repository::Repository;
 use provenance_store::state_store::BeginVerificationInput;
@@ -98,8 +99,10 @@ fn a_run_row_that_cannot_be_written_leaves_no_binding() {
     assert_permission_denied(&answer);
     assert_eq!(status, 500);
     let store = repository.store();
-    assert!(store.list_verification_bindings(&scope()).unwrap().is_empty());
-    assert!(store.list_verification_runs(&scope()).unwrap().is_empty());
+    let bindings = store.list_verification_bindings(&scope()).unwrap();
+    assert_eq!(bindings, [] as [VerificationBinding; 0]);
+    let runs = store.list_verification_runs(&scope()).unwrap();
+    assert_eq!(runs, [] as [VerificationRun; 0]);
     let reviews = store.list_requirement_reviews(&scope()).unwrap();
     assert_eq!(serde_json::to_value(&reviews).unwrap(), json!([open_review()]));
 
@@ -125,7 +128,8 @@ fn a_refused_reviews_key_on_local_disk_leaves_a_running_row() {
     assert_permission_denied(&answer);
     assert_eq!(status, 500);
     let store = repository.store();
-    assert!(store.list_verification_bindings(&scope()).unwrap().is_empty());
+    let bindings = store.list_verification_bindings(&scope()).unwrap();
+    assert_eq!(bindings, [] as [VerificationBinding; 0]);
     let runs = store.list_verification_runs(&scope()).unwrap();
     assert_eq!(runs.len(), 1);
     assert_eq!(runs[0].status, provenance_core::VerificationRunStatus::Running);

@@ -6,13 +6,14 @@
 mod memory;
 
 use memory::{initial_state, key, memory_repository_over, scope, shard};
+use provenance_core::{VerificationBinding, VerificationRun};
 use provenance_macros::verifies;
 use provenance_store::operations::begin_verification;
 use provenance_store::repository::Repository;
 use provenance_store::state_store::BeginVerificationInput;
 use provenance_store::storage::{Atomicity, PublishFailure, StatePersistence, WriteSet};
 use provenance_store::storage::{StateKey, StateView};
-use provenance_store::write_error::{WriteError, WriteFailure};
+use provenance_store::write_error::WriteError;
 use serde_json::json;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -90,17 +91,20 @@ fn a_refused_begin_set_leaves_no_binding_and_no_run_row() {
 
     let error = WriteError(begin_verification(&repository, input()).unwrap_err());
 
-    assert!(
-        matches!(error.safe(), WriteFailure::WriteFailed { .. }),
-        "{error:#}"
+    assert_eq!(
+        serde_json::to_value(&error).unwrap(),
+        json!({"kind": "write_failed", "cause": "the persistence refused the reviews shard"})
     );
+    assert_eq!(error.status(), 500);
     assert_eq!(
         sets.received(),
         [(Atomicity::PerKey, vec![REVIEWS.into(), BINDINGS.into()])],
         "one attempt"
     );
-    assert!(store.list_verification_bindings(&scope()).unwrap().is_empty());
-    assert!(store.list_verification_runs(&scope()).unwrap().is_empty());
+    let bindings = store.list_verification_bindings(&scope()).unwrap();
+    assert_eq!(bindings, [] as [VerificationBinding; 0]);
+    let runs = store.list_verification_runs(&scope()).unwrap();
+    assert_eq!(runs, [] as [VerificationRun; 0]);
     let reviews = store.list_requirement_reviews(&scope()).unwrap();
     assert_eq!(serde_json::to_value(&reviews).unwrap(), json!([open_review()]));
 
