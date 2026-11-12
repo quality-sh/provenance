@@ -156,10 +156,15 @@ async fn identity_resolver_reports_an_ambiguous_visible_index() {
         .execute(pool.pool())
         .await
         .unwrap();
-    let snapshot = crate::operations::reader::ReadSnapshot::open(pool.pool(), &scope)
-        .await
-        .unwrap()
-        .unwrap();
+    let snapshot = crate::operations::reader::ReadSnapshot::open(
+        crate::read_database::file::begin(pool.pool())
+            .await
+            .unwrap(),
+        &scope,
+    )
+    .await
+    .unwrap()
+    .unwrap();
     let resolution = super::super::nodes::resolve(
         &snapshot,
         &StableId::new("req_overtime").unwrap(),
