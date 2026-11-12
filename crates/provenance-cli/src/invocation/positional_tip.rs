@@ -82,10 +82,9 @@ fn declared(words: &[&str], flag: &str) -> Option<clap::Arg> {
 /// without an attached value.
 fn names_flag(argument: &str, flag: &str, short: Option<char>) -> bool {
     if let Some(long) = argument.strip_prefix("--") {
-        return match long.strip_prefix(flag) {
-            Some(rest) => rest.is_empty() || rest.starts_with('='),
-            None => false,
-        };
+        return long
+            .strip_prefix(flag)
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with('='));
     }
     let Some(shorts) = argument.strip_prefix('-') else {
         return false;
