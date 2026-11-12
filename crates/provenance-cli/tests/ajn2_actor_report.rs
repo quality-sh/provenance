@@ -144,6 +144,7 @@ fn fixture(repo: &str) {
 
 /// The update of one text field, on MCP and on the CLI, with and without an actor.
 async fn updates(server: &Server, repo: &str, log: &mut Vec<(String, String)>) {
+    let mut pending = Vec::new();
     for (id, field) in [
         ("req_a", "description"),
         ("rule_a", "description"),
@@ -158,7 +159,9 @@ async fn updates(server: &Server, repo: &str, log: &mut Vec<(String, String)>) {
                 .call("change", with_actor(&arguments, actor))
                 .await;
             record(&format!("mcp update {id} actor={actor}"), &answer, log);
-            eprintln!("AJN2 {}", json!({"decision": id, "after": decision(repo, id)}));
+            let after = decision(repo, id);
+            eprintln!("AJN2 {}", json!({"decision": id, "after": after}));
+            pending.push(after["pending"]["actor"].clone());
         }
         for actor in [false, true] {
             let flag = format!("--{field}");
@@ -167,9 +170,22 @@ async fn updates(server: &Server, repo: &str, log: &mut Vec<(String, String)>) {
             let base = [id, "update", flag.as_str(), &text, "--if-match", &tag];
             let answer = run(&cli_args(&base, repo, actor));
             record(&format!("cli update {id} actor={actor}"), &answer, log);
-            eprintln!("AJN2 {}", json!({"decision": id, "after": decision(repo, id)}));
+            let after = decision(repo, id);
+            eprintln!("AJN2 {}", json!({"decision": id, "after": after}));
+            pending.push(after["pending"]["actor"].clone());
         }
     }
+    // The actor of the pending review submission after each update, in call order.
+    // A refused call leaves the submission of the write before it.
+    assert_eq!(
+        pending,
+        [
+            "cli", "agent", "cli", "agent", // req_a: MCP no actor (refused), MCP, CLI, CLI
+            "authoring", "authoring", "authoring", "authoring", // rule_a
+            "authoring", "authoring", "authoring", "authoring", // res_a
+        ]
+        .map(|actor| json!(actor))
+    );
 }
 
 /// The create of each kind, on MCP and on the CLI, with and without an actor.
@@ -256,5 +272,65 @@ async fn each_write_with_and_without_an_actor_on_mcp_and_the_cli() {
     for (call, outcome) in &log {
         eprintln!("AJN2-OUTCOME {call} => {outcome}");
     }
-    assert_eq!(log.len(), 32);
+    let observed = log
+        .iter()
+        .map(|(call, outcome)| format!("{call} => {outcome}"))
+        .collect::<Vec<_>>();
+    assert_eq!(observed, EXPECTED);
+}
+
+/// The answers of run 43229240596 on commit 04eaa29e3.
+const EXPECTED: [&str; 32] = [
+    r#"mcp update req_a actor=false => mcp error: "invalid_input" "request.actor" "required""#,
+    "mcp update req_a actor=true => ok",
+    "cli update req_a actor=false => ok",
+    "cli update req_a actor=true => ok",
+    "mcp update rule_a actor=false => ok",
+    r#"mcp update rule_a actor=true => mcp error: "invalid_input" "actor" "unknown_field""#,
+    "cli update rule_a actor=false => ok",
+    "cli update rule_a actor=true => exit 2: text",
+    "mcp update res_a actor=false => ok",
+    r#"mcp update res_a actor=true => mcp error: "invalid_input" "actor" "unknown_field""#,
+    "cli update res_a actor=false => ok",
+    "cli update res_a actor=true => exit 2: text",
+    r#"mcp create requirement actor=false => mcp error: "invalid_input" "request.actor" "required""#,
+    "mcp create requirement actor=true => ok",
+    "mcp create rule actor=false => ok",
+    r#"mcp create rule actor=true => mcp error: "invalid_input" "actor" "unknown_field""#,
+    "mcp create resolution actor=false => ok",
+    r#"mcp create resolution actor=true => mcp error: "invalid_input" "actor" "unknown_field""#,
+    "cli create requirement actor=false => ok",
+    "cli create requirement actor=true => ok",
+    "cli create rule actor=false => ok",
+    "cli create rule actor=true => exit 2: text",
+    "cli create resolution actor=false => ok",
+    "cli create resolution actor=true => exit 2: text",
+    r#"mcp discuss requirement actor=false => mcp error: "invalid_input" "actor" "required""#,
+    "mcp discuss requirement actor=true => ok",
+    r#"mcp submit requirement actor=false => mcp error: "invalid_input" "request.actor" "required""#,
+    r#"mcp submit requirement actor=true => mcp error: "review_submission_conflict" null null"#,
+    "cli discuss requirement actor=false => ok",
+    "cli discuss requirement actor=true => ok",
+    r#"cli submit requirement actor=false => exit 1: "invalid_input" "request.actor" "required""#,
+    r#"cli submit requirement actor=true => exit 1: "review_submission_conflict" null null"#,
+];
+
+/// The change tool lists actor as one optional property, and requires only action.
+#[tokio::test]
+async fn the_change_tool_lists_actor_as_optional() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_str().unwrap().to_owned();
+    ok(&["init", "--scope", "default", "--path-prefix", ".", "--path", &repo]);
+    let server = Server::start(&repo).await;
+    let tools = server.client.tools().await;
+    server.close().await;
+    let change = tools.iter().find(|tool| tool["name"] == "change").unwrap();
+    let schema = &change["inputSchema"];
+    eprintln!(
+        "AJN2 {}",
+        json!({"tool": "change", "actor": schema["properties"]["actor"],
+            "required": schema["required"]})
+    );
+    assert_eq!(schema["required"], json!(["action"]));
+    assert_eq!(schema["properties"]["actor"]["type"], json!("string"));
 }
