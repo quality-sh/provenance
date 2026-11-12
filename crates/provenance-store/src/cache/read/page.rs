@@ -1,5 +1,6 @@
 //! Page limits apply before record decoding and transport serialization.
 use super::rows::{decode, select_columns};
+use crate::cache::materialize::SEARCH_TEXT;
 use crate::cache::quoted;
 use crate::operations::reader::{ReadSnapshot, Table};
 use crate::read_database::{OverBudget, SqlColumns, SqlRow, SqlValue};
@@ -119,22 +120,30 @@ impl<K: ProjectionRow> Table<'_, K> {
     }
 
     /// Reads at most `limit` candidate IDs strictly after the previous key.
-    pub(crate) async fn search_ids(
+    /// With a needle, a candidate holds the needle in its search text. The
+    /// caller gives the needle in lowercase. The search text joins all pieces,
+    /// so the caller checks each piece.
+    pub(crate) async fn page_ids(
         &self,
         after: &str,
         limit: usize,
         exclude_terminal: bool,
+        needle: Option<&str>,
     ) -> anyhow::Result<Vec<String>> {
-        let filter = crate::families::projection_families::exclude_terminal_predicate(
+        let terminal = crate::families::projection_families::exclude_terminal_predicate(
             K::TABLE,
             exclude_terminal,
         );
+        let text = needle.map_or_else(String::new, |_| {
+            format!(" AND instr({}, ?) > 0", quoted(SEARCH_TEXT))
+        });
+        let filter = format!("{terminal}{text}");
         let sql = id_page_sql(K::TABLE, &filter);
-        let values = vec![
-            self.snapshot().scope_value(),
-            after.into(),
-            SqlValue::Integer(i64::try_from(limit)?),
-        ];
+        let mut values = vec![self.snapshot().scope_value(), after.into()];
+        if let Some(needle) = needle {
+            values.push(needle.into());
+        }
+        values.push(SqlValue::Integer(i64::try_from(limit)?));
         page_ids(self.snapshot().fetch(&sql, values).await?)
     }
 }

@@ -167,12 +167,12 @@ pub(super) async fn limits(snapshot: &ReadSnapshot, lines: &mut Vec<String>) {
     ));
     let rules = snapshot.table::<Rule>();
     lines.push(line(
-        "rule search_ids after limit 1",
-        rules.search_ids("rule_overtime_001", 1, true).await,
+        "rule page_ids after limit 1",
+        rules.page_ids("rule_overtime_001", 1, true, None).await,
     ));
     lines.push(line(
-        "rule search_ids after limit 2",
-        rules.search_ids("rule_over_003", 2, false).await,
+        "rule page_ids after limit 2",
+        rules.page_ids("rule_over_003", 2, false, None).await,
     ));
     let bindings = snapshot.table::<VerificationBinding>();
     lines.push(line(

@@ -59,10 +59,11 @@ fn a_publication_passes_while_a_reader_has_the_marker_open() {
 /// This test has no Rule: no active Rule states that a write passes while a
 /// reader has a file of the state open.
 ///
-/// A reader keeps the thread and message shards open while a public write of
-/// a message replaces each of them as a one-key set.
+/// A reader keeps the Contribution shard open while a public write of a
+/// Contribution replaces it. The write publishes the shard as a one-key set
+/// with no stage, so it replaces only that file.
 #[test]
-fn a_message_write_passes_while_a_reader_has_the_shards_open() {
+fn a_contribution_write_passes_while_a_reader_has_the_shard_open() {
     let directory = tempfile::tempdir().unwrap();
     let repository = crate::cache::tests::fixtures::initialized(directory.path());
     let store = repository.store();
@@ -79,29 +80,34 @@ fn a_message_write_passes_while_a_reader_has_the_shards_open() {
             .unwrap(),
         )
         .unwrap();
-    let message = |body: &str| {
+    let contribution = |id: &str| {
         serde_json::from_value(serde_json::json!({
-            "scope_id": "default",
-            "parent": {"node_type": "requirement", "node_id": "req_a"},
-            "role": "user", "body": body
+            "scope_id": "default", "id": id,
+            "target": {"artifact_type": "requirement", "artifact_id": "req_a"},
+            "participant_slot": "reviewer", "stance": "support",
+            "strongest_finding": "The records are stored.",
+            "evidence_references": [], "material_claims": [], "risks": [],
+            "objections": [], "challenges": [], "suggested_artifact_changes": [],
+            "unsupported_recommendations": [],
+            "uncertainty": {"level": "low", "rationale": "Direct."},
+            "open_questions": []
         }))
         .unwrap()
     };
-    store.post_thread_message(message("first")).unwrap();
-    let layout = repository.layout();
-    let threads_path = crate::shards::threads_path(layout, &scope);
-    let messages_path = crate::shards::messages_path(layout, &scope);
-    let threads = std::fs::File::open(threads_path).unwrap();
-    let messages = std::fs::File::open(messages_path).unwrap();
     store
-        .post_thread_message(message("second"))
+        .create_contribution(contribution("contrib_a"))
+        .unwrap();
+    let path = crate::shards::contributions_path(repository.layout(), &scope);
+    let reader = std::fs::File::open(path).unwrap();
+    store
+        .create_contribution(contribution("contrib_b"))
         .unwrap_or_else(|error| panic!("{error:#}"));
     let read = crate::repository::Repository::open(directory.path(), "default")
         .unwrap()
         .store()
-        .list_messages(&scope)
+        .list_contributions(&scope)
         .unwrap();
-    drop((threads, messages));
-    let bodies: Vec<_> = read.iter().map(|message| message.body.as_str()).collect();
-    assert_eq!(bodies, ["first", "second"]);
+    drop(reader);
+    let ids: Vec<_> = read.iter().map(|record| record.id.as_str()).collect();
+    assert_eq!(ids, ["contrib_a", "contrib_b"]);
 }

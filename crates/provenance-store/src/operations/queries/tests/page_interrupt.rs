@@ -27,9 +27,13 @@ use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::future::Future;
 
-/// The records of each kind that make the named statement run past 1,000
-/// steps.
+/// The Discussions or threads that make the named statement run past
+/// 1,000 steps.
 const MANY: usize = 80;
+
+/// The requirements that make the named statement run past 1,000 steps.
+/// A raw record costs no write, so the margin is wide.
+const MANY_REQUIREMENTS: usize = 300;
 
 /// Reads `page` with a work bound of no steps, then with the engine's
 /// bound. The first read gives the page budget refusal, and the second
@@ -77,12 +81,12 @@ fn many_discussions(store: &StateStore) {
     }
 }
 
-/// [`MANY`] copies of `req_overtime` that refine it, each matching the
-/// text `overtime`.
+/// [`MANY_REQUIREMENTS`] copies of `req_overtime` that refine it, each
+/// matching the text `overtime`.
 fn many_requirements(store: &StateStore, scope: &provenance_core::ScopeId) {
     let path = crate::shards::requirements_path(&store.layout, scope);
     let mut record = json!(store.list_requirements(scope).unwrap()[0]);
-    for i in 0..MANY {
+    for i in 0..MANY_REQUIREMENTS {
         record["id"] = json!(format!("req_many_{i:03}"));
         record["refines"] = json!(["req_overtime"]);
         append_record(&path, &record);
@@ -111,7 +115,7 @@ async fn a_search_page_past_the_bound_is_the_page_budget_refusal() {
         queries::search(
             &repository_at(&root),
             ReadPolicy::default(),
-            serde_json::from_value(json!({"text": "overtime", "limit": 10})).unwrap(),
+            serde_json::from_value(json!({"text": "overtime", "limit": 200})).unwrap(),
         )
         .await
     })

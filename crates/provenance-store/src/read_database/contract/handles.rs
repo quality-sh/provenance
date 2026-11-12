@@ -86,8 +86,8 @@ pub async fn the_list_handles_read_the_projection<H: Harness + Send + Sync>(harn
     let answer = answer(&harness, |snapshot| {
         Box::pin(async move {
             let table = snapshot.table::<Requirement>();
-            let page = table.search_ids("", 10, false).await?;
-            let first = table.search_ids("", 1, false).await?;
+            let page = table.page_ids("", 10, false, None).await?;
+            let first = table.page_ids("", 1, false, None).await?;
             let wanted = [StableId::new("req_root")?, StableId::new("req_none")?];
             let found = table.by_ids(&wanted).await?;
             let record = table.record(&StableId::new("req_child")?).await?;
@@ -237,7 +237,7 @@ pub async fn a_stopped_page_statement_is_the_page_budget_refusal<H: Harness + Se
                 snapshot.bound_page_work().await?;
                 let page = snapshot
                     .table::<Requirement>()
-                    .search_ids("", 10, false)
+                    .page_ids("", 10, false, None)
                     .await
                     .map_err(page_error);
                 *slot = Some(page.map(|ids| format!("{ids:?}")));

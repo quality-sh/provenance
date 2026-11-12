@@ -169,12 +169,12 @@ async fn pages(snapshot: &ReadSnapshot, lines: &mut Vec<String>) {
         rules.resource_record("none").await,
     ));
     lines.push(line(
-        "rule search_ids",
-        rules.search_ids("", 3, false).await,
+        "rule page_ids",
+        rules.page_ids("", 3, false, None).await,
     ));
     lines.push(line(
-        "rule search_ids after",
-        rules.search_ids("rule_overtime_001", 50, true).await,
+        "rule page_ids after",
+        rules.page_ids("rule_overtime_001", 50, true, None).await,
     ));
     let bindings = snapshot.table::<VerificationBinding>();
     lines.push(line(

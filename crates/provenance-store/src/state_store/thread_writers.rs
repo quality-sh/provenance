@@ -1,12 +1,15 @@
 use super::message_ids::{new_message_id, next_message_time};
 use super::read_budget::ensure_within_read_budget;
-use super::{serde_name, PostMessageInput, PostMessageResult, StateStore};
+use super::{serde_name, PostMessageInput, PostMessageResult, RecordStamp, StateStore};
 use crate::shards;
 use crate::write_error::publication_started;
 use provenance_core::{Message, ScopeId, StableId, Thread, ThreadParent, ThreadStatus};
 use std::collections::BTreeMap;
 
 impl StateStore {
+    /// Posts a Message on the canonical active Thread of its parent. The
+    /// Thread shard, with the archive of the sibling Threads, and the Message
+    /// shard publish as one whole set, so a refused publish lands nothing.
     pub fn post_thread_message(
         &self,
         input: PostMessageInput,
@@ -20,7 +23,9 @@ impl StateStore {
                     .any(|discussion| discussion.parent == input.parent),
                 "enrolled Thread requires an addressed Discussion write"
             );
-            held.write_thread_message(input)
+            crate::publication::with_staged_state(held, false, RecordStamp::Omit, |staged| {
+                staged.write_thread_message(input)
+            })
         })
     }
 

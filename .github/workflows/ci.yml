@@ -1740,8 +1740,12 @@ jobs:
           --test memory_repository --test memory_repository_stage_reads
       # The store must build every target without host, its library unit
       # tests too. A unit test that needs the local disk is gated behind host.
+      # The transport must also build every target without host: a unit test
+      # that uses a host-only module is gated behind host.
       - name: Lint all store targets without host
         run: cargo clippy --locked -p provenance-store --all-targets -- -D warnings
+      - name: Lint all transport targets without host
+        run: cargo clippy --locked -p provenance-transport --all-targets -- -D warnings
       - name: Test the store library without host
         run: cargo test --locked -p provenance-store --lib
 

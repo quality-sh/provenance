@@ -22,8 +22,8 @@ kind_of absent: None
 rule page_record: {"scope_id":"default","id":"rule_overtime_001","name":"Overtime threshold","description":"Pay overtime after the threshold","statement":"Overtime is paid after the threshold","status":"active","severity":"high","requirement_ids":["req_overtime"],"resolution_ids":["res_overtime"]}
 rule resource_record: {"scope_id":"default","id":"rule_penalty_001","statement":"rule_penalty_001 statement","status":"active","severity":"high","requirement_ids":["req_penalty"]}
 rule resource_record absent: null
-rule search_ids: ["rule_over_002","rule_over_003","rule_over_004"]
-rule search_ids after: ["rule_penalty_001","rule_twin_record","rule_wide"]
+rule page_ids: ["rule_over_002","rule_over_003","rule_over_004"]
+rule page_ids after: ["rule_penalty_001","rule_twin_record","rule_wide"]
 verification ids: ["bind_ver_a","bind_ver_b","bind_ver_c","bind_ver_d"]
 verification ids for rule: ["bind_ver_a","bind_ver_b","bind_ver_c"]
 disposition record: {"scope_id":"default","id":"disposition_a","proposal_id":"proposal_two","decision":"accepted","actor":{"identity_type":"human","id":"reader"}}
@@ -78,8 +78,8 @@ document_keys limit 2: [["requirement",{"stage":0,"rank":0,"counter":0,"id":"req
 document_keys limit 6: [["requirement",{"stage":0,"rank":0,"counter":0,"id":"req_top"}],["requirement",{"stage":0,"rank":2,"counter":0,"id":"req_left"}],["requirement",{"stage":0,"rank":2,"counter":0,"id":"req_right"}],["requirement",{"stage":0,"rank":2,"counter":0,"id":"req_twin_record"}],["rule",{"stage":0,"rank":4,"counter":0,"id":"rule_twin_record"}],["thread",{"stage":2,"rank":1,"counter":10,"id":"thread_c"}]]
 document_keys after thread_c limit 2: [["thread",{"stage":2,"rank":1,"counter":20,"id":"thread_a"}],["thread",{"stage":2,"rank":1,"counter":20,"id":"thread_b"}]]
 long thread id document_keys limit 1: [["requirement",{"stage":0,"rank":0,"counter":0,"id":"req_bottom"}]]
-rule search_ids after limit 1: ["rule_penalty_001"]
-rule search_ids after limit 2: ["rule_over_004","rule_over_005"]
+rule page_ids after limit 1: ["rule_penalty_001"]
+rule page_ids after limit 2: ["rule_over_004","rule_over_005"]
 verification ids limit 2: ["bind_ver_a","bind_ver_b"]
 verification ids after limit 1: ["bind_ver_b"]
 requirement page_by_field limit 1: [["req_bottom"],true]
