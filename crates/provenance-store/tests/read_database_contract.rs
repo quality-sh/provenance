@@ -373,3 +373,15 @@ async fn the_file_puts_500_values_in_one_list() {
         .unwrap();
     assert_eq!(most, 500);
 }
+
+/// Evidence only: the catch-up case over each adapter in a test of its own.
+#[tokio::test]
+async fn catch_up_case_over_the_file_adapter() {
+    contract::projection::a_catch_up_makes_and_follows_the_projection(File::default()).await;
+}
+
+/// Evidence only: the catch-up case over each adapter in a test of its own.
+#[tokio::test]
+async fn catch_up_case_over_the_port_only_adapter() {
+    contract::projection::a_catch_up_makes_and_follows_the_projection(PortOnly::default()).await;
+}
