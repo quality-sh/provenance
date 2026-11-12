@@ -94,7 +94,9 @@ fn a_contribution_write_passes_while_a_reader_has_the_shard_open() {
         }))
         .unwrap()
     };
-    store.create_contribution(contribution("contrib_a")).unwrap();
+    store
+        .create_contribution(contribution("contrib_a"))
+        .unwrap();
     let path = crate::shards::contributions_path(repository.layout(), &scope);
     let reader = std::fs::File::open(path).unwrap();
     store
