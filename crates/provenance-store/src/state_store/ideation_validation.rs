@@ -1,7 +1,7 @@
 use super::ideation_batches::{
     ensure_asserted_contribution_unchanged, ensure_asserted_synthesis_unchanged, overlay_records,
 };
-use super::immutable_ids::{IdeationRecords, ImmutableRecord};
+use super::immutable_ids::{duplicate_fault, IdeationRecords};
 use super::message_ids::ShardLine;
 use super::shared_parses::read_jsonl_shared;
 use super::{IdeationLandingBatch, StateStore};
@@ -39,16 +39,40 @@ impl StateStore {
             read_jsonl_shared(self, &shards::contributions_path(&self.layout, scope))?;
         let mut synthesis_packets: Vec<SynthesisPacket> =
             read_jsonl_shared(self, &shards::synthesis_packets_path(&self.layout, scope))?;
-        let direct_proposals = self.read_immutable_rows::<ProposalCard>(scope)?;
-        let direct_assertions = self.read_immutable_rows::<AssertionRecord>(scope)?;
-        let direct_dispositions = self.read_immutable_rows::<DispositionRecord>(scope)?;
-        // A line that does not parse in one of the three files refuses before
-        // an id on two lines in another file.
-        let mut proposals = ids(&direct_proposals.unique()?);
-        let direct_assertions = direct_assertions.unique()?;
-        let mut assertions = ids(&direct_assertions);
-        let mut dispositions = ids(&direct_dispositions.unique()?);
-        let mut assertions_in_order = direct_assertions;
+        let direct_proposals: Vec<ProposalCard> =
+            read_jsonl_shared(self, &shards::proposal_cards_path(&self.layout, scope))?;
+        let direct_assertions: Vec<AssertionRecord> =
+            read_jsonl_shared(self, &shards::assertion_records_path(&self.layout, scope))?;
+        let mut assertions_in_order = direct_assertions.clone();
+        let direct_dispositions: Vec<DispositionRecord> =
+            read_jsonl_shared(self, &shards::dispositions_path(&self.layout, scope))?;
+        let mut proposals = BTreeSet::new();
+        let mut assertions = BTreeSet::new();
+        let mut dispositions = BTreeSet::new();
+        let path = shards::proposal_cards_path(&self.layout, scope);
+        insert_all(
+            "proposal",
+            &direct_proposals,
+            |r| r.id.as_str(),
+            &mut proposals,
+            |id, _| duplicate_fault(self, &path, "proposal", id),
+        )?;
+        let path = shards::assertion_records_path(&self.layout, scope);
+        insert_all(
+            "assertion",
+            &direct_assertions,
+            |r| r.id.as_str(),
+            &mut assertions,
+            |id, _| duplicate_fault(self, &path, "assertion", id),
+        )?;
+        let path = shards::dispositions_path(&self.layout, scope);
+        insert_all(
+            "disposition",
+            &direct_dispositions,
+            |r| r.id.as_str(),
+            &mut dispositions,
+            |id, _| duplicate_fault(self, &path, "disposition", id),
+        )?;
         let landings = shards::ideation_landings_path(&self.layout, scope);
         for (index, batch) in self.list_ideation_landings(scope)?.into_iter().enumerate() {
             let at = ShardLine::new(&landings, index + 1);
@@ -87,10 +111,12 @@ impl StateStore {
             });
             assertions_in_order.extend(batch.assertions);
         }
-        let proposals = self.listed(scope)?;
-        let assertions = self.listed(scope)?;
-        let dispositions = self.listed(scope)?;
+        let proposals = self.list_proposal_definitions(scope)?;
+        let assertions = self.list_assertion_records(scope)?;
+        let dispositions = self.list_dispositions(scope)?;
         IdeationRecords {
+            store: self,
+            scope,
             disposition_actor_ids,
             contributions: &contributions,
             synthesis_packets: &synthesis_packets,
@@ -130,13 +156,6 @@ fn ensure_batch_evidence_unchanged(
         }
     }
     Ok(())
-}
-
-fn ids<T: ImmutableRecord>(records: &[T]) -> BTreeSet<String> {
-    records
-        .iter()
-        .map(|record| record.id().to_owned())
-        .collect()
 }
 
 fn insert_all<'a, T>(

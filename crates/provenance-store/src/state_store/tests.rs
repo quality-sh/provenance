@@ -108,8 +108,6 @@ mod ideation_targets;
 #[cfg(feature = "host")]
 mod implementation_bindings;
 #[cfg(feature = "host")]
-mod kept_immutable_parse;
-#[cfg(feature = "host")]
 mod legacy_coexistence;
 #[cfg(feature = "host")]
 mod message_ids;

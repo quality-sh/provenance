@@ -371,7 +371,16 @@ impl StateStore {
         })
     }
     pub fn list_proposal_definitions(&self, scope: &ScopeId) -> anyhow::Result<Vec<ProposalCard>> {
-        Ok(self.listed(scope)?.into_records())
+        self.with_repository_read(|held| {
+            let mut records = shared_parses::read_jsonl_shared(
+                held,
+                &shards::proposal_cards_path(&held.layout, scope),
+            )?;
+            for batch in held.list_ideation_landings(scope)? {
+                overlay_records(&mut records, batch.proposals, |record| record.id.as_str());
+            }
+            Ok(records)
+        })
     }
 }
 

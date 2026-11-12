@@ -149,12 +149,14 @@ impl StateStore {
                 contributions.push(contribution.clone());
             }
             IdeationRecords {
+                store: self,
+                scope: &scope_id,
                 disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
                 contributions: &contributions,
                 synthesis_packets: &self.list_synthesis_packets(&scope_id)?,
-                proposals: &self.listed(&scope_id)?,
-                assertions: &self.listed(&scope_id)?,
-                dispositions: &self.listed(&scope_id)?,
+                proposals: &self.list_proposal_definitions(&scope_id)?,
+                assertions: &self.list_assertion_records(&scope_id)?,
+                dispositions: &self.list_dispositions(&scope_id)?,
             }
             .validate()?;
             super::read_budget::ensure_within_read_budget(&contribution)?;
@@ -291,12 +293,14 @@ impl StateStore {
                 synthesis_packets.push(synthesis_packet.clone());
             }
             IdeationRecords {
+                store: self,
+                scope: &scope_id,
                 disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
                 contributions: &self.list_contributions(&scope_id)?,
                 synthesis_packets: &synthesis_packets,
-                proposals: &self.listed(&scope_id)?,
-                assertions: &self.listed(&scope_id)?,
-                dispositions: &self.listed(&scope_id)?,
+                proposals: &self.list_proposal_definitions(&scope_id)?,
+                assertions: &self.list_assertion_records(&scope_id)?,
+                dispositions: &self.list_dispositions(&scope_id)?,
             }
             .validate()?;
             super::read_budget::ensure_within_read_budget(&synthesis_packet)?;
