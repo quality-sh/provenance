@@ -212,7 +212,8 @@ fn answer(output: &std::process::Output) -> (Option<i32>, String, String) {
 /// With `proposal_a` on two lines of `proposal_cards.jsonl`, `provenance
 /// check` and an import that replaces the scope refuse at the second line,
 /// and the file does not change. The review-portability check of the import
-/// reads the stored proposals first.
+/// reads the stored proposals first. Without the located check, the import
+/// replaced the file.
 #[test]
 #[verifies("rule_inconsistent_records_refusal_names_records", examples)]
 fn import_into_a_scope_with_a_proposal_id_on_two_lines_refuses_at_the_second_line() {
@@ -238,8 +239,10 @@ fn import_into_a_scope_with_a_proposal_id_on_two_lines_refuses_at_the_second_lin
         answer(&import),
         std::fs::read_to_string(&cards).unwrap(),
     );
-    let refusal = "Error: scopes/default/ideation/proposal_cards.jsonl line 2: \
-        duplicate immutable proposal id proposal_a at line 1 and at line 2\n";
-    let refused = (Some(1), String::new(), refusal.to_owned());
-    assert_eq!(answers, (refused.clone(), refused, stored));
+    let fault = "scopes/default/ideation/proposal_cards.jsonl line 2: \
+        duplicate immutable proposal id proposal_a at line 1 and at line 2";
+    let findings = format!("graph: findings\n  - {fault}\nstatements: passed\nbindings: passed\n");
+    let checked = (Some(1), findings, format!("Error: {fault}\n"));
+    let imported = (Some(1), String::new(), format!("Error: {fault}\n"));
+    assert_eq!(answers, (checked, imported, stored));
 }
