@@ -211,6 +211,8 @@ mod tests {
     use super::super::{digest, DictionaryEntry, DictionaryStatus, PartOfSpeech};
     use super::{load_dictionary_index, store_dictionary_index, DictionaryIndexError};
 
+    mod writes;
+
     static DIRECTORY_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
     fn scratch_directory() -> PathBuf {

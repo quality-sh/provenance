@@ -1,3 +1,5 @@
+#[path = "cli_dictionary/damaged_reference.rs"]
+mod damaged_reference;
 #[path = "cli_dictionary/gate.rs"]
 mod gate;
 #[path = "cli_dictionary/import_command.rs"]
@@ -6,6 +8,9 @@ mod import_command;
 mod inflections;
 #[path = "cli_dictionary/missing_index.rs"]
 mod missing_index;
+#[cfg(unix)]
+#[path = "cli_dictionary/reference_write.rs"]
+mod reference_write;
 #[path = "cli_dictionary/status.rs"]
 mod status;
 #[path = "cli_dictionary/supplied_statement.rs"]
