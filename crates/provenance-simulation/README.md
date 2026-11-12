@@ -44,7 +44,10 @@ fails with "simulation check broken", and the issue says that a check is
 broken, not a law. `tests/storage_contract.rs` runs the storage contract
 suite of `provenance-store` on the simulated storage. `tests/refused_post.rs`
 runs fixed cases of a message post whose publish is refused, in the engine
-job.
+job. A broken law in these cases fails as a probe of the engine layer. The
+replay command of the probe names the test binary `engine`, not
+`refused_post`. A failed check that is not a law gives the report of a layer
+that failed without a broken law.
 
 The probes are fixed cases next to the random test of each layer. A probe
 that breaks a law fails with "simulation probe <test> broke law <law>" and

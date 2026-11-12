@@ -1,9 +1,7 @@
 //! A message post whose publish is refused lands no Thread and no Message.
 //!
 //! The fault meets the post at each number of turns from its start, so it
-//! meets each publish of the post. The nightly engine job runs these
-//! tests. A failure is a panic outside a law, so its report is the report
-//! of a layer that failed without a broken law.
+//! meets each publish of the post.
 
 use provenance_macros::verifies;
 use provenance_simulation::generate::{Case, Fault, Operation, Step};
