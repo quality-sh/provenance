@@ -82,8 +82,14 @@ fn a_state_change_without_the_lock_during_init_refuses_the_manifest_and_restores
             moved.as_str()
         )
     );
-    assert_eq!(std::fs::read(repo.join("AGENTS.md")).unwrap(), b"# Team notes\n");
-    assert_eq!(std::fs::read(repo.join(".gitignore")).unwrap(), b"target/\n");
+    assert_eq!(
+        std::fs::read(repo.join("AGENTS.md")).unwrap(),
+        b"# Team notes\n"
+    );
+    assert_eq!(
+        std::fs::read(repo.join(".gitignore")).unwrap(),
+        b"target/\n"
+    );
     assert_eq!(std::fs::read(layout.manifest_path()).unwrap(), manifest);
     // Only the hand edit stays: no skill file, dictionary reference,
     // temporary file or backup file of init.
