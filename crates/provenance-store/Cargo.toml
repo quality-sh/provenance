@@ -66,7 +66,7 @@ rustix = { workspace = true, optional = true }
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, optional = true }
 
-# A wasm host such as a Worker has no system clock or random source of its own;
+# A wasm host has no system clock or random source of its own;
 # time and uuid reach them through JavaScript.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 time = { workspace = true, features = ["wasm-bindgen"] }
