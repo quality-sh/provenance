@@ -1,10 +1,11 @@
 //! Compare canonical bytes with one stored projection without updating it.
 
-use super::freshness::{self, Freshness};
+use super::freshness::{self, Check, Freshness};
 use super::{ReadRefusal, ReadSnapshot};
-use crate::cache::{open_stored_cache, scope_ids, unit_stored_digest, units_for};
+use crate::cache::{scope_ids, unit_stored_digest, units_for};
 use crate::layout::ProvenanceLayout;
 use crate::publication::publication_guard;
+use crate::read_database::{SqlColumns, Transaction};
 use crate::repository::Repository;
 use provenance_core::protocol::StampPolicy;
 use provenance_core::ScopeId;
@@ -28,61 +29,48 @@ pub(super) fn describe_moved(moved: &[MovedUnit]) -> String {
 }
 
 /// The policy compares hashes without changing projection rows or revisions.
+/// The guard is taken before the read opens the database, and the read
+/// holds it until the hashes are compared.
 #[rule("rule_refuse_stale_writes_no_revision")]
 pub(super) async fn run(repository: &Repository) -> anyhow::Result<Freshness> {
-    let layout = repository.layout();
-    let scope = repository.scope();
     let guard = match publication_guard(repository).await {
         Ok(guard) => Some(guard),
-        Err(error) if crate::cache::permission_failure(layout, &error) => None,
+        Err(error) if crate::cache::permission_failure(repository.layout(), &error) => None,
         Err(error) => return Err(error),
     };
-    let connection = open_stored_cache(layout)
-        .await
-        .map_err(|error| freshness::no_projection(layout, &error))?;
-    let checked = check(connection.pool(), layout, scope, guard.is_none()).await;
-    drop(guard);
-    let checked = checked.and_then(|snapshot| {
-        crate::test_probes::at("refuse_stale_after_hash")?;
-        Ok(snapshot)
-    });
-    match checked {
-        Ok(snapshot) => Ok(Freshness {
-            connection,
-            snapshot: Some(snapshot),
-            policy: StampPolicy::RefuseStale,
-            error: None,
-        }),
-        Err(error) => Err(connection.close_reporting(error).await),
-    }
+    Ok(Freshness {
+        check: Check::Stale(guard),
+        policy: StampPolicy::RefuseStale,
+        error: None,
+    })
 }
 
 /// A digest change refuses with the checked revision and each moved unit, in name order.
 #[rule("rule_refuse_stale_names_the_moved_units")]
-async fn check(
-    pool: &sqlx::SqlitePool,
+pub(super) async fn check(
+    mut transaction: Transaction,
     layout: &ProvenanceLayout,
     scope: &ScopeId,
     repeat_hash: bool,
 ) -> anyhow::Result<ReadSnapshot> {
-    freshness::ensure_current_schema(pool, layout).await?;
-    let snapshot =
-        ReadSnapshot::open(pool, scope)
-            .await?
-            .ok_or_else(|| ReadRefusal::NoProjection {
-                database: layout.cache_db_path(),
-                because: String::new(),
-            })?;
-    let stored: BTreeMap<String, String> = {
-        let mut tx = snapshot.connection().await;
-        sqlx::query_as::<_, (String, String)>(
-            "SELECT unit, stored_digest FROM projection_unit_digests",
-        )
-        .fetch_all(&mut **tx)
+    freshness::ensure_current_schema(&mut transaction, layout).await?;
+    let snapshot = ReadSnapshot::open(transaction, scope)
         .await?
-        .into_iter()
-        .collect()
-    };
+        .ok_or_else(|| ReadRefusal::NoProjection {
+            database: layout.cache_db_path(),
+            because: String::new(),
+        })?;
+    let stored: BTreeMap<String, String> = snapshot
+        .transaction()
+        .await
+        .fetch(
+            "SELECT unit, stored_digest FROM projection_unit_digests",
+            &[],
+        )
+        .await?
+        .iter()
+        .map(|row| Ok((row.text(0)?.to_owned(), row.text(1)?.to_owned())))
+        .collect::<anyhow::Result<_>>()?;
     // Without a guard, two complete passes must match this same stored revision.
     // Each pass reads the scope list again. A missing lock or a recovery marker
     // does not prevent a consistent read-only image from answering.

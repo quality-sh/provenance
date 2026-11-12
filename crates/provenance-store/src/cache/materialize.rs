@@ -10,51 +10,72 @@ mod stamp;
 mod units;
 mod validation;
 
+#[cfg(test)]
 pub use catch_up::catch_up_with_guard;
+pub use catch_up::catch_up_work;
 pub use catch_up::{catch_up_state, CatchUpReport};
 pub use record_rows::SEARCH_TEXT;
 pub use units::unit_stored_digest;
 pub use units::{scope_ids, unit_digest, units_for, Unit, UnitHashError};
 
-use super::{open_cache, MaterializeReport};
+use super::MaterializeReport;
 use crate::current_schema::{self, Compatibility};
+use crate::publication;
+use crate::read_database::file::FileSqlx as _;
+use crate::read_database::{ReadDatabase, Transaction as Lent};
 use crate::repository::Repository;
-use crate::{layout::ProvenanceLayout, publication};
 use provenance_macros::rule;
-use sqlx::{Sqlite, SqlitePool, Transaction};
+use sqlx::{Sqlite, Transaction};
+
+/// The `SQLx` transaction of the file adapter, which the projection writes
+/// through.
+pub(super) fn file_transaction(
+    transaction: &mut Lent,
+) -> anyhow::Result<&mut Transaction<'static, Sqlite>> {
+    transaction
+        .sqlx()
+        .ok_or_else(|| crate::refusal::fault!("the projection writes the file adapter"))
+}
 
 pub async fn materialize_empty_state(repository: &Repository) -> anyhow::Result<MaterializeReport> {
     let guard = publication::publication_guard(repository).await?;
     let _held = &guard;
     crate::test_probes::at("materialize_empty_under_guard")?;
-    let connection = open_cache(repository.layout()).await?;
-    // Everything between the open and the settle is part of the settled
-    // work: a failure there completes the connection before it reports.
-    let applied = initialize_empty(connection.pool()).await;
-    connection
-        .settle(applied.map(|cache_recreated| MaterializeReport {
-            records_loaded: 0,
-            cache_recreated,
+    // Everything in the write is part of the settled work: a failure there
+    // completes the connection before it reports.
+    let mut cache_recreated = false;
+    let slot = &mut cache_recreated;
+    repository
+        .read_database()?
+        .write(Box::new(move |transaction| {
+            Box::pin(async move {
+                *slot = initialize_empty(transaction).await?;
+                Ok(())
+            })
         }))
-        .await
+        .await?;
+    Ok(MaterializeReport {
+        records_loaded: 0,
+        cache_recreated,
+    })
 }
 
-async fn initialize_empty(pool: &SqlitePool) -> anyhow::Result<bool> {
+async fn initialize_empty(mut transaction: Lent) -> anyhow::Result<bool> {
     crate::test_probes::at("prepare_current_schema_under_guard")?;
-    let recreate = current_schema::compatibility(pool).await? == Compatibility::RebuildRequired;
+    let tx = file_transaction(&mut transaction)?;
+    let recreate = current_schema::compatibility(tx).await? == Compatibility::RebuildRequired;
     if !recreate {
         return Ok(false);
     }
-    let mut tx = pool.begin().await?;
-    current_schema::replace(&mut tx).await?;
-    current_schema::mark_current(&mut tx).await?;
-    tx.commit().await?;
+    current_schema::replace(tx).await?;
+    current_schema::mark_current(tx).await?;
+    transaction.commit().await?;
     Ok(true)
 }
 
 pub async fn materialize_state(repository: &Repository) -> anyhow::Result<MaterializeReport> {
     let guard = publication::publication_guard(repository).await?;
-    materialize_with_guard(&guard, repository.layout()).await
+    materialize_with_guard(&guard, repository.read_database()?).await
 }
 
 /// The rebuild body for a caller that holds the guard.
@@ -65,52 +86,61 @@ pub async fn materialize_state(repository: &Repository) -> anyhow::Result<Materi
 /// ends.
 pub(super) async fn materialize_with_guard(
     guard: &publication::PublicationGuard,
-    layout: &ProvenanceLayout,
+    database: &dyn ReadDatabase,
 ) -> anyhow::Result<MaterializeReport> {
     let mut reader = validation::UnitReader::new(guard);
     let (manifest, global_digests) = reader.global(None)?;
-    let connection = open_cache(layout).await?;
-    let outcome = async {
-        crate::test_probes::at("prepare_current_schema_under_guard")?;
-        rebuild_rows(connection.pool(), &reader, manifest, global_digests).await
-    }
-    .await;
-    connection.settle(outcome).await
+    let mut report = None;
+    let (slot, reader) = (&mut report, &reader);
+    database
+        .write(Box::new(move |transaction| {
+            Box::pin(async move {
+                crate::test_probes::at("prepare_current_schema_under_guard")?;
+                let (rebuilt, _) =
+                    rebuild_rows(transaction, reader, manifest, global_digests).await?;
+                *slot = Some(rebuilt);
+                Ok(())
+            })
+        }))
+        .await?;
+    report.ok_or_else(|| crate::refusal::fault!("the read database ended a write without its work"))
 }
 
-/// Rebuilds through a pool whose connection stays with the caller.
-pub(super) async fn materialize_on_pool_with_guard(
+/// Rebuilds in the caller's write transaction and commits it. Gives the
+/// report and the committed revision.
+pub(super) async fn rebuild_with_guard(
     guard: &publication::PublicationGuard,
-    pool: &SqlitePool,
-) -> anyhow::Result<MaterializeReport> {
+    transaction: Lent,
+) -> anyhow::Result<(MaterializeReport, (i64, String))> {
     let mut reader = validation::UnitReader::new(guard);
     let (manifest, global_digests) = reader.global(None)?;
-    rebuild_rows(pool, &reader, manifest, global_digests).await
+    rebuild_rows(transaction, &reader, manifest, global_digests).await
 }
 
-/// Hashes, validates, reloads, and commits one full rebuild on the
-/// caller's pool.
+/// Hashes, validates, reloads, and commits one full rebuild in the
+/// caller's write transaction. Gives the report and the committed
+/// revision.
 #[rule("rule_interrupted_migration_reloads_every_family")]
 async fn rebuild_rows(
-    pool: &SqlitePool,
+    mut transaction: Lent,
     reader: &validation::UnitReader<'_>,
     manifest: provenance_core::Manifest,
     global_digests: units::UnitDigests,
-) -> anyhow::Result<MaterializeReport> {
+) -> anyhow::Result<(MaterializeReport, (i64, String))> {
+    let tx = file_transaction(&mut transaction)?;
     let cache_recreated =
-        current_schema::compatibility(pool).await? == Compatibility::RebuildRequired;
-    let mut tx = pool.begin().await?;
+        current_schema::compatibility(tx).await? == Compatibility::RebuildRequired;
     if cache_recreated {
-        current_schema::replace(&mut tx).await?;
+        current_schema::replace(tx).await?;
     } else {
-        clear_cache(&mut tx).await?;
+        clear_cache(tx).await?;
     }
     let stored_serial: i64 =
         sqlx::query_scalar("SELECT COALESCE(MAX(serial), 0) FROM projection_revision")
-            .fetch_one(&mut *tx)
+            .fetch_one(&mut **tx)
             .await?;
 
-    stamp::upsert_unit_row(&mut tx, "global", &global_digests).await?;
+    stamp::upsert_unit_row(tx, "global", &global_digests).await?;
     let mut records_loaded = 0;
     let scopes: Vec<_> = manifest
         .scopes
@@ -129,10 +159,9 @@ async fn rebuild_rows(
         )?;
         let records = reader.scope(scope, &read, true)?;
         for records in &records.families {
-            records_loaded +=
-                family_rows::load_rows(&mut tx, records.family, &records.bytes).await?;
+            records_loaded += family_rows::load_rows(tx, records.family, &records.bytes).await?;
             stamp::upsert_content_row(
-                &mut tx,
+                tx,
                 scope.as_str(),
                 records.family.family_name(),
                 &records.family.content_digest(&records.bytes)?,
@@ -141,22 +170,30 @@ async fn rebuild_rows(
             )
             .await?;
         }
-        relation_rows::load_rows(&mut tx, &records.relations, scope).await?;
-        stamp::upsert_unit_row(&mut tx, &unit.name(), &read.digests).await?;
-        stamp::replace_file_rows(&mut tx, &unit.name(), &read.files).await?;
+        relation_rows::load_rows(tx, &records.relations, scope).await?;
+        stamp::upsert_unit_row(tx, &unit.name(), &read.digests).await?;
+        stamp::replace_file_rows(tx, &unit.name(), &read.files).await?;
     }
-    stamp::write_stamp(&mut tx, stored_serial + 1).await?;
+    stamp::write_stamp(tx, stored_serial + 1).await?;
     if cache_recreated {
-        current_schema::mark_current(&mut tx).await?;
+        current_schema::mark_current(tx).await?;
     }
     crate::test_probes::at("materialize_before_commit")?;
-    tx.commit().await?;
+    let revision: (i64, String) = sqlx::query_as(
+        "SELECT serial, digest FROM projection_revision ORDER BY serial DESC LIMIT 1",
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+    transaction.commit().await?;
     crate::test_probes::at("materialize_after_commit")?;
 
-    Ok(MaterializeReport {
-        records_loaded,
-        cache_recreated,
-    })
+    Ok((
+        MaterializeReport {
+            records_loaded,
+            cache_recreated,
+        },
+        revision,
+    ))
 }
 
 async fn clear_cache(tx: &mut Transaction<'_, Sqlite>) -> anyhow::Result<()> {

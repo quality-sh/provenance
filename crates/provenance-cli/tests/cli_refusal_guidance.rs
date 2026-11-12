@@ -129,8 +129,8 @@ fn search_words_without_text_flag_name_the_text_flag() {
         &format!(
             "error: unexpected argument '-x' found\n\n  \
              tip: to pass '-x' as a value, use '-- -x'\n\n\
-             Usage: provenance{suffix} [OPTIONS] <COMMAND>\n\n\
-             For more information, try '--help'.\n"
+             Usage: provenance{suffix} search [OPTIONS]\n\n\
+             For more information, try 'provenance search --help'.\n"
         ),
     );
 }

@@ -1,16 +1,18 @@
 //! Catch-up: hash each scope unit and the global unit, then re-derive the
 //! changed families by content digest.
 //!
-//! One pass runs under one guard in one transaction. A pass that changes
-//! nothing commits no revision.
+//! One pass runs under one guard in one write of the read database. A
+//! pass that changes nothing commits no revision.
 
 use super::units::{self, Unit};
 use super::{family_rows, relation_rows, stamp, validation};
-use crate::cache::{open_cache, revision_digest_from_stored_rows, ProjectionFamily};
+use crate::cache::{revision_digest_from_stored_rows, ProjectionFamily};
 use crate::current_schema::{self, Compatibility};
 use crate::publication;
+use crate::read_database::{ReadDatabase, Transaction as Lent, WriteWork};
 use crate::repository::Repository;
 use provenance_core::ScopeId;
+use sqlx::{Sqlite, SqliteConnection};
 use std::collections::{BTreeMap, BTreeSet};
 
 type ContentKey = (String, String);
@@ -39,43 +41,97 @@ pub struct CatchUpReport {
 
 pub async fn catch_up_state(repository: &Repository) -> anyhow::Result<CatchUpReport> {
     let guard = publication::publication_guard(repository).await?;
-    let connection = open_cache(repository.layout()).await?;
-    let report = match catch_up_with_guard(&guard, connection.pool()).await {
-        Ok(report) => report,
-        Err(error) => return Err(connection.close_reporting(error).await),
-    };
-    // As on the read path, writers do not wait for the close.
-    drop(guard);
-    connection.close().await?;
-    Ok(report)
+    catch_up_with_guard(guard, repository.read_database()?).await
 }
 
-/// One catch-up pass on the caller's pool, for a caller that holds the
-/// guard. The pool stays open for the caller.
+/// One catch-up pass in one write of `database`. A pass that succeeds
+/// frees `guard` when its work ends, before the store completes its
+/// connection, so a writer does not wait on the close. A pass that fails
+/// keeps the guard until the connection has completed.
 pub async fn catch_up_with_guard(
-    guard: &publication::PublicationGuard,
-    pool: &sqlx::SqlitePool,
+    guard: publication::PublicationGuard,
+    database: &dyn ReadDatabase,
 ) -> anyhow::Result<CatchUpReport> {
+    let mut guard = Some(guard);
+    let mut report = None;
+    let outcome = database.write(catch_up_work(&mut guard, &mut report)).await;
+    drop(guard);
+    outcome?;
+    report.ok_or_else(|| crate::refusal::fault!("the read database ended a write without its work"))
+}
+
+/// The work of one catch-up pass under the guard in `guard`, in a write
+/// of the read database. When the pass succeeds, the work frees the guard
+/// and puts the report in `report`. When it fails, the guard stays in
+/// `guard`, so the caller frees it after the store has completed its
+/// connection.
+pub fn catch_up_work<'a>(
+    guard: &'a mut Option<publication::PublicationGuard>,
+    report: &'a mut Option<CatchUpReport>,
+) -> WriteWork<'a> {
+    Box::new(move |transaction| {
+        Box::pin(async move {
+            let held = guard
+                .as_ref()
+                .ok_or_else(|| crate::refusal::fault!("a catch-up pass runs under the guard"))?;
+            *report = Some(pass(held, transaction).await?);
+            *guard = None;
+            Ok(())
+        })
+    })
+}
+
+/// What the rows of a pass found.
+enum Step {
+    Rebuild,
+    Unchanged(CatchUpReport),
+    Changed(CatchUpReport),
+}
+
+/// One catch-up pass: a rebuild, a pass that changed nothing and so
+/// commits nothing, or a pass that commits one revision.
+async fn pass(
+    guard: &publication::PublicationGuard,
+    mut transaction: Lent,
+) -> anyhow::Result<CatchUpReport> {
+    let found = step(guard, super::file_transaction(&mut transaction)?).await?;
+    match found {
+        Step::Rebuild => rebuild(guard, transaction).await,
+        Step::Unchanged(report) => Ok(report),
+        Step::Changed(report) => {
+            crate::test_probes::at("catch_up_before_commit")?;
+            transaction.commit().await?;
+            crate::test_probes::at("catch_up_after_commit")?;
+            Ok(report)
+        }
+    }
+}
+
+/// The rows of one catch-up pass, in the write transaction `tx`.
+async fn step(
+    guard: &publication::PublicationGuard,
+    tx: &mut sqlx::Transaction<'static, Sqlite>,
+) -> anyhow::Result<Step> {
     crate::test_probes::at("prepare_current_schema_under_guard")?;
-    if current_schema::compatibility(pool).await? == Compatibility::RebuildRequired {
-        return rebuild(guard, pool).await;
+    if current_schema::compatibility(tx).await? == Compatibility::RebuildRequired {
+        return Ok(Step::Rebuild);
     }
     let stored: Option<(i64, String)> = sqlx::query_as(
         "SELECT serial, digest FROM projection_revision ORDER BY serial DESC LIMIT 1",
     )
-    .fetch_optional(pool)
+    .fetch_optional(&mut **tx)
     .await?;
 
     // A database with no revision, or one whose schema just moved, is
     // rebuilt under the same guard.
     let Some((stored_serial, stored_digest)) = stored else {
-        return rebuild(guard, pool).await;
+        return Ok(Step::Rebuild);
     };
-    if validation::version_changed(pool).await? {
-        return rebuild(guard, pool).await;
+    if validation::version_changed(tx).await? {
+        return Ok(Step::Rebuild);
     }
 
-    let (stored_units, mut content) = load_stored_digests(pool).await?;
+    let (stored_units, mut content) = load_stored_digests(tx).await?;
     let mut reader = validation::UnitReader::new(guard);
     let (manifest, global_digests) = reader.global(stored_units.get("global"))?;
     let scope_ids: Vec<ScopeId> = manifest
@@ -93,13 +149,11 @@ pub async fn catch_up_with_guard(
         rows_written: 0,
         cache_recreated: false,
     };
-    let mut tx = pool.begin().await?;
-
     let live = units::units_for(&scope_ids);
-    let mut changed = remove_departed_scopes(&mut tx, &stored_units, &live, &mut content).await?;
+    let mut changed = remove_departed_scopes(tx, &stored_units, &live, &mut content).await?;
     if stored_units.get("global") != Some(&global_digests) {
         changed = true;
-        stamp::upsert_unit_row(&mut tx, "global", &global_digests).await?;
+        stamp::upsert_unit_row(tx, "global", &global_digests).await?;
     }
     for unit in &live {
         let Unit::Scope(scope) = unit else { continue };
@@ -113,18 +167,17 @@ pub async fn catch_up_with_guard(
             stored,
             bytes: &bytes,
         };
-        catch_up_scope(&mut tx, &reader, pass, &mut content, &mut report).await?;
+        catch_up_scope(tx, &reader, pass, &mut content, &mut report).await?;
     }
     report.units_hashed = reader.units_hashed();
 
     if !changed {
-        drop(tx);
-        return Ok(report);
+        return Ok(Step::Unchanged(report));
     }
 
     for ((scope_id, family), value) in &content {
         stamp::upsert_content_row(
-            &mut tx,
+            tx,
             scope_id,
             family,
             &value.content,
@@ -146,16 +199,13 @@ pub async fn catch_up_with_guard(
         .collect();
     report.digest = revision_digest_from_stored_rows(&rows)?;
     report.serial = stored_serial + 1;
-    stamp::insert_revision(&mut tx, report.serial, &report.digest).await?;
+    stamp::insert_revision(tx, report.serial, &report.digest).await?;
     report.revision_committed = true;
-    crate::test_probes::at("catch_up_before_commit")?;
-    tx.commit().await?;
-    crate::test_probes::at("catch_up_after_commit")?;
-    Ok(report)
+    Ok(Step::Changed(report))
 }
 
 async fn load_stored_digests(
-    pool: &sqlx::SqlitePool,
+    connection: &mut SqliteConnection,
 ) -> anyhow::Result<(
     BTreeMap<String, UnitValue>,
     BTreeMap<ContentKey, ContentValue>,
@@ -163,7 +213,7 @@ async fn load_stored_digests(
     let units: BTreeMap<String, UnitValue> = sqlx::query_as::<_, (String, String, String)>(
         "SELECT unit, digest, stored_digest FROM projection_unit_digests",
     )
-    .fetch_all(pool)
+    .fetch_all(&mut *connection)
     .await?
     .into_iter()
     .map(|(unit, content, stored)| (unit, UnitValue { content, stored }))
@@ -173,7 +223,7 @@ async fn load_stored_digests(
             "SELECT scope_id, family, content_digest, stored_digest, record_count \
          FROM projection_family_digests",
         )
-        .fetch_all(pool)
+        .fetch_all(&mut *connection)
         .await?
         .into_iter()
         .map(|(scope_id, family, content, stored, count)| {
@@ -324,14 +374,9 @@ async fn rederive_scope(
 
 async fn rebuild(
     guard: &publication::PublicationGuard,
-    pool: &sqlx::SqlitePool,
+    transaction: Lent,
 ) -> anyhow::Result<CatchUpReport> {
-    let report = super::materialize_on_pool_with_guard(guard, pool).await?;
-    let (serial, digest): (i64, String) = sqlx::query_as(
-        "SELECT serial, digest FROM projection_revision ORDER BY serial DESC LIMIT 1",
-    )
-    .fetch_one(pool)
-    .await?;
+    let (report, (serial, digest)) = super::rebuild_with_guard(guard, transaction).await?;
     Ok(CatchUpReport {
         serial,
         digest,

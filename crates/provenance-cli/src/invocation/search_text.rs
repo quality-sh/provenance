@@ -7,10 +7,11 @@ use provenance_porcelain::registry;
 
 /// Parses the search command. When clap refuses a word that is not a flag, or a word
 /// after `--`, the refusal says that the search text goes in `--text`. Each other
-/// refusal of clap stays as clap gives it.
+/// refusal is the refusal of `root_word_matches`.
 pub(super) fn parse(arguments: &[String]) -> SearchArgs {
     let command = crate::registry_cli::root_word_command(registry::Command::Search);
-    let error = match command.clone().try_get_matches_from(arguments) {
+    let parsed = crate::registry_cli::root_word_matches(registry::Command::Search, arguments);
+    let error = match parsed {
         Ok(matches) => return SearchArgs::from_matches(&matches),
         Err(error) => error,
     };

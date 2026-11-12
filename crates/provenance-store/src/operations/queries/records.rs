@@ -91,6 +91,7 @@ async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<
                 &after,
                 count,
                 request.exclude_terminal,
+                needle.as_deref(),
             )
             .await?;
             let exhausted = ids.len() < count;

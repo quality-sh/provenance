@@ -22,8 +22,10 @@ async fn the_stamp_carries_the_stored_instance_id() {
     .await
     .unwrap();
 
-    let mut connection = pool.pool().acquire().await.unwrap();
-    let stored = stamp::stored_revision(&mut connection)
+    let mut transaction = crate::read_database::file::begin(pool.pool())
+        .await
+        .unwrap();
+    let stored = stamp::stored_revision(transaction.as_mut())
         .await
         .unwrap()
         .expect("a materialized database holds a revision");
@@ -41,8 +43,10 @@ async fn an_empty_database_holds_no_revision() {
         .await
         .unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    let mut connection = pool.pool().acquire().await.unwrap();
-    assert!(stamp::stored_revision(&mut connection)
+    let mut transaction = crate::read_database::file::begin(pool.pool())
+        .await
+        .unwrap();
+    assert!(stamp::stored_revision(transaction.as_mut())
         .await
         .unwrap()
         .is_none());
