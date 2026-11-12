@@ -9,7 +9,8 @@ use provenance_porcelain::registry;
 use std::fmt::Write as _;
 
 /// The root parser of one word command that reads the shared repository options, as
-/// `provenance search` and `provenance api` read them.
+/// `provenance search` and `provenance api` read them. The help does not show the
+/// command word as an argument, because the usage line starts with that word.
 pub fn root_word_command(command: registry::Command) -> Command {
     let declaration = command.declaration();
     let Some(words) = cli_options::words(&declaration) else {
@@ -17,6 +18,7 @@ pub fn root_word_command(command: registry::Command) -> Command {
     };
     let word = Arg::new("command")
         .required(true)
+        .hide(true)
         .value_name("COMMAND")
         .value_parser(PossibleValuesParser::new(words.iter().copied()));
     with_global_flags(Command::new("provenance"))

@@ -2,9 +2,6 @@ Find records across the permitted kinds in the bound scope, or the Rules bound t
 
 Usage: provenance search [OPTIONS]
 
-Arguments:
-  <COMMAND>  [possible values: search]
-
 Options:
       --repo <REPO>       [default: .]
       --scope <SCOPE>     [default: default]

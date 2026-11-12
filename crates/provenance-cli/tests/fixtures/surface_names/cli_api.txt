@@ -3,8 +3,7 @@ Call one public API path with an optional method, query, headers, and JSON body.
 Usage: provenance api [OPTIONS] [PATH]
 
 Arguments:
-  <COMMAND>  [possible values: api]
-  [PATH]     The public API path. Without a path, the catalog routes show.
+  [PATH]  The public API path. Without a path, the catalog routes show.
 
 Options:
       --repo <REPO>      [default: .]
