@@ -17,6 +17,7 @@ pub mod contract;
 #[cfg(feature = "host")]
 pub mod file;
 
+use std::any::Any;
 use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
@@ -80,8 +81,9 @@ pub struct Statement {
     pub values: Vec<SqlValue>,
 }
 
-/// The transaction that a piece of work runs in.
-pub trait SqlTransaction: Send {
+/// The transaction that a piece of work runs in. It is `Any` so that the
+/// crate can find the transaction of its own file adapter.
+pub trait SqlTransaction: Any + Send {
     /// Runs one statement and gives its rows.
     fn fetch<'a>(&'a mut self, sql: &'a str, values: &'a [SqlValue]) -> SqlFuture<'a, Vec<SqlRow>>;
 
@@ -99,19 +101,6 @@ pub trait SqlTransaction: Send {
 
     /// Commits the transaction. Write work calls this at its end.
     fn commit(self: Box<Self>) -> SqlFuture<'static, ()>;
-
-    /// The `SQLx` transaction of the file adapter, for the code that still
-    /// runs `SQLx` directly. Other adapters have none.
-    #[cfg(feature = "host")]
-    fn sqlx(&mut self) -> Option<&mut sqlx::Transaction<'static, sqlx::Sqlite>> {
-        None
-    }
-
-    /// The `SQLx` transaction of the file adapter, to read through.
-    #[cfg(feature = "host")]
-    fn sqlx_ref(&self) -> Option<&sqlx::Transaction<'static, sqlx::Sqlite>> {
-        None
-    }
 }
 
 /// A transaction lent to one piece of work.
@@ -129,13 +118,30 @@ pub type WriteWork<'a> = Box<dyn FnOnce(Transaction) -> SqlFuture<'a, ()> + Send
 pub trait ReadDatabase: Send + Sync + Debug {
     /// Runs `work` in one read transaction. Each row that the work reads
     /// is from one committed state of the database. When the store cannot
-    /// open the database, the error comes before the work starts.
+    /// open the database, the error is [`Unopened`] and comes before the
+    /// work starts.
     fn read<'a>(&'a self, work: ReadWork<'a>) -> SqlFuture<'a, ()>;
 
     /// Runs `work` in one write transaction, and makes the database when
     /// it is absent. The work commits the transaction; when the work fails
     /// or ends without the commit, the transaction rolls back.
     fn write<'a>(&'a self, work: WriteWork<'a>) -> SqlFuture<'a, ()>;
+
+    /// Runs `write` as [`ReadDatabase::write`] does and, when it succeeds,
+    /// `read` as [`ReadDatabase::read`] does, over one open of the store.
+    /// The store completes its connection once, after the read, so a
+    /// failure of that completion is the failure of the read. When `write`
+    /// fails, `read` does not run.
+    fn write_then_read<'a>(
+        &'a self,
+        write: WriteWork<'a>,
+        read: ReadWork<'a>,
+    ) -> SqlFuture<'a, ()> {
+        Box::pin(async move {
+            self.write(write).await?;
+            self.read(read).await
+        })
+    }
 
     /// The maximum number of values that one statement can bind.
     fn max_bound_values(&self) -> usize;
@@ -146,6 +152,21 @@ pub trait ReadDatabase: Send + Sync + Debug {
 
     /// Where the database is, for the text of a refusal.
     fn location(&self) -> String;
+}
+
+/// The store could not open the database, so the work did not start. A
+/// read of an absent database fails with this error, and the store makes
+/// nothing. Its text is the text of its cause.
+#[derive(Debug, thiserror::Error)]
+#[error("{0:#}")]
+pub struct Unopened(pub anyhow::Error);
+
+impl Unopened {
+    /// The cause, when `error` says that the store could not open the
+    /// database; otherwise `error` itself.
+    pub fn cause(error: anyhow::Error) -> Result<anyhow::Error, anyhow::Error> {
+        error.downcast::<Self>().map(|unopened| unopened.0)
+    }
 }
 
 /// Whether a store error says that a table that the statement names is

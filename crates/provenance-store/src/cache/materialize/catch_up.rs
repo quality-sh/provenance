@@ -9,7 +9,7 @@ use super::{family_rows, relation_rows, stamp, validation};
 use crate::cache::{revision_digest_from_stored_rows, ProjectionFamily};
 use crate::current_schema::{self, Compatibility};
 use crate::publication;
-use crate::read_database::{ReadDatabase, Transaction as Lent};
+use crate::read_database::{ReadDatabase, Transaction as Lent, WriteWork};
 use crate::repository::Repository;
 use provenance_core::ScopeId;
 use sqlx::{Sqlite, SqliteConnection};
@@ -44,25 +44,41 @@ pub async fn catch_up_state(repository: &Repository) -> anyhow::Result<CatchUpRe
     catch_up_with_guard(guard, repository.read_database()?).await
 }
 
-/// One catch-up pass in one write of `database`. The pass frees `guard`
-/// when its work ends, before the store completes its connection, so a
-/// writer does not wait on the close.
+/// One catch-up pass in one write of `database`. A pass that succeeds
+/// frees `guard` when its work ends, before the store completes its
+/// connection, so a writer does not wait on the close. A pass that fails
+/// keeps the guard until the connection has completed.
 pub async fn catch_up_with_guard(
     guard: publication::PublicationGuard,
     database: &dyn ReadDatabase,
 ) -> anyhow::Result<CatchUpReport> {
+    let mut guard = Some(guard);
     let mut report = None;
-    let slot = &mut report;
-    database
-        .write(Box::new(move |transaction| {
-            Box::pin(async move {
-                *slot = Some(pass(&guard, transaction).await?);
-                drop(guard);
-                Ok(())
-            })
-        }))
-        .await?;
+    let outcome = database.write(catch_up_work(&mut guard, &mut report)).await;
+    drop(guard);
+    outcome?;
     report.ok_or_else(|| crate::refusal::fault!("the read database ended a write without its work"))
+}
+
+/// The work of one catch-up pass under the guard in `guard`, in a write
+/// of the read database. When the pass succeeds, the work frees the guard
+/// and puts the report in `report`. When it fails, the guard stays in
+/// `guard`, so the caller frees it after the store has completed its
+/// connection.
+pub fn catch_up_work<'a>(
+    guard: &'a mut Option<publication::PublicationGuard>,
+    report: &'a mut Option<CatchUpReport>,
+) -> WriteWork<'a> {
+    Box::new(move |transaction| {
+        Box::pin(async move {
+            let held = guard
+                .as_ref()
+                .ok_or_else(|| crate::refusal::fault!("a catch-up pass runs under the guard"))?;
+            *report = Some(pass(held, transaction).await?);
+            *guard = None;
+            Ok(())
+        })
+    })
 }
 
 /// What the rows of a pass found.

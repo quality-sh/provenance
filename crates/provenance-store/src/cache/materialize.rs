@@ -10,7 +10,9 @@ mod stamp;
 mod units;
 mod validation;
 
+#[cfg(test)]
 pub use catch_up::catch_up_with_guard;
+pub use catch_up::catch_up_work;
 pub use catch_up::{catch_up_state, CatchUpReport};
 pub use record_rows::SEARCH_TEXT;
 pub use units::unit_stored_digest;
@@ -19,6 +21,7 @@ pub use units::{scope_ids, unit_digest, units_for, Unit, UnitHashError};
 use super::MaterializeReport;
 use crate::current_schema::{self, Compatibility};
 use crate::publication;
+use crate::read_database::file::FileSqlx as _;
 use crate::read_database::{ReadDatabase, Transaction as Lent};
 use crate::repository::Repository;
 use provenance_macros::rule;

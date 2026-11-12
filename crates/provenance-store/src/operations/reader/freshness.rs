@@ -1,26 +1,31 @@
 //! The freshness step a read runs before it answers.
 //!
-//! `catch_up` takes the publication guard, runs one catch-up pass in one
-//! write of the read database, and drops the guard. When that step fails
-//! and the database holds a revision, the read goes on at the stored
-//! serial with the policy word `catch_up_failed` and the error text beside
-//! the answer. `annotate_only` takes no guard and refuses an absent
-//! database. `refuse_stale` hashes canonical units and refuses any digest
-//! change. The read itself is one read of the read database, which owns
+//! `catch_up` takes the publication guard, runs one catch-up pass in a
+//! write of the read database, drops the guard, and reads on the same open
+//! of the database. When the pass fails and the database holds a revision,
+//! the read goes on at the stored serial with the policy word
+//! `catch_up_failed` and the error text beside the answer. `annotate_only`
+//! takes no guard and refuses an absent database. `refuse_stale` hashes
+//! canonical units and refuses any digest change. The read database owns
 //! the connection through its completion, so no step decides how a
 //! connection closes.
 
 use super::{ReadContext, ReadFuture, ReadRefusal, ReadSnapshot};
-use crate::cache::catch_up_with_guard;
+use crate::cache::catch_up_work;
 use crate::current_schema::{self, Compatibility};
 use crate::layout::ProvenanceLayout;
 use crate::operations::read_policy::FreshnessPolicy;
 use crate::operations::stamp;
 use crate::publication::{publication_guard, PublicationGuard};
-use crate::read_database::Transaction;
+use crate::read_database::file::FileSqlx as _;
+use crate::read_database::{ReadDatabase, ReadWork, Transaction, Unopened};
 use crate::repository::Repository;
 use provenance_core::protocol::{Stamp, StampPolicy, Stamped};
 use provenance_macros::rule;
+
+/// The fault of a read of a read database other than the file. It ends
+/// when the row readers run on the port.
+const NOT_A_FILE: &str = "the row readers read only the read database file under .provenance/cache";
 
 pub(super) struct Freshness {
     pub(super) check: Check,
@@ -30,7 +35,9 @@ pub(super) struct Freshness {
 
 /// What the read checks in its transaction before it opens the snapshot.
 pub(super) enum Check {
-    /// Nothing: a catch-up ran, or failed.
+    /// A catch-up pass under this guard, in a write just before the read.
+    CatchUp(PublicationGuard),
+    /// Nothing: the catch-up failed.
     None,
     /// The schema, under `annotate_only`.
     Schema,
@@ -39,11 +46,49 @@ pub(super) enum Check {
     Stale(Option<PublicationGuard>),
 }
 
+/// The operation of one read, and the answer that its work leaves.
+struct Reading<'r, R, F> {
+    repository: &'r Repository,
+    scan_limit: usize,
+    run: Option<F>,
+    answer: Option<(anyhow::Result<R>, Stamp)>,
+}
+
+impl<R, F> Reading<'_, R, F>
+where
+    R: Send,
+    F: for<'c> FnOnce(&'c ReadContext) -> ReadFuture<'c, R> + Send,
+{
+    /// The work of the read: the check, the pinned snapshot, the operation
+    /// and the stamp.
+    fn work<'a>(
+        &'a mut self,
+        check: Check,
+        policy: StampPolicy,
+        because: Option<&'a str>,
+    ) -> ReadWork<'a> {
+        Box::new(move |transaction| {
+            Box::pin(async move {
+                let run = self
+                    .run
+                    .take()
+                    .ok_or_else(|| crate::refusal::fault!("a read runs its operation once"))?;
+                let snapshot = open_snapshot(transaction, check, self.repository, because).await?;
+                let context =
+                    ReadContext::new(snapshot, self.repository.clone(), self.scan_limit, policy);
+                let result = run(&context).await;
+                self.answer = Some((result, stamp::seal(context, policy)));
+                Ok(())
+            })
+        })
+    }
+}
+
 impl Freshness {
-    /// Answers from this freshness state in one read of the read
-    /// database. This is the one completion point of a read: the snapshot
-    /// opens, the body runs, the stamp seals, and the read completes its
-    /// connection before the answer leaves.
+    /// Answers from this freshness state through the read database. This
+    /// is the one completion point of a read: the snapshot opens, the body
+    /// runs, the stamp seals, and the read completes its connection before
+    /// the answer leaves.
     pub(super) async fn complete<R: Send>(
         self,
         repository: &Repository,
@@ -56,30 +101,43 @@ impl Freshness {
             error,
         } = self;
         let database = repository.read_database()?;
-        let mut answer: Option<(anyhow::Result<R>, Stamp)> = None;
-        let mut started = false;
-        let (answer_slot, started_slot, because) = (&mut answer, &mut started, error.as_deref());
-        let outcome = database
-            .read(Box::new(move |transaction| {
-                Box::pin(async move {
-                    *started_slot = true;
-                    let snapshot = open_snapshot(transaction, check, repository, because).await?;
-                    let context =
-                        ReadContext::new(snapshot, repository.clone(), scan_limit, policy);
-                    let result = run(&context).await;
-                    *answer_slot = Some((result, stamp::seal(context, policy)));
-                    Ok(())
-                })
-            }))
-            .await;
+        let mut reading = Reading {
+            repository,
+            scan_limit,
+            run: Some(run),
+            answer: None,
+        };
+        let (policy, error, outcome) = match check {
+            Check::CatchUp(guard) => match catch_up(guard, database, &mut reading).await {
+                Ok(outcome) => (policy, None, outcome),
+                Err(failure) => {
+                    let Self {
+                        check,
+                        policy,
+                        error,
+                    } = stored(&failure);
+                    let outcome = database
+                        .read(reading.work(check, policy, error.as_deref()))
+                        .await;
+                    (policy, error, outcome)
+                }
+            },
+            check => {
+                let outcome = database
+                    .read(reading.work(check, policy, error.as_deref()))
+                    .await;
+                (policy, error, outcome)
+            }
+        };
         if let Err(failure) = outcome {
-            return Err(if started {
-                failure
-            } else {
-                unopened(repository.layout(), policy, error.as_deref(), failure)
-            });
+            return Err(unopened(
+                repository.layout(),
+                policy,
+                error.as_deref(),
+                failure,
+            ));
         }
-        let (result, stamp) = answer.ok_or_else(|| {
+        let (result, stamp) = reading.answer.ok_or_else(|| {
             crate::refusal::fault!("the read database ended a read without its work")
         })?;
         Ok(Stamped {
@@ -90,16 +148,21 @@ impl Freshness {
     }
 }
 
-/// Runs the check of the freshness step, then pins the snapshot.
+/// Runs the check of the freshness step, then pins the snapshot. Until the
+/// row readers run on the port, they read the transaction of the file
+/// adapter, so a read of another adapter refuses here.
 async fn open_snapshot(
     mut transaction: Transaction,
     check: Check,
     repository: &Repository,
     because: Option<&str>,
 ) -> anyhow::Result<ReadSnapshot> {
+    if transaction.sqlx_ref().is_none() {
+        return Err(crate::refusal::fault!("{NOT_A_FILE}"));
+    }
     let layout = repository.layout();
     match check {
-        Check::None => {}
+        Check::CatchUp(_) | Check::None => {}
         Check::Schema => {
             ensure_current_schema(&mut transaction, layout).await?;
         }
@@ -127,23 +190,26 @@ async fn open_snapshot(
         })
 }
 
-/// The refusal of a read whose database did not open.
+/// The refusal of a read whose database did not open. Any other failure,
+/// such as a transaction that did not begin, is the failure of the read.
 fn unopened(
     layout: &ProvenanceLayout,
     policy: StampPolicy,
     because: Option<&str>,
     failure: anyhow::Error,
 ) -> anyhow::Error {
+    let cause = match Unopened::cause(failure) {
+        Ok(cause) => cause,
+        Err(failure) => return failure,
+    };
     match (policy, because) {
         (StampPolicy::CatchUpFailed, Some(text)) => ReadRefusal::NoProjection {
             database: layout.cache_db_path(),
             because: format!(" (catch-up failed: {text})"),
         }
         .into(),
-        (StampPolicy::AnnotateOnly | StampPolicy::RefuseStale, _) => {
-            no_projection(layout, &failure)
-        }
-        _ => failure,
+        (StampPolicy::AnnotateOnly | StampPolicy::RefuseStale, _) => no_projection(layout, &cause),
+        _ => cause,
     }
 }
 
@@ -152,9 +218,9 @@ pub(super) async fn run(
     policy: FreshnessPolicy,
 ) -> anyhow::Result<Freshness> {
     match policy {
-        FreshnessPolicy::CatchUp => Ok(match catch_up(repository).await {
-            Ok(()) => Freshness {
-                check: Check::None,
+        FreshnessPolicy::CatchUp => Ok(match publication_guard(repository).await {
+            Ok(guard) => Freshness {
+                check: Check::CatchUp(guard),
                 policy: StampPolicy::CatchUp,
                 error: None,
             },
@@ -173,12 +239,34 @@ pub(super) async fn run(
 /// cannot both create the file. On a file still in DELETE mode the open
 /// waits for the switch to WAL, at most the retry's deadline plus one
 /// busy timeout (`cache::WalSwitchRetry`); once the file is WAL the switch
-/// costs nothing.
+/// costs nothing. A pass that succeeds frees the guard when it ends, and
+/// the read runs on the same open of the database, which completes after
+/// the read. A pass that fails frees the guard after that completion. An
+/// error of the pass is the error of the freshness step; an error after it
+/// is the error of the read.
 #[rule("rule_read_holds_guard_for_freshness_only")]
-async fn catch_up(repository: &Repository) -> anyhow::Result<()> {
-    let guard = publication_guard(repository).await?;
-    catch_up_with_guard(guard, repository.read_database()?).await?;
-    Ok(())
+async fn catch_up<R, F>(
+    guard: PublicationGuard,
+    database: &dyn ReadDatabase,
+    reading: &mut Reading<'_, R, F>,
+) -> Result<anyhow::Result<()>, anyhow::Error>
+where
+    R: Send,
+    F: for<'c> FnOnce(&'c ReadContext) -> ReadFuture<'c, R> + Send,
+{
+    let mut guard = Some(guard);
+    let mut report = None;
+    let outcome = database
+        .write_then_read(
+            catch_up_work(&mut guard, &mut report),
+            reading.work(Check::None, StampPolicy::CatchUp, None),
+        )
+        .await;
+    drop(guard);
+    match outcome {
+        Err(failure) if report.is_none() => Err(failure),
+        outcome => Ok(outcome),
+    }
 }
 
 /// The read at the stored serial after a failed freshness step. A cache

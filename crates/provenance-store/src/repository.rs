@@ -52,8 +52,9 @@ struct Inner {
     /// Whether `storage` is the local adapter of `layout`, which `open`
     /// makes.
     local: bool,
-    /// The store of the projection. Without `host` a repository has none
-    /// until the caller gives one.
+    /// The store of the projection: the file of the cache directory for a
+    /// repository that `open` makes, or the one that the caller of
+    /// `with_storage` gives.
     read_database: Option<Arc<dyn ReadDatabase>>,
     /// The source scans of the last commit range that a stale or evidence
     /// query of this open read. Each clone of the handle shares them.
@@ -135,7 +136,10 @@ impl Repository {
                 .with_dictionary(dictionary)
                 .with_history(history),
             Arc::new(LocalStateStorage::new(layout.clone())),
-            Arc::new(LocalSectionLock::new(layout)),
+            Arc::new(LocalSectionLock::new(layout.clone())),
+            Some(Arc::new(crate::read_database::file::FileReadDatabase::new(
+                layout,
+            ))),
             true,
         ))
     }
@@ -146,11 +150,16 @@ impl Repository {
     /// scope of `identity`. The repository reads and writes canonical state
     /// only through the storage; the working tree of the identity names the
     /// layout of the paths that the engine keys state by.
+    ///
+    /// The projection lives in `read_database`, which the caller chooses
+    /// with the storage. A repository with none refuses each read of the
+    /// projection; it still reads and writes canonical state.
     #[rule("rule_engine_runs_on_any_storage")]
     pub fn with_storage(
         identity: RepositoryIdentity,
         storage: Arc<dyn StateStorage>,
         lock: Arc<dyn SectionLock>,
+        read_database: Option<Arc<dyn ReadDatabase>>,
     ) -> Result<Self, OpenFailure> {
         let view = storage
             .read_view()
@@ -162,24 +171,26 @@ impl Repository {
         let manifest = crate::state_store::manifest_from_bytes(manifest)
             .map_err(|error| OpenFailure::Io(error.context("failed to parse the manifest")))?;
         declared_scope(&manifest, identity.scope().as_str())?;
-        Ok(Self::with_parts(identity, storage, lock, false))
+        Ok(Self::with_parts(
+            identity,
+            storage,
+            lock,
+            read_database,
+            false,
+        ))
     }
 
     fn with_parts(
         identity: RepositoryIdentity,
         storage: Arc<dyn StateStorage>,
         section_lock: Arc<dyn SectionLock>,
+        read_database: Option<Arc<dyn ReadDatabase>>,
         local: bool,
     ) -> Self {
         Self {
             inner: Arc::new(Inner {
                 layout: ProvenanceLayout::new(identity.working_tree().to_owned()),
-                #[cfg(feature = "host")]
-                read_database: Some(Arc::new(crate::read_database::file::FileReadDatabase::new(
-                    ProvenanceLayout::new(identity.working_tree().to_owned()),
-                ))),
-                #[cfg(not(feature = "host"))]
-                read_database: None,
+                read_database,
                 identity,
                 storage,
                 section_lock,
@@ -303,26 +314,6 @@ impl Repository {
     #[cfg(feature = "host")]
     pub(crate) fn kept_scans(&self) -> &KeptScans {
         &self.inner.kept_scans
-    }
-
-    /// This repository with its projection in `read_database`, as a new
-    /// open. Without this call, a repository with `host` keeps its
-    /// projection in the file of its cache directory.
-    #[must_use]
-    pub fn with_read_database(&self, read_database: Arc<dyn ReadDatabase>) -> Self {
-        Self {
-            inner: Arc::new(Inner {
-                identity: self.inner.identity.clone(),
-                layout: self.inner.layout.clone(),
-                storage: Arc::clone(&self.inner.storage),
-                section_lock: Arc::clone(&self.inner.section_lock),
-                local: self.inner.local,
-                read_database: Some(read_database),
-                #[cfg(feature = "host")]
-                kept_scans: KeptScans::new(),
-            }),
-            section: self.section.clone(),
-        }
     }
 
     /// The store of the projection of this repository.

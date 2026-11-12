@@ -1,19 +1,20 @@
 //! The file adapter: the CLI's `SQLite` file under `.provenance/cache`.
 //!
-//! Each call opens the file, runs the work in one transaction, and
-//! completes the connection before it gives its result, as
-//! [`CacheConnection`] does. A read opens the stored file and does not
-//! make it. A write makes the file when it is absent and uses WAL mode.
+//! Each call opens the file once, runs its work (a write and then a read,
+//! for `write_then_read`), and completes the connection before it gives
+//! its result, as [`CacheConnection`] does. A read opens the stored file
+//! and does not make it. A write makes the file in WAL mode.
 
 use super::{
     ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement, Transaction,
-    WriteWork,
+    Unopened, WriteWork,
 };
 use crate::cache::{open_cache, open_stored_cache, CacheConnection};
 use crate::layout::ProvenanceLayout;
 use sqlx::query::Query;
 use sqlx::sqlite::{SqliteArguments, SqliteRow};
 use sqlx::{Row, Sqlite, SqlitePool, TypeInfo, ValueRef};
+use std::any::Any;
 use std::io::{Read, Write};
 
 /// The maximum number of values that one statement binds in the file.
@@ -34,7 +35,7 @@ impl FileReadDatabase {
 impl ReadDatabase for FileReadDatabase {
     fn read<'a>(&'a self, work: ReadWork<'a>) -> SqlFuture<'a, ()> {
         Box::pin(async move {
-            let connection = open_stored_cache(&self.layout).await?;
+            let connection = open_stored_cache(&self.layout).await.map_err(Unopened)?;
             let outcome = async {
                 let transaction = begin(connection.pool()).await?;
                 work(transaction).await
@@ -48,6 +49,24 @@ impl ReadDatabase for FileReadDatabase {
         Box::pin(async move {
             let connection = open_cache(&self.layout).await?;
             let outcome = run_write(&connection, work).await;
+            connection.settle(outcome).await
+        })
+    }
+
+    /// The read runs on the connection of the write, as the read after a
+    /// catch-up did on that connection before the port.
+    fn write_then_read<'a>(
+        &'a self,
+        write: WriteWork<'a>,
+        read: ReadWork<'a>,
+    ) -> SqlFuture<'a, ()> {
+        Box::pin(async move {
+            let connection = open_cache(&self.layout).await?;
+            let outcome = async {
+                run_write(&connection, write).await?;
+                read(begin(connection.pool()).await?).await
+            }
+            .await;
             connection.settle(outcome).await
         })
     }
@@ -90,6 +109,7 @@ async fn run_write(connection: &CacheConnection, work: WriteWork<'_>) -> anyhow:
 
 /// Begins one transaction on an open pool of the file.
 pub(crate) async fn begin(pool: &SqlitePool) -> anyhow::Result<Transaction> {
+    crate::test_probes::at("read_database_begin")?;
     Ok(Box::new(FileTransaction(pool.begin().await?)))
 }
 
@@ -136,13 +156,27 @@ impl SqlTransaction for FileTransaction {
     fn commit(self: Box<Self>) -> SqlFuture<'static, ()> {
         Box::pin(async move { Ok(self.0.commit().await?) })
     }
+}
 
+/// The `SQLx` transaction of the file adapter, for the code that still runs
+/// `SQLx` directly until the next pull requests move it onto the port. It
+/// is private to the crate; a transaction of another adapter has none.
+pub(crate) trait FileSqlx {
+    fn sqlx(&mut self) -> Option<&mut sqlx::Transaction<'static, Sqlite>>;
+    fn sqlx_ref(&self) -> Option<&sqlx::Transaction<'static, Sqlite>>;
+}
+
+impl FileSqlx for dyn SqlTransaction {
     fn sqlx(&mut self) -> Option<&mut sqlx::Transaction<'static, Sqlite>> {
-        Some(&mut self.0)
+        let any: &mut dyn Any = self;
+        any.downcast_mut::<FileTransaction>()
+            .map(|transaction| &mut transaction.0)
     }
 
     fn sqlx_ref(&self) -> Option<&sqlx::Transaction<'static, Sqlite>> {
-        Some(&self.0)
+        let any: &dyn Any = self;
+        any.downcast_ref::<FileTransaction>()
+            .map(|transaction| &transaction.0)
     }
 }
 

@@ -144,6 +144,7 @@ pub fn memory_repository_with(
         identity,
         storage.clone(),
         Arc::new(MemorySectionLock::default()),
+        None,
     )
     .unwrap();
     MemoryRepository {

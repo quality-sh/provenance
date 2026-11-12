@@ -2,6 +2,7 @@
 //! the handles put their words on it, and a canonical edit moves the
 //! serial under catch-up.
 
+mod adapter;
 mod characterization;
 mod freshness;
 mod guard;
