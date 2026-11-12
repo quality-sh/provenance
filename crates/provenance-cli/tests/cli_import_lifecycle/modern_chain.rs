@@ -209,40 +209,71 @@ fn answer(output: &std::process::Output) -> (Option<i32>, String, String) {
     )
 }
 
-/// With `proposal_a` on two lines of `proposal_cards.jsonl`, `provenance
-/// check` and an import that replaces the scope refuse at the second line,
-/// and the file does not change. The review-portability check of the import
-/// reads the stored proposals first. Without the located check, the import
-/// replaced the file.
+impl ModernLifecycleFixture {
+    /// The fixture after an import of its lifecycle, with the row of
+    /// `proposal_a` on two lines of `proposal_cards.jsonl`. The result also
+    /// gives the path of the file and its one row.
+    fn with_a_proposal_id_on_two_lines() -> (Self, PathBuf, String) {
+        let fixture = Self::new();
+        fixture.import_lifecycle().success();
+        let cards = fixture
+            .repo
+            .join(".provenance/state/scopes/default/ideation/proposal_cards.jsonl");
+        let row = std::fs::read_to_string(&cards).unwrap();
+        assert_eq!(row.lines().count(), 1, "{row}");
+        std::fs::write(&cards, format!("{row}{row}")).unwrap();
+        (fixture, cards, row)
+    }
+}
+
+/// `provenance check` and `provenance export` over a scope with
+/// `proposal_a` on two lines of `proposal_cards.jsonl` refuse at the second
+/// line, and the message names the two lines.
 #[test]
 #[verifies("rule_inconsistent_records_refusal_names_records", examples)]
-fn import_into_a_scope_with_a_proposal_id_on_two_lines_refuses_at_the_second_line() {
-    let fixture = ModernLifecycleFixture::new();
-    fixture.import_lifecycle().success();
-    let cards = fixture
-        .repo
-        .join(".provenance/state/scopes/default/ideation/proposal_cards.jsonl");
-    let text = std::fs::read_to_string(&cards).unwrap();
-    assert_eq!(text.lines().count(), 1, "{text}");
-    let stored = format!("{text}{text}");
-    std::fs::write(&cards, &stored).unwrap();
+fn check_and_export_name_the_two_lines_of_a_proposal_id() {
+    let (fixture, _, _) = ModernLifecycleFixture::with_a_proposal_id_on_two_lines();
+    let repo = fixture.repo.to_str().unwrap();
     let check = super::support::provenance()
-        .args(["check", "--repo", fixture.repo.to_str().unwrap()])
+        .args(["check", "--repo", repo])
         .output()
         .unwrap();
-    let import = fixture
-        .import_value("repair.json", &fixture.lifecycle)
-        .get_output()
-        .clone();
-    let answers = (
-        answer(&check),
-        answer(&import),
-        std::fs::read_to_string(&cards).unwrap(),
-    );
+    let output = fixture.root.join("export.json");
+    let export = super::support::provenance()
+        .args(["export", "--repo", repo, "--scope", "default", "--format", "json"])
+        .arg("--output")
+        .arg(&output)
+        .output()
+        .unwrap();
     let fault = "scopes/default/ideation/proposal_cards.jsonl line 2: \
         duplicate immutable proposal id proposal_a at line 1 and at line 2";
     let findings = format!("graph: findings\n  - {fault}\nstatements: passed\nbindings: passed\n");
     let checked = (Some(1), findings, format!("Error: {fault}\n"));
-    let imported = (Some(1), String::new(), format!("Error: {fault}\n"));
-    assert_eq!(answers, (checked, imported, stored));
+    let exported = (Some(1), String::new(), format!("Error: {fault}\n"));
+    assert_eq!(
+        (answer(&check), answer(&export), output.exists()),
+        (checked, exported, false)
+    );
+}
+
+/// An import of a valid export replaces a scope with `proposal_a` on two
+/// lines of `proposal_cards.jsonl`, and the id is on one line after it.
+///
+/// No Rule: the test pins an answer that this change keeps.
+#[test]
+fn an_import_replaces_a_scope_with_a_proposal_id_on_two_lines() {
+    let (fixture, cards, row) = ModernLifecycleFixture::with_a_proposal_id_on_two_lines();
+    let import = fixture
+        .import_value("repair.json", &fixture.lifecycle)
+        .get_output()
+        .clone();
+    let imported = (
+        Some(0),
+        "{\n  \"status\": \"ok\",\n  \"dry_run\": false,\n  \"records\": 6\n}\n".to_owned(),
+        String::new(),
+    );
+    assert_eq!(
+        (answer(&import), std::fs::read_to_string(&cards).unwrap()),
+        (imported, row)
+    );
 }

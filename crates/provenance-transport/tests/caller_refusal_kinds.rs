@@ -10,7 +10,7 @@ mod support {
 
 use provenance_macros::verifies;
 use serde_json::{json, Value};
-use support::ideation::{contribution, synthesis};
+use support::ideation::{contribution, evidence, synthesis};
 use support::records::{allow_reviewer, Repository};
 use support::resource_http::{call, host};
 
@@ -105,39 +105,6 @@ async fn a_topic_or_question_discussion_that_names_an_owner_is_an_invalid_update
     );
 }
 
-/// Evidence for an assertion of `proposal_decided`: a contribution with one
-/// claim and a synthesis packet that suggests the proposal.
-fn evidence() -> [(&'static str, Value); 2] {
-    let target = json!({"artifact_type":"requirement","artifact_id":"req_shared"});
-    [
-        (
-            "/contributions",
-            json!({"data":{
-                "id":"contribution_evidence", "target":target,
-                "participant_slot":"reviewer", "stance":"support", "strongest_finding":"Observed",
-                "evidence_references":[{"reference_id":"evidence_a","evidence_type":"source","summary":"Pinned"}],
-                "material_claims":[{"claim_id":"claim_a","statement":"Observed",
-                    "evidence_type":"source","evidence_reference_ids":["evidence_a"]}],
-                "risks":[], "objections":[], "challenges":[], "suggested_artifact_changes":[],
-                "unsupported_recommendations":[], "uncertainty":{"level":"low","rationale":"Direct"},
-                "open_questions":[]
-            }}),
-        ),
-        (
-            "/synthesis-packets",
-            json!({"data":{
-                "id":"synthesis_evidence", "target":target, "summary":"Adjudicated",
-                "consensus":[], "contested_claims":[], "minority_objections":[],
-                "evidence_gaps":[], "unsupported_speculation":[], "open_questions":[],
-                "suggested_artifacts":[{"proposal_id":"proposal_decided","proposal_key":"decided",
-                    "proposal_type":"requirement_candidate","summary":"Candidate",
-                    "origin_participant_slots":["reviewer"]}],
-                "required_human_decisions":[]
-            }}),
-        ),
-    ]
-}
-
 fn assertion(id: &str) -> Value {
     json!({"data":{"id":id, "synthesis_packet_id":"synthesis_evidence",
         "supporting_claim_ids":["claim_a"]}})
@@ -158,12 +125,12 @@ async fn a_second_assertion_or_disposition_has_a_declared_kind() {
     let repo = Repository::new("The shared graph is readable.");
     allow_reviewer(&repo);
     let host = host(&repo, true);
-    for (path, body) in evidence() {
+    for (path, body) in evidence("proposal_decided") {
         let (status, created) = call(&host, "POST", path, Some(body)).await;
         assert_eq!(status, 200, "{path}: {created}");
     }
     let proposal = serde_json::from_value(json!({
-        "scope_id":"default", "id":"proposal_decided", "proposal_key":"decided",
+        "scope_id":"default", "id":"proposal_decided", "proposal_key":"proposal_decided",
         "proposal_type":"requirement_candidate", "title":"Decided",
         "summary":"Clarify the shared requirement.",
         "traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_shared"},

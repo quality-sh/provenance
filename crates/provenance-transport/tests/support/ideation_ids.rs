@@ -2,6 +2,7 @@
 //! answers of the ideation writes and the reads over it.
 #![allow(dead_code)]
 
+use super::ideation::evidence;
 use super::records::{allow_reviewer, Repository};
 use super::resource_http::{call, host};
 use serde_json::{json, Value};
@@ -19,36 +20,15 @@ pub fn proposal(id: &str, claims: &[&str]) -> Value {
     }})
 }
 
-/// A contribution with the claim `claim_a` and a synthesis packet that
-/// suggests `proposal_a`, as a merge of a branch that adds them gives.
+/// The evidence of `proposal_a` in the contribution and synthesis files, as
+/// a merge of a branch that adds them gives. No route adds a packet that
+/// qualifies a proposal with no assertion.
 pub fn merge_evidence(repo: &Repository) {
-    let target: Value = serde_json::from_str(TARGET).unwrap();
-    let contribution = json!({
-        "scope_id":"default", "id":"contribution_evidence", "target":target,
-        "participant_slot":"reviewer", "stance":"support", "strongest_finding":"Observed",
-        "evidence_references":[{"reference_id":"evidence_a","evidence_type":"source","summary":"Pinned"}],
-        "material_claims":[{"claim_id":"claim_a","statement":"Observed",
-            "evidence_type":"source","evidence_reference_ids":["evidence_a"]}],
-        "risks":[], "objections":[], "challenges":[], "suggested_artifact_changes":[],
-        "unsupported_recommendations":[], "uncertainty":{"level":"low","rationale":"Direct"},
-        "open_questions":[]
-    });
-    let packet = json!({
-        "scope_id":"default", "id":"synthesis_evidence", "target":target,
-        "summary":"Adjudicated", "consensus":[], "contested_claims":[],
-        "minority_objections":[], "evidence_gaps":[], "unsupported_speculation":[],
-        "open_questions":[],
-        "suggested_artifacts":[{"proposal_id":"proposal_a","proposal_key":"proposal_a",
-            "proposal_type":"requirement_candidate","summary":"Candidate",
-            "origin_participant_slots":["reviewer"]}],
-        "required_human_decisions":[]
-    });
-    for (name, record) in [
-        ("contributions.jsonl", contribution),
-        ("synthesis_packets.jsonl", packet),
-    ] {
-        let path = state_path(repo, name);
-        std::fs::write(path, format!("{record}\n")).unwrap();
+    let names = ["contributions.jsonl", "synthesis_packets.jsonl"];
+    for ((_, body), name) in evidence("proposal_a").into_iter().zip(names) {
+        let mut record = body["data"].clone();
+        record["scope_id"] = json!("default");
+        std::fs::write(state_path(repo, name), format!("{record}\n")).unwrap();
     }
 }
 
@@ -61,8 +41,9 @@ pub fn state_path(repo: &Repository, name: &str) -> std::path::PathBuf {
 }
 
 /// A repository with one row in each of the proposal, assertion and
-/// disposition files, and the proposal `proposal_b` with no assertion.
-pub async fn ideation_repository() -> Repository {
+/// disposition files, and the proposal `proposal_b` with no assertion. The
+/// result also gives the answers of the reads over it.
+pub async fn ideation_repository() -> (Repository, Vec<Value>) {
     let repo = Repository::new("The shared graph is readable.");
     allow_reviewer(&repo);
     let writer = host(&repo, true);
@@ -91,12 +72,12 @@ pub async fn ideation_repository() -> Repository {
         let (status, created) = call(&writer, "POST", path, Some(body)).await;
         assert_eq!(status, 200, "{path}: {created}");
     }
-    for path in READS {
-        let (status, listed) = call(&writer, "GET", path, None).await;
-        assert_eq!(status, 200, "{path}: {listed}");
-        assert_eq!(listed["meta"]["freshness_error"], Value::Null, "{path}");
+    let reads = read_answers(&repo).await;
+    for read in &reads {
+        assert_eq!(read["status"], 200, "{read}");
+        assert_eq!(read["body"]["meta"]["freshness_error"], Value::Null, "{read}");
     }
-    repo
+    (repo, reads)
 }
 
 pub const READS: [&str; 4] = [
@@ -106,9 +87,26 @@ pub const READS: [&str; 4] = [
     "/dispositions",
 ];
 
-/// The status and the error object of each read and each ideation write.
-pub async fn answers(repo: &Repository) -> Vec<Value> {
-    let requests = [
+/// The answer of each request: the request, the status and the body.
+async fn answer_all(repo: &Repository, requests: Vec<(&str, &str, Option<Value>)>) -> Vec<Value> {
+    let writer = host(repo, true);
+    let mut answers = Vec::new();
+    for (method, path, body) in requests {
+        let (status, body) = call(&writer, method, path, body).await;
+        answers.push(json!({"request":format!("{method} {path}"), "status":status, "body":body}));
+    }
+    answers
+}
+
+pub const WRITES: [&str; 3] = [
+    "POST /proposals",
+    "POST /proposals/proposal_b/assertions",
+    "POST /proposals/proposal_b/dispositions",
+];
+
+/// The answers of the three ideation writes, in the order of [`WRITES`].
+pub async fn write_answers(repo: &Repository) -> Vec<Value> {
+    let requests = vec![
         ("POST", "/proposals", Some(proposal("proposal_c", &[]))),
         (
             "POST",
@@ -125,17 +123,40 @@ pub async fn answers(repo: &Repository) -> Vec<Value> {
                 "rationale":"Later", "actor":{"identity_type":"human","id":"reviewer"}}})),
         ),
     ];
-    let reads = READS.map(|path| ("GET", path, None));
-    let writer = host(repo, true);
-    let mut answers = Vec::new();
-    for (method, path, body) in requests.into_iter().chain(reads) {
-        let (status, answer) = call(&writer, method, path, body).await;
-        answers.push(
-            json!({"request":format!("{method} {path}"), "status":status,
-            "error":answer["error"], "freshness_error":answer["meta"]["freshness_error"]}),
-        );
-    }
+    answer_all(repo, requests).await
+}
+
+/// The answers of the reads, in the order of [`READS`].
+pub async fn read_answers(repo: &Repository) -> Vec<Value> {
+    answer_all(repo, READS.map(|path| ("GET", path, None)).to_vec()).await
+}
+
+/// The answers of the writes and then of the reads.
+pub async fn answers(repo: &Repository) -> Vec<Value> {
+    let mut answers = write_answers(repo).await;
+    answers.extend(read_answers(repo).await);
     answers
+}
+
+/// The answer of `request` when it refuses with the error object `error`.
+pub fn refused(request: &str, error: &Value) -> Value {
+    json!({"request":request, "status":500, "body":{"error":error, "meta":{}}})
+}
+
+/// The answers `healthy` of the reads, at the stored serial after a catch-up
+/// that fails with the text `fault`.
+pub fn at_stored(healthy: &[Value], fault: &str) -> Vec<Value> {
+    healthy
+        .iter()
+        .map(|answer| {
+            let mut answer = answer.clone();
+            let meta = &mut answer["body"]["meta"];
+            meta["stamp"]["policy"] = json!("catch_up_failed");
+            meta["freshness_cause"] = json!("catch_up_failed");
+            meta["freshness_error"] = json!(fault);
+            answer
+        })
+        .collect()
 }
 
 /// Adds the row with the id `id` of the file `name` again at the end of the
