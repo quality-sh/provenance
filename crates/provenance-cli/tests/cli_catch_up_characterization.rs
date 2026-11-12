@@ -87,7 +87,7 @@ fn named(label: &str, method: &str, path: &str) -> String {
 
 /// Waits for `future` for the time limit of `bounded_process`. Past the
 /// limit the test fails with `what`.
-async fn within<T>(what: &str, future: impl std::future::Future<Output = T>) -> T {
+async fn within<T>(what: &str, future: impl std::future::Future<Output = T> + Send) -> T {
     let limit = bounded_process::LIMIT;
     tokio::time::timeout(limit, future)
         .await
@@ -125,7 +125,7 @@ impl Mcp {
     }
 
     /// The calls of the step and the side that `label` names.
-    fn side(&self, label: String) -> McpSide<'_> {
+    const fn side(&self, label: String) -> McpSide<'_> {
         McpSide { mcp: self, label }
     }
 }
