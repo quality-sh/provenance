@@ -16,8 +16,8 @@ mod support {
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 use support::ideation_ids::{
-    at_stored, copy_row, ideation_repository, read_answers, refused, state_path, write_answers,
-    IDEATION, WRITES,
+    at_stored, copy_row, freshness_parts, ideation_repository, read_answers, refused, state_path,
+    write_answers, IDEATION, WRITES,
 };
 use support::resource_http::{call, call_with_headers, host};
 
@@ -149,12 +149,14 @@ async fn a_review_submission_over_a_proposal_id_on_two_lines_is_located() {
 }
 
 /// The reads of a Requirement and of the three ideation lists after a hand
-/// edit that puts the id `id` on two lines of the file `name`.
+/// edit that puts the id `id` on two lines of the file `name`: the parts
+/// that a failed catch-up sets, and the parts that the Rule expects.
 async fn reads_over_a_copied_row(name: &str, kind: &str, id: &str) -> (Vec<Value>, Vec<Value>) {
     let (repo, healthy) = ideation_repository().await;
     let lines = copy_row(&repo, name, id);
     let fault = freshness(&located(name, kind, id, lines));
-    (read_answers(&repo).await, at_stored(&healthy, &fault))
+    let expected = freshness_parts(&at_stored(&healthy, &fault));
+    (freshness_parts(&read_answers(&repo).await), expected)
 }
 
 #[tokio::test]
@@ -173,16 +175,11 @@ async fn a_read_over_an_assertion_id_on_two_lines_answers_at_the_stored_serial()
     assert_eq!(answers, expected);
 }
 
-/// The read of the Requirement builds its review decisions from the stored
-/// rows, so it gives the decision of `disposition_a` two times.
 #[tokio::test]
 #[verifies("rule_failed_freshness_answers_at_stored_serial", examples)]
 async fn a_read_over_a_disposition_id_on_two_lines_answers_at_the_stored_serial() {
-    let (answers, mut expected) =
+    let (answers, expected) =
         reads_over_a_copied_row("dispositions.jsonl", "disposition", "disposition_a").await;
-    let decisions = &mut expected[0]["body"]["data"]["decision"]["decisions"];
-    let decision = decisions[0].clone();
-    decisions.as_array_mut().unwrap().push(decision);
     assert_eq!(answers, expected);
 }
 
@@ -199,7 +196,10 @@ async fn a_read_over_ids_on_two_lines_in_two_files_names_the_proposal_file() {
         "proposal_a",
         lines,
     ));
-    assert_eq!(read_answers(&repo).await, at_stored(&healthy, &fault));
+    assert_eq!(
+        freshness_parts(&read_answers(&repo).await),
+        freshness_parts(&at_stored(&healthy, &fault))
+    );
 }
 
 #[tokio::test]

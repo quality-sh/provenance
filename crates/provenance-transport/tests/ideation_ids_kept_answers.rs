@@ -1,6 +1,9 @@
-//! A write that does not run the aggregate check of the ideation records
-//! succeeds over a proposal id on two lines: a withdrawal of a review
-//! submission and a typed-spec apply that opens no review submission.
+//! Answers over an id on two lines that this change keeps. A write that does
+//! not run the aggregate check of the ideation records succeeds over a
+//! proposal id on two lines: a withdrawal of a review submission and a
+//! typed-spec apply that opens no review submission. The read of a
+//! Requirement over a disposition id on two lines gives its decision two
+//! times.
 //!
 //! No Rule: the tests pin answers that this change keeps.
 #![cfg(feature = "test-fixture")]
@@ -13,7 +16,7 @@ mod support {
 }
 
 use serde_json::{json, Value};
-use support::ideation_ids::{copy_row, ideation_repository, state_path};
+use support::ideation_ids::{at_stored, copy_row, ideation_repository, read_answers, state_path};
 use support::resource_http::{call, call_with_headers, host};
 
 #[tokio::test]
@@ -65,4 +68,21 @@ async fn a_typed_apply_that_opens_no_submission_over_a_proposal_id_on_two_lines_
         "resources":[{"kind":"source", "key":"src", "address":["fx", "source", "src"],
             "id":source, "state":"created"}]}, "meta":{}});
     assert_eq!((status, answer), (200, expected));
+}
+
+/// No Rule: it pins an answer that this change keeps, and the decision two
+/// times is a fault of its own.
+#[tokio::test]
+async fn a_requirement_read_over_a_disposition_id_on_two_lines_gives_the_decision_two_times() {
+    let (repo, healthy) = ideation_repository().await;
+    let (first, second) = copy_row(&repo, "dispositions.jsonl", "disposition_a");
+    let fault = format!(
+        "scopes/default/ideation/dispositions.jsonl line {second}: duplicate immutable \
+        disposition id disposition_a at line {first} and at line {second}"
+    );
+    let mut expected = at_stored(&healthy[..1], &fault);
+    let decisions = &mut expected[0]["body"]["data"]["decision"]["decisions"];
+    let decision = decisions[0].clone();
+    decisions.as_array_mut().unwrap().push(decision);
+    assert_eq!(read_answers(&repo).await[..1], expected);
 }

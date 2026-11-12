@@ -162,6 +162,20 @@ pub fn at_stored(healthy: &[Value], fault: &str) -> Vec<Value> {
         .collect()
 }
 
+/// The parts of each read answer that a failed catch-up sets: the status,
+/// the serial and the policy word of the stamp, and the `freshness_error`.
+pub fn freshness_parts(answers: &[Value]) -> Vec<Value> {
+    answers
+        .iter()
+        .map(|answer| {
+            let meta = &answer["body"]["meta"];
+            json!({"request":answer["request"], "status":answer["status"],
+                "serial":meta["stamp"]["serial"], "policy":meta["stamp"]["policy"],
+                "freshness_error":meta["freshness_error"]})
+        })
+        .collect()
+}
+
 /// Adds the row with the id `id` of the file `name` again at the end of the
 /// file. The result is the line of the row and the line of its copy.
 pub fn copy_row(repo: &Repository, name: &str, id: &str) -> (usize, usize) {
