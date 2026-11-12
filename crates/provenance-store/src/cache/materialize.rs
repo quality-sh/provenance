@@ -28,7 +28,9 @@ pub use validation::stored_version as stored_validation_version;
 use super::MaterializeReport;
 use crate::current_schema::{self, Compatibility};
 use crate::publication;
-use crate::read_database::{ReadDatabase, SqlColumns, Transaction as Lent};
+#[cfg(feature = "host")]
+use crate::read_database::ReadDatabase;
+use crate::read_database::{SqlColumns, Transaction as Lent};
 #[cfg(feature = "host")]
 use crate::repository::Repository;
 use provenance_macros::rule;

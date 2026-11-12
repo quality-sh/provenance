@@ -6,6 +6,10 @@ mod gaps;
 #[cfg(feature = "host")]
 mod health;
 mod impact;
+// Without `host`, the catch-up and the rebuild build but have no entry
+// point: each entry takes the publication guard, whose wait for the
+// section lock runs on the blocking pool.
+#[cfg_attr(not(feature = "host"), allow(dead_code))]
 mod materialize;
 mod prime;
 mod projection_digest;
