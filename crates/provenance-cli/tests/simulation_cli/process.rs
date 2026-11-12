@@ -330,7 +330,6 @@ fn done(task: &Task, result: Result<Effect, String>, stopped: bool) -> Done {
         engine: task.engine,
         operation: task.operation,
         op: task.op.clone(),
-        target: task.target(),
         result,
         kind,
         stopped,

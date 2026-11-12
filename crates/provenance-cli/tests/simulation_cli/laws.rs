@@ -52,21 +52,21 @@ pub fn check(case: &Case, run: &CliRun) -> Result<(), Violation> {
 type Expected = BTreeMap<Target, Option<Vec<Effect>>>;
 
 /// L3: each record holds a value of the last group that changed it. A write
-/// merged from a branch adds a value. A stopped write can leave any value.
+/// merged from a branch adds a value. A stopped write can leave any value on
+/// each record that it writes.
 fn successful_writes_stay(run: &CliRun) -> Result<(), Violation> {
     let mut expected = Expected::new();
     for (way, done) in &run.groups {
         let mut changed = Expected::new();
         for done in done {
-            let Some(target) = done.target.clone() else {
-                continue;
-            };
-            if done.stopped {
-                changed.insert(target, None);
-            } else if let Ok(effect) = &done.result {
-                let values = changed.entry(target).or_insert_with(|| Some(Vec::new()));
-                if let Some(values) = values {
-                    values.push(effect.clone());
+            for (target, value) in done.op.writes(done.result.as_ref().ok()) {
+                if done.stopped {
+                    changed.insert(target, None);
+                } else if let Some(value) = value {
+                    let values = changed.entry(target).or_insert_with(|| Some(Vec::new()));
+                    if let Some(values) = values {
+                        values.push(value);
+                    }
                 }
             }
         }
