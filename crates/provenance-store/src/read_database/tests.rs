@@ -14,7 +14,7 @@ fn fault<T: std::fmt::Debug>(result: anyhow::Result<T>) -> String {
 
 #[test]
 fn a_column_of_another_class_names_the_class_and_not_the_value() {
-    let mut row = vec![
+    let mut row = [
         SqlValue::Null,
         SqlValue::Integer(5),
         SqlValue::Real(0.5),
@@ -50,7 +50,7 @@ fn a_column_of_another_class_names_the_class_and_not_the_value() {
 
 #[test]
 fn a_taken_text_moves_out_of_the_row() {
-    let mut row = vec![SqlValue::from("first"), SqlValue::Null];
+    let mut row = [SqlValue::from("first"), SqlValue::Null];
     assert_eq!(row.take_optional_text(1).unwrap(), None);
     assert_eq!(row.take_optional_text(0).unwrap().as_deref(), Some("first"));
     assert_eq!(row.text(0).unwrap(), "");
