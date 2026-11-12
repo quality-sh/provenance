@@ -17,7 +17,7 @@ const COUNT_TO: &str = "WITH RECURSIVE count_to (n) AS (SELECT 1 UNION ALL \
 
 /// The smallest count that the bound of one page stops, found by the
 /// recorded run before the bound went through the port.
-const FIRST_STOPPED_COUNT: i64 = 0;
+const FIRST_STOPPED_COUNT: i64 = 588_280;
 
 /// Whether the bound of one page stops the count to `n`. Any other error
 /// fails the test; the refusal is the page budget refusal.

@@ -211,6 +211,7 @@ pub(crate) fn statement_error(error: sqlx::Error) -> anyhow::Error {
 /// is private to the crate; a transaction of another adapter has none.
 pub(crate) trait FileSqlx {
     fn sqlx(&mut self) -> Option<&mut sqlx::Transaction<'static, Sqlite>>;
+    fn sqlx_ref(&self) -> Option<&sqlx::Transaction<'static, Sqlite>>;
 }
 
 impl FileSqlx for dyn SqlTransaction {
@@ -218,6 +219,12 @@ impl FileSqlx for dyn SqlTransaction {
         let any: &mut dyn Any = self;
         any.downcast_mut::<FileTransaction>()
             .map(|transaction| &mut transaction.0)
+    }
+
+    fn sqlx_ref(&self) -> Option<&sqlx::Transaction<'static, Sqlite>> {
+        let any: &dyn Any = self;
+        any.downcast_ref::<FileTransaction>()
+            .map(|transaction| &transaction.0)
     }
 }
 

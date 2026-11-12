@@ -15,8 +15,9 @@ use provenance_macros::rule;
 use sqlx::Sqlite;
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
+use std::ops::{Deref, DerefMut};
 use std::sync::{Mutex, PoisonError};
-use tokio::sync::{MappedMutexGuard, MutexGuard};
+use tokio::sync::MutexGuard;
 
 /// One read transaction at one revision.
 ///
@@ -121,8 +122,11 @@ impl ReadSnapshot {
     /// statement of a reader that still runs `SQLx` directly. A read of
     /// another adapter refuses here with a fault.
     pub(crate) async fn connection(&self) -> anyhow::Result<FileConnection<'_>> {
-        MutexGuard::try_map(self.tx.lock().await, |tx| tx.sqlx())
-            .map_err(|_| crate::refusal::fault!("{NOT_A_FILE}"))
+        let mut tx = self.tx.lock().await;
+        if tx.sqlx().is_none() {
+            return Err(crate::refusal::fault!("{NOT_A_FILE}"));
+        }
+        Ok(FileConnection(tx))
     }
 
     async fn count_rows(&self, table: &str) -> anyhow::Result<i64> {
@@ -147,8 +151,23 @@ impl ReadSnapshot {
 }
 
 /// The transaction of a snapshot as the `SQLx` transaction of the file
-/// adapter. Only the readers that run `SQLx` take it.
-pub type FileConnection<'s> = MappedMutexGuard<'s, sqlx::Transaction<'static, Sqlite>>;
+/// adapter. Only the readers that run `SQLx` take it, and
+/// [`ReadSnapshot::connection`] makes one only over the file adapter.
+pub struct FileConnection<'s>(MutexGuard<'s, Transaction>);
+
+impl Deref for FileConnection<'_> {
+    type Target = sqlx::Transaction<'static, Sqlite>;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.sqlx_ref().expect(NOT_A_FILE)
+    }
+}
+
+impl DerefMut for FileConnection<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.0.sqlx().expect(NOT_A_FILE)
+    }
+}
 
 /// The fault of a read of another adapter that reaches a reader that runs
 /// `SQLx`. It ends when the discussion reads run on the port.
