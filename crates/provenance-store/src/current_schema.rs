@@ -1,8 +1,7 @@
 //! The one SQLite schema for the disposable cache.
 
+use crate::read_database::{SqlColumns, SqlValue, Transaction};
 use sha2::{Digest, Sha256};
-use sqlx::sqlite::SqlitePoolOptions;
-use sqlx::{Executor, Sqlite, SqliteConnection, Transaction};
 
 const DDL: &str = include_str!("../current_cache.sql");
 
@@ -12,28 +11,35 @@ pub enum Compatibility {
     RebuildRequired,
 }
 
-pub async fn compatibility(connection: &mut SqliteConnection) -> anyhow::Result<Compatibility> {
-    let table: Option<String> = sqlx::query_scalar(
-        "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = '_cache_metadata'",
-    )
-    .fetch_optional(&mut *connection)
-    .await?;
-    if table.is_none() {
+/// Whether the schema of the database in `transaction` is the current
+/// schema: its metadata row names the current digest and its catalog is
+/// the current catalog.
+pub async fn compatibility(transaction: &mut Transaction) -> anyhow::Result<Compatibility> {
+    let table = transaction
+        .fetch(
+            "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = '_cache_metadata'",
+            Vec::new(),
+        )
+        .await?;
+    if table.is_empty() {
         return Ok(Compatibility::RebuildRequired);
     }
-    let stored: Option<String> =
-        match sqlx::query_scalar("SELECT schema_digest FROM _cache_metadata WHERE only_row = 1")
-            .fetch_optional(&mut *connection)
-            .await
-        {
-            Ok(stored) => stored,
-            Err(sqlx::Error::Database(error)) if error.message().contains("no such column") => {
-                return Ok(Compatibility::RebuildRequired);
-            }
-            Err(error) => return Err(error.into()),
-        };
-    let expected = expected_catalog().await?;
-    let live = catalog(connection).await?;
+    let stored = match transaction
+        .fetch(
+            "SELECT schema_digest FROM _cache_metadata WHERE only_row = 1",
+            Vec::new(),
+        )
+        .await
+    {
+        Ok(rows) => match rows.first() {
+            Some(row) => row.optional_text(0)?.map(str::to_owned),
+            None => None,
+        },
+        Err(error) if is_missing_column(&error) => return Ok(Compatibility::RebuildRequired),
+        Err(error) => return Err(error),
+    };
+    let expected = expected_catalog();
+    let live = catalog(transaction).await?;
     Ok(
         if stored.as_deref() == Some(expected.digest().as_str()) && &live == expected {
             Compatibility::Current
@@ -43,34 +49,45 @@ pub async fn compatibility(connection: &mut SqliteConnection) -> anyhow::Result<
     )
 }
 
+fn is_missing_column(error: &anyhow::Error) -> bool {
+    error
+        .chain()
+        .any(|cause| cause.to_string().contains("no such column"))
+}
+
 /// Removes all cache tables and installs the current empty schema.
 /// The caller records the digest only after it loads all rows and stamps.
-pub async fn replace(tx: &mut Transaction<'_, Sqlite>) -> anyhow::Result<()> {
-    let tables: Vec<String> = sqlx::query_scalar(
-        "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
-    )
-    .fetch_all(&mut **tx)
-    .await?;
-    for table in tables {
-        tx.execute(sqlx::AssertSqlSafe(format!(
-            "DROP TABLE {}",
-            quoted(&table)
-        )))
+pub async fn replace(transaction: &mut Transaction) -> anyhow::Result<()> {
+    let tables = transaction
+        .fetch(
+            "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+            Vec::new(),
+        )
         .await?;
+    for table in tables {
+        let sql = format!("DROP TABLE {}", quoted(table.text(0)?));
+        transaction.execute(&sql, Vec::new()).await?;
     }
-    for statement in DDL.split(';').map(str::trim).filter(|sql| !sql.is_empty()) {
-        tx.execute(statement).await?;
+    for statement in statements() {
+        transaction.execute(statement, Vec::new()).await?;
     }
     Ok(())
 }
 
-pub async fn mark_current(tx: &mut Transaction<'_, Sqlite>) -> anyhow::Result<()> {
-    let digest = expected_catalog().await?.digest();
-    sqlx::query("INSERT INTO _cache_metadata (only_row, schema_digest) VALUES (1, ?)")
-        .bind(digest)
-        .execute(&mut **tx)
+pub async fn mark_current(transaction: &mut Transaction) -> anyhow::Result<()> {
+    let digest = expected_catalog().digest();
+    transaction
+        .execute(
+            "INSERT INTO _cache_metadata (only_row, schema_digest) VALUES (1, ?)",
+            vec![SqlValue::from(digest)],
+        )
         .await?;
     Ok(())
+}
+
+/// The statements of the schema, in order.
+fn statements() -> impl Iterator<Item = &'static str> {
+    DDL.split(';').map(str::trim).filter(|sql| !sql.is_empty())
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -97,44 +114,64 @@ struct SchemaObject {
     sql: String,
 }
 
-async fn expected_catalog() -> anyhow::Result<&'static SchemaCatalog> {
-    static EXPECTED: tokio::sync::OnceCell<SchemaCatalog> = tokio::sync::OnceCell::const_new();
-    EXPECTED.get_or_try_init(build_expected_catalog).await
+/// The catalog that the schema gives. `SQLite` keeps the text of each
+/// `CREATE` statement from its first keyword, so the catalog comes from
+/// the schema text itself.
+fn expected_catalog() -> &'static SchemaCatalog {
+    static EXPECTED: std::sync::OnceLock<SchemaCatalog> = std::sync::OnceLock::new();
+    EXPECTED.get_or_init(|| {
+        let mut objects: Vec<SchemaObject> = statements().filter_map(schema_object).collect();
+        objects.retain(|object| object.name != "_cache_metadata");
+        objects.sort_by(|left, right| {
+            (&left.kind, &left.name, &left.table).cmp(&(&right.kind, &right.name, &right.table))
+        });
+        SchemaCatalog(objects)
+    })
 }
 
-async fn build_expected_catalog() -> anyhow::Result<SchemaCatalog> {
-    let pool = SqlitePoolOptions::new()
-        .max_connections(1)
-        .connect("sqlite::memory:")
+/// The catalog row of one `CREATE TABLE` or `CREATE [UNIQUE] INDEX`
+/// statement of the schema.
+fn schema_object(statement: &str) -> Option<SchemaObject> {
+    let create = statement.find("CREATE ")?;
+    let sql = &statement[create..];
+    let words: Vec<&str> = sql
+        .split(|c: char| c.is_whitespace() || c == '(')
+        .filter(|word| !word.is_empty())
+        .collect();
+    let (kind, name, table) = match words.as_slice() {
+        ["CREATE", "TABLE", name, ..] => ("table", *name, *name),
+        ["CREATE", "INDEX", name, "ON", table, ..]
+        | ["CREATE", "UNIQUE", "INDEX", name, "ON", table, ..] => ("index", *name, *table),
+        _ => return None,
+    };
+    Some(SchemaObject {
+        kind: kind.to_owned(),
+        name: name.to_owned(),
+        table: table.to_owned(),
+        sql: normalize_sql(sql),
+    })
+}
+
+async fn catalog(transaction: &mut Transaction) -> anyhow::Result<SchemaCatalog> {
+    let rows = transaction
+        .fetch(
+            "SELECT type, name, tbl_name, sql FROM sqlite_schema \
+             WHERE name NOT LIKE 'sqlite_%' AND name <> '_cache_metadata' \
+             ORDER BY type, name, tbl_name",
+            Vec::new(),
+        )
         .await?;
-    for statement in DDL.split(';').map(str::trim).filter(|sql| !sql.is_empty()) {
-        pool.execute(statement).await?;
-    }
-    let mut connection = pool.acquire().await?;
-    let expected = catalog(&mut connection).await;
-    drop(connection);
-    pool.close().await;
-    expected
-}
-
-async fn catalog(connection: &mut SqliteConnection) -> anyhow::Result<SchemaCatalog> {
-    let rows: Vec<(String, String, String, Option<String>)> = sqlx::query_as(
-        "SELECT type, name, tbl_name, sql FROM sqlite_schema \
-         WHERE name NOT LIKE 'sqlite_%' AND name <> '_cache_metadata' \
-         ORDER BY type, name, tbl_name",
-    )
-    .fetch_all(connection)
-    .await?;
-    Ok(SchemaCatalog(
-        rows.into_iter()
-            .map(|(kind, name, table, sql)| SchemaObject {
-                kind,
-                name,
-                table,
-                sql: normalize_sql(sql.as_deref().unwrap_or_default()),
+    rows.iter()
+        .map(|row| {
+            Ok(SchemaObject {
+                kind: row.text(0)?.to_owned(),
+                name: row.text(1)?.to_owned(),
+                table: row.text(2)?.to_owned(),
+                sql: normalize_sql(row.optional_text(3)?.unwrap_or_default()),
             })
-            .collect(),
-    ))
+        })
+        .collect::<anyhow::Result<_>>()
+        .map(SchemaCatalog)
 }
 
 fn normalize_sql(sql: &str) -> String {
@@ -192,14 +229,52 @@ fn quoted(identifier: &str) -> String {
 }
 
 #[cfg(test)]
+#[cfg(feature = "host")]
 mod tests {
     use super::*;
+    use sqlx::sqlite::SqlitePoolOptions;
+    use sqlx::Executor;
 
-    #[tokio::test]
-    async fn schema_digest_is_stable_sha256_catalog() {
-        let digest = expected_catalog().await.unwrap().digest();
+    #[test]
+    fn schema_digest_is_stable_sha256_catalog() {
+        let digest = expected_catalog().digest();
         assert_eq!(digest.len(), "sha256:".len() + 64);
         assert!(digest.starts_with("sha256:"));
+    }
+
+    /// The catalog from the schema text is the catalog that `SQLite` keeps
+    /// after it runs the schema.
+    #[tokio::test]
+    async fn the_catalog_of_the_schema_text_is_the_catalog_sqlite_keeps() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        for statement in statements() {
+            pool.execute(statement).await.unwrap();
+        }
+        let rows: Vec<(String, String, String, Option<String>)> = sqlx::query_as(
+            "SELECT type, name, tbl_name, sql FROM sqlite_schema \
+             WHERE name NOT LIKE 'sqlite_%' AND name <> '_cache_metadata' \
+             ORDER BY type, name, tbl_name",
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        let kept = SchemaCatalog(
+            rows.into_iter()
+                .map(|(kind, name, table, sql)| SchemaObject {
+                    kind,
+                    name,
+                    table,
+                    sql: normalize_sql(sql.as_deref().unwrap_or_default()),
+                })
+                .collect(),
+        );
+        assert_eq!(&kept, expected_catalog());
+        assert_eq!(expected_catalog().0.len(), 50);
+        pool.close().await;
     }
 
     #[test]

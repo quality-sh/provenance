@@ -7,17 +7,15 @@
 
 use crate::cache::quoted;
 use crate::operations::stamp::{stored_revision, StoredRevision};
-use crate::read_database::file::FileSqlx as _;
+pub(crate) use crate::read_database::one_row;
 use crate::read_database::{SqlColumns, SqlValue, Transaction};
+use futures_util::lock::MutexGuard;
 use provenance_core::model::ProjectionRow;
 use provenance_core::ScopeId;
 use provenance_macros::rule;
-use sqlx::Sqlite;
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
 use std::sync::{Mutex, PoisonError};
-use tokio::sync::MutexGuard;
 
 /// One read transaction at one revision.
 ///
@@ -26,7 +24,7 @@ use tokio::sync::MutexGuard;
 /// every table the read opened.
 #[rule("rule_stamp_attests_every_table_read")]
 pub struct ReadSnapshot {
-    tx: tokio::sync::Mutex<Transaction>,
+    tx: futures_util::lock::Mutex<Transaction>,
     /// The most values of one list that a statement of the read binds.
     list_values: usize,
     scope: ScopeId,
@@ -53,7 +51,7 @@ impl ReadSnapshot {
         };
         Ok(Some(Self {
             list_values,
-            tx: tokio::sync::Mutex::new(tx),
+            tx: futures_util::lock::Mutex::new(tx),
             scope: scope.clone(),
             revision,
             attested: Mutex::new(BTreeSet::new()),
@@ -125,17 +123,6 @@ impl ReadSnapshot {
         SqlValue::from(self.scope.as_str())
     }
 
-    /// The `SQLx` transaction of the file adapter, for the span of one
-    /// statement of a reader that still runs `SQLx` directly. A read of
-    /// another adapter refuses here with a fault.
-    pub(crate) async fn connection(&self) -> anyhow::Result<FileConnection<'_>> {
-        let mut tx = self.tx.lock().await;
-        if tx.sqlx().is_none() {
-            return Err(crate::refusal::fault!("{NOT_A_FILE}"));
-        }
-        Ok(FileConnection(tx))
-    }
-
     async fn count_rows(&self, table: &str) -> anyhow::Result<i64> {
         let sql = format!("SELECT COUNT(*) FROM {} WHERE scope_id = ?", quoted(table));
         let rows = self
@@ -156,30 +143,6 @@ impl ReadSnapshot {
         (self.revision, attested)
     }
 }
-
-/// The transaction of a snapshot as the `SQLx` transaction of the file
-/// adapter. Only the readers that run `SQLx` take it, and
-/// [`ReadSnapshot::connection`] makes one only over the file adapter.
-pub struct FileConnection<'s>(MutexGuard<'s, Transaction>);
-
-impl Deref for FileConnection<'_> {
-    type Target = sqlx::Transaction<'static, Sqlite>;
-
-    fn deref(&self) -> &Self::Target {
-        self.0.sqlx_ref().expect(NOT_A_FILE)
-    }
-}
-
-impl DerefMut for FileConnection<'_> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.0.sqlx().expect(NOT_A_FILE)
-    }
-}
-
-/// The fault of a read of another adapter that reaches a reader that runs
-/// `SQLx`. It ends when the discussion reads run on the port.
-const NOT_A_FILE: &str =
-    "the discussion reads read only the read database file under .provenance/cache";
 
 /// One record table at the snapshot's revision, typed by the record it
 /// holds. The marker is a function type, so the handle is `Send` and
@@ -255,13 +218,4 @@ impl RecordIdentities<'_> {
             })
             .collect()
     }
-}
-
-/// The one row of a statement that gives exactly one, as an aggregate does.
-pub fn one_row(rows: &[crate::read_database::SqlRow]) -> anyhow::Result<&[SqlValue]> {
-    rows.first().map(Vec::as_slice).ok_or_else(|| {
-        crate::refusal::fault!(
-            "no rows returned by a query that expected to return at least one row"
-        )
-    })
 }

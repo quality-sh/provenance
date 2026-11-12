@@ -17,25 +17,14 @@ pub use catch_up::{catch_up_state, CatchUpReport};
 pub use record_rows::SEARCH_TEXT;
 pub use units::unit_stored_digest;
 pub use units::{scope_ids, unit_digest, units_for, Unit, UnitHashError};
+pub(crate) use validation::stored_version as stored_validation_version;
 
 use super::MaterializeReport;
 use crate::current_schema::{self, Compatibility};
 use crate::publication;
-use crate::read_database::file::FileSqlx as _;
-use crate::read_database::{ReadDatabase, Transaction as Lent};
+use crate::read_database::{ReadDatabase, SqlColumns, Transaction as Lent};
 use crate::repository::Repository;
 use provenance_macros::rule;
-use sqlx::{Sqlite, Transaction};
-
-/// The `SQLx` transaction of the file adapter, which the projection writes
-/// through.
-pub(super) fn file_transaction(
-    transaction: &mut Lent,
-) -> anyhow::Result<&mut Transaction<'static, Sqlite>> {
-    transaction
-        .sqlx()
-        .ok_or_else(|| crate::refusal::fault!("the projection writes the file adapter"))
-}
 
 pub async fn materialize_empty_state(repository: &Repository) -> anyhow::Result<MaterializeReport> {
     let guard = publication::publication_guard(repository).await?;
@@ -62,7 +51,7 @@ pub async fn materialize_empty_state(repository: &Repository) -> anyhow::Result<
 
 async fn initialize_empty(mut transaction: Lent) -> anyhow::Result<bool> {
     crate::test_probes::at("prepare_current_schema_under_guard")?;
-    let tx = file_transaction(&mut transaction)?;
+    let tx = &mut transaction;
     let recreate = current_schema::compatibility(tx).await? == Compatibility::RebuildRequired;
     if !recreate {
         return Ok(false);
@@ -91,13 +80,14 @@ pub(super) async fn materialize_with_guard(
     let mut reader = validation::UnitReader::new(guard);
     let (manifest, global_digests) = reader.global(None)?;
     let mut report = None;
+    let bound_values = database.max_bound_values();
     let (slot, reader) = (&mut report, &reader);
     database
         .write(Box::new(move |transaction| {
             Box::pin(async move {
                 crate::test_probes::at("prepare_current_schema_under_guard")?;
-                let (rebuilt, _) =
-                    rebuild_rows(transaction, reader, manifest, global_digests).await?;
+                let digests = (manifest, global_digests);
+                let (rebuilt, _) = rebuild_rows(transaction, reader, digests, bound_values).await?;
                 *slot = Some(rebuilt);
                 Ok(())
             })
@@ -107,14 +97,16 @@ pub(super) async fn materialize_with_guard(
 }
 
 /// Rebuilds in the caller's write transaction and commits it. Gives the
-/// report and the committed revision.
+/// report and the committed revision. A statement binds at most
+/// `bound_values` values.
 pub(super) async fn rebuild_with_guard(
     guard: &publication::PublicationGuard,
     transaction: Lent,
+    bound_values: usize,
 ) -> anyhow::Result<(MaterializeReport, (i64, String))> {
     let mut reader = validation::UnitReader::new(guard);
-    let (manifest, global_digests) = reader.global(None)?;
-    rebuild_rows(transaction, &reader, manifest, global_digests).await
+    let digests = reader.global(None)?;
+    rebuild_rows(transaction, &reader, digests, bound_values).await
 }
 
 /// Hashes, validates, reloads, and commits one full rebuild in the
@@ -124,10 +116,10 @@ pub(super) async fn rebuild_with_guard(
 async fn rebuild_rows(
     mut transaction: Lent,
     reader: &validation::UnitReader<'_>,
-    manifest: provenance_core::Manifest,
-    global_digests: units::UnitDigests,
+    (manifest, global_digests): (provenance_core::Manifest, units::UnitDigests),
+    bound_values: usize,
 ) -> anyhow::Result<(MaterializeReport, (i64, String))> {
-    let tx = file_transaction(&mut transaction)?;
+    let tx = &mut transaction;
     let cache_recreated =
         current_schema::compatibility(tx).await? == Compatibility::RebuildRequired;
     if cache_recreated {
@@ -135,10 +127,13 @@ async fn rebuild_rows(
     } else {
         clear_cache(tx).await?;
     }
-    let stored_serial: i64 =
-        sqlx::query_scalar("SELECT COALESCE(MAX(serial), 0) FROM projection_revision")
-            .fetch_one(&mut **tx)
-            .await?;
+    let stored_serial = one_integer(
+        &tx.fetch(
+            "SELECT COALESCE(MAX(serial), 0) FROM projection_revision",
+            Vec::new(),
+        )
+        .await?,
+    )?;
 
     stamp::upsert_unit_row(tx, "global", &global_digests).await?;
     let mut records_loaded = 0;
@@ -159,7 +154,8 @@ async fn rebuild_rows(
         )?;
         let records = reader.scope(scope, &read, true)?;
         for records in &records.families {
-            records_loaded += family_rows::load_rows(tx, records.family, &records.bytes).await?;
+            records_loaded +=
+                family_rows::load_rows(tx, records.family, &records.bytes, bound_values).await?;
             stamp::upsert_content_row(
                 tx,
                 scope.as_str(),
@@ -170,7 +166,7 @@ async fn rebuild_rows(
             )
             .await?;
         }
-        relation_rows::load_rows(tx, &records.relations, scope).await?;
+        relation_rows::load_rows(tx, &records.relations, scope, bound_values).await?;
         stamp::upsert_unit_row(tx, &unit.name(), &read.digests).await?;
         stamp::replace_file_rows(tx, &unit.name(), &read.files).await?;
     }
@@ -179,11 +175,14 @@ async fn rebuild_rows(
         current_schema::mark_current(tx).await?;
     }
     crate::test_probes::at("materialize_before_commit")?;
-    let revision: (i64, String) = sqlx::query_as(
-        "SELECT serial, digest FROM projection_revision ORDER BY serial DESC LIMIT 1",
-    )
-    .fetch_one(&mut **tx)
-    .await?;
+    let rows = tx
+        .fetch(
+            "SELECT serial, digest FROM projection_revision ORDER BY serial DESC LIMIT 1",
+            Vec::new(),
+        )
+        .await?;
+    let row = crate::read_database::one_row(&rows)?;
+    let revision = (row.integer(0)?, row.text(1)?.to_owned());
     transaction.commit().await?;
     crate::test_probes::at("materialize_after_commit")?;
 
@@ -196,7 +195,11 @@ async fn rebuild_rows(
     ))
 }
 
-async fn clear_cache(tx: &mut Transaction<'_, Sqlite>) -> anyhow::Result<()> {
+fn one_integer(rows: &[crate::read_database::SqlRow]) -> anyhow::Result<i64> {
+    crate::read_database::one_row(rows)?.integer(0)
+}
+
+async fn clear_cache(tx: &mut Lent) -> anyhow::Result<()> {
     for table in [
         "relations",
         "record_identities",
@@ -204,17 +207,12 @@ async fn clear_cache(tx: &mut Transaction<'_, Sqlite>) -> anyhow::Result<()> {
         "projection_unit_digests",
         "projection_file_digests",
     ] {
-        sqlx::query(sqlx::AssertSqlSafe(format!("DELETE FROM {table}")))
-            .execute(&mut **tx)
+        tx.execute(&format!("DELETE FROM {table}"), Vec::new())
             .await?;
     }
     for family in super::ProjectionFamily::ALL {
-        sqlx::query(sqlx::AssertSqlSafe(format!(
-            "DELETE FROM {}",
-            family.family_name()
-        )))
-        .execute(&mut **tx)
-        .await?;
+        tx.execute(&format!("DELETE FROM {}", family.family_name()), Vec::new())
+            .await?;
     }
     Ok(())
 }

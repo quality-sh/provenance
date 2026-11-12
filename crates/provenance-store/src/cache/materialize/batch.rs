@@ -3,18 +3,14 @@
 //! A loader adds its rows in the order it used to insert them one by one.
 //! [`Rows::write`] sends them as multi-row statements, one table at a time.
 //! The rows of one table keep their order, so each table gets the same row
-//! ids as before. When a statement fails, [`Rows::write`] rolls the batch
-//! back to its savepoint. It then inserts the rows one by one in the order
-//! the loader added them. So the first failing row and its error are the
-//! same as with single-row inserts.
+//! ids as before. The statements run as one attempt of the transaction:
+//! when one fails, none of them is kept, and [`Rows::write`] inserts the
+//! rows one by one in the order the loader added them. So the first
+//! failing row and its error are the same as with single-row inserts.
 
+use crate::read_database::{SqlValue, Statement, Transaction};
 use provenance_core::model::ColumnValue;
-use sqlx::sqlite::SqliteArguments;
-use sqlx::{query::Query, Sqlite, Transaction};
 use std::sync::Arc;
-
-/// The most values that one statement binds.
-const VALUES_PER_STATEMENT: usize = 999;
 
 /// One table that a loader writes. The names come from the projection
 /// schema, never from input.
@@ -88,34 +84,30 @@ impl Rows {
     }
 
     /// Writes every row, then reports the number of records or the error
-    /// that stopped the loader. See the module comment for the order on
-    /// failure.
-    pub(super) async fn write(self, tx: &mut Transaction<'_, Sqlite>) -> anyhow::Result<u64> {
-        if !self.entries.is_empty() {
-            execute(tx, "SAVEPOINT projection_rows").await?;
-            if self.batched(tx).await.is_ok() {
-                execute(tx, "RELEASE projection_rows").await?;
-            } else {
-                execute(tx, "ROLLBACK TO projection_rows").await?;
-                execute(tx, "RELEASE projection_rows").await?;
-                self.one_by_one(tx).await?;
-            }
+    /// that stopped the loader. A statement binds at most `bound_values`
+    /// values. See the module comment for the order on failure.
+    pub(super) async fn write(
+        self,
+        tx: &mut Transaction,
+        bound_values: usize,
+    ) -> anyhow::Result<u64> {
+        if !self.entries.is_empty() && tx.attempt(&self.batched(bound_values)).await?.is_err() {
+            self.one_by_one(tx).await?;
         }
         self.failure.map_or(Ok(self.loaded), Err)
     }
 
-    async fn one_by_one(&self, tx: &mut Transaction<'_, Sqlite>) -> anyhow::Result<()> {
+    async fn one_by_one(&self, tx: &mut Transaction) -> anyhow::Result<()> {
         for (table, row) in &self.entries {
-            let mut query = sqlx::query(sqlx::AssertSqlSafe(self.tables[*table].statement(1)));
-            for value in row {
-                query = bind(query, value);
-            }
-            query.execute(&mut **tx).await?;
+            let sql = self.tables[*table].statement(1);
+            tx.execute(&sql, row.iter().map(value).collect()).await?;
         }
         Ok(())
     }
 
-    async fn batched(&self, tx: &mut Transaction<'_, Sqlite>) -> anyhow::Result<()> {
+    /// The multi-row statements of the rows, one table at a time.
+    fn batched(&self, bound_values: usize) -> Vec<Statement> {
+        let mut statements = Vec::new();
         for (index, table) in self.tables.iter().enumerate() {
             let rows: Vec<&Vec<ColumnValue>> = self
                 .entries
@@ -123,7 +115,7 @@ impl Rows {
                 .filter(|(of, _)| *of == index)
                 .map(|(_, row)| row)
                 .collect();
-            let per_statement = (VALUES_PER_STATEMENT / table.columns.len().max(1)).max(1);
+            let per_statement = (bound_values / table.columns.len().max(1)).max(1);
             let full = table.statement(per_statement);
             for chunk in rows.chunks(per_statement) {
                 let sql = if chunk.len() == per_statement {
@@ -131,31 +123,23 @@ impl Rows {
                 } else {
                     table.statement(chunk.len())
                 };
-                let mut query = sqlx::query(sqlx::AssertSqlSafe(sql));
-                for value in chunk.iter().flat_map(|row| row.iter()) {
-                    query = bind(query, value);
-                }
-                query.execute(&mut **tx).await?;
+                statements.push(Statement {
+                    sql: sql.to_string(),
+                    values: chunk.iter().flat_map(|row| row.iter()).map(value).collect(),
+                });
             }
         }
-        Ok(())
+        statements
     }
 }
 
-async fn execute(tx: &mut Transaction<'_, Sqlite>, sql: &'static str) -> anyhow::Result<()> {
-    sqlx::query(sql).execute(&mut **tx).await?;
-    Ok(())
-}
-
-pub(super) fn bind<'q>(
-    query: Query<'q, Sqlite, SqliteArguments>,
-    value: &ColumnValue,
-) -> Query<'q, Sqlite, SqliteArguments> {
-    match value {
-        ColumnValue::Null => query.bind(None::<String>),
-        ColumnValue::Integer(integer) => query.bind(*integer),
-        ColumnValue::Real(real) => query.bind(*real),
-        ColumnValue::Text(text) => query.bind(text.clone()),
+/// The value that a statement binds for one column value.
+pub(super) fn value(column: &ColumnValue) -> SqlValue {
+    match column {
+        ColumnValue::Null => SqlValue::Null,
+        ColumnValue::Integer(integer) => SqlValue::Integer(*integer),
+        ColumnValue::Real(real) => SqlValue::Real(*real),
+        ColumnValue::Text(text) => SqlValue::Text(text.clone()),
     }
 }
 

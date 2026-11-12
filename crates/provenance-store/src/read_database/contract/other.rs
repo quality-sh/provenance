@@ -61,7 +61,7 @@ impl<D: ReadDatabase> ReadDatabase for Other<D> {
         &'a self,
         write: WriteWork<'a>,
         read: ReadWork<'a>,
-    ) -> SqlFuture<'a, ()> {
+    ) -> SqlFuture<'a, anyhow::Result<()>> {
         self.0.write_then_read(
             Box::new(move |lent| write(other(lent))),
             Box::new(move |lent| read(other(lent))),

@@ -8,16 +8,11 @@
 //! transaction is one synchronous call can pass them.
 
 use super::{is_missing_table, ReadDatabase, SqlRow, SqlValue, Statement, Unopened};
-use std::future::Future;
-use std::pin::pin;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::task::Poll;
 
-#[cfg(feature = "host")]
 pub mod handles;
 pub mod limits;
-#[cfg(feature = "host")]
 pub mod projection;
+pub mod sequence;
 #[cfg(any(test, feature = "test-fixture"))]
 mod other;
 
@@ -30,6 +25,12 @@ pub trait Harness {
     fn database(&self) -> &dyn ReadDatabase;
     /// A second adapter over the same store, as a later process opens it.
     fn reopen(&self) -> Box<dyn ReadDatabase>;
+    /// Whether a write can commit while a read of the store is open. A
+    /// store whose read runs to its end in one call says no, and then the
+    /// write runs after the read.
+    fn reads_interleave(&self) -> bool {
+        true
+    }
 }
 
 fn statement(sql: &str, values: Vec<SqlValue>) -> Statement {
@@ -82,46 +83,6 @@ fn integers(rows: &[SqlRow]) -> Vec<i64> {
 #[derive(Debug, thiserror::Error)]
 #[error("the work failed after its commit")]
 struct WorkFailed;
-
-/// Runs both futures until both end. Each poll polls `first` before
-/// `second`.
-async fn both<A, B>(first: impl Future<Output = A>, second: impl Future<Output = B>) -> (A, B) {
-    let (mut first, mut second) = (pin!(first), pin!(second));
-    let (mut a, mut b) = (None, None);
-    std::future::poll_fn(|context| {
-        if a.is_none() {
-            if let Poll::Ready(value) = first.as_mut().poll(context) {
-                a = Some(value);
-            }
-        }
-        if b.is_none() {
-            if let Poll::Ready(value) = second.as_mut().poll(context) {
-                b = Some(value);
-            }
-        }
-        match (a.take(), b.take()) {
-            (Some(a), Some(b)) => Poll::Ready((a, b)),
-            (left, right) => {
-                (a, b) = (left, right);
-                Poll::Pending
-            }
-        }
-    })
-    .await
-}
-
-/// Ends when `flag` is on.
-async fn until(flag: &AtomicBool) {
-    std::future::poll_fn(|context| {
-        if flag.load(Ordering::SeqCst) {
-            Poll::Ready(())
-        } else {
-            context.waker().wake_by_ref();
-            Poll::Pending
-        }
-    })
-    .await;
-}
 
 /// A read of a database that nothing has written fails with [`Unopened`]
 /// before its work starts, and makes nothing: a second read fails in the
@@ -318,65 +279,6 @@ pub async fn a_write_without_its_commit_keeps_nothing<H: Harness>(harness: H) {
     assert_eq!(
         fetch(database, "SELECT n FROM kept").await,
         Vec::<SqlRow>::new()
-    );
-}
-
-/// Every row that a read gets is from the state that was committed when
-/// its first statement ran.
-///
-/// A write commits while the read runs. It runs beside the read, never
-/// inside its work: it starts after
-/// the first statement of the read, and the read goes on until the write
-/// has committed, or for a fixed number of statements. A store that runs a
-/// read to its end in one call runs the write after it.
-pub async fn a_read_answers_from_one_committed_state<H: Harness>(harness: H) {
-    const MOST_STATEMENTS: usize = 1000;
-    let database = harness.database();
-    write(
-        database,
-        vec![
-            statement("CREATE TABLE pinned (n INTEGER)", Vec::new()),
-            statement("INSERT INTO pinned (n) VALUES (1)", Vec::new()),
-        ],
-    )
-    .await
-    .unwrap();
-    let (first_read, committed) = (AtomicBool::new(false), AtomicBool::new(false));
-    let (first_read, committed) = (&first_read, &committed);
-    let mut seen = Vec::new();
-    let slot = &mut seen;
-    let read = database.read(Box::new(move |mut transaction| {
-        Box::pin(async move {
-            let sql = "SELECT n FROM pinned ORDER BY n";
-            slot.push(integers(&transaction.fetch(sql, Vec::new()).await?));
-            first_read.store(true, Ordering::SeqCst);
-            for _ in 0..MOST_STATEMENTS {
-                if committed.load(Ordering::SeqCst) {
-                    break;
-                }
-                slot.push(integers(&transaction.fetch(sql, Vec::new()).await?));
-            }
-            slot.push(integers(&transaction.fetch(sql, Vec::new()).await?));
-            Ok(())
-        })
-    }));
-    let later = async {
-        until(first_read).await;
-        let written = write(
-            database,
-            vec![statement("INSERT INTO pinned (n) VALUES (2)", Vec::new())],
-        )
-        .await;
-        committed.store(true, Ordering::SeqCst);
-        written
-    };
-    let (read, written) = both(read, later).await;
-    read.unwrap();
-    written.unwrap();
-    assert!(seen.iter().all(|rows| rows == &[1]), "{seen:?}");
-    assert_eq!(
-        integers(&fetch(database, "SELECT n FROM pinned ORDER BY n").await),
-        vec![1, 2]
     );
 }
 
