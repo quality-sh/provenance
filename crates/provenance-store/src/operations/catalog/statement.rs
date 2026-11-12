@@ -3,8 +3,6 @@ use provenance_core::protocol::CheckStatementRequest;
 use provenance_macros::rule;
 use provenance_ste100::Report;
 
-// A statement check has no failure, and the contract names this type with no variants.
-#[allow(clippy::empty_enums)]
 #[derive(Debug, serde::Serialize, thiserror::Error)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum StatementFailure {}

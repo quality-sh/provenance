@@ -37,19 +37,10 @@ pub struct RepositoryContext {
     pub freshness: Option<FreshnessPolicy>,
 }
 
-pub use info_request::InfoRequest;
-
-// The Deserialize derive makes an enum with no variants for a struct with no
-// fields, and an allow on the struct does not apply to the derived impl.
-#[allow(clippy::empty_enums)]
-mod info_request {
-    use serde::Deserialize;
-
-    #[derive(Debug, Clone, Deserialize)]
-    #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-    #[serde(deny_unknown_fields)]
-    pub struct InfoRequest {}
-}
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct InfoRequest {}
 
 /// External metadata names the requested target, never a host path.
 #[derive(Debug, Clone, Serialize)]
