@@ -1,5 +1,5 @@
 use super::SetupPort;
-use crate::atomic_file::{FileRollbackJournal, FileSnapshot};
+use crate::atomic_file::FileSnapshot;
 use crate::init_summary::{scope_phrase, InitEnding, InitSummary};
 use crate::skills::{EmbeddedSkill, FileStatus, InstallReport};
 use anyhow::Context;
@@ -52,6 +52,7 @@ fn init(path: &Utf8Path, options: InitOptions) -> anyhow::Result<InitReport> {
 
 pub(super) struct InitPlan {
     path: Utf8PathBuf,
+    manifest: Manifest,
     planned: PlannedFiles,
     skills: crate::skills::InitSkillPlan,
     dictionary: crate::ste_onboarding::Plan,
@@ -62,7 +63,6 @@ pub(super) struct InitPlan {
 
 #[rule("rule_init_plans_all_project_writes")]
 #[rule("rule_init_plan_rejection_preserves_targets")]
-#[rule("rule_init_validates_planned_repository")]
 pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Result<InitPlan> {
     let InitOptions {
         scope,
@@ -123,6 +123,7 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
         .collect();
     Ok(InitPlan {
         path: path.to_path_buf(),
+        manifest,
         planned,
         skills,
         dictionary,
@@ -287,98 +288,6 @@ fn build_summary(
     Some(summary)
 }
 
-impl InitPlan {
-    /// Writes the plan. In an initialized repository it holds the publication
-    /// lock while it writes, so a read waits for init and gets the graph.
-    #[rule("rule_init_apply_rolls_back_owned_changes")]
-    #[rule("rule_read_waits_for_repeated_init")]
-    pub(super) fn apply(self) -> anyhow::Result<InitEnding> {
-        let layout = ProvenanceLayout::new(self.path.clone());
-        // Replacing a file under `.provenance/state` moves the old file away before the new
-        // file goes in. A repository open and the reads of a host (review, HTTP, MCP) take the
-        // publication lock, so they never see that gap. The record id help of the CLI, the
-        // planning reads of init and an older binary take no lock and can see the gap. A new
-        // repository has no `.provenance` and no readers yet.
-        match std::fs::symlink_metadata(layout.provenance_dir()) {
-            Ok(_) => provenance_store::publication::with_repository_publication(&layout, |_| {
-                self.write(&layout)
-            }),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => self.write(&layout),
-            Err(error) => Err(error.into()),
-        }
-    }
-
-    fn write(self, layout: &ProvenanceLayout) -> anyhow::Result<InitEnding> {
-        self.planned
-            .manifest_before
-            .recheck(layout.manifest_path().as_std_path())?;
-        self.skills.recheck()?;
-        self.planned
-            .agents_before
-            .recheck(self.path.join("AGENTS.md").as_std_path())?;
-        self.planned
-            .gitignore_before
-            .recheck(self.path.join(".gitignore").as_std_path())?;
-        self.dictionary.recheck(&self.path)?;
-        let mut rollback = FileRollbackJournal::within(self.path.as_std_path());
-        let result = (|| -> anyhow::Result<InstallReport> {
-            if self.planned.manifest_before.bytes() != Some(self.planned.manifest_bytes.as_slice())
-            {
-                rollback.replace(
-                    layout.manifest_path().as_std_path(),
-                    &self.planned.manifest_before,
-                    &self.planned.manifest_bytes,
-                )?;
-            }
-            let skills = self.skills.apply_in(&mut rollback)?;
-            let agents_path = self.path.join("AGENTS.md");
-            if self.planned.agents_before.bytes() != Some(self.planned.agents_bytes.as_slice()) {
-                rollback.replace(
-                    agents_path.as_std_path(),
-                    &self.planned.agents_before,
-                    &self.planned.agents_bytes,
-                )?;
-            }
-            let gitignore_path = self.path.join(".gitignore");
-            if self.planned.gitignore_before.bytes()
-                != Some(self.planned.gitignore_bytes.as_slice())
-            {
-                rollback.replace(
-                    gitignore_path.as_std_path(),
-                    &self.planned.gitignore_before,
-                    &self.planned.gitignore_bytes,
-                )?;
-            }
-            self.dictionary.apply_in(&self.path, &mut rollback)?;
-            Ok(skills)
-        })();
-        let skills = match result {
-            Ok(skills) => skills,
-            Err(error) => {
-                return match rollback.rollback() {
-                    Ok(()) => Err(error),
-                    Err(rollback) => Err(error.context(format!(
-                        "repository initialization rollback failed: {rollback:#}"
-                    ))),
-                };
-            }
-        };
-        rollback.commit()?;
-        Ok(build_summary(
-            &self.path,
-            &self.scope_ids,
-            &self.planned,
-            &skills,
-            &self.dictionary,
-        )
-        .map_or_else(
-            || already_ending(&self.scope_ids, &self.path, &self.dictionary, self.command),
-            |summary| InitEnding::applied(summary, self.dictionary.warning(), self.command),
-        )
-        .with_notice(self.reviewer_notice))
-    }
-}
-
 pub(super) fn scope_path_prefix(
     path: &Utf8Path,
     scope: &str,
@@ -407,6 +316,8 @@ fn parse_manifest(bytes: &[u8], path: &std::path::Path) -> anyhow::Result<Manife
     serde_json::from_slice::<Manifest>(bytes)
         .with_context(|| format!("failed to parse manifest {}", path.display()))
 }
+
+mod apply;
 
 #[cfg(test)]
 mod lock_tests;

@@ -133,12 +133,27 @@ pub fn memory_repository_with(
     let initial = StateView::new(entries);
     let root = tempfile::tempdir().unwrap();
     let recorded = Arc::new(Recorded::default());
-    let storage = Arc::new(MemoryStateStorage::loaded(
-        initial.clone(),
-        recorded.clone(),
-    ));
+    let (storage, repository) =
+        memory_repository_over(root.path(), initial.clone(), recorded.clone());
+    MemoryRepository {
+        root,
+        storage,
+        recorded,
+        repository,
+        initial,
+    }
+}
+
+/// A repository over the memory adapter, rooted at `root`, whose state
+/// starts as `initial`. The adapter gives each write set to `persistence`.
+pub fn memory_repository_over(
+    root: &std::path::Path,
+    initial: StateView,
+    persistence: Arc<dyn StatePersistence>,
+) -> (Arc<MemoryStateStorage>, Repository) {
+    let storage = Arc::new(MemoryStateStorage::loaded(initial, persistence));
     let working_tree =
-        camino::Utf8PathBuf::from_path_buf(dunce::canonicalize(root.path()).unwrap()).unwrap();
+        camino::Utf8PathBuf::from_path_buf(dunce::canonicalize(root).unwrap()).unwrap();
     let identity = RepositoryIdentity::new(working_tree, scope(), Settings::default());
     let repository = Repository::with_storage(
         identity,
@@ -147,11 +162,5 @@ pub fn memory_repository_with(
         None,
     )
     .unwrap();
-    MemoryRepository {
-        root,
-        storage,
-        recorded,
-        repository,
-        initial,
-    }
+    (storage, repository)
 }

@@ -42,7 +42,12 @@ test gives the engine a stand-in that refuses a claim, and the O3 test adds
 a second stage to a decision. If the law does not see its fault, the test
 fails with "simulation check broken", and the issue says that a check is
 broken, not a law. `tests/storage_contract.rs` runs the storage contract
-suite of `provenance-store` on the simulated storage.
+suite of `provenance-store` on the simulated storage. `tests/refused_post.rs`
+runs fixed cases of a message post whose publish is refused, in the engine
+job. A broken law in these cases fails as a probe of the engine layer. The
+replay command of the probe names the test binary `engine`, not
+`refused_post`. A failed check that is not a law gives the report of a layer
+that failed without a broken law.
 
 The probes are fixed cases next to the random test of each layer. A probe
 that breaks a law fails with "simulation probe <test> broke law <law>" and
@@ -131,6 +136,5 @@ change the other lines; remove the line of a cause when its fix merges.
   write failure (500), for example a message post whose base moved before
   its publish: bead provenance-cf0b. This cause has the same law and layer
   as issue 648, so its failures add comments to the same issue.
-- The engine job can fail on L1: bead provenance-4ayr.
 - The CLI jobs can fail on L6 when the state holds two withdrawals of one
   review submission: bead provenance-chgs.
