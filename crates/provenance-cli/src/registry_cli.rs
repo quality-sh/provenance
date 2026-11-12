@@ -13,6 +13,9 @@ use provenance_porcelain::registry::{
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
 
+mod root_word;
+pub use root_word::{root_word_command, root_word_matches};
+
 /// The CLI switch that reads all the fields of a record or Discussion action as one JSON
 /// object from standard input.
 const STDIN: Field = Field::switch("stdin");
@@ -312,23 +315,6 @@ pub fn selected(matches: &ArgMatches) -> (Vec<&str>, &ArgMatches) {
         leaf = next;
     }
     (words, leaf)
-}
-
-/// The root parser of one word command that reads the shared repository options, as
-/// `provenance search` and `provenance api` read them.
-pub fn root_word_command(command: provenance_porcelain::registry::Command) -> Command {
-    let declaration = command.declaration();
-    let Some(words) = cli_options::words(&declaration) else {
-        panic!("{} is not a word command", declaration.name);
-    };
-    let word = Arg::new("command")
-        .required(true)
-        .value_name("COMMAND")
-        .value_parser(PossibleValuesParser::new(words.iter().copied()));
-    with_global_flags(Command::new("provenance"))
-        .about(declaration.description)
-        .arg(word)
-        .args(args(&declaration))
 }
 
 /// Reads a typed input from the declared fields of one command.
