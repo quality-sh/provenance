@@ -145,3 +145,37 @@ async fn metadata_only_and_unchanged_statements_do_not_create_reviews() {
         [] as [provenance_core::RequirementReview; 0]
     );
 }
+
+/// The native Requirement update takes an edit guard (`expected_etag`), as
+/// the native updates of Sources, Rules, Topics and Questions do. A guard that
+/// no longer matches the record is refused, and the record keeps the change
+/// of the writer that came first.
+#[tokio::test]
+async fn a_native_requirement_update_on_a_stale_etag_is_refused() {
+    let fixture = Fixture::new();
+    fixture.requirement().await;
+    let id = provenance_core::StableId::new("req_one").unwrap();
+    let etag = fixture
+        .store
+        .requirement_edit_state(&fixture.scope, &id)
+        .unwrap()
+        .etag;
+    let update = |description: &str| {
+        json!({"scope_id":"default","id":"req_one","expected_etag":etag,"description":description})
+    };
+    fixture
+        .call("update-requirement-native", update("First writer"))
+        .await
+        .unwrap();
+    let second = fixture
+        .call("update-requirement-native", update("Second writer"))
+        .await;
+    let description = fixture.store.list_requirements(&fixture.scope).unwrap()[0]
+        .description
+        .clone();
+    assert!(
+        second.is_err(),
+        "a second update on etag {etag} succeeded: {second:?}; the description is now {description:?}"
+    );
+    assert_eq!(description.as_deref(), Some("First writer"));
+}

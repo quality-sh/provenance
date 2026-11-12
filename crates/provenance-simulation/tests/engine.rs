@@ -152,3 +152,42 @@ fn each_operation_runs_on_the_engine() {
         }
     }
 }
+
+// No Rule: a probe of the model of L3. The archive of the Requirement of the
+// Topic archives the Topic and clears its claim (rule_claim_cleared_on_exit).
+// The archive reads the state after the outside claim and lands after it, so
+// the final state has no claim, and L3 holds.
+#[test]
+#[ignore = "a probe of the nightly simulation"]
+fn an_archive_after_an_outside_claim_clears_the_claim_and_keeps_l3() {
+    let case = Case {
+        engines: 2,
+        steps: vec![
+            write(0, Operation::ArchiveRequirement { n: 0 }),
+            Step::OutsideWrite(Operation::ClaimTopic),
+        ],
+    };
+    let run = run_case(&case, Config::default());
+    let landed: Vec<_> = run
+        .publishes
+        .iter()
+        .filter(|publish| publish.outcome == Outcome::Landed)
+        .map(|publish| publish.engine)
+        .collect();
+    assert_eq!(landed, [None, Some(0)], "{:?}", run.publishes);
+    assert!(
+        run.done.iter().all(|done| done.result.is_ok()),
+        "{:?}",
+        run.done
+    );
+    let repository = provenance_simulation::open_entries(&run.entries).unwrap();
+    let topics = repository
+        .view()
+        .unwrap()
+        .list_topics(&provenance_simulation::scope())
+        .unwrap();
+    assert_eq!(topics[0].status, provenance_core::TopicStatus::Archived);
+    assert_eq!(topics[0].claimed_by, None);
+    let test = "an_archive_after_an_outside_claim_clears_the_claim_and_keeps_l3";
+    report::probe("engine", test, laws::check(&run));
+}
