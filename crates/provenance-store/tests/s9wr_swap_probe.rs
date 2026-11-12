@@ -286,3 +286,157 @@ fn s9wr_swap_probe() {
     println!("S9WR PROBE os={}\n{report}", std::env::consts::OS);
     eprintln!("S9WR PROBE os={}\n{report}", std::env::consts::OS);
 }
+
+/// A small tree like a state directory: three shards in two levels.
+fn small_tree(root: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let deep = root.join("scopes").join("default");
+    std::fs::create_dir_all(&deep).unwrap();
+    let files = vec![
+        root.join("manifest.json"),
+        deep.join("threads.jsonl"),
+        deep.join("messages.jsonl"),
+    ];
+    for file in &files {
+        std::fs::write(file, vec![b'x'; 4096]).unwrap();
+    }
+    files
+}
+
+/// A reader thread over the files of `files`, or of the directories that
+/// hold them: `open_read` opens, reads and closes each file; otherwise it
+/// lists each directory.
+fn loop_reader(
+    paths: Vec<std::path::PathBuf>,
+    open_read: bool,
+    stop: Arc<AtomicBool>,
+) -> std::thread::JoinHandle<u64> {
+    std::thread::spawn(move || {
+        let mut rounds = 0_u64;
+        while !stop.load(Ordering::Relaxed) {
+            for path in &paths {
+                if open_read {
+                    let _ = std::fs::read(path);
+                } else if let Ok(entries) = std::fs::read_dir(path) {
+                    for entry in entries.flatten() {
+                        let _ = entry.file_type();
+                    }
+                }
+            }
+            rounds += 1;
+        }
+        rounds
+    })
+}
+
+fn os_code(error: &std::io::Error) -> String {
+    format!("{:?}", error.raw_os_error())
+}
+
+/// Option "retry": renames the live directory to a backup and back, with up
+/// to 100 tries 2 ms apart for each rename, while a reader loops.
+fn rename_with_retry(open_read: bool) -> String {
+    let temp = tempfile::tempdir().unwrap();
+    let live = temp.path().join("state");
+    let backup = temp.path().join("backup");
+    let files = small_tree(&live);
+    let paths = if open_read {
+        files
+    } else {
+        vec![live.clone(), live.join("scopes"), live.join("scopes").join("default")]
+    };
+    let stop = Arc::new(AtomicBool::new(false));
+    let reader = loop_reader(paths, open_read, Arc::clone(&stop));
+    let mut tries_needed = BTreeMap::<usize, usize>::new();
+    let mut gave_up = BTreeMap::<String, usize>::new();
+    let mut waited = std::time::Duration::ZERO;
+    for _ in 0..TRIES {
+        let started = std::time::Instant::now();
+        let mut outcome = None;
+        for attempt in 1..=100 {
+            match std::fs::rename(&live, &backup) {
+                Ok(()) => {
+                    outcome = Some(attempt);
+                    break;
+                }
+                Err(error) if attempt == 100 => {
+                    *gave_up.entry(os_code(&error)).or_default() += 1;
+                }
+                Err(_) => std::thread::sleep(std::time::Duration::from_millis(2)),
+            }
+        }
+        waited += started.elapsed();
+        let Some(attempt) = outcome else { continue };
+        *tries_needed.entry(attempt).or_default() += 1;
+        // The reader now loops on missing paths. Rename back for the next try.
+        if let Err(error) = std::fs::rename(&backup, &live) {
+            *gave_up.entry(format!("rename back {}", os_code(&error))).or_default() += 1;
+            break;
+        }
+    }
+    stop.store(true, Ordering::Relaxed);
+    let rounds = reader.join().unwrap();
+    format!(
+        "rename with retry, reader {}: {TRIES} renames; tries needed {tries_needed:?}; gave up after 100 tries {gave_up:?}; total wait {:.2} s; reader rounds {rounds}",
+        if open_read { "open-read-close" } else { "list directories" },
+        waited.as_secs_f64(),
+    )
+}
+
+/// Option "replace in place": replaces each file of the tree with a
+/// temporary file and `std::fs::rename`, while a reader loops or while the
+/// writer keeps a handle on each target.
+fn replace_in_place(held: bool) -> String {
+    let temp = tempfile::tempdir().unwrap();
+    let live = temp.path().join("state");
+    let files = small_tree(&live);
+    let stop = Arc::new(AtomicBool::new(false));
+    let reader = (!held).then(|| loop_reader(files.clone(), true, Arc::clone(&stop)));
+    let mut failures = BTreeMap::<String, usize>::new();
+    let mut deletes = BTreeMap::<String, usize>::new();
+    for index in 0..TRIES {
+        let handles: Vec<_> = if held {
+            files.iter().filter_map(|file| std::fs::File::open(file).ok()).collect()
+        } else {
+            Vec::new()
+        };
+        for file in &files {
+            let temporary = file.with_extension(format!("tmp{index}"));
+            std::fs::write(&temporary, vec![b'y'; 4096]).unwrap();
+            if let Err(error) = std::fs::rename(&temporary, file) {
+                *failures.entry(os_code(&error)).or_default() += 1;
+                let _ = std::fs::remove_file(&temporary);
+            }
+        }
+        // A delete of a held file, then a new file at the same name.
+        let gone = live.join("scopes").join("default").join("threads.jsonl");
+        let held_gone = held.then(|| std::fs::File::open(&gone).ok());
+        let deleted = std::fs::remove_file(&gone)
+            .and_then(|()| std::fs::write(&gone, vec![b'z'; 4096]));
+        if let Err(error) = deleted {
+            *deletes.entry(os_code(&error)).or_default() += 1;
+            let _ = std::fs::write(&gone, vec![b'z'; 4096]);
+        }
+        drop(held_gone);
+        drop(handles);
+    }
+    stop.store(true, Ordering::Relaxed);
+    let rounds = reader.map_or(0, |reader| reader.join().unwrap());
+    format!(
+        "replace in place, {}: {} file replaces, failures by os error {failures:?}; delete and create again: {TRIES} tries, failures {deletes:?}; reader rounds {rounds}",
+        if held { "writer keeps a handle on each target" } else { "reader open-read-close" },
+        TRIES * files.len(),
+    )
+}
+
+#[test]
+fn s9wr_option_probe() {
+    let report = [
+        rename_with_retry(true),
+        rename_with_retry(false),
+        replace_in_place(false),
+        replace_in_place(true),
+    ]
+    .map(|line| format!("S9WR OPTION {line}"))
+    .join("\n");
+    println!("S9WR OPTION PROBE os={}\n{report}", std::env::consts::OS);
+}
