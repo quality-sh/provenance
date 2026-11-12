@@ -262,6 +262,11 @@ pub(super) fn command_word(arguments: &[String]) -> Option<&str> {
 }
 
 /// Read a positional word using the selected command's declared option arity.
+///
+/// The search refusal (`search_text::corrected`) has its own walk. This walk takes the
+/// word after each flag that is not a switch, and its callers select a command with that
+/// reading. The search walk reads each value as clap reads it, and gives no command when
+/// it cannot, so one walk for the two would change the commands that this walk selects.
 pub(super) fn positional_word<'a>(
     arguments: &'a [String],
     command: &Command,
