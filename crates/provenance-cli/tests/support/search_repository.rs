@@ -126,7 +126,7 @@ pub fn page(protocol_version: &Value, limit: usize, has_more: bool, nodes: Vec<V
         "next_cursor": null,
         "limit": limit,
         "has_more": has_more,
-        "nodes": nodes
+        "nodes": Value::Array(nodes)
     })
 }
 
