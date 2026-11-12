@@ -80,9 +80,13 @@ fn usage(parser: &Command, name: &str, arguments: &[String]) -> StyledStr {
     usage
 }
 
-/// The refusal with a help pointer that names the command. Clap writes the usage context
-/// and then its own pointer, so the pointer of the command follows the usage in that
-/// context, and the error takes a parser without a help flag, which gives no pointer.
+/// The refusal with a help pointer that names the command, for example
+/// `provenance search --help`. Clap writes the usage context last, and then its own
+/// pointer. Thus this function puts the pointer of the command at the end of the usage
+/// context. The error takes a parser without a help flag, so clap writes no pointer.
+/// The text of the pointer is a copy of the clap sentence `For more information, try
+/// '--help'.`, and `refusal_without_a_table_flag_stays_as_clap_gives_it` in
+/// `tests/cli_refusal_next_step.rs` fails when clap changes that sentence.
 fn point_to_help(error: clap::Error, command: registry::Command, name: &str) -> clap::Error {
     if matches!(
         error.kind(),
