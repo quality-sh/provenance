@@ -251,10 +251,10 @@ fn ensure_scope(scope: &ScopeId, batch: &IdeationLandingBatch) -> anyhow::Result
 }
 
 /// The kind and the scope of each of `records`.
-fn scope_ids<'a, T: IdeationRecord>(
-    records: &'a [T],
+fn scope_ids<T: IdeationRecord>(
+    records: &[T],
     scope_id: impl Fn(&T) -> &ScopeId,
-) -> impl Iterator<Item = (IdeationRecordKind, &'a ScopeId)> {
+) -> impl Iterator<Item = (IdeationRecordKind, &ScopeId)> {
     records.iter().map(move |record| (T::KIND, scope_id(record)))
 }
 
