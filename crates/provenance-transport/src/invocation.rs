@@ -11,7 +11,14 @@ use provenance_store::operations::catalog::{
 use provenance_store::operations::read_operations::{self, ReadOperations};
 use serde_json::Value;
 use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
+
+/// The wait for a work slot, then the preparation and the work: the work's answer, or the
+/// refusal of the slot or of the preparation.
+type SlotWait<'a, T> = Pin<
+    Box<dyn Future<Output = Result<Result<T, OperationFailure>, OperationFailure>> + Send + 'a>,
+>;
 
 /// How one call enters the host: its context, its framing, and its page-write mark.
 pub struct Invocation {
@@ -100,8 +107,8 @@ impl StatementHost {
     /// which the repository is prepared and `work` runs on the tracked blocking pool. Each
     /// refusal answers before `work` runs.
     ///
-    /// The authorization runs before this returns, so the future that waits holds only the
-    /// work, as when the host waits for a slot itself.
+    /// The authorization runs before this returns. The wait is boxed, so the future of a call
+    /// holds one pointer and not the work with its request.
     fn run_prepared<T: Send + 'static>(
         &self,
         operation: &'static str,
@@ -109,17 +116,14 @@ impl StatementHost {
         needs: ExecutionNeeds,
         native: bool,
         work: impl FnOnce(PreparedContext) -> T + Send + 'static,
-    ) -> Result<
-        impl Future<Output = Result<Result<T, OperationFailure>, OperationFailure>> + '_,
-        OperationFailure,
-    > {
+    ) -> Result<SlotWait<'_, T>, OperationFailure> {
         if let Some(selected) = &selected {
             self.access.authorize(operation, selected)?;
         }
         let access = self.access.clone();
-        Ok(self
-            .execution
-            .run(move || prepare(&access, operation, selected, needs, native).map(work)))
+        Ok(Box::pin(self.execution.run(move || {
+            prepare(&access, operation, selected, needs, native).map(work)
+        })))
     }
 
     /// The read operations port of the bound repository, when `operation` is one of its
