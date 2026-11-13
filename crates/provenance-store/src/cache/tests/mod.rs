@@ -20,6 +20,7 @@ mod linked_entries;
 mod materialization_behavior;
 mod materialize_guard_behavior;
 mod page_order;
+mod page_work;
 mod projection_digest_sensitivity;
 pub mod projection_stamp_behavior;
 mod record_columns;

@@ -243,9 +243,6 @@ port_cases!(
     handles::the_document_handle_reads_the_projection,
     handles::the_discussion_handle_reads_the_projection,
     handles::the_message_handle_reads_the_projection,
-    handles::a_stopped_page_statement_is_the_page_budget_refusal,
-    handles::a_page_statement_reported_at_its_end_is_the_page_budget_refusal,
-    handles::a_page_bounds_its_work_in_the_unit_of_the_adapter,
     limits::a_bounded_read_runs_the_statements_within_its_bound,
     limits::a_statement_far_past_the_bound_gives_over_budget,
     limits::a_limit_bounds_the_rows,
@@ -410,10 +407,6 @@ async fn made(file: &File) {
         .unwrap();
 }
 
-/// A query whose work grows with `n`: it counts from 1 to `n`.
-const COUNT_TO: &str = "WITH RECURSIVE count_to (n) AS (SELECT 1 UNION ALL \
-                        SELECT n + 1 FROM count_to WHERE n < ?) SELECT COUNT(*) FROM count_to";
-
 /// The count to `n` in one read of the file, after the work bound `bound`
 /// when there is one.
 async fn count_to(file: &File, bound: Option<u64>, n: i64) -> anyhow::Result<Vec<SqlRow>> {
@@ -427,7 +420,7 @@ async fn count_to(file: &File, bound: Option<u64>, n: i64) -> anyhow::Result<Vec
                 }
                 *slot = Some(
                     transaction
-                        .fetch(COUNT_TO, vec![SqlValue::Integer(n)])
+                        .fetch(contract::limits::COUNT_TO, vec![SqlValue::Integer(n)])
                         .await,
                 );
                 Ok(())

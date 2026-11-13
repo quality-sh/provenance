@@ -3,17 +3,17 @@
 //!
 //! For the work bound, the contract holds that a bound that the work does
 //! not reach changes nothing, and that a statement far past the bound
-//! gives [`OverBudget`] and no rows. It does not hold whether the adapter
+//! gives [`OverBudget`] and no rows. It does not check whether the adapter
 //! stops the statement while it runs or reports it when it ends; the file
-//! adapter stops it, and its own tests hold that. The cases of the handles
-//! (with `host`) hold that a page gives the page budget refusal for
-//! [`OverBudget`] in both ways.
+//! adapter stops it, and its own tests hold that.
 
 use super::{integers, statement, write, Harness};
 use crate::read_database::{OverBudget, ReadDatabase, SqlRow, SqlValue, Transaction, WorkUnit};
 
-/// A query whose work grows with `n`: it counts from 1 to `n`.
-const COUNT_TO: &str = "WITH RECURSIVE count_to (n) AS (SELECT 1 UNION ALL \
+/// A query whose work grows with `n`: it counts from 1 to `n`. The
+/// tests of the work bound share it.
+#[doc(hidden)]
+pub const COUNT_TO: &str = "WITH RECURSIVE count_to (n) AS (SELECT 1 UNION ALL \
                         SELECT n + 1 FROM count_to WHERE n < ?) SELECT COUNT(*) FROM count_to";
 
 /// Writes a table `numbers` with the integers 1 to 5.
