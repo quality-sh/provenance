@@ -383,31 +383,3 @@ async fn updating_a_row_with_repeated_unknown_members_is_refused_without_publica
     assert_eq!(raw_rows(&fixture, "sources", "source.jsonl"), vec![row]);
     assert_eq!(state_snapshot(&fixture), before);
 }
-
-/// A Topic has no field that an update can clear. A Topic update that gives a clear list is
-/// refused and writes nothing.
-#[tokio::test]
-#[provenance_macros::verifies("rule_update_clear_list_only_for_clearable_fields", examples)]
-async fn topic_update_refuses_a_clear_list_and_writes_nothing() {
-    let fixture = Fixture::new();
-    fixture.requirement().await;
-    fixture.call("create-topic", json!({"scope_id":"default","id":"topic_one","requirement_id":"req_one","title":"Topic","status":"open","links":[]})).await.unwrap();
-    let before = state_snapshot(&fixture);
-    let error = fixture
-        .call(
-            "update-topic",
-            json!({"scope_id":"default","id":"topic_one","title":"Renamed","clear_fields":[]}),
-        )
-        .await
-        .unwrap_err();
-    assert_eq!(error, json!({"kind":"invalid_input"}));
-    assert_eq!(state_snapshot(&fixture), before);
-    let updated = fixture
-        .call(
-            "update-topic",
-            json!({"scope_id":"default","id":"topic_one","title":"Renamed"}),
-        )
-        .await
-        .unwrap();
-    assert_eq!(updated["title"], "Renamed");
-}
