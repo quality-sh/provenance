@@ -191,6 +191,21 @@ impl Fixture {
             .entries
     }
 
+    /// The record JSON with commit names in place of commit ids and with no
+    /// stamp time, which the system clock gives.
+    fn record(&self, text: &str) -> String {
+        let mut record = serde_json::from_str::<serde_json::Value>(text).unwrap();
+        for name in ["created", "updated"] {
+            if let Some(stamp) = record.get_mut(name) {
+                stamp["at"] = json!("<time>");
+                if let Some(commit) = stamp["commit"].as_str() {
+                    stamp["commit"] = json!(self.name(commit));
+                }
+            }
+        }
+        record.to_string()
+    }
+
     /// One line per version, with commit names in place of commit ids and
     /// the index of the first version with the same revision.
     fn lines(&self, entries: &[RecordVersion]) -> Vec<String> {
@@ -224,9 +239,9 @@ async fn history_answers_stay_the_same() {
     assert_eq!(
         fixture.lines(&entries),
         [
-            "create commit=Some(\"create\") author=Some(\"Reviewer\") at=Some(1700000060) before=None fields=[\"depends_on\", \"id\", \"scope_id\", \"statement\", \"status\", \"supersedes\"] outcome=Created origin=None revision=0",
-            "alice commit=Some(\"alice\") author=Some(\"alice\") at=Some(1700000300) before=Some(\"create\") fields=[\"statement\"] outcome=Changed origin=None revision=1",
-            "record commit=Some(\"record\") author=Some(\"dave\") at=Some(1700000900) before=Some(\"alice\") fields=[\"description\"] outcome=Changed origin=Some(true) revision=2",
+            "create commit=Some(\"create\") author=Some(\"Reviewer\") at=Some(1700000120) before=None fields=[\"id\", \"scope_id\", \"statement\", \"status\"] outcome=Created origin=None revision=0",
+            "alice commit=Some(\"alice\") author=Some(\"alice\") at=Some(1700000600) before=Some(\"create\") fields=[\"statement\"] outcome=Changed origin=None revision=1",
+            "record commit=Some(\"record\") author=Some(\"dave\") at=Some(1700001320) before=Some(\"alice\") fields=[\"description\"] outcome=Changed origin=Some(true) revision=2",
             "working commit=None author=None at=None before=Some(\"record\") fields=[\"description\"] outcome=Changed origin=None revision=3",
         ]
     );
@@ -256,7 +271,7 @@ async fn evidence_answers_stay_the_same() {
                             let text = if field.is_some() {
                                 page.json_text
                             } else {
-                                format!("{} bytes", page.json_text.len())
+                                fixture.record(&page.json_text)
                             };
                             format!(
                                 "{} {text} next={:?}",
