@@ -21,26 +21,31 @@ fn a_stored_index_loads_again_without_the_source_document() {
     );
 }
 
+/// A write of the index renames a new file over the path, so the file at the path
+/// gets a new inode. The same inode shows that the second store did not write.
+#[cfg(unix)]
 #[test]
 #[verifies("rule_ste_dictionary_import_reuse", examples)]
 fn storing_an_identical_index_again_is_idempotent() {
     let directory = tempfile::tempdir().expect("make a temporary directory");
     let import = import();
     let first = store_dictionary_index(&import, directory.path()).expect("store the index");
-    let stored_at = modified(&first);
+    let stored_file = inode(&first);
 
     let second = store_dictionary_index(&import, directory.path()).expect("store it again");
 
     assert_eq!(second, first);
-    assert_eq!(modified(&second), stored_at);
+    assert_eq!(inode(&second), stored_file);
     assert_eq!(
         load_dictionary_index(directory.path(), &import.identity),
         Ok(import)
     );
 }
 
-fn modified(path: &std::path::Path) -> std::time::SystemTime {
+#[cfg(unix)]
+fn inode(path: &std::path::Path) -> u64 {
+    use std::os::unix::fs::MetadataExt;
     std::fs::metadata(path)
-        .and_then(|metadata| metadata.modified())
-        .expect("read the time of the index file")
+        .expect("read the metadata of the index file")
+        .ino()
 }
