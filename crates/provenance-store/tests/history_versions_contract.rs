@@ -62,7 +62,7 @@ impl Harness for Git {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path();
         git(root, &[], &["init", "-q"], None);
-        let mut ids = BTreeMap::new();
+        let mut ids: BTreeMap<&'static str, String> = BTreeMap::new();
         for commit in commits {
             match commit.parents.first() {
                 Some(first) => git(root, &[], &["read-tree", &ids[first]], None),
@@ -71,7 +71,7 @@ impl Harness for Git {
             for (path, text) in commit.changes {
                 match text {
                     Some(text) => {
-                        let blob = git(root, &[], &["hash-object", "-w", "--stdin"], Some(text));
+                        let blob = git(root, &[], &["hash-object", "-w", "--stdin"], Some(*text));
                         let entry = format!("100644,{blob},{path}");
                         git(
                             root,
@@ -80,8 +80,10 @@ impl Harness for Git {
                             None,
                         );
                     }
-                    None => git(root, &[], &["update-index", "--force-remove", path], None),
-                };
+                    None => {
+                        git(root, &[], &["update-index", "--force-remove", *path], None);
+                    }
+                }
             }
             let tree = git(root, &[], &["write-tree"], None);
             let mut args = vec!["commit-tree".to_owned(), tree];
