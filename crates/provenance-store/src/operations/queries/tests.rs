@@ -28,6 +28,7 @@ mod impact;
 mod lifecycle_visibility;
 mod limits;
 mod live;
+mod message_order;
 mod order;
 mod page_budget;
 mod page_interrupt;

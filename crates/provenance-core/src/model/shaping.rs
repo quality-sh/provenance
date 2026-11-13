@@ -86,7 +86,12 @@ pub struct Topic {
     pub archived_in_commit: Option<super::ArchivedStamp>,
     #[serde(default, alias = "claimedBy", skip_serializing_if = "Option::is_none")]
     pub claimed_by: Option<String>,
-    #[serde(default, alias = "claimedAt", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        alias = "claimedAt",
+        deserialize_with = "super::exact_integer::optional_time",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub claimed_at: Option<i64>,
     #[serde(default)]
     pub links: Vec<ArtifactLink>,
@@ -122,7 +127,12 @@ pub struct Question {
     pub archived_in_commit: Option<super::ArchivedStamp>,
     #[serde(default, alias = "claimedBy", skip_serializing_if = "Option::is_none")]
     pub claimed_by: Option<String>,
-    #[serde(default, alias = "claimedAt", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        alias = "claimedAt",
+        deserialize_with = "super::exact_integer::optional_time",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub claimed_at: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub answer: Option<String>,

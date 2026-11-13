@@ -9,7 +9,7 @@
 
 use super::{fetch, statement, write, Harness};
 use crate::cache::{catch_up_state, materialize_state, CatchUpReport};
-use crate::read_database::{ReadDatabase, SqlValue};
+use crate::read_database::{ReadDatabase, SqlRow, SqlValue};
 use crate::repository::{Repository, RepositoryIdentity};
 use crate::settings::Settings;
 use crate::storage::memory::{MemorySectionLock, MemoryStateStorage};
@@ -33,7 +33,7 @@ fn requirement(id: &str) -> serde_json::Value {
 
 /// A repository whose state is the manifest and one Requirement, held in
 /// memory, over a second adapter of the harness's store.
-fn repository<H: Harness>(harness: &H) -> Repository {
+pub(super) fn repository<H: Harness>(harness: &H) -> Repository {
     let scope = ScopeId::new("default").unwrap();
     let manifest = Manifest::default_with_scope(scope.clone(), RepoPathPrefix::new("."));
     let mut shard = serde_json::to_vec(&requirement("req_first")).unwrap();
@@ -54,7 +54,7 @@ fn repository<H: Harness>(harness: &H) -> Repository {
 
 /// The serial, and whether the pass rebuilt, committed and made the schema
 /// again.
-const fn outcome(report: &CatchUpReport) -> (i64, bool, bool, bool) {
+pub(super) const fn outcome(report: &CatchUpReport) -> (i64, bool, bool, bool) {
     (
         report.serial,
         report.rebuilt,
@@ -63,12 +63,30 @@ const fn outcome(report: &CatchUpReport) -> (i64, bool, bool, bool) {
     )
 }
 
-async fn requirement_ids(database: &dyn ReadDatabase) -> Vec<SqlValue> {
+pub(super) async fn requirement_ids(database: &dyn ReadDatabase) -> Vec<SqlValue> {
     fetch(database, "SELECT id FROM requirements ORDER BY id")
         .await
         .into_iter()
         .flatten()
         .collect()
+}
+
+/// Publishes one more Requirement, with the statement of the first.
+pub(super) fn add_requirement(repository: &Repository, id: &str) {
+    repository
+        .store()
+        .create_requirement(
+            serde_json::from_value(serde_json::json!({
+                "scope_id": "default",
+                "id": id,
+                "statement": "Share links expire",
+                "status": "active",
+                "depends_on": [],
+                "supersedes": [],
+            }))
+            .unwrap(),
+        )
+        .unwrap();
 }
 
 /// A catch-up makes the projection and then follows the state.
@@ -84,20 +102,7 @@ pub async fn a_catch_up_makes_and_follows_the_projection<H: Harness>(harness: H)
     assert_eq!(outcome(&unchanged), (1, false, false, false));
     assert_eq!(unchanged.digest, first.digest);
 
-    repository
-        .store()
-        .create_requirement(
-            serde_json::from_value(serde_json::json!({
-                "scope_id": "default",
-                "id": "req_second",
-                "statement": "Share links expire",
-                "status": "active",
-                "depends_on": [],
-                "supersedes": [],
-            }))
-            .unwrap(),
-        )
-        .unwrap();
+    add_requirement(&repository, "req_second");
     let next = catch_up_state(&repository).await.unwrap();
     assert_eq!(outcome(&next), (2, false, true, false));
     assert_ne!(next.digest, first.digest);
@@ -142,4 +147,128 @@ pub async fn a_schema_that_is_not_current_is_made_again<H: Harness>(harness: H) 
         requirement_ids(harness.database()).await,
         vec![SqlValue::from("req_first")]
     );
+}
+
+/// Every object of the catalog, then every row of the requirements, in a
+/// fixed order.
+async fn catalog_and_rows(database: &dyn ReadDatabase) -> Vec<SqlRow> {
+    let mut rows = fetch(
+        database,
+        "SELECT type, name, tbl_name, sql FROM sqlite_schema ORDER BY type, name",
+    )
+    .await;
+    rows.extend(fetch(database, "SELECT * FROM requirements ORDER BY scope_id, id").await);
+    rows
+}
+
+/// A schema rebuild and a full rebuild of a database that holds only the
+/// store's tables give the catalog and the rows that the first catch-up
+/// gave, and the same revision digest.
+pub async fn a_rebuild_keeps_the_catalog_and_the_rows<H: Harness>(harness: H) {
+    let repository = repository(&harness);
+    let first = catch_up_state(&repository).await.unwrap();
+    let made = catalog_and_rows(harness.database()).await;
+    write(
+        harness.database(),
+        vec![statement(
+            "UPDATE _cache_metadata SET schema_digest = 'another'",
+            Vec::new(),
+        )],
+    )
+    .await
+    .unwrap();
+    let pass = catch_up_state(&repository).await.unwrap();
+    assert_eq!(outcome(&pass), (1, true, true, true));
+    assert_eq!(pass.digest, first.digest);
+    assert_eq!(catalog_and_rows(harness.database()).await, made);
+    let rebuilt = materialize_state(&repository).await.unwrap();
+    assert_eq!(
+        (rebuilt.records_loaded, rebuilt.cache_recreated),
+        (1, false)
+    );
+    assert_eq!(catalog_and_rows(harness.database()).await, made);
+}
+
+/// The objects and the rows of a table that the store does not own.
+pub(super) async fn foreign(database: &dyn ReadDatabase) -> Vec<SqlRow> {
+    let mut rows = fetch(
+        database,
+        "SELECT type, name FROM sqlite_schema WHERE tbl_name = 'embedder_notes' ORDER BY name",
+    )
+    .await;
+    rows.extend(fetch(database, "SELECT n, note FROM embedder_notes ORDER BY n").await);
+    rows
+}
+
+/// Writes a table that the store does not own, `embedder_notes`, with an
+/// index, a trigger and two rows.
+pub(super) async fn embedder_notes(database: &dyn ReadDatabase) {
+    write(
+        database,
+        vec![
+            statement(
+                "CREATE TABLE embedder_notes (n INTEGER PRIMARY KEY, note TEXT)",
+                Vec::new(),
+            ),
+            statement(
+                "CREATE INDEX embedder_notes_note ON embedder_notes (note)",
+                Vec::new(),
+            ),
+            statement(
+                "CREATE TRIGGER embedder_notes_mark AFTER INSERT ON embedder_notes \
+                 BEGIN UPDATE embedder_notes SET note = note || '.' WHERE n = new.n; END",
+                Vec::new(),
+            ),
+            statement(
+                "INSERT INTO embedder_notes (n, note) VALUES (1, 'kept'), (2, 'also kept')",
+                Vec::new(),
+            ),
+        ],
+    )
+    .await
+    .unwrap();
+}
+
+/// A table that the store does not own stays across the rebuilds.
+///
+/// The table keeps its index, its trigger and its rows across a schema
+/// rebuild and a full rebuild, and the schema check does not ask for a
+/// rebuild because of it. The store's own tables are made again as before.
+pub async fn a_rebuild_keeps_a_table_that_the_store_does_not_own<H: Harness>(harness: H) {
+    let repository = repository(&harness);
+    let database = harness.database();
+    embedder_notes(database).await;
+    let kept = foreign(database).await;
+    assert_eq!(kept.len(), 5, "{kept:?}");
+    let first = catch_up_state(&repository).await.unwrap();
+    assert_eq!(outcome(&first), (1, true, true, true));
+    assert_eq!(foreign(database).await, kept, "the first catch-up");
+    let made = catalog_and_rows(database).await;
+    let unchanged = catch_up_state(&repository).await.unwrap();
+    assert_eq!(
+        outcome(&unchanged),
+        (1, false, false, false),
+        "the schema check asked for a rebuild"
+    );
+    write(
+        database,
+        vec![statement(
+            "UPDATE _cache_metadata SET schema_digest = 'another'",
+            Vec::new(),
+        )],
+    )
+    .await
+    .unwrap();
+    let pass = catch_up_state(&repository).await.unwrap();
+    assert_eq!(outcome(&pass), (1, true, true, true));
+    assert_eq!(pass.digest, first.digest);
+    assert_eq!(foreign(database).await, kept, "the schema rebuild");
+    assert_eq!(catalog_and_rows(database).await, made);
+    let rebuilt = materialize_state(&repository).await.unwrap();
+    assert_eq!(
+        (rebuilt.records_loaded, rebuilt.cache_recreated),
+        (1, false)
+    );
+    assert_eq!(foreign(database).await, kept, "the full rebuild");
+    assert_eq!(catalog_and_rows(database).await, made);
 }
