@@ -220,7 +220,7 @@ async fn materialize_action_refuses_an_argument_by_name() {
     assert_eq!(
         result["structuredContent"]["error"],
         json!({"kind":"invalid_input","field":"dry_run","reason":"unknown_field",
-               "message":"the materialize action does not take dry_run; it takes: "}),
+               "message":"the materialize action does not take dry_run; it takes no argument"}),
         "{result}"
     );
     wire.close().await;
