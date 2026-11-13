@@ -222,6 +222,7 @@ port_cases!(
     handles::the_discussion_handle_reads_the_projection,
     handles::the_message_handle_reads_the_projection,
     handles::a_stopped_page_statement_is_the_page_budget_refusal,
+    handles::a_page_statement_reported_at_its_end_is_the_page_budget_refusal,
     limits::a_bounded_read_runs_the_statements_within_its_bound,
     limits::a_limit_bounds_the_rows,
     limits::a_list_of_the_most_values_runs,

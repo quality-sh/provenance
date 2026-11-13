@@ -4,8 +4,8 @@
 //! passes them gives the handles the rows that the file gives. They do not
 //! cover the discussion reads that still run `SQLx` on the file. Of the
 //! work bound of a page, they hold only that a statement that the adapter
-//! stops with [`OverBudget`] gives the page budget refusal (see also
-//! [`super::limits`]).
+//! stops with [`OverBudget`], or reports with it when the statement ends,
+//! gives the page budget refusal (see also [`super::limits`]).
 
 use super::{statement, write, Harness, Statement};
 use crate::operations::reader::{page_error, Position, ReadSnapshot};
@@ -176,21 +176,29 @@ pub async fn the_message_handle_reads_the_projection<H: Harness + Send + Sync>(h
 #[error("the store stopped the statement")]
 struct Stopped;
 
-/// A transaction that stops each statement after
-/// [`SqlTransaction::bound_work`] with [`OverBudget`], as an adapter does
-/// when a statement passes the bound.
+/// A transaction that gives [`OverBudget`] for each statement after
+/// [`SqlTransaction::bound_work`], as an adapter does when a statement
+/// passes the bound. With `runs_first`, the statement runs to its end and
+/// the adapter then reports it, as an adapter that cannot stop a statement
+/// while it runs does; without it, the adapter stops the statement before
+/// it gives a row.
 struct Stopping {
     inner: Transaction,
     bounded: bool,
+    runs_first: bool,
 }
 
 impl SqlTransaction for Stopping {
     fn fetch<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, Vec<SqlRow>> {
-        if self.bounded {
-            Box::pin(async { Err(OverBudget(Stopped.into()).into()) })
-        } else {
-            self.inner.fetch(sql, values)
+        if !self.bounded {
+            return self.inner.fetch(sql, values);
         }
+        Box::pin(async move {
+            if self.runs_first {
+                self.inner.fetch(sql, values).await?;
+            }
+            Err(OverBudget(Stopped.into()).into())
+        })
     }
 
     fn execute<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, u64> {
@@ -223,6 +231,23 @@ impl SqlTransaction for Stopping {
 pub async fn a_stopped_page_statement_is_the_page_budget_refusal<H: Harness + Send + Sync>(
     harness: H,
 ) {
+    page_over_the_bound(harness, false).await;
+}
+
+/// A page statement that runs to its end and that the adapter then
+/// reports over the work bound, with [`OverBudget`], gives the page budget
+/// refusal, as a statement that the adapter stops does.
+pub async fn a_page_statement_reported_at_its_end_is_the_page_budget_refusal<
+    H: Harness + Send + Sync,
+>(
+    harness: H,
+) {
+    page_over_the_bound(harness, true).await;
+}
+
+/// Reads one page of requirements over [`Stopping`] and checks that it
+/// gives the page budget refusal.
+async fn page_over_the_bound<H: Harness + Send + Sync>(harness: H, runs_first: bool) {
     let database = harness.database();
     write(database, projection()).await.unwrap();
     let mut refused = None;
@@ -233,6 +258,7 @@ pub async fn a_stopped_page_statement_is_the_page_budget_refusal<H: Harness + Se
                 let stopping = Box::new(Stopping {
                     inner: transaction,
                     bounded: false,
+                    runs_first,
                 });
                 let scope = ScopeId::new("default")?;
                 let snapshot = ReadSnapshot::open(stopping, &scope)
