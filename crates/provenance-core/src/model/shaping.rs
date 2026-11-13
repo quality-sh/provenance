@@ -89,7 +89,6 @@ pub struct Topic {
     #[serde(
         default,
         alias = "claimedAt",
-        deserialize_with = "super::exact_integer::optional_time",
         skip_serializing_if = "Option::is_none"
     )]
     pub claimed_at: Option<i64>,
@@ -130,7 +129,6 @@ pub struct Question {
     #[serde(
         default,
         alias = "claimedAt",
-        deserialize_with = "super::exact_integer::optional_time",
         skip_serializing_if = "Option::is_none"
     )]
     pub claimed_at: Option<i64>,

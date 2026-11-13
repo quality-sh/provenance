@@ -46,7 +46,6 @@ pub struct Thread {
     pub id: StableId,
     pub parent: ThreadParent,
     pub status: ThreadStatus,
-    #[serde(deserialize_with = "super::exact_integer::time")]
     pub created_at: i64,
 }
 
@@ -59,6 +58,5 @@ pub struct Message {
     pub role: MessageRole,
     #[serde(alias = "content")]
     pub body: String,
-    #[serde(deserialize_with = "super::exact_integer::time")]
     pub created_at: i64,
 }

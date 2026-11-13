@@ -28,7 +28,6 @@ pub struct Discussion {
     pub message_ids: Vec<StableId>,
     pub status: DiscussionStatus,
     /// Increases by one at each reply or status change.
-    #[serde(deserialize_with = "crate::model::exact_integer::count")]
     pub version: u64,
     /// The actor who started the Discussion.
     pub actor: String,

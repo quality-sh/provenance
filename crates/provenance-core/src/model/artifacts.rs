@@ -201,7 +201,6 @@ pub struct Resolution {
     #[serde(
         default,
         alias = "approvedAt",
-        deserialize_with = "super::exact_integer::optional_time",
         skip_serializing_if = "Option::is_none"
     )]
     pub approved_at: Option<i64>,

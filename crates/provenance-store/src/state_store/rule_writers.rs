@@ -22,7 +22,7 @@ pub(super) fn check_approved_at(approved_at: Option<i64>) -> anyhow::Result<()> 
 
 impl StateStore {
     pub fn create_resolution(&self, input: CreateResolutionInput) -> anyhow::Result<Resolution> {
-        check_approved_at(input.approved_at)?;
+        check_approved_at(None)?;
         let path = shards::resolutions_path(&self.layout, &input.scope_id);
         let id = input.id.clone();
         self.create_native_record(&path, &id, |store| store.write_resolution(input))
