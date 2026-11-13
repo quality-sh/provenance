@@ -10,12 +10,13 @@ mod support {
     pub mod cases;
 }
 
+#[path = "engine_planted/l3.rs"]
+mod l3;
+
 use hegel::{Hegel, Settings, TestCase, Verbosity};
-use provenance_simulation::generate::{self, Case, Effect, Fault, Operation, Step, Task, TOPIC};
+use provenance_simulation::generate::{Case, Fault, Operation, Step};
 use provenance_simulation::laws::{self, Violation};
-use provenance_simulation::storage::{Outcome, Publish};
-use provenance_simulation::{check_case, report, run_case, scope, stable, Config, Plant, Run};
-use provenance_store::repository::Repository;
+use provenance_simulation::{check_case, report, run_case, Config, Plant};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::{Arc, Mutex};
 use support::cases::{alone, moved_base_case, write};
@@ -157,175 +158,6 @@ fn a_state_that_does_not_open_after_a_stop_breaks_l2() {
     let case = Case { engines: 2, steps };
     let run = run_case(&case, planted(Plant::FailReopen, "L2"));
     expect_law(laws::check_only(&run, "L2"), "L2");
-}
-
-// No Rule: proof that L3 can fail. The storage drops the first set of an
-// engine and answers that it landed.
-#[test]
-#[ignore = "a planted fault of the nightly simulation"]
-fn a_lost_write_breaks_l3() {
-    let case = Case {
-        engines: 2,
-        steps: alone(&[Operation::UpdateRequirement { n: 0, stale: false }]),
-    };
-    let run = run_case(&case, planted(Plant::LoseWrite, "L3"));
-    expect_law(laws::check_only(&run, "L3"), "L3");
-}
-
-/// The outside claim, then an archive of the Requirement of the Topic by
-/// engine 0, each one alone.
-fn claim_then_archive() -> Case {
-    let mut steps = vec![Step::OutsideWrite(Operation::ClaimTopic)];
-    steps.extend(alone(&[Operation::ArchiveRequirement { n: 0 }]));
-    Case { engines: 2, steps }
-}
-
-// No Rule: proof that L3 sees a claim that an archive leaves. The storage
-// drops the archive and answers that it landed, so the Topic keeps the claim.
-#[test]
-#[ignore = "a planted fault of the nightly simulation"]
-fn an_archive_that_leaves_the_claim_breaks_l3() {
-    let run = run_case(&claim_then_archive(), planted(Plant::LoseWrite, "L3"));
-    expect_law(laws::check_only(&run, "L3"), "L3");
-}
-
-// No Rule: proof that L3 sees a claim that is lost with no archive. The
-// storage drops the claim of engine 0 and answers that it landed.
-#[test]
-#[ignore = "a planted fault of the nightly simulation"]
-fn a_lost_claim_breaks_l3() {
-    let case = Case {
-        engines: 2,
-        steps: alone(&[Operation::ClaimTopic]),
-    };
-    let run = run_case(&case, planted(Plant::LoseWrite, "L3"));
-    expect_law(laws::check_only(&run, "L3"), "L3");
-}
-
-const ONLY_L3: Config = Config {
-    plant: None,
-    only_law: Some("L3"),
-    apply: None,
-    layer_laws: None,
-};
-
-/// A stand-in archive of the first Requirement: it clears the claim of the
-/// Topic and leaves the Requirement and the Topic open.
-fn archive_that_only_clears_the_claim(
-    repository: &Repository,
-    task: &Task,
-) -> anyhow::Result<Effect> {
-    let Operation::ArchiveRequirement { n: 0 } = task.op else {
-        return generate::apply(repository, task);
-    };
-    let store = repository.store();
-    store.release_topic(&scope(), &stable(TOPIC), &task.actor())?;
-    Ok(Effect::Archived {
-        id: generate::FIRST_REQUIREMENT.to_owned(),
-    })
-}
-
-// No Rule: proof that L3 sees a claim that is cleared on a Topic that stays
-// open. A stand-in archive answers success, clears the claim and archives
-// nothing.
-#[test]
-#[ignore = "a planted fault of the nightly simulation"]
-fn a_claim_cleared_on_an_open_topic_breaks_l3() {
-    let case = Case {
-        engines: 2,
-        steps: alone(&[
-            Operation::ClaimTopic,
-            Operation::ArchiveRequirement { n: 0 },
-        ]),
-    };
-    let config = Config {
-        apply: Some(archive_that_only_clears_the_claim),
-        ..ONLY_L3
-    };
-    let run = run_case(&case, config);
-    expect_law(laws::check_only(&run, "L3"), "L3");
-}
-
-/// Writes the claim of `holder` in the row of the Topic in the final state.
-fn claim_in_the_final_state(run: &mut Run, holder: &str) {
-    let (_, bytes) = run
-        .entries
-        .iter_mut()
-        .find(|(key, _)| key.as_str().contains("/topics/"))
-        .expect("a Topic shard");
-    let mut rows = Vec::new();
-    for line in bytes
-        .split(|byte| *byte == b'\n')
-        .filter(|line| !line.is_empty())
-    {
-        let mut row: serde_json::Value = serde_json::from_slice(line).expect("a Topic row");
-        if row["id"] == TOPIC {
-            row["claimed_by"] = holder.into();
-            row["claimed_at"] = 1.into();
-        }
-        rows.extend(serde_json::to_vec(&row).expect("JSON"));
-        rows.push(b'\n');
-    }
-    *bytes = rows;
-}
-
-// No Rule: proof that L3 sees a claim that lands on an archived Topic. The
-// product refuses the claim after the archive; the test gives the claim a
-// fake answer of success with a landed publish, and writes the claim in the
-// row of the archived Topic.
-#[test]
-#[ignore = "a planted fault of the nightly simulation"]
-fn a_claim_on_an_archived_topic_breaks_l3() {
-    let case = Case {
-        engines: 2,
-        steps: alone(&[
-            Operation::ArchiveRequirement { n: 0 },
-            Operation::ClaimTopic,
-        ]),
-    };
-    let mut run = run_case(&case, ONLY_L3);
-    let claim = &mut run.done[1];
-    assert!(claim.result.is_err(), "the product refuses the claim");
-    claim.result = Ok(Effect::Claim {
-        holder: Some("engine-0".to_owned()),
-    });
-    claim.kind = None;
-    let operation = claim.operation;
-    run.publishes.push(Publish {
-        engine: Some(0),
-        operation,
-        outcome: Outcome::Landed,
-        outside_writes: 0,
-        whole_set: false,
-        on_base: true,
-    });
-    claim_in_the_final_state(&mut run, "engine-0");
-    expect_law(laws::check_only(&run, "L3"), "L3");
-}
-
-// No Rule: proof that L3 keeps the check of a claim through an archive of
-// unknown outcome. The storage drops the claim of engine 0 and answers that
-// it landed. The archive lands no key, so the Topic stays open and must
-// hold the claim.
-#[test]
-#[ignore = "a planted fault of the nightly simulation"]
-fn a_claim_lost_before_an_archive_of_unknown_outcome_breaks_l3() {
-    let mut steps = alone(&[Operation::ClaimTopic]);
-    steps.push(Step::Fault(Fault::UnknownOutcome { landed: 0 }));
-    steps.extend(alone(&[Operation::ArchiveRequirement { n: 0 }]));
-    let case = Case { engines: 2, steps };
-    let run = run_case(&case, planted(Plant::LoseWrite, "L3"));
-    let archive = run.done[1].operation;
-    let unknown = run
-        .publishes
-        .iter()
-        .any(|publish| publish.operation == archive && publish.outcome == Outcome::Unknown);
-    assert!(
-        unknown,
-        "the archive met no unknown outcome: {:?}",
-        run.publishes
-    );
-    expect_law(laws::check_only(&run, "L3"), "L3");
 }
 
 // No Rule: proof that L4 can fail. With no section lock and no base check,
