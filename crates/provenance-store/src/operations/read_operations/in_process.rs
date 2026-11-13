@@ -16,17 +16,19 @@ use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::Value;
 
-/// Runs each read operation on one opened repository. The repository is
-/// prepared as [`LocalRepository`] prepares it for the router, under the
-/// target name of the call.
+/// Runs each read operation on one opened repository.
+///
+/// The repository is prepared as [`LocalRepository`] prepares it for the
+/// router, under the target name of the call.
 #[derive(Debug, Clone)]
 pub struct InProcessReadOperations {
     repository: Repository,
 }
 
 impl InProcessReadOperations {
-    /// The read operations of `repository`. A port that `repository` holds
-    /// is not used: the operations run here.
+    /// The read operations of `repository`.
+    ///
+    /// A port that `repository` holds is not used: the operations run here.
     pub const fn new(repository: Repository) -> Self {
         Self { repository }
     }
@@ -43,10 +45,11 @@ impl ReadOperations for InProcessReadOperations {
     }
 }
 
-/// Decodes `call` and checks its request as the operation checks a call
-/// from outside, with no repository read, and gives the context that the
-/// call selects. A host checks a call here, and authorizes its context,
-/// before it gives the call to a port.
+/// The context that `call` selects, after its request is checked.
+///
+/// The call is decoded and its request is checked as the operation checks a
+/// call from outside, with no repository read. A host checks a call here,
+/// and authorizes its context, before it gives the call to a port.
 pub fn checked_context(
     operation: &str,
     call: &Value,
@@ -95,8 +98,7 @@ struct Call<R> {
     request: R,
 }
 
-/// The context and the request of `call`, after the check that the
-/// operation makes on a call from outside.
+/// The context and the request of `call`, after the outside-call check.
 fn check<O: Operation>(call: Value) -> Result<(RequestedContext, O::Request), OperationFailure> {
     let call: Call<O::Request> = decode(call)?;
     let selected = selected(O::CONTEXT, call.context)?;
@@ -104,8 +106,9 @@ fn check<O: Operation>(call: Value) -> Result<(RequestedContext, O::Request), Op
     Ok((selected, call.request))
 }
 
-/// Checks the call, prepares the repository, then runs the operation, in
-/// the order of the router's own invocation.
+/// Checks the call, prepares the repository, then runs the operation.
+///
+/// The order is the order of the router's own invocation.
 async fn run<O: Operation>(repository: Repository, call: Value) -> Result<Value, ErasedFailure> {
     let refuse = |failure| ErasedFailure::new(Some(O::NAME), failure);
     let (selected, request) = check::<O>(call).map_err(refuse)?;

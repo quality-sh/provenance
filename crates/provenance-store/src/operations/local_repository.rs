@@ -47,8 +47,7 @@ impl LocalRepository {
         self.repository.scope()
     }
 
-    /// The port that runs the read operations of the bound repository, if
-    /// the repository has one.
+    /// The read operations port of the bound repository, if it has one.
     pub fn read_operations(&self) -> Option<Arc<dyn ReadOperations>> {
         self.repository.read_operations().cloned()
     }

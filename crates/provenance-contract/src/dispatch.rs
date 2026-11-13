@@ -268,9 +268,10 @@ pub async fn invoke_with<H: Invoke>(
     (entry.invoke)(call, host).await
 }
 
-/// Decodes `call` as the dispatch of `operation` does, and runs nothing. A
-/// host that gives the call to a port checks it here first, so a call that
-/// does not decode gets the refusal of the dispatch.
+/// Decodes `call` as the dispatch of `operation` does, and runs nothing.
+///
+/// A host that gives the call to a port checks it here first, so a call
+/// that does not decode gets the refusal of the dispatch.
 pub fn check_call(operation: &str, call: Value) -> Result<(), FailureEnvelope> {
     let entry = entries::<Unhosted>()
         .into_iter()

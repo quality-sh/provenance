@@ -42,8 +42,7 @@ pub struct Repository {
     inner: Arc<Inner>,
     /// Set only on the repository of a section guard.
     section: Option<SectionHandle>,
-    /// The port that runs the read operations of the contract router, when
-    /// the caller gave one.
+    /// The read operations port, when the caller gave one.
     reads: Option<Arc<dyn ReadOperations>>,
 }
 
@@ -329,8 +328,9 @@ impl Repository {
             .ok_or_else(|| crate::refusal::fault!("this repository has no read database"))
     }
 
-    /// This repository with `reads` as the port of its read operations. The
-    /// contract router of the repository sends each operation of
+    /// This repository with `reads` as the port of its read operations.
+    ///
+    /// The contract router sends each operation of
     /// [`READ_OPERATIONS`](crate::operations::read_operations::READ_OPERATIONS)
     /// to the port, and does not run it. A clone keeps the port.
     #[must_use]

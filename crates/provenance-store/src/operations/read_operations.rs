@@ -36,10 +36,11 @@ pub trait ReadOperations: Send + Sync + Debug {
     fn run(&self, operation: &'static str, request: Value) -> ReadAnswer;
 }
 
-/// The wire names of the operations that a [`ReadOperations`] port runs:
-/// the page of each record family that the review page lists, one reviewed
-/// record, the document of a Requirement, and the Discussions and messages
-/// of a record.
+/// The wire names of the operations that a [`ReadOperations`] port runs.
+///
+/// They are the page of each record family that the review page lists, one
+/// reviewed record, the document of a Requirement, and the Discussions and
+/// messages of a record.
 pub const READ_OPERATIONS: &[&str] = &[
     "page-sources",
     "page-requirements",

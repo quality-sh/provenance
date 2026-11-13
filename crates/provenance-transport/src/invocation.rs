@@ -99,8 +99,10 @@ impl StatementHost {
             .map_err(OperationError::Common)?
     }
 
-    /// The port that runs `operation` for the bound repository: there is one
-    /// when `operation` is a read operation and the repository has a port.
+    /// The port that runs `operation` for the bound repository, if any.
+    ///
+    /// There is one when `operation` is a read operation and the repository
+    /// has a port.
     pub(crate) fn read_port(
         &self,
         operation: &str,
@@ -109,10 +111,12 @@ impl StatementHost {
         Some((operation, self.access.read_operations()?))
     }
 
-    /// Runs one read operation through `port`. As for an operation that the
-    /// host runs, the call is decoded, its request is checked and its
-    /// context is authorized on the runtime thread, before the work slot
-    /// wait. The port runs on the tracked blocking pool.
+    /// Runs one read operation through `port`.
+    ///
+    /// As for an operation that the host runs, the call is decoded, its
+    /// request is checked and its context is authorized on the runtime
+    /// thread, before the work slot wait. The port runs on the tracked
+    /// blocking pool.
     pub(crate) async fn read(
         &self,
         operation: &'static str,

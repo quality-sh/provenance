@@ -11,8 +11,9 @@ use std::sync::Arc;
 pub trait HostAccess: ContextResolver {
     fn advertises(&self, operation: &str) -> bool;
     fn bound_identity(&self) -> Option<(String, String)>;
-    /// The port that runs the read operations of the bound repository. The
-    /// router sends each read operation to it, when there is one.
+    /// The read operations port of the bound repository, if it has one.
+    ///
+    /// The router sends each read operation to it.
     fn read_operations(&self) -> Option<Arc<dyn ReadOperations>> {
         None
     }
