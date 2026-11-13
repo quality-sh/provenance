@@ -179,12 +179,41 @@ where
     };
     let mut loaded = LoadedRecords::default();
     for (index, line) in contents.lines().enumerate() {
-        let value = parse_line(path, index + 1, line)?;
-        ensure_no_legacy_retirement(path, index + 1, &value)?;
-        let (record, raw) = RawRecord::deserialize(path, line, index + 1)?;
+        let (record, raw) = checked_line(path, index + 1, line)?;
         loaded.push(record, raw);
     }
     Ok(loaded)
+}
+
+/// The record of one stored line of a file of derived state, after the line
+/// checks that a write of the file makes. A reader that does not load the
+/// whole file reads each line here.
+#[cfg(feature = "host")]
+pub(crate) fn record_of_line<T>(
+    path: &Utf8Path,
+    line_number: usize,
+    line: &str,
+) -> anyhow::Result<T>
+where
+    T: DeserializeOwned + Serialize,
+{
+    checked_line(path, line_number, line).map(|(record, _)| record)
+}
+
+/// The line checks of a stored line: it is one JSON value, it holds no
+/// removed field, and it is one record of `T` that can be read back safely.
+/// A refusal is `invalid_state_file` at the line.
+fn checked_line<T>(
+    path: &Utf8Path,
+    line_number: usize,
+    line: &str,
+) -> anyhow::Result<(T, RawRecord)>
+where
+    T: DeserializeOwned + Serialize,
+{
+    let value = parse_line(path, line_number, line)?;
+    ensure_no_legacy_retirement(path, line_number, &value)?;
+    RawRecord::deserialize(path, line, line_number)
 }
 
 /// Writes one JSONL shard while the caller holds the publication lock. It
