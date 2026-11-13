@@ -146,6 +146,7 @@ impl ContextResolver for LocalRepository {
 }
 
 #[cfg(test)]
+#[cfg(feature = "host")]
 mod tests {
     use super::*;
     use crate::layout::ProvenanceLayout;

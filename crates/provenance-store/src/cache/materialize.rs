@@ -10,6 +10,7 @@ mod stamp;
 mod units;
 mod validation;
 
+pub use catch_up::catch_up_in_publish;
 #[cfg(feature = "host")]
 pub use catch_up::catch_up_state;
 #[cfg(test)]
@@ -19,10 +20,8 @@ pub use catch_up::catch_up_with_guard;
 pub use catch_up::catch_up_work;
 pub use catch_up::CatchUpReport;
 pub use record_rows::SEARCH_TEXT;
-#[cfg(feature = "host")]
 pub use units::unit_stored_digest;
 pub use units::{scope_ids, unit_digest, units_for, Unit, UnitHashError};
-#[cfg(feature = "host")]
 pub use validation::stored_version as stored_validation_version;
 
 use super::MaterializeReport;

@@ -26,8 +26,6 @@ host = [
     "dep:libsqlite3-sys",
     "dep:tokio",
     "dep:dunce",
-    "dep:hmac",
-    "dep:base64",
     "dep:provenance-scanner",
     "provenance-ste100/host",
     "dep:rustix",
@@ -57,8 +55,9 @@ tempfile = { workspace = true, optional = true }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["time"], optional = true }
 uuid.workspace = true
-hmac = { version = "0.13", optional = true }
-base64 = { version = "0.22.1", optional = true }
+# The page cursor signature.
+hmac = "0.13"
+base64 = "0.22.1"
 libsqlite3-sys = { version = "0.30.1", optional = true }
 dunce = { workspace = true, optional = true }
 
@@ -181,6 +180,10 @@ name = "read_database_contract"
 required-features = ["host", "test-fixture"]
 
 [[test]]
+name = "read_operations_on_memory"
+required-features = ["test-fixture"]
+
+[[test]]
 name = "read_settings"
 required-features = ["host"]
 
@@ -281,5 +284,8 @@ dunce.workspace = true
 fs_at.workspace = true
 jsonschema.workspace = true
 filetime.workspace = true
+# The read database in memory of the tests that run without host.
+sqlx.workspace = true
 tempfile.workspace = true
+tokio.workspace = true
 trybuild.workspace = true

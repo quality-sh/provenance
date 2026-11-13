@@ -6,13 +6,20 @@
 //! programming error.
 
 use super::ReadContext;
+#[cfg(feature = "host")]
 use crate::cache::{self, GraphEvidence};
+#[cfg(feature = "host")]
 use crate::repository::Repository;
+#[cfg(feature = "host")]
 use crate::stale::{gate, git, revision_scans};
 use crate::state_store::StateStore;
+#[cfg(feature = "host")]
 use camino::Utf8Path;
+#[cfg(feature = "host")]
 use provenance_core::coverage::{EvidenceDiffSite, EvidenceDiffState};
+#[cfg(feature = "host")]
 use provenance_core::{ScopeId, VerificationRun};
+#[cfg(feature = "host")]
 use provenance_scanner::FileScan;
 
 /// The closed list of live words.
@@ -64,6 +71,7 @@ impl<'c> LiveHandle<'c> {
         self.context.repository().store()
     }
 
+    #[cfg(feature = "host")]
     /// The canonical graph references that name a repository path, which
     /// the diff half is read against.
     pub fn graph_evidence(&self) -> anyhow::Result<GraphEvidence> {
@@ -71,6 +79,7 @@ impl<'c> LiveHandle<'c> {
         cache::graph_evidence(self.context.repository())
     }
 
+    #[cfg(feature = "host")]
     /// A scan of the working tree, stopped at the policy's file count; the
     /// flag says when it stopped. A test can set the scan in advance, so a
     /// timing row measures graph and binding work only.
@@ -85,6 +94,7 @@ impl<'c> LiveHandle<'c> {
         )
     }
 
+    #[cfg(feature = "host")]
     /// A selected file is read through a held no-follow handle.
     /// Missing files and unsupported languages keep binding-only answers.
     pub fn scan_file(
@@ -100,6 +110,7 @@ impl<'c> LiveHandle<'c> {
         crate::operations::files::RepositoryFiles::open(self.context.repo())?.scan_file(file)
     }
 
+    #[cfg(feature = "host")]
     /// The scope's verification runs.
     pub fn runs(&self, scope: &ScopeId) -> anyhow::Result<Vec<VerificationRun>> {
         self.only(Live::VerificationRuns);
@@ -116,6 +127,7 @@ impl<'c> LiveHandle<'c> {
         )
     }
 
+    #[cfg(feature = "host")]
     /// Reads the scope's verification runs without loading the file at once.
     pub(crate) fn read_runs<R>(
         &self,
@@ -133,6 +145,7 @@ impl<'c> LiveHandle<'c> {
         )
     }
 
+    #[cfg(feature = "host")]
     /// The two commits a range names, resolved; `head` defaults to the
     /// current commit. A range that does not resolve refuses here, before
     /// anything else is read.
@@ -150,6 +163,7 @@ impl<'c> LiveHandle<'c> {
         )
     }
 
+    #[cfg(feature = "host")]
     /// What the resolved commit range did to the code carrying graph
     /// evidence.
     pub fn disturbed(
@@ -164,6 +178,7 @@ impl<'c> LiveHandle<'c> {
     }
 }
 
+#[cfg(feature = "host")]
 /// What a commit range did to the code carrying graph evidence. Stale is
 /// read from a diff, never guessed from the working tree.
 pub struct Disturbed {
@@ -173,6 +188,7 @@ pub struct Disturbed {
     pub sites: Vec<EvidenceDiffSite>,
 }
 
+#[cfg(feature = "host")]
 fn disturbed(
     repository: &Repository,
     base: String,

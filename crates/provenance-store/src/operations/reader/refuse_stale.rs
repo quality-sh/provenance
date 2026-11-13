@@ -4,6 +4,7 @@ use super::freshness::{self, Check, Freshness};
 use super::{ReadRefusal, ReadSnapshot};
 use crate::cache::{scope_ids, unit_stored_digest, units_for};
 use crate::layout::ProvenanceLayout;
+#[cfg(feature = "host")]
 use crate::publication::publication_guard;
 use crate::read_database::{SqlColumns, Transaction};
 use crate::repository::Repository;
@@ -11,6 +12,11 @@ use provenance_core::protocol::StampPolicy;
 use provenance_core::ScopeId;
 use provenance_macros::rule;
 use std::collections::BTreeMap;
+use std::future::Future;
+use std::pin::Pin;
+
+/// The freshness step of a `refuse_stale` read.
+type FreshnessFuture<'r> = Pin<Box<dyn Future<Output = anyhow::Result<Freshness>> + Send + 'r>>;
 
 /// A unit whose live bytes differ from the stored projection.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,16 +38,27 @@ pub(super) fn describe_moved(moved: &[MovedUnit]) -> String {
 /// The guard is taken before the read opens the database, and the read
 /// holds it until the hashes are compared.
 #[rule("rule_refuse_stale_writes_no_revision")]
-pub(super) async fn run(repository: &Repository) -> anyhow::Result<Freshness> {
-    let guard = match publication_guard(repository).await {
-        Ok(guard) => Some(guard),
-        Err(error) if crate::cache::permission_failure(repository.layout(), &error) => None,
-        Err(error) => return Err(error),
-    };
-    Ok(Freshness {
-        check: Check::Stale(guard),
-        policy: StampPolicy::RefuseStale,
-        error: None,
+///
+/// Without `host` the read takes no guard, so it waits for nothing: two
+/// hash passes must agree.
+pub(super) fn run(repository: &Repository) -> FreshnessFuture<'_> {
+    Box::pin(async move {
+        #[cfg(feature = "host")]
+        let guard = match publication_guard(repository).await {
+            Ok(guard) => Some(guard),
+            Err(error) if crate::cache::permission_failure(repository.layout(), &error) => None,
+            Err(error) => return Err(error),
+        };
+        #[cfg(not(feature = "host"))]
+        let guard = {
+            let _ = repository;
+            None
+        };
+        Ok(Freshness {
+            check: Check::Stale(guard),
+            policy: StampPolicy::RefuseStale,
+            error: None,
+        })
     })
 }
 

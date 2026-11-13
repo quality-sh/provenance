@@ -40,6 +40,16 @@ impl PublicationGuard {
         self.repository.layout()
     }
 
+    /// A guard whose exclusion the caller holds itself: it takes no lock
+    /// and never waits. An embedder that excludes the other publishes of
+    /// the repository in its own way catches up under it.
+    pub(crate) fn held_by_caller(repository: &Repository) -> Self {
+        Self {
+            _lock: None,
+            repository: repository.clone(),
+        }
+    }
+
     /// The opened repository the guard protects. Under a synchronous section
     /// its stores hold that section: they read and write, stage and take a
     /// guard with no second lock. After the section ends, each state access

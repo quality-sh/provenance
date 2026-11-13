@@ -22,9 +22,7 @@ use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
 
-#[cfg(feature = "host")]
 mod in_process;
-#[cfg(feature = "host")]
 pub use in_process::{checked_context, InProcessReadOperations};
 
 /// The answer of one read operation.
