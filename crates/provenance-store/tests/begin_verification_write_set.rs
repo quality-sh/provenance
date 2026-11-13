@@ -1,120 +1,138 @@
-//! The start of a verification run over the memory adapter, where the
-//! persistence keeps each write set that it receives and can refuse each set
-//! that puts the reviews shard.
+//! The write set of the start of a verification run over the memory adapter,
+//! where the persistence keeps each write set that it receives and can fail
+//! each set that puts the reviews shard.
 
 #[path = "support/memory.rs"]
 mod memory;
 
-use memory::{initial_state, key, memory_repository_over, scope, shard};
+use memory::{begin_input, open_review, scope, verification_repository, Failure, Refusing, REVIEWS};
 use provenance_core::{VerificationBinding, VerificationRun};
 use provenance_macros::verifies;
 use provenance_store::operations::begin_verification;
-use provenance_store::repository::Repository;
-use provenance_store::state_store::BeginVerificationInput;
-use provenance_store::storage::{Atomicity, PublishFailure, StatePersistence, WriteSet};
-use provenance_store::storage::{StateKey, StateView};
+use provenance_store::repository::{Repository, SystemClock};
+use provenance_store::storage::{Atomicity, StateKey};
 use provenance_store::write_error::WriteError;
-use serde_json::json;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use serde_json::{json, Value};
+use std::sync::Arc;
 
 const BINDINGS: &str = "scopes/default/verifications/binding.jsonl";
-const REVIEWS: &str = "scopes/default/requirements/review.jsonl";
 
-/// Keeps each set that it receives. Refuses each set that puts the reviews
-/// shard while `refuse` is set.
-#[derive(Debug, Default)]
-struct Sets {
-    refuse: AtomicBool,
-    received: Mutex<Vec<WriteSet>>,
+/// A memory repository with an open review of `rule_expiry`, over a
+/// persistence that fails with `failure` each set that puts the reviews
+/// shard.
+struct Start {
+    _root: tempfile::TempDir,
+    persistence: Arc<Refusing>,
+    repository: Repository,
 }
 
-impl StatePersistence for Sets {
-    fn persist(&self, writes: &WriteSet) -> Result<(), PublishFailure> {
-        self.received.lock().unwrap().push(writes.clone());
-        let reviews = writes.puts().keys().any(|key| key.as_str() == REVIEWS);
-        if reviews && self.refuse.load(Ordering::SeqCst) {
-            return Err(PublishFailure::Refused(anyhow::anyhow!(
-                "the persistence refused the reviews shard"
-            )));
-        }
-        Ok(())
+fn start(failure: Option<Failure>) -> Start {
+    let root = tempfile::tempdir().unwrap();
+    let persistence = Arc::new(Refusing::new(|key| key == REVIEWS));
+    persistence.fail(failure);
+    let clock = Arc::new(SystemClock);
+    let (_, repository) = verification_repository(root.path(), [], persistence.clone(), clock);
+    Start {
+        _root: root,
+        persistence,
+        repository,
     }
 }
 
-impl Sets {
-    /// The atomicity and the put keys of each set that the persistence
-    /// received, from the first.
-    fn received(&self) -> Vec<(Atomicity, Vec<String>)> {
-        let sets = self.received.lock().unwrap();
-        sets.iter()
-            .map(|set| {
-                let keys = set.puts().keys().map(StateKey::as_str).map(String::from);
-                (set.atomicity(), keys.collect())
-            })
-            .collect()
+impl Start {
+    /// The answer body of a failed start and its status.
+    fn failure(&self) -> (Value, u16) {
+        let error = WriteError(begin_verification(&self.repository, begin_input()).unwrap_err());
+        (serde_json::to_value(&error).unwrap(), error.status())
+    }
+
+    /// The bindings, the runs and the reviews that the reads give.
+    fn reads(&self) -> Value {
+        let store = self.repository.store();
+        json!({
+            "bindings": store.list_verification_bindings(&scope()).unwrap(),
+            "runs": store.list_verification_runs(&scope()).unwrap(),
+            "reviews": store.list_requirement_reviews(&scope()).unwrap(),
+        })
     }
 }
 
-fn open_review() -> serde_json::Value {
-    json!({
-        "scope_id": "default", "id": "review_expiry", "rule_id": "rule_expiry",
-        "requirement_id": "req_expiry", "field": "statement",
-        "before": "Links expire", "after": "Share links expire", "changed_at": 1
-    })
-}
-
-/// A memory repository whose state holds an open review of `rule_expiry`.
-fn repository(root: &tempfile::TempDir, sets: Arc<Sets>) -> Repository {
-    std::fs::write(root.path().join("evidence.rs"), "fn expiry() {}\n").unwrap();
-    let mut entries = initial_state().into_entries();
-    entries.insert(key(REVIEWS), shard(&[open_review()]));
-    memory_repository_over(root.path(), StateView::new(entries), sets).1
-}
-
-fn input() -> BeginVerificationInput {
-    serde_json::from_value(json!({
-        "rule": "rule_expiry", "key": "expiry", "method": "examples",
-        "declared_by": "suite", "file": "evidence.rs"
-    }))
-    .unwrap()
+/// The state before any start: no binding, no run and the open review.
+fn untouched() -> Value {
+    json!({"bindings": [], "runs": [], "reviews": [open_review()]})
 }
 
 #[test]
 #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
-fn a_refused_begin_set_leaves_no_binding_and_no_run_row() {
-    let root = tempfile::tempdir().unwrap();
-    let sets = Arc::new(Sets::default());
-    let repository = repository(&root, sets.clone());
-    let store = repository.store();
-    sets.refuse.store(true, Ordering::SeqCst);
+fn a_start_publishes_the_binding_and_the_cleared_reviews_as_one_whole_set() {
+    let start = start(None);
 
-    let error = WriteError(begin_verification(&repository, input()).unwrap_err());
+    begin_verification(&start.repository, begin_input()).unwrap();
+
+    let sets: Vec<(Atomicity, Vec<String>)> = start
+        .persistence
+        .received()
+        .iter()
+        .map(|set| {
+            let keys = set.puts().keys().map(StateKey::as_str).map(String::from);
+            (set.atomicity(), keys.collect())
+        })
+        .collect();
+    assert_eq!(
+        sets,
+        [(Atomicity::WholeSet, vec![REVIEWS.into(), BINDINGS.into()])]
+    );
+}
+
+#[test]
+#[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
+fn a_refused_set_leaves_no_binding_no_run_row_and_an_open_review() {
+    let start = start(Some(Failure::Refused));
+
+    let (answer, status) = start.failure();
 
     assert_eq!(
-        serde_json::to_value(&error).unwrap(),
-        json!({"kind": "write_failed", "cause": "the persistence refused the reviews shard"})
+        (answer, status),
+        (
+            json!({"kind": "write_failed", "cause": "the persistence refused the set"}),
+            500
+        )
     );
-    assert_eq!(error.status(), 500);
-    assert_eq!(
-        sets.received(),
-        [(Atomicity::PerKey, vec![REVIEWS.into(), BINDINGS.into()])],
-        "one attempt"
-    );
-    let bindings = store.list_verification_bindings(&scope()).unwrap();
-    assert_eq!(bindings, [] as [VerificationBinding; 0]);
-    let runs = store.list_verification_runs(&scope()).unwrap();
-    assert_eq!(runs, [] as [VerificationRun; 0]);
-    let reviews = store.list_requirement_reviews(&scope()).unwrap();
-    assert_eq!(
-        serde_json::to_value(&reviews).unwrap(),
-        json!([open_review()])
-    );
+    assert_eq!(start.reads(), untouched());
+}
 
-    sets.refuse.store(false, Ordering::SeqCst);
-    let run = begin_verification(&repository, input()).unwrap();
+// No Rule binding: no Rule states that a start can follow a refused start.
+#[test]
+fn a_start_after_a_refused_set_clears_the_review() {
+    let start = start(Some(Failure::Refused));
+    start.failure();
+    start.persistence.fail(None);
+
+    let run = begin_verification(&start.repository, begin_input()).unwrap();
+
+    let store = start.repository.store();
     let runs = store.list_verification_runs(&scope()).unwrap();
     assert_eq!(runs, std::slice::from_ref(&run));
     let reviews = store.list_requirement_reviews(&scope()).unwrap();
     assert_eq!(reviews[0].cleared_by_run.as_ref(), Some(&run.id));
+}
+
+// No Rule binding: no Rule states the run rows after a write set whose
+// outcome is not known.
+#[test]
+fn a_set_with_an_unknown_outcome_gives_write_failed_and_adds_no_run_row() {
+    let start = start(Some(Failure::Started));
+
+    let (answer, status) = start.failure();
+
+    let cause = "the persistence stopped while it kept the set";
+    assert_eq!(
+        (answer, status),
+        (json!({"kind": "write_failed", "cause": cause}), 500)
+    );
+    let store = start.repository.store();
+    let runs = store.list_verification_runs(&scope()).unwrap();
+    assert_eq!(runs, [] as [VerificationRun; 0]);
+    let bindings = store.list_verification_bindings(&scope()).unwrap();
+    assert_eq!(bindings, [] as [VerificationBinding; 0]);
 }

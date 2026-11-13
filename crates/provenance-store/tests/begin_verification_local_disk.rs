@@ -1,22 +1,23 @@
 //! The start of a verification run on the local disk adapter, when the
-//! process cannot write one directory of the repository. Unix only: the
-//! tests take the write permission from a directory with its mode.
+//! process cannot write one directory of the cache. Unix only: the tests
+//! take the write permission from a directory with its mode.
 #![cfg(unix)]
 
+#[path = "support/initialization.rs"]
+mod initialization;
 #[path = "support/memory.rs"]
 mod memory;
 
-use memory::{initial_state, key, scope, shard};
-use provenance_core::{VerificationBinding, VerificationRun};
+use camino::Utf8Path;
+use memory::{begin_input, scope};
+use provenance_core::{RequirementReview, VerificationRun};
+use provenance_store::layout::ProvenanceLayout;
 use provenance_store::operations::begin_verification;
 use provenance_store::repository::Repository;
-use provenance_store::state_store::BeginVerificationInput;
 use provenance_store::write_error::WriteError;
 use serde_json::{json, Value};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-
-const REVIEWS: &str = "scopes/default/requirements/review.jsonl";
 
 /// Takes the write permission from a directory, and gives it back on drop.
 struct ReadOnly(PathBuf);
@@ -40,115 +41,142 @@ impl Drop for ReadOnly {
     }
 }
 
-fn open_review() -> Value {
-    json!({
-        "scope_id": "default", "id": "review_expiry", "rule_id": "rule_expiry",
-        "requirement_id": "req_expiry", "field": "statement",
-        "before": "Links expire", "after": "Share links expire", "changed_at": 1
-    })
-}
-
-/// A repository on the local disk whose state holds one active Rule and an
-/// open review of it.
+/// An initialized repository on the local disk with the active Rule
+/// `rule_expiry` and an open review of it: the statement of its Requirement
+/// changed after the Rule was made.
 fn repository(root: &Path) -> Repository {
     std::fs::write(root.join("evidence.rs"), "fn expiry() {}\n").unwrap();
-    let state = root.join(".provenance/state");
-    let mut entries = initial_state().into_entries();
-    entries.insert(key(REVIEWS), shard(&[open_review()]));
-    for (key, bytes) in entries {
-        let path = state.join(key.as_str());
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(path, bytes).unwrap();
+    initialization::initialize(&ProvenanceLayout::new(Utf8Path::from_path(root).unwrap()), &[]);
+    let repository = Repository::open(root, "default").unwrap();
+    let store = repository.store();
+    let requirement = json!({
+        "actor": "ben", "origin": null,
+        "create": {
+            "scope_id": "default", "id": "req_expiry", "statement": "Links expire",
+            "status": "discovery", "depends_on": [], "supersedes": []
+        }
+    });
+    store
+        .create_review_requirement(serde_json::from_value(requirement).unwrap())
+        .unwrap();
+    let rule = json!({
+        "scope_id": "default", "id": "rule_expiry", "requirement_ids": ["req_expiry"],
+        "resolution_ids": [], "statement": "Links expire.", "status": "active",
+        "severity": "high"
+    });
+    store
+        .create_rule(serde_json::from_value(rule).unwrap())
+        .unwrap();
+    for update in [json!({}), json!({"statement": "Share links expire"})] {
+        let mut update = update;
+        update["scope_id"] = json!("default");
+        update["id"] = json!("req_expiry");
+        let etag = store
+            .requirement_edit_state(&scope(), &memory::id("req_expiry"))
+            .unwrap()
+            .etag;
+        let save = json!({
+            "actor": "ben", "expected_etag": etag, "update": update, "relationships": null
+        });
+        store
+            .save_requirement(serde_json::from_value(save).unwrap())
+            .unwrap();
     }
-    Repository::open(root, "default").unwrap()
-}
-
-fn input() -> BeginVerificationInput {
-    serde_json::from_value(json!({
-        "rule": "rule_expiry", "key": "expiry", "method": "examples",
-        "declared_by": "suite", "file": "evidence.rs"
-    }))
-    .unwrap()
+    assert_eq!(store.open_requirement_reviews(&scope()).unwrap().len(), 1);
+    repository
 }
 
 /// The answer body of a failed start and its status.
 fn failure(repository: &Repository) -> (Value, u16) {
-    let error = WriteError(begin_verification(repository, input()).unwrap_err());
+    let error = WriteError(begin_verification(repository, begin_input()).unwrap_err());
     (serde_json::to_value(&error).unwrap(), error.status())
 }
 
-fn assert_permission_denied(answer: &Value) {
-    assert_eq!(answer["kind"], "write_failed", "{answer}");
+fn reviews(repository: &Repository) -> Vec<RequirementReview> {
+    repository
+        .store()
+        .list_requirement_reviews(&scope())
+        .unwrap()
+}
+
+fn runs(repository: &Repository) -> Vec<VerificationRun> {
+    repository
+        .store()
+        .list_verification_runs(&scope())
+        .unwrap()
+}
+
+fn bindings(repository: &Repository) -> usize {
+    let store = repository.store();
+    store.list_verification_bindings(&scope()).unwrap().len()
+}
+
+fn assert_permission_denied(answer: &Value, status: u16) {
+    assert_eq!((&answer["kind"], status), (&json!("write_failed"), 500));
     let cause = answer["cause"].as_str().unwrap();
     assert!(
-        cause.starts_with("Permission denied (os error 13) at path \"") && cause.contains(".tmp"),
+        cause.starts_with("Permission denied (os error 13)"),
         "{answer}"
     );
 }
 
-/// This test shows more than a Rule states: no Rule states the state after a
-/// failed write of the run row.
+/// The local adapter lands a whole set on a copy of the state directory in
+/// the cache. No Rule states the answer when it cannot make that copy, so
+/// the test has no Rule binding.
 #[test]
-fn a_run_row_that_cannot_be_written_leaves_no_binding() {
+fn a_refused_set_on_local_disk_leaves_no_binding_no_run_row_and_an_open_review() {
+    let root = tempfile::tempdir().unwrap();
+    let repository = repository(root.path());
+    let open = reviews(&repository);
+    let _copies = ReadOnly::new(root.path().join(".provenance/cache/import-transactions"));
+
+    let (answer, status) = failure(&repository);
+
+    assert_permission_denied(&answer, status);
+    assert_eq!(
+        (bindings(&repository), runs(&repository), reviews(&repository)),
+        (0, Vec::new(), open)
+    );
+}
+
+/// The run row goes into the cache after the binding and the cleared
+/// reviews landed. No Rule states the state after a failed write of the
+/// run row, so the test has no Rule binding.
+#[test]
+fn a_run_row_that_cannot_be_written_leaves_the_binding_and_the_cleared_review() {
+    let root = tempfile::tempdir().unwrap();
+    let repository = repository(root.path());
+    let _cache = ReadOnly::new(root.path().join(".provenance/cache/scopes/default"));
+
+    let (answer, status) = failure(&repository);
+
+    assert_permission_denied(&answer, status);
+    let cause = answer["cause"].as_str().unwrap();
+    assert!(cause.contains(".tmp"), "{answer}");
+    let cleared = reviews(&repository)[0].cleared_by_run.is_some();
+    assert_eq!(
+        (bindings(&repository), runs(&repository), cleared),
+        (1, Vec::new(), true)
+    );
+}
+
+/// A start after a failed run row adds its own row and keeps the binding.
+/// The review stays cleared by the first start, which no row names. No Rule
+/// states this repair, so the test has no Rule binding.
+#[test]
+fn a_start_after_a_failed_run_row_adds_its_row() {
     let root = tempfile::tempdir().unwrap();
     let repository = repository(root.path());
     let cache = ReadOnly::new(root.path().join(".provenance/cache/scopes/default"));
-
-    let (answer, status) = failure(&repository);
-
-    assert_permission_denied(&answer);
-    assert_eq!(status, 500);
-    let store = repository.store();
-    let bindings = store.list_verification_bindings(&scope()).unwrap();
-    assert_eq!(bindings, [] as [VerificationBinding; 0]);
-    let runs = store.list_verification_runs(&scope()).unwrap();
-    assert_eq!(runs, [] as [VerificationRun; 0]);
-    let reviews = store.list_requirement_reviews(&scope()).unwrap();
-    assert_eq!(
-        serde_json::to_value(&reviews).unwrap(),
-        json!([open_review()])
-    );
-
+    failure(&repository);
+    let first = reviews(&repository)[0].cleared_by_run.clone().unwrap();
     drop(cache);
-    let run = begin_verification(&repository, input()).unwrap();
-    assert_eq!(store.list_verification_runs(&scope()).unwrap(), [run]);
-    assert_eq!(store.list_verification_bindings(&scope()).unwrap().len(), 1);
-}
 
-/// The local adapter writes the keys of a per-key set one at a time, in key
-/// order, so the reviews key comes before the binding key. It reports each
-/// failed key as a set whose landing began, the first key too. Thus the
-/// binding does not land, the outcome of the set is not known, and the run
-/// row stays. This test shows more than a Rule states: no Rule states this
-/// state.
-#[test]
-fn a_refused_reviews_key_on_local_disk_leaves_a_running_row() {
-    let root = tempfile::tempdir().unwrap();
-    let repository = repository(root.path());
-    let reviews = ReadOnly::new(
-        root.path()
-            .join(".provenance/state/scopes/default/requirements"),
-    );
+    let run = begin_verification(&repository, begin_input()).unwrap();
 
-    let (answer, status) = failure(&repository);
-
-    assert_permission_denied(&answer);
-    assert_eq!(status, 500);
-    let store = repository.store();
-    let bindings = store.list_verification_bindings(&scope()).unwrap();
-    assert_eq!(bindings, [] as [VerificationBinding; 0]);
-    let runs = store.list_verification_runs(&scope()).unwrap();
-    assert_eq!(runs.len(), 1);
+    let cleared_by = reviews(&repository)[0].cleared_by_run.clone();
     assert_eq!(
-        runs[0].status,
-        provenance_core::VerificationRunStatus::Running
+        (bindings(&repository), runs(&repository), cleared_by),
+        (1, vec![run], Some(first))
     );
-    let open = store.list_requirement_reviews(&scope()).unwrap();
-    assert_eq!(serde_json::to_value(&open).unwrap(), json!([open_review()]));
-
-    drop(reviews);
-    let run = begin_verification(&repository, input()).unwrap();
-    assert_eq!(store.list_verification_runs(&scope()).unwrap().len(), 2);
-    let cleared = store.list_requirement_reviews(&scope()).unwrap();
-    assert_eq!(cleared[0].cleared_by_run.as_ref(), Some(&run.id));
 }

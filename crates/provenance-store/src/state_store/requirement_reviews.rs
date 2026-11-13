@@ -1,5 +1,4 @@
-use camino::Utf8PathBuf;
-use provenance_core::{RequirementReview, ScopeId, StableId, VerificationRun};
+use provenance_core::{RequirementReview, ScopeId, StableId};
 use provenance_macros::rule;
 use sha2::{Digest, Sha256};
 
@@ -83,17 +82,14 @@ impl StateStore {
         })
     }
 
-    /// Clears earlier reviews with the fresh run and its time, and keeps each reason.
-    ///
-    /// Gives the new bytes of the reviews shard, or nothing when the scope
-    /// has no reviews shard. The caller holds the section and publishes the
-    /// bytes.
+    /// Clears earlier reviews with the fresh run and its time, and keeps each
+    /// reason, in new bytes of the reviews shard that the caller publishes.
     #[rule("rule_review_cleared_by_later_run")]
-    #[cfg_attr(not(feature = "host"), allow(dead_code))]
-    pub(crate) fn cleared_requirement_reviews(
+    #[cfg(feature = "host")]
+    pub(super) fn cleared_reviews_shard(
         &self,
-        run: &VerificationRun,
-    ) -> anyhow::Result<Option<(Utf8PathBuf, Vec<u8>)>> {
+        run: &provenance_core::VerificationRun,
+    ) -> anyhow::Result<Option<(camino::Utf8PathBuf, Vec<u8>)>> {
         let path = shards::requirement_reviews_path(&self.layout, &run.scope_id);
         if !self.state_exists(&path)? {
             return Ok(None);

@@ -87,6 +87,14 @@ name = "begin_verification_local_disk"
 required-features = ["host"]
 
 [[test]]
+name = "begin_verification_refusals"
+required-features = ["host"]
+
+[[test]]
+name = "begin_verification_section"
+required-features = ["host"]
+
+[[test]]
 name = "begin_verification_write_set"
 required-features = ["host"]
 

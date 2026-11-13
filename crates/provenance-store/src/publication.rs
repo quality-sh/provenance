@@ -222,6 +222,17 @@ impl crate::state_store::StateStore {
         self.publish_set(WriteSet::new(Atomicity::PerKey).put(self.state_key(path)?, bytes))
     }
 
+    /// Publishes each shard at its path as one whole write set: every shard
+    /// lands or none does.
+    #[cfg(feature = "host")]
+    pub(crate) fn publish_shards(&self, shards: Vec<(Utf8PathBuf, Vec<u8>)>) -> anyhow::Result<()> {
+        let mut writes = WriteSet::new(Atomicity::WholeSet);
+        for (path, bytes) in shards {
+            writes = writes.put(self.state_key(&path)?, bytes);
+        }
+        self.publish_set(writes)
+    }
+
     /// Writes `records` as the shard at `path` in the stage of this store.
     /// The write carries no permission, so it cannot change an enrolled row.
     pub(crate) fn put_jsonl_records<T: Serialize>(
@@ -279,7 +290,7 @@ impl crate::state_store::StateStore {
     /// stage. A store with a section view puts the view as the base of a set
     /// that has no base, and applies the set to the view once it lands. Any
     /// other store publishes through its adapter.
-    pub(crate) fn publish_set(&self, writes: WriteSet) -> anyhow::Result<()> {
+    fn publish_set(&self, writes: WriteSet) -> anyhow::Result<()> {
         if let Some(stage) = self.stage() {
             writes
                 .ensure_disjoint()

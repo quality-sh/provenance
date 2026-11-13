@@ -1,0 +1,125 @@
+//! The start of a verification run and the publication section, over the
+//! memory adapter. The clock of the repository runs a step of the test when
+//! the start reads the time, which it does in the section, after the checks
+//! and before the write set.
+
+#[path = "support/memory.rs"]
+mod memory;
+
+use memory::{
+    begin_input, key, open_review, scope, shard, verification_repository, FixedClock, Recorded,
+};
+use provenance_store::operations::{begin_verification, complete_verification};
+use provenance_store::repository::Clock;
+use provenance_store::state_store::CompleteVerificationInput;
+use provenance_store::storage::{Atomicity, StateStorage, WriteSet};
+use provenance_store::write_error::WriteError;
+use serde_json::json;
+use std::sync::{mpsc, Arc, Mutex};
+use std::time::Duration;
+
+const NOW: i64 = 1_767_225_600_000;
+
+type Step = Box<dyn FnOnce() + Send>;
+
+/// A clock that always reads `NOW` and runs its step at the first read.
+struct SteppingClock {
+    step: Mutex<Option<Step>>,
+}
+
+impl std::fmt::Debug for SteppingClock {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("SteppingClock")
+    }
+}
+
+impl SteppingClock {
+    fn new() -> Self {
+        Self {
+            step: Mutex::new(None),
+        }
+    }
+
+    fn set(&self, step: impl FnOnce() + Send + 'static) {
+        *self.step.lock().unwrap() = Some(Box::new(step));
+    }
+}
+
+impl Clock for SteppingClock {
+    fn now(&self) -> time::OffsetDateTime {
+        let step = self.step.lock().unwrap().take();
+        if let Some(step) = step {
+            step();
+        }
+        FixedClock::at_millis(NOW).now()
+    }
+}
+
+// No Rule binding: no Rule states the answer to a state change that comes
+// from outside the section.
+#[test]
+fn a_state_change_outside_the_section_leaves_no_binding_and_no_run_row() {
+    let root = tempfile::tempdir().unwrap();
+    let clock = Arc::new(SteppingClock::new());
+    let persistence = Arc::new(Recorded::default());
+    let (storage, repository) =
+        verification_repository(root.path(), [], persistence, clock.clone());
+    let requirement = json!({
+        "scope_id": "default", "id": "req_expiry", "statement": "Share links expire",
+        "description": "A change from outside the section", "status": "active"
+    });
+    let change = WriteSet::new(Atomicity::PerKey).put(
+        key("scopes/default/requirements/req.jsonl"),
+        shard(&[requirement]),
+    );
+    clock.set(move || storage.publish(change).unwrap());
+
+    let error = WriteError(begin_verification(&repository, begin_input()).unwrap_err());
+
+    let answer = serde_json::to_value(&error).unwrap();
+    assert_eq!((&answer["kind"], error.status()), (&json!("write_failed"), 500));
+    let cause = answer["cause"].as_str().unwrap();
+    assert!(cause.starts_with("the state moved from revision "), "{cause}");
+    let store = repository.store();
+    let reads = json!({
+        "bindings": store.list_verification_bindings(&scope()).unwrap(),
+        "runs": store.list_verification_runs(&scope()).unwrap(),
+        "reviews": store.list_requirement_reviews(&scope()).unwrap(),
+    });
+    assert_eq!(
+        reads,
+        json!({"bindings": [], "runs": [], "reviews": [open_review()]})
+    );
+}
+
+/// A completion of the run starts while the start reads the time, and waits
+/// for the section. It finds the run row, so the start holds the section
+/// from the time read until the row is in the cache. No Rule states this
+/// order, so the test has no Rule binding.
+#[test]
+fn a_completion_that_waits_for_the_section_finds_the_run_row() {
+    let root = tempfile::tempdir().unwrap();
+    let clock = Arc::new(SteppingClock::new());
+    let persistence = Arc::new(Recorded::default());
+    let (_, repository) = verification_repository(root.path(), [], persistence, clock.clone());
+    let (completed, completion) = mpsc::channel();
+    let waiting = repository.clone();
+    clock.set(move || {
+        std::thread::spawn(move || {
+            let input = CompleteVerificationInput {
+                run: format!("verification_{NOW}"),
+                status: "passed".into(),
+                error: None,
+            };
+            let result = complete_verification(&waiting, input);
+            completed.send(result.map_err(|error| format!("{error:#}"))).unwrap();
+        });
+        std::thread::sleep(Duration::from_millis(200));
+    });
+
+    let run = begin_verification(&repository, begin_input()).unwrap();
+
+    let completed = completion.recv().unwrap().unwrap();
+    let status = serde_json::to_value(completed.status).unwrap();
+    assert_eq!((completed.id, status), (run.id, json!("passed")));
+}

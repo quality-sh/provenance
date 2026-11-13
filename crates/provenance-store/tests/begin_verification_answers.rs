@@ -8,49 +8,18 @@
 #[path = "support/memory.rs"]
 mod memory;
 
-use memory::{initial_state, key, memory_repository_at, scope, shard, Recorded};
+use memory::{begin_input, open_review, scope, verification_repository, FixedClock, Recorded};
 use provenance_store::operations::{begin_verification, complete_verification};
-use provenance_store::repository::{Clock, Repository};
-use provenance_store::state_store::{BeginVerificationInput, CompleteVerificationInput};
-use provenance_store::storage::StateView;
+use provenance_store::repository::Repository;
+use provenance_store::state_store::CompleteVerificationInput;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
 const NOW: i64 = 1_767_225_600_000;
-const REVIEWS: &str = "scopes/default/requirements/review.jsonl";
-
-#[derive(Debug)]
-struct Fixed;
-
-impl Clock for Fixed {
-    fn now(&self) -> time::OffsetDateTime {
-        time::OffsetDateTime::from_unix_timestamp_nanos(i128::from(NOW) * 1_000_000).unwrap()
-    }
-}
-
-fn open_review() -> Value {
-    json!({
-        "scope_id": "default", "id": "review_expiry", "rule_id": "rule_expiry",
-        "requirement_id": "req_expiry", "field": "statement",
-        "before": "Links expire", "after": "Share links expire", "changed_at": 1
-    })
-}
 
 fn repository(root: &tempfile::TempDir) -> Repository {
-    std::fs::write(root.path().join("evidence.rs"), "fn expiry() {}\n").unwrap();
-    let mut entries = initial_state().into_entries();
-    entries.insert(key(REVIEWS), shard(&[open_review()]));
-    let persistence = Arc::new(Recorded::default());
-    let clock = Arc::new(Fixed);
-    memory_repository_at(root.path(), StateView::new(entries), persistence, clock).1
-}
-
-fn input() -> BeginVerificationInput {
-    serde_json::from_value(json!({
-        "rule": "rule_expiry", "key": "expiry", "method": "examples",
-        "declared_by": "suite", "file": "evidence.rs", "symbol": "expiry"
-    }))
-    .unwrap()
+    let clock = Arc::new(FixedClock::at_millis(NOW));
+    verification_repository(root.path(), [], Arc::new(Recorded::default()), clock).1
 }
 
 /// The bindings, the runs and the reviews that the reads give.
@@ -96,7 +65,7 @@ fn a_run_that_begins_and_completes_keeps_its_answers_and_rows() {
     let root = tempfile::tempdir().unwrap();
     let repository = repository(&root);
 
-    let begun = begin_verification(&repository, input()).unwrap();
+    let begun = begin_verification(&repository, begin_input()).unwrap();
     assert_eq!(serde_json::to_value(&begun).unwrap(), run("running", None));
     assert_eq!(
         reads(&repository),
