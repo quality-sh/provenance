@@ -36,6 +36,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy, rustfmt
       - run: sfw npm ci --prefix tools/operation-codegen
       - run: sfw npm ci --prefix tools/review-host
       - run: sfw npm ci --prefix packages/provenance
