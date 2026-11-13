@@ -204,7 +204,9 @@ mod tests {
         with_condition["anyOf"] = json!([{"required":["title"]},{"required":["expected_etag"]}]);
         for raw in [with_title, with_condition] {
             let body = published(&raw).unwrap().expect("the route has a body");
-            let data = body["properties"]["data"]["properties"].as_object().unwrap();
+            let data = body["properties"]["data"]["properties"]
+                .as_object()
+                .unwrap();
             assert_eq!(data.keys().collect::<Vec<_>>(), ["title"], "{raw}");
         }
     }
