@@ -154,7 +154,6 @@ fn a_post_on_a_moved_base_through_the_contract_is_state_changed() {
         "{:?}",
         run.done
     );
-    let test = "a_post_on_a_moved_base_through_the_contract_is_state_changed";
     let verdict = laws::check(&run).and_then(|()| contract_laws(&run));
-    report::probe("contract", test, verdict);
+    report::probe_laws("contract", verdict);
 }
