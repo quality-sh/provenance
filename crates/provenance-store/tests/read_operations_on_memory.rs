@@ -76,7 +76,7 @@ async fn repository() -> (tempfile::TempDir, Repository) {
         identity,
         storage,
         Arc::new(RefusesWhenHeld::default()),
-        Some(Arc::new(Other(MemorySqlite::new().await))),
+        Some(Arc::new(Other::new(MemorySqlite::new().await))),
     )
     .unwrap();
     (root, repository)

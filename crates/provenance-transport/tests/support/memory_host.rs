@@ -86,7 +86,7 @@ pub async fn memory_repository(
         identity,
         storage.clone(),
         Arc::new(MemorySectionLock::default()),
-        Some(Arc::new(Other(MemorySqlite::new().await))),
+        Some(Arc::new(Other::new(MemorySqlite::new().await))),
     )
     .unwrap();
     (repository, storage)
