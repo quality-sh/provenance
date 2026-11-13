@@ -270,8 +270,9 @@ mod tests {
             let mut raw = closed(&fields);
             raw[keyword] = condition;
             let refusal = published(&raw).expect_err(&raw.to_string());
+            let named = format!("the keyword `{keyword}`");
             assert!(refusal.contains(hidden), "{refusal}");
-            assert!(refusal.contains(&format!("the keyword `{keyword}`")), "{refusal}");
+            assert!(refusal.contains(&named), "{refusal}");
         }
 
         let hidden = "operation `example` hides the field `id`";
@@ -284,8 +285,9 @@ mod tests {
             raw["$defs"] = json!({"Condition":{"required":["title"]}});
             raw[keyword] = condition;
             let refusal = published(&raw).expect_err(&raw.to_string());
+            let named = format!("the keyword `{keyword}`");
             assert!(refusal.contains(hidden), "{refusal}");
-            assert!(refusal.contains(&format!("the keyword `{keyword}`")), "{refusal}");
+            assert!(refusal.contains(&named), "{refusal}");
         }
     }
 }
