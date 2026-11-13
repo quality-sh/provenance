@@ -114,7 +114,7 @@ impl HostAccess for LocalRepository {
         &self,
     ) -> Option<std::sync::Arc<dyn provenance_store::operations::read_operations::ReadOperations>>
     {
-        LocalRepository::read_operations(self)
+        Self::read_operations(self)
     }
 }
 
