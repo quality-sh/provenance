@@ -88,18 +88,56 @@ pub fn request_envelope(mut request: Value) -> Value {
     result
 }
 
-pub fn hide_bound_request_field(request: &mut Option<Value>, field: &str) {
+/// Removes a bound field from the properties and the required list of the request data. A
+/// body without the field cannot meet a condition on it. When a keyword that stays in the
+/// data names the field, the construction of the catalog stops.
+pub fn hide_bound_request_field(operation: &str, request: &mut Option<Value>, field: &str) {
     let Some(data) = request
         .as_mut()
         .and_then(|schema| schema.pointer_mut("/properties/data"))
+        .and_then(Value::as_object_mut)
     else {
         return;
     };
-    data.pointer_mut("/properties")
-        .and_then(Value::as_object_mut)
-        .map(|properties| properties.remove(field));
-    if let Some(required) = data.pointer_mut("/required").and_then(Value::as_array_mut) {
+    if let Some(properties) = data.get_mut("properties").and_then(Value::as_object_mut) {
+        properties.remove(field);
+    }
+    if let Some(required) = data.get_mut("required").and_then(Value::as_array_mut) {
         required.retain(|name| name.as_str() != Some(field));
+    }
+    let condition = data.iter().find(|(keyword, value)| {
+        keyword.as_str() != "properties" && member_names_field(keyword, value, field)
+    });
+    if let Some((keyword, value)) = condition {
+        panic!(
+            "operation `{operation}` hides the field `{field}` from its request body, and the \
+             keyword `{keyword}` of that body names the field, or has a reference or a pattern \
+             for property names that can name it. A body cannot meet a condition on a field \
+             that it does not have: {value}"
+        );
+    }
+}
+
+/// The keywords that can name a field that their text does not show: a reference, and a
+/// pattern for property names.
+const NAMES_NOT_SHOWN: [&str; 4] = ["$ref", "$dynamicRef", "patternProperties", "propertyNames"];
+
+/// True when the member `name` of a schema, or its value, names `field`.
+fn member_names_field(name: &str, value: &Value, field: &str) -> bool {
+    name == field || NAMES_NOT_SHOWN.contains(&name) || value_names_field(value, field)
+}
+
+/// True when `value` has the name of `field` as a member name or as a string, at each depth.
+fn value_names_field(value: &Value, field: &str) -> bool {
+    match value {
+        Value::String(text) => text == field,
+        Value::Array(members) => members
+            .iter()
+            .any(|member| value_names_field(member, field)),
+        Value::Object(members) => members
+            .iter()
+            .any(|(name, member)| member_names_field(name, member, field)),
+        _ => false,
     }
 }
 

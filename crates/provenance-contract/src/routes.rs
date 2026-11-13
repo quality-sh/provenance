@@ -407,6 +407,7 @@ fn query_route<O: Operation>(
         adapter: request::DIRECT,
     };
     let parameters = query::parameters(
+        O::NAME,
         &raw.request_schema,
         &definition.registration.request,
         &request,
