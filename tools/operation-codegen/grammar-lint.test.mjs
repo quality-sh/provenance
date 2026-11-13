@@ -111,6 +111,19 @@ test('required-null and untyped request slots are rejected', () => {
   assert.ok(routeGrammarErrors(doc).some(error => /required typed \{data\} envelope/.test(error)));
 });
 
+test('a request body whose data object takes no field is rejected', () => {
+  const errors = errorsFor('/topics/{id}/close', 'post', {
+    requestData: { type: 'object', additionalProperties: false, properties: {} },
+  });
+  assert.ok(errors.some(error => /required typed \{data\} envelope/.test(error)), errors.join('; '));
+});
+
+test('a route that takes no input declares no request body', () => {
+  const doc = document([{ path: '/topics/{id}/close', method: 'post' }]);
+  delete doc.paths['/topics/{id}/close'].post.requestBody;
+  assert.deepEqual(routeGrammarErrors(doc), []);
+});
+
 test('raw, flattened, and MCP-only response envelopes are rejected', () => {
   const raw = document([{ path: '/requirements', method: 'get' }]);
   raw.paths['/requirements'].get.responses['200'].content['application/json'].schema = {

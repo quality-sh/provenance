@@ -8,16 +8,23 @@
 //! The change tool has it as the properties of the action that writes.
 
 use provenance_porcelain::registry::{Command, Field, Input};
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 
 fn fields(command: Command) -> (&'static [Field], Value) {
-    let Input::Fields(fields) = command.declaration().input else {
-        panic!("{command:?} has no typed input");
-    };
-    let schema = fields
-        .schema
-        .unwrap_or_else(|| panic!("{command:?} has no typed input"));
-    (fields.fields, schema())
+    match command.declaration().input {
+        Input::Fields(fields) => {
+            let schema = fields
+                .schema
+                .unwrap_or_else(|| panic!("{command:?} has no typed input"));
+            (fields.fields, schema())
+        }
+        // A command that takes no input has an arguments object with no property.
+        Input::None => (
+            &[],
+            json!({"type": "object", "properties": {}, "additionalProperties": false}),
+        ),
+        _ => panic!("{command:?} has no typed input"),
+    }
 }
 
 fn properties(schema: &mut Value) -> &mut Map<String, Value> {

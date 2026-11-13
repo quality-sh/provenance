@@ -11,7 +11,7 @@ impl StateStore {
         record: &ReviewRecord,
         previous: Option<&ReviewRecord>,
     ) -> anyhow::Result<()> {
-        let kept = previous.map(requirement_parents).unwrap_or_default();
+        let kept = previous.map_or_default(requirement_parents);
         let added = requirement_parents(record)
             .into_iter()
             .filter(|id| !kept.contains(id))

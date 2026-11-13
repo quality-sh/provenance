@@ -5,7 +5,7 @@ use provenance_porcelain::export::Document;
 use provenance_porcelain::init::InitReport;
 use provenance_porcelain::registry::{
     self, CargoInitInput, DictionaryImportInput, DictionaryStatusInput, ExportInput, GraphCommand,
-    ImportInput, InitInput, MaterializeInput, MergeJsonlInput, ReportBuildInput, ReportRenderInput,
+    ImportInput, InitInput, MergeJsonlInput, ReportBuildInput, ReportRenderInput,
     RepositoryCommand, SchemaShowInput, SkillsInstallInput, SkillsListInput, SkillsShowInput,
     SwarmBacktraceLandInput, ValidateInput, WorkspaceCommand,
 };
@@ -42,7 +42,7 @@ pub(super) fn prime_command(input: &registry::PrimeInput) -> anyhow::Result<()> 
 pub(super) enum RepositoryInput {
     Init(InitInput),
     CargoInit(CargoInitInput),
-    Materialize(MaterializeInput, BoundContext),
+    Materialize(BoundContext),
     Export(ExportInput, BoundContext),
     Import(ImportInput, BoundContext),
     MergeJsonl(MergeJsonlInput),
@@ -74,7 +74,9 @@ impl RepositoryInput {
         Ok(match command {
             RepositoryCommand::Init => read!(Init),
             RepositoryCommand::CargoInit => read!(CargoInit),
-            RepositoryCommand::Materialize => read!(Materialize, bound),
+            RepositoryCommand::Materialize => {
+                Self::Materialize(crate::registry_cli::bound_context(matches))
+            }
             RepositoryCommand::Export => read!(Export, bound),
             RepositoryCommand::Import => read!(Import, bound),
             RepositoryCommand::MergeJsonl => read!(MergeJsonl),
@@ -92,9 +94,9 @@ pub(super) async fn repository_command(input: RepositoryInput, quiet: bool) -> a
     match input {
         RepositoryInput::Init(input) => print_init(&setup().init(input).await?, quiet),
         RepositoryInput::CargoInit(input) => print_init(&setup().cargo_init(input).await?, quiet),
-        RepositoryInput::Materialize(input, context) => {
+        RepositoryInput::Materialize(context) => {
             let json = context.json;
-            let result = work(context).materialize(input).await?;
+            let result = work(context).materialize().await?;
             print(
                 json,
                 &result,

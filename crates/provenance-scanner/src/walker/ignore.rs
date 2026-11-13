@@ -100,8 +100,7 @@ impl RepositoryFilter {
 
     fn push_level(&mut self, depth: usize, directory: &Path) {
         let patterns: Vec<Pattern> = std::fs::read_to_string(directory.join(".gitignore"))
-            .map(|text| text.lines().filter_map(parse_pattern).collect())
-            .unwrap_or_default();
+            .map_or_default(|text| text.lines().filter_map(parse_pattern).collect());
         if !patterns.is_empty() {
             self.levels.push(IgnoreLevel {
                 depth,

@@ -135,8 +135,7 @@ pub fn reference_bytes(
 ) -> anyhow::Result<Vec<u8>> {
     let technical_names = match std::fs::read(dictionary_reference_path(layout).as_std_path()) {
         Ok(current) => serde_json::from_slice::<DictionaryReference>(&current)
-            .map(|current| current.technical_names)
-            .unwrap_or_default(),
+            .map_or_default(|current| current.technical_names),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
         Err(error) => return Err(error).context("read the dictionary reference"),
     };

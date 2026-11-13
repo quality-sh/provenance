@@ -217,8 +217,7 @@ fn hold_repeated_properties(branches: &mut [Value], held: &mut Map<String, Value
                 let mut letters = name.chars();
                 letters
                     .next()
-                    .map(|first| first.to_uppercase().chain(letters).collect::<String>())
-                    .unwrap_or_default()
+                    .map_or_default(|first| first.to_uppercase().chain(letters).collect::<String>())
             },
             str::to_owned,
         );

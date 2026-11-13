@@ -3,7 +3,7 @@
 //! failure framing run on every step.
 
 use super::contract_laws::contract_laws;
-use provenance_core::protocol::failure::{ErasedFailure, OperationError, OperationFailure};
+use provenance_core::protocol::failure::{ErasedFailure, OperationFailure};
 use provenance_core::SDK_PROTOCOL_VERSION;
 use provenance_simulation::generate::{self, Effect, Task, SCOPE};
 use provenance_simulation::Config;
@@ -52,9 +52,9 @@ impl Invoke for Host {
         self,
         selected: Option<RequestedContext>,
         request: O::Request,
-    ) -> OperationFuture<O::Success, OperationError<O::Failure>> {
+    ) -> OperationFuture<O::Success, O::Failure> {
         Box::pin(async move {
-            let selected = selected.ok_or(OperationError::Common(OperationFailure::Internal))?;
+            let selected = selected.ok_or(OperationFailure::Internal)?;
             invoke_authorized_typed::<O>(self.0, selected, request).await
         })
     }

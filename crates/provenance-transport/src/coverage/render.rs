@@ -12,10 +12,7 @@ use provenance_core::coverage::{CoverageReport, CoverageSite, SiteRole};
 const OUTSIDE_IMPLEMENTATION_MODULE: &str = " (outside implementation module)";
 
 fn site_details(site: CoverageSite<'_>) -> String {
-    let name = site
-        .symbol()
-        .map(|name| format!(" ({name})"))
-        .unwrap_or_default();
+    let name = site.symbol().map_or_default(|name| format!(" ({name})"));
     match site {
         CoverageSite::Annotation(annotation) => format!("{name} ({})", annotation.coverage),
         CoverageSite::Binding(_) => name,

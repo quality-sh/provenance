@@ -48,7 +48,7 @@ pub use creation::{
     PostThreadMessage,
 };
 pub use discussions::{ListMessages, ListThreads};
-pub use entry::{Invoke, Operation, OperationFuture, WireSchema};
+pub use entry::{CallFailure, HandlerFailure, Invoke, Operation, OperationFuture, WireSchema};
 pub use ideation::{
     CreateAssertion, CreateDisposition, CreateProposal, ListAssertions, ListDispositions,
     ListProposals,
