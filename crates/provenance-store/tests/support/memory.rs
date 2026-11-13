@@ -74,7 +74,8 @@ impl StatePersistence for Refusing {
         if !writes.puts().keys().any(|key| (self.puts)(key.as_str())) {
             return Ok(());
         }
-        match *self.failure.lock().unwrap() {
+        let failure = *self.failure.lock().unwrap();
+        match failure {
             None => Ok(()),
             Some(Failure::Refused) => Err(PublishFailure::Refused(anyhow::anyhow!(
                 "the persistence refused the set"
