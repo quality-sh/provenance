@@ -16,8 +16,6 @@ use provenance_store::read_database::{
 
 #[path = "read_database_contract/lost_commit.rs"]
 mod lost_commit;
-#[path = "read_database_contract/windows_probe.rs"]
-mod windows_probe;
 
 /// A file database in a new cache directory of its own.
 struct File {
