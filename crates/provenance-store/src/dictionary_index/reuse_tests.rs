@@ -27,12 +27,12 @@ fn storing_an_identical_index_again_is_idempotent() {
     let directory = tempfile::tempdir().expect("make a temporary directory");
     let import = import();
     let first = store_dictionary_index(&import, directory.path()).expect("store the index");
-    let modified = modified(&first);
+    let stored_at = modified(&first);
 
     let second = store_dictionary_index(&import, directory.path()).expect("store it again");
 
     assert_eq!(second, first);
-    assert_eq!(modified(&second), modified);
+    assert_eq!(modified(&second), stored_at);
     assert_eq!(
         load_dictionary_index(directory.path(), &import.identity),
         Ok(import)

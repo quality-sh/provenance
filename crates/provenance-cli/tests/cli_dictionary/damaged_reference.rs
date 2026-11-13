@@ -144,19 +144,19 @@ impl Damaged {
         });
         (Some(0), status, String::new())
     }
+}
 
-    /// The statement check of a reference that does not parse with
-    /// `parse_error`: a warning that Rule 1.1 did not run, and no finding for
-    /// the unapproved word.
-    fn unloaded_check(&self, parse_error: &str) -> (Option<i32>, Value, String) {
-        let warning = format!("ASD-STE100 Rule 1.1 did not run: {}", problem(parse_error));
-        let check = json!({"categories": [{
-            "category": "statements",
-            "status": "findings",
-            "findings": [{"message": warning}],
-        }]});
-        (Some(0), check, String::new())
-    }
+/// The statement check of a reference that does not parse with
+/// `parse_error`: a warning that Rule 1.1 did not run, and no finding for
+/// the unapproved word.
+fn unloaded_check(parse_error: &str) -> (Option<i32>, Value, String) {
+    let warning = format!("ASD-STE100 Rule 1.1 did not run: {}", problem(parse_error));
+    let check = json!({"categories": [{
+        "category": "statements",
+        "status": "findings",
+        "findings": [{"message": warning}],
+    }]});
+    (Some(0), check, String::new())
 }
 
 /// The repair that each answer gives for a reference that does not parse.
@@ -211,20 +211,14 @@ fn the_status_of_half_of_a_reference_names_the_parse_error() {
 fn a_statement_check_with_an_empty_reference_warns_that_rule_1_1_did_not_run() {
     let damaged = Damaged::new(EMPTY);
 
-    assert_eq!(
-        damaged.statement_check(),
-        damaged.unloaded_check(EMPTY_MESSAGE)
-    );
+    assert_eq!(damaged.statement_check(), unloaded_check(EMPTY_MESSAGE));
 }
 
 #[test]
 fn a_statement_check_with_half_of_a_reference_warns_that_rule_1_1_did_not_run() {
     let damaged = Damaged::new(&half());
 
-    assert_eq!(
-        damaged.statement_check(),
-        damaged.unloaded_check(HALF_MESSAGE)
-    );
+    assert_eq!(damaged.statement_check(), unloaded_check(HALF_MESSAGE));
 }
 
 #[test]
