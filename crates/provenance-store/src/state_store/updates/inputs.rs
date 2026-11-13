@@ -5,14 +5,18 @@ use provenance_core::{
     ResolutionStatus, RuleSeverity, RuleStatus, ScopeId, SourceType, StableId, TopicStatus,
 };
 use serde::{Deserialize, Serialize};
+use std::convert::Infallible;
 
 macro_rules! update_input {
-    ($name:ident, $clear:ident { $($variant:ident),* }, { $($field:ident: $ty:ty),* }) => {
+    ($name:ident, $clear:ident { $($variant:ident),* }, $fields:tt) => {
         #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
         #[serde(rename_all = "snake_case")]
         pub enum $clear { $($variant),* }
 
+        update_input!($name, $clear, $fields);
+    };
+    ($name:ident, $clear:ident, { $($field:ident: $ty:ty),* }) => {
         #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
         #[derive(Serialize, Deserialize)]
         #[serde(deny_unknown_fields)]
@@ -58,10 +62,47 @@ update_input!(UpdateRuleInput, RuleClearField {
     source_section: String, archived_in_commit: provenance_core::ArchivedStamp,
     requirement_ids: ListEdit, resolution_ids: ListEdit
 });
-update_input!(UpdateTopicInput, TopicClearField {}, {
+update_input!(UpdateTopicInput, TopicClearField, {
     title: String, status: TopicStatus, links: Vec<ArtifactLink>,
     archived_in_commit: provenance_core::ArchivedStamp
 });
+
+/// A Topic has no field that an update clears, so this type has no value, and
+/// an update of a Topic takes only an empty list of fields to clear.
+///
+/// It is a struct and not an enum with no variants, because the `empty_enums`
+/// lint refuses that enum. Its impls give the serialized form, the errors and
+/// the schema of such an enum.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TopicClearField(pub Infallible);
+
+impl Serialize for TopicClearField {
+    fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
+        match self.0 {}
+    }
+}
+
+impl<'de> Deserialize<'de> for TopicClearField {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        provenance_core::protocol::empty::deserialize_enum(deserializer, "TopicClearField")
+            .map(Self)
+    }
+}
+
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for TopicClearField {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "TopicClearField".into()
+    }
+
+    fn schema_id() -> std::borrow::Cow<'static, str> {
+        concat!(module_path!(), "::TopicClearField").into()
+    }
+
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::Schema::from(false)
+    }
+}
 update_input!(EditQuestionInput, QuestionClearField { ResolutionId, Contradicts }, {
     question: String, resolution_method: ResolutionMethod, status: QuestionStatus,
     depends_on: Vec<StableId>,
