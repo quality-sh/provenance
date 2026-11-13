@@ -137,24 +137,54 @@ fn run(repo: &str, args: &[&str]) -> (Option<i32>, Vec<u8>, Vec<u8>) {
     (output.status.code(), output.stdout, output.stderr)
 }
 
-/// Runs each of `commands` over `past` and `malformed`, and compares
-/// the two after the parse messages: a value past the range fails as a
-/// malformed value of the same field fails. `file` is the name of the
-/// edited file, and `value` the value past the range.
+/// The refusal on the first line of standard error, with or without the
+/// `Error: ` prefix.
+fn refusal(stderr: &[u8]) -> Value {
+    let text = String::from_utf8_lossy(stderr);
+    let line = text.lines().next().unwrap_or_default();
+    let object = line.strip_prefix("Error: ").unwrap_or(line);
+    serde_json::from_str(object).unwrap_or_else(|error| panic!("{error}: {text}"))
+}
+
+/// Runs `check` and each of `commands` over `past` and `malformed`, and
+/// compares the two after the parse messages: a value past the range
+/// fails as a malformed value of the same field fails. Over `past`,
+/// `check` names `file`, line 1 and `value`, and each of `commands` gives
+/// the `invalid_state_file` refusal with that file, line and value.
 fn fails_as_malformed(past: &str, malformed: &str, commands: &[&[&str]], file: &str, value: &str) {
-    for (index, args) in commands.iter().enumerate() {
-        let read = index > 0;
+    let message = format!(
+        "invalid value: integer `{value}`, expected an integer from \
+         -9007199254740991 to 9007199254740991"
+    );
+    let check: &[&str] = &["check", "--format", "json"];
+    for args in std::iter::once(check).chain(commands.iter().copied()) {
         let (past_code, past_out, past_err) = run(past, args);
         let (code, out, err) = run(malformed, args);
         let past_text = String::from_utf8_lossy(&past_err).into_owned();
         assert_eq!(past_code, Some(1), "{args:?}: {past_text}");
-        assert!(past_text.contains(file), "{args:?}: {past_text}");
-        assert!(past_text.contains(value), "{args:?}: {past_text}");
-        assert_eq!(
-            past_text.contains("invalid_state_file"),
-            read,
-            "{args:?}: {past_text}"
-        );
+        if args[0] == "check" {
+            assert!(
+                past_text.contains(&format!("{file} line 1: {message}")),
+                "{past_text}"
+            );
+        } else {
+            let error = &refusal(&past_err)["error"];
+            assert_eq!(
+                [
+                    &error["kind"],
+                    &error["file"],
+                    &error["line"],
+                    &error["message"]
+                ],
+                [
+                    &Value::from("invalid_state_file"),
+                    &Value::from(file),
+                    &Value::from(1),
+                    &Value::from(message.as_str())
+                ],
+                "{args:?}: {past_text}"
+            );
+        }
         assert_eq!(
             (
                 past_code,
@@ -167,6 +197,8 @@ fn fails_as_malformed(past: &str, malformed: &str, commands: &[&[&str]], file: &
     }
 }
 
+/// A read and a write of the Resolution family over an `approved_at` past
+/// the range.
 #[test]
 fn a_committed_time_past_the_range_fails_as_a_malformed_field_fails() {
     let (_past_dir, past) = resolution(Value::from(1_i64 << 53));
@@ -175,34 +207,62 @@ fn a_committed_time_past_the_range_fails_as_a_malformed_field_fails() {
         &past,
         &malformed,
         &[
-            &["check", "--format", "json"],
             &["resolution_a", "get", "--format", "json"],
+            &[
+                "resolution_b",
+                "create",
+                "--type",
+                "resolution",
+                "--status",
+                "approved",
+                "--title",
+                "Second decision",
+                "--requirement-id",
+                "req_a",
+                "--position",
+                "Use the award date.",
+                "--rationale",
+                "The award clause sets the date.",
+                "--format",
+                "json",
+            ],
         ],
-        "res.jsonl",
+        "scopes/default/resolutions/res.jsonl",
         "9007199254740992",
     );
 }
 
+/// A read of the Discussion, a list of Discussions, and a reply, over a
+/// Discussion `version` past the range.
 #[test]
 fn a_discussion_version_past_the_range_fails_as_a_malformed_field_fails() {
     let (_past_dir, past, past_id) = discussion(Value::from(1_u64 << 53));
     let (_malformed_dir, malformed, _) = discussion(Value::from("two"));
-    // The ids of the two Discussions differ, so the read of one by its id
-    // is not compared with the other.
-    let (past_code, _, past_err) = run(&past, &[&past_id, "discussion", "--format", "json"]);
-    let past_text = String::from_utf8_lossy(&past_err).into_owned();
-    assert_eq!(past_code, Some(1), "{past_text}");
-    assert!(past_text.contains("invalid_state_file"), "{past_text}");
-    assert!(past_text.contains("discussions.jsonl"), "{past_text}");
-    assert!(past_text.contains("9007199254740992"), "{past_text}");
+    let (code, _, stderr) = run(&past, &[&past_id, "discussion", "--format", "json"]);
+    let error = &refusal(&stderr)["error"];
+    assert_eq!(code, Some(1));
+    assert_eq!(error["kind"], "invalid_state_file", "{error}");
+    assert_eq!(
+        error["file"], "scopes/default/threads/discussions.jsonl",
+        "{error}"
+    );
+    // The ids of the two Discussions differ, so the commands that name a
+    // Discussion are not compared with the malformed one.
     fails_as_malformed(
         &past,
         &malformed,
         &[
-            &["check", "--format", "json"],
             &["discussions", "--format", "json"],
+            &[
+                "req_a",
+                "discuss",
+                "--body",
+                "Which date?",
+                "--format",
+                "json",
+            ],
         ],
-        "discussions.jsonl",
+        "scopes/default/threads/discussions.jsonl",
         "9007199254740992",
     );
 }

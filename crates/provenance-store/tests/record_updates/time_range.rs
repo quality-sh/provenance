@@ -176,7 +176,7 @@ async fn the_approval_time_refusal_comes_before_each_check_of_a_create() {
             "reserved id",
             with(json!({"id":"api"})),
             false,
-            "invalid_input",
+            "write_failed",
         ),
         case(
             "id of a Requirement",
@@ -248,13 +248,13 @@ async fn the_approval_time_refusal_comes_before_each_check_of_an_update() {
             "record that does not exist",
             with(json!({"id":"resolution_missing"})),
             false,
-            "not_found",
+            "missing_reference",
         ),
         case(
             "edit tag that differs",
             with(json!({"expected_etag":"stale"})),
             false,
-            "conflict",
+            "record_edit_conflict",
         ),
         case(
             "Requirement that does not exist",
@@ -266,7 +266,7 @@ async fn the_approval_time_refusal_comes_before_each_check_of_an_update() {
             "no Requirement",
             with(json!({"requirement_ids":[]})),
             false,
-            "missing_reference",
+            "invalid_update",
         ),
         case(
             "blank title",
