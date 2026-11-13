@@ -132,7 +132,7 @@ async fn the_router_over_memory_storage_answers_as_over_a_folder() {
         READ_OPERATIONS.iter().copied().collect::<BTreeSet<_>>()
     );
     assert!(!root.exists(), "the router made the working tree");
-    assert!(entries(missing.path()).is_empty());
-    assert!(entries(home.path()).is_empty());
-    assert!(entries(working.path()).is_empty());
+    assert_eq!(entries(missing.path()), Vec::<std::path::PathBuf>::new());
+    assert_eq!(entries(home.path()), Vec::<std::path::PathBuf>::new());
+    assert_eq!(entries(working.path()), Vec::<std::path::PathBuf>::new());
 }

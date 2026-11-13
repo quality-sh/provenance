@@ -236,6 +236,8 @@ fn decision(singular: &str, id: &str) -> Value {
 
 /// Creates a Requirement and withdraws its submission, then changes it and
 /// decides the new submission.
+// `{proposal}` in a shown call is a placeholder for the generated id.
+#[allow(clippy::literal_string_with_formatting_args)]
 async fn requirement_writes(out: &mut Transcript, surface: &impl Surface) {
     let created = out
         .call(
