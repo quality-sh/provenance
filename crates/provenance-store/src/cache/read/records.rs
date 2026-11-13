@@ -1,18 +1,16 @@
 //! The lookups of one typed table handle, and the kind of a bare id.
 
-use super::rows::{decode, select_columns};
-use super::BIND_CHUNK;
+use super::rows::{decode, id_column, select_columns};
 use crate::cache::materialize::SEARCH_TEXT;
 use crate::cache::quoted;
 use crate::operations::reader::{ReadSnapshot, Table};
+use crate::read_database::{SqlColumns, SqlRow, SqlValue};
 use provenance_core::model::ProjectionRow;
 use provenance_core::{
     ImplementationBinding, NodeType, Question, Requirement, Resolution, Rule, Source, StableId,
     Topic, VerificationBinding,
 };
 use provenance_macros::rule;
-use sqlx::sqlite::SqliteRow;
-use sqlx::Row;
 
 impl<K: ProjectionRow> Table<'_, K> {
     /// One record by id.
@@ -22,15 +20,14 @@ impl<K: ProjectionRow> Table<'_, K> {
             select_columns::<K>(),
             quoted(K::TABLE)
         );
-        let row = {
-            let mut tx = self.snapshot().connection().await;
-            sqlx::query(sqlx::AssertSqlSafe(sql))
-                .bind(self.snapshot().scope().as_str())
-                .bind(id.as_str())
-                .fetch_optional(&mut **tx)
-                .await?
-        };
-        row.as_ref().map(decode::<K>).transpose()
+        let rows = self
+            .snapshot()
+            .fetch(
+                &sql,
+                vec![self.snapshot().scope_value(), id.as_str().into()],
+            )
+            .await?;
+        rows.into_iter().next().map(decode::<K>).transpose()
     }
 
     /// The records with the given ids that count under the view, one per
@@ -47,12 +44,7 @@ impl<K: ProjectionRow> Table<'_, K> {
     /// view, in id order.
     pub async fn by_field(&self, column: &'static str, values: &[&str]) -> anyhow::Result<Vec<K>> {
         let rows = self.rows_in(&select_columns::<K>(), column, values).await?;
-        let mut records = rows
-            .iter()
-            .map(|row| Ok((row.try_get::<String, _>("id")?, decode::<K>(row)?)))
-            .collect::<anyhow::Result<Vec<_>>>()?;
-        records.sort_by(|left, right| left.0.cmp(&right.0));
-        Ok(records.into_iter().map(|(_, record)| record).collect())
+        in_id_order(rows)
     }
 
     /// Reads query-page records only after every stored row passes the
@@ -69,22 +61,18 @@ impl<K: ProjectionRow> Table<'_, K> {
         values.dedup();
         let expression = super::page::byte_expression(K::COLUMNS);
         let maximum = i64::try_from(super::page::RECORD_BYTES)?;
-        for chunk in values.chunks(BIND_CHUNK) {
+        for chunk in values.chunks(self.snapshot().list_values()) {
             let marks = vec!["?"; chunk.len()].join(", ");
             let sql = format!(
                 "SELECT {expression} AS record_bytes FROM {} WHERE scope_id = ? AND {} IN ({marks})",
                 quoted(K::TABLE),
                 quoted(column)
             );
-            let mut query =
-                sqlx::query_scalar(sqlx::AssertSqlSafe(sql)).bind(self.snapshot().scope().as_str());
-            for value in chunk {
-                query = query.bind(*value);
-            }
-            let sizes: Vec<i64> = {
-                let mut tx = self.snapshot().connection().await;
-                query.fetch_all(&mut **tx).await?
-            };
+            let rows = self.snapshot().fetch(&sql, self.bound(chunk)).await?;
+            let sizes = rows
+                .iter()
+                .map(|row| row.integer(0))
+                .collect::<anyhow::Result<Vec<_>>>()?;
             if sizes.into_iter().any(|size| size > maximum) {
                 return Err(
                     provenance_core::protocol::read_failure::ReadFailure::PageRecordTooLarge.into(),
@@ -129,24 +117,19 @@ impl<K: ProjectionRow> Table<'_, K> {
         // holds across the chunked statements.
         let mut candidates: Vec<String> = Vec::new();
         let wanted = i64::try_from(limit + 1)?;
-        for chunk in values.chunks(BIND_CHUNK) {
+        for chunk in values.chunks(self.snapshot().list_values()) {
             let marks = vec!["?"; chunk.len()].join(", ");
             let sql = format!(
                 "SELECT id FROM {} WHERE scope_id = ? AND {} IN ({marks}){filter} ORDER BY id LIMIT ?",
                 quoted(K::TABLE),
                 quoted(column)
             );
-            let mut query =
-                sqlx::query_scalar(sqlx::AssertSqlSafe(sql)).bind(self.snapshot().scope().as_str());
-            for value in chunk {
-                query = query.bind(*value);
+            let mut values = self.bound(chunk);
+            values.push(SqlValue::Integer(wanted));
+            let rows = self.snapshot().fetch(&sql, values).await?;
+            for mut row in rows {
+                candidates.push(row.take_text(0)?);
             }
-            query = query.bind(wanted);
-            let ids: Vec<String> = {
-                let mut tx = self.snapshot().connection().await;
-                query.fetch_all(&mut **tx).await?
-            };
-            candidates.extend(ids);
         }
         candidates.sort();
         let more = candidates.len() > limit;
@@ -172,21 +155,17 @@ impl<K: ProjectionRow> Table<'_, K> {
         let wanted: Vec<&str> = ids.iter().map(String::as_str).collect();
         let expression = super::page::byte_expression(K::COLUMNS);
         let maximum = i64::try_from(super::page::RECORD_BYTES)?;
-        for chunk in wanted.chunks(BIND_CHUNK) {
+        for chunk in wanted.chunks(self.snapshot().list_values()) {
             let marks = vec!["?"; chunk.len()].join(", ");
             let sql = format!(
                 "SELECT {expression} AS record_bytes FROM {} WHERE scope_id = ? AND id IN ({marks})",
                 quoted(K::TABLE)
             );
-            let mut query =
-                sqlx::query_scalar(sqlx::AssertSqlSafe(sql)).bind(self.snapshot().scope().as_str());
-            for value in chunk {
-                query = query.bind(*value);
-            }
-            let sizes: Vec<i64> = {
-                let mut tx = self.snapshot().connection().await;
-                query.fetch_all(&mut **tx).await?
-            };
+            let rows = self.snapshot().fetch(&sql, self.bound(chunk)).await?;
+            let sizes = rows
+                .iter()
+                .map(|row| row.integer(0))
+                .collect::<anyhow::Result<Vec<_>>>()?;
             if sizes.into_iter().any(|size| size > maximum) {
                 return Err(
                     provenance_core::protocol::read_failure::ReadFailure::PageRecordTooLarge.into(),
@@ -194,12 +173,7 @@ impl<K: ProjectionRow> Table<'_, K> {
             }
         }
         let rows = self.rows_in(&select_columns::<K>(), "id", &wanted).await?;
-        let mut records = rows
-            .iter()
-            .map(|row| Ok((row.try_get::<String, _>("id")?, decode::<K>(row)?)))
-            .collect::<anyhow::Result<Vec<_>>>()?;
-        records.sort_by(|left, right| left.0.cmp(&right.0));
-        Ok(records.into_iter().map(|(_, record)| record).collect())
+        in_id_order(rows)
     }
 
     /// The given ids that name a row that counts under the view, in id
@@ -208,9 +182,9 @@ impl<K: ProjectionRow> Table<'_, K> {
         let wanted: Vec<&str> = ids.iter().map(StableId::as_str).collect();
         let rows = self.rows_in("id", "id", &wanted).await?;
         let mut found = rows
-            .iter()
-            .map(|row| row.try_get::<String, _>(0))
-            .collect::<Result<Vec<_>, _>>()?;
+            .into_iter()
+            .map(|mut row| row.take_text(0))
+            .collect::<anyhow::Result<Vec<_>>>()?;
         found.sort_unstable();
         found.into_iter().map(StableId::new).collect()
     }
@@ -225,28 +199,19 @@ impl<K: ProjectionRow> Table<'_, K> {
         select: &str,
         column: &str,
         values: &[&str],
-    ) -> anyhow::Result<Vec<SqliteRow>> {
+    ) -> anyhow::Result<Vec<SqlRow>> {
         let mut values = values.to_vec();
         values.sort_unstable();
         values.dedup();
         let mut rows = Vec::new();
-        for chunk in values.chunks(BIND_CHUNK) {
+        for chunk in values.chunks(self.snapshot().list_values()) {
             let marks = vec!["?"; chunk.len()].join(", ");
             let sql = format!(
                 "SELECT {select} FROM {} WHERE scope_id = ? AND {} IN ({marks})",
                 quoted(K::TABLE),
                 quoted(column)
             );
-            let mut query =
-                sqlx::query(sqlx::AssertSqlSafe(sql)).bind(self.snapshot().scope().as_str());
-            for value in chunk {
-                query = query.bind(*value);
-            }
-            let fetched = {
-                let mut tx = self.snapshot().connection().await;
-                query.fetch_all(&mut **tx).await?
-            };
-            rows.extend(fetched);
+            rows.extend(self.snapshot().fetch(&sql, self.bound(chunk)).await?);
         }
         Ok(rows)
     }
@@ -257,15 +222,14 @@ impl<K: ProjectionRow> Table<'_, K> {
             "SELECT 1 FROM {} WHERE scope_id = ? AND id = ?",
             quoted(K::TABLE)
         );
-        let found: Option<i64> = {
-            let mut tx = self.snapshot().connection().await;
-            sqlx::query_scalar(sqlx::AssertSqlSafe(sql))
-                .bind(self.snapshot().scope().as_str())
-                .bind(id.as_str())
-                .fetch_optional(&mut **tx)
-                .await?
-        };
-        Ok(found.is_some())
+        let rows = self
+            .snapshot()
+            .fetch(
+                &sql,
+                vec![self.snapshot().scope_value(), id.as_str().into()],
+            )
+            .await?;
+        Ok(!rows.is_empty())
     }
 
     /// The records whose search text holds the needle, in id order. The
@@ -278,16 +242,33 @@ impl<K: ProjectionRow> Table<'_, K> {
             quoted(K::TABLE),
             quoted(SEARCH_TEXT)
         );
-        let rows = {
-            let mut tx = self.snapshot().connection().await;
-            sqlx::query(sqlx::AssertSqlSafe(sql))
-                .bind(self.snapshot().scope().as_str())
-                .bind(needle.to_lowercase())
-                .fetch_all(&mut **tx)
-                .await?
-        };
-        rows.iter().map(decode::<K>).collect()
+        let rows = self
+            .snapshot()
+            .fetch(
+                &sql,
+                vec![self.snapshot().scope_value(), needle.to_lowercase().into()],
+            )
+            .await?;
+        rows.into_iter().map(decode::<K>).collect()
     }
+
+    /// The scope, then each value of one chunk, as a statement binds them.
+    fn bound(&self, chunk: &[&str]) -> Vec<SqlValue> {
+        std::iter::once(self.snapshot().scope_value())
+            .chain(chunk.iter().map(|value| SqlValue::from(*value)))
+            .collect()
+    }
+}
+
+/// The records that the rows hold, in id order.
+fn in_id_order<K: ProjectionRow>(rows: Vec<SqlRow>) -> anyhow::Result<Vec<K>> {
+    let id = id_column::<K>()?;
+    let mut records = rows
+        .into_iter()
+        .map(|row| Ok((row.text(id)?.to_owned(), decode::<K>(row)?)))
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    records.sort_by(|left, right| left.0.cmp(&right.0));
+    Ok(records.into_iter().map(|(_, record)| record).collect())
 }
 
 pub struct ImplementationSymbolSite {
@@ -307,11 +288,11 @@ impl Table<'_, ImplementationBinding> {
         file: &str,
     ) -> anyhow::Result<Vec<ImplementationSymbolSite>> {
         let rows = symbol_rows(self, "rule_id, symbol", file).await?;
-        rows.iter()
-            .map(|row| {
+        rows.into_iter()
+            .map(|mut row| {
                 Ok(ImplementationSymbolSite {
-                    rule_id: row.try_get("rule_id")?,
-                    symbol: row.try_get("symbol")?,
+                    rule_id: row.take_text(0)?,
+                    symbol: row.take_text(1)?,
                 })
             })
             .collect()
@@ -324,12 +305,12 @@ impl Table<'_, VerificationBinding> {
         file: &str,
     ) -> anyhow::Result<Vec<VerificationSymbolSite>> {
         let rows = symbol_rows(self, "rule_id, symbol, method", file).await?;
-        rows.iter()
-            .map(|row| {
+        rows.into_iter()
+            .map(|mut row| {
                 Ok(VerificationSymbolSite {
-                    rule_id: row.try_get("rule_id")?,
-                    symbol: row.try_get("symbol")?,
-                    method: row.try_get("method")?,
+                    rule_id: row.take_text(0)?,
+                    symbol: row.take_optional_text(1)?,
+                    method: row.take_text(2)?,
                 })
             })
             .collect()
@@ -337,25 +318,21 @@ impl Table<'_, VerificationBinding> {
 }
 
 /// The binding rows whose file column holds the file, with `select` as
-/// the column list. Only the named columns are read, so no binding record
-/// decodes. The callers pass a constant column list.
+/// the column list, in that order. Only the named columns are read, so no
+/// binding record decodes. The callers pass a constant column list.
 async fn symbol_rows<K: ProjectionRow>(
     table: &Table<'_, K>,
     select: &'static str,
     file: &str,
-) -> anyhow::Result<Vec<SqliteRow>> {
+) -> anyhow::Result<Vec<SqlRow>> {
     let sql = format!(
         "SELECT {select} FROM {} WHERE scope_id = ? AND file = ? ORDER BY rule_id, id",
         quoted(K::TABLE)
     );
-    let mut tx = table.snapshot().connection().await;
-    let rows = sqlx::query(sqlx::AssertSqlSafe(sql))
-        .bind(table.snapshot().scope().as_str())
-        .bind(file)
-        .fetch_all(&mut **tx)
-        .await?;
-    drop(tx);
-    Ok(rows)
+    let snapshot = table.snapshot();
+    snapshot
+        .fetch(&sql, vec![snapshot.scope_value(), file.into()])
+        .await
 }
 
 /// The kind of a record named without one: the first kind, in rank
