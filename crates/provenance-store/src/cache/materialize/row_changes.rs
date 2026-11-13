@@ -11,37 +11,36 @@
 //! is the same. These loads are a loader that stopped on a record, two
 //! records with one id, and a table with no id column.
 
-use super::batch::{bind, Rows, Table};
+use super::batch::{Rows, Table};
 use super::family_rows;
 use crate::cache::ProjectionFamily;
+use crate::read_database::{SqlColumns, SqlValue, Transaction};
 use provenance_core::model::ColumnValue;
 use provenance_core::ScopeId;
-use sqlx::sqlite::SqliteRow;
-use sqlx::{Row, Sqlite, Transaction, TypeInfo, ValueRef};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// The most ids that one delete binds.
-const IDS_PER_STATEMENT: usize = 500;
-
+/// Writes the rows of one family in `scope`; a statement binds at most
+/// `bound_values` values.
 pub(super) async fn write_changes(
-    tx: &mut Transaction<'_, Sqlite>,
+    tx: &mut Transaction,
     rows: Rows,
     family: ProjectionFamily,
     scope: &ScopeId,
+    bound_values: usize,
 ) -> anyhow::Result<u64> {
     let key = rows.tables[0]
         .columns
         .iter()
         .position(|column| matches!(column.trim_matches('"'), "id" | "discussion_id"));
     let Some(key) = key.filter(|_| rows.failure.is_none()) else {
-        return full(tx, rows, family, scope).await;
+        return full(tx, rows, family, scope, bound_values).await;
     };
     let mut fresh = BTreeMap::new();
     let mut identities = BTreeMap::new();
     for (table, values) in &rows.entries {
         let id = match values.get(if *table == 0 { key } else { 1 }) {
             Some(ColumnValue::Text(id)) => id.clone(),
-            _ => return full(tx, rows, family, scope).await,
+            _ => return full(tx, rows, family, scope, bound_values).await,
         };
         let target = if *table == 0 {
             &mut fresh
@@ -49,7 +48,7 @@ pub(super) async fn write_changes(
             &mut identities
         };
         if target.insert(id, values.clone()).is_some() {
-            return full(tx, rows, family, scope).await;
+            return full(tx, rows, family, scope, bound_values).await;
         }
     }
     let table = &rows.tables[0];
@@ -102,18 +101,19 @@ pub(super) async fn write_changes(
         )
         .await?;
     }
-    write.write(tx).await?;
+    write.write(tx, bound_values).await?;
     Ok(rows.loaded)
 }
 
 async fn full(
-    tx: &mut Transaction<'_, Sqlite>,
+    tx: &mut Transaction,
     rows: Rows,
     family: ProjectionFamily,
     scope: &ScopeId,
+    bound_values: usize,
 ) -> anyhow::Result<u64> {
     family_rows::delete_rows(tx, family, scope).await?;
-    rows.write(tx).await
+    rows.write(tx, bound_values).await
 }
 
 /// The columns whose values decide whether a stored row is current, the
@@ -132,7 +132,7 @@ fn compared_columns(table: &Table, key: usize) -> Vec<usize> {
 /// id. A row with a value that this module cannot compare is `None`, so it
 /// is written again.
 async fn stored_rows(
-    tx: &mut Transaction<'_, Sqlite>,
+    tx: &mut Transaction,
     table: &Table,
     compared: &[usize],
     scope: &ScopeId,
@@ -146,39 +146,32 @@ async fn stored_rows(
         columns.join(", "),
         table.name
     );
-    let fetched = sqlx::query(sqlx::AssertSqlSafe(sql))
-        .bind(scope.as_str())
-        .fetch_all(&mut **tx)
-        .await?;
+    let fetched = tx.fetch(&sql, vec![SqlValue::from(scope.as_str())]).await?;
     let mut stored = BTreeMap::new();
     for row in &fetched {
-        let id: String = row.try_get(0)?;
+        let id = row.text(0)?.to_owned();
         stored.insert(id, values(row, compared.len()));
     }
     Ok(stored)
 }
 
-fn values(row: &SqliteRow, columns: usize) -> Option<Vec<ColumnValue>> {
+fn values(row: &[SqlValue], columns: usize) -> Option<Vec<ColumnValue>> {
     (0..columns)
-        .map(|index| {
-            let raw = row.try_get_raw(index).ok()?;
-            if raw.is_null() {
-                return Some(ColumnValue::Null);
-            }
-            match raw.type_info().name() {
-                "INTEGER" => row.try_get(index).ok().map(ColumnValue::Integer),
-                "REAL" => row.try_get(index).ok().map(ColumnValue::Real),
-                "TEXT" => row.try_get(index).ok().map(ColumnValue::Text),
-                _ => None,
-            }
+        .map(|index| match row.get(index)? {
+            SqlValue::Null => Some(ColumnValue::Null),
+            SqlValue::Integer(integer) => Some(ColumnValue::Integer(*integer)),
+            SqlValue::Real(real) => Some(ColumnValue::Real(*real)),
+            SqlValue::Text(text) => Some(ColumnValue::Text(text.clone())),
+            SqlValue::Blob(_) => None,
         })
         .collect()
 }
 
-/// Runs `prefix (?, ...)` over the ids in chunks, with the scope and, when
-/// given, one more value bound before the ids.
+/// Runs `prefix (?, ...)` over the ids in chunks of the list size of the
+/// transaction, with the scope and, when given, one more value bound
+/// before the ids.
 async fn delete(
-    tx: &mut Transaction<'_, Sqlite>,
+    tx: &mut Transaction,
     prefix: &str,
     scope: &ScopeId,
     second: Option<&str>,
@@ -186,17 +179,14 @@ async fn delete(
 ) -> anyhow::Result<()> {
     let unique: BTreeSet<&String> = ids.iter().copied().collect();
     let ids: Vec<&String> = unique.into_iter().collect();
-    for chunk in ids.chunks(IDS_PER_STATEMENT) {
+    for chunk in ids.chunks(tx.max_list_values().max(1)) {
         let marks = vec!["?"; chunk.len()].join(", ");
-        let mut query =
-            sqlx::query(sqlx::AssertSqlSafe(format!("{prefix} ({marks})"))).bind(scope.as_str());
+        let mut values = vec![SqlValue::from(scope.as_str())];
         if let Some(second) = second {
-            query = query.bind(second.to_owned());
+            values.push(SqlValue::from(second));
         }
-        for id in chunk {
-            query = bind(query, &ColumnValue::Text((*id).clone()));
-        }
-        query.execute(&mut **tx).await?;
+        values.extend(chunk.iter().map(|id| SqlValue::from(id.as_str())));
+        tx.execute(&format!("{prefix} ({marks})"), values).await?;
     }
     Ok(())
 }

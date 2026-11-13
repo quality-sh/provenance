@@ -2,8 +2,7 @@
 //! change without compatibility shims. Use `provenance-sdk` for Rust.
 //!
 //! This crate is the repository engine. It owns the use cases and calls storage through a
-//! port. The engine runs where its storage is: in the process over local disk now, and as
-//! Wasm in a Durable Object over the SQLite of that object later.
+//! port. The engine runs where its storage is. Today that is the process, over local disk.
 //!
 //! The areas of the crate:
 //!
@@ -21,15 +20,15 @@
 //!
 //! Without the `host` feature the crate has the write engine: a repository
 //! over any storage adapter, the record writers, stages, review saves and
-//! the merge logic, and it builds for wasm32-unknown-unknown. The `host`
-//! feature adds the local-disk adapter, git, the dictionary index files,
-//! the projection, the queries and the use cases that read through them.
+//! the merge logic, and the projection over any read database adapter: the
+//! catch-up, the rebuild, the schema check, the read snapshot and its
+//! handles. It builds for wasm32-unknown-unknown. The `host` feature adds
+//! the local-disk adapters, git, the dictionary index files, the queries
+//! and the use cases that read through them.
 
-#[cfg(feature = "host")]
 pub mod cache;
 pub mod canonical_digest;
 pub mod code_refs;
-#[cfg(feature = "host")]
 pub mod current_schema;
 pub mod dictionary_reference;
 pub mod families;
@@ -42,7 +41,6 @@ pub mod layout;
 #[cfg(feature = "host")]
 mod long_path;
 pub mod merge;
-#[cfg(feature = "host")]
 pub mod operations;
 pub mod publication;
 pub mod read_database;
@@ -76,7 +74,6 @@ mod test_support;
 /// 1. Graph and ideation validation when catch-up reads changed units in place.
 ///
 /// Increase this version when a validator change requires existing scopes to be checked again.
-#[cfg(feature = "host")]
 pub const VALIDATION_VERSION: u32 = 2;
 
 pub mod write_error;

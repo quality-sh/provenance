@@ -3,34 +3,56 @@
 //! Every operation the wire adapter exposes is reachable here in
 //! process. The CLI is a thin argv and stdio adapter over these
 //! functions; nothing semantic lives in the adapter.
+//!
+//! Without the `host` feature only the read snapshot and its handles
+//! (`reader`) and the stored revision (`stamp`) build.
 
+#[cfg(feature = "host")]
 use anyhow::Context as _;
+#[cfg(feature = "host")]
 use std::str::FromStr as _;
 
+#[cfg(feature = "host")]
 use camino::Utf8Path;
+#[cfg(feature = "host")]
 use provenance_core::{EngineInfo, ScopeId, StableId, SDK_PROTOCOL_VERSION};
+#[cfg(feature = "host")]
 use provenance_macros::rule;
 
+#[cfg(feature = "host")]
 use crate::repository::Repository;
+#[cfg(feature = "host")]
 use crate::state_store::{
     BeginVerificationInput, CompleteVerificationInput, StateStore, TypedSpecInput, TypedSpecResult,
 };
 
+#[cfg(feature = "host")]
 pub mod catalog;
+#[cfg(feature = "host")]
 pub mod family_operations;
+#[cfg(feature = "host")]
 pub mod files;
+#[cfg(feature = "host")]
 pub mod local_repository;
+#[cfg(feature = "host")]
 mod plan;
+#[cfg(feature = "host")]
 pub mod queries;
+#[cfg(feature = "host")]
 pub mod read_policy;
 pub mod reader;
+#[cfg(feature = "host")]
 mod sites;
 pub mod stamp;
+#[cfg(feature = "host")]
 pub use crate::write_error;
 
+#[cfg(feature = "host")]
 pub use local_repository::LocalRepository;
+#[cfg(feature = "host")]
 pub use plan::{AffectedRule, ReviewReason, RuleEvidence, TypedSpecPlan};
 
+#[cfg(feature = "host")]
 /// Advertises the engine contract. The engine version is the store's own.
 pub fn engine_info(repository: &Repository) -> EngineInfo {
     EngineInfo {
@@ -40,6 +62,7 @@ pub fn engine_info(repository: &Repository) -> EngineInfo {
     }
 }
 
+#[cfg(feature = "host")]
 /// Calculates one reconciliation, its affected Rules, and their evidence,
 /// without writing.
 pub fn plan(repository: &Repository, mut input: TypedSpecInput) -> anyhow::Result<TypedSpecPlan> {
@@ -47,6 +70,7 @@ pub fn plan(repository: &Repository, mut input: TypedSpecInput) -> anyhow::Resul
     plan::typed_spec(repository, input)
 }
 
+#[cfg(feature = "host")]
 /// Reconciles one language-owned desired-state document with canonical
 /// state.
 pub fn apply(
@@ -59,6 +83,7 @@ pub fn apply(
         .apply_typed_spec(repository.scope(), input)
 }
 
+#[cfg(feature = "host")]
 /// Opens one verification run against a durable binding.
 ///
 /// Parses the method word once, here, and carries the typed value through to
@@ -76,6 +101,7 @@ pub fn begin_verification(
         .begin_verification(repository.scope().clone(), input, method)
 }
 
+#[cfg(feature = "host")]
 /// Completes one verification run as passed or failed.
 pub fn complete_verification(
     repository: &Repository,
@@ -86,6 +112,7 @@ pub fn complete_verification(
         .complete_verification(repository.scope(), input)
 }
 
+#[cfg(feature = "host")]
 /// Lists verification runs, optionally for one Rule.
 pub fn verification_runs(
     repository: &Repository,
@@ -94,6 +121,7 @@ pub fn verification_runs(
     verification_runs_of(&repository.store(), repository.scope(), rule)
 }
 
+#[cfg(feature = "host")]
 /// Lists verification bindings, optionally for one Rule.
 pub fn verification_bindings(
     repository: &Repository,
@@ -102,6 +130,7 @@ pub fn verification_bindings(
     verification_bindings_of(&repository.store(), repository.scope(), rule)
 }
 
+#[cfg(feature = "host")]
 /// The runs of one scope through a store the caller holds.
 pub(crate) fn verification_runs_of(
     store: &StateStore,
@@ -115,6 +144,7 @@ pub(crate) fn verification_runs_of(
         .collect())
 }
 
+#[cfg(feature = "host")]
 /// The bindings of one scope through a store the caller holds.
 pub(crate) fn verification_bindings_of(
     store: &StateStore,
@@ -128,6 +158,7 @@ pub(crate) fn verification_bindings_of(
         .collect())
 }
 
+#[cfg(feature = "host")]
 fn normalize_verification_context(
     repo: &Utf8Path,
     input: &mut BeginVerificationInput,
@@ -146,6 +177,7 @@ fn normalize_verification_context(
     Ok(())
 }
 
+#[cfg(feature = "host")]
 /// Resolves each implementation target to one repository file before any
 /// store call; a target that does not resolve refuses the operation, so
 /// apply writes nothing.
@@ -172,6 +204,7 @@ fn normalize_implementation_context(
     Ok(())
 }
 
+#[cfg(feature = "host")]
 fn clean_file_commit(repo: &Utf8Path, file: &Utf8Path) -> Option<String> {
     let tracked = crate::stale::git::command(repo)
         .args(["ls-files", "--error-unmatch", "--", file.as_str()])
@@ -201,4 +234,5 @@ fn clean_file_commit(repo: &Utf8Path, file: &Utf8Path) -> Option<String> {
 }
 
 #[cfg(test)]
+#[cfg(feature = "host")]
 mod write_tests;

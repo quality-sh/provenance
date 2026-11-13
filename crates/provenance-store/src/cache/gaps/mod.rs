@@ -39,4 +39,5 @@ pub fn compute_gaps(graph: &GapGraph<'_>) -> Vec<GapItem> {
 /// how to spell a bare graph record, so the cache-level tests reuse them
 /// rather than growing a second set.
 #[cfg(test)]
+#[cfg(feature = "host")]
 pub(in crate::cache) mod tests;
