@@ -3,7 +3,8 @@
 //!
 //! The transaction lives under `.provenance/cache`. A marker names its phase,
 //! so recovery at the next section entry completes or rolls back a swap that
-//! a crash interrupted.
+//! a crash interrupted. A transaction that stopped before its marker belongs
+//! to no live write, and the next section entry removes it.
 
 use super::durability::{sync_directory, sync_tree, write_staged_file};
 use super::recovery::{clear_publication_marker, write_publication_marker, PublicationPhase};
