@@ -77,7 +77,7 @@ impl StatementHost {
             .flatten();
         let runtime = tokio::runtime::Handle::current();
         let native = matches!(options.framing, Framing::Native);
-        self.admitted(
+        self.run_prepared(
             O::NAME,
             selected,
             needs,
@@ -98,7 +98,7 @@ impl StatementHost {
     /// Authorizes `selected` on the runtime thread, waits for a work slot, then prepares the
     /// repository and runs `work` on the tracked blocking pool. Each refusal answers before
     /// `work` runs.
-    async fn admitted<T: Send + 'static>(
+    async fn run_prepared<T: Send + 'static>(
         &self,
         operation: &'static str,
         selected: Option<RequestedContext>,
@@ -134,7 +134,7 @@ impl StatementHost {
     ) -> Result<Value, ErasedFailure> {
         let runtime = tokio::runtime::Handle::current();
         provenance_contract::invoke_port(operation, call, |operation, selected, needs, call| {
-            self.admitted(operation, selected, needs, false, move |_prepared| {
+            self.run_prepared(operation, selected, needs, false, move |_prepared| {
                 runtime.block_on(port.run(operation, call))
             })
         })
