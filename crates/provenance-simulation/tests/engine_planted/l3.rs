@@ -234,7 +234,11 @@ fn unknown(planted: &Operation, apply: Apply) -> Run {
     steps.push(Step::Fault(Fault::UnknownOutcome { landed: 3 }));
     steps.extend(alone(&[planted]));
     let run = run_case(&Case { engines: 2, steps }, with(apply));
-    assert!(met(&run, before.len(), Outcome::Unknown), "{:?}", run.publishes);
+    assert!(
+        met(&run, before.len(), Outcome::Unknown),
+        "{:?}",
+        run.publishes
+    );
     run
 }
 
