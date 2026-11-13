@@ -5,7 +5,6 @@ edition.workspace = true
 description = "Rust API for Provenance graph authoring and verification"
 license.workspace = true
 repository.workspace = true
-homepage.workspace = true
 readme.workspace = true
 publish.workspace = true
 

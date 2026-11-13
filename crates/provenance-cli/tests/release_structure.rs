@@ -54,9 +54,9 @@ fn rust_release_packages_have_registry_metadata_and_versioned_dependencies() {
             package["repository"], "https://github.com/quality-sh/provenance",
             "{crate_name} has no canonical repository",
         );
-        assert_eq!(
-            package["homepage"], "https://github.com/quality-sh/provenance",
-            "{crate_name} has no canonical homepage",
+        assert!(
+            package["homepage"].is_null(),
+            "{crate_name} repeats its repository as a homepage",
         );
         assert!(
             package["description"]

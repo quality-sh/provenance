@@ -5,7 +5,6 @@ edition.workspace = true
 description = "Internal part of Provenance for core records and validation"
 license.workspace = true
 repository.workspace = true
-homepage.workspace = true
 readme.workspace = true
 publish.workspace = true
 

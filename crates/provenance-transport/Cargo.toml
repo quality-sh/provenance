@@ -5,7 +5,6 @@ edition.workspace = true
 license.workspace = true
 description = "Internal part of Provenance for transport and local access"
 repository.workspace = true
-homepage.workspace = true
 readme.workspace = true
 publish.workspace = true
 
@@ -23,7 +22,11 @@ host = [
     "dep:provenance-report",
     "dep:provenance-scanner",
     "dep:provenance-ste100",
+    "dep:provenance-store",
     "provenance-store/host",
+    "dep:pulldown-cmark",
+    "dep:semver",
+    "dep:url",
     "dep:ureq",
     "dep:tokio-util",
     "dep:tokio",
@@ -49,15 +52,15 @@ provenance-contract = { workspace = true, optional = true }
 provenance-report = { workspace = true, optional = true }
 provenance-scanner = { workspace = true, optional = true }
 provenance-ste100 = { workspace = true, optional = true }
-provenance-store = { workspace = true, features = ["schema"] }
-pulldown-cmark.workspace = true
+provenance-store = { workspace = true, features = ["schema"], optional = true }
+pulldown-cmark = { workspace = true, optional = true }
 remove_dir_all = { workspace = true, optional = true }
 serde_json.workspace = true
 serde.workspace = true
-semver.workspace = true
+semver = { workspace = true, optional = true }
 serde_ignored.workspace = true
 ureq = { workspace = true, optional = true }
-url.workspace = true
+url = { workspace = true, optional = true }
 uuid.workspace = true
 tokio-util = { version = "0.7", features = ["rt"], optional = true }
 tokio = { workspace = true, features = ["sync", "io-util", "io-std", "rt", "time"], optional = true }

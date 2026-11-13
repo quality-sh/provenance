@@ -5,7 +5,6 @@ edition.workspace = true
 description = "Supported Rule binding attributes and internal derives for Provenance"
 license.workspace = true
 repository.workspace = true
-homepage.workspace = true
 readme.workspace = true
 publish.workspace = true
 

@@ -298,6 +298,11 @@ mod tests {
             matches!(error, DictionaryIndexError::DigestMismatch { .. }),
             "unexpected error: {error:?}"
         );
+        let expected = format!(
+            "the index file at {} does not match its recorded data digest",
+            path.display()
+        );
+        assert_eq!(error.to_string(), expected);
         std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
     }
 
@@ -340,6 +345,11 @@ mod tests {
             matches!(error, DictionaryIndexError::IdentityMismatch { .. }),
             "unexpected error: {error:?}"
         );
+        let expected = format!(
+            "the index file at {} records a different import identity",
+            other_path.display()
+        );
+        assert_eq!(error.to_string(), expected);
         std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
     }
 
@@ -362,7 +372,7 @@ mod tests {
     fn a_source_match_does_not_accept_an_incomplete_index() {
         let directory = scratch_directory();
         let import = fixture_import();
-        store_dictionary_index(&import, &directory).expect("store the index");
+        let path = store_dictionary_index(&import, &directory).expect("store the index");
 
         let error = super::load_dictionary_index_for_source(&directory, b"synthetic source bytes")
             .expect_err("an incomplete index must not load for a new project");
@@ -371,6 +381,12 @@ mod tests {
             error,
             DictionaryIndexError::InvalidStructure { .. }
         ));
+        let expected = format!(
+            "the index file at {} has invalid dictionary structure: invalid Issue 9 dictionary \
+             structure: expected 878 approved and 1318 unapproved table rows; found 1 and 1",
+            path.display()
+        );
+        assert_eq!(error.to_string(), expected);
         std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
     }
 }

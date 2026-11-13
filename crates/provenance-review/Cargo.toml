@@ -5,7 +5,6 @@ edition.workspace = true
 description = "Internal part of Provenance for the review host, review links and the review page bundle"
 license.workspace = true
 repository.workspace = true
-homepage.workspace = true
 readme.workspace = true
 publish.workspace = true
 # The composed review page bundle is prepared before packaging and is not tracked.
