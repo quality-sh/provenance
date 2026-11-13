@@ -141,7 +141,9 @@ async fn the_page_mapping_refuses_any_over_budget_error() {
     let store = TestStore::pinned();
     catch_up_state(&store.repository()).await.unwrap();
     let cache = open_cache(&store.layout()).await.unwrap();
-    let inner = crate::read_database::file::begin(cache.pool()).await.unwrap();
+    let inner = crate::read_database::file::begin(cache.pool())
+        .await
+        .unwrap();
     let stopping = Box::new(Stopping {
         inner,
         bounded: false,
