@@ -148,11 +148,11 @@ fn each_contract_schema_accepts_a_value_and_each_closed_object_has_a_field() {
     assert!(found.is_empty(), "{found:#?}");
 }
 
-/// The keywords of JSON Schema 2020-12 whose value holds a schema are the applicator
-/// keywords, the unevaluated keywords and `$defs`. The guard walks each one except `not`,
-/// because a schema with no value below `not` is not a fault.
+/// The applicator keywords and the unevaluated keywords of JSON Schema 2020-12 apply a schema
+/// to a value, and `$defs` holds the schemas that a reference names. The guard walks each
+/// one except `not`, because a schema with no value below `not` is not a fault.
 #[test]
-fn the_guard_walks_each_keyword_that_holds_a_schema() {
+fn the_guard_walks_each_keyword_that_applies_a_schema() {
     let mut walked = BTreeSet::from(SCHEMA_MAPS);
     walked.extend(SCHEMA_LISTS);
     walked.extend(SCHEMAS);
