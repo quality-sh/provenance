@@ -225,6 +225,10 @@ name = "review_history_characterization"
 required-features = ["host"]
 
 [[test]]
+name = "review_history_committed_text_errors"
+required-features = ["host"]
+
+[[test]]
 name = "review_history_git"
 required-features = ["host"]
 
