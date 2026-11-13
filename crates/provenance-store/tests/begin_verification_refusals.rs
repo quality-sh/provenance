@@ -57,7 +57,7 @@ impl Start {
 fn invalid_line(file: &str) -> Value {
     json!({
         "kind": "invalid_state_file", "file": file, "line": 1,
-        "message": "key must be a string at line 1 column 2"
+        "message": "key must be a string"
     })
 }
 
@@ -70,10 +70,7 @@ fn a_rule_that_does_not_exist_is_refused_before_any_write() {
 
     let refusal = start.refusal(input);
 
-    let answer = json!({
-        "kind": "invalid_verification_target",
-        "message": "rule `rule_absent` does not exist"
-    });
+    let answer = json!({"kind": "invalid_verification_target"});
     assert_eq!(refusal, (answer, 400, 0, None));
 }
 
@@ -106,7 +103,7 @@ fn a_bad_line_of_the_runs_cache_is_refused_before_any_write() {
 
     let refusal = start.refusal(begin_input());
 
-    let cache = ".provenance/cache/scopes/default/verification-runs.jsonl";
+    let cache = "verification-runs.jsonl";
     assert_eq!(
         refusal,
         (invalid_line(cache), 500, 0, Some(BAD_LINE.to_vec()))

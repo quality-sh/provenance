@@ -67,8 +67,7 @@ fn repository(root: &Path) -> Repository {
     store
         .create_rule(serde_json::from_value(rule).unwrap())
         .unwrap();
-    for update in [json!({}), json!({"statement": "Share links expire"})] {
-        let mut update = update;
+    for mut update in [json!({}), json!({"statement": "Share links expire"})] {
         update["scope_id"] = json!("default");
         update["id"] = json!("req_expiry");
         let etag = store
