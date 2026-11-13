@@ -243,15 +243,11 @@ pub async fn texts_give_the_file_at_each_commit<H: Harness + Sync>(harness: &H) 
 /// no commits gives no texts.
 pub async fn a_file_that_no_commit_holds_has_no_versions<H: Harness + Sync>(harness: &H) {
     let adapter = harness.adapter(GRAPH);
-    assert!(adapter.versions(ABSENT).await.is_empty());
+    assert_eq!(adapter.versions(ABSENT).await, Vec::<Named>::new());
     let head = adapter.ids(&["again"]);
     assert_eq!(adapter.versions.texts(ABSENT, &head).await.unwrap(), [None]);
-    assert!(adapter
-        .versions
-        .texts(RECORDS, &[])
-        .await
-        .unwrap()
-        .is_empty());
+    let texts = adapter.versions.texts(RECORDS, &[]).await.unwrap();
+    assert_eq!(texts, Vec::<Option<String>>::new());
 }
 
 /// File versions over a commit graph in memory, with the commit names as

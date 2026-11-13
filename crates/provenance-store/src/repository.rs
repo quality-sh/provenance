@@ -187,6 +187,7 @@ impl Repository {
     /// A repository that has none reads the Git history of its working
     /// tree, as one from `open` does. The new handle shares the storage, the
     /// lock and the read database of this one.
+    #[must_use]
     pub fn with_file_versions(&self, versions: Arc<dyn FileVersions>) -> Self {
         let mut repository = Self::with_parts(
             self.inner.identity.clone().with_file_versions(versions),
