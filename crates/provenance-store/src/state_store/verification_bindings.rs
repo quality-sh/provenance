@@ -5,20 +5,32 @@ use sha2::{Digest, Sha256};
 use super::{MaterializeVerificationBindingInput, StateStore};
 use crate::shards;
 
+/// A binding, and the path and the new bytes of the bindings shard when its
+/// rows changed.
+pub(super) struct BindingChange {
+    pub(super) binding: VerificationBinding,
+    pub(super) shard: Option<crate::publication::ShardBytes>,
+}
+
 impl StateStore {
     pub fn materialize_verification_binding(
         &self,
         input: MaterializeVerificationBindingInput,
     ) -> anyhow::Result<VerificationBinding> {
-        self.with_repository_publication(|held| held.write_verification_binding(input))
+        self.with_repository_publication(|held| {
+            let change = held.verification_binding_change(input)?;
+            held.publish_shards(change.shard.into_iter().collect())?;
+            Ok(change.binding)
+        })
     }
 
-    /// Updates one binding for each owner, Rule, and owner-local key.
+    /// Updates one binding for each owner, Rule, and owner-local key. The
+    /// caller holds the section and publishes the shard.
     #[rule("rule_verification_binding_identity")]
-    fn write_verification_binding(
+    pub(super) fn verification_binding_change(
         &self,
         input: MaterializeVerificationBindingInput,
-    ) -> anyhow::Result<VerificationBinding> {
+    ) -> anyhow::Result<BindingChange> {
         crate::write_error::ensure!(
             InvalidVerificationTarget,
             !input.key.trim().is_empty(),
@@ -77,16 +89,37 @@ impl StateStore {
             symbol: input.symbol,
         };
         let path = shards::verification_bindings_path(&self.layout, &input.scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<VerificationBinding>| {
-            delete_replaced(records, &binding);
-            if let Some(existing) = records.iter_mut().find(|record| record.id == id) {
-                *existing = binding.clone();
-            } else {
-                records.push(binding.clone());
-            }
-            records.sort_by(|left, right| left.id.as_str().cmp(right.id.as_str()));
-            super::read_budget::ensure_within_read_budget(&binding)?;
-            Ok(binding)
+        self.ensure_writable()?;
+        let contents = self.state_text(&path)?;
+        let bytes = crate::jsonl::mutate_jsonl_bytes(
+            self,
+            &path,
+            contents.as_deref(),
+            |records: &mut Vec<VerificationBinding>| {
+                let count = records.len();
+                delete_replaced(records, &binding);
+                let deleted = records.len() != count;
+                let changed = match records.iter_mut().find(|record| record.id == id) {
+                    Some(existing) if *existing == binding => deleted,
+                    Some(existing) => {
+                        *existing = binding.clone();
+                        true
+                    }
+                    None => {
+                        records.push(binding.clone());
+                        true
+                    }
+                };
+                if changed {
+                    records.sort_by(|left, right| left.id.as_str().cmp(right.id.as_str()));
+                }
+                super::read_budget::ensure_within_read_budget(&binding)?;
+                Ok(changed)
+            },
+        )?;
+        Ok(BindingChange {
+            binding,
+            shard: bytes.map(|bytes| (path, bytes)),
         })
     }
 }

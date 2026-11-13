@@ -23,6 +23,7 @@ impl StateStore {
     }
 
     fn write_resolution_update(&self, input: UpdateResolutionInput) -> anyhow::Result<Resolution> {
+        crate::state_store::rule_writers::check_approved_at(input.approved_at)?;
         let scope = input.scope_id.clone();
         let path = shards::resolutions_path(&self.layout, &input.scope_id);
         let expected_etag = input.expected_etag.clone();

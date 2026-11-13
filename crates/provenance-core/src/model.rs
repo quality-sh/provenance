@@ -1,6 +1,7 @@
 mod artifacts;
 mod collaboration;
 mod content_equality;
+pub mod exact_integer;
 mod graph;
 mod ideation;
 mod ids;
