@@ -140,9 +140,11 @@ pub fn reference_bytes(
 ) -> anyhow::Result<Vec<u8>> {
     let path = dictionary_reference_path(layout);
     let technical_names = match std::fs::read(path.as_std_path()) {
-        Ok(current) => serde_json::from_slice::<DictionaryReference>(&current)
-            .map_err(|error| unparsable_reference(&path, &error))?
-            .technical_names,
+        Ok(current) => {
+            serde_json::from_slice::<DictionaryReference>(&current)
+                .map_err(|error| unparsable_reference(&path, &error))?
+                .technical_names
+        }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
         Err(error) => return Err(error).context("read the dictionary reference"),
     };

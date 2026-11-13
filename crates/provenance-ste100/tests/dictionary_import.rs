@@ -186,8 +186,9 @@ fn imports_the_local_official_issue_9_pdf() {
     );
 
     let contents = encode_dictionary_index(&dictionary).expect("encode the official import");
-    let reloaded = decode_dictionary_index(&contents, &dictionary.identity, Path::new("index.json"))
-        .expect("decode the official index again");
+    let reloaded =
+        decode_dictionary_index(&contents, &dictionary.identity, Path::new("index.json"))
+            .expect("decode the official index again");
     assert_eq!(reloaded, dictionary);
 }
 

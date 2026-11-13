@@ -106,7 +106,14 @@ impl Damaged {
     }
 
     fn status(&self) -> (Option<i32>, Value, String) {
-        answer(&self.run(&["dictionary", "status", "--repo", self.repo(), "--format", "json"]))
+        answer(&self.run(&[
+            "dictionary",
+            "status",
+            "--repo",
+            self.repo(),
+            "--format",
+            "json",
+        ]))
     }
 
     fn statement_check(&self) -> (Option<i32>, Value, String) {
@@ -264,4 +271,3 @@ fn answer(output: &Output) -> (Option<i32>, Value, String) {
         String::from_utf8_lossy(&output.stderr).into_owned(),
     )
 }
-
