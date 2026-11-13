@@ -1,9 +1,8 @@
 use super::read_budget::ensure_slice_within_read_budget;
 use super::{ensure_new_ids_assignable, read_ideation_landings, IdeationLandingBatch, StateStore};
-use crate::families::RecordFamily;
 use crate::shards;
 use provenance_core::{
-    AssertionRecord, Contribution, IdeationRecordKind as Kind, ProposalCard, ScopeId,
+    AssertionRecord, Contribution, IdeationRecord, IdeationRecordKind, ProposalCard, ScopeId,
     SynthesisPacket,
 };
 use provenance_macros::rule;
@@ -91,7 +90,7 @@ impl StateStore {
             ensure_new_ids_assignable(&dispositions, &incoming.dispositions, |record| {
                 record.id.as_str()
             })?;
-            merge_immutable(Kind::Proposal, &mut proposals, &incoming.proposals)?;
+            merge_immutable(&mut proposals, &incoming.proposals)?;
             for replacement in &incoming.contributions {
                 if let Some(existing) = contributions
                     .iter()
@@ -108,20 +107,10 @@ impl StateStore {
                     ensure_asserted_synthesis_unchanged(existing, replacement, &assertions)?;
                 }
             }
-            merge_replaceable(
-                Kind::Contribution,
-                &mut contributions,
-                &incoming.contributions,
-                replace,
-            )?;
-            merge_replaceable(
-                Kind::SynthesisPacket,
-                &mut synthesis_packets,
-                &incoming.synthesis_packets,
-                replace,
-            )?;
-            merge_immutable(Kind::Assertion, &mut assertions, &incoming.assertions)?;
-            merge_immutable(Kind::Disposition, &mut dispositions, &incoming.dispositions)?;
+            merge_replaceable(&mut contributions, &incoming.contributions, replace)?;
+            merge_replaceable(&mut synthesis_packets, &incoming.synthesis_packets, replace)?;
+            merge_immutable(&mut assertions, &incoming.assertions)?;
+            merge_immutable(&mut dispositions, &incoming.dispositions)?;
             validate_batch_proposals(&incoming.proposals)?;
             let manifest = self.manifest()?;
             self.check_ideation_aggregate(scope, provenance_core::IdeationAggregate {
@@ -187,9 +176,7 @@ fn validate_batch_proposals(proposals: &[ProposalCard]) -> anyhow::Result<()> {
 /// contribution is reached through the claim ids an assertion supports, a
 /// synthesis packet through the packet id an assertion names.
 #[rule("rule_asserted_evidence_immutable")]
-pub fn ensure_asserted_evidence_unchanged<T: serde::Serialize>(
-    kind: Kind,
-    id: &str,
+pub fn ensure_asserted_evidence_unchanged<T: serde::Serialize + IdeationRecord>(
     existing: &T,
     replacement: &T,
     cited_by_assertion: impl FnOnce() -> bool,
@@ -200,7 +187,9 @@ pub fn ensure_asserted_evidence_unchanged<T: serde::Serialize>(
     crate::write_error::ensure!(
         InvalidUpdate,
         !cited_by_assertion(),
-        "{kind} {id} is referenced by an assertion and cannot be replaced"
+        "{} {} is referenced by an assertion and cannot be replaced",
+        T::KIND,
+        existing.immutable_id()
     );
     Ok(())
 }
@@ -230,13 +219,9 @@ pub fn ensure_asserted_contribution_unchanged(
     replacement: &Contribution,
     assertions: &[AssertionRecord],
 ) -> anyhow::Result<()> {
-    ensure_asserted_evidence_unchanged(
-        Kind::Contribution,
-        existing.id.as_str(),
-        existing,
-        replacement,
-        || assertion_cites_contribution(existing, assertions),
-    )
+    ensure_asserted_evidence_unchanged(existing, replacement, || {
+        assertion_cites_contribution(existing, assertions)
+    })
 }
 
 pub fn ensure_asserted_synthesis_unchanged(
@@ -244,44 +229,17 @@ pub fn ensure_asserted_synthesis_unchanged(
     replacement: &SynthesisPacket,
     assertions: &[AssertionRecord],
 ) -> anyhow::Result<()> {
-    ensure_asserted_evidence_unchanged(
-        Kind::SynthesisPacket,
-        existing.id.as_str(),
-        existing,
-        replacement,
-        || assertion_cites_synthesis(existing, assertions),
-    )
+    ensure_asserted_evidence_unchanged(existing, replacement, || {
+        assertion_cites_synthesis(existing, assertions)
+    })
 }
 
 fn ensure_scope(scope: &ScopeId, batch: &IdeationLandingBatch) -> anyhow::Result<()> {
-    for (kind, actual) in batch
-        .contributions
-        .iter()
-        .map(|r| (Kind::Contribution, &r.scope_id))
-        .chain(
-            batch
-                .synthesis_packets
-                .iter()
-                .map(|r| (Kind::SynthesisPacket, &r.scope_id)),
-        )
-        .chain(
-            batch
-                .proposals
-                .iter()
-                .map(|r| (Kind::Proposal, &r.scope_id)),
-        )
-        .chain(
-            batch
-                .assertions
-                .iter()
-                .map(|r| (Kind::Assertion, &r.scope_id)),
-        )
-        .chain(
-            batch
-                .dispositions
-                .iter()
-                .map(|r| (Kind::Disposition, &r.scope_id)),
-        )
+    for (kind, actual) in scope_ids(&batch.contributions, |r| &r.scope_id)
+        .chain(scope_ids(&batch.synthesis_packets, |r| &r.scope_id))
+        .chain(scope_ids(&batch.proposals, |r| &r.scope_id))
+        .chain(scope_ids(&batch.assertions, |r| &r.scope_id))
+        .chain(scope_ids(&batch.dispositions, |r| &r.scope_id))
     {
         crate::write_error::ensure!(
             ScopeMismatch,
@@ -292,15 +250,23 @@ fn ensure_scope(scope: &ScopeId, batch: &IdeationLandingBatch) -> anyhow::Result
     Ok(())
 }
 
-fn merge_replaceable<T: Clone + RecordFamily>(
-    kind: Kind,
+/// The kind and the scope of each of `records`.
+fn scope_ids<'a, T: IdeationRecord>(
+    records: &'a [T],
+    scope_id: impl Fn(&T) -> &ScopeId,
+) -> impl Iterator<Item = (IdeationRecordKind, &'a ScopeId)> {
+    records.iter().map(move |record| (T::KIND, scope_id(record)))
+}
+
+fn merge_replaceable<T: Clone + IdeationRecord>(
     existing: &mut Vec<T>,
     incoming: &[T],
     replace: bool,
 ) -> anyhow::Result<()> {
+    let kind = T::KIND;
     let mut incoming_ids = BTreeSet::new();
     for record in incoming {
-        let record_id = record.record_id();
+        let record_id = record.immutable_id();
         crate::write_error::ensure!(
             InvalidUpdate,
             incoming_ids.insert(record_id),
@@ -308,7 +274,7 @@ fn merge_replaceable<T: Clone + RecordFamily>(
         );
         if let Some(index) = existing
             .iter()
-            .position(|current| current.record_id() == record_id)
+            .position(|current| current.immutable_id() == record_id)
         {
             crate::write_error::ensure!(
                 AlreadyExists,
@@ -323,14 +289,14 @@ fn merge_replaceable<T: Clone + RecordFamily>(
     Ok(())
 }
 
-fn merge_immutable<T: Clone + RecordFamily>(
-    kind: Kind,
+fn merge_immutable<T: Clone + IdeationRecord>(
     existing: &mut Vec<T>,
     incoming: &[T],
 ) -> anyhow::Result<()> {
+    let kind = T::KIND;
     let mut incoming_ids = BTreeSet::new();
     for record in incoming {
-        let record_id = record.record_id();
+        let record_id = record.immutable_id();
         crate::write_error::ensure!(
             InvalidUpdate,
             incoming_ids.insert(record_id),
@@ -338,7 +304,7 @@ fn merge_immutable<T: Clone + RecordFamily>(
         );
         crate::write_error::ensure!(
             AlreadyExists,
-            !existing.iter().any(|current| current.record_id() == record_id),
+            !existing.iter().any(|current| current.immutable_id() == record_id),
             "{kind} {record_id} already exists and is immutable"
         );
         existing.push(record.clone());

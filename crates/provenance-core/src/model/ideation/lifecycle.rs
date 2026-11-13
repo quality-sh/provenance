@@ -11,9 +11,11 @@ mod aggregate_validation;
 mod assertion_validation;
 mod legacy_validation;
 mod lineage_validation;
+mod record_kind;
 
 pub use aggregate_validation::validate_disposition_admissible;
 pub use assertion_validation::packet_qualifies_proposal;
+pub use record_kind::{DuplicateImmutableId, IdeationRecord, IdeationRecordKind};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -72,44 +74,6 @@ pub struct IdeationAggregate<'a> {
     pub proposals: &'a [ProposalCard],
     pub assertions: &'a [AssertionRecord],
     pub dispositions: &'a [DispositionRecord],
-}
-
-/// The kind of an ideation record whose id is immutable.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IdeationRecordKind {
-    /// A [`Contribution`].
-    Contribution,
-    /// A [`SynthesisPacket`].
-    SynthesisPacket,
-    /// A [`ProposalCard`].
-    Proposal,
-    /// An [`AssertionRecord`].
-    Assertion,
-    /// A [`DispositionRecord`].
-    Disposition,
-}
-
-impl std::fmt::Display for IdeationRecordKind {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(match self {
-            Self::Contribution => "contribution",
-            Self::SynthesisPacket => "synthesis packet",
-            Self::Proposal => "proposal",
-            Self::Assertion => "assertion",
-            Self::Disposition => "disposition",
-        })
-    }
-}
-
-/// The refusal of [`validate_ideation_aggregate`] when two records of one
-/// kind have the same immutable id.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("duplicate immutable {kind} id {id}")]
-pub struct DuplicateImmutableId {
-    /// The kind of the two records.
-    pub kind: IdeationRecordKind,
-    /// The id that the two records have.
-    pub id: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

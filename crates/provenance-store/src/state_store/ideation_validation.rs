@@ -4,12 +4,11 @@ use super::ideation_batches::{
 use super::message_ids::ShardLine;
 use super::shared_parses::read_jsonl_shared;
 use super::{IdeationLandingBatch, StateStore};
-use crate::families::RecordFamily;
 use crate::refusal::state_fault;
 use crate::shards;
 use provenance_core::{
-    AssertionRecord, Contribution, DispositionRecord, DuplicateImmutableId,
-    IdeationRecordKind as Kind, ProposalCard, ScopeId, SynthesisPacket,
+    AssertionRecord, Contribution, DispositionRecord, DuplicateImmutableId, IdeationRecord,
+    ProposalCard, ScopeId, SynthesisPacket,
 };
 use std::collections::BTreeSet;
 
@@ -51,9 +50,9 @@ impl StateStore {
         let mut assertions = BTreeSet::new();
         let mut dispositions = BTreeSet::new();
         let stored = |duplicate| self.duplicate_id_fault(scope, duplicate);
-        insert_all(Kind::Proposal, &direct_proposals, &mut proposals, stored)?;
-        insert_all(Kind::Assertion, &direct_assertions, &mut assertions, stored)?;
-        insert_all(Kind::Disposition, &direct_dispositions, &mut dispositions, stored)?;
+        insert_all(&direct_proposals, &mut proposals, stored)?;
+        insert_all(&direct_assertions, &mut assertions, stored)?;
+        insert_all(&direct_dispositions, &mut dispositions, stored)?;
         let landings = shards::ideation_landings_path(&self.layout, scope);
         for (index, batch) in self.list_ideation_landings(scope)?.into_iter().enumerate() {
             let at = ShardLine::new(&landings, index + 1);
@@ -64,9 +63,9 @@ impl StateStore {
                 &assertions_in_order,
             )?;
             let landed = |duplicate: DuplicateImmutableId| state_fault(&at, duplicate.to_string());
-            insert_all(Kind::Proposal, &batch.proposals, &mut proposals, landed)?;
-            insert_all(Kind::Assertion, &batch.assertions, &mut assertions, landed)?;
-            insert_all(Kind::Disposition, &batch.dispositions, &mut dispositions, landed)?;
+            insert_all(&batch.proposals, &mut proposals, landed)?;
+            insert_all(&batch.assertions, &mut assertions, landed)?;
+            insert_all(&batch.dispositions, &mut dispositions, landed)?;
             overlay_records(&mut contributions, batch.contributions, |record| {
                 record.id.as_str()
             });
@@ -120,19 +119,18 @@ fn ensure_batch_evidence_unchanged(
     Ok(())
 }
 
-/// Adds the id of each of `records`, of the kind `kind`, to `seen`. The
-/// refusal of an id that `seen` already holds is `at_fault` of it.
-fn insert_all<T: RecordFamily>(
-    kind: Kind,
+/// Adds the id of each of `records` to `seen`. The refusal of an id that
+/// `seen` already holds is `at_fault` of it.
+fn insert_all<T: IdeationRecord>(
     records: &[T],
     seen: &mut BTreeSet<String>,
     at_fault: impl Fn(DuplicateImmutableId) -> anyhow::Error,
 ) -> anyhow::Result<()> {
     for record in records {
-        let id = record.record_id();
+        let id = record.immutable_id();
         if !seen.insert(id.to_owned()) {
             return Err(at_fault(DuplicateImmutableId {
-                kind,
+                kind: T::KIND,
                 id: id.to_owned(),
             }));
         }

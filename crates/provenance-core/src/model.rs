@@ -33,7 +33,7 @@ pub use ideation::lifecycle::{
     effective_proposal_state, packet_qualifies_proposal, validate_assertion_intrinsic,
     validate_disposition_admissible, validate_ideation_aggregate, validate_proposal_intrinsic,
     Assertion, AssertionId, AssertionRecord, DuplicateImmutableId, IdeationAggregate,
-    IdeationRecordKind, LegacyProposalPolicy,
+    IdeationRecord, IdeationRecordKind, LegacyProposalPolicy,
 };
 pub use ideation::proposals::{
     Proposal, ProposalCard, ProposalTraceability, RecordRevisionBinding,

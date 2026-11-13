@@ -11,15 +11,15 @@
 //! The records that the checks get have no lines: each list of a kind joins
 //! the rows of its file, the landings and the record of the write. So the
 //! refusal path reads the file of the kind again with the same typed parse
-//! and the same id as the list reader. The two reads give the same rows when
-//! the file has the same bytes.
+//! as the list reader, and finds the id with
+//! [`IdeationRecord::immutable_id`], as the aggregate check does.
 
 use super::readers::read_jsonl_located;
 use super::StateStore;
 use crate::families::RecordFamily;
 use provenance_core::{
     AssertionRecord, Contribution, DispositionRecord, DuplicateImmutableId, IdeationAggregate,
-    IdeationRecordKind, ProposalCard, ScopeId, SynthesisPacket,
+    IdeationRecord, IdeationRecordKind, ProposalCard, ScopeId, SynthesisPacket,
 };
 use serde::de::DeserializeOwned;
 
@@ -44,12 +44,15 @@ impl StateStore {
     /// `duplicate.kind` in `scope` with the id `duplicate.id`, with a message
     /// that names the first line and the second line.
     ///
-    /// The refusal is `duplicate` with no file and no line only when the file
-    /// does not have the bytes that the check read: a view never changes, and
-    /// a store with a section holds the publication section, so only a
-    /// program outside Provenance can change the file between the two reads.
-    /// A read-only store takes no lock, so a write of another process can
-    /// also change it.
+    /// Two records of one kind with one id come only from two lines of the
+    /// file of that kind: a write and a landing refuse or replace a record
+    /// with an id that the store holds, and a list replaces a row of the file
+    /// with a landed record that has its id. So the refusal is `duplicate`
+    /// with no file and no line only when the file has other bytes at the
+    /// second read. A view never changes, and a store with a section holds
+    /// the publication section, so there only a program outside Provenance
+    /// can change the file. A read-only store takes no lock, so a write of
+    /// another process can also change it.
     pub(super) fn duplicate_id_fault(
         &self,
         scope: &ScopeId,
@@ -78,7 +81,7 @@ impl StateStore {
     /// The located refusal of `duplicate` from the records of the type `T`
     /// in its file, each with its line. `None` when the read fails or does
     /// not show the id on two lines.
-    fn located_duplicate<T: RecordFamily + DeserializeOwned>(
+    fn located_duplicate<T: IdeationRecord + RecordFamily + DeserializeOwned>(
         &self,
         scope: &ScopeId,
         duplicate: &DuplicateImmutableId,
@@ -87,7 +90,7 @@ impl StateStore {
         let rows = read_jsonl_located::<T>(self, &path).ok()?;
         let mut lines = rows
             .into_iter()
-            .filter(|(record, _)| record.record_id() == duplicate.id)
+            .filter(|(record, _)| record.immutable_id() == duplicate.id)
             .map(|(_, at)| at);
         let first = lines.next()?;
         let second = lines.next()?;
