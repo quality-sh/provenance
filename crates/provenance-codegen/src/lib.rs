@@ -10,4 +10,5 @@ pub use rust_types::rust_types;
 
 mod unions;
 
+mod empty_types;
 mod model_layout;

@@ -60,3 +60,45 @@ fn primitive_conversions_stay_with_the_model_that_owns_them() {
     assert!(model.contains("From<VersionOutput> for i64"));
     assert!(!files.contains_key("models/i64.rs"));
 }
+
+#[test]
+fn types_with_no_values_or_no_fields_have_no_enum_with_no_variants() {
+    let mut schemas = Map::new();
+    component(
+        "CheckOutput",
+        json!({
+            "type": "object",
+            "properties": {"failure": {"$ref": "#/$defs/NoFailure"}},
+            "$defs": {
+                "NoFailure": false,
+                "NoFields": {"type": "object", "additionalProperties": false}
+            }
+        }),
+        &mut schemas,
+    );
+    let files = rust_types(&json!({"components":{"schemas":schemas}})).unwrap();
+    let never = &files["models/CheckOutputNoFailure.rs"];
+    assert!(!never.contains("pub enum"), "{never}");
+    assert!(
+        never.contains("pub struct CheckOutputNoFailure(::std::convert::Infallible);"),
+        "{never}"
+    );
+    assert!(
+        never.contains("::serde::Serialize for CheckOutputNoFailure"),
+        "{never}"
+    );
+    assert!(
+        never.contains("crate::empty::deserialize_enum(deserializer, \"CheckOutputNoFailure\")"),
+        "{never}"
+    );
+    let empty = &files["models/CheckOutputNoFields.rs"];
+    assert!(!empty.contains("::serde::Deserialize,"), "{empty}");
+    assert!(
+        empty.contains("pub struct CheckOutputNoFields {}"),
+        "{empty}"
+    );
+    assert!(
+        empty.contains("crate::empty::deserialize_struct(deserializer, \"CheckOutputNoFields\")"),
+        "{empty}"
+    );
+}

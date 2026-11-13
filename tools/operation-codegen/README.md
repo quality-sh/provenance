@@ -106,6 +106,9 @@ The generated Rust module allows only Typify's `if_not_else` conversion style
 and explicit default helpers (`missing_const_for_fn`, `derivable_impls`,
 `default_trait_access`). Models with more than three declared Boolean fields
 retain those wire fields with a local `struct_excessive_bools` allowance.
+The generator writes a schema with no values as a struct over `Infallible`,
+and it reads that type and a closed object with no fields with the
+hand-written `empty` module, so no generated type has an enum with no variants.
 Handwritten code keeps the normal workspace lint settings.
 
 Response validators compile from the same OpenAPI components. TypeScript emits
