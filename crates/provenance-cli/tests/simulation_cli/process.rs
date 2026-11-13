@@ -1,7 +1,7 @@
 //! The `provenance api` and git processes of the CLI simulation.
 //!
-//! Each wait for a process has the limit [`PROCESS_LIMIT`]. A process that
-//! does not end in it is killed, and its case breaks L0, so a stopped
+//! Each process has the limit [`PROCESS_LIMIT`] from its start, for all of
+//! its waits. A process that does not end in it is killed, and its case breaks L0, so a stopped
 //! process fails its case in minutes and does not hold the job. A process
 //! that panics also breaks L0.
 
@@ -18,9 +18,9 @@ use serde_json::{json, Value};
 use std::cell::RefCell;
 use std::io::{Read, Write as _};
 use std::path::Path;
-use std::process::{Child, Command, Output, Stdio};
+use std::process::{Child, Command, ExitStatus, Output, Stdio};
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
-use stop::{Landing, Point, Watch};
 
 /// The longest wait for one process.
 pub const PROCESS_LIMIT: Duration = Duration::from_secs(120);
@@ -58,7 +58,7 @@ pub fn binary() -> &'static Path {
 }
 
 /// Reads a pipe of a child on its own thread.
-fn read_pipe(pipe: Option<impl Read + Send + 'static>) -> std::thread::JoinHandle<Vec<u8>> {
+fn read_pipe(pipe: Option<impl Read + Send + 'static>) -> JoinHandle<Vec<u8>> {
     std::thread::spawn(move || {
         let mut bytes = Vec::new();
         if let Some(mut pipe) = pipe {
@@ -68,37 +68,79 @@ fn read_pipe(pipe: Option<impl Read + Send + 'static>) -> std::thread::JoinHandl
     })
 }
 
-/// Waits for `child` for the process limit. At the limit, kills it, notes
-/// `what` as an L0 break and refuses. A process that panicked is also an L0
-/// break.
-pub fn wait_limited(mut child: Child, what: &str) -> Result<Output, String> {
-    let stdout = read_pipe(child.stdout.take());
-    let stderr = read_pipe(child.stderr.take());
-    let deadline = Instant::now() + PROCESS_LIMIT;
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(5)),
-            Ok(None) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                let text = format!("{what} did not end in {PROCESS_LIMIT:?}");
-                note_l0_break(text.clone());
-                return Err(text);
-            }
-            Err(error) => return Err(format!("{what}: {error}")),
+/// A child process whose output pipes are read on their own threads, so
+/// that a full pipe cannot block it. Its waits share one deadline: the
+/// process limit from its start.
+pub struct Running {
+    child: Child,
+    stdout: JoinHandle<Vec<u8>>,
+    stderr: JoinHandle<Vec<u8>>,
+    deadline: Instant,
+}
+
+impl Running {
+    pub fn start(mut child: Child) -> Self {
+        Self {
+            stdout: read_pipe(child.stdout.take()),
+            stderr: read_pipe(child.stderr.take()),
+            child,
+            deadline: Instant::now() + PROCESS_LIMIT,
         }
-    };
-    let output = Output {
-        status,
-        stdout: stdout.join().unwrap_or_default(),
-        stderr: stderr.join().unwrap_or_default(),
-    };
-    if panicked(&output) {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        note_l0_break(format!("{what} panicked: {}", stderr.trim()));
     }
-    Ok(output)
+
+    /// Tells if the process runs and its deadline is not past.
+    pub fn runs(&mut self) -> bool {
+        Instant::now() < self.deadline && matches!(self.child.try_wait(), Ok(None))
+    }
+
+    /// Waits for the end of the process up to its deadline. At the deadline,
+    /// kills it, notes `what` as an L0 break and refuses. A process that
+    /// panicked is also an L0 break.
+    pub fn wait(mut self, what: &str) -> Result<Output, String> {
+        let status = loop {
+            match self.child.try_wait() {
+                Ok(Some(status)) => break status,
+                Ok(None) if Instant::now() < self.deadline => {
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                Ok(None) => {
+                    let _ = self.child.kill();
+                    let _ = self.child.wait();
+                    let text = format!("{what} did not end in {PROCESS_LIMIT:?}");
+                    note_l0_break(text.clone());
+                    return Err(text);
+                }
+                Err(error) => return Err(format!("{what}: {error}")),
+            }
+        };
+        Ok(self.collect(status, what))
+    }
+
+    /// Kills the process and gives its output. A killed process ends, so
+    /// this wait needs no deadline.
+    pub fn kill(mut self, what: &str) -> Output {
+        let _ = self.child.kill();
+        let status = self.child.wait().expect("a killed process ends");
+        self.collect(status, what)
+    }
+
+    fn collect(self, status: ExitStatus, what: &str) -> Output {
+        let output = Output {
+            status,
+            stdout: self.stdout.join().unwrap_or_default(),
+            stderr: self.stderr.join().unwrap_or_default(),
+        };
+        if panicked(&output) {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            note_l0_break(format!("{what} panicked: {}", stderr.trim()));
+        }
+        output
+    }
+}
+
+/// Waits for `child` for the process limit, as [`Running::wait`] does.
+pub fn wait_limited(child: Child, what: &str) -> Result<Output, String> {
+    Running::start(child).wait(what)
 }
 
 /// Runs `command` to its end, for the process limit at most.
@@ -196,7 +238,12 @@ impl Request {
 
 /// The data of a success, or the text of a refusal with its kind first.
 fn finish(child: Child, what: &str) -> Result<Value, String> {
-    let output = wait_limited(child, what)?;
+    answer(&wait_limited(child, what)?)
+}
+
+/// The data of the success in `output`, or the text of its refusal with its
+/// kind first.
+fn answer(output: &Output) -> Result<Value, String> {
     if output.status.success() {
         return Ok(parse(&output.stdout)["data"].clone());
     }
@@ -339,69 +386,30 @@ fn done(task: &Task, result: Result<Effect, String>, stopped: bool) -> Done {
     }
 }
 
-/// Kills the write process `child` of `task` when it reaches `point` of its
-/// publish, and gives where the stop landed. A process that ends before it
-/// reaches the point, or that printed its answer before the kill, gives its
-/// answer, as a write alone does.
-fn stop_write(
-    task: &Task,
-    mut child: Child,
-    request: &Request,
-    watch: &Watch,
-    point: Point,
-) -> (Done, Option<Landing>) {
-    let ended = |result: Result<Value, String>| {
-        provenance_simulation::stats::add(&layer(), "stops after the write ended", 1);
-        let result = result.and_then(|data| effect(task, request, &data));
-        (done(task, result, false), None)
-    };
-    if !watch.wait(&mut child, point, Instant::now() + PROCESS_LIMIT) {
-        return ended(finish(child, &format!("write {}", request.path)));
-    }
-    let _ = child.kill();
-    match wait_limited(child, "a stopped write") {
-        Ok(output) if !output.stdout.is_empty() => ended(Ok(parse(&output.stdout)["data"].clone())),
-        _ => (
-            done(task, Err("stopped".into()), true),
-            Some(watch.landing()),
-        ),
-    }
-}
-
 /// Runs `tasks` at once on `root`. Each etag is read before the first
-/// process starts. With a stop at `at`, each process is killed at the point
-/// [`Point::of`] of its publish; the landing of each stop that killed a
-/// process follows the answers.
-pub fn run_at_once(root: &Path, tasks: &[Task], stop: Option<u8>) -> (Vec<Done>, Vec<Landing>) {
+/// process starts.
+pub fn run_at_once(root: &Path, tasks: &[Task]) -> Vec<Done> {
     let mut prepared = Vec::new();
     for task in tasks {
         if let Some(request) = request(root, task) {
             prepared.push((task, request));
         }
     }
-    let watch = stop.map(|_| Watch::before(root));
     let mut started = Vec::new();
     for (task, request) in prepared {
         let process = request.map(|request| (request.spawn(root), request));
         started.push((task, process));
     }
     let mut outcome = Vec::new();
-    let mut landings = Vec::new();
     for (task, process) in started {
-        outcome.push(match (process, stop.zip(watch.as_ref())) {
-            (Err(refusal), _) => done(task, Err(refusal), false),
-            (Ok((child, request)), Some((at, watch))) => {
-                let watch = watch.of(child.id());
-                let (stopped, landing) = stop_write(task, child, &request, &watch, Point::of(at));
-                landings.extend(landing);
-                stopped
-            }
-            (Ok((child, request)), None) => {
+        outcome.push(match process {
+            Err(refusal) => done(task, Err(refusal), false),
+            Ok((child, request)) => {
                 let result = finish(child, &format!("write {}", request.path));
                 let result = result.and_then(|data| effect(task, &request, &data));
                 done(task, result, false)
             }
         });
     }
-    (outcome, landings)
+    outcome
 }

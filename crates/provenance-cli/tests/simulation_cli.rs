@@ -40,13 +40,14 @@ mod process;
 #[path = "simulation_cli/reads.rs"]
 mod reads;
 
-use fixture::run_cli;
+use fixture::{run_cli, run_steps, state_entries};
 use hegel::{Hegel, NondeterminismStrictness, Settings, TestCase};
 use laws::{check, Ran};
-use process::layer;
-use process::stop::Landing;
-use provenance_simulation::generate::{Case, Fault, Operation, Step};
+use process::stop::{Landing, Stop};
+use process::{etag, layer};
+use provenance_simulation::generate::{Case, Fault, Operation, Step, FIRST_REQUIREMENT};
 use provenance_simulation::report;
+use std::time::Instant;
 
 // No Rule: L3, L4, L6 and L7 have their basis tests; this is the random
 // check of the plan on each system.
@@ -111,35 +112,115 @@ fn two_updates_at_once_have_one_winner() {
     report::probe(&layer(), test, check(&case, &run));
 }
 
-// No Rule: a probe that a write on a branch merges through `provenance
-// merge-jsonl`, that a stop kills a write inside its publish, and that the
-// stopped write leaves a state that reads. The stop at `at: 0` kills the
-// write when its transaction appears, before the live state moves.
-#[test]
-#[ignore = "a probe of the nightly simulation"]
-fn a_merged_branch_and_a_stopped_write_keep_the_laws() {
+/// Runs a case with a stop at `at` and checks it: an update, a create on a
+/// branch that git merges back through `provenance merge-jsonl`, and a claim
+/// that the stop kills. The stop must land at `landing`, which is before the
+/// install of the new state. After the kill, one read runs through the CLI.
+/// Then the marker is gone, the state is the state before the claim, and the
+/// transaction of the claim stays only for a stop before the marker. The run
+/// must keep the laws.
+fn stop_probe(test: &str, at: u8, landing: Landing) {
+    let started = Instant::now();
     let steps = vec![
         write(0, update(0)),
         Step::OutsideWrite(Operation::CreateRequirement { n: 0 }),
         write(1, Operation::ClaimTopic),
-        Step::Fault(Fault::Stop { engine: 1, at: 0 }),
+        Step::Fault(Fault::Stop { engine: 1, at }),
+    ];
+    let case = Case { engines: 2, steps };
+    let fixture = run_steps(&case);
+    let ways: Vec<_> = fixture.groups.iter().map(|(way, _)| *way).collect();
+    assert_eq!(ways, [Ran::Alone, Ran::Outside, Ran::Stopped]);
+    let (_, outside) = &fixture.groups[1];
+    assert!(outside[0].result.is_ok(), "{outside:?}");
+    let [Stop::Landed(landed)] = fixture.stops.as_slice() else {
+        let stops: Vec<_> = fixture.stops.iter().map(Stop::row).collect();
+        panic!("the stop did not kill the claim before its answer: {stops:?}");
+    };
+    assert_eq!(landed.landing, landing, "the stop landed at another point");
+    let root = fixture.root();
+    etag(&root, FIRST_REQUIREMENT).expect("the read after the stop answers");
+    let marker = fixture.repo.layout.publication_marker_path();
+    assert!(!marker.exists(), "the read after the stop left the marker");
+    assert_eq!(
+        state_entries(&root),
+        landed.before,
+        "after the read, the state is not the state before the claim"
+    );
+    // Recovery removes only the transaction that a marker names.
+    assert_eq!(
+        landed.transaction.exists(),
+        landing == Landing::BeforeMarker,
+        "the transaction of the claim after the read"
+    );
+    report::probe(&layer(), test, check(&case, &fixture.finish(started)));
+}
+
+// No Rule: a probe of the nightly simulation. It runs `stop_probe` with the
+// stop at the transaction, which must land before the marker.
+#[test]
+#[ignore = "a probe of the nightly simulation"]
+fn a_merged_branch_and_a_stop_before_the_marker_keep_the_laws() {
+    let test = "a_merged_branch_and_a_stop_before_the_marker_keep_the_laws";
+    stop_probe(test, 0, Landing::BeforeMarker);
+}
+
+// No Rule: a probe of the nightly simulation. It runs `stop_probe` with the
+// stop at the marker, which must land after the marker and before the
+// install, so that the read after the stop recovers the publish.
+#[test]
+#[ignore = "a probe of the nightly simulation"]
+fn a_merged_branch_and_a_stop_after_the_marker_keep_the_laws() {
+    let test = "a_merged_branch_and_a_stop_after_the_marker_keep_the_laws";
+    stop_probe(test, 1, Landing::BeforeInstall);
+}
+
+// No Rule: a probe that each kind of write that the simulation sends
+// publishes through a transaction: a stop at the transaction kills each
+// kind before its answer.
+#[test]
+#[ignore = "a probe of the nightly simulation"]
+fn a_stop_at_the_transaction_kills_each_kind_of_write() {
+    let stop = Step::Fault(Fault::Stop { engine: 1, at: 0 });
+    let steps = vec![
+        write(1, Operation::CreateRequirement { n: 0 }),
+        stop.clone(),
+        write(1, update(0)),
+        stop.clone(),
+        write(1, Operation::SubmitReview),
+        stop.clone(),
+        write(1, Operation::SubmitReview),
+        Step::Turn(1),
+        write(1, Operation::WithdrawReview { n: 0 }),
+        stop.clone(),
+        write(1, Operation::ClaimTopic),
+        stop.clone(),
+        write(1, Operation::ClaimTopic),
+        Step::Turn(1),
+        write(1, Operation::ReleaseTopic),
+        stop,
     ];
     let case = Case { engines: 2, steps };
     let run = run_cli(&case);
-    let ways: Vec<_> = run.groups.iter().map(|(way, _)| *way).collect();
-    assert_eq!(ways, [Ran::Alone, Ran::Outside, Ran::Stopped]);
-    let (_, outside) = &run.groups[1];
-    assert!(outside[0].result.is_ok(), "{outside:?}");
-    let test = "a_merged_branch_and_a_stopped_write_keep_the_laws";
+    let stopped: Vec<_> = run
+        .groups
+        .iter()
+        .filter(|(way, _)| *way == Ran::Stopped)
+        .flat_map(|(_, done)| done)
+        .map(|done| done.op.clone())
+        .collect();
+    let kinds = [
+        Operation::CreateRequirement { n: 0 },
+        update(0),
+        Operation::SubmitReview,
+        Operation::WithdrawReview { n: 0 },
+        Operation::ClaimTopic,
+        Operation::ReleaseTopic,
+    ];
+    assert_eq!(stopped, kinds);
+    let stops: Vec<_> = run.stops.iter().map(Stop::row).collect();
+    let landed = run.stops.iter().all(|stop| matches!(stop, Stop::Landed(_)));
+    assert!(landed, "a stop did not kill its write before its answer: {stops:?}");
+    let test = "a_stop_at_the_transaction_kills_each_kind_of_write";
     report::probe(&layer(), test, check(&case, &run));
-    let (_, stopped) = &run.groups[2];
-    assert!(
-        stopped[0].stopped,
-        "the write ended before its stop: {stopped:?}"
-    );
-    assert_eq!(
-        run.stops,
-        [Landing::Publish],
-        "the stop landed after the publish"
-    );
 }

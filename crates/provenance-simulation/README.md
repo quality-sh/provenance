@@ -62,13 +62,39 @@ then runs the write, so that write does not meet a moved base.
 
 The job summary gives the counts of the random cases up to the first broken
 law. After a broken law, Hegel shrinks the case; each run of the shrink adds
-only to "shrink runs". A stop of a CLI write kills the process at a point of
-its publish that the test sees on disk: its transaction directory below
-`.provenance/cache/import-transactions`, or the publication marker. The stop
-counts as "during a write" only when the transaction or the marker of the
-write stays after the kill. A write that ends before its point counts as
-"stops after the write ended"; a kill after the publish and before the
-answer counts as "stops after the publish and before the answer".
+only to "shrink runs".
+
+A stop of a CLI write kills the write process at a point of its publish
+that the test sees on disk: an even `at` when the transaction directory of
+the write appears, an odd `at` when the publication marker appears while
+that transaction exists. The order of a publish is in
+`provenance_store::storage::local::whole_set::land`. After the kill, the
+transaction, the marker, the phase of the marker and the live state tell
+where the stop landed. Each stop that a case draws adds 1 to one of these
+rows:
+
+| Row | What the stop did |
+| --- | ----------------- |
+| stops before the marker | It killed the write while its transaction existed and no marker was there. |
+| stops after the marker and before the install | It killed the write after the marker and before the install of the new state. |
+| stops after the install and before the answer | It killed the write after the install of the new state. |
+| stops after the answer | The write gave its answer, a success or a refusal, before the kill. |
+| stops of a write that ended before its stop point | The write ended before the test saw its point, and the state did not change. |
+| stops whose point the test did not see | The write ended and changed the state, but the test did not see its point. |
+| stops of a write that the simulation did not send | The CLI layer has no route for the write, or the read of its etag refused. |
+| stops with no waiting write of the engine | No write of the engine waited, so the stop had no write. |
+| stops of a write that did not end in its limit | The write did not end in the process limit; the case breaks L0. |
+
+The row "stops that left no live state" counts the stops that killed a
+write before its answer and left no live state. The next read recovers
+the live state from the transaction.
+
+Three probes of the CLI layer stop a write on each run. One stops a claim at
+its transaction, and the stop must land before the marker. One stops a
+claim at the marker, and the stop must land after the marker and before the
+install; a read after the stop must remove the marker and give the state
+before the claim. One stops each kind of write that the simulation sends
+at its transaction, and each stop must kill its write before its answer.
 
 ## When a failure issue opens
 

@@ -72,8 +72,8 @@ pub enum Fault {
     UnknownOutcome { landed: u8 },
     /// The engine stops where it is; a new engine takes its place. The CLI
     /// layer kills the write process at a point of its publish: an even `at`
-    /// when its transaction appears, an odd `at` when its publication marker
-    /// appears.
+    /// when its transaction appears, an odd `at` when the publication marker
+    /// appears while its transaction exists.
     Stop { engine: u8, at: u8 },
 }
 
