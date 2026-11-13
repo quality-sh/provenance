@@ -267,7 +267,7 @@ pub async fn invoke_with<H: Invoke>(
 }
 
 /// The checks of `operation` for a call that a port answers.
-pub(crate) fn port_checks(operation: &str) -> Option<crate::port::Checks> {
+pub fn port_checks(operation: &str) -> Option<crate::port::Checks> {
     entries::<Unhosted>()
         .into_iter()
         .find(|entry| entry.name == operation)
@@ -293,7 +293,7 @@ fn invoke_resolved<O: Operation, H: Invoke>(
     })
 }
 
-pub(crate) fn decode_call<O: Operation>(
+pub fn decode_call<O: Operation>(
     call: Value,
 ) -> Result<(Option<RequestedContext>, O::Request), FailureEnvelope> {
     Ok(match O::CONTEXT {

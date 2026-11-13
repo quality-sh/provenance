@@ -139,6 +139,7 @@ impl StatementHost {
             })
         })
         .await
+        .map_err(|failure| *failure)
     }
 
     /// The bound identity in the shape the operation's context kind expects.

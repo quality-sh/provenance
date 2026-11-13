@@ -14,14 +14,14 @@ type Checked = (Option<RequestedContext>, ExecutionNeeds);
 
 /// The checks of one operation for a call that a port answers.
 #[derive(Clone, Copy)]
-pub(crate) struct Checks {
+pub struct Checks {
     name: &'static str,
-    check: fn(Value) -> Result<Checked, FailureEnvelope>,
-    answer: fn(Result<Value, FailureEnvelope>) -> Result<Value, FailureEnvelope>,
+    check: fn(Value) -> Result<Checked, Box<FailureEnvelope>>,
+    answer: fn(Result<Value, FailureEnvelope>) -> Result<Value, Box<FailureEnvelope>>,
 }
 
 impl Checks {
-    pub(crate) const fn of<O: Operation>() -> Self {
+    pub const fn of<O: Operation>() -> Self {
         Self {
             name: O::NAME,
             check: check::<O>,
@@ -46,29 +46,35 @@ pub async fn invoke_port<R, A>(
     operation: &str,
     call: Value,
     run: R,
-) -> Result<Value, FailureEnvelope>
+) -> Result<Value, Box<FailureEnvelope>>
 where
     R: FnOnce(&'static str, Option<RequestedContext>, ExecutionNeeds, Value) -> A,
     A: Future<Output = Result<Result<Value, FailureEnvelope>, OperationFailure>>,
 {
-    let checks = port_checks(operation)
-        .ok_or_else(|| FailureEnvelope::new(None, OperationFailure::UnknownOperation))?;
+    let checks = port_checks(operation).ok_or_else(|| {
+        Box::new(FailureEnvelope::new(
+            None,
+            OperationFailure::UnknownOperation,
+        ))
+    })?;
     let (selected, needs) = (checks.check)(call.clone())?;
     let answer = run(checks.name, selected, needs, call)
         .await
-        .map_err(|failure| FailureEnvelope::new(Some(checks.name), failure))?;
+        .map_err(|failure| Box::new(FailureEnvelope::new(Some(checks.name), failure)))?;
     (checks.answer)(answer)
 }
 
-fn check<O: Operation>(call: Value) -> Result<Checked, FailureEnvelope> {
-    let (selected, request) = decode_call::<O>(call)?;
+fn check<O: Operation>(call: Value) -> Result<Checked, Box<FailureEnvelope>> {
+    let (selected, request) = decode_call::<O>(call).map_err(Box::new)?;
     O::validate_external(&request)
-        .map_err(|failure| FailureEnvelope::new(Some(O::NAME), failure))?;
+        .map_err(|failure| Box::new(FailureEnvelope::new(Some(O::NAME), failure)))?;
     Ok((selected, O::needs(&request)))
 }
 
 /// The answer of the port when the operation declares it, else the `internal` failure.
-fn answer<O: Operation>(answer: Result<Value, FailureEnvelope>) -> Result<Value, FailureEnvelope> {
+fn answer<O: Operation>(
+    answer: Result<Value, FailureEnvelope>,
+) -> Result<Value, Box<FailureEnvelope>> {
     let schemas = schemas::<O>();
     let given = match &answer {
         Ok(success) if accepts(schemas.success.as_ref(), success) => None,
@@ -81,14 +87,14 @@ fn answer<O: Operation>(answer: Result<Value, FailureEnvelope>) -> Result<Value,
         )),
     };
     let Some(given) = given else {
-        return answer;
+        return answer.map_err(Box::new);
     };
-    Err(
+    Err(Box::new(
         FailureEnvelope::new(Some(O::NAME), OperationFailure::Internal).with_cause(Some(format!(
             "the read operations port answered `{}` with {given}",
             O::NAME
         ))),
-    )
+    ))
 }
 
 /// Whether the operation gives `failure`: its failure schema accepts the body, and the status is
