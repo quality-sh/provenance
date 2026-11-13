@@ -1779,7 +1779,7 @@ jobs:
       - uses: ./.github/actions/setup-socket-firewall
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
-          toolchain: stable
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       - name: Read the kernel target from the policy
         id: kernel
         run: echo "target=$(jq -r '.kernel.target' .config/crate-dependencies.json)" >> "$GITHUB_OUTPUT"
