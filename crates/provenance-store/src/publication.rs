@@ -4,9 +4,7 @@ use crate::storage::local::LocalSectionLock;
 use crate::storage::{Atomicity, SectionLock, WriteSet};
 #[cfg(feature = "host")]
 use anyhow::Context;
-use camino::Utf8Path;
-#[cfg(feature = "host")]
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::rule;
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -222,11 +220,17 @@ impl crate::state_store::StateStore {
         self.publish_set(WriteSet::new(Atomicity::PerKey).put(self.state_key(path)?, bytes))
     }
 
-    /// Publishes each shard at its path as one whole write set: every shard
-    /// lands or none does.
-    #[cfg(feature = "host")]
+    /// Publishes the new bytes of each changed shard at its path as one write
+    /// set, in the form that costs least and lands every shard or none: no
+    /// set for no shard, a one-key set for one shard, and a whole set for
+    /// more shards.
     pub(crate) fn publish_shards(&self, shards: Vec<(Utf8PathBuf, Vec<u8>)>) -> anyhow::Result<()> {
-        let mut writes = WriteSet::new(Atomicity::WholeSet);
+        let atomicity = match shards.len() {
+            0 => return Ok(()),
+            1 => Atomicity::PerKey,
+            _ => Atomicity::WholeSet,
+        };
+        let mut writes = WriteSet::new(atomicity);
         for (path, bytes) in shards {
             writes = writes.put(self.state_key(&path)?, bytes);
         }

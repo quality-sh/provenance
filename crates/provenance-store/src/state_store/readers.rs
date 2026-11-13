@@ -20,9 +20,8 @@ pub struct StateLineInvalid {
 }
 
 impl StateLineInvalid {
-    /// The shard path below the state directory, or only its file name when
-    /// the shard is not below a state directory. A refusal that leaves the
-    /// host gives this value and never an absolute path.
+    /// The file as [`state_file`] names it. A refusal that leaves the host
+    /// gives this value and never an absolute path.
     pub fn file(&self) -> String {
         state_file(&self.path)
     }
@@ -33,12 +32,24 @@ impl StateLineInvalid {
     }
 }
 
-/// The shard path below the state directory, or only its file name when the
-/// shard is not below a state directory.
+/// The shard path below the state directory, the path of a file of the
+/// repository cache from the repository root, or only the file name of any
+/// other path. A user can find a cache file only with its directory.
 pub fn state_file(path: &Utf8Path) -> String {
     below_state(path)
+        .or_else(|| in_cache(path))
         .or_else(|| path.file_name().map(str::to_owned))
         .unwrap_or_default()
+}
+
+/// The path from `.provenance/cache` on, with `/` between its parts on every
+/// platform.
+fn in_cache(path: &Utf8Path) -> Option<String> {
+    let components: Vec<&str> = path.iter().collect();
+    components
+        .windows(2)
+        .rposition(|pair| pair == [".provenance", "cache"])
+        .map(|at| components[at..].join("/"))
 }
 
 /// Names the shard and its line when a stored line is not one JSON record.

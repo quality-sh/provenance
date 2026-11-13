@@ -6,11 +6,11 @@ use sha2::{Digest, Sha256};
 use super::{MaterializeVerificationBindingInput, StateStore};
 use crate::shards;
 
-/// A binding and the bindings shard that holds it, before the publish.
+/// A binding, and the path and the new bytes of the bindings shard when its
+/// rows changed.
 pub(super) struct BindingChange {
     pub(super) binding: VerificationBinding,
-    pub(super) path: Utf8PathBuf,
-    pub(super) bytes: Vec<u8>,
+    pub(super) shard: Option<(Utf8PathBuf, Vec<u8>)>,
 }
 
 impl StateStore {
@@ -20,7 +20,7 @@ impl StateStore {
     ) -> anyhow::Result<VerificationBinding> {
         self.with_repository_publication(|held| {
             let change = held.verification_binding_change(input)?;
-            held.publish_shard(&change.path, change.bytes)?;
+            held.publish_shards(change.shard.into_iter().collect())?;
             Ok(change.binding)
         })
     }
@@ -97,22 +97,30 @@ impl StateStore {
             &path,
             contents.as_deref(),
             |records: &mut Vec<VerificationBinding>| {
+                let count = records.len();
                 delete_replaced(records, &binding);
-                if let Some(existing) = records.iter_mut().find(|record| record.id == id) {
-                    *existing = binding.clone();
-                } else {
-                    records.push(binding.clone());
+                let deleted = records.len() != count;
+                let changed = match records.iter_mut().find(|record| record.id == id) {
+                    Some(existing) if *existing == binding => deleted,
+                    Some(existing) => {
+                        *existing = binding.clone();
+                        true
+                    }
+                    None => {
+                        records.push(binding.clone());
+                        true
+                    }
+                };
+                if changed {
+                    records.sort_by(|left, right| left.id.as_str().cmp(right.id.as_str()));
                 }
-                records.sort_by(|left, right| left.id.as_str().cmp(right.id.as_str()));
                 super::read_budget::ensure_within_read_budget(&binding)?;
-                Ok(true)
+                Ok(changed)
             },
-        )?
-        .ok_or_else(|| crate::refusal::fault!("the bindings shard has no new bytes"))?;
+        )?;
         Ok(BindingChange {
             binding,
-            path,
-            bytes,
+            shard: bytes.map(|bytes| (path, bytes)),
         })
     }
 }

@@ -5,6 +5,7 @@ use provenance_core::{
     VerificationRunStatus,
 };
 use sha2::{Digest, Sha256};
+use std::collections::BTreeSet;
 use std::io::{BufRead, BufReader, Read};
 
 use super::requirement_reviews::now_millis;
@@ -19,8 +20,9 @@ impl StateStore {
     /// run-row edge.
     ///
     /// In the section, the checks and the bytes of each write come first.
-    /// Then the binding and the cleared reviews publish as one whole write
-    /// set, and the run row goes into the cache last.
+    /// Then the binding and the cleared reviews that changed publish as one
+    /// write set, and the run row goes into the cache last. A start that
+    /// changes no binding and clears no review publishes no set.
     pub fn begin_verification(
         &self,
         scope_id: ScopeId,
@@ -71,19 +73,30 @@ impl StateStore {
                     error: None,
                 }
             })?;
-            let mut shards = vec![(binding.path, binding.bytes)];
-            shards.extend(held.cleared_reviews_shard(&run)?);
+            let shards: Vec<_> = binding
+                .shard
+                .into_iter()
+                .chain(held.cleared_reviews_shard(&run)?)
+                .collect();
+            let landed = !shards.is_empty();
             held.publish_shards(shards)?;
-            // The binding and the reviews landed, so a failure of the run row
-            // is a write that began.
-            held.add_run_row(&run).map_err(publication_started)?;
+            // After a set landed, a failure of the run row is a write that
+            // began.
+            held.add_run_row(&run).map_err(|error| {
+                if landed {
+                    publication_started(error)
+                } else {
+                    error
+                }
+            })?;
             Ok(run)
         })
     }
 
-    /// The run that `run` makes from the next free run id of the cache and
-    /// the start time of the clock. The caller holds the section, so no other
-    /// start takes the id before the row of the run lands.
+    /// The run that `run` makes from the start time of the clock and the
+    /// next run id that no row of the cache holds and no review names. The
+    /// caller holds the section, so no other start takes the id before the
+    /// row of the run lands.
     fn next_run(
         &self,
         scope_id: &ScopeId,
@@ -91,8 +104,16 @@ impl StateStore {
     ) -> anyhow::Result<VerificationRun> {
         let started_at = now_millis(&*self.clock())?;
         let (path, lock_path) = self.run_files(scope_id);
-        let records: Vec<VerificationRun> = crate::jsonl::read_jsonl_locked(&path, &lock_path)?;
-        Ok(run(next_run_id(&records, started_at)?, started_at))
+        let rows: Vec<VerificationRun> = crate::jsonl::read_jsonl_locked(&path, &lock_path)?;
+        let reviews = self.list_requirement_reviews(scope_id)?;
+        let named = reviews.iter().filter_map(|review| review.cleared_by_run.as_ref());
+        let taken: BTreeSet<&str> = rows
+            .iter()
+            .map(|row| &row.id)
+            .chain(named)
+            .map(StableId::as_str)
+            .collect();
+        Ok(run(next_run_id(&taken, started_at)?, started_at))
     }
 
     /// Adds `run` as a new row of the runs cache.
@@ -309,11 +330,11 @@ fn verification_rule(
     Ok(rule_id)
 }
 
-fn next_run_id(records: &[VerificationRun], started_at: i64) -> anyhow::Result<StableId> {
+fn next_run_id(taken: &BTreeSet<&str>, started_at: i64) -> anyhow::Result<StableId> {
     let base = format!("verification_{started_at}");
     let mut candidate = base.clone();
     let mut suffix = 2_u64;
-    while records.iter().any(|run| run.id.as_str() == candidate) {
+    while taken.contains(candidate.as_str()) {
         candidate = format!("{base}_{suffix}");
         suffix = suffix
             .checked_add(1)

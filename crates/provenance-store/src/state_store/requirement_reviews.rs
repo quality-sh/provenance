@@ -85,6 +85,7 @@ impl StateStore {
 
     /// Clears earlier reviews with the fresh run and its time, and keeps each
     /// reason, in new bytes of the reviews shard that the caller publishes.
+    /// No bytes when the run clears no review.
     #[rule("rule_review_cleared_by_later_run")]
     #[cfg(feature = "host")]
     pub(super) fn cleared_reviews_shard(
@@ -101,6 +102,7 @@ impl StateStore {
             &path,
             contents.as_deref(),
             |records: &mut Vec<RequirementReview>| {
+                let mut cleared = false;
                 for record in records.iter_mut().filter(|record| {
                     record.rule_id == run.rule_id
                         && record.cleared_at.is_none()
@@ -108,8 +110,9 @@ impl StateStore {
                 }) {
                     record.cleared_at = Some(run.started_at);
                     record.cleared_by_run = Some(run.id.clone());
+                    cleared = true;
                 }
-                Ok(true)
+                Ok(cleared)
             },
         )?;
         Ok(bytes.map(|bytes| (path, bytes)))
