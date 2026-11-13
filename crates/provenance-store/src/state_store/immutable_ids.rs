@@ -81,7 +81,12 @@ pub(super) fn duplicate_fault(
     id: &str,
 ) -> anyhow::Error {
     located_duplicate(store, path, kind, id).unwrap_or_else(|| {
-        record_fault(store, path, id, format!("duplicate immutable {kind} id {id}"))
+        record_fault(
+            store,
+            path,
+            id,
+            format!("duplicate immutable {kind} id {id}"),
+        )
     })
 }
 

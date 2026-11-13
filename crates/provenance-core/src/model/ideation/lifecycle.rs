@@ -77,10 +77,15 @@ pub struct IdeationAggregate<'a> {
 /// The kind of an ideation record whose id is immutable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IdeationRecordKind {
+    /// A [`Contribution`].
     Contribution,
+    /// A [`SynthesisPacket`].
     SynthesisPacket,
+    /// A [`ProposalCard`].
     Proposal,
+    /// An [`AssertionRecord`].
     Assertion,
+    /// A [`DispositionRecord`].
     Disposition,
 }
 

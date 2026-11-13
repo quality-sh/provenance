@@ -82,5 +82,8 @@ async fn a_requirement_read_over_a_disposition_id_on_two_lines_gives_the_decisio
     let decision = decisions[0].clone();
     decisions.push(decision);
     let reads = read_answers(&repo).await;
-    assert_eq!((&reads[0]["status"], &reads[0]["body"]["data"]), (&json!(200), &data));
+    assert_eq!(
+        (&reads[0]["status"], &reads[0]["body"]["data"]),
+        (&json!(200), &data)
+    );
 }

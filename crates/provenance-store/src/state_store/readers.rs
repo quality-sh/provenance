@@ -175,7 +175,10 @@ pub fn read_jsonl_located<T: DeserializeOwned>(
 /// Thread check (`thread_origins.rs`), the Rule archive check
 /// (`family_readers.rs`), the canonical artifact index
 /// (`canonical_artifacts.rs`) and the shared declaration address
-/// (`typed_specs.rs`). No state that reaches the fallback is known.
+/// (`typed_specs.rs`). For these callers, no state that reaches the fallback
+/// is known. The ideation scope check (`immutable_ids.rs`) also calls it when
+/// a read with lines does not show a duplicate id on two lines: the file
+/// changed after the read of its records.
 pub fn record_fault(
     store: &StateStore,
     path: &Utf8Path,
