@@ -17,10 +17,25 @@ fn build_runs_script(package: &Path, target: &Path) -> (bool, String) {
         .unwrap();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     assert!(output.status.success(), "{stderr}");
-    let ran = stderr.lines().any(|line| {
-        line.trim_start().starts_with("Running") && line.contains("build-script-build")
-    });
+    let ran = stderr.lines().any(runs_build_script);
     (ran, stderr)
+}
+
+/// Tells if a verbose Cargo line runs the build script program. Cargo gives
+/// that line as the program path alone, with no arguments, and the file name
+/// of the program is `build_script_build`. A `rustc` line that compiles the
+/// script also contains `build_script_build`, but as a crate name argument.
+fn runs_build_script(line: &str) -> bool {
+    let Some(program) = line
+        .trim_start()
+        .strip_prefix("Running `")
+        .and_then(|command| command.strip_suffix('`'))
+    else {
+        return false;
+    };
+    Path::new(program)
+        .file_stem()
+        .is_some_and(|name| name == "build_script_build")
 }
 
 #[test]

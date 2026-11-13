@@ -19,4 +19,8 @@ note: required by a bound in `holds_no_float_field`
   |
 7 | provenance_store::row_counted_kind_holds_no_float_field!(Score);
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `holds_no_float_field`
+  |
+ ::: src/state_store/read_budget.rs
+  |
+  |             const fn holds_no_float_field<T: HoldsNoFloatField>() {}
   = note: this error originates in the macro `provenance_store::row_counted_kind_holds_no_float_field` (in Nightly builds, run with -Z macro-backtrace for more info)
