@@ -61,14 +61,12 @@ impl ReadOperations for InProcessReadOperations {
 
 struct Entry {
     name: &'static str,
-    mutates: bool,
     run: fn(Arc<LocalRepository>, Value) -> ReadAnswer,
 }
 
 const fn entry<O: Operation>() -> Entry {
     Entry {
         name: O::NAME,
-        mutates: O::MUTATES,
         run: run::<O>,
     }
 }
@@ -154,17 +152,5 @@ mod tests {
     fn the_published_list_is_the_list_the_adapter_runs() {
         let names: Vec<_> = super::entries().iter().map(|entry| entry.name).collect();
         assert_eq!(names, super::super::READ_OPERATIONS);
-    }
-
-    /// Implementation aid: no operation of the port writes, so a page write
-    /// never goes to it.
-    #[test]
-    fn no_read_operation_writes() {
-        let writes: Vec<_> = super::entries()
-            .iter()
-            .filter(|entry| entry.mutates)
-            .map(|entry| entry.name)
-            .collect();
-        assert_eq!(writes, Vec::<&str>::new());
     }
 }

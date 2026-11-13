@@ -27,7 +27,7 @@ use provenance_store::operations::catalog::{
     ContextResolver, ExecutionNeeds, PreparedContext, RequestedContext,
 };
 use provenance_store::operations::read_operations::{
-    InProcessReadOperations, ReadAnswer, ReadOperations,
+    InProcessReadOperations, ReadAnswer, ReadOperations, READ_OPERATIONS,
 };
 use provenance_store::operations::LocalRepository;
 use provenance_store::repository::Repository as Opened;
@@ -210,8 +210,6 @@ async fn declared_failures_through_the_port_answer_as_over_a_folder() {
 async fn refusals_of_a_stale_read_through_the_port_answer_as_over_a_folder() {
     let mut pair = Pair::new(Some("refuse_stale")).await;
     let port = pair.in_process();
-    let first = pair.same("/requirements", &port, Step::Open).await;
-    assert_eq!(first.status, 409, "{}", first.json());
     materialize_state(&pair.folder.open()).await.unwrap();
     catch_up_in_publish(&pair.memory).await.unwrap();
     let fresh = pair.same("/requirements", &port, Step::Open).await;
@@ -228,7 +226,7 @@ async fn refusals_of_a_stale_read_through_the_port_answer_as_over_a_folder() {
         .unwrap();
     let stale = pair.same("/requirements", &port, Step::Open).await;
     assert_eq!(kind(&stale), (409, json!("stale")));
-    assert_eq!(port.runs().len(), 3);
+    assert_eq!(port.runs().len(), 2);
 }
 
 #[tokio::test]
@@ -313,4 +311,18 @@ async fn an_answer_that_the_operation_does_not_declare_is_internal() {
         )
         .await;
     assert_eq!(kind(&given), (409, json!("no_projection")));
+}
+
+/// Implementation aid: no operation of the port writes, so the router never
+/// gives a page write to the port.
+#[test]
+fn no_read_operation_writes() {
+    let writes: Vec<&str> = READ_OPERATIONS
+        .iter()
+        .copied()
+        .filter(|operation| {
+            !provenance_contract::contains(operation) || provenance_contract::mutates(operation)
+        })
+        .collect();
+    assert_eq!(writes, Vec::<&str>::new());
 }

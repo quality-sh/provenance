@@ -11,11 +11,15 @@
 //!   as `<repo>`; `content-length` follows the body, whose working tree text
 //!   differs, so it is not compared;
 //! - the `instance_id` of the projection stamp and of a `stale` refusal
-//!   names one read database, and each repository has its own.
+//!   names one read database, and each repository has its own;
+//! - the `digest` of the projection covers the records, and a record that a
+//!   call made has a random id, so the digest is named as a generated value:
+//!   two answers of one run that have the same digest must have the same
+//!   digest in the other run.
 //!
-//! The projection stamp and the fields of a refusal compare as they are,
-//! apart from `instance_id`: the policy, the serial, the digest, the live
-//! and attested parts, the derivation and the moved units.
+//! Each other part of the projection stamp and of a refusal compares as it
+//! is: the policy, the serial, the live and attested parts, the derivation
+//! and the moved units.
 
 #[path = "../../../provenance-store/tests/support/sqlite_database.rs"]
 mod sqlite_database;
@@ -129,6 +133,9 @@ pub fn compared(names: &mut Names, root: &str, answer: &Answer) -> Value {
         let mut part = body.pointer(pointer).cloned().unwrap_or(Value::Null);
         if let Some(part) = part.as_object_mut() {
             part.remove("instance_id");
+            if let Some(Value::String(digest)) = part.get_mut("digest") {
+                *digest = names.name(digest);
+            }
         }
         part
     });

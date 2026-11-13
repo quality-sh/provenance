@@ -79,10 +79,9 @@ impl Repository {
     /// the port, and does not run it. A clone keeps the port.
     #[must_use]
     pub fn with_read_operations(&self, reads: Arc<dyn ReadOperations>) -> Self {
-        Self {
-            reads: Some(reads),
-            ..self.clone()
-        }
+        let mut repository = self.clone();
+        repository.reads = Some(reads);
+        repository
     }
 
     /// The port of the read operations, if the caller gave one.
