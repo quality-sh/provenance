@@ -2,6 +2,7 @@
 name = "provenance-simulation"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "Internal part of Provenance: nightly simulation of the write engine"
 license.workspace = true
 repository.workspace = true

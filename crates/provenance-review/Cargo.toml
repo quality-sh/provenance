@@ -2,6 +2,7 @@
 name = "provenance-review"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "Internal part of Provenance for the review host, review links and the review page bundle"
 license.workspace = true
 repository.workspace = true

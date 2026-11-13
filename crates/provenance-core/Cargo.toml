@@ -2,6 +2,7 @@
 name = "provenance-core"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "Internal part of Provenance for core records and validation"
 license.workspace = true
 repository.workspace = true

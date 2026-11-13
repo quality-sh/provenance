@@ -54,6 +54,10 @@ fn rust_release_packages_have_registry_metadata_and_versioned_dependencies() {
             package["repository"], "https://github.com/quality-sh/provenance",
             "{crate_name} has no canonical repository",
         );
+        assert_eq!(
+            package["rust_version"], "1.100",
+            "{crate_name} does not state the Rust version it needs",
+        );
         assert!(
             package["homepage"].is_null(),
             "{crate_name} repeats its repository as a homepage",
@@ -134,7 +138,7 @@ fn release_workflow_publishes_rust_crates_in_dependency_order() {
             .unwrap()
             < package
     );
-    assert!(workflow.contains("toolchain: 1.98.0"));
+    assert!(workflow.contains("toolchain: 1.100.0"));
     assert!(!workflow.contains("run: cargo publish"));
 }
 

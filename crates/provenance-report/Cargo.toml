@@ -2,6 +2,7 @@
 name = "provenance-report"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "Internal part of Provenance for report envelopes and rendering"
 license.workspace = true
 repository.workspace = true
