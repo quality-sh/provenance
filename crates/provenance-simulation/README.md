@@ -163,9 +163,5 @@ change the other lines; remove the line of a cause when its fix merges.
 
 - The contract job can fail on O1 when an update of a Requirement that does
   not exist answers a write failure (500): GitHub issue 648.
-- The contract job can fail on O1 when a write on a moved base answers a
-  write failure (500), for example a message post whose base moved before
-  its publish: bead provenance-cf0b. This cause has the same law and layer
-  as issue 648, so its failures add comments to the same issue.
 - The CLI jobs can fail on L6 when the state holds two withdrawals of one
   review submission: bead provenance-chgs.
