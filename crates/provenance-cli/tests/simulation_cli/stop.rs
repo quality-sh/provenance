@@ -206,7 +206,10 @@ pub fn run_stopped(
         before,
         live_state: layout.state_dir().exists(),
     };
-    (Some(done(task, Err("stopped".into()), true)), Stop::Landed(landed))
+    (
+        Some(done(task, Err("stopped".into()), true)),
+        Stop::Landed(landed),
+    )
 }
 
 /// The transactions and the marker of one repository, as the test sees them
@@ -252,7 +255,12 @@ impl<'a> Watch<'a> {
             transaction = transaction.or_else(|| self.new_transaction());
             if let Some(name) = &transaction {
                 if point == Point::Transaction || self.marker() {
-                    return Some(self.layout.import_transactions_dir().as_std_path().join(name));
+                    return Some(
+                        self.layout
+                            .import_transactions_dir()
+                            .as_std_path()
+                            .join(name),
+                    );
                 }
             }
             std::thread::sleep(LOOK_INTERVAL);

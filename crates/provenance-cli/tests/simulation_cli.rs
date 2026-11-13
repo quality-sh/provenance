@@ -220,7 +220,10 @@ fn a_stop_at_the_transaction_kills_each_kind_of_write() {
     assert_eq!(stopped, kinds);
     let rows: Vec<_> = run.stops.iter().map(Stop::row).collect();
     let landed = run.stops.iter().all(|stop| matches!(stop, Stop::Landed(_)));
-    assert!(landed, "a stop did not kill its write before its answer: {rows:?}");
+    assert!(
+        landed,
+        "a stop did not kill its write before its answer: {rows:?}"
+    );
     let test = "a_stop_at_the_transaction_kills_each_kind_of_write";
     report::probe(&layer(), test, check(&case, &run));
 }
