@@ -10,6 +10,7 @@ use provenance_store::operations::catalog::{
 };
 use provenance_store::operations::read_operations::{self, ReadOperations};
 use serde_json::Value;
+use std::future::Future;
 use std::sync::Arc;
 
 /// How one call enters the host: its context, its framing, and its page-write mark.
@@ -91,28 +92,34 @@ impl StatementHost {
                     .unwrap_or_else(|| Err(OperationFailure::Internal.into())),
                 None => runtime.block_on(catalog::invoke_typed::<O>(context, request)),
             },
-        )
-        .await?
+        )?
+        .await??
     }
 
-    /// Authorizes `selected` on the runtime thread, waits for a work slot, then prepares the
-    /// repository and runs `work` on the tracked blocking pool. Each refusal answers before
-    /// `work` runs.
-    async fn run_prepared<T: Send + 'static>(
+    /// Authorizes `selected` on the runtime thread, then gives the wait for a work slot, after
+    /// which the repository is prepared and `work` runs on the tracked blocking pool. Each
+    /// refusal answers before `work` runs.
+    ///
+    /// The authorization runs before this returns, so the future that waits holds only the
+    /// work, as when the host waits for a slot itself.
+    fn run_prepared<T: Send + 'static>(
         &self,
         operation: &'static str,
         selected: Option<RequestedContext>,
         needs: ExecutionNeeds,
         native: bool,
         work: impl FnOnce(PreparedContext) -> T + Send + 'static,
-    ) -> Result<T, OperationFailure> {
+    ) -> Result<
+        impl Future<Output = Result<Result<T, OperationFailure>, OperationFailure>> + '_,
+        OperationFailure,
+    > {
         if let Some(selected) = &selected {
             self.access.authorize(operation, selected)?;
         }
         let access = self.access.clone();
-        self.execution
-            .run(move || prepare(&access, operation, selected, needs, native).map(work))
-            .await?
+        Ok(self
+            .execution
+            .run(move || prepare(&access, operation, selected, needs, native).map(work)))
     }
 
     /// The read operations port of the bound repository, when `operation` is one of its
@@ -134,9 +141,10 @@ impl StatementHost {
     ) -> Result<Value, ErasedFailure> {
         let runtime = tokio::runtime::Handle::current();
         provenance_contract::invoke_port(operation, call, |operation, selected, needs, call| {
-            self.run_prepared(operation, selected, needs, false, move |_prepared| {
+            let waiting = self.run_prepared(operation, selected, needs, false, move |_prepared| {
                 runtime.block_on(port.run(operation, call))
-            })
+            });
+            async move { waiting?.await? }
         })
         .await
         .map_err(|failure| *failure)
