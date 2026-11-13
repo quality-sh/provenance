@@ -6,10 +6,10 @@
 
 use super::batch::{text, Rows, Table};
 use crate::cache::{serde_name, ProjectionFamily};
+use crate::read_database::{SqlColumns, SqlValue, Transaction};
 use crate::state_store::{FencedStore, GuardedStore};
 use provenance_core::model::relations::{link_rows_of, rows_of, RelationRow};
 use provenance_core::{NodeType, ScopeId};
-use sqlx::{Sqlite, Transaction};
 use std::collections::{BTreeSet, HashSet};
 
 /// The families whose records declare relations.
@@ -59,14 +59,12 @@ fn owner_rows(store: &GuardedStore<'_>, scope: &ScopeId) -> anyhow::Result<Vec<R
     Ok(rows)
 }
 
-pub(super) async fn delete_rows(
-    tx: &mut Transaction<'_, Sqlite>,
-    scope: &ScopeId,
-) -> anyhow::Result<()> {
-    sqlx::query("DELETE FROM relations WHERE scope_id = ?")
-        .bind(scope.as_str())
-        .execute(&mut **tx)
-        .await?;
+pub(super) async fn delete_rows(tx: &mut Transaction, scope: &ScopeId) -> anyhow::Result<()> {
+    tx.execute(
+        "DELETE FROM relations WHERE scope_id = ?",
+        vec![SqlValue::from(scope.as_str())],
+    )
+    .await?;
     Ok(())
 }
 
@@ -127,36 +125,51 @@ fn push(rows: &mut Rows, scope: &ScopeId, row: &StoredRow) {
 /// written. The other kinds keep their rows, so a caller names every kind
 /// whose records changed.
 pub(super) async fn replace_rows(
-    tx: &mut Transaction<'_, Sqlite>,
+    tx: &mut Transaction,
     rows: &[RelationRow],
     scope: &ScopeId,
     owners: &[String],
+    bound_values: usize,
 ) -> anyhow::Result<()> {
     let fresh = stored_form(rows)?;
     let mut added = insert();
     for owner in owners {
-        let stored: Vec<StoredRow> = sqlx::query_as(
-            "SELECT owner_type, owner_id, relation, target_type, target_id FROM relations \
-             WHERE scope_id = ? AND owner_type = ?",
-        )
-        .bind(scope.as_str())
-        .bind(owner)
-        .fetch_all(&mut **tx)
-        .await?;
+        let stored: Vec<StoredRow> = tx
+            .fetch(
+                "SELECT owner_type, owner_id, relation, target_type, target_id FROM relations \
+                 WHERE scope_id = ? AND owner_type = ?",
+                vec![
+                    SqlValue::from(scope.as_str()),
+                    SqlValue::from(owner.as_str()),
+                ],
+            )
+            .await?
+            .iter()
+            .map(|row| {
+                Ok((
+                    row.text(0)?.to_owned(),
+                    row.text(1)?.to_owned(),
+                    row.text(2)?.to_owned(),
+                    row.text(3)?.to_owned(),
+                    row.text(4)?.to_owned(),
+                ))
+            })
+            .collect::<anyhow::Result<_>>()?;
         let wanted: HashSet<&StoredRow> = fresh.iter().filter(|row| &row.0 == owner).collect();
         let kept: HashSet<&StoredRow> = stored.iter().collect();
         for gone in stored.iter().filter(|row| !wanted.contains(row)) {
-            sqlx::query(
+            tx.execute(
                 "DELETE FROM relations WHERE scope_id = ? AND owner_type = ? AND owner_id = ? \
                  AND relation = ? AND target_type = ? AND target_id = ?",
+                vec![
+                    SqlValue::from(scope.as_str()),
+                    SqlValue::from(gone.0.as_str()),
+                    SqlValue::from(gone.1.as_str()),
+                    SqlValue::from(gone.2.as_str()),
+                    SqlValue::from(gone.3.as_str()),
+                    SqlValue::from(gone.4.as_str()),
+                ],
             )
-            .bind(scope.as_str())
-            .bind(&gone.0)
-            .bind(&gone.1)
-            .bind(&gone.2)
-            .bind(&gone.3)
-            .bind(&gone.4)
-            .execute(&mut **tx)
             .await?;
         }
         for row in fresh
@@ -166,22 +179,24 @@ pub(super) async fn replace_rows(
             push(&mut added, scope, row);
         }
     }
-    added.write(tx).await?;
+    added.write(tx, bound_values).await?;
     Ok(())
 }
 
 /// Writes the scope's rows. Two citations of one source with different
 /// clauses are one row, the first. The rows are derived, so they count
-/// toward no family and no report.
+/// toward no family and no report. A statement binds at most
+/// `bound_values` values.
 pub(super) async fn load_rows(
-    tx: &mut Transaction<'_, Sqlite>,
+    tx: &mut Transaction,
     rows: &[RelationRow],
     scope: &ScopeId,
+    bound_values: usize,
 ) -> anyhow::Result<()> {
     let mut batch = insert();
     for row in &stored_form(rows)? {
         push(&mut batch, scope, row);
     }
-    batch.write(tx).await?;
+    batch.write(tx, bound_values).await?;
     Ok(())
 }
