@@ -562,6 +562,12 @@ jobs:
         if: runner.os != 'Linux'
         shell: bash
         run: cargo nextest run --profile ci --workspace --exclude provenance-http-client --all-features --no-fail-fast --cargo-profile test --timings -E "not ($COMPILE_FAIL_TESTS)"
+      # The coverage run of the whole workspace fills nearly all of the free
+      # disk of the runner, and a full disk stops the runner with no test log.
+      # No step of this job uses these preinstalled SDKs.
+      - name: Free disk for the coverage run
+        if: runner.os == 'Linux'
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
       # The Linux leg runs the same suite once with coverage instrumentation.
       # The CRAP gate reads its LCOV output, so the suite does not run twice.
       # On a pull request it builds and runs only the selected tests.
