@@ -38,9 +38,8 @@ pub use refuse_stale::MovedUnit;
 pub(crate) use snapshot::one_row;
 pub use snapshot::{ReadSnapshot, RecordIdentities, RecordIdentity, Relations, Table};
 
-pub(crate) use crate::cache::read::page::page_error;
 #[cfg(feature = "host")]
-pub(crate) use crate::cache::read::page::{check_limit, PAGE_BYTES, RECORD_BYTES};
+pub(crate) use crate::cache::read::page::{check_limit, page_error, PAGE_BYTES, RECORD_BYTES};
 /// The projection readers that run over the handles: the fetched relation
 /// front and the kind probe. The operations reach them from here, so a
 /// query module never names the cache.
