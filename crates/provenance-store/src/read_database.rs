@@ -143,21 +143,31 @@ pub trait ReadDatabase: Send + Sync + Debug {
     /// Runs `work` in one write transaction, and makes the database when
     /// it is absent. The work commits the transaction; when the work fails
     /// or ends without the commit, the transaction rolls back.
+    ///
+    /// The write fails when its commit fails, also when the store makes the
+    /// commit durable only after the work has ended. Then nothing that the
+    /// work wrote is kept, and the caller does not use what the work
+    /// reported.
     fn write<'a>(&'a self, work: WriteWork<'a>) -> SqlFuture<'a, ()>;
 
-    /// Runs `write` as [`ReadDatabase::write`] does and, when it succeeds,
-    /// `read` as [`ReadDatabase::read`] does, over one open of the store.
-    /// The store completes its connection once, after the read, so a
-    /// failure of that completion is the failure of the read. When `write`
-    /// fails, `read` does not run.
+    /// Runs `write` and then, when it succeeds, `read`.
+    ///
+    /// Each runs as [`ReadDatabase::write`] and [`ReadDatabase::read`] do,
+    /// and the read sees what the write committed.
+    ///
+    /// The outer error is the failure of the write, its commit included;
+    /// then `read` does not run. The inner error is the failure of the
+    /// read. An adapter can run both over one open of its store, and then
+    /// a failure to complete that open after the read is the failure of the
+    /// read.
     fn write_then_read<'a>(
         &'a self,
         write: WriteWork<'a>,
         read: ReadWork<'a>,
-    ) -> SqlFuture<'a, ()> {
+    ) -> SqlFuture<'a, anyhow::Result<()>> {
         Box::pin(async move {
             self.write(write).await?;
-            self.read(read).await
+            Ok(self.read(read).await)
         })
     }
 
@@ -194,6 +204,15 @@ impl Unopened {
 #[error("{0:#}")]
 pub struct OverBudget(pub anyhow::Error);
 
+/// The one row of a statement that gives exactly one, as an aggregate does.
+pub fn one_row(rows: &[SqlRow]) -> anyhow::Result<&[SqlValue]> {
+    rows.first().map(Vec::as_slice).ok_or_else(|| {
+        crate::refusal::fault!(
+            "no rows returned by a query that expected to return at least one row"
+        )
+    })
+}
+
 /// Whether a store error says that a table that the statement names is
 /// absent.
 pub fn is_missing_table(error: &anyhow::Error) -> bool {
@@ -213,6 +232,8 @@ pub trait SqlColumns {
     /// The text or NULL of one column, moved out of the row without a
     /// copy. The column holds empty text after.
     fn take_optional_text(&mut self, index: usize) -> anyhow::Result<Option<String>>;
+    /// The bytes of one blob column.
+    fn blob(&self, index: usize) -> anyhow::Result<&[u8]>;
 }
 
 impl SqlColumns for [SqlValue] {
@@ -250,6 +271,13 @@ impl SqlColumns for [SqlValue] {
             Some(SqlValue::Null) => Ok(None),
             Some(SqlValue::Text(_)) => self.take_text(index).map(Some),
             _ => Err(column_fault(self, index, "text or null")),
+        }
+    }
+
+    fn blob(&self, index: usize) -> anyhow::Result<&[u8]> {
+        match self.get(index) {
+            Some(SqlValue::Blob(value)) => Ok(value),
+            _ => Err(column_fault(self, index, "a blob")),
         }
     }
 }

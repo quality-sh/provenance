@@ -1,12 +1,19 @@
 //! The shared continuation identity and authenticated position.
+#[cfg(feature = "host")]
 use super::ReadContext;
+#[cfg(feature = "host")]
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+#[cfg(feature = "host")]
 use hmac::{Hmac, KeyInit as _, Mac};
+#[cfg(feature = "host")]
 use provenance_core::protocol::read_failure::ReadFailure;
+#[cfg(feature = "host")]
 use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "host")]
 use sha2::{Digest, Sha256};
 
+#[cfg(feature = "host")]
 type Signature = Hmac<Sha256>;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -17,6 +24,7 @@ pub struct Position {
     pub id: String,
 }
 
+#[cfg(feature = "host")]
 #[derive(Serialize, Deserialize)]
 struct Payload {
     identity: String,
@@ -29,12 +37,14 @@ struct Payload {
     position: Position,
 }
 
+#[cfg(feature = "host")]
 pub struct Cursor {
     identity: String,
     key: Vec<u8>,
     live_revision: Option<String>,
 }
 
+#[cfg(feature = "host")]
 impl Cursor {
     /// Binds continuation to the operation, resolved target, scope, and selector.
     #[rule("rule_cursor_binds_query_identity")]
@@ -133,6 +143,7 @@ impl Cursor {
     }
 }
 
+#[cfg(feature = "host")]
 /// A changed projection cannot answer a continuation at the old revision.
 #[rule("rule_cursor_restarts_on_revision_change")]
 fn check_revision(ctx: &ReadContext, payload: &Payload) -> anyhow::Result<()> {
@@ -147,12 +158,14 @@ fn check_revision(ctx: &ReadContext, payload: &Payload) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "host")]
 /// The key of the read database that signs this read's cursors.
 fn signing_key(ctx: &ReadContext) -> anyhow::Result<Vec<u8>> {
     Ok(ctx.repository().read_database()?.cursor_key()?.to_vec())
 }
 
 #[cfg(test)]
+#[cfg(feature = "host")]
 mod tests {
     use super::Signature;
     use hmac::{KeyInit as _, Mac as _};

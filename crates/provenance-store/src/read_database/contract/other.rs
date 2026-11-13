@@ -1,6 +1,6 @@
 //! Another adapter over the store of an adapter: it runs the same SQL, but
-//! its transaction is its own type, so the crate finds no `SQLx`
-//! transaction in it. Code that passes over it needs nothing but the port.
+//! its transaction is its own type. Code that passes over it needs nothing
+//! but the port.
 
 use crate::read_database::{
     ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement, Transaction,
@@ -60,7 +60,7 @@ impl<D: ReadDatabase> ReadDatabase for Other<D> {
         &'a self,
         write: WriteWork<'a>,
         read: ReadWork<'a>,
-    ) -> SqlFuture<'a, ()> {
+    ) -> SqlFuture<'a, anyhow::Result<()>> {
         self.0.write_then_read(
             Box::new(move |lent| write(other(lent))),
             Box::new(move |lent| read(other(lent))),
