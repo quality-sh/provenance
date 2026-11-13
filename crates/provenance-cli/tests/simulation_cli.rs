@@ -133,6 +133,13 @@ fn a_merged_branch_and_a_stopped_write_keep_the_laws() {
     let test = "a_merged_branch_and_a_stopped_write_keep_the_laws";
     report::probe(&layer(), test, check(&case, &run));
     let (_, stopped) = &run.groups[2];
-    assert!(stopped[0].stopped, "the write ended before its stop: {stopped:?}");
-    assert_eq!(run.stops, [Landing::Publish], "the stop landed after the publish");
+    assert!(
+        stopped[0].stopped,
+        "the write ended before its stop: {stopped:?}"
+    );
+    assert_eq!(
+        run.stops,
+        [Landing::Publish],
+        "the stop landed after the publish"
+    );
 }

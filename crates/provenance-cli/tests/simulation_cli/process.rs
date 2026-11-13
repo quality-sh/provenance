@@ -361,7 +361,10 @@ fn stop_write(
     let _ = child.kill();
     match wait_limited(child, "a stopped write") {
         Ok(output) if !output.stdout.is_empty() => ended(Ok(parse(&output.stdout)["data"].clone())),
-        _ => (done(task, Err("stopped".into()), true), Some(watch.landing())),
+        _ => (
+            done(task, Err("stopped".into()), true),
+            Some(watch.landing()),
+        ),
     }
 }
 
