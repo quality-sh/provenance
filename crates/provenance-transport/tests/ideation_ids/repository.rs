@@ -2,7 +2,7 @@
 //! ideation writes and the reads over it, and the hand edits that put an id
 //! on two lines of its file.
 
-use crate::support::ideation::evidence;
+use crate::support::asserted_proposal::{assertion_row, create_asserted_proposal};
 use crate::support::records::{allow_reviewer, Repository};
 use crate::support::resource_http::{call, host};
 use serde_json::{json, Value};
@@ -20,12 +20,6 @@ pub fn proposal(id: &str, claims: &[&str]) -> Value {
     }})
 }
 
-/// The stored row of the assertion `assertion_a` of `proposal_a`.
-pub fn assertion_row() -> Value {
-    json!({"scope_id":"default", "id":"assertion_a", "proposal_id":"proposal_a",
-        "synthesis_packet_id":"synthesis_evidence", "supporting_claim_ids":["claim_a"]})
-}
-
 pub fn state_path(repo: &Repository, name: &str) -> std::path::PathBuf {
     repo.dir
         .path()
@@ -40,27 +34,13 @@ pub fn state_path(repo: &Repository, name: &str) -> std::path::PathBuf {
 /// proposal `proposal_b` with no assertion. The result also gives the
 /// answers of the reads over it.
 ///
-/// No route creates a proposal that a packet qualifies, so one store call
-/// creates `proposal_a` and its assertion, as a swarm landing does. That
-/// call writes the landings file, and the proposal file and the assertion
-/// file do not hold the two records.
+/// The landings file holds `proposal_a` and its assertion (see
+/// [`create_asserted_proposal`]).
 pub async fn ideation_repository() -> (Repository, Vec<Value>) {
     let repo = Repository::new("The shared graph is readable.");
     allow_reviewer(&repo);
+    create_asserted_proposal(&repo, "proposal_a").await;
     let writer = host(&repo, true);
-    for (path, body) in evidence("proposal_a") {
-        let (status, created) = call(&writer, "POST", path, Some(body)).await;
-        assert_eq!(status, 200, "{path}: {created}");
-    }
-    let mut asserted = proposal("proposal_a", &["claim_a"])["data"].clone();
-    asserted["scope_id"] = json!("default");
-    repo.open()
-        .store()
-        .create_asserted_proposal(
-            serde_json::from_value(asserted).unwrap(),
-            serde_json::from_value(assertion_row()).unwrap(),
-        )
-        .unwrap();
     for (path, body) in [
         (
             "/proposals/proposal_a/dispositions",
@@ -216,7 +196,7 @@ pub fn copy_row(repo: &Repository, name: &str, id: &str) -> (usize, usize) {
 /// merge of two branches that each add it gives. The result is the two
 /// lines.
 pub fn merge_assertion_two_times(repo: &Repository) -> (usize, usize) {
-    let row = format!("{}\n", assertion_row());
+    let row = format!("{}\n", assertion_row("proposal_a"));
     let lines = add_rows(repo, "assertions.jsonl", &[row.clone(), row]);
     (lines[0], lines[1])
 }

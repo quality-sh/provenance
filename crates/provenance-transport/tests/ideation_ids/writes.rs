@@ -102,8 +102,10 @@ async fn an_id_on_three_lines_is_located_at_the_second_line() {
 /// With an id on two lines in the proposal file and in the assertion file,
 /// each write names the proposal file: the aggregate check of a write checks
 /// the proposal ids before the assertion ids.
+///
+/// No Rule: an implementation aid. The Rule asks for a record at fault, and
+/// both files hold one, so the Rule does not state which file a write names.
 #[tokio::test]
-#[verifies("rule_inconsistent_records_refusal_names_records", examples)]
 async fn an_id_on_two_lines_in_two_files_is_located_in_the_proposal_file() {
     let (repo, _) = ideation_repository().await;
     let lines = copy_row(&repo, "proposal_cards.jsonl", "proposal_b");
@@ -115,8 +117,10 @@ async fn an_id_on_two_lines_in_two_files_is_located_in_the_proposal_file() {
 /// With an id on two lines in the contribution file and in the proposal
 /// file, each write names the contribution file: the aggregate check of a
 /// write checks the contribution ids first.
+///
+/// No Rule: an implementation aid. The Rule asks for a record at fault, and
+/// both files hold one, so the Rule does not state which file a write names.
 #[tokio::test]
-#[verifies("rule_inconsistent_records_refusal_names_records", examples)]
 async fn a_contribution_id_and_a_proposal_id_on_two_lines_are_located_in_the_contribution_file() {
     let (repo, _) = ideation_repository().await;
     let lines = copy_row(&repo, "contributions.jsonl", "contribution_evidence");

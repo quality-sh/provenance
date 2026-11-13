@@ -1,9 +1,10 @@
 //! Which fault an answer names when a line of the assertion file does not
 //! parse and a proposal id is on two lines of its file.
 //!
-//! No Rule: the test pins an order that this change keeps. The writes read
-//! the assertion file before the aggregate check of the proposal ids, and
-//! the catch-up parses the assertion file before it checks the ids.
+//! No Rule: an implementation aid. It pins that a line that does not parse
+//! wins over a duplicate id. The writes read the assertion file before the
+//! aggregate check of the proposal ids, and the catch-up parses the
+//! assertion file before it checks the ids.
 
 use crate::repository::{
     add_broken_line, answers, at_stored, copy_row, ideation_repository, refused, IDEATION,

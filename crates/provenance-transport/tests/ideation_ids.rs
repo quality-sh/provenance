@@ -15,8 +15,8 @@ mod repository;
 mod writes;
 
 mod support {
-    #[path = "../support/ideation.rs"]
-    pub mod ideation;
+    #[path = "../support/asserted_proposal.rs"]
+    pub mod asserted_proposal;
     #[path = "../support/records.rs"]
     pub mod records;
     #[path = "../support/resource_http.rs"]

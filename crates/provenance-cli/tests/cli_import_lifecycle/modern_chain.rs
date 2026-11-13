@@ -280,7 +280,8 @@ fn export_names_the_two_lines_of_a_proposal_id() {
 /// An import of a valid export replaces a scope with `proposal_a` on two
 /// lines of `proposal_cards.jsonl`, and the id is on one line after it.
 ///
-/// No Rule: the test pins an answer that this change keeps.
+/// No Rule: an implementation aid. It pins that an import of a valid export
+/// repairs a scope that has an id on two lines.
 #[test]
 fn an_import_replaces_a_scope_with_a_proposal_id_on_two_lines() {
     let (fixture, cards, row) = ModernLifecycleFixture::with_a_proposal_id_on_two_lines();

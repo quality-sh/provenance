@@ -107,9 +107,13 @@ async fn a_read_over_a_synthesis_packet_id_on_two_lines_answers_at_the_stored_se
     assert_eq!(answers, expected);
 }
 
-/// The catch-up checks the proposal ids before the assertion ids.
+/// With an id on two lines in the proposal file and in the assertion file,
+/// a read names the proposal file: the catch-up checks the proposal ids
+/// before the assertion ids.
+///
+/// No Rule: an implementation aid. No Rule states which of two faults a
+/// read names.
 #[tokio::test]
-#[verifies("rule_failed_freshness_answers_at_stored_serial", examples)]
 async fn a_read_over_ids_on_two_lines_in_two_files_names_the_proposal_file() {
     let (answers, expected) =
         reads_over("proposal_cards.jsonl", "proposal", "proposal_b", |repo| {
@@ -124,8 +128,10 @@ async fn a_read_over_ids_on_two_lines_in_two_files_names_the_proposal_file() {
 /// file, a read names the proposal file: the catch-up checks the proposal,
 /// assertion and disposition ids before the aggregate check, which checks
 /// the contribution ids. A write names the contribution file.
+///
+/// No Rule: an implementation aid. No Rule states which of two faults a
+/// read names.
 #[tokio::test]
-#[verifies("rule_failed_freshness_answers_at_stored_serial", examples)]
 async fn a_read_over_a_contribution_id_and_a_proposal_id_on_two_lines_names_the_proposal_file() {
     let (answers, expected) =
         reads_over("proposal_cards.jsonl", "proposal", "proposal_b", |repo| {
