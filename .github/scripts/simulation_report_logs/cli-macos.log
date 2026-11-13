@@ -1,0 +1,92 @@
+[32;1m    Starting[0m [1m13[0m tests across [1m2[0m binaries
+[31;1m        FAIL[0m [   0.015s] ( 1/13) [35;1mprovenance-cli::simulation_cli[0m [34;1mzz_check_fails_in_a_probe[0m
+[31;1m [0m [31;1mstdout[0m [31;1m───[0m
+
+    running 1 test
+    test zz_check_fails_in_a_probe ... FAILED
+
+    failures:
+
+    failures:
+        zz_check_fails_in_a_probe
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+    [0m
+[31;1m [0m [31;1mstderr[0m [31;1m───[0m
+
+    [0m[31;1mthread 'zz_check_fails_in_a_probe' (36385) panicked at crates/provenance-cli/tests/simulation_cli.rs:152:5:[0m
+    [31;1massertion `left == right` failed: a planted check[0m
+      left: 1
+     right: 2
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace[0m
+
+[31;1m        FAIL[0m [   0.012s] ( 2/13) [35;1mprovenance-cli::simulation_cli[0m [34;1mzz_planted_check_broken[0m
+[31;1m [0m [31;1mstdout[0m [31;1m───[0m
+
+    running 1 test
+    test zz_planted_check_broken ... FAILED
+
+    failures:
+
+    failures:
+        zz_planted_check_broken
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+    [0m
+[31;1m [0m [31;1mstderr[0m [31;1m───[0m
+
+    [0m[31;1mthread 'zz_planted_check_broken' (36435) panicked at crates/provenance-simulation/src/report.rs:90:5:[0m
+    [31;1msimulation check broken: law L3 did not see its planted fault: every law held[0m
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace[0m
+
+[31;1m        FAIL[0m [   0.010s] ( 3/13) [35;1mprovenance-cli::simulation_cli[0m [34;1mzz_probe_breaks_a_law[0m
+[31;1m [0m [31;1mstdout[0m [31;1m───[0m
+
+    running 1 test
+    test zz_probe_breaks_a_law ... FAILED
+
+    failures:
+
+    failures:
+        zz_probe_breaks_a_law
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+    [0m
+[31;1m [0m [31;1mstderr[0m [31;1m───[0m
+
+    [0m[31;1mthread 'zz_probe_breaks_a_law' (36439) panicked at crates/provenance-simulation/src/report.rs:79:9:[0m
+    [31;1msimulation probe broke law L3 in layer cli-macos: a planted break with a second line[0m
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace[0m
+
+[31;1m     SIGABRT[0m [   0.012s] ( 4/13) [35;1mprovenance-cli::simulation_cli[0m [34;1mzz_test_aborts[0m
+[31;1m [0m [31;1mstdout[0m [31;1m───[0m
+
+    running 1 test[0m
+
+    (test [31;1maborted[0m with signal [1m6[0m: SIGABRT)
+
+[33;1m        SLOW[0m [>  5.000s] (─────) [35;1mprovenance-cli::simulation_cli[0m [34;1mzz_test_hangs[0m
+[32;1m        PASS[0m [   8.824s] ( 5/13) [35;1mprovenance-cli::simulation_cli[0m [34;1mtwo_updates_at_once_have_one_winner[0m
+[31;1m TERMINATING[0m [> 10.000s] (─────) [35;1mprovenance-cli::simulation_cli[0m [34;1mzz_test_hangs[0m
+[31;1m     TIMEOUT[0m [  10.004s] ( 6/13) [35;1mprovenance-cli::simulation_cli[0m [34;1mzz_test_hangs[0m
+[31;1m [0m [31;1mstdout[0m [31;1m───[0m
+
+    running 1 test[0m
+
+    (test [31;1mtimed out[0m)
+
+[32;1m        PASS[0m [  10.542s] ( 7/13) [35;1mprovenance-cli::simulation_cli[0m [34;1ma_merged_branch_and_a_stopped_write_keep_the_laws[0m
+[32;1m        PASS[0m [  10.968s] ( 8/13) [35;1mprovenance-cli::simulation_cli[0m [34;1meach_operation_writes_through_the_cli[0m
+[32;1m        PASS[0m [  15.785s] ( 9/13) [35;1mprovenance-cli::simulation_cli[0m [34;1mrandom_cases_keep_the_laws_through_the_cli[0m
+[32;1m        PASS[0m [   7.462s] (10/13) [35;1mprovenance-cli::simulation_cli_planted[0m [34;1ma_restored_state_file_breaks_l3[0m
+[32;1m        PASS[0m [   7.062s] (11/13) [35;1mprovenance-cli::simulation_cli_planted[0m [34;1man_engine_that_refuses_a_claim_breaks_l7[0m
+[32;1m        PASS[0m [   7.492s] (12/13) [35;1mprovenance-cli::simulation_cli_planted[0m [34;1ma_stale_etag_recorded_for_a_fresh_write_breaks_l4[0m
+[32;1m        PASS[0m [  14.004s] (13/13) [35;1mprovenance-cli::simulation_cli_planted[0m [34;1ma_changed_projection_row_breaks_l6[0m
+────────────
+[31;1m     Summary[0m [  22.830s] [1m13[0m tests run: [1m8[0m [32;1mpassed[0m, [1m4[0m [31;1mfailed[0m, [1m1[0m [31;1mtimed out[0m, [1m0[0m [33;1mskipped[0m
+[31;1m        FAIL[0m [   0.015s] ( 1/13) [35;1mprovenance-cli::simulation_cli[0m [34;1mzz_check_fails_in_a_probe[0m
+[31;1m        FAIL[0m [   0.012s] ( 2/13) [35;1mprovenance-cli::simulation_cli[0m [34;1mzz_planted_check_broken[0m
+[31;1m        FAIL[0m [   0.010s] ( 3/13) [35;1mprovenance-cli::simulation_cli[0m [34;1mzz_probe_breaks_a_law[0m
+[31;1m     SIGABRT[0m [   0.012s] ( 4/13) [35;1mprovenance-cli::simulation_cli[0m [34;1mzz_test_aborts[0m
+[31;1m     TIMEOUT[0m [  10.004s] ( 6/13) [35;1mprovenance-cli::simulation_cli[0m [34;1mzz_test_hangs[0m
+[31;1merror[0m: test run failed

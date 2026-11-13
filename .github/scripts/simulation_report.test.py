@@ -25,9 +25,18 @@ REPLAY = (
     "HEGEL_SEED=1234 cargo nextest run --profile simulation --run-ignored all "
     "-p provenance-simulation --test engine -E 'test(=random_cases_keep_the_laws)'"
 )
-# The real logs of each failure form on each system, from the nightly
-# simulation workflow (see the README of that directory).
+# The nextest part of the logs of run 43425676855 of the simulation workflow,
+# one for each layer job. The run added tests that fail in each form: a probe
+# that breaks a law, a failed check, a broken planted check, a crash and a
+# test that nextest stops at its time limit. The engine tests were in the
+# test target `zz-dash`, a name with a dash.
 REAL_LOGS = Path(__file__).with_name("simulation_report_logs")
+REAL_FORMS = {
+    "engine": ("provenance-simulation", "zz-dash", "SIGABRT", "HEGEL_SEED=1"),
+    "cli-linux": ("provenance-cli", "simulation_cli", "SIGABRT", "HEGEL_SEED=1 SIMULATION_L6=each"),
+    "cli-macos": ("provenance-cli", "simulation_cli", "SIGABRT", "HEGEL_SEED=1 SIMULATION_L6=end"),
+    "cli-windows": ("provenance-cli", "simulation_cli", "ABORT", "HEGEL_SEED=1 SIMULATION_L6=end"),
+}
 
 
 def failed(binary_id, test, stderr, status="FAIL"):
@@ -353,6 +362,34 @@ class ReportTests(unittest.TestCase):
             f"Simulation: probe {PROBE} broke law L1 in the engine layer",
             "Simulation: the engine layer failed without a broken law",
         ])
+
+    def test_the_real_log_of_each_system_gives_a_report_for_each_failed_test(self):
+        for layer, (package, target, crash, environment) in REAL_FORMS.items():
+            with self.subTest(layer=layer):
+                log = (REAL_LOGS / f"{layer}.log").read_text()
+                found = dict(report.layer_reports(layer, log, [], "https://run", environment))
+                self.assertEqual(sorted(found), sorted([
+                    f"Simulation: a planted fault was not found in the {layer} layer",
+                    f"Simulation: probe zz_probe_breaks_a_law broke law L3 in the {layer} layer",
+                    f"Simulation: test zz_check_fails_in_a_probe failed in the {layer} layer",
+                    f"Simulation: test zz_test_aborts failed in the {layer} layer",
+                    f"Simulation: test zz_test_hangs did not end in its time limit in the {layer} layer",
+                ]))
+                for test in ["zz_check_fails_in_a_probe", "zz_test_aborts", "zz_test_hangs"]:
+                    command = (
+                        f"{environment} cargo nextest run --profile simulation --run-ignored all "
+                        f"-p {package} --test {target} -E 'test(={test})'"
+                    )
+                    body = next(body for title, body in found.items() if f" {test} " in title)
+                    self.assertIn(f"- Replay: `{command}`", body)
+                probe = found[f"Simulation: probe zz_probe_breaks_a_law broke law L3 in the {layer} layer"]
+                self.assertIn("- Detail: a planted break with a second line", probe)
+                check = found[f"Simulation: test zz_check_fails_in_a_probe failed in the {layer} layer"]
+                self.assertIn("assertion `left == right` failed: a planted check left: 1 right: 2", check)
+                crashed = found[f"Simulation: test zz_test_aborts failed in the {layer} layer"]
+                self.assertIn(f"- Detail: the test ended with {crash}", crashed)
+                broken = found[f"Simulation: a planted fault was not found in the {layer} layer"]
+                self.assertIn("`zz_planted_check_broken`: `simulation check broken: law L3", broken)
 
     def test_a_probe_line_is_not_a_law_line_of_a_random_case(self):
         self.assertIsNone(report.LAW_LINE.search(PROBE_LOG))

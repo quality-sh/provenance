@@ -54,7 +54,7 @@ FAILED_TEST = re.compile(
     r"^ +(FAIL|TIMEOUT|ABORT|SIG[A-Z]+) \[[^\]]*\] (?:\([^)]*\) )?(\S+) (\S+)$", re.M
 )
 # Each status line and the summary line of nextest start a new part of the log.
-STATUS_LINE = re.compile(r"^ +[A-Z][A-Za-z0-9 -]* \[ *>?[0-9.]+s\]", re.M)
+STATUS_LINE = re.compile(r"^ +[A-Z][A-Za-z0-9 -]* \[ *>? *[0-9.]+s\]", re.M)
 SUMMARY_LINE = re.compile(r"^ +Summary \[", re.M)
 PANIC_LINE = re.compile(r"panicked at [^\n]*:\n")
 # The variables of the job that a replay needs.
@@ -113,6 +113,14 @@ def panic_message(output):
             break
         lines.append(line)
     return " ".join(lines)
+
+
+def ended_with(status, output):
+    """The end of a test with no panic: the status, and the exit code that
+    nextest prints on Windows on the line after the status line."""
+    first = output.lstrip("\n").splitlines()[:1]
+    code = first[0].strip() if first and first[0].strip().startswith("- with code") else ""
+    return f"the test ended with {status} {code}".strip()
 
 
 def load_failures(directory):
@@ -284,7 +292,7 @@ def layer_reports(layer, log, failures, run_url=None, environment=""):
             detail = "nextest stopped the test at its time limit"
         else:
             issue_title = test_title(layer, test, status)
-            detail = panic_message(output) or f"the test ended with {status}"
+            detail = panic_message(output) or ended_with(status, output)
         found.append((issue_title, describe_test(issue_title, test, detail, command, run_url)))
     if broken:
         found.append((title(layer, CHECK_BROKEN), describe_check_broken(layer, broken, run_url)))
