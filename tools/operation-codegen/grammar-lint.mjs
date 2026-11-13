@@ -303,6 +303,7 @@ export const FAILURE_STATUS = new Map([
   ['discussion_version_conflict', 409], ['discussion_membership_mismatch', 400],
   ['discussion_closed', 409], ['discussion_resolved', 409],
   ['discussion_intent_changed', 409], ['claim_conflict', 409],
+  ['state_changed', 409],
   ['invalid_commit_pin', 400], ['scope_mismatch', 400],
   ['empty_message_body', 400], ['statement_invalid', 400],
   ['invalid_declaration', 400], ['invalid_update', 400], ['missing_reference', 400],
