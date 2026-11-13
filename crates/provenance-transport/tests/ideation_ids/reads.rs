@@ -111,11 +111,12 @@ async fn a_read_over_a_synthesis_packet_id_on_two_lines_answers_at_the_stored_se
 #[tokio::test]
 #[verifies("rule_failed_freshness_answers_at_stored_serial", examples)]
 async fn a_read_over_ids_on_two_lines_in_two_files_names_the_proposal_file() {
-    let (answers, expected) = reads_over("proposal_cards.jsonl", "proposal", "proposal_b", |repo| {
-        merge_assertion_two_times(repo);
-        copy_row(repo, "proposal_cards.jsonl", "proposal_b")
-    })
-    .await;
+    let (answers, expected) =
+        reads_over("proposal_cards.jsonl", "proposal", "proposal_b", |repo| {
+            merge_assertion_two_times(repo);
+            copy_row(repo, "proposal_cards.jsonl", "proposal_b")
+        })
+        .await;
     assert_eq!(answers, expected);
 }
 
@@ -126,10 +127,11 @@ async fn a_read_over_ids_on_two_lines_in_two_files_names_the_proposal_file() {
 #[tokio::test]
 #[verifies("rule_failed_freshness_answers_at_stored_serial", examples)]
 async fn a_read_over_a_contribution_id_and_a_proposal_id_on_two_lines_names_the_proposal_file() {
-    let (answers, expected) = reads_over("proposal_cards.jsonl", "proposal", "proposal_b", |repo| {
-        copy_row(repo, "contributions.jsonl", "contribution_evidence");
-        copy_row(repo, "proposal_cards.jsonl", "proposal_b")
-    })
-    .await;
+    let (answers, expected) =
+        reads_over("proposal_cards.jsonl", "proposal", "proposal_b", |repo| {
+            copy_row(repo, "contributions.jsonl", "contribution_evidence");
+            copy_row(repo, "proposal_cards.jsonl", "proposal_b")
+        })
+        .await;
     assert_eq!(answers, expected);
 }
