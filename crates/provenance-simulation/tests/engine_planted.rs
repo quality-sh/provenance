@@ -233,7 +233,10 @@ fn archive_that_only_clears_the_claim(
 fn a_claim_cleared_on_an_open_topic_breaks_l3() {
     let case = Case {
         engines: 2,
-        steps: alone(&[Operation::ClaimTopic, Operation::ArchiveRequirement { n: 0 }]),
+        steps: alone(&[
+            Operation::ClaimTopic,
+            Operation::ArchiveRequirement { n: 0 },
+        ]),
     };
     let config = Config {
         apply: Some(archive_that_only_clears_the_claim),
@@ -251,7 +254,10 @@ fn claim_in_the_final_state(run: &mut Run, holder: &str) {
         .find(|(key, _)| key.as_str().contains("/topics/"))
         .expect("a Topic shard");
     let mut rows = Vec::new();
-    for line in bytes.split(|byte| *byte == b'\n').filter(|line| !line.is_empty()) {
+    for line in bytes
+        .split(|byte| *byte == b'\n')
+        .filter(|line| !line.is_empty())
+    {
         let mut row: serde_json::Value = serde_json::from_slice(line).expect("a Topic row");
         if row["id"] == TOPIC {
             row["claimed_by"] = holder.into();
@@ -272,7 +278,10 @@ fn claim_in_the_final_state(run: &mut Run, holder: &str) {
 fn a_claim_on_an_archived_topic_breaks_l3() {
     let case = Case {
         engines: 2,
-        steps: alone(&[Operation::ArchiveRequirement { n: 0 }, Operation::ClaimTopic]),
+        steps: alone(&[
+            Operation::ArchiveRequirement { n: 0 },
+            Operation::ClaimTopic,
+        ]),
     };
     let mut run = run_case(&case, ONLY_L3);
     let claim = &mut run.done[1];
@@ -311,7 +320,11 @@ fn a_claim_lost_before_an_archive_of_unknown_outcome_breaks_l3() {
         .publishes
         .iter()
         .any(|publish| publish.operation == archive && publish.outcome == Outcome::Unknown);
-    assert!(unknown, "the archive met no unknown outcome: {:?}", run.publishes);
+    assert!(
+        unknown,
+        "the archive met no unknown outcome: {:?}",
+        run.publishes
+    );
     expect_law(laws::check_only(&run, "L3"), "L3");
 }
 

@@ -109,5 +109,8 @@ fn a_failed_check_of_a_probe_reports_the_probe_and_its_replay_line() {
     assert!(first.starts_with(&start), "{text}");
     assert!(first.contains("a planted check"), "{text}");
     let selection = selection(env!("CARGO_PKG_NAME"), env!("CARGO_CRATE_NAME"));
-    assert!(replay.starts_with("replay: ") && replay.ends_with(&selection), "{text}");
+    assert!(
+        replay.starts_with("replay: ") && replay.ends_with(&selection),
+        "{text}"
+    );
 }
