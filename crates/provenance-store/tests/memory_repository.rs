@@ -27,6 +27,7 @@ use provenance_store::state_store::{
     UpdateRequirementInput, UpdateRuleInput,
 };
 use provenance_store::storage::{Atomicity, PublishFailure, StateKey, StateStorage, WriteSet};
+use provenance_store::write_error::{WriteError, WriteFailure};
 
 /// The binding of the Rule with the key `share-link-expiry` in `file`.
 fn binding(file: &str) -> MaterializeVerificationBindingInput {
@@ -247,11 +248,11 @@ fn a_repository_over_memory_makes_changes_and_imports_records_in_stages() {
     );
 }
 
-/// Implementation aid: no proposed Rule of the plan covers the section view
-/// after a refused write. This test shows that a change outside the engine
-/// refuses one write of a section and that the next write of the same
-/// section reads the changed state and lands.
+/// A change outside the engine refuses one write of a section as
+/// `state_changed` (409), and the next write of the same section reads the
+/// changed state and lands.
 #[test]
+#[verifies("rule_moved_base_refusal_is_state_changed", examples)]
 fn a_section_reads_the_state_again_after_a_moved_base() {
     let memory = memory_repository();
     let store = memory.repository.store();
@@ -267,15 +268,23 @@ fn a_section_reads_the_state_again_after_a_moved_base() {
                 .publish(WriteSet::new(Atomicity::PerKey).put(manifest, bytes))
                 .unwrap();
 
-            let refused = section
-                .materialize_verification_binding(binding("tests/second.test.ts"))
-                .unwrap_err();
+            let refused = WriteError(
+                section
+                    .materialize_verification_binding(binding("tests/second.test.ts"))
+                    .unwrap_err(),
+            );
             assert!(
                 matches!(
-                    refused.downcast_ref::<PublishFailure>(),
-                    Some(PublishFailure::BaseMoved { .. })
+                    refused.safe(),
+                    WriteFailure::StateChanged { ref message }
+                        if message.contains("Read the records again")
                 ),
                 "the write after the outside change is refused: {refused:#}"
+            );
+            assert_eq!(refused.status(), 409);
+            assert!(
+                format!("{refused:#}").contains("the state moved from revision"),
+                "the native chain keeps both revisions: {refused:#}"
             );
             section.materialize_verification_binding(binding("tests/third.test.ts"))?;
             Ok(())
