@@ -62,7 +62,7 @@ fn land(store: &StateStore, scope: &ScopeId, batch: IdeationLandingBatch, replac
 /// The ids of the records that the test landed, in the order of each list.
 /// The seeded store also holds a proposal with a generated id.
 fn listed_ids(store: &StateStore, scope: &ScopeId) -> Vec<Vec<String>> {
-    fn ids<T>(records: Vec<T>, id: impl Fn(&T) -> &str) -> Vec<String> {
+    fn ids<T>(records: &[T], id: impl Fn(&T) -> &str) -> Vec<String> {
         records
             .iter()
             .map(|record| id(record).to_owned())
@@ -70,10 +70,10 @@ fn listed_ids(store: &StateStore, scope: &ScopeId) -> Vec<Vec<String>> {
             .collect()
     }
     vec![
-        ids(store.list_contributions(scope).unwrap(), |r| r.id.as_str()),
-        ids(store.list_synthesis_packets(scope).unwrap(), |r| r.id.as_str()),
-        ids(store.list_proposal_definitions(scope).unwrap(), |r| r.id.as_str()),
-        ids(store.list_dispositions(scope).unwrap(), |r| r.id.as_str()),
+        ids(&store.list_contributions(scope).unwrap(), |r| r.id.as_str()),
+        ids(&store.list_synthesis_packets(scope).unwrap(), |r| r.id.as_str()),
+        ids(&store.list_proposal_definitions(scope).unwrap(), |r| r.id.as_str()),
+        ids(&store.list_dispositions(scope).unwrap(), |r| r.id.as_str()),
     ]
 }
 
