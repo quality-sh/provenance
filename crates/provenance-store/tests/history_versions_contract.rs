@@ -352,7 +352,7 @@ async fn a_repository_reads_record_history_through_its_file_versions() {
     let origin = DiscussionOrigin {
         discussion_id: discussion.discussion_id.clone(),
         thread_id: discussion.thread_id.clone(),
-        message_id: discussion.root_message_id.clone(),
+        message_id: discussion.root_message_id,
     };
     let save = discussion_support::save(&store, json!({"description":"Text A."}));
     store

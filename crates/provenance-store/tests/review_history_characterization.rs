@@ -119,7 +119,7 @@ fn history() -> Fixture {
     let origin = DiscussionOrigin {
         discussion_id: discussion.discussion_id.clone(),
         thread_id: discussion.thread_id.clone(),
-        message_id: discussion.root_message_id.clone(),
+        message_id: discussion.root_message_id,
     };
     names.push((git.commit("Reviewer", &[state], "Start"), "start"));
     git.run("Reviewer", &["checkout", "-q", "-B", "main"]);
@@ -265,20 +265,22 @@ async fn evidence_answers_stay_the_same() {
                 let answer =
                     read_evidence(&repository(fixture.root()), ReadPolicy::default(), query)
                         .await
-                        .map(|page| {
-                            let page = page.result;
-                            let text = if field.is_some() {
-                                page.json_text
-                            } else {
-                                fixture.record(&page.json_text)
-                            };
-                            format!(
-                                "{} {text} next={:?}",
-                                fixture.name(page.version.as_str()),
-                                page.next_offset
-                            )
-                        })
-                        .unwrap_or_else(|error| format!("refused: {error:#}"));
+                        .map_or_else(
+                            |error| format!("refused: {error:#}"),
+                            |page| {
+                                let page = page.result;
+                                let text = if field.is_some() {
+                                    page.json_text
+                                } else {
+                                    fixture.record(&page.json_text)
+                                };
+                                format!(
+                                    "{} {text} next={:?}",
+                                    fixture.name(page.version.as_str()),
+                                    page.next_offset
+                                )
+                            },
+                        );
                 answers.push(format!(
                     "{} {field:?} before={before}: {answer}",
                     fixture.name(entry.id.as_str())
