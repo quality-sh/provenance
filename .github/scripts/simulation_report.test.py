@@ -19,49 +19,95 @@ FAILURE = {
     "detail": "operation 1 met a moved base again",
     "seed": "1234",
     "case": {"engines": 2, "steps": [{"Turn": 0}]},
-    "replay": (
-        "HEGEL_SEED=1234 cargo nextest run --profile simulation --run-ignored all "
-        "-p provenance-simulation --test engine -E 'test(=random_cases_keep_the_laws)'"
-    ),
 }
-LOG = (
+ENVIRONMENT = "HEGEL_SEED=1234"
+REPLAY = (
+    "HEGEL_SEED=1234 cargo nextest run --profile simulation --run-ignored all "
+    "-p provenance-simulation --test engine -E 'test(=random_cases_keep_the_laws)'"
+)
+# The real logs of each failure form on each system, from the nightly
+# simulation workflow (see the README of that directory).
+REAL_LOGS = Path(__file__).with_name("simulation_report_logs")
+
+
+def failed(binary_id, test, stderr, status="FAIL"):
+    """A test that did not pass, as nextest prints it in the log of a layer
+    (the form of run 43405112955): the status line, then the output with
+    each line indented by four spaces."""
+    lines = "".join(f"    {line}\n" for line in stderr.splitlines())
+    return (
+        f"\x1b[31;1m        {status}\x1b[0m [   6.102s] (7/7) "
+        f"\x1b[35;1m{binary_id}\x1b[0m \x1b[34;1m{test}\x1b[0m\n"
+        "\x1b[31;1m \x1b[0m \x1b[31;1mstderr\x1b[0m \x1b[31;1m\u2500\u2500\u2500\x1b[0m\n"
+        f"{lines}\n" + "\u2500" * 12 + "\n"
+    )
+
+
+def nextest_log(*tests, finished=True):
+    """The log of a layer with `tests`; a log that is not `finished` stops
+    before the summary of nextest."""
+    log = "\x1b[32;1m    Starting\x1b[0m \x1b[1m7\x1b[0m tests across \x1b[1m2\x1b[0m binaries\n"
+    log += "".join(tests)
+    if finished:
+        log += (
+            "\x1b[31;1m     Summary\x1b[0m [   6.103s] \x1b[1m7\x1b[0m tests run: "
+            "\x1b[1m6\x1b[0m \x1b[32;1mpassed\x1b[0m, \x1b[1m1\x1b[0m \x1b[31;1mfailed\x1b[0m\n"
+        )
+        for test in tests:
+            log += test.splitlines()[0] + "\n"
+        log += "\x1b[31;1merror\x1b[0m: test run failed\n"
+    return log
+
+
+def panic(test, message):
+    return f"thread '{test}' (2) panicked at crates/provenance-simulation/src/report.rs:9:5:\n{message}\n"
+
+
+RANDOM = "random_cases_keep_the_laws"
+RANDOM_FAILURE = failed(
+    "provenance-simulation::engine",
+    RANDOM,
     "simulation law L3 broken in layer engine: other\n"
     '#[hegel::reproduce_failure("OLDBLOB")]\n'
-    "simulation law L5 broken in layer engine: operation 1\n"
-    "steps: ...\n"
-    '#[hegel::reproduce_failure("AAEC")]\n'
+    + panic(RANDOM, "simulation law L5 broken in layer engine: operation 1\nseed: 1234")
+    + "steps: ...\n"
+    '#[hegel::reproduce_failure("AAEC")]\n',
 )
+LOG = nextest_log(RANDOM_FAILURE)
+PROBE = "a_case_with_every_fault_keeps_the_laws"
+PROBE_FAILURE = failed(
+    "provenance-simulation::engine",
+    PROBE,
+    panic(PROBE, "simulation probe broke law L1 in layer engine: operation 3 failed"),
+)
+PROBE_LOG = nextest_log(PROBE_FAILURE)
+REFUSED = "a_refused_post_lands_no_thread_and_no_message"
+CHECK_FAILURE = failed(
+    "provenance-simulation::refused_post",
+    REFUSED,
+    panic(REFUSED, "assertion `left == right` failed: turns 3\n  left: (1, 0)\n right: (0, 0)")
+    + "note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+)
+PLANTED = "a_lost_write_breaks_l3"
+CHECK_BROKEN = failed(
+    "provenance-simulation::engine_planted",
+    PLANTED,
+    panic(PLANTED, "simulation check broken: law L3 did not see its planted fault: x"),
+)
+TIMEOUT = failed("provenance-simulation::engine", PROBE, "", status="TIMEOUT")
 
 
-def layer_artifact(root, failures, log=LOG, name="simulation-engine"):
+def layer_artifact(root, failures, log=LOG, name="simulation-engine", environment=ENVIRONMENT):
     """A downloaded artifact in its own directory; `name=None` unpacks it in `root`."""
     directory = Path(root) / name if name else Path(root)
     (directory / "failures").mkdir(parents=True)
     layer = failures[0]["layer"] if failures else "engine"
     (directory / f"{layer}.log").write_text(log)
+    (directory / f"{layer}.env").write_text(environment + "\n")
     for failure in failures:
         path = directory / "failures" / f"{failure['layer']}-{failure['law']}.json"
         path.write_text(json.dumps(failure))
     return directory
-
-
-PROBE_LOG = (
-    "thread 'a_case_with_every_fault_keeps_the_laws' panicked at tests/engine.rs:9:5:\n"
-    "simulation probe a_case_with_every_fault_keeps_the_laws broke law L1 in layer engine: "
-    "operation 3 failed\n"
-    "replay: cargo nextest run --profile simulation --run-ignored all -p provenance-simulation "
-    "--test engine -E 'test(=a_case_with_every_fault_keeps_the_laws)'\n"
-)
-# A probe whose check that is not a law failed, in a different test target.
-PROBE_CHECK_LOG = (
-    "simulation probe a_refused_post_lands_no_thread_and_no_message failed a check in layer "
-    "engine: turns 3: the state holds a Thread\n"
-    "replay: cargo nextest run --profile simulation --run-ignored all -p provenance-simulation "
-    "--test refused_post -E 'test(=a_refused_post_lands_no_thread_and_no_message)'\n"
-)
-CHECK_LOG = "simulation check broken: law L3 did not see its planted fault: x\n"
-# A planted test that fails prints the text of its planted run.
-PLANTED_TEXT = "planted run in layer engine: law L5 reported: operation 1\n"
 
 
 def open_issues(root, gh, **options):
@@ -85,6 +131,29 @@ class FakeGh:
         return [call for call in self.calls if call[:2] == ("issue", verb)]
 
 
+def titles(gh):
+    return sorted(call[3] for call in gh.made("create"))
+
+
+def bodies(gh):
+    return {call[3]: call[7] for call in gh.made("create")}
+
+
+def issues_of(log, failures=()):
+    gh = FakeGh()
+    with tempfile.TemporaryDirectory() as root:
+        layer_artifact(root, list(failures), log=log, name=None)
+        open_issues(root, gh)
+    return gh
+
+
+def replay_of(target, test, environment=ENVIRONMENT):
+    return (
+        f"{environment} cargo nextest run --profile simulation --run-ignored all "
+        f"-p provenance-simulation --test {target} -E 'test(={test})'"
+    )
+
+
 class ReportTests(unittest.TestCase):
     def test_the_blob_is_the_one_printed_after_the_law(self):
         self.assertEqual(report.blob_for(LOG, FAILURE), "AAEC")
@@ -97,22 +166,34 @@ class ReportTests(unittest.TestCase):
         self.assertIsNone(report.blob_for('#[hegel::reproduce_failure("X")]\n', FAILURE))
 
     def test_a_failure_without_a_blob_is_marked_not_reproduced(self):
-        text = report.describe(FAILURE, None)
+        text = report.describe(FAILURE, None, REPLAY)
         self.assertIn("not reproduced", text)
 
     def test_the_summary_gives_law_seed_blob_steps_and_replay(self):
         with tempfile.TemporaryDirectory() as root:
             directory = layer_artifact(root, [FAILURE])
-            text = report.summary("engine", directory / "engine.log", directory / "failures")
+            text = report.summary("engine", directory / "engine.log", directory / "failures",
+                                  environ={"HEGEL_SEED": "1234"})
         self.assertIn("law L5 broken in the engine layer", text)
         self.assertIn("`1234`", text)
         self.assertIn('#[hegel::reproduce_failure("AAEC")]', text)
         self.assertIn('"Turn": 0', text)
-        self.assertIn(FAILURE["replay"], text)
+        self.assertIn(REPLAY, text)
 
-    def test_a_failed_job_without_a_law_still_reports(self):
+    def test_the_summary_writes_the_replay_variables_of_the_job(self):
+        environ = {"HEGEL_SEED": "77", "HEGEL_TEST_CASES": "", "SIMULATION_L6": "end", "PATH": "x"}
         with tempfile.TemporaryDirectory() as root:
-            text = report.summary("engine", Path(root) / "missing.log", Path(root) / "none")
+            log = Path(root) / "engine.log"
+            log.write_text(PROBE_LOG)
+            report.summary("engine", log, Path(root) / "failures", environ=environ)
+            self.assertEqual((Path(root) / "engine.env").read_text(), "HEGEL_SEED=77 SIMULATION_L6=end\n")
+            text = "".join(body for _, body in report.reports(root, "https://run"))
+        self.assertIn(replay_of("engine", PROBE, "HEGEL_SEED=77 SIMULATION_L6=end"), text)
+
+    def test_a_failed_job_without_a_log_still_reports(self):
+        with tempfile.TemporaryDirectory() as root:
+            text = report.summary("engine", Path(root) / "missing.log", Path(root) / "none",
+                                  environ={})
         self.assertIn("failed without a broken law", text)
 
     def test_a_new_law_opens_one_issue(self):
@@ -124,6 +205,7 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(len(created), 1)
         self.assertIn("Simulation: law L5 broken in the engine layer", created[0])
         self.assertIn("simulation", created[0])
+        self.assertIn(REPLAY, created[0][7])
         self.assertEqual(gh.made("comment"), [])
 
     def test_an_open_issue_for_the_law_gets_a_comment(self):
@@ -139,31 +221,26 @@ class ReportTests(unittest.TestCase):
         self.assertIn("https://run", comments[0][4])
 
     def test_one_artifact_unpacked_in_place_names_its_layer(self):
-        gh = FakeGh()
-        with tempfile.TemporaryDirectory() as root:
-            layer_artifact(root, [FAILURE], name=None)
-            open_issues(root, gh)
-        titles = [call[3] for call in gh.made("create")]
-        self.assertEqual(titles, ["Simulation: law L5 broken in the engine layer"])
+        gh = issues_of(LOG, [FAILURE])
+        self.assertEqual(titles(gh), ["Simulation: law L5 broken in the engine layer"])
 
-    def test_a_layer_log_without_failures_reports_the_layer(self):
-        gh = FakeGh()
-        with tempfile.TemporaryDirectory() as root:
-            layer_artifact(root, [], name=None)
-            open_issues(root, gh)
-        titles = [call[3] for call in gh.made("create")]
-        self.assertEqual(titles, ["Simulation: the engine layer failed without a broken law"])
+    def test_a_layer_log_without_a_test_report_reports_the_layer(self):
+        gh = issues_of("error: could not compile `provenance-simulation`\n")
+        self.assertEqual(titles(gh), ["Simulation: the engine layer failed without a broken law"])
 
     def test_no_artifact_still_opens_an_issue(self):
         gh = FakeGh()
         with tempfile.TemporaryDirectory() as root:
             open_issues(root, gh)
-        titles = [call[3] for call in gh.made("create")]
-        self.assertEqual(titles, ["Simulation: the simulation layer failed without a broken law"])
+        self.assertEqual(titles(gh), ["Simulation: the simulation layer failed without a broken law"])
 
     def test_each_layer_gets_its_own_issue(self):
         gh = FakeGh()
-        contract_log = "simulation law L5 broken in layer contract: x\n"
+        contract_log = nextest_log(failed(
+            "provenance-simulation::contract",
+            "random_cases_keep_the_laws_through_the_contract",
+            "simulation law L5 broken in layer contract: x",
+        ))
         with tempfile.TemporaryDirectory() as root:
             layer_artifact(root, [FAILURE])
             layer_artifact(
@@ -173,95 +250,109 @@ class ReportTests(unittest.TestCase):
                 name="simulation-contract",
             )
             open_issues(root, gh)
-        titles = sorted(call[3] for call in gh.made("create"))
-        self.assertEqual(titles, [
+        self.assertEqual(titles(gh), [
             "Simulation: law L5 broken in the contract layer",
             "Simulation: law L5 broken in the engine layer",
         ])
 
     def test_a_law_that_the_shrink_passed_through_opens_no_issue(self):
         # The log ends with L5, so the L3 file of a shrink step opens nothing.
-        gh = FakeGh()
-        with tempfile.TemporaryDirectory() as root:
-            layer_artifact(root, [FAILURE, {**FAILURE, "law": "L3"}])
-            open_issues(root, gh)
-        titles = [call[3] for call in gh.made("create")]
-        self.assertEqual(titles, ["Simulation: law L5 broken in the engine layer"])
+        gh = issues_of(LOG, [FAILURE, {**FAILURE, "law": "L3"}])
+        self.assertEqual(titles(gh), ["Simulation: law L5 broken in the engine layer"])
 
-    def test_a_failure_file_without_a_law_line_still_opens_an_issue(self):
-        gh = FakeGh()
-        with tempfile.TemporaryDirectory() as root:
-            layer_artifact(root, [FAILURE], log="the job stopped at its time limit\n")
-            open_issues(root, gh)
-        titles = [call[3] for call in gh.made("create")]
-        self.assertEqual(titles, ["Simulation: law L5 broken in the engine layer"])
+    def test_a_failure_file_of_a_job_that_stopped_reports_the_law_and_the_layer(self):
+        gh = issues_of("the job stopped at its time limit\n", [FAILURE])
+        self.assertEqual(titles(gh), [
+            "Simulation: law L5 broken in the engine layer",
+            "Simulation: the engine layer failed without a broken law",
+        ])
+        law = bodies(gh)["Simulation: law L5 broken in the engine layer"]
+        self.assertIn("Replay: not printed; the test did not end with its report", law)
+
+    def test_a_law_line_without_a_failure_file_reports_its_test(self):
+        gh = issues_of(LOG)
+        self.assertEqual(titles(gh), [f"Simulation: test {RANDOM} failed in the engine layer"])
 
     def test_a_broken_planted_check_opens_no_law_issue(self):
-        gh = FakeGh()
-        log = "simulation check broken: law L3 did not see its planted fault: x\n"
-        with tempfile.TemporaryDirectory() as root:
-            layer_artifact(root, [], log=log, name=None)
-            open_issues(root, gh)
-        created = gh.made("create")
-        self.assertEqual(
-            [call[3] for call in created],
-            ["Simulation: a planted fault was not found in the engine layer"],
-        )
-        self.assertIn("the check itself is broken", created[0][7])
+        gh = issues_of(nextest_log(CHECK_BROKEN))
+        self.assertEqual(titles(gh), ["Simulation: a planted fault was not found in the engine layer"])
+        body = bodies(gh)["Simulation: a planted fault was not found in the engine layer"]
+        self.assertIn("the check itself is broken", body)
+        self.assertIn(f"`{PLANTED}`", body)
+        self.assertIn(replay_of("engine_planted", PLANTED), body)
 
     def test_a_broken_check_is_reported_with_the_law_of_its_layer(self):
-        gh = FakeGh()
-        with tempfile.TemporaryDirectory() as root:
-            layer_artifact(root, [FAILURE], log=LOG + CHECK_LOG)
-            open_issues(root, gh)
-        titles = sorted(call[3] for call in gh.made("create"))
-        self.assertEqual(titles, [
+        gh = issues_of(nextest_log(RANDOM_FAILURE, CHECK_BROKEN), [FAILURE])
+        self.assertEqual(titles(gh), [
             "Simulation: a planted fault was not found in the engine layer",
             "Simulation: law L5 broken in the engine layer",
         ])
 
     def test_the_text_of_a_failed_planted_test_does_not_replace_the_law(self):
-        # The planted text comes after the last broken-law line of the log.
-        gh = FakeGh()
-        with tempfile.TemporaryDirectory() as root:
-            layer_artifact(root, [FAILURE], log=LOG + PLANTED_TEXT + CHECK_LOG)
-            open_issues(root, gh)
-        titles = sorted(call[3] for call in gh.made("create"))
-        self.assertIn("Simulation: law L5 broken in the engine layer", titles)
-        self.assertIsNone(report.LAW_LINE.search(PLANTED_TEXT))
-        self.assertIsNone(report.LAW_LINE.search(CHECK_LOG))
+        planted_test = "random_planted_cases_repeat_by_seed_and_replay_by_blob"
+        planted_text = "planted run in layer engine: law L5 reported: operation 1"
+        planted_run = failed(
+            "provenance-simulation::engine_planted", planted_test, panic(planted_test, planted_text)
+        )
+        gh = issues_of(nextest_log(RANDOM_FAILURE, planted_run, CHECK_BROKEN), [FAILURE])
+        self.assertEqual(titles(gh), [
+            "Simulation: a planted fault was not found in the engine layer",
+            "Simulation: law L5 broken in the engine layer",
+            f"Simulation: test {planted_test} failed in the engine layer",
+        ])
+        self.assertIsNone(report.LAW_LINE.search(planted_text))
+        self.assertIsNone(report.LAW_LINE.search(CHECK_BROKEN))
 
     def test_a_probe_that_breaks_a_law_opens_an_issue_with_its_replay(self):
-        gh = FakeGh()
-        with tempfile.TemporaryDirectory() as root:
-            layer_artifact(root, [], log=PROBE_LOG + PROBE_LOG, name=None)
-            open_issues(root, gh)
-        created = gh.made("create")
-        self.assertEqual(
-            [call[3] for call in created],
-            ["Simulation: probe a_case_with_every_fault_keeps_the_laws broke law L1 "
-             "in the engine layer"],
-        )
-        self.assertIn("-E 'test(=a_case_with_every_fault_keeps_the_laws)'", created[0][7])
-        self.assertIn("operation 3 failed", created[0][7])
+        gh = issues_of(nextest_log(PROBE_FAILURE, PROBE_FAILURE))
+        title = f"Simulation: probe {PROBE} broke law L1 in the engine layer"
+        self.assertEqual(titles(gh), [title])
+        self.assertIn(replay_of("engine", PROBE), bodies(gh)[title])
+        self.assertIn("operation 3 failed", bodies(gh)[title])
 
-    def test_a_failed_probe_check_and_a_broken_law_of_one_layer_open_two_issues(self):
-        gh = FakeGh()
-        with tempfile.TemporaryDirectory() as root:
-            layer_artifact(root, [], log=PROBE_LOG + PROBE_CHECK_LOG, name=None)
-            open_issues(root, gh)
-        created = {call[3]: call[7] for call in gh.made("create")}
-        check_title = (
-            "Simulation: probe a_refused_post_lands_no_thread_and_no_message failed a check "
-            "in the engine layer"
-        )
-        self.assertEqual(sorted(created), [
-            "Simulation: probe a_case_with_every_fault_keeps_the_laws broke law L1 "
-            "in the engine layer",
+    def test_a_failed_check_of_a_probe_and_a_broken_law_of_one_layer_open_two_issues(self):
+        gh = issues_of(nextest_log(PROBE_FAILURE, CHECK_FAILURE))
+        check_title = f"Simulation: test {REFUSED} failed in the engine layer"
+        self.assertEqual(titles(gh), [
+            f"Simulation: probe {PROBE} broke law L1 in the engine layer",
             check_title,
         ])
-        self.assertIn("turns 3: the state holds a Thread", created[check_title])
-        self.assertIn("--test refused_post -E", created[check_title])
+        body = bodies(gh)[check_title]
+        self.assertIn("assertion `left == right` failed: turns 3 left: (1, 0) right: (0, 0)", body)
+        self.assertIn(replay_of("refused_post", REFUSED), body)
+
+    def test_a_test_that_failed_beside_a_law_of_its_layer_has_its_own_issue(self):
+        gh = issues_of(nextest_log(RANDOM_FAILURE, CHECK_FAILURE), [FAILURE])
+        self.assertEqual(titles(gh), [
+            "Simulation: law L5 broken in the engine layer",
+            f"Simulation: test {REFUSED} failed in the engine layer",
+        ])
+
+    def test_a_test_stopped_at_its_time_limit_has_its_own_issue(self):
+        gh = issues_of(nextest_log(RANDOM_FAILURE, TIMEOUT), [FAILURE])
+        title = f"Simulation: test {PROBE} did not end in its time limit in the engine layer"
+        self.assertEqual(titles(gh), ["Simulation: law L5 broken in the engine layer", title])
+        self.assertIn(replay_of("engine", PROBE), bodies(gh)[title])
+
+    def test_a_crash_has_its_own_issue(self):
+        crash = failed("provenance-simulation::engine", PROBE, "", status="SIGABRT")
+        gh = issues_of(nextest_log(crash))
+        title = f"Simulation: test {PROBE} failed in the engine layer"
+        self.assertEqual(titles(gh), [title])
+        self.assertIn("the test ended with SIGABRT", bodies(gh)[title])
+
+    def test_a_target_name_with_a_dash_is_given_back(self):
+        probe = failed("provenance-simulation::refused-post", PROBE, panic(PROBE, "a check"))
+        gh = issues_of(nextest_log(probe))
+        body = bodies(gh)[f"Simulation: test {PROBE} failed in the engine layer"]
+        self.assertIn(replay_of("refused-post", PROBE), body)
+
+    def test_a_log_that_stops_before_the_summary_also_reports_the_layer(self):
+        gh = issues_of(nextest_log(PROBE_FAILURE, finished=False))
+        self.assertEqual(titles(gh), [
+            f"Simulation: probe {PROBE} broke law L1 in the engine layer",
+            "Simulation: the engine layer failed without a broken law",
+        ])
 
     def test_a_probe_line_is_not_a_law_line_of_a_random_case(self):
         self.assertIsNone(report.LAW_LINE.search(PROBE_LOG))
@@ -271,7 +362,7 @@ class ReportTests(unittest.TestCase):
         title = "Simulation: law L5 broken in the engine layer"
         gh = FakeGh([{"number": 7, "title": title}])
         with tempfile.TemporaryDirectory() as root:
-            layer_artifact(root, [FAILURE], log=LOG + CHECK_LOG)
+            layer_artifact(root, [FAILURE], log=nextest_log(RANDOM_FAILURE, CHECK_BROKEN))
             text = open_issues(root, gh, print_only=True)
         writes = [call for call in gh.calls if call[:2] != ("issue", "list")]
         self.assertEqual(writes, [])
@@ -281,7 +372,7 @@ class ReportTests(unittest.TestCase):
             text,
         )
         self.assertIn('#[hegel::reproduce_failure("AAEC")]', text)
-        self.assertIn(FAILURE["replay"], text)
+        self.assertIn(REPLAY, text)
 
     def test_print_mode_is_a_choice_of_the_command_line(self):
         calls = []
@@ -296,13 +387,15 @@ class ReportTests(unittest.TestCase):
 
     def test_the_summary_gives_a_broken_check_and_the_law(self):
         with tempfile.TemporaryDirectory() as root:
-            directory = layer_artifact(root, [FAILURE], log=LOG + CHECK_LOG)
-            text = report.summary("engine", directory / "engine.log", directory / "failures")
+            log = nextest_log(RANDOM_FAILURE, CHECK_BROKEN)
+            directory = layer_artifact(root, [FAILURE], log=log)
+            text = report.summary("engine", directory / "engine.log", directory / "failures",
+                                  environ={})
         self.assertIn("law L5 broken in the engine layer", text)
         self.assertIn("a planted fault was not found in the engine layer", text)
 
     def test_each_issue_links_the_guide(self):
-        self.assertIn(report.GUIDE, report.describe(FAILURE, "AAEC"))
+        self.assertIn(report.GUIDE, report.describe(FAILURE, "AAEC", REPLAY))
         self.assertIn(report.GUIDE, report.describe_run("engine"))
 
     def test_the_summary_of_a_passed_layer_gives_its_counts(self):
@@ -313,7 +406,7 @@ class ReportTests(unittest.TestCase):
 
     def test_the_text_of_a_run_without_a_law_names_each_cause(self):
         text = report.describe_run("engine")
-        self.assertIn("a probe test or a planted test failed", text)
+        self.assertIn("The build failed", text)
         self.assertIn("time limit", text)
 
 
