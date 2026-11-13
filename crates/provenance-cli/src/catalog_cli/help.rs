@@ -84,14 +84,13 @@ fn discussion_help(
     let properties = schema
         .get("properties")
         .and_then(Value::as_object)
-        .map(|properties| {
+        .map_or_default(|properties| {
             properties
                 .keys()
                 .filter(|field| !bound.contains(&field.as_str()))
                 .map(|field| fields::cli_name(field))
                 .collect::<BTreeSet<_>>()
-        })
-        .unwrap_or_default();
+        });
     let required = required_discussion_flags(&schema);
     let mut allowed = super::COMMON
         .iter()

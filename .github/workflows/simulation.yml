@@ -37,7 +37,7 @@ concurrency:
 env:
   # The Rust version every toolchain step installs. Change it on purpose,
   # never by following stable.
-  RUST_TOOLCHAIN: 1.99.1
+  RUST_TOOLCHAIN: 1.100.0
   HEGEL_SEED: ${{ inputs.seed || github.run_id }}
   HEGEL_TEST_CASES: ${{ inputs.cases }}
   # The blob replays a shrunk case on any system; print it with the failure.

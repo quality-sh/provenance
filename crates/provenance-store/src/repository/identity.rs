@@ -2,6 +2,7 @@
 //! and the commit history of its working tree.
 
 use crate::dictionary_reference::ProjectDictionary;
+use crate::review::history::FileVersions;
 use crate::settings::Settings;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::ScopeId;
@@ -71,6 +72,9 @@ pub struct RepositoryIdentity {
     settings: Arc<Settings>,
     dictionary: Option<Arc<ProjectDictionary>>,
     history: Option<Arc<dyn RepositoryHistory>>,
+    /// The committed file versions that record history reads, when the
+    /// repository has its own; else the history reads read Git.
+    file_versions: Option<Arc<dyn FileVersions>>,
     clock: Arc<dyn Clock>,
     ids: Arc<dyn IdSource>,
 }
@@ -88,6 +92,7 @@ impl RepositoryIdentity {
             settings: Arc::new(settings),
             dictionary: None,
             history: None,
+            file_versions: None,
             clock: Arc::new(SystemClock),
             ids: Arc::new(RandomIds),
         }
@@ -127,6 +132,22 @@ impl RepositoryIdentity {
     /// The commit history of the working tree, if the host gave one.
     pub fn history(&self) -> Option<&Arc<dyn RepositoryHistory>> {
         self.history.as_ref()
+    }
+
+    /// This identity with the committed file versions that record history
+    /// reads. An identity with none reads the Git history of its working
+    /// tree.
+    #[must_use]
+    pub fn with_file_versions(mut self, versions: Arc<dyn FileVersions>) -> Self {
+        self.file_versions = Some(versions);
+        self
+    }
+
+    /// The committed file versions that record history reads, if the
+    /// repository has its own.
+    #[cfg(feature = "host")]
+    pub(crate) fn file_versions(&self) -> Option<&Arc<dyn FileVersions>> {
+        self.file_versions.as_ref()
     }
 
     /// This identity with the project dictionary that the host resolved.

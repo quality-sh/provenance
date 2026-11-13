@@ -47,9 +47,9 @@ module_name_repetitions = "allow"
 [workspace.package]
 version = "0.4.0"
 edition = "2021"
+rust-version = "1.100"
 license = "BUSL-1.1"
 repository = "https://github.com/quality-sh/provenance"
-homepage = "https://github.com/quality-sh/provenance"
 readme = "README.md"
 publish = ["crates-io"]
 
@@ -88,7 +88,6 @@ tokio = { version = "1.0", features = ["macros", "net", "rt-multi-thread"] }
 ureq = { version = "2.12", default-features = false, features = ["tls"] }
 url = "2.5"
 uuid = { version = "1.10", features = ["v4"] }
-toml = "0.8"
 # Hegel is in beta: a minor version can break, so the pin is exact. The static
 # engine links the engine as a locked dependency instead of a nested build.
 hegeltest = { version = "=0.50.3", features = ["static-engine"] }

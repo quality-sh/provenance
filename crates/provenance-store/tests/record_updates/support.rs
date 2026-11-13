@@ -1,7 +1,4 @@
-use provenance_core::{
-    protocol::failure::{OperationError, OperationFailure},
-    Manifest, RepoPathPrefix, ScopeId,
-};
+use provenance_core::{protocol::failure::OperationFailure, Manifest, RepoPathPrefix, ScopeId};
 use provenance_store::{layout::ProvenanceLayout, operations::catalog::*, state_store::StateStore};
 use serde_json::{json, Value};
 use std::path::PathBuf;
@@ -17,7 +14,7 @@ impl Invoke for Host {
         self,
         selected: Option<RequestedContext>,
         request: O::Request,
-    ) -> OperationFuture<O::Success, OperationError<O::Failure>> {
+    ) -> OperationFuture<O::Success, O::Failure> {
         Box::pin(async move {
             let selected = selected.expect("record updates select a scope");
             invoke_authorized_typed::<O>(self.0, selected, request).await

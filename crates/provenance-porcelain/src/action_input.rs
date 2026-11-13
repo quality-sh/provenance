@@ -41,6 +41,25 @@ impl FieldRefusal {
     }
 }
 
+/// The message of a refusal of the field `name`, which `owner` does not take. The message
+/// gives the fields that `owner` takes. When `owner` has no field, the message says that it
+/// takes no argument.
+pub fn unknown_field_message<'a>(
+    owner: &str,
+    name: &str,
+    takes: impl IntoIterator<Item = &'a str>,
+) -> String {
+    let takes = takes.into_iter().collect::<Vec<_>>();
+    if takes.is_empty() {
+        format!("{owner} does not take {name}; it takes no argument")
+    } else {
+        format!(
+            "{owner} does not take {name}; it takes: {}",
+            takes.join(", ")
+        )
+    }
+}
+
 impl ActionInput {
     /// A command without actions. A call without an action argument selects `default`.
     pub fn new(default: Option<&'static str>) -> Self {
@@ -74,16 +93,13 @@ impl ActionInput {
             .as_object()
             .cloned()
             .unwrap_or_default();
-        let required = schema["required"]
-            .as_array()
-            .map(|fields| {
-                fields
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(str::to_owned)
-                    .collect()
-            })
-            .unwrap_or_default();
+        let required = schema["required"].as_array().map_or_default(|fields| {
+            fields
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect()
+        });
         self.actions.push(ActionFields {
             action,
             properties,
@@ -201,17 +217,13 @@ impl ActionInput {
             .keys()
             .find(|name| !fields.properties.contains_key(*name))
         {
-            let accepted = fields
-                .properties
-                .keys()
-                .map(String::as_str)
-                .collect::<Vec<_>>();
             return Err(FieldRefusal {
                 field: name.clone(),
                 reason: InvalidInputReason::UnknownField,
-                message: format!(
-                    "the {action} action does not take {name}; it takes: {}",
-                    accepted.join(", ")
+                message: unknown_field_message(
+                    &format!("the {action} action"),
+                    name,
+                    fields.properties.keys().map(String::as_str),
                 ),
             });
         }

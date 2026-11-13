@@ -40,7 +40,7 @@ fn cargo_install_emits_the_exact_init_next_step_from_the_cli_build_script() {
     assert!(build_script.contains(&format!("cargo:warning={next_step}")));
 
     let manifest = fs::read_to_string(workspace.join("crates/provenance-cli/Cargo.toml")).unwrap();
-    assert!(manifest.contains("homepage.workspace = true"));
+    assert!(manifest.contains("repository.workspace = true"));
 }
 
 #[test]

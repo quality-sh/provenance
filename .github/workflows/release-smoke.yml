@@ -24,7 +24,7 @@ permissions:
 env:
   # The Rust version every toolchain step installs. Change it on purpose,
   # never by following stable.
-  RUST_TOOLCHAIN: 1.99.1
+  RUST_TOOLCHAIN: 1.100.0
   RELEASE_SMOKE_RETRY_ATTEMPTS: "20"
   RELEASE_SMOKE_RETRY_DELAY_SECONDS: "30"
 
