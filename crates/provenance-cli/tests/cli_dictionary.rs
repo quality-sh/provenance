@@ -4,13 +4,12 @@ mod damaged_reference;
 mod gate;
 #[path = "cli_dictionary/import_command.rs"]
 mod import_command;
+#[path = "cli_dictionary/index_files.rs"]
+mod index_files;
 #[path = "cli_dictionary/inflections.rs"]
 mod inflections;
 #[path = "cli_dictionary/missing_index.rs"]
 mod missing_index;
-#[cfg(unix)]
-#[path = "cli_dictionary/reference_write.rs"]
-mod reference_write;
 #[path = "cli_dictionary/status.rs"]
 mod status;
 #[path = "cli_dictionary/supplied_statement.rs"]

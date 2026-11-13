@@ -85,7 +85,7 @@ pub fn resolve_project_dictionary(layout: &ProvenanceLayout) -> DictionaryResolu
             reason: "no machine data directory is available".to_owned(),
         };
     };
-    match provenance_ste100::load_dictionary_index(&directory, &reference.identity) {
+    match crate::dictionary_index::load_dictionary_index(&directory, &reference.identity) {
         Ok(import) => DictionaryResolution::Loaded(ProjectDictionary {
             import,
             technical_names: reference.technical_names,
@@ -108,39 +108,40 @@ pub fn load_project_dictionary(layout: &ProvenanceLayout) -> Option<ProjectDicti
     }
 }
 
-/// Stores the index in the machine data directory and writes the project reference.
-///
-/// The reference write makes the state directory if it does not exist, writes
-/// a temporary file, syncs it, renames it over the reference and syncs the
-/// directory. A stop during the write keeps the old reference or gives the
-/// new one, and never a part of a file.
+/// Stores the index in `index_directory` and writes the project reference, each
+/// with one synced write, so that a stop keeps the previous file or gives all of
+/// the new file. A current reference that does not parse stops the call before
+/// a write.
+#[rule("rule_ste_dictionary_import_durable_writes")]
 #[cfg(feature = "host")]
 pub fn set_project_dictionary(
     layout: &ProvenanceLayout,
     import: &DictionaryImport,
+    index_directory: &std::path::Path,
 ) -> anyhow::Result<Utf8PathBuf> {
-    let directory = index_directory()
-        .ok_or_else(|| crate::refusal::fault!("no machine data directory is available"))?;
-    provenance_ste100::store_dictionary_index(import, &directory)
-        .context("store the dictionary index")?;
     let path = dictionary_reference_path(layout);
     let reference = reference_bytes(layout, &import.identity)?;
+    crate::dictionary_index::store_dictionary_index(import, index_directory)
+        .context("store the dictionary index")?;
     crate::storage::local::durability::write_synced_file(&path, &reference)
         .context("write the dictionary reference")?;
     Ok(path)
 }
 
-/// The reference bytes for a new dictionary identity. The bytes keep the
-/// technical names of the current reference.
+/// The reference bytes for a new dictionary identity, with the technical names
+/// of the current reference. A current reference that does not parse is
+/// refused, so that no write loses its technical names.
+#[rule("rule_ste_dictionary_reference_parse_refusal")]
 #[cfg(feature = "host")]
 pub fn reference_bytes(
     layout: &ProvenanceLayout,
     identity: &DictionaryImportIdentity,
 ) -> anyhow::Result<Vec<u8>> {
-    let technical_names = match std::fs::read(dictionary_reference_path(layout).as_std_path()) {
+    let path = dictionary_reference_path(layout);
+    let technical_names = match std::fs::read(path.as_std_path()) {
         Ok(current) => serde_json::from_slice::<DictionaryReference>(&current)
-            .map(|current| current.technical_names)
-            .unwrap_or_default(),
+            .map_err(|error| unparsable_reference(&path, &error))?
+            .technical_names,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
         Err(error) => return Err(error).context("read the dictionary reference"),
     };
@@ -152,6 +153,16 @@ pub fn reference_bytes(
         serde_json::to_vec_pretty(&reference).context("serialize the dictionary reference")?;
     bytes.push(b'\n');
     Ok(bytes)
+}
+
+/// The refusal of a reference at `path` that does not parse: the file, the
+/// line and the parse message, and the repair.
+#[cfg(feature = "host")]
+fn unparsable_reference(path: &camino::Utf8Path, error: &serde_json::Error) -> anyhow::Error {
+    crate::state_store::readers::located(path, error.line(), error).context(format!(
+        "the dictionary reference {path} does not parse: get the file again from git or \
+         correct its JSON, and then do the command again"
+    ))
 }
 
 /// The warning for a reference that exists without a loadable index, because
@@ -208,3 +219,7 @@ fn data_directory() -> Option<PathBuf> {
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")))
 }
+
+#[cfg(test)]
+#[cfg(all(unix, feature = "host"))]
+mod write_tests;

@@ -450,9 +450,6 @@
       "dependencies": [
         "provenance-macros"
       ],
-      "host-dependencies": [
-        "fs2"
-      ],
       "dev-dependencies": [
         "jsonschema"
       ]

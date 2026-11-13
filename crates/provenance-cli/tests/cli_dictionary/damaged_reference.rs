@@ -11,7 +11,7 @@ use crate::support::{
     UNAPPROVED_WORD,
 };
 use provenance_macros::verifies;
-use provenance_ste100::store_dictionary_index;
+use provenance_store::dictionary_index::store_dictionary_index;
 use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::process::Output;
@@ -97,9 +97,9 @@ impl Damaged {
     /// not parse with `message`, and the unchanged `contents`.
     fn refused(&self, message: &str, contents: &str) -> (Option<i32>, String, String) {
         let stderr = format!(
-            "Error: the dictionary reference {} does not parse: restore it from git or correct \
-             its JSON, and then run the command again\n\nCaused by:\n    dictionary.json line \
-             1: {message}\n",
+            "Error: the dictionary reference {} does not parse: get the file again from git or \
+             correct its JSON, and then do the command again\n\nCaused by:\n    dictionary.json \
+             line 1: {message}\n",
             reference_path(&self.repo).display()
         );
         (Some(1), stderr, contents.to_owned())

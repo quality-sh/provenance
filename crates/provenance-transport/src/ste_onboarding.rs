@@ -4,7 +4,7 @@ use camino::Utf8Path;
 use fs2::FileExt;
 use provenance_macros::rule;
 use provenance_ste100::DictionaryImport;
-use provenance_store::{dictionary_reference, layout::ProvenanceLayout};
+use provenance_store::{dictionary_index, dictionary_reference, layout::ProvenanceLayout};
 use std::{
     fs::{File, OpenOptions},
     io::{Read, Write},
@@ -96,7 +96,7 @@ impl Plan {
         };
         let index_directory = dictionary_reference::index_directory()
             .context("no machine data directory is available")?;
-        provenance_ste100::store_dictionary_index(import, &index_directory)
+        dictionary_index::store_dictionary_index(import, &index_directory)
             .context("store the dictionary index")?;
         if self.reference_change().is_none() {
             return Ok(());
@@ -134,7 +134,7 @@ fn import_bytes(bytes: &[u8]) -> anyhow::Result<DictionaryImport> {
 
 fn import_cached_bytes(bytes: &[u8]) -> anyhow::Result<DictionaryImport> {
     if let Some(directory) = dictionary_reference::index_directory() {
-        if let Ok(import) = provenance_ste100::load_dictionary_index_for_source(&directory, bytes) {
+        if let Ok(import) = dictionary_index::load_dictionary_index_for_source(&directory, bytes) {
             return Ok(import);
         }
     }

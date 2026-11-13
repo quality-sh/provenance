@@ -17,16 +17,17 @@ pub struct ReplaceFailed(#[source] std::io::Error);
 /// has no sync in this module: the file sync occurs, but a power loss can
 /// lose the rename and the entry of a new directory.
 ///
-/// If a step fails, the steps after it do not occur. A failed sync gives
-/// `sync <path>` and the I/O error. If a directory sync fails, `path` has the
-/// new bytes, but a power loss can lose them.
+/// If a step fails, the steps after it do not occur and no temporary file
+/// stays. The error names the step and its path, for example `make directory
+/// <path>` or `sync <path>`, and then gives the I/O error. If a directory sync
+/// fails, `path` has the new bytes, but a power loss can lose them.
 pub fn write_synced_file(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<()> {
     let (temporary, parent, first_made) = write_temporary(path, bytes)?;
     temporary.as_file().sync_all().map_err(sync_failure(path))?;
     replace_file(temporary, path)?;
     let last = first_made.and_then(Utf8Path::parent).unwrap_or(parent);
     for directory in parent.ancestors() {
-        sync_parent(directory)?;
+        sync_directory(directory)?;
         if directory == last {
             break;
         }
@@ -43,7 +44,7 @@ pub fn write_synced_file(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<()> {
 pub fn remove_synced_file(path: &Utf8Path) -> anyhow::Result<()> {
     let parent = parent_of(path)?;
     match std::fs::remove_file(crate::long_path::extended(path)?) {
-        Ok(()) => sync_parent(parent),
+        Ok(()) => sync_directory(parent),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(crate::refusal::caused(error, format!("remove {path}"))),
     }
@@ -72,15 +73,30 @@ fn write_temporary<'a>(
     let parent = parent_of(path)?;
     let mut first_made = None;
     for directory in parent.ancestors() {
-        if directory.as_str().is_empty() || crate::long_path::extended(directory)?.try_exists()? {
+        if directory.as_str().is_empty() || directory_exists(directory)? {
             break;
         }
         first_made = Some(directory);
     }
-    std::fs::create_dir_all(parent)?;
-    let mut temporary = tempfile::NamedTempFile::new_in(crate::long_path::extended(parent)?)?;
-    temporary.write_all(bytes)?;
+    std::fs::create_dir_all(parent)
+        .map_err(|error| crate::refusal::caused(error, format!("make directory {parent}")))?;
+    let mut temporary = crate::long_path::extended(parent)
+        .and_then(tempfile::NamedTempFile::new_in)
+        .map_err(|error| {
+            crate::refusal::caused(error, format!("make a temporary file in {parent}"))
+        })?;
+    temporary.write_all(bytes).map_err(|error| {
+        crate::refusal::caused(error, format!("write a temporary file for {path}"))
+    })?;
     Ok((temporary, parent, first_made))
+}
+
+/// Tells if `directory` exists. A failure gives `find directory <path>` and
+/// the I/O error.
+fn directory_exists(directory: &Utf8Path) -> anyhow::Result<bool> {
+    crate::long_path::extended(directory)
+        .and_then(|extended| extended.try_exists())
+        .map_err(|error| crate::refusal::caused(error, format!("find directory {directory}")))
 }
 
 fn parent_of(path: &Utf8Path) -> anyhow::Result<&Utf8Path> {
@@ -88,9 +104,13 @@ fn parent_of(path: &Utf8Path) -> anyhow::Result<&Utf8Path> {
         .ok_or_else(|| crate::refusal::fault!("{path} has no parent directory"))
 }
 
-/// Syncs `directory`. A relative path of one name, such as the file that git
-/// gives to a merge driver, has an empty parent: the current directory.
-fn sync_parent(directory: &Utf8Path) -> anyhow::Result<()> {
+/// Syncs `directory`, so that a power loss cannot lose a change of an entry
+/// in it. A relative path of one name, such as the file that git gives to a
+/// merge driver, has an empty parent: the current directory. A failure gives
+/// `sync <path>` and the I/O error. Windows has no directory sync in this
+/// module: the function does nothing there, and a power loss can lose a
+/// recent entry or rename.
+pub fn sync_directory(directory: &Utf8Path) -> anyhow::Result<()> {
     let directory = if directory.as_str().is_empty() {
         Utf8Path::new(".")
     } else {
@@ -137,28 +157,19 @@ fn replace_file(temporary: tempfile::NamedTempFile, target: &Utf8Path) -> anyhow
     Ok(())
 }
 
-/// Flushes directory metadata where the platform supports it.
-///
-/// Windows has no equivalent call in this module. On Windows, file contents are flushed, but a
-/// sudden power loss can lose a recent directory entry or rename. Process-crash recovery remains
-/// available because the operating system keeps the directory changes.
-pub fn sync_directory(path: &Utf8Path) -> anyhow::Result<()> {
-    #[cfg(unix)]
-    std::fs::File::open(path)?.sync_all()?;
-    #[cfg(not(unix))]
-    let _ = path;
-    Ok(())
-}
-
 pub fn sync_tree(path: &Utf8Path) -> anyhow::Result<()> {
     for entry in std::fs::read_dir(path)
         .map_err(|error| crate::refusal::fault!("list publication tree {path}: {error}"))?
     {
-        let entry = entry?;
+        let entry = entry
+            .map_err(|error| crate::refusal::fault!("list publication tree {path}: {error}"))?;
         let child = Utf8PathBuf::from_path_buf(entry.path()).map_err(|path| {
             crate::refusal::fault!("publication path is not UTF-8: {}", path.display())
         })?;
-        if entry.file_type()?.is_dir() {
+        let file_type = entry
+            .file_type()
+            .map_err(|error| crate::refusal::fault!("read the type of {child}: {error}"))?;
+        if file_type.is_dir() {
             sync_tree(&child)?;
         } else {
             // Windows' FlushFileBuffers needs write access; a read-only

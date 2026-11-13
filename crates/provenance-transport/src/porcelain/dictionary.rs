@@ -31,7 +31,13 @@ fn import(pdf: &Utf8Path, repo: &Utf8Path) -> anyhow::Result<DictionaryImportOut
     let import = provenance_ste100::import_dictionary(&bytes)
         .map_err(|error| anyhow::anyhow!("import the dictionary: {error}"))?;
     let layout = ProvenanceLayout::new(repo.to_owned());
-    provenance_store::dictionary_reference::set_project_dictionary(&layout, &import)?;
+    let index_directory = index_directory()
+        .ok_or_else(|| anyhow::anyhow!("no machine data directory is available"))?;
+    provenance_store::dictionary_reference::set_project_dictionary(
+        &layout,
+        &import,
+        &index_directory,
+    )?;
 
     let approved_rows = import
         .entries
