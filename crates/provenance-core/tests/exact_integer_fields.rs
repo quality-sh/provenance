@@ -29,7 +29,7 @@ fn read<T: DeserializeOwned + Serialize>(line: Value) -> Result<Value, String> {
 /// whether the field can be absent.
 struct Field {
     name: &'static str,
-    field: &'static str,
+    key: &'static str,
     line: Value,
     read: Read,
     optional: bool,
@@ -40,7 +40,7 @@ fn fields() -> Vec<Field> {
     vec![
         Field {
             name: "Resolution.approved_at",
-            field: "approved_at",
+            key: "approved_at",
             line: json!({"scope_id":"default","id":"res_a","title":"Decision",
                 "position":"Use it.","rationale":"It works.","status":"approved"}),
             read: read::<Resolution>,
@@ -48,7 +48,7 @@ fn fields() -> Vec<Field> {
         },
         Field {
             name: "Topic.claimed_at",
-            field: "claimed_at",
+            key: "claimed_at",
             line: json!({"scope_id":"default","id":"topic_a","requirement_id":"req_a",
                 "title":"Topic","status":"open","claimed_by":"worker","links":[]}),
             read: read::<Topic>,
@@ -56,7 +56,7 @@ fn fields() -> Vec<Field> {
         },
         Field {
             name: "Question.claimed_at",
-            field: "claimed_at",
+            key: "claimed_at",
             line: json!({"scope_id":"default","id":"q_a","topic_id":"topic_a",
                 "requirement_id":"req_a","question":"Which?","resolution_method":"ask",
                 "status":"open","claimed_by":"worker"}),
@@ -65,21 +65,21 @@ fn fields() -> Vec<Field> {
         },
         Field {
             name: "RequirementReview.changed_at",
-            field: "changed_at",
+            key: "changed_at",
             line: review_line(),
             read: read::<RequirementReview>,
             optional: false,
         },
         Field {
             name: "RequirementReview.cleared_at",
-            field: "cleared_at",
+            key: "cleared_at",
             line: review_line(),
             read: read::<RequirementReview>,
             optional: true,
         },
         Field {
             name: "Thread.created_at",
-            field: "created_at",
+            key: "created_at",
             line: json!({"scope_id":"default","id":"thr_a","parent":parent,
                 "status":"active","created_at":0}),
             read: read::<Thread>,
@@ -87,7 +87,7 @@ fn fields() -> Vec<Field> {
         },
         Field {
             name: "Message.created_at",
-            field: "created_at",
+            key: "created_at",
             line: json!({"scope_id":"default","id":"msg_a","thread_id":"thr_a",
                 "role":"user","body":"Hello.","created_at":0}),
             read: read::<Message>,
@@ -114,23 +114,23 @@ fn with(line: &Value, field: &str, value: Value) -> Value {
 fn faults(field: &Field) -> Vec<String> {
     let mut faults = Vec::new();
     for value in [LARGEST, -LARGEST, 0] {
-        match (field.read)(with(&field.line, field.field, json!(value))) {
-            Ok(written) if written[field.field] == json!(value) => {}
+        match (field.read)(with(&field.line, field.key, json!(value))) {
+            Ok(written) if written[field.key] == json!(value) => {}
             other => faults.push(format!("{value} in the range: {other:?}")),
         }
     }
     for value in [LARGEST + 1, -LARGEST - 1, i64::MAX, i64::MIN] {
-        match (field.read)(with(&field.line, field.field, json!(value))) {
+        match (field.read)(with(&field.line, field.key, json!(value))) {
             Err(error) if error.contains(&format!("integer `{value}`, {EXPECTED}")) => {}
             other => faults.push(format!("{value} past the range: {other:?}")),
         }
     }
     if field.optional {
         let mut absent = field.line.clone();
-        absent.as_object_mut().unwrap().remove(field.field);
-        for line in [absent, with(&field.line, field.field, Value::Null)] {
+        absent.as_object_mut().unwrap().remove(field.key);
+        for line in [absent, with(&field.line, field.key, Value::Null)] {
             match (field.read)(line) {
-                Ok(written) if written.get(field.field).is_none() => {}
+                Ok(written) if written.get(field.key).is_none() => {}
                 other => faults.push(format!("an absent value: {other:?}")),
             }
         }

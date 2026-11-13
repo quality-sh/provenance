@@ -125,30 +125,48 @@ fn run(repo: &str, args: &[&str]) -> (Option<i32>, Vec<u8>, Vec<u8>) {
     (output.status.code(), output.stdout, output.stderr)
 }
 
+/// One repository of a test and the id of its record.
+struct Case<'a> {
+    repo: &'a str,
+    id: &'a str,
+}
+
+/// The exit code, and the output and error of `args` over `case` with the
+/// parse messages left out and the id of the record as `<id>`. Each `<id>`
+/// in `args` is the id of the record.
+fn masked(case: &Case, args: &[&str]) -> (Option<i32>, String, String, String) {
+    let args: Vec<&str> = args
+        .iter()
+        .map(|arg| if *arg == "<id>" { case.id } else { arg })
+        .collect();
+    let (code, out, err) = run(case.repo, &args);
+    let mask = |text: &[u8]| without_messages(text).replace(case.id, "<id>");
+    (
+        code,
+        mask(&out),
+        mask(&err),
+        String::from_utf8_lossy(&err).into_owned(),
+    )
+}
+
 /// `args` over `past` and over `malformed` give the same exit code and
 /// output, with the parse messages left out. Over `past`, the code is 1,
-/// standard error names `file` and `value`, and a read gives
+/// standard error names `file` and `value`, and a read or a write gives
 /// `invalid_state_file`.
-fn fails_as_malformed(past: &str, malformed: &str, args: &[&str], file: &str, value: &str) {
-    let read = args[0] != "check";
-    let (past_code, past_out, past_err) = run(past, args);
-    let (code, out, err) = run(malformed, args);
-    let past_text = String::from_utf8_lossy(&past_err).into_owned();
+fn fails_as_malformed(past: &Case, malformed: &Case, args: &[&str], file: &str, value: &str) {
+    let (past_code, past_out, past_err, past_text) = masked(past, args);
+    let (code, out, err, _) = masked(malformed, args);
     assert_eq!(past_code, Some(1), "{args:?}: {past_text}");
     assert!(past_text.contains(file), "{args:?}: {past_text}");
     assert!(past_text.contains(value), "{args:?}: {past_text}");
     assert_eq!(
         past_text.contains("invalid_state_file"),
-        read,
+        args[0] != "check",
         "{args:?}: {past_text}"
     );
     assert_eq!(
-        (
-            past_code,
-            without_messages(&past_out),
-            without_messages(&past_err)
-        ),
-        (code, without_messages(&out), without_messages(&err)),
+        (past_code, past_out, past_err),
+        (code, out, err),
         "{args:?}"
     );
 }
@@ -157,9 +175,35 @@ fn fails_as_malformed(past: &str, malformed: &str, args: &[&str], file: &str, va
 fn a_committed_time_past_the_range_fails_as_a_malformed_field_fails() {
     let (_past_dir, past) = repository(Value::from(1_i64 << 53));
     let (_malformed_dir, malformed) = repository(Value::from("soon"));
+    let past = Case {
+        repo: &past,
+        id: "resolution_a",
+    };
+    let malformed = Case {
+        repo: &malformed,
+        id: "resolution_a",
+    };
     for args in [
         &["check", "--format", "json"][..],
-        &["resolution_a", "get", "--format", "json"][..],
+        &["<id>", "get", "--format", "json"][..],
+        &[
+            "resolution_b",
+            "create",
+            "--type",
+            "resolution",
+            "--status",
+            "approved",
+            "--title",
+            "Decision",
+            "--requirement-id",
+            "req_a",
+            "--position",
+            "Use the award threshold.",
+            "--rationale",
+            "The award clause sets the threshold.",
+            "--format",
+            "json",
+        ][..],
     ] {
         fails_as_malformed(&past, &malformed, args, "res.jsonl", "9007199254740992");
     }
@@ -169,28 +213,71 @@ fn a_committed_time_past_the_range_fails_as_a_malformed_field_fails() {
 fn a_committed_discussion_version_past_the_range_fails_as_a_malformed_field_fails() {
     let (_past_dir, past, id) = discussion(Value::from(1_u64 << 53));
     let (_malformed_dir, malformed, malformed_id) = discussion(Value::from("soon"));
+    let past = Case {
+        repo: &past,
+        id: &id,
+    };
+    let malformed = Case {
+        repo: &malformed,
+        id: &malformed_id,
+    };
+    for args in [
+        &["check", "--format", "json"][..],
+        &["<id>", "discussion", "--format", "json"][..],
+        &[
+            "<id>",
+            "reply",
+            "--expected-version",
+            "1",
+            "--body",
+            "again",
+            "--format",
+            "json",
+        ][..],
+    ] {
+        fails_as_malformed(
+            &past,
+            &malformed,
+            args,
+            "discussions.jsonl",
+            "9007199254740992",
+        );
+    }
+}
+
+/// A repository with one Requirement review whose `changed_at` holds
+/// `value`, written by hand.
+fn requirement_review(value: Value) -> (tempfile::TempDir, String) {
+    let (directory, repo) = support::review_paths::init();
+    create_requirement(&repo, "req_a");
+    let record = serde_json::json!({"scope_id":"default","id":"requirement_review_a",
+        "rule_id":"rule_a","requirement_id":"req_a","field":"statement","before":"Old.",
+        "after":"New.","changed_at":value});
+    std::fs::write(
+        directory
+            .path()
+            .join(".provenance/state/scopes/default/requirements/review.jsonl"),
+        record.to_string() + "\n",
+    )
+    .unwrap();
+    (directory, repo)
+}
+
+#[test]
+fn a_committed_review_time_past_the_range_fails_check_as_a_malformed_field_fails() {
+    let (_past_dir, past) = requirement_review(Value::from(1_i64 << 53));
+    let (_malformed_dir, malformed) = requirement_review(Value::from("soon"));
     fails_as_malformed(
-        &past,
-        &malformed,
+        &Case {
+            repo: &past,
+            id: "requirement_review_a",
+        },
+        &Case {
+            repo: &malformed,
+            id: "requirement_review_a",
+        },
         &["check", "--format", "json"],
-        "discussions.jsonl",
+        "review.jsonl",
         "9007199254740992",
-    );
-    let (code, _, err) = run(&past, &[&id, "discussion", "--format", "json"]);
-    let (malformed_code, _, malformed_err) = run(
-        &malformed,
-        &[&malformed_id, "discussion", "--format", "json"],
-    );
-    let text = String::from_utf8_lossy(&err).into_owned();
-    assert_eq!(code, Some(1), "{text}");
-    assert!(text.contains("invalid_state_file"), "{text}");
-    assert!(text.contains("discussions.jsonl"), "{text}");
-    assert!(text.contains("9007199254740992"), "{text}");
-    assert_eq!(
-        (code, without_messages(&err).replace(&id, "<id>")),
-        (
-            malformed_code,
-            without_messages(&malformed_err).replace(&malformed_id, "<id>")
-        )
     );
 }
