@@ -136,11 +136,10 @@ impl Adapter {
     }
 
     fn name(&self, id: &str) -> String {
-        self.ids
-            .iter()
-            .find(|(_, known)| known.as_str() == id)
-            .map(|(name, _)| name.clone())
-            .unwrap_or_else(|| panic!("the adapter gave an unknown commit {id}"))
+        let Some((name, _)) = self.ids.iter().find(|(_, known)| known.as_str() == id) else {
+            panic!("the adapter gave an unknown commit {id}")
+        };
+        name.clone()
     }
 
     /// The versions of `path` by commit name, after a check that each
