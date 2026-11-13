@@ -240,9 +240,17 @@ async fn execute(layout: &ProvenanceLayout, statements: &[&str]) {
     cache.close().await.unwrap();
 }
 
+/// The rows of the dump of [`everything`] other than the instance row,
+/// and the instance row.
+fn split_instance(dump: Vec<String>) -> (Vec<String>, Vec<String>) {
+    dump.into_iter()
+        .partition(|row| !row.starts_with("projection_instance: "))
+}
+
 /// A schema rebuild and a full rebuild of a cache with more than one row
 /// in each table of the store give the catalog and every row of every
-/// table that the first build gave.
+/// table that the first build gave. The one exception is the instance id:
+/// the schema rebuild makes a new one.
 #[tokio::test]
 async fn a_rebuild_leaves_every_table_as_the_first_build_made_it() {
     let (_dir, layout, scope) = pinned_store_layout();
@@ -252,6 +260,7 @@ async fn a_rebuild_leaves_every_table_as_the_first_build_made_it() {
     let first = catch_up_state(&repository).await.unwrap();
     assert!(first.rebuilt);
     let (made, counts) = everything(&layout).await;
+    let (made, instance) = split_instance(made);
     let thin: Vec<&(String, usize)> = counts
         .iter()
         .filter(|(table, rows)| *rows < 2 && !ONE_ROW.contains(&table.as_str()))
@@ -264,9 +273,16 @@ async fn a_rebuild_leaves_every_table_as_the_first_build_made_it() {
     .await;
     let pass = catch_up_state(&repository).await.unwrap();
     assert!(pass.rebuilt && pass.cache_recreated);
-    assert_eq!(everything(&layout).await.0, made, "the schema rebuild");
+    let (rebuilt, new_instance) = split_instance(everything(&layout).await.0);
+    assert_eq!(rebuilt, made, "the schema rebuild");
+    assert_eq!((instance.len(), new_instance.len()), (1, 1));
+    assert_ne!(
+        new_instance, instance,
+        "the schema rebuild kept the instance id"
+    );
     materialize_state(&repository).await.unwrap();
-    assert_eq!(everything(&layout).await.0, made, "the full rebuild");
+    let (rebuilt, _) = split_instance(everything(&layout).await.0);
+    assert_eq!(rebuilt, made, "the full rebuild");
 }
 
 /// A table of another name with a foreign key into a table of the store
