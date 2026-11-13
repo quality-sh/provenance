@@ -6,8 +6,8 @@
 //! and does not make it. A write makes the file in WAL mode.
 
 use super::{
-    ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement, Transaction,
-    Unopened, WriteWork,
+    OverBudget, ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement,
+    Transaction, Unopened, WriteWork,
 };
 use crate::cache::{open_cache, open_stored_cache, CacheConnection};
 use crate::layout::ProvenanceLayout;
@@ -19,6 +19,14 @@ use std::io::{Read, Write};
 
 /// The maximum number of values that one statement binds in the file.
 pub const MAX_BOUND_VALUES: usize = 999;
+
+/// The most values of one list that a reader binds in one statement of
+/// the file.
+pub const MAX_LIST_VALUES: usize = 500;
+
+/// The engine steps between two calls of the progress handler that bounds
+/// the work of a transaction.
+const STEPS_PER_CALL: u64 = 1000;
 
 /// The read database in the cache directory of one layout.
 #[derive(Debug, Clone)]
@@ -116,18 +124,24 @@ pub(crate) async fn begin(pool: &SqlitePool) -> anyhow::Result<Transaction> {
 struct FileTransaction(sqlx::Transaction<'static, Sqlite>);
 
 impl SqlTransaction for FileTransaction {
-    fn fetch<'a>(&'a mut self, sql: &'a str, values: &'a [SqlValue]) -> SqlFuture<'a, Vec<SqlRow>> {
+    fn fetch<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, Vec<SqlRow>> {
         Box::pin(async move {
-            let rows = bound(sql, values).fetch_all(&mut *self.0).await?;
-            rows.iter().map(decode).collect()
+            let rows = bound(sql, values)
+                .fetch_all(&mut *self.0)
+                .await
+                .map_err(statement_error)?;
+            // Each row of the file is freed once it is decoded, so the
+            // two forms of the rows are not held in full at once.
+            rows.into_iter().map(|row| decode(&row)).collect()
         })
     }
 
-    fn execute<'a>(&'a mut self, sql: &'a str, values: &'a [SqlValue]) -> SqlFuture<'a, u64> {
+    fn execute<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, u64> {
         Box::pin(async move {
             Ok(bound(sql, values)
                 .execute(&mut *self.0)
-                .await?
+                .await
+                .map_err(statement_error)?
                 .rows_affected())
         })
     }
@@ -137,24 +151,58 @@ impl SqlTransaction for FileTransaction {
         statements: &'a [Statement],
     ) -> SqlFuture<'a, Result<(), anyhow::Error>> {
         Box::pin(async move {
-            self.execute("SAVEPOINT attempt", &[]).await?;
+            self.execute("SAVEPOINT attempt", Vec::new()).await?;
             let mut failure = None;
             for statement in statements {
-                if let Err(error) = self.execute(&statement.sql, &statement.values).await {
+                if let Err(error) = self.execute(&statement.sql, statement.values.clone()).await {
                     failure = Some(error);
                     break;
                 }
             }
             if failure.is_some() {
-                self.execute("ROLLBACK TO attempt", &[]).await?;
+                self.execute("ROLLBACK TO attempt", Vec::new()).await?;
             }
-            self.execute("RELEASE attempt", &[]).await?;
+            self.execute("RELEASE attempt", Vec::new()).await?;
             Ok(failure.map_or(Ok(()), Err))
         })
     }
 
     fn commit(self: Box<Self>) -> SqlFuture<'static, ()> {
         Box::pin(async move { Ok(self.0.commit().await?) })
+    }
+
+    /// Sets the `SQLite` progress handler on the connection: one call each
+    /// [`STEPS_PER_CALL`] steps, and a handler that answers false stops
+    /// the statement with `SQLITE_INTERRUPT`.
+    fn bound_work(&mut self, steps: u64) -> SqlFuture<'_, ()> {
+        Box::pin(async move {
+            let most = steps / STEPS_PER_CALL;
+            let mut handle = self.0.lock_handle().await?;
+            let mut calls = 0;
+            handle.set_progress_handler(i32::try_from(STEPS_PER_CALL)?, move || {
+                calls += 1;
+                calls <= most
+            });
+            Ok(())
+        })
+    }
+
+    fn max_list_values(&self) -> usize {
+        MAX_LIST_VALUES
+    }
+}
+
+/// The error of a statement of the file. A statement that the progress
+/// handler stopped, `SQLite` code 9 (`SQLITE_INTERRUPT`), is [`OverBudget`].
+pub(crate) fn statement_error(error: sqlx::Error) -> anyhow::Error {
+    let interrupted = error
+        .as_database_error()
+        .and_then(sqlx::error::DatabaseError::code)
+        .is_some_and(|code| code == "9");
+    if interrupted {
+        OverBudget(error.into()).into()
+    } else {
+        error.into()
     }
 }
 
@@ -180,15 +228,15 @@ impl FileSqlx for dyn SqlTransaction {
     }
 }
 
-fn bound<'q>(sql: &'q str, values: &[SqlValue]) -> Query<'q, Sqlite, SqliteArguments> {
+fn bound(sql: &str, values: Vec<SqlValue>) -> Query<'_, Sqlite, SqliteArguments> {
     let mut query = sqlx::query(sqlx::AssertSqlSafe(sql));
     for value in values {
         query = match value {
             SqlValue::Null => query.bind(None::<i64>),
-            SqlValue::Integer(value) => query.bind(*value),
-            SqlValue::Real(value) => query.bind(*value),
-            SqlValue::Text(value) => query.bind(value.clone()),
-            SqlValue::Blob(value) => query.bind(value.clone()),
+            SqlValue::Integer(value) => query.bind(value),
+            SqlValue::Real(value) => query.bind(value),
+            SqlValue::Text(value) => query.bind(value),
+            SqlValue::Blob(value) => query.bind(value),
         };
     }
     query
@@ -201,8 +249,8 @@ fn decode(row: &SqliteRow) -> anyhow::Result<SqlRow> {
             if raw.is_null() {
                 return Ok(SqlValue::Null);
             }
-            let class = raw.type_info().name().to_owned();
-            Ok(match class.as_str() {
+            let class = raw.type_info();
+            Ok(match class.name() {
                 "REAL" => SqlValue::Real(row.try_get(index)?),
                 "TEXT" => SqlValue::Text(row.try_get(index)?),
                 "BLOB" => SqlValue::Blob(row.try_get(index)?),

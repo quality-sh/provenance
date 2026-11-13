@@ -28,6 +28,7 @@ mod snapshot;
 pub(crate) use cursor::{Cursor, Position};
 pub use live::{Disturbed, Live, LiveHandle};
 pub use refuse_stale::MovedUnit;
+pub(crate) use snapshot::one_row;
 pub use snapshot::{ReadSnapshot, RecordIdentities, RecordIdentity, Relations, Table};
 
 pub(crate) use crate::cache::read::page::{check_limit, page_error, PAGE_BYTES, RECORD_BYTES};

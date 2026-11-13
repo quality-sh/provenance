@@ -125,12 +125,12 @@ async fn list(ctx: &ReadContext, query: DiscussionListQuery) -> anyhow::Result<D
     }
     sql.push(" ORDER BY d.discussion_id LIMIT ")
         .push_bind(i64::try_from(query.limit + 1)?);
-    let mut tx = ctx.snapshot().connection().await;
+    let mut tx = ctx.snapshot().connection().await?;
     let rows: Vec<DiscussionListRow> = sql
         .build_query_as()
         .fetch_all(&mut **tx)
         .await
-        .map_err(anyhow::Error::from)
+        .map_err(crate::read_database::file::statement_error)
         .map_err(reader::page_error)?;
     drop(tx);
     let row_count = rows.len();
@@ -223,7 +223,7 @@ async fn conversation(
         }
     }
     sql.push(") LIMIT 1");
-    let mut tx = ctx.snapshot().connection().await;
+    let mut tx = ctx.snapshot().connection().await?;
     let row: Option<(String, String)> = sql.build_query_as().fetch_optional(&mut **tx).await?;
     drop(tx);
     let (kind, id) = row.ok_or(ReadFailure::ResourceNotFound)?;
