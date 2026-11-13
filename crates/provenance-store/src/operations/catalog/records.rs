@@ -1,11 +1,10 @@
 //! Registered graph reads reuse the native reader and frame their own identity.
 use super::{
-    failures::ReadError, ExecutionNeed, ExecutionNeeds, Operation, OperationFuture, PreparedContext,
+    failures::ReadError, shapes::handled, ExecutionNeed, ExecutionNeeds, Operation,
+    OperationFuture, PreparedContext,
 };
 use provenance_core::protocol::{
-    self,
-    repository::{InfoRequest, RepositoryInfo},
-    QueryResponse,
+    self, failure::OperationError, repository::RepositoryInfo, QueryResponse,
 };
 
 macro_rules! query {
@@ -116,17 +115,14 @@ query!(
     graph_needs
 );
 
+/// Gives the engine version and the protocol version of one repository. The operation takes
+/// no input, so its request is the unit type, which is null on the wire.
+#[provenance_macros::rule("rule_operation_without_input_takes_null_request")]
 pub struct Info;
 impl Operation for Info {
-    type Request = InfoRequest;
+    type Request = ();
     type Success = RepositoryInfo;
-    type Failure = ReadError;
-    fn failure_status(error: &ReadError) -> u16 {
-        error.status()
-    }
-    fn unclassified_cause(error: &ReadError) -> Option<String> {
-        error.unclassified_cause()
-    }
+    type Failure = OperationError<ReadError>;
     const NAME: &'static str = "info";
     const CONTEXT: super::ContextKind = super::ContextKind::Repository;
     const FAILURE_STATUSES: &'static [u16] = &[409];
@@ -135,9 +131,9 @@ impl Operation for Info {
     }
     fn run(
         context: PreparedContext,
-        _: Self::Request,
+        (): Self::Request,
     ) -> OperationFuture<Self::Success, Self::Failure> {
-        Box::pin(async move {
+        handled(async move {
             let context = context.repository()?;
             let info = crate::operations::engine_info(&context.repository);
             Ok(RepositoryInfo {

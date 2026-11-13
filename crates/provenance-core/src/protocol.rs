@@ -1,5 +1,4 @@
 mod document;
-pub mod empty;
 mod envelope;
 pub use document::{
     DocumentEntry, DocumentReviewOutcome, DocumentReviewSummary, DocumentReviewTotals,

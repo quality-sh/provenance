@@ -1,7 +1,8 @@
-use provenance_core::protocol::failure::OperationFailure;
+use provenance_core::protocol::failure::{OperationError, OperationFailure};
 use provenance_macros::verifies;
 use provenance_store::operations::catalog::{
-    CheckStatement, ExecutionNeeds, Get, Info, Operation, OperationFuture, PreparedContext,
+    CheckStatement, ExecutionNeeds, Get, HandlerFailure, Info, Operation, OperationFuture,
+    PreparedContext,
 };
 use serde_json::json;
 
@@ -64,17 +65,22 @@ impl From<DeclaredFailure> for OperationFailure {
         Self::UnknownTarget
     }
 }
+impl HandlerFailure for DeclaredFailure {
+    fn failure_status(&self) -> u16 {
+        500
+    }
+}
 struct FailureFixture;
 impl Operation for FailureFixture {
     type Request = provenance_core::protocol::CheckStatementRequest;
     type Success = provenance_ste100::Report;
-    type Failure = DeclaredFailure;
+    type Failure = OperationError<DeclaredFailure>;
     const NAME: &'static str = "failure-fixture";
     fn needs(_: &Self::Request) -> ExecutionNeeds {
         &[]
     }
     fn run(_: PreparedContext, _: Self::Request) -> OperationFuture<Self::Success, Self::Failure> {
-        Box::pin(async { Err(DeclaredFailure::AccessDenied) })
+        Box::pin(async { Err(OperationError::Handler(DeclaredFailure::AccessDenied)) })
     }
 }
 

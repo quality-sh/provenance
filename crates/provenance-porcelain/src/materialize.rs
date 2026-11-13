@@ -3,21 +3,6 @@
 use crate::WorkFuture;
 use serde::{Deserialize, Serialize};
 
-/// The `materialize` input. It has no fields: the command rebuilds the cache of the
-/// repository that the consumer binds.
-#[derive(Clone, Debug, Default, schemars::JsonSchema)]
-#[schemars(deny_unknown_fields)]
-pub struct MaterializeInput {}
-
-// This impl is written by hand: for a struct with no fields, the derive makes
-// an enum with no variants, and the `empty_enums` lint refuses that enum.
-impl<'de> Deserialize<'de> for MaterializeInput {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        provenance_core::protocol::empty::deserialize_struct(deserializer, "MaterializeInput")
-            .map(|()| Self {})
-    }
-}
-
 /// The rebuilt cache.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct MaterializeOutput {
@@ -30,19 +15,13 @@ pub trait MaterializePort: Send + Sync {
     /// The failure that this port reports.
     type Failure;
 
-    fn materialize(
-        &self,
-        input: MaterializeInput,
-    ) -> WorkFuture<'_, MaterializeOutput, Self::Failure>;
+    fn materialize(&self) -> WorkFuture<'_, MaterializeOutput, Self::Failure>;
 }
 
 impl<P: MaterializePort> crate::Porcelain<P> {
     /// Rebuilds the cache of the bound repository.
-    pub async fn materialize(
-        &self,
-        input: MaterializeInput,
-    ) -> Result<MaterializeOutput, P::Failure> {
-        self.port.materialize(input).await
+    pub async fn materialize(&self) -> Result<MaterializeOutput, P::Failure> {
+        self.port.materialize().await
     }
 }
 

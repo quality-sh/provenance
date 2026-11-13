@@ -9,8 +9,7 @@ pub fn render(
     parsed: syn::File,
     document: &Value,
 ) -> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
-    let items = crate::empty_types::rewrite(parsed.items);
-    let models: BTreeSet<_> = items.iter().filter_map(declaration_name).collect();
+    let models: BTreeSet<_> = parsed.items.iter().filter_map(declaration_name).collect();
     let families: Vec<_> = document["components"]["schemas"]
         .as_object()
         .ok_or("missing OpenAPI components")?
@@ -18,7 +17,7 @@ pub fn render(
         .filter_map(|schema| schema["x-provenance-model-family"].as_str())
         .collect();
     let mut groups: BTreeMap<String, Vec<syn::Item>> = BTreeMap::new();
-    for mut item in items {
+    for mut item in parsed.items {
         let name = item_group(&item, &models)?;
         strip_schema_docs(&mut item);
         groups.entry(name).or_default().push(item);

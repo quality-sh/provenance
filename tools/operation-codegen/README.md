@@ -69,7 +69,8 @@ Generation runs the contract grammar linter before any output is written. The
 linter checks the live OpenAPI and MCP documents against the declared surface
 in `docs/api-contract.md`. It rejects repository or scope path prefixes,
 relationship routes, legacy verb routes, `/query` subroutes, GET bodies,
-required-null requests, raw arrays, flattened envelopes, MCP-only wrappers,
+required-null requests, request data with no field, raw arrays, flattened
+envelopes, MCP-only wrappers,
 undeclared actions or queries, mutating GETs, read POSTs without
 `MUTATES=false`, missing failure statuses, single-message reads that ship an
 items envelope, duplicate bindings, unresolved path parameters, and operation
@@ -106,9 +107,6 @@ The generated Rust module allows only Typify's `if_not_else` conversion style
 and explicit default helpers (`missing_const_for_fn`, `derivable_impls`,
 `default_trait_access`). Models with more than three declared Boolean fields
 retain those wire fields with a local `struct_excessive_bools` allowance.
-The generator writes a schema with no values as a struct over `Infallible`,
-and it reads that type and a closed object with no fields with the
-hand-written `empty` module, so no generated type has an enum with no variants.
 Handwritten code keeps the normal workspace lint settings.
 
 Response validators compile from the same OpenAPI components. TypeScript emits

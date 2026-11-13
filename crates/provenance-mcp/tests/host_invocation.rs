@@ -16,10 +16,7 @@ mod support {
 
 use axum::{body::Body, http::Request};
 use futures::poll;
-use provenance_core::{
-    protocol::{failure::OperationError, ResolveRecordQuery},
-    NodeType, SDK_PROTOCOL_VERSION,
-};
+use provenance_core::{protocol::ResolveRecordQuery, NodeType, SDK_PROTOCOL_VERSION};
 use provenance_macros::verifies;
 use provenance_store::{
     operations::catalog::{self, ResolveRecord},
@@ -219,7 +216,7 @@ fn resolve_shared() -> ResolveRecordQuery {
 
 type Resolved = Result<
     <ResolveRecord as catalog::Operation>::Success,
-    OperationError<<ResolveRecord as catalog::Operation>::Failure>,
+    <ResolveRecord as catalog::Operation>::Failure,
 >;
 
 /// Eight typed calls held in the gate fill the work slots and take no ingress slot.

@@ -1,4 +1,5 @@
 use super::{query, schema, Definition, Registration, SelectorBinding};
+use serde_json::Value;
 
 pub(super) fn request_schemas(definitions: &mut [Definition]) {
     for definition in definitions {
@@ -15,6 +16,26 @@ pub(super) fn request_schemas(definitions: &mut [Definition]) {
             );
         }
         hide_bound_fields(definition);
+        drop_body_without_fields(&mut definition.registration.request.schema);
+    }
+}
+
+/// A route that gets each input field from its path and its bound context publishes no
+/// request body.
+#[provenance_macros::rule("rule_route_without_body_fields_takes_no_body")]
+fn drop_body_without_fields(request: &mut Option<Value>) {
+    let no_field = request
+        .as_ref()
+        .and_then(|schema| schema.pointer("/properties/data"))
+        .is_some_and(|data| {
+            data.get("additionalProperties") == Some(&Value::Bool(false))
+                && data
+                    .get("properties")
+                    .and_then(Value::as_object)
+                    .is_some_and(serde_json::Map::is_empty)
+        });
+    if no_field {
+        *request = None;
     }
 }
 

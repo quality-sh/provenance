@@ -3,9 +3,7 @@
 //! JSON call, runs the typed operation on the host, and encodes the result.
 
 use provenance_core::{
-    protocol::failure::{
-        ErasedFailure as FailureEnvelope, InvalidInputReason, OperationError, OperationFailure,
-    },
+    protocol::failure::{ErasedFailure as FailureEnvelope, InvalidInputReason, OperationFailure},
     SDK_PROTOCOL_VERSION,
 };
 use provenance_store::operations::{
@@ -54,8 +52,8 @@ impl Invoke for Unhosted {
         self,
         _: Option<RequestedContext>,
         _: O::Request,
-    ) -> OperationFuture<O::Success, OperationError<O::Failure>> {
-        Box::pin(async { Err(OperationError::Common(OperationFailure::UnavailableNeeds)) })
+    ) -> OperationFuture<O::Success, O::Failure> {
+        Box::pin(async { Err(OperationFailure::UnavailableNeeds.into()) })
     }
 }
 

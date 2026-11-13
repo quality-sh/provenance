@@ -1,7 +1,7 @@
 //! The one host invocation. Every store caller passes through it.
 use crate::StatementHost;
 use provenance_core::protocol::{
-    failure::{OperationError, OperationFailure},
+    failure::OperationFailure,
     repository::{RepositoryContext, RepositoryScope, RepositoryTarget},
 };
 use provenance_macros::rule;
@@ -58,20 +58,18 @@ impl StatementHost {
         &self,
         request: O::Request,
         options: Invocation,
-    ) -> Result<O::Success, OperationError<O::Failure>> {
+    ) -> Result<O::Success, O::Failure> {
         // A wire call is advertised by its public route in the routing adapter.
         if matches!(options.framing, Framing::Native) && !self.advertises(O::NAME) {
-            return Err(OperationError::Common(OperationFailure::AccessDenied));
+            return Err(OperationFailure::AccessDenied.into());
         }
         let selected = match options.selected {
             Some(selected) => Some(selected),
             None => self.bound_context(O::CONTEXT)?,
         };
-        O::validate_external(&request).map_err(OperationError::Common)?;
+        O::validate_external(&request)?;
         if let Some(selected) = &selected {
-            self.access
-                .authorize(O::NAME, selected)
-                .map_err(OperationError::Common)?;
+            self.access.authorize(O::NAME, selected)?;
         }
         let access = self.access.clone();
         let page_writes = options
@@ -86,25 +84,24 @@ impl StatementHost {
                 match page_writes {
                     Some(page) => page
                         .run(|held| {
-                            let context = context.within(held).map_err(OperationError::Common)?;
+                            let context = context.within(held)?;
                             runtime.block_on(catalog::invoke_typed::<O>(context, request))
                         })
-                        .unwrap_or(Err(OperationError::Common(OperationFailure::Internal))),
+                        .unwrap_or_else(|| Err(OperationFailure::Internal.into())),
                     None => runtime.block_on(catalog::invoke_typed::<O>(context, request)),
                 }
             })
-            .await
-            .map_err(OperationError::Common)?
+            .await?
     }
 
     /// The bound identity in the shape the operation's context kind expects.
-    fn bound_context<F>(
+    fn bound_context(
         &self,
         kind: ContextKind,
-    ) -> Result<Option<RequestedContext>, OperationError<F>> {
+    ) -> Result<Option<RequestedContext>, OperationFailure> {
         let identity = || {
             self.bound_identity()
-                .ok_or(OperationError::Common(OperationFailure::UnavailableNeeds))
+                .ok_or(OperationFailure::UnavailableNeeds)
         };
         Ok(match kind {
             ContextKind::DataFree => None,
@@ -139,11 +136,9 @@ fn prepare<O: Operation>(
     selected: Option<RequestedContext>,
     request: &O::Request,
     native: bool,
-) -> Result<PreparedContext, OperationError<O::Failure>> {
+) -> Result<PreparedContext, OperationFailure> {
     let context = match selected {
-        Some(selected) => access
-            .prepare(O::NAME, selected, O::needs(request))
-            .map_err(OperationError::Common)?,
+        Some(selected) => access.prepare(O::NAME, selected, O::needs(request))?,
         None => PreparedContext::data_free(),
     };
     Ok(if native {

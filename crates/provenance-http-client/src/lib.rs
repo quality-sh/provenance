@@ -22,7 +22,6 @@ pub mod parameters {
 mod client {
     include!("generated/client.rs");
 }
-mod empty;
 mod runtime;
 pub use client::{HttpClient, OperationFailure, COMPATIBILITY, PROTOCOL_VERSION};
 pub use runtime::{Error, ResponseFailure, MAX_RESPONSE_BYTES};
