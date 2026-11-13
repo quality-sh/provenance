@@ -53,8 +53,8 @@ impl StateStore {
                 symbol: input.symbol.clone(),
             })?;
             let binding_id = binding.binding.id.clone();
-            let run = held.next_run(&scope_id, |id, started_at| VerificationRun {
-                scope_id: scope_id.clone(),
+            let run = held.next_run(&binding.binding.scope_id, |id, started_at| VerificationRun {
+                scope_id,
                 id,
                 binding_id: Some(binding_id),
                 rule_id,
