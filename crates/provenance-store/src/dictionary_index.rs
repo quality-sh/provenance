@@ -67,5 +67,7 @@ fn read_index(path: &Path) -> Result<Vec<u8>, DictionaryIndexError> {
 }
 
 #[cfg(test)]
+mod read_tests;
+#[cfg(test)]
 #[cfg(unix)]
 mod write_tests;

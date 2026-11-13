@@ -17,7 +17,7 @@ concurrency:
 env:
   # The Rust version every toolchain step installs. Change it on purpose,
   # never by following stable.
-  RUST_TOOLCHAIN: 1.99.1
+  RUST_TOOLCHAIN: 1.100.0
   CARGO_TERM_COLOR: always
   # Apply the same debug setting to temporary Cargo workspaces used by tests.
   CARGO_PROFILE_DEV_DEBUG: line-tables-only

@@ -181,8 +181,7 @@ pub(super) async fn trace(ctx: &ReadContext, request: TraceQuery) -> anyhow::Res
     let snapshot = ctx.snapshot();
     let mut frontier: Vec<(NodeType, StableId)> = origin_kind(snapshot, request.node_type, &id)
         .await?
-        .map(|node_type| vec![(node_type, id.clone())])
-        .unwrap_or_default();
+        .map_or_default(|node_type| vec![(node_type, id.clone())]);
     // Every later frontier is made of records that count; only the origin
     // can be one whose fields are not followed.
     let mut follows_out = match frontier.first() {

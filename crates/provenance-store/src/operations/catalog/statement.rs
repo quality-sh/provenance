@@ -1,18 +1,15 @@
 use super::{ExecutionNeeds, Operation, OperationFuture, PreparedContext};
-use provenance_core::protocol::CheckStatementRequest;
+use provenance_core::protocol::{failure::OperationFailure, CheckStatementRequest};
 use provenance_macros::rule;
 use provenance_ste100::Report;
-
-#[derive(Debug, serde::Serialize, thiserror::Error)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub enum StatementFailure {}
 
 pub struct CheckStatement;
 
 impl Operation for CheckStatement {
     type Request = CheckStatementRequest;
     type Success = Report;
-    type Failure = StatementFailure;
+    /// The analysis gives a report for each statement, so the handler has no failure.
+    type Failure = OperationFailure;
     const NAME: &'static str = "check-statement";
 
     /// Keeps statement checks independent of repository state.
@@ -26,7 +23,7 @@ impl Operation for CheckStatement {
     fn run(
         _: PreparedContext,
         request: Self::Request,
-    ) -> OperationFuture<Report, StatementFailure> {
+    ) -> OperationFuture<Report, OperationFailure> {
         Box::pin(async move {
             Ok(crate::statement_analysis::check_statement(
                 &request.statement,

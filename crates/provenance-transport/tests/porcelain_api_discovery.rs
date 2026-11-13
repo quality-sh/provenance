@@ -123,3 +123,67 @@ async fn api_discovery_preserves_query_contracts() {
         .unwrap();
     assert!(names_of(&member_base.parameters).contains(&"id"));
 }
+
+/// The handler of the statement check gives no failure, so the failure schema of the route
+/// has the common failures and no member for a handler.
+#[tokio::test]
+#[verifies("rule_handler_without_failure_publishes_common_failures", examples)]
+async fn statement_check_failure_schema_shows_only_the_common_failures() {
+    let repository = Repository::new("The shared graph is readable.");
+    let service = Porcelain::new(HostApiPort::new(host(&repository)));
+    let ApiOutcome::Catalog(selection) = service
+        .execute_api(ApiRequest::Discover {
+            filter: None,
+            limit: None,
+        })
+        .await
+        .unwrap()
+    else {
+        panic!("discovery returns the catalog");
+    };
+    let catalog = selection.complete();
+    let route = catalog
+        .routes
+        .iter()
+        .find(|route| route.path == "/statement-checks" && route.method == ApiMethod::Post)
+        .expect("the statement check route is described");
+    let failure = &route.queries[0].failure_schema;
+    assert_eq!(
+        failure["properties"]["error"],
+        serde_json::json!({"$ref":"#/$defs/OperationFailure"})
+    );
+    let definitions = failure["$defs"].as_object().unwrap();
+    let mut names = definitions.keys().map(String::as_str).collect::<Vec<_>>();
+    names.sort_unstable();
+    assert_eq!(
+        names,
+        [
+            "FreshnessCause",
+            "InvalidInputReason",
+            "OperationFailure",
+            "ResponseMeta",
+            "Stamp",
+            "StampPolicy"
+        ],
+        "{failure}"
+    );
+    assert!(
+        definitions
+            .values()
+            .all(|schema| schema != &serde_json::json!(false)),
+        "{failure}"
+    );
+    // The handler of a read gives read failures, so its route keeps the handler member.
+    let read = catalog
+        .routes
+        .iter()
+        .find(|route| route.path == "/sources" && route.method == ApiMethod::Get)
+        .expect("the Source list route is described");
+    assert_eq!(
+        read.queries[0].failure_schema["$defs"]["OperationError"]["anyOf"],
+        serde_json::json!([
+            {"$ref":"#/$defs/OperationFailure"},
+            {"$ref":"#/$defs/ReadFailure"}
+        ])
+    );
+}

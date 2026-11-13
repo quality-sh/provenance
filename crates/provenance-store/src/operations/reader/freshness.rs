@@ -172,9 +172,7 @@ async fn open_snapshot(
         .ok_or_else(|| {
             ReadRefusal::NoProjection {
                 database: layout.cache_db_path(),
-                because: because
-                    .map(|error| format!(" (catch-up failed: {error})"))
-                    .unwrap_or_default(),
+                because: because.map_or_default(|error| format!(" (catch-up failed: {error})")),
             }
             .into()
         })

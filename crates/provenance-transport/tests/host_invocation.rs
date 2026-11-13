@@ -90,7 +90,7 @@ async fn a_refused_identity_does_not_wait_for_a_work_slot() {
 
 type Resolved = Result<
     <ResolveRecord as catalog::Operation>::Success,
-    OperationError<<ResolveRecord as catalog::Operation>::Failure>,
+    <ResolveRecord as catalog::Operation>::Failure,
 >;
 
 /// Eight typed calls held in the gate fill the work slots and take no ingress slot.

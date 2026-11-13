@@ -92,9 +92,7 @@ pub fn relation_names() -> Vec<&'static str> {
 /// How a filter naming an unknown relation is refused: the replacement
 /// for a retired name, then the closed vocabulary.
 pub fn unknown_relation_refusal(name: &str) -> String {
-    let retired = retired_clause(name)
-        .map(|clause| format!("; {clause}"))
-        .unwrap_or_default();
+    let retired = retired_clause(name).map_or_default(|clause| format!("; {clause}"));
     format!(
         "unknown relation `{name}`{retired}. valid relations: {}",
         relation_names()

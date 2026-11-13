@@ -1,4 +1,4 @@
-use provenance_core::protocol::failure::{ErasedFailure, OperationFailure};
+use provenance_core::protocol::failure::{ErasedFailure, OperationError, OperationFailure};
 use serde_json::json;
 
 mod authorize_order;
@@ -17,11 +17,16 @@ impl From<DeclaredFailure> for OperationFailure {
         Self::UnknownTarget
     }
 }
+impl super::HandlerFailure for DeclaredFailure {
+    fn failure_status(&self) -> u16 {
+        500
+    }
+}
 struct FailureFixture;
 impl super::Operation for FailureFixture {
     type Request = provenance_core::protocol::CheckStatementRequest;
     type Success = provenance_ste100::Report;
-    type Failure = DeclaredFailure;
+    type Failure = OperationError<DeclaredFailure>;
     const NAME: &'static str = "failure-fixture";
     fn needs(_: &Self::Request) -> super::ExecutionNeeds {
         &[]
@@ -30,7 +35,7 @@ impl super::Operation for FailureFixture {
         _: super::PreparedContext,
         _: Self::Request,
     ) -> super::OperationFuture<Self::Success, Self::Failure> {
-        Box::pin(async { Err(DeclaredFailure::AccessDenied) })
+        Box::pin(async { Err(OperationError::Handler(DeclaredFailure::AccessDenied)) })
     }
 }
 
@@ -56,11 +61,16 @@ enum ExtendedFailure {
     #[error("fixture refusal with a field the wire family does not support")]
     AccessDenied { detail: bool },
 }
+impl super::HandlerFailure for ExtendedFailure {
+    fn failure_status(&self) -> u16 {
+        500
+    }
+}
 struct ExtendedFailureFixture;
 impl super::Operation for ExtendedFailureFixture {
     type Request = provenance_core::protocol::CheckStatementRequest;
     type Success = provenance_ste100::Report;
-    type Failure = ExtendedFailure;
+    type Failure = OperationError<ExtendedFailure>;
     const NAME: &'static str = "extended-failure-fixture";
     fn needs(_: &Self::Request) -> super::ExecutionNeeds {
         &[]
@@ -69,7 +79,11 @@ impl super::Operation for ExtendedFailureFixture {
         _: super::PreparedContext,
         _: Self::Request,
     ) -> super::OperationFuture<Self::Success, Self::Failure> {
-        Box::pin(async { Err(ExtendedFailure::AccessDenied { detail: true }) })
+        Box::pin(async {
+            Err(OperationError::Handler(ExtendedFailure::AccessDenied {
+                detail: true,
+            }))
+        })
     }
 }
 #[tokio::test]

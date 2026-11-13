@@ -10,6 +10,7 @@ use crate::layout::with_initialized_graph;
 use crate::layout::{GraphNotInitialized, ProvenanceLayout};
 use crate::publication::SectionHandle;
 use crate::read_database::ReadDatabase;
+use crate::review::history::FileVersions;
 use crate::settings::{Settings, SettingsError};
 #[cfg(feature = "host")]
 use crate::stale::revision_scans::KeptScans;
@@ -57,9 +58,10 @@ struct Inner {
     /// `with_storage` gives.
     read_database: Option<Arc<dyn ReadDatabase>>,
     /// The source scans of the last commit range that a stale or evidence
-    /// query of this open read. Each clone of the handle shares them.
+    /// query of this open read. Each clone of the handle, and each handle
+    /// that `with_file_versions` gives, shares them.
     #[cfg(feature = "host")]
-    kept_scans: KeptScans,
+    kept_scans: Arc<KeptScans>,
 }
 
 /// Why a repository did not open.
@@ -180,6 +182,29 @@ impl Repository {
         ))
     }
 
+    /// This repository with the committed file versions that its record
+    /// history reads.
+    ///
+    /// A repository that has none reads the Git history of its working
+    /// tree, as one from `open` does. The new handle shares the storage, the
+    /// lock, the read database and the kept source scans of this one.
+    #[must_use]
+    pub fn with_file_versions(&self, versions: Arc<dyn FileVersions>) -> Self {
+        Self {
+            inner: Arc::new(Inner {
+                identity: self.inner.identity.clone().with_file_versions(versions),
+                layout: self.inner.layout.clone(),
+                storage: Arc::clone(&self.inner.storage),
+                section_lock: Arc::clone(&self.inner.section_lock),
+                local: self.inner.local,
+                read_database: self.inner.read_database.clone(),
+                #[cfg(feature = "host")]
+                kept_scans: Arc::clone(&self.inner.kept_scans),
+            }),
+            section: self.section.clone(),
+        }
+    }
+
     fn with_parts(
         identity: RepositoryIdentity,
         storage: Arc<dyn StateStorage>,
@@ -196,7 +221,7 @@ impl Repository {
                 section_lock,
                 local,
                 #[cfg(feature = "host")]
-                kept_scans: KeptScans::new(),
+                kept_scans: Arc::new(KeptScans::new()),
             }),
             section: None,
         }
