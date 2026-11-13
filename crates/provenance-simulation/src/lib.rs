@@ -6,6 +6,7 @@
 //! that a later run can replay it. The crate README tells what to do with a
 //! failure.
 
+pub mod expected;
 pub mod generate;
 mod identity;
 pub mod laws;
@@ -113,12 +114,13 @@ pub fn check_case(layer: &str, case: &Case, config: Config) -> Run {
     first
 }
 
-/// Runs the fixed case of probe `test` twice and returns the first run.
+/// Runs the fixed case of a probe of `layer` twice and returns the first
+/// run.
 ///
-/// A broken law fails the probe with the law and the replay line of the
-/// probe, and writes no failure file.
-pub fn check_probe(layer: &str, test: &str, case: &Case, config: Config) -> Run {
+/// A broken law fails the probe through [`report::probe_laws`], and writes
+/// no failure file.
+pub fn check_probe(layer: &str, case: &Case, config: Config) -> Run {
     let (first, verdict) = verdict(case, config);
-    report::probe(layer, test, verdict);
+    report::probe_laws(layer, verdict);
     first
 }
