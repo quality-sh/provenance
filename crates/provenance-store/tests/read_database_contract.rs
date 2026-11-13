@@ -16,6 +16,8 @@ use provenance_store::read_database::{
 
 #[path = "read_database_contract/lost_commit.rs"]
 mod lost_commit;
+#[path = "read_database_contract/over_budget.rs"]
+mod over_budget;
 
 /// A file database in a new cache directory of its own.
 struct File {
@@ -251,6 +253,9 @@ port_cases!(
     projection::a_schema_that_is_not_current_is_made_again,
     projection::a_rebuild_keeps_the_catalog_and_the_rows,
     projection::a_rebuild_keeps_a_table_that_the_store_does_not_own,
+    ownership::a_trigger_on_a_table_of_the_store_is_removed,
+    ownership::an_index_on_a_table_of_the_store_is_removed,
+    ownership::an_object_that_takes_a_name_of_the_store_is_removed,
     sequence::a_write_then_read_reads_its_write,
     sequence::a_failed_write_stops_the_read,
     sequence::a_failed_read_keeps_the_write,

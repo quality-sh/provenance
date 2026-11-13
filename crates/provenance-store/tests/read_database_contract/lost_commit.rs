@@ -6,7 +6,7 @@ use provenance_store::read_database::contract::{self, Harness};
 use provenance_store::read_database::file::FileReadDatabase;
 use provenance_store::read_database::{
     ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement, Transaction,
-    WriteWork,
+    WorkUnit, WriteWork,
 };
 use std::sync::{Arc, Mutex};
 
@@ -48,6 +48,10 @@ impl SqlTransaction for LaterCommit {
 
     fn bound_work(&mut self, steps: u64) -> SqlFuture<'_, ()> {
         self.transaction.bound_work(steps)
+    }
+
+    fn work_unit(&self) -> WorkUnit {
+        self.transaction.work_unit()
     }
 
     fn max_list_values(&self) -> usize {

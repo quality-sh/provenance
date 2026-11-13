@@ -55,6 +55,10 @@ impl SqlTransaction for OneValueList {
         self.0.bound_work(steps)
     }
 
+    fn work_unit(&self) -> crate::read_database::WorkUnit {
+        self.0.work_unit()
+    }
+
     fn max_list_values(&self) -> usize {
         1
     }

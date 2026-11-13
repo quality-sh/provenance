@@ -134,17 +134,21 @@ pub async fn a_list_of_the_most_values_runs<H: Harness>(harness: H) {
     assert_eq!(found, 5);
 }
 
-/// A bound far below the work of [`FAR_PAST`] in each unit.
+/// A bound in each unit that [`FAR_PAST`] passes a hundred times or more,
+/// however the store plans it.
 const fn small_bound(unit: WorkUnit) -> u64 {
     match unit {
-        WorkUnit::EngineSteps => 100_000,
-        WorkUnit::RowsRead => 1_000,
+        WorkUnit::EngineSteps => 10_000,
+        WorkUnit::RowsRead => 10,
     }
 }
 
-/// A statement that reads the 1,000 rows of `wide` once for each of its
-/// rows: a million rows, and some millions of engine steps.
-const FAR_PAST: &str = "SELECT COUNT(*) FROM wide AS a, wide AS b WHERE a.n <> b.n";
+/// A statement over each of the million pairs of the 1,000 rows of
+/// `wide`. A store reads each row of `wide` at least once, so it reads at
+/// least 1,000 rows, also when it reads `wide` once for both sides. The
+/// sum needs a value of each pair, so the store runs more than 1,000,000
+/// steps.
+const FAR_PAST: &str = "SELECT SUM((a.n * 7 + b.n * 13) % 101) FROM wide AS a, wide AS b";
 
 /// After `bound_work`, a statement far past the bound gives [`OverBudget`].
 ///
