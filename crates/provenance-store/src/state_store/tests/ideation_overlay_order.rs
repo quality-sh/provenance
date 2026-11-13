@@ -59,9 +59,15 @@ fn land(store: &StateStore, scope: &ScopeId, batch: IdeationLandingBatch, replac
     store.land_ideation_batch(scope, batch, replace).unwrap();
 }
 
+/// The ids of the records that the test landed, in the order of each list.
+/// The seeded store also holds a proposal with a generated id.
 fn listed_ids(store: &StateStore, scope: &ScopeId) -> Vec<Vec<String>> {
     fn ids<T>(records: Vec<T>, id: impl Fn(&T) -> &str) -> Vec<String> {
-        records.iter().map(|record| id(record).to_owned()).collect()
+        records
+            .iter()
+            .map(|record| id(record).to_owned())
+            .filter(|id| LANDED_KINDS.iter().any(|kind| id.starts_with(kind)))
+            .collect()
     }
     vec![
         ids(store.list_contributions(scope).unwrap(), |r| r.id.as_str()),
@@ -71,8 +77,10 @@ fn listed_ids(store: &StateStore, scope: &ScopeId) -> Vec<Vec<String>> {
     ]
 }
 
+const LANDED_KINDS: [&str; 4] = ["contribution", "synthesis", "proposal", "disposition"];
+
 fn all_kinds(suffixes: &[&str]) -> Vec<Vec<String>> {
-    ["contribution", "synthesis", "proposal", "disposition"]
+    LANDED_KINDS
         .iter()
         .map(|kind| suffixes.iter().map(|suffix| format!("{kind}_{suffix}")).collect())
         .collect()
