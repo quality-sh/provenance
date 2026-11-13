@@ -42,6 +42,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  # The Rust version every toolchain step installs. Change it on purpose,
+  # never by following stable.
+  RUST_TOOLCHAIN: 1.100.0
   CARGO_TERM_COLOR: never
   # The value each side's .cargo/config.toml gives `cargo test`. The test
   # binaries run directly, so the job sets it.
@@ -111,7 +114,8 @@ jobs:
           node-version: 24
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
-          toolchain: stable
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy, rustfmt
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: benchmarks

@@ -22,6 +22,9 @@ permissions:
   contents: read
 
 env:
+  # The Rust version every toolchain step installs. Change it on purpose,
+  # never by following stable.
+  RUST_TOOLCHAIN: 1.100.0
   RELEASE_SMOKE_RETRY_ATTEMPTS: "20"
   RELEASE_SMOKE_RETRY_DELAY_SECONDS: "30"
 
@@ -70,7 +73,8 @@ jobs:
       - uses: ./.github/actions/setup-socket-firewall
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
-          toolchain: stable
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy, rustfmt
       - name: Install and exercise the exact Rust distribution
         shell: bash
         env:

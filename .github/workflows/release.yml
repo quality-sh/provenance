@@ -10,6 +10,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # The Rust version every toolchain step installs. Change it on purpose,
+  # never by following stable.
+  RUST_TOOLCHAIN: 1.100.0
+
 jobs:
   preflight:
     name: Verify release contract
@@ -62,7 +67,8 @@ jobs:
           done
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
-          toolchain: stable
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy, rustfmt
       # The release version check reads full Cargo metadata for the Rust
       # SDK example, and generate.mjs builds the codegen crate. Fetch both
       # lockfiles through the firewall first.
@@ -121,7 +127,8 @@ jobs:
       - uses: ./.github/actions/setup-socket-firewall
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
-          toolchain: stable
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy, rustfmt
           targets: ${{ matrix.target }}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
