@@ -14,7 +14,8 @@ pub enum Compatibility {
 /// Whether the schema of the database in `transaction` is current.
 ///
 /// It is current when its metadata row names the current digest and its
-/// catalog is the current catalog.
+/// catalog of the objects that the store owns is the current catalog. An
+/// object of another name does not change the answer.
 pub async fn compatibility(transaction: &mut Transaction) -> anyhow::Result<Compatibility> {
     let table = transaction
         .fetch(
@@ -56,23 +57,50 @@ fn is_missing_column(error: &anyhow::Error) -> bool {
         .any(|cause| cause.to_string().contains("no such column"))
 }
 
-/// Removes all cache tables and installs the current empty schema.
-/// The caller records the digest only after it loads all rows and stamps.
+/// Removes the store's own tables and indexes and installs the current
+/// empty schema. The caller records the digest only after it loads all
+/// rows and stamps.
+///
+/// The store owns the objects that the schema text names. An object of
+/// another name stays, with its rows: a table that another program keeps
+/// in the same database, and also an object that an earlier schema text
+/// named and the current text does not. A repository is initialised again,
+/// not migrated, so such an object is no longer the store's.
 pub async fn replace(transaction: &mut Transaction) -> anyhow::Result<()> {
-    let tables = transaction
+    let owned = owned_names();
+    let objects = transaction
         .fetch(
-            "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+            "SELECT type, name FROM sqlite_schema \
+             WHERE type IN ('index', 'table') AND name NOT LIKE 'sqlite_%' \
+             ORDER BY type, name",
             Vec::new(),
         )
         .await?;
-    for table in tables {
-        let sql = format!("DROP TABLE {}", quoted(table.text(0)?));
-        transaction.execute(&sql, Vec::new()).await?;
+    // The indexes come first. An index of another name on a table of the
+    // store goes with its table.
+    for object in objects {
+        let name = object.text(1)?;
+        if owned.contains(name) {
+            let sql = format!("DROP {} IF EXISTS {}", object.text(0)?, quoted(name));
+            transaction.execute(&sql, Vec::new()).await?;
+        }
     }
     for statement in statements() {
         transaction.execute(statement, Vec::new()).await?;
     }
     Ok(())
+}
+
+/// The names of the tables and indexes that the schema text makes.
+fn owned_names() -> &'static std::collections::BTreeSet<String> {
+    static OWNED: std::sync::OnceLock<std::collections::BTreeSet<String>> =
+        std::sync::OnceLock::new();
+    OWNED.get_or_init(|| {
+        statements()
+            .filter_map(schema_object)
+            .map(|object| object.name)
+            .collect()
+    })
 }
 
 pub async fn mark_current(transaction: &mut Transaction) -> anyhow::Result<()> {
@@ -162,7 +190,8 @@ async fn catalog(transaction: &mut Transaction) -> anyhow::Result<SchemaCatalog>
             Vec::new(),
         )
         .await?;
-    rows.iter()
+    let mut objects = rows
+        .iter()
         .map(|row| {
             Ok(SchemaObject {
                 kind: row.text(0)?.to_owned(),
@@ -171,8 +200,9 @@ async fn catalog(transaction: &mut Transaction) -> anyhow::Result<SchemaCatalog>
                 sql: normalize_sql(row.optional_text(3)?.unwrap_or_default()),
             })
         })
-        .collect::<anyhow::Result<_>>()
-        .map(SchemaCatalog)
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    objects.retain(|object| owned_names().contains(&object.name));
+    Ok(SchemaCatalog(objects))
 }
 
 fn normalize_sql(sql: &str) -> String {
