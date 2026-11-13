@@ -5,6 +5,7 @@ use crate::{
             ContextResolver, ExecutionNeed, ExecutionNeeds, PreparedContext, PreparedRead,
             PreparedRepository, PreparedScope, RequestedContext,
         },
+        read_operations::ReadOperations,
         read_policy::ReadPolicy,
     },
     repository::Repository,
@@ -13,6 +14,7 @@ use provenance_core::{
     protocol::failure::{InvalidInputReason, OperationFailure},
     ScopeId,
 };
+use std::sync::Arc;
 
 /// One opened repository bound under an alias, with its scope as the one grant.
 pub struct LocalRepository {
@@ -43,6 +45,12 @@ impl LocalRepository {
     /// The bound scope.
     pub fn scope(&self) -> &ScopeId {
         self.repository.scope()
+    }
+
+    /// The port that runs the read operations of the bound repository, if
+    /// the repository has one.
+    pub fn read_operations(&self) -> Option<Arc<dyn ReadOperations>> {
+        self.repository.read_operations().cloned()
     }
 
     /// Read disposition actors from the repository bound at startup.

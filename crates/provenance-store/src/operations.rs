@@ -38,6 +38,7 @@ pub mod local_repository;
 mod plan;
 #[cfg(feature = "host")]
 pub mod queries;
+pub mod read_operations;
 #[cfg(feature = "host")]
 pub mod read_policy;
 pub mod reader;

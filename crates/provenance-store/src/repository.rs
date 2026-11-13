@@ -8,6 +8,7 @@
 #[cfg(feature = "host")]
 use crate::layout::with_initialized_graph;
 use crate::layout::{GraphNotInitialized, ProvenanceLayout};
+use crate::operations::read_operations::ReadOperations;
 use crate::publication::SectionHandle;
 use crate::read_database::ReadDatabase;
 use crate::settings::{Settings, SettingsError};
@@ -41,6 +42,9 @@ pub struct Repository {
     inner: Arc<Inner>,
     /// Set only on the repository of a section guard.
     section: Option<SectionHandle>,
+    /// The port that runs the read operations of the contract router, when
+    /// the caller gave one.
+    reads: Option<Arc<dyn ReadOperations>>,
 }
 
 #[derive(Debug)]
@@ -199,6 +203,7 @@ impl Repository {
                 kept_scans: KeptScans::new(),
             }),
             section: None,
+            reads: None,
         }
     }
 
@@ -324,6 +329,23 @@ impl Repository {
             .ok_or_else(|| crate::refusal::fault!("this repository has no read database"))
     }
 
+    /// This repository with `reads` as the port of its read operations. The
+    /// contract router of the repository sends each operation of
+    /// [`READ_OPERATIONS`](crate::operations::read_operations::READ_OPERATIONS)
+    /// to the port, and does not run it. A clone keeps the port.
+    #[must_use]
+    pub fn with_read_operations(&self, reads: Arc<dyn ReadOperations>) -> Self {
+        Self {
+            reads: Some(reads),
+            ..self.clone()
+        }
+    }
+
+    /// The port of the read operations, if the caller gave one.
+    pub fn read_operations(&self) -> Option<&Arc<dyn ReadOperations>> {
+        self.reads.as_ref()
+    }
+
     /// The lock that serializes the sections of this repository.
     pub(crate) fn section_lock(&self) -> &Arc<dyn SectionLock> {
         &self.inner.section_lock
@@ -362,6 +384,7 @@ impl Repository {
         Self {
             inner: Arc::clone(&self.inner),
             section: Some(section),
+            reads: self.reads.clone(),
         }
     }
 
