@@ -64,8 +64,10 @@ that the store refuses.
 - `catalog.mjs`, `requests.mjs`, `body.mjs` and `commands.mjs` find the calls
   and their input. `ways.mjs` holds the three clients.
 
-- `fixtures/catalog.json` holds catalog answers of a provenance binary for
-  `catalog.test.mjs`. `node tools/api-latency/fixtures/capture.mjs <binary>
-  <repository>` writes it again.
+- `fixtures/catalog.json` is a sample of the catalog answers of one provenance
+  binary, for `catalog.test.mjs`. `fixtures/capture.mjs` writes it:
+  `node tools/api-latency/fixtures/capture.mjs <binary> <repository>`. Do not
+  edit the file by hand. The sample is not the contract of the current commit,
+  so a contract change does not need a new capture.
 
 Run the unit tests with `node --test tools/api-latency/*.test.mjs`.

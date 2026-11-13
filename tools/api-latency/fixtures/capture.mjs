@@ -1,5 +1,10 @@
-// Writes catalog.json: the catalog answers of a provenance binary that catalog.test.mjs reads.
+// Writes catalog.json: the catalog answers of one provenance binary that catalog.test.mjs reads.
 // Usage: node tools/api-latency/fixtures/capture.mjs <provenance binary> <repository>
+//
+// catalog.json is a sample of the answers of one binary, not the contract of the
+// current commit. The file is the byte-for-byte output of this tool: do not edit it
+// by hand. A contract change does not need a new capture. Capture again only when the
+// tests of the tool need a new form of the answer.
 //
 // The listing keeps three routes of the answer to `api --format json`: a read with a
 // query form, a write, and a POST that only checks. Its bounds say three routes.

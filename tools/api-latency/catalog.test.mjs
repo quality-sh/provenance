@@ -4,8 +4,9 @@ import { readFileSync } from 'node:fs';
 import { requestBody } from './body.mjs';
 import { catalogWithSchemas, fillPath, helpCommands, mcpToolActions, operationsFromCatalog, pathParameters, possibleValues, routeFilter } from './catalog.mjs';
 
-// Answers of a provenance binary, pinned by fixtures/capture.mjs: a listing of three
-// routes without schemas, and the answer to the filter of each route's method and path.
+// A sample of the answers of one provenance binary, written by fixtures/capture.mjs: a
+// listing of three routes without schemas, and the answer to the filter of each route's
+// method and path.
 const { listing, answers } = JSON.parse(readFileSync(new URL('fixtures/catalog.json', import.meta.url), 'utf8'));
 const readRoute = async filter => answers[filter];
 const READ_ONLY_POSTS = ['/statement-checks'];
