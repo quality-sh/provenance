@@ -13,7 +13,6 @@ use std::sync::Arc;
 mod guarded_readers;
 mod section_view;
 
-#[cfg(feature = "host")]
 pub use guarded_readers::ViewStore;
 pub use section_view::{SectionView, StateEntry};
 

@@ -17,8 +17,7 @@ use crate::layout::ProvenanceLayout;
 use crate::operations::read_policy::FreshnessPolicy;
 use crate::operations::stamp;
 use crate::publication::{publication_guard, PublicationGuard};
-use crate::read_database::file::FileSqlx as _;
-use crate::read_database::{ReadDatabase, ReadWork, Transaction, Unopened};
+use crate::read_database::{ReadDatabase, ReadWork, SqlColumns, Transaction, Unopened};
 use crate::repository::Repository;
 use provenance_core::protocol::{Stamp, StampPolicy, Stamped};
 use provenance_macros::rule;
@@ -144,11 +143,7 @@ impl Freshness {
     }
 }
 
-/// Runs the check of the freshness step, then pins the snapshot. The row
-/// readers run on the port, so the snapshot of any adapter opens. Three
-/// steps still need the file adapter and refuse another with a fault: the
-/// catch-up pass, the schema check that `annotate_only` and `refuse_stale`
-/// run, and the discussion reads.
+/// Runs the check of the freshness step, then pins the snapshot.
 async fn open_snapshot(
     mut transaction: Transaction,
     check: Check,
@@ -236,9 +231,10 @@ pub(super) async fn run(
 /// busy timeout (`cache::WalSwitchRetry`); once the file is WAL the switch
 /// costs nothing. A pass that succeeds frees the guard when it ends, and
 /// the read runs on the same open of the database, which completes after
-/// the read. A pass that fails frees the guard after that completion. An
-/// error of the pass is the error of the freshness step; an error after it
-/// is the error of the read.
+/// the read. A pass that fails frees the guard after that completion. A
+/// failure of the write of the pass, its commit included, is the error of
+/// the freshness step, even when the pass gave its report; an error after
+/// it is the error of the read.
 #[rule("rule_read_holds_guard_for_freshness_only")]
 async fn catch_up<R, F>(
     guard: PublicationGuard,
@@ -253,15 +249,12 @@ where
     let mut report = None;
     let outcome = database
         .write_then_read(
-            catch_up_work(&mut guard, &mut report),
+            catch_up_work(&mut guard, &mut report, database.max_bound_values()),
             reading.work(Check::None, StampPolicy::CatchUp, None),
         )
         .await;
     drop(guard);
-    match outcome {
-        Err(failure) if report.is_none() => Err(failure),
-        outcome => Ok(outcome),
-    }
+    outcome
 }
 
 /// The read at the stored serial after a failed freshness step. A cache
@@ -287,28 +280,24 @@ pub(super) async fn ensure_current_schema(
     transaction: &mut Transaction,
     layout: &ProvenanceLayout,
 ) -> anyhow::Result<()> {
-    let tx = transaction
-        .sqlx()
-        .ok_or_else(|| crate::refusal::fault!("the schema check reads the file adapter"))?;
     let behind = ReadRefusal::SchemaBehind {
         database: layout.cache_db_path(),
     };
-    if current_schema::compatibility(tx).await? != Compatibility::Current {
+    if current_schema::compatibility(transaction).await? != Compatibility::Current {
         return Err(behind.into());
     }
-    let validation: Option<i64> =
-        sqlx::query_scalar("SELECT version FROM projection_validation WHERE only_row = 1")
-            .fetch_optional(&mut **tx)
-            .await?;
+    let validation = crate::cache::stored_validation_version(transaction).await?;
     if validation.is_none_or(|version| version < i64::from(crate::VALIDATION_VERSION)) {
         return Err(behind.into());
     }
-    let half_migrated: bool = sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM projection_revision) \
-         AND NOT EXISTS (SELECT 1 FROM projection_family_digests)",
-    )
-    .fetch_one(&mut **tx)
-    .await?;
+    let rows = transaction
+        .fetch(
+            "SELECT EXISTS (SELECT 1 FROM projection_revision) \
+             AND NOT EXISTS (SELECT 1 FROM projection_family_digests)",
+            Vec::new(),
+        )
+        .await?;
+    let half_migrated = super::one_row(&rows)?.integer(0)? != 0;
     if half_migrated && !crate::cache::scope_ids(&layout.state_dir())?.is_empty() {
         return Err(ReadRefusal::HalfMigrated {
             database: layout.cache_db_path(),

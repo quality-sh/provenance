@@ -237,6 +237,40 @@ async fn a_failed_catch_up_frees_the_guard_after_its_close_and_keeps_its_revisio
     assert_eq!(side_files(&store), Vec::<String>::new());
 }
 
+/// A read whose catch-up pass fails holds the publication guard until the
+/// connection of the pass has closed, as `catch_up_state` does, and then
+/// answers at the stored serial.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_read_whose_catch_up_fails_frees_the_guard_after_its_close() {
+    let (store, healthy) = a_catch_up_that_refuses().await;
+    let (_, released) = hold_the_close_lock(&store, Duration::from_secs(4));
+
+    let repository = store.repository();
+    let read = tokio::spawn(async move {
+        crate::operations::reader::answer(&repository, ReadPolicy::default(), |ctx| {
+            Box::pin(async move {
+                crate::operations::queries::records::get(ctx, super::get_query("req_overtime"))
+                    .await
+            })
+        })
+        .await
+    });
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    let guard = publication_guard(&store.repository()).await.unwrap();
+    assert!(
+        released.load(Ordering::SeqCst),
+        "the writer took the guard before the failed pass had closed"
+    );
+    drop(guard);
+    let stamped = read.await.unwrap().unwrap();
+    assert_eq!(stamped.stamp.policy, StampPolicy::CatchUpFailed);
+    assert_eq!(
+        (stamped.stamp.serial, stamped.stamp.digest),
+        (healthy.serial, healthy.digest)
+    );
+    assert_eq!(side_files(&store), Vec::<String>::new());
+}
+
 /// A transaction that does not begin fails the read with its own error,
 /// under each policy: it is not a database that did not open.
 #[tokio::test]

@@ -3,7 +3,8 @@
 //! with default features, and the required `CI OK` job needs that job. The
 //! same job runs the memory adapter tests of the store without `host`, lints
 //! every store target and every transport target without `host` and runs the
-//! store library unit tests.
+//! store library unit tests. A job of its own checks the store with its
+//! contract fixtures for the same target.
 
 use provenance_macros::verifies;
 use std::{fs, path::PathBuf};
@@ -188,4 +189,57 @@ fn a_policy_change_runs_the_wasm_kernel_job() {
         job.contains("needs.changes.outputs.rust == 'true'"),
         "{job}"
     );
+}
+
+/// Implementation aid: no proposed Rule covers the CI wiring of the read
+/// database contract for the kernel target. This test shows that CI checks
+/// the store with its contract fixtures for the target that the policy
+/// names, in a job of its own that `CI OK` needs, so the wasm-kernel job
+/// keeps checking the default features only.
+#[test]
+fn wasm_contract_fixtures_job_checks_the_store_contract_for_the_policy_target() {
+    let workflow = workflow();
+    let job = job(&workflow, "wasm-contract-fixtures");
+
+    for read in [
+        "jq -r '.kernel.target' .config/crate-dependencies.json",
+        "rustup target add \"$TARGET\"",
+        "needs.changes.outputs.rust == 'true'",
+    ] {
+        assert!(
+            job.contains(read),
+            "the wasm-contract-fixtures job runs `{read}`:\n{job}"
+        );
+    }
+    let check = step(
+        &job,
+        "Check the store with its contract fixtures for the target",
+    );
+    let run = check.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(
+        run.ends_with(
+            "run: cargo check --locked -p provenance-store --target \"$TARGET\" --features test-fixture"
+        ),
+        "the step checks only the store with test-fixture for the target:\n{check}"
+    );
+
+    let needs = job_needs(&workflow, "ci-ok");
+    assert!(
+        needs
+            .lines()
+            .any(|line| line.trim() == "- wasm-contract-fixtures"),
+        "CI OK needs the wasm-contract-fixtures job:\n{needs}"
+    );
+}
+
+/// The needs list of `name`, a job whose needs are one per line.
+fn job_needs(workflow: &str, name: &str) -> String {
+    job(workflow, name)
+        .split_once("needs:")
+        .expect("the job lists the jobs it needs")
+        .1
+        .split_once("if:")
+        .expect("the needs list ends at the condition")
+        .0
+        .to_string()
 }

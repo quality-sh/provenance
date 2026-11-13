@@ -6,6 +6,7 @@ mod adapter;
 mod characterization;
 mod freshness;
 mod guard;
+mod outputs;
 #[cfg(unix)]
 mod read_only;
 mod refuse_stale;

@@ -14,6 +14,9 @@ use provenance_store::read_database::{
     Transaction, WriteWork,
 };
 
+#[path = "read_database_contract/lost_commit.rs"]
+mod lost_commit;
+
 /// A file database in a new cache directory of its own.
 struct File {
     _root: tempfile::TempDir,
@@ -43,6 +46,29 @@ impl Harness for File {
     fn reopen(&self) -> Box<dyn ReadDatabase> {
         Box::new(FileReadDatabase::new(self.layout.clone()))
     }
+
+    fn fail_commit<'a>(&'a self, transaction: &'a mut Transaction) -> SqlFuture<'a, ()> {
+        Box::pin(dangling_deferred_key(transaction))
+    }
+}
+
+/// Leaves a row whose deferred foreign key has no parent, so `SQLite`
+/// refuses the commit and rolls the transaction back.
+async fn dangling_deferred_key(transaction: &mut Transaction) -> anyhow::Result<()> {
+    assert_eq!(
+        transaction.fetch("PRAGMA foreign_keys", Vec::new()).await?,
+        vec![vec![SqlValue::Integer(1)]],
+        "the file adapter checks foreign keys, so a dangling deferred key fails the commit"
+    );
+    for sql in [
+        "CREATE TABLE IF NOT EXISTS commit_parent (id INTEGER PRIMARY KEY)",
+        "CREATE TABLE IF NOT EXISTS commit_child (parent INTEGER \
+         REFERENCES commit_parent (id) DEFERRABLE INITIALLY DEFERRED)",
+        "INSERT INTO commit_child (parent) VALUES (1)",
+    ] {
+        transaction.execute(sql, Vec::new()).await?;
+    }
+    Ok(())
 }
 
 /// The file adapter behind another transaction type: the crate finds no
@@ -71,6 +97,10 @@ impl Harness for PortOnly {
     fn reopen(&self) -> Box<dyn ReadDatabase> {
         Box::new(Other(FileReadDatabase::new(self.file.layout.clone())))
     }
+
+    fn fail_commit<'a>(&'a self, transaction: &'a mut Transaction) -> SqlFuture<'a, ()> {
+        self.file.fail_commit(transaction)
+    }
 }
 
 /// The file adapter with a fault: it ignores the `LIMIT` of a statement.
@@ -96,6 +126,10 @@ impl Harness for NoLimit {
 
     fn reopen(&self) -> Box<dyn ReadDatabase> {
         self.file.reopen()
+    }
+
+    fn fail_commit<'a>(&'a self, transaction: &'a mut Transaction) -> SqlFuture<'a, ()> {
+        self.file.fail_commit(transaction)
     }
 }
 
@@ -190,6 +224,12 @@ port_cases!(
     limits::a_bounded_read_runs_the_statements_within_its_bound,
     limits::a_limit_bounds_the_rows,
     limits::a_list_of_the_most_values_runs,
+    projection::a_catch_up_makes_and_follows_the_projection,
+    projection::a_schema_that_is_not_current_is_made_again,
+    sequence::a_write_then_read_reads_its_write,
+    sequence::a_failed_write_stops_the_read,
+    sequence::a_failed_read_keeps_the_write,
+    sequence::a_write_whose_commit_fails_keeps_nothing,
 );
 
 /// The limit case finds an adapter that ignores `LIMIT`.
@@ -197,6 +237,33 @@ port_cases!(
 #[should_panic(expected = "assertion `left == right` failed")]
 async fn the_limit_case_refuses_an_adapter_that_ignores_limit() {
     contract::limits::a_limit_bounds_the_rows(NoLimit::default()).await;
+}
+
+/// The file adapter with a harness whose `fail_commit` gives an error.
+struct HookFails(File);
+
+impl Harness for HookFails {
+    fn database(&self) -> &dyn ReadDatabase {
+        &self.0.database
+    }
+
+    fn reopen(&self) -> Box<dyn ReadDatabase> {
+        self.0.reopen()
+    }
+
+    fn fail_commit<'a>(&'a self, _transaction: &'a mut Transaction) -> SqlFuture<'a, ()> {
+        Box::pin(async { Err::<(), _>(anyhow::anyhow!("the harness has no way to fail a commit")) })
+    }
+}
+
+/// The commit case finds a harness that cannot make a commit fail and
+/// gives an error in place of the failed commit.
+#[tokio::test]
+#[should_panic(
+    expected = "the harness makes the commit fail without an error: the harness has no way to fail a commit"
+)]
+async fn the_commit_case_refuses_a_harness_whose_hook_fails() {
+    contract::sequence::a_write_whose_commit_fails_keeps_nothing(HookFails(File::default())).await;
 }
 
 #[tokio::test]
@@ -274,7 +341,7 @@ async fn a_read_keeps_no_writes() {
 
 #[tokio::test]
 async fn a_read_answers_from_one_committed_state() {
-    contract::a_read_answers_from_one_committed_state(File::default()).await;
+    contract::sequence::a_read_answers_from_one_committed_state(File::default()).await;
 }
 
 #[tokio::test]

@@ -14,7 +14,6 @@ use crate::layout::ProvenanceLayout;
 use sqlx::query::Query;
 use sqlx::sqlite::{SqliteArguments, SqliteRow};
 use sqlx::{Row, Sqlite, SqlitePool, TypeInfo, ValueRef};
-use std::any::Any;
 use std::io::{Read, Write};
 
 /// The maximum number of values that one statement binds in the file.
@@ -62,20 +61,21 @@ impl ReadDatabase for FileReadDatabase {
     }
 
     /// The read runs on the connection of the write, as the read after a
-    /// catch-up did on that connection before the port.
+    /// catch-up did on that connection before the port. The connection
+    /// completes once, after the read, or after the write when the write
+    /// fails.
     fn write_then_read<'a>(
         &'a self,
         write: WriteWork<'a>,
         read: ReadWork<'a>,
-    ) -> SqlFuture<'a, ()> {
+    ) -> SqlFuture<'a, anyhow::Result<()>> {
         Box::pin(async move {
             let connection = open_cache(&self.layout).await?;
-            let outcome = async {
-                run_write(&connection, write).await?;
-                read(begin(connection.pool()).await?).await
+            if let Err(failure) = run_write(&connection, write).await {
+                return Err(connection.close_reporting(failure).await);
             }
-            .await;
-            connection.settle(outcome).await
+            let outcome = async { read(begin(connection.pool()).await?).await }.await;
+            Ok(connection.settle(outcome).await)
         })
     }
 
@@ -194,7 +194,7 @@ impl SqlTransaction for FileTransaction {
 
 /// The error of a statement of the file. A statement that the progress
 /// handler stopped, `SQLite` code 9 (`SQLITE_INTERRUPT`), is [`OverBudget`].
-pub(crate) fn statement_error(error: sqlx::Error) -> anyhow::Error {
+fn statement_error(error: sqlx::Error) -> anyhow::Error {
     let interrupted = error
         .as_database_error()
         .and_then(sqlx::error::DatabaseError::code)
@@ -203,28 +203,6 @@ pub(crate) fn statement_error(error: sqlx::Error) -> anyhow::Error {
         OverBudget(error.into()).into()
     } else {
         error.into()
-    }
-}
-
-/// The `SQLx` transaction of the file adapter, for the code that still runs
-/// `SQLx` directly until the next pull requests move it onto the port. It
-/// is private to the crate; a transaction of another adapter has none.
-pub(crate) trait FileSqlx {
-    fn sqlx(&mut self) -> Option<&mut sqlx::Transaction<'static, Sqlite>>;
-    fn sqlx_ref(&self) -> Option<&sqlx::Transaction<'static, Sqlite>>;
-}
-
-impl FileSqlx for dyn SqlTransaction {
-    fn sqlx(&mut self) -> Option<&mut sqlx::Transaction<'static, Sqlite>> {
-        let any: &mut dyn Any = self;
-        any.downcast_mut::<FileTransaction>()
-            .map(|transaction| &mut transaction.0)
-    }
-
-    fn sqlx_ref(&self) -> Option<&sqlx::Transaction<'static, Sqlite>> {
-        let any: &dyn Any = self;
-        any.downcast_ref::<FileTransaction>()
-            .map(|transaction| &transaction.0)
     }
 }
 

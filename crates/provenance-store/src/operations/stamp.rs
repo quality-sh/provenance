@@ -1,5 +1,6 @@
 //! The stored revision a read answers at, and the stamp built from it.
 
+#[cfg(feature = "host")]
 use super::reader::ReadContext;
 use crate::read_database::{is_missing_table, SqlColumns, SqlTransaction};
 use provenance_core::protocol::{Stamp, StampPolicy};
@@ -43,6 +44,7 @@ impl StoredRevision {
     }
 }
 
+#[cfg(feature = "host")]
 /// The stamp for one finished read: the one way to build it. It consumes
 /// the context and its snapshot, so nothing reads after stamping, and the
 /// two word lists are derived from the handles the read took.

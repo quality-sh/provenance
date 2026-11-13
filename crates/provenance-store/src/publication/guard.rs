@@ -123,8 +123,9 @@ pub fn with_publication_guard<R>(
 #[cfg(feature = "host")]
 pub async fn publication_guard(repository: &Repository) -> anyhow::Result<PublicationGuard> {
     let key = super::publication_lock_identity(repository.layout())?;
-    // The lock waits on the blocking pool, so a stage body that blocks on this guard would
-    // wait on its own publication. The refusal runs here, on the calling thread.
+    // A stage body that waits on this guard would wait on its own publication. The stage is
+    // recorded on the calling thread, and the wait below runs on a blocking-pool thread, so
+    // the refusal runs here, before the wait.
     super::staged::refuse_during_stage(&key, repository.layout().root())?;
     if let Some(section) = repository.section() {
         section.ensure_open()?;
