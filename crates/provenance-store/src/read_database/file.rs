@@ -6,8 +6,8 @@
 //! and does not make it. A write makes the file in WAL mode.
 
 use super::{
-    OverBudget, ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement,
-    Transaction, Unopened, WriteWork,
+    OutOfRange, OverBudget, ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue,
+    Statement, Transaction, Unopened, WriteWork,
 };
 use crate::cache::{open_cache, open_stored_cache, CacheConnection};
 use crate::layout::ProvenanceLayout;
@@ -126,7 +126,7 @@ struct FileTransaction(sqlx::Transaction<'static, Sqlite>);
 impl SqlTransaction for FileTransaction {
     fn fetch<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, Vec<SqlRow>> {
         Box::pin(async move {
-            let rows = bound(sql, values)
+            let rows = bound(sql, values)?
                 .fetch_all(&mut *self.0)
                 .await
                 .map_err(statement_error)?;
@@ -138,7 +138,7 @@ impl SqlTransaction for FileTransaction {
 
     fn execute<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, u64> {
         Box::pin(async move {
-            Ok(bound(sql, values)
+            Ok(bound(sql, values)?
                 .execute(&mut *self.0)
                 .await
                 .map_err(statement_error)?
@@ -228,7 +228,13 @@ fn statement_error(error: sqlx::Error) -> anyhow::Error {
     }
 }
 
-fn bound(sql: &str, values: Vec<SqlValue>) -> Query<'_, Sqlite, SqliteArguments> {
+/// The statement `sql` with `values` bound. An integer past the range of
+/// the port is refused before the statement runs.
+fn bound(
+    sql: &str,
+    values: Vec<SqlValue>,
+) -> Result<Query<'_, Sqlite, SqliteArguments>, OutOfRange> {
+    OutOfRange::check(&values)?;
     let mut query = sqlx::query(sqlx::AssertSqlSafe(sql));
     for value in values {
         query = match value {
@@ -239,7 +245,7 @@ fn bound(sql: &str, values: Vec<SqlValue>) -> Query<'_, Sqlite, SqliteArguments>
             SqlValue::Blob(value) => query.bind(value),
         };
     }
-    query
+    Ok(query)
 }
 
 fn decode(row: &SqliteRow) -> anyhow::Result<SqlRow> {
@@ -254,7 +260,7 @@ fn decode(row: &SqliteRow) -> anyhow::Result<SqlRow> {
                 "REAL" => SqlValue::Real(row.try_get(index)?),
                 "TEXT" => SqlValue::Text(row.try_get(index)?),
                 "BLOB" => SqlValue::Blob(row.try_get(index)?),
-                _ => SqlValue::Integer(row.try_get(index)?),
+                _ => SqlValue::Integer(OutOfRange::integer(row.try_get(index)?)?),
             })
         })
         .collect()

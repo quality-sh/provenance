@@ -263,6 +263,27 @@ pub const LARGEST_INTEGER: i64 = provenance_core::model::exact_integer::LARGEST_
 )]
 pub struct OutOfRange(pub i64);
 
+impl OutOfRange {
+    /// `value`, or this error when it is past the range.
+    pub const fn integer(value: i64) -> Result<i64, Self> {
+        if provenance_core::model::exact_integer::is_exact(value) {
+            Ok(value)
+        } else {
+            Err(Self(value))
+        }
+    }
+
+    /// The first integer of `values` that is past the range, as this error.
+    pub fn check(values: &[SqlValue]) -> Result<(), Self> {
+        for value in values {
+            if let SqlValue::Integer(integer) = value {
+                Self::integer(*integer)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 /// The one row of a statement that gives exactly one, as an aggregate does.
 pub fn one_row(rows: &[SqlRow]) -> anyhow::Result<&[SqlValue]> {
     rows.first().map(Vec::as_slice).ok_or_else(|| {

@@ -15,3 +15,29 @@ pub const LARGEST_EXACT_INTEGER: i64 = (1 << 53) - 1;
 pub const fn is_exact(value: i64) -> bool {
     -LARGEST_EXACT_INTEGER <= value && value <= LARGEST_EXACT_INTEGER
 }
+
+/// Reads a time field and refuses a value past the range, as serde refuses
+/// a value of the wrong type.
+pub fn time<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<i64, D::Error> {
+    checked(<i64 as serde::Deserialize>::deserialize(deserializer)?)
+}
+
+/// Reads an optional time field and refuses a value past the range.
+pub fn optional_time<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<i64>, D::Error> {
+    <Option<i64> as serde::Deserialize>::deserialize(deserializer)?
+        .map(checked)
+        .transpose()
+}
+
+fn checked<E: serde::de::Error>(value: i64) -> Result<i64, E> {
+    if is_exact(value) {
+        Ok(value)
+    } else {
+        Err(E::invalid_value(
+            serde::de::Unexpected::Signed(value),
+            &"an integer from -9007199254740991 to 9007199254740991",
+        ))
+    }
+}

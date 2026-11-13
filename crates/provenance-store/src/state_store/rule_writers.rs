@@ -5,8 +5,23 @@ use crate::shards;
 use provenance_core::model::relations::required_refusal;
 use provenance_core::{NodeType, Resolution, Rule};
 
+/// Refuses an `approved_at` past the range of the read database with the
+/// typed input refusal that names the field.
+pub(super) fn check_approved_at(approved_at: Option<i64>) -> anyhow::Result<()> {
+    match approved_at {
+        Some(at) if !provenance_core::model::exact_integer::is_exact(at) => {
+            Err(crate::refusal::refuse!(
+                (crate::write_error::WriteFailure::invalid_field("request.approved_at")),
+                "approved_at {at} is outside the range -9007199254740991 to 9007199254740991"
+            ))
+        }
+        _ => Ok(()),
+    }
+}
+
 impl StateStore {
     pub fn create_resolution(&self, input: CreateResolutionInput) -> anyhow::Result<Resolution> {
+        check_approved_at(input.approved_at)?;
         let path = shards::resolutions_path(&self.layout, &input.scope_id);
         let id = input.id.clone();
         self.create_native_record(&path, &id, |store| store.write_resolution(input))
