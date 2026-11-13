@@ -69,7 +69,8 @@ Generation runs the contract grammar linter before any output is written. The
 linter checks the live OpenAPI and MCP documents against the declared surface
 in `docs/api-contract.md`. It rejects repository or scope path prefixes,
 relationship routes, legacy verb routes, `/query` subroutes, GET bodies,
-required-null requests, raw arrays, flattened envelopes, MCP-only wrappers,
+required-null requests, request data with no field, raw arrays, flattened
+envelopes, MCP-only wrappers,
 undeclared actions or queries, mutating GETs, read POSTs without
 `MUTATES=false`, missing failure statuses, single-message reads that ship an
 items envelope, duplicate bindings, unresolved path parameters, and operation

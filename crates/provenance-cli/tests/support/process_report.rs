@@ -105,13 +105,11 @@ fn command_line(pid: u32) -> String {
 
 #[cfg(target_os = "linux")]
 fn entries(directory: &str) -> Vec<String> {
-    let mut names: Vec<String> = std::fs::read_dir(directory)
-        .map(|entries| {
-            entries
-                .filter_map(|entry| Some(entry.ok()?.file_name().to_string_lossy().into_owned()))
-                .collect()
-        })
-        .unwrap_or_default();
+    let mut names: Vec<String> = std::fs::read_dir(directory).map_or_default(|entries| {
+        entries
+            .filter_map(|entry| Some(entry.ok()?.file_name().to_string_lossy().into_owned()))
+            .collect()
+    });
     names.sort_by_key(|name| name.parse::<u64>().unwrap_or(u64::MAX));
     names
 }

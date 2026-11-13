@@ -1,13 +1,12 @@
 //! Declarations of the commands that set up, export, import, merge, and check
 //! repository files.
 
-use super::{json_format, Declaration, Field, Fields, Relation};
+use super::{json_format, Binding, Declaration, Field, Fields, Grammar, Input, Relation};
 use crate::cargo_init::CargoInitInput;
 use crate::dictionary::{DictionaryImportInput, DictionaryStatusInput};
 use crate::export::ExportInput;
 use crate::import::ImportInput;
 use crate::init::InitInput;
-use crate::materialize::MaterializeInput;
 use crate::merge_jsonl::MergeJsonlInput;
 use crate::schema::SchemaShowInput;
 use crate::validate::ValidateInput;
@@ -27,25 +26,16 @@ pub enum RepositoryCommand {
     DictionaryStatus,
 }
 
-// An input without fields has an empty properties object, as each other input has.
 macro_rules! schema_fn {
     ($name:ident, $input:ty) => {
         fn $name() -> serde_json::Value {
-            let mut schema =
-                serde_json::to_value(schemars::schema_for!($input)).expect("schema is JSON");
-            schema
-                .as_object_mut()
-                .expect("an input schema is an object")
-                .entry("properties")
-                .or_insert_with(|| serde_json::json!({}));
-            schema
+            serde_json::to_value(schemars::schema_for!($input)).expect("schema is JSON")
         }
     };
 }
 
 schema_fn!(init_schema, InitInput);
 schema_fn!(cargo_init_schema, CargoInitInput);
-schema_fn!(materialize_schema, MaterializeInput);
 schema_fn!(export_schema, ExportInput);
 schema_fn!(import_schema, ImportInput);
 schema_fn!(merge_jsonl_schema, MergeJsonlInput);
@@ -91,8 +81,6 @@ const CARGO_INIT_FIELDS: &[Field] = &[
     Field::text("package"),
     Field::text("ste_pdf").doc(STE_PDF_HELP),
 ];
-
-const MATERIALIZE_FIELDS: &[Field] = &[];
 
 const EXPORT_FIELDS: &[Field] = &[
     Field::text("format")
@@ -157,12 +145,15 @@ pub(super) const fn declaration(command: RepositoryCommand) -> Declaration {
             Fields::new(CARGO_INIT_FIELDS, cargo_init_schema),
         )
         .internal(),
-        RepositoryCommand::Materialize => Declaration::named(
-            "materialize",
-            "Build the local query cache again from the graph files of the repository",
-            Fields::new(MATERIALIZE_FIELDS, materialize_schema),
-        )
-        .bound(),
+        RepositoryCommand::Materialize => Declaration {
+            name: "materialize",
+            description: "Build the local query cache again from the graph files of the \
+                          repository",
+            grammar: Grammar::Name,
+            input: Input::None,
+            internal: false,
+            bound: Binding::Scope,
+        },
         RepositoryCommand::Export => Declaration::named(
             "export",
             "Write the records of one scope as a scope export file",

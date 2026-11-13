@@ -154,24 +154,31 @@ async fn run_repository(
         );
     };
     let arguments = Value::Object(arguments);
-    // The typed input of the command, its result, and the readable line of the result.
+    // The result of the command and the readable line of the result.
+    macro_rules! answer {
+        ($result:expr, $render:path) => {
+            match $result {
+                Ok(output) => readable(
+                    serde_json::to_value(&output).expect("a repository result is JSON"),
+                    $render(&output),
+                ),
+                Err(error) => failed(&*error),
+            }
+        };
+    }
+    // The typed input of the command, then its answer.
     macro_rules! run {
         ($method:ident, $render:path) => {
             match serde_json::from_value(arguments) {
-                Ok(input) => match work.$method(input).await {
-                    Ok(output) => readable(
-                        serde_json::to_value(&output).expect("a repository result is JSON"),
-                        $render(&output),
-                    ),
-                    Err(error) => failed(&*error),
-                },
+                Ok(input) => answer!(work.$method(input).await, $render),
                 Err(error) => invalid(&error),
             }
         };
     }
     match command {
+        // Materialize takes no input. The action input refuses each argument.
         Command::Repository(RepositoryCommand::Materialize) => {
-            run!(materialize, materialize::render_readable)
+            answer!(work.materialize().await, materialize::render_readable)
         }
         Command::Repository(RepositoryCommand::Import) => run!(import, import::render_readable),
         Command::Repository(RepositoryCommand::DictionaryImport) => {

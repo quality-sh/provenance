@@ -44,9 +44,7 @@ fn escaped(word: &str, arguments: &[String]) -> bool {
 }
 
 fn refuse(word: &str, command: &Command, arguments: &[String]) -> ! {
-    let tip = corrected(command, arguments)
-        .map(|line| format!(": {line}"))
-        .unwrap_or_default();
+    let tip = corrected(command, arguments).map_or_default(|line| format!(": {line}"));
     clap::Error::raw(
         ErrorKind::UnknownArgument,
         format!(

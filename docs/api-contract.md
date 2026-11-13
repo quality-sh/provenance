@@ -151,8 +151,10 @@ result, or an MCP-only wrapper. `meta` carries the response machinery kept
 unchanged from the current surface — stamps, freshness policy, the HMAC-bound
 cursor, and limits — per the plan's kept-unchanged list.
 
-A body-bearing request uses `{data}`. HTTP binds catalog-defined controls to
-headers. MCP and native calls use the same typed controls. `If-Match` and the
+A body-bearing request uses `{data}`. A route that gets each input field from
+its path and its bound context takes no body, and refuses a request that has
+one. HTTP binds catalog-defined controls to headers. MCP and native calls use
+the same typed controls. `If-Match` and the
 response `ETag` map to Store-supported precondition checks. The surface never
 advertises an unsupported guarantee.
 
@@ -256,9 +258,10 @@ The filter applies before the page limit and the `has_more` calculation.
 
 The generator linter rejects repository or scope path prefixes, relationship
 routes, legacy verb routes, duplicate bindings, unresolved path parameters,
-generated-name collisions, GET bodies, required-null requests, raw arrays,
-flattened envelopes, MCP-only wrappers, undeclared actions, mutating GETs, read
-POSTs without an explicit `MUTATES=false`, and missing status declarations.
+generated-name collisions, GET bodies, required-null requests, request data
+with no field, raw arrays, flattened envelopes, MCP-only wrappers, undeclared
+actions, mutating GETs, read POSTs without an explicit `MUTATES=false`, and
+missing status declarations.
 
 Generated clients and MCP expose the collapsed contract. They do not reproduce
 the 90 legacy commands under new names. MCP tool descriptions stay

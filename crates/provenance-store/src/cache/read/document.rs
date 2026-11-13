@@ -1,10 +1,10 @@
 //! Root-related key selection. Payload reads use the same bounded snapshot.
-use crate::operations::reader::{Position, ReadSnapshot};
+use crate::operations::reader::{one_row, Position, ReadSnapshot};
+use crate::read_database::{SqlColumns, SqlValue};
 use provenance_core::model::relations::RelationSource;
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::{NodeType, StableId};
 use provenance_macros::rule;
-use sqlx::Row;
 use std::collections::BTreeSet;
 
 // The recursive term follows only active refinement children. Production
@@ -142,21 +142,19 @@ impl ReadSnapshot {
                         eligible && entry_kind == kind.as_str() && key.id == id.as_str()
                     });
                 if contains {
-                    let mut tx = self.connection().await;
-                    let depth: i64 = sqlx::query_scalar(
-                        "WITH RECURSIVE ancestors(id) AS (
+                    let rows = self
+                        .fetch(
+                            "WITH RECURSIVE ancestors(id) AS (
                          SELECT target_id FROM relations WHERE scope_id = ?1 AND owner_id = ?2
                          AND owner_type = 'requirement' AND relation = 'refines' UNION
                          SELECT r.target_id FROM ancestors a JOIN relations r
                          ON r.scope_id = ?1 AND r.owner_id = a.id
                          WHERE r.owner_type = 'requirement' AND r.relation = 'refines')
                          SELECT COUNT(*) FROM ancestors",
-                    )
-                    .bind(self.scope().as_str())
-                    .bind(root.as_str())
-                    .fetch_one(&mut **tx)
-                    .await?;
-                    drop(tx);
+                            vec![self.scope_value(), root.as_str().into()],
+                        )
+                        .await?;
+                    let depth = one_row(&rows)?.integer(0)?;
                     layer.push((std::cmp::Reverse(depth), root.clone()));
                 }
             }
@@ -212,7 +210,6 @@ impl ReadSnapshot {
         ] {
             self.attest(family);
         }
-        let mut tx = self.connection().await;
         let sets = sets(exclude_terminal);
         let hidden = serde_json::to_string(
             &hidden
@@ -220,47 +217,55 @@ impl ReadSnapshot {
                 .map(|(kind, id)| format!("{}:{}", kind.as_str(), id.as_str()))
                 .collect::<Vec<_>>(),
         )?;
-        let overflow: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
-            "{sets} SELECT \
+        let sets_values = vec![self.scope_value(), root.into(), hidden.into()];
+        let overflow = self
+            .fetch(
+                &format!(
+                    "{sets} SELECT \
             (SELECT count(*) FROM members) > 4096 OR (SELECT count(*) FROM refs) > 4096 \
             OR (SELECT count(*) FROM branch) > 4096 OR (SELECT count(*) FROM ancestors) > 4096 \
             OR (SELECT count(*) FROM decisions) > 4096"
-        )))
-        .bind(self.scope().as_str())
-        .bind(root)
-        .bind(&hidden)
-        .fetch_one(&mut **tx)
-        .await?;
-        if overflow != 0 {
+                ),
+                sets_values.clone(),
+            )
+            .await?;
+        if one_row(&overflow)?.integer(0)? != 0 {
             return Err(ReadFailure::PageBudgetExceeded.into());
         }
-        let rows = sqlx::query(sqlx::AssertSqlSafe(format!(
-            "{sets} SELECT stage, kind, CASE WHEN length(CAST(id AS BLOB)) <= 1024 THEN id END AS id, counter, rank FROM ordered \
+        let mut values = sets_values;
+        values.extend([
+            SqlValue::Integer(i64::from(after.stage)),
+            SqlValue::Integer(i64::from(after.rank)),
+            SqlValue::Integer(after.counter),
+            after.id.as_str().into(),
+            SqlValue::Integer(i64::try_from(limit)?),
+        ]);
+        let rows = self
+            .fetch(
+                &format!(
+                    "{sets} SELECT stage, kind, CASE WHEN length(CAST(id AS BLOB)) <= 1024 THEN id END AS id, counter, rank FROM ordered \
             WHERE (stage, rank, counter, id) > (?4, ?5, ?6, ?7) \
             ORDER BY stage, rank, counter, id LIMIT ?8"
-        )))
-        .bind(self.scope().as_str())
-        .bind(root)
-        .bind(&hidden)
-        .bind(i64::from(after.stage))
-        .bind(i64::from(after.rank))
-        .bind(after.counter)
-        .bind(&after.id)
-        .bind(i64::try_from(limit)?)
-        .fetch_all(&mut **tx)
-        .await?;
-        drop(tx);
-        rows.iter()
-            .map(|row| {
+                ),
+                values,
+            )
+            .await?;
+        rows.into_iter()
+            .map(|mut row| {
+                let kind = row.take_text(1)?;
+                let stage = u8::try_from(row.integer(0)?)?;
+                let rank = u8::try_from(row.integer(4)?)?;
+                let counter = row.integer(3)?;
+                let id = row
+                    .take_optional_text(2)?
+                    .ok_or(ReadFailure::PageRecordTooLarge)?;
                 Ok((
-                    row.try_get("kind")?,
+                    kind,
                     Position {
-                        stage: row.try_get("stage")?,
-                        rank: row.try_get("rank")?,
-                        counter: row.try_get("counter")?,
-                        id: row
-                            .try_get::<Option<String>, _>("id")?
-                            .ok_or(ReadFailure::PageRecordTooLarge)?,
+                        stage,
+                        rank,
+                        counter,
+                        id,
                     },
                 ))
             })

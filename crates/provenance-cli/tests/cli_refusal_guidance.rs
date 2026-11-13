@@ -109,9 +109,7 @@ fn search_words_without_text_flag_name_the_text_flag() {
         (&["search", "x", "-y"], "x", None),
     ];
     for (words, found, corrected) in cases {
-        let tip = corrected
-            .map(|corrected| format!(": provenance search {corrected}"))
-            .unwrap_or_default();
+        let tip = corrected.map_or_default(|corrected| format!(": provenance search {corrected}"));
         assert_refusal(
             words,
             &format!(

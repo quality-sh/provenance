@@ -117,6 +117,13 @@ function envelopeErrors(root, schema, requiredFields, where) {
   return [];
 }
 
+// A closed `data` object with no property accepts only `{}`, which gives no input.
+function dataTakesNoField(root, body) {
+  return schemaVariants(root, body).some(envelope => schemaVariants(root, envelope.properties?.data)
+    .some(data => data.additionalProperties === false
+      && Object.keys(data.properties ?? {}).length === 0));
+}
+
 function routePathErrors(path) {
   const errors = [];
   const where = `path ${path}`;
@@ -206,7 +213,8 @@ function operationShapeErrors(document, path, method, operation, seenIds, seenBi
   if (operation?.requestBody !== undefined) {
     const body = operation.requestBody?.content?.['application/json']?.schema;
     const requestErrors = envelopeErrors(document, body, ['data'], `${where} request`);
-    if (operation.requestBody?.required !== true || requestErrors.length > 0) {
+    if (operation.requestBody?.required !== true || requestErrors.length > 0
+      || dataTakesNoField(document, body)) {
       errors.push(`${where}: request must use the required typed {data} envelope; required-null or empty request slots are rejected`);
     }
   }

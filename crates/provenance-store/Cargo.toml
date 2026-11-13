@@ -2,10 +2,10 @@
 name = "provenance-store"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "Internal part of Provenance for Git-backed graph storage"
 license.workspace = true
 repository.workspace = true
-homepage.workspace = true
 readme.workspace = true
 publish.workspace = true
 
@@ -41,6 +41,8 @@ anyhow.workspace = true
 camino.workspace = true
 fs2 = { workspace = true, optional = true }
 fs_at = { workspace = true, optional = true }
+# The async mutex of the read snapshot, which builds without Tokio.
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
 hex.workspace = true
 provenance-core.workspace = true
 provenance-macros.workspace = true
@@ -66,7 +68,7 @@ rustix = { workspace = true, optional = true }
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, optional = true }
 
-# A wasm host such as a Worker has no system clock or random source of its own;
+# A wasm host has no system clock or random source of its own;
 # time and uuid reach them through JavaScript.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 time = { workspace = true, features = ["wasm-bindgen"] }
@@ -151,6 +153,10 @@ name = "git_starts_use_the_helper"
 required-features = ["host"]
 
 [[test]]
+name = "history_versions_contract"
+required-features = ["host"]
+
+[[test]]
 name = "manifest_scope_ids"
 required-features = ["host"]
 
@@ -176,7 +182,7 @@ required-features = ["host"]
 
 [[test]]
 name = "read_database_contract"
-required-features = ["host"]
+required-features = ["host", "test-fixture"]
 
 [[test]]
 name = "read_settings"
@@ -212,6 +218,10 @@ required-features = ["host"]
 
 [[test]]
 name = "review_history"
+required-features = ["host"]
+
+[[test]]
+name = "review_history_characterization"
 required-features = ["host"]
 
 [[test]]

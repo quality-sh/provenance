@@ -192,7 +192,9 @@ Native Rust calls use the typed request structs of the shared catalog. These
 requests carry `scope_id` and `id`, and the request scope must equal the
 selected scope. In the native DTO, a `null` field supplies no value; it does
 not clear. A native request clears fields only through the typed
-`clear_fields` list.
+`clear_fields` list. A record kind with no clearable field has no
+`clear_fields` list: `update-topic` refuses `clear_fields` as an unknown
+field.
 
 The relationship actions stay native: `add/clear-requirement-refines`,
 `add/clear-requirement-depends-on`, `add/clear-requirement-supersedes`,
@@ -212,7 +214,9 @@ record PATCH.
 `close`, and `answer` are POST actions on the record path: `claim-topic`,
 `release-topic`, `close-topic`, `claim-question`, `release-question`, and
 `answer-question`. Claims keep native eligibility and claim clearing.
-Answering uses the existing answer writer.
+Answering uses the existing answer writer. The path of `close-topic` names
+the Topic, so the route takes no request body and refuses a request that has
+one.
 
 `POST /contributions` and `POST /synthesis-packets` create one draft.
 `PATCH /contributions/{id}` and `PATCH /synthesis-packets/{id}` upsert one

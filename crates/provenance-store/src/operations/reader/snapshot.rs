@@ -4,20 +4,22 @@
 //! takes the transaction for the span of one statement and never across
 //! two handles at once, which is how the operations read: one statement at
 //! a time. The row readers behind the handles live in `cache::read`.
+//!
+//! The snapshot builds without `host`; the reads that finish and stamp it
+//! need `host`.
+#![cfg_attr(not(feature = "host"), allow(dead_code))]
 
 use crate::cache::quoted;
 use crate::operations::stamp::{stored_revision, StoredRevision};
-use crate::read_database::file::FileSqlx as _;
+pub use crate::read_database::one_row;
 use crate::read_database::{SqlColumns, SqlValue, Transaction};
+use futures_util::lock::MutexGuard;
 use provenance_core::model::ProjectionRow;
 use provenance_core::ScopeId;
 use provenance_macros::rule;
-use sqlx::Sqlite;
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
 use std::sync::{Mutex, PoisonError};
-use tokio::sync::MutexGuard;
 
 /// One read transaction at one revision.
 ///
@@ -26,7 +28,9 @@ use tokio::sync::MutexGuard;
 /// every table the read opened.
 #[rule("rule_stamp_attests_every_table_read")]
 pub struct ReadSnapshot {
-    tx: tokio::sync::Mutex<Transaction>,
+    tx: futures_util::lock::Mutex<Transaction>,
+    /// The most values of one list that a statement of the read binds.
+    list_values: usize,
     scope: ScopeId,
     revision: StoredRevision,
     attested: Mutex<BTreeSet<&'static str>>,
@@ -36,14 +40,22 @@ impl ReadSnapshot {
     /// Takes one read transaction of the read database. Its first read
     /// is the stored revision, which pins the snapshot: every row read
     /// later in the transaction is at that serial. `None` means the
-    /// database holds no revision.
+    /// database holds no revision. An adapter that allows no values in a
+    /// list is refused with a fault before the first read.
     #[rule("rule_read_answers_from_one_pinned_transaction")]
     pub(crate) async fn open(mut tx: Transaction, scope: &ScopeId) -> anyhow::Result<Option<Self>> {
+        let list_values = tx.max_list_values();
+        if list_values == 0 {
+            return Err(crate::refusal::fault!(
+                "the read database adapter allows no values in a list"
+            ));
+        }
         let Some(revision) = stored_revision(tx.as_mut()).await? else {
             return Ok(None);
         };
         Ok(Some(Self {
-            tx: tokio::sync::Mutex::new(tx),
+            list_values,
+            tx: futures_util::lock::Mutex::new(tx),
             scope: scope.clone(),
             revision,
             attested: Mutex::new(BTreeSet::new()),
@@ -95,10 +107,24 @@ impl ReadSnapshot {
         self.tx.lock().await
     }
 
-    /// The `SQLx` transaction of the file adapter, for the span of one
-    /// statement of a reader that still runs `SQLx` directly.
-    pub(crate) async fn connection(&self) -> FileConnection<'_> {
-        FileConnection(self.tx.lock().await)
+    /// Runs one statement of the read and gives its rows.
+    pub(crate) async fn fetch(
+        &self,
+        sql: &str,
+        values: Vec<SqlValue>,
+    ) -> anyhow::Result<Vec<crate::read_database::SqlRow>> {
+        self.transaction().await.fetch(sql, values).await
+    }
+
+    /// The most values of one list that a statement of the read binds; a
+    /// reader puts a longer list in more statements.
+    pub(crate) const fn list_values(&self) -> usize {
+        self.list_values
+    }
+
+    /// The scope as the value that a statement binds.
+    pub(crate) fn scope_value(&self) -> SqlValue {
+        SqlValue::from(self.scope.as_str())
     }
 
     async fn count_rows(&self, table: &str) -> anyhow::Result<i64> {
@@ -106,7 +132,7 @@ impl ReadSnapshot {
         let rows = self
             .transaction()
             .await
-            .fetch(&sql, &[SqlValue::from(self.scope.as_str())])
+            .fetch(&sql, vec![self.scope_value()])
             .await?;
         one_row(&rows)?.integer(0)
     }
@@ -119,26 +145,6 @@ impl ReadSnapshot {
             .into_inner()
             .unwrap_or_else(PoisonError::into_inner);
         (self.revision, attested)
-    }
-}
-
-/// The transaction of a snapshot as the `SQLx` transaction of the file
-/// adapter. Only the readers that run `SQLx` take it.
-pub struct FileConnection<'s>(MutexGuard<'s, Transaction>);
-
-const NOT_A_FILE: &str = "the readers that run SQLx read the file adapter";
-
-impl Deref for FileConnection<'_> {
-    type Target = sqlx::Transaction<'static, Sqlite>;
-
-    fn deref(&self) -> &Self::Target {
-        self.0.sqlx_ref().expect(NOT_A_FILE)
-    }
-}
-
-impl DerefMut for FileConnection<'_> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.0.sqlx().expect(NOT_A_FILE)
     }
 }
 
@@ -204,7 +210,7 @@ impl RecordIdentities<'_> {
             .fetch(
                 "SELECT scope_id, node_type FROM record_identities \
                  WHERE id = ? ORDER BY scope_id, node_type",
-                &[SqlValue::from(id)],
+                vec![SqlValue::from(id)],
             )
             .await?;
         rows.iter()
@@ -216,13 +222,4 @@ impl RecordIdentities<'_> {
             })
             .collect()
     }
-}
-
-/// The one row of a statement that gives exactly one, as an aggregate does.
-pub fn one_row(rows: &[crate::read_database::SqlRow]) -> anyhow::Result<&[SqlValue]> {
-    rows.first().map(Vec::as_slice).ok_or_else(|| {
-        crate::refusal::fault!(
-            "no rows returned by a query that expected to return at least one row"
-        )
-    })
 }

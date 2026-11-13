@@ -209,11 +209,22 @@ fn validate(store: &GuardedStore<'_>, scope: &ScopeId) -> anyhow::Result<()> {
 /// A projection from a different validator version requires a full rebuild.
 #[rule("rule_validation_version_move_rebuilds_the_projection")]
 pub(super) async fn version_changed(
-    connection: &mut sqlx::SqliteConnection,
+    transaction: &mut crate::read_database::Transaction,
 ) -> anyhow::Result<bool> {
-    let version: Option<i64> =
-        sqlx::query_scalar("SELECT version FROM projection_validation WHERE only_row = 1")
-            .fetch_optional(connection)
-            .await?;
+    let version = stored_version(transaction).await?;
     Ok(version != Some(i64::from(crate::VALIDATION_VERSION)))
+}
+
+/// The validator version that the projection records, when it records one.
+pub async fn stored_version(
+    transaction: &mut crate::read_database::Transaction,
+) -> anyhow::Result<Option<i64>> {
+    use crate::read_database::SqlColumns as _;
+    let rows = transaction
+        .fetch(
+            "SELECT version FROM projection_validation WHERE only_row = 1",
+            Vec::new(),
+        )
+        .await?;
+    rows.first().map(|row| row.integer(0)).transpose()
 }

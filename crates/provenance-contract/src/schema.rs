@@ -1,7 +1,6 @@
 //! Wire schemas for registered operations: request, success and failure documents, parameters
 //! and value parsing.
 use super::{Operation, TargetAction};
-use provenance_core::protocol::failure::OperationError;
 use provenance_core::NodeType;
 use schemars::{
     generate::{Contract, SchemaSettings},
@@ -345,13 +344,16 @@ fn derive_schema<T: JsonSchema>(contract: Contract) -> Value {
     .expect("schema is JSON")
 }
 
+/// The wire definition of one operation. The failure schema shows each failure that a call
+/// gives, so an operation whose handler gives no failure shows only the common failures.
+#[provenance_macros::rule("rule_handler_without_failure_publishes_common_failures")]
 pub fn raw_definition<O: Operation>() -> RawDefinition {
     RawDefinition {
         request_schema: schema::<O::Request>(Contract::Deserialize),
         success_schema: schema::<O::Success>(Contract::Serialize),
-        failure_schema: schema::<
-            provenance_core::protocol::failure::FailureEnvelope<OperationError<O::Failure>>,
-        >(Contract::Serialize),
+        failure_schema: schema::<provenance_core::protocol::failure::FailureEnvelope<O::Failure>>(
+            Contract::Serialize,
+        ),
         mutates: O::MUTATES,
         http_statuses: statuses(O::MUTATES, O::FAILURE_STATUSES),
         context: O::CONTEXT,

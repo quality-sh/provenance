@@ -42,7 +42,6 @@ mod writers;
 pub use updates::*;
 
 pub use access::GuardedStore;
-#[cfg(feature = "host")]
 pub(crate) use access::ViewStore;
 pub(crate) use access::{SectionView, StateEntry};
 #[cfg(feature = "host")]
@@ -101,6 +100,22 @@ impl StateStore {
             #[cfg(not(feature = "host"))]
             None => None,
         }
+    }
+
+    /// The committed file versions that the history reads of this store
+    /// read: the ones that the repository was given, or else the Git
+    /// history of the layout root.
+    #[cfg(feature = "host")]
+    pub(crate) fn file_versions(&self) -> std::sync::Arc<dyn crate::review::history::FileVersions> {
+        self.identity
+            .as_ref()
+            .and_then(RepositoryIdentity::file_versions)
+            .cloned()
+            .unwrap_or_else(|| {
+                std::sync::Arc::new(crate::review::history::GitFileVersions::new(
+                    self.layout.root().to_owned(),
+                ))
+            })
     }
 
     /// The clock that the writes of this store read: the one of the

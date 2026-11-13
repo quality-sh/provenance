@@ -2,10 +2,10 @@
 name = "provenance-scanner"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "Internal part of Provenance for source scanning"
 license.workspace = true
 repository.workspace = true
-homepage.workspace = true
 readme.workspace = true
 publish.workspace = true
 
