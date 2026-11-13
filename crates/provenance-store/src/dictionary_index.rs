@@ -12,7 +12,7 @@ use provenance_ste100::{
     DictionaryImportIdentity, DictionaryIndexError,
 };
 
-use crate::storage::local::durability::{sync_directory, write_synced_file};
+use crate::storage::local::durability::write_synced_file;
 
 /// Stores one import as an index file named by its identity, so that a later
 /// check loads the import with no PDF.
@@ -26,7 +26,6 @@ pub fn store_dictionary_index(
     if load_dictionary_index(directory, &import.identity).is_ok_and(|stored| stored == *import) {
         // A store before this one can have renamed the file and then failed
         // the directory sync, so the entry of the file can still be lost.
-        sync_directory(utf8(directory)?)?;
         return Ok(path);
     }
     let contents = encode_dictionary_index(import)

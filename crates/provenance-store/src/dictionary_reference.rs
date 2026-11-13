@@ -162,8 +162,7 @@ pub fn set_project_dictionary(
     let reference = current_reference(layout)?.bytes_for(&import.identity)?;
     crate::dictionary_index::store_dictionary_index(import, index_directory)
         .context("store the dictionary index")?;
-    crate::storage::local::durability::write_synced_file(&path, &reference)
-        .context("write the dictionary reference")?;
+    std::fs::write(&path, &reference).context("write the dictionary reference")?;
     Ok(path)
 }
 
