@@ -100,14 +100,16 @@ fn policy() -> ReadPolicy {
 }
 
 /// Six discussions whose ids alternate between three parent kinds, so the
-/// rows of each kind's statement interleave by id.
+/// rows of each kind's statement interleave by id. Each parent is a record
+/// that the pinned store writes through its state store, so a read of the
+/// discussion finds its parent.
 const DISCUSSIONS: [(&str, &str, &str); 6] = [
-    ("discussion_a", "rule", "rule_one"),
-    ("discussion_b", "requirement", "req_one"),
-    ("discussion_c", "question", "question_one"),
-    ("discussion_d", "rule", "rule_one"),
-    ("discussion_e", "requirement", "req_one"),
-    ("discussion_f", "question", "question_one"),
+    ("discussion_a", "rule", "rule_overtime_001"),
+    ("discussion_b", "requirement", "req_overtime"),
+    ("discussion_c", "question", "question_threshold"),
+    ("discussion_d", "rule", "rule_overtime_001"),
+    ("discussion_e", "requirement", "req_overtime"),
+    ("discussion_f", "question", "question_threshold"),
 ];
 
 /// The rows of the discussions, one thread and opening message each,
@@ -225,19 +227,14 @@ async fn a_conversation_finds_its_discussion_in_a_later_statement() {
             limit: 10,
             cursor: None,
         };
-        let file = read_discussion_conversation(&store.repository(), policy(), query()).await;
-        let chunked =
-            read_discussion_conversation(&one_value_lists(&store), policy(), query()).await;
-        let (file, chunked) = match (file, chunked) {
-            (Ok(file), Ok(chunked)) => (
-                serde_json::to_value(&file.result).unwrap(),
-                serde_json::to_value(&chunked.result).unwrap(),
-            ),
-            (file, chunked) => (
-                serde_json::Value::from(format!("{:#}", file.map(|_| ()).unwrap_err())),
-                serde_json::Value::from(format!("{:#}", chunked.map(|_| ()).unwrap_err())),
-            ),
-        };
-        assert_eq!(chunked, file, "{id}");
+        let file = read_discussion_conversation(&store.repository(), policy(), query())
+            .await
+            .unwrap_or_else(|failure| panic!("the file read finds {id}: {failure:#}"));
+        let file = serde_json::to_value(&file.result).unwrap();
+        assert_eq!(file["head"]["discussion_id"], id, "{id}");
+        let chunked = read_discussion_conversation(&one_value_lists(&store), policy(), query())
+            .await
+            .unwrap_or_else(|failure| panic!("the chunked read finds {id}: {failure:#}"));
+        assert_eq!(serde_json::to_value(&chunked.result).unwrap(), file, "{id}");
     }
 }
