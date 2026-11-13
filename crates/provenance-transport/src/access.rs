@@ -4,11 +4,18 @@ use provenance_core::protocol::failure::OperationFailure;
 use provenance_store::operations::catalog::{
     CheckStatement, ContextResolver, ExecutionNeeds, Operation, PreparedContext, RequestedContext,
 };
+use provenance_store::operations::read_operations::ReadOperations;
+use std::sync::Arc;
 
 /// The repository binding: which operations the host advertises and which identity it binds.
 pub trait HostAccess: ContextResolver {
     fn advertises(&self, operation: &str) -> bool;
     fn bound_identity(&self) -> Option<(String, String)>;
+    /// The port that runs the read operations of the bound repository. The
+    /// router sends each read operation to it, when there is one.
+    fn read_operations(&self) -> Option<Arc<dyn ReadOperations>> {
+        None
+    }
 }
 
 /// The transport policy an HTTP request must satisfy before the host classifies it.

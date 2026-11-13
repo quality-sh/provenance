@@ -1,13 +1,15 @@
 //! The one host invocation. Every store caller passes through it.
 use crate::StatementHost;
 use provenance_core::protocol::{
-    failure::{OperationError, OperationFailure},
+    failure::{ErasedFailure, OperationError, OperationFailure},
     repository::{RepositoryContext, RepositoryScope, RepositoryTarget},
 };
 use provenance_macros::rule;
 use provenance_store::operations::catalog::{
     self, ContextKind, Operation, PreparedContext, RequestedContext,
 };
+use provenance_store::operations::read_operations::{self, ReadOperations};
+use serde_json::Value;
 use std::sync::Arc;
 
 /// How one call enters the host: its context, its framing, and its page-write mark.
@@ -95,6 +97,39 @@ impl StatementHost {
             })
             .await
             .map_err(OperationError::Common)?
+    }
+
+    /// The port that runs `operation` for the bound repository: there is one
+    /// when `operation` is a read operation and the repository has a port.
+    pub(crate) fn read_port(
+        &self,
+        operation: &str,
+    ) -> Option<(&'static str, Arc<dyn ReadOperations>)> {
+        let operation = read_operations::read_operation(operation)?;
+        Some((operation, self.access.read_operations()?))
+    }
+
+    /// Runs one read operation through `port`. As for an operation that the
+    /// host runs, the call is decoded, its request is checked and its
+    /// context is authorized on the runtime thread, before the work slot
+    /// wait. The port runs on the tracked blocking pool.
+    pub(crate) async fn read(
+        &self,
+        operation: &'static str,
+        port: Arc<dyn ReadOperations>,
+        call: Value,
+    ) -> Result<Value, ErasedFailure> {
+        let refuse = |failure| ErasedFailure::new(Some(operation), failure);
+        provenance_contract::check_call(operation, call.clone())?;
+        let selected = read_operations::checked_context(operation, &call).map_err(refuse)?;
+        self.access
+            .authorize(operation, &selected)
+            .map_err(refuse)?;
+        let runtime = tokio::runtime::Handle::current();
+        self.execution
+            .run(move || runtime.block_on(port.run(operation, call)))
+            .await
+            .map_err(refuse)?
     }
 
     /// The bound identity in the shape the operation's context kind expects.

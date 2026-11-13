@@ -109,16 +109,24 @@ pub async fn invoke(
         identity.as_ref().map(|(_, scope)| scope.as_str()),
     )?;
     let call = context(identity, bound.handler.context, &bound.data)?;
-    let value = provenance_contract::invoke_with(
-        bound.handler.operation,
-        SDK_PROTOCOL_VERSION,
-        call,
-        wire::WireCall {
-            host: host.clone(),
-            page_write,
-        },
-    )
-    .await?;
+    let port = host
+        .read_port(bound.handler.operation)
+        .filter(|_| !page_write);
+    let value = match port {
+        Some((operation, port)) => host.read(operation, port, call).await?,
+        None => {
+            provenance_contract::invoke_with(
+                bound.handler.operation,
+                SDK_PROTOCOL_VERSION,
+                call,
+                wire::WireCall {
+                    host: host.clone(),
+                    page_write,
+                },
+            )
+            .await?
+        }
+    };
     let value = response::success(
         value,
         matched.definition,

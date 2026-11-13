@@ -21,7 +21,7 @@ pub use binding::{
     RequestAdapterError, RequestBinding, ResponseAdapter, ResponseBinding, SelectorBinding,
     TargetAction, TargetBinding,
 };
-pub use dispatch::{contains, invoke_with, mutates};
+pub use dispatch::{check_call, contains, invoke_with, mutates};
 pub use schema::{
     cli_name, definitions, json_flag, operation_request_schema, operation_success_schema,
     parse_parameter_value, parse_schema_value, parse_schema_value_in, serialize_parameter_value,

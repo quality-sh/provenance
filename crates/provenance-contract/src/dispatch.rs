@@ -35,6 +35,7 @@ struct Entry<H: Invoke> {
     name: &'static str,
     mutates: bool,
     invoke: fn(Value, H) -> OperationFuture<Value, FailureEnvelope>,
+    check: fn(Value) -> Result<(), FailureEnvelope>,
 }
 
 fn register<O: Operation, H: Invoke>() -> Entry<H> {
@@ -42,6 +43,7 @@ fn register<O: Operation, H: Invoke>() -> Entry<H> {
         name: O::NAME,
         mutates: O::MUTATES,
         invoke: invoke_resolved::<O, H>,
+        check: |call| decode_call::<O>(call).map(drop),
     }
 }
 
@@ -266,47 +268,64 @@ pub async fn invoke_with<H: Invoke>(
     (entry.invoke)(call, host).await
 }
 
+/// Decodes `call` as the dispatch of `operation` does, and runs nothing. A
+/// host that gives the call to a port checks it here first, so a call that
+/// does not decode gets the refusal of the dispatch.
+pub fn check_call(operation: &str, call: Value) -> Result<(), FailureEnvelope> {
+    let entry = entries::<Unhosted>()
+        .into_iter()
+        .find(|entry| entry.name == operation)
+        .ok_or_else(|| FailureEnvelope::new(None, OperationFailure::UnknownOperation))?;
+    (entry.check)(call)
+}
+
 fn invoke_resolved<O: Operation, H: Invoke>(
     call: Value,
     host: H,
 ) -> OperationFuture<Value, FailureEnvelope> {
     Box::pin(async move {
-        let (selected, request) = match O::CONTEXT {
-            ContextKind::Repository => {
-                let call: RepositoryCall<
-                    O::Request,
-                    provenance_core::protocol::repository::RepositoryTarget,
-                > = decode::<O, _>(call)?;
-                (
-                    Some(RequestedContext::Repository(call.context)),
-                    call.request,
-                )
-            }
-            ContextKind::Scope => {
-                let call: RepositoryCall<
-                    O::Request,
-                    provenance_core::protocol::repository::RepositoryScope,
-                > = decode::<O, _>(call)?;
-                (Some(RequestedContext::Scope(call.context)), call.request)
-            }
-            ContextKind::Scoped => {
-                let call: RepositoryCall<
-                    O::Request,
-                    provenance_core::protocol::repository::RepositoryContext,
-                > = decode::<O, _>(call)?;
-                (Some(RequestedContext::Scoped(call.context)), call.request)
-            }
-            ContextKind::DataFree => {
-                let call: DataFreeCall<O::Request> = decode::<O, _>(call)?;
-                (None, call.request)
-            }
-        };
+        let (selected, request) = decode_call::<O>(call)?;
         let success = host
             .invoke::<O>(selected, request)
             .await
             .map_err(frame_failure::<O>)?;
         serde_json::to_value(success)
             .map_err(|_| FailureEnvelope::new(Some(O::NAME), OperationFailure::Internal))
+    })
+}
+
+fn decode_call<O: Operation>(
+    call: Value,
+) -> Result<(Option<RequestedContext>, O::Request), FailureEnvelope> {
+    Ok(match O::CONTEXT {
+        ContextKind::Repository => {
+            let call: RepositoryCall<
+                O::Request,
+                provenance_core::protocol::repository::RepositoryTarget,
+            > = decode::<O, _>(call)?;
+            (
+                Some(RequestedContext::Repository(call.context)),
+                call.request,
+            )
+        }
+        ContextKind::Scope => {
+            let call: RepositoryCall<
+                O::Request,
+                provenance_core::protocol::repository::RepositoryScope,
+            > = decode::<O, _>(call)?;
+            (Some(RequestedContext::Scope(call.context)), call.request)
+        }
+        ContextKind::Scoped => {
+            let call: RepositoryCall<
+                O::Request,
+                provenance_core::protocol::repository::RepositoryContext,
+            > = decode::<O, _>(call)?;
+            (Some(RequestedContext::Scoped(call.context)), call.request)
+        }
+        ContextKind::DataFree => {
+            let call: DataFreeCall<O::Request> = decode::<O, _>(call)?;
+            (None, call.request)
+        }
     })
 }
 
