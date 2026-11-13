@@ -117,10 +117,7 @@ fn a_claim_cleared_on_an_open_topic_breaks_l3() {
 
 /// A stand-in claim that lands an empty stage and answers success, as a
 /// claim that does not refuse an archived Topic.
-fn claim_that_lands_an_empty_stage(
-    repository: &Repository,
-    task: &Task,
-) -> anyhow::Result<Effect> {
+fn claim_that_lands_an_empty_stage(repository: &Repository, task: &Task) -> anyhow::Result<Effect> {
     if task.op != Operation::ClaimTopic {
         return generate::apply(repository, task);
     }

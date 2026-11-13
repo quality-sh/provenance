@@ -7,6 +7,9 @@
 
 #[allow(dead_code)]
 mod support {
+    // rustfmt reads this path from a directory with the name of the test
+    // file, and the compiler from `tests/support/`; both name one file.
+    #[path = "../support/cases.rs"]
     pub mod cases;
 }
 

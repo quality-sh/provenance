@@ -59,7 +59,9 @@ pub fn check(case: &Case, run: &CliRun) -> Result<(), Violation> {
 fn successful_writes_stay(run: &CliRun) -> Result<(), Violation> {
     let mut expected = Expected::initial();
     for (index, (way, done)) in run.groups.iter().enumerate() {
-        let landed = done.iter().filter(|done| done.stopped || done.result.is_ok());
+        let landed = done
+            .iter()
+            .filter(|done| done.stopped || done.result.is_ok());
         let group = landed.flat_map(|done| {
             let certain = !done.stopped && *way != Ran::Outside;
             let writes = done.op.writes(done.engine, done.operation);

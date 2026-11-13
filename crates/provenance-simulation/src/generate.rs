@@ -12,8 +12,8 @@ pub use apply::apply;
 pub use call::Call;
 
 use hegel::generators as gs;
-use provenance_core::TopicStatus;
 use hegel::{DefaultGenerator, TestCase};
+use provenance_core::TopicStatus;
 use serde::Serialize;
 
 /// The most steps that one case has.
@@ -322,7 +322,10 @@ pub fn initial_values() -> Vec<(Target, Value)> {
         ),
     ];
     for n in 0..3 {
-        values.push((Target::Requirement(created_requirement_id(n)), Value::Absent));
+        values.push((
+            Target::Requirement(created_requirement_id(n)),
+            Value::Absent,
+        ));
     }
     values
 }
