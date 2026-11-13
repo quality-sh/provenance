@@ -124,9 +124,11 @@ async fn api_discovery_preserves_query_contracts() {
     assert!(names_of(&member_base.parameters).contains(&"id"));
 }
 
-// No Rule: this test pins the failure schema of the statement check before a contract change.
+/// The handler of the statement check gives no failure, so the failure schema of the route
+/// has the common failures and no member for a handler.
 #[tokio::test]
-async fn statement_check_failure_schema_has_a_handler_member_with_no_value() {
+#[verifies("rule_handler_without_failure_publishes_common_failures", examples)]
+async fn statement_check_failure_schema_shows_only_the_common_failures() {
     let repository = Repository::new("The shared graph is readable.");
     let service = Porcelain::new(HostApiPort::new(host(&repository)));
     let ApiOutcome::Catalog(selection) = service
@@ -148,17 +150,28 @@ async fn statement_check_failure_schema_has_a_handler_member_with_no_value() {
     let failure = &route.queries[0].failure_schema;
     assert_eq!(
         failure["properties"]["error"],
-        serde_json::json!({"$ref":"#/$defs/OperationError"})
+        serde_json::json!({"$ref":"#/$defs/OperationFailure"})
     );
+    let definitions = failure["$defs"].as_object().unwrap();
+    assert!(!definitions.contains_key("OperationError"), "{failure}");
+    assert!(!definitions.contains_key("StatementFailure"), "{failure}");
+    assert!(
+        definitions
+            .values()
+            .all(|schema| schema != &serde_json::json!(false)),
+        "{failure}"
+    );
+    // The handler of a read gives read failures, so its route keeps the handler member.
+    let read = catalog
+        .routes
+        .iter()
+        .find(|route| route.path == "/sources" && route.method == ApiMethod::Get)
+        .expect("the Source list route is described");
     assert_eq!(
-        failure["$defs"]["OperationError"]["anyOf"],
+        read.queries[0].failure_schema["$defs"]["OperationError"]["anyOf"],
         serde_json::json!([
             {"$ref":"#/$defs/OperationFailure"},
-            {"$ref":"#/$defs/StatementFailure"}
+            {"$ref":"#/$defs/ReadFailure"}
         ])
-    );
-    assert_eq!(
-        failure["$defs"]["StatementFailure"],
-        serde_json::json!(false)
     );
 }

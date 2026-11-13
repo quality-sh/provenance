@@ -117,36 +117,61 @@ async fn target_discussion_writes_dispatch_by_name() {
     assert_eq!(error.error["kind"], "invalid_input");
 }
 
-// No Rule: the two tests below pin the request forms of two native calls before a contract
-// change. A call that decodes reaches the host, and a host with no repositories refuses it.
+/// A Topic has no field that an update can clear, so the Topic update refuses a clear list.
+/// The refusal comes before the host: a host with no repositories gives `unavailable_needs`
+/// to each call that decodes.
 #[tokio::test]
-async fn topic_update_call_takes_a_clear_list() {
-    let error = invoke(
+#[verifies("rule_update_clear_list_only_for_clearable_fields", examples)]
+#[verifies("rule_unknown_request_field_names_accepted_fields", examples)]
+async fn topic_update_call_refuses_a_clear_list() {
+    let call = |request: serde_json::Value| json!({"context":{"repository":"selected","scope":"default"},"request":request});
+    let refused = invoke(
         "update-topic",
         SDK_PROTOCOL_VERSION,
-        json!({
-            "context":{"repository":"selected","scope":"default"},
-            "request":{"scope_id":"default","id":"topic_one","title":"Renamed","clear_fields":[]}
-        }),
+        call(json!({"scope_id":"default","id":"topic_one","title":"Renamed","clear_fields":[]})),
     )
     .await
     .unwrap_err();
-    assert_eq!(error.error, json!({"kind":"unavailable_needs"}));
-}
-
-#[tokio::test]
-async fn info_call_takes_an_empty_request_object() {
-    let call =
-        |request: serde_json::Value| json!({"context":{"repository":"selected"},"request":request});
-    let reached = invoke("info", SDK_PROTOCOL_VERSION, call(json!({})))
-        .await
-        .unwrap_err();
-    assert_eq!(reached.error, json!({"kind":"unavailable_needs"}));
-    let refused = invoke("info", SDK_PROTOCOL_VERSION, call(json!(null)))
-        .await
-        .unwrap_err();
     assert_eq!(
         refused.error,
+        json!({
+            "kind":"invalid_input", "field":"request.clear_fields", "reason":"unknown_field",
+            "message":"update-topic does not take clear_fields; accepted fields: `scope_id`, \
+                       `id`, `expected_etag`, `title`, `status`, `links`, `archived_in_commit`"
+        })
+    );
+    let reached = invoke(
+        "update-topic",
+        SDK_PROTOCOL_VERSION,
+        call(json!({"scope_id":"default","id":"topic_one","title":"Renamed"})),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(reached.error, json!({"kind":"unavailable_needs"}));
+}
+
+/// The info operation has no input field. Its call takes a null request and refuses each
+/// other request form.
+#[tokio::test]
+#[verifies("rule_operation_without_input_takes_null_request", examples)]
+async fn info_call_takes_only_a_null_request() {
+    let info = |call: serde_json::Value| async move {
+        invoke("info", SDK_PROTOCOL_VERSION, call)
+            .await
+            .unwrap_err()
+            .error
+    };
+    let context = json!({"repository":"selected"});
+    assert_eq!(
+        info(json!({"context":context,"request":null})).await,
+        json!({"kind":"unavailable_needs"})
+    );
+    assert_eq!(
+        info(json!({"context":context,"request":{}})).await,
         json!({"kind":"invalid_input","field":"request","reason":"invalid_value"})
+    );
+    assert_eq!(
+        info(json!({"context":context})).await,
+        json!({"kind":"invalid_input","field":"request","reason":"required"})
     );
 }

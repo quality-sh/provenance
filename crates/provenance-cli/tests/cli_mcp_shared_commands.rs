@@ -200,3 +200,28 @@ async fn repository_actions_give_the_cli_result_on_mcp() {
     let readable = cli_text(cli_index, &["materialize", "--repo", &by_cli]);
     assert!(readable.starts_with("The cache has "), "{readable}");
 }
+
+/// The materialize action takes no argument. The refusal names the argument of the call.
+#[tokio::test]
+#[verifies("rule_mcp_refusal_names_field", examples)]
+async fn materialize_action_refuses_an_argument_by_name() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_str().unwrap();
+    let index = tempfile::tempdir().unwrap();
+    support::init_repo(repo);
+    let mut wire = Wire::start(repo, index.path()).await;
+    let result = wire
+        .request(
+            "tools/call",
+            json!({"name":"change","arguments":{"action":"materialize","dry_run":true}}),
+        )
+        .await;
+    assert_eq!(result["isError"], json!(true), "{result}");
+    assert_eq!(
+        result["structuredContent"]["error"],
+        json!({"kind":"invalid_input","field":"dry_run","reason":"unknown_field",
+               "message":"the materialize action does not take dry_run; it takes: "}),
+        "{result}"
+    );
+    wire.close().await;
+}

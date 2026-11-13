@@ -255,8 +255,8 @@ fn public_member_reads_do_not_use_collection_response_adapters() {
 }
 
 #[test]
-#[verifies("rule_empty_request_accepts_only_an_empty_object", examples)]
-fn repository_info_has_a_numeric_version_and_closed_request() {
+#[verifies("rule_operation_without_input_takes_null_request", examples)]
+fn repository_info_has_a_numeric_version_and_a_null_request() {
     let definition = crate::schema::raw_definition::<Info>();
     assert_eq!(
         definition.success_schema["properties"]["protocol_version"]["type"],
@@ -266,8 +266,8 @@ fn repository_info_has_a_numeric_version_and_closed_request() {
         .with_draft(jsonschema::Draft::Draft202012)
         .build(&definition.request_schema)
         .unwrap();
-    assert!(validator.is_valid(&json!({})));
-    assert!(!validator.is_valid(&json!({"scope":"default"})));
+    assert!(validator.is_valid(&json!(null)));
+    assert!(!validator.is_valid(&json!({})));
 }
 
 #[test]
@@ -341,20 +341,18 @@ fn every_discussion_message_member_schema_accepts_one_message() {
     }
 }
 
-// No Rule: this test pins the request schema of the close route before a contract change.
+/// The close route gets the Topic from its path and the scope from the bound context, so it
+/// has no request body and its MCP tool has no `data` argument.
 #[test]
-fn close_topic_route_publishes_a_data_object_with_no_field() {
+#[verifies("rule_route_without_body_fields_takes_no_body", examples)]
+fn close_topic_route_publishes_no_request_body() {
     let definitions = crate::definitions();
     let definition = definitions
         .iter()
         .find(|entry| entry.name == "close-topic")
         .unwrap();
-    let request = definition
-        .request_schema()
-        .expect("the route publishes a body");
-    assert_eq!(request["properties"]["data"]["properties"], json!({}));
-    assert_eq!(
-        definition.mcp_input_schema()["required"],
-        json!(["data", "id"])
-    );
+    assert!(definition.request_schema().is_none());
+    let input = definition.mcp_input_schema();
+    assert_eq!(input["required"], json!(["id"]));
+    assert!(input["properties"].get("data").is_none(), "{input}");
 }
