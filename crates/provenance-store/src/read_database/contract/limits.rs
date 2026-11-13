@@ -1,16 +1,16 @@
 //! The limits that the readers put on a read: the work bound of a page,
 //! the `LIMIT` of a page statement, and the size of a bound list.
 //!
-//! For the work bound, the contract holds only that a bound that the work
-//! does not reach changes nothing. It does not yet say whether an adapter
-//! must stop a statement while it runs; the file adapter does, and its own
-//! tests hold that. When an adapter stops a statement for the bound, its
-//! error is [`OverBudget`](crate::read_database::OverBudget), and a case
-//! of the handles (with `host`) holds that a page gives the page budget
-//! refusal for it.
+//! For the work bound, the contract holds that a bound that the work does
+//! not reach changes nothing, and that a statement far past the bound
+//! gives [`OverBudget`] and no rows. It does not hold whether the adapter
+//! stops the statement while it runs or reports it when it ends; the file
+//! adapter stops it, and its own tests hold that. The cases of the handles
+//! (with `host`) hold that a page gives the page budget refusal for
+//! [`OverBudget`] in both ways.
 
 use super::{integers, statement, write, Harness};
-use crate::read_database::{ReadDatabase, SqlRow, SqlValue, Transaction};
+use crate::read_database::{OverBudget, ReadDatabase, SqlRow, SqlValue, Transaction, WorkUnit};
 
 /// A query whose work grows with `n`: it counts from 1 to `n`.
 const COUNT_TO: &str = "WITH RECURSIVE count_to (n) AS (SELECT 1 UNION ALL \
@@ -132,4 +132,60 @@ pub async fn a_list_of_the_most_values_runs<H: Harness>(harness: H) {
     .await
     .unwrap();
     assert_eq!(found, 5);
+}
+
+/// A bound far below the work of [`FAR_PAST`] in each unit.
+const fn small_bound(unit: WorkUnit) -> u64 {
+    match unit {
+        WorkUnit::EngineSteps => 100_000,
+        WorkUnit::RowsRead => 1_000,
+    }
+}
+
+/// A statement that reads the 1,000 rows of `wide` once for each of its
+/// rows: a million rows, and some millions of engine steps.
+const FAR_PAST: &str = "SELECT COUNT(*) FROM wide AS a, wide AS b WHERE a.n <> b.n";
+
+/// After `bound_work`, a statement whose work is far past the bound gives
+/// [`OverBudget`] and no rows. The transaction stays open: a later
+/// statement in it gives its rows or [`OverBudget`], and the read ends
+/// without an error.
+pub async fn a_statement_far_past_the_bound_gives_over_budget<H: Harness>(harness: H) {
+    let database = harness.database();
+    write(
+        database,
+        vec![
+            statement("CREATE TABLE wide (n INTEGER)", Vec::new()),
+            statement(
+                "INSERT INTO wide (n) WITH RECURSIVE count_to (n) AS (SELECT 1 UNION ALL \
+                 SELECT n + 1 FROM count_to WHERE n < 1000) SELECT n FROM count_to",
+                Vec::new(),
+            ),
+        ],
+    )
+    .await
+    .unwrap();
+    let (far, later) = read(database, |transaction| {
+        Box::pin(async move {
+            let bound = small_bound(transaction.work_unit());
+            transaction.bound_work(bound).await?;
+            let far = transaction.fetch(FAR_PAST, Vec::new()).await;
+            let later = transaction.fetch("SELECT 1", Vec::new()).await;
+            Ok((far, later))
+        })
+    })
+    .await
+    .unwrap();
+    let stopped = far.expect_err("the statement past the bound gave its rows");
+    assert!(
+        stopped.downcast_ref::<OverBudget>().is_some(),
+        "not OverBudget: {stopped:#}"
+    );
+    match later {
+        Ok(rows) => assert_eq!(rows, vec![vec![SqlValue::Integer(1)]]),
+        Err(error) => assert!(
+            error.downcast_ref::<OverBudget>().is_some(),
+            "the transaction failed after OverBudget: {error:#}"
+        ),
+    }
 }

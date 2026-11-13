@@ -103,23 +103,32 @@ impl Harness for PortOnly {
     }
 }
 
-/// The file adapter with a fault: it ignores the `LIMIT` of a statement.
-struct NoLimit {
-    file: File,
-    database: NoLimitDatabase,
+/// The fault of a [`Faulty`] adapter.
+#[derive(Debug, Clone, Copy)]
+enum Fault {
+    /// It ignores the `LIMIT` of a statement.
+    NoLimit,
+    /// It ignores the work bound.
+    NoBound,
 }
 
-impl Default for NoLimit {
-    fn default() -> Self {
+/// The file adapter with one fault.
+struct Faulty {
+    file: File,
+    database: FaultyDatabase,
+}
+
+impl Faulty {
+    fn new(fault: Fault) -> Self {
         let file = File::default();
         Self {
-            database: NoLimitDatabase(file.database.clone()),
+            database: FaultyDatabase(file.database.clone(), fault),
             file,
         }
     }
 }
 
-impl Harness for NoLimit {
+impl Harness for Faulty {
     fn database(&self) -> &dyn ReadDatabase {
         &self.database
     }
@@ -134,9 +143,9 @@ impl Harness for NoLimit {
 }
 
 #[derive(Debug)]
-struct NoLimitDatabase(FileReadDatabase);
+struct FaultyDatabase(FileReadDatabase, Fault);
 
-struct NoLimitTransaction(Transaction);
+struct FaultyTransaction(Transaction, Fault);
 
 /// The statement with each `LIMIT n` read as no limit; the bound value of
 /// the limit stays bound.
@@ -151,9 +160,14 @@ fn without_limit(sql: &str) -> String {
     text
 }
 
-impl SqlTransaction for NoLimitTransaction {
+impl SqlTransaction for FaultyTransaction {
     fn fetch<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, Vec<SqlRow>> {
-        Box::pin(async move { self.0.fetch(&without_limit(sql), values).await })
+        match self.1 {
+            Fault::NoLimit => {
+                Box::pin(async move { self.0.fetch(&without_limit(sql), values).await })
+            }
+            Fault::NoBound => self.0.fetch(sql, values),
+        }
     }
 
     fn execute<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, u64> {
@@ -171,8 +185,11 @@ impl SqlTransaction for NoLimitTransaction {
         self.0.commit()
     }
 
-    fn bound_work(&mut self, steps: u64) -> SqlFuture<'_, ()> {
-        self.0.bound_work(steps)
+    fn bound_work(&mut self, bound: u64) -> SqlFuture<'_, ()> {
+        match self.1 {
+            Fault::NoLimit => self.0.bound_work(bound),
+            Fault::NoBound => Box::pin(async { Ok(()) }),
+        }
     }
 
     fn max_list_values(&self) -> usize {
@@ -180,10 +197,11 @@ impl SqlTransaction for NoLimitTransaction {
     }
 }
 
-impl ReadDatabase for NoLimitDatabase {
+impl ReadDatabase for FaultyDatabase {
     fn read<'a>(&'a self, work: ReadWork<'a>) -> SqlFuture<'a, ()> {
+        let fault = self.1;
         self.0.read(Box::new(move |lent| {
-            work(Box::new(NoLimitTransaction(lent)))
+            work(Box::new(FaultyTransaction(lent, fault)))
         }))
     }
 
@@ -224,6 +242,7 @@ port_cases!(
     handles::a_stopped_page_statement_is_the_page_budget_refusal,
     handles::a_page_statement_reported_at_its_end_is_the_page_budget_refusal,
     limits::a_bounded_read_runs_the_statements_within_its_bound,
+    limits::a_statement_far_past_the_bound_gives_over_budget,
     limits::a_limit_bounds_the_rows,
     limits::a_list_of_the_most_values_runs,
     projection::a_catch_up_makes_and_follows_the_projection,
@@ -239,7 +258,15 @@ port_cases!(
 #[tokio::test]
 #[should_panic(expected = "assertion `left == right` failed")]
 async fn the_limit_case_refuses_an_adapter_that_ignores_limit() {
-    contract::limits::a_limit_bounds_the_rows(NoLimit::default()).await;
+    contract::limits::a_limit_bounds_the_rows(Faulty::new(Fault::NoLimit)).await;
+}
+
+/// The bound case finds an adapter that ignores the work bound.
+#[tokio::test]
+#[should_panic(expected = "the statement past the bound gave its rows")]
+async fn the_bound_case_refuses_an_adapter_that_ignores_the_bound() {
+    contract::limits::a_statement_far_past_the_bound_gives_over_budget(Faulty::new(Fault::NoBound))
+        .await;
 }
 
 /// The file adapter with a harness whose `fail_commit` gives an error.
@@ -406,8 +433,8 @@ async fn count_to(file: &File, bound: Option<u64>, n: i64) -> anyhow::Result<Vec
 
 /// The file stops a statement while it runs once its work passes the
 /// bound, and the error is `OverBudget`. Without the bound, the same
-/// statement runs. The shared contract does not hold this, because it
-/// does not yet say what another adapter must do at the bound.
+/// statement runs. The shared contract holds only the `OverBudget` and no
+/// rows, because another adapter can report the statement when it ends.
 #[tokio::test]
 async fn the_file_stops_a_statement_past_the_bound() {
     let file = File::default();
