@@ -96,7 +96,10 @@ pub trait SqlTransaction: Any + Send {
     /// Runs `statements` as one unit inside the transaction: all of them,
     /// or, when one fails, none of them. The inner error is the error of
     /// the statement that failed, and the transaction continues. The outer
-    /// error means that the transaction itself failed.
+    /// error means that the transaction itself failed. When a statement
+    /// gives [`OverBudget`] and the adapter ends the transaction, as
+    /// [`SqlTransaction::bound_work`] lets it, the outer error is that
+    /// [`OverBudget`].
     fn attempt<'a>(
         &'a mut self,
         statements: &'a [Statement],
@@ -108,19 +111,28 @@ pub trait SqlTransaction: Any + Send {
     /// Bounds the work of the statements that follow in this transaction.
     ///
     /// The adapter counts `bound` in the unit that
-    /// [`SqlTransaction::work_unit`] gives. The work of all these
-    /// statements counts against one bound.
+    /// [`SqlTransaction::work_unit`] gives, over all these statements. It
+    /// can count work at whole check intervals: then the work of a
+    /// statement after its last check is not counted, and a statement that
+    /// does less work than one interval can run past the bound. The file
+    /// adapter checks each 1,000 engine steps of one statement text, over
+    /// all the runs of that text on its connection.
     ///
-    /// When the work passes the bound during a statement, the statement
-    /// gives [`OverBudget`], and the caller does not get its rows. The
-    /// adapter can stop the statement while it runs, or let it run to its
-    /// end and then report it. The transaction stays open after
-    /// [`OverBudget`]: a later statement in it gives its rows or
-    /// [`OverBudget`].
+    /// When the counted work passes the bound during a statement, the
+    /// statement gives [`OverBudget`], and the caller does not get its
+    /// rows. The adapter can stop the statement while it runs, or let it
+    /// run to its end and then report it.
     ///
-    /// An adapter can let the work pass the bound by less than one of its
-    /// check intervals before it reports it. The file adapter checks each
-    /// 1,000 engine steps and stops the statement while it runs.
+    /// When the statement that gives [`OverBudget`] only reads, the
+    /// transaction stays open: the work of the earlier statements is kept,
+    /// and a later statement gives its rows or [`OverBudget`].
+    ///
+    /// When the statement that gives [`OverBudget`] writes, the adapter can
+    /// end the transaction. Then the work of the transaction is not kept,
+    /// and its commit fails. A later statement is then not in the
+    /// transaction: the file adapter runs it outside any transaction, so a
+    /// later write is kept although the commit fails. Work that writes
+    /// after a bound must therefore stop at the first [`OverBudget`].
     fn bound_work(&mut self, bound: u64) -> SqlFuture<'_, ()>;
 
     /// The unit in which this adapter counts work for the work bound.
@@ -141,6 +153,7 @@ pub trait SqlTransaction: Any + Send {
 
 /// What an adapter counts as the work of a statement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum WorkUnit {
     /// The steps of the `SQLite` engine (virtual machine instructions), as
     /// its progress handler counts them. The file adapter counts these.

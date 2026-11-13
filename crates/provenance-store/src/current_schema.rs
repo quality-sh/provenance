@@ -14,8 +14,11 @@ pub enum Compatibility {
 /// Whether the schema of the database in `transaction` is current.
 ///
 /// It is current when its metadata row names the current digest and its
-/// catalog of the objects that the store owns is the current catalog. An
-/// object of another name does not change the answer.
+/// catalog of the store's objects is the current catalog. The store's
+/// objects are the objects that take a name that the schema text names,
+/// and each index and trigger on a table that the schema text names. A
+/// table of another name, and the indexes and triggers on that table, do
+/// not change the answer.
 pub async fn compatibility(transaction: &mut Transaction) -> anyhow::Result<Compatibility> {
     let table = transaction
         .fetch(
@@ -57,27 +60,38 @@ fn is_missing_column(error: &anyhow::Error) -> bool {
         .any(|cause| cause.to_string().contains("no such column"))
 }
 
-/// Removes the store's own tables and indexes and installs the current
-/// empty schema. The caller records the digest only after it loads all
-/// rows and stamps.
+/// Removes the store's objects and installs the current empty schema.
+/// The caller records the digest only after it loads all rows and stamps.
 ///
-/// The store owns the objects that the schema text names. An object of
-/// another name stays, with its rows: a table that another program keeps
-/// in the same database, and also an object that an earlier schema text
-/// named and the current text does not. A repository is initialised again,
-/// not migrated, so such an object is no longer the store's.
+/// The store's objects are as [`compatibility`] gives them. The rebuild
+/// drops each object that takes a name that the schema text names: first
+/// the indexes, then the tables, then the triggers and the views, each
+/// kind in the order of its names. An index or a trigger of another name
+/// on a table of the store goes with its table.
+///
+/// A table of another name stays, with its rows, its indexes and its
+/// triggers. This includes a table that an earlier schema text named and
+/// the current text does not: a repository is initialised again, not
+/// migrated, so the rebuild does not remove such a table.
+///
+/// A view of another name over a table of the store stays, and reads the
+/// table that the rebuild makes again.
+///
+/// A table of another name can have a foreign key into a table of the
+/// store. While it holds a row that refers to a row of the store, the drop
+/// of the table of the store fails on an adapter that checks foreign keys,
+/// as the file adapter does. Then the rebuild fails and keeps nothing, and
+/// each later rebuild fails in the same way until that row is removed.
 pub async fn replace(transaction: &mut Transaction) -> anyhow::Result<()> {
     let owned = owned_names();
     let objects = transaction
         .fetch(
             "SELECT type, name FROM sqlite_schema \
-             WHERE type IN ('index', 'table') AND name NOT LIKE 'sqlite_%' \
-             ORDER BY type, name",
+             WHERE type IN ('index', 'table', 'trigger', 'view') \
+             AND name NOT LIKE 'sqlite_%' ORDER BY type, name",
             Vec::new(),
         )
         .await?;
-    // The indexes come first. An index of another name on a table of the
-    // store goes with its table.
     for object in objects {
         let name = object.text(1)?;
         if owned.contains(name) {
@@ -201,7 +215,8 @@ async fn catalog(transaction: &mut Transaction) -> anyhow::Result<SchemaCatalog>
             })
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
-    objects.retain(|object| owned_names().contains(&object.name));
+    let owned = owned_names();
+    objects.retain(|object| owned.contains(&object.name) || owned.contains(&object.table));
     Ok(SchemaCatalog(objects))
 }
 
