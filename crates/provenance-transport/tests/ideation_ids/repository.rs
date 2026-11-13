@@ -196,11 +196,12 @@ pub fn add_rows(repo: &Repository, name: &str, rows: &[String]) -> Vec<usize> {
 pub fn copy_row_with_key(repo: &Repository, name: &str, id: &str, key: &str) -> (usize, usize) {
     let text = stored_text(repo, name);
     let pair = format!("\"id\":\"{id}\"");
+    let keyed = format!("\"{key}\":\"{id}\"");
     let (first, row) = text
         .lines()
         .enumerate()
         .find(|(_, line)| line.contains(&pair))
-        .map(|(index, line)| (index + 1, line.replace(&pair, &format!("\"{key}\":\"{id}\""))))
+        .map(|(index, line)| (index + 1, line.replace(&pair, &keyed)))
         .unwrap();
     (first, add_rows(repo, name, &[format!("{row}\n")])[0])
 }

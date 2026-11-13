@@ -113,15 +113,18 @@ impl StateStore {
             merge_immutable(&mut dispositions, &incoming.dispositions)?;
             validate_batch_proposals(&incoming.proposals)?;
             let manifest = self.manifest()?;
-            self.check_ideation_aggregate(scope, provenance_core::IdeationAggregate {
-                legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
-                disposition_actor_ids: &manifest.disposition_actor_ids,
-                contributions: &contributions,
-                synthesis_packets: &synthesis_packets,
-                proposals: &proposals,
-                assertions: &assertions,
-                dispositions: &dispositions,
-            })?;
+            self.check_ideation_aggregate(
+                scope,
+                provenance_core::IdeationAggregate {
+                    legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
+                    disposition_actor_ids: &manifest.disposition_actor_ids,
+                    contributions: &contributions,
+                    synthesis_packets: &synthesis_packets,
+                    proposals: &proposals,
+                    assertions: &assertions,
+                    dispositions: &dispositions,
+                },
+            )?;
             for disposition in &incoming.dispositions {
                 crate::write_error::ensure!(
                     InvalidUpdate,
@@ -184,12 +187,11 @@ pub fn ensure_asserted_evidence_unchanged<T: serde::Serialize + IdeationRecord>(
     if serde_json::to_value(existing)? == serde_json::to_value(replacement)? {
         return Ok(());
     }
+    let (kind, id) = (T::KIND, existing.immutable_id());
     crate::write_error::ensure!(
         InvalidUpdate,
         !cited_by_assertion(),
-        "{} {} is referenced by an assertion and cannot be replaced",
-        T::KIND,
-        existing.immutable_id()
+        "{kind} {id} is referenced by an assertion and cannot be replaced"
     );
     Ok(())
 }
@@ -219,9 +221,8 @@ pub fn ensure_asserted_contribution_unchanged(
     replacement: &Contribution,
     assertions: &[AssertionRecord],
 ) -> anyhow::Result<()> {
-    ensure_asserted_evidence_unchanged(existing, replacement, || {
-        assertion_cites_contribution(existing, assertions)
-    })
+    let cited = || assertion_cites_contribution(existing, assertions);
+    ensure_asserted_evidence_unchanged(existing, replacement, cited)
 }
 
 pub fn ensure_asserted_synthesis_unchanged(
@@ -229,9 +230,8 @@ pub fn ensure_asserted_synthesis_unchanged(
     replacement: &SynthesisPacket,
     assertions: &[AssertionRecord],
 ) -> anyhow::Result<()> {
-    ensure_asserted_evidence_unchanged(existing, replacement, || {
-        assertion_cites_synthesis(existing, assertions)
-    })
+    let cited = || assertion_cites_synthesis(existing, assertions);
+    ensure_asserted_evidence_unchanged(existing, replacement, cited)
 }
 
 fn ensure_scope(scope: &ScopeId, batch: &IdeationLandingBatch) -> anyhow::Result<()> {
@@ -255,7 +255,9 @@ fn scope_ids<T: IdeationRecord>(
     records: &[T],
     scope_id: impl Fn(&T) -> &ScopeId,
 ) -> impl Iterator<Item = (IdeationRecordKind, &ScopeId)> {
-    records.iter().map(move |record| (T::KIND, scope_id(record)))
+    records
+        .iter()
+        .map(move |record| (T::KIND, scope_id(record)))
 }
 
 fn merge_replaceable<T: Clone + IdeationRecord>(
@@ -304,7 +306,9 @@ fn merge_immutable<T: Clone + IdeationRecord>(
         );
         crate::write_error::ensure!(
             AlreadyExists,
-            !existing.iter().any(|current| current.immutable_id() == record_id),
+            !existing
+                .iter()
+                .any(|current| current.immutable_id() == record_id),
             "{kind} {record_id} already exists and is immutable"
         );
         existing.push(record.clone());

@@ -94,7 +94,10 @@ impl StateStore {
             .map(|(_, at)| at);
         let first = lines.next()?;
         let second = lines.next()?;
-        let message = format!("{duplicate} at line {} and at line {}", first.line, second.line);
+        let message = format!(
+            "{duplicate} at line {} and at line {}",
+            first.line, second.line
+        );
         Some(crate::refusal::state_fault(&second, message))
     }
 }

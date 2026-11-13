@@ -267,7 +267,11 @@ fn export_names_the_two_lines_of_a_proposal_id() {
     let (code, stdout, stderr) = answer(&export);
     let refusal = format!("Error: {DUPLICATE_PROPOSAL}");
     assert_eq!(
-        (code, stderr.lines().any(|line| line == refusal), output.exists()),
+        (
+            code,
+            stderr.lines().any(|line| line == refusal),
+            output.exists()
+        ),
         (Some(1), true, false),
         "{stdout}{stderr}"
     );

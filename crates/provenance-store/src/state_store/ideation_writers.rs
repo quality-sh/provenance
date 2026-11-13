@@ -147,15 +147,18 @@ impl StateStore {
             } else {
                 contributions.push(contribution.clone());
             }
-            self.check_ideation_aggregate(&scope_id, provenance_core::IdeationAggregate {
-                legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
-                disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
-                contributions: &contributions,
-                synthesis_packets: &self.list_synthesis_packets(&scope_id)?,
-                proposals: &self.list_proposal_definitions(&scope_id)?,
-                assertions: &self.list_assertion_records(&scope_id)?,
-                dispositions: &self.list_dispositions(&scope_id)?,
-            })?;
+            self.check_ideation_aggregate(
+                &scope_id,
+                provenance_core::IdeationAggregate {
+                    legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
+                    disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
+                    contributions: &contributions,
+                    synthesis_packets: &self.list_synthesis_packets(&scope_id)?,
+                    proposals: &self.list_proposal_definitions(&scope_id)?,
+                    assertions: &self.list_assertion_records(&scope_id)?,
+                    dispositions: &self.list_dispositions(&scope_id)?,
+                },
+            )?;
             super::read_budget::ensure_within_read_budget(&contribution)?;
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
             Ok(contribution)
@@ -289,15 +292,18 @@ impl StateStore {
             } else {
                 synthesis_packets.push(synthesis_packet.clone());
             }
-            self.check_ideation_aggregate(&scope_id, provenance_core::IdeationAggregate {
-                legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
-                disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
-                contributions: &self.list_contributions(&scope_id)?,
-                synthesis_packets: &synthesis_packets,
-                proposals: &self.list_proposal_definitions(&scope_id)?,
-                assertions: &self.list_assertion_records(&scope_id)?,
-                dispositions: &self.list_dispositions(&scope_id)?,
-            })?;
+            self.check_ideation_aggregate(
+                &scope_id,
+                provenance_core::IdeationAggregate {
+                    legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
+                    disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
+                    contributions: &self.list_contributions(&scope_id)?,
+                    synthesis_packets: &synthesis_packets,
+                    proposals: &self.list_proposal_definitions(&scope_id)?,
+                    assertions: &self.list_assertion_records(&scope_id)?,
+                    dispositions: &self.list_dispositions(&scope_id)?,
+                },
+            )?;
             super::read_budget::ensure_within_read_budget(&synthesis_packet)?;
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
             Ok(synthesis_packet)

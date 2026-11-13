@@ -15,7 +15,10 @@ mod repository;
 mod writes;
 
 mod support {
+    #[path = "../support/ideation.rs"]
     pub mod ideation;
+    #[path = "../support/records.rs"]
     pub mod records;
+    #[path = "../support/resource_http.rs"]
     pub mod resource_http;
 }

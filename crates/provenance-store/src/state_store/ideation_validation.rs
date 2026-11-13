@@ -77,15 +77,18 @@ impl StateStore {
         let proposals = self.list_proposal_definitions(scope)?;
         let assertions = self.list_assertion_records(scope)?;
         let dispositions = self.list_dispositions(scope)?;
-        self.check_ideation_aggregate(scope, provenance_core::IdeationAggregate {
-            legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
-            disposition_actor_ids,
-            contributions: &contributions,
-            synthesis_packets: &synthesis_packets,
-            proposals: &proposals,
-            assertions: &assertions,
-            dispositions: &dispositions,
-        })?;
+        self.check_ideation_aggregate(
+            scope,
+            provenance_core::IdeationAggregate {
+                legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
+                disposition_actor_ids,
+                contributions: &contributions,
+                synthesis_packets: &synthesis_packets,
+                proposals: &proposals,
+                assertions: &assertions,
+                dispositions: &dispositions,
+            },
+        )?;
         let canonical_artifacts = self.canonical_artifact_index(scope)?;
         for disposition in &dispositions {
             canonical_artifacts.ensure_exists(disposition.canonical_artifact.as_ref())?;
