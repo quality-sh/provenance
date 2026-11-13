@@ -77,7 +77,11 @@ update_input!(UpdateTopicInput, TopicClearField, {
 pub struct TopicClearField(pub Infallible);
 
 impl Serialize for TopicClearField {
-    fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // The type has no value, so this function never runs. The drop gives
+        // it a statement that coverage can record. With no such statement, the
+        // coverage report shows the function as covered.
+        drop(serializer);
         match self.0 {}
     }
 }
