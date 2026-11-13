@@ -287,5 +287,33 @@ async fn evidence_answers_stay_the_same() {
             }
         }
     }
-    assert_eq!(answers, Vec::<String>::new());
+    assert_eq!(
+        answers,
+        [
+            "create None before=false: create {\"id\":\"req_a\",\"scope_id\":\"default\",\"statement\":\"The system stores records.\",\"status\":\"discovery\"} next=None",
+            "create None before=true: refused: the addressed resource does not exist",
+            "create Some(\"statement\") before=false: create \"The system stores records.\" next=None",
+            "create Some(\"statement\") before=true: refused: the addressed resource does not exist",
+            "create Some(\"description\") before=false: create null next=None",
+            "create Some(\"description\") before=true: refused: the addressed resource does not exist",
+            "alice None before=false: alice {\"id\":\"req_a\",\"scope_id\":\"default\",\"statement\":\"The system stores records for one year.\",\"status\":\"discovery\",\"updated\":{\"at\":\"<time>\",\"commit\":\"start\"}} next=None",
+            "alice None before=true: create {\"id\":\"req_a\",\"scope_id\":\"default\",\"statement\":\"The system stores records.\",\"status\":\"discovery\"} next=None",
+            "alice Some(\"statement\") before=false: alice \"The system stores records for one year.\" next=None",
+            "alice Some(\"statement\") before=true: create \"The system stores records.\" next=None",
+            "alice Some(\"description\") before=false: alice null next=None",
+            "alice Some(\"description\") before=true: create null next=None",
+            "record None before=false: record {\"description\":\"Text A.\",\"id\":\"req_a\",\"scope_id\":\"default\",\"statement\":\"The system stores records for one year.\",\"status\":\"discovery\",\"updated\":{\"at\":\"<time>\",\"commit\":\"merge\"}} next=None",
+            "record None before=true: alice {\"id\":\"req_a\",\"scope_id\":\"default\",\"statement\":\"The system stores records for one year.\",\"status\":\"discovery\",\"updated\":{\"at\":\"<time>\",\"commit\":\"start\"}} next=None",
+            "record Some(\"statement\") before=false: record \"The system stores records for one year.\" next=None",
+            "record Some(\"statement\") before=true: alice \"The system stores records for one year.\" next=None",
+            "record Some(\"description\") before=false: record \"Text A.\" next=None",
+            "record Some(\"description\") before=true: alice null next=None",
+            "working None before=false: working {\"description\":\"Text B.\",\"id\":\"req_a\",\"scope_id\":\"default\",\"statement\":\"The system stores records for one year.\",\"status\":\"discovery\",\"updated\":{\"at\":\"<time>\",\"commit\":\"record\"}} next=None",
+            "working None before=true: record {\"description\":\"Text A.\",\"id\":\"req_a\",\"scope_id\":\"default\",\"statement\":\"The system stores records for one year.\",\"status\":\"discovery\",\"updated\":{\"at\":\"<time>\",\"commit\":\"merge\"}} next=None",
+            "working Some(\"statement\") before=false: working \"The system stores records for one year.\" next=None",
+            "working Some(\"statement\") before=true: record \"The system stores records for one year.\" next=None",
+            "working Some(\"description\") before=false: working \"Text B.\" next=None",
+            "working Some(\"description\") before=true: record \"Text A.\" next=None",
+        ]
+    );
 }
