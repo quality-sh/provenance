@@ -312,8 +312,7 @@ fn write_outside(identity: &RepositoryIdentity, world: &Arc<World>, task: &Task)
     if result.is_ok() {
         let after = storage
             .read_view()
-            .map(provenance_store::storage::StateView::into_entries)
-            .unwrap_or_default();
+            .map_or_default(provenance_store::storage::StateView::into_entries);
         if after != before {
             world.write_outside(task.operation, &before, &after);
         }

@@ -3,9 +3,7 @@
 //! JSON call, runs the typed operation on the host, and encodes the result.
 
 use provenance_core::{
-    protocol::failure::{
-        ErasedFailure as FailureEnvelope, InvalidInputReason, OperationError, OperationFailure,
-    },
+    protocol::failure::{ErasedFailure as FailureEnvelope, InvalidInputReason, OperationFailure},
     SDK_PROTOCOL_VERSION,
 };
 use provenance_store::operations::{
@@ -56,8 +54,8 @@ impl Invoke for Unhosted {
         self,
         _: Option<RequestedContext>,
         _: O::Request,
-    ) -> OperationFuture<O::Success, OperationError<O::Failure>> {
-        Box::pin(async { Err(OperationError::Common(OperationFailure::UnavailableNeeds)) })
+    ) -> OperationFuture<O::Success, O::Failure> {
+        Box::pin(async { Err(OperationFailure::UnavailableNeeds.into()) })
     }
 }
 
@@ -280,6 +278,10 @@ pub fn check_call(operation: &str, call: Value) -> Result<(), FailureEnvelope> {
     (entry.check)(call)
 }
 
+/// Decodes the native call of one operation and runs the operation on the host. The request
+/// member of the call has the request type of the operation, so an operation that has no
+/// input fields takes only null.
+#[provenance_macros::rule("rule_operation_without_input_takes_null_request")]
 fn invoke_resolved<O: Operation, H: Invoke>(
     call: Value,
     host: H,

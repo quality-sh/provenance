@@ -2,10 +2,10 @@
 name = "provenance-http-client"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "Internal part of Provenance for generated HTTP access"
 license.workspace = true
 repository.workspace = true
-homepage.workspace = true
 readme.workspace = true
 publish.workspace = true
 # The source generator runs before packaging; consumers use these included files.

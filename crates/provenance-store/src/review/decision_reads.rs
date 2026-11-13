@@ -52,8 +52,7 @@ impl DocumentReviewState {
         self.positions
             .get(kind.as_str())
             .and_then(|ids| ids.get(id.as_str()))
-            .map(|&position| self.records[position].2.clone())
-            .unwrap_or_default()
+            .map_or_default(|&position| self.records[position].2.clone())
     }
 }
 

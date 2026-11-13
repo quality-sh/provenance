@@ -1,12 +1,16 @@
 //! Shared execution shapes for catalog operations.
 
 use super::{
-    failures::ReadError, ContextKind, ExecutionNeeds, Operation, OperationFuture, PreparedContext,
-    PreparedRead, WireSchema,
+    failures::ReadError, ContextKind, ExecutionNeeds, HandlerFailure, Operation, OperationFuture,
+    PreparedContext, PreparedRead, WireSchema,
 };
 use crate::{state_store::StateStore, write_error::WriteError};
-use provenance_core::{protocol::failure::OperationFailure, ScopeId};
+use provenance_core::{
+    protocol::failure::{OperationError, OperationFailure},
+    ScopeId,
+};
 use serde::{de::DeserializeOwned, Serialize};
+use std::future::Future;
 
 pub trait OperationSpec: Send + Sync + 'static + Sized {
     type Request: DeserializeOwned + WireSchema + Send + 'static;
@@ -25,18 +29,21 @@ pub trait OperationSpec: Send + Sync + 'static + Sized {
 }
 
 pub trait OperationShape<S: OperationSpec> {
-    type Failure: std::error::Error + Serialize + WireSchema + Send + 'static;
+    type Failure: HandlerFailure;
 
     const CONTEXT: ContextKind;
 
-    fn failure_status(error: &Self::Failure) -> u16;
-    fn unclassified_cause(_: &Self::Failure) -> Option<String> {
-        None
-    }
     fn run(
         context: PreparedContext,
         request: S::Request,
-    ) -> OperationFuture<S::Success, Self::Failure>;
+    ) -> OperationFuture<S::Success, OperationError<Self::Failure>>;
+}
+
+/// Runs one handler and gives its error as the failure of the handler.
+pub(super) fn handled<T: 'static, F: 'static>(
+    handler: impl Future<Output = Result<T, F>> + Send + 'static,
+) -> OperationFuture<T, OperationError<F>> {
+    Box::pin(async move { handler.await.map_err(OperationError::Handler) })
 }
 
 impl<S> Operation for S
@@ -45,20 +52,12 @@ where
 {
     type Request = S::Request;
     type Success = S::Success;
-    type Failure = <S::Shape as OperationShape<S>>::Failure;
+    type Failure = OperationError<<S::Shape as OperationShape<S>>::Failure>;
 
     const NAME: &'static str = S::NAME;
     const MUTATES: bool = S::MUTATES;
     const CONTEXT: ContextKind = <S::Shape as OperationShape<S>>::CONTEXT;
     const FAILURE_STATUSES: &'static [u16] = S::FAILURE_STATUSES;
-
-    fn failure_status(error: &Self::Failure) -> u16 {
-        S::Shape::failure_status(error)
-    }
-
-    fn unclassified_cause(error: &Self::Failure) -> Option<String> {
-        S::Shape::unclassified_cause(error)
-    }
 
     fn validate_external(request: &Self::Request) -> Result<(), OperationFailure> {
         S::validate_external(request)
@@ -90,19 +89,11 @@ impl<S: GraphReadSpec> OperationShape<S> for GraphRead {
 
     const CONTEXT: ContextKind = ContextKind::Scoped;
 
-    fn failure_status(error: &Self::Failure) -> u16 {
-        error.status()
-    }
-
-    fn unclassified_cause(error: &Self::Failure) -> Option<String> {
-        error.unclassified_cause()
-    }
-
     fn run(
         context: PreparedContext,
         request: S::Request,
-    ) -> OperationFuture<S::Success, Self::Failure> {
-        Box::pin(async move {
+    ) -> OperationFuture<S::Success, OperationError<Self::Failure>> {
+        handled(async move {
             let context = context.graph()?;
             let root = context.repository.layout().root().to_owned();
             S::read(context, request)
@@ -127,19 +118,11 @@ impl<S: ScopedReadSpec> OperationShape<S> for ScopedRead {
 
     const CONTEXT: ContextKind = ContextKind::Scope;
 
-    fn failure_status(error: &Self::Failure) -> u16 {
-        error.status()
-    }
-
-    fn unclassified_cause(error: &Self::Failure) -> Option<String> {
-        error.unclassified_cause()
-    }
-
     fn run(
         context: PreparedContext,
         request: S::Request,
-    ) -> OperationFuture<S::Success, Self::Failure> {
-        Box::pin(async move {
+    ) -> OperationFuture<S::Success, OperationError<Self::Failure>> {
+        handled(async move {
             let context = context.scope()?;
             let store = context.repository.store();
             S::read(&store, context.repository.scope(), request)
@@ -165,19 +148,11 @@ impl<S: ScopedWriteSpec> OperationShape<S> for ScopedWrite {
 
     const CONTEXT: ContextKind = ContextKind::Scope;
 
-    fn failure_status(error: &Self::Failure) -> u16 {
-        error.status()
-    }
-
-    fn unclassified_cause(error: &Self::Failure) -> Option<String> {
-        error.unclassified_cause()
-    }
-
     fn run(
         context: PreparedContext,
         request: S::Request,
-    ) -> OperationFuture<S::Success, Self::Failure> {
-        Box::pin(async move {
+    ) -> OperationFuture<S::Success, OperationError<Self::Failure>> {
+        handled(async move {
             let context = context.scope()?;
             if let Some(scope) = S::request_scope(&request) {
                 context.repository.ensure_selected(scope)?;
@@ -210,19 +185,11 @@ impl<S: ScopedCommandSpec> OperationShape<S> for ScopedCommand {
 
     const CONTEXT: ContextKind = ContextKind::Scope;
 
-    fn failure_status(error: &Self::Failure) -> u16 {
-        error.status()
-    }
-
-    fn unclassified_cause(error: &Self::Failure) -> Option<String> {
-        error.unclassified_cause()
-    }
-
     fn run(
         context: PreparedContext,
         request: S::Request,
-    ) -> OperationFuture<S::Success, Self::Failure> {
-        Box::pin(async move {
+    ) -> OperationFuture<S::Success, OperationError<Self::Failure>> {
+        handled(async move {
             let context = context.scope()?;
             if let Some(scope) = S::request_scope(&request) {
                 context.repository.ensure_selected(scope)?;

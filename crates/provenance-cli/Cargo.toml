@@ -3,10 +3,10 @@ name = "provenance-cli"
 version.workspace = true
 default-run = "provenance"
 edition.workspace = true
+rust-version.workspace = true
 description = "Command-line interface for Provenance requirements traceability"
 license.workspace = true
 repository.workspace = true
-homepage.workspace = true
 readme.workspace = true
 publish.workspace = true
 # Bundled skills are prepared before packaging and are not tracked.

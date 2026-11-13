@@ -22,7 +22,6 @@ pub use crate::dogfood::{
 pub use crate::export::ExportInput;
 pub use crate::import::ImportInput;
 pub use crate::init::InitInput;
-pub use crate::materialize::MaterializeInput;
 pub use crate::merge_jsonl::MergeJsonlInput;
 pub use crate::report::{ReportBuildInput, ReportRenderInput};
 pub use crate::schema::SchemaShowInput;
@@ -76,6 +75,7 @@ pub enum Input {
     },
     /// The typed input of one Discussion action.
     Discussion(Action),
+    /// The command declares no input of its own.
     None,
 }
 

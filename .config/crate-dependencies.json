@@ -489,8 +489,7 @@
       "dependencies": [
         "provenance-core",
         "provenance-macros",
-        "provenance-porcelain",
-        "provenance-store"
+        "provenance-porcelain"
       ],
       "host-dependencies": [
         "axum",
@@ -500,6 +499,7 @@
         "provenance-report",
         "provenance-scanner",
         "provenance-ste100",
+        "provenance-store",
         "remove_dir_all",
         "tempfile",
         "tokio",

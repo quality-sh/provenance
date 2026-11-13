@@ -7,7 +7,9 @@ use crate::operations::reader::ReadRefusal;
 #[cfg(feature = "host")]
 use crate::stale::git::GitRefusal;
 use crate::state_store::readers::StateLineInvalid;
-use crate::write_error::{failure_cause, in_repository, native, SourceFailure, WriteFailure};
+use crate::write_error::{
+    failure_cause, in_repository, native, SourceFailure, WriteError, WriteFailure,
+};
 use provenance_core::protocol::{
     failure::OperationFailure,
     read_failure::{MovedUnit, ReadFailure},
@@ -25,6 +27,22 @@ impl From<anyhow::Error> for ReadError {
 impl From<OperationFailure> for ReadError {
     fn from(error: OperationFailure) -> Self {
         Self(error.into())
+    }
+}
+impl super::HandlerFailure for ReadError {
+    fn failure_status(&self) -> u16 {
+        self.status()
+    }
+    fn log_cause(&self) -> Option<String> {
+        self.unclassified_cause()
+    }
+}
+impl super::HandlerFailure for WriteError {
+    fn failure_status(&self) -> u16 {
+        self.status()
+    }
+    fn log_cause(&self) -> Option<String> {
+        self.unclassified_cause()
     }
 }
 impl ReadError {

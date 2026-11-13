@@ -141,6 +141,26 @@ fn clones_of_an_open_share_the_kept_scans_and_another_open_does_not() {
     assert_eq!(first.base.files, own.base.files);
 }
 
+/// A handle that `with_file_versions` gives keeps the source scans of the
+/// handle it came from.
+#[test]
+fn a_handle_with_its_own_file_versions_shares_the_kept_scans() {
+    use crate::layout::ProvenanceLayout;
+    use crate::repository::Repository;
+    use crate::review::history::contract::MemoryFileVersions;
+    let (dir, base, head) = range();
+    let root = Utf8Path::from_path(dir.path()).unwrap();
+    crate::test_support::initialize(&ProvenanceLayout::new(root.as_str()), &[]);
+    let opened = Repository::open(root, "default").unwrap();
+    let repo = opened.working_tree().to_owned();
+    let first = scan_range(opened.kept_scans(), &repo, &base, &head).unwrap();
+    let versions = opened.with_file_versions(Arc::new(MemoryFileVersions::new(&[])));
+    assert_eq!(kept_count(versions.kept_scans()), 2);
+    let shared = scan_range(versions.kept_scans(), &repo, &base, &head).unwrap();
+    assert!(Arc::ptr_eq(&first.base, &shared.base));
+    assert!(Arc::ptr_eq(&first.head, &shared.head));
+}
+
 #[test]
 fn a_range_over_the_byte_limit_is_not_kept() {
     let (dir, base, head) = range();

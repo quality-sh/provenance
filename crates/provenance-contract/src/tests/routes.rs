@@ -1,6 +1,8 @@
-use provenance_core::protocol::failure::OperationFailure;
+use provenance_core::protocol::failure::{OperationError, OperationFailure};
+use provenance_macros::verifies;
 use provenance_store::operations::catalog::{
-    CheckStatement, ExecutionNeeds, Get, Info, Operation, OperationFuture, PreparedContext,
+    CheckStatement, ExecutionNeeds, Get, HandlerFailure, Info, Operation, OperationFuture,
+    PreparedContext,
 };
 use serde_json::json;
 
@@ -63,17 +65,22 @@ impl From<DeclaredFailure> for OperationFailure {
         Self::UnknownTarget
     }
 }
+impl HandlerFailure for DeclaredFailure {
+    fn failure_status(&self) -> u16 {
+        500
+    }
+}
 struct FailureFixture;
 impl Operation for FailureFixture {
     type Request = provenance_core::protocol::CheckStatementRequest;
     type Success = provenance_ste100::Report;
-    type Failure = DeclaredFailure;
+    type Failure = OperationError<DeclaredFailure>;
     const NAME: &'static str = "failure-fixture";
     fn needs(_: &Self::Request) -> ExecutionNeeds {
         &[]
     }
     fn run(_: PreparedContext, _: Self::Request) -> OperationFuture<Self::Success, Self::Failure> {
-        Box::pin(async { Err(DeclaredFailure::AccessDenied) })
+        Box::pin(async { Err(OperationError::Handler(DeclaredFailure::AccessDenied)) })
     }
 }
 
@@ -254,7 +261,8 @@ fn public_member_reads_do_not_use_collection_response_adapters() {
 }
 
 #[test]
-fn repository_info_has_a_numeric_version_and_closed_request() {
+#[verifies("rule_operation_without_input_takes_null_request", examples)]
+fn repository_info_has_a_numeric_version_and_a_null_request() {
     let definition = crate::schema::raw_definition::<Info>();
     assert_eq!(
         definition.success_schema["properties"]["protocol_version"]["type"],
@@ -264,8 +272,8 @@ fn repository_info_has_a_numeric_version_and_closed_request() {
         .with_draft(jsonschema::Draft::Draft202012)
         .build(&definition.request_schema)
         .unwrap();
-    assert!(validator.is_valid(&json!({})));
-    assert!(!validator.is_valid(&json!({"scope":"default"})));
+    assert!(validator.is_valid(&json!(null)));
+    assert!(!validator.is_valid(&json!({})));
 }
 
 #[test]
@@ -337,4 +345,20 @@ fn every_discussion_message_member_schema_accepts_one_message() {
             validator.iter_errors(&message).collect::<Vec<_>>()
         );
     }
+}
+
+/// The close route gets the Topic from its path and the scope from the bound context, so it
+/// has no request body and its MCP tool has no `data` argument.
+#[test]
+#[verifies("rule_route_without_body_fields_takes_no_body", examples)]
+fn close_topic_route_publishes_no_request_body() {
+    let definitions = crate::definitions();
+    let definition = definitions
+        .iter()
+        .find(|entry| entry.name == "close-topic")
+        .unwrap();
+    assert!(definition.request_schema().is_none());
+    let input = definition.mcp_input_schema();
+    assert_eq!(input["required"], json!(["id"]));
+    assert!(input["properties"].get("data").is_none(), "{input}");
 }
