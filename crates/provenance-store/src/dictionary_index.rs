@@ -12,7 +12,7 @@ use provenance_ste100::{
     DictionaryImportIdentity, DictionaryIndexError,
 };
 
-use crate::storage::local::durability::write_synced_file;
+use crate::storage::local::durability::{sync_directory, write_synced_file};
 
 /// Stores one import as an index file named by its identity, so that a later
 /// check loads the import with no PDF.
@@ -22,12 +22,13 @@ pub fn store_dictionary_index(
     directory: &Path,
 ) -> anyhow::Result<PathBuf> {
     let path = directory.join(dictionary_index_file_name(&import.identity));
+    let target = utf8(&path)?;
     if load_dictionary_index(directory, &import.identity).is_ok_and(|stored| stored == *import) {
+        // A store before this one can have renamed the file and then failed
+        // the directory sync, so the entry of the file can still be lost.
+        sync_directory(utf8(directory)?)?;
         return Ok(path);
     }
-    let target = Utf8Path::from_path(&path).ok_or_else(|| {
-        crate::refusal::fault!("the dictionary index path {} is not UTF-8", path.display())
-    })?;
     let contents = encode_dictionary_index(import)
         .map_err(|error| crate::refusal::caused(error, format!("encode {target}")))?;
     write_synced_file(target, &contents)?;
@@ -52,6 +53,12 @@ pub fn load_dictionary_index_for_source(
     decode_dictionary_index_for_source(&read_index(&path)?, source, &path)
 }
 
+fn utf8(path: &Path) -> anyhow::Result<&Utf8Path> {
+    Utf8Path::from_path(path).ok_or_else(|| {
+        crate::refusal::fault!("the dictionary index path {} is not UTF-8", path.display())
+    })
+}
+
 fn read_index(path: &Path) -> Result<Vec<u8>, DictionaryIndexError> {
     std::fs::read(path).map_err(|error| {
         let path = path.to_path_buf();
@@ -68,6 +75,8 @@ fn read_index(path: &Path) -> Result<Vec<u8>, DictionaryIndexError> {
 
 #[cfg(test)]
 mod read_tests;
+#[cfg(test)]
+mod reuse_tests;
 #[cfg(test)]
 #[cfg(unix)]
 mod write_tests;

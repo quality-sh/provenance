@@ -6,6 +6,7 @@
 //! in `error.hint`.
 
 use provenance_core::protocol::failure::OperationFailure;
+use provenance_core::protocol::read_failure::StateFileRefusal;
 use provenance_porcelain::action::ActionError;
 use provenance_porcelain::get::ReadError;
 use serde_json::{json, Map, Value};
@@ -39,6 +40,25 @@ pub fn json_refusal(error: &anyhow::Error) -> Option<Value> {
         return Some(envelope(action_error(action), &action.to_string()));
     }
     None
+}
+
+/// The error that the CLI prints. A state file refusal in the cause chain
+/// becomes the host refusal of its `invalid_state_file` failure, with the
+/// repair as the hint, as an operation route gives a state file that does not
+/// parse. Each other error does not change.
+pub fn typed(error: anyhow::Error) -> anyhow::Error {
+    let Some(refusal) = error
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<StateFileRefusal>())
+    else {
+        return error;
+    };
+    HostRefusal {
+        failure: json!({"error": refusal.failure(), "meta": {}}),
+        hint: Some(refusal.hint.clone()),
+        text_shows_failure: true,
+    }
+    .into()
 }
 
 /// Prints the refusal object as the only line on standard error, with no

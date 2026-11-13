@@ -5,6 +5,7 @@
 //! The status and the statement check are implementation aids with no Rule:
 //! they record what the product answers. The import and the init refuse and
 //! keep the file, as `rule_ste_dictionary_reference_parse_refusal` states.
+//! The tests of an init with no PDF are in `cli_ste_onboarding`.
 
 use crate::support::{
     dictionary_pdf, imported_dictionary, init, init_command, provenance, reference_path,
@@ -76,6 +77,20 @@ impl Damaged {
         self.run(&["dictionary", "import", "--pdf", pdf, "--repo", self.repo()])
     }
 
+    fn import_as_json(&self) -> Output {
+        let pdf = self.pdf.to_str().unwrap();
+        self.run(&[
+            "dictionary",
+            "import",
+            "--pdf",
+            pdf,
+            "--repo",
+            self.repo(),
+            "--format",
+            "json",
+        ])
+    }
+
     fn init(&self) -> Output {
         init_command(&self.repo, &["--ste-pdf", self.pdf.to_str().unwrap()])
             .env("PROVENANCE_STE100_INDEX_DIR", &self.index_directory)
@@ -91,18 +106,6 @@ impl Damaged {
             String::from_utf8_lossy(&output.stderr).into_owned(),
             std::fs::read_to_string(reference_path(&self.repo)).unwrap(),
         )
-    }
-
-    /// The refusal that a write gives for a reference whose first line does
-    /// not parse with `message`, and the unchanged `contents`.
-    fn refused(&self, message: &str, contents: &str) -> (Option<i32>, String, String) {
-        let stderr = format!(
-            "Error: the dictionary reference {} does not parse: get the file again from git or \
-             correct its JSON, and then do the command again\n\nCaused by:\n    dictionary.json \
-             line 1: {message}\n",
-            reference_path(&self.repo).display()
-        );
-        (Some(1), stderr, contents.to_owned())
     }
 
     fn status(&self) -> (Option<i32>, Value, String) {
@@ -129,7 +132,8 @@ impl Damaged {
         ]))
     }
 
-    /// The status of a reference that does not parse with `parse_error`.
+    /// The status of a reference whose first line does not parse with
+    /// `parse_error`.
     fn unloaded_status(&self, parse_error: &str) -> (Option<i32>, Value, String) {
         let status = json!({
             "referenced": true,
@@ -145,13 +149,7 @@ impl Damaged {
     /// `parse_error`: a warning that Rule 1.1 did not run, and no finding for
     /// the unapproved word.
     fn unloaded_check(&self, parse_error: &str) -> (Option<i32>, Value, String) {
-        let warning = format!(
-            "ASD-STE100 Rule 1.1 did not run: the dictionary reference has no loadable index in \
-             {}: {}. Run `provenance dictionary import` with the local Issue 9 PDF on this \
-             machine",
-            self.index_directory.display(),
-            problem(parse_error)
-        );
+        let warning = format!("ASD-STE100 Rule 1.1 did not run: {}", problem(parse_error));
         let check = json!({"categories": [{
             "category": "statements",
             "status": "findings",
@@ -161,28 +159,52 @@ impl Damaged {
     }
 }
 
-fn problem(parse_error: &str) -> String {
-    format!("the reference is not a dictionary identity: {parse_error}")
+/// The repair that each answer gives for a reference that does not parse.
+const REPAIR: &str =
+    "get the file again from git or correct its JSON, and then do the command again";
+
+/// The problem that the status and the check give for a reference whose first
+/// line does not parse with `message`.
+fn problem(message: &str) -> String {
+    format!("dictionary.json line 1: {message}; {REPAIR}")
+}
+
+/// The `invalid_state_file` failure object of a reference whose first line
+/// does not parse with `message`.
+fn failure(message: &str) -> String {
+    format!(
+        r#"{{"error":{{"file":"dictionary.json","kind":"invalid_state_file","line":1,"message":"{message}"}},"meta":{{}}}}"#
+    )
+}
+
+/// The refusal that a write gives for a reference whose first line does
+/// not parse with `message`, and the unchanged `contents`.
+fn refused(message: &str, contents: &str) -> (Option<i32>, String, String) {
+    let stderr = format!("Error: {}; {REPAIR}\n", failure(message));
+    (Some(1), stderr, contents.to_owned())
+}
+
+/// The refusal that an import with `--format json` gives, and the
+/// unchanged `contents`.
+fn refused_as_json(message: &str, contents: &str) -> (Option<i32>, String, String) {
+    let stderr = format!(
+        r#"{{"error":{{"file":"dictionary.json","hint":"{REPAIR}","kind":"invalid_state_file","line":1,"message":"{message}"}},"meta":{{}}}}"#
+    );
+    (Some(1), stderr + "\n", contents.to_owned())
 }
 
 #[test]
 fn the_status_of_an_empty_reference_names_the_parse_error() {
     let damaged = Damaged::new(EMPTY);
 
-    assert_eq!(
-        damaged.status(),
-        damaged.unloaded_status("EOF while parsing a value at line 1 column 0")
-    );
+    assert_eq!(damaged.status(), damaged.unloaded_status(EMPTY_MESSAGE));
 }
 
 #[test]
 fn the_status_of_half_of_a_reference_names_the_parse_error() {
     let damaged = Damaged::new(&half());
 
-    assert_eq!(
-        damaged.status(),
-        damaged.unloaded_status("EOF while parsing a string at line 1 column 63")
-    );
+    assert_eq!(damaged.status(), damaged.unloaded_status(HALF_MESSAGE));
 }
 
 #[test]
@@ -191,7 +213,7 @@ fn a_statement_check_with_an_empty_reference_warns_that_rule_1_1_did_not_run() {
 
     assert_eq!(
         damaged.statement_check(),
-        damaged.unloaded_check("EOF while parsing a value at line 1 column 0")
+        damaged.unloaded_check(EMPTY_MESSAGE)
     );
 }
 
@@ -201,7 +223,7 @@ fn a_statement_check_with_half_of_a_reference_warns_that_rule_1_1_did_not_run() 
 
     assert_eq!(
         damaged.statement_check(),
-        damaged.unloaded_check("EOF while parsing a string at line 1 column 63")
+        damaged.unloaded_check(HALF_MESSAGE)
     );
 }
 
@@ -212,10 +234,7 @@ fn an_import_over_an_empty_reference_refuses_and_keeps_the_file() {
 
     let import = damaged.import();
 
-    assert_eq!(
-        damaged.refusal(&import),
-        damaged.refused(EMPTY_MESSAGE, EMPTY)
-    );
+    assert_eq!(damaged.refusal(&import), refused(EMPTY_MESSAGE, EMPTY));
 }
 
 #[test]
@@ -225,10 +244,7 @@ fn an_import_over_half_of_a_reference_refuses_and_keeps_the_technical_names() {
 
     let import = damaged.import();
 
-    assert_eq!(
-        damaged.refusal(&import),
-        damaged.refused(HALF_MESSAGE, &half())
-    );
+    assert_eq!(damaged.refusal(&import), refused(HALF_MESSAGE, &half()));
 }
 
 #[test]
@@ -238,10 +254,7 @@ fn an_init_over_an_empty_reference_refuses_and_keeps_the_file() {
 
     let init = damaged.init();
 
-    assert_eq!(
-        damaged.refusal(&init),
-        damaged.refused(EMPTY_MESSAGE, EMPTY)
-    );
+    assert_eq!(damaged.refusal(&init), refused(EMPTY_MESSAGE, EMPTY));
 }
 
 #[test]
@@ -251,9 +264,32 @@ fn an_init_over_half_of_a_reference_refuses_and_keeps_the_technical_names() {
 
     let init = damaged.init();
 
+    assert_eq!(damaged.refusal(&init), refused(HALF_MESSAGE, &half()));
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_reference_parse_refusal", examples)]
+fn an_import_with_json_output_over_an_empty_reference_gives_the_refusal_object() {
+    let damaged = Damaged::new(EMPTY);
+
+    let import = damaged.import_as_json();
+
     assert_eq!(
-        damaged.refusal(&init),
-        damaged.refused(HALF_MESSAGE, &half())
+        damaged.refusal(&import),
+        refused_as_json(EMPTY_MESSAGE, EMPTY)
+    );
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_reference_parse_refusal", examples)]
+fn an_import_with_json_output_over_half_of_a_reference_gives_the_refusal_object() {
+    let damaged = Damaged::new(&half());
+
+    let import = damaged.import_as_json();
+
+    assert_eq!(
+        damaged.refusal(&import),
+        refused_as_json(HALF_MESSAGE, &half())
     );
 }
 

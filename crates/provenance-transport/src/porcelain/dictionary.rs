@@ -74,9 +74,12 @@ fn status(repo: &Utf8Path) -> DictionaryStatusOutput {
                 (true, Some(dictionary.import.identity), true, None)
             }
             DictionaryResolution::NoReference => (false, None, false, None),
+            DictionaryResolution::Unparsable(refusal) => {
+                (true, None, false, Some(refusal.to_string()))
+            }
             DictionaryResolution::Unavailable {
                 identity, reason, ..
-            } => (true, identity, false, Some(reason)),
+            } => (true, Some(identity), false, Some(reason)),
         };
     DictionaryStatusOutput {
         referenced,

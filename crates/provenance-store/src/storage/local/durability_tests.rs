@@ -1,8 +1,9 @@
 //! The error text of a synced write that cannot make the directory of its
-//! file: the text names the step and the path.
+//! file, and the directory after a rename that fails.
 //!
 //! Each test is an implementation aid with no Rule, because no Rule states
-//! the error text of a write to the local disk.
+//! the error text of a write to the local disk or the removal of its
+//! temporary file.
 
 use super::durability::write_synced_file;
 use camino::Utf8PathBuf;
@@ -46,6 +47,25 @@ fn a_directory_that_cannot_be_found_names_the_step_and_the_path() -> anyhow::Res
             std::io::Error::from_raw_os_error(20)
         )
     );
+    Ok(())
+}
+
+#[test]
+fn a_failed_rename_leaves_no_temporary_file() -> anyhow::Result<()> {
+    let temp = tempfile::tempdir()?;
+    let root = utf8(temp.path())?;
+    let target = root.join("dictionary.json");
+    std::fs::create_dir_all(target.join("occupied"))?;
+
+    let error = write_synced_file(&target, b"{}")
+        .expect_err("a directory at the file path must stop the rename");
+
+    let text = format!("{error:#}");
+    assert!(text.starts_with("failed to persist temporary file: "), "{text}");
+    let names = std::fs::read_dir(&root)?
+        .map(|entry| Ok(entry?.file_name().to_string_lossy().into_owned()))
+        .collect::<std::io::Result<Vec<_>>>()?;
+    assert_eq!(names, ["dictionary.json"]);
     Ok(())
 }
 

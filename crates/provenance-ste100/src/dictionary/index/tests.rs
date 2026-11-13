@@ -4,8 +4,8 @@ use provenance_macros::verifies;
 
 use super::super::{digest, DictionaryEntry, DictionaryImport, DictionaryStatus, PartOfSpeech};
 use super::{
-    decode_dictionary_index, decode_dictionary_index_for_source, dictionary_index_file_name,
-    encode_dictionary_index, DictionaryIndexError,
+    decode_dictionary_index, decode_dictionary_index_for_source, encode_dictionary_index,
+    DictionaryIndexError,
 };
 
 const PATH: &str = "index.json";
@@ -42,15 +42,6 @@ fn encoded(import: &DictionaryImport) -> Vec<u8> {
 }
 
 #[test]
-fn a_decoded_index_is_the_encoded_import() {
-    let import = fixture_import();
-
-    let decoded = decode_dictionary_index(&encoded(&import), &import.identity, Path::new(PATH));
-
-    assert_eq!(decoded, Ok(import));
-}
-
-#[test]
 #[verifies("rule_ste_dictionary_index_digest_verification", examples)]
 fn an_edited_index_file_fails_closed() {
     let import = fixture_import();
@@ -63,19 +54,6 @@ fn an_edited_index_file_fails_closed() {
     assert_eq!(
         error,
         Err(DictionaryIndexError::DigestMismatch { path: PATH.into() })
-    );
-}
-
-#[test]
-#[verifies("rule_ste_dictionary_index_digest_verification", examples)]
-fn an_index_for_a_different_identity_has_a_different_file() {
-    let import = fixture_import();
-    let mut other = import.identity.clone();
-    other.extractor_version = format!("{}-other", other.extractor_version);
-
-    assert_ne!(
-        dictionary_index_file_name(&other),
-        dictionary_index_file_name(&import.identity)
     );
 }
 

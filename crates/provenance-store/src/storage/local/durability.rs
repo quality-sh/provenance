@@ -1,4 +1,5 @@
 use camino::{Utf8Path, Utf8PathBuf};
+use provenance_macros::rule;
 use std::io::Write;
 
 /// A failure of [`replace_file`]. It has the text of a `tempfile` persist
@@ -7,20 +8,18 @@ use std::io::Write;
 #[error("failed to persist temporary file: {0}")]
 pub struct ReplaceFailed(#[source] std::io::Error);
 
-/// Writes `bytes` to the file at `path` in this order: make the directory of
-/// `path` if it does not exist, write a temporary file in that directory,
-/// sync the temporary file, replace `path` with it, and sync the directory.
-/// If the call made directories, it then syncs each directory above the
-/// directory of `path` up to the parent of the highest new directory, deepest
-/// first. On Unix, after the call returns, a power loss cannot lose the new
-/// bytes of the file or the entry of a new directory. On Windows, a directory
-/// has no sync in this module: the file sync occurs, but a power loss can
-/// lose the rename and the entry of a new directory.
+/// Writes `bytes` to the file at `path` so that a stop leaves the previous
+/// contents or all of the new contents, and so that a stop of the electrical
+/// supply does not remove a complete write.
 ///
-/// If a step fails, the steps after it do not occur and no temporary file
-/// stays. The error names the step and its path, for example `make directory
-/// <path>` or `sync <path>`, and then gives the I/O error. If a directory sync
-/// fails, `path` has the new bytes, but a power loss can lose them.
+/// On Windows, a directory has no sync in this module, so a stop of the
+/// electrical supply can remove the rename and the entry of a new directory.
+/// If a step fails, the steps after it do not occur, no temporary file stays,
+/// and the error names the step and its path. If a directory sync fails,
+/// `path` has the new bytes, but a stop of the electrical supply can remove
+/// them.
+#[rule("rule_ste_dictionary_file_write_is_whole")]
+#[rule("rule_ste_dictionary_file_write_is_durable")]
 pub fn write_synced_file(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<()> {
     let (temporary, parent, first_made) = write_temporary(path, bytes)?;
     temporary.as_file().sync_all().map_err(sync_failure(path))?;

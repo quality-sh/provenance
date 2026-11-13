@@ -4,8 +4,6 @@ mod damaged_reference;
 mod gate;
 #[path = "cli_dictionary/import_command.rs"]
 mod import_command;
-#[path = "cli_dictionary/index_files.rs"]
-mod index_files;
 #[path = "cli_dictionary/inflections.rs"]
 mod inflections;
 #[path = "cli_dictionary/missing_index.rs"]

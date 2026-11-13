@@ -293,9 +293,9 @@ impl Invocation {
     /// `{error,meta}` object instead of text.
     pub fn json_output(&self) -> bool {
         let format = match self {
+            Self::Repository(input, _) => return input.json_output(),
             Self::Check(..)
             | Self::Prime(_)
-            | Self::Repository(..)
             | Self::Graph(_)
             | Self::Workspace(_)
             | Self::Server(_) => None,

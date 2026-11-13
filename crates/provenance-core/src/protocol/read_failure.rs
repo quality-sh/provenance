@@ -57,6 +57,32 @@ pub enum ReadFailure {
     ReadFailed { cause: String },
 }
 
+/// A state file that does not parse, with the step that repairs it. A
+/// command that has no operation route gives this refusal. Each surface gives
+/// it as the `invalid_state_file` failure, with the step as its hint.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{file} line {line}: {message}; {hint}")]
+pub struct StateFileRefusal {
+    /// The file path below the state directory.
+    pub file: String,
+    pub line: u64,
+    /// The parse message.
+    pub message: String,
+    /// The step that repairs the file.
+    pub hint: String,
+}
+
+impl StateFileRefusal {
+    /// The `invalid_state_file` failure of the file, with no hint.
+    pub fn failure(&self) -> ReadFailure {
+        ReadFailure::InvalidStateFile {
+            file: self.file.clone(),
+            line: self.line,
+            message: self.message.clone(),
+        }
+    }
+}
+
 /// What a cache close was waiting for when its deadline passed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

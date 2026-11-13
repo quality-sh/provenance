@@ -43,11 +43,16 @@ pub fn state_file(path: &Utf8Path) -> String {
 
 /// Names the shard and its line when a stored line is not one JSON record.
 pub fn located(path: &Utf8Path, line_number: usize, error: &serde_json::Error) -> anyhow::Error {
+    crate::refusal::state_fault(&ShardLine::new(path, line_number), parse_message(error))
+}
+
+/// The message of a serde error with no position, because the refusal gives
+/// the line itself.
+pub fn parse_message(error: &serde_json::Error) -> String {
     let text = error.to_string();
-    let message = text
-        .rfind(" at line ")
-        .map_or(text.as_str(), |at| &text[..at]);
-    crate::refusal::state_fault(&ShardLine::new(path, line_number), message.to_owned())
+    text.rfind(" at line ")
+        .map_or(text.as_str(), |at| &text[..at])
+        .to_owned()
 }
 
 /// The shard path below the state directory, with `/` between its parts on

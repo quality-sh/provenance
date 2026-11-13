@@ -310,6 +310,7 @@ fn ensure_strict_dictionary_index(
 ) -> anyhow::Result<()> {
     match resolve_project_dictionary(layout) {
         DictionaryResolution::NoReference | DictionaryResolution::Loaded(_) => Ok(()),
+        DictionaryResolution::Unparsable(refusal) => Err(refusal.into()),
         DictionaryResolution::Unavailable {
             directory, reason, ..
         } => {
