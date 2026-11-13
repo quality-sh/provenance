@@ -16,15 +16,14 @@ pub fn get_refusal(
         let takes = schema
             .get("properties")
             .and_then(Value::as_object)
-            .map(|properties| {
+            .map_or_default(|properties| {
                 properties
                     .keys()
                     .filter(|name| *name != "notify")
                     .cloned()
                     .collect::<Vec<_>>()
                     .join(", ")
-            })
-            .unwrap_or_default();
+            });
         crate::surface::detail_error(json!({
             "kind": "invalid_input",
             "field": "notify",

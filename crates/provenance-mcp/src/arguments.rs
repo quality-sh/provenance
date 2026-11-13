@@ -65,8 +65,9 @@ fn describe(tool: &str, root: &Value, error: &ValidationError<'_>) -> Value {
             let owner = if path.is_empty() { tool } else { &path };
             let takes = schema
                 .and_then(|schema| schema["properties"].as_object())
-                .map(|properties| properties.keys().cloned().collect::<Vec<_>>().join(", "))
-                .unwrap_or_default();
+                .map_or_default(|properties| {
+                    properties.keys().cloned().collect::<Vec<_>>().join(", ")
+                });
             (
                 joined(&path, &name),
                 "unknown_field",

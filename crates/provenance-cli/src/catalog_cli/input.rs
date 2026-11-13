@@ -305,8 +305,7 @@ fn supplied(matches: &ArgMatches, name: &str) -> Vec<String> {
             .try_get_many::<String>(name)
             .ok()
             .flatten()
-            .map(|values| values.map(String::to_owned).collect::<Vec<_>>())
-            .unwrap_or_default()
+            .map_or_default(|values| values.map(String::to_owned).collect::<Vec<_>>())
     };
     let values = read(name);
     if values.is_empty() {

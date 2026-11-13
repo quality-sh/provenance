@@ -37,10 +37,21 @@ pub struct RepositoryContext {
     pub freshness: Option<FreshnessPolicy>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Clone)]
+#[cfg_attr(
+    feature = "schema",
+    derive(schemars::JsonSchema),
+    schemars(deny_unknown_fields)
+)]
 pub struct InfoRequest {}
+
+// This impl is written by hand: for a struct with no fields, the derive makes
+// an enum with no variants, and the `empty_enums` lint refuses that enum.
+impl<'de> Deserialize<'de> for InfoRequest {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        super::empty::deserialize_struct(deserializer, "InfoRequest").map(|()| Self {})
+    }
+}
 
 /// External metadata names the requested target, never a host path.
 #[derive(Debug, Clone, Serialize)]

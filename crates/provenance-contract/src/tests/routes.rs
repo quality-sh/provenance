@@ -1,4 +1,5 @@
 use provenance_core::protocol::failure::OperationFailure;
+use provenance_macros::verifies;
 use provenance_store::operations::catalog::{
     CheckStatement, ExecutionNeeds, Get, Info, Operation, OperationFuture, PreparedContext,
 };
@@ -254,6 +255,7 @@ fn public_member_reads_do_not_use_collection_response_adapters() {
 }
 
 #[test]
+#[verifies("rule_empty_request_accepts_only_an_empty_object", examples)]
 fn repository_info_has_a_numeric_version_and_closed_request() {
     let definition = crate::schema::raw_definition::<Info>();
     assert_eq!(
