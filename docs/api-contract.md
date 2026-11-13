@@ -152,10 +152,10 @@ unchanged from the current surface — stamps, freshness policy, the HMAC-bound
 cursor, and limits — per the plan's kept-unchanged list.
 
 A body-bearing request uses `{data}`. A route that gets each input field from
-its path and its bound context takes no body, and refuses a request that has
-one. HTTP binds catalog-defined controls to headers. MCP and native calls use
-the same typed controls. `If-Match` and the
-response `ETag` map to Store-supported precondition checks. The surface never
+its path, its bound context and its request headers takes no body, and refuses
+a request that has one. HTTP binds catalog-defined controls to headers. MCP
+and native calls use the same typed controls. `If-Match` and the response
+`ETag` map to Store-supported precondition checks. The surface never
 advertises an unsupported guarantee.
 
 Review writes do not accept `Idempotency-Key`, and their bodies do not accept a

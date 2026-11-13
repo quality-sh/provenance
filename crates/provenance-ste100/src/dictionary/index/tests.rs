@@ -90,10 +90,13 @@ fn a_source_match_does_not_accept_an_incomplete_index() {
     );
 }
 
-/// A user reads these texts as the load problem of the dictionary status and in the
-/// failure of a strict check. No Rule states the texts, so this test has no Rule binding.
-/// It makes each fault of the bytes of an index and shows its text. The store tests the
-/// texts of a file that is missing or that cannot be read.
+/// The dictionary status gives the texts of an identity, a digest and a structure that do
+/// not match as its load problem, and a strict check gives them in its failure. No command
+/// gives the text of an incomplete index, because onboarding imports the PDF when the index
+/// does not load. A caller of `decode_dictionary_index_for_source` gets that text. No Rule
+/// states the texts, so this test has no Rule binding. It makes each fault of the bytes of
+/// an index and shows its text. The store tests the texts of a file that is missing or that
+/// cannot be read.
 #[test]
 fn each_fault_of_the_index_bytes_gives_its_diagnostic() {
     let import = fixture_import();

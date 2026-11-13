@@ -292,7 +292,7 @@ fn request_field_stripping_does_not_change_nested_definitions() {
     let mut schema = Some(crate::schema::request_envelope(
         crate::schema::type_schema::<Request>(schemars::generate::Contract::Deserialize),
     ));
-    crate::schema::hide_bound_request_field(&mut schema, "id");
+    crate::schema::hide_bound_request_field("example", &mut schema, "id");
     let schema = schema.unwrap();
 
     assert!(schema["properties"]["data"]["properties"]
