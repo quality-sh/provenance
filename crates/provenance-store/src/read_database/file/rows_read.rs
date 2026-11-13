@@ -49,7 +49,9 @@ impl MakeHooks for RowsRead {
 async fn full_scan_rows(inner: &mut Transaction) -> anyhow::Result<u64> {
     let file = (inner.as_mut() as &mut dyn std::any::Any)
         .downcast_mut::<FileTransaction>()
-        .ok_or_else(|| anyhow::anyhow!("the transaction is not a transaction of the file"))?;
+        .ok_or_else(|| {
+            crate::refusal::fault!("the transaction is not a transaction of the file")
+        })?;
     let mut handle = file.0.lock_handle().await?;
     let connection = handle.as_raw_handle().as_ptr();
     let mut rows = 0;
@@ -144,7 +146,11 @@ impl Harness for Rows {
     }
 
     fn fail_commit<'a>(&'a self, _transaction: &'a mut Transaction) -> SqlFuture<'a, ()> {
-        Box::pin(async { Err(anyhow::anyhow!("the work-bound cases make no commit fail")) })
+        Box::pin(async {
+            Err(crate::refusal::fault!(
+                "the work-bound cases make no commit fail"
+            ))
+        })
     }
 }
 
