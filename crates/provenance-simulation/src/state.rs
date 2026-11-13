@@ -126,13 +126,13 @@ impl FinalRecords {
     /// Tells if `target` holds `value`.
     pub fn holds(&self, target: &Target, value: &Value) -> bool {
         match (target, value) {
-            (Target::Exists(id), Value::Exists) => self.descriptions.contains_key(id),
-            (Target::Description(id), Value::Description(description)) => {
-                self.descriptions.get(id) == Some(&Some(description.clone()))
+            (Target::Requirement(id), Value::Absent) => !self.descriptions.contains_key(id),
+            (Target::Requirement(id), Value::Requirement { description }) => {
+                self.descriptions.get(id) == Some(description)
             }
-            (Target::Topic, Value::Topic { archived, claim }) => {
-                let is_archived = self.topic_status == Some(TopicStatus::Archived);
-                is_archived == *archived && self.claim == *claim
+            (Target::Topic, Value::Absent) => self.topic_status.is_none(),
+            (Target::Topic, Value::Topic { status, claim }) => {
+                self.topic_status == Some(*status) && self.claim == *claim
             }
             _ => false,
         }

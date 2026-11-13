@@ -6,6 +6,7 @@
 //! that a later run can replay it. The crate README tells what to do with a
 //! failure.
 
+pub mod expected;
 pub mod generate;
 mod identity;
 pub mod laws;

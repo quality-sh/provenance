@@ -1,9 +1,9 @@
 //! The laws that a run of a case through the CLI keeps.
 
 use provenance_core::{RequirementStatus, ScopeId, StableId};
+use provenance_simulation::expected::{Expected, Write};
 use provenance_simulation::generate::{
-    created_requirement_id, requirement_id, Case, Effect, Operation, Step, Target, Task, Value,
-    SCOPE,
+    created_requirement_id, requirement_id, Case, Effect, Operation, Step, Task, SCOPE,
 };
 use provenance_simulation::laws::Violation;
 use provenance_simulation::{final_records, run_case, Config, Done};
@@ -49,40 +49,24 @@ pub fn check(case: &Case, run: &CliRun) -> Result<(), Violation> {
     one_writer_answers_as_the_engine(case, run, apply_public)
 }
 
-/// The values that a record can hold after each group; `None` is any value.
-type Expected = BTreeMap<Target, Option<Vec<Value>>>;
-
-/// L3: each record holds a value of the last group that changed it. A write
-/// merged from a branch adds a value. A stopped write can leave any value on
-/// each record that it writes. A failed write that did not stop changes no
-/// record.
+/// L3: each record holds a value of the last group that changed it, from
+/// the values of the initial state. A write that stopped, or a write merged
+/// from a branch, is not certain. A failed write that did not stop changes
+/// no record.
 fn successful_writes_stay(run: &CliRun) -> Result<(), Violation> {
-    let mut expected = Expected::new();
-    for (way, done) in &run.groups {
-        let mut changed = Expected::new();
-        for done in done {
-            for (target, value) in done.op.writes(done.result.as_ref().ok()) {
-                if done.stopped {
-                    changed.insert(target, None);
-                } else if let (Ok(_), Some(value)) = (&done.result, value) {
-                    let values = changed.entry(target).or_insert_with(|| Some(Vec::new()));
-                    if let Some(values) = values {
-                        values.push(value);
-                    }
-                }
-            }
-        }
-        for (target, values) in changed {
-            let before = expected.remove(&target).flatten();
-            let values = match (way, before, values) {
-                (Ran::Outside, Some(mut old), Some(new)) => {
-                    old.extend(new);
-                    Some(old)
-                }
-                (_, _, values) => values,
-            };
-            expected.insert(target, values);
-        }
+    let mut expected = Expected::initial();
+    for (index, (way, done)) in run.groups.iter().enumerate() {
+        let landed = done.iter().filter(|done| done.stopped || done.result.is_ok());
+        let group = landed.flat_map(|done| {
+            let certain = !done.stopped && *way != Ran::Outside;
+            let writes = done.op.writes(done.engine, done.operation);
+            writes.into_iter().map(move |(target, value)| Write {
+                target,
+                value,
+                certain,
+            })
+        });
+        expected.apply(index + 1, group);
     }
     let entries = run.entries.as_ref().map_err(|error| Violation {
         law: "L3",
@@ -92,13 +76,7 @@ fn successful_writes_stay(run: &CliRun) -> Result<(), Violation> {
         law: "L3",
         detail: format!("the final state does not read: {error:#}"),
     })?;
-    for (target, values) in expected {
-        let Some(values) = values else { continue };
-        if !values.iter().any(|value| state.holds(&target, value)) {
-            return broken("L3", format!("{target:?} holds none of {values:?}"));
-        }
-    }
-    Ok(())
+    expected.check(&state, "write group")
 }
 
 /// L4: two writes of the engines on one etag do not both succeed.

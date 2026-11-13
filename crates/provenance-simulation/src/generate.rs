@@ -12,6 +12,7 @@ pub use apply::apply;
 pub use call::Call;
 
 use hegel::generators as gs;
+use provenance_core::TopicStatus;
 use hegel::{DefaultGenerator, TestCase};
 use serde::Serialize;
 
@@ -181,28 +182,25 @@ pub fn binding_file(n: u8) -> String {
     format!("tests/sim_{}.test.ts", n % 4)
 }
 
-/// The record that an operation writes, for the laws that follow a record.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+/// A record that the laws follow.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Target {
-    /// The description of a Requirement.
-    Description(String),
-    /// A Requirement that a create makes.
-    Exists(String),
+    /// A Requirement and its description.
+    Requirement(String),
     /// The status and the claim of the Topic.
     Topic,
 }
 
-/// The value that a record holds after a write on it lands.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+/// The value of a record that the laws follow.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Value {
-    /// The Requirement exists.
-    Exists,
-    /// The description of the Requirement.
-    Description(String),
-    /// The Topic is archived or open for a claim, and the actor that holds
-    /// its claim. An archived Topic holds no claim.
+    /// The record does not exist.
+    Absent,
+    /// The Requirement exists and has this description.
+    Requirement { description: Option<String> },
+    /// The status of the Topic and the actor that holds its claim.
     Topic {
-        archived: bool,
+        status: TopicStatus,
         claim: Option<String>,
     },
 }
@@ -264,62 +262,86 @@ pub struct Task {
 }
 
 impl Operation {
-    /// The records that the operation writes when it lands, for the laws
-    /// that follow a record, each with the value that the record then holds.
-    /// The value of most writes comes from `effect`, the effect of a
-    /// success; with no effect, it is not known.
+    /// The records that the operation writes when it lands, each with the
+    /// value that the record then holds. The value comes from the operation,
+    /// the engine that runs it and its number, so it is known also when the
+    /// answer is not.
     ///
-    /// An archive of the first Requirement archives its Topic, and an
-    /// archived Topic holds no claim. This value does not need the effect.
-    /// A successful claim or release shows that the Topic was not archived.
-    pub fn writes(&self, effect: Option<&Effect>) -> Vec<(Target, Option<Value>)> {
-        let (target, value) = match self {
+    /// - A create makes the Requirement with no description, and an update
+    ///   gives it the description of the operation.
+    /// - A claim holds the claim of its actor. The product refuses a claim of
+    ///   an archived Topic, so a claim that lands shows an open Topic.
+    /// - A release clears the claim. The product refuses a release unless
+    ///   the actor holds the claim, and an archive clears the claim, so a
+    ///   release that lands shows an open Topic.
+    /// - An archive of the first Requirement archives its Topic and clears
+    ///   the claim.
+    pub fn writes(&self, engine: Option<usize>, operation: u64) -> Vec<(Target, Value)> {
+        let topic = |status, claim| Value::Topic { status, claim };
+        let write = match self {
             Self::CreateRequirement { n } => (
-                Target::Exists(created_requirement_id(*n)),
-                effect.map(|_| Value::Exists),
+                Target::Requirement(created_requirement_id(*n)),
+                Value::Requirement { description: None },
             ),
             Self::UpdateRequirement { n, .. } => (
-                Target::Description(requirement_id(*n)),
-                match effect {
-                    Some(Effect::Described { description, .. }) => {
-                        Some(Value::Description(description.clone()))
-                    }
-                    _ => None,
+                Target::Requirement(requirement_id(*n)),
+                Value::Requirement {
+                    description: Some(description(operation)),
                 },
             ),
-            Self::ClaimTopic | Self::ReleaseTopic => (
-                Target::Topic,
-                match effect {
-                    Some(Effect::Claim { holder }) => Some(Value::Topic {
-                        archived: false,
-                        claim: holder.clone(),
-                    }),
-                    _ => None,
-                },
-            ),
-            Self::ArchiveRequirement { n } if requirement_id(*n) == FIRST_REQUIREMENT => (
-                Target::Topic,
-                Some(Value::Topic {
-                    archived: true,
-                    claim: None,
-                }),
-            ),
+            Self::ClaimTopic => (Target::Topic, topic(TopicStatus::Open, Some(actor(engine)))),
+            Self::ReleaseTopic => (Target::Topic, topic(TopicStatus::Open, None)),
+            Self::ArchiveRequirement { n } if requirement_id(*n) == FIRST_REQUIREMENT => {
+                (Target::Topic, topic(TopicStatus::Archived, None))
+            }
             _ => return Vec::new(),
         };
-        vec![(target, value)]
+        vec![write]
     }
+}
+
+/// The value of each record that the laws follow, in the initial state:
+/// the first Requirement has no description, the Requirements that a create
+/// makes do not exist, and the Topic is open with no claim.
+pub fn initial_values() -> Vec<(Target, Value)> {
+    let mut values = vec![
+        (
+            Target::Requirement(FIRST_REQUIREMENT.to_owned()),
+            Value::Requirement { description: None },
+        ),
+        (
+            Target::Topic,
+            Value::Topic {
+                status: TopicStatus::Open,
+                claim: None,
+            },
+        ),
+    ];
+    for n in 0..3 {
+        values.push((Target::Requirement(created_requirement_id(n)), Value::Absent));
+    }
+    values
+}
+
+/// The actor of a claim: each engine is its own agent.
+fn actor(engine: Option<usize>) -> String {
+    engine.map_or_else(|| "outside".to_owned(), |slot| format!("engine-{slot}"))
+}
+
+/// The description that update `operation` writes.
+fn description(operation: u64) -> String {
+    format!("Description from operation {operation}")
 }
 
 impl Task {
     /// The actor of a claim: each engine is its own agent.
     pub fn actor(&self) -> String {
-        self.engine
-            .map_or_else(|| "outside".to_owned(), |slot| format!("engine-{slot}"))
+        actor(self.engine)
     }
 
     /// The description that an update writes.
     pub fn description(&self) -> String {
-        format!("Description from operation {}", self.operation)
+        description(self.operation)
     }
 
     /// The body of a message or a Discussion entry.
