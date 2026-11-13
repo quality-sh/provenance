@@ -283,6 +283,10 @@ mod tests {
     use provenance_macros::verifies;
     use serde_json::json;
 
+    // The base of a path in an inline module of `import.rs` is `import/tests/`.
+    #[path = "../../../../tests/support/ideation.rs"]
+    mod ideation;
+
     fn minimal_export(source: &serde_json::Value) -> serde_json::Value {
         json!({
             "scope": "default",
@@ -374,28 +378,17 @@ mod tests {
         );
     }
 
-    fn evidence_target() -> serde_json::Value {
-        json!({"artifact_type": "requirement", "artifact_id": "req_a"})
-    }
-
     fn contribution() -> Contribution {
-        serde_json::from_value(json!({
-            "scope_id": "default", "id": "contribution_a", "target": evidence_target(),
-            "participant_slot": "reviewer", "stance": "support", "strongest_finding": "Observed",
-            "evidence_references": [], "material_claims": [], "risks": [], "objections": [],
-            "challenges": [], "suggested_artifact_changes": [], "unsupported_recommendations": [],
-            "uncertainty": {"level": "low", "rationale": "Direct"}, "open_questions": []
-        }))
-        .unwrap()
+        stored(ideation::contribution("contribution_a"))
     }
 
     fn synthesis_packet() -> SynthesisPacket {
-        serde_json::from_value(json!({
-            "scope_id": "default", "id": "synthesis_a", "target": evidence_target(),
-            "summary": "Adjudicated", "consensus": [], "contested_claims": [],
-            "minority_objections": [], "evidence_gaps": [], "unsupported_speculation": [],
-            "open_questions": [], "suggested_artifacts": [], "required_human_decisions": []
-        }))
-        .unwrap()
+        stored(ideation::synthesis("synthesis_a"))
+    }
+
+    /// The stored form of the request body `record` in the scope `default`.
+    fn stored<T: serde::de::DeserializeOwned>(mut record: serde_json::Value) -> T {
+        record["scope_id"] = json!("default");
+        serde_json::from_value(record).unwrap()
     }
 }
