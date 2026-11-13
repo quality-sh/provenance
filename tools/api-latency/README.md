@@ -66,8 +66,12 @@ that the store refuses.
 
 - `fixtures/catalog.json` is a sample of the catalog answers of one provenance
   binary, for `catalog.test.mjs`. `fixtures/capture.mjs` writes it:
-  `node tools/api-latency/fixtures/capture.mjs <binary> <repository>`. Do not
-  edit the file by hand. The sample is not the contract of the current commit,
-  so a contract change does not need a new capture.
+  `node tools/api-latency/fixtures/capture.mjs <binary> <repository>`. The file
+  is the output of this tool with no change: do not edit it by hand. The sample
+  does not follow the contract: a contract change does not need a new capture.
+  Capture again only when the tests of the tool need a new form of the answer.
+  To test the reader on the catalog of a different binary, give an output file
+  as a third argument and set `API_LATENCY_CATALOG` to that file when you run
+  `catalog.test.mjs`. CI does this with the CLI that it builds.
 
 Run the unit tests with `node --test tools/api-latency/*.test.mjs`.
