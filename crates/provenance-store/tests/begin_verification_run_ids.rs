@@ -40,7 +40,8 @@ struct StartsAnotherRun {
 
 impl StatePersistence for StartsAnotherRun {
     fn persist(&self, _writes: &WriteSet) -> Result<(), PublishFailure> {
-        if let Some(other) = self.other.lock().unwrap().take() {
+        let other = self.other.lock().unwrap().take();
+        if let Some(other) = other {
             std::thread::scope(|threads| {
                 threads.spawn(|| begin_verification(&other, begin_input()).unwrap());
             });
