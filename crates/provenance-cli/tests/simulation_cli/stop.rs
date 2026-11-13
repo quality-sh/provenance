@@ -306,6 +306,5 @@ fn landing(layout: &ProvenanceLayout, transaction: &Path) -> Landing {
 /// The names in `directory`, or none when it does not exist.
 fn names(directory: &Path) -> BTreeSet<OsString> {
     std::fs::read_dir(directory)
-        .map(|entries| entries.flatten().map(|entry| entry.file_name()).collect())
-        .unwrap_or_default()
+        .map_or_default(|entries| entries.flatten().map(|entry| entry.file_name()).collect())
 }
