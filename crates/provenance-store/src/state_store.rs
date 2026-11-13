@@ -42,7 +42,6 @@ mod writers;
 pub use updates::*;
 
 pub use access::GuardedStore;
-#[cfg(feature = "host")]
 pub(crate) use access::ViewStore;
 pub(crate) use access::{SectionView, StateEntry};
 #[cfg(feature = "host")]

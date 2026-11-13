@@ -58,12 +58,12 @@ impl Bounded for Command {
 /// Runs `command` with piped output. Past `limit` the test fails with the
 /// report of the process and the output that it wrote.
 pub fn output(command: &mut Command, limit: Duration) -> Output {
-    run(command, None, limit)
+    run(command, None, limit, None)
 }
 
 /// Runs `command` like [`output`] with `input` on its standard input.
 pub fn output_with_input(command: &mut Command, input: impl Into<Vec<u8>>) -> Output {
-    run(command, Some(input.into()), LIMIT)
+    run(command, Some(input.into()), LIMIT, None)
 }
 
 /// Runs `command` like [`output_with_input`] and gives an assertion on its
@@ -78,14 +78,31 @@ pub fn assert_with_input(command: &mut Command, input: impl Into<Vec<u8>>) -> As
         .append_context("stdin", text)
 }
 
-fn run(command: &mut Command, input: Option<Vec<u8>>, limit: Duration) -> Output {
+/// Runs `command` like [`output`], with `input` on its standard input when
+/// the caller gives it. Each failure names `what`, for example the step of
+/// the test that runs the command.
+pub fn output_named(command: &mut Command, input: Option<Vec<u8>>, what: &str) -> Output {
+    run(command, input, LIMIT, Some(what))
+}
+
+/// Runs `command` to its end or to `limit`. Each failure names `what` when
+/// the caller gives it, and the command.
+fn run(
+    command: &mut Command,
+    input: Option<Vec<u8>>,
+    limit: Duration,
+    what: Option<&str>,
+) -> Output {
     // As with `assert_cmd`, a process that gets no input reads an empty input.
     command.stdin(if input.is_some() {
         Stdio::piped()
     } else {
         Stdio::null()
     });
-    let description = format!("{command:?}");
+    let description = what.map_or_else(
+        || format!("{command:?}"),
+        |what| format!("{what}: {command:?}"),
+    );
     // In its own process group, the process and its child processes stop together.
     #[cfg(unix)]
     std::os::unix::process::CommandExt::process_group(command, 0);
@@ -170,7 +187,13 @@ fn left(deadline: Instant) -> Duration {
     deadline.saturating_duration_since(Instant::now())
 }
 
+/// The longest sleep between two reads of the process status. The sleep
+/// starts at 1 ms and doubles to this value, so that a process that ends in
+/// a few milliseconds does not wait for a long sleep.
+const POLL_MAX: Duration = Duration::from_millis(25);
+
 fn wait_until(child: &mut Child, deadline: Instant) -> Option<ExitStatus> {
+    let mut sleep = Duration::from_millis(1);
     loop {
         if let Some(status) = child.try_wait().expect("read the process status") {
             return Some(status);
@@ -178,7 +201,8 @@ fn wait_until(child: &mut Child, deadline: Instant) -> Option<ExitStatus> {
         if Instant::now() >= deadline {
             return None;
         }
-        std::thread::sleep(Duration::from_millis(25));
+        std::thread::sleep(sleep);
+        sleep = (sleep * 2).min(POLL_MAX);
     }
 }
 

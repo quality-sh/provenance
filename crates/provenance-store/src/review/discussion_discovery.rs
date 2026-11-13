@@ -2,6 +2,7 @@ use crate::operations::{
     read_policy::ReadPolicy,
     reader::{self, Cursor, ReadContext, PAGE_BYTES},
 };
+use crate::read_database::{SqlColumns, SqlRow, SqlValue};
 use crate::repository::Repository;
 use provenance_core::{
     protocol::{read_failure::ReadFailure, Stamped},
@@ -13,12 +14,10 @@ use provenance_core::{
     NodeType, StableId, ThreadParent,
 };
 use provenance_macros::rule;
-use sqlx::{QueryBuilder, Sqlite};
 
 const EXCERPT_CHARS: usize = 240;
 // One Rust char uses at most four UTF-8 bytes.
 const EXCERPT_PREFIX_BYTES: usize = EXCERPT_CHARS * 4;
-type DiscussionListRow = (String, String, String, String, i64, Vec<u8>, i64);
 
 /// Lists addressed Discussions in one scope or under one parent.
 #[rule("rule_porcelain_discussions_list_scope_or_parent")]
@@ -90,64 +89,24 @@ async fn list(ctx: &ReadContext, query: DiscussionListQuery) -> anyhow::Result<D
     for table in ["discussions", "messages"] {
         ctx.snapshot().attest(table);
     }
-    let mut sql = QueryBuilder::<Sqlite>::new(
-        "SELECT d.discussion_id,json_extract(d.parent,'$.node_type'),\
-         json_extract(d.parent,'$.node_id'),d.status,d.version,\
-         substr(CAST(m.body AS BLOB),1,",
-    );
-    sql.push_bind(i64::try_from(EXCERPT_PREFIX_BYTES)?);
-    sql.push(
-        "),length(CAST(m.body AS BLOB)) \
-         FROM discussions d \
-         JOIN messages m ON m.scope_id=d.scope_id AND m.id=d.root_message_id \
-         WHERE d.scope_id=",
-    );
-    sql.push_bind(ctx.snapshot().scope().as_str());
-    sql.push(" AND d.discussion_id>").push_bind(&position.id);
-    sql.push(" AND json_extract(d.parent,'$.node_type') IN (");
-    {
-        let mut separated = sql.separated(",");
-        for kind in &kinds {
-            separated.push_bind(*kind);
-        }
-    }
-    sql.push(")");
-    if let Some(parent) = &query.parent {
-        sql.push(" AND json_extract(d.parent,'$.node_type')=")
-            .push_bind(super::discussion_state::discussion_kind_word(
-                parent.node_type,
-            ));
-        sql.push(" AND json_extract(d.parent,'$.node_id')=")
-            .push_bind(parent.node_id.as_str());
-    }
-    if let Some(status) = status_word(query.status) {
-        sql.push(" AND d.status=").push_bind(status);
-    }
-    sql.push(" ORDER BY d.discussion_id LIMIT ")
-        .push_bind(i64::try_from(query.limit + 1)?);
-    let mut tx = ctx.snapshot().connection().await;
-    let rows: Vec<DiscussionListRow> = sql
-        .build_query_as()
-        .fetch_all(&mut **tx)
-        .await
-        .map_err(anyhow::Error::from)
-        .map_err(reader::page_error)?;
-    drop(tx);
+    let wanted = query.limit + 1;
+    let rows = list_rows(ctx, &query, &kinds, &position.id, wanted).await?;
     let row_count = rows.len();
     let mut entries = Vec::new();
     let mut bytes = 0;
-    for (id, kind, parent_id, status, version, opening, body_bytes) in rows {
+    for mut row in rows {
         if entries.len() == query.limit {
             break;
         }
+        let id = row.take_text(0)?;
         let entry = summary(
             id.clone(),
-            kind,
-            parent_id,
-            status,
-            version,
-            &opening,
-            body_bytes,
+            row.take_text(1)?,
+            row.take_text(2)?,
+            row.take_text(3)?,
+            row.integer(4)?,
+            row.blob(5)?,
+            row.integer(6)?,
         )?;
         let size = serde_json::to_vec(&entry)?.len();
         if bytes + size > PAGE_BYTES - 16_384 {
@@ -162,6 +121,62 @@ async fn list(ctx: &ReadContext, query: DiscussionListQuery) -> anyhow::Result<D
         entries,
         next_cursor: has_more.then(|| cursor.encode(ctx, position)).transpose()?,
     })
+}
+
+/// The rows of the list after the discussion id `after`, at most `wanted`
+/// of them, in discussion id order. The parent kinds go in chunks of the
+/// list size of the read.
+async fn list_rows(
+    ctx: &ReadContext,
+    query: &DiscussionListQuery,
+    kinds: &[&'static str],
+    after: &str,
+    wanted: usize,
+) -> anyhow::Result<Vec<SqlRow>> {
+    let mut tail = String::new();
+    let mut tail_values = Vec::new();
+    if let Some(parent) = &query.parent {
+        tail.push_str(
+            " AND json_extract(d.parent,'$.node_type')=? AND json_extract(d.parent,'$.node_id')=?",
+        );
+        tail_values.push(SqlValue::from(
+            super::discussion_state::discussion_kind_word(parent.node_type),
+        ));
+        tail_values.push(SqlValue::from(parent.node_id.as_str()));
+    }
+    if let Some(status) = status_word(query.status) {
+        tail.push_str(" AND d.status=?");
+        tail_values.push(SqlValue::from(status));
+    }
+    let mut rows = Vec::new();
+    for chunk in kinds.chunks(ctx.snapshot().list_values()) {
+        let sql = format!(
+            "SELECT d.discussion_id,json_extract(d.parent,'$.node_type'),\
+             json_extract(d.parent,'$.node_id'),d.status,d.version,\
+             substr(CAST(m.body AS BLOB),1,?),length(CAST(m.body AS BLOB)) \
+             FROM discussions d \
+             JOIN messages m ON m.scope_id=d.scope_id AND m.id=d.root_message_id \
+             WHERE d.scope_id=? AND d.discussion_id>? \
+             AND json_extract(d.parent,'$.node_type') IN ({}){tail} \
+             ORDER BY d.discussion_id LIMIT ?",
+            vec!["?"; chunk.len()].join(",")
+        );
+        let mut values = vec![
+            SqlValue::Integer(i64::try_from(EXCERPT_PREFIX_BYTES)?),
+            ctx.snapshot().scope_value(),
+            SqlValue::from(after),
+        ];
+        values.extend(chunk.iter().map(|kind| SqlValue::from(*kind)));
+        values.extend(tail_values.iter().cloned());
+        values.push(SqlValue::Integer(i64::try_from(wanted)?));
+        rows.extend(
+            ctx.snapshot()
+                .fetch(&sql, values)
+                .await
+                .map_err(reader::page_error)?,
+        );
+    }
+    first_by_id(rows, wanted)
 }
 
 /// A compact entry gives the stored identity, parent, status, and opening text.
@@ -208,24 +223,24 @@ async fn conversation(
     }
     ctx.snapshot().bound_page_work().await?;
     ctx.snapshot().attest("discussions");
-    let mut sql = QueryBuilder::<Sqlite>::new(
-        "SELECT json_extract(parent,'$.node_type'),json_extract(parent,'$.node_id') \
-         FROM discussions WHERE scope_id=",
-    );
-    sql.push_bind(ctx.snapshot().scope().as_str());
-    sql.push(" AND discussion_id=")
-        .push_bind(query.discussion_id.as_str());
-    sql.push(" AND json_extract(parent,'$.node_type') IN (");
-    {
-        let mut separated = sql.separated(",");
-        for kind in &kinds {
-            separated.push_bind(*kind);
+    let mut row = None;
+    for chunk in kinds.chunks(ctx.snapshot().list_values()) {
+        let sql = format!(
+            "SELECT json_extract(parent,'$.node_type'),json_extract(parent,'$.node_id') \
+             FROM discussions WHERE scope_id=? AND discussion_id=? \
+             AND json_extract(parent,'$.node_type') IN ({}) LIMIT 1",
+            vec!["?"; chunk.len()].join(",")
+        );
+        let mut values = vec![
+            ctx.snapshot().scope_value(),
+            SqlValue::from(query.discussion_id.as_str()),
+        ];
+        values.extend(chunk.iter().map(|kind| SqlValue::from(*kind)));
+        if let Some(mut found) = ctx.snapshot().fetch(&sql, values).await?.into_iter().next() {
+            row = Some((found.take_text(0)?, found.take_text(1)?));
+            break;
         }
     }
-    sql.push(") LIMIT 1");
-    let mut tx = ctx.snapshot().connection().await;
-    let row: Option<(String, String)> = sql.build_query_as().fetch_optional(&mut **tx).await?;
-    drop(tx);
     let (kind, id) = row.ok_or(ReadFailure::ResourceNotFound)?;
     let parent = ThreadParent {
         node_type: serde_json::from_value(serde_json::Value::String(kind))?,
@@ -253,4 +268,19 @@ async fn conversation(
         head: *discussion,
         messages,
     })
+}
+
+/// The first `wanted` rows by discussion id, the first column, of the rows
+/// that the statements of each list chunk gave.
+fn first_by_id(mut rows: Vec<SqlRow>, wanted: usize) -> anyhow::Result<Vec<SqlRow>> {
+    for row in &rows {
+        row.text(0)?;
+    }
+    rows.sort_by(|left, right| {
+        left.text(0)
+            .unwrap_or_default()
+            .cmp(right.text(0).unwrap_or_default())
+    });
+    rows.truncate(wanted);
+    Ok(rows)
 }

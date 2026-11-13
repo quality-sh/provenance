@@ -7,10 +7,13 @@ use provenance_core::{Manifest, NodeType, RepoPathPrefix, RequirementStatus, Sco
 
 mod binding_pages;
 mod budgets;
+mod catch_up_rows;
 mod comparison;
 mod concurrent;
 mod cursor;
 mod dangling_targets;
+mod discussion_chunks;
+mod discussion_outputs;
 mod document;
 mod document_lifecycle;
 mod document_membership;
@@ -26,8 +29,11 @@ mod lifecycle_visibility;
 mod limits;
 mod live;
 mod order;
+mod page_budget;
+mod page_interrupt;
 mod pinned;
 mod reader;
+mod reader_outputs;
 mod stamp;
 mod symbol_pages;
 mod symbols;

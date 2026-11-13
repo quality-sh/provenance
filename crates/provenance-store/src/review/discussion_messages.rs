@@ -3,6 +3,7 @@ use crate::operations::{
     read_policy::ReadPolicy,
     reader::{self, Cursor, Position, ReadContext},
 };
+use crate::read_database::{one_row, SqlColumns, SqlValue};
 use crate::repository::Repository;
 use provenance_core::{
     protocol::{read_failure::ReadFailure, Stamped},
@@ -56,16 +57,32 @@ async fn message(
          JOIN threads t ON t.scope_id=m.scope_id AND t.id=m.thread_id {join} \
          WHERE m.scope_id=? AND t.parent_type=? AND t.parent_id=? AND {condition} AND m.id=?"
     );
-    let mut tx = ctx.snapshot().connection().await;
-    let row: Option<(String, String, String, i64, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(sql))
-        .bind(ctx.snapshot().scope().as_str())
-        .bind(kind)
-        .bind(parent.node_id.as_str())
-        .bind(selector_id)
-        .bind(message_id.as_str())
-        .fetch_optional(&mut **tx)
+    let rows = ctx
+        .snapshot()
+        .fetch(
+            &sql,
+            vec![
+                ctx.snapshot().scope_value(),
+                SqlValue::from(kind),
+                SqlValue::from(parent.node_id.as_str()),
+                SqlValue::from(selector_id),
+                SqlValue::from(message_id.as_str()),
+            ],
+        )
         .await?;
-    drop(tx);
+    let row = rows
+        .into_iter()
+        .next()
+        .map(|mut row| {
+            anyhow::Ok((
+                row.take_text(0)?,
+                row.take_text(1)?,
+                row.take_text(2)?,
+                row.integer(3)?,
+                row.integer(4)?,
+            ))
+        })
+        .transpose()?;
     let (thread, role, body, created_at, size) = row.ok_or(ReadFailure::ResourceNotFound)?;
     check_stored_size(size)?;
     Ok(Message {
@@ -130,15 +147,19 @@ async fn check_address(ctx: &ReadContext, query: &DiscussionMessagesQuery) -> an
         DiscussionSelector::Legacy { thread_id } => ("SELECT EXISTS(SELECT 1 FROM threads WHERE scope_id=? AND parent_type=? AND parent_id=? AND id=?)", thread_id.as_str()),
     };
     let kind = super::discussion_state::discussion_kind_word(query.parent.node_type);
-    let mut tx = ctx.snapshot().connection().await;
-    let exists: bool = sqlx::query_scalar(address_sql)
-        .bind(ctx.snapshot().scope().as_str())
-        .bind(kind)
-        .bind(query.parent.node_id.as_str())
-        .bind(address_id)
-        .fetch_one(&mut **tx)
+    let rows = ctx
+        .snapshot()
+        .fetch(
+            address_sql,
+            vec![
+                ctx.snapshot().scope_value(),
+                SqlValue::from(kind),
+                SqlValue::from(query.parent.node_id.as_str()),
+                SqlValue::from(address_id),
+            ],
+        )
         .await?;
-    drop(tx);
+    let exists = one_row(&rows)?.integer(0)? != 0;
     if !exists {
         return Err(ReadFailure::ResourceNotFound.into());
     }
@@ -179,24 +200,49 @@ async fn message_keys(
 ) -> anyhow::Result<Vec<(String, i64, i64)>> {
     let (join, selector, condition) = selector_sql(&query.selector);
     let kind = super::discussion_state::discussion_kind_word(query.parent.node_type);
-    let mut tx = ctx.snapshot().connection().await;
-    let keys: Vec<(String, i64, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT m.id,m.created_at,length(CAST(m.body AS BLOB))+length(m.id)+length(m.thread_id)+256 FROM messages m JOIN threads t ON t.scope_id=m.scope_id AND t.id=m.thread_id {join} WHERE m.scope_id=? AND t.parent_type=? AND t.parent_id=? AND {condition} AND (m.created_at>? OR (m.created_at=? AND m.id>?)) ORDER BY m.created_at,m.id LIMIT ?")))
-        .bind(ctx.snapshot().scope().as_str()).bind(kind).bind(query.parent.node_id.as_str()).bind(selector)
-        .bind(position.counter).bind(position.counter).bind(&position.id).bind(i64::try_from(query.limit+1)?).fetch_all(&mut **tx).await.map_err(anyhow::Error::from).map_err(reader::page_error)?;
-    drop(tx);
+    let sql = format!(
+        "SELECT m.id,m.created_at,length(CAST(m.body AS BLOB))+length(m.id)+length(m.thread_id)+256 \
+         FROM messages m JOIN threads t ON t.scope_id=m.scope_id AND t.id=m.thread_id {join} \
+         WHERE m.scope_id=? AND t.parent_type=? AND t.parent_id=? AND {condition} \
+         AND (m.created_at>? OR (m.created_at=? AND m.id>?)) ORDER BY m.created_at,m.id LIMIT ?"
+    );
+    let values = vec![
+        ctx.snapshot().scope_value(),
+        SqlValue::from(kind),
+        SqlValue::from(query.parent.node_id.as_str()),
+        SqlValue::from(selector),
+        SqlValue::Integer(position.counter),
+        SqlValue::Integer(position.counter),
+        SqlValue::from(position.id.as_str()),
+        SqlValue::Integer(i64::try_from(query.limit + 1)?),
+    ];
+    let rows = ctx
+        .snapshot()
+        .fetch(&sql, values)
+        .await
+        .map_err(reader::page_error)?;
+    let mut keys = Vec::with_capacity(rows.len());
+    for mut row in rows {
+        keys.push((row.take_text(0)?, row.integer(1)?, row.integer(2)?));
+    }
     Ok(keys)
 }
 
 /// Loads one message of the page by id.
 async fn page_message(ctx: &ReadContext, id: &str, created_at: i64) -> anyhow::Result<Message> {
-    let mut tx = ctx.snapshot().connection().await;
-    let (thread, role, body): (String, String, String) =
-        sqlx::query_as("SELECT thread_id,role,body FROM messages WHERE scope_id=? AND id=?")
-            .bind(ctx.snapshot().scope().as_str())
-            .bind(id)
-            .fetch_one(&mut **tx)
-            .await?;
-    drop(tx);
+    let rows = ctx
+        .snapshot()
+        .fetch(
+            "SELECT thread_id,role,body FROM messages WHERE scope_id=? AND id=?",
+            vec![ctx.snapshot().scope_value(), SqlValue::from(id)],
+        )
+        .await?;
+    let mut row = rows.into_iter().next().ok_or_else(|| {
+        crate::refusal::fault!(
+            "no rows returned by a query that expected to return at least one row"
+        )
+    })?;
+    let (thread, role, body) = (row.take_text(0)?, row.take_text(1)?, row.take_text(2)?);
     Ok(Message {
         scope_id: ctx.snapshot().scope().clone(),
         id: StableId::new(id)?,
