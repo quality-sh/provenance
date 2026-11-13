@@ -96,10 +96,11 @@ pub trait SqlTransaction: Any + Send {
     /// Runs `statements` as one unit inside the transaction: all of them,
     /// or, when one fails, none of them. The inner error is the error of
     /// the statement that failed, and the transaction continues. The outer
-    /// error means that the transaction itself failed. When a statement
-    /// gives [`OverBudget`] and the adapter ends the transaction, as
-    /// [`SqlTransaction::bound_work`] lets it, the outer error is that
-    /// [`OverBudget`].
+    /// error means that the transaction itself failed.
+    ///
+    /// When a statement gives [`OverBudget`] and the adapter ends the
+    /// transaction, as [`SqlTransaction::bound_work`] lets it, the outer
+    /// error is that [`OverBudget`].
     fn attempt<'a>(
         &'a mut self,
         statements: &'a [Statement],
