@@ -77,9 +77,15 @@ fn a_state_change_outside_the_section_leaves_no_binding_and_no_run_row() {
     let error = WriteError(begin_verification(&repository, begin_input()).unwrap_err());
 
     let answer = serde_json::to_value(&error).unwrap();
-    assert_eq!((&answer["kind"], error.status()), (&json!("write_failed"), 500));
+    assert_eq!(
+        (&answer["kind"], error.status()),
+        (&json!("write_failed"), 500)
+    );
     let cause = answer["cause"].as_str().unwrap();
-    assert!(cause.starts_with("the state moved from revision "), "{cause}");
+    assert!(
+        cause.starts_with("the state moved from revision "),
+        "{cause}"
+    );
     let store = repository.store();
     let reads = json!({
         "bindings": store.list_verification_bindings(&scope()).unwrap(),
@@ -112,7 +118,9 @@ fn a_completion_that_waits_for_the_section_finds_the_run_row() {
                 error: None,
             };
             let result = complete_verification(&waiting, input);
-            completed.send(result.map_err(|error| format!("{error:#}"))).unwrap();
+            completed
+                .send(result.map_err(|error| format!("{error:#}")))
+                .unwrap();
         });
         std::thread::sleep(Duration::from_millis(200));
     });

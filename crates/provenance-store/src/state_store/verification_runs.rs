@@ -43,30 +43,33 @@ impl StateStore {
             .map_err(|error| crate::refusal::refuse!(InvalidVerificationTarget, "{error:#}"))?;
         self.with_repository_publication(|held| {
             let rule_id = verification_rule(held, &scope_id, input.rule, input.declaration)?;
-            let binding = held.verification_binding_change(MaterializeVerificationBindingInput {
-                scope_id: scope_id.clone(),
-                rule_id: rule_id.clone(),
-                key: input.key,
-                method,
-                declared_by: input.declared_by.clone(),
-                file: file.clone(),
-                symbol: input.symbol.clone(),
-            })?;
+            let binding =
+                held.verification_binding_change(MaterializeVerificationBindingInput {
+                    scope_id: scope_id.clone(),
+                    rule_id: rule_id.clone(),
+                    key: input.key,
+                    method,
+                    declared_by: input.declared_by.clone(),
+                    file: file.clone(),
+                    symbol: input.symbol.clone(),
+                })?;
             let binding_id = binding.binding.id.clone();
-            let run = held.next_run(&binding.binding.scope_id, |id, started_at| VerificationRun {
-                scope_id,
-                id,
-                binding_id: Some(binding_id),
-                rule_id,
-                method: method.to_string(),
-                declared_by: input.declared_by,
-                file: Some(file),
-                symbol: input.symbol,
-                commit,
-                status: VerificationRunStatus::Running,
-                started_at,
-                completed_at: None,
-                error: None,
+            let run = held.next_run(&binding.binding.scope_id, |id, started_at| {
+                VerificationRun {
+                    scope_id,
+                    id,
+                    binding_id: Some(binding_id),
+                    rule_id,
+                    method: method.to_string(),
+                    declared_by: input.declared_by,
+                    file: Some(file),
+                    symbol: input.symbol,
+                    commit,
+                    status: VerificationRunStatus::Running,
+                    started_at,
+                    completed_at: None,
+                    error: None,
+                }
             })?;
             let mut shards = vec![(binding.path, binding.bytes)];
             shards.extend(held.cleared_reviews_shard(&run)?);

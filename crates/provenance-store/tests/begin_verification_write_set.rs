@@ -5,7 +5,9 @@
 #[path = "support/memory.rs"]
 mod memory;
 
-use memory::{begin_input, open_review, scope, verification_repository, Failure, Refusing, REVIEWS};
+use memory::{
+    begin_input, open_review, scope, verification_repository, Failure, Refusing, REVIEWS,
+};
 use provenance_core::{VerificationBinding, VerificationRun};
 use provenance_macros::verifies;
 use provenance_store::operations::begin_verification;

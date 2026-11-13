@@ -50,7 +50,12 @@ impl Start {
         let error = WriteError(begin_verification(&self.repository, input).unwrap_err());
         let answer = serde_json::to_value(&error).unwrap();
         let sets = self.recorded.0.lock().unwrap().len();
-        (answer, error.status(), sets, std::fs::read(self.runs_cache()).ok())
+        (
+            answer,
+            error.status(),
+            sets,
+            std::fs::read(self.runs_cache()).ok(),
+        )
     }
 }
 

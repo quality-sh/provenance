@@ -46,7 +46,10 @@ impl Drop for ReadOnly {
 /// changed after the Rule was made.
 fn repository(root: &Path) -> Repository {
     std::fs::write(root.join("evidence.rs"), "fn expiry() {}\n").unwrap();
-    initialization::initialize(&ProvenanceLayout::new(Utf8Path::from_path(root).unwrap()), &[]);
+    initialization::initialize(
+        &ProvenanceLayout::new(Utf8Path::from_path(root).unwrap()),
+        &[],
+    );
     let repository = Repository::open(root, "default").unwrap();
     let store = repository.store();
     let requirement = json!({
@@ -99,10 +102,7 @@ fn reviews(repository: &Repository) -> Vec<RequirementReview> {
 }
 
 fn runs(repository: &Repository) -> Vec<VerificationRun> {
-    repository
-        .store()
-        .list_verification_runs(&scope())
-        .unwrap()
+    repository.store().list_verification_runs(&scope()).unwrap()
 }
 
 fn bindings(repository: &Repository) -> usize {
@@ -133,7 +133,11 @@ fn a_refused_set_on_local_disk_leaves_no_binding_no_run_row_and_an_open_review()
 
     assert_permission_denied(&answer, status);
     assert_eq!(
-        (bindings(&repository), runs(&repository), reviews(&repository)),
+        (
+            bindings(&repository),
+            runs(&repository),
+            reviews(&repository)
+        ),
         (0, Vec::new(), open)
     );
 }
