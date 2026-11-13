@@ -9,7 +9,7 @@
 
 use super::{fetch, statement, write, Harness};
 use crate::cache::{catch_up_state, materialize_state, CatchUpReport};
-use crate::read_database::{ReadDatabase, SqlValue};
+use crate::read_database::{ReadDatabase, SqlRow, SqlValue};
 use crate::repository::{Repository, RepositoryIdentity};
 use crate::settings::Settings;
 use crate::storage::memory::{MemorySectionLock, MemoryStateStorage};
@@ -142,4 +142,44 @@ pub async fn a_schema_that_is_not_current_is_made_again<H: Harness>(harness: H) 
         requirement_ids(harness.database()).await,
         vec![SqlValue::from("req_first")]
     );
+}
+
+/// Every object of the catalog, then every row of the requirements, in a
+/// fixed order.
+async fn catalog_and_rows(database: &dyn ReadDatabase) -> Vec<SqlRow> {
+    let mut rows = fetch(
+        database,
+        "SELECT type, name, tbl_name, sql FROM sqlite_schema ORDER BY type, name",
+    )
+    .await;
+    rows.extend(fetch(database, "SELECT * FROM requirements ORDER BY scope_id, id").await);
+    rows
+}
+
+/// A schema rebuild and a full rebuild of a database that holds only the
+/// store's tables give the catalog and the rows that the first catch-up
+/// gave, and the same revision digest.
+pub async fn a_rebuild_keeps_the_catalog_and_the_rows<H: Harness>(harness: H) {
+    let repository = repository(&harness);
+    let first = catch_up_state(&repository).await.unwrap();
+    let made = catalog_and_rows(harness.database()).await;
+    write(
+        harness.database(),
+        vec![statement(
+            "UPDATE _cache_metadata SET schema_digest = 'another'",
+            Vec::new(),
+        )],
+    )
+    .await
+    .unwrap();
+    let pass = catch_up_state(&repository).await.unwrap();
+    assert_eq!(outcome(&pass), (1, true, true, true));
+    assert_eq!(pass.digest, first.digest);
+    assert_eq!(catalog_and_rows(harness.database()).await, made);
+    let rebuilt = materialize_state(&repository).await.unwrap();
+    assert_eq!(
+        (rebuilt.records_loaded, rebuilt.cache_recreated),
+        (1, false)
+    );
+    assert_eq!(catalog_and_rows(harness.database()).await, made);
 }
