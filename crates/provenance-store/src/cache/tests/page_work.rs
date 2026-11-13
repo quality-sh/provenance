@@ -8,12 +8,11 @@
 //! `limits::a_statement_far_past_the_bound_gives_over_budget` holds that.
 
 use super::fixtures::{open, seeded_layout};
-use crate::cache::read::page::{page_error, PAGE_WORK_STEPS};
+use crate::cache::read::page::page_error;
 use crate::cache::{materialize_state, open_cache};
 use crate::operations::reader::ReadSnapshot;
-use crate::read_database::{
-    OverBudget, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement, Transaction,
-};
+use crate::read_database::contract::{Hook, HookedTransaction};
+use crate::read_database::{OverBudget, SqlFuture, SqlRow, Transaction};
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::Requirement;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -24,48 +23,34 @@ use std::sync::Arc;
 #[error("the store reported the statement at its end")]
 struct Reported;
 
-/// A transaction over the file that records the last bound that it got. After [`SqlTransaction::bound_work`], each
-/// statement runs to its end and then gives `OverBudget(Reported)`.
+/// A hook that records the last bound that the transaction got and gives
+/// the file no bound. After the bound, each statement runs to its end and
+/// then gives `OverBudget(Reported)`.
+#[derive(Debug, Clone)]
 struct ReportsAtEnd {
-    inner: Transaction,
     bound: Arc<AtomicU64>,
     bounded: bool,
 }
 
-impl SqlTransaction for ReportsAtEnd {
-    fn fetch<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, Vec<SqlRow>> {
-        Box::pin(async move {
-            let rows = self.inner.fetch(sql, values).await?;
-            if self.bounded {
-                return Err(OverBudget(Reported.into()).into());
-            }
-            Ok(rows)
-        })
-    }
-
-    fn execute<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, u64> {
-        self.inner.execute(sql, values)
-    }
-
-    fn attempt<'a>(
-        &'a mut self,
-        statements: &'a [Statement],
-    ) -> SqlFuture<'a, Result<(), anyhow::Error>> {
-        self.inner.attempt(statements)
-    }
-
-    fn commit(self: Box<Self>) -> SqlFuture<'static, ()> {
-        self.inner.commit()
-    }
-
-    fn bound_work(&mut self, bound: u64) -> SqlFuture<'_, ()> {
+impl Hook for ReportsAtEnd {
+    fn bound(&mut self, bound: u64) -> Option<u64> {
         self.bounded = true;
         self.bound.store(bound, Ordering::SeqCst);
-        Box::pin(async { Ok(()) })
+        None
     }
 
-    fn max_list_values(&self) -> usize {
-        self.inner.max_list_values()
+    fn fetched<'a>(
+        &'a mut self,
+        _inner: &'a mut Transaction,
+        _rows: &'a [SqlRow],
+    ) -> SqlFuture<'a, ()> {
+        let bounded = self.bounded;
+        Box::pin(async move {
+            if bounded {
+                return Err(OverBudget(Reported.into()).into());
+            }
+            Ok(())
+        })
     }
 }
 
@@ -76,13 +61,15 @@ async fn bounded_page() -> (u64, anyhow::Result<Vec<String>>) {
     materialize_state(&open(&layout)).await.unwrap();
     let cache = open_cache(&layout).await.unwrap();
     let bound = Arc::new(AtomicU64::new(0));
-    let transaction = ReportsAtEnd {
-        inner: crate::read_database::file::begin(cache.pool())
+    let transaction = HookedTransaction::new(
+        crate::read_database::file::begin(cache.pool())
             .await
             .unwrap(),
-        bound: Arc::clone(&bound),
-        bounded: false,
-    };
+        ReportsAtEnd {
+            bound: Arc::clone(&bound),
+            bounded: false,
+        },
+    );
     let snapshot = ReadSnapshot::open(Box::new(transaction), &scope)
         .await
         .unwrap()
@@ -112,8 +99,8 @@ async fn a_page_statement_reported_at_its_end_is_the_page_budget_refusal() {
     );
 }
 
-/// A page gives each adapter its bound in engine steps.
+/// A page gives each adapter the bound of 10,000,000 engine steps.
 #[tokio::test]
 async fn a_page_bounds_its_work_in_engine_steps() {
-    assert_eq!(bounded_page().await.0, PAGE_WORK_STEPS);
+    assert_eq!(bounded_page().await.0, 10_000_000);
 }

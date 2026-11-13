@@ -16,6 +16,9 @@ use sqlx::sqlite::{SqliteArguments, SqliteRow};
 use sqlx::{Row, Sqlite, SqlitePool, TypeInfo, ValueRef};
 use std::io::{Read, Write};
 
+#[cfg(test)]
+mod tests;
+
 /// The maximum number of values that one statement binds in the file.
 pub const MAX_BOUND_VALUES: usize = 999;
 

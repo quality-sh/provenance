@@ -114,11 +114,12 @@ pub trait SqlTransaction: Any + Send {
     /// `bound` is in engine steps: the virtual machine instructions of
     /// `SQLite`, as its progress handler counts them. The adapter counts the
     /// work of all these statements against it. It can count work at whole
-    /// check intervals: then the work of a statement after its last check
-    /// is not counted, and a statement that does less work than one
-    /// interval can run past the bound. The file adapter checks each 1,000
-    /// engine steps of one statement text, over all the runs of that text
-    /// on its connection.
+    /// check intervals of at most 1,000 engine steps, or of at most 1,000
+    /// units of its own measure: then the work of a statement after its
+    /// last check is not counted, and a statement that does less work than
+    /// one interval can run past the bound. The file adapter checks each
+    /// 1,000 engine steps of one statement text, over all the runs of that
+    /// text on its connection.
     ///
     /// An adapter that cannot count engine steps converts `bound` to its
     /// own measure of work, for example the rows that a statement reads
@@ -128,7 +129,10 @@ pub trait SqlTransaction: Any + Send {
     /// - The adapter gives [`OverBudget`] for a statement whose work is far
     ///   past the bound.
     /// - The adapter does not refuse a statement that the file adapter
-    ///   answers within the same bound by a wide margin.
+    ///   answers within the same bound by a wide margin: in at most one
+    ///   twentieth of the bound. The measured table reads of the page
+    ///   statements take 3 to 33 engine steps a row, so a margin of 20
+    ///   lets a conversion at any rate in that range answer the statement.
     ///
     /// The bound does not limit work that the adapter's measure does not
     /// see. For a count of rows read, that is recursion, sorts, and

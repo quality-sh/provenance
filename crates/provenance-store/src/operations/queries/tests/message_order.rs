@@ -3,8 +3,8 @@
 //! message time that would pass the range.
 //!
 //! No Rule: implementation aids. The first test holds the page order, the
-//! cursor walk and the first page while the first page stops binding a
-//! position. `discussion_outputs.txt` holds the bytes of the pages.
+//! cursor walk and the first page, which binds no position.
+//! `discussion_outputs.txt` holds the bytes of the pages.
 
 use super::{repository_at, root_of, seeded_store};
 use crate::cache::tests::fixtures::append_record;

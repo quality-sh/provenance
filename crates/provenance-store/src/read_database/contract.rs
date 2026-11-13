@@ -12,6 +12,8 @@ use super::{
 };
 
 pub mod handles;
+#[cfg(any(test, feature = "test-fixture"))]
+mod hooked;
 pub mod limits;
 #[cfg(any(test, feature = "test-fixture"))]
 mod other;
@@ -22,6 +24,8 @@ pub mod projection;
 pub mod range;
 pub mod sequence;
 
+#[cfg(any(test, feature = "test-fixture"))]
+pub use hooked::{Hook, Hooked, HookedTransaction};
 #[cfg(any(test, feature = "test-fixture"))]
 pub use other::{Other, OtherTransaction};
 

@@ -70,9 +70,9 @@ fn is_missing_column(error: &anyhow::Error) -> bool {
 /// on a table of the store goes with its table.
 ///
 /// A table of another name stays, with its rows, its indexes and its
-/// triggers. This includes a table that an earlier schema text named and
-/// the current text does not: a repository is initialised again, not
-/// migrated, so the rebuild does not remove such a table.
+/// triggers. This includes a table that another schema text of the store
+/// named: a repository is initialised again, not migrated, so the rebuild
+/// does not remove such a table.
 ///
 /// A view of another name over a table of the store stays, and reads the
 /// table that the rebuild makes again.

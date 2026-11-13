@@ -4,8 +4,8 @@
 //! after a statement that writes gives `OverBudget`; these tests hold what
 //! the file does.
 //!
-//! No Rule: these tests hold the text of `SqlTransaction::bound_work` for
-//! the file adapter until the owner rules on the port obligation.
+//! No Rule: an implementation aid. These tests hold what the doc of
+//! `SqlTransaction::bound_work` states of the file adapter.
 
 use super::File;
 use provenance_store::read_database::{
