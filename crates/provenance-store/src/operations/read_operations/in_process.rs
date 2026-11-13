@@ -72,7 +72,7 @@ const fn entry<O: Operation>() -> Entry {
 }
 
 /// The operations of [`super::READ_OPERATIONS`], in its order.
-fn entries() -> [Entry; 10] {
+const fn entries() -> [Entry; 10] {
     [
         entry::<PageSources>(),
         entry::<PageRequirements>(),

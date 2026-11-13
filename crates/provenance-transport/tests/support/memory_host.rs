@@ -116,7 +116,7 @@ pub fn state(repo: &Repository) -> BTreeMap<StateKey, Vec<u8>> {
 /// generated values of one host, and `root` is the working tree of its
 /// repository.
 pub fn compared(names: &mut Names, root: &str, answer: &Answer) -> Value {
-    let text = String::from_utf8(answer.body.clone())
+    let text = std::str::from_utf8(&answer.body)
         .unwrap()
         .replace(root, "<repo>");
     let body: Value = serde_json::from_str(&text).unwrap();
