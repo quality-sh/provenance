@@ -5,9 +5,9 @@ use provenance_core::VerificationRun;
 use provenance_core::{RequirementReview, ScopeId, StableId};
 #[cfg(feature = "host")]
 use provenance_macros::rule;
+use sha2::{Digest, Sha256};
 #[cfg(feature = "host")]
 use std::collections::BTreeSet;
-use sha2::{Digest, Sha256};
 
 use super::{readers::read_jsonl, ReconciledResource, StateStore, TypedResourceKind};
 use crate::shards;

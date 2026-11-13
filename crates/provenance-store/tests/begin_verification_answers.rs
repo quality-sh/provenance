@@ -20,7 +20,14 @@ const NOW: i64 = 1_767_225_600_000;
 fn repository(root: &tempfile::TempDir) -> Repository {
     let clock = Arc::new(FixedClock::at_millis(NOW));
     let reviews = [open_review()];
-    verification_repository(root.path(), &reviews, [], Arc::new(Recorded::default()), clock).1
+    verification_repository(
+        root.path(),
+        &reviews,
+        [],
+        Arc::new(Recorded::default()),
+        clock,
+    )
+    .1
 }
 
 /// The bindings, the runs and the reviews that the reads give.

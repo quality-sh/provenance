@@ -21,10 +21,7 @@ fn repository(root: &tempfile::TempDir) -> Repository {
 
 /// A repository at `root` whose adapter gives each write set to
 /// `persistence`.
-fn repository_over(
-    root: &tempfile::TempDir,
-    persistence: Arc<dyn StatePersistence>,
-) -> Repository {
+fn repository_over(root: &tempfile::TempDir, persistence: Arc<dyn StatePersistence>) -> Repository {
     let clock = Arc::new(FixedClock::at_millis(NOW));
     let reviews = [open_review()];
     verification_repository(root.path(), &reviews, [], persistence, clock).1

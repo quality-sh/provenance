@@ -60,8 +60,13 @@ fn a_state_change_outside_the_section_leaves_no_binding_and_no_run_row() {
     let root = tempfile::tempdir().unwrap();
     let clock = Arc::new(SteppingClock::new());
     let persistence = Arc::new(Recorded::default());
-    let (storage, repository) =
-        verification_repository(root.path(), &[open_review()], [], persistence, clock.clone());
+    let (storage, repository) = verification_repository(
+        root.path(),
+        &[open_review()],
+        [],
+        persistence,
+        clock.clone(),
+    );
     let requirement = json!({
         "scope_id": "default", "id": "req_expiry", "statement": "Share links expire",
         "description": "A change from outside the section", "status": "active"

@@ -7,7 +7,7 @@
 mod memory;
 
 use memory::{
-    begin_input, open_review, scope, verification_repository, FixedClock, Failure, Refusing,
+    begin_input, open_review, scope, verification_repository, Failure, FixedClock, Refusing,
     REVIEWS,
 };
 use provenance_core::{RequirementReview, VerificationBinding, VerificationRun};
@@ -176,11 +176,18 @@ fn cleared(mut review: RequirementReview, run: &VerificationRun) -> RequirementR
 #[verifies("rule_review_cleared_by_later_run", examples)]
 fn a_run_clears_only_the_reviews_raised_before_it_and_keeps_their_reason() {
     let reviews = [review("review_expiry", 1), review("review_later", NOW + 1)];
-    let start = start_with(None, &reviews.map(|review| serde_json::to_value(review).unwrap()));
+    let start = start_with(
+        None,
+        &reviews.map(|review| serde_json::to_value(review).unwrap()),
+    );
 
     let run = begin_verification(&start.repository, begin_input()).unwrap();
 
-    let reviews = start.repository.store().list_requirement_reviews(&scope()).unwrap();
+    let reviews = start
+        .repository
+        .store()
+        .list_requirement_reviews(&scope())
+        .unwrap();
     assert_eq!(
         reviews,
         [
@@ -188,7 +195,10 @@ fn a_run_clears_only_the_reviews_raised_before_it_and_keeps_their_reason() {
             review("review_later", NOW + 1)
         ]
     );
-    assert_eq!((run.started_at, run.id.as_str()), (NOW, "verification_1767225600000"));
+    assert_eq!(
+        (run.started_at, run.id.as_str()),
+        (NOW, "verification_1767225600000")
+    );
 }
 
 // No Rule binding: no Rule states the state after a retry of a refused set.
