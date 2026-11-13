@@ -99,13 +99,20 @@ fn host(repository: Opened, step: Step) -> Http {
     Http::with_access(Arc::new(Gate { inner, step }))
 }
 
-/// A port that gives one answer to each call.
-#[derive(Debug)]
-struct Fixed(fn() -> Result<Value, ErasedFailure>);
+/// A port that gives one answer to each call: a success, or a failure body
+/// with its status.
+#[derive(Debug, Clone)]
+enum Fixed {
+    Success(Value),
+    Failure(Value, u16),
+}
 
 impl ReadOperations for Fixed {
-    fn run(&self, _: &'static str, _: Value) -> ReadAnswer {
-        let answer = (self.0)();
+    fn run(&self, operation: &'static str, _: Value) -> ReadAnswer {
+        let answer = match self.clone() {
+            Self::Success(success) => Ok(success),
+            Self::Failure(body, status) => Err(ErasedFailure::declared(operation, body, status)),
+        };
         Box::pin(async move { answer })
     }
 }
@@ -165,7 +172,8 @@ impl Pair {
         assert_eq!(
             compared(&mut self.names.0, self.root.as_str(), &over_memory),
             compared(&mut self.names.1, &folder_root, &over_folder),
-            "{path}"
+            "{}",
+            over_memory.shown
         );
         over_memory
     }
@@ -243,7 +251,7 @@ async fn an_authorization_refusal_answers_before_the_port() {
 async fn the_router_prepares_the_repository_before_the_port() {
     let mut pair = Pair::new(None).await;
     // This port prepares nothing: it answers each call with an empty page.
-    let port = Counted::new(Arc::new(Fixed(|| Ok(json!({"items": []})))));
+    let port = Counted::new(Arc::new(Fixed::Success(json!({"items": []}))));
     let step = Step::Prepare("page-requirements");
     let refused = pair.same("/requirements", &port, step).await;
     assert_eq!(kind(&refused), (404, json!("unknown_scope")));
@@ -253,34 +261,16 @@ async fn the_router_prepares_the_repository_before_the_port() {
 #[tokio::test]
 async fn an_answer_that_the_operation_does_not_declare_is_internal() {
     let pair = Pair::new(None).await;
-    let undeclared: [fn() -> Result<Value, ErasedFailure>; 4] = [
-        || Ok(json!({"page": "of another operation"})),
-        || {
-            Err(ErasedFailure::declared(
-                "page-requirements",
-                json!({"kind": "stale"}),
-                409,
-            ))
-        },
-        || {
-            Err(ErasedFailure::declared(
-                "page-requirements",
-                json!({"kind": "no_projection"}),
-                1000,
-            ))
-        },
-        || {
-            Err(ErasedFailure::declared(
-                "page-requirements",
-                json!({"kind": "no_projection"}),
-                200,
-            ))
-        },
+    let undeclared = [
+        Fixed::Success(json!({"page": "of another operation"})),
+        Fixed::Failure(json!({"kind": "stale"}), 409),
+        Fixed::Failure(json!({"kind": "no_projection"}), 1000),
+        Fixed::Failure(json!({"kind": "no_projection"}), 200),
     ];
     for answer in undeclared {
-        let port = Counted::new(Arc::new(Fixed(answer)));
+        let port = Counted::new(Arc::new(answer.clone()));
         let memory = pair.memory.with_read_operations(port.clone());
-        let given = host(memory, Step::Open)
+        let given = Http::over(memory)
             .call(
                 "GET",
                 "/requirements",
@@ -289,17 +279,12 @@ async fn an_answer_that_the_operation_does_not_declare_is_internal() {
                 "GET /requirements".into(),
             )
             .await;
-        assert_eq!(kind(&given), (500, json!("internal")), "{:?}", answer());
+        assert_eq!(kind(&given), (500, json!("internal")), "{answer:?}");
         assert_eq!(given.json()["error"], json!({"kind": "internal"}));
         assert_eq!(port.runs(), vec!["page-requirements"]);
     }
-    let declared = Counted::new(Arc::new(Fixed(|| {
-        Err(ErasedFailure::declared(
-            "page-requirements",
-            json!({"kind": "no_projection"}),
-            409,
-        ))
-    })));
+    let declared = Fixed::Failure(json!({"kind": "no_projection"}), 409);
+    let declared = Counted::new(Arc::new(declared));
     let memory = pair.memory.with_read_operations(declared);
     let given = host(memory, Step::Open)
         .call(
