@@ -91,6 +91,10 @@ name = "begin_verification_refusals"
 required-features = ["host"]
 
 [[test]]
+name = "begin_verification_run_ids"
+required-features = ["host"]
+
+[[test]]
 name = "begin_verification_section"
 required-features = ["host"]
 

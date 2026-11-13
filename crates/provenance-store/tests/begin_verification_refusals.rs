@@ -6,6 +6,7 @@
 mod memory;
 
 use memory::{begin_input, key, verification_repository, Recorded, REVIEWS};
+use provenance_macros::verifies;
 use provenance_store::operations::begin_verification;
 use provenance_store::repository::{Repository, SystemClock};
 use provenance_store::state_store::BeginVerificationInput;
@@ -16,6 +17,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 const BINDINGS: &str = "scopes/default/verifications/binding.jsonl";
+const RUNS: &str = ".provenance/cache/scopes/default/verification-runs.jsonl";
 const BAD_LINE: &[u8] = b"{not json\n";
 
 /// A memory repository with an open review of `rule_expiry`, whose state
@@ -40,8 +42,7 @@ fn start(extra: Vec<(StateKey, Vec<u8>)>) -> Start {
 
 impl Start {
     fn runs_cache(&self) -> PathBuf {
-        let runs = ".provenance/cache/scopes/default/verification-runs.jsonl";
-        self.root.path().join(runs)
+        self.root.path().join(RUNS)
     }
 
     /// The answer body of a refused start, its status, the number of write
@@ -79,8 +80,10 @@ fn a_rule_that_does_not_exist_is_refused_before_any_write() {
     assert_eq!(refusal, (answer, 400, 0, None));
 }
 
-// No Rule binding: no Rule states the order of the refusals of a start.
+// The Rule covers the answer. No Rule states the order of the refusals of
+// a start.
 #[test]
+#[verifies("rule_state_parse_refusal_names_the_line", examples)]
 fn a_bad_line_of_the_bindings_shard_is_refused_before_any_write() {
     let start = start(vec![(key(BINDINGS), BAD_LINE.to_vec())]);
 
@@ -89,8 +92,10 @@ fn a_bad_line_of_the_bindings_shard_is_refused_before_any_write() {
     assert_eq!(refusal, (invalid_line(BINDINGS), 500, 0, None));
 }
 
-// No Rule binding: no Rule states the order of the refusals of a start.
+// The Rule covers the answer. No Rule states the order of the refusals of
+// a start.
 #[test]
+#[verifies("rule_state_parse_refusal_names_the_line", examples)]
 fn a_bad_line_of_the_reviews_shard_is_refused_before_any_write() {
     let start = start(vec![(key(REVIEWS), BAD_LINE.to_vec())]);
 
@@ -99,8 +104,10 @@ fn a_bad_line_of_the_reviews_shard_is_refused_before_any_write() {
     assert_eq!(refusal, (invalid_line(REVIEWS), 500, 0, None));
 }
 
-// No Rule binding: no Rule states the order of the refusals of a start.
+// The Rule covers the answer. No Rule states the order of the refusals of
+// a start.
 #[test]
+#[verifies("rule_state_parse_refusal_names_the_line", examples)]
 fn a_bad_line_of_the_runs_cache_is_refused_before_any_write() {
     let start = start(Vec::new());
     std::fs::create_dir_all(start.runs_cache().parent().unwrap()).unwrap();
@@ -108,9 +115,8 @@ fn a_bad_line_of_the_runs_cache_is_refused_before_any_write() {
 
     let refusal = start.refusal(begin_input());
 
-    let cache = "verification-runs.jsonl";
     assert_eq!(
         refusal,
-        (invalid_line(cache), 500, 0, Some(BAD_LINE.to_vec()))
+        (invalid_line(RUNS), 500, 0, Some(BAD_LINE.to_vec()))
     );
 }

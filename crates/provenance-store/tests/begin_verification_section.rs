@@ -9,14 +9,12 @@ mod memory;
 use memory::{
     begin_input, key, open_review, scope, shard, verification_repository, FixedClock, Recorded,
 };
-use provenance_store::operations::{begin_verification, complete_verification};
+use provenance_store::operations::begin_verification;
 use provenance_store::repository::Clock;
-use provenance_store::state_store::CompleteVerificationInput;
 use provenance_store::storage::{Atomicity, StateStorage, WriteSet};
 use provenance_store::write_error::WriteError;
 use serde_json::json;
-use std::sync::{mpsc, Arc, Mutex};
-use std::time::Duration;
+use std::sync::{Arc, Mutex};
 
 const NOW: i64 = 1_767_225_600_000;
 
@@ -96,38 +94,4 @@ fn a_state_change_outside_the_section_leaves_no_binding_and_no_run_row() {
         reads,
         json!({"bindings": [], "runs": [], "reviews": [open_review()]})
     );
-}
-
-/// A completion of the run starts while the start reads the time, and waits
-/// for the section. It finds the run row, so the start holds the section
-/// from the time read until the row is in the cache. No Rule states this
-/// order, so the test has no Rule binding.
-#[test]
-fn a_completion_that_waits_for_the_section_finds_the_run_row() {
-    let root = tempfile::tempdir().unwrap();
-    let clock = Arc::new(SteppingClock::new());
-    let persistence = Arc::new(Recorded::default());
-    let (_, repository) = verification_repository(root.path(), [], persistence, clock.clone());
-    let (completed, completion) = mpsc::channel();
-    let waiting = repository.clone();
-    clock.set(move || {
-        std::thread::spawn(move || {
-            let input = CompleteVerificationInput {
-                run: format!("verification_{NOW}"),
-                status: "passed".into(),
-                error: None,
-            };
-            let result = complete_verification(&waiting, input);
-            completed
-                .send(result.map_err(|error| format!("{error:#}")))
-                .unwrap();
-        });
-        std::thread::sleep(Duration::from_millis(200));
-    });
-
-    let run = begin_verification(&repository, begin_input()).unwrap();
-
-    let completed = completion.recv().unwrap().unwrap();
-    let status = serde_json::to_value(completed.status).unwrap();
-    assert_eq!((completed.id, status), (run.id, json!("passed")));
 }
