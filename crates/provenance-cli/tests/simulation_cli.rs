@@ -134,8 +134,8 @@ fn stop_probe(test: &str, at: u8, landing: Landing) {
     let (_, outside) = &fixture.groups[1];
     assert!(outside[0].result.is_ok(), "{outside:?}");
     let [Stop::Landed(landed)] = fixture.stops.as_slice() else {
-        let stops: Vec<_> = fixture.stops.iter().map(Stop::row).collect();
-        panic!("the stop did not kill the claim before its answer: {stops:?}");
+        let rows: Vec<_> = fixture.stops.iter().map(Stop::row).collect();
+        panic!("the stop did not kill the claim before its answer: {rows:?}");
     };
     assert_eq!(landed.landing, landing, "the stop landed at another point");
     let root = fixture.root();
@@ -218,9 +218,9 @@ fn a_stop_at_the_transaction_kills_each_kind_of_write() {
         Operation::ReleaseTopic,
     ];
     assert_eq!(stopped, kinds);
-    let stops: Vec<_> = run.stops.iter().map(Stop::row).collect();
+    let rows: Vec<_> = run.stops.iter().map(Stop::row).collect();
     let landed = run.stops.iter().all(|stop| matches!(stop, Stop::Landed(_)));
-    assert!(landed, "a stop did not kill its write before its answer: {stops:?}");
+    assert!(landed, "a stop did not kill its write before its answer: {rows:?}");
     let test = "a_stop_at_the_transaction_kills_each_kind_of_write";
     report::probe(&layer(), test, check(&case, &run));
 }
