@@ -107,13 +107,14 @@ impl Rows {
         } = self;
         for (table, row) in &entries {
             let table = &tables[*table];
-            anyhow::ensure!(
-                row.len() == table.columns.len(),
-                "a row for {} has {} values, but the table has {} columns",
-                table.name,
-                row.len(),
-                table.columns.len()
-            );
+            if row.len() != table.columns.len() {
+                return Err(crate::refusal::fault!(
+                    "a row for {} has {} values, but the table has {} columns",
+                    table.name,
+                    row.len(),
+                    table.columns.len()
+                ));
+            }
         }
         if !entries.is_empty() {
             let order: Vec<usize> = entries.iter().map(|(table, _)| *table).collect();
