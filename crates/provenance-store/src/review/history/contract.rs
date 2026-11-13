@@ -19,6 +19,12 @@ pub const RECORDS: &str = ".provenance/state/records.jsonl";
 pub const DISCUSSIONS: &str = ".provenance/state/discussions.jsonl";
 /// A file that no commit of the graph holds.
 pub const ABSENT: &str = ".provenance/state/absent.jsonl";
+/// A file that two lines change to the same text before a merge.
+pub const MERGED: &str = ".provenance/state/merged.jsonl";
+/// A file that a commit moves to [`MOVED_TO`].
+pub const MOVED_FROM: &str = ".provenance/state/moved_from.jsonl";
+/// The file that a commit makes from [`MOVED_FROM`].
+pub const MOVED_TO: &str = ".provenance/state/moved_to.jsonl";
 
 /// One commit of a commit graph.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,8 +33,13 @@ pub struct Commit {
     pub name: String,
     /// The names of the parents, in parent order.
     pub parents: Vec<String>,
+    /// The author name.
     pub author: String,
-    /// The author and commit time in seconds since the Unix epoch.
+    /// The committer name.
+    pub committer: String,
+    /// The author time in seconds since the Unix epoch.
+    pub authored_at: i64,
+    /// The commit time in seconds since the Unix epoch.
     pub committed_at: i64,
     /// The files that differ from the first parent: the new text, or `None`
     /// for a removed file. A merge has the files of its first parent and
@@ -38,14 +49,27 @@ pub struct Commit {
 
 impl Commit {
     /// A commit with these parents, in parent order, that changes no file.
+    /// Its author is also its committer, and its author time is its commit
+    /// time.
     pub fn new(name: &str, parents: &[&str], author: &str, committed_at: i64) -> Self {
         Self {
             name: name.to_owned(),
             parents: parents.iter().map(|parent| (*parent).to_owned()).collect(),
             author: author.to_owned(),
+            committer: author.to_owned(),
+            authored_at: committed_at,
             committed_at,
             changes: Vec::new(),
         }
+    }
+
+    /// This commit with `committer` as the committer name and `authored_at`
+    /// as the author time, as a commit that another person rebased has.
+    #[must_use]
+    pub fn with_committer(mut self, committer: &str, authored_at: i64) -> Self {
+        committer.clone_into(&mut self.committer);
+        self.authored_at = authored_at;
+        self
     }
 
     /// This commit with `text` as the file at `path`.
@@ -79,6 +103,14 @@ impl Commit {
 /// - `join` merges `other` and `revert` and keeps the record file of its
 ///   second parent `revert`, so neither `join` nor `other` is listed and
 ///   `revert` is the last version.
+/// - `merge` and `revert` have a committer that is not their author and an
+///   author time before their commit time.
+/// - `pick` and `copy` give [`MERGED`] the same text on two lines from
+///   `split`, and `same` merges them. The history goes on through the first
+///   parent `pick`, so `copy` is not listed.
+/// - `move` removes [`MOVED_FROM`] and adds [`MOVED_TO`] with the same text.
+///   The versions do not follow the move: `move` is the first version of
+///   [`MOVED_TO`], with no parent. `HEAD` is `move`.
 #[must_use]
 pub fn graph() -> Vec<Commit> {
     vec![
@@ -88,16 +120,29 @@ pub fn graph() -> Vec<Commit> {
             .with_file(RECORDS, "r2\n")
             .with_file(DISCUSSIONS, "d2\n"),
         commit("right", &["create"], "cal", 400).with_file(RECORDS, "r3\n"),
-        commit("merge", &["left", "right"], "dan", 500).with_file(RECORDS, "r4\n"),
+        commit("merge", &["left", "right"], "dan", 500)
+            .with_committer("eve", 1_700_000_450)
+            .with_file(RECORDS, "r4\n"),
         commit("discuss", &["merge"], "ann", 600).with_file(DISCUSSIONS, "d5\n"),
         commit("theirs", &["discuss"], "bea", 700).with_file(RECORDS, "r6\n"),
         commit("ours", &["discuss", "theirs"], "cal", 800),
         commit("delete", &["ours"], "dan", 900).without_file(RECORDS),
         commit("again", &["delete"], "ann", 1000).with_file(RECORDS, "r9\n"),
         commit("drift", &["again"], "bea", 1100).with_file(RECORDS, "r10\n"),
-        commit("revert", &["drift"], "cal", 1200).with_file(RECORDS, "r9\n"),
+        commit("revert", &["drift"], "cal", 1200)
+            .with_committer("eve", 1_700_001_150)
+            .with_file(RECORDS, "r9\n"),
         commit("other", &["again"], "dan", 1300).with_file(RECORDS, "r11\n"),
         commit("join", &["other", "revert"], "ann", 1400).with_file(RECORDS, "r9\n"),
+        commit("split", &["join"], "bea", 1500).with_file(MERGED, "m1\n"),
+        commit("pick", &["split"], "cal", 1600).with_file(MERGED, "m2\n"),
+        commit("copy", &["split"], "dan", 1700).with_file(MERGED, "m2\n"),
+        commit("same", &["pick", "copy"], "ann", 1800),
+        commit("draft", &["same"], "bea", 1900).with_file(MOVED_FROM, "v1\n"),
+        commit("edit", &["draft"], "cal", 2000).with_file(MOVED_FROM, "v2\n"),
+        commit("move", &["edit"], "dan", 2100)
+            .without_file(MOVED_FROM)
+            .with_file(MOVED_TO, "v2\n"),
     ]
 }
 
@@ -186,11 +231,38 @@ fn named(commit: &str, parents: &[&str], text: Option<&str>) -> Named {
     )
 }
 
-/// Sorts the versions by commit name, so that two lists with the same
-/// versions in another parent-first order compare equal.
-fn sorted(mut versions: Vec<Named>) -> Vec<Named> {
+/// Checks the versions of `path` against `expected`, in any parent-first
+/// order: first the commits, parents and texts, then the author names, then
+/// the commit times.
+fn assert_versions(path: &str, mut versions: Vec<Named>, mut expected: Vec<Named>) {
     versions.sort();
-    versions
+    expected.sort();
+    let commits = |list: &[Named]| {
+        list.iter()
+            .map(|version| (version.0.clone(), version.1.clone(), version.4.clone()))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        commits(&versions),
+        commits(&expected),
+        "{path}: the listed commits, parents or texts are not the expected ones"
+    );
+    let authors = |list: &[Named]| {
+        list.iter()
+            .map(|version| version.2.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        authors(&versions),
+        authors(&expected),
+        "{path}: a version does not carry the author name of its commit"
+    );
+    let times = |list: &[Named]| list.iter().map(|version| version.3).collect::<Vec<_>>();
+    assert_eq!(
+        times(&versions),
+        times(&expected),
+        "{path}: a version does not carry the commit time of its commit"
+    );
 }
 
 /// The versions of a file list each commit in the history of `HEAD` that
@@ -200,20 +272,23 @@ fn sorted(mut versions: Vec<Named>) -> Vec<Named> {
 /// A merge that keeps the file of one parent, first or second, is not
 /// listed, and the commits that only its other parents reach are not
 /// listed. A merge with new text is listed with each parent line. A
-/// removal is listed with no text. The last version is the newest commit
-/// that changed the file in the history of `HEAD`, which need not be
-/// `HEAD`.
+/// removal is listed with no text. When more than one parent of a merge has
+/// its file, the history goes on through the first of them. A moved file
+/// starts at the move. The last version is the first commit that changed the
+/// file on the walk from `HEAD`, which need not be `HEAD`. Each version
+/// carries the author name and the commit time of its commit.
 pub async fn versions_follow_the_history_of_head<H: Harness + Sync>(harness: &H) {
     let adapter = harness.adapter(&graph());
     let records = adapter.versions(RECORDS).await;
     assert_eq!(
         records.last().map(|version| version.0.as_str()),
         Some("revert"),
-        "{RECORDS}: the last version is not the newest commit that changed the file"
+        "{RECORDS}: the last version is not the first commit that changed the file on the walk from HEAD"
     );
-    assert_eq!(
-        sorted(records),
-        sorted(vec![
+    assert_versions(
+        RECORDS,
+        records,
+        vec![
             named("create", &[], Some("r1\n")),
             named("left", &["create"], Some("r2\n")),
             named("right", &["create"], Some("r3\n")),
@@ -222,7 +297,7 @@ pub async fn versions_follow_the_history_of_head<H: Harness + Sync>(harness: &H)
             named("again", &["delete"], Some("r9\n")),
             named("drift", &["again"], Some("r10\n")),
             named("revert", &["drift"], Some("r9\n")),
-        ])
+        ],
     );
     let discussions = adapter.versions(DISCUSSIONS).await;
     assert_eq!(
@@ -232,6 +307,28 @@ pub async fn versions_follow_the_history_of_head<H: Harness + Sync>(harness: &H)
             named("left", &["start"], Some("d2\n")),
             named("discuss", &["left"], Some("d5\n")),
         ]
+    );
+    assert_versions(
+        MERGED,
+        adapter.versions(MERGED).await,
+        vec![
+            named("split", &[], Some("m1\n")),
+            named("pick", &["split"], Some("m2\n")),
+        ],
+    );
+    assert_versions(
+        MOVED_FROM,
+        adapter.versions(MOVED_FROM).await,
+        vec![
+            named("draft", &[], Some("v1\n")),
+            named("edit", &["draft"], Some("v2\n")),
+            named("move", &["edit"], None),
+        ],
+    );
+    assert_versions(
+        MOVED_TO,
+        adapter.versions(MOVED_TO).await,
+        vec![named("move", &[], Some("v2\n"))],
     );
 }
 
@@ -267,7 +364,7 @@ pub async fn texts_give_the_file_at_each_commit<H: Harness + Sync>(harness: &H) 
 pub async fn a_file_that_no_commit_holds_has_no_versions<H: Harness + Sync>(harness: &H) {
     let adapter = harness.adapter(&graph());
     assert_eq!(adapter.versions(ABSENT).await, Vec::<Named>::new());
-    let head = adapter.ids(&["join"]);
+    let head = adapter.ids(&["move"]);
     assert_eq!(adapter.versions.texts(ABSENT, &head).await.unwrap(), [None]);
     let texts = adapter.versions.texts(RECORDS, &[]).await.unwrap();
     assert_eq!(texts, Vec::<Option<String>>::new());

@@ -26,8 +26,10 @@ pub struct FileVersion {
     /// file text at each is the file text at the matching parent. A root
     /// commit, or a commit at the edge of a shallow clone, has none.
     pub parents: Vec<String>,
+    /// The author name of the commit, not the committer name.
     pub author: String,
-    /// The commit time in seconds since the Unix epoch.
+    /// The commit time (the committer date, not the author date) in seconds
+    /// since the Unix epoch.
     pub committed_at: i64,
     /// `None` when the commit removed the file.
     pub text: Option<String>,
@@ -65,12 +67,15 @@ pub trait FileVersions: Send + Sync + Debug {
     /// file of one parent is not listed, and the history goes on through
     /// that parent only, which can be any parent. When more than one parent
     /// has the same file, the history goes on through the first of them.
+    /// The versions do not follow a moved file: a commit that moves a file
+    /// to `path` is a change of `path` only, and the versions of the old
+    /// path are not listed.
     ///
-    /// The last version is the newest commit that changed the file in that
-    /// history: start at `HEAD` and go to the parent with the same file
-    /// until a commit changed the file. When `HEAD` did not change the file,
-    /// `HEAD` is not listed. A history with no commit, or with no commit
-    /// that changed the file, gives no versions.
+    /// The last version is the first commit that changed the file on the
+    /// walk from `HEAD`: start at `HEAD` and go to the first parent with the
+    /// same file until a commit changed the file. When `HEAD` did not change
+    /// the file, `HEAD` is not listed. A history with no commit, or with no
+    /// commit that changed the file, gives no versions.
     fn versions<'a>(
         &'a self,
         path: &'a str,
