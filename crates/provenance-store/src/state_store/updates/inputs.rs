@@ -30,7 +30,7 @@ macro_rules! update_input {
     };
     (
         @request $(#[$attribute:meta])* $name:ident,
-        { $($field:ident: $ty:ty),* },
+        { $($field:ident: $ty:ty),* $(,)? },
         { $($clear_list:tt)* }
     ) => {
         $(#[$attribute])*
@@ -50,54 +50,82 @@ macro_rules! update_input {
 
 update_input!(
     struct UpdateSourceInput {
-        declared_by: String, name: String, source_type: SourceType, url: String,
-        reference: String, commit_pin: String,
-        supersedes: ListEdit
+        declared_by: String,
+        name: String,
+        source_type: SourceType,
+        url: String,
+        reference: String,
+        commit_pin: String,
+        supersedes: ListEdit,
     }
     clear SourceClearField { Url, Reference, CommitPin }
 );
 update_input!(
     struct UpdateResolutionInput {
-        title: String, position: String, rationale: String, status: ResolutionStatus,
-        context: String, inputs: Vec<ResolutionInput>,
-        made_by: String, approved_by: String, approved_at: i64,
+        title: String,
+        position: String,
+        rationale: String,
+        status: ResolutionStatus,
+        context: String,
+        inputs: Vec<ResolutionInput>,
+        made_by: String,
+        approved_by: String,
+        approved_at: i64,
         archived_in_commit: provenance_core::ArchivedStamp,
-        requirement_ids: ListEdit, supersedes: ListEdit
+        requirement_ids: ListEdit,
+        supersedes: ListEdit,
     }
     clear ResolutionClearField { Context, MadeBy, ApprovedBy, ApprovedAt }
 );
 update_input!(
     struct UpdateRequirementInput {
-        declared_by: String, statement: String, description: String,
-        status: RequirementStatus, archived_in_commit: provenance_core::ArchivedStamp
+        declared_by: String,
+        statement: String,
+        description: String,
+        status: RequirementStatus,
+        archived_in_commit: provenance_core::ArchivedStamp,
     }
     clear RequirementClearField { Description }
 );
 update_input!(
     struct UpdateRuleInput {
-        declared_by: String, name: String, description: String, statement: String,
-        status: RuleStatus, severity: RuleSeverity, source_document: String,
-        source_section: String, archived_in_commit: provenance_core::ArchivedStamp,
-        requirement_ids: ListEdit, resolution_ids: ListEdit
+        declared_by: String,
+        name: String,
+        description: String,
+        statement: String,
+        status: RuleStatus,
+        severity: RuleSeverity,
+        source_document: String,
+        source_section: String,
+        archived_in_commit: provenance_core::ArchivedStamp,
+        requirement_ids: ListEdit,
+        resolution_ids: ListEdit,
     }
     clear RuleClearField { Name, Description, SourceDocument, SourceSection }
 );
+// A Topic has no field that an update can clear, so its update request has no clear list, and
+// the request refuses each field that it does not declare. This text is not a doc comment,
+// because the doc comment of a request type becomes a description in the published schemas.
 update_input!(
-    /// A Topic has no field that an update can clear, so its update request has no clear
-    /// list. The request refuses each field that it does not declare.
     #[rule("rule_update_clear_list_only_for_clearable_fields")]
     #[verifies("rule_update_clear_list_only_for_clearable_fields", construction)]
     struct UpdateTopicInput {
-        title: String, status: TopicStatus, links: Vec<ArtifactLink>,
-        archived_in_commit: provenance_core::ArchivedStamp
+        title: String,
+        status: TopicStatus,
+        links: Vec<ArtifactLink>,
+        archived_in_commit: provenance_core::ArchivedStamp,
     }
 );
 update_input!(
     struct EditQuestionInput {
-        question: String, resolution_method: ResolutionMethod, status: QuestionStatus,
+        question: String,
+        resolution_method: ResolutionMethod,
+        status: QuestionStatus,
         depends_on: Vec<StableId>,
-        links: Vec<ArtifactLink>, resolution_id: StableId, contradicts: StableId,
-        archived_in_commit: provenance_core::ArchivedStamp
+        links: Vec<ArtifactLink>,
+        resolution_id: StableId,
+        contradicts: StableId,
+        archived_in_commit: provenance_core::ArchivedStamp,
     }
     clear QuestionClearField { ResolutionId, Contradicts }
 );
