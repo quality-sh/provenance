@@ -135,6 +135,7 @@ fn cli_shaping_actions_and_requirement_patch_share_the_catalog() {
         "agent-one",
     ])
     .success();
+    // The close route takes no body: an input object is refused, and the Topic stays open.
     provenance_stdin(
         &[
             "api",
@@ -148,6 +149,18 @@ fn cli_shaping_actions_and_requirement_patch_share_the_catalog() {
         ],
         "{}",
     )
+    .failure()
+    .stderr(contains(
+        r#""error":{"field":"input","kind":"invalid_input","reason":"invalid_value"}"#,
+    ));
+    provenance(&[
+        "api",
+        "topics/topic_overtime/close",
+        "--method",
+        "post",
+        "--repo",
+        &repo,
+    ])
     .success()
     .stdout(contains(r#""status": "closed""#));
 

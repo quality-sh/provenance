@@ -102,6 +102,22 @@ impl StateStore {
         }
     }
 
+    /// The committed file versions that the history reads of this store
+    /// read: the ones that the repository was given, or else the Git
+    /// history of the layout root.
+    #[cfg(feature = "host")]
+    pub(crate) fn file_versions(&self) -> std::sync::Arc<dyn crate::review::history::FileVersions> {
+        self.identity
+            .as_ref()
+            .and_then(RepositoryIdentity::file_versions)
+            .cloned()
+            .unwrap_or_else(|| {
+                std::sync::Arc::new(crate::review::history::GitFileVersions::new(
+                    self.layout.root().to_owned(),
+                ))
+            })
+    }
+
     /// The clock that the writes of this store read: the one of the
     /// repository identity, or the system clock for a layout-level store.
     pub(crate) fn clock(&self) -> std::sync::Arc<dyn crate::repository::Clock> {

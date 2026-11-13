@@ -37,11 +37,6 @@ pub struct RepositoryContext {
     pub freshness: Option<FreshnessPolicy>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-pub struct InfoRequest {}
-
 /// External metadata names the requested target, never a host path.
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

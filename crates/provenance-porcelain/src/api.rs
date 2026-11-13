@@ -342,8 +342,7 @@ mod tests {
     fn definition_names(schema: &Value) -> BTreeSet<String> {
         schema["$defs"]
             .as_object()
-            .map(|defs| defs.keys().cloned().collect())
-            .unwrap_or_default()
+            .map_or_default(|defs| defs.keys().cloned().collect())
     }
 
     #[test]
