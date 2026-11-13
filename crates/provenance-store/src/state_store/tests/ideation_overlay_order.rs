@@ -97,15 +97,21 @@ fn listed_ids(store: &StateStore, scope: &ScopeId) -> Vec<Vec<String>> {
 }
 
 fn all_kinds(suffixes: &[&str]) -> Vec<Vec<String>> {
-    ["contribution", "synthesis", "proposal", "assertion", "disposition"]
-        .iter()
-        .map(|kind| {
-            suffixes
-                .iter()
-                .map(|suffix| format!("{kind}_{suffix}"))
-                .collect()
-        })
-        .collect()
+    [
+        "contribution",
+        "synthesis",
+        "proposal",
+        "assertion",
+        "disposition",
+    ]
+    .iter()
+    .map(|kind| {
+        suffixes
+            .iter()
+            .map(|suffix| format!("{kind}_{suffix}"))
+            .collect()
+    })
+    .collect()
 }
 
 /// One record of each kind for each of `suffixes`. The assertion of a suffix
