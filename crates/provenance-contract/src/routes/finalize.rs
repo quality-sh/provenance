@@ -236,4 +236,56 @@ mod tests {
             assert!(refusal.contains(cause), "{refusal}");
         }
     }
+
+    /// An implementation aid with no Rule binding: a request with a condition on a hidden
+    /// field stops the construction of the catalog, so the catalog of the crate cannot hold
+    /// one. The route hides `id` and `expected_etag` from its body, and a body cannot meet a
+    /// condition on a field that it does not have. The refusal names the operation, the
+    /// field and the keyword. A reference and a pattern for property names can name a field
+    /// that their text does not show, so they also stop the construction. The same condition
+    /// on a body field stays in the published body.
+    #[test]
+    fn a_condition_on_a_hidden_field_stops_catalog_construction() {
+        let field = json!({"type":"string"});
+        let fields = json!({"id":field,"expected_etag":field,"title":field,"summary":field});
+        let conditions = |name: &str| {
+            [
+                ("anyOf", json!([{"required":["title"]},{"required":[name]}])),
+                ("not", json!({"required":[name]})),
+                ("if", json!({"properties":{name:{"const":"a"}}})),
+                ("dependentRequired", json!({"title":[name]})),
+                ("dependentSchemas", json!({name:{"required":["title"]}})),
+            ]
+        };
+        for (keyword, condition) in conditions("summary") {
+            let mut raw = closed(&fields);
+            raw[keyword] = condition.clone();
+            let body = published(&raw).unwrap();
+            let body = body.expect("the route has a body");
+            assert_eq!(body["properties"]["data"][keyword], condition, "{raw}");
+        }
+
+        let hidden = "operation `example` hides the field `expected_etag`";
+        for (keyword, condition) in conditions("expected_etag") {
+            let mut raw = closed(&fields);
+            raw[keyword] = condition;
+            let refusal = published(&raw).expect_err(&raw.to_string());
+            assert!(refusal.contains(hidden), "{refusal}");
+            assert!(refusal.contains(&format!("the keyword `{keyword}`")), "{refusal}");
+        }
+
+        let hidden = "operation `example` hides the field `id`";
+        for (keyword, condition) in [
+            ("allOf", json!([{"$ref":"#/$defs/Condition"}])),
+            ("anyOf", json!([{"patternProperties":{"^expected_":false}}])),
+            ("propertyNames", json!({"pattern":"^[a-z]+$"})),
+        ] {
+            let mut raw = closed(&fields);
+            raw["$defs"] = json!({"Condition":{"required":["title"]}});
+            raw[keyword] = condition;
+            let refusal = published(&raw).expect_err(&raw.to_string());
+            assert!(refusal.contains(hidden), "{refusal}");
+            assert!(refusal.contains(&format!("the keyword `{keyword}`")), "{refusal}");
+        }
+    }
 }
