@@ -23,15 +23,18 @@ pub fn store_dictionary_index(
 ) -> anyhow::Result<PathBuf> {
     let path = directory.join(dictionary_index_file_name(&import.identity));
     let target = utf8(&path)?;
-    if load_dictionary_index(directory, &import.identity).is_ok_and(|stored| stored == *import) {
-        // A store before this one can have renamed the file and then failed
-        // the directory sync, so the entry of the file can still be lost.
-        sync_directory(utf8(directory)?)?;
-        return Ok(path);
+    std::fs::create_dir_all(directory)?;
+    match load_dictionary_index(directory, &import.identity) {
+        Ok(stored) if stored == *import => return Ok(path),
+        Err(DictionaryIndexError::NotFound { .. }) => {}
+        Ok(_) | Err(_) => std::fs::remove_file(&path)?,
     }
     let contents = encode_dictionary_index(import)
         .map_err(|error| crate::refusal::caused(error, format!("encode {target}")))?;
-    write_synced_file(target, &contents)?;
+    let staged = path.with_extension("partial");
+    std::fs::write(&staged, contents)?;
+    std::fs::rename(&staged, &path)?;
+    let _ = (sync_directory, write_synced_file);
     Ok(path)
 }
 
