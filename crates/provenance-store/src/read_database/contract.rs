@@ -4,7 +4,9 @@
 //! The cases use only the port: the SQL that they run is the SQL that the
 //! projection runs, so a store that passes them can hold the projection.
 //! No case runs one port call inside the work of another, and no work
-//! waits on anything but its own transaction.
+//! waits on anything but its own transaction, with one exception: the read
+//! of [`sequence::a_read_answers_from_one_committed_state`] waits for a
+//! write beside it when the harness says that reads interleave.
 
 use super::{
     is_missing_table, ReadDatabase, SqlFuture, SqlRow, SqlValue, Statement, Transaction, Unopened,

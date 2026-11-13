@@ -11,6 +11,10 @@ skills/** text eol=lf
 crates/provenance-cli/tests/fixtures/surface_names/** text eol=lf
 crates/provenance-mcp/tests/fixtures/surface_names/** text eol=lf
 
+# The expected reader outputs are compared byte for byte with the lines
+# that the readers give.
+crates/provenance-store/src/operations/queries/tests/**/*.txt text eol=lf
+
 # Other tracked Claude skills retain LF on every platform.
 .claude/skills/** text eol=lf
 

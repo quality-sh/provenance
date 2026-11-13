@@ -52,13 +52,16 @@ async fn until(flag: &AtomicBool) {
 /// its first statement ran.
 ///
 /// A write commits while the read runs. It runs beside the read, never
-/// inside its work: it starts after the first statement of the read, and
-/// the read goes on until the write has committed, or for a fixed number
-/// of statements. When the harness says that reads interleave, the write
-/// must commit while the read is open. A store that runs a read to its
-/// end in one call runs the write after it.
+/// inside its work: it starts after the first statement of the read. When
+/// the harness says that reads interleave, the read waits until the write
+/// has committed and then runs one more statement, so the write must
+/// commit while the read is open. The wait has no bound of its own: a
+/// store that keeps the write from committing while a read is open never
+/// ends this case, and the test runner stops it. A store that runs a read
+/// to its end in one call runs the write after it; for that store the read
+/// runs a fixed number of statements and does not wait.
 pub async fn a_read_answers_from_one_committed_state<H: Harness>(harness: H) {
-    const MOST_STATEMENTS: usize = 1000;
+    const STATEMENTS_WITHOUT_INTERLEAVING: usize = 10;
     let database = harness.database();
     write(
         database,
@@ -69,6 +72,7 @@ pub async fn a_read_answers_from_one_committed_state<H: Harness>(harness: H) {
     )
     .await
     .unwrap();
+    let interleave = harness.reads_interleave();
     let (first_read, committed) = (AtomicBool::new(false), AtomicBool::new(false));
     let (first_read, committed) = (&first_read, &committed);
     let mut seen = Vec::new();
@@ -78,11 +82,12 @@ pub async fn a_read_answers_from_one_committed_state<H: Harness>(harness: H) {
             let sql = "SELECT n FROM pinned ORDER BY n";
             slot.push(integers(&transaction.fetch(sql, Vec::new()).await?));
             first_read.store(true, Ordering::SeqCst);
-            for _ in 0..MOST_STATEMENTS {
-                if committed.load(Ordering::SeqCst) {
-                    break;
+            if interleave {
+                until(committed).await;
+            } else {
+                for _ in 0..STATEMENTS_WITHOUT_INTERLEAVING {
+                    slot.push(integers(&transaction.fetch(sql, Vec::new()).await?));
                 }
-                slot.push(integers(&transaction.fetch(sql, Vec::new()).await?));
             }
             slot.push(integers(&transaction.fetch(sql, Vec::new()).await?));
             Ok(())
@@ -102,12 +107,6 @@ pub async fn a_read_answers_from_one_committed_state<H: Harness>(harness: H) {
     read.unwrap();
     written.unwrap();
     assert!(seen.iter().all(|rows| rows == &[1]), "{seen:?}");
-    if harness.reads_interleave() {
-        assert!(
-            seen.len() < MOST_STATEMENTS + 2,
-            "the write did not commit while the read was open"
-        );
-    }
     assert_eq!(
         integers(&fetch(database, "SELECT n FROM pinned ORDER BY n").await),
         vec![1, 2]

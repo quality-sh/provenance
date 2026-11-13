@@ -74,6 +74,13 @@ filter = 'binary(cli_review_events_recovery) & test(repeat_kernel_queue_loss_thi
 slow-timeout = { period = "60s", terminate-after = 4 }
 
 [[profile.default.overrides]]
+# The read of this case waits, with no bound, for a write to commit beside
+# it. A store that keeps that write from committing must fail the case in
+# about a minute, not at the job timeout.
+filter = 'package(provenance-store) & binary(read_database_contract) & test(=a_read_answers_from_one_committed_state)'
+slow-timeout = { period = "30s", terminate-after = 2 }
+
+[[profile.default.overrides]]
 # A blocked OS lock cannot be cancelled by an async timeout.
 filter = 'binary(page_write_response)'
 slow-timeout = { period = "30s", terminate-after = 2 }

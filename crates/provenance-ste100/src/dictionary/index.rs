@@ -374,9 +374,12 @@ mod tests {
         std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
     }
 
-    /// A user reads these texts as the load problem of the dictionary status and in the
-    /// failure of a strict check. No Rule states the texts, so this test has no Rule binding.
-    /// It makes the cause of each index fault and shows the text of that fault.
+    /// The dictionary status gives the first five texts as its load problem, and a strict
+    /// check gives them in its failure. No command gives the text of an incomplete index,
+    /// because onboarding imports the PDF when the index does not load. A caller of
+    /// `load_dictionary_index_for_source` gets that text. No Rule states the texts, so this
+    /// test has no Rule binding. It makes the cause of each index fault and shows the text of
+    /// that fault.
     #[test]
     fn each_index_fault_gives_its_diagnostic() {
         let directory = scratch_directory();
