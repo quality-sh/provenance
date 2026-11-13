@@ -9,6 +9,7 @@ mod memory;
 use memory::{
     begin_input, key, open_review, scope, shard, verification_repository, FixedClock, Recorded,
 };
+use provenance_macros::verifies;
 use provenance_store::operations::begin_verification;
 use provenance_store::repository::Clock;
 use provenance_store::storage::{Atomicity, StateStorage, WriteSet};
@@ -53,9 +54,8 @@ impl Clock for SteppingClock {
     }
 }
 
-// No Rule binding: no Rule states the answer to a state change that comes
-// from outside the section.
 #[test]
+#[verifies("rule_moved_base_refusal_is_state_changed", examples)]
 fn a_state_change_outside_the_section_leaves_no_binding_and_no_run_row() {
     let root = tempfile::tempdir().unwrap();
     let clock = Arc::new(SteppingClock::new());
@@ -74,15 +74,11 @@ fn a_state_change_outside_the_section_leaves_no_binding_and_no_run_row() {
 
     let error = WriteError(begin_verification(&repository, begin_input()).unwrap_err());
 
-    let answer = serde_json::to_value(&error).unwrap();
+    let message = "The stored state changed after this write read it, so the write saved \
+                   nothing. Read the records again, then send the write again.";
     assert_eq!(
-        (&answer["kind"], error.status()),
-        (&json!("write_failed"), 500)
-    );
-    let cause = answer["cause"].as_str().unwrap();
-    assert!(
-        cause.starts_with("the state moved from revision "),
-        "{cause}"
+        (serde_json::to_value(&error).unwrap(), error.status()),
+        (json!({"kind": "state_changed", "message": message}), 409)
     );
     let store = repository.store();
     let reads = json!({
