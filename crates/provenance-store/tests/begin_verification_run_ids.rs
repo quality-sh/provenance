@@ -119,7 +119,13 @@ fn a_start_whose_run_id_a_row_holds_adds_no_row() {
     let bindings = store.list_verification_bindings(&scope()).unwrap();
     let bound: Vec<_> = bindings
         .iter()
-        .map(|binding| (binding.rule_id.as_str(), binding.key.as_str(), binding.file.as_str()))
+        .map(|binding| {
+            (
+                binding.rule_id.as_str(),
+                binding.key.as_str(),
+                binding.file.as_str(),
+            )
+        })
         .collect();
     assert_eq!(bound, [("rule_expiry", "expiry", "evidence.rs")]);
     let mut review: RequirementReview = serde_json::from_value(open_review()).unwrap();
