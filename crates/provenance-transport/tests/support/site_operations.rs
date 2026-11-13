@@ -5,47 +5,113 @@
 //! and the change of a Requirement, the document of a Requirement and the
 //! repository metadata. That is 58 operations, 25 of them reads.
 //!
-//! Each answer keeps its status and its body, without the projection stamp,
-//! with a cursor as whether a next page exists, and with `root` as
-//! `<repo>`. A path that holds a generated id names it by its place.
+//! Each call keeps its whole answer: the status, the headers and the body
+//! bytes. The pinned form of a run keeps the status, the headers apart from
+//! the length, and the body without the projection stamp, with a cursor as
+//! whether a next page exists and with the working tree as `<repo>`. Each
+//! generated value is named by its place.
 
-use super::catch_up_steps::{Answer, Surface};
-use super::resource_http::call_with_headers;
-use super::transcript::{named_answers, Names};
-use provenance_store::operations::LocalRepository;
-use provenance_store::repository::Repository;
-use provenance_transport::{OpenCredential, StatementHost};
-use serde_json::{json, Value};
-use std::sync::Arc;
+use super::names::Names;
+use super::router_answer::{Answer, Http};
+use super::views::{named, stable_view};
+use serde_json::{json, Map, Value};
 
-/// The HTTP routes of a host that serves one opened repository, as the
-/// review host binds it.
-pub struct Http(pub StatementHost);
+/// The calls of one run, with their answers.
+pub struct Transcript {
+    /// The working tree of the repository behind the host.
+    pub root: String,
+    pub answers: Vec<Answer>,
+}
 
-impl Http {
-    /// A host over `repository` under the target name `selected`.
-    pub fn over(repository: Repository) -> Self {
-        let access = LocalRepository::bind(repository, "selected").unwrap();
-        Self(StatementHost::with_access(Arc::new(access)).with_credential(Arc::new(OpenCredential)))
+impl Transcript {
+    async fn call(
+        &mut self,
+        http: &Http,
+        method: &str,
+        path: &str,
+        data: Option<Value>,
+        headers: &[(&str, &str)],
+        shown: &str,
+    ) -> Value {
+        let answer = http
+            .call(method, path, data, headers, format!("{method} {shown}"))
+            .await;
+        let body = answer.json();
+        self.answers.push(answer);
+        body
+    }
+
+    async fn get(&mut self, http: &Http, path: &str, shown: &str) -> Value {
+        self.call(http, "GET", path, None, &[], shown).await
+    }
+
+    /// The pinned form of the run: the stable view of the answers with
+    /// each generated value named.
+    pub fn pinned(&self) -> Value {
+        let calls: Vec<Value> = self.answers.iter().map(pinned_call).collect();
+        let text = serde_json::to_string(&calls)
+            .unwrap()
+            .replace(&self.root, "<repo>");
+        stable_view(&named(
+            &mut Names::default(),
+            &serde_json::from_str(&text).unwrap(),
+        ))
     }
 }
 
-impl Surface for Http {
-    fn call<'a>(
-        &'a self,
-        method: &'a str,
-        path: &'a str,
-        data: Option<Value>,
-        headers: &'a [(&'a str, &'a str)],
-    ) -> Answer<'a> {
-        let body = data.map(|data| json!({ "data": data }));
-        Box::pin(call_with_headers(&self.0, method, path, body, headers))
+/// One answer in the pinned form. An entity tag is kept without its quotes,
+/// so that a generated value in it is named.
+fn pinned_call(answer: &Answer) -> Value {
+    let mut body = answer.json();
+    if let Some(meta) = body.get_mut("meta").and_then(Value::as_object_mut) {
+        meta.remove("stamp");
+        if let Some(cursor) = meta.remove("next_cursor") {
+            meta.insert("next_cursor".into(), json!(!cursor.is_null()));
+        }
     }
+    let headers: Map<String, Value> = answer
+        .headers
+        .iter()
+        .filter(|(name, _)| name != "content-length")
+        .map(|(name, value)| (name.clone(), json!(value.trim_matches('"'))))
+        .collect();
+    json!({"call": answer.shown, "status": answer.status, "headers": headers, "body": body})
+}
+
+/// The pinned form of a run over the fixture repository. Without the
+/// headers it is the transcript that the router gave before it could send
+/// a read to a port.
+const PINNED: &str = include_str!("../fixtures/site_operations.json");
+
+/// Asserts that `pinned` equals the checked transcript. A failure shows each
+/// line that differs, then the whole observed transcript.
+pub fn assert_pinned(pinned: &Value) {
+    let observed = serde_json::to_string_pretty(pinned).unwrap();
+    let expected = PINNED.trim_end();
+    if observed == expected {
+        return;
+    }
+    let observed_lines: Vec<&str> = observed.lines().collect();
+    let expected_lines: Vec<&str> = expected.lines().collect();
+    let mut diff = Vec::new();
+    for index in 0..observed_lines.len().max(expected_lines.len()) {
+        let (left, right) = (expected_lines.get(index), observed_lines.get(index));
+        if left != right {
+            diff.push(format!("line {}:", index + 1));
+            diff.extend(left.map(|line| format!("- {line}")));
+            diff.extend(right.map(|line| format!("+ {line}")));
+        }
+    }
+    panic!(
+        "the transcript differs from tests/fixtures/site_operations.json \
+         (- expected, + observed):\n{}\n=== observed transcript\n{observed}\n=== end",
+        diff.join("\n")
+    );
 }
 
 /// The record kinds, with the id of the record of each kind that the
 /// fixture repository holds after `all_kinds`.
-pub const KINDS: [(&str, &str, &str); 6] = [
+const KINDS: [(&str, &str, &str); 6] = [
     ("sources", "source", "source_shared"),
     ("requirements", "requirement", "req_shared"),
     ("resolutions", "resolution", "resolution_shared"),
@@ -53,58 +119,6 @@ pub const KINDS: [(&str, &str, &str); 6] = [
     ("topics", "topic", "topic_shared"),
     ("questions", "question", "question_shared"),
 ];
-
-/// The number of calls of [`run`] to read operations: the 25 reads, the
-/// new Requirement, and each record again at the end.
-pub const READS: usize = 25 + 1 + 6;
-
-/// The calls of one run, with their answers.
-pub struct Transcript {
-    root: String,
-    calls: Vec<Value>,
-}
-
-impl Transcript {
-    async fn call(
-        &mut self,
-        surface: &impl Surface,
-        method: &str,
-        path: &str,
-        data: Option<Value>,
-        headers: &[(&str, &str)],
-        shown: &str,
-    ) -> Value {
-        let (status, body) = surface.call(method, path, data, headers).await;
-        let mut kept = body.clone();
-        if let Some(meta) = kept.get_mut("meta").and_then(Value::as_object_mut) {
-            meta.remove("stamp");
-            if let Some(cursor) = meta.remove("next_cursor") {
-                meta.insert("next_cursor".into(), json!(!cursor.is_null()));
-            }
-        }
-        let kept = serde_json::from_str::<Value>(
-            &serde_json::to_string(&kept)
-                .unwrap()
-                .replace(&self.root, "<repo>"),
-        )
-        .unwrap();
-        self.calls.push(json!({
-            "call": format!("{method} {shown}"),
-            "status": status,
-            "body": kept,
-        }));
-        body
-    }
-
-    async fn get(&mut self, surface: &impl Surface, path: &str, shown: &str) -> Value {
-        self.call(surface, "GET", path, None, &[], shown).await
-    }
-
-    /// The answers with each generated value named in the order it shows.
-    pub fn named(&self) -> Vec<Value> {
-        named_answers(&mut Names::default(), &self.calls)
-    }
-}
 
 /// The proposal of the pending submission of the record at `path`, or a
 /// proposal id that no submission has.
@@ -115,51 +129,41 @@ fn pending(record: &Value) -> String {
         .to_owned()
 }
 
-/// Runs the operations of the review page on `surface`. `root` is the
+/// Runs the operations of the review page on `http`. `root` is the
 /// working tree of the repository behind it.
-pub async fn run(surface: &impl Surface, root: &str) -> Transcript {
+pub async fn run(http: &Http, root: &str) -> Transcript {
     let mut out = Transcript {
         root: root.to_owned(),
-        calls: Vec::new(),
+        answers: Vec::new(),
     };
     for (plural, singular, id) in KINDS {
-        kind(&mut out, surface, plural, singular, id).await;
+        kind(&mut out, http, plural, singular, id).await;
     }
-    requirement_writes(&mut out, surface).await;
+    requirement_writes(&mut out, http).await;
     out.get(
-        surface,
+        http,
         "/requirements/req_shared/document",
         "/requirements/req_shared/document",
     )
     .await;
-    out.call(surface, "GET", "/metadata", None, &[], "/metadata")
+    out.call(http, "GET", "/metadata", None, &[], "/metadata")
         .await;
     for (plural, _, id) in KINDS {
-        out.get(
-            surface,
-            &format!("/{plural}/{id}"),
-            &format!("/{plural}/{id}"),
-        )
-        .await;
+        out.get(http, &format!("/{plural}/{id}"), &format!("/{plural}/{id}"))
+            .await;
     }
     out
 }
 
-async fn kind(
-    out: &mut Transcript,
-    surface: &impl Surface,
-    plural: &str,
-    singular: &str,
-    id: &str,
-) {
+async fn kind(out: &mut Transcript, http: &Http, plural: &str, singular: &str, id: &str) {
     let record = format!("/{plural}/{id}");
     let discussions = format!("{record}/discussions");
-    out.get(surface, &format!("/{plural}"), &format!("/{plural}"))
+    out.get(http, &format!("/{plural}"), &format!("/{plural}"))
         .await;
-    let read = out.get(surface, &record, &record).await;
+    let read = out.get(http, &record, &record).await;
     let started = out
         .call(
-            surface,
+            http,
             "POST",
             &discussions,
             Some(
@@ -176,9 +180,9 @@ async fn kind(
         .to_owned();
     let thread = format!("{discussions}/{discussion}");
     let shown = format!("{discussions}/{{discussion}}");
-    out.get(surface, &discussions, &discussions).await;
+    out.get(http, &discussions, &discussions).await;
     out.call(
-        surface,
+        http,
         "POST",
         &format!("{thread}/messages"),
         Some(
@@ -190,13 +194,13 @@ async fn kind(
     )
     .await;
     out.get(
-        surface,
+        http,
         &format!("{thread}/messages"),
         &format!("{shown}/messages"),
     )
     .await;
     out.call(
-        surface,
+        http,
         "PATCH",
         &thread,
         Some(json!({"actor":"reviewer", "declared_by":null, "status":"resolved"})),
@@ -208,7 +212,7 @@ async fn kind(
     let submission = format!("{record}/submissions/{proposal}");
     let shown = format!("{record}/submissions/{{proposal}}");
     out.call(
-        surface,
+        http,
         "POST",
         &format!("{submission}/withdraw"),
         Some(json!({"actor":"agent", "declared_by":null, "reason":"Revise it."})),
@@ -217,7 +221,7 @@ async fn kind(
     )
     .await;
     out.call(
-        surface,
+        http,
         "POST",
         &format!("{submission}/decide"),
         Some(decision(singular, id)),
@@ -237,11 +241,11 @@ fn decision(singular: &str, id: &str) -> Value {
 /// Creates a Requirement and withdraws its submission, then changes it and
 /// decides the new submission.
 // `{proposal}` in a shown call is a placeholder for the generated id.
-async fn requirement_writes(out: &mut Transcript, surface: &impl Surface) {
+async fn requirement_writes(out: &mut Transcript, http: &Http) {
     let record = "/requirements/req_new";
     let created = out
         .call(
-            surface,
+            http,
             "POST",
             "/requirements",
             Some(json!({"actor":"agent", "id":"req_new",
@@ -255,7 +259,7 @@ async fn requirement_writes(out: &mut Transcript, surface: &impl Surface) {
         .as_str()
         .unwrap_or("proposal_missing");
     out.call(
-        surface,
+        http,
         "POST",
         &format!("/requirements/req_new/submissions/{proposal}/withdraw"),
         Some(json!({"actor":"agent", "declared_by":null, "reason":"Revise it."})),
@@ -264,7 +268,7 @@ async fn requirement_writes(out: &mut Transcript, surface: &impl Surface) {
     )
     .await;
     let read = out
-        .get(surface, "/requirements/req_new", "/requirements/req_new")
+        .get(http, "/requirements/req_new", "/requirements/req_new")
         .await;
     let etag = read["data"]["edit"]["etag"]
         .as_str()
@@ -272,7 +276,7 @@ async fn requirement_writes(out: &mut Transcript, surface: &impl Surface) {
         .to_owned();
     let saved = out
         .call(
-            surface,
+            http,
             "PATCH",
             "/requirements/req_new",
             Some(json!({"actor":"agent", "statement":"The record req_new is new."})),
@@ -284,7 +288,7 @@ async fn requirement_writes(out: &mut Transcript, surface: &impl Surface) {
         .as_str()
         .unwrap_or("proposal_missing");
     out.call(
-        surface,
+        http,
         "POST",
         &format!("/requirements/req_new/submissions/{proposal}/decide"),
         Some(decision("requirement", "req_new")),

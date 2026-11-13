@@ -82,18 +82,29 @@ async fn repository() -> (tempfile::TempDir, Repository) {
     (root, repository)
 }
 
-/// The call of one operation on the default scope.
-fn call(request: Value) -> Value {
-    let mut call = json!({ "context": { "repository": "memory", "scope": "default" } });
-    call["request"] = request;
-    call
+/// The context of a call on the default scope of the target `memory`.
+fn context() -> Value {
+    json!({ "repository": "memory", "scope": "default" })
 }
 
 /// The answer of one read: the success, or the status and body of the
 /// failure.
 async fn read(repository: &Repository, operation: &'static str, request: Value) -> Value {
+    read_in(repository, context(), operation, request).await
+}
+
+/// The answer of one read in `context`.
+async fn read_in(
+    repository: &Repository,
+    context: Value,
+    operation: &'static str,
+    request: Value,
+) -> Value {
     let port = InProcessReadOperations::new(repository.clone());
-    match port.run(operation, call(request)).await {
+    match port
+        .run(operation, json!({ "context": context, "request": request }))
+        .await
+    {
         Ok(success) => success,
         Err(failure) => json!({
             "status": failure.status_code(),
@@ -245,4 +256,71 @@ async fn a_publish_then_the_catch_up_shows_in_the_next_read() {
     let stamp_after = stamp(&mut after);
     assert_eq!(stamp_after["serial"], second.serial, "{stamp_after}");
     assert_eq!(ids(&after), ["req_expiry", "req_owner"], "{after}");
+}
+
+/// The in-process port runs the calls of the target name that it is given,
+/// and refuses a call that names another target, as the router does.
+#[tokio::test]
+async fn a_call_that_names_another_target_refuses() {
+    let (_root, repository) = repository().await;
+    catch_up_in_publish(&repository).await.unwrap();
+    let other = json!({ "repository": "other", "scope": "default" });
+    let answer = read_in(&repository, other, "page-requirements", json!({})).await;
+    assert_eq!(answer["status"], 404, "{answer}");
+    assert_eq!(answer["error"]["kind"], "unknown_target", "{answer}");
+}
+
+/// A `refuse_stale` read over memory storage hashes the storage: it answers
+/// after the embedder's catch-up, and refuses after a publish that no
+/// catch-up followed, with the moved unit.
+#[tokio::test]
+async fn a_refuse_stale_read_hashes_the_storage() {
+    let (_root, repository) = repository().await;
+    let caught_up = catch_up_in_publish(&repository).await.unwrap();
+    let mut refusing = context();
+    refusing["freshness"] = json!("refuse_stale");
+
+    let mut fresh = read_in(
+        &repository,
+        refusing.clone(),
+        "page-requirements",
+        json!({}),
+    )
+    .await;
+    let stamp = stamp(&mut fresh);
+    assert_eq!(stamp["policy"], "refuse_stale", "{fresh}");
+    assert_eq!(stamp["serial"], caught_up.serial, "{stamp}");
+    assert_eq!(ids(&fresh), ["req_expiry"], "{fresh}");
+
+    repository
+        .store()
+        .create_requirement(requirement("req_owner"))
+        .unwrap();
+    let stale = read_in(&repository, refusing, "page-requirements", json!({})).await;
+    assert_eq!(stale["status"], 409, "{stale}");
+    assert_eq!(stale["error"]["kind"], "stale", "{stale}");
+    assert_eq!(stale["error"]["serial"], caught_up.serial, "{stale}");
+    let moved: Vec<&Value> = stale["error"]["moved"].as_array().unwrap().iter().collect();
+    assert!(
+        moved.iter().any(|unit| unit["unit"] == "scope:default"),
+        "{stale}"
+    );
+}
+
+/// Without `host` an acquire of a held memory section refuses at once: no
+/// thread waits for a section.
+#[cfg(not(feature = "host"))]
+#[test]
+fn a_held_memory_section_refuses_without_host() {
+    let lock = provenance_store::storage::memory::MemorySectionLock::default();
+    let held = lock.acquire().unwrap();
+    let other = lock.clone();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::spawn(move || sender.send(other.acquire().is_err()).unwrap());
+    let refused = receiver
+        .recv_timeout(std::time::Duration::from_secs(10))
+        .expect("the second acquire waits for the held section");
+    assert!(refused, "the second acquire took the held section");
+    drop(held);
+    assert!(lock.acquire().is_ok());
 }

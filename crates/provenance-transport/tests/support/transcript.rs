@@ -9,9 +9,10 @@
 //! order it first shows.
 
 use super::catch_up_steps::Surface;
+use super::names::{generated, Names};
+use super::views::{named, stable_view};
 use provenance_transport::fixture::records::Repository;
-use serde_json::{json, Map, Value};
-use std::collections::BTreeMap;
+use serde_json::{json, Value};
 
 /// The reads that each step of a characterization records.
 pub const READS: &[&str] = &[
@@ -45,38 +46,6 @@ pub const READS: &[&str] = &[
     "/sources/source_a?query=impact",
 ];
 
-#[derive(Default)]
-pub struct Names {
-    known: BTreeMap<String, String>,
-}
-
-impl Names {
-    fn name(&mut self, text: &str) -> String {
-        if !generated(text) {
-            return text.to_owned();
-        }
-        let next = self.known.len() + 1;
-        self.known
-            .entry(text.to_owned())
-            .or_insert_with(|| format!("<generated {next}>"))
-            .clone()
-    }
-}
-
-/// A UUID with or without a word before it, a hex digest, a signed value
-/// or a time stamp.
-fn generated(text: &str) -> bool {
-    let hex = |part: &str| !part.is_empty() && part.bytes().all(|b| b.is_ascii_hexdigit());
-    let last = text.rsplit('_').next().unwrap_or(text);
-    let uuid = last.len() == 36 && last.split('-').map(str::len).eq([8, 4, 4, 4, 12]);
-    let digest = text.len() >= 40 && hex(text.trim_start_matches("sha256:"));
-    let time = text.len() >= 20
-        && text.as_bytes()[4] == b'-'
-        && text.as_bytes()[10] == b'T'
-        && text.bytes().take(4).all(|b| b.is_ascii_digit());
-    uuid || digest || time
-}
-
 /// The text with each generated word replaced by `<generated>`.
 #[allow(dead_code)]
 pub fn without_generated(text: &str) -> String {
@@ -84,28 +53,6 @@ pub fn without_generated(text: &str) -> String {
         .map(|word| if generated(word) { "<generated>" } else { word })
         .collect::<Vec<_>>()
         .join(" ")
-}
-
-/// The answer with each generated value named, and each `created_at`
-/// number as `<time>`.
-fn named(names: &mut Names, value: &Value) -> Value {
-    match value {
-        Value::String(text) => Value::String(names.name(text)),
-        Value::Array(items) => Value::Array(items.iter().map(|item| named(names, item)).collect()),
-        Value::Object(fields) => {
-            let mut out = Map::new();
-            for (key, field) in fields {
-                let value = if key == "created_at" && field.is_number() {
-                    json!("<time>")
-                } else {
-                    named(names, field)
-                };
-                out.insert(key.clone(), value);
-            }
-            Value::Object(out)
-        }
-        other => other.clone(),
-    }
 }
 
 /// The value with the repository path replaced in each string.
@@ -209,31 +156,6 @@ pub fn copy_without_projection(repo: &Repository) -> Repository {
     }
     let layout = provenance_store::layout::ProvenanceLayout::new(dir.path().to_str().unwrap());
     Repository { dir, layout }
-}
-
-/// The transcript without what differs from run to run. Record ids such as
-/// proposal ids are random, so each generated value becomes one word. A list
-/// of records keyed by a generated id is in id order, so it is sorted by its
-/// text.
-pub fn stable_view(value: &Value) -> Value {
-    match value {
-        Value::String(text) if text.starts_with("<generated ") => json!("<generated>"),
-        Value::Array(items) => {
-            let mut items: Vec<Value> = items.iter().map(stable_view).collect();
-            let keyed = |item: &Value| item.get("id") == Some(&json!("<generated>"));
-            if !items.is_empty() && items.iter().all(keyed) {
-                items.sort_by_key(|item| serde_json::to_string(item).unwrap());
-            }
-            Value::Array(items)
-        }
-        Value::Object(fields) => Value::Object(
-            fields
-                .iter()
-                .map(|(key, field)| (key.clone(), stable_view(field)))
-                .collect(),
-        ),
-        other => other.clone(),
-    }
 }
 
 /// A 64-bit FNV-1a digest of the stable view of the transcript, to pin a
