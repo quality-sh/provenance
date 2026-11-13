@@ -138,8 +138,35 @@ fn release_workflow_publishes_rust_crates_in_dependency_order() {
             .unwrap()
             < package
     );
-    assert!(workflow.contains("toolchain: 1.100.0"));
     assert!(!workflow.contains("run: cargo publish"));
+}
+
+/// Cargo generates the archive checksum with the Rust version of the release. The workflow
+/// names one exact version, and each toolchain step installs that version.
+#[test]
+fn release_workflow_names_one_exact_rust_version() {
+    let workflow = fs::read_to_string(workspace_root().join(".github/workflows/release.yml"))
+        .expect("read release workflow");
+    let versions = workflow
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix("RUST_TOOLCHAIN: "))
+        .collect::<Vec<_>>();
+    let [version] = versions.as_slice() else {
+        panic!("the release workflow names its Rust version one time: {versions:?}");
+    };
+    let parts = version.split('.').collect::<Vec<_>>();
+    assert_eq!(parts.len(), 3, "{version}");
+    for part in parts {
+        assert!(part.parse::<u32>().is_ok(), "{version}");
+    }
+    let steps = workflow
+        .lines()
+        .filter(|line| line.trim_start().starts_with("toolchain:"))
+        .collect::<Vec<_>>();
+    assert!(!steps.is_empty(), "the release installs no Rust toolchain");
+    for step in steps {
+        assert_eq!(step.trim(), "toolchain: ${{ env.RUST_TOOLCHAIN }}");
+    }
 }
 
 #[test]
