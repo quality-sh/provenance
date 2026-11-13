@@ -61,7 +61,10 @@ fn a_failed_rename_leaves_no_temporary_file() -> anyhow::Result<()> {
         .expect_err("a directory at the file path must stop the rename");
 
     let text = format!("{error:#}");
-    assert!(text.starts_with("failed to persist temporary file: "), "{text}");
+    assert!(
+        text.starts_with("failed to persist temporary file: "),
+        "{text}"
+    );
     let names = std::fs::read_dir(&root)?
         .map(|entry| Ok(entry?.file_name().to_string_lossy().into_owned()))
         .collect::<std::io::Result<Vec<_>>>()?;

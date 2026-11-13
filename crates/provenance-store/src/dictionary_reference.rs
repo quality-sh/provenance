@@ -197,9 +197,7 @@ pub fn current_reference_from(
 ) -> Result<CurrentReference, StateFileRefusal> {
     let technical_names = match file {
         None => Vec::new(),
-        Some(bytes) => {
-            parse_reference(&dictionary_reference_path(layout), bytes)?.technical_names
-        }
+        Some(bytes) => parse_reference(&dictionary_reference_path(layout), bytes)?.technical_names,
     };
     Ok(CurrentReference { technical_names })
 }
