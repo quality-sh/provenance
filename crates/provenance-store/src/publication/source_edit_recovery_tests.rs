@@ -7,6 +7,7 @@ use crate::{
     test_probes,
 };
 use camino::Utf8Path;
+use provenance_macros::verifies;
 
 const BEFORE: &[u8] = b"before\n";
 const AFTER: &[u8] = b"after\n";
@@ -47,6 +48,8 @@ fn crash_child() {
     };
     let phase = std::env::var("PROVENANCE_SOURCE_EDIT_CRASH_PHASE").unwrap();
     let phase = match phase.as_str() {
+        "state_prepared" => "state_prepared",
+        "source_edit_temp_prepared" => "source_edit_temp_prepared",
         "source_edit_prepared" => "source_edit_prepared",
         "source_edit_backup_created" => "source_edit_backup_created",
         "source_edit_state_installed" => "source_edit_state_installed",
@@ -103,6 +106,71 @@ fn each_source_edit_phase_recovers_matching_file_and_state() {
         assert!(
             !names.iter().any(|name| name.strip_suffix(".tmp").is_some()),
             "{phase}: {names:?}"
+        );
+    }
+}
+
+/// Runs the source edit of the fixture at `root` in a child process. The
+/// probe at `phase` ends the process with no unwind, as a kill does.
+fn stop_in_child(root: &Utf8Path, phase: &str) {
+    let status = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "operations::files::tests::source_edit_recovery_tests::crash_child",
+            "--nocapture",
+        ])
+        .env("PROVENANCE_SOURCE_EDIT_CRASH_ROOT", root.as_str())
+        .env("PROVENANCE_SOURCE_EDIT_CRASH_PHASE", phase)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .unwrap();
+    assert_eq!(status.code(), Some(86), "{phase}");
+}
+
+/// The names of the entries of `directory`.
+fn names(directory: &Utf8Path) -> Vec<String> {
+    std::fs::read_dir(directory)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect()
+}
+
+/// A stop after the copy of the state and before the record of the prepared
+/// file, and a stop after that record and before the marker.
+#[test]
+#[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
+fn a_stopped_source_edit_leaves_no_transaction_after_the_next_section_entry() {
+    for phase in ["state_prepared", "source_edit_temp_prepared"] {
+        let temp = fixture();
+        let root_path = canonical_root(&temp);
+        let root = root_path.as_path();
+        let layout = ProvenanceLayout::new(root);
+        stop_in_child(root, phase);
+        assert_eq!(
+            names(&layout.source_edit_transactions_dir()).len(),
+            1,
+            "{phase}: the stopped write left its transaction"
+        );
+        assert!(!layout.source_edit_marker_path().exists(), "{phase}");
+
+        with_repository_publication(&layout, |_| Ok(())).unwrap();
+
+        assert_eq!(
+            names(&layout.source_edit_transactions_dir()),
+            Vec::<String>::new(),
+            "{phase}: the cache keeps no transaction data"
+        );
+        assert_eq!(std::fs::read(root.join("source.txt")).unwrap(), BEFORE, "{phase}");
+        assert_eq!(
+            std::fs::read(layout.state_dir().join("value")).unwrap(),
+            BEFORE,
+            "{phase}"
+        );
+        assert!(
+            !names(root).iter().any(|name| name.ends_with(".tmp")),
+            "{phase}: {:?}",
+            names(root)
         );
     }
 }
