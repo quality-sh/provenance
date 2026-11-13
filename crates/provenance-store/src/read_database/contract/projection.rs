@@ -195,10 +195,11 @@ async fn foreign(database: &dyn ReadDatabase) -> Vec<SqlRow> {
     rows
 }
 
-/// A table that the store does not own, with its index and its rows,
-/// stays in the database across a schema rebuild and a full rebuild, and
-/// the schema check does not ask for a rebuild because of it. The store's
-/// own tables are made again as before.
+/// A table that the store does not own stays across the rebuilds.
+///
+/// The table keeps its index and its rows across a schema rebuild and a
+/// full rebuild, and the schema check does not ask for a rebuild because
+/// of it. The store's own tables are made again as before.
 pub async fn a_rebuild_keeps_a_table_that_the_store_does_not_own<H: Harness>(harness: H) {
     let repository = repository(&harness);
     let database = harness.database();

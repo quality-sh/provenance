@@ -146,8 +146,9 @@ const fn small_bound(unit: WorkUnit) -> u64 {
 /// rows: a million rows, and some millions of engine steps.
 const FAR_PAST: &str = "SELECT COUNT(*) FROM wide AS a, wide AS b WHERE a.n <> b.n";
 
-/// After `bound_work`, a statement whose work is far past the bound gives
-/// [`OverBudget`] and no rows. The transaction stays open: a later
+/// After `bound_work`, a statement far past the bound gives [`OverBudget`].
+///
+/// The statement gives no rows. The transaction stays open: a later
 /// statement in it gives its rows or [`OverBudget`], and the read ends
 /// without an error.
 pub async fn a_statement_far_past_the_bound_gives_over_budget<H: Harness>(harness: H) {
