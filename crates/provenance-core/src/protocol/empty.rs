@@ -107,7 +107,10 @@ impl Visitor<'_> for Name {
 
     fn visit_u64<E: Error>(self, value: u64) -> Result<Infallible, E> {
         let expected = format!("{} index 0 <= i < 0", self.word());
-        Err(E::invalid_value(Unexpected::Unsigned(value), &expected.as_str()))
+        Err(E::invalid_value(
+            Unexpected::Unsigned(value),
+            &expected.as_str(),
+        ))
     }
 
     fn visit_str<E: Error>(self, value: &str) -> Result<Infallible, E> {
