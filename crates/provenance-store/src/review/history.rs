@@ -1,28 +1,50 @@
-//! Record history and change evidence read from Git and the working copy.
+//! Record history and change evidence, read from the committed versions of
+//! the record files and from the working copy.
+//!
+//! The committed versions come through the [`FileVersions`] port. The port
+//! and its contract build without `host`; the history reads need it.
 
+pub mod contract;
+#[cfg(feature = "host")]
 mod evidence;
+#[cfg(feature = "host")]
 mod git;
+#[cfg(feature = "host")]
 mod origins;
+mod versions;
 
+#[cfg(feature = "host")]
 pub(super) use evidence::page as evidence_page;
+#[cfg(feature = "host")]
+pub use git::GitFileVersions;
+pub use versions::{BoxFuture, FileVersion, FileVersions};
 
+#[cfg(feature = "host")]
 use super::classifier;
+#[cfg(feature = "host")]
 use crate::{families::review_families, shards, state_store::StateStore};
+#[cfg(feature = "host")]
 use provenance_core::review::{RecordVersion, SaveOutcome};
+#[cfg(feature = "host")]
 use provenance_core::{NodeType, ScopeId, StableId};
+#[cfg(feature = "host")]
 use provenance_macros::rule;
+#[cfg(feature = "host")]
 use serde_json::Value;
 
 /// The version id of the saved working copy.
+#[cfg(feature = "host")]
 pub(super) const WORKING: &str = "working";
 
 /// One record version and the record JSON it holds.
+#[cfg(feature = "host")]
 pub(super) struct VersionedRecord {
     pub(super) version: RecordVersion,
     pub(super) record: Value,
 }
 
 /// Where one version comes from.
+#[cfg(feature = "host")]
 struct Source {
     id: StableId,
     commit: Option<String>,
@@ -30,6 +52,7 @@ struct Source {
     committed_at: Option<i64>,
 }
 
+#[cfg(feature = "host")]
 impl StateStore {
     /// Lists the versions of one record, oldest first: each commit that
     /// changed it in its graph record file, then the saved working copy when
@@ -41,6 +64,9 @@ impl StateStore {
     /// lists only the kept side. A merge that resolves to new content adds
     /// one, after the version of its first parent. A commit whose shard text
     /// does not parse adds no version.
+    ///
+    /// The committed versions come from the file versions of the store. The
+    /// call blocks on them, so it runs where a blocking call is permitted.
     #[rule("rule_record_history_reads_git")]
     pub(super) fn record_versions(
         &self,
@@ -48,16 +74,21 @@ impl StateStore {
         kind: NodeType,
         id: &StableId,
     ) -> anyhow::Result<Vec<VersionedRecord>> {
+        tokio::runtime::Handle::current().block_on(self.read_record_versions(scope, kind, id))
+    }
+
+    async fn read_record_versions(
+        &self,
+        scope: &ScopeId,
+        kind: NodeType,
+        id: &StableId,
+    ) -> anyhow::Result<Vec<VersionedRecord>> {
         let path = shards::path_for(&self.layout, scope, kind);
         let (working, discussions) = self.with_repository_publication(|held| {
-            let text = match std::fs::read_to_string(&path) {
-                Ok(text) => Some(text),
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-                Err(error) => return Err(error.into()),
-            };
-            Ok((text, held.list_discussions(scope)?))
+            Ok((held.state_text(&path)?, held.list_discussions(scope)?))
         })?;
-        let files = git::file_versions(self.layout.root(), &path)?;
+        let history = self.file_versions();
+        let files = history.versions(&self.relative(&path)?).await?;
         let records = files
             .iter()
             .map(|file| file.text.as_deref().and_then(|text| find(text, id)))
@@ -92,22 +123,33 @@ impl StateStore {
             }
         }
         origins::assign(
-            self.layout.root(),
-            &shards::discussions_path(&self.layout, scope),
+            history.as_ref(),
+            &self.relative(&shards::discussions_path(&self.layout, scope))?,
             &discussions,
             kind,
             id,
             &mut versions,
-        )?;
+        )
+        .await?;
         Ok(versions)
+    }
+
+    /// The path of a file of this store below its working tree, as the file
+    /// versions port names it.
+    fn relative(&self, path: &camino::Utf8Path) -> anyhow::Result<String> {
+        Ok(path
+            .strip_prefix(self.layout.root())?
+            .as_str()
+            .replace('\\', "/"))
     }
 }
 
+#[cfg(feature = "host")]
 /// The indexes of the commits that changed the record at `HEAD`, oldest
 /// first. The walk starts at the newest commit and steps to a parent whose
 /// record the commit kept, or else to its first parent. A commit that holds
 /// the record and kept no parent's record changed it.
-fn lineage(files: &[git::FileVersion], records: &[Option<Value>]) -> Vec<usize> {
+fn lineage(files: &[FileVersion], records: &[Option<Value>]) -> Vec<usize> {
     let index = files
         .iter()
         .enumerate()
@@ -136,6 +178,7 @@ fn lineage(files: &[git::FileVersion], records: &[Option<Value>]) -> Vec<usize> 
     chain
 }
 
+#[cfg(feature = "host")]
 /// The record with `id` in the text of one JSONL record file. A line that is
 /// not a JSON record, such as a committed conflict marker, holds no record.
 fn find(text: &str, id: &StableId) -> Option<Value> {
@@ -144,6 +187,7 @@ fn find(text: &str, id: &StableId) -> Option<Value> {
         .find(|value| value.get("id").and_then(Value::as_str) == Some(id.as_str()))
 }
 
+#[cfg(feature = "host")]
 /// The record without its record stamps.
 fn content(record: &Value) -> Value {
     let mut value = record.clone();
@@ -155,6 +199,7 @@ fn content(record: &Value) -> Value {
     value
 }
 
+#[cfg(feature = "host")]
 /// Adds a version when the record differs from the previous version.
 fn push_version(
     versions: &mut Vec<VersionedRecord>,
@@ -167,8 +212,7 @@ fn push_version(
     let changed_fields = match previous.map(|previous| content(&previous.record)) {
         None => after
             .as_object()
-            .map(|fields| fields.keys().cloned().collect())
-            .unwrap_or_default(),
+            .map_or_default(|fields| fields.keys().cloned().collect()),
         Some(before) => {
             let mut names = before
                 .as_object()

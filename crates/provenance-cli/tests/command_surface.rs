@@ -20,8 +20,7 @@ use support::surface::{help, tools, words};
 fn properties(schema: &Value) -> BTreeSet<String> {
     schema["properties"]
         .as_object()
-        .map(|properties| properties.keys().cloned().collect())
-        .unwrap_or_default()
+        .map_or_default(|properties| properties.keys().cloned().collect())
 }
 
 /// The CLI help and the MCP tool of each command on both interfaces show one description.
@@ -67,8 +66,7 @@ fn values<'a>(tools: &'a BTreeMap<String, Value>, tool: &str, property: &str) ->
     property["enum"]
         .as_array()
         .or_else(|| property["items"]["enum"].as_array())
-        .map(|values| values.iter().filter_map(Value::as_str).collect())
-        .unwrap_or_default()
+        .map_or_default(|values| values.iter().filter_map(Value::as_str).collect())
 }
 
 /// Whether MCP shows `name` as a tool or as a value of an action or categories argument.
