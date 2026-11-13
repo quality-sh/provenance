@@ -10,6 +10,7 @@ mod support {
     pub mod cases;
     pub mod contract;
     pub mod contract_laws;
+    pub mod replay;
 }
 
 use hegel::TestCase;
@@ -22,6 +23,7 @@ use std::sync::Arc;
 use support::cases::{alone, each_operation};
 use support::contract::{invoke, refusal_prefix, CONTRACT};
 use support::contract_laws::contract_laws;
+use support::replay::{replay_of_a_broken_probe, selection};
 
 // No Rule: O1 to O3 have no accepted Rule; each is a check of the plan.
 #[hegel::test]
@@ -127,4 +129,14 @@ fn each_operation_runs_through_the_contract() {
     }
     let test = "each_operation_runs_through_the_contract";
     check_probe("contract", test, &case, CONTRACT);
+}
+
+// No Rule: a probe that the replay line of a probe in this test target runs
+// this test target.
+#[test]
+#[ignore = "a probe of the nightly simulation"]
+fn the_replay_line_of_a_probe_runs_this_test_target() {
+    let replay = replay_of_a_broken_probe("contract");
+    let selection = selection(env!("CARGO_PKG_NAME"), env!("CARGO_CRATE_NAME"));
+    assert!(replay.ends_with(&selection), "{replay}");
 }

@@ -8,6 +8,7 @@
 #[allow(dead_code)]
 mod support {
     pub mod cases;
+    pub mod replay;
 }
 
 use hegel::TestCase;
@@ -16,6 +17,7 @@ use provenance_simulation::generate::{Case, Effect, Fault, Operation, Step};
 use provenance_simulation::storage::Outcome;
 use provenance_simulation::{check_case, check_probe, laws, report, run_case, stats, Config, Run};
 use support::cases::{alone, each_operation, moved_base_case, write};
+use support::replay::{replay_of_a_broken_probe, selection};
 
 #[hegel::test]
 #[ignore = "random cases run nightly: cargo nextest run --profile simulation --run-ignored all"]
@@ -189,4 +191,14 @@ fn an_archive_after_an_outside_claim_clears_the_claim_and_keeps_l3() {
     assert_eq!(topics[0].claimed_by, None);
     let test = "an_archive_after_an_outside_claim_clears_the_claim_and_keeps_l3";
     report::probe("engine", test, laws::check(&run));
+}
+
+// No Rule: a probe that the replay line of a probe in this test target runs
+// this test target.
+#[test]
+#[ignore = "a probe of the nightly simulation"]
+fn the_replay_line_of_a_probe_runs_this_test_target() {
+    let replay = replay_of_a_broken_probe("engine");
+    let selection = selection(env!("CARGO_PKG_NAME"), env!("CARGO_CRATE_NAME"));
+    assert!(replay.ends_with(&selection), "{replay}");
 }

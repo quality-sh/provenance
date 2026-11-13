@@ -6,6 +6,11 @@
 use provenance_macros::verifies;
 use provenance_simulation::generate::{Case, Fault, Operation, Step};
 use provenance_simulation::{laws, report, run_case, Config, Run};
+use support::replay::{replay_of_a_broken_probe, selection};
+
+mod support {
+    pub mod replay;
+}
 
 /// The most turns of the post before the refusal arms.
 const MOST_TURNS: usize = 8;
@@ -79,4 +84,14 @@ fn a_refused_post_lands_no_thread_and_no_message() {
         }
     }
     assert!(refused > 0, "the refusal met no post");
+}
+
+// No Rule: a probe that the replay line of a probe in this test target runs
+// this test target.
+#[test]
+#[ignore = "a probe of the nightly simulation"]
+fn the_replay_line_of_a_probe_runs_this_test_target() {
+    let replay = replay_of_a_broken_probe("engine");
+    let selection = selection(env!("CARGO_PKG_NAME"), env!("CARGO_CRATE_NAME"));
+    assert!(replay.ends_with(&selection), "{replay}");
 }

@@ -52,6 +52,13 @@ PROBE_LOG = (
     "replay: cargo nextest run --profile simulation --run-ignored all -p provenance-simulation "
     "--test engine -E 'test(=a_case_with_every_fault_keeps_the_laws)'\n"
 )
+# A probe whose check that is not a law failed, in a different test target.
+PROBE_CHECK_LOG = (
+    "simulation probe a_refused_post_lands_no_thread_and_no_message failed a check in layer "
+    "engine: turns 3: the state holds a Thread\n"
+    "replay: cargo nextest run --profile simulation --run-ignored all -p provenance-simulation "
+    "--test refused_post -E 'test(=a_refused_post_lands_no_thread_and_no_message)'\n"
+)
 CHECK_LOG = "simulation check broken: law L3 did not see its planted fault: x\n"
 # A planted test that fails prints the text of its planted run.
 PLANTED_TEXT = "planted run in layer engine: law L5 reported: operation 1\n"
@@ -237,6 +244,24 @@ class ReportTests(unittest.TestCase):
         )
         self.assertIn("-E 'test(=a_case_with_every_fault_keeps_the_laws)'", created[0][7])
         self.assertIn("operation 3 failed", created[0][7])
+
+    def test_a_failed_probe_check_and_a_broken_law_of_one_layer_open_two_issues(self):
+        gh = FakeGh()
+        with tempfile.TemporaryDirectory() as root:
+            layer_artifact(root, [], log=PROBE_LOG + PROBE_CHECK_LOG, name=None)
+            open_issues(root, gh)
+        created = {call[3]: call[7] for call in gh.made("create")}
+        check_title = (
+            "Simulation: probe a_refused_post_lands_no_thread_and_no_message failed a check "
+            "in the engine layer"
+        )
+        self.assertEqual(sorted(created), [
+            "Simulation: probe a_case_with_every_fault_keeps_the_laws broke law L1 "
+            "in the engine layer",
+            check_title,
+        ])
+        self.assertIn("turns 3: the state holds a Thread", created[check_title])
+        self.assertIn("--test refused_post -E", created[check_title])
 
     def test_a_probe_line_is_not_a_law_line_of_a_random_case(self):
         self.assertIsNone(report.LAW_LINE.search(PROBE_LOG))

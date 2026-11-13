@@ -142,3 +142,23 @@ fn a_merged_branch_and_a_stopped_write_keep_the_laws() {
     }
     panic!("in {STOP_ATTEMPTS} runs, each write ended or printed its answer before its stop");
 }
+
+// No Rule: a probe that the replay line of a probe in this test target runs
+// this test target.
+#[test]
+#[ignore = "a probe of the nightly simulation"]
+fn the_replay_line_of_a_probe_runs_this_test_target() {
+    let broken = Err(provenance_simulation::laws::Violation {
+        law: "L3",
+        detail: "a planted law break".to_owned(),
+    });
+    let payload = std::panic::catch_unwind(|| report::probe(&layer(), "a_planted_probe", broken))
+        .expect_err("a broken probe fails");
+    let text = report::panic_text(&*payload);
+    let selection = format!(
+        "-p {} --test {} -E 'test(=a_planted_probe)'",
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_CRATE_NAME")
+    );
+    assert!(text.ends_with(&selection), "{text}");
+}
