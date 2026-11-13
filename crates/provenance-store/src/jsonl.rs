@@ -206,7 +206,7 @@ fn guard_jsonl_lines(
 
 #[cfg(feature = "host")]
 fn write_jsonl_lines_atomic_unlocked(path: &Utf8Path, lines: &[String]) -> anyhow::Result<()> {
-    crate::storage::local::write_file_atomic(path, &jsonl_bytes(lines))
+    crate::storage::local::durability::write_synced_file(path, &jsonl_bytes(lines))
 }
 
 /// The lines, each with a final `\n`.

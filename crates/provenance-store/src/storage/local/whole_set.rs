@@ -5,7 +5,7 @@
 //! so recovery at the next section entry completes or rolls back a swap that
 //! a crash interrupted.
 
-use super::durability::{sync_directory, sync_tree};
+use super::durability::{sync_directory, sync_tree, write_staged_file};
 use super::recovery::{clear_publication_marker, write_publication_marker, PublicationPhase};
 use crate::layout::ProvenanceLayout;
 use crate::storage::WriteSet;
@@ -68,7 +68,8 @@ pub fn land(
     publish_staged_state(live, &staged, &staged_repo, &transaction, hook)
 }
 
-/// Applies `writes` to the copy of the state directory at `staged`.
+/// Applies `writes` to the copy of the state directory at `staged`, with no
+/// sync: `publish_staged_state` syncs the staged tree one time.
 fn apply(staged: &ProvenanceLayout, writes: &WriteSet) -> anyhow::Result<()> {
     let state = staged.state_dir();
     for key in writes.deletes() {
@@ -81,7 +82,7 @@ fn apply(staged: &ProvenanceLayout, writes: &WriteSet) -> anyhow::Result<()> {
         }
     }
     for (key, bytes) in writes.puts() {
-        super::write_file_atomic(&state.join(key.as_str()), bytes)?;
+        write_staged_file(&state.join(key.as_str()), bytes)?;
     }
     Ok(())
 }

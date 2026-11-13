@@ -1,11 +1,10 @@
-use super::durability::{replace_file, sync_directory};
+use super::durability::{sync_directory, write_synced_file};
 use super::section::canonical_utf8;
 use crate::layout::ProvenanceLayout;
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::rule;
 use serde::Serialize;
-use std::io::Write;
 
 #[derive(Clone, Copy, Debug, serde::Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -32,14 +31,10 @@ pub fn write_publication_marker(
         transaction_dir,
         phase,
     };
-    let path = layout.publication_marker_path();
-    std::fs::create_dir_all(layout.cache_dir())?;
-    let mut temporary =
-        tempfile::NamedTempFile::new_in(crate::long_path::extended(layout.cache_dir())?)?;
-    temporary.write_all(&serde_json::to_vec(&marker)?)?;
-    temporary.as_file().sync_all()?;
-    replace_file(temporary, &path)?;
-    sync_directory(&layout.cache_dir())
+    write_synced_file(
+        &layout.publication_marker_path(),
+        &serde_json::to_vec(&marker)?,
+    )
 }
 
 pub fn clear_publication_marker(layout: &ProvenanceLayout) -> anyhow::Result<()> {

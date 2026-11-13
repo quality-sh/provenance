@@ -1,5 +1,5 @@
 use super::sync_directory;
-use crate::storage::local::durability::replace_file;
+use crate::storage::local::durability::write_synced_file;
 use crate::storage::local::whole_set::{InstallState, WholeSetHook};
 use crate::storage::local::FileInstall;
 use crate::{
@@ -203,12 +203,10 @@ pub(super) fn write_marker(
     layout: &ProvenanceLayout,
     marker: &SourceEditMarker,
 ) -> anyhow::Result<()> {
-    let mut temporary =
-        tempfile::NamedTempFile::new_in(crate::long_path::extended(layout.cache_dir())?)?;
-    temporary.write_all(&serde_json::to_vec(marker)?)?;
-    temporary.as_file().sync_all()?;
-    replace_file(temporary, &layout.source_edit_marker_path())?;
-    sync_directory(&layout.cache_dir())
+    write_synced_file(
+        &layout.source_edit_marker_path(),
+        &serde_json::to_vec(marker)?,
+    )
 }
 
 pub(super) fn finish(layout: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
