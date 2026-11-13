@@ -34,7 +34,7 @@ impl ReadSnapshot {
         let mut transaction = self.transaction().await;
         let bound = match transaction.work_unit() {
             WorkUnit::EngineSteps => PAGE_WORK_STEPS,
-            WorkUnit::RowsRead => PAGE_ROWS_READ,
+            WorkUnit::RowsRead => PAGE_WORK_STEPS,
         };
         transaction
             .bound_work(crate::test_probes::page_work_steps(bound))
