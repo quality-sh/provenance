@@ -2,18 +2,19 @@
 //! the `LIMIT` of a page statement, and the size of a bound list.
 //!
 //! For the work bound, the contract holds only that a bound that the work
-//! does not reach changes nothing. It does not yet say whether an adapter
-//! must stop a statement while it runs; the file adapter does, and its own
-//! tests hold that. When an adapter stops a statement for the bound, its
-//! error is [`OverBudget`](crate::read_database::OverBudget), and a case
-//! of the handles (with `host`) holds that a page gives the page budget
-//! refusal for it.
+//! does not reach changes nothing. It does not check whether an adapter
+//! stops a statement that passes the bound, or which error it gives then.
+//! The file adapter stops it with
+//! [`OverBudget`](crate::read_database::OverBudget), and its own tests
+//! hold that.
 
 use super::{integers, statement, write, Harness};
 use crate::read_database::{ReadDatabase, SqlRow, SqlValue, Transaction};
 
-/// A query whose work grows with `n`: it counts from 1 to `n`.
-const COUNT_TO: &str = "WITH RECURSIVE count_to (n) AS (SELECT 1 UNION ALL \
+/// A query whose work grows with `n`: it counts from 1 to `n`. The
+/// tests of the work bound share it.
+#[doc(hidden)]
+pub const COUNT_TO: &str = "WITH RECURSIVE count_to (n) AS (SELECT 1 UNION ALL \
                         SELECT n + 1 FROM count_to WHERE n < ?) SELECT COUNT(*) FROM count_to";
 
 /// Writes a table `numbers` with the integers 1 to 5.
