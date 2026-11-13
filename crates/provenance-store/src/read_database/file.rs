@@ -27,6 +27,9 @@ pub const MAX_LIST_VALUES: usize = 500;
 /// the work of a transaction.
 const STEPS_PER_CALL: u64 = 1000;
 
+#[cfg(test)]
+mod rows_read;
+
 /// The read database in the cache directory of one layout.
 #[derive(Debug, Clone)]
 pub struct FileReadDatabase {

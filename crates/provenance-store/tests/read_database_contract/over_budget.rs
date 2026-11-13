@@ -4,8 +4,10 @@
 //! after a statement that writes gives `OverBudget`; these tests hold what
 //! the file does.
 //!
-//! No Rule: these tests hold the text of `SqlTransaction::bound_work` for
-//! the file adapter until the owner rules on the port obligation.
+//! No Rule: implementation aids. They pin what `SQLite` does at the bound,
+//! which the doc of `SqlTransaction::bound_work` states for the file
+//! adapter; the shared contract cannot hold it, because another adapter
+//! can report a statement at its end.
 
 use super::File;
 use provenance_store::read_database::{

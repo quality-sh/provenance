@@ -114,11 +114,11 @@ pub trait SqlTransaction: Any + Send {
     /// `bound` is in engine steps: the virtual machine instructions of
     /// `SQLite`, as its progress handler counts them. The adapter counts the
     /// work of all these statements against it. It can count work at whole
-    /// check intervals: then the work of a statement after its last check
-    /// is not counted, and a statement that does less work than one
-    /// interval can run past the bound. The file adapter checks each 1,000
-    /// engine steps of one statement text, over all the runs of that text
-    /// on its connection.
+    /// check intervals of at most 1,000 units of its measure: then the work
+    /// of a statement after its last check is not counted, and a statement
+    /// that does less work than one interval can run past the bound. The
+    /// file adapter checks each 1,000 engine steps of one statement text,
+    /// over all the runs of that text on its connection.
     ///
     /// An adapter that cannot count engine steps converts `bound` to its
     /// own measure of work, for example the rows that a statement reads
@@ -128,7 +128,9 @@ pub trait SqlTransaction: Any + Send {
     /// - The adapter gives [`OverBudget`] for a statement whose work is far
     ///   past the bound.
     /// - The adapter does not refuse a statement that the file adapter
-    ///   answers within the same bound by a wide margin.
+    ///   answers within a twentieth of the same bound. The measured table
+    ///   reads cost 3 to 33 engine steps a row, so a conversion of the bound
+    ///   at up to 60 steps a row meets this limit for each of them.
     ///
     /// The bound does not limit work that the adapter's measure does not
     /// see. For a count of rows read, that is recursion, sorts, and
@@ -243,15 +245,12 @@ impl Unopened {
 #[error("{0:#}")]
 pub struct OverBudget(pub anyhow::Error);
 
-/// The largest magnitude of an integer that the port binds or reads.
+/// An integer of magnitude more than
+/// [`LARGEST_EXACT_INTEGER`](provenance_core::model::exact_integer::LARGEST_EXACT_INTEGER),
+/// 2^53 − 1, in a value that a statement binds or in a row that it gives.
 ///
-/// It is 2^53 − 1, the largest integer whose neighbours a 64-bit float also
-/// holds exactly. A store that keeps each number as a 64-bit float holds
-/// each integer of the range and gives it back unchanged.
-pub const LARGEST_INTEGER: i64 = provenance_core::model::exact_integer::LARGEST_EXACT_INTEGER;
-
-/// An integer of magnitude more than [`LARGEST_INTEGER`], in a value that
-/// a statement binds or in a row that it gives.
+/// A store that keeps each number as a 64-bit float holds each integer of
+/// the range and gives it back unchanged.
 ///
 /// Every adapter gives this error. For a bound value, it comes before the
 /// statement runs, so a write whose work stops at it keeps nothing. For a
@@ -260,7 +259,8 @@ pub const LARGEST_INTEGER: i64 = provenance_core::model::exact_integer::LARGEST_
 /// store: it reads as `read_failed` or `write_failed`.
 #[derive(Debug, thiserror::Error)]
 #[error(
-    "integer {0} is outside the range of the read database, -9007199254740991 to 9007199254740991"
+    "integer {0} is outside the range of the read database, {range}",
+    range = provenance_core::model::exact_integer::RangeText
 )]
 pub struct OutOfRange(pub i64);
 

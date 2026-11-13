@@ -1,16 +1,16 @@
 //! The create and the update of a Resolution refuse an `approved_at` past
 //! the range of the read database, ±(2^53 − 1), and keep nothing.
 //!
-//! No Rule: the plan proposes the Rule to the owner. Until it is in the
-//! graph, these tests hold the refusal and its order.
+//! No Rule: implementation aids. They hold the refusal and that it keeps
+//! nothing. `time_range_order.rs` holds its place among the checks.
 
 use super::support::{shard_path, Fixture};
 use serde_json::{json, Value};
 
-const LARGEST: i64 = (1 << 53) - 1;
+pub const LARGEST: i64 = provenance_core::model::exact_integer::LARGEST_EXACT_INTEGER;
 
 /// The text of each stored Resolution file, by file name.
-fn stored(fixture: &Fixture) -> Vec<(String, String)> {
+pub fn stored(fixture: &Fixture) -> Vec<(String, String)> {
     let mut files: Vec<(String, String)> =
         std::fs::read_dir(shard_path(fixture, "resolutions", ""))
             .unwrap()
@@ -25,11 +25,11 @@ fn stored(fixture: &Fixture) -> Vec<(String, String)> {
 }
 
 /// The refusal of an `approved_at` past the range.
-fn refusal() -> Value {
+pub fn refusal() -> Value {
     json!({"kind":"invalid_input","field":"request.approved_at","reason":"invalid_value"})
 }
 
-fn create(approved_at: i64, requirement: &str) -> Value {
+pub fn create(approved_at: i64, requirement: &str) -> Value {
     json!({"scope_id":"default","id":"resolution_one","title":"Decision",
         "position":"Use the saved record.","rationale":"The record is available.",
         "status":"approved","requirement_ids":[requirement],"supersedes":[],"inputs":[],
@@ -62,19 +62,6 @@ async fn a_create_refuses_an_approval_time_past_the_range_and_keeps_nothing() {
     }
 }
 
-/// A create with an `approved_at` past the range that also names a
-/// Requirement that does not exist gives the `approved_at` refusal.
-#[tokio::test]
-async fn the_approval_time_refusal_comes_before_the_reference_checks_of_a_create() {
-    let fixture = Fixture::new();
-    fixture.requirement().await;
-    let error = fixture
-        .call("create-resolution", create(LARGEST + 1, "req_missing"))
-        .await
-        .unwrap_err();
-    assert_eq!(error, refusal());
-}
-
 #[tokio::test]
 async fn an_update_refuses_an_approval_time_past_the_range_and_keeps_the_record() {
     let fixture = Fixture::new();
@@ -103,34 +90,4 @@ async fn an_update_refuses_an_approval_time_past_the_range_and_keeps_the_record(
         .await
         .unwrap();
     assert_eq!(updated["approved_at"], json!(LARGEST));
-}
-
-/// An update with an `approved_at` past the range gives the `approved_at`
-/// refusal also when it clears the same field, names a record that does
-/// not exist, or holds a blank title.
-#[tokio::test]
-async fn the_approval_time_refusal_comes_before_the_other_checks_of_an_update() {
-    let fixture = Fixture::new();
-    fixture.requirement().await;
-    fixture
-        .call("create-resolution", create(1234, "req_one"))
-        .await
-        .unwrap();
-    for patch in [
-        json!({"clear_fields":["approved_at"]}),
-        json!({"id":"resolution_missing"}),
-        json!({"title":" "}),
-    ] {
-        let mut request =
-            json!({"scope_id":"default","id":"resolution_one","approved_at":LARGEST + 1});
-        request
-            .as_object_mut()
-            .unwrap()
-            .extend(patch.as_object().unwrap().clone());
-        let error = fixture
-            .call("update-resolution", request)
-            .await
-            .unwrap_err();
-        assert_eq!(error, refusal(), "{patch}");
-    }
 }

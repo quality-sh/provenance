@@ -12,7 +12,8 @@ pub(super) fn check_approved_at(approved_at: Option<i64>) -> anyhow::Result<()> 
         Some(at) if !provenance_core::model::exact_integer::is_exact(at) => {
             Err(crate::refusal::refuse!(
                 (crate::write_error::WriteFailure::invalid_field("request.approved_at")),
-                "approved_at {at} is outside the range -9007199254740991 to 9007199254740991"
+                "approved_at {at} is outside the range {}",
+                provenance_core::model::exact_integer::RangeText
             ))
         }
         _ => Ok(()),

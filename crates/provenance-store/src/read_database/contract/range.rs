@@ -1,8 +1,9 @@
 //! The range of the integers that the port binds and reads: magnitude at
-//! most [`LARGEST_INTEGER`], 2^53 − 1.
+//! most [`LARGEST_EXACT_INTEGER`], 2^53 − 1.
 
 use super::{fetch, statement, write, Harness};
-use crate::read_database::{OutOfRange, ReadDatabase, SqlRow, SqlValue, LARGEST_INTEGER};
+use crate::read_database::{OutOfRange, ReadDatabase, SqlRow, SqlValue};
+use provenance_core::model::exact_integer::LARGEST_EXACT_INTEGER;
 
 /// The error of one statement in one read.
 async fn read_error(database: &dyn ReadDatabase, sql: &'static str) -> anyhow::Error {
@@ -37,8 +38,8 @@ pub async fn an_integer_past_the_range_is_refused_and_nothing_is_written<H: Harn
     .await
     .unwrap();
     for past in [
-        LARGEST_INTEGER + 1,
-        -LARGEST_INTEGER - 1,
+        LARGEST_EXACT_INTEGER + 1,
+        -LARGEST_EXACT_INTEGER - 1,
         i64::MAX,
         i64::MIN,
     ] {
@@ -65,8 +66,8 @@ pub async fn an_integer_past_the_range_is_refused_and_nothing_is_written<H: Harn
         Vec::<SqlRow>::new()
     );
     for (sql, past) in [
-        ("SELECT 9007199254740991 + 1", LARGEST_INTEGER + 1),
-        ("SELECT -9007199254740991 - 1", -LARGEST_INTEGER - 1),
+        ("SELECT 9007199254740991 + 1", LARGEST_EXACT_INTEGER + 1),
+        ("SELECT -9007199254740991 - 1", -LARGEST_EXACT_INTEGER - 1),
     ] {
         let refused = read_error(database, sql).await;
         assert_eq!(

@@ -12,11 +12,9 @@ use super::get_through;
 use crate::operations::queries::records;
 use crate::operations::read_policy::ReadPolicy;
 use crate::operations::reader::answer;
+use crate::read_database::contract::{Hooks, MakeHooks, Other};
 use crate::read_database::file::FileReadDatabase;
-use crate::read_database::{
-    OverBudget, ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement,
-    Transaction, WriteWork,
-};
+use crate::read_database::{OverBudget, SqlFuture, SqlRow, SqlValue, Transaction};
 use provenance_core::protocol::read_failure::ReadFailure;
 use std::sync::Arc;
 
@@ -33,22 +31,36 @@ const STEPS_PER_ROW: u64 = 3;
 /// first statement after the bound reads `scan` rows, as a scan of a
 /// large scope does, and each later statement reads one row. It converts
 /// a bound in engine steps to `bound / STEPS_PER_ROW` rows.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 struct CountsRows {
-    file: FileReadDatabase,
     scan: u64,
 }
 
-/// A transaction of [`CountsRows`].
-struct RowsTransaction {
-    inner: Transaction,
+/// The rows that the statements of one transaction of [`CountsRows`] read.
+struct RowsCount {
     scan: u64,
     bound: Option<u64>,
     read: u64,
 }
 
-impl SqlTransaction for RowsTransaction {
-    fn fetch<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, Vec<SqlRow>> {
+impl MakeHooks for CountsRows {
+    type Hooks = RowsCount;
+    fn make(&self) -> RowsCount {
+        RowsCount {
+            scan: self.scan,
+            bound: None,
+            read: 0,
+        }
+    }
+}
+
+impl Hooks for RowsCount {
+    fn fetch<'a>(
+        &'a mut self,
+        inner: &'a mut Transaction,
+        sql: &'a str,
+        values: Vec<SqlValue>,
+    ) -> SqlFuture<'a, Vec<SqlRow>> {
         Box::pin(async move {
             if let Some(bound) = self.bound {
                 self.read += if self.read == 0 { self.scan } else { 1 };
@@ -56,62 +68,13 @@ impl SqlTransaction for RowsTransaction {
                     return Err(OverBudget(PastTheBound.into()).into());
                 }
             }
-            self.inner.fetch(sql, values).await
+            inner.fetch(sql, values).await
         })
     }
 
-    fn execute<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, u64> {
-        self.inner.execute(sql, values)
-    }
-
-    fn attempt<'a>(
-        &'a mut self,
-        statements: &'a [Statement],
-    ) -> SqlFuture<'a, Result<(), anyhow::Error>> {
-        self.inner.attempt(statements)
-    }
-
-    fn commit(self: Box<Self>) -> SqlFuture<'static, ()> {
-        self.inner.commit()
-    }
-
-    fn bound_work(&mut self, bound: u64) -> SqlFuture<'_, ()> {
+    fn bound_work<'a>(&'a mut self, _inner: &'a mut Transaction, bound: u64) -> SqlFuture<'a, ()> {
         self.bound = Some(bound / STEPS_PER_ROW);
         Box::pin(async { Ok(()) })
-    }
-
-    fn max_list_values(&self) -> usize {
-        self.inner.max_list_values()
-    }
-}
-
-impl ReadDatabase for CountsRows {
-    fn read<'a>(&'a self, work: ReadWork<'a>) -> SqlFuture<'a, ()> {
-        let scan = self.scan;
-        self.file.read(Box::new(move |inner| {
-            work(Box::new(RowsTransaction {
-                inner,
-                scan,
-                bound: None,
-                read: 0,
-            }))
-        }))
-    }
-
-    fn write<'a>(&'a self, work: WriteWork<'a>) -> SqlFuture<'a, ()> {
-        self.file.write(work)
-    }
-
-    fn max_bound_values(&self) -> usize {
-        self.file.max_bound_values()
-    }
-
-    fn cursor_key(&self) -> anyhow::Result<[u8; 32]> {
-        self.file.cursor_key()
-    }
-
-    fn location(&self) -> String {
-        self.file.location()
     }
 }
 
@@ -121,7 +84,13 @@ async fn search_reading(scan: u64) -> anyhow::Result<usize> {
     let store = test_stores::seeded_queries();
     get_through(&store, ReadPolicy::default()).await.unwrap();
     let file = FileReadDatabase::new(store.layout());
-    let repository = over(&store, Some(Arc::new(CountsRows { file, scan })));
+    let repository = over(
+        &store,
+        Some(Arc::new(Other {
+            database: file,
+            hooks: CountsRows { scan },
+        })),
+    );
     let page = answer(&repository, ReadPolicy::default(), |ctx| {
         Box::pin(
             async move { records::search(ctx, requests::search("overtime", Vec::new())).await },

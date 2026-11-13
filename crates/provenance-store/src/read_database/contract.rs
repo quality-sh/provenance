@@ -8,8 +8,8 @@
 
 use super::{
     is_missing_table, ReadDatabase, SqlFuture, SqlRow, SqlValue, Statement, Transaction, Unopened,
-    LARGEST_INTEGER,
 };
+use provenance_core::model::exact_integer::LARGEST_EXACT_INTEGER;
 
 pub mod handles;
 pub mod limits;
@@ -23,7 +23,7 @@ pub mod range;
 pub mod sequence;
 
 #[cfg(any(test, feature = "test-fixture"))]
-pub use other::{Other, OtherTransaction};
+pub use other::{Forward, Hooks, MakeHooks, Other, OtherTransaction};
 
 /// One adapter under test.
 pub trait Harness {
@@ -178,8 +178,8 @@ pub async fn a_write_keeps_each_value_class<H: Harness>(harness: H) {
     let database = harness.database();
     let values = vec![
         SqlValue::Null,
-        SqlValue::Integer(-LARGEST_INTEGER),
-        SqlValue::Integer(LARGEST_INTEGER),
+        SqlValue::Integer(-LARGEST_EXACT_INTEGER),
+        SqlValue::Integer(LARGEST_EXACT_INTEGER),
         SqlValue::Real(-0.5),
         SqlValue::Text(String::new()),
         SqlValue::Text("Ünïcode \u{1F600} 'quoted'".to_owned()),

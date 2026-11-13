@@ -1,8 +1,7 @@
 //! The read database contract on the file adapter.
 //!
-//! No Rule: the plan proposes `rule_read_database_adapters_meet_contract`
-//! for the owner's review. Until it is approved, these tests hold the
-//! contract while the projection moves behind the port.
+//! No Rule: implementation aids. They run the shared contract on the file
+//! adapter and check that its cases refuse faulty adapters.
 
 use camino::Utf8PathBuf;
 use provenance_store::layout::ProvenanceLayout;
@@ -10,14 +9,16 @@ use provenance_store::operations::stamp::stored_revision;
 use provenance_store::read_database::contract::{self, Harness, Other};
 use provenance_store::read_database::file::FileReadDatabase;
 use provenance_store::read_database::{
-    OverBudget, ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement,
-    Transaction, WriteWork,
+    OverBudget, ReadDatabase, SqlFuture, SqlRow, SqlValue, Transaction,
 };
 
+#[path = "read_database_contract/faulty.rs"]
+mod faulty;
 #[path = "read_database_contract/lost_commit.rs"]
 mod lost_commit;
 #[path = "read_database_contract/over_budget.rs"]
 mod over_budget;
+use faulty::{Fault, Faulty};
 
 /// A file database in a new cache directory of its own.
 struct File {
@@ -85,7 +86,7 @@ impl Default for PortOnly {
     fn default() -> Self {
         let file = File::default();
         Self {
-            database: Other(file.database.clone()),
+            database: Other::new(file.database.clone()),
             file,
         }
     }
@@ -97,130 +98,11 @@ impl Harness for PortOnly {
     }
 
     fn reopen(&self) -> Box<dyn ReadDatabase> {
-        Box::new(Other(FileReadDatabase::new(self.file.layout.clone())))
+        Box::new(Other::new(FileReadDatabase::new(self.file.layout.clone())))
     }
 
     fn fail_commit<'a>(&'a self, transaction: &'a mut Transaction) -> SqlFuture<'a, ()> {
         self.file.fail_commit(transaction)
-    }
-}
-
-/// The fault of a [`Faulty`] adapter.
-#[derive(Debug, Clone, Copy)]
-enum Fault {
-    /// It ignores the `LIMIT` of a statement.
-    NoLimit,
-    /// It ignores the work bound.
-    NoBound,
-}
-
-/// The file adapter with one fault.
-struct Faulty {
-    file: File,
-    database: FaultyDatabase,
-}
-
-impl Faulty {
-    fn new(fault: Fault) -> Self {
-        let file = File::default();
-        Self {
-            database: FaultyDatabase(file.database.clone(), fault),
-            file,
-        }
-    }
-}
-
-impl Harness for Faulty {
-    fn database(&self) -> &dyn ReadDatabase {
-        &self.database
-    }
-
-    fn reopen(&self) -> Box<dyn ReadDatabase> {
-        self.file.reopen()
-    }
-
-    fn fail_commit<'a>(&'a self, transaction: &'a mut Transaction) -> SqlFuture<'a, ()> {
-        self.file.fail_commit(transaction)
-    }
-}
-
-#[derive(Debug)]
-struct FaultyDatabase(FileReadDatabase, Fault);
-
-struct FaultyTransaction(Transaction, Fault);
-
-/// The statement with each `LIMIT n` read as no limit; the bound value of
-/// the limit stays bound.
-fn without_limit(sql: &str) -> String {
-    let mut parts = sql.split(" LIMIT ");
-    let mut text = parts.next().unwrap_or_default().to_owned();
-    for part in parts {
-        let end = part.find(char::is_whitespace).unwrap_or(part.len());
-        let (limit, rest) = part.split_at(end);
-        text = text + " LIMIT -1 + 0 * (" + limit + ")" + rest;
-    }
-    text
-}
-
-impl SqlTransaction for FaultyTransaction {
-    fn fetch<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, Vec<SqlRow>> {
-        match self.1 {
-            Fault::NoLimit => {
-                Box::pin(async move { self.0.fetch(&without_limit(sql), values).await })
-            }
-            Fault::NoBound => self.0.fetch(sql, values),
-        }
-    }
-
-    fn execute<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, u64> {
-        self.0.execute(sql, values)
-    }
-
-    fn attempt<'a>(
-        &'a mut self,
-        statements: &'a [Statement],
-    ) -> SqlFuture<'a, Result<(), anyhow::Error>> {
-        self.0.attempt(statements)
-    }
-
-    fn commit(self: Box<Self>) -> SqlFuture<'static, ()> {
-        self.0.commit()
-    }
-
-    fn bound_work(&mut self, bound: u64) -> SqlFuture<'_, ()> {
-        match self.1 {
-            Fault::NoLimit => self.0.bound_work(bound),
-            Fault::NoBound => Box::pin(async { Ok(()) }),
-        }
-    }
-
-    fn max_list_values(&self) -> usize {
-        self.0.max_list_values()
-    }
-}
-
-impl ReadDatabase for FaultyDatabase {
-    fn read<'a>(&'a self, work: ReadWork<'a>) -> SqlFuture<'a, ()> {
-        let fault = self.1;
-        self.0.read(Box::new(move |lent| {
-            work(Box::new(FaultyTransaction(lent, fault)))
-        }))
-    }
-
-    fn write<'a>(&'a self, work: WriteWork<'a>) -> SqlFuture<'a, ()> {
-        self.0.write(work)
-    }
-
-    fn max_bound_values(&self) -> usize {
-        self.0.max_bound_values()
-    }
-
-    fn cursor_key(&self) -> anyhow::Result<[u8; 32]> {
-        self.0.cursor_key()
-    }
-
-    fn location(&self) -> String {
-        self.0.location()
     }
 }
 
@@ -243,6 +125,7 @@ port_cases!(
     handles::the_message_handle_reads_the_projection,
     limits::a_bounded_read_runs_the_statements_within_its_bound,
     limits::a_statement_far_past_the_bound_gives_over_budget,
+    limits::a_statement_well_within_the_bound_gives_its_rows,
     limits::a_limit_bounds_the_rows,
     limits::a_list_of_the_most_values_runs,
     projection::a_catch_up_makes_and_follows_the_projection,
@@ -272,6 +155,17 @@ async fn the_limit_case_refuses_an_adapter_that_ignores_limit() {
 async fn the_bound_case_refuses_an_adapter_that_ignores_the_bound() {
     contract::limits::a_statement_far_past_the_bound_gives_over_budget(Faulty::new(Fault::NoBound))
         .await;
+}
+
+/// The case of a statement well within the bound finds an adapter that
+/// refuses work that the file answers by a wide margin.
+#[tokio::test]
+#[should_panic(expected = "the statement well within the bound gave no rows")]
+async fn the_margin_case_refuses_an_adapter_that_refuses_work_within_the_bound() {
+    contract::limits::a_statement_well_within_the_bound_gives_its_rows(Faulty::new(
+        Fault::TooStrict,
+    ))
+    .await;
 }
 
 /// The file adapter with a harness whose `fail_commit` gives an error.
@@ -409,9 +303,14 @@ async fn made(file: &File) {
         .unwrap();
 }
 
-/// The count to `n` in one read of the file, after the work bound `bound`
-/// when there is one.
-async fn count_to(file: &File, bound: Option<u64>, n: i64) -> anyhow::Result<Vec<SqlRow>> {
+/// The rows of `sql` with `values` in one read of the file, after the work
+/// bound `bound` when there is one.
+async fn bounded(
+    file: &File,
+    bound: Option<u64>,
+    sql: &'static str,
+    values: Vec<SqlValue>,
+) -> anyhow::Result<Vec<SqlRow>> {
     let mut rows = None;
     let slot = &mut rows;
     file.database
@@ -420,16 +319,38 @@ async fn count_to(file: &File, bound: Option<u64>, n: i64) -> anyhow::Result<Vec
                 if let Some(steps) = bound {
                     transaction.bound_work(steps).await?;
                 }
-                *slot = Some(
-                    transaction
-                        .fetch(contract::limits::COUNT_TO, vec![SqlValue::Integer(n)])
-                        .await,
-                );
+                *slot = Some(transaction.fetch(sql, values).await);
                 Ok(())
             })
         }))
         .await?;
     rows.expect("the read ran its work")
+}
+
+/// The count to `n` in one read of the file, after the work bound `bound`
+/// when there is one.
+async fn count_to(file: &File, bound: Option<u64>, n: i64) -> anyhow::Result<Vec<SqlRow>> {
+    bounded(
+        file,
+        bound,
+        contract::limits::COUNT_TO,
+        vec![SqlValue::Integer(n)],
+    )
+    .await
+}
+
+/// The file answers the scan of the margin case within a twentieth of the
+/// bound of that case, so the case asks of an adapter only work that the
+/// file answers by that margin.
+#[tokio::test]
+async fn the_file_answers_the_margin_scan_within_a_twentieth_of_its_bound() {
+    let file = File::default();
+    contract::limits::tall(&file.database).await;
+    let bound = contract::limits::WIDE_MARGIN_BOUND / 20;
+    let rows = bounded(&file, Some(bound), contract::limits::WITHIN, Vec::new())
+        .await
+        .unwrap();
+    assert_eq!(rows, vec![vec![SqlValue::Integer(50_005_000)]]);
 }
 
 /// The file stops a statement while it runs once its work passes the

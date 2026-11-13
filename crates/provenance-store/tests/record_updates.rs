@@ -12,4 +12,5 @@ mod record_updates {
     mod spec_owned_edits;
     mod support;
     mod time_range;
+    mod time_range_order;
 }
