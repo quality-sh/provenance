@@ -1,14 +1,13 @@
 //! One `SQLite` row into one record.
 //!
 //! The select lists `K::COLUMNS` in order, so column `i` is field `i`.
-//! Each value is read by its storage class through `type_info()`, never by
-//! trying `i64` first: a `REAL` column holding `1.0` must stay a real, or
-//! a confidence of one would print as `1`.
+//! Each value keeps the storage class that the read database gives for
+//! it: a `REAL` column holding `1.0` must stay a real, or a confidence of
+//! one would print as `1`.
 
 use crate::cache::quoted;
+use crate::read_database::{SqlRow, SqlValue};
 use provenance_core::model::{ColumnValue, ProjectionRow};
-use sqlx::sqlite::{SqliteRow, SqliteValueRef};
-use sqlx::{Decode, Row, TypeInfo, ValueRef};
 
 /// The quoted column list of one record type, for a select.
 pub fn select_columns<K: ProjectionRow>() -> String {
@@ -19,38 +18,49 @@ pub fn select_columns<K: ProjectionRow>() -> String {
         .join(", ")
 }
 
-/// The record a row holds, read column by column.
-pub(super) fn decode<K: ProjectionRow>(row: &SqliteRow) -> anyhow::Result<K> {
+/// The record a row holds, read column by column. The values move out of
+/// the row, so no text is copied.
+pub(super) fn decode<K: ProjectionRow>(row: SqlRow) -> anyhow::Result<K> {
     crate::test_probes::at("query_row_hydrated")?;
     K::from_row(&column_values::<K>(row)?)
 }
 
 /// The row's values in `COLUMNS` order, each in the storage class the
-/// database reports.
-pub fn column_values<K: ProjectionRow>(row: &SqliteRow) -> anyhow::Result<Vec<ColumnValue>> {
-    (0..K::COLUMNS.len())
-        .map(|index| column_value(row, index))
-        .collect()
+/// database reports. The first column that no field takes, in column
+/// order, refuses the row.
+pub fn column_values<K: ProjectionRow>(row: SqlRow) -> anyhow::Result<Vec<ColumnValue>> {
+    let wanted = K::COLUMNS.len();
+    let len = row.len();
+    let mut values = Vec::with_capacity(wanted);
+    for (index, value) in row.into_iter().take(wanted).enumerate() {
+        values.push(column_value(value, index)?);
+    }
+    if len < wanted {
+        return Err(crate::refusal::fault!(
+            "column index out of bounds: the len is {len}, but the index is {len}"
+        ));
+    }
+    Ok(values)
 }
 
-fn column_value(row: &SqliteRow, index: usize) -> anyhow::Result<ColumnValue> {
-    let raw = row.try_get_raw(index)?;
-    if raw.is_null() {
-        return Ok(ColumnValue::Null);
-    }
-    let class = raw.type_info().name().to_string();
-    Ok(match class.as_str() {
-        "INTEGER" => ColumnValue::Integer(read::<i64>(raw)?),
-        "REAL" => ColumnValue::Real(read::<f64>(raw)?),
-        "TEXT" => ColumnValue::Text(read::<String>(raw)?),
-        other => {
+/// The index of a record type's `id` column in its select list.
+pub(super) fn id_column<K: ProjectionRow>() -> anyhow::Result<usize> {
+    K::COLUMNS
+        .iter()
+        .position(|column| *column == "id")
+        .ok_or_else(|| crate::refusal::fault!("no column found for name: id"))
+}
+
+fn column_value(value: SqlValue, index: usize) -> anyhow::Result<ColumnValue> {
+    Ok(match value {
+        SqlValue::Null => ColumnValue::Null,
+        SqlValue::Integer(value) => ColumnValue::Integer(value),
+        SqlValue::Real(value) => ColumnValue::Real(value),
+        SqlValue::Text(value) => ColumnValue::Text(value),
+        SqlValue::Blob(_) => {
             return Err(crate::refusal::fault!(
-                "column {index} holds a {other} value, which no record field takes"
+                "column {index} holds a BLOB value, which no record field takes"
             ))
         }
     })
-}
-
-fn read<'r, T: Decode<'r, sqlx::Sqlite>>(raw: SqliteValueRef<'r>) -> anyhow::Result<T> {
-    T::decode(raw).map_err(|error| crate::refusal::fault!("{error}"))
 }

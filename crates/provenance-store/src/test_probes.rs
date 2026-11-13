@@ -5,8 +5,11 @@
 //! a closure for a label on its own thread, or records the set of paths one
 //! derivation reads. A test can also set the working-tree scan the reader
 //! hands out, so a timing row measures graph work and not the scan, and
-//! can ask whether the publication lock is held.
+//! can ask whether the publication lock is held. A test can also set a
+//! smaller work bound for the pages that it reads on its own thread.
 
+#[cfg(all(test, feature = "host"))]
+use std::cell::Cell;
 #[cfg(test)]
 use std::cell::RefCell;
 #[cfg(test)]
@@ -19,6 +22,8 @@ type Probe = Box<dyn FnMut() -> anyhow::Result<()>>;
 thread_local! {
     static PROBES: RefCell<HashMap<&'static str, Probe>> = RefCell::new(HashMap::new());
     static READS: RefCell<Option<BTreeSet<String>>> = const { RefCell::new(None) };
+    #[cfg(feature = "host")]
+    static PAGE_WORK_STEPS: Cell<Option<u64>> = const { Cell::new(None) };
     #[cfg(feature = "host")]
     static SCAN: RefCell<Option<Vec<provenance_scanner::FileScan>>> = const { RefCell::new(None) };
 }
@@ -37,6 +42,25 @@ pub const fn test_scan() -> Option<Vec<provenance_scanner::FileScan>> {
 #[cfg(all(test, feature = "host"))]
 pub fn set_test_scan(scans: Option<Vec<provenance_scanner::FileScan>>) {
     SCAN.with(|scan| *scan.borrow_mut() = scans);
+}
+
+/// The work bound of one page: `steps`, or the bound that a test set on
+/// this thread.
+#[cfg(all(test, feature = "host"))]
+pub fn page_work_steps(steps: u64) -> u64 {
+    PAGE_WORK_STEPS.with(Cell::get).unwrap_or(steps)
+}
+
+#[cfg(all(not(test), feature = "host"))]
+pub const fn page_work_steps(steps: u64) -> u64 {
+    steps
+}
+
+/// Sets the work bound of the pages that this thread reads; `None` puts
+/// back the bound of the engine.
+#[cfg(all(test, feature = "host"))]
+pub fn set_page_work_steps(steps: Option<u64>) {
+    PAGE_WORK_STEPS.with(|bound| bound.set(steps));
 }
 
 /// Whether another holder has the repository's publication lock right now.

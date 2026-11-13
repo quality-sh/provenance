@@ -2,13 +2,11 @@
 //!
 //! The engine runs SQL text through this port and decodes the rows that it
 //! gets back. The named queries stay above the port, as the snapshot
-//! handles and the catch-up. Each store has an adapter: the file adapter
-//! keeps the CLI's `SQLite` file under `.provenance/cache`, and a Durable
-//! Object keeps the same tables in its own `SQLite`.
+//! handles and the catch-up. Each store has an adapter. The file adapter
+//! keeps the CLI's `SQLite` file under `.provenance/cache`.
 //!
-//! A transaction is lent to one piece of work and ends when the work ends,
-//! because the object's store runs a transaction over one closure. The
-//! work owns the transaction while it runs: a read drops it, and a write
+//! A transaction is lent to one piece of work and ends when the work ends.
+//! The work owns the transaction while it runs: a read drops it, and a write
 //! commits it at its end. The store completes its connection after the
 //! work ends, so a lock that the work frees after its commit is free while
 //! the connection closes.
@@ -16,6 +14,8 @@
 pub mod contract;
 #[cfg(feature = "host")]
 pub mod file;
+#[cfg(test)]
+mod tests;
 
 use std::any::Any;
 use std::fmt::Debug;
@@ -83,12 +83,15 @@ pub struct Statement {
 
 /// The transaction that a piece of work runs in. It is `Any` so that the
 /// crate can find the transaction of its own file adapter.
+///
+/// A statement owns its bound values, so a store can bind them without a
+/// copy.
 pub trait SqlTransaction: Any + Send {
     /// Runs one statement and gives its rows.
-    fn fetch<'a>(&'a mut self, sql: &'a str, values: &'a [SqlValue]) -> SqlFuture<'a, Vec<SqlRow>>;
+    fn fetch<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, Vec<SqlRow>>;
 
     /// Runs one statement and gives the number of rows that it changed.
-    fn execute<'a>(&'a mut self, sql: &'a str, values: &'a [SqlValue]) -> SqlFuture<'a, u64>;
+    fn execute<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, u64>;
 
     /// Runs `statements` as one unit inside the transaction: all of them,
     /// or, when one fails, none of them. The inner error is the error of
@@ -101,6 +104,21 @@ pub trait SqlTransaction: Any + Send {
 
     /// Commits the transaction. Write work calls this at its end.
     fn commit(self: Box<Self>) -> SqlFuture<'static, ()>;
+
+    /// Bounds the work of the statements that follow in this transaction
+    /// to about `steps` steps of the store's engine.
+    ///
+    /// When the store stops a statement for the bound, the error of the
+    /// statement is [`OverBudget`]. The file adapter counts the steps of
+    /// the `SQLite` engine and stops a statement at the bound while it
+    /// runs. The contract does not yet say what another adapter must do.
+    fn bound_work(&mut self, steps: u64) -> SqlFuture<'_, ()>;
+
+    /// The most values of one list that a reader binds in one statement;
+    /// a longer list goes in more statements. With the two values that a
+    /// reader binds beside the list, it is at most
+    /// [`ReadDatabase::max_bound_values`].
+    fn max_list_values(&self) -> usize;
 }
 
 /// A transaction lent to one piece of work.
@@ -169,6 +187,13 @@ impl Unopened {
     }
 }
 
+/// The store stopped a statement because the work of its transaction
+/// passed the bound that [`SqlTransaction::bound_work`] set. Its text is
+/// the text of its cause.
+#[derive(Debug, thiserror::Error)]
+#[error("{0:#}")]
+pub struct OverBudget(pub anyhow::Error);
+
 /// Whether a store error says that a table that the statement names is
 /// absent.
 pub fn is_missing_table(error: &anyhow::Error) -> bool {
@@ -182,20 +207,26 @@ pub trait SqlColumns {
     fn integer(&self, index: usize) -> anyhow::Result<i64>;
     fn text(&self, index: usize) -> anyhow::Result<&str>;
     fn optional_text(&self, index: usize) -> anyhow::Result<Option<&str>>;
+    /// The text of one column, moved out of the row without a copy. The
+    /// column holds empty text after.
+    fn take_text(&mut self, index: usize) -> anyhow::Result<String>;
+    /// The text or NULL of one column, moved out of the row without a
+    /// copy. The column holds empty text after.
+    fn take_optional_text(&mut self, index: usize) -> anyhow::Result<Option<String>>;
 }
 
 impl SqlColumns for [SqlValue] {
     fn integer(&self, index: usize) -> anyhow::Result<i64> {
         match self.get(index) {
             Some(SqlValue::Integer(value)) => Ok(*value),
-            other => Err(column_fault(index, "an integer", other)),
+            _ => Err(column_fault(self, index, "an integer")),
         }
     }
 
     fn text(&self, index: usize) -> anyhow::Result<&str> {
         match self.get(index) {
             Some(SqlValue::Text(value)) => Ok(value),
-            other => Err(column_fault(index, "text", other)),
+            _ => Err(column_fault(self, index, "text")),
         }
     }
 
@@ -203,11 +234,39 @@ impl SqlColumns for [SqlValue] {
         match self.get(index) {
             Some(SqlValue::Null) => Ok(None),
             Some(SqlValue::Text(value)) => Ok(Some(value)),
-            other => Err(column_fault(index, "text or null", other)),
+            _ => Err(column_fault(self, index, "text or null")),
+        }
+    }
+
+    fn take_text(&mut self, index: usize) -> anyhow::Result<String> {
+        if let Some(SqlValue::Text(text)) = self.get_mut(index) {
+            return Ok(std::mem::take(text));
+        }
+        Err(column_fault(self, index, "text"))
+    }
+
+    fn take_optional_text(&mut self, index: usize) -> anyhow::Result<Option<String>> {
+        match self.get(index) {
+            Some(SqlValue::Null) => Ok(None),
+            Some(SqlValue::Text(_)) => self.take_text(index).map(Some),
+            _ => Err(column_fault(self, index, "text or null")),
         }
     }
 }
 
-fn column_fault(index: usize, wanted: &str, found: Option<&SqlValue>) -> anyhow::Error {
-    crate::refusal::fault!("column {index} holds {found:?}, not {wanted}")
+fn column_fault(row: &[SqlValue], index: usize, wanted: &str) -> anyhow::Error {
+    let Some(found) = row.get(index) else {
+        return crate::refusal::fault!(
+            "column index out of bounds: the len is {}, but the index is {index}",
+            row.len()
+        );
+    };
+    let class = match found {
+        SqlValue::Null => "a NULL value",
+        SqlValue::Integer(_) => "an INTEGER value",
+        SqlValue::Real(_) => "a REAL value",
+        SqlValue::Text(_) => "a TEXT value",
+        SqlValue::Blob(_) => "a BLOB value",
+    };
+    crate::refusal::fault!("column {index} holds {class}, not {wanted}")
 }
