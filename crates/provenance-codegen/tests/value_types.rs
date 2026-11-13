@@ -13,14 +13,19 @@ const SCHEMA_MAPS: [&str; 4] = [
 ];
 /// The keywords whose value is a list of schemas.
 const SCHEMA_LISTS: [&str; 4] = ["anyOf", "oneOf", "allOf", "prefixItems"];
-/// The keywords whose value is one schema. A `false` value of these keywords closes an object
-/// or an array, so only an object value is a schema of a value.
-const SCHEMAS: [&str; 5] = [
+/// The keywords whose value is one schema. The guard examines an object value of each. A
+/// `false` value closes an object or an array, or it is a condition on a value, so the guard
+/// does not examine it as a schema of a value.
+const SCHEMAS: [&str; 9] = [
     "items",
     "additionalProperties",
     "unevaluatedProperties",
     "unevaluatedItems",
     "contains",
+    "propertyNames",
+    "if",
+    "then",
+    "else",
 ];
 
 /// The members of the keyword `key` of `schema`, when its value is an object.
@@ -45,13 +50,21 @@ fn accepts_no_value(schema: &Map<String, Value>) -> bool {
     no_member("enum") || no_member("anyOf") || no_member("oneOf") || refuses_each_value
 }
 
-/// True when `schema` is an object that accepts no property.
+/// True when `schema` is an object that accepts no property. Its `type` is `object` or a list
+/// with `object`. It refuses each property name, or it refuses each property that it does not
+/// name and it names none.
 fn closed_without_field(schema: &Map<String, Value>) -> bool {
     let no_member = |key: &str| member_map(schema, key).is_none_or(Map::is_empty);
-    schema.get("type") == Some(&Value::from("object"))
-        && schema.get("additionalProperties") == Some(&Value::Bool(false))
+    let object = match schema.get("type") {
+        Some(Value::String(kind)) => kind == "object",
+        Some(Value::Array(kinds)) => kinds.contains(&Value::from("object")),
+        _ => false,
+    };
+    let names_no_property = schema.get("additionalProperties") == Some(&Value::Bool(false))
         && no_member("properties")
-        && no_member("patternProperties")
+        && no_member("patternProperties");
+    let refuses_each_name = schema.get("propertyNames") == Some(&Value::Bool(false));
+    object && (names_no_property || refuses_each_name)
 }
 
 /// Adds each schema in `schema` that accepts no value, and each closed object that has no
@@ -116,8 +129,8 @@ fn each_contract_schema_accepts_a_value_and_each_closed_object_has_a_field() {
     assert!(found.is_empty(), "{found:#?}");
 }
 
-/// The guard finds each form of a schema with no value, at the root and in each place that
-/// holds a schema.
+/// The guard finds each form of a schema with no value at the root and below each keyword
+/// that it walks.
 #[test]
 fn the_guard_finds_each_schema_form_that_has_no_value() {
     let forms = [
@@ -129,32 +142,26 @@ fn the_guard_finds_each_schema_form_that_has_no_value() {
         json!({"not":true}),
         json!({"type":"object","additionalProperties":false}),
         json!({"type":"object","additionalProperties":false,"properties":{}}),
+        json!({"type":["object","null"],"additionalProperties":false}),
+        json!({"type":"object","propertyNames":false}),
     ];
     for form in forms {
-        let holders = [
-            form.clone(),
-            json!({"type":"object","properties":{"field":form}}),
-            json!({"type":"object","patternProperties":{"^x":form}}),
-            json!({"$ref":"#/$defs/Held","$defs":{"Held":form}}),
-            json!({"anyOf":[{"type":"null"},form]}),
-            json!({"allOf":[form]}),
-            json!({"type":"array","prefixItems":[form]}),
-        ];
+        let mut holders = vec![form.clone()];
+        holders.extend(SCHEMA_MAPS.map(|key| json!({key:{"member":form}})));
+        holders.extend(SCHEMA_LISTS.map(|key| json!({key:[{"type":"null"},form]})));
+        if form.is_object() {
+            holders.extend(SCHEMAS.map(|key| json!({key:form})));
+        }
         for holder in holders {
             assert_eq!(faults_of(&holder).len(), 1, "{holder}");
-        }
-        if form.is_object() {
-            for key in SCHEMAS {
-                let holder = json!({key:form});
-                assert_eq!(faults_of(&holder).len(), 1, "{holder}");
-            }
         }
     }
 }
 
 /// The guard accepts a schema that has a value: an open object, a closed object with a
-/// field, a closed map, an object and an array that a `false` keyword closes, and a `not`
-/// that refuses some values.
+/// field, a closed map, an object and an array that a `false` keyword closes, a `not` that
+/// refuses some values, a closed value that is not an object, an object with a pattern for
+/// its property names, and a condition whose result is `false`.
 #[test]
 fn the_guard_accepts_each_schema_form_that_has_a_value() {
     for schema in [
@@ -162,11 +169,15 @@ fn the_guard_accepts_each_schema_form_that_has_a_value() {
         json!({}),
         json!({"type":"object"}),
         json!({"type":"object","additionalProperties":false,"properties":{"field":{}}}),
+        json!({"type":["object","null"],"additionalProperties":false,"properties":{"field":{}}}),
         json!({"type":"object","additionalProperties":false,"patternProperties":{"^x":{}}}),
         json!({"type":"object","properties":{"field":{}},"unevaluatedProperties":false}),
         json!({"type":"array","prefixItems":[{"type":"string"}],"items":false}),
         json!({"not":{"type":"null"}}),
         json!({"enum":[null]}),
+        json!({"type":["string","null"],"additionalProperties":false}),
+        json!({"type":"object","propertyNames":{"pattern":"^x"}}),
+        json!({"if":{"required":["field"]},"then":false}),
     ] {
         assert_eq!(faults_of(&schema), Vec::<String>::new(), "{schema}");
     }
