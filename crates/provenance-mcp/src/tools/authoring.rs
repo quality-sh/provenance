@@ -5,6 +5,7 @@ use provenance_core::protocol::failure::ErasedFailure;
 use provenance_core::NodeType;
 use provenance_macros::rule;
 use provenance_porcelain::action::render_readable;
+use provenance_porcelain::action_input::unknown_field_message;
 use provenance_porcelain::registry::Command;
 use provenance_transport::porcelain::{
     replacement_call, target_call, Action, ActionError, ParentReplacement, ReplacementError,
@@ -285,17 +286,16 @@ async fn write(
     let (data, query, headers) =
         split(route.definition, request, &route.target).map_err(crate::surface::failure_result)?;
     if let Some(name) = query.keys().next() {
-        let takes = fields
-            .iter()
-            .filter(|field| !query.contains_key(*field))
-            .cloned()
-            .collect::<Vec<_>>()
-            .join(", ");
-        let message = format!(
-            "the {} action on a {} record does not take {name}; it takes: {takes}",
+        let on = format!(
+            "the {} action on a {} record",
             route.action.as_str(),
             route.kind.as_str()
         );
+        let takes = fields
+            .iter()
+            .filter(|field| !query.contains_key(*field))
+            .map(String::as_str);
+        let message = unknown_field_message(&on, name, takes);
         return Err(refusal(name, "unknown_field", &message));
     }
     match (&replace_parent, &with_parent) {
@@ -346,13 +346,11 @@ fn field_refusal(
         .keys()
         .find(|name| !properties.contains_key(*name))
     {
+        let takes = accepted_fields(schema);
         (
             name.clone(),
             "unknown_field",
-            format!(
-                "{on} does not take {name}; it takes: {}",
-                accepted_fields(schema).join(", ")
-            ),
+            unknown_field_message(&on, name, takes.iter().map(String::as_str)),
         )
     } else {
         let required = schema["required"].as_array()?;

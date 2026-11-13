@@ -5,6 +5,7 @@
 //! the range, the pattern, or the type.
 
 use jsonschema::{error::ValidationErrorKind, paths::LocationSegment, ValidationError};
+use provenance_porcelain::action_input::unknown_field_message;
 use serde_json::{json, Map, Value};
 
 /// The input schema of one listed tool, compiled once when the server starts.
@@ -63,15 +64,12 @@ fn describe(tool: &str, root: &Value, error: &ValidationError<'_>) -> Value {
         | ValidationErrorKind::UnevaluatedProperties { unexpected } => {
             let name = unexpected.first().cloned().unwrap_or_default();
             let owner = if path.is_empty() { tool } else { &path };
-            let takes = schema
-                .and_then(|schema| schema["properties"].as_object())
-                .map_or_default(|properties| {
-                    properties.keys().cloned().collect::<Vec<_>>().join(", ")
-                });
+            let takes = schema.and_then(|schema| schema["properties"].as_object());
+            let takes = takes.into_iter().flat_map(Map::keys).map(String::as_str);
             (
                 joined(&path, &name),
                 "unknown_field",
-                format!("{owner} does not take {name}; it takes: {takes}"),
+                unknown_field_message(owner, &name, takes),
             )
         }
         ValidationErrorKind::Required { property } => {

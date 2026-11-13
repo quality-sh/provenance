@@ -1,6 +1,7 @@
 //! The read tools refuse each request that writes and name the change action that
 //! makes it.
 
+use provenance_porcelain::action_input::unknown_field_message;
 use rmcp::model::CallToolResult;
 use serde_json::{json, Map, Value};
 
@@ -13,24 +14,19 @@ pub fn get_refusal(
     arguments: &Map<String, Value>,
 ) -> Option<CallToolResult> {
     arguments.contains_key("notify").then(|| {
-        let takes = schema
-            .get("properties")
-            .and_then(Value::as_object)
-            .map_or_default(|properties| {
-                properties
-                    .keys()
-                    .filter(|name| *name != "notify")
-                    .cloned()
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            });
+        let takes = schema.get("properties").and_then(Value::as_object);
+        let takes = takes
+            .into_iter()
+            .flat_map(Map::keys)
+            .map(String::as_str)
+            .filter(|name| *name != "notify");
+        let message = unknown_field_message("get", "notify", takes);
         crate::surface::detail_error(json!({
             "kind": "invalid_input",
             "field": "notify",
             "reason": "unknown_field",
             "message": format!(
-                "get does not take notify; it takes: {takes}; register a client thread with \
-                 the change tool, action notify"
+                "{message}; register a client thread with the change tool, action notify"
             ),
         }))
     })
