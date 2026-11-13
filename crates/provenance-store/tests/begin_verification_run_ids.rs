@@ -32,7 +32,7 @@ fn repository_over(
 
 /// Keeps each write set. While it keeps the first set, it starts a run in
 /// `other`, a second repository over the same working tree with its own
-/// section.
+/// section, on a second thread, as a second host would.
 #[derive(Debug)]
 struct StartsAnotherRun {
     other: Mutex<Option<Repository>>,
@@ -41,7 +41,9 @@ struct StartsAnotherRun {
 impl StatePersistence for StartsAnotherRun {
     fn persist(&self, _writes: &WriteSet) -> Result<(), PublishFailure> {
         if let Some(other) = self.other.lock().unwrap().take() {
-            begin_verification(&other, begin_input()).unwrap();
+            std::thread::scope(|threads| {
+                threads.spawn(|| begin_verification(&other, begin_input()).unwrap());
+            });
         }
         Ok(())
     }
