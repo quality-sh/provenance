@@ -115,7 +115,7 @@ fn publish_body_fields(definition: &mut Definition) {
         return;
     }
     for field in bound {
-        schema::hide_bound_request_field(&mut registration.request.schema, field);
+        schema::hide_bound_request_field(operation, &mut registration.request.schema, field);
     }
 }
 
