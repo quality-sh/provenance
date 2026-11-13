@@ -237,8 +237,8 @@ fn decision(singular: &str, id: &str) -> Value {
 /// Creates a Requirement and withdraws its submission, then changes it and
 /// decides the new submission.
 // `{proposal}` in a shown call is a placeholder for the generated id.
-#[allow(clippy::literal_string_with_formatting_args)]
 async fn requirement_writes(out: &mut Transcript, surface: &impl Surface) {
+    let record = "/requirements/req_new";
     let created = out
         .call(
             surface,
@@ -260,7 +260,7 @@ async fn requirement_writes(out: &mut Transcript, surface: &impl Surface) {
         &format!("/requirements/req_new/submissions/{proposal}/withdraw"),
         Some(json!({"actor":"agent", "declared_by":null, "reason":"Revise it."})),
         &[],
-        "/requirements/req_new/submissions/{proposal}/withdraw",
+        &format!("{record}/submissions/{{proposal}}/withdraw"),
     )
     .await;
     let read = out
@@ -289,7 +289,7 @@ async fn requirement_writes(out: &mut Transcript, surface: &impl Surface) {
         &format!("/requirements/req_new/submissions/{proposal}/decide"),
         Some(decision("requirement", "req_new")),
         &[],
-        "/requirements/req_new/submissions/{proposal}/decide",
+        &format!("{record}/submissions/{{proposal}}/decide"),
     )
     .await;
 }

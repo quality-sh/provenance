@@ -71,7 +71,7 @@ fn entry<O: Operation>() -> Entry {
     Entry {
         name: O::NAME,
         check: |call| check::<O>(call).map(|(selected, _)| selected),
-        run: |repository, call| Box::pin(run::<O>(repository, call)),
+        run: run::<O>,
     }
 }
 
@@ -110,23 +110,24 @@ fn check<O: Operation>(call: Value) -> Result<(RequestedContext, O::Request), Op
 ///
 /// The order is the order of the router's own invocation. The failure is
 /// the dispatch's own failure type, which the port gives as it is.
-#[allow(clippy::result_large_err)]
-async fn run<O: Operation>(repository: Repository, call: Value) -> Result<Value, ErasedFailure> {
-    let refuse = |failure| ErasedFailure::new(Some(O::NAME), failure);
-    let (selected, request) = check::<O>(call).map_err(refuse)?;
-    let target = match &selected {
-        RequestedContext::Repository(context) => &context.repository,
-        RequestedContext::Scope(context) => &context.repository,
-        RequestedContext::Scoped(context) => &context.repository,
-    };
-    let binding = LocalRepository::bind(repository, target).map_err(refuse)?;
-    let context = binding
-        .prepare(O::NAME, selected, O::needs(&request))
-        .map_err(refuse)?;
-    let success = invoke_typed::<O>(context, request)
-        .await
-        .map_err(frame_failure::<O>)?;
-    serde_json::to_value(success).map_err(|_| refuse(OperationFailure::Internal))
+fn run<O: Operation>(repository: Repository, call: Value) -> ReadAnswer {
+    Box::pin(async move {
+        let refuse = |failure| ErasedFailure::new(Some(O::NAME), failure);
+        let (selected, request) = check::<O>(call).map_err(refuse)?;
+        let target = match &selected {
+            RequestedContext::Repository(context) => &context.repository,
+            RequestedContext::Scope(context) => &context.repository,
+            RequestedContext::Scoped(context) => &context.repository,
+        };
+        let binding = LocalRepository::bind(repository, target).map_err(refuse)?;
+        let context = binding
+            .prepare(O::NAME, selected, O::needs(&request))
+            .map_err(refuse)?;
+        let success = invoke_typed::<O>(context, request)
+            .await
+            .map_err(frame_failure::<O>)?;
+        serde_json::to_value(success).map_err(|_| refuse(OperationFailure::Internal))
+    })
 }
 
 fn selected(kind: ContextKind, context: Value) -> Result<RequestedContext, OperationFailure> {
