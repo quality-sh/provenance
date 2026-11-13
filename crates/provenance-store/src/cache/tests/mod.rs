@@ -23,6 +23,7 @@ mod page_order;
 mod page_work;
 mod projection_digest_sensitivity;
 pub mod projection_stamp_behavior;
+mod rebuild_objects;
 mod record_columns;
 mod relation_rows_behavior;
 mod reporting_behavior;

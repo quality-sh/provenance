@@ -15,6 +15,8 @@ pub mod limits;
 #[cfg(any(test, feature = "test-fixture"))]
 mod other;
 #[cfg(feature = "host")]
+pub mod ownership;
+#[cfg(feature = "host")]
 pub mod projection;
 pub mod sequence;
 

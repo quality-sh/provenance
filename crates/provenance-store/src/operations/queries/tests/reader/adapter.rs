@@ -22,7 +22,7 @@ use provenance_core::{NodeType, RequirementStatus};
 use std::sync::Arc;
 
 /// The repository of `store` over `database`.
-fn over(store: &TestStore, database: Option<Arc<dyn ReadDatabase>>) -> Repository {
+pub(super) fn over(store: &TestStore, database: Option<Arc<dyn ReadDatabase>>) -> Repository {
     let layout = store.layout();
     Repository::with_storage(
         RepositoryIdentity::new(store.root.clone(), store.scope.clone(), Settings::default()),
@@ -211,6 +211,10 @@ impl SqlTransaction for Uncommitted {
         self.0.bound_work(steps)
     }
 
+    fn work_unit(&self) -> crate::read_database::WorkUnit {
+        self.0.work_unit()
+    }
+
     fn max_list_values(&self) -> usize {
         self.0.max_list_values()
     }
@@ -305,6 +309,10 @@ impl crate::read_database::SqlTransaction for NoList {
 
     fn bound_work(&mut self, steps: u64) -> crate::read_database::SqlFuture<'_, ()> {
         self.0.bound_work(steps)
+    }
+
+    fn work_unit(&self) -> crate::read_database::WorkUnit {
+        self.0.work_unit()
     }
 
     fn max_list_values(&self) -> usize {
