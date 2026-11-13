@@ -10,7 +10,6 @@ mod support {
     pub mod cases;
     pub mod contract;
     pub mod contract_laws;
-    pub mod replay;
 }
 
 use hegel::TestCase;
@@ -23,7 +22,6 @@ use std::sync::Arc;
 use support::cases::{alone, each_operation};
 use support::contract::{invoke, refusal_prefix, CONTRACT};
 use support::contract_laws::contract_laws;
-use support::replay::{replay_of_a_broken_probe, selection};
 
 // No Rule: O1 to O3 have no accepted Rule; each is a check of the plan.
 #[hegel::test]
@@ -57,28 +55,25 @@ fn empty_repository() -> Repository {
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn a_create_source_runs_through_the_contract_on_a_storage_port() {
-    let test = "a_create_source_runs_through_the_contract_on_a_storage_port";
-    report::probe("contract", test, |_| {
-        let repository = empty_repository();
-        let source = invoke(
-            &repository,
-            "create-source",
-            &json!({
-                "scope_id": SCOPE, "id": "source_one", "name": "Policy", "source_type": "policy",
-                "url": "https://example.com/policy", "reference": "section 1",
-                "commit_pin": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "supersedes": [],
-            }),
-        )
-        .unwrap_or_else(|failure| panic!("{}", serde_json::to_string(&failure).unwrap()));
-        assert_eq!(source["id"], "source_one");
-        let view = repository.view().unwrap();
-        assert_eq!(
-            view.list_sources(&provenance_simulation::scope())
-                .unwrap()
-                .len(),
-            1
-        );
-    });
+    let repository = empty_repository();
+    let source = invoke(
+        &repository,
+        "create-source",
+        &json!({
+            "scope_id": SCOPE, "id": "source_one", "name": "Policy", "source_type": "policy",
+            "url": "https://example.com/policy", "reference": "section 1",
+            "commit_pin": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "supersedes": [],
+        }),
+    )
+    .unwrap_or_else(|failure| panic!("{}", serde_json::to_string(&failure).unwrap()));
+    assert_eq!(source["id"], "source_one");
+    let view = repository.view().unwrap();
+    assert_eq!(
+        view.list_sources(&provenance_simulation::scope())
+            .unwrap()
+            .len(),
+        1
+    );
 }
 
 // No Rule: a probe of the plan. A stale `update-requirement` through the
@@ -86,29 +81,26 @@ fn a_create_source_runs_through_the_contract_on_a_storage_port() {
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn a_stale_update_through_the_contract_is_a_conflict() {
-    let test = "a_stale_update_through_the_contract_is_a_conflict";
-    report::probe("contract", test, |probe| {
-        let update = |engine, stale| Step::Write {
-            engine,
-            op: Operation::UpdateRequirement { n: 0, stale },
-        };
-        let case = Case {
-            engines: 2,
-            steps: vec![update(0, false), update(1, true)],
-        };
-        let run = run_case(&case, CONTRACT);
-        let results: Vec<_> = run.done.iter().map(|done| &done.result).collect();
-        assert!(
-            matches!(results[0], Ok(Effect::Described { .. })),
-            "{results:?}"
-        );
-        assert!(
-            matches!(results[1], Err(answer) if answer.starts_with(&refusal_prefix(409))),
-            "{results:?}"
-        );
-        let verdict = laws::check(&run).and_then(|()| contract_laws(&run));
-        probe.laws(verdict);
-    });
+    let update = |engine, stale| Step::Write {
+        engine,
+        op: Operation::UpdateRequirement { n: 0, stale },
+    };
+    let case = Case {
+        engines: 2,
+        steps: vec![update(0, false), update(1, true)],
+    };
+    let run = run_case(&case, CONTRACT);
+    let results: Vec<_> = run.done.iter().map(|done| &done.result).collect();
+    assert!(
+        matches!(results[0], Ok(Effect::Described { .. })),
+        "{results:?}"
+    );
+    assert!(
+        matches!(results[1], Err(answer) if answer.starts_with(&refusal_prefix(409))),
+        "{results:?}"
+    );
+    let verdict = laws::check(&run).and_then(|()| contract_laws(&run));
+    report::probe_laws("contract", verdict);
 }
 
 // No Rule: a probe that each operation of the generator answers through the
@@ -116,34 +108,21 @@ fn a_stale_update_through_the_contract_is_a_conflict() {
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn each_operation_runs_through_the_contract() {
-    let test = "each_operation_runs_through_the_contract";
-    report::probe("contract", test, |probe| {
-        let ops = each_operation();
-        let case = Case {
-            engines: 2,
-            steps: alone(&ops),
-        };
-        let run = run_case(&case, CONTRACT);
-        let ran: Vec<_> = run.done.iter().map(|done| &done.op).collect();
-        assert_eq!(ran, ops.iter().collect::<Vec<_>>());
-        for done in &run.done {
-            assert!(
-                matches!(&done.result, Ok(effect) if *effect != Effect::Skipped),
-                "{:?} gave {:?}",
-                done.op,
-                done.result
-            );
-        }
-        check_probe(probe, &case, CONTRACT);
-    });
-}
-
-// No Rule: a probe that the replay line of a probe in this test target runs
-// this test target.
-#[test]
-#[ignore = "a probe of the nightly simulation"]
-fn the_replay_line_of_a_probe_runs_this_test_target() {
-    let replay = replay_of_a_broken_probe("contract");
-    let selection = selection(env!("CARGO_PKG_NAME"), env!("CARGO_CRATE_NAME"));
-    assert!(replay.ends_with(&selection), "{replay}");
+    let ops = each_operation();
+    let case = Case {
+        engines: 2,
+        steps: alone(&ops),
+    };
+    let run = run_case(&case, CONTRACT);
+    let ran: Vec<_> = run.done.iter().map(|done| &done.op).collect();
+    assert_eq!(ran, ops.iter().collect::<Vec<_>>());
+    for done in &run.done {
+        assert!(
+            matches!(&done.result, Ok(effect) if *effect != Effect::Skipped),
+            "{:?} gave {:?}",
+            done.op,
+            done.result
+        );
+    }
+    check_probe("contract", &case, CONTRACT);
 }

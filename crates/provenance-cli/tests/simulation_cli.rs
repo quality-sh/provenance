@@ -77,41 +77,35 @@ const fn update(n: u8) -> Operation {
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn each_operation_writes_through_the_cli() {
-    let test = "each_operation_writes_through_the_cli";
-    report::probe(&layer(), test, |probe| {
-        let steps = vec![
-            write(0, Operation::CreateRequirement { n: 0 }),
-            write(1, update(1)),
-            write(1, Operation::SubmitReview),
-            write(1, Operation::WithdrawReview { n: 0 }),
-            write(0, update(0)),
-            write(0, Operation::ClaimTopic),
-            write(0, Operation::ReleaseTopic),
-        ];
-        let case = Case { engines: 2, steps };
-        let run = run_cli(&case);
-        let done: Vec<_> = run.groups.iter().flat_map(|(_, done)| done).collect();
-        assert_eq!(done.len(), 7, "{done:?}");
-        assert!(done.iter().all(|done| done.result.is_ok()), "{done:?}");
-        probe.laws(check(&case, &run));
-    });
+    let steps = vec![
+        write(0, Operation::CreateRequirement { n: 0 }),
+        write(1, update(1)),
+        write(1, Operation::SubmitReview),
+        write(1, Operation::WithdrawReview { n: 0 }),
+        write(0, update(0)),
+        write(0, Operation::ClaimTopic),
+        write(0, Operation::ReleaseTopic),
+    ];
+    let case = Case { engines: 2, steps };
+    let run = run_cli(&case);
+    let done: Vec<_> = run.groups.iter().flat_map(|(_, done)| done).collect();
+    assert_eq!(done.len(), 7, "{done:?}");
+    assert!(done.iter().all(|done| done.result.is_ok()), "{done:?}");
+    report::probe_laws(&layer(), check(&case, &run));
 }
 
 // No Rule: a probe that two updates at once on one etag have one winner.
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn two_updates_at_once_have_one_winner() {
-    let test = "two_updates_at_once_have_one_winner";
-    report::probe(&layer(), test, |probe| {
-        let steps = vec![write(0, update(0)), write(1, update(0)), Step::Turn(0)];
-        let case = Case { engines: 2, steps };
-        let run = run_cli(&case);
-        let (way, done) = &run.groups[0];
-        assert_eq!(*way, Ran::AtOnce);
-        let won = done.iter().filter(|done| done.result.is_ok()).count();
-        assert_eq!(won, 1, "{done:?}");
-        probe.laws(check(&case, &run));
-    });
+    let steps = vec![write(0, update(0)), write(1, update(0)), Step::Turn(0)];
+    let case = Case { engines: 2, steps };
+    let run = run_cli(&case);
+    let (way, done) = &run.groups[0];
+    assert_eq!(*way, Ran::AtOnce);
+    let won = done.iter().filter(|done| done.result.is_ok()).count();
+    assert_eq!(won, 1, "{done:?}");
+    report::probe_laws(&layer(), check(&case, &run));
 }
 
 /// The most runs of the stop probe. A stop at `at: 0` kills the write at
@@ -124,49 +118,24 @@ const STOP_ATTEMPTS: usize = 5;
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn a_merged_branch_and_a_stopped_write_keep_the_laws() {
-    let test = "a_merged_branch_and_a_stopped_write_keep_the_laws";
-    report::probe(&layer(), test, |probe| {
-        let steps = vec![
-            write(0, update(0)),
-            Step::OutsideWrite(Operation::CreateRequirement { n: 0 }),
-            write(1, Operation::ClaimTopic),
-            Step::Fault(Fault::Stop { engine: 1, at: 0 }),
-        ];
-        let case = Case { engines: 2, steps };
-        for _ in 0..STOP_ATTEMPTS {
-            let run = run_cli(&case);
-            let ways: Vec<_> = run.groups.iter().map(|(way, _)| *way).collect();
-            assert_eq!(ways, [Ran::Alone, Ran::Outside, Ran::Stopped]);
-            let (_, outside) = &run.groups[1];
-            assert!(outside[0].result.is_ok(), "{outside:?}");
-            probe.laws(check(&case, &run));
-            let (_, stopped) = &run.groups[2];
-            if stopped.iter().any(|done| done.stopped) {
-                return;
-            }
+    let steps = vec![
+        write(0, update(0)),
+        Step::OutsideWrite(Operation::CreateRequirement { n: 0 }),
+        write(1, Operation::ClaimTopic),
+        Step::Fault(Fault::Stop { engine: 1, at: 0 }),
+    ];
+    let case = Case { engines: 2, steps };
+    for _ in 0..STOP_ATTEMPTS {
+        let run = run_cli(&case);
+        let ways: Vec<_> = run.groups.iter().map(|(way, _)| *way).collect();
+        assert_eq!(ways, [Ran::Alone, Ran::Outside, Ran::Stopped]);
+        let (_, outside) = &run.groups[1];
+        assert!(outside[0].result.is_ok(), "{outside:?}");
+        report::probe_laws(&layer(), check(&case, &run));
+        let (_, stopped) = &run.groups[2];
+        if stopped.iter().any(|done| done.stopped) {
+            return;
         }
-        panic!("in {STOP_ATTEMPTS} runs, each write ended or printed its answer before its stop");
-    });
-}
-
-// No Rule: a probe that the replay line of a probe in this test target runs
-// this test target.
-#[test]
-#[ignore = "a probe of the nightly simulation"]
-fn the_replay_line_of_a_probe_runs_this_test_target() {
-    let broken = Err(provenance_simulation::laws::Violation {
-        law: "L3",
-        detail: "a planted law break".to_owned(),
-    });
-    let payload = std::panic::catch_unwind(|| {
-        report::probe(&layer(), "a_planted_probe", |probe| probe.laws(broken));
-    })
-    .expect_err("a broken probe fails");
-    let text = report::panic_text(&*payload);
-    let selection = format!(
-        "-p {} --test {} -E 'test(=a_planted_probe)'",
-        env!("CARGO_PKG_NAME"),
-        env!("CARGO_CRATE_NAME")
-    );
-    assert!(text.ends_with(&selection), "{text}");
+    }
+    panic!("in {STOP_ATTEMPTS} runs, each write ended or printed its answer before its stop");
 }

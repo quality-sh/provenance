@@ -8,7 +8,6 @@
 #[allow(dead_code)]
 mod support {
     pub mod cases;
-    pub mod replay;
 }
 
 use hegel::TestCase;
@@ -17,7 +16,6 @@ use provenance_simulation::generate::{Case, Effect, Fault, Operation, Step};
 use provenance_simulation::storage::Outcome;
 use provenance_simulation::{check_case, check_probe, laws, report, run_case, stats, Config, Run};
 use support::cases::{alone, each_operation, moved_base_case, write};
-use support::replay::{replay_of_a_broken_probe, selection};
 
 #[hegel::test]
 #[ignore = "random cases run nightly: cargo nextest run --profile simulation --run-ignored all"]
@@ -37,17 +35,14 @@ fn met(run: &Run, outcome: Outcome) -> bool {
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn the_write_after_a_moved_base_lands() {
-    let test = "the_write_after_a_moved_base_lands";
-    report::probe("engine", test, |probe| {
-        let run = run_case(&moved_base_case(), Config::default());
-        assert!(met(&run, Outcome::BaseMoved), "the case met no moved base");
-        assert!(
-            matches!(run.done[1].result, Ok(Effect::Bound { .. })),
-            "{:?}",
-            run.done
-        );
-        probe.laws(laws::check(&run));
-    });
+    let run = run_case(&moved_base_case(), Config::default());
+    assert!(met(&run, Outcome::BaseMoved), "the case met no moved base");
+    assert!(
+        matches!(run.done[1].result, Ok(Effect::Bound { .. })),
+        "{:?}",
+        run.done
+    );
+    report::probe_laws("engine", laws::check(&run));
 }
 
 /// A case where each fault of the generator meets an engine.
@@ -79,92 +74,83 @@ fn every_fault_case() -> Case {
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn a_case_with_every_fault_keeps_the_laws() {
-    let test = "a_case_with_every_fault_keeps_the_laws";
-    report::probe("engine", test, |probe| {
-        let run = check_probe(probe, &every_fault_case(), Config::default());
-        assert!(
-            met(&run, Outcome::Unknown),
-            "no unknown outcome: {:?}",
-            run.publishes
-        );
-        assert!(
-            met(&run, Outcome::Refused),
-            "no refusal: {:?}",
-            run.publishes
-        );
-        assert!(
-            run.done
-                .iter()
-                .any(|done| done.engine.is_none() && done.result.is_ok()),
-            "no outside write: {:?}",
-            run.done
-        );
-        assert!(
-            run.done.iter().any(|done| done.stopped),
-            "the stop met no engine during an operation: {:?}",
-            run.done
-        );
-    });
+    let run = check_probe("engine", &every_fault_case(), Config::default());
+    assert!(
+        met(&run, Outcome::Unknown),
+        "no unknown outcome: {:?}",
+        run.publishes
+    );
+    assert!(
+        met(&run, Outcome::Refused),
+        "no refusal: {:?}",
+        run.publishes
+    );
+    assert!(
+        run.done
+            .iter()
+            .any(|done| done.engine.is_none() && done.result.is_ok()),
+        "no outside write: {:?}",
+        run.done
+    );
+    assert!(
+        run.done.iter().any(|done| done.stopped),
+        "the stop met no engine during an operation: {:?}",
+        run.done
+    );
 }
 
 // No Rule: a probe that an unknown outcome lands a prefix and the laws hold.
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn an_unknown_outcome_lands_a_prefix_and_keeps_the_laws() {
-    let test = "an_unknown_outcome_lands_a_prefix_and_keeps_the_laws";
-    report::probe("engine", test, |probe| {
-        for landed in 0..3 {
-            let case = Case {
-                engines: 2,
-                steps: vec![
-                    Step::Fault(Fault::UnknownOutcome { landed }),
-                    write(0, Operation::PostMessage),
-                    write(1, Operation::UpdateRequirement { n: 0, stale: false }),
-                ],
-            };
-            let run = run_case(&case, Config::default());
-            assert!(met(&run, Outcome::Unknown), "the fault met a publish");
-            probe.laws(laws::check(&run));
-        }
-    });
+    for landed in 0..3 {
+        let case = Case {
+            engines: 2,
+            steps: vec![
+                Step::Fault(Fault::UnknownOutcome { landed }),
+                write(0, Operation::PostMessage),
+                write(1, Operation::UpdateRequirement { n: 0, stale: false }),
+            ],
+        };
+        let run = run_case(&case, Config::default());
+        assert!(met(&run, Outcome::Unknown), "the fault met a publish");
+        report::probe_laws("engine", laws::check(&run));
+    }
 }
 
 // No Rule: a probe that each operation of the generator succeeds alone.
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn each_operation_runs_on_the_engine() {
-    let test = "each_operation_runs_on_the_engine";
-    report::probe("engine", test, |probe| {
-        let ops = each_operation();
-        let case = Case {
-            engines: 2,
-            steps: alone(&ops),
-        };
-        let run = check_probe(probe, &case, Config::default());
-        let ran: Vec<_> = run.done.iter().map(|done| &done.op).collect();
-        assert_eq!(ran, ops.iter().collect::<Vec<_>>());
-        for done in &run.done {
-            assert!(
-                matches!(&done.result, Ok(effect) if *effect != Effect::Skipped),
-                "{:?} gave {:?}",
-                done.op,
-                done.result
-            );
+    let ops = each_operation();
+    let case = Case {
+        engines: 2,
+        steps: alone(&ops),
+    };
+    let run = check_probe("engine", &case, Config::default());
+    let ran: Vec<_> = run.done.iter().map(|done| &done.op).collect();
+    assert_eq!(ran, ops.iter().collect::<Vec<_>>());
+    for done in &run.done {
+        assert!(
+            matches!(&done.result, Ok(effect) if *effect != Effect::Skipped),
+            "{:?} gave {:?}",
+            done.op,
+            done.result
+        );
+    }
+    for done in &run.done {
+        if matches!(
+            done.op,
+            Operation::DecideReview { .. } | Operation::ArchiveRequirement { .. }
+        ) {
+            let staged = run.publishes.iter().any(|publish| {
+                publish.operation == done.operation
+                    && publish.whole_set
+                    && publish.outcome == Outcome::Landed
+            });
+            assert!(staged, "{:?} landed no stage: {:?}", done.op, run.publishes);
         }
-        for done in &run.done {
-            if matches!(
-                done.op,
-                Operation::DecideReview { .. } | Operation::ArchiveRequirement { .. }
-            ) {
-                let staged = run.publishes.iter().any(|publish| {
-                    publish.operation == done.operation
-                        && publish.whole_set
-                        && publish.outcome == Outcome::Landed
-                });
-                assert!(staged, "{:?} landed no stage: {:?}", done.op, run.publishes);
-            }
-        }
-    });
+    }
 }
 
 // No Rule: a probe that L3 follows the claim through an archive. The archive
@@ -173,73 +159,33 @@ fn each_operation_runs_on_the_engine() {
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn an_archive_after_an_outside_claim_clears_the_claim_and_keeps_l3() {
-    let test = "an_archive_after_an_outside_claim_clears_the_claim_and_keeps_l3";
-    report::probe("engine", test, |probe| {
-        let case = Case {
-            engines: 2,
-            steps: vec![
-                write(0, Operation::ArchiveRequirement { n: 0 }),
-                Step::OutsideWrite(Operation::ClaimTopic),
-            ],
-        };
-        let run = run_case(&case, Config::default());
-        let landed: Vec<_> = run
-            .publishes
-            .iter()
-            .filter(|publish| publish.outcome == Outcome::Landed)
-            .map(|publish| publish.engine)
-            .collect();
-        assert_eq!(landed, [None, Some(0)], "{:?}", run.publishes);
-        assert!(
-            run.done.iter().all(|done| done.result.is_ok()),
-            "{:?}",
-            run.done
-        );
-        let repository = provenance_simulation::open_entries(&run.entries).unwrap();
-        let topics = repository
-            .view()
-            .unwrap()
-            .list_topics(&provenance_simulation::scope())
-            .unwrap();
-        assert_eq!(topics[0].status, provenance_core::TopicStatus::Archived);
-        assert_eq!(topics[0].claimed_by, None);
-        probe.laws(laws::check(&run));
-    });
-}
-
-// No Rule: a probe that the replay line of a probe in this test target runs
-// this test target.
-#[test]
-#[ignore = "a probe of the nightly simulation"]
-fn the_replay_line_of_a_probe_runs_this_test_target() {
-    let replay = replay_of_a_broken_probe("engine");
-    let selection = selection(env!("CARGO_PKG_NAME"), env!("CARGO_CRATE_NAME"));
-    assert!(replay.ends_with(&selection), "{replay}");
-}
-
-// No Rule: a probe that the replay line names each test target of this
-// crate. Cargo names a test binary with `_` in place of each `-` of its
-// target name, and the replay line takes the target name from the binary.
-#[test]
-#[ignore = "a probe of the nightly simulation"]
-fn the_replay_line_names_each_test_target_of_this_crate() {
-    let tests = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
-    let mut targets = Vec::new();
-    for entry in std::fs::read_dir(&tests).unwrap() {
-        let path = entry.unwrap().path();
-        if path.extension().is_some_and(|extension| extension == "rs") {
-            targets.push(path.file_stem().unwrap().to_str().unwrap().to_owned());
-        }
-    }
-    assert!(targets.contains(&"refused_post".to_owned()), "{targets:?}");
-    for target in targets {
-        let crate_name = target.replace('-', "_");
-        for binary in [
-            format!("{crate_name}-0123456789abcdef"),
-            format!("{crate_name}-0123456789abcdef.exe"),
-        ] {
-            let exe = std::path::Path::new("target/debug/deps").join(binary);
-            assert_eq!(report::test_target(&exe), Some(target.clone()), "{exe:?}");
-        }
-    }
+    let case = Case {
+        engines: 2,
+        steps: vec![
+            write(0, Operation::ArchiveRequirement { n: 0 }),
+            Step::OutsideWrite(Operation::ClaimTopic),
+        ],
+    };
+    let run = run_case(&case, Config::default());
+    let landed: Vec<_> = run
+        .publishes
+        .iter()
+        .filter(|publish| publish.outcome == Outcome::Landed)
+        .map(|publish| publish.engine)
+        .collect();
+    assert_eq!(landed, [None, Some(0)], "{:?}", run.publishes);
+    assert!(
+        run.done.iter().all(|done| done.result.is_ok()),
+        "{:?}",
+        run.done
+    );
+    let repository = provenance_simulation::open_entries(&run.entries).unwrap();
+    let topics = repository
+        .view()
+        .unwrap()
+        .list_topics(&provenance_simulation::scope())
+        .unwrap();
+    assert_eq!(topics[0].status, provenance_core::TopicStatus::Archived);
+    assert_eq!(topics[0].claimed_by, None);
+    report::probe_laws("engine", laws::check(&run));
 }
