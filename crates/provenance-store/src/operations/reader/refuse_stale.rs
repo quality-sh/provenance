@@ -65,7 +65,7 @@ pub(super) async fn check(
         .await
         .fetch(
             "SELECT unit, stored_digest FROM projection_unit_digests",
-            &[],
+            Vec::new(),
         )
         .await?
         .iter()

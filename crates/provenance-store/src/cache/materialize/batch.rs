@@ -3,18 +3,14 @@
 //! A loader adds its rows in the order it used to insert them one by one.
 //! [`Rows::write`] sends them as multi-row statements, one table at a time.
 //! The rows of one table keep their order, so each table gets the same row
-//! ids as before. When a statement fails, [`Rows::write`] rolls the batch
-//! back to its savepoint. It then inserts the rows one by one in the order
-//! the loader added them. So the first failing row and its error are the
-//! same as with single-row inserts.
+//! ids as before. The statements run as one attempt of the transaction:
+//! when one fails, none of them is kept, and [`Rows::write`] inserts the
+//! rows one by one in the order the loader added them. So the first
+//! failing row and its error are the same as with single-row inserts.
 
+use crate::read_database::{SqlValue, Statement, Transaction};
 use provenance_core::model::ColumnValue;
-use sqlx::sqlite::SqliteArguments;
-use sqlx::{query::Query, Sqlite, Transaction};
 use std::sync::Arc;
-
-/// The most values that one statement binds.
-const VALUES_PER_STATEMENT: usize = 999;
 
 /// One table that a loader writes. The names come from the projection
 /// schema, never from input.
@@ -82,80 +78,120 @@ impl Rows {
     }
 
     /// Adds one row for the table at `table` in the list given to [`Rows::new`].
+    /// [`Rows::write`] refuses a row whose length is not the table's
+    /// number of columns.
     pub(super) fn push(&mut self, table: usize, row: Vec<ColumnValue>) {
-        debug_assert_eq!(row.len(), self.tables[table].columns.len());
         self.entries.push((table, row));
     }
 
     /// Writes every row, then reports the number of records or the error
-    /// that stopped the loader. See the module comment for the order on
-    /// failure.
-    pub(super) async fn write(self, tx: &mut Transaction<'_, Sqlite>) -> anyhow::Result<u64> {
-        if !self.entries.is_empty() {
-            execute(tx, "SAVEPOINT projection_rows").await?;
-            if self.batched(tx).await.is_ok() {
-                execute(tx, "RELEASE projection_rows").await?;
-            } else {
-                execute(tx, "ROLLBACK TO projection_rows").await?;
-                execute(tx, "RELEASE projection_rows").await?;
-                self.one_by_one(tx).await?;
+    /// that stopped the loader. A statement binds at most `bound_values`
+    /// values. See the module comment for the order on failure.
+    ///
+    /// A row whose length is not its table's number of columns is a fault
+    /// of the loader. The write then fails before any statement runs, so
+    /// the one-by-one inserts never split the rows at the wrong place.
+    ///
+    /// The values of the rows move into the statements, and back out of
+    /// them for the one-by-one inserts, so the load holds one copy of them.
+    pub(super) async fn write(
+        self,
+        tx: &mut Transaction,
+        bound_values: usize,
+    ) -> anyhow::Result<u64> {
+        let Self {
+            tables,
+            entries,
+            loaded,
+            failure,
+        } = self;
+        for (table, row) in &entries {
+            let table = &tables[*table];
+            if row.len() != table.columns.len() {
+                return Err(crate::refusal::fault!(
+                    "a row for {} has {} values, but the table has {} columns",
+                    table.name,
+                    row.len(),
+                    table.columns.len()
+                ));
             }
         }
-        self.failure.map_or(Ok(self.loaded), Err)
-    }
-
-    async fn one_by_one(&self, tx: &mut Transaction<'_, Sqlite>) -> anyhow::Result<()> {
-        for (table, row) in &self.entries {
-            let mut query = sqlx::query(sqlx::AssertSqlSafe(self.tables[*table].statement(1)));
-            for value in row {
-                query = bind(query, value);
-            }
-            query.execute(&mut **tx).await?;
-        }
-        Ok(())
-    }
-
-    async fn batched(&self, tx: &mut Transaction<'_, Sqlite>) -> anyhow::Result<()> {
-        for (index, table) in self.tables.iter().enumerate() {
-            let rows: Vec<&Vec<ColumnValue>> = self
-                .entries
-                .iter()
-                .filter(|(of, _)| *of == index)
-                .map(|(_, row)| row)
-                .collect();
-            let per_statement = (VALUES_PER_STATEMENT / table.columns.len().max(1)).max(1);
-            let full = table.statement(per_statement);
-            for chunk in rows.chunks(per_statement) {
-                let sql = if chunk.len() == per_statement {
-                    Arc::clone(&full)
-                } else {
-                    table.statement(chunk.len())
-                };
-                let mut query = sqlx::query(sqlx::AssertSqlSafe(sql));
-                for value in chunk.iter().flat_map(|row| row.iter()) {
-                    query = bind(query, value);
-                }
-                query.execute(&mut **tx).await?;
+        if !entries.is_empty() {
+            let order: Vec<usize> = entries.iter().map(|(table, _)| *table).collect();
+            let (of, statements) = batched(&tables, entries, bound_values);
+            if tx.attempt(&statements).await?.is_err() {
+                one_by_one(tx, &tables, &order, &of, statements).await?;
             }
         }
-        Ok(())
+        failure.map_or(Ok(loaded), Err)
     }
 }
 
-async fn execute(tx: &mut Transaction<'_, Sqlite>, sql: &'static str) -> anyhow::Result<()> {
-    sqlx::query(sql).execute(&mut **tx).await?;
+/// The multi-row statements of `entries`, one table at a time, with the
+/// table of each statement.
+fn batched(
+    tables: &[Table],
+    entries: Vec<(usize, Vec<ColumnValue>)>,
+    bound_values: usize,
+) -> (Vec<usize>, Vec<Statement>) {
+    let mut rows: Vec<Vec<Vec<ColumnValue>>> = tables.iter().map(|_| Vec::new()).collect();
+    for (table, row) in entries {
+        rows[table].push(row);
+    }
+    let (mut of, mut statements) = (Vec::new(), Vec::new());
+    for (index, (table, rows)) in tables.iter().zip(rows).enumerate() {
+        let per_statement = (bound_values / table.columns.len().max(1)).max(1);
+        let full = table.statement(per_statement);
+        let mut rows = rows.into_iter().peekable();
+        while rows.peek().is_some() {
+            let chunk: Vec<Vec<ColumnValue>> = rows.by_ref().take(per_statement).collect();
+            let sql = if chunk.len() == per_statement {
+                Arc::clone(&full)
+            } else {
+                table.statement(chunk.len())
+            };
+            of.push(index);
+            statements.push(Statement {
+                sql: sql.to_string(),
+                values: chunk.into_iter().flatten().map(into_value).collect(),
+            });
+        }
+    }
+    (of, statements)
+}
+
+/// Inserts the rows of `statements` one by one, in the loader's `order`.
+/// `of` names the table of each statement.
+async fn one_by_one(
+    tx: &mut Transaction,
+    tables: &[Table],
+    order: &[usize],
+    of: &[usize],
+    statements: Vec<Statement>,
+) -> anyhow::Result<()> {
+    let mut values: Vec<Vec<SqlValue>> = tables.iter().map(|_| Vec::new()).collect();
+    for (table, statement) in of.iter().zip(statements) {
+        values[*table].extend(statement.values);
+    }
+    let mut values: Vec<_> = values.into_iter().map(Vec::into_iter).collect();
+    let single: Vec<Arc<str>> = tables.iter().map(|table| table.statement(1)).collect();
+    for table in order {
+        let row = values[*table]
+            .by_ref()
+            .take(tables[*table].columns.len())
+            .collect();
+        tx.execute(&single[*table], row).await?;
+    }
     Ok(())
 }
 
-pub(super) fn bind<'q>(
-    query: Query<'q, Sqlite, SqliteArguments>,
-    value: &ColumnValue,
-) -> Query<'q, Sqlite, SqliteArguments> {
-    match value {
-        ColumnValue::Null => query.bind(None::<String>),
-        ColumnValue::Integer(integer) => query.bind(*integer),
-        ColumnValue::Real(real) => query.bind(*real),
-        ColumnValue::Text(text) => query.bind(text.clone()),
+/// The value that a statement binds for one column value.
+fn into_value(column: ColumnValue) -> SqlValue {
+    match column {
+        ColumnValue::Null => SqlValue::Null,
+        ColumnValue::Integer(integer) => SqlValue::Integer(integer),
+        ColumnValue::Real(real) => SqlValue::Real(real),
+        ColumnValue::Text(text) => SqlValue::Text(text),
     }
 }
 
@@ -168,3 +204,7 @@ pub(super) fn text(value: impl Into<String>) -> ColumnValue {
 pub(super) fn optional_text(value: Option<impl Into<String>>) -> ColumnValue {
     value.map_or(ColumnValue::Null, text)
 }
+
+#[cfg(test)]
+#[cfg(feature = "host")]
+mod tests;

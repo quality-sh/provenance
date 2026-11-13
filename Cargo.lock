@@ -2764,6 +2764,7 @@ dependencies = [
  "filetime",
  "fs2",
  "fs_at",
+ "futures-util",
  "hex",
  "hmac",
  "jsonschema",

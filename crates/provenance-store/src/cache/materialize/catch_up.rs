@@ -10,9 +10,10 @@ use crate::cache::{revision_digest_from_stored_rows, ProjectionFamily};
 use crate::current_schema::{self, Compatibility};
 use crate::publication;
 use crate::read_database::{ReadDatabase, Transaction as Lent, WriteWork};
+use crate::read_database::{SqlColumns, SqlValue};
+#[cfg(feature = "host")]
 use crate::repository::Repository;
 use provenance_core::ScopeId;
-use sqlx::{Sqlite, SqliteConnection};
 use std::collections::{BTreeMap, BTreeSet};
 
 type ContentKey = (String, String);
@@ -39,6 +40,7 @@ pub struct CatchUpReport {
     pub cache_recreated: bool,
 }
 
+#[cfg(feature = "host")]
 pub async fn catch_up_state(repository: &Repository) -> anyhow::Result<CatchUpReport> {
     let guard = publication::publication_guard(repository).await?;
     catch_up_with_guard(guard, repository.read_database()?).await
@@ -54,7 +56,8 @@ pub async fn catch_up_with_guard(
 ) -> anyhow::Result<CatchUpReport> {
     let mut guard = Some(guard);
     let mut report = None;
-    let outcome = database.write(catch_up_work(&mut guard, &mut report)).await;
+    let work = catch_up_work(&mut guard, &mut report, database.max_bound_values());
+    let outcome = database.write(work).await;
     drop(guard);
     outcome?;
     report.ok_or_else(|| crate::refusal::fault!("the read database ended a write without its work"))
@@ -65,16 +68,19 @@ pub async fn catch_up_with_guard(
 /// and puts the report in `report`. When it fails, the guard stays in
 /// `guard`, so the caller frees it after the store has completed its
 /// connection.
+///
+/// A statement of the pass binds at most `bound_values` values.
 pub fn catch_up_work<'a>(
     guard: &'a mut Option<publication::PublicationGuard>,
     report: &'a mut Option<CatchUpReport>,
+    bound_values: usize,
 ) -> WriteWork<'a> {
     Box::new(move |transaction| {
         Box::pin(async move {
             let held = guard
                 .as_ref()
                 .ok_or_else(|| crate::refusal::fault!("a catch-up pass runs under the guard"))?;
-            *report = Some(pass(held, transaction).await?);
+            *report = Some(pass(held, transaction, bound_values).await?);
             *guard = None;
             Ok(())
         })
@@ -93,10 +99,11 @@ enum Step {
 async fn pass(
     guard: &publication::PublicationGuard,
     mut transaction: Lent,
+    bound_values: usize,
 ) -> anyhow::Result<CatchUpReport> {
-    let found = step(guard, super::file_transaction(&mut transaction)?).await?;
+    let found = step(guard, &mut transaction, bound_values).await?;
     match found {
-        Step::Rebuild => rebuild(guard, transaction).await,
+        Step::Rebuild => rebuild(guard, transaction, bound_values).await,
         Step::Unchanged(report) => Ok(report),
         Step::Changed(report) => {
             crate::test_probes::at("catch_up_before_commit")?;
@@ -110,17 +117,22 @@ async fn pass(
 /// The rows of one catch-up pass, in the write transaction `tx`.
 async fn step(
     guard: &publication::PublicationGuard,
-    tx: &mut sqlx::Transaction<'static, Sqlite>,
+    tx: &mut Lent,
+    bound_values: usize,
 ) -> anyhow::Result<Step> {
     crate::test_probes::at("prepare_current_schema_under_guard")?;
     if current_schema::compatibility(tx).await? == Compatibility::RebuildRequired {
         return Ok(Step::Rebuild);
     }
-    let stored: Option<(i64, String)> = sqlx::query_as(
-        "SELECT serial, digest FROM projection_revision ORDER BY serial DESC LIMIT 1",
-    )
-    .fetch_optional(&mut **tx)
-    .await?;
+    let stored = tx
+        .fetch(
+            "SELECT serial, digest FROM projection_revision ORDER BY serial DESC LIMIT 1",
+            Vec::new(),
+        )
+        .await?
+        .first()
+        .map(|row| anyhow::Ok((row.integer(0)?, row.text(1)?.to_owned())))
+        .transpose()?;
 
     // A database with no revision, or one whose schema just moved, is
     // rebuilt under the same guard.
@@ -166,6 +178,7 @@ async fn step(
             scope,
             stored,
             bytes: &bytes,
+            bound_values,
         };
         catch_up_scope(tx, &reader, pass, &mut content, &mut report).await?;
     }
@@ -205,38 +218,41 @@ async fn step(
 }
 
 async fn load_stored_digests(
-    connection: &mut SqliteConnection,
+    tx: &mut Lent,
 ) -> anyhow::Result<(
     BTreeMap<String, UnitValue>,
     BTreeMap<ContentKey, ContentValue>,
 )> {
-    let units: BTreeMap<String, UnitValue> = sqlx::query_as::<_, (String, String, String)>(
-        "SELECT unit, digest, stored_digest FROM projection_unit_digests",
-    )
-    .fetch_all(&mut *connection)
-    .await?
-    .into_iter()
-    .map(|(unit, content, stored)| (unit, UnitValue { content, stored }))
-    .collect();
-    let content: BTreeMap<ContentKey, ContentValue> =
-        sqlx::query_as::<_, (String, String, String, String, i64)>(
-            "SELECT scope_id, family, content_digest, stored_digest, record_count \
-         FROM projection_family_digests",
+    let mut units = BTreeMap::new();
+    let unit_rows = tx
+        .fetch(
+            "SELECT unit, digest, stored_digest FROM projection_unit_digests",
+            Vec::new(),
         )
-        .fetch_all(&mut *connection)
-        .await?
-        .into_iter()
-        .map(|(scope_id, family, content, stored, count)| {
-            (
-                (scope_id, family),
-                ContentValue {
-                    content,
-                    stored,
-                    count,
-                },
-            )
-        })
-        .collect();
+        .await?;
+    for mut row in unit_rows {
+        let value = UnitValue {
+            content: row.take_text(1)?,
+            stored: row.take_text(2)?,
+        };
+        units.insert(row.take_text(0)?, value);
+    }
+    let mut content = BTreeMap::new();
+    let content_rows = tx
+        .fetch(
+            "SELECT scope_id, family, content_digest, stored_digest, record_count \
+             FROM projection_family_digests",
+            Vec::new(),
+        )
+        .await?;
+    for mut row in content_rows {
+        let value = ContentValue {
+            content: row.take_text(2)?,
+            stored: row.take_text(3)?,
+            count: row.integer(4)?,
+        };
+        content.insert((row.take_text(0)?, row.take_text(1)?), value);
+    }
     Ok((units, content))
 }
 
@@ -245,13 +261,14 @@ struct ScopePass<'a> {
     scope: &'a ScopeId,
     stored: Option<&'a UnitValue>,
     bytes: &'a units::UnitBytes<'a>,
+    bound_values: usize,
 }
 
 /// Parses the families of one scope unit that its changed files can change,
 /// and writes their changed rows. Then stores the digests of the unit and
 /// of each of its files.
 async fn catch_up_scope(
-    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    tx: &mut Lent,
     reader: &validation::UnitReader<'_>,
     pass: ScopePass<'_>,
     content: &mut BTreeMap<ContentKey, ContentValue>,
@@ -261,6 +278,7 @@ async fn catch_up_scope(
         scope,
         stored,
         bytes,
+        bound_values,
     } = pass;
     let name = Unit::Scope(scope.clone()).name();
     let read = units::files_read(reader.state_dir(), bytes, &stored_files(tx, &name).await?)?;
@@ -271,32 +289,37 @@ async fn catch_up_scope(
             !content.contains_key(&(scope.as_str().to_owned(), family.family_name().to_owned()))
         });
     let records = reader.scope(scope, &read, all)?;
-    rederive_scope(tx, &records, scope, content, report).await?;
+    rederive_scope(tx, &records, (scope, bound_values), content, report).await?;
     stamp::upsert_unit_row(tx, &name, &read.digests).await?;
     stamp::replace_file_rows(tx, &name, &read.files).await
 }
 
 /// The file rows of one unit, by path.
 async fn stored_files(
-    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    tx: &mut Lent,
     unit: &str,
 ) -> anyhow::Result<BTreeMap<String, units::FileDigest>> {
-    let rows: Vec<(String, String, String)> = sqlx::query_as(
-        "SELECT path, stored_digest, content_digest FROM projection_file_digests WHERE unit = ?",
-    )
-    .bind(unit)
-    .fetch_all(&mut **tx)
-    .await?;
-    Ok(rows
-        .into_iter()
-        .map(|(path, stored, content)| (path, units::FileDigest { stored, content }))
-        .collect())
+    let rows = tx
+        .fetch(
+            "SELECT path, stored_digest, content_digest FROM projection_file_digests WHERE unit = ?",
+            vec![SqlValue::from(unit)],
+        )
+        .await?;
+    let mut files = BTreeMap::new();
+    for mut row in rows {
+        let file = units::FileDigest {
+            stored: row.take_text(1)?,
+            content: row.take_text(2)?,
+        };
+        files.insert(row.take_text(0)?, file);
+    }
+    Ok(files)
 }
 
 /// Removes the rows, relation rows, and digest rows of every scope the
 /// manifest does not name. Returns whether anything departed.
 async fn remove_departed_scopes(
-    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    tx: &mut Lent,
     stored_units: &BTreeMap<String, UnitValue>,
     live: &[Unit],
     content: &mut BTreeMap<ContentKey, ContentValue>,
@@ -313,19 +336,22 @@ async fn remove_departed_scopes(
             }
             relation_rows::delete_rows(tx, &scope).await?;
             content.retain(|(scope_id, _), _| scope_id != scope.as_str());
-            sqlx::query("DELETE FROM projection_family_digests WHERE scope_id = ?")
-                .bind(scope.as_str())
-                .execute(&mut **tx)
-                .await?;
+            tx.execute(
+                "DELETE FROM projection_family_digests WHERE scope_id = ?",
+                vec![SqlValue::from(scope.as_str())],
+            )
+            .await?;
         }
-        sqlx::query("DELETE FROM projection_unit_digests WHERE unit = ?")
-            .bind(name)
-            .execute(&mut **tx)
-            .await?;
-        sqlx::query("DELETE FROM projection_file_digests WHERE unit = ?")
-            .bind(name)
-            .execute(&mut **tx)
-            .await?;
+        tx.execute(
+            "DELETE FROM projection_unit_digests WHERE unit = ?",
+            vec![SqlValue::from(name.as_str())],
+        )
+        .await?;
+        tx.execute(
+            "DELETE FROM projection_file_digests WHERE unit = ?",
+            vec![SqlValue::from(name.as_str())],
+        )
+        .await?;
         departed = true;
     }
     Ok(departed)
@@ -333,11 +359,12 @@ async fn remove_departed_scopes(
 
 /// Rewrites only the parsed families whose content digest moved, and in
 /// each of them only the rows that differ. When an owner family moved, the
-/// relation rows of its kind follow the same way.
+/// relation rows of its kind follow the same way. A statement binds at
+/// most `bound_values` values.
 async fn rederive_scope(
-    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    tx: &mut Lent,
     records: &validation::ScopeRecords,
-    scope: &ScopeId,
+    (scope, bound_values): (&ScopeId, usize),
     content: &mut BTreeMap<ContentKey, ContentValue>,
     report: &mut CatchUpReport,
 ) -> anyhow::Result<()> {
@@ -357,7 +384,8 @@ async fn rederive_scope(
         let content_changed = previous.is_none_or(|previous| {
             previous.content != fresh.content || previous.count != fresh.count
         });
-        report.rows_written += family_rows::replace_rows(tx, family, scope, &records.bytes).await?;
+        report.rows_written +=
+            family_rows::replace_rows(tx, family, scope, &records.bytes, bound_values).await?;
         report.families_rederived += 1;
         if content_changed && relation_rows::OWNERS.contains(&family) {
             if let Some(node_type) = family.node_type() {
@@ -367,7 +395,8 @@ async fn rederive_scope(
         content.insert(key, fresh);
     }
     if !moved_owners.is_empty() {
-        relation_rows::replace_rows(tx, &records.relations, scope, &moved_owners).await?;
+        relation_rows::replace_rows(tx, &records.relations, scope, &moved_owners, bound_values)
+            .await?;
     }
     Ok(())
 }
@@ -375,8 +404,10 @@ async fn rederive_scope(
 async fn rebuild(
     guard: &publication::PublicationGuard,
     transaction: Lent,
+    bound_values: usize,
 ) -> anyhow::Result<CatchUpReport> {
-    let (report, (serial, digest)) = super::rebuild_with_guard(guard, transaction).await?;
+    let (report, (serial, digest)) =
+        super::rebuild_with_guard(guard, transaction, bound_values).await?;
     Ok(CatchUpReport {
         serial,
         digest,

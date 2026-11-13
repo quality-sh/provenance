@@ -4,15 +4,22 @@
 //! The cases use only the port: the SQL that they run is the SQL that the
 //! projection runs, so a store that passes them can hold the projection.
 //! No case runs one port call inside the work of another, and no work
-//! waits on anything but its own transaction, so a store whose
-//! transaction is one synchronous call, as a Durable Object's is, can
-//! pass them.
+//! waits on anything but its own transaction.
 
-use super::{is_missing_table, ReadDatabase, SqlRow, SqlValue, Statement, Unopened};
-use std::future::Future;
-use std::pin::pin;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::task::Poll;
+use super::{
+    is_missing_table, ReadDatabase, SqlFuture, SqlRow, SqlValue, Statement, Transaction, Unopened,
+};
+
+pub mod handles;
+pub mod limits;
+#[cfg(any(test, feature = "test-fixture"))]
+mod other;
+#[cfg(feature = "host")]
+pub mod projection;
+pub mod sequence;
+
+#[cfg(any(test, feature = "test-fixture"))]
+pub use other::{Other, OtherTransaction};
 
 /// One adapter under test.
 pub trait Harness {
@@ -20,6 +27,35 @@ pub trait Harness {
     fn database(&self) -> &dyn ReadDatabase;
     /// A second adapter over the same store, as a later process opens it.
     fn reopen(&self) -> Box<dyn ReadDatabase>;
+    /// Whether a write can commit while a read of the store is open.
+    ///
+    /// This answer changes one check of one case,
+    /// [`sequence::a_read_answers_from_one_committed_state`]: with `true`,
+    /// the write that the case starts beside the read must commit before
+    /// the read ends. With `false`, the case does not check when that write
+    /// commits. A store whose read runs to its end in one call says no, and
+    /// then the write runs after the read.
+    ///
+    /// The rest of that case runs with either answer: the write starts
+    /// after the first statement of the read, every row that the read gets
+    /// must be from the state committed before it, the write must succeed,
+    /// and a later read must find the rows of both writes. So a store whose
+    /// read sees a write that commits while it is open fails the case with
+    /// either answer. No other case reads this answer.
+    fn reads_interleave(&self) -> bool {
+        true
+    }
+    /// Makes the commit of the write `transaction` fail, so that the write
+    /// keeps nothing.
+    ///
+    /// The work commits after this call, as every write work does. A store
+    /// that commits in the work fails that commit; a store that makes its
+    /// commit durable after the work fails it there.
+    ///
+    /// This call itself must succeed: when it returns an error, the commit
+    /// case fails, because the write then fails in a step of its work and
+    /// not at its commit.
+    fn fail_commit<'a>(&'a self, transaction: &'a mut Transaction) -> SqlFuture<'a, ()>;
 }
 
 fn statement(sql: &str, values: Vec<SqlValue>) -> Statement {
@@ -34,10 +70,8 @@ async fn write(database: &dyn ReadDatabase, statements: Vec<Statement>) -> anyho
     database
         .write(Box::new(move |mut transaction| {
             Box::pin(async move {
-                for statement in &statements {
-                    transaction
-                        .execute(&statement.sql, &statement.values)
-                        .await?;
+                for Statement { sql, values } in statements {
+                    transaction.execute(&sql, values).await?;
                 }
                 transaction.commit().await
             })
@@ -52,7 +86,7 @@ async fn fetch(database: &dyn ReadDatabase, sql: &'static str) -> Vec<SqlRow> {
     database
         .read(Box::new(move |mut transaction| {
             Box::pin(async move {
-                *slot = transaction.fetch(sql, &[]).await?;
+                *slot = transaction.fetch(sql, Vec::new()).await?;
                 Ok(())
             })
         }))
@@ -74,46 +108,6 @@ fn integers(rows: &[SqlRow]) -> Vec<i64> {
 #[derive(Debug, thiserror::Error)]
 #[error("the work failed after its commit")]
 struct WorkFailed;
-
-/// Runs both futures until both end. Each poll polls `first` before
-/// `second`.
-async fn both<A, B>(first: impl Future<Output = A>, second: impl Future<Output = B>) -> (A, B) {
-    let (mut first, mut second) = (pin!(first), pin!(second));
-    let (mut a, mut b) = (None, None);
-    std::future::poll_fn(|context| {
-        if a.is_none() {
-            if let Poll::Ready(value) = first.as_mut().poll(context) {
-                a = Some(value);
-            }
-        }
-        if b.is_none() {
-            if let Poll::Ready(value) = second.as_mut().poll(context) {
-                b = Some(value);
-            }
-        }
-        match (a.take(), b.take()) {
-            (Some(a), Some(b)) => Poll::Ready((a, b)),
-            (left, right) => {
-                (a, b) = (left, right);
-                Poll::Pending
-            }
-        }
-    })
-    .await
-}
-
-/// Ends when `flag` is on.
-async fn until(flag: &AtomicBool) {
-    std::future::poll_fn(|context| {
-        if flag.load(Ordering::SeqCst) {
-            Poll::Ready(())
-        } else {
-            context.waker().wake_by_ref();
-            Poll::Pending
-        }
-    })
-    .await;
-}
 
 /// A read of a database that nothing has written fails with [`Unopened`]
 /// before its work starts, and makes nothing: a second read fails in the
@@ -162,7 +156,7 @@ pub async fn a_missing_table_is_reported_as_missing<H: Harness>(harness: H) {
                     "SELECT n FROM absent_table",
                     "SELECT absent_column FROM present",
                 ] {
-                    let failed = transaction.fetch(sql, &[]).await.unwrap_err();
+                    let failed = transaction.fetch(sql, Vec::new()).await.unwrap_err();
                     slot.push(is_missing_table(&failed));
                 }
                 Ok(())
@@ -243,7 +237,7 @@ pub async fn a_write_that_fails_after_its_commit_keeps_the_commit<H: Harness>(ha
         .write(Box::new(|mut transaction| {
             Box::pin(async move {
                 transaction
-                    .execute("INSERT INTO kept (n) VALUES (1)", &[])
+                    .execute("INSERT INTO kept (n) VALUES (1)", Vec::new())
                     .await?;
                 transaction.commit().await?;
                 Err(WorkFailed.into())
@@ -273,7 +267,7 @@ pub async fn a_read_keeps_no_writes<H: Harness>(harness: H) {
                 // A store may refuse the statement; either way it keeps
                 // nothing.
                 let _ = transaction
-                    .execute("INSERT INTO kept (n) VALUES (1)", &[])
+                    .execute("INSERT INTO kept (n) VALUES (1)", Vec::new())
                     .await;
                 Ok(())
             })
@@ -300,7 +294,7 @@ pub async fn a_write_without_its_commit_keeps_nothing<H: Harness>(harness: H) {
         .write(Box::new(|mut transaction| {
             Box::pin(async move {
                 transaction
-                    .execute("INSERT INTO kept (n) VALUES (1)", &[])
+                    .execute("INSERT INTO kept (n) VALUES (1)", Vec::new())
                     .await?;
                 Ok(())
             })
@@ -310,65 +304,6 @@ pub async fn a_write_without_its_commit_keeps_nothing<H: Harness>(harness: H) {
     assert_eq!(
         fetch(database, "SELECT n FROM kept").await,
         Vec::<SqlRow>::new()
-    );
-}
-
-/// Every row that a read gets is from the state that was committed when
-/// its first statement ran.
-///
-/// A write commits while the read runs. It runs beside the read, never
-/// inside its work: it starts after
-/// the first statement of the read, and the read goes on until the write
-/// has committed, or for a fixed number of statements. A store that runs a
-/// read to its end in one call runs the write after it.
-pub async fn a_read_answers_from_one_committed_state<H: Harness>(harness: H) {
-    const MOST_STATEMENTS: usize = 1000;
-    let database = harness.database();
-    write(
-        database,
-        vec![
-            statement("CREATE TABLE pinned (n INTEGER)", Vec::new()),
-            statement("INSERT INTO pinned (n) VALUES (1)", Vec::new()),
-        ],
-    )
-    .await
-    .unwrap();
-    let (first_read, committed) = (AtomicBool::new(false), AtomicBool::new(false));
-    let (first_read, committed) = (&first_read, &committed);
-    let mut seen = Vec::new();
-    let slot = &mut seen;
-    let read = database.read(Box::new(move |mut transaction| {
-        Box::pin(async move {
-            let sql = "SELECT n FROM pinned ORDER BY n";
-            slot.push(integers(&transaction.fetch(sql, &[]).await?));
-            first_read.store(true, Ordering::SeqCst);
-            for _ in 0..MOST_STATEMENTS {
-                if committed.load(Ordering::SeqCst) {
-                    break;
-                }
-                slot.push(integers(&transaction.fetch(sql, &[]).await?));
-            }
-            slot.push(integers(&transaction.fetch(sql, &[]).await?));
-            Ok(())
-        })
-    }));
-    let later = async {
-        until(first_read).await;
-        let written = write(
-            database,
-            vec![statement("INSERT INTO pinned (n) VALUES (2)", Vec::new())],
-        )
-        .await;
-        committed.store(true, Ordering::SeqCst);
-        written
-    };
-    let (read, written) = both(read, later).await;
-    read.unwrap();
-    written.unwrap();
-    assert!(seen.iter().all(|rows| rows == &[1]), "{seen:?}");
-    assert_eq!(
-        integers(&fetch(database, "SELECT n FROM pinned ORDER BY n").await),
-        vec![1, 2]
     );
 }
 
@@ -397,12 +332,12 @@ pub async fn an_attempt_keeps_all_or_none<H: Harness>(harness: H) {
                     )
                 };
                 transaction
-                    .execute("INSERT INTO attempted (n) VALUES (1)", &[])
+                    .execute("INSERT INTO attempted (n) VALUES (1)", Vec::new())
                     .await?;
                 let failed = transaction.attempt(&[insert(2), insert(1)]).await?;
                 let kept = transaction.attempt(&[insert(3), insert(4)]).await?;
                 transaction
-                    .execute("INSERT INTO attempted (n) VALUES (5)", &[])
+                    .execute("INSERT INTO attempted (n) VALUES (5)", Vec::new())
                     .await?;
                 *slot = vec![failed.is_err(), kept.is_err()];
                 transaction.commit().await

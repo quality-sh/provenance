@@ -5,6 +5,10 @@
 //! the `relations` table as a `RelationSource` the traversal core walks.
 //! Nothing here touches a pool: every statement runs on the snapshot's
 //! one transaction.
+//!
+//! The readers build without `host`, but only the queries, which need
+//! `host`, call most of them.
+#![cfg_attr(not(feature = "host"), allow(dead_code))]
 
 mod discussions;
 mod document;
@@ -17,8 +21,5 @@ mod rows;
 pub use front::SqlFront;
 pub use records::kind_of;
 #[cfg(test)]
+#[cfg(feature = "host")]
 pub(crate) use rows::{column_values, select_columns};
-
-/// The most bind parameters one statement takes: `SQLite` bounds them,
-/// and a frontier or an id list is chunked to this size.
-const BIND_CHUNK: usize = 500;
