@@ -324,7 +324,7 @@ fn adoption_conflicts_when_definition_or_source_relationship_differs() {
             .changes
             .iter()
             .any(|change| change.field == "statement" || change.field == "description"));
-        assert!(store.apply_typed_spec(&scope, mismatch.clone()).is_err());
+        assert!(store.apply_typed_spec(&scope, mismatch).is_err());
         assert_eq!(std::fs::read(&path).unwrap(), before);
     }
 

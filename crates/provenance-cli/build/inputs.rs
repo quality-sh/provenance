@@ -81,13 +81,11 @@ pub fn absolute(root: &Path, path: &str) -> PathBuf {
 }
 
 fn sorted_entries(directory: &Path) -> Vec<PathBuf> {
-    let mut entries: Vec<PathBuf> = std::fs::read_dir(directory)
-        .map(|entries| {
-            entries
-                .filter_map(|entry| Some(entry.ok()?.path()))
-                .collect()
-        })
-        .unwrap_or_default();
+    let mut entries: Vec<PathBuf> = std::fs::read_dir(directory).map_or_default(|entries| {
+        entries
+            .filter_map(|entry| Some(entry.ok()?.path()))
+            .collect()
+    });
     entries.sort();
     entries
 }

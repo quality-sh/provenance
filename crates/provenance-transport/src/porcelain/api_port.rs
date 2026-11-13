@@ -38,7 +38,8 @@ impl ApiPort for HostApiPort {
 
 impl HostApiPort {
     /// Refuse a missing or unexpected body as the HTTP router does: a route
-    /// that expects a body and gets none reports `malformed_json`.
+    /// that expects a body and gets none reports `malformed_json`. A route
+    /// that takes no body refuses the input argument.
     fn check_body(
         &self,
         method: &axum::http::Method,
@@ -55,7 +56,7 @@ impl HostApiPort {
             input.body.is_some(),
         ) {
             (true, false) => Err(api_error(&crate::routing::malformed_json())),
-            (false, true) => Err(ApiError::invalid_options(Some("body"))),
+            (false, true) => Err(ApiError::invalid_options(Some("input"))),
             _ => Ok(()),
         }
     }

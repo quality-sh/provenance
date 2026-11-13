@@ -1,4 +1,5 @@
 use super::{query, schema, Definition, Registration, SelectorBinding};
+use serde_json::Value;
 
 pub(super) fn request_schemas(definitions: &mut [Definition]) {
     for definition in definitions {
@@ -14,7 +15,7 @@ pub(super) fn request_schemas(definitions: &mut [Definition]) {
                 &query_route.response.raw_schema,
             );
         }
-        hide_bound_fields(definition);
+        publish_body_fields(definition);
     }
 }
 
@@ -65,39 +66,20 @@ fn derive_bound_parameter_schemas(registration: &mut Registration) {
     }
 }
 
-fn hide_bound_fields(definition: &mut Definition) {
-    let registration = &definition.registration;
-    let mut fields = registration
-        .request
+/// The request fields that the route fills from its path, its bound context and its headers.
+fn bound_fields(registration: &Registration) -> Vec<&'static str> {
+    let request = &registration.request;
+    let mut fields = request
         .path
         .iter()
         .map(|binding| binding.field)
         .collect::<Vec<_>>();
-    fields.extend(
-        registration
-            .request
-            .fixed
-            .iter()
-            .map(|binding| binding.field),
-    );
-    fields.extend(registration.request.scope_field);
-    fields.extend(
-        registration
-            .request
-            .parent
-            .iter()
-            .map(|binding| binding.field),
-    );
-    fields.extend(
-        registration
-            .request
-            .selector
-            .iter()
-            .map(|binding| match binding {
-                SelectorBinding::Discussion { field, .. }
-                | SelectorBinding::Legacy { field, .. } => *field,
-            }),
-    );
+    fields.extend(request.fixed.iter().map(|binding| binding.field));
+    fields.extend(request.scope_field);
+    fields.extend(request.parent.iter().map(|binding| binding.field));
+    fields.extend(request.selector.iter().map(|binding| match binding {
+        SelectorBinding::Discussion { field, .. } | SelectorBinding::Legacy { field, .. } => *field,
+    }));
     fields.extend(
         registration
             .controls
@@ -105,10 +87,26 @@ fn hide_bound_fields(definition: &mut Definition) {
             .iter()
             .map(|binding| binding.field),
     );
-    fields.push("action");
-    fields.sort_unstable();
-    fields.dedup();
-    for field in fields {
-        schema::hide_bound_request_field(&mut definition.registration.request.schema, field);
+    fields
+}
+
+/// A route that gets each input field from its path and its bound context publishes no
+/// request body. Each other route publishes a body without the fields that the route fills.
+#[provenance_macros::rule("rule_route_without_body_fields_takes_no_body")]
+fn publish_body_fields(definition: &mut Definition) {
+    let bound = bound_fields(&definition.registration);
+    let request = &mut definition.registration.request;
+    let fields = request
+        .raw
+        .as_ref()
+        .and_then(|raw| raw.get("properties"))
+        .and_then(Value::as_object);
+    let from_body = |field: &String| !bound.contains(&field.as_str());
+    if !fields.is_some_and(|fields| fields.keys().any(from_body)) {
+        request.schema = None;
+        return;
+    }
+    for field in bound.into_iter().chain(["action"]) {
+        schema::hide_bound_request_field(&mut request.schema, field);
     }
 }
