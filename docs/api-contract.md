@@ -218,6 +218,11 @@ The CLI reports when the current Proposal is already pending and names
 `provenance <record-id> get --view review` as the read command. A guarded update
 after a rejection creates the replacement submission.
 
+A write returns 409 with `state_changed` when the stored state changed after
+the write read it and before the write landed. The write saved nothing. The
+`message` field gives the next step: read the records again, then send the
+write again. The server does not repeat the write.
+
 ## 6. Compatibility tuple and gate
 
 One authoritative compatibility tuple contains `wire` and `read_derivation`.

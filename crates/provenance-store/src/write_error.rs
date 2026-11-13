@@ -72,6 +72,11 @@ pub enum WriteFailure {
     DiscussionClosed,
     DiscussionResolved,
     DiscussionIntentChanged,
+    /// The stored state changed after the write read it, so the write
+    /// saved nothing. `message` gives the next step.
+    StateChanged {
+        message: String,
+    },
     StatementRejected {
         diagnostics: Vec<TypedSpecDiagnostic>,
     },
@@ -179,14 +184,24 @@ pub(crate) fn publication_started(error: anyhow::Error) -> anyhow::Error {
 }
 
 /// The error of a write set that did not land. A failure after landing
-/// began is a [`PublicationStarted`]; any other failure landed no key.
+/// began is a [`PublicationStarted`]; any other failure landed no key. A
+/// moved base is a [`WriteFailure::StateChanged`] that keeps both revisions
+/// in its native chain.
+#[provenance_macros::rule("rule_moved_base_refusal_is_state_changed")]
 pub(crate) fn publish_failure(failure: crate::storage::PublishFailure) -> anyhow::Error {
     match failure {
         crate::storage::PublishFailure::Started(error) => publication_started(error),
         crate::storage::PublishFailure::Refused(error) => error,
-        moved @ crate::storage::PublishFailure::BaseMoved { .. } => moved.into(),
+        moved @ crate::storage::PublishFailure::BaseMoved { .. } => SourceFailure::wrap(
+            WriteFailure::StateChanged {
+                message: STATE_CHANGED.to_owned(),
+            },
+            moved,
+        ),
     }
 }
+
+const STATE_CHANGED: &str = "The stored state changed after this write read it, so the write saved nothing. Read the records again, then send the write again.";
 
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
@@ -297,6 +312,7 @@ impl WriteError {
             | WriteFailure::DiscussionClosed
             | WriteFailure::DiscussionResolved
             | WriteFailure::DiscussionIntentChanged
+            | WriteFailure::StateChanged { .. }
             | WriteFailure::ClaimConflict { .. }
             | WriteFailure::AlreadyComplete => 409,
             _ => 400,
