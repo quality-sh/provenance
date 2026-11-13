@@ -205,6 +205,7 @@ impl Repository {
                 kept_scans: Arc::clone(&self.inner.kept_scans),
             }),
             section: self.section.clone(),
+            reads: self.reads.clone(),
         }
     }
 
