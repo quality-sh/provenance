@@ -64,10 +64,11 @@ impl Harness for Git {
         git(root, &[], &["init", "-q"], None);
         let mut ids: BTreeMap<&'static str, String> = BTreeMap::new();
         for commit in commits {
-            match commit.parents.first() {
-                Some(first) => git(root, &[], &["read-tree", &ids[first]], None),
-                None => git(root, &[], &["read-tree", "--empty"], None),
-            };
+            let base = commit
+                .parents
+                .first()
+                .map_or("--empty", |first| ids[first].as_str());
+            git(root, &[], &["read-tree", base], None);
             for (path, text) in commit.changes {
                 match text {
                     Some(text) => {
@@ -124,7 +125,7 @@ impl Harness for Git {
     }
 }
 
-fn git_harness() -> Git {
+const fn git_harness() -> Git {
     Git {
         temps: std::sync::Mutex::new(Vec::new()),
     }
