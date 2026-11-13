@@ -9,13 +9,13 @@ use provenance_store::layout::ProvenanceLayout;
 use provenance_store::operations::stamp::stored_revision;
 use provenance_store::read_database::contract::{self, Harness, Other};
 use provenance_store::read_database::file::FileReadDatabase;
-#[path = "read_database_contract/lost_commit.rs"]
-mod lost_commit;
-
 use provenance_store::read_database::{
     OverBudget, ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement,
     Transaction, WriteWork,
 };
+
+#[path = "read_database_contract/lost_commit.rs"]
+mod lost_commit;
 
 /// A file database in a new cache directory of its own.
 struct File {
@@ -238,6 +238,33 @@ port_cases!(
 #[should_panic(expected = "assertion `left == right` failed")]
 async fn the_limit_case_refuses_an_adapter_that_ignores_limit() {
     contract::limits::a_limit_bounds_the_rows(NoLimit::default()).await;
+}
+
+/// The file adapter with a harness whose `fail_commit` gives an error.
+struct HookFails(File);
+
+impl Harness for HookFails {
+    fn database(&self) -> &dyn ReadDatabase {
+        &self.0.database
+    }
+
+    fn reopen(&self) -> Box<dyn ReadDatabase> {
+        self.0.reopen()
+    }
+
+    fn fail_commit<'a>(&'a self, _transaction: &'a mut Transaction) -> SqlFuture<'a, ()> {
+        Box::pin(async { Err::<(), _>(anyhow::anyhow!("the harness has no way to fail a commit")) })
+    }
+}
+
+/// The commit case finds a harness that cannot make a commit fail and
+/// gives an error in place of the failed commit.
+#[tokio::test]
+#[should_panic(
+    expected = "the harness makes the commit fail without an error: the harness has no way to fail a commit"
+)]
+async fn the_commit_case_refuses_a_harness_whose_hook_fails() {
+    contract::sequence::a_write_whose_commit_fails_keeps_nothing(HookFails(File::default())).await;
 }
 
 #[tokio::test]
