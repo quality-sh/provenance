@@ -73,25 +73,44 @@ fn copy_state(source: &camino::Utf8Path, destination: &camino::Utf8Path) {
 #[verifies("rule_message_time_follows_write_clock", property)]
 fn generated_message_times_follow_the_clock_or_increase_the_latest() {
     use crate::state_store::message_ids::next_message_time;
+    const LARGEST: i64 = (1 << 53) - 1;
     let mut seed = 0x1234_5678_90ab_cdef_u64;
+    let check = |clock: i64, latest: Option<i64>| {
+        let result = next_message_time(clock, latest);
+        let expected = latest.map_or(Some(clock), |latest| {
+            latest.checked_add(1).map(|next| clock.max(next))
+        });
+        match expected.filter(|time| (-LARGEST..=LARGEST).contains(time)) {
+            Some(time) => assert_eq!(result.unwrap(), time),
+            None => assert!(result
+                .unwrap_err()
+                .to_string()
+                .contains("timestamp overflow")),
+        }
+    };
     for _ in 0..10_000 {
         seed ^= seed << 13;
         seed ^= seed >> 7;
         seed ^= seed << 17;
-        let clock = i64::from_ne_bytes(seed.to_ne_bytes());
-        let latest = clock.saturating_add(i64::from(i8::from_ne_bytes([seed.to_ne_bytes()[7]])));
-        for latest in [None, Some(latest), Some(i64::MAX)] {
-            let result = next_message_time(clock, latest);
-            if latest == Some(i64::MAX) {
-                assert!(result
-                    .unwrap_err()
-                    .to_string()
-                    .contains("timestamp overflow"));
-            } else {
-                let time = result.unwrap();
-                assert_eq!(time, latest.map_or(clock, |latest| clock.max(latest + 1)));
+        let wide = i64::from_ne_bytes(seed.to_ne_bytes());
+        let step = i64::from(i8::from_ne_bytes([seed.to_ne_bytes()[7]]));
+        // The second clock is in the range: a shift of 11 bits leaves a
+        // magnitude of at most 2^52.
+        for clock in [wide, wide >> 11] {
+            for latest in [None, Some(clock.saturating_add(step)), Some(i64::MAX)] {
+                check(clock, latest);
             }
         }
+    }
+    for (clock, latest) in [
+        (LARGEST, None),
+        (LARGEST, Some(LARGEST)),
+        (LARGEST + 1, None),
+        (-LARGEST, Some(-LARGEST - 1)),
+        (-LARGEST - 1, None),
+        (0, Some(LARGEST - 1)),
+    ] {
+        check(clock, latest);
     }
 }
 

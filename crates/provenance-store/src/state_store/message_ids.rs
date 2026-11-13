@@ -10,14 +10,16 @@ pub fn new_message_id(ids: &dyn IdSource) -> StableId {
 }
 
 /// Message times follow the write clock and increase within a scope.
+///
+/// A time past the range of the read database, ±(2^53 − 1), is refused.
 #[rule("rule_message_time_follows_write_clock")]
 pub fn next_message_time(now_ms: i64, latest: Option<i64>) -> anyhow::Result<i64> {
-    match latest {
-        Some(latest) if latest >= now_ms => latest
-            .checked_add(1)
-            .ok_or_else(|| crate::refusal::fault!("Message timestamp overflow")),
-        _ => Ok(now_ms),
-    }
+    let time = match latest {
+        Some(latest) if latest >= now_ms => latest.checked_add(1),
+        _ => Some(now_ms),
+    };
+    time.filter(|time| provenance_core::model::exact_integer::is_exact(*time))
+        .ok_or_else(|| crate::refusal::fault!("Message timestamp overflow"))
 }
 
 /// A line of a shard file. The first line is 1.
