@@ -110,3 +110,121 @@ fn publish_body_fields(definition: &mut Definition) {
         schema::hide_bound_request_field(&mut request.schema, field);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::publish_body_fields;
+    use crate::{
+        schema, ContextKind, Definition, HandlerBinding, HeaderBinding, HttpMethod, PathBinding,
+        Registration, ResponseBinding, ResponseKind,
+    };
+    use serde_json::{json, Value};
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+
+    /// A POST route of the operation `example`. The path fills `id`, the bound context fills
+    /// `scope_id`, and the `If-Match` header fills `expected_etag`.
+    fn route(raw: &Value) -> Definition {
+        let handler = HandlerBinding {
+            operation: "example",
+            context: ContextKind::Scoped,
+            mutates: true,
+            http_statuses: Vec::new(),
+            failure_schema: Value::Null,
+        };
+        let response = ResponseBinding::direct(ResponseKind::Result, Value::Null, Value::Null);
+        let body = schema::request_envelope(raw.clone());
+        let mut registration = Registration::new(handler, Some(body), response);
+        registration.request.raw = Some(raw.clone());
+        registration.request.path = vec![PathBinding {
+            parameter: "id",
+            field: "id",
+        }];
+        registration.request.scope_field = Some("scope_id");
+        registration.controls.headers.push(HeaderBinding {
+            name: "If-Match",
+            field: "expected_etag",
+            trim_quotes: true,
+            numeric: false,
+            required: true,
+        });
+        Definition {
+            name: "example-route",
+            operation_id: "exampleRoute",
+            method: HttpMethod::Post,
+            path: "/examples/{id}",
+            description: "An example.",
+            registration,
+        }
+    }
+
+    /// The request body that the route publishes for the request type `raw`, or the message
+    /// of the refusal that stops the catalog construction.
+    fn published(raw: &Value) -> Result<Option<Value>, String> {
+        let mut definition = route(raw);
+        let outcome = catch_unwind(AssertUnwindSafe(|| publish_body_fields(&mut definition)));
+        match outcome {
+            Ok(()) => Ok(definition.registration.request.schema),
+            Err(refusal) => Err(refusal
+                .downcast_ref::<String>()
+                .cloned()
+                .expect("the refusal has a message")),
+        }
+    }
+
+    fn closed(properties: &Value) -> Value {
+        json!({"type":"object","additionalProperties":false,"properties":properties})
+    }
+
+    /// An implementation aid with no Rule binding: the catalog of the crate holds no request
+    /// of these forms with these bindings, so only this step can show them. The unit type has
+    /// no field. An object that refuses each field that its `properties` do not name has
+    /// those properties. The route decides its body from them.
+    #[test]
+    fn a_request_that_shows_its_fields_decides_the_body() {
+        let field = json!({"type":"string"});
+        for raw in [
+            json!({"type":"null"}),
+            json!({"type":"object","additionalProperties":false}),
+            closed(&json!({"id":field,"scope_id":field})),
+            closed(&json!({"id":field,"scope_id":field,"expected_etag":field})),
+        ] {
+            assert_eq!(published(&raw), Ok(None), "{raw}");
+        }
+
+        let with_title = closed(&json!({"id":field,"expected_etag":field,"title":field}));
+        let mut with_condition = with_title.clone();
+        with_condition["anyOf"] = json!([{"required":["title"]},{"required":["expected_etag"]}]);
+        for raw in [with_title, with_condition] {
+            let body = published(&raw).unwrap().expect("the route has a body");
+            let data = body["properties"]["data"]["properties"].as_object().unwrap();
+            assert_eq!(data.keys().collect::<Vec<_>>(), ["title"], "{raw}");
+        }
+    }
+
+    /// An implementation aid with no Rule binding: a request of one of these forms stops the
+    /// construction of the catalog, so the catalog of the crate cannot hold one. A field of
+    /// such a request can come from a keyword that is not its top-level `properties`, so the
+    /// route does not decide its body. The refusal names the operation.
+    #[test]
+    fn a_request_that_does_not_show_its_fields_stops_catalog_construction() {
+        let field = json!({"type":"string"});
+        let inner = closed(&json!({"title":field}));
+        let id = json!({"id":field});
+        let pattern = json!({"^x":field});
+        for raw in [
+            json!({"$ref":"#/$defs/Inner","$defs":{"Inner":inner}}),
+            json!({"allOf":[inner]}),
+            json!({"oneOf":[inner,{"type":"null"}]}),
+            json!({"type":"object","properties":id,"oneOf":[{"properties":{"title":field}}]}),
+            json!({"type":"object","properties":id}),
+            json!({"type":"object","additionalProperties":field,"properties":id}),
+            json!({"type":"object","additionalProperties":false,"patternProperties":pattern}),
+            json!({"type":["object","null"],"additionalProperties":false,"properties":id}),
+            json!({"type":"object","additionalProperties":false,"properties":[]}),
+            json!({"type":"array","items":field}),
+        ] {
+            let refusal = published(&raw).expect_err(&raw.to_string());
+            assert!(refusal.contains("operation `example`"), "{refusal}");
+        }
+    }
+}

@@ -189,4 +189,19 @@ mod tests {
             &QueryRequestBinding::default(),
         );
     }
+
+    /// The fields of this request are in the choices of a `oneOf`, so the query parameters of
+    /// the route are not known.
+    #[test]
+    #[should_panic(expected = "does not show its fields")]
+    fn a_query_request_that_does_not_show_its_fields_refuses_catalog_construction() {
+        let schema = json!({
+            "oneOf": [{"type": "object", "properties": {"text": {"type": "string"}}}]
+        });
+        parameters(
+            &schema,
+            &RequestBinding::default(),
+            &QueryRequestBinding::default(),
+        );
+    }
 }
