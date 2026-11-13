@@ -1,7 +1,7 @@
 //! A time field or a Discussion version past the range of the read
 //! database, ±(2^53 − 1), in a committed record fails as a malformed field
-//! fails: `check` and a read refuse with the file and the line of the
-//! record, and a read gives `invalid_state_file`.
+//! fails: `check` refuses with the file and the line of the record, and a
+//! read or a write over the record refuses as over a malformed record.
 //!
 //! No Rule: an implementation aid. It compares the refusal with the
 //! refusal of a malformed field, so it holds the place of the range check
@@ -149,21 +149,32 @@ fn masked(case: &Case, args: &[&str]) -> (Option<i32>, String, String, String) {
     )
 }
 
+/// What `args` over the record past the range give, beside the output of
+/// the malformed record.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Refusal {
+    /// `check` names the file and the value.
+    Check,
+    /// `invalid_state_file` with the file and the value.
+    Located,
+    /// The kind `kind`, as over the malformed record.
+    Kind(&'static str),
+}
+
 /// `args` over `past` and over `malformed` give the same exit code and
-/// output, with the parse messages left out. Over `past`, the code is 1,
-/// standard error names `file` and `value`, and a read or a write gives
-/// `invalid_state_file`.
-fn fails_as_malformed(past: &Case, malformed: &Case, args: &[&str], file: &str, value: &str) {
+/// output, with the parse messages left out. Over `past`, the code is 1 and
+/// standard error holds `refusal`.
+fn fails_as_malformed(past: &Case, malformed: &Case, args: &[&str], refusal: Refusal, file: &str) {
     let (past_code, past_out, past_err, past_text) = masked(past, args);
     let (code, out, err, _) = masked(malformed, args);
     assert_eq!(past_code, Some(1), "{args:?}: {past_text}");
-    assert!(past_text.contains(file), "{args:?}: {past_text}");
-    assert!(past_text.contains(value), "{args:?}: {past_text}");
-    assert_eq!(
-        past_text.contains("invalid_state_file"),
-        args[0] != "check",
-        "{args:?}: {past_text}"
-    );
+    let names_the_line = past_text.contains(file) && past_text.contains("9007199254740992");
+    let holds = match refusal {
+        Refusal::Check => names_the_line && !past_text.contains("invalid_state_file"),
+        Refusal::Located => names_the_line && past_text.contains("invalid_state_file"),
+        Refusal::Kind(kind) => past_text.contains(&format!("\"kind\":\"{kind}\"")),
+    };
+    assert!(holds, "{args:?}: {past_text}");
     assert_eq!(
         (past_code, past_out, past_err),
         (code, out, err),
@@ -205,7 +216,12 @@ fn a_committed_time_past_the_range_fails_as_a_malformed_field_fails() {
             "json",
         ][..],
     ] {
-        fails_as_malformed(&past, &malformed, args, "res.jsonl", "9007199254740992");
+        let refusal = if args[0] == "check" {
+            Refusal::Check
+        } else {
+            Refusal::Located
+        };
+        fails_as_malformed(&past, &malformed, args, refusal, "res.jsonl");
     }
 }
 
@@ -221,33 +237,33 @@ fn a_committed_discussion_version_past_the_range_fails_as_a_malformed_field_fail
         repo: &malformed,
         id: &malformed_id,
     };
-    for args in [
-        &["check", "--format", "json"][..],
-        &["<id>", "discussion", "--format", "json"][..],
-        &[
-            "<id>",
-            "reply",
-            "--expected-version",
-            "1",
-            "--body",
-            "again",
-            "--format",
-            "json",
-        ][..],
+    for (args, refusal) in [
+        (&["check", "--format", "json"][..], Refusal::Check),
+        (
+            &["<id>", "discussion", "--format", "json"][..],
+            Refusal::Kind("resource_not_found"),
+        ),
+        (
+            &[
+                "<id>",
+                "reply",
+                "--expected-version",
+                "1",
+                "--body",
+                "again",
+                "--format",
+                "json",
+            ][..],
+            Refusal::Located,
+        ),
     ] {
-        fails_as_malformed(
-            &past,
-            &malformed,
-            args,
-            "discussions.jsonl",
-            "9007199254740992",
-        );
+        fails_as_malformed(&past, &malformed, args, refusal, "discussions.jsonl");
     }
 }
 
 /// A repository with one Requirement review whose `changed_at` holds
 /// `value`, written by hand.
-fn requirement_review(value: Value) -> (tempfile::TempDir, String) {
+fn requirement_review(value: &Value) -> (tempfile::TempDir, String) {
     let (directory, repo) = support::review_paths::init();
     create_requirement(&repo, "req_a");
     let record = serde_json::json!({"scope_id":"default","id":"requirement_review_a",
@@ -265,8 +281,8 @@ fn requirement_review(value: Value) -> (tempfile::TempDir, String) {
 
 #[test]
 fn a_committed_review_time_past_the_range_fails_check_as_a_malformed_field_fails() {
-    let (_past_dir, past) = requirement_review(Value::from(1_i64 << 53));
-    let (_malformed_dir, malformed) = requirement_review(Value::from("soon"));
+    let (_past_dir, past) = requirement_review(&Value::from(1_i64 << 53));
+    let (_malformed_dir, malformed) = requirement_review(&Value::from("soon"));
     fails_as_malformed(
         &Case {
             repo: &past,
@@ -277,7 +293,7 @@ fn a_committed_review_time_past_the_range_fails_check_as_a_malformed_field_fails
             id: "requirement_review_a",
         },
         &["check", "--format", "json"],
+        Refusal::Check,
         "review.jsonl",
-        "9007199254740992",
     );
 }
