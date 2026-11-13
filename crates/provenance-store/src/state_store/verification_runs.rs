@@ -106,7 +106,9 @@ impl StateStore {
         let (path, lock_path) = self.run_files(scope_id);
         let rows: Vec<VerificationRun> = crate::jsonl::read_jsonl_locked(&path, &lock_path)?;
         let reviews = self.list_requirement_reviews(scope_id)?;
-        let named = reviews.iter().filter_map(|review| review.cleared_by_run.as_ref());
+        let named = reviews
+            .iter()
+            .filter_map(|review| review.cleared_by_run.as_ref());
         let taken: BTreeSet<&str> = rows
             .iter()
             .map(|row| &row.id)

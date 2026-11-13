@@ -115,8 +115,12 @@ fn a_start_in_a_scope_with_no_reviews_shard_sends_the_binding_as_a_one_key_set()
     std::fs::write(root.path().join("evidence.rs"), "fn expiry() {}\n").unwrap();
     let persistence = Arc::new(Refusing::new(|_| false));
     let clock = Arc::new(SystemClock);
-    let (_, repository) =
-        memory_repository_at(root.path(), memory::initial_state(), persistence.clone(), clock);
+    let (_, repository) = memory_repository_at(
+        root.path(),
+        memory::initial_state(),
+        persistence.clone(),
+        clock,
+    );
 
     begin_verification(&repository, begin_input()).unwrap();
 
@@ -171,8 +175,14 @@ fn review(id: &str, changed_at: i64) -> RequirementReview {
 #[verifies("rule_review_cleared_by_later_run", examples)]
 fn a_start_after_a_refused_set_clears_the_review() {
     let later = 4_102_444_800_000;
-    let reviews = [open_review(), serde_json::to_value(review("review_later", later)).unwrap()];
-    let start = start_with(Some(Failure::Refused), vec![(key(REVIEWS), shard(&reviews))]);
+    let reviews = [
+        open_review(),
+        serde_json::to_value(review("review_later", later)).unwrap(),
+    ];
+    let start = start_with(
+        Some(Failure::Refused),
+        vec![(key(REVIEWS), shard(&reviews))],
+    );
     start.failure();
     start.persistence.fail(None);
 

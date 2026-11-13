@@ -20,7 +20,9 @@ fn repository(root: &tempfile::TempDir) -> Repository {
 /// The ids of the rows of the runs cache.
 fn row_ids(repository: &Repository) -> Vec<String> {
     let runs = repository.store().list_verification_runs(&scope()).unwrap();
-    runs.into_iter().map(|run| run.id.as_str().to_owned()).collect()
+    runs.into_iter()
+        .map(|run| run.id.as_str().to_owned())
+        .collect()
 }
 
 #[test]
@@ -31,7 +33,10 @@ fn two_starts_at_one_clock_value_get_different_run_ids_and_both_rows_land() {
     let first = begin_verification(&repository, begin_input()).unwrap();
     let second = begin_verification(&repository, begin_input()).unwrap();
 
-    let ids = [format!("verification_{NOW}"), format!("verification_{NOW}_2")];
+    let ids = [
+        format!("verification_{NOW}"),
+        format!("verification_{NOW}_2"),
+    ];
     assert_eq!([first.id.as_str(), second.id.as_str()], ids);
     assert_eq!(row_ids(&repository), ids);
 }
@@ -48,7 +53,10 @@ fn a_start_after_the_runs_cache_is_deleted_takes_an_id_that_no_review_names() {
 
     let second = begin_verification(&repository, begin_input()).unwrap();
 
-    let reviews = repository.store().list_requirement_reviews(&scope()).unwrap();
+    let reviews = repository
+        .store()
+        .list_requirement_reviews(&scope())
+        .unwrap();
     assert_eq!(reviews[0].cleared_by_run.as_ref(), Some(&first.id));
     assert_eq!(second.id.as_str(), format!("verification_{NOW}_2"));
     assert_eq!(row_ids(&repository), [second.id.as_str()]);
