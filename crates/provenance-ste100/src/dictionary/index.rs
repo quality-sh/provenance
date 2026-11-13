@@ -298,11 +298,6 @@ mod tests {
             matches!(error, DictionaryIndexError::DigestMismatch { .. }),
             "unexpected error: {error:?}"
         );
-        let expected = format!(
-            "the index file at {} does not match its recorded data digest",
-            path.display()
-        );
-        assert_eq!(error.to_string(), expected);
         std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
     }
 
@@ -345,11 +340,6 @@ mod tests {
             matches!(error, DictionaryIndexError::IdentityMismatch { .. }),
             "unexpected error: {error:?}"
         );
-        let expected = format!(
-            "the index file at {} records a different import identity",
-            other_path.display()
-        );
-        assert_eq!(error.to_string(), expected);
         std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
     }
 
@@ -372,7 +362,7 @@ mod tests {
     fn a_source_match_does_not_accept_an_incomplete_index() {
         let directory = scratch_directory();
         let import = fixture_import();
-        let path = store_dictionary_index(&import, &directory).expect("store the index");
+        store_dictionary_index(&import, &directory).expect("store the index");
 
         let error = super::load_dictionary_index_for_source(&directory, b"synthetic source bytes")
             .expect_err("an incomplete index must not load for a new project");
@@ -381,12 +371,62 @@ mod tests {
             error,
             DictionaryIndexError::InvalidStructure { .. }
         ));
-        let expected = format!(
-            "the index file at {} has invalid dictionary structure: invalid Issue 9 dictionary \
-             structure: expected 878 approved and 1318 unapproved table rows; found 1 and 1",
-            path.display()
+        std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
+    }
+
+    /// A user reads these texts as the load problem of the dictionary status and in the
+    /// failure of a strict check. No Rule states the texts, so this test has no Rule binding.
+    /// It makes the cause of each index fault and shows the text of that fault.
+    #[test]
+    fn each_index_fault_gives_its_diagnostic() {
+        let directory = scratch_directory();
+        let import = fixture_import();
+        let path = super::index_path(&directory, &import.identity);
+        let at = path.display();
+        let load = || {
+            load_dictionary_index(&directory, &import.identity)
+                .expect_err("the index has a fault")
+                .to_string()
+        };
+
+        assert_eq!(load(), format!("no index file at {at}"));
+
+        std::fs::create_dir_all(&path).expect("put a directory at the index path");
+        let access = load();
+        let cause = access.strip_prefix(&format!("index file access at {at}: "));
+        assert!(cause.is_some_and(|cause| !cause.is_empty()), "{access}");
+        std::fs::remove_dir(&path).expect("remove the directory at the index path");
+
+        std::fs::write(&path, "{").expect("write a file that is not a JSON document");
+        let malformed = load();
+        let cause = malformed.strip_prefix(&format!("malformed index file at {at}: "));
+        assert!(cause.is_some_and(|cause| !cause.is_empty()), "{malformed}");
+
+        let mut other = fixture_import();
+        other.identity.extractor_version.push_str("-other");
+        let other_path = store_dictionary_index(&other, &directory).expect("store another index");
+        std::fs::copy(&other_path, &path).expect("put the other index at the index path");
+        assert_eq!(
+            load(),
+            format!("the index file at {at} records a different import identity")
         );
-        assert_eq!(error.to_string(), expected);
+
+        store_dictionary_index(&import, &directory).expect("store the index");
+        let stored = std::fs::read_to_string(&path).expect("read the index file");
+        std::fs::write(&path, stored.replace("AAWORD", "ABWORD")).expect("edit the index file");
+        assert_eq!(
+            load(),
+            format!("the index file at {at} does not match its recorded data digest")
+        );
+
+        store_dictionary_index(&import, &directory).expect("store the index again");
+        let rows = super::super::validate_entries(&import.entries).expect_err("two rows");
+        let error = super::load_dictionary_index_for_source(&directory, b"synthetic source bytes")
+            .expect_err("an incomplete index must not load");
+        assert_eq!(
+            error.to_string(),
+            format!("the index file at {at} has invalid dictionary structure: {rows}")
+        );
         std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
     }
 }
