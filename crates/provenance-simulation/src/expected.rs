@@ -41,11 +41,12 @@ impl Expected {
         Self { records }
     }
 
-    /// Applies a group of writes at point `at`. The writes of one group ran
-    /// at the same time, so they landed in an order that is not known. A
-    /// record that the group writes holds a value of one of its writes. When
-    /// one of these writes is not certain, the record can also hold a value
-    /// that it could hold before the group.
+    /// Applies a group of writes at point `at`.
+    ///
+    /// The writes of one group ran at the same time, so they landed in an
+    /// order that is not known. A record that the group writes holds a value
+    /// of one of its writes. When one of these writes is not certain, the
+    /// record can also hold a value that it could hold before the group.
     pub fn apply(&mut self, at: usize, group: impl IntoIterator<Item = Write>) {
         let mut changed: BTreeMap<Target, (bool, Vec<Value>)> = BTreeMap::new();
         for write in group {
@@ -68,8 +69,9 @@ impl Expected {
         }
     }
 
-    /// Breaks L3 when a record of `state` holds none of its values. The
-    /// text names a point as "after <point> <at>".
+    /// Breaks L3 when a record of `state` holds none of its values.
+    ///
+    /// The text names a point as "after <point> <at>".
     pub fn check(&self, state: &FinalRecords, point: &str) -> Result<(), Violation> {
         for (target, (at, values)) in &self.records {
             if values.iter().any(|value| state.holds(target, value)) {

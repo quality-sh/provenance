@@ -262,15 +262,17 @@ pub struct Task {
 }
 
 impl Operation {
-    /// The records that the operation writes when it lands, each with the
-    /// value that the record then holds. The value comes from the operation,
-    /// the engine that runs it and its number, so it is known also when the
-    /// answer is not.
+    /// The records that the operation writes when it lands, each with its value.
+    ///
+    /// The value comes from the operation, the engine that runs it and its
+    /// number, so it is known also when the answer is not.
     ///
     /// - A create makes the Requirement with no description, and an update
     ///   gives it the description of the operation.
-    /// - A claim holds the claim of its actor. The product refuses a claim of
-    ///   an archived Topic, so a claim that lands shows an open Topic.
+    /// - A claim holds the claim of its actor. The product refuses a claim
+    ///   of a Topic that is not open, and no operation of the simulation
+    ///   gives the Topic a status other than open or archived, so a claim
+    ///   that lands shows an open Topic.
     /// - A release clears the claim. The product refuses a release unless
     ///   the actor holds the claim, and an archive clears the claim, so a
     ///   release that lands shows an open Topic.
@@ -300,8 +302,9 @@ impl Operation {
     }
 }
 
-/// The value of each record that the laws follow, in the initial state:
-/// the first Requirement has no description, the Requirements that a create
+/// The value of each record that the laws follow, in the initial state.
+///
+/// The first Requirement has no description, the Requirements that a create
 /// makes do not exist, and the Topic is open with no claim.
 pub fn initial_values() -> Vec<(Target, Value)> {
     let mut values = vec![
