@@ -188,14 +188,7 @@ async fn rebuild_rows(
         current_schema::mark_current(tx).await?;
     }
     crate::test_probes::at("materialize_before_commit")?;
-    let rows = tx
-        .fetch(
-            "SELECT serial, digest FROM projection_revision ORDER BY serial DESC LIMIT 1",
-            Vec::new(),
-        )
-        .await?;
-    let row = crate::read_database::one_row(&rows)?;
-    let revision = (row.integer(0)?, row.text(1)?.to_owned());
+    let revision = latest_revision(tx).await?;
     transaction.commit().await?;
     crate::test_probes::at("materialize_after_commit")?;
 
@@ -206,6 +199,18 @@ async fn rebuild_rows(
         },
         revision,
     ))
+}
+
+/// The serial and digest of the newest projection revision.
+async fn latest_revision(tx: &mut Lent) -> anyhow::Result<(i64, String)> {
+    let rows = tx
+        .fetch(
+            "SELECT serial, digest FROM projection_revision ORDER BY serial DESC LIMIT 1",
+            Vec::new(),
+        )
+        .await?;
+    let row = crate::read_database::one_row(&rows)?;
+    Ok((row.integer(0)?, row.text(1)?.to_owned()))
 }
 
 fn one_integer(rows: &[crate::read_database::SqlRow]) -> anyhow::Result<i64> {
