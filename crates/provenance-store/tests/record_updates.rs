@@ -4,6 +4,7 @@ mod record_updates {
     mod descriptions;
     mod drafts;
     mod lifecycle;
+    mod native_etag;
     mod preservation;
     mod relationships;
     mod resolutions;

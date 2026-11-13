@@ -215,3 +215,27 @@ fn requirement_archive_includes_topic_and_question() {
         assert_eq!(record["archived_in_commit"]["commit"], COMMIT);
     }
 }
+
+#[test]
+#[verifies("rule_claim_cleared_on_exit", examples)]
+fn requirement_archive_clears_the_claim_of_its_topic() {
+    let (_directory, store, scope) = seeded_requirement_store();
+    store
+        .create_topic(
+            serde_json::from_value(json!({
+                "scope_id":scope, "id":"topic_child", "requirement_id":"req_overtime",
+                "title":"Stored history", "status":"open", "links":[]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    let topic_id = provenance_core::StableId::new("topic_child").unwrap();
+    let claimed = store.claim_topic(&scope, &topic_id, "agent-one").unwrap();
+    assert_eq!(claimed.topic.claimed_by.as_deref(), Some("agent-one"));
+    archive(&store, "req_overtime");
+    let topics = store.list_topics(&scope).unwrap();
+    assert_eq!(topics.len(), 1);
+    assert_eq!(topics[0].status, provenance_core::TopicStatus::Archived);
+    assert_eq!(topics[0].claimed_by, None);
+    assert_eq!(topics[0].claimed_at, None);
+}
