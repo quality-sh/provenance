@@ -3,6 +3,7 @@ name = "provenance-codegen"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+description = "Internal part of Provenance that generates the operation clients"
 license.workspace = true
 publish = false
 

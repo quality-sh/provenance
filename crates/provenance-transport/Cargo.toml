@@ -28,6 +28,7 @@ host = [
     "dep:pulldown-cmark",
     "dep:semver",
     "dep:url",
+    "dep:uuid",
     "dep:ureq",
     "dep:tokio-util",
     "dep:tokio",
@@ -62,7 +63,7 @@ semver = { workspace = true, optional = true }
 serde_ignored.workspace = true
 ureq = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
-uuid.workspace = true
+uuid = { workspace = true, optional = true }
 tokio-util = { version = "0.7", features = ["rt"], optional = true }
 tokio = { workspace = true, features = ["sync", "io-util", "io-std", "rt", "time"], optional = true }
 dunce = { workspace = true, optional = true }
