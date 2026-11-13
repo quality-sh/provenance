@@ -66,12 +66,8 @@ impl StateStore {
             insert_all(&batch.proposals, &mut proposals, landed)?;
             insert_all(&batch.assertions, &mut assertions, landed)?;
             insert_all(&batch.dispositions, &mut dispositions, landed)?;
-            overlay_records(&mut contributions, batch.contributions, |record| {
-                record.id.as_str()
-            });
-            overlay_records(&mut synthesis_packets, batch.synthesis_packets, |record| {
-                record.id.as_str()
-            });
+            overlay_records(&mut contributions, batch.contributions);
+            overlay_records(&mut synthesis_packets, batch.synthesis_packets);
             assertions_in_order.extend(batch.assertions);
         }
         let proposals = self.list_proposal_definitions(scope)?;

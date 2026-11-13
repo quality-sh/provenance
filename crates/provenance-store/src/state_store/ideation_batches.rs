@@ -316,16 +316,23 @@ fn merge_immutable<T: Clone + IdeationRecord>(
     Ok(())
 }
 
-pub(super) fn overlay_records<T>(records: &mut Vec<T>, incoming: Vec<T>, id: impl Fn(&T) -> &str) {
+/// Puts each of `incoming` in `records` with [`replace_or_append`], and then
+/// puts `records` in id order.
+pub(super) fn overlay_records<T: IdeationRecord>(records: &mut Vec<T>, incoming: Vec<T>) {
     for record in incoming {
-        if let Some(index) = records
-            .iter()
-            .position(|current| id(current) == id(&record))
-        {
-            records[index] = record;
-        } else {
-            records.push(record);
-        }
+        replace_or_append(records, record);
     }
-    records.sort_by(|a, b| id(a).cmp(id(b)));
+    records.sort_by(|a, b| a.immutable_id().cmp(b.immutable_id()));
+}
+
+/// Puts `record` in place of the record of `records` with its id, or at the
+/// end when no record has its id.
+pub(super) fn replace_or_append<T: IdeationRecord>(records: &mut Vec<T>, record: T) {
+    match records
+        .iter()
+        .position(|current| current.immutable_id() == record.immutable_id())
+    {
+        Some(index) => records[index] = record,
+        None => records.push(record),
+    }
 }
