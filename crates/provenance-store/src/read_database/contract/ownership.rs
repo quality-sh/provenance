@@ -11,18 +11,17 @@ use super::projection::{
 };
 use super::{fetch, statement, write, Harness};
 use crate::cache::catch_up_state;
-use crate::read_database::{SqlRow, SqlValue};
+use crate::read_database::{ReadDatabase, SqlRow, SqlValue};
 
-/// Writes `sql` to the database of the harness after a first catch-up,
-/// and then publishes a second Requirement with the statement of the
-/// first. Gives the objects and the rows of the table that the store does
-/// not own, as they were before the catch-up.
-async fn after_a_change<H: Harness>(
-    harness: &H,
+/// Writes `sql` to `database` after a first catch-up, and then publishes
+/// a second Requirement with the statement of the first. Gives the
+/// objects and the rows of the table that the store does not own, as they
+/// were before the catch-up.
+async fn after_a_change(
+    database: &dyn ReadDatabase,
     repository: &crate::repository::Repository,
     sql: &[&str],
 ) -> Vec<SqlRow> {
-    let database = harness.database();
     embedder_notes(database).await;
     let kept = foreign(database).await;
     let first = catch_up_state(repository).await.unwrap();
@@ -39,7 +38,7 @@ async fn after_a_change<H: Harness>(
 
 /// The next catch-up makes the projection again, with both Requirements,
 /// and a catch-up after it finds the schema current.
-async fn made_again<H: Harness>(harness: &H, repository: &crate::repository::Repository) {
+async fn made_again(database: &dyn ReadDatabase, repository: &crate::repository::Repository) {
     let pass = catch_up_state(repository).await.unwrap();
     assert_eq!(
         outcome(&pass),
@@ -47,7 +46,7 @@ async fn made_again<H: Harness>(harness: &H, repository: &crate::repository::Rep
         "the schema check did not ask for a rebuild"
     );
     assert_eq!(
-        requirement_ids(harness.database()).await,
+        requirement_ids(database).await,
         vec![SqlValue::from("req_first"), SqlValue::from("req_second")]
     );
     let unchanged = catch_up_state(repository).await.unwrap();
@@ -62,8 +61,9 @@ async fn made_again<H: Harness>(harness: &H, repository: &crate::repository::Rep
 /// it keeps its rows, its index and its trigger.
 pub async fn a_trigger_on_a_table_of_the_store_is_removed<H: Harness>(harness: H) {
     let repository = repository(&harness);
+    let database = harness.database();
     let kept = after_a_change(
-        &harness,
+        database,
         &repository,
         &[
             "CREATE TRIGGER embedder_rewrite AFTER INSERT ON requirements \
@@ -71,8 +71,7 @@ pub async fn a_trigger_on_a_table_of_the_store_is_removed<H: Harness>(harness: H
         ],
     )
     .await;
-    made_again(&harness, &repository).await;
-    let database = harness.database();
+    made_again(database, &repository).await;
     assert_eq!(
         fetch(
             database,
@@ -92,14 +91,14 @@ pub async fn a_trigger_on_a_table_of_the_store_is_removed<H: Harness>(harness: H
 /// its trigger.
 pub async fn an_index_on_a_table_of_the_store_is_removed<H: Harness>(harness: H) {
     let repository = repository(&harness);
+    let database = harness.database();
     let kept = after_a_change(
-        &harness,
+        database,
         &repository,
         &["CREATE UNIQUE INDEX embedder_one_statement ON requirements (scope_id, statement)"],
     )
     .await;
-    made_again(&harness, &repository).await;
-    let database = harness.database();
+    made_again(database, &repository).await;
     assert_eq!(
         fetch(
             database,
@@ -119,8 +118,9 @@ pub async fn an_index_on_a_table_of_the_store_is_removed<H: Harness>(harness: H)
 /// another name keeps its rows, its index and its own trigger.
 pub async fn an_object_that_takes_a_name_of_the_store_is_removed<H: Harness>(harness: H) {
     let repository = repository(&harness);
+    let database = harness.database();
     let kept = after_a_change(
-        &harness,
+        database,
         &repository,
         &[
             "DROP TABLE topics",
@@ -129,8 +129,7 @@ pub async fn an_object_that_takes_a_name_of_the_store_is_removed<H: Harness>(har
         ],
     )
     .await;
-    made_again(&harness, &repository).await;
-    let database = harness.database();
+    made_again(database, &repository).await;
     assert_eq!(
         fetch(
             database,

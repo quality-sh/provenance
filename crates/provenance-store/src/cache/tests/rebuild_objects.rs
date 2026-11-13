@@ -81,7 +81,8 @@ fn append(
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     let mut text = std::fs::read_to_string(&path).unwrap_or_default();
     for record in records {
-        text.push_str(&format!("{record}\n"));
+        text.push_str(&record.to_string());
+        text.push('\n');
     }
     std::fs::write(path, text).unwrap();
 }
