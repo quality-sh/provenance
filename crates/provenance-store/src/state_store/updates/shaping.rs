@@ -65,9 +65,6 @@ impl StateStore {
         Ok(topic)
     }
 
-    /// Writes one Topic update. A Topic has no field that an update can clear, so the
-    /// update has no clear list.
-    #[provenance_macros::rule("rule_update_clear_list_only_for_clearable_fields")]
     fn write_topic_update(&self, input: UpdateTopicInput) -> anyhow::Result<Topic> {
         if let Some(title) = &input.title {
             required_text(title)?;
