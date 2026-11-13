@@ -9,21 +9,22 @@ use std::io::Write;
 pub struct ReplaceFailed(#[source] std::io::Error);
 
 /// Writes `bytes` to the file at `path` so that a stop leaves the previous
-/// contents or all of the new contents, and so that a stop of the electrical
-/// supply does not remove a complete write.
-///
-/// On Windows, a directory has no sync in this module, so a stop of the
-/// electrical supply can remove the rename and the entry of a new directory.
-/// If a step fails, the steps after it do not occur, no temporary file stays,
-/// and the error names the step and its path. If a directory sync fails,
-/// `path` has the new bytes, but a stop of the electrical supply can remove
-/// them.
+/// contents or all of the new contents, and a stop of the electrical supply
+/// does not remove a complete write.
 #[rule("rule_ste_dictionary_file_write_is_whole")]
 #[rule("rule_ste_dictionary_file_write_is_durable")]
 pub fn write_synced_file(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<()> {
+    // If a step fails, the steps after it do not occur, no temporary file
+    // stays, and the error names the step and its path. If a directory sync
+    // fails, `path` has the new bytes, but a stop of the electrical supply can
+    // remove them.
     let (temporary, parent, first_made) = write_temporary(path, bytes)?;
     temporary.as_file().sync_all().map_err(sync_failure(path))?;
     replace_file(temporary, path)?;
+    // The sync of the directory of `path` and of each directory that the call
+    // made, deepest first. On Windows, `sync_directory` does not sync, so a
+    // stop of the electrical supply can remove the rename and the entry of a
+    // new directory.
     let last = first_made.and_then(Utf8Path::parent).unwrap_or(parent);
     for directory in parent.ancestors() {
         sync_directory(directory)?;

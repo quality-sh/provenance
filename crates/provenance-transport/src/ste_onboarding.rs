@@ -37,7 +37,7 @@ pub fn prepare(
     let reference_before = FileSnapshot::read(reference_path.as_std_path())?;
     // A reference that does not parse stops init here, before a download and
     // before each write.
-    dictionary_reference::current_reference(&layout)?;
+    dictionary_reference::current_reference_from(&layout, reference_before.bytes())?;
     if dictionary_reference::load_project_dictionary(&layout).is_some() {
         reference_before.recheck(reference_path.as_std_path())?;
         return Ok(Plan::unchanged(reference_before));
@@ -61,7 +61,8 @@ pub fn prepare(
         });
     };
     let before = FileSnapshot::read(reference_path.as_std_path())?;
-    let bytes = dictionary_reference::current_reference(&layout)?.bytes_for(&import.identity)?;
+    let bytes = dictionary_reference::current_reference_from(&layout, before.bytes())?
+        .bytes_for(&import.identity)?;
     Ok(Plan {
         import: Some(import),
         reference_before: Some(before),

@@ -293,9 +293,14 @@ impl Invocation {
     /// `{error,meta}` object instead of text.
     pub fn json_output(&self) -> bool {
         let format = match self {
-            Self::Repository(input, _) => return input.json_output(),
+            // Of the repository commands, only `dictionary import` gives its
+            // refusal as an `{error,meta}` object.
+            Self::Repository(RepositoryInput::DictionaryImport(_, context), _) => {
+                return context.json;
+            }
             Self::Check(..)
             | Self::Prime(_)
+            | Self::Repository(..)
             | Self::Graph(_)
             | Self::Workspace(_)
             | Self::Server(_) => None,

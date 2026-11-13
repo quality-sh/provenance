@@ -71,50 +71,33 @@ pub enum DictionaryResolution {
 const REFERENCE_REPAIR: &str =
     "get the file again from git or correct its JSON, and then do the command again";
 
-/// The committed reference, as one read of its file gives it.
+/// Parses the reference at `path`. The refusal of a reference that does not
+/// parse gives the file below the state directory, the line, the parse message
+/// and the repair.
 #[cfg(feature = "host")]
-enum ReferenceFile {
-    Missing,
-    Unreadable(std::io::Error),
-    Unparsable(StateFileRefusal),
-    Parsed(DictionaryReference),
-}
-
-#[cfg(feature = "host")]
-fn read_reference(layout: &ProvenanceLayout) -> ReferenceFile {
-    let path = dictionary_reference_path(layout);
-    match std::fs::read(path.as_std_path()) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => ReferenceFile::Missing,
-        Err(error) => ReferenceFile::Unreadable(error),
-        Ok(bytes) => serde_json::from_slice(&bytes).map_or_else(
-            |error| ReferenceFile::Unparsable(unparsable_reference(&path, &error)),
-            ReferenceFile::Parsed,
-        ),
-    }
-}
-
-/// The refusal of the reference at `path` that does not parse: the file below
-/// the state directory, the line, the parse message and the repair.
-#[cfg(feature = "host")]
-fn unparsable_reference(path: &camino::Utf8Path, error: &serde_json::Error) -> StateFileRefusal {
-    StateFileRefusal {
+fn parse_reference(
+    path: &camino::Utf8Path,
+    bytes: &[u8],
+) -> Result<DictionaryReference, StateFileRefusal> {
+    serde_json::from_slice(bytes).map_err(|error| StateFileRefusal {
         file: crate::state_store::readers::state_file(path),
         line: u64::try_from(error.line()).unwrap_or(u64::MAX),
-        message: crate::state_store::readers::parse_message(error),
+        message: crate::state_store::readers::parse_message(&error),
         hint: REFERENCE_REPAIR.to_owned(),
-    }
+    })
 }
 
 /// Separates a missing reference from a reference that cannot load, so a strict
 /// gate can fail on the second and stay silent on the first.
 #[cfg(feature = "host")]
 pub fn resolve_project_dictionary(layout: &ProvenanceLayout) -> DictionaryResolution {
-    let reference = match read_reference(layout) {
-        ReferenceFile::Missing | ReferenceFile::Unreadable(_) => {
-            return DictionaryResolution::NoReference;
-        }
-        ReferenceFile::Unparsable(refusal) => return DictionaryResolution::Unparsable(refusal),
-        ReferenceFile::Parsed(reference) => reference,
+    let path = dictionary_reference_path(layout);
+    let Ok(bytes) = std::fs::read(path.as_std_path()) else {
+        return DictionaryResolution::NoReference;
+    };
+    let reference = match parse_reference(&path, &bytes) {
+        Ok(reference) => reference,
+        Err(refusal) => return DictionaryResolution::Unparsable(refusal),
     };
     let Some(directory) = index_directory() else {
         return DictionaryResolution::Unavailable {
@@ -191,20 +174,32 @@ impl CurrentReference {
     }
 }
 
-/// Refuses a dictionary reference that does not parse, so that a write does
-/// not lose its technical names.
-///
-/// Each writer of the reference calls this function before its first write.
-#[rule("rule_ste_dictionary_reference_parse_refusal")]
+/// Reads the committed reference and gives its part that a write keeps, or the
+/// refusal of [`current_reference_from`].
 #[cfg(feature = "host")]
 pub fn current_reference(layout: &ProvenanceLayout) -> anyhow::Result<CurrentReference> {
-    let technical_names = match read_reference(layout) {
-        ReferenceFile::Missing => Vec::new(),
-        ReferenceFile::Unreadable(error) => {
-            return Err(error).context("read the dictionary reference");
+    let path = dictionary_reference_path(layout);
+    let bytes = match std::fs::read(path.as_std_path()) {
+        Ok(bytes) => Some(bytes),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error).context("read the dictionary reference"),
+    };
+    Ok(current_reference_from(layout, bytes.as_deref())?)
+}
+
+/// Refuses a dictionary reference that does not parse, so that no write of
+/// the reference loses its technical names.
+#[rule("rule_ste_dictionary_reference_parse_refusal")]
+#[cfg(feature = "host")]
+pub fn current_reference_from(
+    layout: &ProvenanceLayout,
+    file: Option<&[u8]>,
+) -> Result<CurrentReference, StateFileRefusal> {
+    let technical_names = match file {
+        None => Vec::new(),
+        Some(bytes) => {
+            parse_reference(&dictionary_reference_path(layout), bytes)?.technical_names
         }
-        ReferenceFile::Unparsable(refusal) => return Err(refusal.into()),
-        ReferenceFile::Parsed(reference) => reference.technical_names,
     };
     Ok(CurrentReference { technical_names })
 }

@@ -88,20 +88,6 @@ impl RepositoryInput {
     }
 }
 
-impl RepositoryInput {
-    /// Whether the caller asked for JSON from `dictionary import`, so that its
-    /// refusal prints as one `{error,meta}` object.
-    ///
-    /// The other repository commands print their refusals as text.
-    #[allow(clippy::redundant_pub_crate)]
-    pub(super) const fn json_output(&self) -> bool {
-        match self {
-            Self::DictionaryImport(_, context) => context.json,
-            _ => false,
-        }
-    }
-}
-
 /// Runs one repository command.
 #[allow(clippy::redundant_pub_crate)]
 pub(super) async fn repository_command(input: RepositoryInput, quiet: bool) -> anyhow::Result<()> {
