@@ -9,8 +9,11 @@ use memory::{
     begin_input, key, open_review, verification_repository, FixedClock, Recorded, REVIEWS,
 };
 use provenance_macros::verifies;
-use provenance_store::operations::{begin_verification, complete_verification};
+use provenance_store::operations::{
+    begin_verification, complete_verification, verification_runs,
+};
 use provenance_store::repository::Repository;
+use provenance_core::VerificationRun;
 use provenance_store::state_store::{BeginVerificationInput, CompleteVerificationInput};
 use provenance_store::storage::StateKey;
 use provenance_store::write_error::WriteError;
@@ -66,6 +69,12 @@ impl Start {
         };
         let error = complete_verification(&self.repository, completion).unwrap_err();
         self.answer(error)
+    }
+
+    /// The runs that the list of runs gives, or its answer as
+    /// [`Start::answer`] gives it.
+    fn list(&self) -> Result<Vec<VerificationRun>, (Value, u16, usize, Option<Vec<u8>>)> {
+        verification_runs(&self.repository, None).map_err(|error| self.answer(error))
     }
 
     /// The answer body of `error`, its status, the number of write sets
@@ -127,12 +136,17 @@ fn a_bad_line_of_the_reviews_shard_is_refused_before_any_write() {
     assert_eq!(refusal, (invalid_line(REVIEWS), 500, 0, None));
 }
 
-/// A start whose runs cache has a bad first line.
-fn start_with_a_bad_runs_cache() -> Start {
+/// A start whose runs cache holds `contents`.
+fn start_with_runs_cache(contents: &[u8]) -> Start {
     let start = start(Vec::new());
     std::fs::create_dir_all(start.runs_cache().parent().unwrap()).unwrap();
-    std::fs::write(start.runs_cache(), BAD_LINE).unwrap();
+    std::fs::write(start.runs_cache(), contents).unwrap();
     start
+}
+
+/// A start whose runs cache has a bad first line.
+fn start_with_a_bad_runs_cache() -> Start {
+    start_with_runs_cache(BAD_LINE)
 }
 
 // No Rule binding: `rule_state_parse_refusal_names_the_line` is for record
@@ -163,4 +177,43 @@ fn a_completion_gives_the_same_answer_for_a_bad_line_of_the_runs_cache() {
         refusal,
         (invalid_line(RUNS_FILE), 500, 0, Some(BAD_LINE.to_vec()))
     );
+}
+
+// No Rule binding: `rule_state_parse_refusal_names_the_line` is for record
+// files below the state directory, and the runs cache is a cache file.
+#[test]
+fn the_list_of_runs_gives_the_same_answer_for_a_bad_line_of_the_runs_cache() {
+    let start = start_with_a_bad_runs_cache();
+
+    let list = start.list();
+
+    let answer = (invalid_line(RUNS_FILE), 500, 0, Some(BAD_LINE.to_vec()));
+    assert_eq!(list, Err(answer));
+}
+
+// No Rule binding: no Rule states which stored run rows a build refuses.
+#[test]
+fn the_list_of_runs_refuses_a_run_row_that_the_start_and_the_completion_refuse() {
+    let row = concat!(
+        r#"{"scope_id":"default","id":"verification_1767225600000","#,
+        r#""rule_id":"rule_expiry","method":"examples","declared_by":"cargo","#,
+        r#""status":"running","started_at":1767225600000,"retired":false}"#,
+        "\n"
+    );
+    let start = start_with_runs_cache(row.as_bytes());
+
+    let answers = [
+        start.list(),
+        Err(start.refusal(begin_input())),
+        Err(start.completion_refusal()),
+    ];
+
+    let message = "record verification_1767225600000 contains legacy field `retired`; \
+                   canonical JSONL requires record-deletion migration 026 before this build \
+                   can read it";
+    let refusal = json!({
+        "kind": "invalid_state_file", "file": RUNS_FILE, "line": 1, "message": message
+    });
+    let answer = Err((refusal, 500, 0, Some(row.as_bytes().to_vec())));
+    assert_eq!(answers, [answer.clone(), answer.clone(), answer]);
 }
