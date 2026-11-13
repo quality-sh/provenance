@@ -49,8 +49,10 @@ async fn everything(layout: &ProvenanceLayout) -> (Vec<String>, Vec<(String, usi
                 .fetch_all(pool)
                 .await
                 .unwrap();
+        // The time of a revision is the second that it was written in.
         let quoted: Vec<String> = columns
             .iter()
+            .filter(|column| !(table == "projection_revision" && *column == "created_at"))
             .map(|column| format!("quote(\"{column}\")"))
             .collect();
         let select = format!(
@@ -240,9 +242,17 @@ async fn execute(layout: &ProvenanceLayout, statements: &[&str]) {
     cache.close().await.unwrap();
 }
 
+/// The rows of `dump` of the table `table`, and the other rows.
+fn take(dump: Vec<String>, table: &str) -> (Vec<String>, Vec<String>) {
+    let prefix = format!("{table}: ");
+    dump.into_iter().partition(|row| row.starts_with(&prefix))
+}
+
 /// A schema rebuild and a full rebuild of a cache with more than one row
 /// in each table of the store give the catalog and every row of every
-/// table that the first build gave.
+/// table that the first build gave, with two exceptions. The schema
+/// rebuild makes a new instance id. The full rebuild over a current schema
+/// keeps the instance and adds revision 2 with the digest of revision 1.
 #[tokio::test]
 async fn a_rebuild_leaves_every_table_as_the_first_build_made_it() {
     let (_dir, layout, scope) = pinned_store_layout();
@@ -257,6 +267,9 @@ async fn a_rebuild_leaves_every_table_as_the_first_build_made_it() {
         .filter(|(table, rows)| *rows < 2 && !ONE_ROW.contains(&table.as_str()))
         .collect();
     assert_eq!(thin, Vec::<&(String, usize)>::new(), "{counts:?}");
+    let (instance, made) = take(made, "projection_instance");
+    let (revision, made) = take(made, "projection_revision");
+    assert_eq!((instance.len(), revision.len()), (1, 1));
     execute(
         &layout,
         &["UPDATE _cache_metadata SET schema_digest = 'another'"],
@@ -264,9 +277,25 @@ async fn a_rebuild_leaves_every_table_as_the_first_build_made_it() {
     .await;
     let pass = catch_up_state(&repository).await.unwrap();
     assert!(pass.rebuilt && pass.cache_recreated);
-    assert_eq!(everything(&layout).await.0, made, "the schema rebuild");
+    let (new_instance, rebuilt) = take(everything(&layout).await.0, "projection_instance");
+    let (new_revision, rebuilt) = take(rebuilt, "projection_revision");
+    assert_eq!(rebuilt, made, "the schema rebuild");
+    assert_eq!(new_revision, revision, "the schema rebuild");
+    assert_ne!(
+        new_instance, instance,
+        "the schema rebuild kept the instance id"
+    );
     materialize_state(&repository).await.unwrap();
-    assert_eq!(everything(&layout).await.0, made, "the full rebuild");
+    let (kept_instance, rebuilt) = take(everything(&layout).await.0, "projection_instance");
+    let (revisions, rebuilt) = take(rebuilt, "projection_revision");
+    assert_eq!(rebuilt, made, "the full rebuild");
+    assert_eq!(kept_instance, new_instance, "the full rebuild");
+    let second = revision[0].replacen("projection_revision: 1|", "projection_revision: 2|", 1);
+    assert_eq!(
+        revisions,
+        vec![revision[0].clone(), second],
+        "the full rebuild"
+    );
 }
 
 /// A table of another name with a foreign key into a table of the store
