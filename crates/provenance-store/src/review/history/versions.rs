@@ -19,6 +19,7 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// One commit that changed a file, with the file text at that commit.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct FileVersion {
     pub commit: String,
     /// The nearest listed commits on each parent line, in parent order. The
@@ -32,15 +33,44 @@ pub struct FileVersion {
     pub text: Option<String>,
 }
 
+impl FileVersion {
+    /// The version of a file at `commit`, whose nearest listed commits on
+    /// each parent line are `parents`. `text` is `None` when the commit
+    /// removed the file.
+    pub const fn new(
+        commit: String,
+        parents: Vec<String>,
+        author: String,
+        committed_at: i64,
+        text: Option<String>,
+    ) -> Self {
+        Self {
+            commit,
+            parents,
+            author,
+            committed_at,
+            text,
+        }
+    }
+}
+
 /// The committed versions of the files of one repository.
 pub trait FileVersions: Send + Sync + Debug {
     /// The commits in the history of `HEAD` that changed `path`, each
-    /// parent before its children, with the version of `HEAD` last.
+    /// parent before its children.
     ///
-    /// A merge whose file is the same as the file of one parent is not
-    /// listed, and the history goes on through that parent only. A merge
-    /// whose file differs from the file of each parent is listed. A history
-    /// with no commit gives no versions.
+    /// A commit changed the file when its file differs from the file of
+    /// each of its parents, or when it is a root commit that holds the
+    /// file. A removal is a change. A merge whose file is the same as the
+    /// file of one parent is not listed, and the history goes on through
+    /// that parent only, which can be any parent. When more than one parent
+    /// has the same file, the history goes on through the first of them.
+    ///
+    /// The last version is the newest commit that changed the file in that
+    /// history: start at `HEAD` and go to the parent with the same file
+    /// until a commit changed the file. When `HEAD` did not change the file,
+    /// `HEAD` is not listed. A history with no commit, or with no commit
+    /// that changed the file, gives no versions.
     fn versions<'a>(
         &'a self,
         path: &'a str,
