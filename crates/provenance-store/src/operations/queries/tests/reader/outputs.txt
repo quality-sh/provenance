@@ -1,0 +1,62 @@
+absent AnnotateOnly: refused: no projection revision in <root>/.provenance/cache/provenance.db; run `provenance materialize` (error returned from database: (code: 14) unable to open database file: (code: 14) unable to open database file)
+absent RefuseStale: refused: no projection revision in <root>/.provenance/cache/provenance.db; run `provenance materialize` (error returned from database: (code: 14) unable to open database file: (code: 14) unable to open database file)
+absent CatchUp: CatchUp serial 1 found true error None
+catch-up absent: serial 1 rebuilt false committed false units 2 families 0 rows 0 recreated false
+catch-up current: serial 1 rebuilt false committed false units 2 families 0 rows 0 recreated false
+current AnnotateOnly: AnnotateOnly serial 1 found true error None
+current RefuseStale: RefuseStale serial 1 found true error None
+current CatchUp: CatchUp serial 1 found true error None
+moved AnnotateOnly: AnnotateOnly serial 1 found true error None
+moved RefuseStale: refused: refuse_stale: the projection in <root>/.provenance/cache/provenance.db at serial 1 (digest sha256:<hex>, instance <instance>) is behind canonical state; moved: scope:default (stored sha256:<hex>, live sha256:<hex>). Read under catch_up or run `provenance materialize`.
+moved CatchUp: CatchUp serial 2 found true error None
+catch-up moved: serial 2 rebuilt false committed false units 2 families 0 rows 0 recreated false
+digest AnnotateOnly: refused: the projection in <root>/.provenance/cache/provenance.db has an incompatible cache schema or old validation; run `provenance materialize`
+digest RefuseStale: refused: the projection in <root>/.provenance/cache/provenance.db has an incompatible cache schema or old validation; run `provenance materialize`
+digest CatchUp: CatchUp serial 1 found true error None
+catch-up digest: serial 1 rebuilt true committed true units 0 families 0 rows 3 recreated true
+index AnnotateOnly: refused: the projection in <root>/.provenance/cache/provenance.db has an incompatible cache schema or old validation; run `provenance materialize`
+index RefuseStale: refused: the projection in <root>/.provenance/cache/provenance.db has an incompatible cache schema or old validation; run `provenance materialize`
+index CatchUp: CatchUp serial 1 found true error None
+catch-up index: serial 1 rebuilt true committed true units 0 families 0 rows 3 recreated true
+table AnnotateOnly: refused: the projection in <root>/.provenance/cache/provenance.db has an incompatible cache schema or old validation; run `provenance materialize`
+table RefuseStale: refused: the projection in <root>/.provenance/cache/provenance.db has an incompatible cache schema or old validation; run `provenance materialize`
+table CatchUp: CatchUp serial 1 found true error None
+catch-up table: serial 1 rebuilt true committed true units 0 families 0 rows 3 recreated true
+metadata AnnotateOnly: refused: the projection in <root>/.provenance/cache/provenance.db has an incompatible cache schema or old validation; run `provenance materialize`
+metadata RefuseStale: refused: the projection in <root>/.provenance/cache/provenance.db has an incompatible cache schema or old validation; run `provenance materialize`
+metadata CatchUp: CatchUp serial 1 found true error None
+catch-up metadata: serial 1 rebuilt true committed true units 0 families 0 rows 3 recreated true
+metadata column AnnotateOnly: refused: the projection in <root>/.provenance/cache/provenance.db has an incompatible cache schema or old validation; run `provenance materialize`
+metadata column RefuseStale: refused: the projection in <root>/.provenance/cache/provenance.db has an incompatible cache schema or old validation; run `provenance materialize`
+metadata column CatchUp: CatchUp serial 1 found true error None
+catch-up metadata column: serial 1 rebuilt true committed true units 0 families 0 rows 3 recreated true
+validation AnnotateOnly: refused: the projection in <root>/.provenance/cache/provenance.db has an incompatible cache schema or old validation; run `provenance materialize`
+validation RefuseStale: refused: the projection in <root>/.provenance/cache/provenance.db has an incompatible cache schema or old validation; run `provenance materialize`
+validation CatchUp: CatchUp serial 2 found true error None
+catch-up validation: serial 3 rebuilt true committed true units 0 families 0 rows 3 recreated false
+no validation AnnotateOnly: refused: the projection in <root>/.provenance/cache/provenance.db has an incompatible cache schema or old validation; run `provenance materialize`
+no validation RefuseStale: refused: the projection in <root>/.provenance/cache/provenance.db has an incompatible cache schema or old validation; run `provenance materialize`
+no validation CatchUp: CatchUp serial 4 found true error None
+catch-up no validation: serial 5 rebuilt true committed true units 0 families 0 rows 3 recreated false
+half AnnotateOnly: refused: the projection in <root>/.provenance/cache/provenance.db holds a revision but no family digests, so the cache is incomplete; run `provenance materialize`
+half RefuseStale: refused: the projection in <root>/.provenance/cache/provenance.db holds a revision but no family digests, so the cache is incomplete; run `provenance materialize`
+half CatchUp: CatchUp serial 5 found true error None
+catch-up half: serial 5 rebuilt false committed false units 2 families 0 rows 0 recreated false
+no revision AnnotateOnly: refused: no projection revision in <root>/.provenance/cache/provenance.db; run `provenance materialize`
+no revision RefuseStale: refused: no projection revision in <root>/.provenance/cache/provenance.db; run `provenance materialize`
+no revision CatchUp: CatchUp serial 1 found true error None
+catch-up no revision: serial 1 rebuilt true committed true units 0 families 0 rows 3 recreated false
+materialize: Ok("records 3 recreated false")
+materialize dropped table: Ok("records 3 recreated true")
+materialized AnnotateOnly: AnnotateOnly serial 1 found true error None
+materialized RefuseStale: RefuseStale serial 1 found true error None
+materialized CatchUp: CatchUp serial 1 found true error None
+catch-up anchored: serial 1 rebuilt true committed true units 0 families 0 rows 5 recreated true
+refused AnnotateOnly: AnnotateOnly serial 1 found true error None
+refused RefuseStale: refused: refuse_stale: the projection in <root>/.provenance/cache/provenance.db at serial 1 (digest sha256:<hex>, instance <instance>) is behind canonical state; moved: scope:default (stored sha256:<hex>, live sha256:<hex>). Read under catch_up or run `provenance materialize`.
+refused CatchUp: CatchUpFailed serial 1 found true error Some("rule rule_anchored is refused: a rule needs one requirement")
+catch-up refused: refused: rule rule_anchored is refused: a rule needs one requirement
+materialize refused: Err(rule rule_anchored is refused: a rule needs one requirement)
+refused absent AnnotateOnly: refused: no projection revision in <root>/.provenance/cache/provenance.db; run `provenance materialize` (error returned from database: (code: 14) unable to open database file: (code: 14) unable to open database file)
+refused absent RefuseStale: refused: no projection revision in <root>/.provenance/cache/provenance.db; run `provenance materialize` (error returned from database: (code: 14) unable to open database file: (code: 14) unable to open database file)
+refused absent CatchUp: refused: no projection revision in <root>/.provenance/cache/provenance.db; run `provenance materialize` (catch-up failed: rule rule_anchored is refused: a rule needs one requirement)

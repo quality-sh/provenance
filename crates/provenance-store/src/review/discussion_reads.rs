@@ -3,6 +3,7 @@ use crate::operations::{
     read_policy::ReadPolicy,
     reader::{self, Cursor, Position, ReadContext},
 };
+use crate::read_database::{one_row, SqlColumns, SqlValue};
 use crate::repository::Repository;
 use provenance_core::{
     model::{ColumnValue, ProjectionRow},
@@ -25,34 +26,26 @@ pub(super) const DISCUSSION_SIZE: &str = "length(CAST(d.parent AS BLOB))+\
 pub(super) const DISCUSSION_PARENT: &str =
     "json_extract(d.parent,'$.node_type')=? AND json_extract(d.parent,'$.node_id')=?";
 
-type DiscussionRow = (
-    String,
-    String,
-    String,
-    String,
-    String,
-    String,
-    String,
-    i64,
-    String,
-    String,
-    Option<String>,
-);
-
-fn discussion_from_row(row: DiscussionRow) -> anyhow::Result<Discussion> {
-    let text = ColumnValue::Text;
+/// One Discussion from a row of `DISCUSSION_COLUMNS`.
+fn discussion_from_row(row: &[SqlValue]) -> anyhow::Result<Discussion> {
+    let text = |index| {
+        row.text(index)
+            .map(|value| ColumnValue::Text(value.to_owned()))
+    };
     Discussion::from_row(&[
-        text(row.0),
-        text(row.1),
-        text(row.2),
-        text(row.3),
-        text(row.4),
-        text(row.5),
-        text(row.6),
-        ColumnValue::Integer(row.7),
-        text(row.8),
-        text(row.9),
-        row.10.map_or(ColumnValue::Null, ColumnValue::Text),
+        text(0)?,
+        text(1)?,
+        text(2)?,
+        text(3)?,
+        text(4)?,
+        text(5)?,
+        text(6)?,
+        ColumnValue::Integer(row.integer(7)?),
+        text(8)?,
+        text(9)?,
+        row.optional_text(10)?.map_or(ColumnValue::Null, |value| {
+            ColumnValue::Text(value.to_owned())
+        }),
     ])
 }
 
@@ -82,19 +75,31 @@ pub async fn read_discussion(
 pub(super) async fn check_parent(ctx: &ReadContext, parent: &ThreadParent) -> anyhow::Result<()> {
     let table = super::discussion_state::parent_table(parent.node_type);
     ctx.snapshot().attest(table);
-    let mut tx = ctx.snapshot().connection().await;
-    let exists: bool = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
-        "SELECT EXISTS(SELECT 1 FROM {table} WHERE scope_id = ? AND id = ?)"
-    )))
-    .bind(ctx.snapshot().scope().as_str())
-    .bind(parent.node_id.as_str())
-    .fetch_one(&mut **tx)
-    .await?;
-    drop(tx);
-    if !exists {
+    let sql = format!("SELECT EXISTS(SELECT 1 FROM {table} WHERE scope_id = ? AND id = ?)");
+    let rows = ctx
+        .snapshot()
+        .fetch(
+            &sql,
+            vec![
+                ctx.snapshot().scope_value(),
+                SqlValue::from(parent.node_id.as_str()),
+            ],
+        )
+        .await?;
+    if one_row(&rows)?.integer(0)? == 0 {
         return Err(ReadFailure::ResourceNotFound.into());
     }
     Ok(())
+}
+
+/// The values that select the Discussions of `parent`.
+fn parent_values(parent: &ThreadParent) -> [SqlValue; 2] {
+    [
+        SqlValue::from(super::discussion_state::discussion_kind_word(
+            parent.node_type,
+        )),
+        SqlValue::from(parent.node_id.as_str()),
+    ]
 }
 
 async fn groups(ctx: &ReadContext, query: DiscussionQuery) -> anyhow::Result<DiscussionPage> {
@@ -141,25 +146,25 @@ async fn fill_addressed(
     position: &mut Position,
     page: &mut DiscussionPageFill<DiscussionGroup>,
 ) -> anyhow::Result<Fill> {
-    let mut tx = ctx.snapshot().connection().await;
-    let keys: Vec<(String, i64, String)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+    let sql = format!(
         "SELECT d.discussion_id, {DISCUSSION_SIZE}, t.status FROM discussions d \
          JOIN threads t ON t.scope_id=d.scope_id AND t.id=d.thread_id \
          WHERE d.scope_id=? AND {DISCUSSION_PARENT} AND d.discussion_id>? \
          ORDER BY d.discussion_id LIMIT ?"
-    )))
-    .bind(ctx.snapshot().scope().as_str())
-    .bind(super::discussion_state::discussion_kind_word(
-        query.parent.node_type,
-    ))
-    .bind(query.parent.node_id.as_str())
-    .bind(&position.id)
-    .bind(i64::try_from(query.limit + 1)?)
-    .fetch_all(&mut **tx)
-    .await
-    .map_err(anyhow::Error::from)
-    .map_err(reader::page_error)?;
-    drop(tx);
+    );
+    let mut values = vec![ctx.snapshot().scope_value()];
+    values.extend(parent_values(&query.parent));
+    values.push(SqlValue::from(position.id.as_str()));
+    values.push(SqlValue::Integer(i64::try_from(query.limit + 1)?));
+    let rows = ctx
+        .snapshot()
+        .fetch(&sql, values)
+        .await
+        .map_err(reader::page_error)?;
+    let mut keys = Vec::with_capacity(rows.len());
+    for mut row in rows {
+        keys.push((row.take_text(0)?, row.integer(1)?, row.take_text(2)?));
+    }
     for (discussion, size, status) in keys {
         if page.at_limit() || page.over_budget(usize::try_from(size)?) {
             return Ok(Fill::Full);
@@ -179,16 +184,14 @@ async fn discussion_group(
     id: &str,
     status: String,
 ) -> anyhow::Result<DiscussionGroup> {
-    let mut tx = ctx.snapshot().connection().await;
-    let row: DiscussionRow = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+    let sql = format!(
         "SELECT {DISCUSSION_COLUMNS} FROM discussions d WHERE d.scope_id=? AND d.discussion_id=?"
-    )))
-    .bind(ctx.snapshot().scope().as_str())
-    .bind(id)
-    .fetch_one(&mut **tx)
-    .await?;
-    drop(tx);
-    addressed(discussion_from_row(row)?, status)
+    );
+    let rows = ctx
+        .snapshot()
+        .fetch(&sql, vec![ctx.snapshot().scope_value(), SqlValue::from(id)])
+        .await?;
+    addressed(discussion_from_row(one_row(&rows)?)?, status)
 }
 
 fn addressed(discussion: Discussion, status: String) -> anyhow::Result<DiscussionGroup> {
@@ -206,13 +209,26 @@ async fn fill_legacy(
     position: &mut Position,
     page: &mut DiscussionPageFill<DiscussionGroup>,
 ) -> anyhow::Result<Fill> {
-    let mut tx = ctx.snapshot().connection().await;
-    let keys: Vec<(String,String)> = sqlx::query_as("SELECT t.id,t.status FROM threads t WHERE t.scope_id=? AND t.parent_type=? AND t.parent_id=? AND t.id>? AND EXISTS(SELECT 1 FROM messages m WHERE m.scope_id=t.scope_id AND m.thread_id=t.id AND NOT EXISTS(SELECT 1 FROM discussions d, json_each(d.message_ids) e WHERE d.scope_id=m.scope_id AND e.value=m.id)) ORDER BY t.id LIMIT ?")
-        .bind(ctx.snapshot().scope().as_str())
-        .bind(super::discussion_state::discussion_kind_word(query.parent.node_type))
-        .bind(query.parent.node_id.as_str()).bind(&position.id)
-        .bind(i64::try_from(query.limit + 1)?).fetch_all(&mut **tx).await.map_err(anyhow::Error::from).map_err(reader::page_error)?;
-    drop(tx);
+    let mut values = vec![ctx.snapshot().scope_value()];
+    values.extend(parent_values(&query.parent));
+    values.push(SqlValue::from(position.id.as_str()));
+    values.push(SqlValue::Integer(i64::try_from(query.limit + 1)?));
+    let rows = ctx
+        .snapshot()
+        .fetch(
+            "SELECT t.id,t.status FROM threads t WHERE t.scope_id=? AND t.parent_type=? \
+             AND t.parent_id=? AND t.id>? AND EXISTS(SELECT 1 FROM messages m \
+             WHERE m.scope_id=t.scope_id AND m.thread_id=t.id AND NOT EXISTS(SELECT 1 \
+             FROM discussions d, json_each(d.message_ids) e WHERE d.scope_id=m.scope_id \
+             AND e.value=m.id)) ORDER BY t.id LIMIT ?",
+            values,
+        )
+        .await
+        .map_err(reader::page_error)?;
+    let mut keys = Vec::with_capacity(rows.len());
+    for mut row in rows {
+        keys.push((row.take_text(0)?, row.take_text(1)?));
+    }
     for (id, status) in keys {
         let group = DiscussionGroup::Legacy {
             thread_id: StableId::new(id.clone())?,
@@ -239,21 +255,19 @@ pub(super) async fn group(
     for family in ["discussions", "threads"] {
         ctx.snapshot().attest(family);
     }
-    let mut tx = ctx.snapshot().connection().await;
-    let row: Option<(String, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+    let sql = format!(
         "SELECT t.status,{DISCUSSION_SIZE} FROM discussions d \
          JOIN threads t ON t.scope_id=d.scope_id AND t.id=d.thread_id \
          WHERE d.scope_id=? AND {DISCUSSION_PARENT} AND d.discussion_id=?"
-    )))
-    .bind(ctx.snapshot().scope().as_str())
-    .bind(super::discussion_state::discussion_kind_word(
-        parent.node_type,
-    ))
-    .bind(parent.node_id.as_str())
-    .bind(discussion_id.as_str())
-    .fetch_optional(&mut **tx)
-    .await?;
-    drop(tx);
+    );
+    let mut values = vec![ctx.snapshot().scope_value()];
+    values.extend(parent_values(&parent));
+    values.push(SqlValue::from(discussion_id.as_str()));
+    let rows = ctx.snapshot().fetch(&sql, values).await?;
+    let row = rows
+        .first()
+        .map(|row| anyhow::Ok((row.text(0)?.to_owned(), row.integer(1)?)))
+        .transpose()?;
     let (status, size) = row.ok_or(ReadFailure::ResourceNotFound)?;
     check_stored_size(size)?;
     discussion_group(ctx, discussion_id.as_str(), status).await

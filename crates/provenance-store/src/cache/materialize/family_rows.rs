@@ -10,28 +10,30 @@ use super::collaboration_records;
 use super::record_rows::{kind_rows_of, record_rows_of};
 use crate::cache::quoted;
 use crate::cache::ProjectionFamily;
+use crate::read_database::{SqlValue, Transaction};
 use provenance_core::protocol::GraphNode;
 use provenance_core::ScopeId;
-use sqlx::{Sqlite, Transaction};
 
 pub(super) async fn delete_rows(
-    tx: &mut Transaction<'_, Sqlite>,
+    tx: &mut Transaction,
     family: ProjectionFamily,
     scope: &ScopeId,
 ) -> anyhow::Result<()> {
-    sqlx::query(sqlx::AssertSqlSafe(format!(
+    let sql = format!(
         "DELETE FROM {} WHERE scope_id = ?",
         quoted(family.family_name())
-    )))
-    .bind(scope.as_str())
-    .execute(&mut **tx)
-    .await?;
+    );
+    tx.execute(&sql, vec![SqlValue::from(scope.as_str())])
+        .await?;
     if let Some(node_type) = family.node_type() {
-        sqlx::query("DELETE FROM record_identities WHERE scope_id = ? AND node_type = ?")
-            .bind(scope.as_str())
-            .bind(node_type.as_str())
-            .execute(&mut **tx)
-            .await?;
+        tx.execute(
+            "DELETE FROM record_identities WHERE scope_id = ? AND node_type = ?",
+            vec![
+                SqlValue::from(scope.as_str()),
+                SqlValue::from(node_type.as_str()),
+            ],
+        )
+        .await?;
     }
     Ok(())
 }
@@ -81,23 +83,26 @@ macro_rules! define_family_loader {
 
 crate::families::record_families!(define_family_loader);
 
-/// Writes every row of one family, for a family with no stored rows.
+/// Writes every row of one family, for a family with no stored rows. A
+/// statement binds at most `bound_values` values.
 pub(super) async fn load_rows(
-    tx: &mut Transaction<'_, Sqlite>,
+    tx: &mut Transaction,
     family: ProjectionFamily,
     bytes: &[u8],
+    bound_values: usize,
 ) -> anyhow::Result<u64> {
-    rows_of(family, bytes)?.write(tx).await
+    rows_of(family, bytes)?.write(tx, bound_values).await
 }
 
 /// Makes the stored rows of one family in `scope` equal to the rows of
 /// `bytes`, and writes only the rows that differ.
 pub(super) async fn replace_rows(
-    tx: &mut Transaction<'_, Sqlite>,
+    tx: &mut Transaction,
     family: ProjectionFamily,
     scope: &ScopeId,
     bytes: &[u8],
+    bound_values: usize,
 ) -> anyhow::Result<u64> {
     let rows = rows_of(family, bytes)?;
-    super::row_changes::write_changes(tx, rows, family, scope).await
+    super::row_changes::write_changes(tx, rows, family, scope, bound_values).await
 }
