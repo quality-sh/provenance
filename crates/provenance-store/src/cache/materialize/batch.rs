@@ -105,21 +105,25 @@ impl Rows {
             loaded,
             failure,
         } = self;
-        for (table, row) in &entries {
-            let table = &tables[*table];
-            if row.len() != table.columns.len() {
-                return Err(crate::refusal::fault!(
-                    "a row for {} has {} values, but the table has {} columns",
-                    table.name,
-                    row.len(),
-                    table.columns.len()
-                ));
-            }
-        }
         if !entries.is_empty() {
             let order: Vec<usize> = entries.iter().map(|(table, _)| *table).collect();
+            let lengths: Vec<(usize, usize)> = entries
+                .iter()
+                .map(|(table, row)| (*table, row.len()))
+                .collect();
             let (of, statements) = batched(&tables, entries, bound_values);
             if tx.attempt(&statements).await?.is_err() {
+                for (table, length) in &lengths {
+                    let table = &tables[*table];
+                    if *length != table.columns.len() {
+                        return Err(crate::refusal::fault!(
+                            "a row for {} has {} values, but the table has {} columns",
+                            table.name,
+                            length,
+                            table.columns.len()
+                        ));
+                    }
+                }
                 one_by_one(tx, &tables, &order, &of, statements).await?;
             }
         }
