@@ -19,6 +19,19 @@ pub fn moved_base_case() -> Case {
     }
 }
 
+/// A message post that meets a moved base: the engine reads, then a post
+/// outside lands before the engine publishes.
+pub fn moved_base_post_case() -> Case {
+    Case {
+        engines: 2,
+        steps: vec![Step::WriteOnMovedBase {
+            engine: 0,
+            op: Operation::PostMessage,
+            outside: Operation::PostMessage,
+        }],
+    }
+}
+
 pub const fn write(engine: u8, op: Operation) -> Step {
     Step::Write { engine, op }
 }

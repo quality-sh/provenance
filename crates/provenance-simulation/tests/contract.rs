@@ -14,12 +14,13 @@ mod support {
 
 use hegel::TestCase;
 use provenance_simulation::generate::{Case, Effect, Operation, Step, SCOPE};
+use provenance_simulation::storage::Outcome;
 use provenance_simulation::{check_case, check_probe, laws, report, run_case, stats};
 use provenance_store::repository::Repository;
 use provenance_store::storage::memory::{MemorySectionLock, MemoryStateStorage};
 use serde_json::json;
 use std::sync::Arc;
-use support::cases::{alone, each_operation};
+use support::cases::{alone, each_operation, moved_base_post_case};
 use support::contract::{invoke, refusal_prefix, CONTRACT};
 use support::contract_laws::contract_laws;
 
@@ -125,4 +126,35 @@ fn each_operation_runs_through_the_contract() {
         );
     }
     check_probe("contract", &case, CONTRACT);
+}
+
+// No Rule binding: the store example binds the Rule. This probe shows that a
+// post whose base moved before its publish answers `state_changed` (409)
+// through the contract, so O1 holds.
+#[test]
+#[ignore = "a probe of the nightly simulation"]
+fn a_post_on_a_moved_base_through_the_contract_is_state_changed() {
+    let run = run_case(&moved_base_post_case(), CONTRACT);
+    assert!(
+        run.publishes
+            .iter()
+            .any(|publish| publish.outcome == Outcome::BaseMoved),
+        "the case met no moved base: {:?}",
+        run.publishes
+    );
+    let post = run
+        .done
+        .iter()
+        .find(|done| done.engine == Some(0) && done.op == Operation::PostMessage)
+        .expect("the engine post ran");
+    assert!(
+        matches!(&post.result, Err(text)
+            if text.starts_with(&refusal_prefix(409))
+                && text.contains(r#""kind":"state_changed""#)),
+        "{:?}",
+        run.done
+    );
+    let test = "a_post_on_a_moved_base_through_the_contract_is_state_changed";
+    let verdict = laws::check(&run).and_then(|()| contract_laws(&run));
+    report::probe("contract", test, verdict);
 }
