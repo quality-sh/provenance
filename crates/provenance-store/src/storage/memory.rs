@@ -117,6 +117,10 @@ impl StateStorage for MemoryStateStorage {
 
 /// The section of a repository whose state is in memory: a lock in the
 /// process. A clone shares the lock.
+///
+/// With `host` an acquire waits until the section is free. Without `host` an
+/// acquire never waits: a section that is held refuses, so no thread blocks
+/// and a single-threaded embedder cannot stop.
 #[derive(Clone, Debug, Default)]
 pub struct MemorySectionLock {
     held: Arc<(Mutex<bool>, Condvar)>,
@@ -125,12 +129,21 @@ pub struct MemorySectionLock {
 impl SectionLock for MemorySectionLock {
     fn acquire(&self) -> anyhow::Result<Box<dyn Send>> {
         let (held, released) = &*self.held;
+        let held = held.lock().unwrap_or_else(PoisonError::into_inner);
+        #[cfg(feature = "host")]
         let mut held = released
-            .wait_while(
-                held.lock().unwrap_or_else(PoisonError::into_inner),
-                |held| *held,
-            )
+            .wait_while(held, |held| *held)
             .unwrap_or_else(PoisonError::into_inner);
+        #[cfg(not(feature = "host"))]
+        let mut held = {
+            let _ = released;
+            if *held {
+                return Err(crate::refusal::fault!(
+                    "the section is held, and without the host feature a section does not wait"
+                ));
+            }
+            held
+        };
         *held = true;
         drop(held);
         Ok(Box::new(MemorySection(Arc::clone(&self.held))))

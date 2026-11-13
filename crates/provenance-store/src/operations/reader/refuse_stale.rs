@@ -2,14 +2,12 @@
 
 use super::freshness::{self, Check, Freshness};
 use super::{ReadRefusal, ReadSnapshot};
-use crate::cache::{scope_ids, unit_stored_digest, units_for};
-use crate::layout::ProvenanceLayout;
+use crate::cache::{scope_ids, unit_stored_digest, units_for, view_stored_digests};
 #[cfg(feature = "host")]
 use crate::publication::publication_guard;
 use crate::read_database::{SqlColumns, Transaction};
 use crate::repository::Repository;
 use provenance_core::protocol::StampPolicy;
-use provenance_core::ScopeId;
 use provenance_macros::rule;
 use std::collections::BTreeMap;
 use std::future::Future;
@@ -66,10 +64,11 @@ pub(super) fn run(repository: &Repository) -> FreshnessFuture<'_> {
 #[rule("rule_refuse_stale_names_the_moved_units")]
 pub(super) async fn check(
     mut transaction: Transaction,
-    layout: &ProvenanceLayout,
-    scope: &ScopeId,
+    repository: &Repository,
     repeat_hash: bool,
 ) -> anyhow::Result<ReadSnapshot> {
+    let layout = repository.layout();
+    let scope = repository.scope();
     freshness::ensure_current_schema(&mut transaction, layout).await?;
     let snapshot = ReadSnapshot::open(transaction, scope)
         .await?
@@ -92,7 +91,7 @@ pub(super) async fn check(
     // Each pass reads the scope list again. A missing lock or a recovery marker
     // does not prevent a consistent read-only image from answering.
     for _ in 0..if repeat_hash { 2 } else { 1 } {
-        let moved = moved_units(layout, stored.clone())?;
+        let moved = moved_units(repository, stored.clone())?;
         if !moved.is_empty() {
             return Err(ReadRefusal::Stale {
                 database: layout.cache_db_path(),
@@ -108,26 +107,14 @@ pub(super) async fn check(
 }
 
 fn moved_units(
-    layout: &ProvenanceLayout,
+    repository: &Repository,
     mut stored: BTreeMap<String, String>,
 ) -> anyhow::Result<Vec<MovedUnit>> {
-    let state_dir = layout.state_dir();
-    let scopes = scope_ids(&state_dir)?;
     let mut moved = Vec::new();
-    for unit in units_for(&scopes) {
-        let live =
-            unit_stored_digest(&state_dir, &unit).map_err(|error| ReadRefusal::UnitUnreadable {
-                unit: unit.name(),
-                path: error.path,
-                error: format!("{:#}", error.error),
-            })?;
-        let stored = stored.remove(&unit.name()).unwrap_or_default();
+    for (unit, live) in live_digests(repository)? {
+        let stored = stored.remove(&unit).unwrap_or_default();
         if stored != live {
-            moved.push(MovedUnit {
-                unit: unit.name(),
-                stored,
-                live,
-            });
+            moved.push(MovedUnit { unit, stored, live });
         }
     }
     moved.extend(stored.into_iter().map(|(unit, stored)| MovedUnit {
@@ -137,4 +124,28 @@ fn moved_units(
     }));
     moved.sort_by(|left, right| left.unit.cmp(&right.unit));
     Ok(moved)
+}
+
+/// The stored digest of each unit of the canonical state, by unit name.
+///
+/// The files of a repository in a folder are hashed with no lock. The
+/// state of any other storage is hashed from one view of the storage.
+fn live_digests(repository: &Repository) -> anyhow::Result<Vec<(String, String)>> {
+    if !repository.has_local_storage() {
+        return view_stored_digests(&repository.storage().read_view()?);
+    }
+    let state_dir = repository.layout().state_dir();
+    units_for(&scope_ids(&state_dir)?)
+        .into_iter()
+        .map(|unit| {
+            let live = unit_stored_digest(&state_dir, &unit).map_err(|error| {
+                ReadRefusal::UnitUnreadable {
+                    unit: unit.name(),
+                    path: error.path,
+                    error: format!("{:#}", error.error),
+                }
+            })?;
+            Ok((unit.name(), live))
+        })
+        .collect()
 }

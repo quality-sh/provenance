@@ -174,9 +174,7 @@ async fn open_snapshot(
         }
         Check::Stale(guard) => {
             let repeat_hash = guard.is_none();
-            let snapshot =
-                super::refuse_stale::check(transaction, layout, repository.scope(), repeat_hash)
-                    .await;
+            let snapshot = super::refuse_stale::check(transaction, repository, repeat_hash).await;
             drop(guard);
             let snapshot = snapshot?;
             crate::test_probes::at("refuse_stale_after_hash")?;

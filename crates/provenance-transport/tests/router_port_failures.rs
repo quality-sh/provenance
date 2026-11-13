@@ -172,7 +172,7 @@ impl Pair {
 
     /// The in-process port of the memory repository, counted.
     fn in_process(&self) -> Arc<Counted> {
-        let reads = InProcessReadOperations::new(self.memory.clone());
+        let reads = InProcessReadOperations::new(self.memory.clone(), "selected").unwrap();
         Counted::new(Arc::new(reads))
     }
 }

@@ -20,8 +20,8 @@ pub use catch_up::catch_up_with_guard;
 pub use catch_up::catch_up_work;
 pub use catch_up::CatchUpReport;
 pub use record_rows::SEARCH_TEXT;
-pub use units::unit_stored_digest;
 pub use units::{scope_ids, unit_digest, units_for, Unit, UnitHashError};
+pub use units::{unit_stored_digest, view_stored_digests};
 pub use validation::stored_version as stored_validation_version;
 
 use super::MaterializeReport;

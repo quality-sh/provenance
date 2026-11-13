@@ -71,7 +71,7 @@ async fn the_router_over_memory_storage_answers_as_over_a_folder() {
         std::env::set_var(name, temporary.path());
     }
     std::env::set_current_dir(working.path()).unwrap();
-    let reads = InProcessReadOperations::new(memory.clone());
+    let reads = InProcessReadOperations::new(memory.clone(), "selected").unwrap();
     let port = Counted::new(std::sync::Arc::new(reads));
     let memory = memory.with_read_operations(port.clone());
     let actual = run(&Http::over(memory), root.as_str()).await;

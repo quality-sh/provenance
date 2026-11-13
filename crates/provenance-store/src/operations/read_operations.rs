@@ -6,24 +6,36 @@
 //! database, in another process, and serve the contract routes from a
 //! repository that has only its canonical state.
 //!
+//! Before the router gives a call to the port, it does all that it does for
+//! an operation that it runs itself: it decodes the call, checks the
+//! request, authorizes the context, waits for a work slot and prepares the
+//! repository through its host access. After the port answers, the router
+//! checks the answer against the operation: a success must have the shape
+//! of the operation's success, and a failure must be one that the operation
+//! declares, with its status. An answer that is not declared becomes the
+//! `internal` failure.
+//!
 //! A request is the call of one operation as the contract dispatch takes
 //! it: `{"context": {...}, "request": {...}}`. An answer is the encoded
 //! success, or the failure that the operation declares, with its status.
 //!
 //! [`InProcessReadOperations`] runs each operation on one opened
-//! repository, with the preparation of [`LocalRepository`]. It gives the
-//! answers that the router gives when it runs the operation itself.
+//! repository, with the checks and the preparation of [`LocalRepository`].
+//! It gives the answers that the router gives when it runs the operation
+//! itself.
 //!
 //! [`LocalRepository`]: super::LocalRepository
 
+use crate::repository::Repository;
 use provenance_core::protocol::failure::ErasedFailure;
 use serde_json::Value;
 use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 
 mod in_process;
-pub use in_process::{checked_context, InProcessReadOperations};
+pub use in_process::InProcessReadOperations;
 
 /// The answer of one read operation.
 pub type ReadAnswer = Pin<Box<dyn Future<Output = Result<Value, ErasedFailure>> + Send>>;
@@ -38,7 +50,7 @@ pub trait ReadOperations: Send + Sync + Debug {
 ///
 /// They are the page of each record family that the review page lists, one
 /// reviewed record, the document of a Requirement, and the Discussions and
-/// messages of a record.
+/// messages of a record. None of them writes.
 pub const READ_OPERATIONS: &[&str] = &[
     "page-sources",
     "page-requirements",
@@ -58,4 +70,23 @@ pub fn read_operation(operation: &str) -> Option<&'static str> {
         .iter()
         .copied()
         .find(|name| *name == operation)
+}
+
+impl Repository {
+    /// This repository with `reads` as the port of its read operations.
+    ///
+    /// The contract router sends each operation of [`READ_OPERATIONS`] to
+    /// the port, and does not run it. A clone keeps the port.
+    #[must_use]
+    pub fn with_read_operations(&self, reads: Arc<dyn ReadOperations>) -> Self {
+        Self {
+            reads: Some(reads),
+            ..self.clone()
+        }
+    }
+
+    /// The port of the read operations, if the caller gave one.
+    pub fn read_operations(&self) -> Option<&Arc<dyn ReadOperations>> {
+        self.reads.as_ref()
+    }
 }

@@ -100,7 +100,7 @@ async fn read_in(
     operation: &'static str,
     request: Value,
 ) -> Value {
-    let port = InProcessReadOperations::new(repository.clone());
+    let port = InProcessReadOperations::new(repository.clone(), "memory").unwrap();
     match port
         .run(operation, json!({ "context": context, "request": request }))
         .await

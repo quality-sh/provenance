@@ -15,22 +15,36 @@ use provenance_core::protocol::repository::{RepositoryContext, RepositoryScope, 
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::Value;
+use std::sync::Arc;
 
-/// Runs each read operation on one opened repository.
+/// Runs each read operation on one opened repository, bound under one
+/// target name.
 ///
-/// The repository is prepared as [`LocalRepository`] prepares it for the
-/// router, under the target name of the call.
-#[derive(Debug, Clone)]
+/// Each call is checked and authorized as [`LocalRepository`] checks it for
+/// the router, so a call that names another target refuses with
+/// `unknown_target`. Then the repository is prepared and the operation runs.
+#[derive(Clone)]
 pub struct InProcessReadOperations {
-    repository: Repository,
+    binding: Arc<LocalRepository>,
 }
 
 impl InProcessReadOperations {
-    /// The read operations of `repository`.
+    /// The read operations of `repository`, under the target name `alias`.
     ///
     /// A port that `repository` holds is not used: the operations run here.
-    pub const fn new(repository: Repository) -> Self {
-        Self { repository }
+    pub fn new(repository: Repository, alias: &str) -> Result<Self, OperationFailure> {
+        Ok(Self {
+            binding: Arc::new(LocalRepository::bind(repository, alias)?),
+        })
+    }
+}
+
+impl std::fmt::Debug for InProcessReadOperations {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("InProcessReadOperations")
+            .field("target", &self.binding.repository())
+            .finish_non_exhaustive()
     }
 }
 
@@ -41,36 +55,20 @@ impl ReadOperations for InProcessReadOperations {
                 Err(ErasedFailure::new(None, OperationFailure::UnknownOperation))
             });
         };
-        (entry.run)(self.repository.clone(), request)
+        (entry.run)(Arc::clone(&self.binding), request)
     }
-}
-
-/// The context that `call` selects, after its request is checked.
-///
-/// The call is decoded and its request is checked as the operation checks a
-/// call from outside, with no repository read. A host checks a call here,
-/// and authorizes its context, before it gives the call to a port.
-pub fn checked_context(
-    operation: &str,
-    call: &Value,
-) -> Result<RequestedContext, OperationFailure> {
-    let entry = entries()
-        .into_iter()
-        .find(|entry| entry.name == operation)
-        .ok_or(OperationFailure::UnknownOperation)?;
-    (entry.check)(call.clone())
 }
 
 struct Entry {
     name: &'static str,
-    check: fn(Value) -> Result<RequestedContext, OperationFailure>,
-    run: fn(Repository, Value) -> ReadAnswer,
+    mutates: bool,
+    run: fn(Arc<LocalRepository>, Value) -> ReadAnswer,
 }
 
-fn entry<O: Operation>() -> Entry {
+const fn entry<O: Operation>() -> Entry {
     Entry {
         name: O::NAME,
-        check: |call| check::<O>(call).map(|(selected, _)| selected),
+        mutates: O::MUTATES,
         run: run::<O>,
     }
 }
@@ -106,20 +104,16 @@ fn check<O: Operation>(call: Value) -> Result<(RequestedContext, O::Request), Op
     Ok((selected, call.request))
 }
 
-/// Checks the call, prepares the repository, then runs the operation.
+/// Checks the call, authorizes it, prepares the repository, then runs the
+/// operation.
 ///
 /// The order is the order of the router's own invocation. The failure is
 /// the dispatch's own failure type, which the port gives as it is.
-fn run<O: Operation>(repository: Repository, call: Value) -> ReadAnswer {
+fn run<O: Operation>(binding: Arc<LocalRepository>, call: Value) -> ReadAnswer {
     Box::pin(async move {
         let refuse = |failure| ErasedFailure::new(Some(O::NAME), failure);
         let (selected, request) = check::<O>(call).map_err(refuse)?;
-        let target = match &selected {
-            RequestedContext::Repository(context) => &context.repository,
-            RequestedContext::Scope(context) => &context.repository,
-            RequestedContext::Scoped(context) => &context.repository,
-        };
-        let binding = LocalRepository::bind(repository, target).map_err(refuse)?;
+        binding.authorize(O::NAME, &selected).map_err(refuse)?;
         let context = binding
             .prepare(O::NAME, selected, O::needs(&request))
             .map_err(refuse)?;
@@ -160,5 +154,17 @@ mod tests {
     fn the_published_list_is_the_list_the_adapter_runs() {
         let names: Vec<_> = super::entries().iter().map(|entry| entry.name).collect();
         assert_eq!(names, super::super::READ_OPERATIONS);
+    }
+
+    /// Implementation aid: no operation of the port writes, so a page write
+    /// never goes to it.
+    #[test]
+    fn no_read_operation_writes() {
+        let writes: Vec<_> = super::entries()
+            .iter()
+            .filter(|entry| entry.mutates)
+            .map(|entry| entry.name)
+            .collect();
+        assert_eq!(writes, Vec::<&str>::new());
     }
 }
