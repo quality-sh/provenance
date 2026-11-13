@@ -98,6 +98,12 @@ impl StateStore {
             &path,
             &lock_path,
             |records: &mut Vec<VerificationRun>| {
+                crate::write_error::ensure!(
+                    Fault,
+                    records.iter().all(|row| row.id != run.id),
+                    "the runs cache already holds verification run `{}`",
+                    run.id.as_str()
+                );
                 records.push(run.clone());
                 records.sort_by(|left, right| {
                     left.started_at
