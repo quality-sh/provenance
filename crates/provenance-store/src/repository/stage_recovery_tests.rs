@@ -288,8 +288,14 @@ fn the_removal_of_a_stopped_transaction_keeps_a_link_and_its_target() {
     crate::publication::with_repository_publication(&layout, |_| Ok(())).unwrap();
 
     assert_eq!(transactions(&fixture.root), vec![link.clone()]);
-    assert!(std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink());
-    assert_eq!(std::fs::read_to_string(outside.join("sentinel")).unwrap(), "keep");
+    assert!(std::fs::symlink_metadata(&link)
+        .unwrap()
+        .file_type()
+        .is_symlink());
+    assert_eq!(
+        std::fs::read_to_string(outside.join("sentinel")).unwrap(),
+        "keep"
+    );
 }
 
 #[test]
