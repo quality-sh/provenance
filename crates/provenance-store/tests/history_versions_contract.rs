@@ -14,15 +14,19 @@ use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::review::{RecordVersion, ReviewHistoryQuery};
 use provenance_core::threads::DiscussionOrigin;
 use provenance_core::{NodeType, StableId};
-use provenance_store::operations::read_policy::ReadPolicy;
-use provenance_store::repository::Repository;
+use provenance_store::layout::ProvenanceLayout;
+use provenance_store::operations::read_policy::{FreshnessPolicy, ReadPolicy};
+use provenance_store::read_database::file::FileReadDatabase;
+use provenance_store::repository::{Repository, RepositoryIdentity};
 use provenance_store::review::history::contract::{
     self, Adapter, Commit, Harness, MemoryFileVersions,
 };
 use provenance_store::review::history::GitFileVersions;
 use provenance_store::review::history::{BoxFuture, FileVersion, FileVersions};
 use provenance_store::review::read_history;
+use provenance_store::settings::Settings;
 use provenance_store::shards;
+use provenance_store::storage::memory::{MemorySectionLock, MemoryStateStorage};
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -305,17 +309,25 @@ async fn the_contract_refuses_an_adapter_that_compares_a_merge_with_its_first_pa
     contract::versions_follow_the_history_of_head(&WrongMerges).await;
 }
 
-async fn history(repository: &Repository, id: StableId) -> anyhow::Result<Vec<RecordVersion>> {
+async fn history_with(
+    repository: &Repository,
+    id: StableId,
+    policy: ReadPolicy,
+) -> anyhow::Result<Vec<RecordVersion>> {
     let query = ReviewHistoryQuery {
         record_kind: NodeType::Requirement,
         record_id: id,
         limit: 10,
         cursor: None,
     };
-    Ok(read_history(repository, ReadPolicy::default(), query)
+    Ok(read_history(repository, policy, query)
         .await?
         .result
         .entries)
+}
+
+async fn history(repository: &Repository, id: StableId) -> anyhow::Result<Vec<RecordVersion>> {
+    history_with(repository, id, ReadPolicy::default()).await
 }
 
 fn ids(entries: &[RecordVersion]) -> Vec<&str> {
@@ -375,25 +387,39 @@ async fn a_repository_reads_record_history_through_its_file_versions() {
 
 /// Implementation aid with no Rule binding: a repository over storage that
 /// is not a folder shows its working version from that storage. Its working
-/// tree is an empty folder, so a read of the record file from disk finds
-/// none.
+/// tree is an empty folder and its read database is in another folder, so a
+/// read of the record file from disk finds none.
 #[tokio::test]
 async fn a_repository_over_other_storage_shows_its_working_version_from_storage() {
-    let memory = memory::memory_repository();
-    let repository = memory
-        .repository
+    let root = tempfile::tempdir().unwrap();
+    let cache = tempfile::tempdir().unwrap();
+    let layout = ProvenanceLayout::new(Utf8Path::from_path(cache.path()).unwrap());
+    std::fs::create_dir_all(layout.cache_dir()).unwrap();
+    let working_tree =
+        Utf8PathBuf::from_path_buf(dunce::canonicalize(root.path()).unwrap()).unwrap();
+    let identity = RepositoryIdentity::new(working_tree, memory::scope(), Settings::default())
         .with_file_versions(Arc::new(MemoryFileVersions::new(&[])));
+    let repository = Repository::with_storage(
+        identity,
+        Arc::new(MemoryStateStorage::new(
+            memory::initial_state().into_entries(),
+        )),
+        Arc::new(MemorySectionLock::default()),
+        Some(Arc::new(FileReadDatabase::new(layout))),
+    )
+    .unwrap();
     let entries = history(&repository, memory::id("req_expiry"))
         .await
         .unwrap();
     assert_eq!(ids(&entries), ["working"]);
     assert_eq!(entries[0].commit, None);
-    memory.assert_empty();
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
 }
 
 /// Implementation aid with no Rule binding: on an opened repository, a
-/// record file of the working copy that is not UTF-8 refuses the history
-/// read with the text of the storage view, which names the file.
+/// record file of the working copy that is not UTF-8 refuses a history read
+/// that does not catch up first with the text of the storage view, which
+/// names the file. A read that catches up refuses at the catch-up.
 #[tokio::test]
 async fn a_working_record_file_that_is_not_utf8_refuses_the_history_read() {
     let (temp, _store) = discussion_support::fixture();
@@ -401,8 +427,12 @@ async fn a_working_record_file_that_is_not_utf8_refuses_the_history_read() {
     let repository = discussion_support::repository(root);
     let scope = discussion_support::scope();
     let shard = shards::path_for(repository.layout(), &scope, NodeType::Requirement);
+    history(&repository, discussion_support::id())
+        .await
+        .unwrap();
     std::fs::write(&shard, b"\xff\xfe\n").unwrap();
-    let error = history(&repository, discussion_support::id())
+    let annotate = ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly);
+    let error = history_with(&repository, discussion_support::id(), annotate)
         .await
         .unwrap_err();
     assert_eq!(
