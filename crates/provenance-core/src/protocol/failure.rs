@@ -90,6 +90,12 @@ pub enum OperationError<F> {
     Handler(F),
 }
 
+impl<F> From<OperationFailure> for OperationError<F> {
+    fn from(failure: OperationFailure) -> Self {
+        Self::Common(failure)
+    }
+}
+
 /// Exact declared failure payload after dispatch, with private response status.
 ///
 /// A failure of no known kind keeps its native cause, with absolute paths,

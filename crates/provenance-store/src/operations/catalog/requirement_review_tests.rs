@@ -4,7 +4,7 @@ use crate::{
     operations::catalog::{Operation, PreparedContext, PreparedScope},
     state_store::StateStore,
 };
-use provenance_core::{Manifest, RepoPathPrefix, ScopeId};
+use provenance_core::{protocol::failure::OperationError, Manifest, RepoPathPrefix, ScopeId};
 use serde_json::json;
 
 fn fixture() -> (tempfile::TempDir, PreparedContext, StateStore, ScopeId) {
@@ -316,13 +316,13 @@ async fn a_repeated_update_with_an_old_etag_returns_a_typed_conflict() {
     .await
     .unwrap();
 
-    let Err(error) = UpdateRequirementResource::run(
+    let Err(OperationError::Handler(error)) = UpdateRequirementResource::run(
         context,
         update_request_with_etag("update_a", &first_etag, "First text."),
     )
     .await
     else {
-        panic!("the stale update succeeded");
+        panic!("the stale update gave no handler failure");
     };
 
     assert!(matches!(
