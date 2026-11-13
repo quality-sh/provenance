@@ -47,11 +47,10 @@ async fn a_create_refuses_an_approval_time_past_the_range_and_keeps_nothing() {
             .unwrap_err();
         assert_eq!(error, refusal(), "{past}");
     }
-    assert!(fixture
-        .store
-        .list_resolutions(&fixture.scope)
-        .unwrap()
-        .is_empty());
+    assert_eq!(
+        fixture.store.list_resolutions(&fixture.scope).unwrap(),
+        Vec::<provenance_core::Resolution>::new()
+    );
     for end in [LARGEST, -LARGEST] {
         let fixture = Fixture::new();
         fixture.requirement().await;
