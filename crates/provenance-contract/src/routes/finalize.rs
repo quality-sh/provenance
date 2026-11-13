@@ -23,10 +23,7 @@ pub(super) fn request_schemas(definitions: &mut [Definition]) {
 /// field, so the exported parameter constraints and the runtime
 /// deserialization limits stay the same limits by construction.
 fn derive_bound_parameter_schemas(registration: &mut Registration) {
-    let raw =
-        registration.request.raw.clone().unwrap_or_else(|| {
-            panic!("bound parameters without a request type cannot derive schemas")
-        });
+    let raw = raw_request(registration).clone();
     let mut derived = Vec::new();
     for binding in &registration.request.path {
         derived.push((
@@ -90,24 +87,35 @@ fn bound_fields(registration: &Registration) -> Vec<&'static str> {
     fields
 }
 
+/// The request type of the operation of a registration, with each typed field.
+fn raw_request(registration: &Registration) -> &Value {
+    let operation = registration.handler.operation;
+    registration
+        .request
+        .raw
+        .as_ref()
+        .unwrap_or_else(|| panic!("operation `{operation}` has no request type"))
+}
+
 /// A route that gets each input field from its path and its bound context publishes no
 /// request body. Each other route publishes a body without the fields that the route fills.
 #[provenance_macros::rule("rule_route_without_body_fields_takes_no_body")]
 fn publish_body_fields(definition: &mut Definition) {
-    let bound = bound_fields(&definition.registration);
-    let request = &mut definition.registration.request;
-    let fields = request
-        .raw
-        .as_ref()
-        .and_then(|raw| raw.get("properties"))
-        .and_then(Value::as_object);
-    let from_body = |field: &String| !bound.contains(&field.as_str());
-    if !fields.is_some_and(|fields| fields.keys().any(from_body)) {
-        request.schema = None;
+    let registration = &mut definition.registration;
+    if registration.request.schema.is_none() {
+        return;
+    }
+    let bound = bound_fields(registration);
+    let operation = registration.handler.operation;
+    let from_body = query::request_fields(operation, raw_request(registration))
+        .iter()
+        .any(|(field, _)| !bound.contains(&field.as_str()));
+    if !from_body {
+        registration.request.schema = None;
         return;
     }
     for field in bound.into_iter().chain(["action"]) {
-        schema::hide_bound_request_field(&mut request.schema, field);
+        schema::hide_bound_request_field(&mut registration.request.schema, field);
     }
 }
 

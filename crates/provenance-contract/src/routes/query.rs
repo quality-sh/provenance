@@ -1,14 +1,43 @@
 use crate::{Parameter, QueryRequestBinding, RequestBinding};
 use serde_json::Value;
 
+/// The fields of a raw request type. The unit type has no field. An object that refuses each
+/// field that its `properties` do not name has those properties and no other field, whatever
+/// its other keywords say. The form of each other request does not show its fields, so the
+/// construction of the catalog stops.
+pub(super) fn request_fields<'a>(operation: &str, raw: &'a Value) -> Vec<(&'a String, &'a Value)> {
+    shown_fields(raw).unwrap_or_else(|| {
+        panic!(
+            "the request type of operation `{operation}` does not show its fields. The catalog \
+             reads the fields of the unit type and of an object that refuses unknown fields: {raw}"
+        )
+    })
+}
+
+/// The fields that the form of `raw` shows, or nothing when a field can come from a keyword
+/// that is not the top-level `properties`.
+fn shown_fields(raw: &Value) -> Option<Vec<(&String, &Value)>> {
+    match raw.get("type").and_then(Value::as_str)? {
+        "null" => Some(Vec::new()),
+        "object" => {
+            let closed = raw.get("additionalProperties") == Some(&Value::Bool(false))
+                && raw.get("patternProperties").is_none();
+            let fields = match raw.get("properties") {
+                Some(properties) => properties.as_object()?.iter().collect(),
+                None => Vec::new(),
+            };
+            closed.then_some(fields)
+        }
+        _ => None,
+    }
+}
+
 pub(super) fn parameters(
+    operation: &str,
     schema: &Value,
     route: &RequestBinding,
     query: &QueryRequestBinding,
 ) -> Vec<Parameter> {
-    let Some(properties) = schema.get("properties").and_then(Value::as_object) else {
-        return Vec::new();
-    };
     let required = schema
         .get("required")
         .and_then(Value::as_array)
@@ -16,8 +45,8 @@ pub(super) fn parameters(
         .flatten()
         .filter_map(Value::as_str)
         .collect::<std::collections::BTreeSet<_>>();
-    properties
-        .iter()
+    request_fields(operation, schema)
+        .into_iter()
         .filter(|(name, _)| !is_bound(name, route, query))
         .map(|(name, field)| {
             let parameter_schema = parameter_schema(schema, field)
@@ -181,9 +210,11 @@ mod tests {
     fn unsupported_query_fields_refuse_catalog_construction() {
         let schema = json!({
             "type": "object",
+            "additionalProperties": false,
             "properties": {"unsupported": {"type": "object"}}
         });
         parameters(
+            "example",
             &schema,
             &RequestBinding::default(),
             &QueryRequestBinding::default(),
@@ -193,12 +224,13 @@ mod tests {
     /// The fields of this request are in the choices of a `oneOf`, so the query parameters of
     /// the route are not known.
     #[test]
-    #[should_panic(expected = "does not show its fields")]
+    #[should_panic(expected = "operation `example` does not show its fields")]
     fn a_query_request_that_does_not_show_its_fields_refuses_catalog_construction() {
         let schema = json!({
             "oneOf": [{"type": "object", "properties": {"text": {"type": "string"}}}]
         });
         parameters(
+            "example",
             &schema,
             &RequestBinding::default(),
             &QueryRequestBinding::default(),
