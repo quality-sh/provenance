@@ -554,6 +554,22 @@ jobs:
           }
           RS
           PROVENANCE_TEST_STE100_ASSET_URL=http://127.0.0.1:12345/exported.pdf cargo run --quiet --offline --manifest-path target/test-ste100-env/Cargo.toml
+      - name: TEMPORARY line end evidence
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -x
+          git config --show-origin --get-all core.autocrlf || true
+          files=$(git ls-files 'crates/provenance-store/src/operations/queries/tests/*.txt')
+          cp .gitattributes "$RUNNER_TEMP/attributes"
+          grep -v 'queries/tests' "$RUNNER_TEMP/attributes" > .gitattributes
+          rm -f $files && git checkout -- $files
+          git ls-files --eol -- $files
+          od -c crates/provenance-store/src/operations/queries/tests/reader_outputs.txt | head -n 3
+          cp "$RUNNER_TEMP/attributes" .gitattributes
+          rm -f $files && git checkout -- $files
+          git ls-files --eol -- $files
+          git status --short
       # The Compile-fail tests job runs the trybuild tests.
       # cargo_nested_sdk runs a real nested Cargo build and stays on every leg.
       # The generated HTTP client is platform neutral and is the slowest crate
