@@ -1,6 +1,7 @@
 //! A time field past the range of the read database, ±(2^53 − 1), in a
 //! committed record fails as a malformed field fails: `check` and a read
-//! refuse with `invalid_state_file` at the line of the record.
+//! refuse with the file and the line of the record, and a read gives
+//! `invalid_state_file`.
 //!
 //! No Rule: the plan proposes the Rule to the owner. Until it is in the
 //! graph, this test holds the refusal.
@@ -57,31 +58,34 @@ fn repository(value: Value) -> (tempfile::TempDir, String) {
     (directory, repo)
 }
 
-/// The text of `output` with the value of each `"message":"..."` left out.
+/// The text of `output` with the parse message of each line left out: the
+/// value of `"message":"..."` in a JSON line, and the text after `line 1: `
+/// in a text line.
 fn without_messages(output: &[u8]) -> String {
-    let text = String::from_utf8_lossy(output);
-    let mut kept = String::new();
-    let mut rest = text.as_ref();
-    while let Some(at) = rest.find("\"message\":\"") {
-        let start = at + "\"message\":\"".len();
-        kept.push_str(&rest[..start]);
-        let after = &rest[start..];
-        let mut end = 0;
-        let mut escaped = false;
-        for (index, c) in after.char_indices() {
-            if escaped {
-                escaped = false;
-            } else if c == '\\' {
-                escaped = true;
-            } else if c == '"' {
-                end = index;
-                break;
+    String::from_utf8_lossy(output)
+        .lines()
+        .map(|line| {
+            if let Some(at) = line.find("\"message\":\"") {
+                let start = at + "\"message\":\"".len();
+                let rest = &line[start..];
+                let mut escaped = false;
+                let end = rest
+                    .char_indices()
+                    .find(|&(_, c)| {
+                        let close = !escaped && c == '"';
+                        escaped = !escaped && c == '\\';
+                        close
+                    })
+                    .map_or(rest.len(), |(index, _)| index);
+                format!("{}{}", &line[..start], &rest[end..])
+            } else if let Some(at) = line.find(" line 1: ") {
+                line[..at + " line 1: ".len()].to_owned()
+            } else {
+                line.to_owned()
             }
-        }
-        rest = &after[end..];
-    }
-    kept.push_str(rest);
-    kept
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// The exit code, standard output and standard error of `args` over `repo`.
@@ -102,16 +106,19 @@ fn a_committed_time_past_the_range_fails_as_a_malformed_field_fails() {
         &["check", "--format", "json"][..],
         &["resolution_a", "get", "--format", "json"][..],
     ] {
+        let read = args[0] == "resolution_a";
         let (past_code, past_out, past_err) = run(&past, args);
         let (code, out, err) = run(&malformed, args);
         let past_text = String::from_utf8_lossy(&past_err).into_owned();
         assert_eq!(past_code, Some(1), "{args:?}: {past_text}");
-        assert!(
-            past_text.contains("invalid_state_file"),
-            "{args:?}: {past_text}"
-        );
+        assert!(past_text.contains("res.jsonl"), "{args:?}: {past_text}");
         assert!(
             past_text.contains("9007199254740992"),
+            "{args:?}: {past_text}"
+        );
+        assert_eq!(
+            past_text.contains("invalid_state_file"),
+            read,
             "{args:?}: {past_text}"
         );
         assert_eq!(
