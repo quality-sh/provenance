@@ -1,8 +1,11 @@
 //! The state that every case starts from, and the records of a final state
 //! that the laws read.
 
-use crate::generate::{self, DECIDER, DETAIL_REQUIREMENT, FIRST_REQUIREMENT, FIRST_RULE, TOPIC};
+use crate::generate::{
+    self, Target, Value, DECIDER, DETAIL_REQUIREMENT, FIRST_REQUIREMENT, FIRST_RULE, TOPIC,
+};
 use crate::identity::{identity, identity_with_ids, scope, stable, INITIAL_STATE_IDS};
+use provenance_core::TopicStatus;
 use provenance_store::repository::Repository;
 use provenance_store::storage::memory::{MemorySectionLock, MemoryStateStorage};
 use provenance_store::storage::{StateKey, StateStorage};
@@ -73,7 +76,7 @@ pub fn initial_state() -> InitialState {
             id: stable(TOPIC),
             requirement_id: stable(FIRST_REQUIREMENT),
             title: "Who owns a share link".into(),
-            status: provenance_core::TopicStatus::Open,
+            status: TopicStatus::Open,
             links: Vec::new(),
         })
         .expect("the Topic is written");
@@ -112,26 +115,45 @@ pub fn open_entries(entries: &BTreeMap<StateKey, Vec<u8>>) -> anyhow::Result<Rep
 pub struct FinalRecords {
     /// Each Requirement with its description.
     pub descriptions: BTreeMap<String, Option<String>>,
+    /// The status of the Topic.
+    pub topic_status: Option<TopicStatus>,
     /// The holder of the Topic claim.
     pub claim: Option<String>,
     pub messages: BTreeSet<String>,
+}
+
+impl FinalRecords {
+    /// Tells if `target` holds `value`.
+    pub fn holds(&self, target: &Target, value: &Value) -> bool {
+        match (target, value) {
+            (Target::Requirement(id), Value::Absent) => !self.descriptions.contains_key(id),
+            (Target::Requirement(id), Value::Requirement { description }) => {
+                self.descriptions.get(id) == Some(description)
+            }
+            (Target::Topic, Value::Topic { status, claim }) => {
+                self.topic_status == Some(*status) && self.claim == *claim
+            }
+            _ => false,
+        }
+    }
 }
 
 /// Reads the records that the laws follow from `entries`.
 pub fn final_records(entries: &BTreeMap<StateKey, Vec<u8>>) -> anyhow::Result<FinalRecords> {
     let repository = open_entries(entries)?;
     let view = repository.view()?;
+    let topic = view
+        .list_topics(&scope())?
+        .into_iter()
+        .find(|topic| topic.id.as_str() == TOPIC);
     Ok(FinalRecords {
         descriptions: view
             .list_requirements(&scope())?
             .into_iter()
             .map(|requirement| (requirement.id.as_str().to_owned(), requirement.description))
             .collect(),
-        claim: view
-            .list_topics(&scope())?
-            .into_iter()
-            .find(|topic| topic.id.as_str() == TOPIC)
-            .and_then(|topic| topic.claimed_by),
+        topic_status: topic.as_ref().map(|topic| topic.status),
+        claim: topic.and_then(|topic| topic.claimed_by),
         messages: view
             .list_messages(&scope())?
             .into_iter()

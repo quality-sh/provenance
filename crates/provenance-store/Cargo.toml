@@ -80,6 +80,30 @@ name = "automatic_submissions"
 required-features = ["host"]
 
 [[test]]
+name = "begin_verification_answers"
+required-features = ["host"]
+
+[[test]]
+name = "begin_verification_local_disk"
+required-features = ["host"]
+
+[[test]]
+name = "begin_verification_refusals"
+required-features = ["host"]
+
+[[test]]
+name = "begin_verification_run_ids"
+required-features = ["host"]
+
+[[test]]
+name = "begin_verification_section"
+required-features = ["host"]
+
+[[test]]
+name = "begin_verification_write_set"
+required-features = ["host"]
+
+[[test]]
 name = "catch_up_lock"
 required-features = ["host"]
 
