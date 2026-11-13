@@ -1753,12 +1753,6 @@ jobs:
         run: >-
           cargo test --locked -p provenance-store
           --test memory_repository --test memory_repository_stage_reads
-      # The read operations without host, over memory storage and a read
-      # database that the test catches up as an embedder does.
-      - name: Test the read operations on memory without host
-        run: >-
-          cargo test --locked -p provenance-store --features test-fixture
-          --test read_operations_on_memory
       # The store must build every target without host, its library unit
       # tests too. A unit test that needs the local disk is gated behind host.
       # The transport must also build every target without host: a unit test
@@ -1803,6 +1797,13 @@ jobs:
         env:
           TARGET: ${{ steps.kernel.outputs.target }}
         run: cargo check --locked -p provenance-store --target "$TARGET" --features test-fixture
+      - name: Test the read operations on memory without host
+        # Natively, over memory storage and an SQLite read database in memory
+        # behind the contract wrapper, which the test catches up as an
+        # embedder does.
+        run: >-
+          cargo test --locked -p provenance-store --features test-fixture
+          --test read_operations_on_memory
 
   # The one status the branch ruleset requires. Conditional jobs skip when a
   # pull request leaves their inputs untouched, and a skipped matrix job never
