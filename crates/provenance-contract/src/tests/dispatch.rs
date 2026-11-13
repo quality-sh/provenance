@@ -2,7 +2,7 @@ use super::invoke;
 use provenance_core::SDK_PROTOCOL_VERSION;
 use provenance_macros::verifies;
 use provenance_store::cache::ProjectionFamily;
-use serde_json::json;
+use serde_json::{json, Value};
 
 #[tokio::test]
 #[verifies("rule_ste_sdk_statement_report", examples)]
@@ -150,28 +150,56 @@ async fn topic_update_call_refuses_a_clear_list() {
     assert_eq!(reached.error, json!({"kind":"unavailable_needs"}));
 }
 
-/// The info operation has no input field. Its call takes a null request and refuses each
-/// other request form.
+/// Two operations that have no input field, each with the context of its native call.
+fn without_input() -> [(&'static str, Value); 2] {
+    [
+        ("info", json!({"repository":"selected"})),
+        (
+            "list-threads",
+            json!({"repository":"selected","scope":"default"}),
+        ),
+    ]
+}
+
+/// Runs one native call on a host with no repositories and returns the error. That host
+/// gives `unavailable_needs` to each call that decodes.
+async fn call_error(operation: &str, context: &Value, mut call: Value) -> Value {
+    call["context"] = context.clone();
+    invoke(operation, SDK_PROTOCOL_VERSION, call)
+        .await
+        .unwrap_err()
+        .error
+}
+
+/// A native call of an operation that has no input fields takes a null request and refuses
+/// an empty object.
 #[tokio::test]
 #[verifies("rule_operation_without_input_takes_null_request", examples)]
-async fn info_call_takes_only_a_null_request() {
-    let info = |call: serde_json::Value| async move {
-        invoke("info", SDK_PROTOCOL_VERSION, call)
-            .await
-            .unwrap_err()
-            .error
-    };
-    let context = json!({"repository":"selected"});
-    assert_eq!(
-        info(json!({"context":context,"request":null})).await,
-        json!({"kind":"unavailable_needs"})
-    );
-    assert_eq!(
-        info(json!({"context":context,"request":{}})).await,
-        json!({"kind":"invalid_input","field":"request","reason":"invalid_value"})
-    );
-    assert_eq!(
-        info(json!({"context":context})).await,
-        json!({"kind":"invalid_input","field":"request","reason":"required"})
-    );
+async fn call_of_an_operation_without_input_takes_only_a_null_request() {
+    for (operation, context) in without_input() {
+        assert_eq!(
+            call_error(operation, &context, json!({"request":null})).await,
+            json!({"kind":"unavailable_needs"}),
+            "{operation}"
+        );
+        assert_eq!(
+            call_error(operation, &context, json!({"request":{}})).await,
+            json!({"kind":"invalid_input","field":"request","reason":"invalid_value"}),
+            "{operation}"
+        );
+    }
+}
+
+/// A characterization with no Rule binding, because no Rule states the answer to a native
+/// call that has no request member. The decode of each native call needs the member, and
+/// this test shows that the same is true for an operation that has no input fields.
+#[tokio::test]
+async fn call_of_an_operation_without_input_needs_the_request_member() {
+    for (operation, context) in without_input() {
+        assert_eq!(
+            call_error(operation, &context, json!({})).await,
+            json!({"kind":"invalid_input","field":"request","reason":"required"}),
+            "{operation}"
+        );
+    }
 }

@@ -264,6 +264,10 @@ pub async fn invoke_with<H: Invoke>(
     (entry.invoke)(call, host).await
 }
 
+/// Decodes the native call of one operation and runs the operation on the host. The request
+/// member of the call has the request type of the operation, so an operation that has no
+/// input fields takes only null.
+#[provenance_macros::rule("rule_operation_without_input_takes_null_request")]
 fn invoke_resolved<O: Operation, H: Invoke>(
     call: Value,
     host: H,

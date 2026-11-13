@@ -116,8 +116,7 @@ query!(
 );
 
 /// Gives the engine version and the protocol version of one repository. The operation takes
-/// no input, so its request is the unit type, which is null on the wire.
-#[provenance_macros::rule("rule_operation_without_input_takes_null_request")]
+/// no input, so its request is the unit type.
 pub struct Info;
 impl Operation for Info {
     type Request = ();
