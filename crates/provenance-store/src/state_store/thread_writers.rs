@@ -91,6 +91,9 @@ impl StateStore {
         let existing = self.list_messages(scope_id)?;
         let now_ms = super::requirement_reviews::now_millis(&*self.clock())?;
         let created_at = next_message_time(now_ms, existing.iter().map(|m| m.created_at).max())?;
+        if !provenance_core::model::exact_integer::is_exact(created_at) {
+            return Err(crate::refusal::fault!("Message timestamp overflow"));
+        }
         let id = new_message_id(&*self.ids());
         let message = Message {
             scope_id: scope_id.clone(),

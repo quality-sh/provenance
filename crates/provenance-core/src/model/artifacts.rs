@@ -198,7 +198,12 @@ pub struct Resolution {
     pub made_by: Option<String>,
     #[serde(default, alias = "approvedBy", skip_serializing_if = "Option::is_none")]
     pub approved_by: Option<String>,
-    #[serde(default, alias = "approvedAt", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        alias = "approvedAt",
+        deserialize_with = "super::exact_integer::optional_time",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub approved_at: Option<i64>,
     #[relation(target = Requirement, flow = target_upstream, required)]
     #[serde(

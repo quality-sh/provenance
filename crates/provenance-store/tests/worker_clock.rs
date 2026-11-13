@@ -5,12 +5,10 @@
 #[path = "support/memory.rs"]
 mod memory;
 
-use memory::{id, initial_state, scope};
+use memory::{id, initial_state, scope, FixedClock};
 use provenance_core::{MessageRole, NodeType, RequirementStatus, ThreadParent};
 use provenance_macros::verifies;
-use provenance_store::repository::{
-    Clock, IdSource, Repository, RepositoryHistory, RepositoryIdentity,
-};
+use provenance_store::repository::{IdSource, Repository, RepositoryHistory, RepositoryIdentity};
 use provenance_store::settings::Settings;
 use provenance_store::state_store::{CreateRequirementInput, PostMessageInput};
 use provenance_store::storage::memory::{MemorySectionLock, MemoryStateStorage};
@@ -82,16 +80,6 @@ fn the_scan_finds_the_std_clock_and_skips_the_local_adapter() {
     ));
     assert!(is_local_adapter(&root.join("storage/local.rs"), &root));
     assert!(!is_local_adapter(&root.join("storage/memory.rs"), &root));
-}
-
-/// A clock that always reads one time.
-#[derive(Debug)]
-struct FixedClock(time::OffsetDateTime);
-
-impl Clock for FixedClock {
-    fn now(&self) -> time::OffsetDateTime {
-        self.0
-    }
 }
 
 /// IDs that count up from one.
