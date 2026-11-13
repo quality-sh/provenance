@@ -7,6 +7,7 @@ use provenance_core::{
 };
 use provenance_macros::rule;
 use std::collections::BTreeSet;
+use std::convert::Infallible;
 
 impl StateStore {
     /// Runs `operation` in the section of this store under the lifecycle
@@ -274,19 +275,14 @@ fn merge_replaceable<T: Clone + IdeationRecord>(
             incoming_ids.insert(record_id),
             "duplicate {kind} id {record_id} in batch"
         );
-        if let Some(index) = existing
-            .iter()
-            .position(|current| current.immutable_id() == record_id)
-        {
+        replace_checked_or_append(existing, record.clone(), |_| {
             crate::write_error::ensure!(
                 AlreadyExists,
                 replace,
                 "{kind} {record_id} already exists"
             );
-            existing[index] = record.clone();
-        } else {
-            existing.push(record.clone());
-        }
+            Ok(())
+        })?;
     }
     Ok(())
 }
@@ -328,11 +324,26 @@ pub(super) fn overlay_records<T: IdeationRecord>(records: &mut Vec<T>, incoming:
 /// Puts `record` in place of the record of `records` with its id, or at the
 /// end when no record has its id.
 pub(super) fn replace_or_append<T: IdeationRecord>(records: &mut Vec<T>, record: T) {
+    let Ok(()) = replace_checked_or_append(records, record, |_| Ok::<(), Infallible>(()));
+}
+
+/// Puts `record` in place of the record of `records` with its id, or at the
+/// end when no record has its id. Before a replacement, `check_stored` reads
+/// the stored record with that id; when it refuses, `records` stays as it is.
+pub(super) fn replace_checked_or_append<T: IdeationRecord, E>(
+    records: &mut Vec<T>,
+    record: T,
+    check_stored: impl FnOnce(&T) -> Result<(), E>,
+) -> Result<(), E> {
     match records
         .iter()
         .position(|current| current.immutable_id() == record.immutable_id())
     {
-        Some(index) => records[index] = record,
+        Some(index) => {
+            check_stored(&records[index])?;
+            records[index] = record;
+        }
         None => records.push(record),
     }
+    Ok(())
 }

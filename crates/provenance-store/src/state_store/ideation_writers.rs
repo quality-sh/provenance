@@ -1,4 +1,4 @@
-use super::ideation_batches::replace_or_append;
+use super::ideation_batches::{replace_checked_or_append, replace_or_append};
 use super::{
     CreateContributionInput, CreateSynthesisPacketInput, StateStore, UpdateContributionInput,
     UpdateSynthesisPacketInput,
@@ -125,20 +125,14 @@ impl StateStore {
         }
         let path = shards::contributions_path(&self.layout, &scope_id);
         self.mutate_jsonl_records(&path, |records: &mut Vec<Contribution>| {
-            if let Some(index) = records
-                .iter()
-                .position(|record| record.id == contribution.id)
-            {
+            replace_checked_or_append(records, contribution.clone(), |stored| {
                 crate::write_error::ensure!(AlreadyExists, replace, "contribution already exists");
                 super::ideation_batches::ensure_asserted_contribution_unchanged(
-                    &records[index],
+                    stored,
                     &contribution,
                     &self.list_assertion_records(&scope_id)?,
-                )?;
-                records[index] = contribution.clone();
-            } else {
-                records.push(contribution.clone());
-            }
+                )
+            })?;
             let mut contributions = self.list_contributions(&scope_id)?;
             replace_or_append(&mut contributions, contribution.clone());
             self.check_ideation_aggregate(
@@ -259,24 +253,18 @@ impl StateStore {
         }
         let path = shards::synthesis_packets_path(&self.layout, &scope_id);
         self.mutate_jsonl_records(&path, |records: &mut Vec<SynthesisPacket>| {
-            if let Some(index) = records
-                .iter()
-                .position(|record| record.id == synthesis_packet.id)
-            {
+            replace_checked_or_append(records, synthesis_packet.clone(), |stored| {
                 crate::write_error::ensure!(
                     AlreadyExists,
                     replace,
                     "synthesis packet already exists"
                 );
                 super::ideation_batches::ensure_asserted_synthesis_unchanged(
-                    &records[index],
+                    stored,
                     &synthesis_packet,
                     &self.list_assertion_records(&scope_id)?,
-                )?;
-                records[index] = synthesis_packet.clone();
-            } else {
-                records.push(synthesis_packet.clone());
-            }
+                )
+            })?;
             let mut synthesis_packets = self.list_synthesis_packets(&scope_id)?;
             replace_or_append(&mut synthesis_packets, synthesis_packet.clone());
             self.check_ideation_aggregate(
