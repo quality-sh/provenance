@@ -99,6 +99,10 @@ name = "claim_holder"
 required-features = ["host"]
 
 [[test]]
+name = "close_topic_body"
+required-features = ["host"]
+
+[[test]]
 name = "decision_actor_refusal"
 required-features = ["host"]
 
