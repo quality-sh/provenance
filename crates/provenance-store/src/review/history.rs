@@ -88,11 +88,14 @@ impl StateStore {
             Ok((held.state_text(&path)?, held.list_discussions(scope)?))
         })?;
         let history = self.file_versions();
-        let files = history.versions(&self.relative(&path)?).await?;
-        let records = files
-            .iter()
-            .map(|file| file.text.as_deref().and_then(|text| find(text, id)))
-            .collect::<Vec<_>>();
+        let relative = self.relative(&path)?;
+        let files = history.versions(&relative).await?;
+        // One text at a time: the read keeps only the record it finds in it.
+        let mut records = Vec::with_capacity(files.len());
+        for file in files.iter() {
+            let text = history.text(&relative, &file.commit).await?;
+            records.push(text.as_deref().and_then(|text| find(text, id)));
+        }
         let head = records.last().cloned().flatten();
         let mut versions = Vec::new();
         for index in lineage(&files, &records) {

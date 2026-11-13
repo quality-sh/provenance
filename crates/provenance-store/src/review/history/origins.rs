@@ -19,23 +19,17 @@ pub(super) async fn assign(
     id: &StableId,
     versions: &mut [VersionedRecord],
 ) -> anyhow::Result<()> {
-    let commits = versions
-        .iter()
-        .filter_map(|version| version.version.commit.clone())
-        .collect::<Vec<_>>();
-    let mut committed = history.texts(path, &commits).await?.into_iter();
     let mut seen = BTreeSet::new();
     for version in versions {
-        let discussions = if version.version.commit.is_some() {
-            committed
-                .next()
-                .flatten()
+        let discussions = match &version.version.commit {
+            Some(commit) => history
+                .text(path, commit)
+                .await?
                 .unwrap_or_default()
                 .lines()
                 .filter_map(|line| serde_json::from_str::<Discussion>(line).ok())
-                .collect::<Vec<_>>()
-        } else {
-            working.to_vec()
+                .collect::<Vec<_>>(),
+            None => working.to_vec(),
         };
         for discussion in discussions {
             for outcome in discussion.outcomes {

@@ -145,6 +145,10 @@ name = "discussion_writes"
 required-features = ["host"]
 
 [[test]]
+name = "history_text_memory"
+required-features = ["host"]
+
+[[test]]
 name = "refusals_declare_a_kind"
 required-features = ["host"]
 

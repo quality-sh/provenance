@@ -2,7 +2,7 @@
 //! commit names as commit ids.
 
 use provenance_store::review::history::contract::{
-    Adapter, Commit, Harness, MemoryFileVersions, MOVED_FROM, MOVED_TO,
+    Adapter, Commit, Entry, Harness, MemoryFileVersions, MOVED_FROM, MOVED_TO,
 };
 use provenance_store::review::history::{BoxFuture, FileVersion, FileVersions};
 use std::collections::BTreeMap;
@@ -33,6 +33,54 @@ pub fn last_same_parent(commits: &[Commit]) -> Arc<dyn FileVersions> {
     Arc::new(Walk::new(commits, Kept::LastParent))
 }
 
+/// An adapter that compares a merge with its first two parents only: it
+/// lists an octopus merge that keeps the file of its third parent.
+pub fn first_two_parents(commits: &[Commit]) -> Arc<dyn FileVersions> {
+    Arc::new(Walk::new(commits, Kept::FirstTwoParents))
+}
+
+/// An adapter that lists a commit once for each parent line that reaches it.
+pub fn each_line(commits: &[Commit]) -> Arc<dyn FileVersions> {
+    Arc::new(Walk::new(commits, Kept::EachLine))
+}
+
+/// An adapter that compares the texts of a file and not its mode: it does
+/// not list a commit that changes only the mode.
+pub fn ignores_mode(commits: &[Commit]) -> Arc<dyn FileVersions> {
+    Arc::new(MemoryFileVersions::new(&changed(commits, |entry| {
+        Entry::new(entry.bytes, false)
+    })))
+}
+
+/// An adapter that gives the text of `HEAD` at a commit that it does not
+/// hold.
+pub fn head_text(commits: &[Commit]) -> Arc<dyn FileVersions> {
+    Arc::new(HeadText {
+        memory: MemoryFileVersions::new(commits),
+        commits: commits.iter().map(|commit| commit.name.clone()).collect(),
+    })
+}
+
+/// An adapter that gives a text that is not UTF-8 with replacement
+/// characters.
+pub fn lossy_text(commits: &[Commit]) -> Arc<dyn FileVersions> {
+    Arc::new(MemoryFileVersions::new(&changed(commits, |entry| {
+        let text = String::from_utf8_lossy(&entry.bytes).into_owned();
+        Entry::new(text.into_bytes(), entry.executable)
+    })))
+}
+
+/// `commits` with `change` applied to each entry.
+fn changed(commits: &[Commit], change: fn(Entry) -> Entry) -> Vec<Commit> {
+    let mut commits = commits.to_vec();
+    for commit in &mut commits {
+        for (_, entry) in &mut commit.changes {
+            *entry = entry.take().map(change);
+        }
+    }
+    commits
+}
+
 /// An adapter that gives each version the author time of its commit in
 /// place of the commit time.
 pub fn author_time(commits: &[Commit]) -> Arc<dyn FileVersions> {
@@ -55,26 +103,31 @@ pub fn follows_moves(commits: &[Commit]) -> Arc<dyn FileVersions> {
 enum Kept {
     FirstParentOnly,
     LastParent,
+    FirstTwoParents,
+    /// The first parent with the same file, with no check that a commit is
+    /// listed already.
+    EachLine,
 }
 
 /// The versions found from `HEAD` through the parent that `kept` names.
 #[derive(Debug)]
 struct Walk {
     commits: Vec<Commit>,
-    files: Vec<BTreeMap<String, String>>,
+    files: Vec<BTreeMap<String, Entry>>,
     kept: Kept,
+    memory: MemoryFileVersions,
 }
 
 impl Walk {
     fn new(commits: &[Commit], kept: Kept) -> Self {
-        let mut files: Vec<BTreeMap<String, String>> = Vec::new();
+        let mut files: Vec<BTreeMap<String, Entry>> = Vec::new();
         for commit in commits {
             let mut file = commit.parents.first().map_or_else(BTreeMap::new, |first| {
                 files[Self::at(commits, first)].clone()
             });
-            for (path, text) in &commit.changes {
-                match text {
-                    Some(text) => file.insert(path.clone(), text.clone()),
+            for (path, entry) in &commit.changes {
+                match entry {
+                    Some(entry) => file.insert(path.clone(), entry.clone()),
                     None => file.remove(path),
                 };
             }
@@ -84,6 +137,7 @@ impl Walk {
             commits: commits.to_vec(),
             files,
             kept,
+            memory: MemoryFileVersions::new(commits),
         }
     }
 
@@ -114,11 +168,14 @@ impl Walk {
         let kept = match self.kept {
             Kept::FirstParentOnly => parents.first().filter(same),
             Kept::LastParent => parents.iter().rev().find(same),
+            Kept::FirstTwoParents => parents.iter().take(2).find(same),
+            Kept::EachLine => parents.iter().find(same),
         };
         if let Some(kept) = kept {
             return self.nearest(*kept, path, listed);
         }
-        if !listed.iter().any(|(known, _)| *known == index) {
+        let each_line = matches!(self.kept, Kept::EachLine);
+        if each_line || !listed.iter().any(|(known, _)| *known == index) {
             let lines = parents
                 .iter()
                 .flat_map(|parent| self.nearest(*parent, path, listed))
@@ -149,27 +206,18 @@ impl FileVersions for Walk {
                         .collect(),
                     commit.author.clone(),
                     commit.committed_at,
-                    self.files[index].get(path).cloned(),
                 )
             })
             .collect();
         Box::pin(std::future::ready(Ok(Arc::new(versions))))
     }
 
-    fn texts<'a>(
+    fn text<'a>(
         &'a self,
         path: &'a str,
-        commits: &'a [String],
-    ) -> BoxFuture<'a, anyhow::Result<Vec<Option<String>>>> {
-        let texts = commits
-            .iter()
-            .map(|commit| {
-                self.files[Self::at(&self.commits, commit)]
-                    .get(path)
-                    .cloned()
-            })
-            .collect();
-        Box::pin(std::future::ready(Ok(texts)))
+        commit: &'a str,
+    ) -> BoxFuture<'a, anyhow::Result<Option<String>>> {
+        self.memory.text(path, commit)
     }
 }
 
@@ -211,7 +259,6 @@ impl Other {
             version.parents.clone(),
             author,
             time,
-            version.text.clone(),
         )
     }
 }
@@ -232,12 +279,12 @@ impl FileVersions for Other {
         })
     }
 
-    fn texts<'a>(
+    fn text<'a>(
         &'a self,
         path: &'a str,
-        commits: &'a [String],
-    ) -> BoxFuture<'a, anyhow::Result<Vec<Option<String>>>> {
-        self.memory.texts(path, commits)
+        commit: &'a str,
+    ) -> BoxFuture<'a, anyhow::Result<Option<String>>> {
+        self.memory.text(path, commit)
     }
 }
 
@@ -271,18 +318,45 @@ impl FileVersions for FollowsMoves {
                     parents,
                     version.author.clone(),
                     version.committed_at,
-                    version.text.clone(),
                 ));
             }
             Ok(Arc::new(earlier))
         })
     }
 
-    fn texts<'a>(
+    fn text<'a>(
         &'a self,
         path: &'a str,
-        commits: &'a [String],
-    ) -> BoxFuture<'a, anyhow::Result<Vec<Option<String>>>> {
-        self.0.texts(path, commits)
+        commit: &'a str,
+    ) -> BoxFuture<'a, anyhow::Result<Option<String>>> {
+        self.0.text(path, commit)
+    }
+}
+
+/// The memory adapter, except that a commit it does not hold has the text
+/// of `HEAD`.
+#[derive(Debug)]
+struct HeadText {
+    memory: MemoryFileVersions,
+    commits: Vec<String>,
+}
+
+impl FileVersions for HeadText {
+    fn versions<'a>(
+        &'a self,
+        path: &'a str,
+    ) -> BoxFuture<'a, anyhow::Result<Arc<Vec<FileVersion>>>> {
+        self.memory.versions(path)
+    }
+
+    fn text<'a>(
+        &'a self,
+        path: &'a str,
+        commit: &'a str,
+    ) -> BoxFuture<'a, anyhow::Result<Option<String>>> {
+        let known_commit = self.commits.iter().any(|known| known == commit);
+        let head = self.commits.last().map_or("", String::as_str);
+        self.memory
+            .text(path, if known_commit { commit } else { head })
     }
 }

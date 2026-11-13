@@ -1,11 +1,12 @@
 //! The git adapter of the file versions port: it reads the committed
 //! versions of one file from the Git history of the working tree.
 
+mod batch;
+
 use super::versions::{BoxFuture, FileVersion, FileVersions};
 use crate::stale::git::command;
+use batch::Batch;
 use camino::{Utf8Path, Utf8PathBuf};
-use std::io::Write;
-use std::process::Stdio;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 /// The file versions of the Git history of one working tree.
@@ -14,15 +15,49 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 /// where a blocking call is permitted. A directory outside Git, Git that
 /// cannot run, or a repository with no commit gives no versions. A shallow
 /// clone gives the commits it holds.
-#[derive(Debug, Clone)]
+///
+/// The texts come from one `git cat-file --batch` process that the adapter
+/// starts at its first text and stops when it is dropped. The process gives
+/// one text per call, so the adapter holds at most one text.
+#[derive(Debug)]
 pub struct GitFileVersions {
     root: Utf8PathBuf,
+    texts: Mutex<Option<Batch>>,
 }
 
 impl GitFileVersions {
     /// The adapter over the Git history of the working tree at `root`.
     pub const fn new(root: Utf8PathBuf) -> Self {
-        Self { root }
+        Self {
+            root,
+            texts: Mutex::new(None),
+        }
+    }
+
+    /// Reads one text through the batch process, which it starts when there
+    /// is none. The process is out of its lock while it reads, so two reads
+    /// at the same time use two processes, and the adapter keeps one of them.
+    /// An error stops the process, so the next text starts a new one.
+    fn read_text(&self, relative: &str, commit: &str) -> anyhow::Result<Option<String>> {
+        let taken = lock(&self.texts).take();
+        let mut batch = taken.map_or_else(|| self.start(), Ok)?;
+        let text = batch.text(commit, relative)?;
+        *lock(&self.texts) = Some(batch);
+        Ok(text)
+    }
+
+    fn start(&self) -> anyhow::Result<Batch> {
+        let prefix = repository_head(&self.root)
+            .ok_or_else(|| crate::refusal::fault!("record history repository is unavailable"))?
+            .prefix;
+        Batch::start(&self.root, prefix)
+    }
+}
+
+/// A clone starts its own batch process at its first text.
+impl Clone for GitFileVersions {
+    fn clone(&self) -> Self {
+        Self::new(self.root.clone())
     }
 }
 
@@ -35,13 +70,13 @@ impl FileVersions for GitFileVersions {
         Box::pin(std::future::ready(versions))
     }
 
-    fn texts<'a>(
+    fn text<'a>(
         &'a self,
         path: &'a str,
-        commits: &'a [String],
-    ) -> BoxFuture<'a, anyhow::Result<Vec<Option<String>>>> {
-        let texts = file_at_commits(&self.root, path, commits);
-        Box::pin(std::future::ready(texts))
+        commit: &'a str,
+    ) -> BoxFuture<'a, anyhow::Result<Option<String>>> {
+        let text = self.read_text(path, commit);
+        Box::pin(std::future::ready(text))
     }
 }
 
@@ -49,7 +84,6 @@ impl FileVersions for GitFileVersions {
 struct ReadVersions {
     root: Utf8PathBuf,
     relative: String,
-    prefix: String,
     head: String,
     shallow: Option<Vec<u8>>,
     versions: Arc<Vec<FileVersion>>,
@@ -58,16 +92,14 @@ struct ReadVersions {
 // The versions of the file of the last history read. The committed versions
 // change only when `HEAD` or the shallow boundary changes, so a new read of the
 // same file at the same `HEAD` and boundary starts one Git process. One file is
-// kept, so the memory stays at the size of one history read.
+// kept, with no text.
 static LAST_READ: Mutex<Option<ReadVersions>> = Mutex::new(None);
 
 /// Lists the commits reachable from `HEAD`, as one read resolves it, that
 /// changed `relative`, parents before children.
 fn file_versions(root: &Utf8Path, relative: &str) -> anyhow::Result<Arc<Vec<FileVersion>>> {
     let Some(Head {
-        prefix,
-        commit,
-        shallow,
+        commit, shallow, ..
     }) = repository_head(root)
     else {
         return Ok(Arc::default());
@@ -83,11 +115,10 @@ fn file_versions(root: &Utf8Path, relative: &str) -> anyhow::Result<Arc<Vec<File
     }
     drop(last);
     // `HEAD` can move after `repository_head`, so the read names the commit.
-    let versions = Arc::new(read_file_versions(root, &commit, &prefix, relative)?);
+    let versions = Arc::new(read_file_versions(root, &commit, relative)?);
     *lock(&LAST_READ) = Some(ReadVersions {
         root: root.to_owned(),
         relative: relative.to_owned(),
-        prefix,
         head: commit,
         shallow,
         versions: versions.clone(),
@@ -98,7 +129,6 @@ fn file_versions(root: &Utf8Path, relative: &str) -> anyhow::Result<Arc<Vec<File
 fn read_file_versions(
     root: &Utf8Path,
     head: &str,
-    prefix: &str,
     relative: &str,
 ) -> anyhow::Result<Vec<FileVersion>> {
     // `--parents` names each parent as the nearest commit that changed the file.
@@ -135,34 +165,9 @@ fn read_file_versions(
             parents: parents.split_whitespace().map(str::to_owned).collect(),
             author: author.to_owned(),
             committed_at: time.parse()?,
-            text: None,
         });
     }
-    if versions.is_empty() {
-        return Ok(versions);
-    }
-    let commits = versions
-        .iter()
-        .map(|version| version.commit.clone())
-        .collect::<Vec<_>>();
-    let texts = read_blobs(root, &blob_names(&commits, prefix, relative), commits.len())?;
-    for (version, text) in versions.iter_mut().zip(texts) {
-        version.text = text;
-    }
     Ok(versions)
-}
-
-/// The `git cat-file --batch` input that names the file at each revision.
-fn blob_names(revisions: &[String], prefix: &str, relative: &str) -> String {
-    let mut names = String::new();
-    for revision in revisions {
-        names.push_str(revision);
-        names.push(':');
-        names.push_str(prefix);
-        names.push_str(relative);
-        names.push('\n');
-    }
-    names
 }
 
 /// The path of `root` inside its work tree, the `HEAD` commit, and the shallow
@@ -206,104 +211,9 @@ fn repository_head(root: &Utf8Path) -> Option<Head> {
     })
 }
 
-/// Reads each named blob through one `git cat-file --batch` process.
-fn read_blobs(root: &Utf8Path, names: &str, count: usize) -> anyhow::Result<Vec<Option<String>>> {
-    let mut child = command(root)
-        .args(["cat-file", "--batch"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-    let mut stdin = child.stdin.take().expect("piped stdin");
-    let input = names.to_owned();
-    let writer = std::thread::spawn(move || stdin.write_all(input.as_bytes()));
-    let output = child.wait_with_output()?;
-    writer
-        .join()
-        .map_err(|_| crate::refusal::fault!("git cat-file input thread failed"))??;
-    crate::write_error::ensure!(
-        Fault,
-        output.status.success(),
-        "git cat-file failed: {}",
-        String::from_utf8_lossy(&output.stderr).trim()
-    );
-    let mut rest = output.stdout.as_slice();
-    let mut texts = Vec::with_capacity(count);
-    for _ in 0..count {
-        let end = rest
-            .iter()
-            .position(|byte| *byte == b'\n')
-            .ok_or_else(|| crate::refusal::fault!("git cat-file output ended early"))?;
-        let header = std::str::from_utf8(&rest[..end])?;
-        rest = &rest[end + 1..];
-        if header.ends_with(" missing") {
-            texts.push(None);
-            continue;
-        }
-        let size = header
-            .rsplit(' ')
-            .next()
-            .and_then(|size| size.parse::<usize>().ok())
-            .ok_or_else(|| crate::refusal::fault!("git cat-file returned an unreadable header"))?;
-        crate::write_error::ensure!(Fault, rest.len() > size, "git cat-file output ended early");
-        texts.push(Some(String::from_utf8(rest[..size].to_vec())?));
-        rest = &rest[size + 1..];
-    }
-    Ok(texts)
-}
-
 /// A cache entry holds only read results, so a poisoned lock still holds a
-/// whole entry.
+/// whole entry. A text read takes the batch process out of its lock while it
+/// reads, so a poisoned batch lock holds no process.
 fn lock<T>(cache: &Mutex<T>) -> MutexGuard<'_, T> {
     cache.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
-/// The texts of one file at named commits, from the last read.
-struct ReadTexts {
-    root: Utf8PathBuf,
-    relative: String,
-    commits: Vec<String>,
-    texts: Vec<Option<String>>,
-}
-
-// The file at a named commit does not change, so a new read of the same file
-// at the same commits starts no Git process.
-static LAST_TEXTS: Mutex<Option<ReadTexts>> = Mutex::new(None);
-
-/// Reads one file at each specified commit through one Git process.
-fn file_at_commits(
-    root: &Utf8Path,
-    relative: &str,
-    commits: &[String],
-) -> anyhow::Result<Vec<Option<String>>> {
-    if commits.is_empty() {
-        return Ok(Vec::new());
-    }
-    if let Some(read) = lock(&LAST_TEXTS)
-        .as_ref()
-        .filter(|read| read.root == root && read.relative == relative && read.commits == commits)
-    {
-        return Ok(read.texts.clone());
-    }
-    // The prefix of a root does not change, so the last history read gives it.
-    let known = lock(&LAST_READ)
-        .as_ref()
-        .filter(|read| read.root == root)
-        .map(|read| read.prefix.clone());
-    let prefix = match known {
-        Some(prefix) => prefix,
-        None => {
-            repository_head(root)
-                .ok_or_else(|| crate::refusal::fault!("record history repository is unavailable"))?
-                .prefix
-        }
-    };
-    let texts = read_blobs(root, &blob_names(commits, &prefix, relative), commits.len())?;
-    *lock(&LAST_TEXTS) = Some(ReadTexts {
-        root: root.to_owned(),
-        relative: relative.to_owned(),
-        commits: commits.to_vec(),
-        texts: texts.clone(),
-    });
-    Ok(texts)
 }
