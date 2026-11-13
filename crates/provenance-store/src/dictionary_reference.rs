@@ -108,10 +108,11 @@ pub fn load_project_dictionary(layout: &ProvenanceLayout) -> Option<ProjectDicti
     }
 }
 
-/// Stores the index in `index_directory` and writes the project reference, each
-/// with one synced write, so that a stop keeps the previous file or gives all of
-/// the new file. A current reference that does not parse stops the call before
-/// a write.
+/// Stores the index in `index_directory` and writes the project reference.
+///
+/// Each file has one synced write, so that a stop keeps the previous file or
+/// gives all of the new file. A current reference that does not parse stops
+/// the call before a write.
 #[rule("rule_ste_dictionary_import_durable_writes")]
 #[cfg(feature = "host")]
 pub fn set_project_dictionary(

@@ -104,9 +104,10 @@ fn parent_of(path: &Utf8Path) -> anyhow::Result<&Utf8Path> {
         .ok_or_else(|| crate::refusal::fault!("{path} has no parent directory"))
 }
 
-/// Syncs `directory`, so that a power loss cannot lose a change of an entry
-/// in it. A relative path of one name, such as the file that git gives to a
-/// merge driver, has an empty parent: the current directory. A failure gives
+/// Syncs `directory`, so that a power loss cannot lose a change of an entry in it.
+///
+/// A relative path of one name, such as the file that git gives to a merge
+/// driver, has an empty parent: the current directory. A failure gives
 /// `sync <path>` and the I/O error. Windows has no directory sync in this
 /// module: the function does nothing there, and a power loss can lose a
 /// recent entry or rename.
