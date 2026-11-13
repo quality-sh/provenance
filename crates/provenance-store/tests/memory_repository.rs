@@ -26,7 +26,7 @@ use provenance_store::state_store::{
     CreateRequirementInput, CreateRuleInput, MaterializeVerificationBindingInput, ScopeShards,
     UpdateRequirementInput, UpdateRuleInput,
 };
-use provenance_store::storage::{Atomicity, PublishFailure, StateKey, StateStorage, WriteSet};
+use provenance_store::storage::{Atomicity, StateKey, StateStorage, WriteSet};
 use provenance_store::write_error::{WriteError, WriteFailure};
 
 /// The binding of the Rule with the key `share-link-expiry` in `file`.
@@ -330,7 +330,9 @@ fn a_source_edit_on_a_memory_repository_needs_the_local_adapter() {
             .contains("needs the local storage adapter"),
         "the refusal names the adapter: {refused:#}"
     );
-    assert!(refused.downcast_ref::<PublishFailure>().is_none());
+    assert!(refused
+        .downcast_ref::<provenance_store::storage::PublishFailure>()
+        .is_none());
     assert_eq!(memory.storage.read_view().unwrap(), before);
     assert!(memory.recorded.0.lock().unwrap().is_empty());
     assert_eq!(std::fs::read(root.join("source.txt")).unwrap(), b"before\n");
