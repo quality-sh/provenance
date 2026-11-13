@@ -237,17 +237,23 @@ fn a_committed_time_past_the_range_fails_as_a_malformed_field_fails() {
 #[test]
 fn a_discussion_version_past_the_range_fails_as_a_malformed_field_fails() {
     let (_past_dir, past, past_id) = discussion(Value::from(1_u64 << 53));
-    let (_malformed_dir, malformed, _) = discussion(Value::from("two"));
-    let (code, _, stderr) = run(&past, &[&past_id, "discussion", "--format", "json"]);
-    let error = &refusal(&stderr)["error"];
-    assert_eq!(code, Some(1));
-    assert_eq!(error["kind"], "invalid_state_file", "{error}");
-    assert_eq!(
-        error["file"], "scopes/default/threads/discussions.jsonl",
-        "{error}"
-    );
-    // The ids of the two Discussions differ, so the commands that name a
-    // Discussion are not compared with the malformed one.
+    let (_malformed_dir, malformed, malformed_id) = discussion(Value::from("two"));
+    // The ids of the two Discussions differ, so the read of a Discussion by
+    // its id is compared with the id masked.
+    let by_id = |repo: &str, id: &str| {
+        let (code, out, err) = run(repo, &[id, "discussion", "--format", "json"]);
+        let mask = |bytes: &[u8]| {
+            without_messages(
+                String::from_utf8_lossy(bytes)
+                    .replace(id, "<id>")
+                    .as_bytes(),
+            )
+        };
+        (code, mask(&out), mask(&err))
+    };
+    let read = by_id(&past, &past_id);
+    assert_eq!(read.0, Some(1), "{read:?}");
+    assert_eq!(read, by_id(&malformed, &malformed_id));
     fails_as_malformed(
         &past,
         &malformed,
