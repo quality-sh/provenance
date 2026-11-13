@@ -187,13 +187,13 @@ fn second_records(store: &StateStore, scope: &ScopeId) {
             contradicts: None,
         })
         .unwrap();
-    for body in ["A concern", "Another concern"] {
+    for parent in ["req_overtime", "req_top"] {
         store
             .write_discussion(
                 serde_json::from_value(json!({
                     "scope_id": scope, "actor": "reviewer", "declared_by": null,
-                    "parent": {"node_type": "requirement", "node_id": "req_overtime"},
-                    "action": {"kind": "start", "role": "user", "body": body}
+                    "parent": {"node_type": "requirement", "node_id": parent},
+                    "action": {"kind": "start", "role": "user", "body": "A concern"}
                 }))
                 .unwrap(),
             )

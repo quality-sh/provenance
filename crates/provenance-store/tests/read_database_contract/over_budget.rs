@@ -179,31 +179,48 @@ async fn a_stopped_attempt_gives_over_budget() {
     assert_eq!(kept(&file).await, vec![vec![SqlValue::Integer(2)]]);
 }
 
-/// The file counts the work of a statement in whole intervals of 1,000
-/// engine steps, so it never counts a statement of fewer steps: with a
-/// bound of no steps, a hundred such statements give their rows.
+/// The file counts the steps of each statement text in whole intervals of
+/// 1,000 engine steps, over all the runs of that text on the connection.
+/// With a bound of no steps, a hundred distinct statements of fewer steps
+/// each give their rows, and one such statement that runs again and again
+/// is stopped once its runs together pass one interval.
 #[tokio::test]
-async fn the_file_does_not_count_a_statement_under_one_interval() {
+async fn the_file_counts_each_statement_text_at_whole_intervals() {
     let file = File::default();
     tables(&file).await;
-    let mut counts = Vec::new();
-    let slot = &mut counts;
+    let mut seen = None;
+    let slot = &mut seen;
     file.database
         .read(Box::new(move |mut transaction| {
             Box::pin(async move {
                 transaction.bound_work(0).await?;
-                for _ in 0..100 {
-                    let rows = transaction
-                        .fetch("SELECT COUNT(*) FROM wide WHERE rowid <= 20", Vec::new())
-                        .await?;
-                    slot.push(rows);
+                let mut distinct = Vec::new();
+                for n in 1..=100 {
+                    let sql = format!("SELECT COUNT(*) FROM wide WHERE rowid <= {n}");
+                    distinct.push(transaction.fetch(&sql, Vec::new()).await?);
                 }
+                let mut repeated = None;
+                for run in 0..100 {
+                    let sql = "SELECT COUNT(*) FROM wide WHERE rowid <= 20";
+                    if let Err(error) = transaction.fetch(sql, Vec::new()).await {
+                        repeated = Some((run, error));
+                        break;
+                    }
+                }
+                *slot = Some((distinct, repeated));
                 Ok(())
             })
         }))
         .await
         .unwrap();
-    assert_eq!(counts, vec![vec![vec![SqlValue::Integer(20)]]; 100]);
+    let (distinct, repeated) = seen.expect("the read ran its work");
+    let expected: Vec<Vec<SqlRow>> = (1..=100)
+        .map(|n| vec![vec![SqlValue::Integer(n)]])
+        .collect();
+    assert_eq!(distinct, expected);
+    let (run, error) = repeated.expect("the repeated statement was not stopped");
+    assert!(run > 0, "the first run of the statement was stopped");
+    assert_over_budget(&error);
 }
 
 /// The file's transaction with another unit of work.
