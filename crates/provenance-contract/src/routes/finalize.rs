@@ -97,8 +97,8 @@ fn raw_request(registration: &Registration) -> &Value {
         .unwrap_or_else(|| panic!("operation `{operation}` has no request type"))
 }
 
-/// A route that gets each input field from its path and its bound context publishes no
-/// request body. Each other route publishes a body without the fields that the route fills.
+/// A route that gets each input field from its path, its bound context and its request
+/// headers publishes no request body. Each other route publishes a body without those fields.
 #[provenance_macros::rule("rule_route_without_body_fields_takes_no_body")]
 fn publish_body_fields(definition: &mut Definition) {
     let registration = &mut definition.registration;
