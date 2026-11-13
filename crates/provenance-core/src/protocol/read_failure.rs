@@ -57,9 +57,10 @@ pub enum ReadFailure {
     ReadFailed { cause: String },
 }
 
-/// A state file that does not parse, with the step that repairs it. A
-/// command that has no operation route gives this refusal. Each surface gives
-/// it as the `invalid_state_file` failure, with the step as its hint.
+/// A state file that does not parse, with the step that repairs it.
+///
+/// A command that has no operation route gives this refusal. Each surface
+/// gives it as the `invalid_state_file` failure, with the step as its hint.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("{file} line {line}: {message}; {hint}")]
 pub struct StateFileRefusal {

@@ -42,10 +42,12 @@ pub fn json_refusal(error: &anyhow::Error) -> Option<Value> {
     None
 }
 
-/// The error that the CLI prints. A state file refusal in the cause chain
-/// becomes the host refusal of its `invalid_state_file` failure, with the
-/// repair as the hint, as an operation route gives a state file that does not
-/// parse. Each other error does not change.
+/// The error that the CLI prints.
+///
+/// A state file refusal in the cause chain becomes the host refusal of its
+/// `invalid_state_file` failure, with the repair as the hint, as an operation
+/// route gives a state file that does not parse. Each other error does not
+/// change.
 pub fn typed(error: anyhow::Error) -> anyhow::Error {
     let Some(refusal) = error
         .chain()

@@ -149,8 +149,9 @@ pub fn load_project_dictionary(layout: &ProvenanceLayout) -> Option<ProjectDicti
 }
 
 /// Stores the index in `index_directory` and then writes the project
-/// reference, so that the reference names only an index that is stored. A
-/// current reference that does not parse stops the call before a write.
+/// reference, so that the reference names only an index that is stored.
+///
+/// A current reference that does not parse stops the call before a write.
 #[cfg(feature = "host")]
 pub fn set_project_dictionary(
     layout: &ProvenanceLayout,
@@ -191,8 +192,9 @@ impl CurrentReference {
 }
 
 /// Refuses a dictionary reference that does not parse, so that a write does
-/// not lose its technical names. Each writer of the reference calls this
-/// function before its first write.
+/// not lose its technical names.
+///
+/// Each writer of the reference calls this function before its first write.
 #[rule("rule_ste_dictionary_reference_parse_refusal")]
 #[cfg(feature = "host")]
 pub fn current_reference(layout: &ProvenanceLayout) -> anyhow::Result<CurrentReference> {

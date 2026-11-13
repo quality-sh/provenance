@@ -216,7 +216,8 @@ fn failed(error: &(dyn std::error::Error + Send + Sync + 'static)) -> CallToolRe
     if let Some(refusal) = std::iter::successors(Some(root), |cause| cause.source())
         .find_map(|cause| cause.downcast_ref::<StateFileRefusal>())
     {
-        let mut detail = serde_json::to_value(refusal.failure()).expect("a failure is JSON");
+        let failure = refusal.failure();
+        let mut detail = serde_json::to_value(failure).expect("a failure is JSON");
         detail["hint"] = json!(refusal.hint);
         return crate::surface::detail_error(detail);
     }
