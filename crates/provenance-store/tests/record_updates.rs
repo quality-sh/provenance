@@ -11,4 +11,5 @@ mod record_updates {
     mod sources;
     mod spec_owned_edits;
     mod support;
+    mod time_range;
 }

@@ -243,6 +243,26 @@ impl Unopened {
 #[error("{0:#}")]
 pub struct OverBudget(pub anyhow::Error);
 
+/// The largest magnitude of an integer that the port binds or reads:
+/// 2^53 − 1, the largest integer whose neighbours a 64-bit float also holds
+/// exactly. A store that keeps each number as a 64-bit float holds each
+/// integer of the range and gives it back unchanged.
+pub const LARGEST_INTEGER: i64 = provenance_core::model::exact_integer::LARGEST_EXACT_INTEGER;
+
+/// An integer of magnitude more than [`LARGEST_INTEGER`], in a value that
+/// a statement binds or in a row that it gives.
+///
+/// Every adapter gives this error. For a bound value, it comes before the
+/// statement runs, so a write whose work stops at it keeps nothing. For a
+/// row, the statement gives no rows. The store refuses a time field past
+/// the range when a record is written, so this error is a fault of the
+/// store: it reads as `read_failed` or `write_failed`.
+#[derive(Debug, thiserror::Error)]
+#[error(
+    "integer {0} is outside the range of the read database, -9007199254740991 to 9007199254740991"
+)]
+pub struct OutOfRange(pub i64);
+
 /// The one row of a statement that gives exactly one, as an aggregate does.
 pub fn one_row(rows: &[SqlRow]) -> anyhow::Result<&[SqlValue]> {
     rows.first().map(Vec::as_slice).ok_or_else(|| {

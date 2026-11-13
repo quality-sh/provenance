@@ -249,6 +249,7 @@ port_cases!(
     projection::a_schema_that_is_not_current_is_made_again,
     projection::a_rebuild_keeps_the_catalog_and_the_rows,
     projection::a_rebuild_keeps_a_table_that_the_store_does_not_own,
+    range::an_integer_past_the_range_is_refused_and_nothing_is_written,
     ownership::a_trigger_on_a_table_of_the_store_is_removed,
     ownership::an_index_on_a_table_of_the_store_is_removed,
     ownership::an_object_that_takes_a_name_of_the_store_is_removed,

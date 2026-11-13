@@ -8,6 +8,7 @@
 
 use super::{
     is_missing_table, ReadDatabase, SqlFuture, SqlRow, SqlValue, Statement, Transaction, Unopened,
+    LARGEST_INTEGER,
 };
 
 pub mod handles;
@@ -18,6 +19,7 @@ mod other;
 pub mod ownership;
 #[cfg(feature = "host")]
 pub mod projection;
+pub mod range;
 pub mod sequence;
 
 #[cfg(any(test, feature = "test-fixture"))]
@@ -170,13 +172,14 @@ pub async fn a_missing_table_is_reported_as_missing<H: Harness>(harness: H) {
 }
 
 /// A write keeps each value with its storage class, and a later read gives
-/// it back unchanged.
+/// it back unchanged. The integers are the two ends of the range of the
+/// port.
 pub async fn a_write_keeps_each_value_class<H: Harness>(harness: H) {
     let database = harness.database();
     let values = vec![
         SqlValue::Null,
-        SqlValue::Integer(i64::MIN),
-        SqlValue::Integer(i64::MAX),
+        SqlValue::Integer(-LARGEST_INTEGER),
+        SqlValue::Integer(LARGEST_INTEGER),
         SqlValue::Real(-0.5),
         SqlValue::Text(String::new()),
         SqlValue::Text("Ünïcode \u{1F600} 'quoted'".to_owned()),
