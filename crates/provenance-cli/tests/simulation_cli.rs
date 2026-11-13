@@ -2,9 +2,9 @@
 //!
 //! Each write is one `provenance api` process on a fixture repository. A
 //! `Turn` starts the next two writes at once. A `Stop` kills a write process
-//! during its measured write time. An outside write runs on a git branch,
-//! and git merges it back through `provenance merge-jsonl`. The run keeps
-//! these laws:
+//! at a point of its publish that the test sees on disk (`stop.rs`). An
+//! outside write runs on a git branch, and git merges it back through
+//! `provenance merge-jsonl`. The run keeps these laws:
 //!
 //! | Law | Statement |
 //! | --- | --------- |
@@ -44,6 +44,7 @@ use fixture::run_cli;
 use hegel::{Hegel, NondeterminismStrictness, Settings, TestCase};
 use laws::{check, Ran};
 use process::layer;
+use process::stop::Landing;
 use provenance_simulation::generate::{Case, Fault, Operation, Step};
 use provenance_simulation::report;
 
@@ -110,13 +111,10 @@ fn two_updates_at_once_have_one_winner() {
     report::probe(&layer(), test, check(&case, &run));
 }
 
-/// The most runs of the stop probe. A stop at `at: 0` kills the write at
-/// half of its mean time, so a write that ends before the stop is rare.
-const STOP_ATTEMPTS: usize = 5;
-
 // No Rule: a probe that a write on a branch merges through `provenance
-// merge-jsonl`, that a stop kills a write while it runs, and that the
-// stopped write leaves a state that reads.
+// merge-jsonl`, that a stop kills a write inside its publish, and that the
+// stopped write leaves a state that reads. The stop at `at: 0` kills the
+// write when its transaction appears, before the live state moves.
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn a_merged_branch_and_a_stopped_write_keep_the_laws() {
@@ -127,18 +125,14 @@ fn a_merged_branch_and_a_stopped_write_keep_the_laws() {
         Step::Fault(Fault::Stop { engine: 1, at: 0 }),
     ];
     let case = Case { engines: 2, steps };
-    for _ in 0..STOP_ATTEMPTS {
-        let run = run_cli(&case);
-        let ways: Vec<_> = run.groups.iter().map(|(way, _)| *way).collect();
-        assert_eq!(ways, [Ran::Alone, Ran::Outside, Ran::Stopped]);
-        let (_, outside) = &run.groups[1];
-        assert!(outside[0].result.is_ok(), "{outside:?}");
-        let test = "a_merged_branch_and_a_stopped_write_keep_the_laws";
-        report::probe(&layer(), test, check(&case, &run));
-        let (_, stopped) = &run.groups[2];
-        if stopped.iter().any(|done| done.stopped) {
-            return;
-        }
-    }
-    panic!("in {STOP_ATTEMPTS} runs, each write ended or printed its answer before its stop");
+    let run = run_cli(&case);
+    let ways: Vec<_> = run.groups.iter().map(|(way, _)| *way).collect();
+    assert_eq!(ways, [Ran::Alone, Ran::Outside, Ran::Stopped]);
+    let (_, outside) = &run.groups[1];
+    assert!(outside[0].result.is_ok(), "{outside:?}");
+    let test = "a_merged_branch_and_a_stopped_write_keep_the_laws";
+    report::probe(&layer(), test, check(&case, &run));
+    let (_, stopped) = &run.groups[2];
+    assert!(stopped[0].stopped, "the write ended before its stop: {stopped:?}");
+    assert_eq!(run.stops, [Landing::Publish], "the stop landed after the publish");
 }

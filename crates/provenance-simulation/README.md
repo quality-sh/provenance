@@ -62,8 +62,13 @@ then runs the write, so that write does not meet a moved base.
 
 The job summary gives the counts of the random cases up to the first broken
 law. After a broken law, Hegel shrinks the case; each run of the shrink adds
-only to "shrink runs". A stop of a CLI write counts as "during a write" only
-when the process runs at the kill and has not printed its answer.
+only to "shrink runs". A stop of a CLI write kills the process at a point of
+its publish that the test sees on disk: its transaction directory below
+`.provenance/cache/import-transactions`, or the publication marker. The stop
+counts as "during a write" only when the transaction or the marker of the
+write stays after the kill. A write that ends before its point counts as
+"stops after the write ended"; a kill after the publish and before the
+answer counts as "stops after the publish and before the answer".
 
 ## When a failure issue opens
 

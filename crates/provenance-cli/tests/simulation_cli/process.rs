@@ -5,6 +5,9 @@
 //! process fails its case in minutes and does not hold the job. A process
 //! that panics also breaks L0.
 
+#[path = "stop.rs"]
+pub mod stop;
+
 use crate::support::api_process;
 use crate::support::catch_up_steps::{Answer, Surface};
 use provenance_simulation::generate::{
@@ -16,8 +19,8 @@ use std::cell::RefCell;
 use std::io::{Read, Write as _};
 use std::path::Path;
 use std::process::{Child, Command, Output, Stdio};
-use std::sync::Mutex;
 use std::time::{Duration, Instant};
+use stop::{Landing, Point, Watch};
 
 /// The longest wait for one process.
 pub const PROCESS_LIMIT: Duration = Duration::from_secs(120);
@@ -336,83 +339,66 @@ fn done(task: &Task, result: Result<Effect, String>, stopped: bool) -> Done {
     }
 }
 
-/// The total time and the count of the writes that ran to their end.
-static WRITE_TIMES: Mutex<(Duration, u32)> = Mutex::new((Duration::ZERO, 0));
-
-/// The mean time of a write process in this test process, or one second
-/// before the first write ends.
-fn mean_write_time() -> Duration {
-    let (total, count) = *WRITE_TIMES
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if count == 0 {
-        Duration::from_secs(1)
-    } else {
-        total / count
-    }
-}
-
-/// When a stop at `at` kills a write: in the second half of the mean write
-/// time, where the write publishes.
-pub fn stop_delay(at: u8) -> Duration {
-    mean_write_time() * (255 + u32::from(at)) / 510
-}
-
-/// Kills the write process `child` of `task`. The stop is inside the write
-/// when the process runs at the kill and has not printed its answer. A
-/// process that ended or printed its answer before the kill gives its
+/// Kills the write process `child` of `task` when it reaches `point` of its
+/// publish, and gives where the stop landed. A process that ends before it
+/// reaches the point, or that printed its answer before the kill, gives its
 /// answer, as a write alone does.
-fn stop_write(task: &Task, mut child: Child, request: &Request) -> Done {
+fn stop_write(
+    task: &Task,
+    mut child: Child,
+    request: &Request,
+    watch: &Watch,
+    point: Point,
+) -> (Done, Option<Landing>) {
     let ended = |result: Result<Value, String>| {
         provenance_simulation::stats::add(&layer(), "stops after the write ended", 1);
         let result = result.and_then(|data| effect(task, request, &data));
-        done(task, result, false)
+        (done(task, result, false), None)
     };
-    if matches!(child.try_wait(), Ok(Some(_))) {
+    if !watch.wait(&mut child, point, Instant::now() + PROCESS_LIMIT) {
         return ended(finish(child, &format!("write {}", request.path)));
     }
     let _ = child.kill();
     match wait_limited(child, "a stopped write") {
         Ok(output) if !output.stdout.is_empty() => ended(Ok(parse(&output.stdout)["data"].clone())),
-        _ => done(task, Err("stopped".into()), true),
+        _ => (done(task, Err("stopped".into()), true), Some(watch.landing())),
     }
 }
 
 /// Runs `tasks` at once on `root`. Each etag is read before the first
-/// process starts. With `stop`, each process is killed after that delay.
-pub fn run_at_once(root: &Path, tasks: &[Task], stop: Option<Duration>) -> Vec<Done> {
+/// process starts. With a stop at `at`, each process is killed at the point
+/// [`Point::of`] of its publish; the landing of each stop that killed a
+/// process follows the answers.
+pub fn run_at_once(root: &Path, tasks: &[Task], stop: Option<u8>) -> (Vec<Done>, Vec<Landing>) {
     let mut prepared = Vec::new();
     for task in tasks {
         if let Some(request) = request(root, task) {
             prepared.push((task, request));
         }
     }
+    let watch = stop.map(|_| Watch::before(root));
     let mut started = Vec::new();
     for (task, request) in prepared {
-        let process = request.map(|request| (request.spawn(root), request, Instant::now()));
+        let process = request.map(|request| (request.spawn(root), request));
         started.push((task, process));
     }
     let mut outcome = Vec::new();
+    let mut landings = Vec::new();
     for (task, process) in started {
-        outcome.push(match (process, stop) {
+        outcome.push(match (process, stop.zip(watch.as_ref())) {
             (Err(refusal), _) => done(task, Err(refusal), false),
-            (Ok((child, request, _)), Some(delay)) => {
-                std::thread::sleep(delay);
-                stop_write(task, child, &request)
+            (Ok((child, request)), Some((at, watch))) => {
+                let watch = watch.of(child.id());
+                let (stopped, landing) = stop_write(task, child, &request, &watch, Point::of(at));
+                landings.extend(landing);
+                stopped
             }
-            (Ok((child, request, started)), None) => {
+            (Ok((child, request)), None) => {
                 let result = finish(child, &format!("write {}", request.path));
-                if tasks.len() == 1 {
-                    let mut times = WRITE_TIMES
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    times.0 += started.elapsed();
-                    times.1 += 1;
-                }
                 let result = result.and_then(|data| effect(task, &request, &data));
                 done(task, result, false)
             }
         });
     }
-    outcome
+    (outcome, landings)
 }

@@ -2,7 +2,8 @@
 //! it.
 
 use crate::laws::{CliRun, Ran};
-use crate::process::{binary, commit, etag, git, layer, run_at_once, stop_delay, take_l0_breaks};
+use crate::process::stop::Landing;
+use crate::process::{binary, commit, etag, git, layer, run_at_once, take_l0_breaks};
 use crate::reads;
 use provenance_simulation::generate::{
     requirement_id, Case, Context, Effect, Fault, Operation, Step, Task, FIRST_REQUIREMENT,
@@ -18,8 +19,14 @@ use std::time::Instant;
 /// The arguments of the merge driver after the program.
 const MERGE_ARGUMENTS: &str = "merge-jsonl %O %A %B --output %A --path %P";
 
-/// The count of the stops during a write after which the state changed.
+/// The count of the stops that landed inside the publish of a write.
+const STOPS_DURING: &str = "stops during a write";
+/// The count of those stops after which the state changed.
 const STOPS_THAT_CHANGED: &str = "stops during a write after which the state changed";
+/// The count of those stops that left the live state in the transaction.
+const STOPS_WITH_NO_LIVE_STATE: &str = "stops during a write that left no live state";
+/// The count of the stops after the publish and before the answer.
+const STOPS_AFTER_PUBLISH: &str = "stops after the publish and before the answer";
 /// The count of the updates sent with the etag of a read before a merge.
 const MOVED_ETAG_UPDATES: &str = "updates with the etag of a read before a merge";
 /// The count of those updates that refused.
@@ -44,6 +51,8 @@ pub struct Fixture {
     engines: u8,
     /// Each group of writes and what its writes did.
     pub groups: Vec<(Ran, Vec<Done>)>,
+    /// Where each stop that killed a write landed.
+    pub stops: Vec<Landing>,
     /// The first L6 failure of the case.
     pub reads: Result<(), String>,
 }
@@ -86,6 +95,7 @@ impl Fixture {
             serial: 0,
             engines: engines.max(1),
             groups: Vec::new(),
+            stops: Vec::new(),
             reads: Ok(()),
         }
     }
@@ -132,12 +142,19 @@ impl Fixture {
     /// Runs `tasks` in the way `way`; tells if a write refused.
     fn run_tasks(&mut self, way: Ran, tasks: &[Task], stop: Option<u8>) -> bool {
         let before = (way == Ran::Stopped).then(|| state_entries(&self.root()));
-        let done = run_at_once(&self.root(), tasks, stop.map(stop_delay));
-        if let Some(before) = before.filter(|_| done.iter().any(|done| done.stopped)) {
-            stats::add(&layer(), "stops during a write", 1);
-            let changed = state_entries(&self.root()) != before;
+        let (done, landings) = run_at_once(&self.root(), tasks, stop);
+        for landing in &landings {
+            if *landing == Landing::AfterPublish {
+                stats::add(&layer(), STOPS_AFTER_PUBLISH, 1);
+                continue;
+            }
+            stats::add(&layer(), STOPS_DURING, 1);
+            let live = self.repo.layout.state_dir().exists();
+            stats::add(&layer(), STOPS_WITH_NO_LIVE_STATE, u64::from(!live));
+            let changed = live && before.as_ref() != Some(&state_entries(&self.root()));
             stats::add(&layer(), STOPS_THAT_CHANGED, u64::from(changed));
         }
+        self.stops.extend(landings);
         let refused = done.iter().any(|done| done.result.is_err());
         if !done.is_empty() {
             self.groups.push((way, done));
@@ -155,7 +172,7 @@ impl Fixture {
         let add: [&str; 5] = ["worktree", "add", "--detach", branch_text, &self.base];
         let opened = commit(&root, "ours").and_then(|_| git(&root, &add));
         opened.expect("the branch opens");
-        let mut outcome = run_at_once(&branch, std::slice::from_ref(&task), None);
+        let (mut outcome, _) = run_at_once(&branch, std::slice::from_ref(&task), None);
         if let Some(Done { result: Ok(_), .. }) = outcome.first() {
             let merged = commit(&branch, "outside")
                 .and_then(|_| git(&branch, &["rev-parse", "HEAD"]))
@@ -283,8 +300,10 @@ impl Fixture {
             .sum::<usize>();
         stats::count_run(&layer());
         // The stop counts show 0 on a night with no stop.
-        stats::add(&layer(), "stops during a write", 0);
+        stats::add(&layer(), STOPS_DURING, 0);
         stats::add(&layer(), STOPS_THAT_CHANGED, 0);
+        stats::add(&layer(), STOPS_WITH_NO_LIVE_STATE, 0);
+        stats::add(&layer(), STOPS_AFTER_PUBLISH, 0);
         stats::add(&layer(), "stops after the write ended", 0);
         stats::add(&layer(), MOVED_ETAG_UPDATES, 0);
         stats::add(&layer(), MOVED_ETAG_REFUSALS, 0);
@@ -300,6 +319,7 @@ impl Fixture {
             reads: self.reads.clone(),
             entries: state_entries(&self.root()),
             groups: self.groups,
+            stops: self.stops,
         }
     }
 }

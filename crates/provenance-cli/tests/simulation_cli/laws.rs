@@ -1,5 +1,6 @@
 //! The laws that a run of a case through the CLI keeps.
 
+use crate::process::stop::Landing;
 use provenance_core::{RequirementStatus, ScopeId, StableId};
 use provenance_simulation::generate::{
     created_requirement_id, requirement_id, Case, Effect, Operation, Step, Target, Task, SCOPE,
@@ -22,6 +23,8 @@ pub enum Ran {
 /// Everything that one case did on disk.
 pub struct CliRun {
     pub groups: Vec<(Ran, Vec<Done>)>,
+    /// Where each stop that killed a write landed.
+    pub stops: Vec<Landing>,
     /// The final state, or the error of its read.
     pub entries: Result<BTreeMap<StateKey, Vec<u8>>, String>,
     /// The first failure of the full-rebuild comparison of the reads.
