@@ -1,6 +1,12 @@
+#[cfg(feature = "host")]
+use camino::Utf8PathBuf;
+#[cfg(feature = "host")]
+use provenance_core::VerificationRun;
 use provenance_core::{RequirementReview, ScopeId, StableId};
 #[cfg(feature = "host")]
 use provenance_macros::rule;
+#[cfg(feature = "host")]
+use std::collections::BTreeSet;
 use sha2::{Digest, Sha256};
 
 use super::{readers::read_jsonl, ReconciledResource, StateStore, TypedResourceKind};
@@ -83,25 +89,34 @@ impl StateStore {
         })
     }
 
-    /// Clears earlier reviews with the fresh run and its time, and keeps each
-    /// reason, in new bytes of the reviews shard that the caller publishes.
-    /// No bytes when the run clears no review.
+    /// Makes the run of a start from the ids of the runs that the reviews of
+    /// the scope name, and clears the earlier open reviews of its Rule with
+    /// the run and its time. Each review keeps its reason. Gives the run and
+    /// the new bytes of the reviews shard, which the caller publishes, or no
+    /// bytes when the run clears no review.
     #[rule("rule_review_cleared_by_later_run")]
     #[cfg(feature = "host")]
-    pub(super) fn cleared_reviews_shard(
+    pub(super) fn run_with_cleared_reviews(
         &self,
-        run: &provenance_core::VerificationRun,
-    ) -> anyhow::Result<Option<(camino::Utf8PathBuf, Vec<u8>)>> {
-        let path = shards::requirement_reviews_path(&self.layout, &run.scope_id);
+        scope_id: &ScopeId,
+        make_run: impl FnOnce(&BTreeSet<&str>) -> anyhow::Result<VerificationRun>,
+    ) -> anyhow::Result<(VerificationRun, Option<(Utf8PathBuf, Vec<u8>)>)> {
+        let path = shards::requirement_reviews_path(&self.layout, scope_id);
         if !self.state_exists(&path)? {
-            return Ok(None);
+            return Ok((make_run(&BTreeSet::new())?, None));
         }
         let contents = self.state_text(&path)?;
-        let bytes = crate::jsonl::mutate_jsonl_bytes(
+        let (run, bytes) = crate::jsonl::mutate_jsonl_bytes_with(
             self,
             &path,
             contents.as_deref(),
             |records: &mut Vec<RequirementReview>| {
+                let named: BTreeSet<&str> = records
+                    .iter()
+                    .filter_map(|record| record.cleared_by_run.as_ref())
+                    .map(StableId::as_str)
+                    .collect();
+                let run = make_run(&named)?;
                 let mut cleared = false;
                 for record in records.iter_mut().filter(|record| {
                     record.rule_id == run.rule_id
@@ -112,10 +127,10 @@ impl StateStore {
                     record.cleared_by_run = Some(run.id.clone());
                     cleared = true;
                 }
-                Ok(cleared)
+                Ok((run, cleared))
             },
         )?;
-        Ok(bytes.map(|bytes| (path, bytes)))
+        Ok((run, bytes.map(|bytes| (path, bytes))))
     }
 
     /// Every review ever raised in this scope, cleared ones included.

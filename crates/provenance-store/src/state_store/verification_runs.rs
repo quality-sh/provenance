@@ -1,4 +1,3 @@
-use crate::write_error::publication_started;
 use camino::Utf8PathBuf;
 use provenance_core::{
     validate_optional_commit_pin, ScopeId, StableId, VerificationMethod, VerificationRun,
@@ -22,7 +21,8 @@ impl StateStore {
     /// In the section, the checks and the bytes of each write come first.
     /// Then the binding and the cleared reviews that changed publish as one
     /// write set, and the run row goes into the cache last. A start that
-    /// changes no binding and clears no review publishes no set.
+    /// changes no binding and clears no review publishes no set. A failure
+    /// of the run row leaves the set that landed before it.
     pub fn begin_verification(
         &self,
         scope_id: ScopeId,
@@ -55,11 +55,15 @@ impl StateStore {
                     file: file.clone(),
                     symbol: input.symbol.clone(),
                 })?;
+            let started_at = now_millis(&*held.clock())?;
+            let rows = held.run_rows(&scope_id)?;
             let binding_id = binding.binding.id.clone();
-            let run = held.next_run(&binding.binding.scope_id, |id, started_at| {
-                VerificationRun {
-                    scope_id,
-                    id,
+            let (run, reviews) = held.run_with_cleared_reviews(&scope_id, |named| {
+                let taken = rows.iter().map(|row| row.id.as_str());
+                let taken: BTreeSet<&str> = taken.chain(named.iter().copied()).collect();
+                Ok(VerificationRun {
+                    scope_id: scope_id.clone(),
+                    id: next_run_id(&taken, started_at)?,
                     binding_id: Some(binding_id),
                     rule_id,
                     method: method.to_string(),
@@ -71,54 +75,23 @@ impl StateStore {
                     started_at,
                     completed_at: None,
                     error: None,
-                }
+                })
             })?;
-            let shards: Vec<_> = binding
-                .shard
-                .into_iter()
-                .chain(held.cleared_reviews_shard(&run)?)
-                .collect();
-            let landed = !shards.is_empty();
-            held.publish_shards(shards)?;
-            // After a set landed, a failure of the run row is a write that
-            // began.
-            held.add_run_row(&run).map_err(|error| {
-                if landed {
-                    publication_started(error)
-                } else {
-                    error
-                }
-            })?;
+            held.publish_shards(binding.shard.into_iter().chain(reviews).collect())?;
+            held.add_run_row(&run)?;
             Ok(run)
         })
     }
 
-    /// The run that `run` makes from the start time of the clock and the
-    /// next run id that no row of the cache holds and no review names. The
-    /// caller holds the section, so no other start takes the id before the
-    /// row of the run lands.
-    fn next_run(
-        &self,
-        scope_id: &ScopeId,
-        run: impl FnOnce(StableId, i64) -> VerificationRun,
-    ) -> anyhow::Result<VerificationRun> {
-        let started_at = now_millis(&*self.clock())?;
+    /// The rows of the runs cache of `scope_id`. The caller holds the section,
+    /// so no other start adds a row before the row of its run lands.
+    fn run_rows(&self, scope_id: &ScopeId) -> anyhow::Result<Vec<VerificationRun>> {
         let (path, lock_path) = self.run_files(scope_id);
-        let rows: Vec<VerificationRun> = crate::jsonl::read_jsonl_locked(&path, &lock_path)?;
-        let reviews = self.list_requirement_reviews(scope_id)?;
-        let named = reviews
-            .iter()
-            .filter_map(|review| review.cleared_by_run.as_ref());
-        let taken: BTreeSet<&str> = rows
-            .iter()
-            .map(|row| &row.id)
-            .chain(named)
-            .map(StableId::as_str)
-            .collect();
-        Ok(run(next_run_id(&taken, started_at)?, started_at))
+        crate::jsonl::read_jsonl_locked(&path, &lock_path)
     }
 
-    /// Adds `run` as a new row of the runs cache.
+    /// Adds `run` as a new row of the runs cache, and refuses a run whose id
+    /// a row already holds.
     fn add_run_row(&self, run: &VerificationRun) -> anyhow::Result<()> {
         let (path, lock_path) = self.run_files(&run.scope_id);
         crate::jsonl::mutate_jsonl_locked(

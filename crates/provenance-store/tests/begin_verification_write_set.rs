@@ -7,40 +7,43 @@
 mod memory;
 
 use memory::{
-    begin_input, key, memory_repository_at, open_review, scope, shard, verification_repository,
-    Failure, Refusing, REVIEWS,
+    begin_input, open_review, scope, verification_repository, FixedClock, Failure, Refusing,
+    REVIEWS,
 };
 use provenance_core::{RequirementReview, VerificationBinding, VerificationRun};
 use provenance_macros::verifies;
 use provenance_store::operations::begin_verification;
-use provenance_store::repository::{Repository, SystemClock};
+use provenance_store::repository::Repository;
 use provenance_store::storage::{Atomicity, StateKey};
 use provenance_store::write_error::WriteError;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
 const BINDINGS: &str = "scopes/default/verifications/binding.jsonl";
+const NOW: i64 = 1_767_225_600_000;
 
-/// A memory repository with an open review of `rule_expiry`, over a
-/// persistence that fails with `failure` each set that puts the reviews
-/// shard.
+/// A memory repository at the fixed time `NOW`, over a persistence that
+/// fails with `failure` each set that puts the reviews shard.
 struct Start {
     _root: tempfile::TempDir,
     persistence: Arc<Refusing>,
     repository: Repository,
 }
 
+/// A start whose state holds an open review of `rule_expiry`.
 fn start(failure: Option<Failure>) -> Start {
-    start_with(failure, Vec::new())
+    start_with(failure, &[open_review()])
 }
 
-/// Like [`start`], but the state also holds `extra`.
-fn start_with(failure: Option<Failure>, extra: Vec<(StateKey, Vec<u8>)>) -> Start {
+/// Like [`start`], but the reviews shard holds `reviews`, or the state has
+/// no reviews shard when `reviews` is empty.
+fn start_with(failure: Option<Failure>, reviews: &[Value]) -> Start {
     let root = tempfile::tempdir().unwrap();
     let persistence = Arc::new(Refusing::new(|key| key == REVIEWS));
     persistence.fail(failure);
-    let clock = Arc::new(SystemClock);
-    let (_, repository) = verification_repository(root.path(), extra, persistence.clone(), clock);
+    let clock = Arc::new(FixedClock::at_millis(NOW));
+    let (_, repository) =
+        verification_repository(root.path(), reviews, [], persistence.clone(), clock);
     Start {
         _root: root,
         persistence,
@@ -111,21 +114,12 @@ fn a_repeated_start_sends_no_set_to_the_persistence() {
 #[test]
 #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
 fn a_start_in_a_scope_with_no_reviews_shard_sends_the_binding_as_a_one_key_set() {
-    let root = tempfile::tempdir().unwrap();
-    std::fs::write(root.path().join("evidence.rs"), "fn expiry() {}\n").unwrap();
-    let persistence = Arc::new(Refusing::new(|_| false));
-    let clock = Arc::new(SystemClock);
-    let (_, repository) = memory_repository_at(
-        root.path(),
-        memory::initial_state(),
-        persistence.clone(),
-        clock,
-    );
+    let start = start_with(None, &[]);
 
-    begin_verification(&repository, begin_input()).unwrap();
+    begin_verification(&start.repository, begin_input()).unwrap();
 
     assert_eq!(
-        sets(&persistence),
+        sets(&start.persistence),
         [(Atomicity::PerKey, vec![BINDINGS.to_owned()])]
     );
 }
@@ -171,18 +165,36 @@ fn review(id: &str, changed_at: i64) -> RequirementReview {
     review
 }
 
+/// `review` cleared by `run` at its start time.
+fn cleared(mut review: RequirementReview, run: &VerificationRun) -> RequirementReview {
+    review.cleared_at = Some(run.started_at);
+    review.cleared_by_run = Some(run.id.clone());
+    review
+}
+
 #[test]
 #[verifies("rule_review_cleared_by_later_run", examples)]
-fn a_start_after_a_refused_set_clears_the_review() {
-    let later = 4_102_444_800_000;
-    let reviews = [
-        open_review(),
-        serde_json::to_value(review("review_later", later)).unwrap(),
-    ];
-    let start = start_with(
-        Some(Failure::Refused),
-        vec![(key(REVIEWS), shard(&reviews))],
+fn a_run_clears_only_the_reviews_raised_before_it_and_keeps_their_reason() {
+    let reviews = [review("review_expiry", 1), review("review_later", NOW + 1)];
+    let start = start_with(None, &reviews.map(|review| serde_json::to_value(review).unwrap()));
+
+    let run = begin_verification(&start.repository, begin_input()).unwrap();
+
+    let reviews = start.repository.store().list_requirement_reviews(&scope()).unwrap();
+    assert_eq!(
+        reviews,
+        [
+            cleared(review("review_expiry", 1), &run),
+            review("review_later", NOW + 1)
+        ]
     );
+    assert_eq!((run.started_at, run.id.as_str()), (NOW, "verification_1767225600000"));
+}
+
+// No Rule binding: no Rule states the state after a retry of a refused set.
+#[test]
+fn a_start_after_a_refused_set_adds_its_run_and_clears_the_review() {
+    let start = start(Some(Failure::Refused));
     start.failure();
     start.persistence.fail(None);
 
@@ -191,11 +203,8 @@ fn a_start_after_a_refused_set_clears_the_review() {
     let store = start.repository.store();
     let runs = store.list_verification_runs(&scope()).unwrap();
     assert_eq!(runs, std::slice::from_ref(&run));
-    let mut cleared = review("review_expiry", 1);
-    cleared.cleared_at = Some(run.started_at);
-    cleared.cleared_by_run = Some(run.id);
     let reviews = store.list_requirement_reviews(&scope()).unwrap();
-    assert_eq!(reviews, [cleared, review("review_later", later)]);
+    assert_eq!(reviews, [cleared(review("review_expiry", 1), &run)]);
 }
 
 // No Rule binding: no Rule states the run rows after a write set whose

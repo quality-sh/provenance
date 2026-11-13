@@ -276,17 +276,22 @@ pub fn begin_input() -> BeginVerificationInput {
     .unwrap()
 }
 
-/// A memory repository at `root` whose state also holds `extra` and an open
-/// review of `rule_expiry`, and whose working tree holds `evidence.rs`.
+/// A memory repository at `root` whose state also holds `extra` and the
+/// rows `reviews` as the reviews shard of the default scope, and whose
+/// working tree holds `evidence.rs`. With no rows the state has no reviews
+/// shard.
 pub fn verification_repository(
     root: &std::path::Path,
+    reviews: &[serde_json::Value],
     extra: impl IntoIterator<Item = (StateKey, Vec<u8>)>,
     persistence: Arc<dyn StatePersistence>,
     clock: Arc<dyn Clock>,
 ) -> (Arc<MemoryStateStorage>, Repository) {
     std::fs::write(root.join("evidence.rs"), "fn expiry() {}\n").unwrap();
     let mut entries = initial_entries();
-    entries.insert(key(REVIEWS), shard(&[open_review()]));
+    if !reviews.is_empty() {
+        entries.insert(key(REVIEWS), shard(reviews));
+    }
     entries.extend(extra);
     memory_repository_at(root, StateView::new(entries), persistence, clock)
 }

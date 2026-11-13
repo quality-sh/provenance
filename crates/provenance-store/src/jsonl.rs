@@ -130,13 +130,31 @@ pub(crate) fn mutate_jsonl_bytes<T>(
 where
     T: DeserializeOwned + Serialize,
 {
+    let ((), bytes) = mutate_jsonl_bytes_with(store, path, contents, |records| {
+        mutate(records).map(|changed| ((), changed))
+    })?;
+    Ok(bytes)
+}
+
+/// Like [`mutate_jsonl_bytes`], but `mutate` also gives a value that the
+/// caller receives with the bytes.
+pub(crate) fn mutate_jsonl_bytes_with<T, R>(
+    store: &StateStore,
+    path: &Utf8Path,
+    contents: Option<&str>,
+    mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<(R, bool)>,
+) -> anyhow::Result<(R, Option<Vec<u8>>)>
+where
+    T: DeserializeOwned + Serialize,
+{
     let mut loaded = load_jsonl(path, contents)?;
-    if !mutate(loaded.records_mut())? {
-        return Ok(None);
+    let (result, changed) = mutate(loaded.records_mut())?;
+    if !changed {
+        return Ok((result, None));
     }
     let lines = loaded.into_lines(path)?;
     guard_jsonl_lines(store, path, &lines, store.permissions())?;
-    Ok(Some(jsonl_bytes(&lines)))
+    Ok((result, Some(jsonl_bytes(&lines))))
 }
 
 /// The read a write is built on, guarded the same way an ordinary read is.

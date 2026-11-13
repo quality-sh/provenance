@@ -5,16 +5,46 @@
 #[path = "support/memory.rs"]
 mod memory;
 
-use memory::{begin_input, scope, verification_repository, FixedClock, Recorded};
+use memory::{begin_input, open_review, scope, verification_repository, FixedClock, Recorded};
 use provenance_store::operations::begin_verification;
 use provenance_store::repository::Repository;
-use std::sync::Arc;
+use provenance_store::storage::{PublishFailure, StatePersistence, WriteSet};
+use provenance_store::write_error::WriteError;
+use serde_json::json;
+use std::sync::{Arc, Mutex};
 
 const NOW: i64 = 1_767_225_600_000;
 
 fn repository(root: &tempfile::TempDir) -> Repository {
+    repository_over(root, Arc::new(Recorded::default()))
+}
+
+/// A repository at `root` whose adapter gives each write set to
+/// `persistence`.
+fn repository_over(
+    root: &tempfile::TempDir,
+    persistence: Arc<dyn StatePersistence>,
+) -> Repository {
     let clock = Arc::new(FixedClock::at_millis(NOW));
-    verification_repository(root.path(), [], Arc::new(Recorded::default()), clock).1
+    let reviews = [open_review()];
+    verification_repository(root.path(), &reviews, [], persistence, clock).1
+}
+
+/// Keeps each write set. While it keeps the first set, it starts a run in
+/// `other`, a second repository over the same working tree with its own
+/// section.
+#[derive(Debug)]
+struct StartsAnotherRun {
+    other: Mutex<Option<Repository>>,
+}
+
+impl StatePersistence for StartsAnotherRun {
+    fn persist(&self, _writes: &WriteSet) -> Result<(), PublishFailure> {
+        if let Some(other) = self.other.lock().unwrap().take() {
+            begin_verification(&other, begin_input()).unwrap();
+        }
+        Ok(())
+    }
 }
 
 /// The ids of the rows of the runs cache.
@@ -60,4 +90,25 @@ fn a_start_after_the_runs_cache_is_deleted_takes_an_id_that_no_review_names() {
     assert_eq!(reviews[0].cleared_by_run.as_ref(), Some(&first.id));
     assert_eq!(second.id.as_str(), format!("verification_{NOW}_2"));
     assert_eq!(row_ids(&repository), [second.id.as_str()]);
+}
+
+/// Two repositories over the memory adapter and one working tree have
+/// separate sections, so a start in each can take one run id.
+#[test]
+fn a_start_whose_run_id_a_row_holds_adds_no_row() {
+    let root = tempfile::tempdir().unwrap();
+    let other = repository(&root);
+    let persistence = Arc::new(StartsAnotherRun {
+        other: Mutex::new(Some(other)),
+    });
+    let repository = repository_over(&root, persistence);
+
+    let error = WriteError(begin_verification(&repository, begin_input()).unwrap_err());
+
+    let cause = format!("the runs cache already holds verification run `verification_{NOW}`");
+    assert_eq!(
+        (serde_json::to_value(&error).unwrap(), error.status()),
+        (json!({"kind": "write_failed", "cause": cause}), 500)
+    );
+    assert_eq!(row_ids(&repository), [format!("verification_{NOW}")]);
 }
