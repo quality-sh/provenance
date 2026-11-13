@@ -62,11 +62,13 @@ fn repository(value: Value) -> (tempfile::TempDir, String) {
 /// value of `"message":"..."` in a JSON line, and the text after `line 1: `
 /// in a text line.
 fn without_messages(output: &[u8]) -> String {
+    const MESSAGE: &str = "\"message\":\"";
+    const LINE: &str = " line 1: ";
     String::from_utf8_lossy(output)
         .lines()
-        .map(|line| {
-            if let Some(at) = line.find("\"message\":\"") {
-                let start = at + "\"message\":\"".len();
+        .map(|line| match (line.find(MESSAGE), line.find(LINE)) {
+            (Some(at), _) => {
+                let start = at + MESSAGE.len();
                 let rest = &line[start..];
                 let mut escaped = false;
                 let end = rest
@@ -78,11 +80,9 @@ fn without_messages(output: &[u8]) -> String {
                     })
                     .map_or(rest.len(), |(index, _)| index);
                 format!("{}{}", &line[..start], &rest[end..])
-            } else if let Some(at) = line.find(" line 1: ") {
-                line[..at + " line 1: ".len()].to_owned()
-            } else {
-                line.to_owned()
             }
+            (None, Some(at)) => line[..at + LINE.len()].to_owned(),
+            (None, None) => line.to_owned(),
         })
         .collect::<Vec<_>>()
         .join("\n")
