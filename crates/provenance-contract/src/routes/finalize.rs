@@ -114,7 +114,7 @@ fn publish_body_fields(definition: &mut Definition) {
         registration.request.schema = None;
         return;
     }
-    for field in bound.into_iter().chain(["action"]) {
+    for field in bound {
         schema::hide_bound_request_field(&mut registration.request.schema, field);
     }
 }
