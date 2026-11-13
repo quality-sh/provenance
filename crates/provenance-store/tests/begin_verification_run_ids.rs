@@ -6,6 +6,7 @@
 mod memory;
 
 use memory::{begin_input, open_review, scope, verification_repository, FixedClock, Recorded};
+use provenance_core::RequirementReview;
 use provenance_store::operations::begin_verification;
 use provenance_store::repository::Repository;
 use provenance_store::storage::{PublishFailure, StatePersistence, WriteSet};
@@ -93,7 +94,10 @@ fn a_start_after_the_runs_cache_is_deleted_takes_an_id_that_no_review_names() {
 }
 
 /// Two repositories over the memory adapter and one working tree have
-/// separate sections, so a start in each can take one run id.
+/// separate sections, so a start in each can take one run id. The refusal
+/// comes after the set of the first start has landed, so its binding and
+/// its cleared review stay, and the review names the run of the other
+/// start.
 #[test]
 fn a_start_whose_run_id_a_row_holds_adds_no_row() {
     let root = tempfile::tempdir().unwrap();
@@ -111,4 +115,16 @@ fn a_start_whose_run_id_a_row_holds_adds_no_row() {
         (json!({"kind": "write_failed", "cause": cause}), 500)
     );
     assert_eq!(row_ids(&repository), [format!("verification_{NOW}")]);
+    let store = repository.store();
+    let bindings = store.list_verification_bindings(&scope()).unwrap();
+    let bound: Vec<_> = bindings
+        .iter()
+        .map(|binding| (binding.rule_id.as_str(), binding.key.as_str(), binding.file.as_str()))
+        .collect();
+    assert_eq!(bound, [("rule_expiry", "expiry", "evidence.rs")]);
+    let mut review: RequirementReview = serde_json::from_value(open_review()).unwrap();
+    review.cleared_at = Some(NOW);
+    review.cleared_by_run = Some(memory::id(&format!("verification_{NOW}")));
+    let reviews = store.list_requirement_reviews(&scope()).unwrap();
+    assert_eq!(reviews, [review]);
 }
