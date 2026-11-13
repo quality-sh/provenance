@@ -114,7 +114,7 @@ fn a_refused_begin_set_leaves_no_binding_and_no_run_row() {
     sets.refuse.store(false, Ordering::SeqCst);
     let run = begin_verification(&repository, input()).unwrap();
     let runs = store.list_verification_runs(&scope()).unwrap();
-    assert_eq!(runs, [run.clone()]);
+    assert_eq!(runs, std::slice::from_ref(&run));
     let reviews = store.list_requirement_reviews(&scope()).unwrap();
     assert_eq!(reviews[0].cleared_by_run.as_ref(), Some(&run.id));
 }
