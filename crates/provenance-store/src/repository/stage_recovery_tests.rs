@@ -212,6 +212,8 @@ fn crash_child() {
 }
 
 #[test]
+#[verifies("rule_live_projection_shows_only_published_state", examples)]
+#[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
 fn process_crashes_reopen_as_complete_old_or_new_state() {
     for (phase, committed) in CRASH_PHASES {
         let fixture = fixture();
@@ -237,7 +239,7 @@ fn a_stop_before_the_prepared_marker_leaves_a_transaction_that_the_next_section_
     assert_reopened(&fixture, false, "state_prepared");
 }
 
-/// An implementation aid with no Rule: it shows the error of a failed
+/// An implementation aid with no Rule: it shows the answer of a failed
 /// removal, which no Rule states.
 #[cfg(unix)]
 #[test]
@@ -250,19 +252,27 @@ fn a_failed_removal_of_a_stopped_transaction_names_the_step_and_the_path() {
     let directory = layout.import_transactions_dir();
 
     std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o500)).unwrap();
-    let result = crate::publication::with_repository_publication(&layout, |_| Ok(()));
+    let mut ran = false;
+    let result = crate::publication::with_repository_publication(&layout, |_| {
+        ran = true;
+        Ok(())
+    });
     std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o755)).unwrap();
 
-    let error = result.unwrap_err();
+    let error = crate::write_error::WriteError(result.unwrap_err());
+    assert!(matches!(error.safe(), crate::write_error::WriteFailure::WriteFailed { .. }));
     assert_eq!(
-        format!("{error:#}"),
+        format!("{:#}", error.0),
         format!(
-            "remove leftover import transaction {}: {}",
+            "remove transaction directory {} (give this process write permission to this \
+             directory and to the directory that holds it): {}",
             left.display(),
             std::io::Error::from_raw_os_error(13)
         )
     );
-    assert!(left.is_dir(), "the transaction stays");
+    assert!(!ran, "the section entry does not run the operation");
+    crate::publication::with_repository_publication(&layout, |_| Ok(())).unwrap();
+    assert_eq!(transactions(&fixture.root), Vec::<Utf8PathBuf>::new());
     assert!(
         state_tree(&fixture.root) == fixture.old,
         "the live state does not change"
@@ -299,6 +309,8 @@ fn the_removal_of_a_stopped_transaction_keeps_a_link_and_its_target() {
 }
 
 #[test]
+#[verifies("rule_live_projection_shows_only_published_state", examples)]
+#[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
 fn errors_before_published_roll_back_and_an_error_at_published_keeps_new_state() {
     for (phase, _) in CRASH_PHASES {
         let fixture = fixture();

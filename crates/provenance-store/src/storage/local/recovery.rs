@@ -1,5 +1,6 @@
 use super::durability::{sync_directory, write_synced_file};
 use super::section::canonical_utf8;
+use super::transactions::{remove_leftovers, remove_transaction, TransactionKind};
 use crate::layout::ProvenanceLayout;
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -47,13 +48,16 @@ pub fn clear_publication_marker(layout: &ProvenanceLayout) -> anyhow::Result<()>
 }
 
 /// Completes or rolls back the publication that the marker names, and then
-/// removes each transaction that no marker names.
-pub fn recover_pending_publication(layout: &ProvenanceLayout) -> anyhow::Result<()> {
+/// removes each import transaction that no marker names.
+///
+/// The caller holds the section lock: with no lock, the removal can remove
+/// the transaction of a live write.
+pub(super) fn recover_pending_publication(layout: &ProvenanceLayout) -> anyhow::Result<()> {
     let marker_path = layout.publication_marker_path();
     if marker_path.exists() {
         recover_marked_publication(layout, &marker_path)?;
     }
-    remove_unmarked_transactions(layout)
+    remove_leftovers(layout, TransactionKind::Import, |_| Ok(()))
 }
 
 fn recover_marked_publication(
@@ -77,44 +81,9 @@ fn recover_marked_publication(
         sync_directory(&layout.provenance_dir())?;
     }
     if transaction_dir.exists() {
-        std::fs::remove_dir_all(&transaction_dir)?;
+        remove_transaction(&transaction_dir)?;
     }
     clear_publication_marker(layout)
-}
-
-/// Removes each real directory in the transactions directory of the cache.
-///
-/// The caller holds the section lock and no marker exists, so no live write
-/// owns such a directory: a write holds the lock from the creation of its
-/// directory to its marker. An entry that is not a real directory stays, and
-/// no link is followed.
-#[rule("rule_stopped_write_leaves_no_transaction_data")]
-fn remove_unmarked_transactions(layout: &ProvenanceLayout) -> anyhow::Result<()> {
-    let transactions = layout.import_transactions_dir();
-    let listed =
-        |error: std::io::Error| crate::refusal::caused(error, format!("list {transactions}"));
-    let mut removed = false;
-    for entry in std::fs::read_dir(&transactions).map_err(listed)? {
-        let entry = entry.map_err(listed)?;
-        if !entry.file_type().map_err(listed)?.is_dir() {
-            continue;
-        }
-        let path = Utf8PathBuf::from_path_buf(entry.path()).map_err(|path| {
-            crate::refusal::fault!("import transaction is not UTF-8: {}", path.display())
-        })?;
-        let transaction = validated_transaction_dir(layout, &path)?;
-        std::fs::remove_dir_all(&transaction).map_err(|error| {
-            crate::refusal::caused(
-                error,
-                format!("remove leftover import transaction {transaction}"),
-            )
-        })?;
-        removed = true;
-    }
-    if removed {
-        sync_directory(&transactions).with_context(|| format!("sync {transactions}"))?;
-    }
-    Ok(())
 }
 
 const OUTSIDE_REPOSITORY_CACHE: &str =
@@ -231,11 +200,27 @@ pub fn validated_transaction_dir(
     layout: &ProvenanceLayout,
     transaction_dir: &Utf8Path,
 ) -> anyhow::Result<Utf8PathBuf> {
-    let canonical_transactions = canonical_transactions_dir(layout)?;
+    contained_transaction(layout, &layout.import_transactions_dir(), transaction_dir)
+}
+
+/// The resolved path of `transaction`, a real directory directly in
+/// `directory`, which is a real directory directly in the cache.
+pub(super) fn contained_transaction(
+    layout: &ProvenanceLayout,
+    directory: &Utf8Path,
+    transaction: &Utf8Path,
+) -> anyhow::Result<Utf8PathBuf> {
+    let canonical_cache = canonical_utf8(&layout.cache_dir(), "repository cache path")?;
+    let canonical_directory = recovery_dir_inside_cache(
+        &canonical_cache,
+        &layout.cache_dir(),
+        directory,
+        RecoveryUse::Touched,
+    )?;
     recovery_dir_inside_cache(
-        &canonical_transactions,
-        &layout.import_transactions_dir(),
-        transaction_dir,
+        &canonical_directory,
+        directory,
+        transaction,
         RecoveryUse::Touched,
     )
 }

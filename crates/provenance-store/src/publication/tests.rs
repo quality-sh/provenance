@@ -65,7 +65,7 @@ fn recovery_rejects_traversal_outside_import_transactions() {
     )
     .unwrap();
 
-    let error = recover_pending_publication(&layout)
+    let error = with_repository_publication(&layout, |_| Ok(()))
         .unwrap_err()
         .to_string();
 
@@ -98,7 +98,7 @@ fn recovery_rejects_symlinked_import_transactions_outside_repository() {
     )
     .unwrap();
 
-    let error = recover_pending_publication(&layout)
+    let error = with_repository_publication(&layout, |_| Ok(()))
         .unwrap_err()
         .to_string();
 
@@ -130,7 +130,7 @@ fn recovery_rejects_symlinked_import_transactions_inside_repository() {
     )
     .unwrap();
 
-    let error = recover_pending_publication(&layout)
+    let error = with_repository_publication(&layout, |_| Ok(()))
         .unwrap_err()
         .to_string();
 
@@ -163,7 +163,7 @@ fn recovery_rejects_a_symlink_component_even_when_the_written_path_resolves_insi
     )
     .unwrap();
 
-    let error = recover_pending_publication(&layout)
+    let error = with_repository_publication(&layout, |_| Ok(()))
         .unwrap_err()
         .to_string();
 
@@ -194,7 +194,7 @@ fn recovery_clears_published_marker_when_transaction_is_missing() {
     )
     .unwrap();
 
-    recover_pending_publication(&layout).unwrap();
+    with_repository_publication(&layout, |_| Ok(())).unwrap();
 
     assert!(layout.state_dir().is_dir());
     assert!(!layout.publication_marker_path().exists());
@@ -220,7 +220,7 @@ fn recovery_rejects_a_transaction_that_is_a_regular_file() {
     )
     .unwrap();
 
-    let error = recover_pending_publication(&layout)
+    let error = with_repository_publication(&layout, |_| Ok(()))
         .unwrap_err()
         .to_string();
 

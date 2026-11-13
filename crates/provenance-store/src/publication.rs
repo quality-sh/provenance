@@ -24,8 +24,7 @@ mod write_permission;
 pub use crate::storage::local::durability::{sync_directory, sync_tree};
 #[cfg(feature = "host")]
 pub use crate::storage::local::{
-    clear_publication_marker, recover_pending_publication, write_publication_marker,
-    PublicationPhase,
+    clear_publication_marker, write_publication_marker, PublicationPhase,
 };
 #[cfg(all(test, unix, feature = "host"))]
 use crate::storage::local::{validate_missing_transaction_dir, validated_transaction_dir};

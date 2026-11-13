@@ -11,18 +11,27 @@ use crate::{
         validate_recovery_artifact_leaf, HeldRepositoryFile, RepositoryFileBackup,
         RepositoryFileRefusal, RepositoryFiles,
     },
+    storage::local::{remove_leftovers, TransactionKind},
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use sha2::{Digest as _, Sha256};
 
+/// Completes the source edit that the marker names, and then removes each
+/// source-edit transaction that no marker names, with the working-tree file
+/// that its record names.
+///
+/// The caller holds the section lock: with no lock, the removal can remove
+/// the transaction of a live write.
 pub fn recover_pending_source_edit(layout: &ProvenanceLayout) -> anyhow::Result<()> {
     let marker_path = layout.source_edit_marker_path();
-    if !marker_path.exists() {
-        return clean_unmarked_transactions(layout);
+    if marker_path.exists() {
+        let mut marker: SourceEditMarker = serde_json::from_slice(&std::fs::read(&marker_path)?)?;
+        validate_marker_leaves(&marker)?;
+        recover_marked_source_edit(layout, &marker_path, &mut marker)?;
     }
-    let mut marker: SourceEditMarker = serde_json::from_slice(&std::fs::read(&marker_path)?)?;
-    validate_marker_leaves(&marker)?;
-    recover_marked_source_edit(layout, &marker_path, &mut marker)
+    remove_leftovers(layout, TransactionKind::SourceEdit, |transaction| {
+        remove_prepared_file(layout, transaction)
+    })
 }
 
 fn recover_marked_source_edit(
@@ -237,24 +246,24 @@ fn install_staged_state(
     sync_directory(&layout.provenance_dir())
 }
 
-fn clean_unmarked_transactions(layout: &ProvenanceLayout) -> anyhow::Result<()> {
-    for entry in std::fs::read_dir(layout.source_edit_transactions_dir())? {
-        let path = Utf8PathBuf::from_path_buf(entry?.path()).map_err(|path| {
-            crate::refusal::fault!("source-edit transaction is not UTF-8: {}", path.display())
-        })?;
-        let transaction = validate_transaction(layout, &path)?;
-        let record: PreparedSourceRecord = serde_json::from_slice(&read_regular_file(
-            &transaction.join("prepared-source.json"),
-        )?)?;
-        validate_recovery_artifact_leaf(&record.target, &record.prepared_leaf, ".tmp")?;
-        RepositoryFiles::open(layout.root())?.remove_recovery_temp(
-            &record.target,
-            &record.prepared_leaf,
-            &record.prepared_identity,
-            record.after_digest,
-        )?;
-        std::fs::remove_dir_all(transaction)?;
+/// Removes the prepared working-tree file that the record of `transaction`
+/// names. A write records the file before its marker, so a transaction with
+/// no record has no prepared file that the store can find.
+fn remove_prepared_file(layout: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
+    let record_path = transaction.join("prepared-source.json");
+    match std::fs::symlink_metadata(&record_path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.into()),
+        Ok(_) => {}
     }
+    let record: PreparedSourceRecord = serde_json::from_slice(&read_regular_file(&record_path)?)?;
+    validate_recovery_artifact_leaf(&record.target, &record.prepared_leaf, ".tmp")?;
+    RepositoryFiles::open(layout.root())?.remove_recovery_temp(
+        &record.target,
+        &record.prepared_leaf,
+        &record.prepared_identity,
+        record.after_digest,
+    )?;
     Ok(())
 }
 

@@ -19,18 +19,17 @@ pub(crate) mod durability;
 mod file_install;
 mod recovery;
 mod section;
+mod transactions;
 pub(crate) mod whole_set;
 #[cfg(any(unix, windows))]
 pub(crate) use file_install::FileInstall;
-pub use recovery::{
-    clear_publication_marker, recover_pending_publication, write_publication_marker,
-    PublicationPhase,
-};
+pub use recovery::{clear_publication_marker, write_publication_marker, PublicationPhase};
 #[cfg(all(test, unix))]
 pub(crate) use recovery::{validate_missing_transaction_dir, validated_transaction_dir};
 pub use section::LocalSectionLock;
 #[cfg(test)]
 pub(crate) use section::LockedPublicationFile;
+pub(crate) use transactions::{remove_leftovers, remove_transaction, TransactionKind};
 
 #[cfg(test)]
 pub(crate) use whole_set::copy_directory;

@@ -8,6 +8,7 @@
 
 use super::durability::{sync_directory, sync_tree, write_staged_file};
 use super::recovery::{clear_publication_marker, write_publication_marker, PublicationPhase};
+use super::transactions::remove_transaction;
 use crate::layout::ProvenanceLayout;
 use crate::storage::WriteSet;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -183,6 +184,9 @@ fn rollback_after_error(
 }
 
 /// Removes the transaction when it ends with no marker, also on unwind.
+///
+/// A failed removal does not change the result of the write: no marker
+/// names the transaction, so the next section entry removes it.
 struct TransactionCleanup {
     transaction: Utf8PathBuf,
     publication_marker: Utf8PathBuf,
@@ -191,7 +195,7 @@ struct TransactionCleanup {
 impl Drop for TransactionCleanup {
     fn drop(&mut self) {
         if !self.publication_marker.exists() && self.transaction.exists() {
-            let _ = std::fs::remove_dir_all(&self.transaction);
+            let _ = remove_transaction(&self.transaction);
         }
     }
 }
@@ -265,8 +269,11 @@ impl WholeSetHook for StatePublication {
         clear_publication_marker(live)
     }
 
+    /// The state is published, so the write succeeds when the removal or the
+    /// clear of the marker fails. The Published marker then stays, and the
+    /// next section entry removes the transaction and clears the marker.
     fn finish(&mut self, live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
-        if std::fs::remove_dir_all(transaction).is_ok() {
+        if remove_transaction(transaction).is_ok() {
             let _ = clear_publication_marker(live);
         }
         Ok(())

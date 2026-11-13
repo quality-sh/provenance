@@ -1,7 +1,7 @@
 use super::sync_directory;
 use crate::storage::local::durability::write_synced_file;
 use crate::storage::local::whole_set::{InstallState, WholeSetHook};
-use crate::storage::local::FileInstall;
+use crate::storage::local::{remove_transaction, FileInstall};
 use crate::{
     layout::ProvenanceLayout,
     operations::files::{
@@ -12,7 +12,6 @@ use anyhow::Context as _;
 use camino::{Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
-use std::io::Write as _;
 
 #[derive(Debug, thiserror::Error)]
 pub enum SourceEditRecoveryFailure {
@@ -210,18 +209,17 @@ pub(super) fn write_marker(
 }
 
 pub(super) fn finish(layout: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
-    std::fs::remove_dir_all(transaction)?;
+    remove_transaction(transaction)?;
     crate::test_probes::at("source_edit_transaction_removed")?;
     std::fs::remove_file(layout.source_edit_marker_path())?;
     sync_directory(&layout.cache_dir())
 }
 
+/// Writes `record` in `transaction` with a replace, so that the record is
+/// complete or does not exist: recovery reads a record that exists.
 fn write_prepared_source_record(
     transaction: &Utf8Path,
     record: &PreparedSourceRecord,
 ) -> anyhow::Result<()> {
-    let mut file = std::fs::File::create(transaction.join("prepared-source.json"))?;
-    file.write_all(&serde_json::to_vec(record)?)?;
-    file.sync_all()?;
-    sync_directory(transaction)
+    write_synced_file(&transaction.join("prepared-source.json"), &serde_json::to_vec(record)?)
 }
