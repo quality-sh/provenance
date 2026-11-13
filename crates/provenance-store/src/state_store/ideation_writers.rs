@@ -4,8 +4,8 @@ use super::{
 };
 use crate::shards;
 use provenance_core::{
-    ensure_record_id_assignable, validate_optional_confidence_score, Contribution, ScopeId,
-    StableId, SynthesisPacket,
+    ensure_record_id_assignable, validate_optional_confidence_score, Contribution, IdeationRecord,
+    ScopeId, StableId, SynthesisPacket,
 };
 
 impl StateStore {
@@ -138,15 +138,7 @@ impl StateStore {
             } else {
                 records.push(contribution.clone());
             }
-            let mut contributions = self.list_contributions(&scope_id)?;
-            if let Some(index) = contributions
-                .iter()
-                .position(|record| record.id == contribution.id)
-            {
-                contributions[index] = contribution.clone();
-            } else {
-                contributions.push(contribution.clone());
-            }
+            let contributions = with_record(self.list_contributions(&scope_id)?, &contribution);
             self.check_ideation_aggregate(
                 &scope_id,
                 provenance_core::IdeationAggregate {
@@ -283,15 +275,8 @@ impl StateStore {
             } else {
                 records.push(synthesis_packet.clone());
             }
-            let mut synthesis_packets = self.list_synthesis_packets(&scope_id)?;
-            if let Some(index) = synthesis_packets
-                .iter()
-                .position(|record| record.id == synthesis_packet.id)
-            {
-                synthesis_packets[index] = synthesis_packet.clone();
-            } else {
-                synthesis_packets.push(synthesis_packet.clone());
-            }
+            let stored = self.list_synthesis_packets(&scope_id)?;
+            let synthesis_packets = with_record(stored, &synthesis_packet);
             self.check_ideation_aggregate(
                 &scope_id,
                 provenance_core::IdeationAggregate {
@@ -366,4 +351,17 @@ fn merge_synthesis(
             .required_human_decisions
             .unwrap_or(existing.required_human_decisions),
     }
+}
+
+/// `records` with `record` in place of the record with its id, or with
+/// `record` at the end when no record has its id.
+fn with_record<T: IdeationRecord + Clone>(mut records: Vec<T>, record: &T) -> Vec<T> {
+    match records
+        .iter()
+        .position(|current| current.immutable_id() == record.immutable_id())
+    {
+        Some(index) => records[index] = record.clone(),
+        None => records.push(record.clone()),
+    }
+    records
 }
