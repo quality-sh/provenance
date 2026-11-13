@@ -340,3 +340,21 @@ fn every_discussion_message_member_schema_accepts_one_message() {
         );
     }
 }
+
+// No Rule: this test pins the request schema of the close route before a contract change.
+#[test]
+fn close_topic_route_publishes_a_data_object_with_no_field() {
+    let definitions = crate::definitions();
+    let definition = definitions
+        .iter()
+        .find(|entry| entry.name == "close-topic")
+        .unwrap();
+    let request = definition
+        .request_schema()
+        .expect("the route publishes a body");
+    assert_eq!(request["properties"]["data"]["properties"], json!({}));
+    assert_eq!(
+        definition.mcp_input_schema()["required"],
+        json!(["data", "id"])
+    );
+}

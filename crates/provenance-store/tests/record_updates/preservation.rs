@@ -383,3 +383,19 @@ async fn updating_a_row_with_repeated_unknown_members_is_refused_without_publica
     assert_eq!(raw_rows(&fixture, "sources", "source.jsonl"), vec![row]);
     assert_eq!(state_snapshot(&fixture), before);
 }
+
+// No Rule: this test pins the clear list of a native Topic update before a contract change.
+#[tokio::test]
+async fn topic_update_takes_an_empty_clear_list() {
+    let fixture = Fixture::new();
+    fixture.requirement().await;
+    fixture.call("create-topic", json!({"scope_id":"default","id":"topic_one","requirement_id":"req_one","title":"Topic","status":"open","links":[]})).await.unwrap();
+    let updated = fixture
+        .call(
+            "update-topic",
+            json!({"scope_id":"default","id":"topic_one","title":"Renamed","clear_fields":[]}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(updated["title"], "Renamed");
+}

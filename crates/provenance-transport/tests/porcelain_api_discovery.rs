@@ -123,3 +123,42 @@ async fn api_discovery_preserves_query_contracts() {
         .unwrap();
     assert!(names_of(&member_base.parameters).contains(&"id"));
 }
+
+// No Rule: this test pins the failure schema of the statement check before a contract change.
+#[tokio::test]
+async fn statement_check_failure_schema_has_a_handler_member_with_no_value() {
+    let repository = Repository::new("The shared graph is readable.");
+    let service = Porcelain::new(HostApiPort::new(host(&repository)));
+    let ApiOutcome::Catalog(selection) = service
+        .execute_api(ApiRequest::Discover {
+            filter: None,
+            limit: None,
+        })
+        .await
+        .unwrap()
+    else {
+        panic!("discovery returns the catalog");
+    };
+    let catalog = selection.complete();
+    let route = catalog
+        .routes
+        .iter()
+        .find(|route| route.path == "/statement-checks" && route.method == ApiMethod::Post)
+        .expect("the statement check route is described");
+    let failure = &route.queries[0].failure_schema;
+    assert_eq!(
+        failure["properties"]["error"],
+        serde_json::json!({"$ref":"#/$defs/OperationError"})
+    );
+    assert_eq!(
+        failure["$defs"]["OperationError"]["anyOf"],
+        serde_json::json!([
+            {"$ref":"#/$defs/OperationFailure"},
+            {"$ref":"#/$defs/StatementFailure"}
+        ])
+    );
+    assert_eq!(
+        failure["$defs"]["StatementFailure"],
+        serde_json::json!(false)
+    );
+}

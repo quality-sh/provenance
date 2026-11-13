@@ -116,3 +116,37 @@ async fn target_discussion_writes_dispatch_by_name() {
         .unwrap_err();
     assert_eq!(error.error["kind"], "invalid_input");
 }
+
+// No Rule: the two tests below pin the request forms of two native calls before a contract
+// change. A call that decodes reaches the host, and a host with no repositories refuses it.
+#[tokio::test]
+async fn topic_update_call_takes_a_clear_list() {
+    let error = invoke(
+        "update-topic",
+        SDK_PROTOCOL_VERSION,
+        json!({
+            "context":{"repository":"selected","scope":"default"},
+            "request":{"scope_id":"default","id":"topic_one","title":"Renamed","clear_fields":[]}
+        }),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.error, json!({"kind":"unavailable_needs"}));
+}
+
+#[tokio::test]
+async fn info_call_takes_an_empty_request_object() {
+    let call =
+        |request: serde_json::Value| json!({"context":{"repository":"selected"},"request":request});
+    let reached = invoke("info", SDK_PROTOCOL_VERSION, call(json!({})))
+        .await
+        .unwrap_err();
+    assert_eq!(reached.error, json!({"kind":"unavailable_needs"}));
+    let refused = invoke("info", SDK_PROTOCOL_VERSION, call(json!(null)))
+        .await
+        .unwrap_err();
+    assert_eq!(
+        refused.error,
+        json!({"kind":"invalid_input","field":"request","reason":"invalid_value"})
+    );
+}
