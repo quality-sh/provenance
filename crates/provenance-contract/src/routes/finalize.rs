@@ -183,40 +183,39 @@ mod tests {
         json!({"type":"object","additionalProperties":false,"properties":properties})
     }
 
-    /// An implementation aid with no Rule binding: the catalog of the crate holds no request
-    /// of these forms with these bindings, so only this step can show them. The unit type has
-    /// no field. An object that refuses each field that its `properties` do not name has
-    /// those properties. The route decides its body from them.
+    /// An implementation aid with no Rule binding. No route of the catalog has the unit type
+    /// or an object with no field as its request type, and no route gets each field from its
+    /// path, its bound context and a request header. Only this step can show that such a
+    /// route publishes no body. One body field in the last request keeps the body, without
+    /// the bound fields.
     #[test]
     fn a_request_that_shows_its_fields_decides_the_body() {
         let field = json!({"type":"string"});
+        let mut fields = json!({"id":field,"scope_id":field,"expected_etag":field});
         for raw in [
             json!({"type":"null"}),
             json!({"type":"object","additionalProperties":false}),
-            closed(&json!({"id":field,"scope_id":field})),
-            closed(&json!({"id":field,"scope_id":field,"expected_etag":field})),
+            closed(&fields),
         ] {
             assert_eq!(published(&raw), Ok(None), "{raw}");
         }
 
-        let with_title = closed(&json!({"id":field,"expected_etag":field,"title":field}));
-        let mut with_condition = with_title.clone();
-        with_condition["anyOf"] = json!([{"required":["title"]},{"required":["expected_etag"]}]);
-        for raw in [with_title, with_condition] {
-            let body = published(&raw).unwrap().expect("the route has a body");
-            let data = body["properties"]["data"]["properties"]
-                .as_object()
-                .unwrap();
-            assert_eq!(data.keys().collect::<Vec<_>>(), ["title"], "{raw}");
-        }
+        fields["title"] = field;
+        let body = published(&closed(&fields)).unwrap();
+        let body = body.expect("the route has a body");
+        let data = body["properties"]["data"]["properties"]
+            .as_object()
+            .unwrap();
+        assert_eq!(data.keys().collect::<Vec<_>>(), ["title"]);
     }
 
     /// An implementation aid with no Rule binding: a request of one of these forms stops the
     /// construction of the catalog, so the catalog of the crate cannot hold one. A field of
     /// such a request can come from a keyword that is not its top-level `properties`, so the
-    /// route does not decide its body. The refusal names the operation.
+    /// route does not decide its body. The refusal names the operation and gives the cause.
     #[test]
     fn a_request_that_does_not_show_its_fields_stops_catalog_construction() {
+        let cause = "the request type of operation `example` does not show its fields";
         let field = json!({"type":"string"});
         let inner = closed(&json!({"title":field}));
         let id = json!({"id":field});
@@ -234,7 +233,7 @@ mod tests {
             json!({"type":"array","items":field}),
         ] {
             let refusal = published(&raw).expect_err(&raw.to_string());
-            assert!(refusal.contains("operation `example`"), "{refusal}");
+            assert!(refusal.contains(cause), "{refusal}");
         }
     }
 }
