@@ -148,3 +148,22 @@ async fn a_row_of_the_wrong_length_fails_the_write_before_any_statement() {
     assert_eq!(t, ids(&[]));
     assert_eq!(u, ids(&[]));
 }
+
+#[tokio::test]
+async fn rows_of_the_wrong_length_that_fill_one_statement_fail_the_write() {
+    // One row of `t` is one value too long and the next is one value too
+    // short. With 6 values a statement, their 6 values fill one statement
+    // of 3 rows, so that statement would run and keep shifted values.
+    let mut rows = Rows::new(tables());
+    rows.push(0, vec![text("a"), text("value of a")]);
+    rows.push(0, vec![text("b"), text("value of b"), text("extra")]);
+    rows.push(0, vec![text("c")]);
+    let (outcome, t, u) = load(rows, 6).await;
+
+    assert_eq!(
+        outcome.unwrap_err().to_string(),
+        "a row for t has 3 values, but the table has 2 columns"
+    );
+    assert_eq!(t, ids(&[]));
+    assert_eq!(u, ids(&[]));
+}
