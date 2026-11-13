@@ -105,7 +105,6 @@ impl std::fmt::Display for IdeationRecordKind {
 /// kind have the same immutable id.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("duplicate immutable {kind} id {id}")]
-#[non_exhaustive]
 pub struct DuplicateImmutableId {
     /// The kind of the two records.
     pub kind: IdeationRecordKind,

@@ -169,16 +169,8 @@ pub fn read_jsonl_located<T: DeserializeOwned>(
 /// line with the id `id` when the shard holds it twice, else at its only
 /// line. The shard is read again only here, on the refusal path. When that
 /// read fails or does not find the id, the refusal is `message` with no line.
-///
-/// Each caller passes the id of a record that it read from the shard at
-/// `path`: the Discussion parent check (`discussion_state.rs`), the origin
-/// Thread check (`thread_origins.rs`), the Rule archive check
-/// (`family_readers.rs`), the canonical artifact index
-/// (`canonical_artifacts.rs`) and the shared declaration address
-/// (`typed_specs.rs`). For these callers, no state that reaches the fallback
-/// is known. The ideation scope check (`immutable_ids.rs`) also calls it when
-/// a read with lines does not show a duplicate id on two lines: the file
-/// changed after the read of its records.
+/// The read finds the id in the `id` key of each line, so it does not find a
+/// line that holds the id under an alias of that key.
 pub fn record_fault(
     store: &StateStore,
     path: &Utf8Path,

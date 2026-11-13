@@ -4,7 +4,7 @@ use super::{RepositoryPort, ScopeExport};
 use crate::repository::RepoContext;
 use crate::snapshot::{snapshot, ScopeSnapshot, Store};
 use camino::Utf8Path;
-use provenance_core::ScopeId;
+use provenance_core::{IdeationRecordKind, ScopeId};
 use provenance_macros::rule;
 use provenance_porcelain::import::{ImportInput, ImportOutput, ImportPort};
 use provenance_porcelain::WorkFuture;
@@ -14,7 +14,7 @@ use provenance_store::repository::Repository;
 use provenance_store::state_store::{
     assertion_cites_contribution, assertion_cites_synthesis,
     ensure_asserted_contribution_unchanged, ensure_asserted_synthesis_unchanged, ScopeShards,
-    StateStore, CONTRIBUTION_KIND, SYNTHESIS_KIND,
+    StateStore,
 };
 use provenance_store::statement_analysis::{analyze_changed_statements, violation_error};
 use serde::Serialize;
@@ -170,7 +170,7 @@ fn ensure_immutable_records_preserved<T: Serialize>(
 /// the same record.
 #[rule("rule_asserted_evidence_undeletable")]
 fn ensure_asserted_evidence_not_deleted(
-    kind: &str,
+    kind: IdeationRecordKind,
     id: &str,
     cited_by_assertion: bool,
 ) -> anyhow::Result<()> {
@@ -202,7 +202,7 @@ fn ensure_asserted_evidence_preserved(
                 )?;
             }
             None => ensure_asserted_evidence_not_deleted(
-                CONTRIBUTION_KIND,
+                IdeationRecordKind::Contribution,
                 existing.id.as_str(),
                 assertion_cites_contribution(existing, &stored.assertion_records),
             )?,
@@ -222,7 +222,7 @@ fn ensure_asserted_evidence_preserved(
                 )?;
             }
             None => ensure_asserted_evidence_not_deleted(
-                SYNTHESIS_KIND,
+                IdeationRecordKind::SynthesisPacket,
                 existing.id.as_str(),
                 assertion_cites_synthesis(existing, &stored.assertion_records),
             )?,
@@ -296,10 +296,8 @@ fn ensure_changed_statements_are_clean(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        deserialize_scope_export, ensure_asserted_evidence_not_deleted, CONTRIBUTION_KIND,
-        SYNTHESIS_KIND,
-    };
+    use super::{deserialize_scope_export, ensure_asserted_evidence_not_deleted};
+    use provenance_core::IdeationRecordKind;
     use provenance_macros::verifies;
     use serde_json::json;
 
@@ -354,11 +352,11 @@ mod tests {
 
     // The decision ranges over two finite axes and nothing else: the kind of
     // evidence being dropped, and whether an assertion cites it. The kinds are
-    // the two `provenance-store` freezes, named from the store so a third kind
-    // has to be spelled here before it can be dropped silently.
-    const EVIDENCE_KINDS: [(&str, &str); 2] = [
-        (CONTRIBUTION_KIND, "contribution_a"),
-        (SYNTHESIS_KIND, "synthesis_a"),
+    // the two `provenance-store` freezes, so a third kind has to be named
+    // here before it can be dropped silently.
+    const EVIDENCE_KINDS: [(IdeationRecordKind, &str); 2] = [
+        (IdeationRecordKind::Contribution, "contribution_a"),
+        (IdeationRecordKind::SynthesisPacket, "synthesis_a"),
     ];
 
     #[test]

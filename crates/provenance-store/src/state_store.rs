@@ -52,8 +52,7 @@ pub use archive_history::{ArchiveCommitGap, ArchiveCommitGapReason};
 pub use graph_validation::validate_relations;
 pub use ideation_batches::{
     assertion_cites_contribution, assertion_cites_synthesis,
-    ensure_asserted_contribution_unchanged, ensure_asserted_synthesis_unchanged, CONTRIBUTION_KIND,
-    SYNTHESIS_KIND,
+    ensure_asserted_contribution_unchanged, ensure_asserted_synthesis_unchanged,
 };
 pub use ideation_edits::{UpdateContributionInput, UpdateSynthesisPacketInput};
 pub use inputs::{
