@@ -78,14 +78,19 @@ impl Rows {
     }
 
     /// Adds one row for the table at `table` in the list given to [`Rows::new`].
+    /// [`Rows::write`] refuses a row whose length is not the table's
+    /// number of columns.
     pub(super) fn push(&mut self, table: usize, row: Vec<ColumnValue>) {
-        debug_assert_eq!(row.len(), self.tables[table].columns.len());
         self.entries.push((table, row));
     }
 
     /// Writes every row, then reports the number of records or the error
     /// that stopped the loader. A statement binds at most `bound_values`
     /// values. See the module comment for the order on failure.
+    ///
+    /// A row whose length is not its table's number of columns is a fault
+    /// of the loader. The write then fails before any statement runs, so
+    /// the one-by-one inserts never split the rows at the wrong place.
     ///
     /// The values of the rows move into the statements, and back out of
     /// them for the one-by-one inserts, so the load holds one copy of them.
@@ -100,6 +105,16 @@ impl Rows {
             loaded,
             failure,
         } = self;
+        for (table, row) in &entries {
+            let table = &tables[*table];
+            anyhow::ensure!(
+                row.len() == table.columns.len(),
+                "a row for {} has {} values, but the table has {} columns",
+                table.name,
+                row.len(),
+                table.columns.len()
+            );
+        }
         if !entries.is_empty() {
             let order: Vec<usize> = entries.iter().map(|(table, _)| *table).collect();
             let (of, statements) = batched(&tables, entries, bound_values);

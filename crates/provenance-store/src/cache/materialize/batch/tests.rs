@@ -1,7 +1,8 @@
 //! Implementation aid, no Rule: the loads of a rebuild and a catch-up go
 //! through `Rows::write`, and these tests show that the multi-row path and
 //! the one-by-one path after a failed attempt keep the loader's order, the
-//! row ids, and the first failing row's error.
+//! row ids, and the first failing row's error, and that a row of the wrong
+//! length fails the write before any statement runs.
 
 use super::{text, Rows, Table};
 use crate::read_database::file::FileReadDatabase;
@@ -127,4 +128,23 @@ async fn a_loader_failure_is_reported_after_its_rows_are_written() {
     assert_eq!(outcome.unwrap_err().to_string(), "the loader stopped");
     assert_eq!(t, ids(&[(1, "a")]));
     assert_eq!(u, ids(&[(1, "x")]));
+}
+
+#[tokio::test]
+async fn a_row_of_the_wrong_length_fails_the_write_before_any_statement() {
+    // The second row of `t` has one value too many. Every row of the load
+    // stays out, and so does the row of `u` before it.
+    let mut rows = Rows::new(tables());
+    rows.push(0, vec![text("a"), text("value of a")]);
+    rows.push(1, vec![text("x")]);
+    rows.push(0, vec![text("b"), text("value of b"), text("extra")]);
+    rows.push(0, vec![text("c"), text("value of c")]);
+    let (outcome, t, u) = load(rows, 4).await;
+
+    assert_eq!(
+        outcome.unwrap_err().to_string(),
+        "a row for t has 3 values, but the table has 2 columns"
+    );
+    assert_eq!(t, ids(&[]));
+    assert_eq!(u, ids(&[]));
 }
