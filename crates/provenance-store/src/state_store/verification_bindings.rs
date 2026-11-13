@@ -1,4 +1,3 @@
-use camino::Utf8PathBuf;
 use provenance_core::{StableId, VerificationBinding};
 use provenance_macros::rule;
 use sha2::{Digest, Sha256};
@@ -10,7 +9,7 @@ use crate::shards;
 /// rows changed.
 pub(super) struct BindingChange {
     pub(super) binding: VerificationBinding,
-    pub(super) shard: Option<(Utf8PathBuf, Vec<u8>)>,
+    pub(super) shard: Option<crate::publication::ShardBytes>,
 }
 
 impl StateStore {

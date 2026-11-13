@@ -1,5 +1,5 @@
 #[cfg(feature = "host")]
-use camino::Utf8PathBuf;
+use crate::publication::ShardBytes;
 #[cfg(feature = "host")]
 use provenance_core::VerificationRun;
 use provenance_core::{RequirementReview, ScopeId, StableId};
@@ -100,7 +100,7 @@ impl StateStore {
         &self,
         scope_id: &ScopeId,
         make_run: impl FnOnce(&BTreeSet<&str>) -> anyhow::Result<VerificationRun>,
-    ) -> anyhow::Result<(VerificationRun, Option<(Utf8PathBuf, Vec<u8>)>)> {
+    ) -> anyhow::Result<(VerificationRun, Option<ShardBytes>)> {
         let path = shards::requirement_reviews_path(&self.layout, scope_id);
         if !self.state_exists(&path)? {
             return Ok((make_run(&BTreeSet::new())?, None));

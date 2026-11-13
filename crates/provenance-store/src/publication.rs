@@ -10,6 +10,7 @@ use serde::{de::DeserializeOwned, Serialize};
 
 mod guard;
 mod holders;
+
 #[cfg(feature = "host")]
 mod read_only;
 #[cfg(feature = "host")]
@@ -46,6 +47,9 @@ pub(crate) use staged::with_stage_body;
 pub use staged::LiveAccessDuringStage;
 pub(crate) use staged::{refuse_held_access_during_stage, with_staged_state, StageLock};
 pub(crate) use write_permission::{protect_rows, WritePermissions};
+
+/// The path of one shard and its new bytes.
+pub(crate) type ShardBytes = (Utf8PathBuf, Vec<u8>);
 
 /// Runs `operation` in the publication section of `layout`.
 ///
@@ -224,7 +228,7 @@ impl crate::state_store::StateStore {
     /// set, in the form that costs least and lands every shard or none: no
     /// set for no shard, a one-key set for one shard, and a whole set for
     /// more shards.
-    pub(crate) fn publish_shards(&self, shards: Vec<(Utf8PathBuf, Vec<u8>)>) -> anyhow::Result<()> {
+    pub(crate) fn publish_shards(&self, shards: Vec<ShardBytes>) -> anyhow::Result<()> {
         let atomicity = match shards.len() {
             0 => return Ok(()),
             1 => Atomicity::PerKey,

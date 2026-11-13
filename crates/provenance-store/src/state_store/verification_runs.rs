@@ -56,13 +56,14 @@ impl StateStore {
                     symbol: input.symbol.clone(),
                 })?;
             let started_at = now_millis(&*held.clock())?;
-            let rows = held.run_rows(&scope_id)?;
+            let scope = &binding.binding.scope_id;
+            let rows = held.run_rows(scope)?;
             let binding_id = binding.binding.id.clone();
-            let (run, reviews) = held.run_with_cleared_reviews(&scope_id, |named| {
+            let (run, reviews) = held.run_with_cleared_reviews(scope, |named| {
                 let taken = rows.iter().map(|row| row.id.as_str());
                 let taken: BTreeSet<&str> = taken.chain(named.iter().copied()).collect();
                 Ok(VerificationRun {
-                    scope_id: scope_id.clone(),
+                    scope_id,
                     id: next_run_id(&taken, started_at)?,
                     binding_id: Some(binding_id),
                     rule_id,
