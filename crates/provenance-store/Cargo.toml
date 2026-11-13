@@ -153,6 +153,10 @@ name = "git_starts_use_the_helper"
 required-features = ["host"]
 
 [[test]]
+name = "history_versions_contract"
+required-features = ["host"]
+
+[[test]]
 name = "manifest_scope_ids"
 required-features = ["host"]
 
@@ -214,6 +218,10 @@ required-features = ["host"]
 
 [[test]]
 name = "review_history"
+required-features = ["host"]
+
+[[test]]
+name = "review_history_characterization"
 required-features = ["host"]
 
 [[test]]
