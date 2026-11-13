@@ -32,13 +32,19 @@ fn a_landed_replacement_keeps_the_position_of_its_id() {
         .iter()
         .map(|record| (record.id.as_str(), record.strongest_finding.as_str()))
         .collect();
-    assert_eq!(findings, [("contribution_a", "Second"), ("contribution_c", "First")]);
+    assert_eq!(
+        findings,
+        [("contribution_a", "Second"), ("contribution_c", "First")]
+    );
     let packets = store.list_synthesis_packets(&scope).unwrap();
     let summaries: Vec<_> = packets
         .iter()
         .map(|record| (record.id.as_str(), record.summary.as_str()))
         .collect();
-    assert_eq!(summaries, [("synthesis_a", "Second"), ("synthesis_c", "First")]);
+    assert_eq!(
+        summaries,
+        [("synthesis_a", "Second"), ("synthesis_c", "First")]
+    );
 }
 
 /// A store with the requirement `req_overtime` and the disposition actor
@@ -71,8 +77,12 @@ fn listed_ids(store: &StateStore, scope: &ScopeId) -> Vec<Vec<String>> {
     }
     vec![
         ids(&store.list_contributions(scope).unwrap(), |r| r.id.as_str()),
-        ids(&store.list_synthesis_packets(scope).unwrap(), |r| r.id.as_str()),
-        ids(&store.list_proposal_definitions(scope).unwrap(), |r| r.id.as_str()),
+        ids(&store.list_synthesis_packets(scope).unwrap(), |r| {
+            r.id.as_str()
+        }),
+        ids(&store.list_proposal_definitions(scope).unwrap(), |r| {
+            r.id.as_str()
+        }),
         ids(&store.list_dispositions(scope).unwrap(), |r| r.id.as_str()),
     ]
 }
@@ -82,7 +92,12 @@ const LANDED_KINDS: [&str; 4] = ["contribution", "synthesis", "proposal", "dispo
 fn all_kinds(suffixes: &[&str]) -> Vec<Vec<String>> {
     LANDED_KINDS
         .iter()
-        .map(|kind| suffixes.iter().map(|suffix| format!("{kind}_{suffix}")).collect())
+        .map(|kind| {
+            suffixes
+                .iter()
+                .map(|suffix| format!("{kind}_{suffix}"))
+                .collect()
+        })
         .collect()
 }
 
