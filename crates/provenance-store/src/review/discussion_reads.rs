@@ -82,7 +82,7 @@ pub async fn read_discussion(
 pub(super) async fn check_parent(ctx: &ReadContext, parent: &ThreadParent) -> anyhow::Result<()> {
     let table = super::discussion_state::parent_table(parent.node_type);
     ctx.snapshot().attest(table);
-    let mut tx = ctx.snapshot().connection().await;
+    let mut tx = ctx.snapshot().connection().await?;
     let exists: bool = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT EXISTS(SELECT 1 FROM {table} WHERE scope_id = ? AND id = ?)"
     )))
@@ -141,7 +141,7 @@ async fn fill_addressed(
     position: &mut Position,
     page: &mut DiscussionPageFill<DiscussionGroup>,
 ) -> anyhow::Result<Fill> {
-    let mut tx = ctx.snapshot().connection().await;
+    let mut tx = ctx.snapshot().connection().await?;
     let keys: Vec<(String, i64, String)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT d.discussion_id, {DISCUSSION_SIZE}, t.status FROM discussions d \
          JOIN threads t ON t.scope_id=d.scope_id AND t.id=d.thread_id \
@@ -157,7 +157,7 @@ async fn fill_addressed(
     .bind(i64::try_from(query.limit + 1)?)
     .fetch_all(&mut **tx)
     .await
-    .map_err(anyhow::Error::from)
+    .map_err(crate::read_database::file::statement_error)
     .map_err(reader::page_error)?;
     drop(tx);
     for (discussion, size, status) in keys {
@@ -179,7 +179,7 @@ async fn discussion_group(
     id: &str,
     status: String,
 ) -> anyhow::Result<DiscussionGroup> {
-    let mut tx = ctx.snapshot().connection().await;
+    let mut tx = ctx.snapshot().connection().await?;
     let row: DiscussionRow = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {DISCUSSION_COLUMNS} FROM discussions d WHERE d.scope_id=? AND d.discussion_id=?"
     )))
@@ -206,12 +206,12 @@ async fn fill_legacy(
     position: &mut Position,
     page: &mut DiscussionPageFill<DiscussionGroup>,
 ) -> anyhow::Result<Fill> {
-    let mut tx = ctx.snapshot().connection().await;
+    let mut tx = ctx.snapshot().connection().await?;
     let keys: Vec<(String,String)> = sqlx::query_as("SELECT t.id,t.status FROM threads t WHERE t.scope_id=? AND t.parent_type=? AND t.parent_id=? AND t.id>? AND EXISTS(SELECT 1 FROM messages m WHERE m.scope_id=t.scope_id AND m.thread_id=t.id AND NOT EXISTS(SELECT 1 FROM discussions d, json_each(d.message_ids) e WHERE d.scope_id=m.scope_id AND e.value=m.id)) ORDER BY t.id LIMIT ?")
         .bind(ctx.snapshot().scope().as_str())
         .bind(super::discussion_state::discussion_kind_word(query.parent.node_type))
         .bind(query.parent.node_id.as_str()).bind(&position.id)
-        .bind(i64::try_from(query.limit + 1)?).fetch_all(&mut **tx).await.map_err(anyhow::Error::from).map_err(reader::page_error)?;
+        .bind(i64::try_from(query.limit + 1)?).fetch_all(&mut **tx).await.map_err(crate::read_database::file::statement_error).map_err(reader::page_error)?;
     drop(tx);
     for (id, status) in keys {
         let group = DiscussionGroup::Legacy {
@@ -239,7 +239,7 @@ pub(super) async fn group(
     for family in ["discussions", "threads"] {
         ctx.snapshot().attest(family);
     }
-    let mut tx = ctx.snapshot().connection().await;
+    let mut tx = ctx.snapshot().connection().await?;
     let row: Option<(String, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT t.status,{DISCUSSION_SIZE} FROM discussions d \
          JOIN threads t ON t.scope_id=d.scope_id AND t.id=d.thread_id \

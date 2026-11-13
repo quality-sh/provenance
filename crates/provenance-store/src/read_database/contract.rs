@@ -4,15 +4,22 @@
 //! The cases use only the port: the SQL that they run is the SQL that the
 //! projection runs, so a store that passes them can hold the projection.
 //! No case runs one port call inside the work of another, and no work
-//! waits on anything but its own transaction, so a store whose
-//! transaction is one synchronous call, as a Durable Object's is, can
-//! pass them.
+//! waits on anything but its own transaction.
 
 use super::{is_missing_table, ReadDatabase, SqlRow, SqlValue, Statement, Unopened};
 use std::future::Future;
 use std::pin::pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::Poll;
+
+#[cfg(feature = "host")]
+pub mod handles;
+pub mod limits;
+#[cfg(any(test, feature = "test-fixture"))]
+mod other;
+
+#[cfg(any(test, feature = "test-fixture"))]
+pub use other::{Other, OtherTransaction};
 
 /// One adapter under test.
 pub trait Harness {
@@ -34,10 +41,8 @@ async fn write(database: &dyn ReadDatabase, statements: Vec<Statement>) -> anyho
     database
         .write(Box::new(move |mut transaction| {
             Box::pin(async move {
-                for statement in &statements {
-                    transaction
-                        .execute(&statement.sql, &statement.values)
-                        .await?;
+                for Statement { sql, values } in statements {
+                    transaction.execute(&sql, values).await?;
                 }
                 transaction.commit().await
             })
@@ -52,7 +57,7 @@ async fn fetch(database: &dyn ReadDatabase, sql: &'static str) -> Vec<SqlRow> {
     database
         .read(Box::new(move |mut transaction| {
             Box::pin(async move {
-                *slot = transaction.fetch(sql, &[]).await?;
+                *slot = transaction.fetch(sql, Vec::new()).await?;
                 Ok(())
             })
         }))
@@ -162,7 +167,7 @@ pub async fn a_missing_table_is_reported_as_missing<H: Harness>(harness: H) {
                     "SELECT n FROM absent_table",
                     "SELECT absent_column FROM present",
                 ] {
-                    let failed = transaction.fetch(sql, &[]).await.unwrap_err();
+                    let failed = transaction.fetch(sql, Vec::new()).await.unwrap_err();
                     slot.push(is_missing_table(&failed));
                 }
                 Ok(())
@@ -243,7 +248,7 @@ pub async fn a_write_that_fails_after_its_commit_keeps_the_commit<H: Harness>(ha
         .write(Box::new(|mut transaction| {
             Box::pin(async move {
                 transaction
-                    .execute("INSERT INTO kept (n) VALUES (1)", &[])
+                    .execute("INSERT INTO kept (n) VALUES (1)", Vec::new())
                     .await?;
                 transaction.commit().await?;
                 Err(WorkFailed.into())
@@ -273,7 +278,7 @@ pub async fn a_read_keeps_no_writes<H: Harness>(harness: H) {
                 // A store may refuse the statement; either way it keeps
                 // nothing.
                 let _ = transaction
-                    .execute("INSERT INTO kept (n) VALUES (1)", &[])
+                    .execute("INSERT INTO kept (n) VALUES (1)", Vec::new())
                     .await;
                 Ok(())
             })
@@ -300,7 +305,7 @@ pub async fn a_write_without_its_commit_keeps_nothing<H: Harness>(harness: H) {
         .write(Box::new(|mut transaction| {
             Box::pin(async move {
                 transaction
-                    .execute("INSERT INTO kept (n) VALUES (1)", &[])
+                    .execute("INSERT INTO kept (n) VALUES (1)", Vec::new())
                     .await?;
                 Ok(())
             })
@@ -340,15 +345,15 @@ pub async fn a_read_answers_from_one_committed_state<H: Harness>(harness: H) {
     let read = database.read(Box::new(move |mut transaction| {
         Box::pin(async move {
             let sql = "SELECT n FROM pinned ORDER BY n";
-            slot.push(integers(&transaction.fetch(sql, &[]).await?));
+            slot.push(integers(&transaction.fetch(sql, Vec::new()).await?));
             first_read.store(true, Ordering::SeqCst);
             for _ in 0..MOST_STATEMENTS {
                 if committed.load(Ordering::SeqCst) {
                     break;
                 }
-                slot.push(integers(&transaction.fetch(sql, &[]).await?));
+                slot.push(integers(&transaction.fetch(sql, Vec::new()).await?));
             }
-            slot.push(integers(&transaction.fetch(sql, &[]).await?));
+            slot.push(integers(&transaction.fetch(sql, Vec::new()).await?));
             Ok(())
         })
     }));
@@ -397,12 +402,12 @@ pub async fn an_attempt_keeps_all_or_none<H: Harness>(harness: H) {
                     )
                 };
                 transaction
-                    .execute("INSERT INTO attempted (n) VALUES (1)", &[])
+                    .execute("INSERT INTO attempted (n) VALUES (1)", Vec::new())
                     .await?;
                 let failed = transaction.attempt(&[insert(2), insert(1)]).await?;
                 let kept = transaction.attempt(&[insert(3), insert(4)]).await?;
                 transaction
-                    .execute("INSERT INTO attempted (n) VALUES (5)", &[])
+                    .execute("INSERT INTO attempted (n) VALUES (5)", Vec::new())
                     .await?;
                 *slot = vec![failed.is_err(), kept.is_err()];
                 transaction.commit().await
