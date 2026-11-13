@@ -1,10 +1,10 @@
-//! A repository with one proposal, assertion and disposition, and the
-//! answers of the ideation writes and the reads over it.
-#![allow(dead_code)]
+//! A repository with ideation records of each kind, the answers of the
+//! ideation writes and the reads over it, and the hand edits that put an id
+//! on two lines of its file.
 
-use super::ideation::evidence;
-use super::records::{allow_reviewer, Repository};
-use super::resource_http::{call, host};
+use crate::support::ideation::evidence;
+use crate::support::records::{allow_reviewer, Repository};
+use crate::support::resource_http::{call, host};
 use serde_json::{json, Value};
 
 pub const IDEATION: &str = "scopes/default/ideation";
@@ -20,16 +20,10 @@ pub fn proposal(id: &str, claims: &[&str]) -> Value {
     }})
 }
 
-/// The evidence of `proposal_a` in the contribution and synthesis files, as
-/// a merge of a branch that adds them gives. No route adds a packet that
-/// qualifies a proposal with no assertion.
-pub fn merge_evidence(repo: &Repository) {
-    let names = ["contributions.jsonl", "synthesis_packets.jsonl"];
-    for ((_, body), name) in evidence("proposal_a").into_iter().zip(names) {
-        let mut record = body["data"].clone();
-        record["scope_id"] = json!("default");
-        std::fs::write(state_path(repo, name), format!("{record}\n")).unwrap();
-    }
+/// The stored row of the assertion `assertion_a` of `proposal_a`.
+pub fn assertion_row() -> Value {
+    json!({"scope_id":"default", "id":"assertion_a", "proposal_id":"proposal_a",
+        "synthesis_packet_id":"synthesis_evidence", "supporting_claim_ids":["claim_a"]})
 }
 
 pub fn state_path(repo: &Repository, name: &str) -> std::path::PathBuf {
@@ -40,28 +34,34 @@ pub fn state_path(repo: &Repository, name: &str) -> std::path::PathBuf {
         .join(name)
 }
 
-/// A repository with one row in each of the proposal, assertion and
-/// disposition files, and the proposal `proposal_b` with no assertion. The
-/// result also gives the answers of the reads over it.
+/// A repository with the contribution `contribution_evidence`, the
+/// synthesis packet `synthesis_evidence`, the proposal `proposal_a` with its
+/// assertion `assertion_a` and its disposition `disposition_a`, and the
+/// proposal `proposal_b` with no assertion. The result also gives the
+/// answers of the reads over it.
+///
+/// No route creates a proposal that a packet qualifies, so one store call
+/// creates `proposal_a` and its assertion, as a swarm landing does. That
+/// call writes the landings file, and the proposal file and the assertion
+/// file do not hold the two records.
 pub async fn ideation_repository() -> (Repository, Vec<Value>) {
     let repo = Repository::new("The shared graph is readable.");
     allow_reviewer(&repo);
     let writer = host(&repo, true);
-    let (status, created) = call(
-        &writer,
-        "POST",
-        "/proposals",
-        Some(proposal("proposal_a", &["claim_a"])),
-    )
-    .await;
-    assert_eq!(status, 200, "{created}");
-    merge_evidence(&repo);
+    for (path, body) in evidence("proposal_a") {
+        let (status, created) = call(&writer, "POST", path, Some(body)).await;
+        assert_eq!(status, 200, "{path}: {created}");
+    }
+    let mut asserted = proposal("proposal_a", &["claim_a"])["data"].clone();
+    asserted["scope_id"] = json!("default");
+    repo.open()
+        .store()
+        .create_asserted_proposal(
+            serde_json::from_value(asserted).unwrap(),
+            serde_json::from_value(assertion_row()).unwrap(),
+        )
+        .unwrap();
     for (path, body) in [
-        (
-            "/proposals/proposal_a/assertions",
-            json!({"data":{"id":"assertion_a", "synthesis_packet_id":"synthesis_evidence",
-                "supporting_claim_ids":["claim_a"]}}),
-        ),
         (
             "/proposals/proposal_a/dispositions",
             json!({"data":{"id":"disposition_a", "decision":"rejected", "rationale":"Reviewed",
@@ -176,26 +176,52 @@ pub fn freshness_parts(answers: &[Value]) -> Vec<Value> {
         .collect()
 }
 
+/// The text of the file `name`, or no text when the file does not exist.
+fn stored_text(repo: &Repository, name: &str) -> String {
+    std::fs::read_to_string(state_path(repo, name)).unwrap_or_default()
+}
+
+/// Adds `rows` at the end of the file `name`. The result is the line of
+/// each added row.
+pub fn add_rows(repo: &Repository, name: &str, rows: &[String]) -> Vec<usize> {
+    let text = stored_text(repo, name);
+    let first = text.lines().count() + 1;
+    std::fs::write(state_path(repo, name), format!("{text}{}", rows.concat())).unwrap();
+    (first..first + rows.len()).collect()
+}
+
 /// Adds the row with the id `id` of the file `name` again at the end of the
-/// file. The result is the line of the row and the line of its copy.
-pub fn copy_row(repo: &Repository, name: &str, id: &str) -> (usize, usize) {
-    let path = state_path(repo, name);
-    let text = std::fs::read_to_string(&path).unwrap();
+/// file, with the id under the key `key`. The result is the line of the row
+/// and the line of its copy.
+pub fn copy_row_with_key(repo: &Repository, name: &str, id: &str, key: &str) -> (usize, usize) {
+    let text = stored_text(repo, name);
+    let pair = format!("\"id\":\"{id}\"");
     let (first, row) = text
         .lines()
         .enumerate()
-        .find(|(_, line)| line.contains(&format!("\"id\":\"{id}\"")))
-        .map(|(index, line)| (index + 1, line.to_owned()))
+        .find(|(_, line)| line.contains(&pair))
+        .map(|(index, line)| (index + 1, line.replace(&pair, &format!("\"{key}\":\"{id}\""))))
         .unwrap();
-    std::fs::write(&path, format!("{text}{row}\n")).unwrap();
-    (first, text.lines().count() + 1)
+    (first, add_rows(repo, name, &[format!("{row}\n")])[0])
+}
+
+/// Adds the row with the id `id` of the file `name` again at the end of the
+/// file. The result is the line of the row and the line of its copy.
+pub fn copy_row(repo: &Repository, name: &str, id: &str) -> (usize, usize) {
+    copy_row_with_key(repo, name, id, "id")
+}
+
+/// Adds the row of `assertion_a` two times to the assertion file, as a
+/// merge of two branches that each add it gives. The result is the two
+/// lines.
+pub fn merge_assertion_two_times(repo: &Repository) -> (usize, usize) {
+    let row = format!("{}\n", assertion_row());
+    let lines = add_rows(repo, "assertions.jsonl", &[row.clone(), row]);
+    (lines[0], lines[1])
 }
 
 /// Adds a line that does not parse at the end of the file `name`. The
 /// result is its line.
 pub fn add_broken_line(repo: &Repository, name: &str) -> usize {
-    let path = state_path(repo, name);
-    let text = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(&path, format!("{text}{{\"id\":\"broken\"\n")).unwrap();
-    text.lines().count() + 1
+    add_rows(repo, name, &["{\"id\":\"broken\"\n".to_owned()])[0]
 }

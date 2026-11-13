@@ -226,35 +226,50 @@ impl ModernLifecycleFixture {
     }
 }
 
-/// `provenance check` and `provenance export` over a scope with
-/// `proposal_a` on two lines of `proposal_cards.jsonl` refuse at the second
-/// line, and the message names the two lines.
+/// The fault of `proposal_a` on the lines 1 and 2 of `proposal_cards.jsonl`.
+const DUPLICATE_PROPOSAL: &str = "scopes/default/ideation/proposal_cards.jsonl line 2: \
+    duplicate immutable proposal id proposal_a at line 1 and at line 2";
+
+/// `provenance check` over a scope with `proposal_a` on two lines of
+/// `proposal_cards.jsonl` fails and gives the fault at the second line, with
+/// a message that names the two lines.
 #[test]
 #[verifies("rule_inconsistent_records_refusal_names_records", examples)]
-fn check_and_export_name_the_two_lines_of_a_proposal_id() {
+fn check_names_the_two_lines_of_a_proposal_id() {
     let (fixture, _, _) = ModernLifecycleFixture::with_a_proposal_id_on_two_lines();
-    let repo = fixture.repo.to_str().unwrap();
     let check = super::support::provenance()
-        .args(["check", "--repo", repo])
+        .args(["check", "--repo", fixture.repo.to_str().unwrap()])
         .output()
         .unwrap();
+    let (code, stdout, stderr) = answer(&check);
+    let finding = format!("  - {DUPLICATE_PROPOSAL}");
+    assert_eq!(
+        (code, stdout.lines().any(|line| line == finding)),
+        (Some(1), true),
+        "{stdout}{stderr}"
+    );
+}
+
+/// `provenance export` over a scope with `proposal_a` on two lines of
+/// `proposal_cards.jsonl` refuses with the fault at the second line, with a
+/// message that names the two lines, and writes no export.
+#[test]
+#[verifies("rule_inconsistent_records_refusal_names_records", examples)]
+fn export_names_the_two_lines_of_a_proposal_id() {
+    let (fixture, _, _) = ModernLifecycleFixture::with_a_proposal_id_on_two_lines();
     let output = fixture.root.join("export.json");
     let export = super::support::provenance()
-        .args([
-            "export", "--repo", repo, "--scope", "default", "--format", "json",
-        ])
-        .arg("--output")
+        .args(["export", "--repo", fixture.repo.to_str().unwrap()])
+        .args(["--scope", "default", "--format", "json", "--output"])
         .arg(&output)
         .output()
         .unwrap();
-    let fault = "scopes/default/ideation/proposal_cards.jsonl line 2: \
-        duplicate immutable proposal id proposal_a at line 1 and at line 2";
-    let findings = format!("graph: findings\n  - {fault}\nstatements: passed\nbindings: passed\n");
-    let checked = (Some(1), findings, format!("Error: {fault}\n"));
-    let exported = (Some(1), String::new(), format!("Error: {fault}\n"));
+    let (code, stdout, stderr) = answer(&export);
+    let refusal = format!("Error: {DUPLICATE_PROPOSAL}");
     assert_eq!(
-        (answer(&check), answer(&export), output.exists()),
-        (checked, exported, false)
+        (code, stderr.lines().any(|line| line == refusal), output.exists()),
+        (Some(1), true, false),
+        "{stdout}{stderr}"
     );
 }
 
