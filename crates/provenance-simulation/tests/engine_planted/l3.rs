@@ -7,14 +7,19 @@
 //! the write: certain, unknown, failed after its publish landed, and
 //! stopped after its publish landed. L3 accepts the value that the Topic
 //! held before the write or the value of the write, so each one breaks L3.
+//! One more test checks the model of L3 for a group of writes.
 
 use crate::support::cases::alone;
 use crate::{expect_law, planted};
-use provenance_simulation::generate::{self, Case, Effect, Fault, Operation, Step, Task, TOPIC};
+use provenance_core::TopicStatus;
+use provenance_simulation::expected::{Expected, Write};
+use provenance_simulation::generate::{self, Case, Effect, Fault, Operation, Step, Target, Task};
+use provenance_simulation::generate::{Value, TOPIC};
 use provenance_simulation::laws;
 use provenance_simulation::storage::Outcome;
-use provenance_simulation::{run_case, scope, stable, Apply, Config, Plant, Run};
+use provenance_simulation::{run_case, scope, stable, Apply, Config, FinalRecords, Plant, Run};
 use provenance_store::repository::Repository;
+use std::collections::BTreeMap;
 
 const ONLY_L3: Config = Config {
     plant: None,
@@ -142,6 +147,43 @@ fn a_claim_on_an_archived_topic_breaks_l3() {
     let run = run_case(&case, with(claim_that_lands_an_empty_stage));
     assert!(met(&run, 1, Outcome::Landed), "{:?}", run.publishes);
     expect_law(laws::check_only(&run, "L3"), "L3");
+}
+
+/// The final records with the initial Requirements and an open Topic that
+/// `claim` holds.
+fn open_topic_held_by(claim: Option<&str>) -> FinalRecords {
+    FinalRecords {
+        descriptions: BTreeMap::from([(generate::FIRST_REQUIREMENT.to_owned(), None)]),
+        topic_status: Some(TopicStatus::Open),
+        claim: claim.map(str::to_owned),
+        ..FinalRecords::default()
+    }
+}
+
+// No Rule: proof that L3 refuses the earlier value of a record after a group
+// with one certain write and one write that is not certain on the record,
+// and accepts it when no write of the group is certain.
+#[test]
+#[ignore = "a check of the nightly simulation"]
+fn a_certain_write_in_a_group_removes_the_earlier_value() {
+    for (certain, earlier_holds) in [(true, false), (false, true)] {
+        let write = |actor: &str, certain| Write {
+            target: Target::Topic,
+            value: Value::Topic {
+                status: TopicStatus::Open,
+                claim: Some(actor.to_owned()),
+            },
+            certain,
+        };
+        let mut expected = Expected::initial();
+        expected.apply(1, [write("engine-0", certain), write("engine-1", false)]);
+        for actor in ["engine-0", "engine-1"] {
+            let state = open_topic_held_by(Some(actor));
+            expected.check(&state, "group").unwrap();
+        }
+        let earlier = expected.check(&open_topic_held_by(None), "group");
+        assert_eq!(earlier.is_ok(), earlier_holds, "{certain}: {earlier:?}");
+    }
 }
 
 /// Tells if a publish of the operation at `index` of the run met `outcome`.
@@ -283,17 +325,16 @@ fn stopped(planted: &Operation, apply: Apply) -> Run {
     panic!("in {MOST_TURNS} runs, no stop met {planted:?} after its publish landed");
 }
 
-/// One planted test of a Topic write: a stand-in and an outcome.
+/// One planted test of a Topic write: an outcome, the write and its stand-in.
+/// The stand-in of a `failed` row fails after its publish.
 macro_rules! topic_write_breaks_l3 {
-    ($($test:ident: $outcome:ident, $op:expr, $apply:ident;)*) => {$(
+    ($($test:ident: $outcome:ident, $op:expr, $apply:expr;)*) => {$(
         // No Rule: proof that L3 sees a wrong Topic value from this write
         // with this outcome.
         #[test]
         #[ignore = "a planted fault of the nightly simulation"]
         fn $test() {
-            let fail = stringify!($outcome) == "failed";
-            let apply: Apply = if fail { $apply::<true> } else { $apply::<false> };
-            let run = $outcome(&$op, apply);
+            let run = $outcome(&$op, $apply);
             expect_law(laws::check_only(&run, "L3"), "L3");
         }
     )*};
@@ -301,27 +342,27 @@ macro_rules! topic_write_breaks_l3 {
 
 topic_write_breaks_l3! {
     a_certain_claim_for_a_different_actor_breaks_l3:
-        certain, Operation::ClaimTopic, claim_for_a_different_actor;
+        certain, Operation::ClaimTopic, claim_for_a_different_actor::<false>;
     a_claim_of_unknown_outcome_for_a_different_actor_breaks_l3:
-        unknown, Operation::ClaimTopic, claim_for_a_different_actor;
+        unknown, Operation::ClaimTopic, claim_for_a_different_actor::<false>;
     a_failed_claim_for_a_different_actor_breaks_l3:
-        failed, Operation::ClaimTopic, claim_for_a_different_actor;
+        failed, Operation::ClaimTopic, claim_for_a_different_actor::<true>;
     a_stopped_claim_for_a_different_actor_breaks_l3:
-        stopped, Operation::ClaimTopic, claim_for_a_different_actor;
+        stopped, Operation::ClaimTopic, claim_for_a_different_actor::<false>;
     a_certain_release_that_closes_the_topic_breaks_l3:
-        certain, Operation::ReleaseTopic, release_that_closes;
+        certain, Operation::ReleaseTopic, release_that_closes::<false>;
     a_release_of_unknown_outcome_that_closes_the_topic_breaks_l3:
-        unknown, Operation::ReleaseTopic, release_that_closes;
+        unknown, Operation::ReleaseTopic, release_that_closes::<false>;
     a_failed_release_that_closes_the_topic_breaks_l3:
-        failed, Operation::ReleaseTopic, release_that_closes;
+        failed, Operation::ReleaseTopic, release_that_closes::<true>;
     a_stopped_release_that_closes_the_topic_breaks_l3:
-        stopped, Operation::ReleaseTopic, release_that_closes;
+        stopped, Operation::ReleaseTopic, release_that_closes::<false>;
     a_certain_archive_that_claims_the_topic_breaks_l3:
-        certain, Operation::ArchiveRequirement { n: 0 }, archive_that_claims;
+        certain, Operation::ArchiveRequirement { n: 0 }, archive_that_claims::<false>;
     an_archive_of_unknown_outcome_that_claims_the_topic_breaks_l3:
-        unknown, Operation::ArchiveRequirement { n: 0 }, archive_that_claims;
+        unknown, Operation::ArchiveRequirement { n: 0 }, archive_that_claims::<false>;
     a_failed_archive_that_claims_the_topic_breaks_l3:
-        failed, Operation::ArchiveRequirement { n: 0 }, archive_that_claims;
+        failed, Operation::ArchiveRequirement { n: 0 }, archive_that_claims::<true>;
     a_stopped_archive_that_claims_the_topic_breaks_l3:
-        stopped, Operation::ArchiveRequirement { n: 0 }, archive_that_claims;
+        stopped, Operation::ArchiveRequirement { n: 0 }, archive_that_claims::<false>;
 }

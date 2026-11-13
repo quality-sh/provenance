@@ -25,38 +25,61 @@ REPLAY = (
     "HEGEL_SEED=1234 cargo nextest run --profile simulation --run-ignored all "
     "-p provenance-simulation --test engine -E 'test(=random_cases_keep_the_laws)'"
 )
-# The nextest part of the logs of run 43425676855 of the simulation workflow,
-# one for each layer job. The run added tests that fail in each form: a probe
-# that breaks a law, a failed check, a broken planted check, a crash and a
-# test that nextest stops at its time limit. The engine tests were in the
-# test target `zz-dash`, a name with a dash.
-REAL_LOGS = Path(__file__).with_name("simulation_report_logs")
+# Real nextest logs of the engine layer on Linux and of the CLI layer on
+# Linux and Windows. In each log, tests pass (PASS) and tests fail in each
+# form: a probe that breaks a law, a failed check (FAIL), a broken planted
+# check, a crash (SIGABRT on Linux, ABORT with its exit code on Windows) and a
+# test that nextest stops at its time limit (SLOW and TERMINATING while it
+# runs, then TIMEOUT). The engine tests are in the test target `zz-dash`, a
+# name with a dash.
+REAL_LOGS = Path(__file__).parent / "fixtures" / "simulation_report"
 REAL_FORMS = {
     "engine": ("provenance-simulation", "zz-dash", "SIGABRT", "HEGEL_SEED=1"),
     "cli-linux": ("provenance-cli", "simulation_cli", "SIGABRT", "HEGEL_SEED=1 SIMULATION_L6=each"),
-    "cli-macos": ("provenance-cli", "simulation_cli", "SIGABRT", "HEGEL_SEED=1 SIMULATION_L6=end"),
     "cli-windows": ("provenance-cli", "simulation_cli", "ABORT", "HEGEL_SEED=1 SIMULATION_L6=end"),
 }
+# The other final status words of nextest 0.9.143 for a test that did not
+# pass: a signal with no name, a crash with another signal, a failure with a
+# leak, a test that did not start, a leak that fails, a flaky test that is a
+# failure, the last try after retries, and a word that the script does not
+# know.
+BUILT_FAILURES = (
+    "ABORT SIG 99", "SIGSEGV", "FAIL + LEAK", "XFAIL", "LEAK-FAIL", "FLKY-FL 2/3",
+    "TRY 3 FAIL", "TRY 3 SEGV", "TRY 3 LKFAIL", "A NEW WORD",
+)
+
+
+# The counter of a status line while a test runs or of a skip.
+PADDED = "(\u2500\u2500\u2500)"
+
+
+def status_line(status, binary_id, test, time="   6.102s", counter="(7/7)"):
+    """A status line as nextest prints it: the status right-aligned to 12
+    characters, the time and the counter."""
+    return (
+        f"\x1b[31;1m{status:>12}\x1b[0m [{time}] {counter} "
+        f"\x1b[35;1m{binary_id}\x1b[0m \x1b[34;1m{test}\x1b[0m\n"
+    )
 
 
 def failed(binary_id, test, stderr, status="FAIL"):
-    """A test that did not pass, as nextest prints it in the log of a layer
-    (the form of run 43405112955): the status line, then the output with
-    each line indented by four spaces."""
+    """A test that did not pass, as nextest prints it in the log of a layer:
+    the status line, then the output with each line indented by four
+    spaces."""
     lines = "".join(f"    {line}\n" for line in stderr.splitlines())
     return (
-        f"\x1b[31;1m        {status}\x1b[0m [   6.102s] (7/7) "
-        f"\x1b[35;1m{binary_id}\x1b[0m \x1b[34;1m{test}\x1b[0m\n"
-        "\x1b[31;1m \x1b[0m \x1b[31;1mstderr\x1b[0m \x1b[31;1m\u2500\u2500\u2500\x1b[0m\n"
+        status_line(status, binary_id, test)
+        + "\x1b[31;1m \x1b[0m \x1b[31;1mstderr\x1b[0m \x1b[31;1m\u2500\u2500\u2500\x1b[0m\n"
         f"{lines}\n" + "\u2500" * 12 + "\n"
     )
 
 
-def nextest_log(*tests, finished=True):
-    """The log of a layer with `tests`; a log that is not `finished` stops
-    before the summary of nextest."""
+def nextest_log(*tests, finished=True, passed=()):
+    """The log of a layer with the failed `tests` and the status lines
+    `passed`; a log that is not `finished` stops before the summary of
+    nextest, which repeats the status line of each failed test."""
     log = "\x1b[32;1m    Starting\x1b[0m \x1b[1m7\x1b[0m tests across \x1b[1m2\x1b[0m binaries\n"
-    log += "".join(tests)
+    log += "".join(tests) + "".join(passed)
     if finished:
         log += (
             "\x1b[31;1m     Summary\x1b[0m [   6.103s] \x1b[1m7\x1b[0m tests run: "
@@ -433,7 +456,7 @@ class ReportTests(unittest.TestCase):
 
     def test_each_issue_links_the_guide(self):
         self.assertIn(report.GUIDE, report.describe(FAILURE, "AAEC", REPLAY))
-        self.assertIn(report.GUIDE, report.describe_run("engine"))
+        self.assertIn(report.GUIDE, report.describe_run("engine", False))
 
     def test_the_summary_of_a_passed_layer_gives_its_counts(self):
         with tempfile.TemporaryDirectory() as root:
@@ -442,9 +465,56 @@ class ReportTests(unittest.TestCase):
         self.assertIn("| stops | 3 |", text)
 
     def test_the_text_of_a_run_without_a_law_names_each_cause(self):
-        text = report.describe_run("engine")
-        self.assertIn("The build failed", text)
+        text = report.describe_run("engine", False)
+        self.assertIn("does not show the end of the tests. The build failed", text)
         self.assertIn("time limit", text)
+
+    def test_a_log_with_the_summary_and_no_report_says_that_the_tests_ended(self):
+        gh = issues_of(nextest_log())
+        title = "Simulation: the engine layer failed without a broken law"
+        self.assertEqual(titles(gh), [title])
+        self.assertIn("shows the end of the tests, but no test in it gives a report", bodies(gh)[title])
+        self.assertNotIn("The build failed", bodies(gh)[title])
+
+    def test_each_status_that_is_not_a_pass_or_a_skip_gives_its_own_report(self):
+        for status in BUILT_FAILURES:
+            with self.subTest(status=status):
+                test = "zz_ends_with_a_status"
+                other = failed("provenance-simulation::engine", test, "", status=status)
+                gh = issues_of(nextest_log(CHECK_FAILURE, other))
+                title = f"Simulation: test {test} failed in the engine layer"
+                self.assertEqual(titles(gh), sorted([
+                    f"Simulation: test {REFUSED} failed in the engine layer", title,
+                ]))
+                self.assertIn(f"the test ended with {status}", bodies(gh)[title])
+                self.assertIn(replay_of("engine", test), bodies(gh)[title])
+
+    def test_the_last_try_at_the_time_limit_is_a_time_limit(self):
+        stopped = failed("provenance-simulation::engine", PROBE, "", status="TRY 3 TMT")
+        gh = issues_of(nextest_log(CHECK_FAILURE, stopped))
+        self.assertIn(
+            f"Simulation: test {PROBE} did not end in its time limit in the engine layer",
+            titles(gh),
+        )
+
+    def test_a_pass_or_a_skip_in_each_form_gives_no_report(self):
+        engine = "provenance-simulation::engine"
+        passed = [
+            status_line("PASS", engine, "a_pass"),
+            status_line("SLOW", engine, "a_slow_pass", time="> 60.000s", counter=PADDED),
+            status_line("SLOW", engine, "a_slow_pass", time=" 312.000s"),
+            status_line("SLOW + LEAK", engine, "a_slow_pass_with_a_leak"),
+            status_line("SLOW+TMPASS", engine, "a_slow_pass_at_the_time_limit"),
+            status_line("LEAK", engine, "a_pass_with_a_leak"),
+            status_line("TIMEOUT-PASS", engine, "a_pass_at_the_time_limit"),
+            status_line("START", engine, "a_flaky_pass", time="         "),
+            status_line("TRY 1 FAIL", engine, "a_flaky_pass", counter=PADDED),
+            status_line("TRY 2 START", engine, "a_flaky_pass", time="         ", counter=PADDED),
+            status_line("FLAKY 2/2", engine, "a_flaky_pass"),
+            status_line("SKIP", engine, "a_skip", time="         ", counter=PADDED),
+        ]
+        gh = issues_of(nextest_log(CHECK_FAILURE, passed=passed))
+        self.assertEqual(titles(gh), [f"Simulation: test {REFUSED} failed in the engine layer"])
 
 
 if __name__ == "__main__":

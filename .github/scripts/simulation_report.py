@@ -21,8 +21,8 @@ test that did not pass gives a report:
   and law opens its own issue.
 - A planted test whose law did not see its fault prints "simulation check
   broken"; its layer gets an issue that says that a check is broken.
-- Each other test that failed, and each test that nextest stopped at its time
-  limit, opens its own issue.
+- Each other test whose last status is not a pass or a skip opens its own
+  issue. A status word that the script does not know is a failure.
 
 When the log does not end with the summary of nextest (the build failed or
 the job stopped at its time limit), or when no test gave a report, the layer
@@ -48,13 +48,25 @@ PROBE_LINE = re.compile(r"simulation probe broke law (\S+) in layer \S+: ([^\r\n
 CHECK_BROKEN = "simulation check broken"
 # The color codes that nextest writes in the log.
 COLOR = re.compile(r"\x1b\[[0-9;]*m")
-# The status line of a test that did not pass. A crash shows the signal on
-# Linux and macOS (SIGABRT) and ABORT on Windows.
-FAILED_TEST = re.compile(
-    r"^ +(FAIL|TIMEOUT|ABORT|SIG[A-Z]+) \[[^\]]*\] (?:\([^)]*\) )?(\S+) (\S+)$", re.M
+# The status line of a test: the status, right-aligned to 12 characters, the
+# time in brackets, the counter and the name. The status words of nextest 0.9.143 are in
+# nextest-runner/src/reporter/displayer/imp.rs, in the functions
+# `write_status_line_prefix`, `status_str` and `short_status_str`.
+TEST_LINE = re.compile(
+    r"^ *([A-Z][A-Za-z0-9 +/-]*?) \[(>? *[0-9.]+s| *)\] +(?:\([^)\n]*\) +)?(\S+) (\S+)$", re.M
 )
+# The last status of a test that passed. FLAKY is a pass after a retry.
+PASSED = {"PASS", "SLOW", "SLOW + LEAK", "SLOW+TMPASS", "LEAK", "TIMEOUT-PASS"}
+PASSED_AFTER_RETRY = re.compile(r"FLAKY [0-9]+/[0-9]+")
+SKIPPED = "SKIP"
+# A status line while a test runs, before its last status: the time of a slow
+# or a stopped test starts with ">"; a start has no time.
+PROGRESS = re.compile(r"START|TRY [0-9]+ START")
+# The last status of a test that nextest stopped at its time limit; TMT is the
+# short form after a retry.
+TIME_LIMIT = re.compile(r"TIMEOUT|TRY [0-9]+ TMT")
 # Each status line and the summary line of nextest start a new part of the log.
-STATUS_LINE = re.compile(r"^ +[A-Z][A-Za-z0-9 -]* \[ *>? *[0-9.]+s\]", re.M)
+STATUS_LINE = re.compile(r"^ *[A-Z][A-Za-z0-9 +/-]* \[(?:>? *[0-9.]+s| *)\]", re.M)
 SUMMARY_LINE = re.compile(r"^ +Summary \[", re.M)
 PANIC_LINE = re.compile(r"panicked at [^\n]*:\n")
 # The variables of the job that a replay needs.
@@ -76,29 +88,54 @@ def replay_environment(environ):
 
 def replay(binary_id, test, environment):
     """The command that runs `test` of the nextest binary `binary_id`
-    (`<package>::<test target>`, or `<package>` for the library)."""
+    (`<package>::<test target>`)."""
     package, _, target = binary_id.partition("::")
-    selection = f"--test {target}" if target else "--lib"
     command = (
         f"cargo nextest run --profile simulation --run-ignored all -p {package} "
-        f"{selection} -E 'test(={test})'"
+        f"--test {target} -E 'test(={test})'"
     )
     return f"{environment} {command}" if environment else command
 
 
+def is_progress(status, time):
+    """Tells if a status line shows a test that still runs."""
+    return time.startswith(">") or PROGRESS.fullmatch(status) is not None
+
+
+def is_failure(status):
+    """Tells if the last status of a test is not a pass or a skip."""
+    passed = status in PASSED or PASSED_AFTER_RETRY.fullmatch(status)
+    return not passed and status != SKIPPED
+
+
 def failed_tests(log):
-    """(status, binary id, test, output) of each test that did not pass, in
-    the order of the log. nextest prints the status line again in its
-    summary, with no output; the first output is kept."""
-    found = {}
-    for match in FAILED_TEST.finditer(log):
-        status, binary_id, test = match.groups()
+    """(status, binary id, test, output) of each test whose last status
+    before the summary of nextest is not a pass or a skip, in the order of
+    that status in the log. nextest prints the status line of a failed test
+    again in its summary; the first output of the last status is kept."""
+    summary = SUMMARY_LINE.search(log)
+    run_end = summary.start() if summary else len(log)
+    last = {}
+    lines = {}
+    for match in TEST_LINE.finditer(log):
+        status, time, binary_id, test = match.groups()
+        if is_progress(status, time):
+            continue
+        key = (binary_id, test)
         end = STATUS_LINE.search(log, match.end())
         output = log[match.end():end.start() if end else len(log)]
-        key = (binary_id, test)
-        if key not in found or not found[key][3].strip():
-            found[key] = (status, binary_id, test, output)
-    return list(found.values())
+        lines.setdefault(key, []).append((status, output))
+        if match.start() < run_end:
+            last.pop(key, None)
+            last[key] = status
+    found = []
+    for (binary_id, test), status in last.items():
+        if not is_failure(status):
+            continue
+        outputs = [output for line, output in lines[(binary_id, test)] if line == status]
+        output = next((output for output in outputs if output.strip()), outputs[0])
+        found.append((status, binary_id, test, output))
+    return found
 
 
 def panic_message(output):
@@ -185,15 +222,20 @@ def describe(failure, blob, replay_line, run_url=None):
     return "\n".join(lines)
 
 
-def describe_run(layer, run_url=None):
-    """The report of a job that did not end its tests or gave no report."""
-    lines = [
-        f"### {title(layer, NO_LAW)}",
-        "",
-        "The job did not succeed, and the log does not show the end of the "
-        "tests or a report of a test. The build failed, or the job stopped at "
-        "its time limit. Read the log.",
-    ]
+def describe_run(layer, finished, run_url=None):
+    """The report of a job that did not end its tests or gave no report;
+    `finished` tells if the log shows the summary of nextest."""
+    if finished:
+        cause = (
+            "The log shows the end of the tests, but no test in it gives a "
+            "report. Read the log."
+        )
+    else:
+        cause = (
+            "The log does not show the end of the tests. The build failed, or "
+            "the job stopped at its time limit. Read the log."
+        )
+    lines = [f"### {title(layer, NO_LAW)}", "", f"The job did not succeed. {cause}"]
     if run_url:
         lines.append(f"Run: {run_url}")
     lines.append(f"What to do: {GUIDE}")
@@ -224,7 +266,7 @@ def test_title(layer, test, kind, law=None):
     that failed, or a test that did not end in its time limit."""
     if kind == "probe":
         return f"Simulation: probe {test} broke law {law} in the {layer} layer"
-    if kind == "TIMEOUT":
+    if kind == "time limit":
         return f"Simulation: test {test} did not end in its time limit in the {layer} layer"
     return f"Simulation: test {test} failed in the {layer} layer"
 
@@ -287,8 +329,8 @@ def layer_reports(layer, log, failures, run_url=None, environment=""):
             continue
         elif laws_in(output, layer) & reported_laws:
             continue
-        elif status == "TIMEOUT":
-            issue_title = test_title(layer, test, status)
+        elif TIME_LIMIT.fullmatch(status):
+            issue_title = test_title(layer, test, "time limit")
             detail = "nextest stopped the test at its time limit"
         else:
             issue_title = test_title(layer, test, status)
@@ -296,8 +338,9 @@ def layer_reports(layer, log, failures, run_url=None, environment=""):
         found.append((issue_title, describe_test(issue_title, test, detail, command, run_url)))
     if broken:
         found.append((title(layer, CHECK_BROKEN), describe_check_broken(layer, broken, run_url)))
-    if not found or not SUMMARY_LINE.search(log):
-        found.append((title(layer, NO_LAW), describe_run(layer, run_url)))
+    finished = SUMMARY_LINE.search(log) is not None
+    if not found or not finished:
+        found.append((title(layer, NO_LAW), describe_run(layer, finished, run_url)))
     return found
 
 
@@ -345,7 +388,7 @@ def reports(artifacts, run_url):
         environment = env_path.read_text().strip() if env_path.is_file() else ""
         found += layer_reports(layer, log, failures, run_url, environment)
     if not found:
-        found.append((title(NO_LAYER, NO_LAW), describe_run(NO_LAYER, run_url)))
+        found.append((title(NO_LAYER, NO_LAW), describe_run(NO_LAYER, False, run_url)))
     return found
 
 

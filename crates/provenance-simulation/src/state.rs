@@ -130,7 +130,6 @@ impl FinalRecords {
             (Target::Requirement(id), Value::Requirement { description }) => {
                 self.descriptions.get(id) == Some(description)
             }
-            (Target::Topic, Value::Absent) => self.topic_status.is_none(),
             (Target::Topic, Value::Topic { status, claim }) => {
                 self.topic_status == Some(*status) && self.claim == *claim
             }

@@ -45,13 +45,15 @@ impl Expected {
     ///
     /// The writes of one group ran at the same time, so they landed in an
     /// order that is not known. A record that the group writes holds a value
-    /// of one of its writes. When one of these writes is not certain, the
-    /// record can also hold a value that it could hold before the group.
+    /// of one of its writes. When no write of the group on the record is
+    /// certain, the record can also hold a value that it could hold before
+    /// the group. A certain write landed, so with one certain write the
+    /// record cannot hold an earlier value.
     pub fn apply(&mut self, at: usize, group: impl IntoIterator<Item = Write>) {
         let mut changed: BTreeMap<Target, (bool, Vec<Value>)> = BTreeMap::new();
         for write in group {
-            let (certain, values) = changed.entry(write.target).or_insert((true, Vec::new()));
-            *certain &= write.certain;
+            let (certain, values) = changed.entry(write.target).or_insert((false, Vec::new()));
+            *certain |= write.certain;
             if !values.contains(&write.value) {
                 values.push(write.value);
             }

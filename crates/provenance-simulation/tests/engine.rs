@@ -45,8 +45,10 @@ fn the_write_after_a_moved_base_lands() {
     report::probe_laws("engine", laws::check(&run));
 }
 
-/// A case where each fault of the generator meets an engine.
-fn every_fault_case() -> Case {
+// No Rule: a probe that each fault of the generator meets an engine.
+#[test]
+#[ignore = "a probe of the nightly simulation"]
+fn a_case_with_every_fault_keeps_the_laws() {
     let update = Operation::UpdateRequirement { n: 0, stale: false };
     let mut steps = vec![
         Step::Fault(Fault::UnknownOutcome { landed: 1 }),
@@ -67,14 +69,8 @@ fn every_fault_case() -> Case {
         write(0, Operation::PostMessage),
         write(2, Operation::ReleaseTopic),
     ]);
-    Case { engines: 3, steps }
-}
-
-// No Rule: a probe that each fault of the generator meets an engine.
-#[test]
-#[ignore = "a probe of the nightly simulation"]
-fn a_case_with_every_fault_keeps_the_laws() {
-    let run = check_probe("engine", &every_fault_case(), Config::default());
+    let case = Case { engines: 3, steps };
+    let run = check_probe("engine", &case, Config::default());
     assert!(
         met(&run, Outcome::Unknown),
         "no unknown outcome: {:?}",
