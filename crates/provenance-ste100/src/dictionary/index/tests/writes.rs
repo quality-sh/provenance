@@ -47,6 +47,23 @@ fn a_failed_write_of_the_new_index_keeps_the_stored_index() {
     std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
 }
 
+#[test]
+fn a_failed_rename_of_the_new_index_leaves_no_staged_file() {
+    let directory = scratch_directory();
+    let import = fixture_import();
+    let path = super::super::index_path(&directory, &import.identity);
+    std::fs::create_dir_all(path.join("occupied")).expect("make a directory at the index path");
+
+    let result = store_dictionary_index(&import, &directory);
+
+    assert!(result.is_err(), "unexpected result: {result:?}");
+    assert!(
+        !path.with_extension("partial").exists(),
+        "a failed write must not leave a staged file"
+    );
+    std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
+}
+
 #[cfg(unix)]
 #[test]
 fn a_replace_of_a_stored_index_syncs_the_directory_after_the_rename() {

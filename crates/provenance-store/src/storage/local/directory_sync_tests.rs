@@ -136,6 +136,25 @@ fn a_publication_marker_write_syncs_the_cache_directory() -> anyhow::Result<()> 
     Ok(())
 }
 
+#[test]
+fn a_failed_directory_sync_names_the_directory() -> anyhow::Result<()> {
+    let temp = tempfile::tempdir()?;
+    let directory = utf8(temp.path())?.join("published");
+    std::fs::create_dir(&directory)?;
+
+    let Some(closed) = close_to_reads(&directory)? else {
+        return Ok(());
+    };
+    let result = super::durability::sync_directory(&directory);
+    drop(closed);
+
+    let Err(error) = result else {
+        panic!("the directory sync did not fail");
+    };
+    assert_eq!(format!("{error:#}"), sync_failed(&directory));
+    Ok(())
+}
+
 fn layout_in(temp: &tempfile::TempDir) -> anyhow::Result<ProvenanceLayout> {
     Ok(ProvenanceLayout::new(utf8(temp.path())?))
 }

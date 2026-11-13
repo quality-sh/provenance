@@ -1,157 +1,253 @@
-//! The answers of the dictionary commands when a stop during the write of the
-//! dictionary reference left it damaged: an empty file, or a file with half of
-//! a JSON object.
+//! The answers of the dictionary commands when the dictionary reference does
+//! not parse, for example after a bad merge or a hand edit: an empty file, or a
+//! file with half of a JSON object.
 //!
-//! Each test is an implementation aid with no Rule: it records the behaviour
-//! of the product, and no Rule states it.
+//! The status and the statement check are implementation aids with no Rule:
+//! they record what the product answers. The import and the init refuse and
+//! keep the file, as `rule_ste_dictionary_reference_parse_refusal` states.
 
 use crate::support::{
-    dictionary_pdf, imported_dictionary, init, provenance, reference_path, APPROVED_TABLE_ROWS,
-    UNAPPROVED_TABLE_ROWS, UNAPPROVED_WORD,
+    dictionary_pdf, imported_dictionary, init, init_command, provenance, reference_path,
+    UNAPPROVED_WORD,
 };
+use provenance_macros::verifies;
 use provenance_ste100::store_dictionary_index;
 use serde_json::{json, Value};
-use std::path::Path;
+use std::path::PathBuf;
 use std::process::Output;
 
-#[test]
-fn the_dictionary_commands_with_an_empty_reference() {
-    record_the_answers("", "EOF while parsing a value at line 1 column 0");
+/// A reference with no bytes.
+const EMPTY: &str = "";
+
+/// The parse message of [`EMPTY`].
+const EMPTY_MESSAGE: &str = "EOF while parsing a value";
+
+/// The parse message of [`half`].
+const HALF_MESSAGE: &str = "EOF while parsing a string";
+
+/// A reference that stops in the name of its third field. It holds a
+/// technical name that a write must not lose.
+fn half() -> String {
+    format!(r#"{{"technical_names": ["{UNAPPROVED_WORD}"], "issue": 9, "source_sha"#)
 }
 
-#[test]
-fn the_dictionary_commands_with_half_of_a_reference() {
-    let half = format!(r#"{{"technical_names": ["{UNAPPROVED_WORD}"], "issue": 9, "source_sha"#);
-
-    record_the_answers(&half, "EOF while parsing a string at line 1 column 63");
+/// A repository whose dictionary reference holds `contents`, the index
+/// directory that holds the index of the fixture, and the fixture PDF.
+struct Damaged {
+    _scratch: tempfile::TempDir,
+    repo: PathBuf,
+    index_directory: PathBuf,
+    pdf: PathBuf,
 }
 
-/// Runs the status, a statement check and an import, in this order, on a
-/// repository whose reference holds `contents`, and compares each answer.
-fn record_the_answers(contents: &str, parse_error: &str) {
-    let scratch = tempfile::tempdir().unwrap();
-    let repo = scratch.path().join("repo");
-    let index_directory = scratch.path().join("index");
-    let pdf = scratch.path().join("dictionary.pdf");
-    std::fs::create_dir_all(&repo).unwrap();
-    std::fs::write(&pdf, dictionary_pdf()).unwrap();
-    init(&repo);
-    store_dictionary_index(imported_dictionary(), &index_directory).unwrap();
-    std::fs::write(reference_path(&repo), contents).unwrap();
-    let problem = format!("the reference is not a dictionary identity: {parse_error}");
+impl Damaged {
+    fn new(contents: &str) -> Self {
+        let scratch = tempfile::tempdir().unwrap();
+        let repo = scratch.path().join("repo");
+        let index_directory = scratch.path().join("index");
+        let pdf = scratch.path().join("dictionary.pdf");
+        std::fs::create_dir_all(&repo).unwrap();
+        std::fs::write(&pdf, dictionary_pdf()).unwrap();
+        init(&repo);
+        store_dictionary_index(imported_dictionary(), &index_directory).unwrap();
+        std::fs::write(reference_path(&repo), contents).unwrap();
+        Self {
+            _scratch: scratch,
+            repo,
+            index_directory,
+            pdf,
+        }
+    }
 
-    assert_the_status(&repo, &index_directory, &problem);
-    assert_the_statement_check(&repo, &index_directory, &problem);
-    assert_the_import(&repo, &index_directory, &pdf);
-}
+    fn repo(&self) -> &str {
+        self.repo.to_str().unwrap()
+    }
 
-fn assert_the_status(repo: &Path, index_directory: &Path, problem: &str) {
-    let status = run(
-        index_directory,
-        &[
-            "dictionary",
-            "status",
-            "--repo",
-            repo.to_str().unwrap(),
-            "--format",
-            "json",
-        ],
-    );
-    assert_eq!(
-        answer(&status),
+    fn run(&self, arguments: &[&str]) -> Output {
+        provenance()
+            .env("PROVENANCE_STE100_INDEX_DIR", &self.index_directory)
+            .args(arguments)
+            .output()
+            .unwrap()
+    }
+
+    fn import(&self) -> Output {
+        let pdf = self.pdf.to_str().unwrap();
+        self.run(&["dictionary", "import", "--pdf", pdf, "--repo", self.repo()])
+    }
+
+    fn init(&self) -> Output {
+        init_command(&self.repo, &["--ste-pdf", self.pdf.to_str().unwrap()])
+            .env("PROVENANCE_STE100_INDEX_DIR", &self.index_directory)
+            .output()
+            .unwrap()
+    }
+
+    /// The exit code and standard error of a refused write, and the bytes of
+    /// the reference after it.
+    fn refusal(&self, output: &Output) -> (Option<i32>, String, String) {
         (
-            Some(0),
-            json!({
-                "referenced": true,
-                "index_directory": index_directory.display().to_string(),
-                "index_present": false,
-                "analyzer": "built_in_rules",
-                "load_problem": problem,
-            }),
-            String::new()
+            output.status.code(),
+            String::from_utf8_lossy(&output.stderr).into_owned(),
+            std::fs::read_to_string(reference_path(&self.repo)).unwrap(),
         )
-    );
-}
+    }
 
-fn assert_the_statement_check(repo: &Path, index_directory: &Path, problem: &str) {
-    let statement = format!("The {UNAPPROVED_WORD} item stops.");
-    let check = run(
-        index_directory,
-        &[
+    /// The refusal that a write gives for a reference whose first line does
+    /// not parse with `message`, and the unchanged `contents`.
+    fn refused(&self, message: &str, contents: &str) -> (Option<i32>, String, String) {
+        let stderr = format!(
+            "Error: the dictionary reference {} does not parse: restore it from git or correct \
+             its JSON, and then run the command again\n\nCaused by:\n    dictionary.json line \
+             1: {message}\n",
+            reference_path(&self.repo).display()
+        );
+        (Some(1), stderr, contents.to_owned())
+    }
+
+    fn status(&self) -> (Option<i32>, Value, String) {
+        answer(&self.run(&["dictionary", "status", "--repo", self.repo(), "--format", "json"]))
+    }
+
+    fn statement_check(&self) -> (Option<i32>, Value, String) {
+        let statement = format!("The {UNAPPROVED_WORD} item stops.");
+        answer(&self.run(&[
             "check",
             "--repo",
-            repo.to_str().unwrap(),
+            self.repo(),
             "--statement",
             &statement,
             "--format",
             "json",
-        ],
-    );
-    let warning = format!(
-        "ASD-STE100 Rule 1.1 did not run: the dictionary reference has no loadable index in \
-         {}: {problem}. Run `provenance dictionary import` with the local Issue 9 PDF on \
-         this machine",
-        index_directory.display()
-    );
+        ]))
+    }
+
+    /// The status of a reference that does not parse with `parse_error`.
+    fn unloaded_status(&self, parse_error: &str) -> (Option<i32>, Value, String) {
+        let status = json!({
+            "referenced": true,
+            "index_directory": self.index_directory.display().to_string(),
+            "index_present": false,
+            "analyzer": "built_in_rules",
+            "load_problem": problem(parse_error),
+        });
+        (Some(0), status, String::new())
+    }
+
+    /// The statement check of a reference that does not parse with
+    /// `parse_error`: a warning that Rule 1.1 did not run, and no finding for
+    /// the unapproved word.
+    fn unloaded_check(&self, parse_error: &str) -> (Option<i32>, Value, String) {
+        let warning = format!(
+            "ASD-STE100 Rule 1.1 did not run: the dictionary reference has no loadable index in \
+             {}: {}. Run `provenance dictionary import` with the local Issue 9 PDF on this \
+             machine",
+            self.index_directory.display(),
+            problem(parse_error)
+        );
+        let check = json!({"categories": [{
+            "category": "statements",
+            "status": "findings",
+            "findings": [{"message": warning}],
+        }]});
+        (Some(0), check, String::new())
+    }
+}
+
+fn problem(parse_error: &str) -> String {
+    format!("the reference is not a dictionary identity: {parse_error}")
+}
+
+#[test]
+fn the_status_of_an_empty_reference_names_the_parse_error() {
+    let damaged = Damaged::new(EMPTY);
+
     assert_eq!(
-        answer(&check),
-        (
-            Some(0),
-            json!({"categories": [{
-                "category": "statements",
-                "status": "findings",
-                "findings": [{"message": warning}],
-            }]}),
-            String::new()
-        )
+        damaged.status(),
+        damaged.unloaded_status("EOF while parsing a value at line 1 column 0")
     );
 }
 
-fn assert_the_import(repo: &Path, index_directory: &Path, pdf: &Path) {
-    let import = run(
-        index_directory,
-        &[
-            "dictionary",
-            "import",
-            "--format",
-            "json",
-            "--pdf",
-            pdf.to_str().unwrap(),
-            "--repo",
-            repo.to_str().unwrap(),
-        ],
-    );
-    let identity = &imported_dictionary().identity;
+#[test]
+fn the_status_of_half_of_a_reference_names_the_parse_error() {
+    let damaged = Damaged::new(&half());
+
     assert_eq!(
-        answer(&import),
-        (
-            Some(0),
-            json!({
-                "issue": 9,
-                "source_sha256": identity.source_sha256,
-                "data_sha256": identity.data_sha256,
-                "extractor_version": identity.extractor_version,
-                "approved_rows": APPROVED_TABLE_ROWS,
-                "unapproved_rows": UNAPPROVED_TABLE_ROWS,
-            }),
-            String::new()
-        )
-    );
-    let written: Value =
-        serde_json::from_slice(&std::fs::read(reference_path(repo)).unwrap()).unwrap();
-    assert_eq!(
-        written,
-        serde_json::to_value(identity).unwrap(),
-        "the import writes the identity with no technical names"
+        damaged.status(),
+        damaged.unloaded_status("EOF while parsing a string at line 1 column 63")
     );
 }
 
-fn run(index_directory: &Path, arguments: &[&str]) -> Output {
-    provenance()
-        .env("PROVENANCE_STE100_INDEX_DIR", index_directory)
-        .args(arguments)
-        .output()
-        .unwrap()
+#[test]
+fn a_statement_check_with_an_empty_reference_warns_that_rule_1_1_did_not_run() {
+    let damaged = Damaged::new(EMPTY);
+
+    assert_eq!(
+        damaged.statement_check(),
+        damaged.unloaded_check("EOF while parsing a value at line 1 column 0")
+    );
+}
+
+#[test]
+fn a_statement_check_with_half_of_a_reference_warns_that_rule_1_1_did_not_run() {
+    let damaged = Damaged::new(&half());
+
+    assert_eq!(
+        damaged.statement_check(),
+        damaged.unloaded_check("EOF while parsing a string at line 1 column 63")
+    );
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_reference_parse_refusal", examples)]
+fn an_import_over_an_empty_reference_refuses_and_keeps_the_file() {
+    let damaged = Damaged::new(EMPTY);
+
+    let import = damaged.import();
+
+    assert_eq!(
+        damaged.refusal(&import),
+        damaged.refused(EMPTY_MESSAGE, EMPTY)
+    );
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_reference_parse_refusal", examples)]
+fn an_import_over_half_of_a_reference_refuses_and_keeps_the_technical_names() {
+    let damaged = Damaged::new(&half());
+
+    let import = damaged.import();
+
+    assert_eq!(
+        damaged.refusal(&import),
+        damaged.refused(HALF_MESSAGE, &half())
+    );
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_reference_parse_refusal", examples)]
+fn an_init_over_an_empty_reference_refuses_and_keeps_the_file() {
+    let damaged = Damaged::new(EMPTY);
+
+    let init = damaged.init();
+
+    assert_eq!(
+        damaged.refusal(&init),
+        damaged.refused(EMPTY_MESSAGE, EMPTY)
+    );
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_reference_parse_refusal", examples)]
+fn an_init_over_half_of_a_reference_refuses_and_keeps_the_technical_names() {
+    let damaged = Damaged::new(&half());
+
+    let init = damaged.init();
+
+    assert_eq!(
+        damaged.refusal(&init),
+        damaged.refused(HALF_MESSAGE, &half())
+    );
 }
 
 /// The exit code, the JSON on standard output and the text on standard error.
@@ -168,3 +264,4 @@ fn answer(output: &Output) -> (Option<i32>, Value, String) {
         String::from_utf8_lossy(&output.stderr).into_owned(),
     )
 }
+
