@@ -108,7 +108,9 @@ fn check<O: Operation>(call: Value) -> Result<(RequestedContext, O::Request), Op
 
 /// Checks the call, prepares the repository, then runs the operation.
 ///
-/// The order is the order of the router's own invocation.
+/// The order is the order of the router's own invocation. The failure is
+/// the dispatch's own failure type, which the port gives as it is.
+#[allow(clippy::result_large_err)]
 async fn run<O: Operation>(repository: Repository, call: Value) -> Result<Value, ErasedFailure> {
     let refuse = |failure| ErasedFailure::new(Some(O::NAME), failure);
     let (selected, request) = check::<O>(call).map_err(refuse)?;
