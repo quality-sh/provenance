@@ -162,8 +162,13 @@ pub struct RequirementReview {
     pub field: String,
     pub before: String,
     pub after: String,
+    #[serde(deserialize_with = "super::exact_integer::time")]
     pub changed_at: i64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "super::exact_integer::optional_time",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub cleared_at: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cleared_by_run: Option<StableId>,
