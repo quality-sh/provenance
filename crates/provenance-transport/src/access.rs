@@ -13,7 +13,10 @@ pub trait HostAccess: ContextResolver {
     fn bound_identity(&self) -> Option<(String, String)>;
     /// The read operations port of the bound repository, if it has one.
     ///
-    /// The router sends each read operation to it.
+    /// The router sends each read operation to it. Before it does, the call has the checks,
+    /// the authorization, the work slot and the preparation through `prepare` of an operation
+    /// that the router runs itself, in the same order. A refusal of `prepare` is the answer, and
+    /// the port is not asked. The answer of the port is checked against the operation.
     fn read_operations(&self) -> Option<Arc<dyn ReadOperations>> {
         None
     }

@@ -13,6 +13,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+jsonschema = { version = "=0.60.2", default-features = false }
 provenance-core = { workspace = true, features = ["schema"] }
 provenance-macros.workspace = true
 provenance-store = { workspace = true, features = ["host", "schema"] }

@@ -109,11 +109,9 @@ pub async fn invoke(
         identity.as_ref().map(|(_, scope)| scope.as_str()),
     )?;
     let call = context(identity, bound.handler.context, &bound.data)?;
-    let port = host
-        .read_port(bound.handler.operation)
-        .filter(|_| !page_write);
-    let value = match port {
-        Some((operation, port)) => host.read(operation, port, call).await?,
+    // No operation of the port writes, so a page write never goes to it.
+    let value = match host.read_port(bound.handler.operation) {
+        Some(port) => host.read(port, bound.handler.operation, call).await?,
         None => {
             provenance_contract::invoke_with(
                 bound.handler.operation,

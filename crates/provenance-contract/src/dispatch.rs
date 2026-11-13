@@ -33,7 +33,7 @@ struct Entry<H: Invoke> {
     name: &'static str,
     mutates: bool,
     invoke: fn(Value, H) -> OperationFuture<Value, FailureEnvelope>,
-    check: fn(Value) -> Result<(), FailureEnvelope>,
+    port: crate::port::Checks,
 }
 
 fn register<O: Operation, H: Invoke>() -> Entry<H> {
@@ -41,7 +41,7 @@ fn register<O: Operation, H: Invoke>() -> Entry<H> {
         name: O::NAME,
         mutates: O::MUTATES,
         invoke: invoke_resolved::<O, H>,
-        check: |call| decode_call::<O>(call).map(drop),
+        port: crate::port::Checks::of::<O>(),
     }
 }
 
@@ -266,16 +266,12 @@ pub async fn invoke_with<H: Invoke>(
     (entry.invoke)(call, host).await
 }
 
-/// Decodes `call` as the dispatch of `operation` does, and runs nothing.
-///
-/// A host that gives the call to a port checks it here first, so a call
-/// that does not decode gets the refusal of the dispatch.
-pub fn check_call(operation: &str, call: Value) -> Result<(), FailureEnvelope> {
-    let entry = entries::<Unhosted>()
+/// The checks of `operation` for a call that a port answers.
+pub(crate) fn port_checks(operation: &str) -> Option<crate::port::Checks> {
+    entries::<Unhosted>()
         .into_iter()
         .find(|entry| entry.name == operation)
-        .ok_or_else(|| FailureEnvelope::new(None, OperationFailure::UnknownOperation))?;
-    (entry.check)(call)
+        .map(|entry| entry.port)
 }
 
 /// Decodes the native call of one operation and runs the operation on the host. The request
@@ -297,7 +293,7 @@ fn invoke_resolved<O: Operation, H: Invoke>(
     })
 }
 
-fn decode_call<O: Operation>(
+pub(crate) fn decode_call<O: Operation>(
     call: Value,
 ) -> Result<(Option<RequestedContext>, O::Request), FailureEnvelope> {
     Ok(match O::CONTEXT {

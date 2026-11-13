@@ -310,6 +310,7 @@
     },
     "provenance-contract": {
       "dependencies": [
+        "jsonschema",
         "provenance-core",
         "provenance-macros",
         "provenance-store"

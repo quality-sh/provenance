@@ -6,7 +6,7 @@ use provenance_core::protocol::{
 };
 use provenance_macros::rule;
 use provenance_store::operations::catalog::{
-    self, ContextKind, Operation, PreparedContext, RequestedContext,
+    self, ContextKind, ExecutionNeeds, Operation, PreparedContext, RequestedContext,
 };
 use provenance_store::operations::read_operations::{self, ReadOperations};
 use serde_json::Value;
@@ -70,67 +70,75 @@ impl StatementHost {
             None => self.bound_context(O::CONTEXT)?,
         };
         O::validate_external(&request)?;
-        if let Some(selected) = &selected {
-            self.access.authorize(O::NAME, selected)?;
-        }
-        let access = self.access.clone();
+        let needs = O::needs(&request);
         let page_writes = options
             .page_write
             .then(|| self.page_writes.clone())
             .flatten();
         let runtime = tokio::runtime::Handle::current();
         let native = matches!(options.framing, Framing::Native);
+        self.admitted(
+            O::NAME,
+            selected,
+            needs,
+            native,
+            move |context| match page_writes {
+                Some(page) => page
+                    .run(|held| {
+                        let context = context.within(held)?;
+                        runtime.block_on(catalog::invoke_typed::<O>(context, request))
+                    })
+                    .unwrap_or_else(|| Err(OperationFailure::Internal.into())),
+                None => runtime.block_on(catalog::invoke_typed::<O>(context, request)),
+            },
+        )
+        .await?
+    }
+
+    /// Authorizes `selected` on the runtime thread, waits for a work slot, then prepares the
+    /// repository and runs `work` on the tracked blocking pool. Each refusal answers before
+    /// `work` runs.
+    async fn admitted<T: Send + 'static>(
+        &self,
+        operation: &'static str,
+        selected: Option<RequestedContext>,
+        needs: ExecutionNeeds,
+        native: bool,
+        work: impl FnOnce(PreparedContext) -> T + Send + 'static,
+    ) -> Result<T, OperationFailure> {
+        if let Some(selected) = &selected {
+            self.access.authorize(operation, selected)?;
+        }
+        let access = self.access.clone();
         self.execution
-            .run(move || {
-                let context = prepare::<O>(&access, selected, &request, native)?;
-                match page_writes {
-                    Some(page) => page
-                        .run(|held| {
-                            let context = context.within(held)?;
-                            runtime.block_on(catalog::invoke_typed::<O>(context, request))
-                        })
-                        .unwrap_or_else(|| Err(OperationFailure::Internal.into())),
-                    None => runtime.block_on(catalog::invoke_typed::<O>(context, request)),
-                }
-            })
+            .run(move || prepare(&access, operation, selected, needs, native).map(work))
             .await?
     }
 
-    /// The port that runs `operation` for the bound repository, if any.
-    ///
-    /// There is one when `operation` is a read operation and the repository
-    /// has a port.
-    pub(crate) fn read_port(
-        &self,
-        operation: &str,
-    ) -> Option<(&'static str, Arc<dyn ReadOperations>)> {
-        let operation = read_operations::read_operation(operation)?;
-        Some((operation, self.access.read_operations()?))
+    /// The read operations port of the bound repository, when `operation` is one of its
+    /// operations.
+    pub(crate) fn read_port(&self, operation: &str) -> Option<Arc<dyn ReadOperations>> {
+        read_operations::read_operation(operation)?;
+        self.access.read_operations()
     }
 
-    /// Runs one read operation through `port`.
-    ///
-    /// As for an operation that the host runs, the call is decoded, its
-    /// request is checked and its context is authorized on the runtime
-    /// thread, before the work slot wait. The port runs on the tracked
-    /// blocking pool.
+    /// Runs one read operation through `port`. The call has the checks, the authorization,
+    /// the work slot and the repository preparation of an operation that this host runs, in
+    /// the same order; then the port runs on the tracked blocking pool, and the dispatch checks
+    /// its answer against the operation.
     pub(crate) async fn read(
         &self,
-        operation: &'static str,
         port: Arc<dyn ReadOperations>,
+        operation: &str,
         call: Value,
     ) -> Result<Value, ErasedFailure> {
-        let refuse = |failure| ErasedFailure::new(Some(operation), failure);
-        provenance_contract::check_call(operation, call.clone())?;
-        let selected = read_operations::checked_context(operation, &call).map_err(refuse)?;
-        self.access
-            .authorize(operation, &selected)
-            .map_err(refuse)?;
         let runtime = tokio::runtime::Handle::current();
-        self.execution
-            .run(move || runtime.block_on(port.run(operation, call)))
-            .await
-            .map_err(refuse)?
+        provenance_contract::invoke_port(operation, call, |operation, selected, needs, call| {
+            self.admitted(operation, selected, needs, false, move |_prepared| {
+                runtime.block_on(port.run(operation, call))
+            })
+        })
+        .await
     }
 
     /// The bound identity in the shape the operation's context kind expects.
@@ -170,14 +178,15 @@ impl StatementHost {
 }
 
 /// Repository preparation, on the blocking path before any page-write section.
-fn prepare<O: Operation>(
+fn prepare(
     access: &Arc<dyn crate::HostAccess>,
+    operation: &'static str,
     selected: Option<RequestedContext>,
-    request: &O::Request,
+    needs: ExecutionNeeds,
     native: bool,
 ) -> Result<PreparedContext, OperationFailure> {
     let context = match selected {
-        Some(selected) => access.prepare(O::NAME, selected, O::needs(request))?,
+        Some(selected) => access.prepare(operation, selected, needs)?,
         None => PreparedContext::data_free(),
     };
     Ok(if native {
