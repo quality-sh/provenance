@@ -7,7 +7,7 @@
 
 use super::{
     OverBudget, ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement,
-    Transaction, Unopened, WriteWork,
+    Transaction, Unopened, WorkUnit, WriteWork,
 };
 use crate::cache::{open_cache, open_stored_cache, CacheConnection};
 use crate::layout::ProvenanceLayout;
@@ -173,10 +173,11 @@ impl SqlTransaction for FileTransaction {
 
     /// Sets the `SQLite` progress handler on the connection: one call each
     /// [`STEPS_PER_CALL`] steps, and a handler that answers false stops
-    /// the statement with `SQLITE_INTERRUPT`.
-    fn bound_work(&mut self, steps: u64) -> SqlFuture<'_, ()> {
+    /// the statement while it runs, with `SQLITE_INTERRUPT`. A statement
+    /// that runs fewer steps than one interval does not call the handler.
+    fn bound_work(&mut self, bound: u64) -> SqlFuture<'_, ()> {
         Box::pin(async move {
-            let most = steps / STEPS_PER_CALL;
+            let most = bound / STEPS_PER_CALL;
             let mut handle = self.0.lock_handle().await?;
             let mut calls = 0;
             handle.set_progress_handler(i32::try_from(STEPS_PER_CALL)?, move || {
@@ -185,6 +186,10 @@ impl SqlTransaction for FileTransaction {
             });
             Ok(())
         })
+    }
+
+    fn work_unit(&self) -> WorkUnit {
+        WorkUnit::EngineSteps
     }
 
     fn max_list_values(&self) -> usize {

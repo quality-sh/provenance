@@ -8,10 +8,15 @@
 //! gives the page budget refusal (see also [`super::limits`]).
 
 use super::{statement, write, Harness, Statement};
+use crate::cache::read::page::{PAGE_ROWS_READ, PAGE_WORK_STEPS};
 use crate::operations::reader::{page_error, Position, ReadSnapshot};
-use crate::read_database::{OverBudget, SqlFuture, SqlRow, SqlTransaction, SqlValue, Transaction};
+use crate::read_database::{
+    OverBudget, SqlFuture, SqlRow, SqlTransaction, SqlValue, Transaction, WorkUnit,
+};
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::{Requirement, ScopeId, StableId};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 const SCHEMA: &str = include_str!("../../../current_cache.sql");
 
@@ -186,6 +191,21 @@ struct Stopping {
     inner: Transaction,
     bounded: bool,
     runs_first: bool,
+    unit: WorkUnit,
+    /// The last bound that [`SqlTransaction::bound_work`] got.
+    bound: Arc<AtomicU64>,
+}
+
+impl Stopping {
+    fn new(inner: Transaction, runs_first: bool, unit: WorkUnit) -> Self {
+        Self {
+            inner,
+            bounded: false,
+            runs_first,
+            unit,
+            bound: Arc::default(),
+        }
+    }
 }
 
 impl SqlTransaction for Stopping {
@@ -216,9 +236,14 @@ impl SqlTransaction for Stopping {
         self.inner.commit()
     }
 
-    fn bound_work(&mut self, _steps: u64) -> SqlFuture<'_, ()> {
+    fn bound_work(&mut self, bound: u64) -> SqlFuture<'_, ()> {
         self.bounded = true;
+        self.bound.store(bound, Ordering::SeqCst);
         Box::pin(async { Ok(()) })
+    }
+
+    fn work_unit(&self) -> WorkUnit {
+        self.unit
     }
 
     fn max_list_values(&self) -> usize {
@@ -255,11 +280,11 @@ async fn page_over_the_bound<H: Harness + Send + Sync>(harness: H, runs_first: b
     database
         .read(Box::new(move |transaction| {
             Box::pin(async move {
-                let stopping = Box::new(Stopping {
-                    inner: transaction,
-                    bounded: false,
+                let stopping = Box::new(Stopping::new(
+                    transaction,
                     runs_first,
-                });
+                    WorkUnit::EngineSteps,
+                ));
                 let scope = ScopeId::new("default")?;
                 let snapshot = ReadSnapshot::open(stopping, &scope)
                     .await?
@@ -284,4 +309,34 @@ async fn page_over_the_bound<H: Harness + Send + Sync>(harness: H, runs_first: b
         ),
         "{failed:#}"
     );
+}
+
+/// A page bounds its work in the unit that the adapter gives: the engine
+/// steps of a page, or the rows read of a page.
+pub async fn a_page_bounds_its_work_in_the_unit_of_the_adapter<H: Harness + Send + Sync>(
+    harness: H,
+) {
+    let database = harness.database();
+    write(database, projection()).await.unwrap();
+    let mut bounds = Vec::new();
+    for unit in [WorkUnit::EngineSteps, WorkUnit::RowsRead] {
+        let slot = &mut bounds;
+        database
+            .read(Box::new(move |transaction| {
+                Box::pin(async move {
+                    let stopping = Stopping::new(transaction, false, unit);
+                    let bound = Arc::clone(&stopping.bound);
+                    let scope = ScopeId::new("default")?;
+                    let snapshot = ReadSnapshot::open(Box::new(stopping), &scope)
+                        .await?
+                        .expect("a revision");
+                    snapshot.bound_page_work().await?;
+                    slot.push(bound.load(Ordering::SeqCst));
+                    Ok(())
+                })
+            }))
+            .await
+            .unwrap();
+    }
+    assert_eq!(bounds, vec![PAGE_WORK_STEPS, PAGE_ROWS_READ]);
 }

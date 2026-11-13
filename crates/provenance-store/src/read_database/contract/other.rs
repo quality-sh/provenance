@@ -4,7 +4,7 @@
 
 use crate::read_database::{
     ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement, Transaction,
-    WriteWork,
+    WorkUnit, WriteWork,
 };
 
 /// The adapter `D` behind a transaction of another type.
@@ -34,8 +34,12 @@ impl SqlTransaction for OtherTransaction {
         self.0.commit()
     }
 
-    fn bound_work(&mut self, steps: u64) -> SqlFuture<'_, ()> {
-        self.0.bound_work(steps)
+    fn bound_work(&mut self, bound: u64) -> SqlFuture<'_, ()> {
+        self.0.bound_work(bound)
+    }
+
+    fn work_unit(&self) -> WorkUnit {
+        self.0.work_unit()
     }
 
     fn max_list_values(&self) -> usize {

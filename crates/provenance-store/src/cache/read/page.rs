@@ -3,7 +3,7 @@ use super::rows::{decode, select_columns};
 use crate::cache::materialize::SEARCH_TEXT;
 use crate::cache::quoted;
 use crate::operations::reader::{ReadSnapshot, Table};
-use crate::read_database::{OverBudget, SqlColumns, SqlRow, SqlValue};
+use crate::read_database::{OverBudget, SqlColumns, SqlRow, SqlValue, WorkUnit};
 use provenance_core::model::ProjectionRow;
 use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
 use provenance_core::protocol::read_failure::ReadFailure;
@@ -17,13 +17,28 @@ pub const RESOURCE_RECORD_BYTES: usize = PAGE_BYTES - 16_384;
 /// sorts included.
 pub const PAGE_WORK_STEPS: u64 = 10_000_000;
 
+/// The rows that the statements of one page may read, for an adapter that
+/// counts work in rows read.
+///
+/// The page statements run 3 to 33 engine steps for each row that they
+/// read, so a page within this bound reads no more rows than a page within
+/// [`PAGE_WORK_STEPS`] can read at 3 steps a row.
+pub const PAGE_ROWS_READ: u64 = PAGE_WORK_STEPS / 3;
+
 impl ReadSnapshot {
     /// Bounds the work of the statements that follow in this page
-    /// transaction to [`PAGE_WORK_STEPS`].
+    /// transaction to [`PAGE_WORK_STEPS`], or to [`PAGE_ROWS_READ`] when
+    /// the adapter counts rows read.
     #[rule("rule_query_pages_bound_shared_reads")]
     pub(crate) async fn bound_page_work(&self) -> anyhow::Result<()> {
-        let steps = crate::test_probes::page_work_steps(PAGE_WORK_STEPS);
-        self.transaction().await.bound_work(steps).await
+        let mut transaction = self.transaction().await;
+        let bound = match transaction.work_unit() {
+            WorkUnit::EngineSteps => PAGE_WORK_STEPS,
+            WorkUnit::RowsRead => PAGE_ROWS_READ,
+        };
+        transaction
+            .bound_work(crate::test_probes::page_work_steps(bound))
+            .await
     }
 }
 

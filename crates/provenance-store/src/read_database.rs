@@ -105,20 +105,49 @@ pub trait SqlTransaction: Any + Send {
     /// Commits the transaction. Write work calls this at its end.
     fn commit(self: Box<Self>) -> SqlFuture<'static, ()>;
 
-    /// Bounds the work of the statements that follow in this transaction
-    /// to about `steps` steps of the store's engine.
+    /// Bounds the work of the statements that follow in this transaction.
     ///
-    /// When the store stops a statement for the bound, the error of the
-    /// statement is [`OverBudget`]. The file adapter counts the steps of
-    /// the `SQLite` engine and stops a statement at the bound while it
-    /// runs. The contract does not yet say what another adapter must do.
-    fn bound_work(&mut self, steps: u64) -> SqlFuture<'_, ()>;
+    /// The adapter counts `bound` in the unit that
+    /// [`SqlTransaction::work_unit`] gives. The work of all these
+    /// statements counts against one bound.
+    ///
+    /// When the work passes the bound during a statement, the statement
+    /// gives [`OverBudget`], and the caller does not get its rows. The
+    /// adapter can stop the statement while it runs, or let it run to its
+    /// end and then report it. The transaction stays open after
+    /// [`OverBudget`]: a later statement in it gives its rows or
+    /// [`OverBudget`].
+    ///
+    /// An adapter can let the work pass the bound by less than one of its
+    /// check intervals before it reports it. The file adapter checks each
+    /// 1,000 engine steps and stops the statement while it runs.
+    fn bound_work(&mut self, bound: u64) -> SqlFuture<'_, ()>;
+
+    /// The unit in which this adapter counts work for the work bound.
+    ///
+    /// No one factor converts one unit into the other, so a caller keeps a
+    /// bound in each unit. Without this method, the unit is
+    /// [`WorkUnit::EngineSteps`].
+    fn work_unit(&self) -> WorkUnit {
+        WorkUnit::EngineSteps
+    }
 
     /// The most values of one list that a reader binds in one statement;
     /// a longer list goes in more statements. With the two values that a
     /// reader binds beside the list, it is at most
     /// [`ReadDatabase::max_bound_values`].
     fn max_list_values(&self) -> usize;
+}
+
+/// What an adapter counts as the work of a statement.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkUnit {
+    /// The steps of the `SQLite` engine (virtual machine instructions), as
+    /// its progress handler counts them. The file adapter counts these.
+    EngineSteps,
+    /// The rows that the store read from its tables and indexes for the
+    /// statement, for a store that counts work only in rows.
+    RowsRead,
 }
 
 /// A transaction lent to one piece of work.
@@ -197,9 +226,11 @@ impl Unopened {
     }
 }
 
-/// The store stopped a statement because the work of its transaction
-/// passed the bound that [`SqlTransaction::bound_work`] set. Its text is
-/// the text of its cause.
+/// The work of a transaction passed its work bound during a statement.
+///
+/// The bound is the one that [`SqlTransaction::bound_work`] set. The
+/// statement gives no rows: the store stopped it, or reported it at its
+/// end. Its text is the text of its cause.
 #[derive(Debug, thiserror::Error)]
 #[error("{0:#}")]
 pub struct OverBudget(pub anyhow::Error);
