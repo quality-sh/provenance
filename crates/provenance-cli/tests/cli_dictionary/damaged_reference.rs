@@ -36,20 +36,23 @@ fn record_the_answers(contents: &str, parse_error: &str) {
     std::fs::create_dir_all(&repo).unwrap();
     std::fs::write(&pdf, dictionary_pdf()).unwrap();
     init(&repo);
-    let dictionary = imported_dictionary();
-    store_dictionary_index(dictionary, &index_directory).unwrap();
+    store_dictionary_index(imported_dictionary(), &index_directory).unwrap();
     std::fs::write(reference_path(&repo), contents).unwrap();
-    let index = index_directory.display().to_string();
     let problem = format!("the reference is not a dictionary identity: {parse_error}");
-    let repo_argument = repo.to_str().unwrap();
 
+    assert_the_status(&repo, &index_directory, &problem);
+    assert_the_statement_check(&repo, &index_directory, &problem);
+    assert_the_import(&repo, &index_directory, &pdf);
+}
+
+fn assert_the_status(repo: &Path, index_directory: &Path, problem: &str) {
     let status = run(
-        &index_directory,
+        index_directory,
         &[
             "dictionary",
             "status",
             "--repo",
-            repo_argument,
+            repo.to_str().unwrap(),
             "--format",
             "json",
         ],
@@ -60,7 +63,7 @@ fn record_the_answers(contents: &str, parse_error: &str) {
             Some(0),
             json!({
                 "referenced": true,
-                "index_directory": index,
+                "index_directory": index_directory.display().to_string(),
                 "index_present": false,
                 "analyzer": "built_in_rules",
                 "load_problem": problem,
@@ -68,14 +71,16 @@ fn record_the_answers(contents: &str, parse_error: &str) {
             String::new()
         )
     );
+}
 
+fn assert_the_statement_check(repo: &Path, index_directory: &Path, problem: &str) {
     let statement = format!("The {UNAPPROVED_WORD} item stops.");
     let check = run(
-        &index_directory,
+        index_directory,
         &[
             "check",
             "--repo",
-            repo_argument,
+            repo.to_str().unwrap(),
             "--statement",
             &statement,
             "--format",
@@ -84,8 +89,9 @@ fn record_the_answers(contents: &str, parse_error: &str) {
     );
     let warning = format!(
         "ASD-STE100 Rule 1.1 did not run: the dictionary reference has no loadable index in \
-         {index}: {problem}. Run `provenance dictionary import` with the local Issue 9 PDF on \
-         this machine"
+         {}: {problem}. Run `provenance dictionary import` with the local Issue 9 PDF on \
+         this machine",
+        index_directory.display()
     );
     assert_eq!(
         answer(&check),
@@ -99,9 +105,11 @@ fn record_the_answers(contents: &str, parse_error: &str) {
             String::new()
         )
     );
+}
 
+fn assert_the_import(repo: &Path, index_directory: &Path, pdf: &Path) {
     let import = run(
-        &index_directory,
+        index_directory,
         &[
             "dictionary",
             "import",
@@ -110,10 +118,10 @@ fn record_the_answers(contents: &str, parse_error: &str) {
             "--pdf",
             pdf.to_str().unwrap(),
             "--repo",
-            repo_argument,
+            repo.to_str().unwrap(),
         ],
     );
-    let identity = &dictionary.identity;
+    let identity = &imported_dictionary().identity;
     assert_eq!(
         answer(&import),
         (
@@ -130,7 +138,7 @@ fn record_the_answers(contents: &str, parse_error: &str) {
         )
     );
     let written: Value =
-        serde_json::from_slice(&std::fs::read(reference_path(&repo)).unwrap()).unwrap();
+        serde_json::from_slice(&std::fs::read(reference_path(repo)).unwrap()).unwrap();
     assert_eq!(
         written,
         serde_json::to_value(identity).unwrap(),
