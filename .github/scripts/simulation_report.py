@@ -11,7 +11,9 @@ law, so one run can leave files of laws that the shrink passed through. Only
 the law of the last "simulation law ... broken" line of a layer's log opens an
 issue. A probe that breaks a law prints "simulation probe <test> broke law
 ..." and the command that runs the probe; each such probe and law opens its
-own issue. A planted test whose law did not see its fault prints "simulation
+own issue. A probe whose other check failed prints "simulation probe <test>
+failed a check ..." and the same command; each such probe opens its own
+issue. A planted test whose law did not see its fault prints "simulation
 check broken"; its layer gets an issue that says that a check is broken, in
 addition to the law issues of the layer.
 """
@@ -26,7 +28,8 @@ import sys
 BLOB = re.compile(r'#\[hegel::reproduce_failure\("([^"]*)"\)\]')
 LAW_LINE = re.compile(r"simulation law (\S+) broken in layer (\S+):")
 PROBE_LINE = re.compile(
-    r"simulation probe (\S+) broke law (\S+) in layer (\S+): ([^\r\n]*)\r?\nreplay: ([^\r\n]*)"
+    r"simulation probe (\S+) (?:broke law (\S+)|failed a check) in layer (\S+): "
+    r"([^\r\n]*)\r?\nreplay: ([^\r\n]*)"
 )
 CHECK_BROKEN = "simulation check broken"
 GUIDE = (
@@ -134,12 +137,17 @@ def describe_check_broken(layer, log, run_url=None):
 
 
 def probe_title(layer, test, law):
+    """The title of a probe report; `law` is None for a check that is not a
+    law."""
+    if law is None:
+        return f"Simulation: probe {test} failed a check in the {layer} layer"
     return f"Simulation: probe {test} broke law {law} in the {layer} layer"
 
 
 def probe_failures(log, layer):
-    """(test, law, detail, replay) of each probe of `layer` that broke a law,
-    once for each probe and law."""
+    """(test, law, detail, replay) of each probe of `layer` that broke a law
+    or failed a check, once for each probe and law. The law of a failed check
+    is None."""
     found = {}
     for match in PROBE_LINE.finditer(log):
         test, law, probe_layer, detail, replay = match.groups()

@@ -2,7 +2,8 @@
 
 use provenance_core::{RequirementStatus, ScopeId, StableId};
 use provenance_simulation::generate::{
-    created_requirement_id, requirement_id, Case, Effect, Operation, Step, Target, Task, SCOPE,
+    created_requirement_id, requirement_id, Case, Effect, Operation, Step, Target, Task, Value,
+    SCOPE,
 };
 use provenance_simulation::laws::Violation;
 use provenance_simulation::{final_records, run_case, Config, Done};
@@ -49,11 +50,12 @@ pub fn check(case: &Case, run: &CliRun) -> Result<(), Violation> {
 }
 
 /// The values that a record can hold after each group; `None` is any value.
-type Expected = BTreeMap<Target, Option<Vec<Effect>>>;
+type Expected = BTreeMap<Target, Option<Vec<Value>>>;
 
 /// L3: each record holds a value of the last group that changed it. A write
 /// merged from a branch adds a value. A stopped write can leave any value on
-/// each record that it writes.
+/// each record that it writes. A failed write that did not stop changes no
+/// record.
 fn successful_writes_stay(run: &CliRun) -> Result<(), Violation> {
     let mut expected = Expected::new();
     for (way, done) in &run.groups {
@@ -62,7 +64,7 @@ fn successful_writes_stay(run: &CliRun) -> Result<(), Violation> {
             for (target, value) in done.op.writes(done.result.as_ref().ok()) {
                 if done.stopped {
                     changed.insert(target, None);
-                } else if let Some(value) = value {
+                } else if let (Ok(_), Some(value)) = (&done.result, value) {
                     let values = changed.entry(target).or_insert_with(|| Some(Vec::new()));
                     if let Some(values) = values {
                         values.push(value);
@@ -92,15 +94,7 @@ fn successful_writes_stay(run: &CliRun) -> Result<(), Violation> {
     })?;
     for (target, values) in expected {
         let Some(values) = values else { continue };
-        let holds = values.iter().any(|value| match (&target, value) {
-            (Target::Exists(id), _) => state.descriptions.contains_key(id),
-            (Target::Description(id), Effect::Described { description, .. }) => {
-                state.descriptions.get(id) == Some(&Some(description.clone()))
-            }
-            (Target::Claim, Effect::Claim { holder }) => &state.claim == holder,
-            _ => true,
-        });
-        if !holds {
+        if !values.iter().any(|value| state.holds(&target, value)) {
             return broken("L3", format!("{target:?} holds none of {values:?}"));
         }
     }

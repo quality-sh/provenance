@@ -113,12 +113,12 @@ pub fn check_case(layer: &str, case: &Case, config: Config) -> Run {
     first
 }
 
-/// Runs the fixed case of probe `test` twice and returns the first run.
+/// Runs the fixed case of `probe` twice and returns the first run.
 ///
 /// A broken law fails the probe with the law and the replay line of the
 /// probe, and writes no failure file.
-pub fn check_probe(layer: &str, test: &str, case: &Case, config: Config) -> Run {
+pub fn check_probe(probe: &report::Probe<'_>, case: &Case, config: Config) -> Run {
     let (first, verdict) = verdict(case, config);
-    report::probe(layer, test, verdict);
+    probe.laws(verdict);
     first
 }

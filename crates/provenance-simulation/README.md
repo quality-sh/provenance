@@ -44,14 +44,24 @@ fails with "simulation check broken", and the issue says that a check is
 broken, not a law. `tests/storage_contract.rs` runs the storage contract
 suite of `provenance-store` on the simulated storage. `tests/refused_post.rs`
 runs fixed cases of a message post whose publish is refused, in the engine
-job. A broken law in these cases fails as a probe of the engine layer. The
-replay command of the probe names the test binary `engine`, not
-`refused_post`. A failed check that is not a law gives the report of a layer
-that failed without a broken law.
+job, as a probe of the engine layer.
 
 The probes are fixed cases next to the random test of each layer. A probe
 that breaks a law fails with "simulation probe <test> broke law <law>" and
-the command that runs the probe. It writes no failure file.
+the command that runs the probe. A probe whose other check fails, for
+example a check of the final state, fails with "simulation probe <test>
+failed a check" and the same command. The command names the package and the
+test target of the test binary that ran the probe. A probe writes no failure
+file.
+
+L3 follows the existence and the description of each Requirement that a
+write changes, each message, and the status and the claim of the Topic. A
+write that is not certain (a stop, an unknown outcome, or a failure after a
+landed publish) leaves the value that the record had before it or its own
+value, when the write gives its value without its answer; else the record
+has no expected value. An archive of the first Requirement archives the
+Topic and clears its claim. A claim or a release shows that the Topic was
+not archived.
 
 A write on a moved base: in the engine and contract layers, the engine
 reads, a write outside lands, and the engine publishes on the moved base.
@@ -87,9 +97,10 @@ the shrunk case again and the case passed. This happens in the CLI layer,
 where two processes at once make a case nondeterministic. Use the shrunk
 steps of the issue as a fixed case, and run it more than one time.
 
-An issue "probe <test> broke law <law>" gives the replay command of the
-probe. The probe is a fixed case, so the command runs the same case on any
-system.
+An issue "probe <test> broke law <law>" or "probe <test> failed a check"
+gives the replay command of the probe. The probe is a fixed case, so the
+command runs the same case on any system. A report of a probe does not
+replace the other reports of its layer in the same run.
 
 An issue "a planted fault was not found" opens each time that a planted
 test fails, also on a night with a law issue for the same layer.

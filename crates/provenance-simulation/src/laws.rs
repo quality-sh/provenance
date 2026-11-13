@@ -10,7 +10,7 @@
 //! | L5 | After a moved base, the next write of the section lands. |
 //! | L8 | One case gives the same final bytes each time. |
 
-use crate::generate::{Effect, Target};
+use crate::generate::{Effect, Target, Value};
 use crate::storage::{Outcome, Publish};
 use crate::{Done, Run};
 use std::collections::BTreeMap;
@@ -135,17 +135,24 @@ fn failed_operations_land_nothing(run: &Run) -> Result<(), Violation> {
     Ok(())
 }
 
-/// What the final state must hold for one record, if the record's last
-/// write is certain.
+/// What one write tells about the value of a record after its publish.
 #[derive(Debug)]
-struct Expected {
-    at: usize,
-    value: Option<Effect>,
+enum Change {
+    /// The write is certain: the record holds this value.
+    Holds(Value),
+    /// The write is not certain: the record holds the value that it held
+    /// before the write, or this value. With no earlier write in the run,
+    /// the value is not known.
+    Either(Value),
+    /// The value is not known.
+    Unknown,
 }
 
-/// L3: the last write that landed on a record decides it.
-fn successful_writes_stay(run: &Run) -> Result<(), Violation> {
-    let mut expected: BTreeMap<Target, Expected> = BTreeMap::new();
+/// The changes of each operation that wrote a record, each with the index
+/// of its last publish that landed or has an unknown outcome, in the order
+/// of these publishes.
+fn changes(run: &Run) -> Vec<(usize, Target, Change)> {
+    let mut changes = Vec::new();
     for done in &run.done {
         let writes = done.op.writes(done.result.as_ref().ok());
         if writes.is_empty() {
@@ -161,35 +168,48 @@ fn successful_writes_stay(run: &Run) -> Result<(), Violation> {
         };
         let certain = last.outcome == Outcome::Landed && !done.stopped && done.result.is_ok();
         for (target, value) in writes {
-            let value = value.filter(|_| certain);
-            if expected.get(&target).is_none_or(|old| old.at < at) {
-                expected.insert(target, Expected { at, value });
-            }
+            let change = match value {
+                Some(value) if certain => Change::Holds(value),
+                Some(value) => Change::Either(value),
+                None => Change::Unknown,
+            };
+            changes.push((at, target, change));
         }
+    }
+    changes.sort_by_key(|(at, _, _)| *at);
+    changes
+}
+
+/// L3: the last write that landed on a record decides it. A write that is
+/// not certain leaves the earlier value or its own value.
+fn successful_writes_stay(run: &Run) -> Result<(), Violation> {
+    // The values that each record can hold, after the publish with the
+    // index; `None` is any value.
+    let mut expected: BTreeMap<Target, (usize, Option<Vec<Value>>)> = BTreeMap::new();
+    for (at, target, change) in changes(run) {
+        let earlier = expected.remove(&target).and_then(|(_, values)| values);
+        let values = match change {
+            Change::Holds(value) => Some(vec![value]),
+            Change::Either(value) => earlier.map(|mut values| {
+                values.push(value);
+                values
+            }),
+            Change::Unknown => None,
+        };
+        expected.insert(target, (at, values));
     }
     let state = crate::final_records(&run.entries).map_err(|error| Violation {
         law: "L3",
         detail: format!("the final state does not read: {error:#}"),
     })?;
-    for (target, expected) in expected {
-        let Some(value) = expected.value else {
+    for (target, (at, values)) in expected {
+        let Some(values) = values else {
             continue;
         };
-        let holds = match (&target, &value) {
-            (Target::Exists(id), _) => state.descriptions.contains_key(id),
-            (Target::Description(id), Effect::Described { description, .. }) => {
-                state.descriptions.get(id) == Some(&Some(description.clone()))
-            }
-            (Target::Claim, Effect::Claim { holder }) => &state.claim == holder,
-            _ => true,
-        };
-        if !holds {
+        if !values.iter().any(|value| state.holds(&target, value)) {
             return broken(
                 "L3",
-                format!(
-                    "after publish {}, {target:?} should hold {value:?}",
-                    expected.at
-                ),
+                format!("after publish {at}, {target:?} holds none of {values:?}"),
             );
         }
     }

@@ -188,8 +188,23 @@ pub enum Target {
     Description(String),
     /// A Requirement that a create makes.
     Exists(String),
-    /// The claim of the Topic.
-    Claim,
+    /// The status and the claim of the Topic.
+    Topic,
+}
+
+/// The value that a record holds after a write on it lands.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub enum Value {
+    /// The Requirement exists.
+    Exists,
+    /// The description of the Requirement.
+    Description(String),
+    /// The Topic is archived or open for a claim, and the actor that holds
+    /// its claim. An archived Topic holds no claim.
+    Topic {
+        archived: bool,
+        claim: Option<String>,
+    },
 }
 
 /// What an operation that succeeded did.
@@ -250,24 +265,48 @@ pub struct Task {
 
 impl Operation {
     /// The records that the operation writes when it lands, for the laws
-    /// that follow a record. With `effect`, the effect of a success, each
-    /// record has the value that it then holds. With no effect, the value is
-    /// not known.
+    /// that follow a record, each with the value that the record then holds.
+    /// The value of most writes comes from `effect`, the effect of a
+    /// success; with no effect, it is not known.
     ///
     /// An archive of the first Requirement archives its Topic, and an
-    /// archived Topic holds no claim.
-    pub fn writes(&self, effect: Option<&Effect>) -> Vec<(Target, Option<Effect>)> {
-        let target = match self {
-            Self::CreateRequirement { n } => Target::Exists(created_requirement_id(*n)),
-            Self::UpdateRequirement { n, .. } => Target::Description(requirement_id(*n)),
-            Self::ClaimTopic | Self::ReleaseTopic => Target::Claim,
-            Self::ArchiveRequirement { n } if requirement_id(*n) == FIRST_REQUIREMENT => {
-                let cleared = effect.map(|_| Effect::Claim { holder: None });
-                return vec![(Target::Claim, cleared)];
-            }
+    /// archived Topic holds no claim. This value does not need the effect.
+    /// A successful claim or release shows that the Topic was not archived.
+    pub fn writes(&self, effect: Option<&Effect>) -> Vec<(Target, Option<Value>)> {
+        let (target, value) = match self {
+            Self::CreateRequirement { n } => (
+                Target::Exists(created_requirement_id(*n)),
+                effect.map(|_| Value::Exists),
+            ),
+            Self::UpdateRequirement { n, .. } => (
+                Target::Description(requirement_id(*n)),
+                match effect {
+                    Some(Effect::Described { description, .. }) => {
+                        Some(Value::Description(description.clone()))
+                    }
+                    _ => None,
+                },
+            ),
+            Self::ClaimTopic | Self::ReleaseTopic => (
+                Target::Topic,
+                match effect {
+                    Some(Effect::Claim { holder }) => Some(Value::Topic {
+                        archived: false,
+                        claim: holder.clone(),
+                    }),
+                    _ => None,
+                },
+            ),
+            Self::ArchiveRequirement { n } if requirement_id(*n) == FIRST_REQUIREMENT => (
+                Target::Topic,
+                Some(Value::Topic {
+                    archived: true,
+                    claim: None,
+                }),
+            ),
             _ => return Vec::new(),
         };
-        vec![(target, effect.cloned())]
+        vec![(target, value)]
     }
 }
 

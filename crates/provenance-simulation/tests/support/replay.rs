@@ -13,8 +13,10 @@ pub fn replay_of_a_broken_probe(layer: &str) -> String {
         law: "L3",
         detail: "a planted law break".to_owned(),
     });
-    let payload = std::panic::catch_unwind(|| report::probe(layer, PROBE, broken))
-        .expect_err("a broken probe fails");
+    let payload = std::panic::catch_unwind(|| {
+        report::probe(layer, PROBE, |probe| probe.laws(broken));
+    })
+    .expect_err("a broken probe fails");
     let text = report::panic_text(&*payload);
     text.lines()
         .find_map(|line| line.strip_prefix("replay: "))
@@ -25,4 +27,13 @@ pub fn replay_of_a_broken_probe(layer: &str) -> String {
 /// The part of a replay line that selects `package`, `target` and the probe.
 pub fn selection(package: &str, target: &str) -> String {
     format!("-p {package} --test {target} -E 'test(={PROBE})'")
+}
+
+/// The text of a probe of `layer` whose check that is not a law fails.
+pub fn report_of_a_failed_check(layer: &str) -> String {
+    let payload = std::panic::catch_unwind(|| {
+        report::probe(layer, PROBE, |_| panic!("a planted check"));
+    })
+    .expect_err("a failed check fails the probe");
+    report::panic_text(&*payload)
 }
