@@ -104,7 +104,10 @@ fn a_run_row_that_cannot_be_written_leaves_no_binding() {
     let runs = store.list_verification_runs(&scope()).unwrap();
     assert_eq!(runs, [] as [VerificationRun; 0]);
     let reviews = store.list_requirement_reviews(&scope()).unwrap();
-    assert_eq!(serde_json::to_value(&reviews).unwrap(), json!([open_review()]));
+    assert_eq!(
+        serde_json::to_value(&reviews).unwrap(),
+        json!([open_review()])
+    );
 
     drop(cache);
     let run = begin_verification(&repository, input()).unwrap();
@@ -113,15 +116,19 @@ fn a_run_row_that_cannot_be_written_leaves_no_binding() {
 }
 
 /// The local adapter writes the keys of a per-key set one at a time, in key
-/// order, so the reviews key comes before the binding key. A refused reviews
-/// key thus stops the set after landing began, and the run row stays. This
-/// test shows more than a Rule states: no Rule states this state.
+/// order, so the reviews key comes before the binding key. It reports each
+/// failed key as a set whose landing began, the first key too. Thus the
+/// binding does not land, the outcome of the set is not known, and the run
+/// row stays. This test shows more than a Rule states: no Rule states this
+/// state.
 #[test]
 fn a_refused_reviews_key_on_local_disk_leaves_a_running_row() {
     let root = tempfile::tempdir().unwrap();
     let repository = repository(root.path());
-    let reviews =
-        ReadOnly::new(root.path().join(".provenance/state/scopes/default/requirements"));
+    let reviews = ReadOnly::new(
+        root.path()
+            .join(".provenance/state/scopes/default/requirements"),
+    );
 
     let (answer, status) = failure(&repository);
 
@@ -132,7 +139,10 @@ fn a_refused_reviews_key_on_local_disk_leaves_a_running_row() {
     assert_eq!(bindings, [] as [VerificationBinding; 0]);
     let runs = store.list_verification_runs(&scope()).unwrap();
     assert_eq!(runs.len(), 1);
-    assert_eq!(runs[0].status, provenance_core::VerificationRunStatus::Running);
+    assert_eq!(
+        runs[0].status,
+        provenance_core::VerificationRunStatus::Running
+    );
     let open = store.list_requirement_reviews(&scope()).unwrap();
     assert_eq!(serde_json::to_value(&open).unwrap(), json!([open_review()]));
 

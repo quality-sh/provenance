@@ -106,7 +106,10 @@ fn a_refused_begin_set_leaves_no_binding_and_no_run_row() {
     let runs = store.list_verification_runs(&scope()).unwrap();
     assert_eq!(runs, [] as [VerificationRun; 0]);
     let reviews = store.list_requirement_reviews(&scope()).unwrap();
-    assert_eq!(serde_json::to_value(&reviews).unwrap(), json!([open_review()]));
+    assert_eq!(
+        serde_json::to_value(&reviews).unwrap(),
+        json!([open_review()])
+    );
 
     sets.refuse.store(false, Ordering::SeqCst);
     let run = begin_verification(&repository, input()).unwrap();

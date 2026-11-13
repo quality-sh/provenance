@@ -114,8 +114,8 @@ impl StateStore {
         binding: BindingChange,
         run: &VerificationRun,
     ) -> anyhow::Result<()> {
-        let mut writes = WriteSet::new(Atomicity::PerKey)
-            .put(self.state_key(&binding.path)?, binding.bytes);
+        let mut writes =
+            WriteSet::new(Atomicity::PerKey).put(self.state_key(&binding.path)?, binding.bytes);
         if let Some((path, bytes)) = self.cleared_requirement_reviews(run)? {
             writes = writes.put(self.state_key(&path)?, bytes);
         }
@@ -123,22 +123,24 @@ impl StateStore {
     }
 
     /// Removes the row of `run` when no key of its write set landed, and
-    /// gives `error` as a write failure. When landing began, the row stays.
-    /// When the removal fails, the row stays and the answer is `error`.
+    /// gives `error` as it is. When landing began, the row stays and the
+    /// answer is a write failure. When the removal fails, the row stays and
+    /// the answer is `error`.
     fn withdraw_refused_run(&self, run: &VerificationRun, error: anyhow::Error) -> anyhow::Error {
-        if error.downcast_ref::<PublicationStarted>().is_none() {
-            let path = self.layout.verification_runs_path(&run.scope_id);
-            let lock_path = self.layout.verification_runs_lock_path(&run.scope_id);
-            let _removed = crate::jsonl::mutate_jsonl_locked(
-                &path,
-                &lock_path,
-                |records: &mut Vec<VerificationRun>| {
-                    records.retain(|record| record.id != run.id);
-                    Ok(())
-                },
-            );
+        if error.downcast_ref::<PublicationStarted>().is_some() {
+            return error;
         }
-        publication_started(error)
+        let path = self.layout.verification_runs_path(&run.scope_id);
+        let lock_path = self.layout.verification_runs_lock_path(&run.scope_id);
+        let _removed = crate::jsonl::mutate_jsonl_locked(
+            &path,
+            &lock_path,
+            |records: &mut Vec<VerificationRun>| {
+                records.retain(|record| record.id != run.id);
+                Ok(())
+            },
+        );
+        error
     }
 
     pub fn complete_verification(
