@@ -7,7 +7,7 @@
 
 use super::{
     OverBudget, ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement,
-    Transaction, Unopened, WorkUnit, WriteWork,
+    Transaction, Unopened, WriteWork,
 };
 use crate::cache::{open_cache, open_stored_cache, CacheConnection};
 use crate::layout::ProvenanceLayout;
@@ -207,10 +207,6 @@ impl SqlTransaction for FileTransaction {
             });
             Ok(())
         })
-    }
-
-    fn work_unit(&self) -> WorkUnit {
-        WorkUnit::EngineSteps
     }
 
     fn max_list_values(&self) -> usize {

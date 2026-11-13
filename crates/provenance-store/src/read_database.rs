@@ -111,13 +111,28 @@ pub trait SqlTransaction: Any + Send {
 
     /// Bounds the work of the statements that follow in this transaction.
     ///
-    /// The adapter counts `bound` in the unit that
-    /// [`SqlTransaction::work_unit`] gives, over all these statements. It
-    /// can count work at whole check intervals: then the work of a
-    /// statement after its last check is not counted, and a statement that
-    /// does less work than one interval can run past the bound. The file
-    /// adapter checks each 1,000 engine steps of one statement text, over
-    /// all the runs of that text on its connection.
+    /// `bound` is in engine steps: the virtual machine instructions of
+    /// `SQLite`, as its progress handler counts them. The adapter counts the
+    /// work of all these statements against it. It can count work at whole
+    /// check intervals: then the work of a statement after its last check
+    /// is not counted, and a statement that does less work than one
+    /// interval can run past the bound. The file adapter checks each 1,000
+    /// engine steps of one statement text, over all the runs of that text
+    /// on its connection.
+    ///
+    /// An adapter that cannot count engine steps converts `bound` to its
+    /// own measure of work, for example the rows that a statement reads
+    /// from tables and indexes. The conversion is the adapter's, and these
+    /// two limits apply to it:
+    ///
+    /// - The adapter gives [`OverBudget`] for a statement whose work is far
+    ///   past the bound.
+    /// - The adapter does not refuse a statement that the file adapter
+    ///   answers within the same bound by a wide margin.
+    ///
+    /// The bound does not limit work that the adapter's measure does not
+    /// see. For a count of rows read, that is recursion, sorts, and
+    /// `json_each` over a bound list.
     ///
     /// When the counted work passes the bound during a statement, the
     /// statement gives [`OverBudget`], and the caller does not get its
@@ -136,32 +151,11 @@ pub trait SqlTransaction: Any + Send {
     /// after a bound must therefore stop at the first [`OverBudget`].
     fn bound_work(&mut self, bound: u64) -> SqlFuture<'_, ()>;
 
-    /// The unit in which this adapter counts work for the work bound.
-    ///
-    /// No one factor converts one unit into the other, so a caller keeps a
-    /// bound in each unit. Without this method, the unit is
-    /// [`WorkUnit::EngineSteps`].
-    fn work_unit(&self) -> WorkUnit {
-        WorkUnit::EngineSteps
-    }
-
     /// The most values of one list that a reader binds in one statement;
     /// a longer list goes in more statements. With the two values that a
     /// reader binds beside the list, it is at most
     /// [`ReadDatabase::max_bound_values`].
     fn max_list_values(&self) -> usize;
-}
-
-/// What an adapter counts as the work of a statement.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum WorkUnit {
-    /// The steps of the `SQLite` engine (virtual machine instructions), as
-    /// its progress handler counts them. The file adapter counts these.
-    EngineSteps,
-    /// The rows that the store read from its tables and indexes for the
-    /// statement, for a store that counts work only in rows.
-    RowsRead,
 }
 
 /// A transaction lent to one piece of work.

@@ -1,5 +1,5 @@
 //! The work bound of a page over an adapter that reports the bound when a
-//! statement ends, or that counts its work in rows read.
+//! statement ends.
 //!
 //! No Rule: this is an implementation aid. The transaction under test is a
 //! wrapper over the file that makes the `OverBudget` error and records the
@@ -8,11 +8,11 @@
 //! `limits::a_statement_far_past_the_bound_gives_over_budget` holds that.
 
 use super::fixtures::{open, seeded_layout};
-use crate::cache::read::page::{page_error, PAGE_ROWS_READ, PAGE_WORK_STEPS};
+use crate::cache::read::page::{page_error, PAGE_WORK_STEPS};
 use crate::cache::{materialize_state, open_cache};
 use crate::operations::reader::ReadSnapshot;
 use crate::read_database::{
-    OverBudget, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement, Transaction, WorkUnit,
+    OverBudget, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement, Transaction,
 };
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::Requirement;
@@ -24,12 +24,10 @@ use std::sync::Arc;
 #[error("the store reported the statement at its end")]
 struct Reported;
 
-/// A transaction over the file that counts work in `unit` and records the
-/// last bound that it got. After [`SqlTransaction::bound_work`], each
+/// A transaction over the file that records the last bound that it got. After [`SqlTransaction::bound_work`], each
 /// statement runs to its end and then gives `OverBudget(Reported)`.
 struct ReportsAtEnd {
     inner: Transaction,
-    unit: WorkUnit,
     bound: Arc<AtomicU64>,
     bounded: bool,
 }
@@ -66,18 +64,14 @@ impl SqlTransaction for ReportsAtEnd {
         Box::pin(async { Ok(()) })
     }
 
-    fn work_unit(&self) -> WorkUnit {
-        self.unit
-    }
-
     fn max_list_values(&self) -> usize {
         self.inner.max_list_values()
     }
 }
 
-/// Bounds one page over [`ReportsAtEnd`] in `unit` and reads its first
-/// requirement ids. Gives the bound that the page set and the page.
-async fn bounded_page(unit: WorkUnit) -> (u64, anyhow::Result<Vec<String>>) {
+/// Bounds one page over [`ReportsAtEnd`] and reads its first requirement
+/// ids. Gives the bound that the page set and the page.
+async fn bounded_page() -> (u64, anyhow::Result<Vec<String>>) {
     let (_dir, layout, scope) = seeded_layout();
     materialize_state(&open(&layout)).await.unwrap();
     let cache = open_cache(&layout).await.unwrap();
@@ -86,7 +80,6 @@ async fn bounded_page(unit: WorkUnit) -> (u64, anyhow::Result<Vec<String>>) {
         inner: crate::read_database::file::begin(cache.pool())
             .await
             .unwrap(),
-        unit,
         bound: Arc::clone(&bound),
         bounded: false,
     };
@@ -110,7 +103,7 @@ async fn bounded_page(unit: WorkUnit) -> (u64, anyhow::Result<Vec<String>>) {
 /// that the file stops does.
 #[tokio::test]
 async fn a_page_statement_reported_at_its_end_is_the_page_budget_refusal() {
-    let (_, page) = bounded_page(WorkUnit::EngineSteps).await;
+    let (_, page) = bounded_page().await;
     let refused = page.unwrap_err();
     assert_eq!(
         refused.downcast_ref::<ReadFailure>(),
@@ -119,12 +112,8 @@ async fn a_page_statement_reported_at_its_end_is_the_page_budget_refusal() {
     );
 }
 
-/// A page bounds its work in the unit that the adapter gives.
+/// A page gives each adapter its bound in engine steps.
 #[tokio::test]
-async fn a_page_bounds_its_work_in_the_unit_of_the_adapter() {
-    let mut bounds = Vec::new();
-    for unit in [WorkUnit::EngineSteps, WorkUnit::RowsRead] {
-        bounds.push(bounded_page(unit).await.0);
-    }
-    assert_eq!(bounds, vec![PAGE_WORK_STEPS, PAGE_ROWS_READ]);
+async fn a_page_bounds_its_work_in_engine_steps() {
+    assert_eq!(bounded_page().await.0, PAGE_WORK_STEPS);
 }

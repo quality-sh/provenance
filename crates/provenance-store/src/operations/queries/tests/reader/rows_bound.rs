@@ -1,9 +1,9 @@
 //! The work bound of a page over an adapter that counts its work in rows
-//! read.
+//! read and converts the bound in engine steps itself.
 //!
 //! No Rule: an implementation aid. It holds that the page gives such an
-//! adapter its bound in rows, `PAGE_ROWS_READ`, and not the bound in
-//! engine steps, `PAGE_WORK_STEPS`, which is three times larger.
+//! adapter the bound `PAGE_WORK_STEPS`, and that the page budget refusal
+//! comes from the `OverBudget` of the adapter's own conversion.
 
 use super::super::comparison::requests;
 use super::super::comparison::test_stores;
@@ -15,7 +15,7 @@ use crate::operations::reader::answer;
 use crate::read_database::file::FileReadDatabase;
 use crate::read_database::{
     OverBudget, ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement,
-    Transaction, WorkUnit, WriteWork,
+    Transaction, WriteWork,
 };
 use provenance_core::protocol::read_failure::ReadFailure;
 use std::sync::Arc;
@@ -25,9 +25,14 @@ use std::sync::Arc;
 #[error("the statements read more rows than the bound")]
 struct PastTheBound;
 
+/// The engine steps that [`CountsRows`] takes for one row read: the low
+/// end of the steps per row of the measured page statements.
+const STEPS_PER_ROW: u64 = 3;
+
 /// The file adapter as a store that counts its work in rows read. The
 /// first statement after the bound reads `scan` rows, as a scan of a
-/// large scope does, and each later statement reads one row.
+/// large scope does, and each later statement reads one row. It converts
+/// a bound in engine steps to `bound / STEPS_PER_ROW` rows.
 #[derive(Debug)]
 struct CountsRows {
     file: FileReadDatabase,
@@ -71,12 +76,8 @@ impl SqlTransaction for RowsTransaction {
     }
 
     fn bound_work(&mut self, bound: u64) -> SqlFuture<'_, ()> {
-        self.bound = Some(bound);
+        self.bound = Some(bound / STEPS_PER_ROW);
         Box::pin(async { Ok(()) })
-    }
-
-    fn work_unit(&self) -> WorkUnit {
-        WorkUnit::RowsRead
     }
 
     fn max_list_values(&self) -> usize {
@@ -132,8 +133,8 @@ async fn search_reading(scan: u64) -> anyhow::Result<usize> {
 
 /// A page over an adapter that counts rows read answers when its
 /// statements read 1,000,000 rows, and gives the page budget refusal when
-/// they read 5,000,000: more than `PAGE_ROWS_READ`, and less than
-/// `PAGE_WORK_STEPS`.
+/// they read 5,000,000: more than the 3,333,333 rows of its conversion of
+/// `PAGE_WORK_STEPS`, and less than `PAGE_WORK_STEPS`.
 #[tokio::test]
 async fn a_page_bounds_the_rows_that_it_reads() {
     let answered = search_reading(1_000_000).await.unwrap();

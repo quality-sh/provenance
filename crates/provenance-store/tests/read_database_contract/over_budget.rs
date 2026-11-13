@@ -8,10 +8,8 @@
 //! the file adapter until the owner rules on the port obligation.
 
 use super::File;
-use provenance_store::read_database::contract::OtherTransaction;
 use provenance_store::read_database::{
-    OverBudget, ReadDatabase, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement, Transaction,
-    WorkUnit,
+    OverBudget, ReadDatabase, SqlFuture, SqlRow, SqlValue, Statement, Transaction,
 };
 
 /// A statement that writes a row for each of the million pairs of rows of
@@ -221,60 +219,4 @@ async fn the_file_counts_each_statement_text_at_whole_intervals() {
     let (run, error) = repeated.expect("the repeated statement was not stopped");
     assert!(run > 0, "the first run of the statement was stopped");
     assert_over_budget(&error);
-}
-
-/// The file's transaction with another unit of work.
-struct InRows(Transaction);
-
-impl SqlTransaction for InRows {
-    fn fetch<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, Vec<SqlRow>> {
-        self.0.fetch(sql, values)
-    }
-
-    fn execute<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, u64> {
-        self.0.execute(sql, values)
-    }
-
-    fn attempt<'a>(
-        &'a mut self,
-        statements: &'a [Statement],
-    ) -> SqlFuture<'a, Result<(), anyhow::Error>> {
-        self.0.attempt(statements)
-    }
-
-    fn commit(self: Box<Self>) -> SqlFuture<'static, ()> {
-        self.0.commit()
-    }
-
-    fn bound_work(&mut self, bound: u64) -> SqlFuture<'_, ()> {
-        self.0.bound_work(bound)
-    }
-
-    fn work_unit(&self) -> WorkUnit {
-        WorkUnit::RowsRead
-    }
-
-    fn max_list_values(&self) -> usize {
-        self.0.max_list_values()
-    }
-}
-
-/// The other adapter of the contract gives the unit of the transaction
-/// that it wraps, so the port cases over it bound the work in that unit.
-#[tokio::test]
-async fn the_other_adapter_gives_the_unit_of_its_transaction() {
-    let file = File::default();
-    tables(&file).await;
-    let mut unit = None;
-    let slot = &mut unit;
-    file.database
-        .read(Box::new(move |transaction| {
-            Box::pin(async move {
-                *slot = Some(OtherTransaction(Box::new(InRows(transaction))).work_unit());
-                Ok(())
-            })
-        }))
-        .await
-        .unwrap();
-    assert_eq!(unit, Some(WorkUnit::RowsRead));
 }

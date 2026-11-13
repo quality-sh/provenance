@@ -8,7 +8,7 @@
 //! adapter stops it, and its own tests hold that.
 
 use super::{integers, statement, write, Harness};
-use crate::read_database::{OverBudget, ReadDatabase, SqlRow, SqlValue, Transaction, WorkUnit};
+use crate::read_database::{OverBudget, ReadDatabase, SqlRow, SqlValue, Transaction};
 
 /// A query whose work grows with `n`: it counts from 1 to `n`. The
 /// tests of the work bound share it.
@@ -134,14 +134,15 @@ pub async fn a_list_of_the_most_values_runs<H: Harness>(harness: H) {
     assert_eq!(found, 5);
 }
 
-/// A bound in each unit that [`FAR_PAST`] passes a hundred times or more,
-/// however the store plans it.
-const fn small_bound(unit: WorkUnit) -> u64 {
-    match unit {
-        WorkUnit::EngineSteps => 10_000,
-        WorkUnit::RowsRead => 10,
-    }
-}
+/// The bound of the case, in engine steps.
+///
+/// [`FAR_PAST`] runs more than 10,000 times this bound in engine steps. An
+/// adapter that converts the bound to rows read gets at most 100 rows when
+/// its conversion gives at most one row for each step, and [`FAR_PAST`]
+/// reads at least ten times that, however the store plans it. At the 3
+/// steps a row of the cheapest measured statement, it reads 30 times the
+/// converted bound.
+const SMALL_BOUND: u64 = 100;
 
 /// A statement over each of the million pairs of the 1,000 rows of
 /// `wide`. A store reads each row of `wide` at least once, so it reads at
@@ -172,8 +173,7 @@ pub async fn a_statement_far_past_the_bound_gives_over_budget<H: Harness>(harnes
     .unwrap();
     let (far, later) = read(database, |transaction| {
         Box::pin(async move {
-            let bound = small_bound(transaction.work_unit());
-            transaction.bound_work(bound).await?;
+            transaction.bound_work(SMALL_BOUND).await?;
             let far = transaction.fetch(FAR_PAST, Vec::new()).await;
             let later = transaction.fetch("SELECT 1", Vec::new()).await;
             Ok((far, later))
