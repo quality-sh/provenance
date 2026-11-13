@@ -277,15 +277,15 @@ fn ensure_changed_statements_are_clean(
 }
 
 #[cfg(test)]
+#[path = "../../tests/support/ideation.rs"]
+mod ideation;
+
+#[cfg(test)]
 mod tests {
-    use super::{deserialize_scope_export, ensure_asserted_evidence_not_deleted};
+    use super::{deserialize_scope_export, ensure_asserted_evidence_not_deleted, ideation};
     use provenance_core::{Contribution, IdeationRecord, SynthesisPacket};
     use provenance_macros::verifies;
     use serde_json::json;
-
-    // The base of a path in an inline module of `import.rs` is `import/tests/`.
-    #[path = "../../../../tests/support/ideation.rs"]
-    mod ideation;
 
     fn minimal_export(source: &serde_json::Value) -> serde_json::Value {
         json!({
