@@ -228,8 +228,10 @@ fn statement_error(error: sqlx::Error) -> anyhow::Error {
     }
 }
 
-/// The statement `sql` with `values` bound. An integer past the range of
-/// the port is refused before the statement runs.
+/// The statement `sql` with `values` bound.
+///
+/// An integer past the range of the port is refused before the statement
+/// runs.
 fn bound(
     sql: &str,
     values: Vec<SqlValue>,

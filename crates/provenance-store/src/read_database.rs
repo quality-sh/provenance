@@ -243,10 +243,11 @@ impl Unopened {
 #[error("{0:#}")]
 pub struct OverBudget(pub anyhow::Error);
 
-/// The largest magnitude of an integer that the port binds or reads:
-/// 2^53 − 1, the largest integer whose neighbours a 64-bit float also holds
-/// exactly. A store that keeps each number as a 64-bit float holds each
-/// integer of the range and gives it back unchanged.
+/// The largest magnitude of an integer that the port binds or reads.
+///
+/// It is 2^53 − 1, the largest integer whose neighbours a 64-bit float also
+/// holds exactly. A store that keeps each number as a 64-bit float holds
+/// each integer of the range and gives it back unchanged.
 pub const LARGEST_INTEGER: i64 = provenance_core::model::exact_integer::LARGEST_EXACT_INTEGER;
 
 /// An integer of magnitude more than [`LARGEST_INTEGER`], in a value that

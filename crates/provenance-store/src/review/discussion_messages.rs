@@ -191,8 +191,9 @@ async fn fill_messages(
 }
 
 /// The id, creation time, and stored size of each message after
-/// `position`, or of each message from the first when there is no
-/// position. Large Message bodies never enter this query.
+/// `position`, or from the first message when there is no position.
+///
+/// Large Message bodies never enter this query.
 async fn message_keys(
     ctx: &ReadContext,
     query: &DiscussionMessagesQuery,
