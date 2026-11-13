@@ -298,3 +298,32 @@ fn failed_rollback_retains_material_and_restart_finishes_the_edit() {
     );
     assert!(!layout.source_edit_marker_path().exists());
 }
+
+/// A file and a link in the source-edit transaction directory are entries
+/// that no write makes, so the test puts them there itself.
+#[cfg(unix)]
+#[test]
+#[verifies("rule_recovery_stays_in_cache", examples)]
+fn a_file_and_a_link_in_the_source_edit_transactions_stay_and_the_section_opens() {
+    let temp = fixture();
+    let root_path = canonical_root(&temp);
+    let root = root_path.as_path();
+    let layout = ProvenanceLayout::new(root);
+    let outside = root.join("outside");
+    std::fs::create_dir(&outside).unwrap();
+    std::fs::write(outside.join("sentinel"), "keep").unwrap();
+    let transactions = layout.source_edit_transactions_dir();
+    std::fs::create_dir_all(&transactions).unwrap();
+    std::fs::write(transactions.join("file"), "keep").unwrap();
+    std::os::unix::fs::symlink(&outside, transactions.join("link")).unwrap();
+
+    with_repository_publication(&layout, |_| Ok(())).unwrap();
+
+    let mut left = names(&transactions);
+    left.sort();
+    assert_eq!(left, ["file", "link"]);
+    assert_eq!(
+        std::fs::read_to_string(outside.join("sentinel")).unwrap(),
+        "keep"
+    );
+}
