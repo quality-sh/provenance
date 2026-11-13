@@ -153,8 +153,20 @@ async fn statement_check_failure_schema_shows_only_the_common_failures() {
         serde_json::json!({"$ref":"#/$defs/OperationFailure"})
     );
     let definitions = failure["$defs"].as_object().unwrap();
-    assert!(!definitions.contains_key("OperationError"), "{failure}");
-    assert!(!definitions.contains_key("StatementFailure"), "{failure}");
+    let mut names = definitions.keys().map(String::as_str).collect::<Vec<_>>();
+    names.sort_unstable();
+    assert_eq!(
+        names,
+        [
+            "FreshnessCause",
+            "InvalidInputReason",
+            "OperationFailure",
+            "ResponseMeta",
+            "Stamp",
+            "StampPolicy"
+        ],
+        "{failure}"
+    );
     assert!(
         definitions
             .values()
