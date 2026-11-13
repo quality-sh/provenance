@@ -52,9 +52,9 @@ fn owner_matches(record: &impl serde::Serialize, owner: Option<&str>) -> anyhow:
     Ok(())
 }
 
-// The review reads page through the projection; they run on the host.
-#[cfg(feature = "host")]
-mod history;
+// The file versions port and its contract build without host; the history
+// reads in it and the review reads page through the projection on the host.
+pub mod history;
 #[cfg(feature = "host")]
 mod reads;
 #[cfg(feature = "host")]

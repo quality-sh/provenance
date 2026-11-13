@@ -1,28 +1,46 @@
 //! Record history and change evidence read from Git and the working copy.
 
+pub mod contract;
+#[cfg(feature = "host")]
 mod evidence;
+#[cfg(feature = "host")]
 mod git;
+#[cfg(feature = "host")]
 mod origins;
+mod versions;
 
+#[cfg(feature = "host")]
 pub(super) use evidence::page as evidence_page;
+#[cfg(feature = "host")]
+pub use git::GitFileVersions;
+pub use versions::{BoxFuture, FileVersion, FileVersions};
 
+#[cfg(feature = "host")]
 use super::classifier;
+#[cfg(feature = "host")]
 use crate::{families::review_families, shards, state_store::StateStore};
+#[cfg(feature = "host")]
 use provenance_core::review::{RecordVersion, SaveOutcome};
+#[cfg(feature = "host")]
 use provenance_core::{NodeType, ScopeId, StableId};
+#[cfg(feature = "host")]
 use provenance_macros::rule;
+#[cfg(feature = "host")]
 use serde_json::Value;
 
 /// The version id of the saved working copy.
+#[cfg(feature = "host")]
 pub(super) const WORKING: &str = "working";
 
 /// One record version and the record JSON it holds.
+#[cfg(feature = "host")]
 pub(super) struct VersionedRecord {
     pub(super) version: RecordVersion,
     pub(super) record: Value,
 }
 
 /// Where one version comes from.
+#[cfg(feature = "host")]
 struct Source {
     id: StableId,
     commit: Option<String>,
@@ -30,6 +48,7 @@ struct Source {
     committed_at: Option<i64>,
 }
 
+#[cfg(feature = "host")]
 impl StateStore {
     /// Lists the versions of one record, oldest first: each commit that
     /// changed it in its graph record file, then the saved working copy when
@@ -103,6 +122,7 @@ impl StateStore {
     }
 }
 
+#[cfg(feature = "host")]
 /// The indexes of the commits that changed the record at `HEAD`, oldest
 /// first. The walk starts at the newest commit and steps to a parent whose
 /// record the commit kept, or else to its first parent. A commit that holds
@@ -136,6 +156,7 @@ fn lineage(files: &[git::FileVersion], records: &[Option<Value>]) -> Vec<usize> 
     chain
 }
 
+#[cfg(feature = "host")]
 /// The record with `id` in the text of one JSONL record file. A line that is
 /// not a JSON record, such as a committed conflict marker, holds no record.
 fn find(text: &str, id: &StableId) -> Option<Value> {
@@ -144,6 +165,7 @@ fn find(text: &str, id: &StableId) -> Option<Value> {
         .find(|value| value.get("id").and_then(Value::as_str) == Some(id.as_str()))
 }
 
+#[cfg(feature = "host")]
 /// The record without its record stamps.
 fn content(record: &Value) -> Value {
     let mut value = record.clone();
@@ -155,6 +177,7 @@ fn content(record: &Value) -> Value {
     value
 }
 
+#[cfg(feature = "host")]
 /// Adds a version when the record differs from the previous version.
 fn push_version(
     versions: &mut Vec<VersionedRecord>,

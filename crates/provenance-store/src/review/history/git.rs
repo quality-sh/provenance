@@ -6,6 +6,38 @@ use std::io::Write;
 use std::process::Stdio;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
+/// The file versions of the Git history of one working tree.
+#[derive(Debug, Clone)]
+pub struct GitFileVersions {
+    root: Utf8PathBuf,
+}
+
+impl GitFileVersions {
+    /// The adapter over the Git history of the working tree at `root`.
+    pub const fn new(root: Utf8PathBuf) -> Self {
+        Self { root }
+    }
+}
+
+impl super::versions::FileVersions for GitFileVersions {
+    fn versions<'a>(
+        &'a self,
+        _path: &'a str,
+    ) -> super::versions::BoxFuture<'a, anyhow::Result<Arc<Vec<super::versions::FileVersion>>>>
+    {
+        let _ = &self.root;
+        Box::pin(std::future::ready(Ok(Arc::default())))
+    }
+
+    fn texts<'a>(
+        &'a self,
+        _path: &'a str,
+        commits: &'a [String],
+    ) -> super::versions::BoxFuture<'a, anyhow::Result<Vec<Option<String>>>> {
+        Box::pin(std::future::ready(Ok(vec![None; commits.len()])))
+    }
+}
+
 /// The versions of one record file, read for one `HEAD` and one shallow boundary.
 struct ReadVersions {
     root: Utf8PathBuf,

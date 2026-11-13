@@ -10,6 +10,7 @@ use crate::layout::with_initialized_graph;
 use crate::layout::{GraphNotInitialized, ProvenanceLayout};
 use crate::publication::SectionHandle;
 use crate::read_database::ReadDatabase;
+use crate::review::history::FileVersions;
 use crate::settings::{Settings, SettingsError};
 #[cfg(feature = "host")]
 use crate::stale::revision_scans::KeptScans;
@@ -178,6 +179,24 @@ impl Repository {
             read_database,
             false,
         ))
+    }
+
+    /// This repository with the committed file versions that its record
+    /// history reads.
+    ///
+    /// A repository that has none reads the Git history of its working
+    /// tree, as one from `open` does. The new handle shares the storage, the
+    /// lock and the read database of this one.
+    pub fn with_file_versions(&self, versions: Arc<dyn FileVersions>) -> Self {
+        let mut repository = Self::with_parts(
+            self.inner.identity.clone().with_file_versions(versions),
+            Arc::clone(&self.inner.storage),
+            Arc::clone(&self.inner.section_lock),
+            self.inner.read_database.clone(),
+            self.inner.local,
+        );
+        repository.section.clone_from(&self.section);
+        repository
     }
 
     fn with_parts(
