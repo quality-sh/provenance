@@ -5,7 +5,7 @@
 #[path = "support/memory.rs"]
 mod memory;
 
-use memory::{begin_input, key, scope, verification_repository, Recorded, REVIEWS};
+use memory::{begin_input, key, verification_repository, Recorded, REVIEWS};
 use provenance_store::operations::begin_verification;
 use provenance_store::repository::{Repository, SystemClock};
 use provenance_store::state_store::BeginVerificationInput;
