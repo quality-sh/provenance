@@ -253,6 +253,7 @@ port_cases!(
     projection::a_catch_up_makes_and_follows_the_projection,
     projection::a_schema_that_is_not_current_is_made_again,
     projection::a_rebuild_keeps_the_catalog_and_the_rows,
+    projection::a_rebuild_keeps_a_table_that_the_store_does_not_own,
     sequence::a_write_then_read_reads_its_write,
     sequence::a_failed_write_stops_the_read,
     sequence::a_failed_read_keeps_the_write,

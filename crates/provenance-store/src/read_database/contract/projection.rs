@@ -183,3 +183,75 @@ pub async fn a_rebuild_keeps_the_catalog_and_the_rows<H: Harness>(harness: H) {
     );
     assert_eq!(catalog_and_rows(harness.database()).await, made);
 }
+
+/// The objects and the rows of a table that the store does not own.
+async fn foreign(database: &dyn ReadDatabase) -> Vec<SqlRow> {
+    let mut rows = fetch(
+        database,
+        "SELECT type, name FROM sqlite_schema WHERE tbl_name = 'embedder_notes' ORDER BY name",
+    )
+    .await;
+    rows.extend(fetch(database, "SELECT n, note FROM embedder_notes ORDER BY n").await);
+    rows
+}
+
+/// A table that the store does not own, with its index and its rows,
+/// stays in the database across a schema rebuild and a full rebuild, and
+/// the schema check does not ask for a rebuild because of it. The store's
+/// own tables are made again as before.
+pub async fn a_rebuild_keeps_a_table_that_the_store_does_not_own<H: Harness>(harness: H) {
+    let repository = repository(&harness);
+    let database = harness.database();
+    write(
+        database,
+        vec![
+            statement(
+                "CREATE TABLE embedder_notes (n INTEGER PRIMARY KEY, note TEXT)",
+                Vec::new(),
+            ),
+            statement(
+                "CREATE INDEX embedder_notes_note ON embedder_notes (note)",
+                Vec::new(),
+            ),
+            statement(
+                "INSERT INTO embedder_notes (n, note) VALUES (1, 'kept'), (2, 'also kept')",
+                Vec::new(),
+            ),
+        ],
+    )
+    .await
+    .unwrap();
+    let kept = foreign(database).await;
+    assert_eq!(kept.len(), 4, "{kept:?}");
+    let first = catch_up_state(&repository).await.unwrap();
+    assert_eq!(outcome(&first), (1, true, true, true));
+    assert_eq!(foreign(database).await, kept, "the first catch-up");
+    let made = catalog_and_rows(database).await;
+    let unchanged = catch_up_state(&repository).await.unwrap();
+    assert_eq!(
+        outcome(&unchanged),
+        (1, false, false, false),
+        "the schema check asked for a rebuild"
+    );
+    write(
+        database,
+        vec![statement(
+            "UPDATE _cache_metadata SET schema_digest = 'another'",
+            Vec::new(),
+        )],
+    )
+    .await
+    .unwrap();
+    let pass = catch_up_state(&repository).await.unwrap();
+    assert_eq!(outcome(&pass), (1, true, true, true));
+    assert_eq!(pass.digest, first.digest);
+    assert_eq!(foreign(database).await, kept, "the schema rebuild");
+    assert_eq!(catalog_and_rows(database).await, made);
+    let rebuilt = materialize_state(&repository).await.unwrap();
+    assert_eq!(
+        (rebuilt.records_loaded, rebuilt.cache_recreated),
+        (1, false)
+    );
+    assert_eq!(foreign(database).await, kept, "the full rebuild");
+    assert_eq!(catalog_and_rows(database).await, made);
+}
