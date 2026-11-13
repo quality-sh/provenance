@@ -1,4 +1,5 @@
 use provenance_core::{RequirementReview, ScopeId, StableId};
+#[cfg(feature = "host")]
 use provenance_macros::rule;
 use sha2::{Digest, Sha256};
 
