@@ -131,28 +131,29 @@ fn reads_that_replace_a_key_file_at_the_same_time_use_one_key() {
     let latest = discussion(&store);
     write_key_file(&root, b"");
     let barrier = Arc::new(Barrier::new(READS));
-    let readers: Vec<_> = (0..READS)
-        .map(|_| {
-            let (root, latest, barrier) = (root.clone(), latest.clone(), barrier.clone());
-            std::thread::spawn(move || {
-                let runtime = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .unwrap();
-                barrier.wait();
-                runtime
-                    .block_on(page(&root, &latest, None))
-                    .unwrap()
-                    .result
-                    .next_cursor
-                    .expect("page one continues")
-            })
-        })
-        .collect();
-    let cursors: Vec<String> = readers
-        .into_iter()
-        .map(|reader| reader.join().unwrap())
-        .collect();
+    // Each read starts on its own thread before any read is joined, so the
+    // reads meet at the barrier.
+    let mut readers = Vec::with_capacity(READS);
+    for _ in 0..READS {
+        let (root, latest, barrier) = (root.clone(), latest.clone(), barrier.clone());
+        readers.push(std::thread::spawn(move || {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            barrier.wait();
+            runtime
+                .block_on(page(&root, &latest, None))
+                .unwrap()
+                .result
+                .next_cursor
+                .expect("page one continues")
+        }));
+    }
+    let mut cursors = Vec::with_capacity(READS);
+    for reader in readers {
+        cursors.push(reader.join().unwrap());
+    }
     let key = std::fs::read(key_path(&root)).unwrap();
     assert_eq!(key.len(), 32);
     let runtime = tokio::runtime::Builder::new_current_thread()
