@@ -49,6 +49,9 @@ pub trait Harness {
     /// keeps nothing. The work commits after this call, as every write
     /// work does. A store that commits in the work fails that commit; a
     /// store that makes its commit durable after the work fails it there.
+    /// This call itself must succeed: when it returns an error, the commit
+    /// case fails, because the write then fails in a step of its work and
+    /// not at its commit.
     fn fail_commit<'a>(&'a self, transaction: &'a mut Transaction) -> SqlFuture<'a, ()>;
 }
 

@@ -192,10 +192,48 @@ pub async fn a_failed_write_stops_the_read<H: Harness>(harness: H) {
     );
 }
 
+/// A work that writes serial `n`, has the harness make its commit fail,
+/// and commits. Each step before the commit must succeed, so a failure is
+/// the failure of the commit. The work puts the result of its commit call
+/// in `report`.
+fn failing_commit<'a, H: Harness + Sync>(
+    harness: &'a H,
+    n: i64,
+    report: &'a mut Option<Result<(), String>>,
+) -> WriteWork<'a> {
+    Box::new(move |mut transaction| {
+        Box::pin(async move {
+            transaction
+                .execute(
+                    "INSERT INTO sequenced (n) VALUES (?)",
+                    vec![SqlValue::Integer(n)],
+                )
+                .await
+                .expect("the work writes its serial");
+            harness
+                .fail_commit(&mut transaction)
+                .await
+                .unwrap_or_else(|failure| {
+                    panic!("the harness makes the commit fail without an error: {failure:#}")
+                });
+            let committed = transaction.commit().await;
+            *report = Some(match &committed {
+                Ok(()) => Ok(()),
+                Err(failure) => Err(format!("{failure:#}")),
+            });
+            committed
+        })
+    })
+}
+
 /// A write whose commit fails keeps nothing, and fails.
 ///
 /// Serial 1 is kept. A work writes the next serial and commits, and the
-/// harness makes that commit fail. [`ReadDatabase::write`] then fails, and
+/// harness makes that commit fail. Each step of the work before its commit
+/// succeeds. A store that commits in the work fails the commit call, and
+/// the work returns that error. A store that commits after the work
+/// accepts the commit call, the work returns `Ok`, and the store's own
+/// commit then fails. In both, [`ReadDatabase::write`] fails, and
 /// [`ReadDatabase::write_then_read`] fails with the outer error and does
 /// not run its read. A later read finds serial 1 only, so a caller that
 /// stamps a read with the serial it finds never stamps one that was not
@@ -204,27 +242,27 @@ pub async fn a_write_whose_commit_fails_keeps_nothing<H: Harness + Sync>(harness
     let database = harness.database();
     sequenced(database).await;
     database.write(insert(1)).await.unwrap();
-    let failing = |n: i64| -> WriteWork<'_> {
-        let harness = &harness;
-        Box::new(move |mut transaction| {
-            Box::pin(async move {
-                transaction
-                    .execute(
-                        "INSERT INTO sequenced (n) VALUES (?)",
-                        vec![SqlValue::Integer(n)],
-                    )
-                    .await?;
-                harness.fail_commit(&mut transaction).await?;
-                transaction.commit().await
-            })
-        })
-    };
-    database.write(failing(2)).await.unwrap_err();
-    let mut seen = None;
-    database
-        .write_then_read(failing(2), read_into(&mut seen))
-        .await
-        .unwrap_err();
+    let mut report = None;
+    let failed = database
+        .write(failing_commit(&harness, 2, &mut report))
+        .await;
+    assert!(report.is_some(), "the work did not reach its commit");
+    assert!(
+        failed.is_err(),
+        "a write whose commit failed reported success; the commit call gave {report:?}"
+    );
+    let (mut report, mut seen) = (None, None);
+    let failed = database
+        .write_then_read(
+            failing_commit(&harness, 2, &mut report),
+            read_into(&mut seen),
+        )
+        .await;
+    assert!(report.is_some(), "the work did not reach its commit");
+    assert!(
+        failed.is_err(),
+        "a write whose commit failed reported success; the commit call gave {report:?}"
+    );
     assert_eq!(seen, None, "the read ran after a write that failed");
     assert_eq!(
         integers(&fetch(database, "SELECT n FROM sequenced ORDER BY n").await),

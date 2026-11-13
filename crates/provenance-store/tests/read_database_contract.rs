@@ -9,6 +9,9 @@ use provenance_store::layout::ProvenanceLayout;
 use provenance_store::operations::stamp::stored_revision;
 use provenance_store::read_database::contract::{self, Harness, Other};
 use provenance_store::read_database::file::FileReadDatabase;
+#[path = "read_database_contract/lost_commit.rs"]
+mod lost_commit;
+
 use provenance_store::read_database::{
     OverBudget, ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement,
     Transaction, WriteWork,
@@ -235,65 +238,6 @@ port_cases!(
 #[should_panic(expected = "assertion `left == right` failed")]
 async fn the_limit_case_refuses_an_adapter_that_ignores_limit() {
     contract::limits::a_limit_bounds_the_rows(NoLimit::default()).await;
-}
-
-/// The file adapter with a fault: a write whose work fails reports success.
-#[derive(Debug)]
-struct SwallowsFailure(FileReadDatabase);
-
-impl ReadDatabase for SwallowsFailure {
-    fn read<'a>(&'a self, work: ReadWork<'a>) -> SqlFuture<'a, ()> {
-        self.0.read(work)
-    }
-
-    fn write<'a>(&'a self, work: WriteWork<'a>) -> SqlFuture<'a, ()> {
-        Box::pin(async move {
-            let _ignored = self.0.write(work).await;
-            Ok(())
-        })
-    }
-
-    fn max_bound_values(&self) -> usize {
-        self.0.max_bound_values()
-    }
-
-    fn cursor_key(&self) -> anyhow::Result<[u8; 32]> {
-        self.0.cursor_key()
-    }
-
-    fn location(&self) -> String {
-        self.0.location()
-    }
-}
-
-struct Swallowing {
-    file: File,
-    database: SwallowsFailure,
-}
-
-impl Harness for Swallowing {
-    fn database(&self) -> &dyn ReadDatabase {
-        &self.database
-    }
-
-    fn reopen(&self) -> Box<dyn ReadDatabase> {
-        self.file.reopen()
-    }
-
-    fn fail_commit<'a>(&'a self, transaction: &'a mut Transaction) -> SqlFuture<'a, ()> {
-        self.file.fail_commit(transaction)
-    }
-}
-
-/// The commit case finds an adapter whose write succeeds when its commit
-/// failed.
-#[tokio::test]
-#[should_panic(expected = "called `Result::unwrap_err()` on an `Ok` value")]
-async fn the_commit_case_refuses_an_adapter_that_hides_a_failed_commit() {
-    let file = File::default();
-    let database = SwallowsFailure(file.database.clone());
-    contract::sequence::a_write_whose_commit_fails_keeps_nothing(Swallowing { file, database })
-        .await;
 }
 
 #[tokio::test]
