@@ -5,47 +5,18 @@
 #[path = "support/memory.rs"]
 mod memory;
 
-use memory::{id, initial_state, memory_repository_over, scope};
+use memory::{id, initial_state, memory_repository_over, scope, Failure, Refusing};
 use provenance_core::{Message, MessageRole, NodeType, Thread, ThreadParent};
 use provenance_macros::verifies;
 use provenance_store::repository::Repository;
 use provenance_store::state_store::PostMessageInput;
 use provenance_store::storage::memory::MemoryStateStorage;
-use provenance_store::storage::{Atomicity, PublishFailure, StatePersistence, WriteSet};
-use provenance_store::storage::{StateKey, StateStorage};
+use provenance_store::storage::{Atomicity, StateKey, StateStorage};
 use provenance_store::write_error::{WriteError, WriteFailure};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 const THREAD_DIRECTORY: &str = "scopes/default/threads/";
 const THREADS: &str = "scopes/default/threads/threads.jsonl";
-
-/// Keeps each set that it receives. Refuses each set that puts a Message
-/// shard when `refuse` is set.
-#[derive(Debug, Default)]
-struct Sets {
-    refuse: bool,
-    received: Mutex<Vec<WriteSet>>,
-}
-
-impl Sets {
-    /// The sets that the persistence received, from the first.
-    fn received(&self) -> Vec<WriteSet> {
-        self.received.lock().unwrap().clone()
-    }
-}
-
-impl StatePersistence for Sets {
-    fn persist(&self, writes: &WriteSet) -> Result<(), PublishFailure> {
-        self.received.lock().unwrap().push(writes.clone());
-        let keys = writes.puts().keys();
-        if self.refuse && keys.map(StateKey::as_str).any(is_message_shard) {
-            return Err(PublishFailure::Refused(anyhow::anyhow!(
-                "the persistence refused the Message shard"
-            )));
-        }
-        Ok(())
-    }
-}
 
 fn is_message_shard(key: &str) -> bool {
     key.starts_with(THREAD_DIRECTORY) && key != THREADS
@@ -55,17 +26,17 @@ fn is_message_shard(key: &str) -> bool {
 /// a Message shard when `refuse` is set.
 struct Posting {
     _root: tempfile::TempDir,
-    persistence: Arc<Sets>,
+    persistence: Arc<Refusing>,
     storage: Arc<MemoryStateStorage>,
     repository: Repository,
 }
 
 fn posting(refuse: bool) -> Posting {
     let root = tempfile::tempdir().unwrap();
-    let persistence = Arc::new(Sets {
-        refuse,
-        ..Sets::default()
-    });
+    let persistence = Arc::new(Refusing::new(is_message_shard));
+    if refuse {
+        persistence.fail(Some(Failure::Refused));
+    }
     let (storage, repository) =
         memory_repository_over(root.path(), initial_state(), persistence.clone());
     Posting {

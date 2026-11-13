@@ -14,7 +14,11 @@ pub enum Compatibility {
 /// Whether the schema of the database in `transaction` is current.
 ///
 /// It is current when its metadata row names the current digest and its
-/// catalog is the current catalog.
+/// catalog of the store's objects is the current catalog. The store's
+/// objects are the objects that take a name that the schema text names,
+/// and each index and trigger on a table that the schema text names. A
+/// table of another name, and the indexes and triggers on that table, do
+/// not change the answer.
 pub async fn compatibility(transaction: &mut Transaction) -> anyhow::Result<Compatibility> {
     let table = transaction
         .fetch(
@@ -56,23 +60,61 @@ fn is_missing_column(error: &anyhow::Error) -> bool {
         .any(|cause| cause.to_string().contains("no such column"))
 }
 
-/// Removes all cache tables and installs the current empty schema.
+/// Removes the store's objects and installs the current empty schema.
 /// The caller records the digest only after it loads all rows and stamps.
+///
+/// The store's objects are as [`compatibility`] gives them. The rebuild
+/// drops each object that takes a name that the schema text names: first
+/// the indexes, then the tables, then the triggers and the views, each
+/// kind in the order of its names. An index or a trigger of another name
+/// on a table of the store goes with its table.
+///
+/// A table of another name stays, with its rows, its indexes and its
+/// triggers. This includes a table that an earlier schema text named and
+/// the current text does not: a repository is initialised again, not
+/// migrated, so the rebuild does not remove such a table.
+///
+/// A view of another name over a table of the store stays, and reads the
+/// table that the rebuild makes again.
+///
+/// A table of another name can have a foreign key into a table of the
+/// store. While it holds a row that refers to a row of the store, the drop
+/// of the table of the store fails on an adapter that checks foreign keys,
+/// as the file adapter does. Then the rebuild fails and keeps nothing, and
+/// each later rebuild fails in the same way until that row is removed.
 pub async fn replace(transaction: &mut Transaction) -> anyhow::Result<()> {
-    let tables = transaction
+    let owned = owned_names();
+    let objects = transaction
         .fetch(
-            "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+            "SELECT type, name FROM sqlite_schema \
+             WHERE type IN ('index', 'table', 'trigger', 'view') \
+             AND name NOT LIKE 'sqlite_%' ORDER BY type, name",
             Vec::new(),
         )
         .await?;
-    for table in tables {
-        let sql = format!("DROP TABLE {}", quoted(table.text(0)?));
-        transaction.execute(&sql, Vec::new()).await?;
+    for object in objects {
+        let name = object.text(1)?;
+        if owned.contains(name) {
+            let sql = format!("DROP {} IF EXISTS {}", object.text(0)?, quoted(name));
+            transaction.execute(&sql, Vec::new()).await?;
+        }
     }
     for statement in statements() {
         transaction.execute(statement, Vec::new()).await?;
     }
     Ok(())
+}
+
+/// The names of the tables and indexes that the schema text makes.
+fn owned_names() -> &'static std::collections::BTreeSet<String> {
+    static OWNED: std::sync::OnceLock<std::collections::BTreeSet<String>> =
+        std::sync::OnceLock::new();
+    OWNED.get_or_init(|| {
+        statements()
+            .filter_map(schema_object)
+            .map(|object| object.name)
+            .collect()
+    })
 }
 
 pub async fn mark_current(transaction: &mut Transaction) -> anyhow::Result<()> {
@@ -162,7 +204,8 @@ async fn catalog(transaction: &mut Transaction) -> anyhow::Result<SchemaCatalog>
             Vec::new(),
         )
         .await?;
-    rows.iter()
+    let mut objects = rows
+        .iter()
         .map(|row| {
             Ok(SchemaObject {
                 kind: row.text(0)?.to_owned(),
@@ -171,8 +214,10 @@ async fn catalog(transaction: &mut Transaction) -> anyhow::Result<SchemaCatalog>
                 sql: normalize_sql(row.optional_text(3)?.unwrap_or_default()),
             })
         })
-        .collect::<anyhow::Result<_>>()
-        .map(SchemaCatalog)
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    let owned = owned_names();
+    objects.retain(|object| owned.contains(&object.name) || owned.contains(&object.table));
+    Ok(SchemaCatalog(objects))
 }
 
 fn normalize_sql(sql: &str) -> String {

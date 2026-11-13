@@ -97,6 +97,10 @@ pub trait SqlTransaction: Any + Send {
     /// or, when one fails, none of them. The inner error is the error of
     /// the statement that failed, and the transaction continues. The outer
     /// error means that the transaction itself failed.
+    ///
+    /// When a statement gives [`OverBudget`] and the adapter ends the
+    /// transaction, as [`SqlTransaction::bound_work`] lets it, the outer
+    /// error is that [`OverBudget`].
     fn attempt<'a>(
         &'a mut self,
         statements: &'a [Statement],
@@ -105,14 +109,49 @@ pub trait SqlTransaction: Any + Send {
     /// Commits the transaction. Write work calls this at its end.
     fn commit(self: Box<Self>) -> SqlFuture<'static, ()>;
 
-    /// Bounds the work of the statements that follow in this transaction
-    /// to about `steps` steps of the store's engine.
+    /// Bounds the work of the statements that follow in this transaction.
     ///
-    /// When the store stops a statement for the bound, the error of the
-    /// statement is [`OverBudget`]. The file adapter counts the steps of
-    /// the `SQLite` engine and stops a statement at the bound while it
-    /// runs. The contract does not yet say what another adapter must do.
-    fn bound_work(&mut self, steps: u64) -> SqlFuture<'_, ()>;
+    /// `bound` is in engine steps: the virtual machine instructions of
+    /// `SQLite`, as its progress handler counts them. The adapter counts the
+    /// work of all these statements against it. It can count work at whole
+    /// check intervals of at most 1,000 units of its measure: then the work
+    /// of a statement after its last check is not counted, and a statement
+    /// that does less work than one interval can run past the bound. The
+    /// file adapter checks each 1,000 engine steps of one statement text,
+    /// over all the runs of that text on its connection.
+    ///
+    /// An adapter that cannot count engine steps converts `bound` to its
+    /// own measure of work, for example the rows that a statement reads
+    /// from tables and indexes. The conversion is the adapter's, and these
+    /// two limits apply to it:
+    ///
+    /// - The adapter gives [`OverBudget`] for a statement whose work is far
+    ///   past the bound.
+    /// - The adapter does not refuse a statement that the file adapter
+    ///   answers within a twentieth of the same bound. The measured table
+    ///   reads cost 3 to 33 engine steps a row, so a conversion of the bound
+    ///   at up to 60 steps a row meets this limit for each of them.
+    ///
+    /// The bound does not limit work that the adapter's measure does not
+    /// see. For a count of rows read, that is recursion, sorts, and
+    /// `json_each` over a bound list.
+    ///
+    /// When the counted work passes the bound during a statement, the
+    /// statement gives [`OverBudget`], and the caller does not get its
+    /// rows. The adapter can stop the statement while it runs, or let it
+    /// run to its end and then report it.
+    ///
+    /// When the statement that gives [`OverBudget`] only reads, the
+    /// transaction stays open: the work of the earlier statements is kept,
+    /// and a later statement gives its rows or [`OverBudget`].
+    ///
+    /// When the statement that gives [`OverBudget`] writes, the adapter can
+    /// end the transaction. Then the work of the transaction is not kept,
+    /// and its commit fails. A later statement is then not in the
+    /// transaction: the file adapter runs it outside any transaction, so a
+    /// later write is kept although the commit fails. Work that writes
+    /// after a bound must therefore stop at the first [`OverBudget`].
+    fn bound_work(&mut self, bound: u64) -> SqlFuture<'_, ()>;
 
     /// The most values of one list that a reader binds in one statement;
     /// a longer list goes in more statements. With the two values that a
@@ -197,12 +236,54 @@ impl Unopened {
     }
 }
 
-/// The store stopped a statement because the work of its transaction
-/// passed the bound that [`SqlTransaction::bound_work`] set. Its text is
-/// the text of its cause.
+/// The work of a transaction passed its work bound during a statement.
+///
+/// The bound is the one that [`SqlTransaction::bound_work`] set. The
+/// statement gives no rows: the store stopped it, or reported it at its
+/// end. Its text is the text of its cause.
 #[derive(Debug, thiserror::Error)]
 #[error("{0:#}")]
 pub struct OverBudget(pub anyhow::Error);
+
+/// An integer of magnitude more than
+/// [`LARGEST_EXACT_INTEGER`](provenance_core::model::exact_integer::LARGEST_EXACT_INTEGER),
+/// 2^53 − 1, in a value that a statement binds or in a row that it gives.
+///
+/// A store that keeps each number as a 64-bit float holds each integer of
+/// the range and gives it back unchanged.
+///
+/// Every adapter gives this error. For a bound value, it comes before the
+/// statement runs, so a write whose work stops at it keeps nothing. For a
+/// row, the statement gives no rows. The store refuses a time field past
+/// the range when a record is written, so this error is a fault of the
+/// store: it reads as `read_failed` or `write_failed`.
+#[derive(Debug, thiserror::Error)]
+#[error(
+    "integer {0} is outside the range of the read database, {range}",
+    range = provenance_core::model::exact_integer::RangeText
+)]
+pub struct OutOfRange(pub i64);
+
+impl OutOfRange {
+    /// `value`, or this error when it is past the range.
+    pub const fn integer(value: i64) -> Result<i64, Self> {
+        if provenance_core::model::exact_integer::is_exact(value) {
+            Ok(value)
+        } else {
+            Err(Self(value))
+        }
+    }
+
+    /// The first integer of `values` that is past the range, as this error.
+    pub fn check(values: &[SqlValue]) -> Result<(), Self> {
+        for value in values {
+            if let SqlValue::Integer(integer) = value {
+                Self::integer(*integer)?;
+            }
+        }
+        Ok(())
+    }
+}
 
 /// The one row of a statement that gives exactly one, as an aggregate does.
 pub fn one_row(rows: &[SqlRow]) -> anyhow::Result<&[SqlValue]> {

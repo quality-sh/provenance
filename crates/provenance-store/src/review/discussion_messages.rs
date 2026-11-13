@@ -106,9 +106,6 @@ pub(super) async fn messages(
     for family in ["discussions", "messages", "threads"] {
         ctx.snapshot().attest(family);
     }
-    if query.cursor.is_none() {
-        position.counter = i64::MIN;
-    }
     check_address(ctx, &query).await?;
     let mut page = DiscussionPageFill::new(query.limit);
     let next_cursor = match fill_messages(ctx, &query, &mut position, &mut page).await? {
@@ -167,14 +164,16 @@ async fn check_address(ctx: &ReadContext, query: &DiscussionMessagesQuery) -> an
 }
 
 /// Adds the messages after `position` to the page, in creation order, and
-/// moves `position` past each message it adds.
+/// moves `position` past each message it adds. The first page, which has
+/// no cursor, starts at the first message.
 async fn fill_messages(
     ctx: &ReadContext,
     query: &DiscussionMessagesQuery,
     position: &mut Position,
     page: &mut DiscussionPageFill<Message>,
 ) -> anyhow::Result<Fill> {
-    for (id, created_at, size) in message_keys(ctx, query, position).await? {
+    let after = query.cursor.is_some().then_some(&*position);
+    for (id, created_at, size) in message_keys(ctx, query, after).await? {
         if page.at_limit() {
             return Ok(Fill::Full);
         }
@@ -192,30 +191,41 @@ async fn fill_messages(
 }
 
 /// The id, creation time, and stored size of each message after
-/// `position`. Large Message bodies never enter this query.
+/// `position`, or from the first message when there is no position.
+///
+/// Large Message bodies never enter this query.
 async fn message_keys(
     ctx: &ReadContext,
     query: &DiscussionMessagesQuery,
-    position: &Position,
+    position: Option<&Position>,
 ) -> anyhow::Result<Vec<(String, i64, i64)>> {
     let (join, selector, condition) = selector_sql(&query.selector);
     let kind = super::discussion_state::discussion_kind_word(query.parent.node_type);
     let sql = format!(
         "SELECT m.id,m.created_at,length(CAST(m.body AS BLOB))+length(m.id)+length(m.thread_id)+256 \
          FROM messages m JOIN threads t ON t.scope_id=m.scope_id AND t.id=m.thread_id {join} \
-         WHERE m.scope_id=? AND t.parent_type=? AND t.parent_id=? AND {condition} \
-         AND (m.created_at>? OR (m.created_at=? AND m.id>?)) ORDER BY m.created_at,m.id LIMIT ?"
+         WHERE m.scope_id=? AND t.parent_type=? AND t.parent_id=? AND {condition}{after} \
+         ORDER BY m.created_at,m.id LIMIT ?",
+        after = if position.is_some() {
+            " AND (m.created_at>? OR (m.created_at=? AND m.id>?))"
+        } else {
+            ""
+        }
     );
-    let values = vec![
+    let mut values = vec![
         ctx.snapshot().scope_value(),
         SqlValue::from(kind),
         SqlValue::from(query.parent.node_id.as_str()),
         SqlValue::from(selector),
-        SqlValue::Integer(position.counter),
-        SqlValue::Integer(position.counter),
-        SqlValue::from(position.id.as_str()),
-        SqlValue::Integer(i64::try_from(query.limit + 1)?),
     ];
+    if let Some(position) = position {
+        values.extend([
+            SqlValue::Integer(position.counter),
+            SqlValue::Integer(position.counter),
+            SqlValue::from(position.id.as_str()),
+        ]);
+    }
+    values.push(SqlValue::Integer(i64::try_from(query.limit + 1)?));
     let rows = ctx
         .snapshot()
         .fetch(&sql, values)

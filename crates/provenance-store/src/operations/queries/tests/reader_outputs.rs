@@ -51,7 +51,7 @@ async fn snapshot_of(store: &TestStore, port_only: bool) -> (CacheConnection, Re
         .await
         .unwrap();
     if port_only {
-        transaction = Box::new(OtherTransaction(transaction));
+        transaction = OtherTransaction::forward(transaction);
     }
     let snapshot = ReadSnapshot::open(transaction, &store.scope)
         .await
