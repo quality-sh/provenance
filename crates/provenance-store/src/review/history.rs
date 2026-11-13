@@ -1,4 +1,8 @@
-//! Record history and change evidence read from Git and the working copy.
+//! Record history and change evidence, read from the committed versions of
+//! the record files and from the working copy.
+//!
+//! The committed versions come through the [`FileVersions`] port. The port
+//! and its contract build without `host`; the history reads need it.
 
 pub mod contract;
 #[cfg(feature = "host")]
@@ -60,6 +64,9 @@ impl StateStore {
     /// lists only the kept side. A merge that resolves to new content adds
     /// one, after the version of its first parent. A commit whose shard text
     /// does not parse adds no version.
+    ///
+    /// The committed versions come from the file versions of the store. The
+    /// call blocks on them, so it runs where a blocking call is permitted.
     #[rule("rule_record_history_reads_git")]
     pub(super) fn record_versions(
         &self,
@@ -67,16 +74,21 @@ impl StateStore {
         kind: NodeType,
         id: &StableId,
     ) -> anyhow::Result<Vec<VersionedRecord>> {
+        tokio::runtime::Handle::current().block_on(self.read_record_versions(scope, kind, id))
+    }
+
+    async fn read_record_versions(
+        &self,
+        scope: &ScopeId,
+        kind: NodeType,
+        id: &StableId,
+    ) -> anyhow::Result<Vec<VersionedRecord>> {
         let path = shards::path_for(&self.layout, scope, kind);
         let (working, discussions) = self.with_repository_publication(|held| {
-            let text = match std::fs::read_to_string(&path) {
-                Ok(text) => Some(text),
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-                Err(error) => return Err(error.into()),
-            };
-            Ok((text, held.list_discussions(scope)?))
+            Ok((held.state_text(&path)?, held.list_discussions(scope)?))
         })?;
-        let files = git::file_versions(self.layout.root(), &path)?;
+        let history = self.file_versions();
+        let files = history.versions(&self.relative(&path)?).await?;
         let records = files
             .iter()
             .map(|file| file.text.as_deref().and_then(|text| find(text, id)))
@@ -111,14 +123,24 @@ impl StateStore {
             }
         }
         origins::assign(
-            self.layout.root(),
-            &shards::discussions_path(&self.layout, scope),
+            history.as_ref(),
+            &self.relative(&shards::discussions_path(&self.layout, scope))?,
             &discussions,
             kind,
             id,
             &mut versions,
-        )?;
+        )
+        .await?;
         Ok(versions)
+    }
+
+    /// The path of a file of this store below its working tree, as the file
+    /// versions port names it.
+    fn relative(&self, path: &camino::Utf8Path) -> anyhow::Result<String> {
+        Ok(path
+            .strip_prefix(self.layout.root())?
+            .as_str()
+            .replace('\\', "/"))
     }
 }
 
@@ -127,7 +149,7 @@ impl StateStore {
 /// first. The walk starts at the newest commit and steps to a parent whose
 /// record the commit kept, or else to its first parent. A commit that holds
 /// the record and kept no parent's record changed it.
-fn lineage(files: &[git::FileVersion], records: &[Option<Value>]) -> Vec<usize> {
+fn lineage(files: &[FileVersion], records: &[Option<Value>]) -> Vec<usize> {
     let index = files
         .iter()
         .enumerate()

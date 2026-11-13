@@ -1,17 +1,19 @@
 //! Assigns an outcome to the first record version that contains it. A
 //! committed Discussion line that does not parse holds no outcome.
 
-use super::{git, VersionedRecord};
-use camino::Utf8Path;
+use super::versions::FileVersions;
+use super::VersionedRecord;
 use provenance_core::{
     threads::{Discussion, DiscussionOrigin},
     NodeType, StableId,
 };
 use std::collections::BTreeSet;
 
-pub(super) fn assign(
-    root: &Utf8Path,
-    path: &Utf8Path,
+/// `path` names the Discussion file; `working` holds the Discussions of the
+/// saved working copy.
+pub(super) async fn assign(
+    history: &dyn FileVersions,
+    path: &str,
     working: &[Discussion],
     kind: NodeType,
     id: &StableId,
@@ -19,9 +21,9 @@ pub(super) fn assign(
 ) -> anyhow::Result<()> {
     let commits = versions
         .iter()
-        .filter_map(|version| version.version.commit.as_deref())
+        .filter_map(|version| version.version.commit.clone())
         .collect::<Vec<_>>();
-    let mut committed = git::file_at_commits(root, path, &commits)?.into_iter();
+    let mut committed = history.texts(path, &commits).await?.into_iter();
     let mut seen = BTreeSet::new();
     for version in versions {
         let discussions = if version.version.commit.is_some() {

@@ -359,9 +359,31 @@ impl MemoryFileVersions {
         order.push(index);
     }
 
-    #[allow(clippy::unused_self)]
-    const fn file_versions(&self, _path: &str) -> Vec<FileVersion> {
-        Vec::new()
+    fn file_versions(&self, path: &str) -> Vec<FileVersion> {
+        let Some(head) = self.commits.len().checked_sub(1) else {
+            return Vec::new();
+        };
+        let mut listed = BTreeMap::new();
+        let mut order = Vec::new();
+        for tip in self.nearest(head, path, &mut listed) {
+            Self::order(tip, &listed, &mut order);
+        }
+        order
+            .into_iter()
+            .map(|index| {
+                let commit = &self.commits[index].commit;
+                FileVersion {
+                    commit: commit.name.to_owned(),
+                    parents: listed[&index]
+                        .iter()
+                        .map(|parent| self.commits[*parent].commit.name.to_owned())
+                        .collect(),
+                    author: commit.author.to_owned(),
+                    committed_at: commit.committed_at,
+                    text: self.text(index, path).map(str::to_owned),
+                }
+            })
+            .collect()
     }
 }
 
@@ -378,7 +400,14 @@ impl FileVersions for MemoryFileVersions {
         path: &'a str,
         commits: &'a [String],
     ) -> BoxFuture<'a, anyhow::Result<Vec<Option<String>>>> {
-        let texts = vec![None; commits.len()];
+        let texts = commits
+            .iter()
+            .map(|commit| {
+                self.index(commit)
+                    .and_then(|index| self.text(index, path))
+                    .map(str::to_owned)
+            })
+            .collect();
         Box::pin(std::future::ready(Ok(texts)))
     }
 }
