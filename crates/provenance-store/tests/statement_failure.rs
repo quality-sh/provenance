@@ -1,7 +1,8 @@
 //! Implementation aid: these tests pin how the failure of a statement check
 //! reads JSON and its schema, so that a change of the type keeps the results
 //! and the error texts of an enum with no variants. No Rule states this
-//! behaviour.
+//! behaviour. The catalog of operations needs the `host` feature.
+#![cfg(feature = "host")]
 use provenance_store::operations::catalog::{CheckStatement, Operation};
 use serde_json::{json, Value};
 
@@ -67,6 +68,6 @@ fn the_statement_failure_schema_refuses_each_value() {
     .unwrap();
     assert_eq!(
         schema,
-        json!({"$schema": "https://json-schema.org/draft/2020-12/schema", "title": "StatementFailure"})
+        json!({"$schema": "https://json-schema.org/draft/2020-12/schema", "title": "StatementFailure", "not": {}})
     );
 }
