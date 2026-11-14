@@ -163,7 +163,9 @@ fn reads_that_replace_a_key_file_at_the_same_time_use_one_key() {
                     // A send and not a panic, so that each thread reaches the
                     // barrier at the end of each round.
                     let cursor = read.map(|page| page.result.next_cursor);
-                    sender.send(cursor.map_err(|error| format!("{error:#}"))).unwrap();
+                    sender
+                        .send(cursor.map_err(|error| format!("{error:#}")))
+                        .unwrap();
                     end.wait();
                 }
             })
@@ -176,13 +178,21 @@ fn reads_that_replace_a_key_file_at_the_same_time_use_one_key() {
         let key = std::fs::read(key_path(&root)).unwrap();
         assert_eq!(key.len(), 32, "round {round}");
         for _ in 0..READS {
-            let cursor = cursors.recv().unwrap().unwrap().expect("page one continues");
+            let cursor = cursors
+                .recv()
+                .unwrap()
+                .unwrap()
+                .expect("page one continues");
             let next = runtime
                 .block_on(page(&root, ReadPolicy::default(), &latest, Some(cursor)))
                 .unwrap_or_else(|error| panic!("round {round}: {error:#}"));
             assert_eq!(next.result.entries.len(), 2);
         }
-        assert_eq!(std::fs::read(key_path(&root)).unwrap(), key, "round {round}");
+        assert_eq!(
+            std::fs::read(key_path(&root)).unwrap(),
+            key,
+            "round {round}"
+        );
     }
     for reader in readers {
         reader.join().unwrap();
