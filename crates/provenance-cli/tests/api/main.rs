@@ -17,6 +17,8 @@ mod cli_catalog;
 mod cli_catalog_structured_input;
 #[path = "../cli_catch_up_characterization.rs"]
 mod cli_catch_up_characterization;
+#[path = "../cli_get_edit_etag.rs"]
+mod cli_get_edit_etag;
 #[path = "../cli_get_trace.rs"]
 mod cli_get_trace;
 #[path = "../cli_mcp_api_catalog.rs"]

@@ -33,13 +33,13 @@ fn init(repo: &str) {
 }
 
 /// One spawned `provenance mcp` process and its connected client.
-struct Server {
+pub(crate) struct Server {
     child: tokio::process::Child,
-    client: Client,
+    pub(crate) client: Client,
 }
 
 impl Server {
-    async fn start(repo: &str) -> Self {
+    pub(crate) async fn start(repo: &str) -> Self {
         let mut child = tokio::process::Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
             .args(["mcp", "--repo", repo])
             .stdin(Stdio::piped())
@@ -56,7 +56,7 @@ impl Server {
         Self { child, client }
     }
 
-    async fn close(mut self) {
+    pub(crate) async fn close(mut self) {
         self.client.cancel().await.unwrap();
         let status = self.child.wait().await.unwrap();
         assert!(status.success(), "{status}");

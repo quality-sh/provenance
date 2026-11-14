@@ -80,8 +80,10 @@ fn managed_guidance_carries_the_selected_scope_on_every_review_command() {
         "provenance <record-id> --scope app --review-link --no-open --format json`",
         "provenance <record-id> --scope app --view review`",
         "provenance <requirement-id> --scope app --view review --follow --format json`",
-        "provenance <question_id> --scope app --view review --format json`",
-        "provenance <topic_id> --scope app --view review --format json`",
+        "provenance <record-id> --scope app --format json`",
+        "provenance <requirement-id> update --scope app --if-match <etag> --description <text>`",
+        "provenance <question_id> --scope app --format json`",
+        "provenance <topic_id> --scope app --format json`",
         "provenance api questions/<question_id> --method patch --header \"If-Match: <etag>\" --input - --scope app --format json`",
         "provenance api topics/<topic_id> --method patch --header \"If-Match: <etag>\" --input - --scope app --format json`",
     ] {
@@ -151,6 +153,92 @@ fn the_documented_archive_commands_run_as_written() {
             "api", &path, "--repo", repo, "--scope", "app", "--format", "json",
         ]));
         assert_eq!(after["data"]["status"], "archived", "{family} {id}");
+    }
+}
+
+/// The command in backticks that starts with `start` on the line that contains it.
+fn documented_command<'a>(agents: &'a str, start: &str) -> &'a str {
+    let from = agents
+        .find(&format!("`{start}"))
+        .unwrap_or_else(|| panic!("missing {start}\n{agents}"));
+    let command = &agents[from + 1..];
+    &command[..command.find('`').unwrap()]
+}
+
+/// Runs one documented command with each placeholder replaced, and gives its JSON answer.
+fn run_documented(command: &str, repo: &str, values: &[(&str, &str)]) -> serde_json::Value {
+    let mut args = command
+        .split_whitespace()
+        .skip(1)
+        .map(|word| {
+            values
+                .iter()
+                .find(|(placeholder, _)| *placeholder == word)
+                .map_or(word, |(_, value)| *value)
+        })
+        .collect::<Vec<_>>();
+    args.extend(["--repo", repo]);
+    if !args.contains(&"--format") {
+        args.extend(["--format", "json"]);
+    }
+    json(provenance().args(args))
+}
+
+#[test]
+#[verifies("rule_init_guidance_selected_scope", examples)]
+fn the_documented_read_then_update_commands_run_as_written() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_str().unwrap();
+    init(directory.path(), "app");
+    shaping_records(repo, "app");
+    let agents = std::fs::read_to_string(directory.path().join("AGENTS.md")).unwrap();
+    let read = documented_command(&agents, "provenance <record-id> --scope app --format");
+    let update = documented_command(&agents, "provenance <requirement-id> update");
+
+    let record = run_documented(read, repo, &[("<record-id>", "req_a")]);
+    let etag = record["edit"]["etag"].as_str().unwrap();
+    let updated = run_documented(
+        update,
+        repo,
+        &[("<requirement-id>", "req_a"), ("<etag>", etag), ("<text>", "Changed.")],
+    );
+    assert_eq!(updated["data"]["description"], "Changed.", "{updated}");
+
+    for (start, placeholder, id, field, value) in [
+        (
+            "provenance <question_id> --scope app",
+            "<question_id>",
+            "q_one",
+            "status",
+            "blocked_on_human",
+        ),
+        (
+            "provenance <topic_id> --scope app",
+            "<topic_id>",
+            "topic_open",
+            "title",
+            "Changed",
+        ),
+    ] {
+        let read = documented_command(&agents, start);
+        let record = run_documented(read, repo, &[(placeholder, id)]);
+        let etag = record["edit"]["etag"].as_str().unwrap();
+        let flag = format!("--{field}");
+        let updated = json(provenance().args([
+            id,
+            "update",
+            "--repo",
+            repo,
+            "--scope",
+            "app",
+            "--if-match",
+            etag,
+            &flag,
+            value,
+            "--format",
+            "json",
+        ]));
+        assert_eq!(updated["data"][field], value, "{updated}");
     }
 }
 
