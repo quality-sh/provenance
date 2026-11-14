@@ -104,17 +104,21 @@ async fn each_read_and_write_of_the_runs_names_the_first_bad_line_of_the_runs_ca
             "missing field `scope_id`",
         ),
     ];
+    let mut answered = Vec::new();
+    let mut expected = Vec::new();
     for (cache, line, message) in cases {
         let answers = answers(&cache).await;
-
         let error = json!({
             "kind": "invalid_state_file", "file": "verification-runs.jsonl", "line": line,
             "message": message
         });
-        let expected = answers
+        let refusals = answers
             .iter()
             .map(|(surface, _, _)| (surface.clone(), 500, error.clone()))
             .collect::<Vec<_>>();
-        assert_eq!(answers, expected, "{message} at line {line}");
+        answered.push((line, message, answers));
+        expected.push((line, message, refusals));
     }
+
+    assert_eq!(answered, expected);
 }
