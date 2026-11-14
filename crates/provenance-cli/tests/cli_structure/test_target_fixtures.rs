@@ -173,14 +173,29 @@ fn a_file_with_tests_in_a_subdirectory_that_loads_nowhere_is_a_fault() {
             ("tests/group/data/input.rs", "fn main() {}\n"),
             ("tests/group/data/broken.rs", "fn main( {\n"),
             ("tests/group/data/notes.txt", "#[test]\n"),
+            (
+                "tests/group/record_updates/new_case.rs",
+                "#[test]\nfn writes() { let x = ; }\n",
+            ),
+            (
+                "tests/group/props.rs",
+                "macro_rules! case {\n    ($name:ident) => {\n        #[test]\n        \
+                 fn $name() {}\n    };\n}\ncase!(a);\n",
+            ),
         ],
     );
-    assert_eq!(
-        naming(&faults, "tests/group/writes.rs", "in no test target").len(),
-        1,
-        "{faults:#?}"
-    );
-    assert_eq!(faults.len(), 1, "{faults:#?}");
+    for file in [
+        "tests/group/writes.rs",
+        "tests/group/record_updates/new_case.rs",
+        "tests/group/props.rs",
+    ] {
+        assert_eq!(
+            naming(&faults, file, "in no test target").len(),
+            1,
+            "{faults:#?}"
+        );
+    }
+    assert_eq!(faults.len(), 3, "{faults:#?}");
 }
 
 const TWO_TARGETS: &str =
@@ -260,4 +275,28 @@ fn two_cfg_alternatives_of_one_module_load_its_file_once() {
         ],
     );
     assert!(faults.is_empty(), "{faults:#?}");
+}
+
+#[test]
+fn a_file_that_one_cfg_alternative_loads_two_times_loads_two_times() {
+    let faults = faults(
+        "autotests = false\n[[test]]\nname = \"first\"\n",
+        &[
+            (
+                "tests/first.rs",
+                "#[cfg(unix)]\n#[path = \"f.rs\"]\nmod x;\n#[cfg(not(unix))]\nmod x;\n",
+            ),
+            (
+                "tests/x.rs",
+                "#[path = \"f.rs\"]\nmod p;\n#[path = \"f.rs\"]\nmod q;\n",
+            ),
+            ("tests/f.rs", ONE_TEST),
+        ],
+    );
+    assert_eq!(
+        naming(&faults, "tests/f.rs", "loads 2 times").len(),
+        1,
+        "{faults:#?}"
+    );
+    assert_eq!(faults.len(), 1, "{faults:#?}");
 }
