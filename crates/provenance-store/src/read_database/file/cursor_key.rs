@@ -12,9 +12,9 @@ use std::io::Read;
 /// The number of bytes of a valid key.
 const KEY_BYTES: usize = 32;
 
-/// A cache with no cursor key or a damaged cursor key does not stop a read
-/// that gives or accepts a cursor: the read makes one new key, and callers
-/// that find no key at the same time sign with that one key.
+/// A cache with no cursor key or a damaged cursor key does not stop a paged
+/// read: the read makes one new key, and callers that find no key at the
+/// same time sign with that one key.
 ///
 /// A valid key is read without the lock, so a cache that this process
 /// cannot write still gives its key. The wait for the lock blocks the
