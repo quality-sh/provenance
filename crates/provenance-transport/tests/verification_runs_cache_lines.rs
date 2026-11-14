@@ -68,26 +68,53 @@ async fn answers(cache: &[u8]) -> Vec<(String, u16, Value)> {
     answers
 }
 
-// No Rule binding: `rule_state_parse_refusal_names_the_line` is for record
-// files below the state directory, and the runs cache is a cache file.
+/// A correct run row whose id is not the id that the member route and the
+/// completion ask for.
+const RUN: &str = concat!(
+    r#"{"scope_id":"default","id":"verification_0","rule_id":"rule_shared","#,
+    r#""method":"examples","declared_by":"fixture","status":"passed","started_at":1}"#,
+    "\n"
+);
+
+/// A run row that holds the known field `id` two times.
+const REPEATED: &str = concat!(
+    r#"{"scope_id":"default","id":"verification_1","rule_id":"rule_shared","#,
+    r#""method":"examples","declared_by":"fixture","status":"passed","started_at":1,"#,
+    r#""id":"verification_1"}"#,
+    "\n"
+);
+
+/// No Rule binding: `rule_state_parse_refusal_names_the_line` is for record
+/// files below the state directory, and the runs cache is a cache file.
+///
+/// In the case with the bad line at line 2, each request reads past line 1:
+/// the page route asks for a page of the default size, 50 rows; the member
+/// route and the completion ask for `verification_1`, which line 1 does not
+/// hold; the evidence read, the start and the SDK operations read each line.
 #[tokio::test]
 async fn each_read_and_write_of_the_runs_names_the_first_bad_line_of_the_runs_cache() {
-    let cases: [(&[u8], &str); 3] = [
-        (b"{not json\n\xff\n", "key must be a string"),
-        (b"\xff\n", "invalid utf-8 sequence of 1 bytes from index 0"),
-        (b"{\"id\":\"verification_1\"}\n", "missing field `scope_id`"),
+    let cases: [(Vec<u8>, u64, &str); 5] = [
+        (b"{not json\n\xff\n".to_vec(), 1, "key must be a string"),
+        (b"\xff\n".to_vec(), 1, "invalid utf-8 sequence of 1 bytes from index 0"),
+        (b"{\"id\":\"verification_1\"}\n".to_vec(), 1, "missing field `scope_id`"),
+        (REPEATED.into(), 1, "duplicate field `id`"),
+        (
+            format!("{RUN}{{\"id\":\"verification_1\"}}\n").into(),
+            2,
+            "missing field `scope_id`",
+        ),
     ];
-    for (cache, message) in cases {
-        let answers = answers(cache).await;
+    for (cache, line, message) in cases {
+        let answers = answers(&cache).await;
 
         let error = json!({
-            "kind": "invalid_state_file", "file": "verification-runs.jsonl", "line": 1,
+            "kind": "invalid_state_file", "file": "verification-runs.jsonl", "line": line,
             "message": message
         });
         let expected = answers
             .iter()
             .map(|(surface, _, _)| (surface.clone(), 500, error.clone()))
             .collect::<Vec<_>>();
-        assert_eq!(answers, expected, "{message}");
+        assert_eq!(answers, expected, "{message} at line {line}");
     }
 }
