@@ -95,12 +95,8 @@ pub(super) fn record_conflicts(
 ) -> anyhow::Result<RecordConflicts> {
     let base_keys: BTreeSet<&str> = base.iter().map(|(key, _)| key.as_str()).collect();
     let our_keys: BTreeSet<&str> = ours.iter().map(|(key, _)| key.as_str()).collect();
-    let added = |rows: &'_ [(String, CanonicalRecord)]| {
-        rows.iter()
-            .filter(|(key, _)| !base_keys.contains(key.as_str()))
-            .collect::<Vec<_>>()
-    };
-    let (our_additions, their_additions) = (added(ours), added(theirs));
+    let our_additions = additions(ours, &base_keys);
+    let their_additions = additions(theirs, &base_keys);
     let mut result = RecordConflicts::default();
     for list in records.lists {
         let base_read = records.read(list, base.iter().map(|(_, row)| row))?;
@@ -125,10 +121,7 @@ pub(super) fn record_conflicts(
             });
             for (key, row) in &their_additions {
                 if !our_keys.contains(key.as_str())
-                    && list_records(list, row)?.iter().any(|record| {
-                        record.get(records.key).and_then(Value::as_str) == Some(id)
-                            && record != our_record
-                    })
+                    && holds_other_record(records.key, list_records(list, row)?, id, our_record)
                 {
                     result.left_out.insert(key.clone());
                 }
@@ -136,4 +129,21 @@ pub(super) fn record_conflicts(
         }
     }
     Ok(result)
+}
+
+/// The rows of one side that no row of the base is equal to.
+fn additions<'a>(
+    rows: &'a [(String, CanonicalRecord)],
+    base_keys: &BTreeSet<&str>,
+) -> Vec<&'a (String, CanonicalRecord)> {
+    rows.iter()
+        .filter(|(key, _)| !base_keys.contains(key.as_str()))
+        .collect()
+}
+
+/// Whether `records` hold a record with `id` that is not `ours`.
+fn holds_other_record(key: &str, records: &[Value], id: &str, ours: &CanonicalRecord) -> bool {
+    records
+        .iter()
+        .any(|record| record.get(key).and_then(Value::as_str) == Some(id) && record != ours)
 }
