@@ -102,8 +102,6 @@ pub use decision_input::{
 mod automatic_submission;
 mod cycle_index;
 mod decision;
-// The document review reads serve the host queries only.
-#[cfg_attr(not(feature = "host"), allow(dead_code))]
 mod decision_reads;
 pub(crate) use decision_reads::DocumentReviewState;
 mod decision_state;
