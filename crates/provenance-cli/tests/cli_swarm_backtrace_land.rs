@@ -1,4 +1,4 @@
-use crate::review_host_support::bounded_process;
+use crate::bounded_process;
 #[path = "cli_swarm_backtrace_land/conflict_atomicity.rs"]
 mod conflict_atomicity;
 use crate::export_fixture_support;

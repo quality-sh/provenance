@@ -1,4 +1,4 @@
-use crate::discussion_support::base as review_support;
+use crate::review_support;
 use provenance_core::StableId;
 use provenance_macros::verifies;
 use provenance_store::state_store::StateStore;

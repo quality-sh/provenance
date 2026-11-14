@@ -2524,6 +2524,7 @@ dependencies = [
  "serde_ignored",
  "serde_json",
  "sha2 0.11.0",
+ "syn 2.0.117",
  "tar",
  "tempfile",
  "tokio",
