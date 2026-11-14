@@ -1,7 +1,8 @@
+use super::line::{top_level_members, CheckedLine};
 use crate::state_store::message_ids::ShardLine;
 use crate::state_store::readers::located;
 use camino::Utf8Path;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::Serialize;
 
 /// One stored line kept beside the record built from it.
 ///
@@ -20,55 +21,33 @@ pub(super) struct RawRecord {
 }
 
 impl RawRecord {
-    pub(super) fn deserialize<T: DeserializeOwned + Serialize>(
+    /// Keeps the checked `line` beside its record, so that a write of the
+    /// file can carry the stored line over.
+    pub(super) fn keep<T: Serialize>(
         path: &Utf8Path,
-        line: &str,
-        line_number: usize,
+        line: CheckedLine<'_, T>,
     ) -> anyhow::Result<(T, Self)> {
-        let mut top_level_unknown = Vec::new();
-        let mut nested_unknown = None;
-        let mut deserializer = serde_json::Deserializer::from_str(line);
-        let at = |error: serde_json::Error| located(path, line_number, &error);
-        let record = serde_ignored::deserialize(&mut deserializer, |path| match path {
-            serde_ignored::Path::Map {
-                parent: serde_ignored::Path::Root,
-                key,
-            } => top_level_unknown.push(key),
-            other => {
-                if nested_unknown.is_none() {
-                    nested_unknown = Some(other.to_string());
-                }
-            }
-        })
-        .map_err(at)?;
-        let known = serde_json::to_value(&record).map_err(at)?;
-        let scan = top_level_members(line).map_err(at)?;
-        let repeated_member = scan.repeated;
-        let missing = top_level_unknown
-            .iter()
-            .filter(|name| !scan.members.iter().any(|member| &member.name == *name))
-            .collect::<Vec<_>>();
-        if !missing.is_empty() {
-            return Err(crate::refusal::state_fault(
-                &ShardLine::new(path, line_number),
-                format!("stored field names {missing:?} cannot be read back safely"),
-            ));
-        }
+        let at = |error: serde_json::Error| located(path, line.number, &error);
+        let known = serde_json::to_value(&line.record).map_err(at)?;
+        let scan = match line.members {
+            Some(scan) => scan,
+            None => top_level_members(line.text).map_err(at)?,
+        };
         let unknown = scan
             .members
             .into_iter()
-            .filter(|member| top_level_unknown.contains(&member.name))
+            .filter(|member| line.unknown.contains(&member.name))
             .map(|member| member.raw)
             .collect();
         Ok((
-            record,
+            line.record,
             Self {
-                line: line.to_owned(),
+                line: line.text.to_owned(),
                 known,
                 unknown,
-                repeated_member,
-                nested_unknown,
-                line_number,
+                repeated_member: scan.repeated,
+                nested_unknown: line.nested_unknown,
+                line_number: line.number,
             },
         ))
     }
@@ -222,116 +201,30 @@ fn record_id(value: &serde_json::Value) -> Option<&str> {
     value.get("id").and_then(serde_json::Value::as_str)
 }
 
-struct Member {
-    name: String,
-    raw: String,
-}
-
-struct Scan {
-    members: Vec<Member>,
-    repeated: Option<String>,
-}
-
-/// Reads the top-level members of one stored JSON object line.
-///
-/// The line has already parsed as JSON, so the scan only has to walk it:
-/// strings in key position at the first nesting level name members, and a
-/// member spans from its name to the comma or closing brace that ends its
-/// value. The raw bytes are kept so a rewritten line can carry a member over
-/// without re-encoding it.
-fn top_level_members(line: &str) -> Result<Scan, serde_json::Error> {
-    let bytes = line.as_bytes();
-    let mut depth = 0usize;
-    let mut root_object = false;
-    let mut in_string = false;
-    let mut escaped = false;
-    let mut string_start = 0usize;
-    let mut expecting_key = false;
-    let mut pending: Option<(String, usize)> = None;
-    let mut members = Vec::new();
-    let mut seen: Vec<String> = Vec::new();
-    let mut repeated = None;
-    for (index, byte) in bytes.iter().enumerate() {
-        if in_string {
-            match byte {
-                b'\\' => escaped = !escaped,
-                b'"' if escaped => escaped = false,
-                b'"' => {
-                    in_string = false;
-                    if depth == 1 && root_object && expecting_key {
-                        let name: String = serde_json::from_str(&line[string_start..=index])?;
-                        if repeated.is_none() && seen.contains(&name) {
-                            repeated = Some(name.clone());
-                        }
-                        seen.push(name.clone());
-                        pending = Some((name, string_start));
-                        expecting_key = false;
-                    }
-                }
-                _ => escaped = false,
-            }
-            continue;
-        }
-        match byte {
-            b'"' => {
-                in_string = true;
-                escaped = false;
-                string_start = index;
-            }
-            b'{' | b'[' => {
-                depth += 1;
-                if depth == 1 {
-                    root_object = *byte == b'{';
-                    expecting_key = root_object;
-                }
-            }
-            b'}' | b']' => {
-                if depth == 1 {
-                    if let Some((name, start)) = pending.take() {
-                        members.push(Member {
-                            name,
-                            raw: line[start..index].to_owned(),
-                        });
-                    }
-                }
-                depth = depth.saturating_sub(1);
-            }
-            b',' if depth == 1 => {
-                if let Some((name, start)) = pending.take() {
-                    members.push(Member {
-                        name,
-                        raw: line[start..index].to_owned(),
-                    });
-                }
-                expecting_key = root_object;
-            }
-            _ => {}
-        }
-    }
-    Ok(Scan { members, repeated })
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{top_level_members, LoadedRecords, RawRecord};
+    use super::{LoadedRecords, RawRecord};
+    use crate::jsonl::line::checked_line;
+    use serde::{de::DeserializeOwned, Serialize};
+
+    /// The rows of `lines` as a load of a file keeps them.
+    fn load<T: DeserializeOwned + Serialize>(lines: [&str; 2]) -> LoadedRecords<T> {
+        let path = camino::Utf8Path::new("records.jsonl");
+        let mut loaded = LoadedRecords::default();
+        for (index, line) in lines.into_iter().enumerate() {
+            let line = checked_line(path, index + 1, line.as_bytes()).unwrap();
+            let (record, raw) = RawRecord::keep(path, line).unwrap();
+            loaded.push(record, raw);
+        }
+        loaded
+    }
 
     /// Implementation aid with no Rule: the test builds the stored rows
     /// directly.
     #[test]
     fn a_changed_record_with_a_stored_id_twice_is_located_at_the_second_line() {
-        let mut loaded = LoadedRecords::default();
-        for (index, line) in [r#"{"id":"one","n":1}"#, r#"{"id":"one","n":2}"#]
-            .into_iter()
-            .enumerate()
-        {
-            let (record, raw) = RawRecord::deserialize::<serde_json::Value>(
-                camino::Utf8Path::new("records.jsonl"),
-                line,
-                index + 1,
-            )
-            .unwrap();
-            loaded.push(record, raw);
-        }
+        let mut loaded =
+            load::<serde_json::Value>([r#"{"id":"one","n":1}"#, r#"{"id":"one","n":2}"#]);
         loaded.records_mut()[0]["n"] = 3.into();
         let error = loaded
             .into_lines(camino::Utf8Path::new("state/scopes/default/records.jsonl"))
@@ -351,19 +244,7 @@ mod tests {
         struct Row {
             n: u32,
         }
-        let mut loaded = LoadedRecords::default();
-        for (index, line) in [r#"{"n":1}"#, r#"{"n":2,"extension":true}"#]
-            .into_iter()
-            .enumerate()
-        {
-            let (record, raw) = RawRecord::deserialize::<Row>(
-                camino::Utf8Path::new("records.jsonl"),
-                line,
-                index + 1,
-            )
-            .unwrap();
-            loaded.push(record, raw);
-        }
+        let mut loaded = load::<Row>([r#"{"n":1}"#, r#"{"n":2,"extension":true}"#]);
         loaded.records_mut()[1].n = 3;
         let error = loaded
             .into_lines(camino::Utf8Path::new("state/scopes/default/records.jsonl"))
@@ -377,43 +258,5 @@ mod tests {
                 "unknown fields cannot survive a typed change to a record without an id"
             )
         );
-    }
-
-    #[test]
-    fn collects_members_in_written_order_with_raw_bytes() {
-        let scan =
-            top_level_members(r#"{"id" : "one","note":"a,b:c}{[#","detail":{"known":1}}"#).unwrap();
-        let names = scan
-            .members
-            .iter()
-            .map(|member| member.name.as_str())
-            .collect::<Vec<_>>();
-        assert_eq!(names, vec!["id", "note", "detail"]);
-        assert!(scan.repeated.is_none());
-        assert_eq!(scan.members[0].raw, r#""id" : "one""#);
-        assert_eq!(scan.members[1].raw, r#""note":"a,b:c}{[#""#);
-    }
-
-    #[test]
-    fn detects_a_repeat_written_with_escapes() {
-        let scan =
-            top_level_members(r#"{"a":1,"extension":2,"\u0061":3,"a\"b":4,"a\"b":5}"#).unwrap();
-        assert_eq!(scan.repeated.as_deref(), Some("a"));
-        assert_eq!(scan.members.len(), 5);
-    }
-
-    #[test]
-    fn escaped_quotes_do_not_end_a_key() {
-        let scan = top_level_members(r#"{"a\"b":1,"c":2}"#).unwrap();
-        assert_eq!(scan.members[0].name, "a\"b");
-        assert_eq!(scan.members[0].raw, r#""a\"b":1"#);
-        assert!(scan.repeated.is_none());
-    }
-
-    #[test]
-    fn an_array_root_has_no_members() {
-        let scan = top_level_members(r#"[{"a":1},{"a":2}]"#).unwrap();
-        assert!(scan.members.is_empty());
-        assert!(scan.repeated.is_none());
     }
 }
