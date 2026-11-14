@@ -98,3 +98,11 @@ async fn the_contract_refuses_an_adapter_that_gives_a_text_at_a_commit_it_does_n
 async fn the_contract_refuses_an_adapter_that_replaces_bytes_that_are_not_utf8() {
     contract::a_text_that_is_not_utf8_is_an_error(&Wrong(wrong::lossy_text)).await;
 }
+
+#[tokio::test]
+#[should_panic(
+    expected = ".provenance/state/unreadable.jsonl: the error is not the UTF-8 error of the text at base"
+)]
+async fn the_contract_refuses_an_adapter_whose_text_fails_for_another_reason() {
+    contract::a_text_that_is_not_utf8_is_an_error(&Wrong(wrong::failed_text)).await;
+}

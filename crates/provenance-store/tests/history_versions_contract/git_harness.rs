@@ -9,9 +9,12 @@ use std::process::Stdio;
 use std::sync::Arc;
 
 /// A Git repository that holds the commits, made with Git's plumbing so
-/// that each commit has exactly the parents and files of the graph.
+/// that each commit has exactly the parents and files of the graph. The
+/// adapter root is the directory `prefix` of the work tree, and each file of
+/// a commit is below it.
 pub struct Git {
     temps: std::sync::Mutex<Vec<tempfile::TempDir>>,
+    prefix: &'static str,
 }
 
 fn git(
@@ -52,8 +55,9 @@ impl Harness for Git {
                 .map_or("--empty", |first| ids[first.as_str()].as_str());
             git(root, &[], &["read-tree", base], None);
             for (path, entry) in &commit.changes {
+                let path = format!("{}{path}", self.prefix);
                 let Some(entry) = entry else {
-                    git(root, &[], &["update-index", "--force-remove", path], None);
+                    git(root, &[], &["update-index", "--force-remove", &path], None);
                     continue;
                 };
                 let input = Some(entry.bytes.as_slice());
@@ -99,14 +103,24 @@ impl Harness for Git {
             &["symbolic-ref", "HEAD", "refs/heads/main"],
             None,
         );
+        let root = root.join(self.prefix);
+        std::fs::create_dir_all(&root).unwrap();
         let root = Utf8PathBuf::from_path_buf(dunce::canonicalize(root).unwrap()).unwrap();
         self.temps.lock().unwrap().push(temp);
         Adapter::new(Arc::new(GitFileVersions::new(root)), ids)
     }
 }
 
+/// The git adapter at the top of its work tree.
 pub const fn git_harness() -> Git {
+    git_harness_in("")
+}
+
+/// The git adapter at the directory `prefix` of its work tree, such as
+/// `sub/`.
+pub const fn git_harness_in(prefix: &'static str) -> Git {
     Git {
         temps: std::sync::Mutex::new(Vec::new()),
+        prefix,
     }
 }

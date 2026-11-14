@@ -19,7 +19,7 @@ pub use edges::{
     a_change_of_mode_only_is_listed, a_commit_on_two_parent_lines_is_listed_once,
     a_commit_that_the_adapter_does_not_hold_has_no_text, a_text_that_is_not_utf8_is_an_error,
     an_octopus_merge_goes_on_through_the_parent_with_its_file, edge_graph, MODE, OCTOPUS,
-    TWO_LINES, UNHELD, UNKNOWN_COMMIT, UNREADABLE,
+    TWO_LINES, UNKNOWN_COMMIT, UNREADABLE,
 };
 pub use memory::{memory_adapter, MemoryFileVersions};
 

@@ -70,6 +70,12 @@ pub fn lossy_text(commits: &[Commit]) -> Arc<dyn FileVersions> {
     })))
 }
 
+/// An adapter that lists the versions and gives an error for each text,
+/// which is not the error of a text that is not UTF-8.
+pub fn failed_text(commits: &[Commit]) -> Arc<dyn FileVersions> {
+    Arc::new(FailedText(MemoryFileVersions::new(commits)))
+}
+
 /// `commits` with `change` applied to each entry.
 fn changed(commits: &[Commit], change: fn(Entry) -> Entry) -> Vec<Commit> {
     let mut commits = commits.to_vec();
@@ -358,5 +364,28 @@ impl FileVersions for HeadText {
         let head = self.commits.last().map_or("", String::as_str);
         self.memory
             .text(path, if known_commit { commit } else { head })
+    }
+}
+
+/// The memory adapter, except that each text read fails.
+#[derive(Debug)]
+struct FailedText(MemoryFileVersions);
+
+impl FileVersions for FailedText {
+    fn versions<'a>(
+        &'a self,
+        path: &'a str,
+    ) -> BoxFuture<'a, anyhow::Result<Arc<Vec<FileVersion>>>> {
+        self.0.versions(path)
+    }
+
+    fn text<'a>(
+        &'a self,
+        _path: &'a str,
+        _commit: &'a str,
+    ) -> BoxFuture<'a, anyhow::Result<Option<String>>> {
+        Box::pin(std::future::ready(Err(anyhow::anyhow!(
+            "the history is not available"
+        ))))
     }
 }

@@ -12,8 +12,6 @@ pub const TWO_LINES: &str = ".provenance/state/two_lines.jsonl";
 pub const MODE: &str = ".provenance/state/mode.jsonl";
 /// A file whose text is not UTF-8.
 pub const UNREADABLE: &str = ".provenance/state/unreadable.jsonl";
-/// A file that each commit of the graph holds.
-pub const UNHELD: &str = OCTOPUS;
 /// A commit id that no history of the cases holds.
 pub const UNKNOWN_COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
 
@@ -104,14 +102,17 @@ pub async fn a_change_of_mode_only_is_listed<H: Harness + Sync>(harness: &H) {
 }
 
 /// The text at a commit that the adapter does not hold is `None`, also for
-/// a file that each commit it holds has.
+/// a file that each commit it holds has. An empty name and a revision name
+/// such as `HEAD` are not commit ids, so they name no commit that it holds.
 pub async fn a_commit_that_the_adapter_does_not_hold_has_no_text<H: Harness + Sync>(harness: &H) {
     let adapter = harness.adapter(&edge_graph());
-    let text = adapter.versions.text(UNHELD, UNKNOWN_COMMIT).await.unwrap();
-    assert_eq!(
-        text, None,
-        "{UNHELD}: the text at a commit that the adapter does not hold is not None"
-    );
+    for commit in [UNKNOWN_COMMIT, "", "HEAD"] {
+        let text = adapter.versions.text(OCTOPUS, commit).await.unwrap();
+        assert_eq!(
+            text, None,
+            "{OCTOPUS}: the text at a commit that the adapter does not hold is not None: {commit:?}"
+        );
+    }
 }
 
 /// A commit whose file text is not UTF-8 is listed, and its text is an
@@ -132,8 +133,15 @@ pub async fn a_text_that_is_not_utf8_is_an_error<H: Harness + Sync>(harness: &H)
         .versions
         .text(UNREADABLE, &adapter.ids["base"])
         .await;
-    assert!(
-        text.is_err(),
-        "{UNREADABLE}: a text that is not UTF-8 is not an error: {text:?}"
+    let Err(error) = text else {
+        panic!("{UNREADABLE}: a text that is not UTF-8 is not an error: {text:?}");
+    };
+    let bytes = error
+        .downcast_ref::<std::string::FromUtf8Error>()
+        .map(std::string::FromUtf8Error::as_bytes);
+    assert_eq!(
+        bytes,
+        Some(&b"\xff\n"[..]),
+        "{UNREADABLE}: the error is not the UTF-8 error of the text at base: {error:#}"
     );
 }

@@ -1,9 +1,10 @@
-//! A record history read holds at most one committed text at a time.
+//! A record history read holds at most one committed text at a time, and
+//! keeps no text after it ends.
 //!
 //! Implementation aid with no Rule binding: the test process counts the
-//! bytes that it holds through its allocator, and a history read of many
-//! large committed texts adds less than two texts at its peak. The count does
-//! not depend on timing. This binary holds one test, so no other test adds
+//! bytes that it holds through its allocator. A history read of many large
+//! committed texts adds less than two texts at its peak, and less than a
+//! quarter of one text stays after it. The count does not depend on timing. This binary holds one test, so no other test adds
 //! to the count.
 
 mod discussion_support;
@@ -129,9 +130,13 @@ fn git_history(root: &std::path::Path, path: &str, texts: &[String]) {
     git(&["symbolic-ref", "HEAD", "refs/heads/main"]);
 }
 
-/// The largest count of bytes that a history read of `req_a` through
-/// `versions` adds, and the number of versions that it lists.
-async fn peak_of_read(repository: &Repository, versions: Arc<dyn FileVersions>) -> (usize, usize) {
+/// The bytes that a history read of `req_a` through `versions` adds: the
+/// largest count during the read, and the count that stays after it. Also
+/// the number of versions that it lists.
+async fn peak_of_read(
+    repository: &Repository,
+    versions: Arc<dyn FileVersions>,
+) -> (usize, usize, usize) {
     let repository = repository.with_file_versions(versions);
     let query = ReviewHistoryQuery {
         record_kind: NodeType::Requirement,
@@ -146,7 +151,11 @@ async fn peak_of_read(repository: &Repository, versions: Arc<dyn FileVersions>) 
         .unwrap()
         .result
         .entries;
-    (PEAK.load(Ordering::SeqCst) - start, entries.len())
+    let listed = entries.len();
+    drop(entries);
+    drop(repository);
+    let kept = LIVE.load(Ordering::SeqCst).saturating_sub(start);
+    (PEAK.load(Ordering::SeqCst) - start, kept, listed)
 }
 
 #[tokio::test]
@@ -181,11 +190,15 @@ async fn a_history_read_holds_one_committed_text_at_a_time() {
         .collect::<Vec<_>>();
     let memory = Arc::new(MemoryFileVersions::new(&commits));
     drop(commits);
-    let (peak, listed) = peak_of_read(&repository, memory).await;
+    let (peak, kept, listed) = peak_of_read(&repository, memory).await;
     assert_eq!(listed, 1, "the memory history lists the record once");
     assert!(
         peak < limit,
         "a read over the memory adapter added {peak} bytes; one text has {TEXT}"
+    );
+    assert!(
+        kept < TEXT / 4,
+        "a read over the memory adapter kept {kept} bytes; one text has {TEXT}"
     );
 
     let history = tempfile::tempdir().unwrap();
@@ -195,10 +208,14 @@ async fn a_history_read_holds_one_committed_text_at_a_time() {
     let git = Arc::new(GitFileVersions::new(
         camino::Utf8PathBuf::from_path_buf(git_root).unwrap(),
     ));
-    let (peak, listed) = peak_of_read(&repository, git).await;
+    let (peak, kept, listed) = peak_of_read(&repository, git).await;
     assert_eq!(listed, 1, "the Git history lists the record once");
     assert!(
         peak < limit,
         "a read over the git adapter added {peak} bytes; one text has {TEXT}"
+    );
+    assert!(
+        kept < TEXT / 4,
+        "a read over the git adapter kept {kept} bytes; one text has {TEXT}"
     );
 }

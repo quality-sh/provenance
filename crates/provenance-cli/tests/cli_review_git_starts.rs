@@ -49,7 +49,7 @@ fn expected(steps: &[(&'static str, &[&str])]) -> Vec<(&'static str, Vec<String>
 }
 
 #[test]
-fn review_host_starts_git_once_per_value_that_can_change() {
+fn review_host_git_starts_of_each_request_step() {
     let repo = repository_with_actors(&["jane_example_com"]);
     create(repo.path(), "req_review", "requirement", &[]);
     create(repo.path(), "req_other", "requirement", &[]);
@@ -128,7 +128,7 @@ fn review_host_starts_git_once_per_value_that_can_change() {
 }
 
 /// The Git subcommands that each step of
-/// `review_host_starts_git_once_per_value_that_can_change` starts, in order.
+/// `review_host_git_starts_of_each_request_step` starts, in order.
 fn expected_starts() -> Vec<(&'static str, Vec<String>)> {
     let first_read = ["--version", "rev-parse", "log", "cat-file"];
     let reviewer_read = ["config", "config"];
@@ -143,17 +143,14 @@ fn expected_starts() -> Vec<(&'static str, Vec<String>)> {
         ("first history read", &first_read),
         (
             "two history reads at the same HEAD",
-            &["rev-parse", "cat-file", "rev-parse", "cat-file"],
+            &["rev-parse", "rev-parse"],
         ),
         (
             "history read after HEAD moves",
             &["rev-parse", "log", "cat-file"],
         ),
         ("working tree edit", &["rev-parse"]),
-        (
-            "history read after the working tree edit",
-            &["rev-parse", "cat-file"],
-        ),
+        ("history read after the working tree edit", &["rev-parse"]),
         (
             "history read of a second Requirement",
             &["rev-parse", "cat-file"],

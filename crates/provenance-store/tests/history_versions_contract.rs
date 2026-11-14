@@ -13,6 +13,8 @@ mod edges;
 mod git_harness;
 #[path = "support/memory.rs"]
 mod memory;
+#[path = "history_versions_contract/subdirectory.rs"]
+mod subdirectory;
 #[path = "history_versions_contract/wrong.rs"]
 mod wrong;
 
