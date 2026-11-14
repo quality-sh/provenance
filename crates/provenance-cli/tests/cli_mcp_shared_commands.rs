@@ -224,3 +224,75 @@ async fn materialize_action_refuses_an_argument_by_name() {
     );
     wire.close().await;
 }
+
+/// The dictionary import action over a dictionary reference that does not parse gives the
+/// `invalid_state_file` failure with the repair as the hint, keeps the file and writes no
+/// index.
+#[tokio::test]
+#[verifies("rule_ste_dictionary_reference_parse_refusal", examples)]
+async fn the_dictionary_import_action_refuses_a_reference_that_does_not_parse() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_str().unwrap();
+    let index = tempfile::tempdir().unwrap();
+    support::init_repo(repo);
+    let reference = dictionary_support::reference_path(directory.path());
+    std::fs::write(&reference, "").unwrap();
+    let files = tempfile::tempdir().unwrap();
+    let pdf = files.path().join("dictionary.pdf");
+    std::fs::write(&pdf, dictionary_support::dictionary_pdf()).unwrap();
+    let mut wire = Wire::start(repo, index.path()).await;
+    let arguments = json!({"action":"dictionary_import","pdf":pdf.to_str().unwrap()});
+
+    let result = wire
+        .request("tools/call", json!({"name":"change","arguments":arguments}))
+        .await;
+
+    assert_eq!(result["isError"], json!(true), "{result}");
+    assert_eq!(
+        result["structuredContent"]["error"],
+        json!({"kind":"invalid_state_file","file":"dictionary.json","line":1,
+               "message":"EOF while parsing a value",
+               "hint":"get the file again from git or correct its JSON, and then do the \
+                       command again"}),
+        "{result}"
+    );
+    assert_eq!(std::fs::read_to_string(&reference).unwrap(), "");
+    assert_eq!(
+        dictionary_support::file_names(index.path()),
+        Vec::<String>::new()
+    );
+    wire.close().await;
+}
+
+/// The materialize action over a record file with a line that does not parse gives the
+/// `invalid_state_file` failure with the relative file path, the line and the message.
+#[tokio::test]
+#[verifies("rule_state_parse_refusal_names_the_line", examples)]
+async fn the_materialize_action_names_a_record_line_that_does_not_parse() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_str().unwrap();
+    let index = tempfile::tempdir().unwrap();
+    support::init_repo(repo);
+    let shard = directory
+        .path()
+        .join(".provenance/state/scopes/default/requirements/req.jsonl");
+    std::fs::create_dir_all(shard.parent().unwrap()).unwrap();
+    std::fs::write(&shard, "{\n").unwrap();
+    let mut wire = Wire::start(repo, index.path()).await;
+
+    let result = wire
+        .request(
+            "tools/call",
+            json!({"name":"change","arguments":{"action":"materialize"}}),
+        )
+        .await;
+
+    assert_eq!(result["isError"], json!(true), "{result}");
+    assert_eq!(
+        result["structuredContent"]["error"],
+        json!({"kind":"invalid_state_file","file":"scopes/default/requirements/req.jsonl",
+               "line":1,"message":"EOF while parsing an object"}),
+        "{result}"
+    );
+    wire.close().await;
+}

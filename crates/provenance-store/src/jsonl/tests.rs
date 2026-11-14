@@ -1,4 +1,5 @@
 use super::*;
+use provenance_core::protocol::read_failure::UnparsableStateFile;
 use serde::{Deserialize, Serialize};
 #[derive(Serialize)]
 struct Record {
@@ -202,9 +203,9 @@ fn mutation_refuses_a_changed_row_with_nested_unknown_data() {
         },
     )
     .unwrap_err();
-    let state = crate::state_store::readers::StateLineInvalid::find(&message).unwrap();
+    let state = UnparsableStateFile::find(message.as_ref()).unwrap();
     assert_eq!(
-        (state.line, state.message.as_str()),
+        (state.line(), state.message()),
         (
             1,
             "nested unknown field `detail.extension` cannot survive a typed record change"
@@ -234,9 +235,9 @@ fn mutation_refuses_a_changed_row_with_a_repeated_unknown_field() {
         },
     )
     .unwrap_err();
-    let state = crate::state_store::readers::StateLineInvalid::find(&message).unwrap();
+    let state = UnparsableStateFile::find(message.as_ref()).unwrap();
     assert_eq!(
-        (state.line, state.message.as_str()),
+        (state.line(), state.message()),
         (
             1,
             "repeated top-level member `extension` cannot survive a typed record change"

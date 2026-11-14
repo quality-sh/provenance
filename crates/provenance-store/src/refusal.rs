@@ -24,7 +24,6 @@
 //! test refuses a raw anyhow refusal outside this file and `write_error.rs`.
 
 use crate::state_store::message_ids::ShardLine;
-use crate::state_store::readers::StateLineInvalid;
 use provenance_core::protocol::failure::OperationFailure;
 
 /// The text of a declared internal fault.
@@ -79,11 +78,12 @@ pub(crate) use refuse;
 /// Stored records that do not agree, located at the record at fault. It reads
 /// as `invalid_state_file` with that file and line.
 pub fn state_fault(at: &ShardLine, message: String) -> anyhow::Error {
-    StateLineInvalid {
-        path: at.path.clone(),
-        line: u64::try_from(at.line).unwrap_or(u64::MAX),
+    crate::state_store::readers::unparsable(
+        &at.path,
+        u64::try_from(at.line).unwrap_or(u64::MAX),
         message,
-    }
+        None,
+    )
     .into()
 }
 

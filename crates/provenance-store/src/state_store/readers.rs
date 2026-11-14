@@ -3,66 +3,52 @@ use super::{Message, ProvenanceLayout, ScopeId, StateEntry, StateStore};
 use crate::shards;
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
+use provenance_core::protocol::read_failure::{shown_file, UnparsableStateFile};
 use serde::de::DeserializeOwned;
-
-/// A stored line that is not one record of its family.
-///
-/// `serde_json` reports a position inside the one line it was given, which
-/// reads as "line 1" for every row; the shard path and the row number are
-/// what locate the fault. The display gives the path below the state
-/// directory, so check output and a refusal name the same place.
-#[derive(Debug, thiserror::Error)]
-#[error("{} line {line}: {message}", state_relative(path))]
-pub struct StateLineInvalid {
-    pub path: Utf8PathBuf,
-    pub line: u64,
-    pub message: String,
-}
-
-impl StateLineInvalid {
-    /// The shard path below the state directory, or only its file name when
-    /// the shard is not below a state directory. A refusal that leaves the
-    /// host gives this value and never an absolute path.
-    pub fn file(&self) -> String {
-        state_file(&self.path)
-    }
-
-    /// The first unparsable state line in the cause chain of `error`.
-    pub fn find(error: &anyhow::Error) -> Option<&Self> {
-        error.chain().find_map(|cause| cause.downcast_ref::<Self>())
-    }
-}
 
 /// The shard path below the state directory, or only its file name when the
 /// shard is not below a state directory.
 pub fn state_file(path: &Utf8Path) -> String {
-    below_state(path)
-        .or_else(|| path.file_name().map(str::to_owned))
-        .unwrap_or_default()
+    shown_file(path, None)
+}
+
+/// The refusal of the file at `path`, which does not parse at `line`. The
+/// refusal finds the repository that holds the file, so that it gives a path
+/// that a person can find and never an absolute path.
+pub fn unparsable(
+    path: &Utf8Path,
+    line: u64,
+    message: String,
+    hint: Option<String>,
+) -> UnparsableStateFile {
+    let absolute = std::path::absolute(path)
+        .ok()
+        .and_then(|absolute| Utf8PathBuf::from_path_buf(absolute).ok());
+    let repository = absolute
+        .as_deref()
+        .and_then(Utf8Path::parent)
+        .and_then(|directory| crate::layout::locate_repo_root(directory).ok());
+    UnparsableStateFile::new(
+        absolute.as_deref().unwrap_or(path),
+        repository.as_deref(),
+        line,
+        message,
+        hint,
+    )
 }
 
 /// Names the shard and its line when a stored line is not one JSON record.
 pub fn located(path: &Utf8Path, line_number: usize, error: &serde_json::Error) -> anyhow::Error {
+    crate::refusal::state_fault(&ShardLine::new(path, line_number), parse_message(error))
+}
+
+/// The message of a serde error with no position, because the refusal gives
+/// the line itself.
+pub fn parse_message(error: &serde_json::Error) -> String {
     let text = error.to_string();
-    let message = text
-        .rfind(" at line ")
-        .map_or(text.as_str(), |at| &text[..at]);
-    crate::refusal::state_fault(&ShardLine::new(path, line_number), message.to_owned())
-}
-
-/// The shard path below the state directory, with `/` between its parts on
-/// every platform. A shard path joins native separators to a family suffix
-/// that has `/`, so the plain display mixes the two on Windows.
-fn state_relative(path: &Utf8Path) -> String {
-    below_state(path).unwrap_or_else(|| path.to_string())
-}
-
-fn below_state(path: &Utf8Path) -> Option<String> {
-    let components: Vec<&str> = path.iter().collect();
-    components
-        .windows(2)
-        .rposition(|pair| pair == [".provenance", "state"])
-        .map(|at| components[at + 2..].join("/"))
+    text.rfind(" at line ")
+        .map_or(text.as_str(), |at| &text[..at])
+        .to_owned()
 }
 
 pub fn parse_line(

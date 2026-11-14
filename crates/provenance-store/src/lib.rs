@@ -30,6 +30,8 @@ pub mod cache;
 pub mod canonical_digest;
 pub mod code_refs;
 pub mod current_schema;
+#[cfg(feature = "host")]
+pub mod dictionary_index;
 pub mod dictionary_reference;
 pub mod families;
 #[cfg(all(feature = "host", feature = "test-fixture"))]

@@ -4,7 +4,7 @@ use camino::Utf8Path;
 use fs2::FileExt;
 use provenance_macros::rule;
 use provenance_ste100::DictionaryImport;
-use provenance_store::{dictionary_reference, layout::ProvenanceLayout};
+use provenance_store::{dictionary_index, dictionary_reference, layout::ProvenanceLayout};
 use std::{
     fs::{File, OpenOptions},
     io::{Read, Write},
@@ -35,6 +35,9 @@ pub fn prepare(
     let layout = ProvenanceLayout::new(repo.to_owned());
     let reference_path = dictionary_reference::dictionary_reference_path(&layout);
     let reference_before = FileSnapshot::read(reference_path.as_std_path())?;
+    // A reference that does not parse stops init here, before a download and
+    // before each write.
+    dictionary_reference::current_reference_from(&layout, reference_before.bytes())?;
     if dictionary_reference::load_project_dictionary(&layout).is_some() {
         reference_before.recheck(reference_path.as_std_path())?;
         return Ok(Plan::unchanged(reference_before));
@@ -58,7 +61,8 @@ pub fn prepare(
         });
     };
     let before = FileSnapshot::read(reference_path.as_std_path())?;
-    let bytes = dictionary_reference::reference_bytes(&layout, &import.identity)?;
+    let bytes = dictionary_reference::current_reference_from(&layout, before.bytes())?
+        .bytes_for(&import.identity)?;
     Ok(Plan {
         import: Some(import),
         reference_before: Some(before),
@@ -96,7 +100,7 @@ impl Plan {
         };
         let index_directory = dictionary_reference::index_directory()
             .context("no machine data directory is available")?;
-        provenance_ste100::store_dictionary_index(import, &index_directory)
+        dictionary_index::store_dictionary_index(import, &index_directory)
             .context("store the dictionary index")?;
         if self.reference_change().is_none() {
             return Ok(());
@@ -134,7 +138,7 @@ fn import_bytes(bytes: &[u8]) -> anyhow::Result<DictionaryImport> {
 
 fn import_cached_bytes(bytes: &[u8]) -> anyhow::Result<DictionaryImport> {
     if let Some(directory) = dictionary_reference::index_directory() {
-        if let Ok(import) = provenance_ste100::load_dictionary_index_for_source(&directory, bytes) {
+        if let Ok(import) = dictionary_index::load_dictionary_index_for_source(&directory, bytes) {
             return Ok(import);
         }
     }

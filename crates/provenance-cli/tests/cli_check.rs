@@ -1,6 +1,7 @@
 use predicates::prelude::PredicateBooleanExt;
 use predicates::str::contains;
 use provenance_macros::verifies;
+use provenance_store::dictionary_index::store_dictionary_index;
 use std::path::Path;
 
 // The synthetic Issue 9 fixture, shared with the dictionary test target.
@@ -382,7 +383,7 @@ fn strict_check_passes_when_the_referenced_index_is_present() {
     git(&repo, &["config", "user.name", "Test"]);
     init(&repo);
     let dictionary = dictionary_support::imported_dictionary();
-    provenance_ste100::store_dictionary_index(dictionary, &index_directory).unwrap();
+    store_dictionary_index(dictionary, &index_directory).unwrap();
     dictionary_support::write_reference(&repo, dictionary);
     git(&repo, &["add", "."]);
     git(&repo, &["commit", "-m", "initial candidate"]);
