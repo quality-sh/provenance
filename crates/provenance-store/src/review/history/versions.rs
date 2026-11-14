@@ -17,7 +17,8 @@ use std::sync::Arc;
 /// The future of one port call.
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
-/// One commit that changed a file, with the file text at that commit.
+/// One commit that changed a file. The port gives the text of the file at a
+/// commit through [`FileVersions::text`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct FileVersion {
@@ -31,27 +32,22 @@ pub struct FileVersion {
     /// The commit time (the committer date, not the author date) in seconds
     /// since the Unix epoch.
     pub committed_at: i64,
-    /// `None` when the commit removed the file.
-    pub text: Option<String>,
 }
 
 impl FileVersion {
     /// The version of a file at `commit`, whose nearest listed commits on
-    /// each parent line are `parents`. `text` is `None` when the commit
-    /// removed the file.
+    /// each parent line are `parents`.
     pub const fn new(
         commit: String,
         parents: Vec<String>,
         author: String,
         committed_at: i64,
-        text: Option<String>,
     ) -> Self {
         Self {
             commit,
             parents,
             author,
             committed_at,
-            text,
         }
     }
 }
@@ -59,12 +55,13 @@ impl FileVersion {
 /// The committed versions of the files of one repository.
 pub trait FileVersions: Send + Sync + Debug {
     /// The commits in the history of `HEAD` that changed `path`, each
-    /// parent before its children.
+    /// parent before its children, each commit once.
     ///
     /// A commit changed the file when its file differs from the file of
     /// each of its parents, or when it is a root commit that holds the
-    /// file. A removal is a change. A merge whose file is the same as the
-    /// file of one parent is not listed, and the history goes on through
+    /// file. A removal is a change, and so is a change of the file mode
+    /// only. A merge whose file is the same as the file of one parent is not
+    /// listed, and the history goes on through
     /// that parent only, which can be any parent. When more than one parent
     /// has the same file, the history goes on through the first of them.
     /// The versions do not follow a moved file: a commit that moves a file
@@ -76,18 +73,33 @@ pub trait FileVersions: Send + Sync + Debug {
     /// same file until a commit changed the file. When `HEAD` did not change
     /// the file, `HEAD` is not listed. A history with no commit, or with no
     /// commit that changed the file, gives no versions.
+    ///
+    /// An adapter can give the same list, the same `Arc`, again while its
+    /// history does not change. A history read keeps what it found for the
+    /// last list that it read, so a new read of that list reads no text.
     fn versions<'a>(
         &'a self,
         path: &'a str,
     ) -> BoxFuture<'a, anyhow::Result<Arc<Vec<FileVersion>>>>;
 
-    /// The text of `path` at each commit of `commits`, in the same order.
+    /// The text of `path` at `commit`.
     ///
     /// The commit need not have changed the file. `None` when the file is
-    /// not in that commit.
-    fn texts<'a>(
+    /// not in that commit, and when the adapter does not hold the commit. A
+    /// name that is not a commit id of the adapter, such as an empty name or
+    /// `HEAD`, names no commit that it holds. When the text is not UTF-8, the
+    /// error is the [`FromUtf8Error`](std::string::FromUtf8Error) of its
+    /// bytes.
+    ///
+    /// A history read asks for one text at a time and keeps only what it
+    /// finds in it, so an adapter that reads each text on demand holds at
+    /// most one text of the read. An error of a text ends the history read
+    /// with that error, and the read asks the adapter for no more texts.
+    /// Only the git adapter, [`GitFileVersions`](super::GitFileVersions), gets
+    /// the remaining texts of the file after an error.
+    fn text<'a>(
         &'a self,
         path: &'a str,
-        commits: &'a [String],
-    ) -> BoxFuture<'a, anyhow::Result<Vec<Option<String>>>>;
+        commit: &'a str,
+    ) -> BoxFuture<'a, anyhow::Result<Option<String>>>;
 }

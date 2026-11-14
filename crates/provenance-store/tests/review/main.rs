@@ -19,6 +19,8 @@ mod review_cycle_records;
 mod review_history;
 #[path = "../review_history_characterization.rs"]
 mod review_history_characterization;
+#[path = "../review_history_committed_text_errors.rs"]
+mod review_history_committed_text_errors;
 #[path = "../review_history_git.rs"]
 mod review_history_git;
 #[path = "../review_markers.rs"]

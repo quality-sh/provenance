@@ -8,9 +8,13 @@ pub mod contract;
 #[cfg(feature = "host")]
 mod evidence;
 #[cfg(feature = "host")]
+mod found;
+#[cfg(feature = "host")]
 mod git;
 #[cfg(feature = "host")]
 mod origins;
+#[cfg(feature = "host")]
+mod texts;
 mod versions;
 
 #[cfg(feature = "host")]
@@ -38,6 +42,7 @@ pub(super) const WORKING: &str = "working";
 
 /// One record version and the record JSON it holds.
 #[cfg(feature = "host")]
+#[derive(Clone)]
 pub(super) struct VersionedRecord {
     pub(super) version: RecordVersion,
     pub(super) record: Value,
@@ -88,28 +93,18 @@ impl StateStore {
             Ok((held.state_text(&path)?, held.list_discussions(scope)?))
         })?;
         let history = self.file_versions();
-        let files = history.versions(&self.relative(&path)?).await?;
-        let records = files
-            .iter()
-            .map(|file| file.text.as_deref().and_then(|text| find(text, id)))
-            .collect::<Vec<_>>();
-        let head = records.last().cloned().flatten();
-        let mut versions = Vec::new();
-        for index in lineage(&files, &records) {
-            let (file, Some(record)) = (&files[index], records[index].clone()) else {
-                continue;
-            };
-            let source = Source {
-                id: StableId::new(file.commit.clone())?,
-                commit: Some(file.commit.clone()),
-                author: Some(file.author.clone()),
-                committed_at: Some(file.committed_at),
-            };
-            push_version(&mut versions, kind, source, record)?;
-        }
+        let records = self.relative(&path)?;
+        let files = history.versions(&records).await?;
+        let paths = found::Paths {
+            records: &records,
+            discussions: &self.relative(&shards::discussions_path(&self.layout, scope))?,
+        };
+        let committed = found::committed(history.as_ref(), &files, paths, kind, id).await?;
+        let mut versions = committed.versions.clone();
         let working = working.as_deref().and_then(|text| find(text, id));
         if let Some(record) = working {
-            if head
+            if committed
+                .head
                 .as_ref()
                 .is_none_or(|head| content(head) != content(&record))
             {
@@ -119,18 +114,13 @@ impl StateStore {
                     author: None,
                     committed_at: None,
                 };
+                let count = versions.len();
                 push_version(&mut versions, kind, source, record)?;
+                if let Some(version) = versions.get_mut(count) {
+                    origins::working(discussions, kind, id, &committed.seen, version);
+                }
             }
         }
-        origins::assign(
-            history.as_ref(),
-            &self.relative(&shards::discussions_path(&self.layout, scope))?,
-            &discussions,
-            kind,
-            id,
-            &mut versions,
-        )
-        .await?;
         Ok(versions)
     }
 

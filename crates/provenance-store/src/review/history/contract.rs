@@ -1,12 +1,26 @@
 //! The contract that every file versions adapter meets.
 //!
-//! Each case asks the harness for an adapter over the commit graph
+//! Each case asks the harness for an adapter over a commit graph, such as
 //! [`graph`]. The expected answers are the answers of the git adapter over a
 //! Git history that holds the same commits, so an adapter that passes gives
 //! the git adapter's versions and texts. The cases use only the port.
 
+mod cases;
+mod commit;
+mod edges;
 mod memory;
 
+pub use cases::{
+    a_file_that_no_commit_holds_has_no_versions, text_gives_the_file_at_a_commit,
+    versions_follow_the_history_of_head,
+};
+pub use commit::{Commit, Entry};
+pub use edges::{
+    a_change_of_mode_only_is_listed, a_commit_on_two_parent_lines_is_listed_once,
+    a_commit_that_the_adapter_does_not_hold_has_no_text, a_text_that_is_not_utf8_is_an_error,
+    an_octopus_merge_goes_on_through_the_parent_with_its_file, edge_graph, MODE, OCTOPUS,
+    TWO_LINES, UNKNOWN_COMMIT, UNREADABLE,
+};
 pub use memory::{memory_adapter, MemoryFileVersions};
 
 use super::versions::FileVersions;
@@ -25,67 +39,6 @@ pub const MERGED: &str = ".provenance/state/merged.jsonl";
 pub const MOVED_FROM: &str = ".provenance/state/moved_from.jsonl";
 /// The file that a commit makes from [`MOVED_FROM`].
 pub const MOVED_TO: &str = ".provenance/state/moved_to.jsonl";
-
-/// One commit of a commit graph.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
-pub struct Commit {
-    pub name: String,
-    /// The names of the parents, in parent order.
-    pub parents: Vec<String>,
-    /// The author name.
-    pub author: String,
-    /// The committer name.
-    pub committer: String,
-    /// The author time in seconds since the Unix epoch.
-    pub authored_at: i64,
-    /// The commit time in seconds since the Unix epoch.
-    pub committed_at: i64,
-    /// The files that differ from the first parent: the new text, or `None`
-    /// for a removed file. A merge has the files of its first parent and
-    /// these changes.
-    pub changes: Vec<(String, Option<String>)>,
-}
-
-impl Commit {
-    /// A commit with these parents, in parent order, that changes no file.
-    /// Its author is also its committer, and its author time is its commit
-    /// time.
-    pub fn new(name: &str, parents: &[&str], author: &str, committed_at: i64) -> Self {
-        Self {
-            name: name.to_owned(),
-            parents: parents.iter().map(|parent| (*parent).to_owned()).collect(),
-            author: author.to_owned(),
-            committer: author.to_owned(),
-            authored_at: committed_at,
-            committed_at,
-            changes: Vec::new(),
-        }
-    }
-
-    /// This commit with `committer` as the committer name and `authored_at`
-    /// as the author time, as a commit that another person rebased has.
-    #[must_use]
-    pub fn with_committer(mut self, committer: &str, authored_at: i64) -> Self {
-        committer.clone_into(&mut self.committer);
-        self.authored_at = authored_at;
-        self
-    }
-
-    /// This commit with `text` as the file at `path`.
-    #[must_use]
-    pub fn with_file(mut self, path: &str, text: &str) -> Self {
-        self.changes.push((path.to_owned(), Some(text.to_owned())));
-        self
-    }
-
-    /// This commit with no file at `path`.
-    #[must_use]
-    pub fn without_file(mut self, path: &str) -> Self {
-        self.changes.push((path.to_owned(), None));
-        self
-    }
-}
 
 /// The commit graph of the cases, each parent before its children. `HEAD`
 /// is the last commit.
@@ -176,10 +129,6 @@ pub trait Harness {
 type Named = (String, Vec<String>, String, i64, Option<String>);
 
 impl Adapter {
-    fn ids(&self, names: &[&str]) -> Vec<String> {
-        names.iter().map(|name| self.ids[*name].clone()).collect()
-    }
-
     fn name(&self, id: &str) -> String {
         let Some((name, _)) = self.ids.iter().find(|(_, known)| known.as_str() == id) else {
             panic!("the adapter gave an unknown commit {id}")
@@ -187,13 +136,23 @@ impl Adapter {
         name.clone()
     }
 
-    /// The versions of `path` by commit name, after a check that each
-    /// parent comes before its child.
+    /// The text of `path` at the commit named `name`.
+    async fn text(&self, path: &str, name: &str) -> Option<String> {
+        self.versions.text(path, &self.ids[name]).await.unwrap()
+    }
+
+    /// The versions of `path` by commit name, each with its text, after a
+    /// check that each parent comes before its child and that no commit is
+    /// listed twice.
     async fn versions(&self, path: &str) -> Vec<Named> {
         let versions = self.versions.versions(path).await.unwrap();
         let mut named: Vec<Named> = Vec::new();
         for version in versions.iter() {
             let commit = self.name(&version.commit);
+            assert!(
+                named.iter().all(|listed| listed.0 != commit),
+                "{path}: the commit {commit} is listed more than once"
+            );
             let parents = version
                 .parents
                 .iter()
@@ -205,27 +164,29 @@ impl Adapter {
                     "{path}: parent {parent} of {commit} is not listed before it"
                 );
             }
+            let text = self.text(path, &commit).await;
             named.push((
                 commit,
                 parents,
                 version.author.clone(),
                 version.committed_at,
-                version.text.clone(),
+                text,
             ));
         }
         named
     }
 }
 
-fn named(commit: &str, parents: &[&str], text: Option<&str>) -> Named {
-    let found = graph()
-        .into_iter()
+/// The expected version at the commit `commit` of `commits`.
+fn named(commits: &[Commit], commit: &str, parents: &[&str], text: Option<&str>) -> Named {
+    let found = commits
+        .iter()
         .find(|known| known.name == commit)
         .expect("the case names a commit of the graph");
     (
-        found.name,
+        found.name.clone(),
         parents.iter().map(|parent| (*parent).to_owned()).collect(),
-        found.author,
+        found.author.clone(),
         found.committed_at,
         text.map(str::to_owned),
     )
@@ -263,109 +224,4 @@ fn assert_versions(path: &str, mut versions: Vec<Named>, mut expected: Vec<Named
         times(&expected),
         "{path}: a version does not carry the commit time of its commit"
     );
-}
-
-/// The versions of a file list each commit in the history of `HEAD` that
-/// changed it, with the nearest listed commit on each parent line, each
-/// parent before its child.
-///
-/// A merge that keeps the file of one parent, first or second, is not
-/// listed, and the commits that only its other parents reach are not
-/// listed. A merge with new text is listed with each parent line. A
-/// removal is listed with no text. When more than one parent of a merge has
-/// its file, the history goes on through the first of them. A moved file
-/// starts at the move. The last version is the first commit that changed the
-/// file on the walk from `HEAD`, which need not be `HEAD`. Each version
-/// carries the author name and the commit time of its commit.
-pub async fn versions_follow_the_history_of_head<H: Harness + Sync>(harness: &H) {
-    let adapter = harness.adapter(&graph());
-    let records = adapter.versions(RECORDS).await;
-    assert_eq!(
-        records.last().map(|version| version.0.as_str()),
-        Some("revert"),
-        "{RECORDS}: the last version is not the first commit that changed the file on the walk from HEAD"
-    );
-    assert_versions(
-        RECORDS,
-        records,
-        vec![
-            named("create", &[], Some("r1\n")),
-            named("left", &["create"], Some("r2\n")),
-            named("right", &["create"], Some("r3\n")),
-            named("merge", &["left", "right"], Some("r4\n")),
-            named("delete", &["merge"], None),
-            named("again", &["delete"], Some("r9\n")),
-            named("drift", &["again"], Some("r10\n")),
-            named("revert", &["drift"], Some("r9\n")),
-        ],
-    );
-    let discussions = adapter.versions(DISCUSSIONS).await;
-    assert_eq!(
-        discussions,
-        vec![
-            named("start", &[], Some("d0\n")),
-            named("left", &["start"], Some("d2\n")),
-            named("discuss", &["left"], Some("d5\n")),
-        ]
-    );
-    assert_versions(
-        MERGED,
-        adapter.versions(MERGED).await,
-        vec![
-            named("split", &[], Some("m1\n")),
-            named("pick", &["split"], Some("m2\n")),
-        ],
-    );
-    assert_versions(
-        MOVED_FROM,
-        adapter.versions(MOVED_FROM).await,
-        vec![
-            named("draft", &[], Some("v1\n")),
-            named("edit", &["draft"], Some("v2\n")),
-            named("move", &["edit"], None),
-        ],
-    );
-    assert_versions(
-        MOVED_TO,
-        adapter.versions(MOVED_TO).await,
-        vec![named("move", &[], Some("v2\n"))],
-    );
-}
-
-/// The texts of a file are its text at each named commit, in the order of
-/// the names, whether or not that commit changed it: `None` before the file
-/// exists and after its removal.
-pub async fn texts_give_the_file_at_each_commit<H: Harness + Sync>(harness: &H) {
-    let adapter = harness.adapter(&graph());
-    let commits = adapter.ids(&[
-        "again", "start", "discuss", "ours", "delete", "right", "theirs", "join", "other",
-    ]);
-    let texts = adapter.versions.texts(RECORDS, &commits).await.unwrap();
-    let expected = [
-        Some("r9\n"),
-        None,
-        Some("r4\n"),
-        Some("r4\n"),
-        None,
-        Some("r3\n"),
-        Some("r6\n"),
-        Some("r9\n"),
-        Some("r11\n"),
-    ];
-    assert_eq!(texts, expected.map(|text| text.map(str::to_owned)));
-    let commits = adapter.ids(&["create", "right", "merge", "join"]);
-    let texts = adapter.versions.texts(DISCUSSIONS, &commits).await.unwrap();
-    let expected = [Some("d0\n"), Some("d0\n"), Some("d2\n"), Some("d5\n")];
-    assert_eq!(texts, expected.map(|text| text.map(str::to_owned)));
-}
-
-/// A file that no commit holds has no versions and no text, and a read of
-/// no commits gives no texts.
-pub async fn a_file_that_no_commit_holds_has_no_versions<H: Harness + Sync>(harness: &H) {
-    let adapter = harness.adapter(&graph());
-    assert_eq!(adapter.versions(ABSENT).await, Vec::<Named>::new());
-    let head = adapter.ids(&["move"]);
-    assert_eq!(adapter.versions.texts(ABSENT, &head).await.unwrap(), [None]);
-    let texts = adapter.versions.texts(RECORDS, &[]).await.unwrap();
-    assert_eq!(texts, Vec::<Option<String>>::new());
 }
