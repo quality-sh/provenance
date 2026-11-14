@@ -25,10 +25,8 @@ pub async fn read_document_answer(
     policy: ReadPolicy,
     request: ReadDocumentQuery,
 ) -> anyhow::Result<Stamped<ReadDocumentResult>> {
-    crate::operations::reader::current(repository, policy, move |ctx| {
-        Box::pin(read(ctx, request))
-    })
-    .await
+    crate::operations::reader::current(repository, policy, move |ctx| Box::pin(read(ctx, request)))
+        .await
 }
 
 /// Returns at most one document: nearest, then deepest, then lowest Requirement ID.

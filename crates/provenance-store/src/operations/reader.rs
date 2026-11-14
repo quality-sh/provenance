@@ -205,7 +205,12 @@ pub async fn answer<R: Send>(
 ) -> anyhow::Result<Stamped<R>> {
     let fresh = freshness::run(repository, policy.freshness).await?;
     fresh
-        .complete(repository, policy.scan_limit, freshness::FailedCatchUp::ReadsStored, run)
+        .complete(
+            repository,
+            policy.scan_limit,
+            freshness::FailedCatchUp::ReadsStored,
+            run,
+        )
         .await
 }
 
@@ -220,6 +225,11 @@ pub async fn current<R: Send>(
 ) -> anyhow::Result<Stamped<R>> {
     let fresh = freshness::run(repository, policy.freshness).await?;
     fresh
-        .complete(repository, policy.scan_limit, freshness::FailedCatchUp::Refuses, run)
+        .complete(
+            repository,
+            policy.scan_limit,
+            freshness::FailedCatchUp::Refuses,
+            run,
+        )
         .await
 }
