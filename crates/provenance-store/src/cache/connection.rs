@@ -10,7 +10,7 @@
 use super::completion::{complete, within_deadline, Stage};
 use crate::layout::ProvenanceLayout;
 use provenance_macros::rule;
-use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use std::time::Duration;
@@ -239,23 +239,20 @@ fn stored_cache_options(layout: &ProvenanceLayout) -> SqliteConnectOptions {
     SqliteConnectOptions::new().filename(layout.cache_db_path())
 }
 
+/// The options of the writable open, of the open of an existing cache and
+/// of the immutable-image open.
+///
+/// Temporary tables, temporary indexes, sorts and statement journals stay in
+/// memory, and the page cache can hold up to 16,000 KiB. These settings
+/// apply only to the connection and write nothing to the file, so a
+/// read-only or immutable open accepts them. The stored-read open does not
+/// use these options: `cache_size` reads the schema inside the open, and a
+/// stored read uses no temporary file and fits the default page cache, so
+/// the probe is its first read of the file.
 pub fn cache_options(layout: &ProvenanceLayout) -> SqliteConnectOptions {
     SqliteConnectOptions::new()
         .filename(layout.cache_db_path())
         .journal_mode(SqliteJournalMode::Wal)
-}
-
-/// Adds the connection settings that each open of the cache uses.
-///
-/// Each table of the cache is made again from the state files, so a commit
-/// that a power loss removes costs one catch-up: in WAL mode, NORMAL syncs
-/// at a checkpoint and not at each commit. Temporary tables and indexes stay
-/// in memory, and the page cache holds 16,000 KiB. The three settings apply
-/// only to the connection: they write nothing to the file, so a read-only or
-/// immutable open accepts them.
-fn with_cache_settings(options: SqliteConnectOptions) -> SqliteConnectOptions {
-    options
-        .synchronous(SqliteSynchronous::Normal)
         .pragma("temp_store", "MEMORY")
         .pragma("cache_size", "-16000")
 }
@@ -268,7 +265,7 @@ async fn connect(
     options: SqliteConnectOptions,
     retry: WalSwitchRetry,
 ) -> anyhow::Result<SqlitePool> {
-    let options = with_cache_settings(options).busy_timeout(retry.busy_timeout);
+    let options = options.busy_timeout(retry.busy_timeout);
     let started = std::time::Instant::now();
     loop {
         let pool = SqlitePoolOptions::new()
