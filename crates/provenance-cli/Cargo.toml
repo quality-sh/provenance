@@ -147,6 +147,9 @@ name = "cli_skills_single_source"
 name = "cli_ste_onboarding"
 
 [[test]]
+name = "cli_ste_onboarding_concurrency"
+
+[[test]]
 name = "cli_structure"
 
 [[test]]
@@ -192,6 +195,9 @@ provenance-mcp = { workspace = true, features = ["client"] }
 tar.workspace = true
 provenance-store = { workspace = true, features = ["host"] }
 provenance-ste100.workspace = true
+# The test layout check (tests/cli_structure.rs) reads the module tree of
+# each test target.
+syn = { workspace = true, features = ["full"] }
 provenance-transport = { path = "../provenance-transport", version = "0.4.0", features = ["test-fixture"] }
 tokio = { workspace = true, features = ["process"] }
 # The nightly simulation of the CLI (tests/simulation_cli.rs). The simulation

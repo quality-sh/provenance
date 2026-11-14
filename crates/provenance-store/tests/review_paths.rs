@@ -1,5 +1,5 @@
 #![cfg(any(unix, windows))]
-use crate::discussion_support::base as review_support;
+use crate::review_support;
 
 use camino::Utf8Path;
 use provenance_core::review::{EvidenceQuery, ReviewHistoryQuery};

@@ -11,6 +11,7 @@ mod support {
 }
 #[path = "../review_host_support/mod.rs"]
 mod review_host_support;
+use review_host_support::bounded_process;
 #[path = "../support/stale_repo.rs"]
 mod stale_repo;
 use support::review_paths;

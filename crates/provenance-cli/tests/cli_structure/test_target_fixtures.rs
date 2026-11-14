@@ -85,7 +85,7 @@ fn a_file_that_a_group_loads_and_that_is_its_own_target_is_in_two_targets() {
         ],
     );
     assert_eq!(
-        naming(&faults, "tests/reads.rs", "in 2 test targets").len(),
+        naming(&faults, "tests/reads.rs", "loads 2 times").len(),
         1,
         "{faults:#?}"
     );
@@ -105,7 +105,7 @@ fn a_group_in_a_crate_with_automatic_targets_puts_its_files_in_two_targets() {
         ],
     );
     assert_eq!(
-        naming(&faults, "tests/reads.rs", "in 2 test targets").len(),
+        naming(&faults, "tests/reads.rs", "loads 2 times").len(),
         1,
         "{faults:#?}"
     );

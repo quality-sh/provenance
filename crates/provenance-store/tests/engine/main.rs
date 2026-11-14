@@ -25,6 +25,7 @@ mod changed_statement_analysis;
 mod coverage_binding_settings;
 #[path = "../discussion_support.rs"]
 mod discussion_support;
+use discussion_support::base as review_support;
 #[path = "../history_versions_contract.rs"]
 mod history_versions_contract;
 #[path = "../manifest_scope_ids.rs"]

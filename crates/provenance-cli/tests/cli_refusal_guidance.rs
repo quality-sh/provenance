@@ -1,4 +1,4 @@
-use crate::review_host_support::bounded_process;
+use crate::bounded_process;
 use crate::support;
 use bounded_process::Bounded;
 use provenance_macros::verifies;

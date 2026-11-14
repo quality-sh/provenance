@@ -112,6 +112,8 @@ SOURCE_READERS = (
     # These read the metadata of every workspace crate.
     ("crates/", "/Cargo.toml", "provenance-cli::release_structure"),
     ("crates/", "/Cargo.toml", "provenance-cli::release_onboarding_structure"),
+    # This reads the test targets of every workspace crate.
+    ("crates/", "/Cargo.toml", "provenance-cli::cli_structure"),
     ("crates/provenance-sdk/", "", "provenance-cli::cargo_nested_sdk"),
     ("crates/provenance-transport/src/", "", "provenance-contract::registration_ownership"),
     # This compares the bindings in the store crate with a text search of it.
