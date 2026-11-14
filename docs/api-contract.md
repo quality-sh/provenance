@@ -112,7 +112,10 @@ These exceptions imply no new persistent plan records, no generic action
 dispatch, and no weaker authoring ownership checks.
 
 Typed-spec apply (`POST /authoring-changes`) records an occurrence for each
-changed enrolled record and refuses to delete an enrolled record. It continues
+changed enrolled record and refuses to delete an enrolled record. The plan
+(`POST /authoring-plans`) shows each deletion that apply refuses with the state
+`refused` and a `refusal` that gives the cause and the message of the apply
+refusal, and counts it in `refused`, not in `deleted`. Apply continues
 to replace un-enrolled graph state without journal entries because those
 records have not entered review. When apply deletes a record, also by cascade,
 it deletes the Discussions of that record, active or resolved, with their
