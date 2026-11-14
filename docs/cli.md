@@ -374,6 +374,40 @@ To repair the store by hand:
 There is no automatic repair command. The duplicate rows do not always contain
 enough information to select the owning Discussion.
 
+## Repairing review rows that do not agree
+
+The review rows of a record are its review submissions, the decisions on them,
+and their withdrawals. They are in `ideation/proposal_cards.jsonl`,
+`ideation/dispositions.jsonl`, and `ideation/withdrawals.jsonl`. A merge of two
+branches keeps the rows that each branch added, and a person can keep the two
+sides when Git cannot merge a file.
+
+Rows that say the same thing read as one row: one row ID on two equal lines,
+two decisions on one submission with the same result, and two withdrawals of
+one submission. Rows that do not agree make each read and each review write of
+their record refuse with `invalid_state_file`:
+
+- One row ID is on two lines with different contents.
+- Two decisions on one submission have different results.
+- One submission has an approval and a withdrawal.
+- Two submissions of one record have the same review cycle.
+
+The refusal names the file and the line of the second row, and its message
+names the two rows and the repair. For example:
+
+```text
+review submission S of requirement req_a has two decisions with different results: accepted D1 at ideation/dispositions.jsonl line 1 and rejected D2 at line 2. To repair, remove the line of the decision that you do not keep, then commit.
+```
+
+Other records, the documents that do not hold the record, and the reads of all
+records of a type continue. `provenance check` reports each of these rows with
+its file and its line.
+
+To repair the rows, remove the line that the message names, then commit. When
+you remove a submission, also remove each line of `ideation/dispositions.jsonl`
+and `ideation/withdrawals.jsonl` that names it. This is the only hand edit of
+`.provenance/state` that the generated AGENTS.md permits.
+
 ## Agent guidance
 
 `provenance prime` introduces the Provenance domain. It explains Requirements,

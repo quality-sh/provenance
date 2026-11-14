@@ -471,6 +471,8 @@ mod options;
 mod review_conflicts;
 #[path = "porcelain_api/review_cycle.rs"]
 mod review_cycle;
+#[path = "porcelain_api/review_disagreeing_rows.rs"]
+mod review_disagreeing_rows;
 #[path = "porcelain_api/review_history.rs"]
 mod review_history;
 #[path = "porcelain_api/review_merged_decisions.rs"]
