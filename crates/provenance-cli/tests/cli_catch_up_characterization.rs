@@ -20,8 +20,7 @@ mod support {
     pub mod views;
 }
 
-#[path = "support/bounded_process.rs"]
-mod bounded_process;
+use crate::bounded_process;
 
 use provenance_mcp::Client;
 use provenance_transport::fixture::records::Repository;

@@ -5,9 +5,7 @@ use predicates::str::contains;
 use serde_json::Value;
 use std::path::Path;
 
-#[path = "cli_dictionary/support.rs"]
-#[allow(dead_code)]
-mod dictionary_support;
+use crate::dictionary_support;
 
 fn init(root: &Path, args: &[&str]) -> assert_cmd::assert::Assert {
     let asset_dir = root.join("asset-cache");

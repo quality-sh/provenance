@@ -2,10 +2,7 @@
 //! an address that names no evidence, and the native limit refusal.
 #![cfg(feature = "test-fixture")]
 
-mod support {
-    pub mod records;
-    pub mod resource_http;
-}
+use crate::support;
 
 use provenance_core::{ScopeId, StableId};
 use provenance_macros::verifies;

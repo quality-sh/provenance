@@ -1,17 +1,6 @@
 //! One review decision gives one result through HTTP, MCP and the native Store.
 #![cfg(feature = "test-fixture")]
-#[allow(dead_code)]
-mod support {
-    #[allow(dead_code)]
-    #[path = "../../../provenance-transport/tests/support/api_fixture.rs"]
-    pub mod api_fixture;
-    pub mod api_session;
-    #[path = "../../../provenance-transport/tests/support/records.rs"]
-    pub mod records;
-    #[allow(dead_code)]
-    #[path = "../../../provenance-transport/tests/support/resource_http.rs"]
-    pub mod resource_http;
-}
+use crate::support;
 use provenance_core::{NodeType, StableId};
 use provenance_macros::verifies;
 use provenance_store::review::DecideRecordReview;

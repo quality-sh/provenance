@@ -8,6 +8,7 @@ license.workspace = true
 repository.workspace = true
 readme.workspace = true
 publish.workspace = true
+autotests = false
 
 [lints]
 workspace = true
@@ -26,6 +27,8 @@ host = [
     "dep:libsqlite3-sys",
     "dep:tokio",
     "dep:dunce",
+    "dep:hmac",
+    "dep:base64",
     "dep:provenance-scanner",
     "provenance-ste100/host",
     "dep:rustix",
@@ -55,9 +58,8 @@ tempfile = { workspace = true, optional = true }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["time"], optional = true }
 uuid.workspace = true
-# The page cursor signature.
-hmac = "0.13"
-base64 = "0.22.1"
+hmac = { version = "0.13", optional = true }
+base64 = { version = "0.22.1", optional = true }
 libsqlite3-sys = { version = "0.30.1", optional = true }
 dunce = { workspace = true, optional = true }
 
@@ -73,50 +75,45 @@ windows-sys = { workspace = true, optional = true }
 time = { workspace = true, features = ["wasm-bindgen"] }
 uuid = { workspace = true, features = ["js"] }
 
-# The engine tests need host. The source scan tests read_process_state and
-# store_shape run without it.
+# Cargo does not find the test targets itself. Each group binary in
+# tests/<group>/main.rs compiles test files of tests/ as its modules, because
+# each test binary links the full dependency tree. Each other file listed
+# here is a test binary of its own. cli_structure checks that each test file
+# is in one of these targets. discussion_support.rs is a module of other
+# tests, not a target.
+#
+# The engine tests need host. The source scan tests in the source group and
+# read_process_state run without it, and the memory adapter tests too.
 [[test]]
-name = "automatic_submissions"
+name = "discussion"
+path = "tests/discussion/main.rs"
 required-features = ["host"]
 
 [[test]]
-name = "begin_verification_answers"
+name = "engine"
+path = "tests/engine/main.rs"
 required-features = ["host"]
 
 [[test]]
-name = "begin_verification_local_disk"
+name = "review"
+path = "tests/review/main.rs"
 required-features = ["host"]
 
 [[test]]
-name = "begin_verification_refusals"
-required-features = ["host"]
+name = "source"
+path = "tests/source/main.rs"
 
 [[test]]
-name = "begin_verification_run_ids"
-required-features = ["host"]
+name = "memory_repository"
 
 [[test]]
-name = "begin_verification_section"
-required-features = ["host"]
+name = "memory_repository_stage_reads"
 
 [[test]]
-name = "begin_verification_write_set"
-required-features = ["host"]
-
-[[test]]
-name = "catch_up_lock"
-required-features = ["host"]
-
-[[test]]
-name = "changed_statement_analysis"
-required-features = ["host"]
+name = "read_process_state"
 
 [[test]]
 name = "compile_fail"
-required-features = ["host"]
-
-[[test]]
-name = "coverage_binding_settings"
 required-features = ["host"]
 
 [[test]]
@@ -124,87 +121,7 @@ name = "discover_without_current_directory"
 required-features = ["host"]
 
 [[test]]
-name = "discussion_compatibility"
-required-features = ["host"]
-
-[[test]]
-name = "discussion_discovery"
-required-features = ["host"]
-
-[[test]]
-name = "discussion_excerpt"
-required-features = ["host"]
-
-[[test]]
-name = "cursor_key_repair"
-required-features = ["host"]
-
-[[test]]
-name = "discussion_kinds"
-required-features = ["host"]
-
-[[test]]
-name = "discussion_message_cursor"
-required-features = ["host"]
-
-[[test]]
-name = "discussion_origins"
-required-features = ["host"]
-
-[[test]]
-name = "discussion_outcomes"
-required-features = ["host"]
-
-[[test]]
-name = "discussion_reads"
-required-features = ["host"]
-
-[[test]]
-name = "discussion_support"
-required-features = ["host"]
-
-[[test]]
-name = "discussion_target_writes"
-required-features = ["host"]
-
-[[test]]
-name = "discussion_writes"
-required-features = ["host"]
-
-[[test]]
-name = "refusals_declare_a_kind"
-required-features = ["host"]
-
-[[test]]
 name = "git_starts_use_the_helper"
-required-features = ["host"]
-
-[[test]]
-name = "history_versions_contract"
-required-features = ["host"]
-
-[[test]]
-name = "manifest_scope_ids"
-required-features = ["host"]
-
-[[test]]
-name = "multiple_parents"
-required-features = ["host"]
-
-[[test]]
-name = "native_review_submissions"
-required-features = ["host"]
-
-[[test]]
-name = "one_write_path"
-required-features = ["host"]
-
-[[test]]
-name = "operation_schema"
-required-features = ["host"]
-
-[[test]]
-name = "query_handles"
 required-features = ["host"]
 
 [[test]]
@@ -216,47 +133,7 @@ name = "read_operations_on_memory"
 required-features = ["test-fixture"]
 
 [[test]]
-name = "read_settings"
-required-features = ["host"]
-
-[[test]]
-name = "record_save_files"
-required-features = ["host"]
-
-[[test]]
-name = "record_updates"
-required-features = ["host"]
-
-[[test]]
-name = "relation_deltas"
-required-features = ["host"]
-
-[[test]]
-name = "repository_open"
-required-features = ["host"]
-
-[[test]]
-name = "requirement_review_reads"
-required-features = ["host"]
-
-[[test]]
 name = "review_cost"
-required-features = ["host"]
-
-[[test]]
-name = "review_cycle_records"
-required-features = ["host"]
-
-[[test]]
-name = "review_history"
-required-features = ["host"]
-
-[[test]]
-name = "review_history_characterization"
-required-features = ["host"]
-
-[[test]]
-name = "review_history_git"
 required-features = ["host"]
 
 [[test]]
@@ -264,47 +141,7 @@ name = "review_history_head_move"
 required-features = ["host"]
 
 [[test]]
-name = "review_markers"
-required-features = ["host"]
-
-[[test]]
-name = "review_paths"
-required-features = ["host"]
-
-[[test]]
-name = "review_projection"
-required-features = ["host"]
-
-[[test]]
-name = "review_reads"
-required-features = ["host"]
-
-[[test]]
-name = "review_revision_kernel"
-required-features = ["host"]
-
-[[test]]
-name = "review_saves"
-required-features = ["host"]
-
-[[test]]
-name = "review_validation"
-required-features = ["host"]
-
-[[test]]
 name = "rule_binding_integrity"
-required-features = ["host"]
-
-[[test]]
-name = "staged_view"
-required-features = ["host"]
-
-[[test]]
-name = "state_view"
-required-features = ["host"]
-
-[[test]]
-name = "stray_state_entries"
 required-features = ["host"]
 
 [[test]]
@@ -320,8 +157,5 @@ dunce.workspace = true
 fs_at.workspace = true
 jsonschema.workspace = true
 filetime.workspace = true
-# The read database in memory of the tests that run without host.
-sqlx.workspace = true
 tempfile.workspace = true
-tokio = { workspace = true, features = ["sync", "time"] }
 trybuild.workspace = true

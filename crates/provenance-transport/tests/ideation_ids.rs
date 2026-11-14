@@ -14,11 +14,4 @@ mod repository;
 #[path = "ideation_ids/writes.rs"]
 mod writes;
 
-mod support {
-    #[path = "../support/asserted_proposal.rs"]
-    pub mod asserted_proposal;
-    #[path = "../support/records.rs"]
-    pub mod records;
-    #[path = "../support/resource_http.rs"]
-    pub mod resource_http;
-}
+use crate::support;

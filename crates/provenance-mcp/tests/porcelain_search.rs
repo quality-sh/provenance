@@ -2,12 +2,7 @@
 
 use provenance_macros::verifies;
 
-#[allow(dead_code)]
-mod support {
-    pub mod mcp;
-    #[path = "../../../provenance-transport/tests/support/records.rs"]
-    pub mod records;
-}
+use crate::support;
 
 use provenance_store::operations::catalog::{self, Operation as _};
 use provenance_transport::{
