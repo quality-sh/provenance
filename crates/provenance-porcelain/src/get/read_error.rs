@@ -18,7 +18,7 @@ pub enum ReadError {
     HostBusy(String),
     Operation(String),
     /// The host refused a read with this declared failure object. Its text is the
-    /// `{error, meta}` object, as the CLI shows each refusal of the host.
+    /// `{error, meta}` object, as each consumer shows a refusal of the host.
     Refused(serde_json::Value),
 }
 
