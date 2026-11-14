@@ -277,7 +277,7 @@ where
 /// `-shm` file cannot be created, so the database opens as an immutable
 /// image.
 #[rule("rule_failed_freshness_answers_at_stored_serial")]
-fn stored(error: anyhow::Error) -> Freshness {
+const fn stored(error: anyhow::Error) -> Freshness {
     Freshness {
         check: Check::None,
         policy: StampPolicy::CatchUpFailed,
