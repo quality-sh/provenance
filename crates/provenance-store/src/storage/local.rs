@@ -132,6 +132,10 @@ impl LocalStateStorage {
         })
     }
 
+    /// A failure before the first key changed lands no key: the set is
+    /// refused. A failure after it, or a failed sync of a changed key, began
+    /// to land.
+    #[rule("rule_failure_before_a_key_changes_is_refused")]
     fn land_per_key(&self, writes: &WriteSet) -> Result<(), PublishFailure> {
         let mut changes: BTreeMap<&StateKey, Option<&[u8]>> = BTreeMap::new();
         changes.extend(writes.deletes().iter().map(|key| (key, None)));
@@ -152,14 +156,20 @@ impl LocalStateStorage {
             })
             .collect::<anyhow::Result<Vec<_>>>()
             .map_err(PublishFailure::Refused)?;
+        let mut changed = false;
         for (key, bytes) in changes {
             let path = self.layout.state_dir().join(key.as_str());
-            bytes
-                .map_or_else(
-                    || durability::remove_synced_file(&path),
-                    |bytes| durability::write_synced_file(&path, bytes),
-                )
-                .map_err(PublishFailure::Started)?;
+            let landed = bytes.map_or_else(
+                || durability::remove_synced_file(&path),
+                |bytes| durability::write_synced_file(&path, bytes).map(|()| true),
+            );
+            match landed {
+                Ok(landed) => changed |= landed,
+                Err(error) if changed || error.is::<durability::ChangedUnsynced>() => {
+                    return Err(PublishFailure::Started(error));
+                }
+                Err(error) => return Err(PublishFailure::Refused(error)),
+            }
         }
         Ok(())
     }
