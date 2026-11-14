@@ -1,22 +1,9 @@
+use super::held_file_tests::stage_two_new_shards;
 use super::read_only::tests::{record_kind_repositories, scope};
 use super::*;
 use crate::state_store::RecordStamp::ResolveFromRepository as StampFromGit;
 use provenance_core::NodeType;
 use provenance_macros::verifies;
-
-/// Puts two new empty shards in the stage, so it lands as a whole set.
-fn stage_two_new_shards(staged: &crate::state_store::StateStore) -> anyhow::Result<()> {
-    staged.publish_shards(
-        [NodeType::Topic, NodeType::Question]
-            .map(|kind| {
-                (
-                    crate::shards::path_for(&staged.layout, &scope(), kind),
-                    Vec::new(),
-                )
-            })
-            .into(),
-    )
-}
 
 #[test]
 fn concurrent_first_access_creates_publication_lock_directories_idempotently() {
@@ -384,7 +371,8 @@ fn a_repository_read_in_the_publication_gap_waits_for_the_publication() {
     with_repository_publication(&layout, |held| {
         with_staged_state(held, false, StampFromGit, |staged| {
             let manifest = staged.layout.manifest_path();
-            staged.publish_shard(&manifest, serde_json::to_vec(&published)?)
+            staged.publish_shard(&manifest, serde_json::to_vec(&published)?)?;
+            stage_two_new_shards(staged)
         })
     })
     .unwrap();
