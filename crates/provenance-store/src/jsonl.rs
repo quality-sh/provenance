@@ -18,8 +18,7 @@ mod preservation;
 
 use line::numbered_lines;
 #[cfg(feature = "host")]
-pub(crate) use line::record_of_line;
-pub(crate) use line::without_terminator;
+pub(crate) use line::{record_of_line, without_terminator};
 use preservation::{LoadedRecords, RawRecord};
 
 /// An exclusive lock on the lock file at a path. Released on drop.
