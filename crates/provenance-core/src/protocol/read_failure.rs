@@ -105,10 +105,17 @@ impl UnparsableStateFile {
 
 impl std::fmt::Display for UnparsableStateFile {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "{} line {}: {}", self.file, self.line, self.message)?;
-        self.hint
-            .as_ref()
-            .map_or(Ok(()), |hint| write!(formatter, "; {hint}"))
+        let Self {
+            file,
+            line,
+            message,
+            hint,
+        } = self;
+        write!(formatter, "{file} line {line}: {message}")?;
+        if let Some(hint) = hint {
+            write!(formatter, "; {hint}")?;
+        }
+        Ok(())
     }
 }
 

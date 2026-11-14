@@ -9,9 +9,8 @@
 //! states. The tests of an init with no PDF are in `cli_ste_onboarding`.
 
 use crate::support::{
-    dictionary_pdf, file_names, half_reference, init, init_command, provenance,
-    reference_path, reference_problem, reference_refusal, HALF_REFERENCE_MESSAGE,
-    REFERENCE_REPAIR, UNAPPROVED_WORD,
+    dictionary_pdf, file_names, half_reference, init, init_command, provenance, reference_path,
+    reference_problem, reference_refusal, HALF_REFERENCE_MESSAGE, REFERENCE_REPAIR, UNAPPROVED_WORD,
 };
 use provenance_macros::verifies;
 use serde_json::{json, Value};

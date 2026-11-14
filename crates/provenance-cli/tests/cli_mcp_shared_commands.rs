@@ -258,7 +258,10 @@ async fn the_dictionary_import_action_refuses_a_reference_that_does_not_parse() 
         "{result}"
     );
     assert_eq!(std::fs::read_to_string(&reference).unwrap(), "");
-    assert_eq!(dictionary_support::file_names(index.path()), Vec::<String>::new());
+    assert_eq!(
+        dictionary_support::file_names(index.path()),
+        Vec::<String>::new()
+    );
     wire.close().await;
 }
 
