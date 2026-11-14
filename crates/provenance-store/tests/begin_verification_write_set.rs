@@ -87,6 +87,7 @@ fn untouched() -> Value {
 
 #[test]
 #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
+#[verifies("rule_store_sends_the_smallest_write_set", examples)]
 fn a_start_publishes_the_binding_and_the_cleared_reviews_as_one_whole_set() {
     let start = start(None);
 
@@ -113,6 +114,7 @@ fn a_repeated_start_sends_no_set_to_the_persistence() {
 
 #[test]
 #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
+#[verifies("rule_store_sends_the_smallest_write_set", examples)]
 fn a_start_in_a_scope_with_no_reviews_shard_sends_the_binding_as_a_one_key_set() {
     let start = start_with(None, &[]);
 
@@ -126,6 +128,7 @@ fn a_start_in_a_scope_with_no_reviews_shard_sends_the_binding_as_a_one_key_set()
 
 #[test]
 #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
+#[verifies("rule_store_sends_the_smallest_write_set", examples)]
 fn a_start_that_changes_only_the_binding_sends_a_one_key_set() {
     let start = start(None);
     begin_verification(&start.repository, begin_input()).unwrap();
