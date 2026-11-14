@@ -16,7 +16,7 @@ use provenance_macros::rule;
 
 /// The kind of write that owns a transaction directory of the cache.
 #[derive(Clone, Copy, Debug)]
-pub(crate) enum TransactionKind {
+pub enum TransactionKind {
     /// A whole-set write with no working-tree file.
     Import,
     /// A whole-set write with one working-tree file.
@@ -39,7 +39,7 @@ impl TransactionKind {
 /// holds the lock from the creation of its transaction to its marker, so no
 /// live write owns such a transaction. The first failure stops the pass.
 #[rule("rule_stopped_write_leaves_no_transaction_data")]
-pub(crate) fn remove_leftovers(
+pub fn remove_leftovers(
     layout: &ProvenanceLayout,
     kind: TransactionKind,
     mut before_removal: impl FnMut(&Utf8Path) -> anyhow::Result<()>,
@@ -79,7 +79,7 @@ fn leftovers(
 /// error shows a cause that a person can correct, the text also tells the
 /// correction. The contents that the call removed before the failure stay
 /// removed.
-pub(crate) fn remove_transaction(transaction: &Utf8Path) -> anyhow::Result<()> {
+pub fn remove_transaction(transaction: &Utf8Path) -> anyhow::Result<()> {
     std::fs::remove_dir_all(transaction).map_err(|error| {
         let step = correction(&error).map_or_else(
             || format!("remove transaction directory {transaction}"),

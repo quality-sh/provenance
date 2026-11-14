@@ -168,7 +168,9 @@ fn a_stopped_source_edit_leaves_no_transaction_after_the_next_section_entry() {
             "{phase}"
         );
         assert!(
-            !names(root).iter().any(|name| name.ends_with(".tmp")),
+            !names(root)
+                .iter()
+                .any(|name| Utf8Path::new(name).extension() == Some("tmp")),
             "{phase}: {:?}",
             names(root)
         );
