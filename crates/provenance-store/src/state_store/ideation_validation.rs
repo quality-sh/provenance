@@ -7,8 +7,8 @@ use super::{IdeationLandingBatch, StateStore};
 use crate::refusal::state_fault;
 use crate::shards;
 use provenance_core::{
-    AssertionRecord, Contribution, DispositionRecord, DuplicateImmutableId, IdeationRecord,
-    ProposalCard, ScopeId, SynthesisPacket,
+    AssertionRecord, Contribution, DuplicateImmutableId, IdeationRecord, ScopeId,
+    SynthesisPacket,
 };
 use std::collections::BTreeSet;
 
@@ -39,13 +39,14 @@ impl StateStore {
             read_jsonl_shared(self, &shards::contributions_path(&self.layout, scope))?;
         let mut synthesis_packets: Vec<SynthesisPacket> =
             read_jsonl_shared(self, &shards::synthesis_packets_path(&self.layout, scope))?;
-        let direct_proposals: Vec<ProposalCard> =
-            read_jsonl_shared(self, &shards::proposal_cards_path(&self.layout, scope))?;
+        // The review rows of the two files read as the reading of the
+        // review rows gives them; a read of their record names the lines
+        // that do not agree.
+        let direct_proposals = self.proposal_file_rows_once(scope)?;
         let direct_assertions: Vec<AssertionRecord> =
             read_jsonl_shared(self, &shards::assertion_records_path(&self.layout, scope))?;
         let mut assertions_in_order = direct_assertions.clone();
-        let direct_dispositions: Vec<DispositionRecord> =
-            read_jsonl_shared(self, &shards::dispositions_path(&self.layout, scope))?;
+        let direct_dispositions = self.disposition_file_rows_once(scope)?;
         let mut proposals = BTreeSet::new();
         let mut assertions = BTreeSet::new();
         let mut dispositions = BTreeSet::new();

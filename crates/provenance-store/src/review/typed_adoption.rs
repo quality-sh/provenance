@@ -1,6 +1,9 @@
 //! Guarded typed-spec changes to enrolled graph records.
 
-use super::{classifier, decision_state::CycleFacts};
+use super::{
+    classifier,
+    review_rows::{CycleFacts, StoredRows},
+};
 use crate::{
     families::review_families,
     review::publication::with_record_state,
@@ -29,7 +32,8 @@ impl StateStore {
         with_record_state(self, RecordStamp::ResolveFromRepository, |staged| {
             // The staged copy holds the live records until `publish` runs.
             let current = review_families::review_records(staged, scope)?;
-            let facts = CycleFacts::validated(staged, scope)?;
+            let stored = StoredRows::read(staged, scope)?;
+            let facts = stored.facts()?;
             let paths = review_families::review_paths(&staged.layout, scope);
             let paths = paths.iter().map(AsRef::as_ref).collect::<Vec<_>>();
             let result = staged.permitting(&paths, "*", publish)?;
@@ -53,7 +57,7 @@ impl StateStore {
 
 fn typed_changes(
     current: &[ReviewRecord],
-    facts: &CycleFacts,
+    facts: &CycleFacts<'_>,
     desired: &[ReviewRecord],
 ) -> anyhow::Result<(Vec<TypedChange>, Vec<ReviewRecord>)> {
     let mut changes = Vec::new();
@@ -63,7 +67,7 @@ fn typed_changes(
             .iter()
             .find(|record| record.kind() == before.kind() && record.id() == before.id());
         let Some(after) = after else {
-            if facts.has_submissions(before.kind(), before.id()) {
+            if facts.record(before.kind(), before.id())?.has_submissions() {
                 return Err(enrolled_deletion_conflict(before));
             }
             deleted.push(before.clone());

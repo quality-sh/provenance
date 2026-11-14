@@ -107,7 +107,6 @@ pub use decision_input::{
     DecideRecordReview, ReviewFeedback, SubmitRecordReview, WithdrawRecordReview,
 };
 mod automatic_submission;
-mod cycle_index;
 mod decision;
 // The document review reads serve the host queries only.
 #[cfg_attr(not(feature = "host"), allow(dead_code))]
@@ -115,6 +114,8 @@ mod decision_reads;
 #[cfg(feature = "host")]
 pub(crate) use decision_reads::DocumentReviewState;
 mod decision_state;
+mod review_row_refusal;
+mod review_rows;
 
 #[cfg(test)]
 #[cfg(feature = "host")]

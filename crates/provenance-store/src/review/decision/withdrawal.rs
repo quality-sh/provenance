@@ -3,8 +3,9 @@ use crate::{
     review::publication::with_record_state,
     review::{
         decision_input::WithdrawRecordReview,
-        decision_state::{check_request_size, review_submission, CycleFacts, Receipt},
+        decision_state::{check_request_size, review_submission, Receipt},
         new_id, owner_matches,
+        review_rows::StoredRows,
     },
     shards,
     state_store::{RecordStamp, StateStore},
@@ -12,7 +13,7 @@ use crate::{
 };
 use provenance_core::{
     review::{CycleEntry, CycleFact},
-    DispositionDecision, NodeType, StableId, Withdrawal,
+    NodeType, StableId, Withdrawal,
 };
 use provenance_macros::rule;
 
@@ -55,7 +56,8 @@ impl StateStore {
         self.with_repository_publication(move |held| {
             crate::review::ensure_manifest_scope(held, &scope)?;
             let proposal = review_submission(held, &scope, &input.proposal_id)?;
-            let facts = CycleFacts::validated(held, &scope)?;
+            let stored = StoredRows::read(held, &scope)?;
+            let facts = stored.facts()?;
             validate_submission_address(
                 &proposal,
                 addressed.as_ref().map(|(kind, id)| (*kind, id)),
@@ -63,6 +65,7 @@ impl StateStore {
             let kind = NodeType::from(proposal.traceability.target.artifact_type);
             let record_id = &proposal.traceability.target.artifact_id;
             let record = crate::families::review_families::record(held, &scope, kind, record_id)?;
+            let review = facts.record(kind, record_id)?;
             owner_matches(&record, input.declared_by.as_deref())?;
             let binding = proposal
                 .record_revision
@@ -73,14 +76,11 @@ impl StateStore {
             })?;
             let refusal = if revision != binding.revision {
                 Some("this review submission is stale")
-            } else if facts.is_withdrawn(&input.proposal_id) {
+            } else if review.is_withdrawn(&input.proposal_id) {
                 Some("this review submission is already withdrawn")
-            } else if facts.dispositions().iter().any(|disposition| {
-                disposition.proposal_id == input.proposal_id
-                    && disposition.decision == DispositionDecision::Accepted
-            }) {
+            } else if review.is_accepted(&input.proposal_id) {
                 Some("this review submission is accepted")
-            } else if facts.is_replaced(&proposal) {
+            } else if review.is_replaced(&proposal) {
                 Some("this review submission was replaced by a later submission")
             } else {
                 None

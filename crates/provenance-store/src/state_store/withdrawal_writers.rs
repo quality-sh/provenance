@@ -8,9 +8,12 @@ use crate::shards;
 use provenance_core::{ProposalType, ScopeId, Withdrawal};
 
 impl StateStore {
-    /// Reads the scope's Withdrawal records.
+    /// Reads the scope's Withdrawal records, each ID one time.
     pub fn list_withdrawals(&self, scope: &ScopeId) -> anyhow::Result<Vec<Withdrawal>> {
-        read_jsonl(self, &shards::withdrawals_path(&self.layout, scope))
+        Ok(super::review_rows_once::withdrawals_once(read_jsonl(
+            self,
+            &shards::withdrawals_path(&self.layout, scope),
+        )?))
     }
 
     /// Reads the scope's Withdrawal records, each with its shard line.

@@ -6,7 +6,7 @@
 //! dispositions keep their place in the history and stay authoritative for
 //! their own proposals; none of them attests the record's current contents.
 
-use super::decision_state::CycleFacts;
+use super::review_rows::{CycleFacts, StoredRows};
 use crate::{families::review_families::ReviewFamilyIndex, state_store::StateStore};
 use provenance_core::{
     protocol::DocumentReviewSummary,
@@ -62,7 +62,7 @@ impl DocumentReviewState {
 /// proposal of another type that names the record, such as a candidate
 /// answer to a Question, decides nothing about the record.
 #[rule("rule_review_document_hides_rejected_new_records")]
-fn rejected_before_acceptance(state: &RequirementDecisionState, facts: &CycleFacts) -> bool {
+fn rejected_before_acceptance(state: &RequirementDecisionState, facts: &CycleFacts<'_>) -> bool {
     let reviews = state
         .decisions
         .iter()
@@ -87,7 +87,8 @@ impl StateStore {
         records: &[(NodeType, StableId)],
     ) -> anyhow::Result<DocumentReviewState> {
         self.with_repository_publication(|held| {
-            let facts = CycleFacts::validated(held, scope)?;
+            let stored = StoredRows::read(held, scope)?;
+            let facts = stored.facts()?;
             let mut families = ReviewFamilyIndex::new(held, scope, records);
             let mut states = Vec::new();
             for (kind, id) in records {
@@ -143,21 +144,24 @@ impl StateStore {
         &self,
         record: &ReviewRecord,
     ) -> anyhow::Result<RequirementDecisionState> {
-        let facts = CycleFacts::validated(self, record.scope_id())?;
-        Self::record_decision_state_from_parts(record, &facts)
+        let stored = StoredRows::read(self, record.scope_id())?;
+        Self::record_decision_state_from_parts(record, &stored.facts()?)
     }
 
     /// The decision state of one record from one read of the scope's
-    /// review records.
+    /// review records. Refuses the record when its review rows do not
+    /// agree.
     fn record_decision_state_from_parts(
         record: &ReviewRecord,
-        facts: &CycleFacts,
+        facts: &CycleFacts<'_>,
     ) -> anyhow::Result<RequirementDecisionState> {
         let kind = record.kind();
         let record_id = record.id();
         let current_revision = super::save::current_revision(record)?;
-        let pending = facts
-            .pending_submission_at_revision(kind, record_id, current_revision.as_ref())
+        let review = facts.record(kind, record_id)?;
+        let pending = review
+            .pending_at(current_revision.as_ref())
+            .cloned()
             .map(|proposal| PendingSubmission {
                 proposal_id: proposal.id,
                 revision: proposal
@@ -167,8 +171,9 @@ impl StateStore {
                 actor: proposal.actor.unwrap_or_default(),
                 revises: proposal.revises,
             });
-        let mut recorded: Vec<RecordedDecision> = facts
-            .decisions_of(kind, record_id)
+        let recorded: Vec<RecordedDecision> = review
+            .decisions()
+            .into_iter()
             .map(|(disposition, proposal)| RecordedDecision {
                 revision: proposal
                     .record_revision
@@ -178,7 +183,6 @@ impl StateStore {
                 disposition: disposition.clone(),
             })
             .collect();
-        recorded.sort_by_key(|decision| facts.order_of(&decision.disposition.proposal_id));
         let current_acceptance = recorded
             .iter()
             .filter(|decision| decision.disposition.decision == DispositionDecision::Accepted)
@@ -194,7 +198,7 @@ impl StateStore {
             pending,
             current_acceptance,
             decisions: recorded,
-            withdrawn: facts.withdrawn_submissions_of_record(kind, record_id),
+            withdrawn: review.withdrawn(),
         })
     }
 
@@ -220,8 +224,14 @@ impl StateStore {
         if candidates.is_empty() {
             return Ok(accepted);
         }
-        let facts = CycleFacts::validated(self, scope)?;
+        let stored = StoredRows::read(self, scope)?;
+        let facts = stored.facts()?;
         for resolution in candidates {
+            // A Resolution whose review rows do not agree has no accepted
+            // revision; its own read names the rows.
+            if facts.record(NodeType::Resolution, &resolution.id).is_err() {
+                continue;
+            }
             let record = ReviewRecord::Resolution(resolution.clone());
             if Self::record_decision_state_from_parts(&record, &facts)?
                 .current_acceptance

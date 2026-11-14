@@ -4,9 +4,10 @@ use crate::{
     review::{
         decision_input::SubmitRecordReview,
         decision_state::{
-            check_request_size, review_proposal_key, validated_resubmission, CycleFacts, Receipt,
+            check_request_size, next_cycle, review_proposal_key, validated_resubmission, Receipt,
         },
         new_id, owner_matches,
+        review_rows::StoredRows,
     },
     shards,
     state_store::{CreateProposalCardInput, RecordStamp, StateStore},
@@ -57,7 +58,9 @@ impl StateStore {
                 "submission requires a review revision: save the record through the review seam first"
             )
         })?;
-        let facts = CycleFacts::validated(self, &scope)?;
+        let stored = StoredRows::read(self, &scope)?;
+        let facts = stored.facts()?;
+        let review = facts.record(input.record_kind, &input.record_id)?;
         if input
             .expected_revision
             .as_ref()
@@ -83,6 +86,7 @@ impl StateStore {
                 Some(validated_resubmission(
                     self,
                     &scope,
+                    &facts,
                     predecessor,
                     input.record_kind,
                     &input.record_id,
@@ -90,7 +94,7 @@ impl StateStore {
             ),
             None => (None, None),
         };
-        let cycle = facts.next_cycle(input.record_kind, &input.record_id)?;
+        let cycle = next_cycle(&review)?;
         let proposal = self.create_proposal_card(CreateProposalCardInput {
             scope_id: scope,
             id: new_id(&*self.ids()),

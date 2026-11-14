@@ -61,7 +61,23 @@ async fn pending_submission(repo: &Repository) -> String {
 }
 
 /// The public surface writes each Withdrawal one time with a new id, so
-/// only a hand edit of the state file puts one id on two lines.
+/// only a hand edit of the state file puts one id on two lines. Two equal
+/// lines read as one Withdrawal.
+#[tokio::test]
+#[verifies("rule_equal_review_row_lines_read_as_one", examples)]
+async fn a_withdrawal_id_on_two_equal_lines_reads_as_one() {
+    let repo = Repository::new("The shared graph is readable.");
+    let proposal = pending_submission(&repo).await;
+    let line = withdrawal("withdrawal_a", &proposal);
+    write_withdrawals(&repo, &[line.clone(), line]);
+    let (status, read) = call(&host(&repo, false), "GET", "/requirements/req_shared", None).await;
+    assert_eq!(status, 200, "{read}");
+    assert_eq!(read["data"]["decision"]["withdrawn"], json!([proposal]));
+    assert_eq!(read["data"]["decision"]["pending"], serde_json::Value::Null);
+}
+
+/// Two lines of one Withdrawal id with different contents refuse the record
+/// that the Withdrawal names, at the second line.
 #[tokio::test]
 #[verifies("rule_inconsistent_records_refusal_names_records", examples)]
 async fn a_withdrawal_id_on_two_lines_is_located_at_the_second_line() {
@@ -79,7 +95,9 @@ async fn a_withdrawal_id_on_two_lines_is_located_at_the_second_line() {
     assert_eq!(
         failure["error"],
         json!({"kind":"invalid_state_file", "file":WITHDRAWALS, "line":2,
-            "message":"withdrawal withdrawal_a is stored again; line 1 stores it first"}),
+            "message":"withdrawal withdrawal_a is on line 1 and line 2 of \
+                ideation/withdrawals.jsonl with different contents. To repair, remove the line \
+                that is not correct, then commit."}),
     );
 }
 
@@ -189,4 +207,46 @@ async fn a_message_id_on_two_lines_is_located_at_the_second_line() {
              see docs/cli.md#repairing-a-duplicate-message-id"
         )}),
     );
+}
+
+/// Two decisions with different results on the submission of `req_shared`
+/// refuse its read, and the read of a different record answers.
+#[tokio::test]
+#[verifies("rule_review_row_refusal_stays_with_record", examples)]
+async fn decisions_with_different_results_refuse_only_their_record() {
+    const DISPOSITIONS: &str = "scopes/default/ideation/dispositions.jsonl";
+    let repo = Repository::new("The shared graph is readable.");
+    let proposal = pending_submission(&repo).await;
+    let (status, created) = call(
+        &host(&repo, true),
+        "POST",
+        "/requirements",
+        Some(json!({"data":{"actor":"agent", "id":"req_other",
+            "statement":"The other record is readable.", "status":"active",
+            "depends_on":[], "supersedes":[]}})),
+    )
+    .await;
+    assert_eq!(status, 200, "{created}");
+    let decision = |id: &str, result: &str| {
+        json!({"scope_id":"default", "id":id, "proposal_id":proposal, "decision":result,
+            "rationale":"By hand.", "actor":{"identity_type":"human","id":"reviewer"}})
+        .to_string()
+    };
+    let path = repo.dir.path().join(".provenance/state").join(DISPOSITIONS);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let lines = [decision("decision_a", "deferred"), decision("decision_b", "rejected")];
+    std::fs::write(&path, lines.join("\n") + "\n").unwrap();
+    let reader = host(&repo, false);
+    let (status, failure) = call(&reader, "GET", "/requirements/req_shared", None).await;
+    assert_eq!(status, 500, "{failure}");
+    assert_eq!(
+        failure["error"],
+        json!({"kind":"invalid_state_file", "file":DISPOSITIONS, "line":2,
+            "message":format!("review submission {proposal} of requirement req_shared has two \
+                decisions with different results: deferred decision_a at \
+                ideation/dispositions.jsonl line 1 and rejected decision_b at line 2. To \
+                repair, remove the line of the decision that you do not keep, then commit.")}),
+    );
+    let (status, other) = call(&reader, "GET", "/requirements/req_other", None).await;
+    assert_eq!(status, 200, "{other}");
 }
