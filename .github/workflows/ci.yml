@@ -1285,7 +1285,7 @@ jobs:
           fixture_repo="$PWD/examples/rust-sdk"
           target/debug/provenance init --path "$fixture_repo" --scope default --path-prefix .
           (cd examples/rust-sdk && sfw cargo fetch --locked)
-          (cd examples/rust-sdk && PROVENANCE_REPO="$fixture_repo" cargo run --bin apply)
+          (cd examples/rust-sdk && PROVENANCE_REPO="$fixture_repo" cargo run --example apply)
           (cd examples/rust-sdk && \
             PROVENANCE_REPO="$fixture_repo" \
             PROVENANCE_VERIFICATION_OWNER="ci://rust-example" \
@@ -1301,6 +1301,15 @@ jobs:
           target/debug/provenance api verification-bindings \
             --repo "$fixture_repo" --scope default --query "rule=$rule_id" --format json \
             | jq -e '.data.items | length == 1 and .[0].file == "tests/share_links.rs"'
+      - name: Check the application has no Provenance crate
+        shell: bash
+        run: |
+          normal_tree=$(cd examples/rust-sdk && cargo tree --locked --offline -e normal)
+          printf '%s\n' "$normal_tree"
+          if grep -q provenance <<<"$normal_tree"; then
+            echo "examples/rust-sdk has a Provenance crate in its normal dependencies" >&2
+            exit 1
+          fi
 
   typescript-sdk:
     timeout-minutes: 20

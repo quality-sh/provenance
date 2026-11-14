@@ -6,6 +6,8 @@ publish = false
 
 [dependencies]
 anyhow = "1.0"
+
+[dev-dependencies]
 provenance-sdk = { path = "../../crates/provenance-sdk" }
 
 [workspace]
