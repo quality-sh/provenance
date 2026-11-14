@@ -85,20 +85,3 @@ pub fn repository() -> tempfile::TempDir {
         .success();
     dir
 }
-
-pub fn rows(path: &Path) -> Vec<Value> {
-    std::fs::read_to_string(path)
-        .unwrap()
-        .lines()
-        .map(|line| serde_json::from_str(line).unwrap())
-        .collect()
-}
-
-pub fn write_rows(path: &Path, rows: &[Value]) {
-    let text = rows
-        .iter()
-        .map(|row| serde_json::to_string(row).unwrap())
-        .collect::<Vec<_>>()
-        .join("\n");
-    std::fs::write(path, text + "\n").unwrap();
-}

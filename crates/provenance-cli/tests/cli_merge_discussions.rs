@@ -1,7 +1,7 @@
 #[path = "support/merge_driver.rs"]
 mod merge_driver;
 
-use merge_driver::{cli, commit, git, git_ok, json, rows, write_rows};
+use merge_driver::{cli, commit, git, git_ok, json};
 use provenance_macros::verifies;
 use serde_json::Value;
 use std::path::Path;
@@ -118,6 +118,23 @@ fn replies_to_one_discussion_report_a_typed_conflict() {
     );
     assert!(diagnostic.contains("divergent_edit"), "{diagnostic}");
     assert!(diagnostic.contains(&id), "{diagnostic}");
+}
+
+fn rows(path: &Path) -> Vec<Value> {
+    std::fs::read_to_string(path)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect()
+}
+
+fn write_rows(path: &Path, rows: &[Value]) {
+    let text = rows
+        .iter()
+        .map(|row| serde_json::to_string(row).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    std::fs::write(path, text + "\n").unwrap();
 }
 
 #[test]

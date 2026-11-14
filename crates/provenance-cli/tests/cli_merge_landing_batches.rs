@@ -1,7 +1,7 @@
 #[path = "support/merge_driver.rs"]
 mod merge_driver;
 
-use merge_driver::{cli, commit, git, git_ok, json, repository, rows, write_rows};
+use merge_driver::{cli, commit, git, git_ok, json, repository};
 use provenance_macros::verifies;
 use std::path::{Path, PathBuf};
 
@@ -186,9 +186,7 @@ fn the_merge_removes_a_batch_that_one_side_removes_and_the_other_keeps() {
     commit(repo, "theirs");
     git_ok(repo, &["checkout", "main"]);
     // The product does not remove a batch, so this side removes it by hand.
-    let mut stored = rows(&landings(repo));
-    stored.pop();
-    write_rows(&landings(repo), &stored);
+    std::fs::write(landings(repo), format!("{kept}\n")).unwrap();
     commit(repo, "ours");
 
     assert_eq!(merge_theirs(repo), Some(0));
