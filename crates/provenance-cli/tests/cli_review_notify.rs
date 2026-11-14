@@ -2,10 +2,8 @@
 //! through `codex queue`. The tests read what Codex accepted from the thread queue.
 #![cfg(target_os = "linux")]
 
-#[path = "review_host_support/codex.rs"]
-mod codex;
-#[path = "review_host_support/mod.rs"]
-mod review_host_support;
+use crate::codex;
+use crate::review_host_support;
 
 use codex::{notify, parts, registration, replay, Codex};
 use provenance_macros::verifies;

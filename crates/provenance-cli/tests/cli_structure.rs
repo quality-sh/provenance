@@ -1,6 +1,9 @@
+use serde_json::Value;
 use std::{
+    collections::BTreeSet,
     fs,
     path::{Path, PathBuf},
+    process::Command,
 };
 
 const RUST_FILE_LINE_LIMIT: usize = 500;
@@ -67,6 +70,83 @@ fn rule_doc_headers_stay_within_their_budget() {
         }
     }
     assert!(rules_seen > 0, "rule doc audit found no #[rule(\"...\")]");
+}
+
+/// Checks that Cargo compiles each test file in the `tests/` directory of a crate.
+///
+/// A crate with `autotests = false` lists its test targets. A group target
+/// `tests/<group>/main.rs` loads test files of `tests/` as modules. A new test
+/// file that no target loads is not compiled, so its tests do not run. This is
+/// an aid for the test layout. No Rule states the layout.
+#[test]
+fn each_test_file_is_in_a_test_target() {
+    let workspace = workspace_root();
+    let output = Command::new(env!("CARGO"))
+        .args(["metadata", "--no-deps", "--format-version", "1"])
+        .current_dir(&workspace)
+        .output()
+        .expect("run cargo metadata");
+    assert!(output.status.success(), "cargo metadata failed");
+    let metadata: Value = serde_json::from_slice(&output.stdout).expect("parse cargo metadata");
+    let mut files_seen = 0usize;
+    for package in metadata["packages"].as_array().expect("metadata packages") {
+        let manifest = PathBuf::from(package["manifest_path"].as_str().expect("manifest path"));
+        let tests = manifest.parent().expect("crate directory").join("tests");
+        let Ok(entries) = fs::read_dir(&tests) else {
+            continue;
+        };
+        let targets = package["targets"]
+            .as_array()
+            .expect("package targets")
+            .iter()
+            .filter(|target| target["kind"][0] == "test")
+            .map(|target| PathBuf::from(target["src_path"].as_str().expect("target path")))
+            .collect::<BTreeSet<_>>();
+        let mut loaded = BTreeSet::new();
+        let mut test_files = Vec::new();
+        for entry in entries {
+            let path = entry.expect("read tests entry").path();
+            let group_main = path.join("main.rs");
+            if group_main.is_file() {
+                assert!(
+                    targets.contains(&group_main),
+                    "{} is not a test target of {}; add it as a [[test]]",
+                    group_main.display(),
+                    package["name"],
+                );
+                let text = fs::read_to_string(&group_main).expect("read group main.rs");
+                for line in text.lines() {
+                    if let Some(file) = line.trim().strip_prefix("#[path = \"../") {
+                        loaded.insert(tests.join(file.trim_end_matches("\"]")));
+                    }
+                }
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                test_files.push((
+                    path.clone(),
+                    fs::read_to_string(&path).expect("read test file"),
+                ));
+            }
+        }
+        for (path, _) in &test_files {
+            files_seen += 1;
+            let stem = path
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .expect("file stem");
+            let support = test_files.iter().any(|(other, text)| {
+                other != path
+                    && (text.contains(&format!("mod {stem};"))
+                        || text.contains(&format!("\"{stem}.rs\"")))
+            });
+            assert!(
+                targets.contains(path) || loaded.contains(path) || support,
+                "{} is in no test target of {}: add it to a group main.rs or as a [[test]]",
+                path.display(),
+                package["name"],
+            );
+        }
+    }
+    assert!(files_seen > 0, "the test layout check found no test files");
 }
 
 fn workspace_root() -> PathBuf {

@@ -1,8 +1,6 @@
 use std::fmt::Write as _;
 
-mod support {
-    pub mod help_text;
-}
+use crate::support;
 use support::help_text::help;
 
 #[test]

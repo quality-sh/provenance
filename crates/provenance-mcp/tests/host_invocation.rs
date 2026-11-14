@@ -3,16 +3,7 @@
 //! timing test first awaits the `entered` signal that the gate sends from inside the blocking
 //! work, so the held operation owns a work slot before the test acts.
 
-#[allow(dead_code)]
-mod support {
-    #[path = "../../../provenance-transport/tests/support/gate.rs"]
-    pub mod gate;
-    pub mod mcp;
-    #[path = "../../../provenance-transport/tests/support/records.rs"]
-    pub mod records;
-    #[path = "../../../provenance-transport/tests/support/resource_http.rs"]
-    pub mod resource_http;
-}
+use crate::support;
 
 use axum::{body::Body, http::Request};
 use futures::poll;

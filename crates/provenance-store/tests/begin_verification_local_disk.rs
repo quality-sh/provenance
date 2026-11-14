@@ -3,10 +3,8 @@
 //! take the write permission from a directory with its mode.
 #![cfg(unix)]
 
-#[path = "support/initialization.rs"]
-mod initialization;
-#[path = "support/memory.rs"]
-mod memory;
+use crate::discussion_support::base::initialization;
+use crate::memory;
 
 use camino::Utf8Path;
 use memory::{begin_input, scope};

@@ -8,12 +8,7 @@
 //! answer, its order or a refusal.
 #![cfg(feature = "test-fixture")]
 
-mod support {
-    pub mod catch_up_steps;
-    pub mod records;
-    pub mod resource_http;
-    pub mod transcript;
-}
+use crate::support;
 
 use provenance_transport::StatementHost;
 use serde_json::{json, Value};
