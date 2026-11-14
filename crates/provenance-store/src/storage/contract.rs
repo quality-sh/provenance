@@ -220,7 +220,7 @@ pub fn a_one_key_set_lands_all_of_its_bytes<H: Harness>(mut harness: H) {
 }
 
 /// A one-key set that fails while it lands leaves the state as it was and
-/// reports that landing started.
+/// is refused.
 pub fn a_failed_one_key_set_lands_nothing<H: Harness>(mut harness: H) {
     harness.seed(&[("manifest.json", b"{}")]);
     harness.break_key(X);
@@ -228,7 +228,22 @@ pub fn a_failed_one_key_set_lands_nothing<H: Harness>(mut harness: H) {
     let writes = WriteSet::new(Atomicity::PerKey).put(key(X), b"x".to_vec());
     assert!(matches!(
         publish(&harness, writes),
-        Err(PublishFailure::Started(_))
+        Err(PublishFailure::Refused(_))
+    ));
+    assert_eq!(read(&harness), before);
+}
+
+/// A per-key set that fails at its first key changes no key and is refused.
+pub fn a_per_key_set_that_fails_at_its_first_key_is_refused<H: Harness>(mut harness: H) {
+    harness.seed(&[("manifest.json", b"{}")]);
+    harness.break_key(A);
+    let before = read(&harness);
+    let writes = WriteSet::new(Atomicity::PerKey)
+        .put(key(A), b"a".to_vec())
+        .put(key(B), b"b".to_vec());
+    assert!(matches!(
+        publish(&harness, writes),
+        Err(PublishFailure::Refused(_))
     ));
     assert_eq!(read(&harness), before);
 }
@@ -391,11 +406,19 @@ mod tests {
     #[test]
     #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
     #[verifies("rule_one_key_write_set_lands_whole", examples)]
-    #[verifies("rule_failure_after_landing_starts_is_an_unknown_outcome", examples)]
+    #[verifies("rule_failure_before_a_key_changes_is_refused", examples)]
     fn each_adapter_a_failed_one_key_set_lands_nothing() {
         a_failed_one_key_set_lands_nothing(local());
         a_failed_one_key_set_lands_nothing(Memory::default());
         a_failed_one_key_set_lands_nothing(Persisting::default());
+    }
+
+    #[test]
+    #[verifies("rule_failure_before_a_key_changes_is_refused", examples)]
+    fn each_adapter_a_per_key_set_that_fails_at_its_first_key_is_refused() {
+        a_per_key_set_that_fails_at_its_first_key_is_refused(local());
+        a_per_key_set_that_fails_at_its_first_key_is_refused(Memory::default());
+        a_per_key_set_that_fails_at_its_first_key_is_refused(Persisting::default());
     }
 
     #[test]
