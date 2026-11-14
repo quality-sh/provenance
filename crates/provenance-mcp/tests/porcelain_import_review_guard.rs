@@ -66,7 +66,12 @@ async fn mcp_import_on_a_scope_with_a_requirement_review_record_is_refused() {
     support::records::allow_reviewer(&repository);
     let root = repository.dir.path().to_str().unwrap().to_owned();
     let session = Session::start(RepoContext::new(root, "default").host().unwrap()).await;
-    let stored = import(&session, &repository, &document("The system keeps the record.")).await;
+    let stored = import(
+        &session,
+        &repository,
+        &document("The system keeps the record."),
+    )
+    .await;
     assert_eq!(stored["records"], 2, "{stored}");
     let restated = import(
         &session,
@@ -77,7 +82,12 @@ async fn mcp_import_on_a_scope_with_a_requirement_review_record_is_refused() {
     assert_eq!(restated["records"], 2, "{restated}");
     let before = state_bytes(&repository);
 
-    let refused = import(&session, &repository, &document("The system keeps the record.")).await;
+    let refused = import(
+        &session,
+        &repository,
+        &document("The system keeps the record."),
+    )
+    .await;
 
     assert_eq!(refused["message"], REFUSAL);
     assert_eq!(state_bytes(&repository), before);

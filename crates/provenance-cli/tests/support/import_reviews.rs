@@ -94,7 +94,14 @@ pub fn export(repo: &Path) -> assert_cmd::assert::Assert {
 /// Applies the typed authoring document `spec` to the scope `default` of `repo`.
 pub fn apply_spec(repo: &Path, spec: &Value) {
     provenance()
-        .args(["api", "authoring-changes", "--method", "post", "--input", "-"])
+        .args([
+            "api",
+            "authoring-changes",
+            "--method",
+            "post",
+            "--input",
+            "-",
+        ])
         .args(["--repo", repo.to_str().unwrap()])
         .args(["--scope", "default", "--format", "json"])
         .write_stdin(spec.to_string())

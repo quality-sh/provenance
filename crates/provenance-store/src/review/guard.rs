@@ -51,9 +51,9 @@ impl UnportableState {
         let held = match self {
             Self::ReviewFolder => format!("the review folder scopes/{scope}/review"),
             Self::ReviewHistory => "a review submission, a Discussion or a withdrawal".to_owned(),
-            Self::RequirementReviews => format!(
-                "a Requirement review record in scopes/{scope}/requirements/review.jsonl"
-            ),
+            Self::RequirementReviews => {
+                format!("a Requirement review record in scopes/{scope}/requirements/review.jsonl")
+            }
         };
         crate::refusal::refuse!(
             InvalidUpdate,

@@ -95,7 +95,10 @@ pub(super) fn reviews(
     for change in requirement_statement_changes(&reconciliation.resources) {
         let mut affected = store.rule_ids_for_requirement(scope, &change.requirement_id)?;
         let key = Some(change.requirement_key.as_str());
-        for resource in typed_rules.clone().filter(|resource| resource.parent.as_deref() == key) {
+        for resource in typed_rules
+            .clone()
+            .filter(|resource| resource.parent.as_deref() == key)
+        {
             push_unique(&mut affected, resource.id.clone());
         }
         affected.retain(|rule| !removed.contains(&rule));
