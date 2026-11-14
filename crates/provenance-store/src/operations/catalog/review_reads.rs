@@ -99,7 +99,7 @@ const fn limit() -> usize {
     50
 }
 
-// The history reads stay on the host for now.
+// The history reads need `host`.
 #[cfg(feature = "host")]
 review_read!(
     ReviewHistory,

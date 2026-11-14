@@ -6,7 +6,7 @@
 //! `host`. Without it a read takes no publication guard and never writes
 //! the read database: it answers from the database as the last
 //! `catch_up_in_publish` left it, and its stamp says `annotate_only`. With
-//! `host` a read catches the database up itself, as before.
+//! `host` a read catches the database up itself.
 //!
 //! The read database is an `SQLite` database in memory behind the
 //! contract's wrapper, so the reads reach it through the port only. The
