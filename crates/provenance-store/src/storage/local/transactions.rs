@@ -148,7 +148,9 @@ fn remove_marker_temporaries(
 /// failure gives the step, the path and the system error. The contents that
 /// the call removed before the failure stay removed.
 pub fn remove_transaction(transaction: &Utf8Path) -> anyhow::Result<()> {
-    remove_directory(transaction, || format!("remove transaction directory {transaction}"))
+    remove_directory(transaction, || {
+        format!("remove transaction directory {transaction}")
+    })
 }
 
 fn remove_directory(path: &Utf8Path, step: impl FnOnce() -> String) -> anyhow::Result<()> {

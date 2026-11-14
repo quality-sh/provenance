@@ -42,11 +42,8 @@ fn recover_marked_source_edit(
     marker: &mut SourceEditMarker,
 ) -> anyhow::Result<()> {
     if marker.phase != SourceEditPhase::FileInstalled {
-        let transaction = contained_transaction(
-            layout,
-            TransactionKind::SourceEdit,
-            &marker.transaction_dir,
-        )?;
+        let transaction =
+            contained_transaction(layout, TransactionKind::SourceEdit, &marker.transaction_dir)?;
         validate_recovery_tree(&transaction)?;
         let replacement = read_replacement(&transaction, marker.after_digest)?;
         let held = recover_target(layout, marker)?;

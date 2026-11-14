@@ -374,7 +374,11 @@ fn a_section_entry_ends_a_published_source_edit_whose_transaction_is_removed_in_
     let failed = with_repository_publication(&layout, |_| Ok(()));
     std::fs::set_permissions(&transactions, std::fs::Permissions::from_mode(0o755)).unwrap();
     assert!(failed.is_err(), "the removal fails");
-    assert_eq!(names(&transaction), Vec::<String>::new(), "a part is removed");
+    assert_eq!(
+        names(&transaction),
+        Vec::<String>::new(),
+        "a part is removed"
+    );
     assert!(layout.source_edit_marker_path().exists());
     assert_eq!(published(root), (AFTER.to_vec(), AFTER.to_vec()));
 
@@ -401,7 +405,10 @@ fn a_stop_in_the_write_of_the_source_edit_marker_leaves_no_file_after_the_next_s
         .env("PROVENANCE_SOURCE_EDIT_STOP_AT_FILE_WRITE", "1")
         .status()
         .unwrap();
-    assert_eq!(status.signal(), Some(rustix::process::Signal::XFSZ.as_raw()));
+    assert_eq!(
+        status.signal(),
+        Some(rustix::process::Signal::XFSZ.as_raw())
+    );
     assert_eq!(
         hidden_files(&layout.cache_dir()).len(),
         1,

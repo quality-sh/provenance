@@ -385,7 +385,10 @@ fn a_stop_in_the_write_of_the_import_marker_leaves_no_file_after_the_next_sectio
         .status()
         .unwrap();
 
-    assert_eq!(status.signal(), Some(rustix::process::Signal::XFSZ.as_raw()));
+    assert_eq!(
+        status.signal(),
+        Some(rustix::process::Signal::XFSZ.as_raw())
+    );
     assert_eq!(
         hidden_cache_files(&layout).len(),
         1,
