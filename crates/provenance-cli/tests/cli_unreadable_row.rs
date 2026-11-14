@@ -10,12 +10,11 @@
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 
-mod support {
-    pub mod review_paths;
-}
+use crate::support;
 use support::review_paths::{create_requirement, json_output, provenance};
 
 const REQUIREMENTS: &str = ".provenance/state/scopes/default/requirements/req.jsonl";
+const RUNS: &str = ".provenance/cache/scopes/default/verification-runs.jsonl";
 const RETIRED: &str = "record req_a contains legacy field `retired`; canonical JSONL requires \
     record-deletion migration 026 before this build can read it";
 
@@ -122,4 +121,30 @@ fn each_read_and_write_of_a_row_with_the_retired_field_refuses_at_the_row() {
         .output()
         .unwrap();
     assert_eq!(refusal(&read), state_file_refusal(RETIRED));
+}
+
+/// No Rule binding: `rule_state_parse_refusal_names_the_line` is for record
+/// files below the state directory, and the runs cache is a cache file.
+#[test]
+fn the_list_of_runs_names_a_line_of_the_runs_cache_that_is_not_utf8() {
+    let (directory, repo) = support::review_paths::init();
+    let path = directory.path().join(RUNS);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, b"\xff\n").unwrap();
+
+    let output = provenance()
+        .args(["api", "verification-runs", "--repo", &repo])
+        .output()
+        .unwrap();
+
+    let text = concat!(
+        r#"Error: {"error":{"file":"verification-runs.jsonl","kind":"invalid_state_file","#,
+        r#""line":1,"message":"invalid utf-8 sequence of 1 bytes from index 0"},"meta":{}}"#,
+        "\n"
+    );
+    let answer = (output.status.code(), output.stdout.is_empty());
+    assert_eq!(
+        (answer, String::from_utf8_lossy(&output.stderr)),
+        ((Some(1), true), text.into())
+    );
 }

@@ -11,8 +11,7 @@ mod dictionary_support;
 #[path = "cli_check/archive_commit.rs"]
 mod archive_commit;
 
-#[path = "support/bounded_process.rs"]
-mod bounded_process;
+use crate::review_host_support::bounded_process;
 use bounded_process::Bounded;
 
 #[test]
@@ -403,7 +402,7 @@ fn strict_check_passes_when_the_referenced_index_is_present() {
         .stdout(contains(r#""category": "graph""#).and(contains(r#""status": "passed""#)));
 }
 
-pub(crate) fn git(repo: &Path, arguments: &[&str]) {
+fn git(repo: &Path, arguments: &[&str]) {
     let output = provenance_store::git_process::git()
         .current_dir(repo)
         .args(arguments)
@@ -415,7 +414,7 @@ pub(crate) fn git(repo: &Path, arguments: &[&str]) {
     );
 }
 
-pub(crate) fn init(repo: &Path) {
+fn init(repo: &Path) {
     bounded_process::provenance()
         .args([
             "init",

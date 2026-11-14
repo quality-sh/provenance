@@ -10,9 +10,7 @@
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
-mod support {
-    pub mod review_paths;
-}
+use crate::support;
 use support::review_paths::{create_requirement, provenance};
 
 /// The one Resolution file of the repository.

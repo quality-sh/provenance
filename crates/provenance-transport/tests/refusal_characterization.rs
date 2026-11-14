@@ -4,10 +4,7 @@
 //! The other tests pin caller refusals that have a declared kind.
 #![cfg(feature = "test-fixture")]
 
-mod support {
-    pub mod records;
-    pub mod resource_http;
-}
+use crate::support;
 
 use serde_json::{json, Value};
 use support::records::Repository;

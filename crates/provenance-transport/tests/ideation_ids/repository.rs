@@ -2,9 +2,9 @@
 //! ideation writes and the reads over it, and the hand edits that put an id
 //! on two lines of its file.
 
-use crate::support::asserted_proposal::{assertion_row, create_asserted_proposal};
-use crate::support::records::{allow_reviewer, Repository};
-use crate::support::resource_http::{call, host};
+use super::support::asserted_proposal::{assertion_row, create_asserted_proposal};
+use super::support::records::{allow_reviewer, Repository};
+use super::support::resource_http::{call, host};
 use serde_json::{json, Value};
 
 pub const IDEATION: &str = "scopes/default/ideation";

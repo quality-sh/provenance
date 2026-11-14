@@ -3,10 +3,7 @@
 //! a reviewer accepted. A PATCH of the status to active or archived opens a
 //! status request.
 #![cfg(feature = "test-fixture")]
-mod support {
-    pub mod records;
-    pub mod resource_http;
-}
+use crate::support;
 use provenance_macros::verifies;
 use provenance_transport::StatementHost;
 use serde_json::{json, Value};

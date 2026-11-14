@@ -406,7 +406,8 @@ authorization, repository and scope access, embedded assets, and shutdown.
 
 ## Validation
 
-Run `cargo test -p provenance-cli --test cli_review_host --test cli_review_refusal_connections --test review_asset_build --test review_archive`
+Run `cargo test -p provenance-cli --test review -- cli_review_host:: cli_review_refusal_connections:: review_archive::`,
+`cargo test -p provenance-review --test review_asset_build`
 and `cargo test -p provenance-transport --features test-fixture` after generation.
 Run `node --test tools/review-host/*.test.ts` for composition and session checks.
 Run `node tools/review-host/verify-page-session.ts BINARY` to run the page

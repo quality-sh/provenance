@@ -49,10 +49,7 @@ async fn well_formed_body_with_invalid_envelope_keeps_the_invalid_value_reason()
 }
 
 #[cfg(feature = "test-fixture")]
-mod support {
-    pub mod records;
-    pub mod resource_http;
-}
+use crate::support;
 
 /// A create that carries `source_refs` names the field, lists the
 /// accepted fields and tells how to cite a Source.

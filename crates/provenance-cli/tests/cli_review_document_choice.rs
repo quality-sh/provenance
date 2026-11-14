@@ -1,5 +1,5 @@
-mod porcelain_authoring_support;
-mod review_host_support;
+use crate::porcelain_authoring_support;
+use crate::review_host_support;
 
 use porcelain_authoring_support::{initialized_repo, json_output, provenance};
 use provenance_macros::verifies;

@@ -7,9 +7,7 @@ use predicates::prelude::*;
 use provenance_macros::verifies;
 use std::path::Path;
 
-mod support {
-    pub mod review_paths;
-}
+use crate::support;
 use support::review_paths::{init_scope, json_output as json, provenance};
 
 fn init(repo: &Path, scope: &str) {

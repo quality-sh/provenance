@@ -2,9 +2,12 @@
 //! record lifecycle status.
 
 mod review_serde;
+mod stored_rows;
 
 use crate::{NodeType, ScopeId, StableId};
 use serde::{Deserialize, Serialize};
+
+pub use stored_rows::{withdrawn_submission_ids, WithdrawalRowFault};
 
 const fn requirement_kind() -> NodeType {
     NodeType::Requirement
