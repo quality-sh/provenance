@@ -1,6 +1,7 @@
-//! Typed Rule declaration calls and other `rule(` calls never become
-//! implementation bindings in TypeScript; the `verifies` helper from the
-//! `rules` subpath binds a test, and unknown ids on real bindings still warn.
+//! Typed Rule declaration calls never become implementation bindings; a
+//! project's own `rule(` helper binds, free or through a namespace import, the
+//! `verifies` helper from the `rules` subpath binds a test, and unknown ids on
+//! real bindings still warn.
 
 use camino::Utf8Path;
 use provenance_scanner::{scan_file, validate_bindings, Language, Verification};
@@ -20,22 +21,27 @@ fn typed_rule_declaration_call_is_not_an_implementation_binding() {
 }
 
 #[test]
-fn namespace_imported_verifies_binds_its_test() {
+fn namespace_imported_helpers_bind_their_implementation_and_verification() {
     let scan = scan_file(
-        Utf8Path::new("rule-bindings.test.ts"),
+        Utf8Path::new("rule-bindings.ts"),
         Language::TypeScript,
-        r#"import * as ruleBindings from "@quality-sh/provenance/rules";
+        r#"import * as ruleBindings from "./rule-bindings.js";
+
+const implementation = (hours: number): boolean => hours > 38;
+const paysOvertime: (hours: number) => boolean = ruleBindings.rule("rule_packed_consumer_overtime", implementation);
 
 function overtimeExamples(): void {
   ruleBindings.verifies("rule_packed_consumer_overtime", "examples");
 }"#,
     );
 
-    assert_eq!(scan.bindings.len(), 1);
+    assert_eq!(scan.bindings.len(), 2);
     assert_eq!(scan.bindings[0].rule_id, "rule_packed_consumer_overtime");
-    assert_eq!(scan.bindings[0].verification, Some(Verification::Examples));
+    assert_eq!(scan.bindings[0].verification, None);
+    assert_eq!(scan.bindings[0].item_name.as_deref(), Some("paysOvertime"));
+    assert_eq!(scan.bindings[1].verification, Some(Verification::Examples));
     assert_eq!(
-        scan.bindings[0].item_name.as_deref(),
+        scan.bindings[1].item_name.as_deref(),
         Some("overtimeExamples")
     );
 }
@@ -104,7 +110,7 @@ fn tracked_sdk_declaration_shapes_never_bind() {
 }
 
 #[test]
-fn free_rule_call_is_not_a_binding() {
+fn free_rule_helper_call_remains_a_binding() {
     let scan = scan_file(
         Utf8Path::new("rules.ts"),
         Language::TypeScript,
@@ -113,10 +119,10 @@ fn free_rule_call_is_not_a_binding() {
 export const paysOvertime = rule("rule_overtime", (hours: number) => hours > 38);"#,
     );
 
-    assert_eq!(
-        scan.bindings,
-        [] as [provenance_scanner::AttributeBinding; 0]
-    );
+    assert_eq!(scan.bindings.len(), 1);
+    assert_eq!(scan.bindings[0].rule_id, "rule_overtime");
+    assert_eq!(scan.bindings[0].verification, None);
+    assert_eq!(scan.bindings[0].item_name.as_deref(), Some("paysOvertime"));
 }
 
 #[test]
@@ -139,9 +145,7 @@ fn declaration_silence_and_unknown_id_warnings_coexist() {
         Utf8Path::new("mixed.test.ts"),
         Language::TypeScript,
         r#"const fixture = requirement.rule("expiry", {statement: "Expires after 30 days"});
-function overtimeExamples() {
-  verifies("rule_not_in_graph", "examples");
-}"#,
+const paysOvertime = rule("rule_not_in_graph", (hours: number) => hours > 38);"#,
     );
 
     let warnings = validate_bindings(std::slice::from_ref(&scan), ["rule_known".to_string()]);

@@ -40,7 +40,7 @@ fn script_verifies_calls_without_a_method_warn_with_the_line() {
         "{:?}",
         scan.warnings
     );
-    assert_eq!(scan.bindings.len(), 1);
+    assert_eq!(scan.bindings.len(), 2);
     assert_eq!(scan.bindings[0].line, 3);
 }
 

@@ -13,10 +13,6 @@ function overtimeExamples(): void {
 overtimeExamples();
 
 if (false) {
-  // Production code connects to a Rule with a comment, so the rules subpath
-  // gives only the test helper.
-  // @ts-expect-error The rules subpath has no implementation helper.
-  ruleBindings.rule("rule_packed_consumer_overtime", paysOvertime);
   // The alias keeps this a type-level check: the scanner reports a literal
   // `verifies(` call with a method word outside its vocabulary.
   const checkMethodWord = ruleBindings.verifies;
