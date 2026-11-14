@@ -110,13 +110,11 @@ fn bindings(repository: &Repository) -> usize {
     store.list_verification_bindings(&scope()).unwrap().len()
 }
 
-fn assert_permission_denied(answer: &Value, status: u16) {
+/// Asserts a `write_failed` answer whose cause starts with `cause`.
+fn assert_write_failed(answer: &Value, status: u16, cause: &str) {
     assert_eq!((&answer["kind"], status), (&json!("write_failed"), 500));
-    let cause = answer["cause"].as_str().unwrap();
-    assert!(
-        cause.starts_with("Permission denied (os error 13)"),
-        "{answer}"
-    );
+    let text = answer["cause"].as_str().unwrap();
+    assert!(text.starts_with(cause), "{answer}");
 }
 
 /// The local adapter lands a whole set on a copy of the state directory in
@@ -131,7 +129,7 @@ fn a_refused_set_on_local_disk_leaves_no_binding_no_run_row_and_an_open_review()
 
     let (answer, status) = failure(&repository);
 
-    assert_permission_denied(&answer, status);
+    assert_write_failed(&answer, status, "Permission denied (os error 13)");
     assert_eq!(
         (
             bindings(&repository),
@@ -153,7 +151,11 @@ fn a_run_row_that_cannot_be_written_leaves_the_binding_and_the_cleared_review() 
 
     let (answer, status) = failure(&repository);
 
-    assert_permission_denied(&answer, status);
+    assert_write_failed(
+        &answer,
+        status,
+        "make a temporary file in default: Permission denied (os error 13)",
+    );
     let cause = answer["cause"].as_str().unwrap();
     assert!(cause.contains(".tmp"), "{answer}");
     let cleared = reviews(&repository)[0].cleared_by_run.is_some();
