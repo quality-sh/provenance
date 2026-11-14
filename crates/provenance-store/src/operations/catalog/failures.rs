@@ -74,7 +74,9 @@ impl ReadError {
                 field: field.clone(),
                 reason: reason.clone(),
             }),
-            WriteFailure::AccessDenied => Some(OperationFailure::AccessDenied),
+            WriteFailure::AccessDenied { message } => Some(OperationFailure::AccessDenied {
+                message: message.clone(),
+            }),
             _ => None,
         }
     }
