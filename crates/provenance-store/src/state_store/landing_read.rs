@@ -42,7 +42,7 @@ pub(crate) struct LandingRefusal {
 
 impl IdeationRecords {
     /// The records with no landing batch applied.
-    pub(crate) const fn new(
+    pub(crate) fn new(
         contributions: Vec<Contribution>,
         synthesis_packets: Vec<SynthesisPacket>,
         proposals: Vec<ProposalCard>,
