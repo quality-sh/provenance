@@ -33,7 +33,7 @@ tokio = { workspace = true, features = ["io-std", "io-util"] }
 # tests/<group>/main.rs compiles test files of tests/ as its modules, because
 # each test binary links the full dependency tree. Each other file listed
 # here is a test binary of its own. cli_structure checks that each test file
-# is in one of these targets.
+# is in exactly one of these targets.
 [[test]]
 name = "server"
 path = "tests/server/main.rs"
