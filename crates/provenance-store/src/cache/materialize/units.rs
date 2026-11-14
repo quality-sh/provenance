@@ -125,6 +125,7 @@ pub fn unit_digest(state_dir: &Utf8Path, unit: &Unit) -> Result<String, UnitHash
 
 /// The digest of the exact stored bytes in one unit, read from the files
 /// with no lock.
+#[cfg(feature = "host")]
 pub fn unit_stored_digest(state_dir: &Utf8Path, unit: &Unit) -> Result<String, UnitHashError> {
     Ok(read_unit(state_dir, unit, |_, _| {})?.bytes().stored)
 }

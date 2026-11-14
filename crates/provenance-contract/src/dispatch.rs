@@ -8,32 +8,20 @@ use provenance_core::{
 };
 use provenance_store::operations::{
     catalog::{
-        self as operation, frame_failure, ContextKind, Invoke, Operation, OperationFuture,
-        RequestedContext,
+        self as operation, frame_failure, Invoke, Operation, OperationFuture, RequestedContext,
     },
     family_operations as family,
 };
-use serde::{de::IntoDeserializer as _, Deserialize};
+use serde::de::IntoDeserializer as _;
 use serde_json::Value;
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct DataFreeCall<R> {
-    request: R,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct RepositoryCall<R, C> {
-    context: C,
-    request: R,
-}
+mod call;
+pub(crate) use call::decode_call;
 
 struct Entry<H: Invoke> {
     name: &'static str,
     mutates: bool,
     invoke: fn(Value, H) -> OperationFuture<Value, FailureEnvelope>,
-    port: crate::port::Checks,
 }
 
 fn register<O: Operation, H: Invoke>() -> Entry<H> {
@@ -41,7 +29,6 @@ fn register<O: Operation, H: Invoke>() -> Entry<H> {
         name: O::NAME,
         mutates: O::MUTATES,
         invoke: invoke_resolved::<O, H>,
-        port: crate::port::Checks::of::<O>(),
     }
 }
 
@@ -266,14 +253,6 @@ pub async fn invoke_with<H: Invoke>(
     (entry.invoke)(call, host).await
 }
 
-/// The checks of `operation` for a call that a port answers.
-pub fn port_checks(operation: &str) -> Option<crate::port::Checks> {
-    entries::<Unhosted>()
-        .into_iter()
-        .find(|entry| entry.name == operation)
-        .map(|entry| entry.port)
-}
-
 /// Decodes the native call of one operation and runs the operation on the host. The request
 /// member of the call has the request type of the operation, so an operation that has no
 /// input fields takes only null.
@@ -290,41 +269,6 @@ fn invoke_resolved<O: Operation, H: Invoke>(
             .map_err(frame_failure::<O>)?;
         serde_json::to_value(success)
             .map_err(|_| FailureEnvelope::new(Some(O::NAME), OperationFailure::Internal))
-    })
-}
-
-pub fn decode_call<O: Operation>(
-    call: Value,
-) -> Result<(Option<RequestedContext>, O::Request), FailureEnvelope> {
-    Ok(match O::CONTEXT {
-        ContextKind::Repository => {
-            let call: RepositoryCall<
-                O::Request,
-                provenance_core::protocol::repository::RepositoryTarget,
-            > = decode::<O, _>(call)?;
-            (
-                Some(RequestedContext::Repository(call.context)),
-                call.request,
-            )
-        }
-        ContextKind::Scope => {
-            let call: RepositoryCall<
-                O::Request,
-                provenance_core::protocol::repository::RepositoryScope,
-            > = decode::<O, _>(call)?;
-            (Some(RequestedContext::Scope(call.context)), call.request)
-        }
-        ContextKind::Scoped => {
-            let call: RepositoryCall<
-                O::Request,
-                provenance_core::protocol::repository::RepositoryContext,
-            > = decode::<O, _>(call)?;
-            (Some(RequestedContext::Scoped(call.context)), call.request)
-        }
-        ContextKind::DataFree => {
-            let call: DataFreeCall<O::Request> = decode::<O, _>(call)?;
-            (None, call.request)
-        }
     })
 }
 

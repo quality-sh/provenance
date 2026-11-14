@@ -5,14 +5,14 @@
 //! open, and gives out stores. An operation takes the handle; it does not
 //! discover, canonicalize or re-read settings itself.
 
+use crate::cache::{CatchUpRunning, PassClaim, PassSlot};
 #[cfg(feature = "host")]
 use crate::layout::with_initialized_graph;
 use crate::layout::{GraphNotInitialized, ProvenanceLayout};
-use crate::operations::read_operations::ReadOperations;
 use crate::publication::SectionHandle;
 use crate::read_database::ReadDatabase;
 use crate::review::history::FileVersions;
-use crate::settings::{Settings, SettingsError};
+use crate::settings::Settings;
 #[cfg(feature = "host")]
 use crate::stale::revision_scans::KeptScans;
 use crate::state_store::StateStore;
@@ -23,7 +23,6 @@ use crate::write_error::WriteError;
 use camino::Utf8Path;
 #[cfg(feature = "host")]
 use camino::Utf8PathBuf;
-use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
 use provenance_core::{Manifest, Scope, ScopeId, Stamp};
 use provenance_macros::{rule, verifies};
 #[cfg(feature = "host")]
@@ -31,9 +30,11 @@ use std::path::Path;
 use std::sync::Arc;
 
 mod identity;
+mod open_failure;
 pub use identity::{
     Clock, IdSource, RandomIds, RepositoryHistory, RepositoryIdentity, SystemClock,
 };
+pub use open_failure::OpenFailure;
 
 /// One opened repository. A clone shares the open; one open per command or host.
 #[derive(Clone, Debug)]
@@ -43,8 +44,6 @@ pub struct Repository {
     inner: Arc<Inner>,
     /// Set only on the repository of a section guard.
     section: Option<SectionHandle>,
-    /// The read operations port, when the caller gave one.
-    reads: Option<Arc<dyn ReadOperations>>,
 }
 
 #[derive(Debug)]
@@ -60,50 +59,13 @@ struct Inner {
     /// repository that `open` makes, or the one that the caller of
     /// `with_storage` gives.
     read_database: Option<Arc<dyn ReadDatabase>>,
+    /// Whether a catch-up pass writes `read_database`.
+    pass: Arc<PassSlot>,
     /// The source scans of the last commit range that a stale or evidence
     /// query of this open read. Each clone of the handle, and each handle
     /// that `with_file_versions` gives, shares them.
     #[cfg(feature = "host")]
     kept_scans: Arc<KeptScans>,
-}
-
-/// Why a repository did not open.
-#[derive(Debug, thiserror::Error)]
-pub enum OpenFailure {
-    #[error("resolve repository `{path}`: {error}")]
-    InvalidRoot {
-        path: String,
-        #[source]
-        error: std::io::Error,
-    },
-    #[error("{}", GraphNotInitialized)]
-    NotInitialized,
-    #[error("unknown scope `{selected}`; declared scopes: {}", .declared.join(", "))]
-    UnknownScope {
-        selected: String,
-        declared: Vec<String>,
-    },
-    #[error(transparent)]
-    Settings(#[from] SettingsError),
-    /// The initialized-graph gate did not complete: an I/O failure, a lock
-    /// failure, a manifest that is not a file, or a manifest that does not parse.
-    #[error("{0:#}")]
-    Io(anyhow::Error),
-}
-
-impl From<OpenFailure> for OperationFailure {
-    fn from(failure: OpenFailure) -> Self {
-        match failure {
-            OpenFailure::InvalidRoot { .. } => Self::InvalidInput {
-                field: None,
-                reason: InvalidInputReason::InvalidValue,
-            },
-            OpenFailure::UnknownScope { .. } => Self::UnknownScope,
-            OpenFailure::NotInitialized | OpenFailure::Settings(_) | OpenFailure::Io(_) => {
-                Self::Internal
-            }
-        }
-    }
 }
 
 /// A request named a scope other than the one the handle selected.
@@ -201,11 +163,11 @@ impl Repository {
                 section_lock: Arc::clone(&self.inner.section_lock),
                 local: self.inner.local,
                 read_database: self.inner.read_database.clone(),
+                pass: Arc::clone(&self.inner.pass),
                 #[cfg(feature = "host")]
                 kept_scans: Arc::clone(&self.inner.kept_scans),
             }),
             section: self.section.clone(),
-            reads: self.reads.clone(),
         }
     }
 
@@ -220,6 +182,7 @@ impl Repository {
             inner: Arc::new(Inner {
                 layout: ProvenanceLayout::new(identity.working_tree().to_owned()),
                 read_database,
+                pass: Arc::default(),
                 identity,
                 storage,
                 section_lock,
@@ -228,7 +191,6 @@ impl Repository {
                 kept_scans: Arc::new(KeptScans::new()),
             }),
             section: None,
-            reads: None,
         }
     }
 
@@ -354,6 +316,13 @@ impl Repository {
             .ok_or_else(|| crate::refusal::fault!("this repository has no read database"))
     }
 
+    /// The claim of the one catch-up pass that writes the read database, or
+    /// the refusal at once when another pass holds it. Each clone of this
+    /// handle shares the claim.
+    pub(crate) fn claim_catch_up(&self) -> Result<PassClaim, CatchUpRunning> {
+        self.inner.pass.claim()
+    }
+
     /// The lock that serializes the sections of this repository.
     pub(crate) fn section_lock(&self) -> &Arc<dyn SectionLock> {
         &self.inner.section_lock
@@ -392,7 +361,6 @@ impl Repository {
         Self {
             inner: Arc::clone(&self.inner),
             section: Some(section),
-            reads: self.reads.clone(),
         }
     }
 
@@ -424,21 +392,6 @@ impl Repository {
         self.store().with_repository_publication(|held| {
             crate::publication::with_staged_state(held, dry_run, record_stamp, prepare)
         })
-    }
-
-    /// This repository with `reads` as the port of its read operations.
-    ///
-    /// The contract router sends each read operation to the port. A clone keeps the port.
-    #[must_use]
-    pub fn with_read_operations(&self, reads: Arc<dyn ReadOperations>) -> Self {
-        let mut repository = self.clone();
-        repository.reads = Some(reads);
-        repository
-    }
-
-    /// The port of the read operations, if the caller gave one.
-    pub fn read_operations(&self) -> Option<&Arc<dyn ReadOperations>> {
-        self.reads.as_ref()
     }
 }
 

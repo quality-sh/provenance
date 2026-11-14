@@ -1,10 +1,11 @@
 //! The read operations of one repository, as a port.
 //!
 //! The contract router sends each of these operations to the port of the
-//! repository it serves, when the repository has one, and does not run the
-//! operation itself. So an embedder can run the reads beside the read
-//! database, in another process, and serve the contract routes from a
-//! repository that has only its canonical state.
+//! binding it serves ([`LocalRepository::with_read_operations`]), when the
+//! binding has one, and does not run the operation itself. So an embedder
+//! can run the reads beside the read database, in another process, and
+//! serve the contract routes from a repository that has only its canonical
+//! state.
 //!
 //! Before the router gives a call to the port, it does all that it does for
 //! an operation that it runs itself: it decodes the call, checks the
@@ -19,12 +20,13 @@
 //! it: `{"context": {...}, "request": {...}}`. An answer is the encoded
 //! success, or the failure that the operation declares, with its status.
 //!
-//! [`InProcessReadOperations`] runs each operation on one opened
-//! repository, with the checks and the preparation of [`LocalRepository`].
-//! It gives the answers that the router gives when it runs the operation
-//! itself.
+//! [`InProcessReadOperations`] runs each operation on the repository of one
+//! binding, under its target name, with the checks and the preparation of
+//! [`LocalRepository`]. It gives the answers that the router gives when it
+//! runs the operation itself.
 //!
 //! [`LocalRepository`]: super::LocalRepository
+//! [`LocalRepository::with_read_operations`]: super::LocalRepository::with_read_operations
 
 use provenance_core::protocol::failure::ErasedFailure;
 use serde_json::Value;

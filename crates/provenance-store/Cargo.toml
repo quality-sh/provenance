@@ -319,5 +319,5 @@ filetime.workspace = true
 # The read database in memory of the tests that run without host.
 sqlx.workspace = true
 tempfile.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["sync", "time"] }
 trybuild.workspace = true

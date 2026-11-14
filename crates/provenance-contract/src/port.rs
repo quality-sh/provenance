@@ -1,36 +1,71 @@
 //! A call that a port answers in place of the host: the dispatch decodes and checks the call as
 //! for an operation that the host runs, and checks the answer of the port against the operation.
 
-use crate::dispatch::{decode_call, port_checks};
+use crate::dispatch::decode_call;
 use provenance_core::protocol::failure::{ErasedFailure as FailureEnvelope, OperationFailure};
-use provenance_store::operations::catalog::{ExecutionNeeds, Operation, RequestedContext};
+use provenance_core::protocol::read_failure::ReadFailure;
+use provenance_core::protocol::ResponseMeta;
+use provenance_store::operations::catalog::{
+    ExecutionNeeds, GetReviewedResource, Operation, ReadDocument, RequestedContext,
+    ReviewDiscussionMessages, ReviewDiscussions,
+};
+use provenance_store::operations::family_operations::{
+    PageQuestions, PageRequirements, PageResolutions, PageRules, PageSources, PageTopics,
+};
+use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
-use std::collections::BTreeMap;
 use std::future::Future;
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::LazyLock;
 
 /// The context that a checked call selects, and the needs of its request.
 type Checked = (Option<RequestedContext>, ExecutionNeeds);
 
-/// The checks of one operation for a call that a port answers.
-#[derive(Clone, Copy)]
-pub struct Checks {
+/// The checks of one read operation for a call that a port answers.
+struct Checks {
     name: &'static str,
     check: fn(Value) -> Result<Checked, Box<FailureEnvelope>>,
-    answer: fn(Result<Value, FailureEnvelope>) -> Result<Value, Box<FailureEnvelope>>,
+    /// The success schema of the operation, closed: an object of the answer has no member that
+    /// the schema does not name.
+    success: jsonschema::Validator,
+    /// Each status that the operation gives.
+    statuses: Vec<u16>,
 }
 
 impl Checks {
-    pub const fn of<O: Operation>() -> Self {
+    fn of<O: Operation>() -> Self {
+        let definition = crate::schema::raw_definition::<O>();
+        let mut success = definition.success_schema;
+        close(&mut success);
         Self {
             name: O::NAME,
             check: check::<O>,
-            answer: answer::<O>,
+            success: jsonschema::options()
+                .with_draft(jsonschema::Draft::Draft202012)
+                .build(&success)
+                .expect("the closed success schema of a read operation compiles"),
+            statuses: definition.http_statuses,
         }
     }
 }
 
-/// Runs one call of `operation` through a port.
+/// The checks of each operation in `READ_OPERATIONS`, in its order. They are made once, at the
+/// first call through a port.
+static CHECKS: LazyLock<[Checks; 10]> = LazyLock::new(|| {
+    [
+        Checks::of::<PageSources>(),
+        Checks::of::<PageRequirements>(),
+        Checks::of::<PageResolutions>(),
+        Checks::of::<PageRules>(),
+        Checks::of::<PageTopics>(),
+        Checks::of::<PageQuestions>(),
+        Checks::of::<GetReviewedResource>(),
+        Checks::of::<ReadDocument>(),
+        Checks::of::<ReviewDiscussions>(),
+        Checks::of::<ReviewDiscussionMessages>(),
+    ]
+});
+
+/// Runs one call of `operation`, one of `READ_OPERATIONS`, through a port.
 ///
 /// The call is decoded and its request is checked as for an operation that the host runs, so a
 /// call that does not decode, or a request that the operation refuses, gets the same refusal.
@@ -38,10 +73,15 @@ impl Checks {
 /// call. It authorizes the context, waits for its work slot, prepares the repository and asks
 /// the port; its own refusal is a common failure of the operation.
 ///
-/// The answer of the port must be one that the operation declares: a success that its success
-/// schema accepts, or a failure that its failure schema accepts, with a status that the
-/// operation gives for it. Any other answer becomes the `internal` failure, and the host log
-/// keeps what the port gave.
+/// The answer of the port must be one that the operation gives:
+/// - a success that the success schema of the operation accepts, where no object has a member
+///   that the schema does not name;
+/// - or a common failure or a read failure, with no member that the failure does not name, no
+///   response meta, and the one status of its kind, which the operation gives.
+///
+/// Any other answer becomes the `internal` failure, and the host log keeps what the port gave.
+/// The check of a success walks the answer once for each schema node that applies to a value,
+/// so its cost grows with the size of the answer and not with the number of operations.
 pub async fn invoke_port<R, A>(
     operation: &str,
     call: Value,
@@ -51,17 +91,20 @@ where
     R: FnOnce(&'static str, Option<RequestedContext>, ExecutionNeeds, Value) -> A,
     A: Future<Output = Result<Result<Value, FailureEnvelope>, OperationFailure>>,
 {
-    let checks = port_checks(operation).ok_or_else(|| {
-        Box::new(FailureEnvelope::new(
-            None,
-            OperationFailure::UnknownOperation,
-        ))
-    })?;
+    let checks = CHECKS
+        .iter()
+        .find(|checks| checks.name == operation)
+        .ok_or_else(|| {
+            Box::new(FailureEnvelope::new(
+                None,
+                OperationFailure::UnknownOperation,
+            ))
+        })?;
     let (selected, needs) = (checks.check)(call.clone())?;
     let answer = run(checks.name, selected, needs, call)
         .await
         .map_err(|failure| Box::new(FailureEnvelope::new(Some(checks.name), failure)))?;
-    (checks.answer)(answer)
+    checked(checks, answer)
 }
 
 fn check<O: Operation>(call: Value) -> Result<Checked, Box<FailureEnvelope>> {
@@ -71,17 +114,17 @@ fn check<O: Operation>(call: Value) -> Result<Checked, Box<FailureEnvelope>> {
     Ok((selected, O::needs(&request)))
 }
 
-/// The answer of the port when the operation declares it, else the `internal` failure.
-fn answer<O: Operation>(
+/// The answer of the port when the operation gives it, else the `internal` failure.
+fn checked(
+    checks: &Checks,
     answer: Result<Value, FailureEnvelope>,
 ) -> Result<Value, Box<FailureEnvelope>> {
-    let schemas = schemas::<O>();
     let given = match &answer {
-        Ok(success) if accepts(schemas.success.as_ref(), success) => None,
-        Err(failure) if declared(&schemas, failure) => None,
+        Ok(success) if checks.success.is_valid(success) => None,
+        Err(failure) if declared(checks, failure) => None,
         Ok(success) => Some(format!("a success that its schema refuses: {success}")),
         Err(failure) => Some(format!(
-            "a failure that it does not declare, with status {}: {}",
+            "a failure that it does not give, with status {}: {}",
             failure.status_code(),
             failure.error
         )),
@@ -90,56 +133,75 @@ fn answer<O: Operation>(
         return answer.map_err(Box::new);
     };
     Err(Box::new(
-        FailureEnvelope::new(Some(O::NAME), OperationFailure::Internal).with_cause(Some(format!(
-            "the read operations port answered `{}` with {given}",
-            O::NAME
-        ))),
+        FailureEnvelope::new(Some(checks.name), OperationFailure::Internal).with_cause(Some(
+            format!(
+                "the read operations port answered `{}` with {given}",
+                checks.name
+            ),
+        )),
     ))
 }
 
-/// Whether the operation gives `failure`: its failure schema accepts the body, and the status is
-/// one that the operation gives. A common failure has the status of its kind.
-fn declared(schemas: &Schemas, failure: &FailureEnvelope) -> bool {
-    let status = failure.status_code();
-    let given = serde_json::from_value::<OperationFailure>(failure.error.clone()).map_or_else(
-        |_| schemas.statuses.contains(&status),
-        |common| common.status_code() == status,
-    );
-    given
-        && serde_json::to_value(failure).is_ok_and(|body| accepts(schemas.failure.as_ref(), &body))
+/// Whether the operation gives `failure`: its body is a common failure or a read failure as the
+/// dispatch writes it, it has no response meta, and its status is the one of its kind.
+fn declared(checks: &Checks, failure: &FailureEnvelope) -> bool {
+    let body = &failure.error;
+    let status = exact::<OperationFailure>(body)
+        .map(|common| common.status_code())
+        .or_else(|| exact::<ReadFailure>(body).map(|read| read.status_code()));
+    failure.meta == ResponseMeta::default()
+        && status == Some(failure.status_code())
+        && checks.statuses.contains(&failure.status_code())
 }
 
-fn accepts(validator: Option<&jsonschema::Validator>, value: &Value) -> bool {
-    validator.is_some_and(|validator| validator.is_valid(value))
+/// `body` as a `T`, when `T` writes it back as the same JSON: no member is unknown or left out.
+fn exact<T: DeserializeOwned + Serialize>(body: &Value) -> Option<T> {
+    let value = T::deserialize(body).ok()?;
+    (serde_json::to_value(&value).ok()? == *body).then_some(value)
 }
 
-/// The published success and failure schemas of one operation, and the statuses it gives.
-struct Schemas {
-    success: Option<jsonschema::Validator>,
-    failure: Option<jsonschema::Validator>,
-    statuses: Vec<u16>,
+/// Closes each object schema in `schema` that names its properties, so an object may have no
+/// other member. `unevaluatedProperties` counts the members that an `allOf`, `oneOf` or `$ref`
+/// of the same object names, so a flattened member stays accepted.
+fn close(schema: &mut Value) {
+    let Value::Object(schema) = schema else {
+        return;
+    };
+    let open = !schema.contains_key("additionalProperties")
+        && !schema.contains_key("unevaluatedProperties");
+    if open && schema.contains_key("properties") {
+        schema.insert("unevaluatedProperties".into(), Value::Bool(false));
+    }
+    for (keyword, value) in schema.iter_mut() {
+        match (keyword.as_str(), value) {
+            (
+                "properties" | "patternProperties" | "$defs" | "definitions",
+                Value::Object(named),
+            ) => {
+                named.values_mut().for_each(close);
+            }
+            ("allOf" | "anyOf" | "oneOf" | "prefixItems", Value::Array(each)) => {
+                each.iter_mut().for_each(close);
+            }
+            (
+                "items" | "additionalProperties" | "not" | "if" | "then" | "else" | "contains",
+                value,
+            ) => close(value),
+            _ => {}
+        }
+    }
 }
 
-fn schemas<O: Operation>() -> Arc<Schemas> {
-    static SCHEMAS: OnceLock<Mutex<BTreeMap<&'static str, Arc<Schemas>>>> = OnceLock::new();
-    let mut known = SCHEMAS
-        .get_or_init(Mutex::default)
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner);
-    Arc::clone(known.entry(O::NAME).or_insert_with(|| {
-        let definition = crate::schema::raw_definition::<O>();
-        Arc::new(Schemas {
-            success: validator(&definition.success_schema),
-            failure: validator(&definition.failure_schema),
-            statuses: definition.http_statuses,
-        })
-    }))
-}
+#[cfg(test)]
+mod tests {
+    use super::CHECKS;
+    use provenance_store::operations::read_operations::READ_OPERATIONS;
 
-fn validator(schema: &Value) -> Option<jsonschema::Validator> {
-    jsonschema::options()
-        .with_draft(jsonschema::Draft::Draft202012)
-        .offline()
-        .build(schema)
-        .ok()
+    /// Implementation aid: the table names the operations of the published list, in its order,
+    /// and each closed success schema compiles.
+    #[test]
+    fn the_checks_cover_the_published_list() {
+        let names: Vec<_> = CHECKS.iter().map(|checks| checks.name).collect();
+        assert_eq!(names, READ_OPERATIONS);
+    }
 }

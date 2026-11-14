@@ -5,24 +5,16 @@
 //! ids, digests and times, so a change to how the router runs these
 //! operations cannot change an answer or its order. A failure shows the
 //! lines that differ.
-#![cfg(feature = "test-fixture")]
 
-mod support {
-    pub mod names;
-    pub mod records;
-    pub mod router_answer;
-    pub mod site_operations;
-    pub mod views;
-}
+use crate::support::records::{allow_reviewer, Repository};
+use crate::support::router_answer::Http;
+use crate::support::site_operations::{assert_pinned, run};
 
-use support::records::{allow_reviewer, Repository};
-use support::router_answer::Http;
-use support::site_operations::{assert_pinned, run};
-
-/// Implementation aid: characterization of the router's answers, made
-/// before the router can send read operations to a port. No Rule binds it.
+/// Implementation aid: characterization of the answers of the router when it
+/// runs each operation itself. No Rule binds it.
 #[tokio::test]
-async fn the_site_operations_answer_as_before() {
+async fn the_site_operations_answer_as_the_checked_transcript() {
+    let _alone = crate::one_at_a_time().await;
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
     allow_reviewer(&repo);

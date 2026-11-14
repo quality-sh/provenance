@@ -21,16 +21,26 @@ impl Names {
     }
 }
 
-/// A UUID with or without a word before it, a hex digest, a signed value
-/// or a time stamp.
+/// A UUID with or without a word before it, a hex digest, a page cursor or
+/// a time stamp. A page cursor is two base64url parts joined by a dot, and
+/// its second part is a signature of 32 bytes.
 pub fn generated(text: &str) -> bool {
     let hex = |part: &str| !part.is_empty() && part.bytes().all(|b| b.is_ascii_hexdigit());
+    let base64url = |part: &str| {
+        !part.is_empty()
+            && part
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+    };
     let last = text.rsplit('_').next().unwrap_or(text);
     let uuid = last.len() == 36 && last.split('-').map(str::len).eq([8, 4, 4, 4, 12]);
     let digest = text.len() >= 40 && hex(text.trim_start_matches("sha256:"));
+    let cursor = text.split_once('.').is_some_and(|(body, signature)| {
+        base64url(body) && signature.len() == 43 && base64url(signature)
+    });
     let time = text.len() >= 20
         && text.as_bytes()[4] == b'-'
         && text.as_bytes()[10] == b'T'
         && text.bytes().take(4).all(|b| b.is_ascii_digit());
-    uuid || digest || time
+    uuid || digest || cursor || time
 }

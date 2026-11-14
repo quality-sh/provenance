@@ -55,15 +55,7 @@ impl ReadError {
         if let Some(error) = self.common() {
             return error.status_code();
         }
-        match self.safe() {
-            ReadFailure::ResourceNotFound => 404,
-            ReadFailure::ReadFailed { .. } | ReadFailure::InvalidStateFile { .. } => 500,
-            ReadFailure::FileAccessDenied => 403,
-            ReadFailure::FileUnavailable
-            | ReadFailure::GitUnavailable
-            | ReadFailure::CacheCloseTimedOut { .. } => 503,
-            _ => 409,
-        }
+        self.safe().status_code()
     }
     /// A common refusal that a read handler raised itself, such as an input
     /// refusal; it keeps its own kind and status. A store refusal of a common

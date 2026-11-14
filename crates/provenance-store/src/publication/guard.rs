@@ -12,6 +12,7 @@
 //! reach this. A served process must move synchronous publication sections
 //! to `spawn_blocking` or make them async first.
 
+use crate::cache::{CatchUpRunning, PassClaim};
 use crate::layout::ProvenanceLayout;
 use crate::repository::Repository;
 use crate::state_store::SectionView;
@@ -30,6 +31,8 @@ pub struct PublicationGuard {
     // An async guard keeps the close of its section here too.
     _lock: Option<std::sync::Mutex<Box<dyn Send>>>,
     repository: Repository,
+    /// The claim of the catch-up pass that runs under this guard.
+    _pass: Option<PassClaim>,
 }
 
 impl PublicationGuard {
@@ -40,14 +43,27 @@ impl PublicationGuard {
         self.repository.layout()
     }
 
-    /// A guard whose exclusion the caller holds itself: it takes no lock
-    /// and never waits. An embedder that excludes the other publishes of
-    /// the repository in its own way catches up under it.
-    pub(crate) fn held_by_caller(repository: &Repository) -> Self {
+    /// A guard whose exclusion of the other publishes the caller holds
+    /// itself: it takes no lock and never waits. It holds the catch-up
+    /// claim of the repository, or refuses at once when another pass holds
+    /// it.
+    pub(crate) fn held_by_caller(repository: &Repository) -> Result<Self, CatchUpRunning> {
         Self {
             _lock: None,
             repository: repository.clone(),
+            _pass: None,
         }
+        .for_pass()
+    }
+
+    /// This guard, holding the catch-up claim of its repository until it is
+    /// dropped. Refuses at once when another pass holds the claim.
+    pub(crate) fn for_pass(self) -> Result<Self, CatchUpRunning> {
+        let claim = self.repository.claim_catch_up()?;
+        Ok(Self {
+            _pass: Some(claim),
+            ..self
+        })
     }
 
     /// The opened repository the guard protects. Under a synchronous section
@@ -106,6 +122,7 @@ pub fn with_publication_guard<R>(
         return operation(&PublicationGuard {
             _lock: None,
             repository: repository.clone(),
+            _pass: None,
         });
     }
     let lock = repository.section_lock();
@@ -118,6 +135,7 @@ pub fn with_publication_guard<R>(
         operation(&PublicationGuard {
             _lock: None,
             repository: repository.within_section(section),
+            _pass: None,
         })
     })
 }
@@ -142,6 +160,7 @@ pub async fn publication_guard(repository: &Repository) -> anyhow::Result<Public
         return Ok(PublicationGuard {
             _lock: None,
             repository: repository.clone(),
+            _pass: None,
         });
     }
     let repository = repository.clone();
@@ -156,6 +175,7 @@ pub async fn publication_guard(repository: &Repository) -> anyhow::Result<Public
         Ok(PublicationGuard {
             _lock: Some(std::sync::Mutex::new(held)),
             repository: repository.within_section(section),
+            _pass: None,
         })
     })
     .await

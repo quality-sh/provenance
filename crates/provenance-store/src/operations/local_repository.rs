@@ -20,6 +20,8 @@ use std::sync::Arc;
 pub struct LocalRepository {
     repository: Repository,
     alias: String,
+    /// The read operations port, when the caller gave one.
+    reads: Option<Arc<dyn ReadOperations>>,
 }
 
 impl LocalRepository {
@@ -34,7 +36,28 @@ impl LocalRepository {
         Ok(Self {
             repository,
             alias: alias.to_owned(),
+            reads: None,
         })
+    }
+
+    /// This binding with `reads` as the port of its read operations. The
+    /// contract router sends each read operation of this binding to the
+    /// port.
+    #[must_use]
+    pub fn with_read_operations(self, reads: Arc<dyn ReadOperations>) -> Self {
+        Self {
+            reads: Some(reads),
+            ..self
+        }
+    }
+
+    /// The same repository under the same alias, with no port.
+    pub(crate) fn without_read_operations(&self) -> Self {
+        Self {
+            repository: self.repository.clone(),
+            alias: self.alias.clone(),
+            reads: None,
+        }
     }
 
     /// The bound alias.
@@ -47,9 +70,9 @@ impl LocalRepository {
         self.repository.scope()
     }
 
-    /// The read operations port of the bound repository, if it has one.
+    /// The read operations port of this binding, if it has one.
     pub fn read_operations(&self) -> Option<Arc<dyn ReadOperations>> {
-        self.repository.read_operations().cloned()
+        self.reads.clone()
     }
 
     /// Read disposition actors from the repository bound at startup.

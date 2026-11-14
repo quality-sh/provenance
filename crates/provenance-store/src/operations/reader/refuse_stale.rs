@@ -2,7 +2,9 @@
 
 use super::freshness::{self, Check, Freshness};
 use super::{ReadRefusal, ReadSnapshot};
-use crate::cache::{scope_ids, unit_stored_digest, units_for, view_stored_digests};
+use crate::cache::view_stored_digests;
+#[cfg(feature = "host")]
+use crate::cache::{scope_ids, unit_stored_digest, units_for};
 #[cfg(feature = "host")]
 use crate::publication::publication_guard;
 use crate::read_database::{SqlColumns, Transaction};
@@ -33,27 +35,34 @@ pub(super) fn describe_moved(moved: &[MovedUnit]) -> String {
 }
 
 /// The policy compares hashes without changing projection rows or revisions.
-/// The guard is taken before the read opens the database, and the read
-/// holds it until the hashes are compared.
+/// Over a folder, the guard is taken before the read opens the database,
+/// and the read holds it until the hashes are compared. A folder whose
+/// guard this process cannot take is hashed twice with no lock, and the two
+/// passes must agree. Any other storage gives one consistent view of its
+/// state, so the read takes no guard and hashes the view once.
 #[rule("rule_refuse_stale_writes_no_revision")]
-///
-/// Without `host` the read takes no guard, so it waits for nothing: two
-/// hash passes must agree.
 pub(super) fn run(repository: &Repository) -> FreshnessFuture<'_> {
     Box::pin(async move {
+        // A folder is local storage, which needs `host`.
         #[cfg(feature = "host")]
-        let guard = match publication_guard(repository).await {
-            Ok(guard) => Some(guard),
-            Err(error) if crate::cache::permission_failure(repository.layout(), &error) => None,
-            Err(error) => return Err(error),
-        };
-        #[cfg(not(feature = "host"))]
-        let guard = {
-            let _ = repository;
+        let guard = if repository.has_local_storage() {
+            match publication_guard(repository).await {
+                Ok(guard) => Some(guard),
+                Err(error) if crate::cache::permission_failure(repository.layout(), &error) => None,
+                Err(error) => return Err(error),
+            }
+        } else {
             None
         };
+        #[cfg(not(feature = "host"))]
+        let guard = None;
+        let passes = if repository.has_local_storage() && guard.is_none() {
+            2
+        } else {
+            1
+        };
         Ok(Freshness {
-            check: Check::Stale(guard),
+            check: Check::Stale { guard, passes },
             policy: StampPolicy::RefuseStale,
             error: None,
         })
@@ -65,7 +74,7 @@ pub(super) fn run(repository: &Repository) -> FreshnessFuture<'_> {
 pub(super) async fn check(
     mut transaction: Transaction,
     repository: &Repository,
-    repeat_hash: bool,
+    passes: usize,
 ) -> anyhow::Result<ReadSnapshot> {
     let layout = repository.layout();
     let scope = repository.scope();
@@ -87,10 +96,10 @@ pub(super) async fn check(
         .iter()
         .map(|row| Ok((row.text(0)?.to_owned(), row.text(1)?.to_owned())))
         .collect::<anyhow::Result<_>>()?;
-    // Without a guard, two complete passes must match this same stored revision.
-    // Each pass reads the scope list again. A missing lock or a recovery marker
-    // does not prevent a consistent read-only image from answering.
-    for _ in 0..if repeat_hash { 2 } else { 1 } {
+    // A folder with no guard is hashed in two complete passes, which must match this
+    // same stored revision. Each pass reads the scope list again. A missing lock or a
+    // recovery marker does not prevent a consistent read-only image from answering.
+    for _ in 0..passes {
         let moved = moved_units(repository, stored.clone())?;
         if !moved.is_empty() {
             return Err(ReadRefusal::Stale {
@@ -128,17 +137,24 @@ fn moved_units(
 
 /// The stored digest of each unit of the canonical state, by unit name.
 ///
-/// The files of a repository in a folder are hashed with no lock. The
-/// state of any other storage is hashed from one view of the storage.
+/// The state of a folder is read from its files with no lock. The state of
+/// any other storage is read from one view of the storage.
 fn live_digests(repository: &Repository) -> anyhow::Result<Vec<(String, String)>> {
-    if !repository.has_local_storage() {
-        return view_stored_digests(&repository.storage().read_view()?);
+    // A folder is local storage, which needs `host`.
+    #[cfg(feature = "host")]
+    if repository.has_local_storage() {
+        return folder_digests(&repository.layout().state_dir());
     }
-    let state_dir = repository.layout().state_dir();
-    units_for(&scope_ids(&state_dir)?)
+    view_stored_digests(&repository.storage().read_view()?)
+}
+
+/// The stored digest of each unit of the state files under `state_dir`.
+#[cfg(feature = "host")]
+fn folder_digests(state_dir: &camino::Utf8Path) -> anyhow::Result<Vec<(String, String)>> {
+    units_for(&scope_ids(state_dir)?)
         .into_iter()
         .map(|unit| {
-            let live = unit_stored_digest(&state_dir, &unit).map_err(|error| {
+            let live = unit_stored_digest(state_dir, &unit).map_err(|error| {
                 ReadRefusal::UnitUnreadable {
                     unit: unit.name(),
                     path: error.path,

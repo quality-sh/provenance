@@ -9,7 +9,6 @@ use crate::operations::family_operations::{
     PageQuestions, PageRequirements, PageResolutions, PageRules, PageSources, PageTopics,
 };
 use crate::operations::LocalRepository;
-use crate::repository::Repository;
 use provenance_core::protocol::failure::{ErasedFailure, InvalidInputReason, OperationFailure};
 use provenance_core::protocol::repository::{RepositoryContext, RepositoryScope, RepositoryTarget};
 use serde::de::DeserializeOwned;
@@ -17,8 +16,8 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::sync::Arc;
 
-/// Runs each read operation on one opened repository, bound under one
-/// target name.
+/// Runs each read operation on the repository of one binding, under the
+/// target name of the binding.
 ///
 /// Each call is checked and authorized as [`LocalRepository`] checks it for
 /// the router, so a call that names another target refuses with
@@ -29,13 +28,16 @@ pub struct InProcessReadOperations {
 }
 
 impl InProcessReadOperations {
-    /// The read operations of `repository`, under the target name `alias`.
+    /// The read operations of the repository of `binding`, under its target
+    /// name. Give the port to the same binding, with
+    /// [`LocalRepository::with_read_operations`], so the router and the port
+    /// check each call against one name.
     ///
-    /// A port that `repository` holds is not used: the operations run here.
-    pub fn new(repository: Repository, alias: &str) -> Result<Self, OperationFailure> {
-        Ok(Self {
-            binding: Arc::new(LocalRepository::bind(repository, alias)?),
-        })
+    /// A port that `binding` holds is not used: the operations run here.
+    pub fn new(binding: &LocalRepository) -> Self {
+        Self {
+            binding: Arc::new(binding.without_read_operations()),
+        }
     }
 }
 

@@ -11,6 +11,7 @@ use crate::current_schema::{self, Compatibility};
 use crate::publication;
 use crate::read_database::{ReadDatabase, Transaction as Lent, WriteWork};
 use crate::read_database::{SqlColumns, SqlValue};
+#[cfg(feature = "host")]
 use crate::repository::Repository;
 use provenance_core::ScopeId;
 use std::collections::{BTreeMap, BTreeSet};
@@ -41,23 +42,9 @@ pub struct CatchUpReport {
 
 #[cfg(feature = "host")]
 pub async fn catch_up_state(repository: &Repository) -> anyhow::Result<CatchUpReport> {
-    let guard = publication::publication_guard(repository).await?;
-    catch_up_with_guard(guard, repository.read_database()?).await
-}
-
-/// Catches the read database of `repository` up with its canonical state,
-/// for an embedder that does it inside each of its publishes.
-///
-/// It runs one catch-up pass in one write of the read database, and builds
-/// the projection when the database holds none. It takes no publication
-/// guard and never waits for one. Without `host` no read catches up, so a
-/// read answers what the last of these passes wrote.
-///
-/// Precondition: the caller holds its own exclusion for the publish. No
-/// other publish of this repository, and no other pass, runs until this
-/// one ends.
-pub async fn catch_up_in_publish(repository: &Repository) -> anyhow::Result<CatchUpReport> {
-    let guard = publication::PublicationGuard::held_by_caller(repository);
+    let guard = publication::publication_guard(repository)
+        .await?
+        .for_pass()?;
     catch_up_with_guard(guard, repository.read_database()?).await
 }
 

@@ -1,15 +1,13 @@
 //! A repository whose state is in memory, made from the state of a fixture
-//! repository in a folder, and the form in which the answers of two hosts
-//! compare.
+//! repository in a folder, its binding with a read operations port, and the
+//! form in which the answers of two hosts compare.
 //!
 //! Two answers compare in their status, their headers and their body bytes.
 //! The parts that may differ, and why:
 //! - a generated value (a record id, a digest of a record that holds one, a
-//!   time) is random in each run, so it is named by its first place in the
-//!   run of its host;
-//! - the working tree of each repository is another directory, so it shows
-//!   as `<repo>`; `content-length` follows the body, whose working tree text
-//!   differs, so it is not compared;
+//!   time, a page cursor) is random in each run, or signed with the key of
+//!   one read database, so it is named by its first place in the run of its
+//!   host;
 //! - the `instance_id` of the projection stamp and of a `stale` refusal
 //!   names one read database, and each repository has its own;
 //! - the `digest` of the projection covers the records, and a record that a
@@ -28,7 +26,10 @@ use super::names::Names;
 use super::router_answer::Answer;
 use camino::Utf8Path;
 use provenance_core::ScopeId;
-use provenance_store::operations::read_operations::{ReadAnswer, ReadOperations};
+use provenance_store::operations::read_operations::{
+    InProcessReadOperations, ReadAnswer, ReadOperations,
+};
+use provenance_store::operations::LocalRepository;
 use provenance_store::read_database::contract::Other;
 use provenance_store::repository::{Repository as Opened, RepositoryIdentity};
 use provenance_store::settings::Settings;
@@ -112,18 +113,29 @@ pub fn state(repo: &Repository) -> BTreeMap<StateKey, Vec<u8>> {
     entries
 }
 
-/// One answer in the form in which two hosts compare it. `names` names the
-/// generated values of one host, and `root` is the working tree of its
-/// repository.
-pub fn compared(names: &mut Names, root: &str, answer: &Answer) -> Value {
-    let text = std::str::from_utf8(&answer.body)
+/// The binding of `repository` under the target name `selected`, with
+/// `port` as the port of its read operations.
+pub fn bound(repository: Opened, port: Arc<dyn ReadOperations>) -> LocalRepository {
+    LocalRepository::bind(repository, "selected")
         .unwrap()
-        .replace(root, "<repo>");
-    let body: Value = serde_json::from_str(&text).unwrap();
+        .with_read_operations(port)
+}
+
+/// The in-process port of `repository` under the target name `selected`,
+/// counted.
+pub fn in_process(repository: &Opened) -> Arc<Counted> {
+    let binding = LocalRepository::bind(repository.clone(), "selected").unwrap();
+    Counted::new(Arc::new(InProcessReadOperations::new(&binding)))
+}
+
+/// One answer in the form in which two hosts compare it. `names` names the
+/// generated values of one host.
+pub fn compared(names: &mut Names, answer: &Answer) -> Value {
+    let text = std::str::from_utf8(&answer.body).unwrap();
+    let body: Value = serde_json::from_str(text).unwrap();
     let headers: Vec<String> = answer
         .headers
         .iter()
-        .filter(|(name, _)| name != "content-length")
         .map(|(name, value)| {
             let tag = value.trim_matches('"');
             format!("{name}: {}", value.replace(tag, &names.name(tag)))
@@ -143,7 +155,7 @@ pub fn compared(names: &mut Names, root: &str, answer: &Answer) -> Value {
         "status": answer.status,
         "headers": headers,
         "literal": literal,
-        "body": named_text(names, &body, &text),
+        "body": named_text(names, &body, text),
     })
 }
 

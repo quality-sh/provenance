@@ -78,9 +78,8 @@ fn pinned_call(answer: &Answer) -> Value {
     json!({"call": answer.shown, "status": answer.status, "headers": headers, "body": body})
 }
 
-/// The pinned form of a run over the fixture repository. Without the
-/// headers it is the transcript that the router gave before it could send
-/// a read to a port.
+/// The pinned form of a run over the fixture repository, when the router
+/// runs each operation itself.
 const PINNED: &str = include_str!("../fixtures/site_operations.json");
 
 /// Asserts that `pinned` equals the checked transcript. A failure shows each

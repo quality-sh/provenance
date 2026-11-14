@@ -11,7 +11,7 @@
 //! connection closes.
 //!
 //! Without `host` a read takes no publication guard and never writes the
-//! read database: the embedder catches the database up inside each of its
+//! read database: the embedder catches the database up after each of its
 //! publishes ([`catch_up_in_publish`]). A `catch_up` read then answers as
 //! an `annotate_only` read does, and its stamp says `annotate_only`.
 //!
@@ -50,9 +50,13 @@ pub(super) enum Check {
     None,
     /// The schema, under `annotate_only`.
     Schema,
-    /// The schema and the canonical digests, under `refuse_stale`. The
-    /// guard, when the read has one, is held until the digests are hashed.
-    Stale(Option<PublicationGuard>),
+    /// The schema and the canonical digests, under `refuse_stale`, hashed
+    /// `passes` times. The guard, when the read has one, is held until the
+    /// digests are hashed.
+    Stale {
+        guard: Option<PublicationGuard>,
+        passes: usize,
+    },
 }
 
 /// The operation of one read, and the answer that its work leaves.
@@ -172,9 +176,8 @@ async fn open_snapshot(
         Check::Schema => {
             ensure_current_schema(&mut transaction, layout).await?;
         }
-        Check::Stale(guard) => {
-            let repeat_hash = guard.is_none();
-            let snapshot = super::refuse_stale::check(transaction, repository, repeat_hash).await;
+        Check::Stale { guard, passes } => {
+            let snapshot = super::refuse_stale::check(transaction, repository, passes).await;
             drop(guard);
             let snapshot = snapshot?;
             crate::test_probes::at("refuse_stale_after_hash")?;
@@ -221,8 +224,14 @@ pub(super) async fn run(
 ) -> anyhow::Result<Freshness> {
     match policy {
         FreshnessPolicy::CatchUp => {
+            // A read whose pass finds the catch-up claim held, as by a pass
+            // of `catch_up_in_publish`, answers as a read whose catch-up
+            // failed.
             #[cfg(feature = "host")]
-            let freshness = match publication_guard(repository).await {
+            let freshness = match publication_guard(repository)
+                .await
+                .and_then(|guard| guard.for_pass().map_err(anyhow::Error::from))
+            {
                 Ok(guard) => Freshness {
                     check: Check::CatchUp(guard),
                     policy: StampPolicy::CatchUp,

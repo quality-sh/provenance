@@ -3,6 +3,7 @@ mod catch_up;
 mod collaboration_records;
 mod family_inputs;
 mod family_rows;
+mod in_publish;
 mod record_rows;
 mod relation_rows;
 mod row_changes;
@@ -10,7 +11,6 @@ mod stamp;
 mod units;
 mod validation;
 
-pub use catch_up::catch_up_in_publish;
 #[cfg(feature = "host")]
 pub use catch_up::catch_up_state;
 #[cfg(test)]
@@ -19,9 +19,12 @@ pub use catch_up::catch_up_with_guard;
 #[cfg(feature = "host")]
 pub use catch_up::catch_up_work;
 pub use catch_up::CatchUpReport;
+pub use in_publish::catch_up_in_publish;
 pub use record_rows::SEARCH_TEXT;
+#[cfg(feature = "host")]
+pub use units::unit_stored_digest;
+pub use units::view_stored_digests;
 pub use units::{scope_ids, unit_digest, units_for, Unit, UnitHashError};
-pub use units::{unit_stored_digest, view_stored_digests};
 pub use validation::stored_version as stored_validation_version;
 
 use super::MaterializeReport;
@@ -36,7 +39,9 @@ use provenance_macros::rule;
 
 #[cfg(feature = "host")]
 pub async fn materialize_empty_state(repository: &Repository) -> anyhow::Result<MaterializeReport> {
-    let guard = publication::publication_guard(repository).await?;
+    let guard = publication::publication_guard(repository)
+        .await?
+        .for_pass()?;
     let _held = &guard;
     crate::test_probes::at("materialize_empty_under_guard")?;
     // Everything in the write is part of the settled work: a failure there
@@ -74,7 +79,9 @@ async fn initialize_empty(mut transaction: Lent) -> anyhow::Result<bool> {
 
 #[cfg(feature = "host")]
 pub async fn materialize_state(repository: &Repository) -> anyhow::Result<MaterializeReport> {
-    let guard = publication::publication_guard(repository).await?;
+    let guard = publication::publication_guard(repository)
+        .await?
+        .for_pass()?;
     materialize_with_guard(&guard, repository.read_database()?).await
 }
 
