@@ -1,86 +1,15 @@
-use assert_cmd::Command;
+#[path = "support/merge_driver.rs"]
+mod merge_driver;
+
+use merge_driver::{cli, commit, git, git_ok, json, rows, write_rows};
 use provenance_macros::verifies;
 use serde_json::Value;
 use std::path::Path;
 
-fn cli(repo: &Path, args: &[&str]) -> std::process::Output {
-    Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
-        .args(args)
-        .args(["--repo", repo.to_str().unwrap(), "--format", "json"])
-        .output()
-        .unwrap()
-}
-
-fn json(repo: &Path, args: &[&str]) -> Value {
-    let output = cli(repo, args);
-    assert!(
-        output.status.success(),
-        "{args:?}: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    serde_json::from_slice(&output.stdout).unwrap()
-}
-
-fn git(repo: &Path, args: &[&str]) -> std::process::Output {
-    provenance_store::git_process::git()
-        .current_dir(repo)
-        .args(args)
-        .output()
-        .unwrap()
-}
-
-fn git_ok(repo: &Path, args: &[&str]) {
-    let output = git(repo, args);
-    assert!(
-        output.status.success(),
-        "git {args:?}: {} {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
-fn commit(repo: &Path, message: &str) {
-    git_ok(repo, &["add", "."]);
-    git_ok(repo, &["commit", "-m", message]);
-}
-
 fn repository() -> tempfile::TempDir {
-    let dir = tempfile::tempdir().unwrap();
-    let repo = dir.path();
-    git_ok(repo, &["init", "--initial-branch", "main"]);
-    git_ok(repo, &["config", "user.email", "test@example.test"]);
-    git_ok(repo, &["config", "user.name", "Test"]);
-    let binary = assert_cmd::cargo::cargo_bin!("provenance");
-    git_ok(
-        repo,
-        &[
-            "config",
-            "merge.provenance-jsonl.driver",
-            &format!(
-                "'{}' merge-jsonl %O %A %B --output %A --path %P",
-                binary.to_str().unwrap().replace('\\', "/")
-            ),
-        ],
-    );
-    std::fs::write(
-        repo.join(".gitattributes"),
-        ".provenance/state/**/*.jsonl merge=provenance-jsonl\n",
-    )
-    .unwrap();
-    Command::new(binary)
-        .args([
-            "init",
-            "--path",
-            repo.to_str().unwrap(),
-            "--scope",
-            "default",
-            "--path-prefix",
-            ".",
-        ])
-        .assert()
-        .success();
+    let dir = merge_driver::repository();
     json(
-        repo,
+        dir.path(),
         &[
             "req_a",
             "create",
@@ -189,23 +118,6 @@ fn replies_to_one_discussion_report_a_typed_conflict() {
     );
     assert!(diagnostic.contains("divergent_edit"), "{diagnostic}");
     assert!(diagnostic.contains(&id), "{diagnostic}");
-}
-
-fn rows(path: &Path) -> Vec<Value> {
-    std::fs::read_to_string(path)
-        .unwrap()
-        .lines()
-        .map(|line| serde_json::from_str(line).unwrap())
-        .collect()
-}
-
-fn write_rows(path: &Path, rows: &[Value]) {
-    let text = rows
-        .iter()
-        .map(|row| serde_json::to_string(row).unwrap())
-        .collect::<Vec<_>>()
-        .join("\n");
-    std::fs::write(path, text + "\n").unwrap();
 }
 
 #[test]
