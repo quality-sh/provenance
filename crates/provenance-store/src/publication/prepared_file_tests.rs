@@ -17,6 +17,7 @@ use provenance_macros::verifies;
 const LONG: [u8; 4096] = [b'x'; 4096];
 
 /// The test that runs a source edit with the replacement [`LONG`] as a child.
+#[cfg(unix)]
 const LONG_CHILD: &str = "operations::files::tests::prepared_file_tests::long_child";
 
 #[test]

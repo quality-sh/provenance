@@ -9,7 +9,7 @@ use crate::cache::tests::fixtures::{open, seeded_layout, sid};
 use crate::cache::{catch_up_state, open_cache};
 use crate::layout::ProvenanceLayout;
 use crate::state_store::StateStore;
-use crate::stopped_child::{files_named, names, run_as_child};
+use crate::stopped_child::{names, run_as_child};
 use crate::test_probes;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ScopeId, Stamp};
@@ -393,7 +393,9 @@ fn a_published_import_answers_success_when_the_removal_of_its_transaction_fails(
 fn a_stop_in_the_write_of_the_import_marker_leaves_no_file_after_the_next_section_entry() {
     let fixture = fixture();
     let layout = ProvenanceLayout::new(fixture.root.clone());
-    let marker_temporaries = || files_named(&layout.cache_dir(), ".import-publication.json.", ".tmp");
+    let marker_temporaries = || {
+        crate::stopped_child::files_named(&layout.cache_dir(), ".import-publication.json.", ".tmp")
+    };
     assert_eq!(marker_temporaries(), Vec::<String>::new());
 
     crate::stopped_child::stop_in_child_at_file_size(CHILD, &fixture.root, "state_prepared", 0);

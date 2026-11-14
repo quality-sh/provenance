@@ -96,7 +96,11 @@ impl RepositoryFiles {
 impl HeldRepositoryFile {
     /// Removes the prepared file `leaf` next to this file when it is the
     /// store's own data, as [`RepositoryFiles::remove_own_prepared`] does.
-    pub(crate) fn remove_own_prepared(&self, leaf: &str, replacement: &[u8]) -> Result<(), Refusal> {
+    pub(crate) fn remove_own_prepared(
+        &self,
+        leaf: &str,
+        replacement: &[u8],
+    ) -> Result<(), Refusal> {
         remove_own_prepared(self.parent(), self.leaf(), leaf, Some(replacement))
     }
 
