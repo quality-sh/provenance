@@ -5,13 +5,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 #[cfg(feature = "test-fixture")]
-#[allow(dead_code)]
-mod support {
-    #[path = "../../../provenance-transport/tests/support/records.rs"]
-    pub mod records;
-    #[path = "../../../provenance-transport/tests/support/resource_http.rs"]
-    pub mod resource_http;
-}
+use crate::support;
 
 #[test]
 fn statement_host_supplies_the_injected_get_port() {

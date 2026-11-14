@@ -1,7 +1,5 @@
 //! A Discussion status write that changes nothing sends no change event.
-#[path = "review_host_support/mod.rs"]
-#[allow(dead_code)]
-mod review_host_support;
+use crate::review_host_support;
 
 use provenance_macros::verifies;
 use review_host_support::{

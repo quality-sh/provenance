@@ -7,8 +7,7 @@
 //! These tests have no Rule, because no active Rule states that a page holds a
 //! record when more records match.
 
-#[path = "support/search_repository.rs"]
-mod search_repository;
+use crate::search_repository;
 
 use search_repository::{
     all_pages, binary, ids, page, plain_sources, repository, requirement, requirement_node,

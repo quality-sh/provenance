@@ -6,8 +6,7 @@
 //! object that Git cannot read, and the refusal that wins when a read has
 //! more than one of these faults.
 
-mod discussion_support;
-use discussion_support::*;
+use crate::discussion_support::*;
 use provenance_core::review::ReviewHistoryQuery;
 use provenance_core::NodeType;
 use provenance_store::{

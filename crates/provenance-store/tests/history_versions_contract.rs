@@ -6,13 +6,12 @@
 //! git adapter shows that the expected answers are Git's, and the memory
 //! adapter shows that an adapter with no Git gives the same answers.
 
-mod discussion_support;
+use crate::discussion_support;
+use crate::memory;
 #[path = "history_versions_contract/edges.rs"]
 mod edges;
 #[path = "history_versions_contract/git_harness.rs"]
 mod git_harness;
-#[path = "support/memory.rs"]
-mod memory;
 #[path = "history_versions_contract/subdirectory.rs"]
 mod subdirectory;
 #[path = "history_versions_contract/wrong.rs"]

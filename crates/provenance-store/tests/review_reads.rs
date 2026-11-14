@@ -1,5 +1,4 @@
-#[allow(dead_code)]
-mod review_support;
+use crate::discussion_support::base as review_support;
 use provenance_core::review::{EvidenceQuery, ReviewHistoryQuery};
 use provenance_store::{
     operations::read_policy::ReadPolicy,

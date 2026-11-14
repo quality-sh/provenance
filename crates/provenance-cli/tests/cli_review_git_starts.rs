@@ -4,8 +4,7 @@
 //! (bead provenance-a5ru). The logging `git` is a shell script, so the tests are Unix-only.
 #![cfg(unix)]
 
-#[path = "review_host_support/mod.rs"]
-mod review_host_support;
+use crate::review_host_support;
 
 #[path = "cli_review_git_starts/support.rs"]
 mod support;

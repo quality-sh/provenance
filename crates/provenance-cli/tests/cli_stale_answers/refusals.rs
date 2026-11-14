@@ -1,10 +1,10 @@
-use crate::support::{cli_stale, commit, fixture, git, remove_object, write, Goldens};
+use super::support::{cli_stale, commit, fixture, git, remove_object, write, Goldens};
 use provenance_macros::verifies;
 use serde_json::json;
 
 /// The exit code, the JSON error and the diagnostic text of a refused
 /// request, with the commit ids replaced by names.
-fn refusal(fixture: &crate::support::Fixture, query: &[(&str, &str)]) -> serde_json::Value {
+fn refusal(fixture: &super::support::Fixture, query: &[(&str, &str)]) -> serde_json::Value {
     let (code, stdout, stderr) = cli_stale(fixture.path(), query);
     let stderr = stderr
         .replace(&fixture.base, "BASE")
