@@ -1,6 +1,6 @@
 //! A document read whose catch-up fails on a state line that does not parse
 //! gives the file, the line and the parse message of that line, in JSON and
-//! in text.
+//! in text, for a line of the wrong type and for a line that is not JSON.
 
 use provenance_macros::verifies;
 use serde_json::{json, Value};
@@ -89,4 +89,43 @@ fn a_document_read_gives_the_line_that_stops_its_catch_up() {
         assert_eq!(refused.stdout, "", "{format:?}");
         assert_eq!(refusal(&refused), expected, "{format:?}");
     }
+}
+
+#[test]
+#[verifies("rule_state_parse_refusal_names_the_line", examples)]
+fn a_document_read_gives_the_line_that_is_not_json() {
+    let directory = tempfile::tempdir().unwrap();
+    read_once(directory.path());
+    assert_cmd::Command::new(binary())
+        .args(["rule_alpha", "create", "--type", "rule", "--requirement-id"])
+        .args(["req_alpha", "--statement", "The host starts in one second."])
+        .arg("--repo")
+        .arg(directory.path())
+        .assert()
+        .success();
+    let shard = directory
+        .path()
+        .join(".provenance/state/scopes/default/rules/rule.jsonl");
+    let text = std::fs::read_to_string(&shard).unwrap();
+    std::fs::write(&shard, format!("{text}invalid JSON\n")).unwrap();
+
+    let refused = document(directory.path(), &["--format", "json"]);
+
+    assert_eq!(refused.status.code(), Some(1));
+    assert_eq!(refused.stdout, "");
+    assert_eq!(
+        refusal(&refused),
+        json!({
+            "error": {
+                "kind": "document_catch_up_failed",
+                "cause": {
+                    "kind": "invalid_state_file",
+                    "file": "scopes/default/rules/rule.jsonl",
+                    "line": 2,
+                    "message": "expected value"
+                }
+            },
+            "meta": {}
+        })
+    );
 }
