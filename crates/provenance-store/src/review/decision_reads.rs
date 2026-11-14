@@ -158,14 +158,17 @@ impl StateStore {
         let current_revision = super::save::current_revision(record)?;
         let pending = facts
             .pending_submission_at_revision(kind, record_id, current_revision.as_ref())
-            .map(|proposal| PendingSubmission {
-                proposal_id: proposal.id,
-                revision: proposal
+            .map(|proposal| {
+                let binding = proposal
                     .record_revision
-                    .expect("pending submissions carry bindings")
-                    .revision,
-                actor: proposal.actor.unwrap_or_default(),
-                revises: proposal.revises,
+                    .expect("pending submissions carry bindings");
+                PendingSubmission {
+                    proposal_id: proposal.id,
+                    revision: binding.revision,
+                    actor: proposal.actor.unwrap_or_default(),
+                    revises: proposal.revises,
+                    status_request: binding.status_request,
+                }
             });
         let mut recorded: Vec<RecordedDecision> = facts
             .decisions_of(kind, record_id)

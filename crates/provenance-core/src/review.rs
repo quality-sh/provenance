@@ -1,4 +1,5 @@
-//! Native review evidence types. Review does not change record lifecycle.
+//! Native review evidence types. Only an accepted status request changes a
+//! record lifecycle status.
 
 mod review_serde;
 
@@ -243,6 +244,35 @@ pub struct CycleEntry {
     pub actor: String,
 }
 
+/// A lifecycle status that a status request can ask for.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RequestedStatus {
+    Active,
+    Archived,
+}
+
+impl RequestedStatus {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Active => "active",
+            Self::Archived => "archived",
+        }
+    }
+}
+
+/// The lifecycle status that a review submission asks for. An approval of
+/// the submission sets this status in the same write.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StatusRequest {
+    pub status: RequestedStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archived_in_commit: Option<crate::ArchivedStamp>,
+}
+
 /// A submission still waiting for a decision.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -252,6 +282,9 @@ pub struct PendingSubmission {
     pub revision: StableId,
     pub actor: String,
     pub revises: Option<StableId>,
+    /// The lifecycle status that the submission asks for, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status_request: Option<StatusRequest>,
 }
 
 /// One terminal decision as the cycle reads it: the disposition itself, the
