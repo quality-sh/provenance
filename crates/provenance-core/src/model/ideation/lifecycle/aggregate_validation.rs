@@ -1,6 +1,7 @@
 use super::{
     assertion_validation, effective_proposal_state, legacy_validation, lineage_validation,
-    validate_proposal_intrinsic, AssertionRecord, IdeationAggregate,
+    validate_proposal_intrinsic, AssertionRecord, DuplicateImmutableId, IdeationAggregate,
+    IdeationRecord,
 };
 use crate::model::{
     disposition_requires_prior_assertion, validate_disposition_intrinsic, DispositionActorRefusal,
@@ -10,47 +11,17 @@ use provenance_macros::rule;
 use std::collections::BTreeMap;
 
 pub(super) fn validate(aggregate: IdeationAggregate<'_>) -> anyhow::Result<()> {
-    ensure_immutable_ids(
-        "contribution",
-        aggregate
-            .contributions
-            .iter()
-            .map(|record| (record.id.as_str(), record)),
-    )?;
-    ensure_immutable_ids(
-        "synthesis packet",
-        aggregate
-            .synthesis_packets
-            .iter()
-            .map(|record| (record.id.as_str(), record)),
-    )?;
-    ensure_immutable_ids(
-        "proposal",
-        aggregate
-            .proposals
-            .iter()
-            .map(|record| (record.id.as_str(), record)),
-    )?;
+    ensure_immutable_ids(aggregate.contributions)?;
+    ensure_immutable_ids(aggregate.synthesis_packets)?;
+    ensure_immutable_ids(aggregate.proposals)?;
     legacy_validation::validate_records(
         aggregate.proposals,
         aggregate.dispositions,
         aggregate.legacy_policy,
     )?;
     validate_proposals(aggregate.proposals)?;
-    ensure_immutable_ids(
-        "assertion",
-        aggregate
-            .assertions
-            .iter()
-            .map(|record| (record.id.as_str(), record)),
-    )?;
-    ensure_immutable_ids(
-        "disposition",
-        aggregate
-            .dispositions
-            .iter()
-            .map(|record| (record.id.as_str(), record)),
-    )?;
+    ensure_immutable_ids(aggregate.assertions)?;
+    ensure_immutable_ids(aggregate.dispositions)?;
     validate_disposition_intrinsics(aggregate.dispositions)?;
 
     let proposals = aggregate
@@ -225,13 +196,17 @@ fn validate_disposition_links(aggregate: &IdeationAggregate<'_>) -> anyhow::Resu
     Ok(())
 }
 
-fn ensure_immutable_ids<'a, T: 'a>(
-    kind: &str,
-    records: impl IntoIterator<Item = (&'a str, &'a T)>,
-) -> anyhow::Result<()> {
+fn ensure_immutable_ids<T: IdeationRecord>(records: &[T]) -> anyhow::Result<()> {
     let mut seen = std::collections::BTreeSet::new();
-    for (id, _) in records {
-        anyhow::ensure!(seen.insert(id), "duplicate immutable {kind} id {id}");
+    for record in records {
+        let id = record.immutable_id();
+        if !seen.insert(id) {
+            return Err(DuplicateImmutableId {
+                kind: T::KIND,
+                id: id.to_owned(),
+            }
+            .into());
+        }
     }
     Ok(())
 }

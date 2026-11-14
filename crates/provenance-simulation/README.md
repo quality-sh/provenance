@@ -44,14 +44,40 @@ fails with "simulation check broken", and the issue says that a check is
 broken, not a law. `tests/storage_contract.rs` runs the storage contract
 suite of `provenance-store` on the simulated storage. `tests/refused_post.rs`
 runs fixed cases of a message post whose publish is refused, in the engine
-job. A broken law in these cases fails as a probe of the engine layer. The
-replay command of the probe names the test binary `engine`, not
-`refused_post`. A failed check that is not a law gives the report of a layer
-that failed without a broken law.
+job, as a probe of the engine layer.
 
 The probes are fixed cases next to the random test of each layer. A probe
-that breaks a law fails with "simulation probe <test> broke law <law>" and
-the command that runs the probe. It writes no failure file.
+that breaks a law fails with "simulation probe broke law <law> in layer
+<layer>". A probe writes no failure file.
+
+L3 follows each Requirement that a write creates or updates (its existence
+and its description) and the Topic (its status and its claim). The model
+starts from the initial state: the first Requirement has no description,
+the Requirements that a create makes do not exist, and the Topic is open
+with no claim. Each write gives its record a value from the write itself,
+not from its answer, so the value is known also when the answer is not:
+
+| Write | Value of its record when it lands |
+| --- | --- |
+| Create | The Requirement exists with no description |
+| Update | The Requirement has the description of the update |
+| Claim | The Topic is open and the actor of the claim holds it |
+| Release | The Topic is open with no claim |
+| Archive of the first Requirement | The Topic is archived with no claim |
+
+The product refuses a claim of a Topic that is not open, and a release
+unless the actor holds the claim; an archive clears the claim. So a claim
+or a release that lands shows an open Topic.
+
+A certain write (its last publish landed, and it did not stop or fail)
+gives its record its value. A write that is not certain (a stop, an unknown
+outcome, or a failure after a landed publish) can have landed or not, so
+its record holds its value or a value that the record could hold before
+the write. A write that landed no publish changes no record. In the CLI
+layer, the writes that run at once are one group, a stopped write and a
+write merged from a branch are not certain, and a failed write that did not
+stop changes no record. The engine law and the CLI law use the same model
+(`src/expected.rs`).
 
 A write on a moved base: in the engine and contract layers, the engine
 reads, a write outside lands, and the engine publishes on the moved base.
@@ -122,13 +148,23 @@ An issue "probe <test> broke law <law>" gives the replay command of the
 probe. The probe is a fixed case, so the command runs the same case on any
 system.
 
-An issue "a planted fault was not found" opens each time that a planted
-test fails, also on a night with a law issue for the same layer.
+An issue "a planted fault was not found" opens when a planted test fails
+with "simulation check broken". It names each such test with its replay
+command.
 
-An issue "failed without a broken law" means that the job did not succeed,
-and no random case, probe or planted test reported a law or a broken check.
-The build or a probe test failed, a test panicked outside a law, or the job
-stopped at its time limit. Read the log of the run.
+An issue "test <test> failed" opens for each other test that failed, for
+example a check of a probe that is not a law, a panic outside a law, or a
+failed planted test. An issue "test <test> did not end in its time limit"
+opens for each test that nextest stopped. Each gives the failure text and
+the replay command.
+
+An issue "failed without a broken law" means that the job did not succeed
+and the log does not show the end of the tests, or that no test gave a
+report. The build failed, or the job stopped at its time limit. Read the
+log of the run.
+
+Each issue of a layer opens apart from the other issues of the layer, so
+one failure does not hide another one in the same night.
 
 ## Replay a case
 
@@ -139,12 +175,16 @@ HEGEL_SEED=<seed> cargo nextest run --profile simulation --run-ignored all \
   -p provenance-simulation --test engine -E 'test(=random_cases_keep_the_laws)'
 ```
 
-The random tests are ignored tests, so the command needs `--run-ignored all`.
-A run with a case count other than 100 also sets `HEGEL_TEST_CASES`. For the
-CLI layer, the package is `provenance-cli` and the test binary is
-`simulation_cli`. The CLI layer checks L6 after each write; the macOS and
-Windows jobs check it only at the end of each case, so the replay command of
-their failures sets `SIMULATION_L6=end`.
+The report script takes the package, the test target and the test from
+the status line that nextest prints for the failed test, for example
+`FAIL [ 6.102s] (7/7) provenance-simulation::contract
+random_cases_keep_the_laws_through_the_contract`. The random tests are
+ignored tests, so the command needs `--run-ignored all`. The command sets
+the variables of the job: `HEGEL_SEED`, `HEGEL_TEST_CASES` when the run
+sets it, and `SIMULATION_L6` in the CLI layer. The CLI layer checks L6
+after each write; the macOS and Windows jobs check it only at the end of
+each case, so the replay command of their failures sets
+`SIMULATION_L6=end`.
 
 ## Start a manual run
 
