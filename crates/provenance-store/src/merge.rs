@@ -149,23 +149,88 @@ pub(crate) fn preserved_lines(
         .collect()
 }
 
-/// Merges by the selected key, keeping a change when the other side matches the
-/// base. Call [`validate_merged_records`] before publication: records valid alone
-/// can be invalid together.
+/// What makes rows of the sides of a merge the same record.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RowIdentity {
+    /// Rows with the same string in this field are one record. The merge
+    /// writes the records in the order of that string.
+    Field(&'static str),
+    /// Equal rows are the same batch. One side can hold equal batches, so the
+    /// second equal row of one side is the same batch as the second equal row
+    /// of another side. The merge writes the batches of the base, then the
+    /// batches that ours adds, then the batches that theirs adds, each in the
+    /// order of its file.
+    Batch,
+}
+
+impl RowIdentity {
+    /// The merge order of the keys of the three sides.
+    fn merge_order(self, sides: [&[(String, CanonicalRecord)]; 3]) -> Vec<String> {
+        let keys = sides
+            .into_iter()
+            .flat_map(|side| side.iter().map(|(key, _)| key.clone()));
+        match self {
+            Self::Field(_) => keys.collect::<BTreeSet<_>>().into_iter().collect(),
+            Self::Batch => {
+                let mut seen = BTreeSet::new();
+                keys.filter(|key| seen.insert(key.clone())).collect()
+            }
+        }
+    }
+}
+
+/// Gives the key of each row of one side, in the order of the rows.
+struct RowKeys {
+    identity: RowIdentity,
+    /// For a batch identity, the number of rows so far equal to each row.
+    equal_rows: BTreeMap<String, usize>,
+}
+
+impl RowKeys {
+    const fn new(identity: RowIdentity) -> Self {
+        Self {
+            identity,
+            equal_rows: BTreeMap::new(),
+        }
+    }
+
+    fn key(&mut self, record: &CanonicalRecord) -> anyhow::Result<String> {
+        match self.identity {
+            RowIdentity::Field(field) => string_id(field, record).map(str::to_owned),
+            RowIdentity::Batch => batch_key(&mut self.equal_rows, record),
+        }
+    }
+}
+
+/// The key of one batch row: its canonical JSON and the number of rows of
+/// its side up to it that are equal to it.
+#[rule("rule_landing_batch_merge")]
+fn batch_key(
+    equal_rows: &mut BTreeMap<String, usize>,
+    record: &CanonicalRecord,
+) -> anyhow::Result<String> {
+    let row = String::from_utf8(crate::canonical_digest::canonical_bytes(record)?)?;
+    let count = equal_rows.entry(row.clone()).or_default();
+    *count += 1;
+    Ok(format!("{row}#{count}"))
+}
+
+/// Merges by the row identity of the shard, keeping a change when the other
+/// side matches the base. Call [`validate_merged_records`] before publication:
+/// records valid alone can be invalid together.
 #[rule("rule_record_merge")]
 pub fn merge_records(
-    key: &str,
+    identity: RowIdentity,
     base: &[CanonicalRecord],
     ours: &[CanonicalRecord],
     theirs: &[CanonicalRecord],
 ) -> anyhow::Result<MergeOutcome<Vec<CanonicalRecord>>> {
-    let base = index_by_id(key, base)?;
-    let ours = index_by_id(key, ours)?;
-    let theirs = index_by_id(key, theirs)?;
-    let mut ids = BTreeSet::new();
-    ids.extend(base.keys().cloned());
-    ids.extend(ours.keys().cloned());
-    ids.extend(theirs.keys().cloned());
+    let base = keyed_rows(identity, base)?;
+    let ours = keyed_rows(identity, ours)?;
+    let theirs = keyed_rows(identity, theirs)?;
+    let ids = identity.merge_order([&base, &ours, &theirs]);
+    let [base, ours, theirs] =
+        [base, ours, theirs].map(|rows| rows.into_iter().collect::<BTreeMap<_, _>>());
 
     let mut merged = Vec::new();
     let mut conflicts = Vec::new();
@@ -257,13 +322,14 @@ impl std::fmt::Display for MergeSide {
 pub fn ensure_unique_ids(
     shard_path: &camino::Utf8Path,
     side: MergeSide,
-    key: &str,
+    identity: RowIdentity,
     rows: &[StoredRow],
 ) -> anyhow::Result<()> {
+    let mut keys = RowKeys::new(identity);
     let mut first_lines = BTreeMap::new();
     for row in rows {
-        let id = string_id(key, &row.record)?;
-        if let Some(first) = first_lines.insert(id, row.line_number) {
+        let id = keys.key(&row.record)?;
+        if let Some(first) = first_lines.insert(id.clone(), row.line_number) {
             return Err(crate::refusal::state_fault(
                 &crate::state_store::message_ids::ShardLine::new(shard_path, row.line_number),
                 format!(
@@ -300,17 +366,21 @@ pub fn read_jsonl_records_for_shard(
         .collect())
 }
 
-fn index_by_id(
-    key: &str,
+/// Each record of one side with its key, in the order of the side. A key on
+/// two rows is refused at the second row.
+fn keyed_rows(
+    identity: RowIdentity,
     records: &[CanonicalRecord],
-) -> anyhow::Result<BTreeMap<String, CanonicalRecord>> {
-    let mut indexed = BTreeMap::new();
+) -> anyhow::Result<Vec<(String, CanonicalRecord)>> {
+    let mut keys = RowKeys::new(identity);
+    let mut seen = BTreeSet::new();
+    let mut rows = Vec::new();
     for record in records {
-        let id = string_id(key, record)?;
-        crate::write_error::ensure!(Fault, !indexed.contains_key(id), "duplicate record id {id}");
-        indexed.insert(id.to_string(), record.clone());
+        let id = keys.key(record)?;
+        crate::write_error::ensure!(Fault, seen.insert(id.clone()), "duplicate record id {id}");
+        rows.push((id, record.clone()));
     }
-    Ok(indexed)
+    Ok(rows)
 }
 
 #[cfg(test)]
