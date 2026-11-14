@@ -142,9 +142,9 @@ pub fn set_project_dictionary(
     index_directory: &std::path::Path,
 ) -> anyhow::Result<Utf8PathBuf> {
     let path = dictionary_reference_path(layout);
-    let reference = current_reference(layout)?.bytes_for(&import.identity)?;
     crate::dictionary_index::store_dictionary_index(import, index_directory)
         .context("store the dictionary index")?;
+    let reference = current_reference(layout)?.bytes_for(&import.identity)?;
     crate::storage::local::durability::write_synced_file(&path, &reference)
         .context("write the dictionary reference")?;
     Ok(path)
