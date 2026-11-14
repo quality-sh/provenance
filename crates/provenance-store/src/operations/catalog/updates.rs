@@ -26,7 +26,7 @@ creation!(
     "update-requirement-native",
     UpdateRequirementInput,
     provenance_core::Requirement,
-    update_requirement,
+    request_requirement_update,
     [GraphStorage, Dictionary]
 );
 creation!(

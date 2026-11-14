@@ -241,12 +241,8 @@ fn cli_binding_check_reports_absence_without_running_or_failing_project_tests() 
         ])
         .assert()
         .success();
-    accept_status_request(
-        directory.path().to_str().unwrap(),
-        "rules",
-        "rule",
-        "rule_unbound",
-    );
+    let repo = directory.path().to_str().unwrap();
+    accept_status_request(repo, "rules", "rule", "rule_unbound");
 
     let output = Command::cargo_bin("provenance")
         .unwrap()
