@@ -35,7 +35,11 @@ async fn the_reads_of_the_runs_name_a_line_of_the_runs_cache_that_the_writer_ref
         for route in ["/verification-runs", "/verification-runs/verification_1"] {
             let (status, answer) = call(&host, "GET", route, None).await;
 
-            assert_eq!((status, &answer["error"]), (500, &error), "{route}: {answer}");
+            assert_eq!(
+                (status, &answer["error"]),
+                (500, &error),
+                "{route}: {answer}"
+            );
         }
     }
 }
