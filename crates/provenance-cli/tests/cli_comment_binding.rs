@@ -86,7 +86,7 @@ fn a_second_comment_for_one_rule_names_the_rule_in_the_finding() {
         duplicates,
         [(
             Some(4),
-            Some("more than one primary implementation binding was found for Rule `rule_overtime`")
+            Some("more than one primary implementation binding was found for rule `rule_overtime`")
         )],
         "{report}"
     );
