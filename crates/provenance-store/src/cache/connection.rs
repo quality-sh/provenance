@@ -10,7 +10,7 @@
 use super::completion::{complete, within_deadline, Stage};
 use crate::layout::ProvenanceLayout;
 use provenance_macros::rule;
-use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use std::time::Duration;
@@ -245,6 +245,21 @@ pub fn cache_options(layout: &ProvenanceLayout) -> SqliteConnectOptions {
         .journal_mode(SqliteJournalMode::Wal)
 }
 
+/// Adds the connection settings that each open of the cache uses.
+///
+/// Each table of the cache is made again from the state files, so a commit
+/// that a power loss removes costs one catch-up: in WAL mode, NORMAL syncs
+/// at a checkpoint and not at each commit. Temporary tables and indexes stay
+/// in memory, and the page cache holds 16,000 KiB. The three settings apply
+/// only to the connection: they write nothing to the file, so a read-only or
+/// immutable open accepts them.
+fn with_cache_settings(options: SqliteConnectOptions) -> SqliteConnectOptions {
+    options
+        .synchronous(SqliteSynchronous::Normal)
+        .pragma("temp_store", "MEMORY")
+        .pragma("cache_size", "-16000")
+}
+
 /// Connects, retrying while the switch to WAL is refused as busy. The
 /// switch needs an exclusive lock, and a build whose busy timeout does not
 /// wait for it fails the first open of a DELETE-mode file another process
@@ -253,7 +268,7 @@ async fn connect(
     options: SqliteConnectOptions,
     retry: WalSwitchRetry,
 ) -> anyhow::Result<SqlitePool> {
-    let options = options.busy_timeout(retry.busy_timeout);
+    let options = with_cache_settings(options).busy_timeout(retry.busy_timeout);
     let started = std::time::Instant::now();
     loop {
         let pool = SqlitePoolOptions::new()
