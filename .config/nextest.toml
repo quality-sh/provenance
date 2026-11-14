@@ -43,8 +43,10 @@ max-threads = 1
 
 [[profile.default.overrides]]
 # PDF imports can cause HTTP timeouts under CPU contention. The mutex in
-# this binary cannot serialize separate nextest processes.
-filter = 'binary(cli_ste_onboarding)'
+# these binaries cannot serialize separate nextest processes. In
+# cli_ste_onboarding_concurrency, a held download of one init waits against
+# the 10s HTTP client while a second init runs.
+filter = 'binary(cli_ste_onboarding) | binary(cli_ste_onboarding_concurrency)'
 threads-required = "num-test-threads"
 priority = 100
 

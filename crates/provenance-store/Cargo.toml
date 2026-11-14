@@ -79,8 +79,9 @@ uuid = { workspace = true, features = ["js"] }
 # tests/<group>/main.rs compiles test files of tests/ as its modules, because
 # each test binary links the full dependency tree. Each other file listed
 # here is a test binary of its own. cli_structure checks that each test file
-# is in one of these targets. discussion_support.rs is a module of other
-# tests, not a target.
+# is in exactly one of these targets. discussion_support.rs is shared
+# support: its _support name lets more than one target load it, and it
+# declares no tests.
 #
 # The engine tests need host. The source scan tests in the source group and
 # read_process_state run without it, and the memory adapter tests too.

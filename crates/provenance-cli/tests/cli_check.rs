@@ -11,7 +11,7 @@ mod dictionary_support;
 #[path = "cli_check/archive_commit.rs"]
 mod archive_commit;
 
-use crate::review_host_support::bounded_process;
+use crate::bounded_process;
 use bounded_process::Bounded;
 
 #[test]
