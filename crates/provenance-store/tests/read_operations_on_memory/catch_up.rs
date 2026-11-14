@@ -1,7 +1,7 @@
 //! The embedder's catch-up: one pass at a time, and the state after a pass
 //! that fails once the publish committed.
 
-use crate::{ids, read, read_in, repository, requirement, stamp, with_policy, Switch};
+use crate::{handles, ids, read, read_in, repository, requirement, stamp, with_policy, Switch};
 use provenance_store::cache::{catch_up_in_publish, CatchUpRunning};
 use provenance_store::repository::Repository;
 use serde_json::json;
@@ -82,6 +82,41 @@ async fn a_second_catch_up_at_once_refuses_and_writes_nothing() {
     );
     assert!(
         !catch_up_in_publish(&repository)
+            .await
+            .unwrap()
+            .revision_committed
+    );
+}
+
+/// Two handles that `Repository::with_storage` makes over one read database
+/// share the catch-up claim: a call of `catch_up_in_publish` on one, while a
+/// pass of the other writes the database, refuses at once with
+/// `CatchUpRunning` and writes nothing. The first pass then commits.
+#[tokio::test]
+async fn a_catch_up_through_another_handle_of_the_database_refuses() {
+    let (_root, handles, switch) = handles(2).await;
+    let (first, second) = (&handles[0], &handles[1]);
+    let caught_up = catch_up_in_publish(first).await.unwrap();
+    first
+        .store()
+        .create_requirement(requirement("req_owner"))
+        .unwrap();
+
+    let (running, refused) = while_held(
+        &switch,
+        catch_up_in_publish(first),
+        catch_up_in_publish(second),
+    )
+    .await;
+    let refused = refused.unwrap_err();
+    assert_eq!(
+        refused.downcast_ref::<CatchUpRunning>(),
+        Some(&CatchUpRunning),
+        "{refused:#}"
+    );
+    assert_eq!(running.unwrap().serial, caught_up.serial + 1);
+    assert!(
+        !catch_up_in_publish(second)
             .await
             .unwrap()
             .revision_committed

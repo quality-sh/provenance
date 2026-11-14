@@ -4,7 +4,10 @@
 //! `tests/fixtures/site_operations.json` pins them apart from the generated
 //! ids, digests and times, so a change to how the router runs these
 //! operations cannot change an answer or its order. A failure shows the
-//! lines that differ.
+//! lines that differ. With the environment variable
+//! `PROVENANCE_WRITE_FIXTURES` set, the test writes the observed transcript
+//! to the checked file and passes, so the file is made again after an
+//! intended change; review the change of the file before it is committed.
 
 use crate::support::records::{allow_reviewer, Repository};
 use crate::support::router_answer::Http;

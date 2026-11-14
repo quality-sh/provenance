@@ -313,3 +313,6 @@ fn readable(schema: &Value, at: &str) -> Result<(), String> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;
