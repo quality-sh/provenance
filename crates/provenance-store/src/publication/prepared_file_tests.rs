@@ -151,10 +151,11 @@ fn a_marked_source_edit_replaces_a_prepared_file_with_a_leading_part_of_the_repl
 }
 
 /// A prepared file with content that is not a leading part of the
-/// replacement is a change that a person made. The section entry fails, the
-/// operation does not run, and the file stays, for a stopped write with no
-/// marker and for a marked write.
+/// replacement is a change that a person made. The section entry fails with
+/// the path of the file, the operation does not run, and the file and the
+/// target stay, for a stopped write with no marker and for a marked write.
 #[test]
+#[verifies("rule_failed_removal_of_stopped_write_names_its_path", examples)]
 fn a_prepared_file_that_a_person_changed_stops_the_section_entry_and_stays() {
     for phase in ["source_edit_temp_prepared", "source_edit_prepared"] {
         let temp = fixture();
@@ -174,11 +175,16 @@ fn a_prepared_file_that_a_person_changed_stops_the_section_entry_and_stays() {
 
         assert_eq!(
             format!("{error:#}"),
-            "repository file changed after it was read",
+            format!("remove prepared file {prepared}: repository file changed after it was read"),
             "{phase}"
         );
         assert!(!ran, "{phase}");
         assert_eq!(std::fs::read(&prepared).unwrap(), b"changed\n", "{phase}");
-        assert_eq!(published(root), (BEFORE.to_vec(), BEFORE.to_vec()), "{phase}");
+        assert_eq!(std::fs::read(root.join("source.txt")).unwrap(), BEFORE, "{phase}");
+        assert_eq!(
+            layout.source_edit_marker_path().exists(),
+            phase == "source_edit_prepared",
+            "{phase}: the marker of a marked write stays"
+        );
     }
 }

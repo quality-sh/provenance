@@ -46,13 +46,14 @@ pub(super) struct SourceEditMarker {
     pub(super) backup_digest: [u8; 32],
 }
 
+/// The record of the prepared file of a source edit, in its transaction.
+/// The store writes it before it makes the file, so that a stop at any later
+/// point leaves a record that names the file.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct PreparedSourceRecord {
     pub(super) target: Utf8PathBuf,
-    pub(super) after_digest: [u8; 32],
     pub(super) prepared_leaf: String,
-    pub(super) prepared_identity: FileIdentity,
 }
 
 /// Publishes a stage and one repository file edit under the live section
@@ -101,8 +102,18 @@ impl WholeSetHook for SourceEditPublication {
         live.source_edit_marker_path()
     }
 
+    /// Writes the record of the prepared file, then the replacement, each
+    /// synced, and then makes the prepared file. Thus a prepared file exists
+    /// only when its record and the complete replacement are durable.
     fn prepared(&mut self, live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
-        let replacement_path = transaction.join("replacement");
+        let held = self.held.as_ref().expect("source-edit held file");
+        let prepared_record = PreparedSourceRecord {
+            target: held.relative().to_owned(),
+            prepared_leaf: held.new_temp_leaf(),
+        };
+        write_prepared_source_record(transaction, &prepared_record)
+            .context("record prepared source file")?;
+        let replacement_path = transaction.join(REPLACEMENT);
         std::fs::write(&replacement_path, &self.replacement)
             .context("write source-edit replacement record")?;
         std::fs::OpenOptions::new()
@@ -113,19 +124,11 @@ impl WholeSetHook for SourceEditPublication {
             .sync_all()
             .context("flush source-edit replacement record")?;
         sync_directory(transaction).context("flush source-edit transaction")?;
-        let held = self.held.as_ref().expect("source-edit held file");
         let prepared = held
-            .create_temp(&self.replacement)
+            .create_temp_at(&prepared_record.prepared_leaf, &self.replacement)
             .context("prepare source replacement file")?;
+        let prepared_identity = prepared.recovery_identity().clone();
         let backup = held.recovery_backup();
-        let prepared_record = PreparedSourceRecord {
-            target: held.relative().to_owned(),
-            after_digest: Sha256::digest(&self.replacement).into(),
-            prepared_leaf: prepared.recovery_leaf().to_owned(),
-            prepared_identity: prepared.recovery_identity().clone(),
-        };
-        write_prepared_source_record(transaction, &prepared_record)
-            .context("record prepared source file")?;
         self.prepared = Some(prepared);
         self.backup = Some(backup.clone());
         crate::test_probes::at("source_edit_temp_prepared")?;
@@ -137,7 +140,7 @@ impl WholeSetHook for SourceEditPublication {
             before_digest: held.digest(),
             after_digest: Sha256::digest(&self.replacement).into(),
             prepared_leaf: prepared_record.prepared_leaf,
-            prepared_identity: prepared_record.prepared_identity,
+            prepared_identity,
             backup_leaf: backup.leaf().to_owned(),
             backup_identity: backup.identity().clone(),
             backup_digest: backup.digest(),
@@ -232,14 +235,20 @@ fn clear_marker(layout: &ProvenanceLayout) -> anyhow::Result<()> {
     sync_directory(&layout.cache_dir())
 }
 
-/// Writes `record` in `transaction` with a replace, so that the record is
-/// complete or does not exist: recovery reads a record that exists.
+/// The file of a source-edit transaction that holds the replacement bytes.
+pub(super) const REPLACEMENT: &str = "replacement";
+
+/// The file of a source-edit transaction that holds its record.
+pub(super) const PREPARED_SOURCE_RECORD: &str = "prepared-source.json";
+
+/// Writes `record` in `transaction` with a replace and a sync, so that the
+/// record is complete or does not exist: recovery reads a record that exists.
 fn write_prepared_source_record(
     transaction: &Utf8Path,
     record: &PreparedSourceRecord,
 ) -> anyhow::Result<()> {
     write_synced_file(
-        &transaction.join("prepared-source.json"),
+        &transaction.join(PREPARED_SOURCE_RECORD),
         &serde_json::to_vec(record)?,
     )
 }

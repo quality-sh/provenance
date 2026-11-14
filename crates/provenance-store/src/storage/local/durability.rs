@@ -155,9 +155,19 @@ fn replace_file(temporary: tempfile::NamedTempFile, target: &Utf8Path) -> anyhow
 /// available because the operating system keeps the directory changes.
 pub fn sync_directory(path: &Utf8Path) -> anyhow::Result<()> {
     #[cfg(unix)]
-    std::fs::File::open(path)?.sync_all()?;
+    sync_opened_directory(&std::fs::File::open(path)?)?;
     #[cfg(not(unix))]
     let _ = path;
+    Ok(())
+}
+
+/// Flushes the metadata of the open directory `directory`, as
+/// [`sync_directory`] does: on Windows, the call does nothing.
+pub(crate) fn sync_opened_directory(directory: &std::fs::File) -> std::io::Result<()> {
+    #[cfg(unix)]
+    directory.sync_all()?;
+    #[cfg(not(unix))]
+    let _ = directory;
     Ok(())
 }
 

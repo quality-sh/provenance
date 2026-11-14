@@ -276,12 +276,12 @@ fn a_file_and_a_link_in_the_source_edit_transactions_stay_and_the_section_opens(
     );
 }
 
-/// An implementation aid with no Rule: no Rule states the answer of a write
-/// whose last removal fails. The probe after the `FileInstalled` marker takes
-/// the write permission from the source-edit transaction directory, so the
-/// removal of the transaction removes its contents and then fails.
+/// The probe after the `FileInstalled` marker takes the write permission from
+/// the source-edit transaction directory, so the removal of the transaction
+/// removes its contents and then fails.
 #[cfg(unix)]
 #[test]
+#[verifies("rule_published_write_succeeds_when_its_cleanup_fails", examples)]
 fn a_published_source_edit_answers_success_when_the_removal_of_its_transaction_fails() {
     use std::os::unix::fs::PermissionsExt;
     let temp = fixture();
@@ -317,6 +317,7 @@ fn a_published_source_edit_answers_success_when_the_removal_of_its_transaction_f
 #[cfg(unix)]
 #[test]
 #[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
+#[verifies("rule_failed_removal_of_stopped_write_names_its_path", examples)]
 fn a_section_entry_ends_a_published_source_edit_whose_transaction_is_removed_in_part() {
     use std::os::unix::fs::PermissionsExt;
     let temp = fixture();

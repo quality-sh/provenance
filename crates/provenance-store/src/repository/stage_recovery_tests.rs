@@ -223,10 +223,12 @@ fn a_stop_before_the_prepared_marker_leaves_a_transaction_that_the_next_section_
     assert_reopened(&fixture, false, "state_prepared");
 }
 
-/// An implementation aid with no Rule: it shows the answer of a failed
-/// removal, which no Rule states.
+/// The child stops before the Prepared marker. With no write permission on
+/// the import transaction directory, the next section entry cannot remove
+/// the transaction.
 #[cfg(unix)]
 #[test]
+#[verifies("rule_failed_removal_of_stopped_write_names_its_path", examples)]
 fn a_failed_removal_of_a_stopped_transaction_names_the_step_and_the_path() {
     use std::os::unix::fs::PermissionsExt;
     let fixture = fixture();
@@ -318,6 +320,7 @@ fn errors_before_published_roll_back_and_an_error_at_published_keeps_new_state()
 #[cfg(unix)]
 #[test]
 #[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
+#[verifies("rule_failed_removal_of_stopped_write_names_its_path", examples)]
 fn a_section_entry_ends_a_published_import_whose_transaction_is_removed_in_part() {
     use std::os::unix::fs::PermissionsExt;
     let fixture = fixture();
@@ -349,6 +352,35 @@ fn a_section_entry_ends_a_published_import_whose_transaction_is_removed_in_part(
     );
     assert!(layout.publication_marker_path().exists());
 
+    assert_reopened(&fixture, true, "state_published");
+}
+
+/// The probe after the Published marker takes the write permission from the
+/// import transaction directory, so the removal of the transaction removes
+/// its contents and then fails.
+#[cfg(unix)]
+#[test]
+#[verifies("rule_published_write_succeeds_when_its_cleanup_fails", examples)]
+fn a_published_import_answers_success_when_the_removal_of_its_transaction_fails() {
+    use std::os::unix::fs::PermissionsExt;
+    let fixture = fixture();
+    let layout = ProvenanceLayout::new(fixture.root.clone());
+    let directory = layout.import_transactions_dir();
+    let locked = directory.clone();
+    test_probes::arm("state_published", move || {
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o500))?;
+        Ok(())
+    });
+
+    let answer = stage_rule(&open(&layout));
+    test_probes::disarm("state_published");
+    let left = transactions(&fixture.root);
+    std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    answer.unwrap();
+    assert_eq!(left.len(), 1, "the transaction stays");
+    assert_eq!(names(&left[0]), Vec::<String>::new());
+    assert!(layout.publication_marker_path().exists());
     assert_reopened(&fixture, true, "state_published");
 }
 

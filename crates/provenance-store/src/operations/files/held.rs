@@ -6,7 +6,10 @@ use std::fs::File;
 use std::io::Write as _;
 use std::path::PathBuf;
 
+use crate::storage::local::durability::sync_opened_directory;
+
 pub use super::held_metadata::FileIdentity;
+pub use super::held_recovery::RepositoryFileBackup;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BackupRetentionReason {
@@ -22,42 +25,6 @@ pub enum RepositoryFileInstall {
         backup: String,
         reason: BackupRetentionReason,
     },
-}
-
-#[derive(Clone, Debug)]
-pub struct RepositoryFileBackup {
-    leaf: String,
-    identity: FileIdentity,
-    digest: [u8; 32],
-}
-
-impl RepositoryFileBackup {
-    pub(crate) fn from_recovery(
-        leaf: String,
-        identity: FileIdentity,
-        digest: [u8; 32],
-    ) -> Result<Self, Refusal> {
-        if matches!(leaf.as_str(), "" | "." | "..") || leaf.contains(['/', '\\', ':', '\0']) {
-            return Err(Refusal::Changed);
-        }
-        Ok(Self {
-            leaf,
-            identity,
-            digest,
-        })
-    }
-
-    pub fn leaf(&self) -> &str {
-        &self.leaf
-    }
-
-    pub const fn identity(&self) -> &FileIdentity {
-        &self.identity
-    }
-
-    pub const fn digest(&self) -> [u8; 32] {
-        self.digest
-    }
 }
 
 pub struct HeldRepositoryFile {
@@ -101,62 +68,75 @@ impl HeldRepositoryFile {
         &self.relative
     }
 
+    pub(super) const fn parent(&self) -> &File {
+        &self.parent
+    }
+
+    pub(super) fn leaf(&self) -> &str {
+        &self.leaf
+    }
+
     pub fn recovery_backup(&self) -> RepositoryFileBackup {
-        RepositoryFileBackup {
-            leaf: format!(
-                ".{}.provenance-{}.backup",
-                self.leaf,
-                uuid::Uuid::new_v4().simple()
-            ),
-            identity: self.identity.clone(),
-            digest: self.digest,
-        }
+        let leaf = format!(
+            ".{}.provenance-{}.backup",
+            self.leaf,
+            uuid::Uuid::new_v4().simple()
+        );
+        RepositoryFileBackup::new(leaf, self.identity.clone(), self.digest)
+    }
+
+    /// A new random name for a prepared file next to this file.
+    pub fn new_temp_leaf(&self) -> String {
+        format!(
+            ".{}.provenance-{}.tmp",
+            self.leaf,
+            uuid::Uuid::new_v4().simple()
+        )
     }
 
     pub fn create_temp(&self, bytes: &[u8]) -> Result<PreparedRepositoryFile, Refusal> {
-        let parent_identity = identity(&self.parent)?;
         for _ in 0..100 {
-            let leaf = format!(
-                ".{}.provenance-{}.tmp",
-                self.leaf,
-                uuid::Uuid::new_v4().simple()
-            );
-            match create_new(&self.parent, &leaf) {
-                Ok(mut file) => {
-                    let mut cleanup = CreatedLeaf::new(&self.parent, &leaf);
-                    let prepared: Result<(File, FileIdentity), Refusal> = (|| {
-                        file.write_all(bytes).map_err(Refusal::Write)?;
-                        self.metadata.apply(&file)?;
-                        file.sync_all().map_err(Refusal::Write)?;
-                        probe_io("repository_file_clone_parent").map_err(Refusal::Write)?;
-                        let parent = self.parent.try_clone().map_err(Refusal::Write)?;
-                        let file_identity = identity(&file)?;
-                        Ok((parent, file_identity))
-                    })();
-                    let (parent, file_identity) = prepared?;
-                    cleanup.disarm();
-                    drop(cleanup);
-                    return Ok(PreparedRepositoryFile {
-                        parent,
-                        parent_identity,
-                        leaf,
-                        file,
-                        identity: file_identity,
-                        digest: Sha256::digest(bytes).into(),
-                        target_leaf: self.leaf.clone(),
-                        target_identity: self.identity.clone(),
-                        target_digest: self.digest,
-                        remove_on_drop: true,
-                    });
-                }
-                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
-                Err(error) => return Err(write_refusal(error)),
+            match self.create_temp_at(&self.new_temp_leaf(), bytes) {
+                Err(Refusal::Write(error)) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                result => return result,
             }
         }
         Err(Refusal::Write(std::io::Error::new(
             std::io::ErrorKind::AlreadyExists,
             "could not allocate a repository temporary file",
         )))
+    }
+
+    /// Makes the prepared file `leaf` next to this file with `bytes`, and
+    /// syncs it. The call fails when `leaf` exists, and removes the file that
+    /// it made when a later step fails.
+    pub fn create_temp_at(
+        &self,
+        leaf: &str,
+        bytes: &[u8],
+    ) -> Result<PreparedRepositoryFile, Refusal> {
+        let parent_identity = identity(&self.parent)?;
+        let mut file = create_new(&self.parent, leaf).map_err(write_refusal)?;
+        let mut cleanup = CreatedLeaf::new(&self.parent, leaf);
+        file.write_all(bytes).map_err(Refusal::Write)?;
+        self.metadata.apply(&file)?;
+        file.sync_all().map_err(Refusal::Write)?;
+        probe_io("repository_file_clone_parent").map_err(Refusal::Write)?;
+        let parent = self.parent.try_clone().map_err(Refusal::Write)?;
+        let file_identity = identity(&file)?;
+        cleanup.disarm();
+        Ok(PreparedRepositoryFile {
+            parent,
+            parent_identity,
+            leaf: leaf.to_owned(),
+            file,
+            identity: file_identity,
+            digest: Sha256::digest(bytes).into(),
+            target_leaf: self.leaf.clone(),
+            target_identity: self.identity.clone(),
+            target_digest: self.digest,
+            remove_on_drop: true,
+        })
     }
 
     pub(crate) fn recover_temp(
@@ -207,17 +187,17 @@ impl HeldRepositoryFile {
         backup: &RepositoryFileBackup,
     ) -> Result<RepositoryFileInstall, Refusal> {
         self.require_prepared_for_target(&prepared)?;
-        if backup.identity != self.identity
-            || backup.digest != self.digest
-            || !valid_artifact_leaf(&self.leaf, &backup.leaf, ".backup")
+        if backup.identity() != &self.identity
+            || backup.digest() != self.digest
+            || !valid_artifact_leaf(&self.leaf, backup.leaf(), ".backup")
         {
             return Err(Refusal::Changed);
         }
-        self.displace_to_backup(&backup.leaf)?;
+        self.displace_to_backup(backup.leaf())?;
         probe_io("repository_file_after_displace").map_err(Refusal::Write)?;
-        self.require_matching_backup(&backup.leaf)?;
-        self.install_prepared(&backup.leaf, &mut prepared)?;
-        Ok(self.finish_backup(backup.leaf.clone()))
+        self.require_matching_backup(backup.leaf())?;
+        self.install_prepared(backup.leaf(), &mut prepared)?;
+        Ok(self.finish_backup(backup.leaf().to_owned()))
     }
 
     fn require_prepared_for_target(
@@ -256,6 +236,11 @@ impl HeldRepositoryFile {
         if let Err(error) = install {
             return self.restore_then_refuse(backup, error);
         }
+        if let Err(error) = sync_opened_directory(&self.parent) {
+            safe_fs::rename_no_replace_in(&self.parent, &self.leaf, &prepared.leaf)
+                .map_err(Refusal::Restore)?;
+            return self.restore_then_refuse(backup, Refusal::Write(error));
+        }
         prepared.remove_on_drop = false;
         Ok(())
     }
@@ -276,6 +261,7 @@ impl HeldRepositoryFile {
         }
         if probe_io("repository_file_unlink_backup").is_err()
             || unlink(&self.parent, &backup).is_err()
+            || sync_opened_directory(&self.parent).is_err()
         {
             return RepositoryFileInstall::InstalledBackupKept {
                 backup,
