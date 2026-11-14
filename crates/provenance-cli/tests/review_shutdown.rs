@@ -1,7 +1,6 @@
 #![cfg(unix)]
 
-#[path = "review_host_support/mod.rs"]
-mod review_host_support;
+use crate::review_host_support;
 
 use provenance_core::ScopeId;
 use provenance_store::{layout::ProvenanceLayout, repository::Repository};
@@ -9,8 +8,7 @@ use review_host_support::{
     repository as initialized_repository, start_capturing_stderr, start_with, Host,
 };
 
-#[path = "review_host_support/persistent_browser.rs"]
-mod persistent_browser;
+use crate::persistent_browser;
 use persistent_browser::PersistentBrowser;
 use serde_json::json;
 use std::{

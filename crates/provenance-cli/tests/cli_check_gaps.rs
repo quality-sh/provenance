@@ -7,9 +7,7 @@ use provenance_mcp::Client;
 use serde_json::{json, Value};
 use std::process::Stdio;
 
-mod support {
-    pub mod review_paths;
-}
+use crate::support;
 use support::review_paths::{init, init_scope, provenance};
 
 /// The standard output of one CLI command that succeeds.

@@ -1,5 +1,4 @@
-#[path = "review_host_support/mod.rs"]
-mod review_host_support;
+use crate::review_host_support;
 
 use provenance_macros::verifies;
 use review_host_support::{repository_with_actors, request, response, start, Host};

@@ -1,6 +1,5 @@
 //! Implementation aid: probe the approved native watcher assumptions before host changes.
-#[path = "review_host_support/mod.rs"]
-mod review_host_support;
+use crate::review_host_support;
 
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
 use provenance_store::{
