@@ -29,9 +29,7 @@ impl ImportPort for RepositoryPort {
     }
 }
 
-/// Puts the records of the scope export file `input` in place of the records of the selected
-/// scope and gives the number of records that the import writes. A dry run does each check and
-/// changes nothing.
+/// Refuses an import that changes or removes shipped-v1 terminal proposals.
 fn import_scope(
     context: &RepoContext,
     input: &Utf8Path,
@@ -42,7 +40,21 @@ fn import_scope(
     let repository = context.open()?;
     repository.ensure_selected(&ScopeId::new(&exported.scope)?)?;
     let scope_id = repository.scope().clone();
-    let records = with_publication_guard(&repository, |guard| {
+    let records = exported.sources.len()
+        + exported.requirements.len()
+        + exported.topics.len()
+        + exported.questions.len()
+        + exported.resolutions.len()
+        + exported.rules.len()
+        + exported.implementation_bindings.len()
+        + exported.threads.len()
+        + exported.messages.len()
+        + exported.contributions.len()
+        + exported.synthesis_packets.len()
+        + exported.proposal_cards.len()
+        + exported.assertion_records.len()
+        + exported.dispositions.len();
+    with_publication_guard(&repository, |guard| {
         let held = guard.repository();
         let store = Store::new(held);
         store.ensure_review_portable(&scope_id)?;
@@ -201,63 +213,40 @@ fn ensure_asserted_evidence_preserved(
     Ok(())
 }
 
-/// Publishes the export over the live state and gives the number of records
-/// that the import writes. `repository` holds the section that read `live`,
-/// the snapshot before the stage; the stage body reads only the staged store.
-#[rule("rule_import_reports_record_count")]
+/// Publishes the export over the live state. `repository` holds the section
+/// that read `live`, the snapshot before the stage; the stage body reads only
+/// the staged store.
 fn apply_import(
     repository: &Repository,
     live: &ScopeSnapshot,
     exported: &ScopeExport,
     dry_run: bool,
-) -> anyhow::Result<usize> {
+) -> anyhow::Result<()> {
     let scope_id = repository.scope();
     repository.stage(dry_run, None, |staged| {
-        let written = staged.import_scope(scope_id, &scope_shards(exported))?;
+        staged.import_scope(scope_id, &scope_shards(exported))?;
         crate::check::validate_repository(staged)?;
-        ensure_changed_statements_are_clean(live, staged)?;
-        Ok(written)
+        ensure_changed_statements_are_clean(live, staged)
     })
 }
 
-/// The shards of each record field of the document. The pattern names each
-/// field, so a new field of the document does not compile until the import
-/// writes it.
 fn scope_shards(exported: &ScopeExport) -> ScopeShards<'_> {
-    let ScopeExport {
-        scope: _,
-        sources,
-        requirements,
-        topics,
-        questions,
-        resolutions,
-        rules,
-        verification_bindings,
-        implementation_bindings,
-        threads,
-        messages,
-        contributions,
-        synthesis_packets,
-        proposal_cards,
-        assertion_records,
-        dispositions,
-    } = exported;
     ScopeShards {
-        sources,
-        requirements,
-        topics,
-        questions,
-        resolutions,
-        rules,
-        verification_bindings,
-        implementation_bindings,
-        threads,
-        messages,
-        contributions,
-        synthesis_packets,
-        proposal_cards,
-        assertion_records,
-        dispositions,
+        sources: &exported.sources,
+        requirements: &exported.requirements,
+        topics: &exported.topics,
+        questions: &exported.questions,
+        resolutions: &exported.resolutions,
+        rules: &exported.rules,
+        verification_bindings: &exported.verification_bindings,
+        implementation_bindings: &exported.implementation_bindings,
+        threads: &exported.threads,
+        messages: &exported.messages,
+        contributions: &exported.contributions,
+        synthesis_packets: &exported.synthesis_packets,
+        proposal_cards: &exported.proposal_cards,
+        assertion_records: &exported.assertion_records,
+        dispositions: &exported.dispositions,
     }
 }
 

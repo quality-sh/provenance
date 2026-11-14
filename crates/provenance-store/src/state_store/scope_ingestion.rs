@@ -119,26 +119,26 @@ macro_rules! ensure_assignable {
 
 macro_rules! write_binding {
     (
-        verification, $store:ident, $scope:ident, $shards:ident, $written:ident,
+        verification, $store:ident, $scope:ident, $shards:ident,
         $variant:ident, $field:ident,
         verification
     ) => {
-        write_family!($store, $scope, $shards, $written, $variant, $field);
+        write_family!($store, $scope, $shards, $variant, $field);
     };
     (
-        implementation, $store:ident, $scope:ident, $shards:ident, $written:ident,
+        implementation, $store:ident, $scope:ident, $shards:ident,
         $variant:ident, $field:ident,
         implementation
     ) => {
-        write_family!($store, $scope, $shards, $written, $variant, $field);
+        write_family!($store, $scope, $shards, $variant, $field);
     };
     (
-        verification, $store:ident, $scope:ident, $shards:ident, $written:ident,
+        verification, $store:ident, $scope:ident, $shards:ident,
         $variant:ident, $field:ident,
         implementation
     ) => {};
     (
-        implementation, $store:ident, $scope:ident, $shards:ident, $written:ident,
+        implementation, $store:ident, $scope:ident, $shards:ident,
         $variant:ident, $field:ident,
         verification
     ) => {};
@@ -179,17 +179,12 @@ macro_rules! ensure_binding_assignable {
     ) => {};
 }
 
-/// Writes the shard of one family and adds its records to the count `$written`.
 macro_rules! write_family {
-    (
-        $store:ident, $scope:ident, $shards:ident, $written:ident,
-        $variant:ident, $field:ident
-    ) => {
+    ($store:ident, $scope:ident, $shards:ident, $variant:ident, $field:ident) => {
         $store.put_jsonl_records(
             &ProjectionFamily::$variant.shard_path(&$store.layout, $scope),
             $shards.$field,
         )?;
-        $written += $shards.$field.len();
         crate::test_probes::at(concat!("scope_import_", stringify!($field), "_written"))?;
     };
 }
@@ -267,13 +262,12 @@ macro_rules! define_imported_scope_shards {
         }
 
         impl StateStore {
-            /// Writes the canonical record shards for one scope and gives the
-            /// number of records that it writes.
+            /// Writes the canonical record shards for one scope.
             pub fn import_scope(
                 &self,
                 scope: &ScopeId,
                 shards: &ScopeShards<'_>,
-            ) -> anyhow::Result<usize> {
+            ) -> anyhow::Result<()> {
                 self.ensure_writable()?;
                 self.with_staged_import(|store| {
                     validate_threads(shards.threads)?;
@@ -310,22 +304,17 @@ macro_rules! define_imported_scope_shards {
                     store.delete_state_keys_under(
                         &store.layout.scopes_dir().join(scope.as_str()),
                     )?;
-                    let mut written = 0;
-                    $(write_family!(
-                        store, scope, shards, written, $export_variant, $export_field
-                    );)*
+                    $(write_family!(store, scope, shards, $export_variant, $export_field);)*
                     $(write_binding!(
-                        verification, store, scope, shards, written, $binding_variant,
+                        verification, store, scope, shards, $binding_variant,
                         $binding_field, $($binding_graph)+
                     );)*
                     $(write_binding!(
-                        implementation, store, scope, shards, written, $binding_variant,
+                        implementation, store, scope, shards, $binding_variant,
                         $binding_field, $($binding_graph)+
                     );)*
-                    $(write_family!(
-                        store, scope, shards, written, $canonical_variant, $canonical_field
-                    );)*
-                    Ok(written)
+                    $(write_family!(store, scope, shards, $canonical_variant, $canonical_field);)*
+                    Ok(())
                 })
             }
         }
