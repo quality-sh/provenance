@@ -13,7 +13,8 @@ fn faults(manifest: &str, files: &[(&str, &str)]) -> Vec<String> {
         "[package]\nname = \"fixture\"\nversion = \"0.0.0\"\nedition = \"2021\"\n{manifest}\n[workspace]\n"
     );
     fs::write(root.join("Cargo.toml"), manifest).expect("write fixture manifest");
-    for (path, text) in [("src/lib.rs", "")].iter().chain(files) {
+    let library = ("src/lib.rs", "");
+    for (path, text) in std::iter::once(&library).chain(files) {
         let path = root.join(path);
         fs::create_dir_all(path.parent().expect("fixture file directory"))
             .expect("create fixture directory");
