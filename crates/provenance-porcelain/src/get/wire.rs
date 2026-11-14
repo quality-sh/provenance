@@ -2,6 +2,7 @@
 
 use super::{Bounds, GetInput, GetOutcome, Registration, Review, View};
 use provenance_core::protocol::{GraphNode, ImpactResult, ResponseMeta};
+use provenance_core::review::RequirementEditState;
 use provenance_core::{NodeType, Question, Requirement, Resolution, Rule, Source, StableId, Topic};
 use schemars::generate::{Contract, SchemaSettings};
 use serde::{Deserialize, Serialize, Serializer};
@@ -60,6 +61,10 @@ struct GetWire<'a> {
     detail: Option<&'a ImpactResult>,
     review: Option<&'a Review>,
     bounds: Option<&'a Bounds>,
+    /// The edit state of the record. Only the record view has it. Give `etag` unchanged
+    /// as the if-match value of the next update of the record.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    edit: Option<&'a RequirementEditState>,
     #[serde(skip_serializing_if = "Option::is_none")]
     shaping: Option<&'a super::SessionSummary>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -121,14 +126,12 @@ impl GetOutcome {
             detail: self.impact(),
             review: self.review(),
             bounds: self.bounds(),
+            edit: self.edit(),
             shaping: self.shaping(),
             record_metadata: self.record_metadata.as_ref(),
             view_metadata: self.view_metadata(),
             notify: self.review().and_then(|review| review.notify.as_ref()),
-            review_link: match &self.result {
-                super::ViewResult::ReviewLink(link) => Some(link),
-                _ => None,
-            },
+            review_link: self.review_link(),
         }
     }
 }
@@ -309,7 +312,10 @@ pub fn render_readable(outcome: &GetOutcome) -> serde_json::Result<String> {
             ));
         }
     }
-    if let super::ViewResult::ReviewLink(link) = &outcome.result {
+    if let Some(edit) = outcome.edit() {
+        sections.push(format!("edit.etag: {}", edit.etag));
+    }
+    if let Some(link) = outcome.review_link() {
         sections.push(match (&link.review_url, &link.message) {
             (Some(url), _) => format!("review link: {url}"),
             (None, Some(message)) => format!("review link: none. {message}"),

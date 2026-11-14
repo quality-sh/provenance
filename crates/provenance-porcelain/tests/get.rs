@@ -1,5 +1,6 @@
 use provenance_core::protocol::RecordResolution as CoreRecordResolution;
 use provenance_core::protocol::{GraphNode, ImpactResult, ResponseMeta, TracedNode};
+use provenance_core::review::RequirementEditState;
 use provenance_macros::verifies;
 use provenance_porcelain::get::{
     GetInput, GetPort, Impact, PortFuture, ReadError, RecordResolution, TraceInput, Traversal,
@@ -71,6 +72,13 @@ impl GetPort for FixturePort {
                     ..ResponseMeta::default()
                 }),
             })
+        })
+    }
+
+    fn edit(&self, _: &GraphNode) -> Result<RequirementEditState, ReadError> {
+        Ok(RequirementEditState {
+            etag: "sha256:fixture".into(),
+            revision: None,
         })
     }
 }
@@ -393,7 +401,7 @@ async fn bare_get_returns_the_selected_record() {
         .await
         .unwrap();
 
-    assert!(matches!(outcome.result, ViewResult::Record));
+    assert!(matches!(outcome.result, ViewResult::Record { .. }));
     let encoded = serde_json::to_value(outcome).unwrap();
     assert_eq!(
         encoded["record"]["value"]["statement"],

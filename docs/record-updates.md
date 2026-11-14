@@ -162,13 +162,13 @@ A Requirement update sends the ETag of the last read. The CLI supplies the
 `actor` default:
 
 ```sh
-provenance req_policy get --view review
+provenance req_policy get --format json
 printf '%s' '{"description":"Reviewed wording."}' |
   provenance --repo . --scope default requirements req_policy update \
     --if-match "$etag" --stdin
 ```
 
-Copy `review.edit.etag` unchanged. A value has the form `sha256:` followed by
+Copy `edit.etag` unchanged. A value has the form `sha256:` followed by
 64 lowercase hexadecimal characters.
 
 ## HTTP clients

@@ -29,7 +29,7 @@ impl StateStore {
         input: CreateReviewRequirement,
     ) -> anyhow::Result<RequirementEditState> {
         self.create_review_requirement_with(input, |_, created| {
-            Self::record_edit_state_for_record(&created.into())
+            super::save::edit_state(&created.into())
         })
     }
 

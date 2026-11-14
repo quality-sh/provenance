@@ -10,13 +10,15 @@ use provenance_core::{
 };
 use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, future::Future, pin::Pin};
+use std::{future::Future, pin::Pin};
 
 mod notify;
+mod read_error;
 mod review_link;
 mod shaping;
 mod wire;
 pub use notify::{Notify, NotifyClient, NotifyPort, Registration, NO_REVIEW_HOST};
+pub use read_error::ReadError;
 pub use review_link::{ReviewLink, ReviewLinkPort};
 pub use shaping::{BlockedQuestion, BlockedReason, Claim, QuestionState, SessionSummary};
 pub use wire::{
@@ -182,19 +184,22 @@ pub struct Review {
 /// The data selected by one named view.
 #[derive(Clone, Debug)]
 pub enum ViewResult {
-    Record,
+    /// The record view: the edit state that the next guarded update of the record needs,
+    /// and the review link of the record when the request asks for it.
+    Record {
+        edit: RequirementEditState,
+        review_link: Option<ReviewLink>,
+    },
     Children(Traversal),
     Trace(Traversal),
     Impact(Impact),
     Review(Box<Review>),
-    /// The record view with the review link of the record.
-    ReviewLink(ReviewLink),
 }
 
 impl ViewResult {
     pub const fn view(&self) -> View {
         match self {
-            Self::Record | Self::ReviewLink(_) => View::Record,
+            Self::Record { .. } => View::Record,
             Self::Children(_) => View::Children,
             Self::Trace(_) => View::Trace,
             Self::Impact(_) => View::Impact,
@@ -205,7 +210,7 @@ impl ViewResult {
     pub fn related(&self) -> &[TracedNode] {
         match self {
             Self::Children(traversal) | Self::Trace(traversal) => &traversal.records,
-            Self::Record | Self::ReviewLink(_) | Self::Impact(_) | Self::Review(_) => &[],
+            Self::Record { .. } | Self::Impact(_) | Self::Review(_) => &[],
         }
     }
 
@@ -223,12 +228,29 @@ impl ViewResult {
         }
     }
 
+    pub const fn edit(&self) -> Option<&RequirementEditState> {
+        match self {
+            Self::Record { edit, .. } => Some(edit),
+            _ => None,
+        }
+    }
+
+    pub const fn review_link(&self) -> Option<&ReviewLink> {
+        match self {
+            Self::Record {
+                review_link: Some(link),
+                ..
+            } => Some(link),
+            _ => None,
+        }
+    }
+
     pub const fn bounds(&self) -> Option<&Bounds> {
         match self {
             Self::Children(traversal) | Self::Trace(traversal) => Some(&traversal.bounds),
             Self::Impact(impact) => Some(&impact.bounds),
             Self::Review(review) => Some(&review.bounds),
-            Self::Record | Self::ReviewLink(_) => None,
+            Self::Record { .. } => None,
         }
     }
 
@@ -239,7 +261,7 @@ impl ViewResult {
             }
             Self::Impact(impact) => impact.response_metadata.as_ref(),
             Self::Review(review) => review.response_metadata.as_ref(),
-            Self::Record | Self::ReviewLink(_) => None,
+            Self::Record { .. } => None,
         }
     }
 }
@@ -269,6 +291,15 @@ impl GetOutcome {
         self.result.review()
     }
 
+    /// The edit state of the record. Only the record view has it.
+    pub const fn edit(&self) -> Option<&RequirementEditState> {
+        self.result.edit()
+    }
+
+    pub const fn review_link(&self) -> Option<&ReviewLink> {
+        self.result.review_link()
+    }
+
     pub const fn bounds(&self) -> Option<&Bounds> {
         self.result.bounds()
     }
@@ -285,65 +316,14 @@ impl GetOutcome {
     }
 }
 
-/// A failure from validation, identity resolution, or an injected operation.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ReadError {
-    InvalidOptions,
-    NotFound,
-    AmbiguousIdentity,
-    /// The review host refused one request field.
-    InvalidInput {
-        field: String,
-        message: String,
-    },
-    /// The review host could not finish the request now; the same request can run again.
-    HostBusy(String),
-    Operation(String),
-}
-
-impl Display for ReadError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::InvalidOptions => formatter.write_str("unsupported read options"),
-            Self::NotFound => formatter.write_str("record does not exist"),
-            Self::AmbiguousIdentity => formatter.write_str("record ID is not unique"),
-            Self::InvalidInput { message, .. }
-            | Self::HostBusy(message)
-            | Self::Operation(message) => formatter.write_str(message),
-        }
-    }
-}
-
-impl std::error::Error for ReadError {}
-
-impl ReadError {
-    /// The `{error, meta}` object that each consumer returns for this failure.
-    #[rule("rule_mcp_get_failure_matches_cli")]
-    pub fn failure(&self) -> serde_json::Value {
-        let mut error = match self {
-            Self::InvalidOptions => {
-                serde_json::json!({"kind": "invalid_input", "reason": "invalid_value"})
-            }
-            Self::NotFound => serde_json::json!({"kind": "resource_not_found"}),
-            Self::AmbiguousIdentity => serde_json::json!({
-                "kind": "invalid_input", "reason": "invalid_value", "field": "target"
-            }),
-            Self::InvalidInput { field, .. } => serde_json::json!({
-                "kind": "invalid_input", "reason": "invalid_value", "field": field
-            }),
-            Self::HostBusy(_) => serde_json::json!({"kind": "host_busy"}),
-            Self::Operation(_) => serde_json::json!({"kind": "operation_failed"}),
-        };
-        error["message"] = serde_json::Value::String(self.to_string());
-        serde_json::json!({"error": error, "meta": {}})
-    }
-}
-
 /// Existing operation paths needed to compose a known-record read.
 pub trait GetPort: Send + Sync {
     fn resolve<'a>(&'a self, id: &'a str) -> PortFuture<'a, RecordResolution>;
     fn traverse(&self, request: TraversalRequest) -> PortFuture<'_, Traversal>;
     fn impact<'a>(&'a self, record: &'a GraphNode, limit: usize) -> PortFuture<'a, Impact>;
+    /// The edit state of a resolved record. It comes from the resolved record, so it
+    /// agrees with the record that the get shows.
+    fn edit(&self, record: &GraphNode) -> Result<RequirementEditState, ReadError>;
     fn review<'a>(&'a self, _record: &'a GraphNode, _limit: usize) -> PortFuture<'a, Review> {
         Box::pin(async { Err(ReadError::InvalidOptions) })
     }
@@ -380,10 +360,7 @@ impl<P: GetPort> crate::Porcelain<P> {
         };
         let record_metadata = resolved.metadata;
         let result = match input.view {
-            View::Record if input.review_link => {
-                ViewResult::ReviewLink(self.port.review_link(&record).await?)
-            }
-            View::Record => ViewResult::Record,
+            View::Record => self.record_view(&record, input.review_link).await?,
             View::Children | View::Trace => {
                 let mut traversal = self
                     .port
@@ -440,6 +417,23 @@ impl<P: GetPort> crate::Porcelain<P> {
 }
 
 impl<P: GetPort> crate::Porcelain<P> {
+    /// The record view gives the edit state of the record, so that the next guarded
+    /// update of the record needs no other read.
+    #[rule("rule_get_record_gives_edit_etag")]
+    async fn record_view(
+        &self,
+        record: &GraphNode,
+        review_link: bool,
+    ) -> Result<ViewResult, ReadError> {
+        let edit = self.port.edit(record)?;
+        let review_link = if review_link {
+            Some(self.port.review_link(record).await?)
+        } else {
+            None
+        };
+        Ok(ViewResult::Record { edit, review_link })
+    }
+
     /// Walks upward from one record to its Sources: the get trace view without a view
     /// selector.
     #[rule("rule_trace_action_matches_trace_view")]
