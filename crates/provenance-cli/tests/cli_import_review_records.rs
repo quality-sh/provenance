@@ -77,7 +77,7 @@ fn an_import_that_restates_a_requirement_writes_the_records_that_the_api_writes(
         reasons(&records),
         BTreeSet::from([
             reason("rule_a", BEFORE, AFTER),
-            reason("rule_b", BEFORE, AFTER)
+            reason("rule_b", BEFORE, AFTER),
         ])
     );
     assert_eq!(without_time(records), without_time(reviews(&patched)));
@@ -97,7 +97,7 @@ fn an_import_that_restates_a_requirement_and_changes_its_rules_writes_a_record_f
         BTreeSet::from([
             reason("rule_a", BEFORE, AFTER),
             reason("rule_b", BEFORE, AFTER),
-            reason("rule_c", BEFORE, AFTER)
+            reason("rule_c", BEFORE, AFTER),
         ])
     );
 }
@@ -146,10 +146,9 @@ fn an_import_on_a_scope_with_a_requirement_review_record_is_refused_and_changes_
         .get_output()
         .clone();
 
-    assert_eq!(
-        (output.status.code(), String::from_utf8(output.stderr).unwrap()),
-        (Some(1), REFUSAL.to_owned())
-    );
+    let code = output.status.code();
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert_eq!((code, stderr), (Some(1), REFUSAL.to_owned()));
     assert_eq!(state_files(&repo), before);
 }
 
@@ -167,12 +166,11 @@ fn an_export_of_a_scope_with_a_requirement_review_record_is_refused() {
         .get_output()
         .clone();
 
+    let code = output.status.code();
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let stderr = String::from_utf8(output.stderr).unwrap();
     assert_eq!(
-        (
-            output.status.code(),
-            String::from_utf8(output.stdout).unwrap(),
-            String::from_utf8(output.stderr).unwrap()
-        ),
+        (code, stdout, stderr),
         (Some(1), String::new(), REFUSAL.to_owned())
     );
 }
@@ -185,7 +183,8 @@ fn provenance() -> Command {
 fn repository(dir: &Path, name: &str) -> PathBuf {
     let repo = dir.join(name);
     provenance()
-        .args(["init", "--path", repo.to_str().unwrap(), "--scope", "default"])
+        .args(["init", "--path", repo.to_str().unwrap()])
+        .args(["--scope", "default"])
         .args(["--disposition-actor-id", "reviewer"])
         .assert()
         .success();
@@ -197,8 +196,8 @@ fn import(repo: &Path, document: &Value) -> assert_cmd::assert::Assert {
     let input = repo.with_extension("import.json");
     std::fs::write(&input, document.to_string()).unwrap();
     provenance()
-        .args(["import", "--repo", repo.to_str().unwrap(), "--scope", "default"])
-        .args(["--input", input.to_str().unwrap()])
+        .args(["import", "--repo", repo.to_str().unwrap()])
+        .args(["--scope", "default", "--input", input.to_str().unwrap()])
         .assert()
 }
 
@@ -213,7 +212,8 @@ fn patch_statement(repo: &Path, statement: &str) {
     let etag = read["edit"]["etag"].as_str().unwrap();
     provenance()
         .args(["api", "requirements/req_record", "--method", "patch"])
-        .args(["--header", &format!("If-Match: {etag}"), "--input", "-"])
+        .args(["--header", &format!("If-Match: {etag}")])
+        .args(["--input", "-"])
         .args(["--repo", repo, "--scope", "default", "--format", "json"])
         .write_stdin(json!({"actor": "agent", "statement": statement}).to_string())
         .assert()

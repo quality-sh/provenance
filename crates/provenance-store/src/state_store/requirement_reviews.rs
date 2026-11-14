@@ -60,7 +60,7 @@ pub struct RequirementReviewInput {
 }
 
 /// One changed Requirement statement and the Rules whose evidence the change puts up for review.
-pub(crate) struct Restatement {
+pub(super) struct Restatement {
     pub requirement_id: StableId,
     pub before: String,
     pub after: String,
