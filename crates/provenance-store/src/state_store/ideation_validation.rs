@@ -7,8 +7,7 @@ use super::{IdeationLandingBatch, StateStore};
 use crate::refusal::state_fault;
 use crate::shards;
 use provenance_core::{
-    AssertionRecord, Contribution, DuplicateImmutableId, IdeationRecord, ScopeId,
-    SynthesisPacket,
+    AssertionRecord, Contribution, DuplicateImmutableId, IdeationRecord, ScopeId, SynthesisPacket,
 };
 use std::collections::BTreeSet;
 

@@ -10,7 +10,8 @@ use super::review_merged_withdrawals::{
 };
 use super::*;
 
-pub(super) const DISPOSITIONS: &str = ".provenance/state/scopes/default/ideation/dispositions.jsonl";
+pub(super) const DISPOSITIONS: &str =
+    ".provenance/state/scopes/default/ideation/dispositions.jsonl";
 pub(super) const WITHDRAWALS: &str = ".provenance/state/scopes/default/ideation/withdrawals.jsonl";
 pub(super) const PROPOSALS: &str = ".provenance/state/scopes/default/ideation/proposal_cards.jsonl";
 
@@ -62,7 +63,10 @@ pub(super) fn lines(repo: &str, file: &str) -> Vec<String> {
 
 /// Writes `lines` to one state file and commits it.
 pub(super) fn store_lines(repo: &str, file: &str, lines: &[String]) {
-    let text = lines.iter().map(|line| format!("{line}\n")).collect::<String>();
+    let text = lines
+        .iter()
+        .map(|line| format!("{line}\n"))
+        .collect::<String>();
     directory_file(repo, file, &text);
     commit(repo);
 }
@@ -106,11 +110,17 @@ fn decisions_with_one_result_read_as_one(result: &str, merge: Merge) {
     if result == "accepted" {
         assert_eq!(state["current_acceptance"]["disposition"]["id"], ids[0]);
     }
-    let view = read(&repo, &["req_a", "get", "--view", "review", "--format", "json"]);
+    let view = read(
+        &repo,
+        &["req_a", "get", "--view", "review", "--format", "json"],
+    );
     assert_eq!(view["review"]["decision"], state);
     read(&repo, &["api", "requirements/req_a/document"]);
     let path = format!("proposals/{submission}");
-    assert_eq!(read(&repo, &["api", &path])["data"]["promotion_state"], result);
+    assert_eq!(
+        read(&repo, &["api", &path])["data"]["promotion_state"],
+        result
+    );
     let listed = fresh_list(&repo, "dispositions");
     assert_eq!(listed["data"]["items"].as_array().unwrap().len(), 2);
     check_passes(&repo);
@@ -162,7 +172,14 @@ fn copied_review_row_lines_read_as_one() {
     create(&repo, "req_a");
     create(&repo, "req_b");
     let submission = pending(&repo, "req_a");
-    decide(&repo, "req_a", &submission, "rejected", "Name the scope.", None);
+    decide(
+        &repo,
+        "req_a",
+        &submission,
+        "rejected",
+        "Name the scope.",
+        None,
+    );
     withdraw(&repo, "req_a", &submission, "agent", "Start again.");
     commit(&repo);
     let before = read(&repo, &["api", "requirements/req_a"])["data"]["decision"].clone();

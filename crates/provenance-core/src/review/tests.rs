@@ -23,8 +23,12 @@ fn closed_record_read_refuses_unknown_fields() {
 }
 
 mod stored_rows {
-    use crate::review::{read_review_rows, ReviewRowFamily, ReviewRowFault, RowAt, StoredReviewRows};
-    use crate::{DispositionDecision, DispositionRecord, NodeType, ProposalCard, StableId, Withdrawal};
+    use crate::review::{
+        read_review_rows, ReviewRowFamily, ReviewRowFault, RowAt, StoredReviewRows,
+    };
+    use crate::{
+        DispositionDecision, DispositionRecord, NodeType, ProposalCard, StableId, Withdrawal,
+    };
     use provenance_macros::verifies;
     use serde_json::json;
 
@@ -139,7 +143,10 @@ mod stored_rows {
     #[verifies("rule_disagreeing_review_rows_refuse_record", examples)]
     fn rows_that_disagree_refuse_only_their_record() {
         let decision_family = ReviewRowFamily::Decision;
-        let proposals = [submission("sub_a", REQ_A, 1), submission("sub_b", "req_b", 1)];
+        let proposals = [
+            submission("sub_a", REQ_A, 1),
+            submission("sub_b", "req_b", 1),
+        ];
         let cases: Vec<(Vec<DispositionRecord>, Vec<Withdrawal>, ReviewRowFault)> = vec![
             (
                 vec![
@@ -155,7 +162,10 @@ mod stored_rows {
             ),
             (
                 vec![decision("dec_a", "sub_a", "accepted", "reviewer")],
-                vec![withdrawal("wd_a", "sub_a", "agent"), withdrawal("wd_b", "sub_a", "agent")],
+                vec![
+                    withdrawal("wd_a", "sub_a", "agent"),
+                    withdrawal("wd_b", "sub_a", "agent"),
+                ],
                 ReviewRowFault::AcceptedAndWithdrawn {
                     submission: id("sub_a"),
                     approval: at(decision_family, 0),
@@ -182,7 +192,9 @@ mod stored_rows {
                 withdrawals: &withdrawals,
             });
             assert_eq!(
-                reading.record(NodeType::Requirement, &id(REQ_A)).unwrap_err(),
+                reading
+                    .record(NodeType::Requirement, &id(REQ_A))
+                    .unwrap_err(),
                 &expected
             );
             assert!(reading.record(NodeType::Requirement, &id("req_b")).is_ok());
@@ -204,7 +216,9 @@ mod stored_rows {
             withdrawals: &[],
         });
         assert_eq!(
-            reading.record(NodeType::Requirement, &id(REQ_A)).unwrap_err(),
+            reading
+                .record(NodeType::Requirement, &id(REQ_A))
+                .unwrap_err(),
             &ReviewRowFault::OneCycleTwoSubmissions {
                 cycle: 2,
                 first: at(family, 0),

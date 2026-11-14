@@ -14,7 +14,10 @@ use provenance_macros::rule;
 /// The file of a row below the scope directory, as `ideation/<file>`.
 fn file_of(at: &ShardLine) -> String {
     let path = at.path.as_path();
-    match (path.parent().and_then(|parent| parent.file_name()), path.file_name()) {
+    match (
+        path.parent().and_then(|parent| parent.file_name()),
+        path.file_name(),
+    ) {
         (Some(directory), Some(file)) => format!("{directory}/{file}"),
         _ => path.to_string(),
     }

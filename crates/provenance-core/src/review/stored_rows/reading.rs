@@ -3,8 +3,8 @@
 
 use super::row_groups::{group_by_id, IdGroup};
 use super::{
-    review_cycle, submission_order, target, RecordKey, RecordRows, ReviewReading,
-    ReviewRowFamily, ReviewRowFault, RowAt, SubmissionRows,
+    review_cycle, submission_order, target, RecordKey, RecordRows, ReviewReading, ReviewRowFamily,
+    ReviewRowFault, RowAt, SubmissionRows,
 };
 use crate::{DispositionDecision, DispositionRecord, ProposalCard, ProposalType, StableId};
 use provenance_macros::rule;
@@ -58,7 +58,8 @@ impl<'a> ReviewReading<'a> {
 
     pub(super) fn read_submissions(&mut self) {
         let proposals = self.rows.proposals;
-        let review = |proposal: &ProposalCard| proposal.proposal_type == ProposalType::RecordRevision;
+        let review =
+            |proposal: &ProposalCard| proposal.proposal_type == ProposalType::RecordRevision;
         let mut kept = Vec::new();
         for (position, proposal) in proposals.iter().enumerate() {
             if review(proposal) {
@@ -124,8 +125,12 @@ impl<'a> ReviewReading<'a> {
             if let Some(second) = group.differing {
                 let records =
                     self.records_of_lines(dispositions, &group, |row| row.proposal_id.as_str());
-                let fault =
-                    id_on_two_lines(&dispositions[first].id, ReviewRowFamily::Decision, first, second);
+                let fault = id_on_two_lines(
+                    &dispositions[first].id,
+                    ReviewRowFamily::Decision,
+                    first,
+                    second,
+                );
                 self.fault(fault, &records);
                 continue;
             }
@@ -227,7 +232,6 @@ impl<'a> ReviewReading<'a> {
             }
         }
     }
-
 }
 
 fn id_on_two_lines(

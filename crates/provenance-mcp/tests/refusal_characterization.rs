@@ -61,7 +61,11 @@ async fn disagreeing_review_rows(client: &Client, repo: &Repository) -> (Value, 
     let path = repo.dir.path().join(PROPOSALS);
     let stored = std::fs::read_to_string(&path).unwrap_or_default();
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    let edited = format!("{stored}{}\n{}\n", submission("First."), submission("Second."));
+    let edited = format!(
+        "{stored}{}\n{}\n",
+        submission("First."),
+        submission("Second.")
+    );
     std::fs::write(&path, edited).unwrap();
     let mut answer = call(client, "api", json!({"path":"requirements/req_shared"})).await;
     answer["row"] = json!("read a record whose review rows do not agree");

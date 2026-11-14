@@ -74,9 +74,21 @@ fn check_reports_two_submissions_with_one_cycle_at_the_second_line() {
 fn check_reports_each_withdrawal_that_a_read_refuses() {
     let (directory, submission) = repository();
     let missing = json!({"id":"proposal_missing"});
-    append(directory.path(), WITHDRAWALS, &withdrawal("withdrawal_lost", &missing, "Lost."));
-    append(directory.path(), WITHDRAWALS, &withdrawal("withdrawal_a", &submission, "First."));
-    append(directory.path(), WITHDRAWALS, &withdrawal("withdrawal_a", &submission, "Second."));
+    append(
+        directory.path(),
+        WITHDRAWALS,
+        &withdrawal("withdrawal_lost", &missing, "Lost."),
+    );
+    append(
+        directory.path(),
+        WITHDRAWALS,
+        &withdrawal("withdrawal_a", &submission, "First."),
+    );
+    append(
+        directory.path(),
+        WITHDRAWALS,
+        &withdrawal("withdrawal_a", &submission, "Second."),
+    );
     provenance(directory.path())
         .failure()
         .stderr(contains(

@@ -187,7 +187,11 @@ impl ReviewReading<'_> {
     }
 
     /// The review state of one record, or the first fault of its rows.
-    pub fn record(&self, kind: NodeType, id: &StableId) -> Result<RecordReview<'_>, &ReviewRowFault> {
+    pub fn record(
+        &self,
+        kind: NodeType,
+        id: &StableId,
+    ) -> Result<RecordReview<'_>, &ReviewRowFault> {
         let rows = self
             .records
             .get(kind.as_str())
@@ -231,4 +235,3 @@ impl ReviewReading<'_> {
         results.all(|result| result == first).then_some(first)
     }
 }
-

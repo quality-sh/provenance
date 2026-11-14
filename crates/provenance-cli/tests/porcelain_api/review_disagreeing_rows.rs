@@ -4,12 +4,12 @@
 //! records, the list reads and the cache catch-up continue, and the repair
 //! in the message makes the record readable again.
 
+use super::review_history::{commit, git};
 use super::review_merged_decisions::{
     decide, decide_on_two_branches, fresh_list, lines, store_lines, DISPOSITIONS, PROPOSALS,
     WITHDRAWALS,
 };
 use super::review_merged_withdrawals::{create, pending, read, repository, withdraw, Merge};
-use super::review_history::{commit, git};
 use super::*;
 
 /// The line number of the first line of `file` that holds `text`.
@@ -177,7 +177,11 @@ fn two_submissions_with_one_cycle_refuse_their_record() {
     only_req_a_refuses(&repo, &expected);
 
     // The write of req_c sorted the file again, so the line moved.
-    remove_line(&repo, PROPOSALS, line_of(&repo, PROPOSALS, "submission_by_hand"));
+    remove_line(
+        &repo,
+        PROPOSALS,
+        line_of(&repo, PROPOSALS, "submission_by_hand"),
+    );
     let state = read(&repo, &["api", "requirements/req_a"])["data"]["decision"].clone();
     assert_eq!(state["pending"]["proposal_id"], json!(submission));
 }
@@ -190,7 +194,14 @@ fn two_submissions_with_one_cycle_refuse_their_record() {
 fn a_decision_id_on_two_different_lines_refuses_its_record() {
     let (_directory, repo) = repository(Merge::Driver);
     let submission = pending(&repo, "req_a");
-    decide(&repo, "req_a", &submission, "rejected", "Name the scope.", None);
+    decide(
+        &repo,
+        "req_a",
+        &submission,
+        "rejected",
+        "Name the scope.",
+        None,
+    );
     commit(&repo);
     let mut copied = row(&repo, DISPOSITIONS, 1);
     copied["rationale"] = json!("Name the owner.");
@@ -208,7 +219,14 @@ fn a_decision_id_on_two_different_lines_refuses_its_record() {
     decide(&repo, "req_b", &other, "deferred", "Later.", None);
 
     // The decision of req_b rewrote the file, so the line moved.
-    remove_line(&repo, DISPOSITIONS, line_of(&repo, DISPOSITIONS, "Name the owner."));
+    remove_line(
+        &repo,
+        DISPOSITIONS,
+        line_of(&repo, DISPOSITIONS, "Name the owner."),
+    );
     let state = read(&repo, &["api", "requirements/req_a"])["data"]["decision"].clone();
-    assert_eq!(state["decisions"][0]["disposition"]["rationale"], "Name the scope.");
+    assert_eq!(
+        state["decisions"][0]["disposition"]["rationale"],
+        "Name the scope."
+    );
 }

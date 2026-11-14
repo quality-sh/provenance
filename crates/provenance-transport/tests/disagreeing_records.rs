@@ -234,7 +234,10 @@ async fn decisions_with_different_results_refuse_only_their_record() {
     };
     let path = repo.dir.path().join(".provenance/state").join(DISPOSITIONS);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    let lines = [decision("decision_a", "deferred"), decision("decision_b", "rejected")];
+    let lines = [
+        decision("decision_a", "deferred"),
+        decision("decision_b", "rejected"),
+    ];
     std::fs::write(&path, lines.join("\n") + "\n").unwrap();
     let reader = host(&repo, false);
     let (status, failure) = call(&reader, "GET", "/requirements/req_shared", None).await;

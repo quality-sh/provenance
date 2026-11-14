@@ -1,8 +1,8 @@
 //! One read of the stored review rows of a scope, and the review state of
 //! each record from [`provenance_core::review::read_review_rows`].
 
-use crate::state_store::{message_ids::ShardLine, readers::read_jsonl_located, StateStore};
 use crate::shards;
+use crate::state_store::{message_ids::ShardLine, readers::read_jsonl_located, StateStore};
 use provenance_core::{
     review::{read_review_rows, RecordReview, ReviewReading, StoredReviewRows},
     DispositionRecord, NodeType, ProposalCard, ScopeId, StableId, Withdrawal,

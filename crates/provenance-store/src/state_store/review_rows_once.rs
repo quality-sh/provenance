@@ -78,7 +78,8 @@ impl StateStore {
     ) -> anyhow::Result<Vec<DispositionRecord>> {
         let proposals: Vec<ProposalCard> =
             read_jsonl_shared(self, &shards::proposal_cards_path(&self.layout, scope))?;
-        let dispositions = read_jsonl_shared(self, &shards::dispositions_path(&self.layout, scope))?;
+        let dispositions =
+            read_jsonl_shared(self, &shards::dispositions_path(&self.layout, scope))?;
         Ok(dispositions_once(&proposals, dispositions))
     }
 
