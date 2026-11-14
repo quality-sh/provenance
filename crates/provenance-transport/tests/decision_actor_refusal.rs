@@ -6,6 +6,12 @@ use serde_json::{json, Value};
 use support::records::{allow_reviewer, Repository};
 use support::resource_http::{call, call_with_headers, host};
 
+/// The refusal of a decision by an actor that the field does not contain.
+const NOT_LISTED: &str = "The manifest field disposition_actor_ids does not contain the actor of \
+    a review decision. To change this field, use the command provenance init \
+    --disposition-actor-id <DISPOSITION_ACTOR_ID>. Give --disposition-actor-id one time for each \
+    actor that can make a review decision.";
+
 fn decision(actor: &str) -> Value {
     json!({"data":{
         "actor":{"identity_type":"human", "id":actor},
@@ -40,7 +46,10 @@ async fn an_actor_outside_the_allowlist_gets_access_denied() {
 
     let (status, refused) = call(&host, "POST", &path, Some(decision("intruder"))).await;
     assert_eq!(status, 403, "{refused}");
-    assert_eq!(refused["error"], json!({"kind":"access_denied"}));
+    assert_eq!(
+        refused,
+        json!({"error": {"kind": "access_denied", "message": NOT_LISTED}, "meta": {}})
+    );
 
     let (status, read) = call(&host, "GET", "/requirements/req_shared", None).await;
     assert_eq!(status, 200, "{read}");
