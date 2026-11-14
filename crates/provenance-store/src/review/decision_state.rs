@@ -219,8 +219,13 @@ impl CycleFacts {
         self.index.is_submission(proposal)
     }
 
-    pub(super) fn has_submissions(&self, kind: NodeType, record_id: &StableId) -> bool {
-        self.of_record(kind, record_id).next().is_some()
+    /// The kind and id of the record of each review submission, in stored
+    /// order.
+    pub(super) fn submitted_records(&self) -> impl Iterator<Item = (NodeType, &StableId)> + '_ {
+        self.submissions.iter().map(|submission| {
+            let target = &submission.traceability.target;
+            (NodeType::from(target.artifact_type), &target.artifact_id)
+        })
     }
 
     fn of_record<'a>(

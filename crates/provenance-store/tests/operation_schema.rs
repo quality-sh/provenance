@@ -40,7 +40,7 @@ fn round_trip<T: JsonSchema + DeserializeOwned + Serialize>(value: &Value) {
 #[test]
 fn apply_and_flat_plan_use_the_real_result_types() {
     let result = json!({"declared_by":"test","created":0,"updated":0,"moved":0,"deleted":0,
-        "conflicts":0,"unchanged":0,"resources":[]});
+        "refused":0,"conflicts":0,"unchanged":0,"resources":[]});
     round_trip::<TypedSpecResult>(&result);
     let mut plan = result;
     plan["affected_rules"] = json!([]);

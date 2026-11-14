@@ -37,12 +37,19 @@ impl StateStore {
                     for record in &before {
                         if !replacement.iter().any(|after| after.id() == record.id()) {
                             let record: ReviewRecord = record.clone().into();
+                            let message = format!(
+                                "cannot delete {} {} because a replacement of its record file \
+                                 leaves it out; keep the record in the replacement",
+                                record.kind().as_str(),
+                                record.id().as_str()
+                            );
                             return Err(crate::refusal::refuse!(
                                 (WriteFailure::EnrolledRecordDeletionConflict {
                                     record_kind: record.kind(),
                                     record_id: record.id().clone(),
+                                    message: message.clone(),
                                 }),
-                                "an enrolled graph record cannot be removed by replacement"
+                                "{message}"
                             ));
                         }
                     }

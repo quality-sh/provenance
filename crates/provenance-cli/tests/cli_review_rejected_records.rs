@@ -1,4 +1,5 @@
 use crate::review_host_support;
+use crate::support::state_files::state_files;
 
 use provenance_macros::verifies;
 use review_host_support::{repository_with_actors, request, response, start, Host};
@@ -333,7 +334,7 @@ fn replaced_rejection(accepted: bool, revises: bool) {
     if accepted {
         decide(&host, "res_new", "accepted");
     }
-    let before = state_files(&repo.path().join(".provenance/state"));
+    let before = state_files(repo.path());
     let record = get(&host, "/resolutions/res_new");
     let result = response(
         request(
@@ -359,18 +360,5 @@ fn replaced_rejection(accepted: bool, revises: bool) {
     let body: Value = serde_json::from_str(&result.into_string().unwrap()).unwrap();
     assert_eq!(body["error"]["kind"], "review_submission_conflict");
     assert_eq!(get(&host, "/resolutions/res_new"), record);
-    assert_eq!(state_files(&repo.path().join(".provenance/state")), before);
-}
-
-fn state_files(root: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u8>> {
-    let mut files = std::collections::BTreeMap::new();
-    for entry in std::fs::read_dir(root).unwrap() {
-        let path = entry.unwrap().path();
-        if path.is_dir() {
-            files.extend(state_files(&path));
-        } else {
-            files.insert(path.clone(), std::fs::read(path).unwrap());
-        }
-    }
-    files
+    assert_eq!(state_files(repo.path()), before);
 }

@@ -3,7 +3,7 @@ use porcelain_authoring_support::{initialized_repo, json_output, provenance};
 use provenance_macros::verifies;
 
 fn parent_repo() -> (tempfile::TempDir, String) {
-    let (directory, repo) = initialized_repo();
+    let (directory, repo) = initialized_repo(None);
     for id in ["req_p", "req_q", "req_b", "req_shared", "req_child"] {
         json_output(&[
             id,

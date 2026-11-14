@@ -6,21 +6,24 @@ pub fn provenance() -> Command {
     Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
 }
 
-pub fn initialized_repo() -> (tempfile::TempDir, String) {
+/// An initialized repository. A `reviewer` is the one actor that can decide
+/// review submissions.
+pub fn initialized_repo(reviewer: Option<&str>) -> (tempfile::TempDir, String) {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_string_lossy().into_owned();
-    provenance()
-        .args([
-            "init",
-            "--path",
-            &repo,
-            "--scope",
-            "default",
-            "--path-prefix",
-            ".",
-        ])
-        .assert()
-        .success();
+    let mut arguments = vec![
+        "init",
+        "--path",
+        &repo,
+        "--scope",
+        "default",
+        "--path-prefix",
+        ".",
+    ];
+    if let Some(reviewer) = reviewer {
+        arguments.extend(["--disposition-actor-id", reviewer]);
+    }
+    provenance().args(arguments).assert().success();
     (directory, repo)
 }
 

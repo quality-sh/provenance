@@ -86,7 +86,7 @@ fn assert_target(url: &url::Url, root: &str, focus: Option<&str>) {
 #[test]
 #[verifies("rule_review_document_choice", examples)]
 fn nested_requirements_each_open_their_own_document() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
     nested(&repo);
     let host = review_host_support::start(std::path::Path::new(&repo));
     for id in ["req_a_root", "req_m_middle", "req_z_leaf"] {
@@ -97,7 +97,7 @@ fn nested_requirements_each_open_their_own_document() {
 #[test]
 #[verifies("rule_review_document_choice", examples)]
 fn nested_rule_and_question_open_the_leaf_document() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
     nested(&repo);
     json_output(&[
         "rule_leaf",
@@ -122,7 +122,7 @@ fn nested_rule_and_question_open_the_leaf_document() {
 #[test]
 #[verifies("rule_review_document_choice", examples)]
 fn nested_write_returns_a_link_without_a_warning() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
     nested(&repo);
     let host = review_host_support::start(std::path::Path::new(&repo));
     let output = host
@@ -157,7 +157,7 @@ fn nested_write_returns_a_link_without_a_warning() {
 #[test]
 #[verifies("rule_review_document_choice", examples)]
 fn single_requirement_keeps_its_document() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
     create(std::path::Path::new(&repo), "req_only", "requirement", &[]);
     let host = review_host_support::start(std::path::Path::new(&repo));
     assert_target(&link(&host, &repo, "req_only"), "req_only", None);
@@ -166,7 +166,7 @@ fn single_requirement_keeps_its_document() {
 #[test]
 #[verifies("rule_review_document_choice", examples)]
 fn equal_distances_use_the_lowest_id_regardless_of_creation_order() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
     create(std::path::Path::new(&repo), "req_z", "requirement", &[]);
     create(std::path::Path::new(&repo), "req_a", "requirement", &[]);
     provenance()
@@ -199,7 +199,7 @@ fn equal_distances_use_the_lowest_id_regardless_of_creation_order() {
 #[test]
 #[verifies("rule_review_document_choice", examples)]
 fn a_source_cited_only_by_a_deep_leaf_gets_a_link() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
     json_output(&[
         "source_leaf",
         "create",
@@ -254,7 +254,7 @@ fn a_source_cited_only_by_a_deep_leaf_gets_a_link() {
 #[test]
 #[verifies("rule_review_document_choice", examples)]
 fn a_rule_naming_root_and_leaf_opens_the_deepest_document() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
     nested(&repo);
     create(
         std::path::Path::new(&repo),
@@ -278,7 +278,7 @@ fn a_rule_naming_root_and_leaf_opens_the_deepest_document() {
 #[test]
 #[verifies("rule_review_document_choice", examples)]
 fn a_nested_resolution_opens_the_leaf_document() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
     nested(&repo);
     json_output(&[
         "res_leaf",

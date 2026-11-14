@@ -12,7 +12,7 @@ use std::net::TcpListener;
 #[test]
 #[verifies("rule_review_link_needs_no_record_id", examples)]
 fn write_output_links_to_the_containing_requirement() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
     json_output(&[
         "req_link",
         "create",
@@ -48,7 +48,7 @@ fn write_output_links_to_the_containing_requirement() {
 #[test]
 #[verifies("rule_agent_review_request_includes_link", examples)]
 fn explicit_read_links_to_the_containing_requirement() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
     json_output(&[
         "req_link",
         "create",
@@ -106,7 +106,7 @@ fn explicit_read_links_to_the_containing_requirement() {
 #[test]
 #[verifies("rule_review_link_opens_repository_host_only", examples)]
 fn a_stale_listener_does_not_produce_a_link() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
     json_output(&[
         "req_link",
         "create",
@@ -144,7 +144,7 @@ fn identity_mismatches_do_not_produce_links() {
         ("scope", "other"),
         ("instanceNonce", "other"),
     ] {
-        let (_directory, repo) = initialized_repo();
+        let (_directory, repo) = initialized_repo(None);
         json_output(&[
             "req_link",
             "create",
@@ -240,7 +240,7 @@ fn assert_review_link(output: &serde_json::Value, root: &str) {
 #[test]
 #[verifies("rule_cli_record_review_action_returns_url", examples)]
 fn create_returns_the_review_link() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
     let host = local_host(&repo);
 
     let created = create_requirement(&repo, "req_flow");
@@ -251,7 +251,7 @@ fn create_returns_the_review_link() {
 #[test]
 #[verifies("rule_cli_record_review_action_returns_url", examples)]
 fn update_returns_the_review_link() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
     let created = create_requirement(&repo, "req_flow");
     let etag = created["data"]["edit"]["etag"].as_str().unwrap();
     let host = local_host(&repo);
@@ -276,7 +276,7 @@ fn update_returns_the_review_link() {
 #[test]
 #[verifies("rule_cli_record_review_action_returns_url", examples)]
 fn submit_returns_the_review_link() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
     ready_to_submit(&repo);
     let host = local_host(&repo);
     let submitted = json_stdin_output(

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { build } from 'esbuild';
-import { effectFiles } from './effect.mjs';
+import { effectFiles, effectServerDocument } from './effect.mjs';
 import { operationValidators } from './validators.mjs';
 
 const reference = name => ({ $ref: `#/components/schemas/${name}` });
@@ -178,4 +178,48 @@ export function selectedGroup() {
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+// A check of the generator itself, with no Rule: a failure variant can carry a
+// union tagged `kind` in its payload, as the plan entries of a typed spec do.
+test('a kind union in the payload of a failure variant keeps each member', () => {
+  const variant = kind => ({ type: 'object', required: ['kind'], properties: { kind: { const: kind } } });
+  const conflict = {
+    type: 'object',
+    required: ['kind', 'conflicts'],
+    properties: {
+      kind: { const: 'ownership_conflict' },
+      conflicts: { type: 'array', items: { type: 'object', properties: { refusal: reference('Refusal') } } },
+    },
+  };
+  const document = {
+    openapi: '3.1.0',
+    info: { title: 'Payload fixture', version: '1' },
+    paths: {
+      '/authoring-changes': {
+        post: {
+          operationId: 'applyAuthoring',
+          responses: { 400: response('ApplyFailure'), 409: response('ApplyFailure') },
+        },
+      },
+    },
+    components: {
+      schemas: {
+        ApplyFailure: {
+          type: 'object',
+          required: ['error', 'meta'],
+          properties: { error: { oneOf: [variant('invalid_input'), conflict] }, meta: { type: 'object' } },
+        },
+        Refusal: { oneOf: [variant('review_submission'), variant('disposition')] },
+      },
+    },
+  };
+
+  const served = effectServerDocument(document);
+
+  const failure = served.paths['/authoring-changes'].post.responses['409'].content['application/json'].schema;
+  const variants = failure.properties.error.oneOf;
+  assert.deepEqual(variants.map(variant => variant.properties.kind.const), ['ownership_conflict']);
+  const refusal = variants[0].properties.conflicts.items.properties.refusal;
+  assert.deepEqual(refusal.oneOf.map(member => member.properties.kind.const), ['review_submission', 'disposition']);
 });

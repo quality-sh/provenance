@@ -84,7 +84,7 @@ async fn target_first_action_names_match_on_the_live_cli_and_mcp_surfaces() {
 #[verifies("rule_porcelain_cli_target_action_order", examples)]
 #[verifies("rule_porcelain_named_domain_actions", examples)]
 fn named_actions_work_for_ordinary_targets() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
     json_output(&[
         "req_routing",
         "create",
@@ -176,7 +176,7 @@ fn named_actions_work_for_ordinary_targets() {
 
 #[test]
 fn reserved_commands_global_flags_and_api_forms_keep_their_meaning() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
     provenance().arg("--help").assert().success();
     provenance()
         .args(["check", "--repo", &repo])

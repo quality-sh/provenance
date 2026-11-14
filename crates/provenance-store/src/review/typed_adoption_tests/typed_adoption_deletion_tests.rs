@@ -8,6 +8,7 @@ fn assert_enrolled_deletion(error: anyhow::Error, expected_kind: NodeType, expec
         WriteFailure::EnrolledRecordDeletionConflict {
             record_kind,
             record_id,
+            ..
         } if record_kind == expected_kind && &record_id == expected_id
     ));
     assert_eq!(error.status(), 409);
