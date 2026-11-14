@@ -31,7 +31,7 @@ fn cargo_injected_argument_initializes_one_package_at_the_cli_version() {
         .exists());
     assert!(fixture
         .cargo_calls()
-        .contains("add provenance-sdk@=0.4.0 --manifest-path"));
+        .contains("add provenance-sdk@=0.4.0 --dev --manifest-path"));
 }
 
 #[test]
@@ -283,7 +283,7 @@ fn explicit_package_selects_its_manifest_directory_as_the_path_prefix() {
     assert_eq!(fixture.scope_path_prefix(), "crates/api");
     assert!(fixture
         .cargo_calls()
-        .contains("add provenance-sdk@=0.4.0 --manifest-path"));
+        .contains("add provenance-sdk@=0.4.0 --dev --manifest-path"));
 }
 
 #[test]
@@ -338,7 +338,8 @@ fn rerun_refuses_to_change_the_existing_target_package() {
     assert_eq!(fixture.scope_path_prefix(), "crates/api");
     assert!(!fixture
         .cargo_calls()
-        .contains("add provenance-sdk@0.4.0 --package worker --exact"));
+        .lines()
+        .any(|call| call.starts_with("add ") && call.contains("worker")));
 }
 
 #[test]
@@ -388,7 +389,7 @@ fn cargo_init_reports_only_published_changes_then_no_change() {
         String::from_utf8_lossy(&first.stderr)
     );
     let first = String::from_utf8(first.stdout).unwrap();
-    assert!(first.contains("  Cargo.toml (added the Provenance SDK dependency)\n"));
+    assert!(first.contains("  Cargo.toml (added the Provenance SDK development dependency)\n"));
     assert!(first.contains("  Cargo.lock (created by Cargo)\n"));
     assert!(first.contains("  .provenance/state/manifest.json (manifest for scope \"default\")\n"));
     assert!(!first.contains("Dictionary:"));
