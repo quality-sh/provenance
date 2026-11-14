@@ -2,8 +2,7 @@
 //! does not contain gets an `access_denied` refusal that names the field and the
 //! init command. The refusal gives no actor ID of the field.
 
-#[path = "review_host_support/mod.rs"]
-mod review_host_support;
+use crate::review_host_support;
 
 use provenance_macros::verifies;
 use provenance_mcp::Client;
