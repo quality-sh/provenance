@@ -324,6 +324,14 @@ jobs:
         run: node tools/review-host/verify-review-writes.ts target/debug/provenance target/review-sdk
       - name: Verify the page session through a launch link, a reload, and a refusal
         run: node tools/review-host/verify-page-session.ts target/debug/provenance
+      # The tests of tools/api-latency read a committed sample of the catalog.
+      # This step gives them the catalog of this build instead, so a contract
+      # change that the latency tool cannot read fails here.
+      - name: Test the API latency catalog reader on the catalog of this build
+        shell: bash
+        run: |
+          node tools/api-latency/fixtures/capture.mjs target/debug/provenance . "$RUNNER_TEMP/catalog.json"
+          API_LATENCY_CATALOG="$RUNNER_TEMP/catalog.json" node --test tools/api-latency/catalog.test.mjs
       - name: Upload the CLI and isolated test host for the consumer jobs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
