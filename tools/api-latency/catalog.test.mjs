@@ -4,9 +4,12 @@ import { readFileSync } from 'node:fs';
 import { requestBody } from './body.mjs';
 import { catalogWithSchemas, fillPath, helpCommands, mcpToolActions, operationsFromCatalog, pathParameters, possibleValues, routeFilter } from './catalog.mjs';
 
-// Answers of a provenance binary, pinned by fixtures/capture.mjs: a listing of three
-// routes without schemas, and the answer to the filter of each route's method and path.
-const { listing, answers } = JSON.parse(readFileSync(new URL('fixtures/catalog.json', import.meta.url), 'utf8'));
+// A sample of the answers of one provenance binary, written by fixtures/capture.mjs: a
+// listing of three routes without schemas, and the answer to the filter of each route's
+// method and path. API_LATENCY_CATALOG names a different capture, so that CI can test the
+// reader on the catalog of the CLI that it builds.
+const catalogFile = process.env.API_LATENCY_CATALOG ?? new URL('fixtures/catalog.json', import.meta.url);
+const { listing, answers } = JSON.parse(readFileSync(catalogFile, 'utf8'));
 const readRoute = async filter => answers[filter];
 const READ_ONLY_POSTS = ['/statement-checks'];
 
