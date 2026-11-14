@@ -14,8 +14,8 @@ use std::time::Duration;
 ///
 /// Each call runs Git before it returns its future, so a caller runs it
 /// where a blocking call is permitted. A directory outside Git, Git that
-/// cannot run, or a repository with no commit gives no versions. A shallow
-/// clone gives the commits it holds.
+/// cannot run, or a `HEAD` that names no commit gives no versions and no
+/// texts. A shallow clone gives the commits it holds.
 ///
 /// The texts come from one `git cat-file --batch` process that the adapter
 /// starts at its first text. The process gives one text per call, so the
@@ -65,7 +65,9 @@ impl GitFileVersions {
             return Ok(None);
         }
         let taken = lock(self.texts()).batch.take();
-        let mut batch = taken.map_or_else(|| self.start(), Ok)?;
+        let Some(mut batch) = taken.map_or_else(|| self.start(), |batch| Ok(Some(batch)))? else {
+            return Ok(None);
+        };
         let bytes = if is_commit_id(commit, batch.id_length()) {
             batch.bytes(commit, relative)?
         } else {
@@ -77,21 +79,20 @@ impl GitFileVersions {
 
     /// Starts the batch process. The prefix of a root and the length of its
     /// commit ids do not change, so the last version read of the root gives
-    /// them when there is one.
-    fn start(&self) -> anyhow::Result<Batch> {
+    /// them when there is one. `None` when `HEAD` names no commit, as in a
+    /// repository with no commit or on a branch with no commit: then the
+    /// adapter gives no versions, so it gives no texts.
+    fn start(&self) -> anyhow::Result<Option<Batch>> {
         let known = lock(&LAST_READ)
             .as_ref()
             .filter(|read| read.root == self.root)
             .map(|read| (read.prefix.clone(), read.head.len()));
-        let (prefix, id_length) = if let Some(known) = known {
-            known
-        } else {
-            let head = repository_head(&self.root).ok_or_else(|| {
-                crate::refusal::fault!("record history repository is unavailable")
-            })?;
-            (head.prefix, head.commit.len())
+        let Some((prefix, id_length)) = known
+            .or_else(|| repository_head(&self.root).map(|head| (head.prefix, head.commit.len())))
+        else {
+            return Ok(None);
         };
-        Batch::start(&self.root, prefix, id_length)
+        Batch::start(&self.root, prefix, id_length).map(Some)
     }
 
     /// Puts the process back after a read, and starts the idle stop when no
