@@ -181,7 +181,9 @@ async fn merge_jsonl(input: MergeJsonlInput) -> anyhow::Result<()> {
     match Porcelain::new(ArtifactPort).merge_jsonl(input).await {
         Ok(report) => {
             println!("{}", report.outcome);
-            report.conflict.map_or(Ok(()), |conflict| Err(anyhow::anyhow!(conflict)))
+            report
+                .conflict
+                .map_or(Ok(()), |conflict| Err(anyhow::anyhow!(conflict)))
         }
         Err(failure) => {
             if let Some(outcome) = failure.outcome {

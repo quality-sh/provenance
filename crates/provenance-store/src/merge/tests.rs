@@ -147,9 +147,7 @@ fn parts(outcome: MergeOutcome<Vec<Value>>) -> (Vec<Value>, Vec<MergeConflict>) 
     match outcome {
         MergeOutcome::Clean { records } => (records, Vec::new()),
         MergeOutcome::Conflicted {
-            conflicts,
-            partial,
-            ..
+            conflicts, partial, ..
         } => (partial, conflicts),
     }
 }

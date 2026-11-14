@@ -87,7 +87,10 @@ fn assert_field_identity(path: &Utf8Path, field: &str, rows: &[Value]) {
 fn assert_batch_identity(path: &Utf8Path, rows: &[Value]) {
     for row in rows {
         let parsed = serde_json::from_value::<IdeationLandingBatch>(row.clone());
-        assert!(parsed.is_ok(), "{path}: a row is not a landing batch: {row}");
+        assert!(
+            parsed.is_ok(),
+            "{path}: a row is not a landing batch: {row}"
+        );
     }
 }
 

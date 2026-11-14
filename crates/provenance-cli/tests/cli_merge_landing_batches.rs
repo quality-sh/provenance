@@ -126,7 +126,12 @@ fn two_batches_that_add_one_proposal_differently_conflict_and_keep_ours() {
     );
     commit(repo, "theirs");
     git_ok(repo, &["checkout", "main"]);
-    let ours = land_run(&landing, "ours", &evidence, Some(proposal_run("Of ours", "claim_contrib_p")));
+    let ours = land_run(
+        &landing,
+        "ours",
+        &evidence,
+        Some(proposal_run("Of ours", "claim_contrib_p")),
+    );
     commit(repo, "ours");
 
     let merge = merge_into(repo, "main", "theirs");

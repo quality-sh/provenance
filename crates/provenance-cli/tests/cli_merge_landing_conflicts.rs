@@ -106,7 +106,10 @@ fn one_proposal_with_equal_content_in_two_different_batches_conflicts_in_each_di
         };
         assert_eq!(
             outcome["failed_checks"],
-            json!([check("ours_then_theirs", "theirs"), check("theirs_then_ours", "ours")]),
+            json!([
+                check("ours_then_theirs", "theirs"),
+                check("theirs_then_ours", "ours")
+            ]),
             "into {into}"
         );
         assert!(
@@ -195,7 +198,10 @@ fn a_batch_of_theirs_with_one_conflicting_record_is_named_with_each_of_its_recor
     );
     assert_eq!(stderr, text);
     let read = json(repo, &["api", "contributions"]);
-    assert_eq!(read_record(&read["data"]["items"], "contrib_c"), &our_record);
+    assert_eq!(
+        read_record(&read["data"]["items"], "contrib_c"),
+        &our_record
+    );
 }
 
 #[test]
@@ -203,15 +209,30 @@ fn a_batch_of_theirs_with_one_conflicting_record_is_named_with_each_of_its_recor
 fn the_next_step_of_the_conflict_text_adds_their_change() {
     let landing = landing_repository();
     let repo = landing.repo();
-    land_run(&landing, "base", &[contribution("contrib_c", "Base.")], None);
+    land_run(
+        &landing,
+        "base",
+        &[contribution("contrib_c", "Base.")],
+        None,
+    );
     commit(repo, "base");
     git_ok(repo, &["checkout", "-b", "theirs"]);
     let their_record = contribution("contrib_c", "Finding of theirs.");
     let other = contribution("contrib_d", "No conflict.");
-    land_run(&landing, "theirs", &[their_record.clone(), other.clone()], None);
+    land_run(
+        &landing,
+        "theirs",
+        &[their_record.clone(), other.clone()],
+        None,
+    );
     commit(repo, "theirs");
     git_ok(repo, &["checkout", "-b", "ours", "main"]);
-    land_run(&landing, "ours", &[contribution("contrib_c", "Ours.")], None);
+    land_run(
+        &landing,
+        "ours",
+        &[contribution("contrib_c", "Ours.")],
+        None,
+    );
     commit(repo, "ours");
     conflict_keeps_ours(&landing, "ours", "theirs");
 
@@ -244,7 +265,12 @@ fn a_side_that_lands_a_base_batch_again_conflicts_with_a_change_of_the_other_sid
     commit(repo, "base");
     git_ok(repo, &["checkout", "-b", "theirs"]);
     let their_record = contribution("contrib_c", "Finding of theirs.");
-    land_run(&landing, "theirs", std::slice::from_ref(&their_record), None);
+    land_run(
+        &landing,
+        "theirs",
+        std::slice::from_ref(&their_record),
+        None,
+    );
     commit(repo, "theirs");
     git_ok(repo, &["checkout", "-b", "ours", "main"]);
     let again = land_run(&landing, "base", std::slice::from_ref(&base_record), None);
@@ -270,7 +296,12 @@ fn a_batch_that_one_side_removes_by_hand_conflicts_when_the_read_changes() {
     let repo = landing.repo();
     let kept = land(&landing, "kept");
     let removed_record = contribution("contrib_removed", "The requirement holds.");
-    land_run(&landing, "removed", std::slice::from_ref(&removed_record), None);
+    land_run(
+        &landing,
+        "removed",
+        std::slice::from_ref(&removed_record),
+        None,
+    );
     commit(repo, "base");
     git_ok(repo, &["checkout", "-b", "theirs"]);
     land(&landing, "theirs");
