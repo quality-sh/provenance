@@ -1,5 +1,7 @@
 use super::{document, initialized_store};
+use crate::state_store::readers::StateLineInvalid;
 use provenance_core::ScopeId;
+use provenance_macros::verifies;
 
 #[test]
 fn typed_spec_accepts_dispositions_for_each_surviving_canonical_kind() {
@@ -21,6 +23,7 @@ fn typed_spec_accepts_dispositions_for_each_surviving_canonical_kind() {
 }
 
 #[test]
+#[verifies("rule_inconsistent_records_refusal_names_records", examples)]
 fn typed_spec_refuses_dispositions_for_each_wrong_scope_canonical_kind() {
     for (artifact_type, record) in canonical_records("other") {
         let (_dir, store, scope) = initialized_store();
@@ -30,38 +33,48 @@ fn typed_spec_refuses_dispositions_for_each_wrong_scope_canonical_kind() {
         );
         write_disposition(&store, &scope, artifact_type);
 
-        let error = store
-            .apply_typed_spec(
-                &scope,
-                document("spec://rust/no-op", Vec::new(), Vec::new()),
-            )
-            .unwrap_err()
-            .to_string();
-
-        assert!(
-            error.contains(&format!("cannot delete canonical {artifact_type}")),
-            "{artifact_type}: {error}"
-        );
+        assert_names_no_record(&store, &scope, artifact_type);
     }
 }
 
 #[test]
+#[verifies("rule_inconsistent_records_refusal_names_records", examples)]
 fn typed_spec_refuses_dispositions_for_each_missing_canonical_kind() {
     for artifact_type in canonical_artifact_types() {
         let (_dir, store, scope) = initialized_store();
         write_disposition(&store, &scope, artifact_type);
 
-        let error = store
-            .apply_typed_spec(
-                &scope,
-                document("spec://rust/no-op", Vec::new(), Vec::new()),
-            )
-            .unwrap_err()
-            .to_string();
+        assert_names_no_record(&store, &scope, artifact_type);
+    }
+}
 
-        assert!(
-            error.contains(&format!("cannot delete canonical {artifact_type}")),
-            "{artifact_type}: {error}"
+/// The plan and the apply refuse the scope at the line of the Disposition,
+/// which names a record that the scope does not have.
+fn assert_names_no_record(
+    store: &crate::state_store::StateStore,
+    scope: &ScopeId,
+    artifact_type: &str,
+) {
+    let no_op = || document("spec://rust/no-op", Vec::new(), Vec::new());
+    let path = crate::shards::dispositions_path(&store.layout, scope);
+    let planned = store.plan_typed_spec(scope, no_op()).unwrap_err();
+    let applied = store.apply_typed_spec(scope, no_op()).unwrap_err();
+
+    for error in [planned, applied] {
+        let fault = StateLineInvalid::find(&error)
+            .unwrap_or_else(|| panic!("{artifact_type}: {error:#}"));
+        assert_eq!(
+            (&fault.path, fault.line, fault.message.as_str()),
+            (
+                &path,
+                1,
+                format!(
+                    "disposition disposition_artifact names {artifact_type} artifact_test, \
+                     which the scope does not have"
+                )
+                .as_str()
+            ),
+            "{artifact_type}"
         );
     }
 }

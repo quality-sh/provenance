@@ -148,7 +148,7 @@ fn expected_cascade(removed: &str, retained: &str) -> Value {
 
 #[test]
 fn deleting_a_requirement_removes_its_ids_from_surviving_records() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
     let (removed, retained) = cited_requirement(&repo);
     let after = document(&json!([other_requirement()]));
 

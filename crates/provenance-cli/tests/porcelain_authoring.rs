@@ -11,7 +11,7 @@ use provenance_macros::verifies;
 #[verifies("rule_porcelain_create_names_new_record", examples)]
 /// This flow checks target-first creation grammar and its required record type.
 fn target_first_create_uses_the_target_id_and_requires_an_explicit_type() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
 
     let source = json_output(&[
         "source_target",
@@ -47,7 +47,7 @@ fn target_first_create_uses_the_target_id_and_requires_an_explicit_type() {
 #[test]
 #[verifies("rule_porcelain_parent_is_separate_input", examples)]
 fn target_first_create_keeps_the_parent_separate_from_the_child_id() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
 
     let parent = json_output(&[
         "req_parent",
@@ -90,7 +90,7 @@ fn target_first_create_keeps_the_parent_separate_from_the_child_id() {
 #[test]
 #[verifies("rule_porcelain_relationship_patch_modes", examples)]
 fn relationship_updates_preserve_unmodified_members_until_explicit_replacement() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
     for (id, statement) in [
         ("req_first", "The first dependency exists."),
         ("req_second", "The second dependency exists."),
@@ -195,7 +195,7 @@ fn relationship_updates_preserve_unmodified_members_until_explicit_replacement()
 #[verifies("rule_porcelain_update_preserves_omissions", examples)]
 /// This flow checks omission and null semantics in both readable and JSON updates.
 fn target_first_update_preserves_omissions_and_honors_null_clear() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
     json_output(&[
         "source_patch",
         "create",
@@ -277,7 +277,7 @@ fn target_first_update_preserves_omissions_and_honors_null_clear() {
 #[test]
 #[verifies("rule_porcelain_update_keeps_preconditions", examples)]
 fn target_first_mutations_keep_parent_version_and_existence_preconditions() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
     provenance()
         .args([
             "req_bad_parent",
@@ -344,7 +344,7 @@ fn target_actions_keep_help_global_context_and_flag_like_values() {
         .stdout(predicates::str::contains("<TARGET> [ACTION]"))
         .stdout(predicates::str::contains("--type"));
 
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
     let source = json_output(&[
         "--repo",
         &repo,

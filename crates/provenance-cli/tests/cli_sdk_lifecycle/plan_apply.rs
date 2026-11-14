@@ -1,11 +1,11 @@
 //! The plan of a typed authoring document shows each deletion that the apply
 //! of the same document refuses, with the cause that the apply gives.
 
-use super::porcelain_authoring_support::provenance;
+use super::porcelain_authoring_support::{initialized_repo, provenance};
+use crate::support::state_files::state_files;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
 
 const OWNER: &str = "spec://typescript/share-links";
 const KEPT: (&str, &str) = ("kept", "The system retains records.");
@@ -22,27 +22,6 @@ fn document(requirements: &[(&str, &str)]) -> Value {
         "requirements": requirements,
         "rules": []
     })
-}
-
-/// An initialized repository whose reviewer is `reviewer`.
-fn initialized_repo() -> (tempfile::TempDir, String) {
-    let directory = tempfile::tempdir().unwrap();
-    let repo = directory.path().to_string_lossy().into_owned();
-    provenance()
-        .args([
-            "init",
-            "--path",
-            &repo,
-            "--scope",
-            "default",
-            "--path-prefix",
-            ".",
-            "--disposition-actor-id",
-            "reviewer",
-        ])
-        .assert()
-        .success();
-    (directory, repo)
 }
 
 struct Answer {
@@ -155,28 +134,6 @@ fn withdraw(repo: &str, id: &str, proposal: &str) {
     );
 }
 
-/// The bytes of each state file below the repository. The cache is a derived
-/// copy of the state, so it is left out.
-fn state_files(repo: &str) -> BTreeMap<PathBuf, Vec<u8>> {
-    fn walk(root: &Path, directory: &Path, files: &mut BTreeMap<PathBuf, Vec<u8>>) {
-        for entry in std::fs::read_dir(directory).unwrap() {
-            let path = entry.unwrap().path();
-            let relative = path.strip_prefix(root).unwrap().to_path_buf();
-            if relative.starts_with(".provenance/cache") || relative.starts_with(".git") {
-                continue;
-            }
-            if path.is_dir() {
-                walk(root, &path, files);
-            } else {
-                files.insert(relative, std::fs::read(&path).unwrap());
-            }
-        }
-    }
-    let mut files = BTreeMap::new();
-    walk(Path::new(repo), Path::new(repo), &mut files);
-    files
-}
-
 fn resource<'a>(plan: &'a Value, key: &str) -> &'a Value {
     plan["data"]["resources"]
         .as_array()
@@ -188,10 +145,10 @@ fn resource<'a>(plan: &'a Value, key: &str) -> &'a Value {
 
 fn submission_refusal(id: &str) -> Value {
     json!({
-        "cause": "review_submission",
+        "kind": "review_submission",
         "message": format!(
             "cannot delete requirement {id} because it has a review submission; \
-             keep the requirement in the typed document"
+             keep requirement {id} in the typed document"
         )
     })
 }
@@ -199,7 +156,7 @@ fn submission_refusal(id: &str) -> Value {
 #[test]
 #[verifies("rule_typed_plan_shows_refused_deletions", examples)]
 fn the_plan_shows_each_deletion_that_the_apply_refuses_with_its_cause() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(Some("reviewer"));
     let all = [
         ("pending", "The host stops."),
         ("rejected", "The host starts."),
@@ -231,15 +188,15 @@ fn the_plan_shows_each_deletion_that_the_apply_refuses_with_its_cause() {
         assert_eq!(entry["refusal"], submission_refusal(&ids[key]), "{plan}");
     }
     let disposition_message = format!(
-        "cannot delete canonical requirement {} because disposition {disposition} names it; \
-         keep the requirement in the typed document",
-        ids["accepted"]
+        "cannot delete canonical requirement {id} because disposition {disposition} names it; \
+         keep requirement {id} in the typed document",
+        id = ids["accepted"]
     );
     let entry = resource(&plan, "accepted");
     assert_eq!(entry["state"], "refused", "{plan}");
     assert_eq!(
         entry["refusal"],
-        json!({"cause": "disposition", "disposition_id": disposition,
+        json!({"kind": "disposition", "disposition_id": disposition,
                "message": disposition_message}),
         "{plan}"
     );
@@ -266,7 +223,7 @@ fn the_plan_shows_each_deletion_that_the_apply_refuses_with_its_cause() {
 #[test]
 #[verifies("rule_typed_plan_shows_refused_deletions", examples)]
 fn a_plan_with_no_refused_deletion_applies() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
     let ids = apply(&repo, &[("plain", "The system stores records."), KEPT]);
     let kept_only = document(&[KEPT]);
 
@@ -282,5 +239,108 @@ fn a_plan_with_no_refused_deletion_applies() {
         &[&ids["plain"], "get", "--repo", &repo, "--format", "json"],
         None,
     );
-    assert_ne!(read.code, Some(0), "{}", read.stdout);
+    assert_eq!(read.code, Some(1), "{}", read.stdout);
+    let error: Value = serde_json::from_str(&read.stderr).unwrap();
+    assert_eq!(error["error"]["kind"], "resource_not_found", "{error}");
+}
+
+fn create(repo: &str, id: &str, kind: &str, fields: &[&str]) {
+    let mut arguments = vec![
+        id, "create", "--type", kind, "--repo", repo, "--format", "json",
+    ];
+    arguments.extend_from_slice(fields);
+    succeeded(&run(&arguments, None));
+}
+
+/// The cascade entry of a record that a review submission keeps, because it
+/// cites the deleted Requirement `requirement`.
+fn kept_by_submission(kind: &str, id: &str, requirement: &str) -> Value {
+    json!({
+        "kind": kind, "id": id, "state": "refused",
+        "refusal": {
+            "kind": "review_submission",
+            "message": format!(
+                "cannot delete {kind} {id} because it has a review submission; \
+                 keep requirement {requirement} in the typed document"
+            )
+        }
+    })
+}
+
+#[test]
+#[verifies("rule_typed_plan_shows_refused_deletions", examples)]
+fn the_plan_shows_each_cascade_deletion_that_the_apply_refuses() {
+    let (_directory, repo) = initialized_repo(None);
+    let ids = apply(&repo, &[("sharing", "The host stops."), KEPT]);
+    let sharing = ids["sharing"].as_str();
+    let cites_sharing = json!([sharing]).to_string();
+    create(
+        &repo,
+        "res_only",
+        "resolution",
+        &[
+            "--title",
+            "Sharing decision",
+            "--position",
+            "The host stops.",
+            "--rationale",
+            "The host stops.",
+            "--requirement-ids-json",
+            &cites_sharing,
+        ],
+    );
+    create(
+        &repo,
+        "topic_only",
+        "topic",
+        &["--title", "Sharing topic", "--requirement-id", sharing],
+    );
+    create(
+        &repo,
+        "question_only",
+        "question",
+        &[
+            "--topic-id",
+            "topic_only",
+            "--question",
+            "Does the host stop?",
+            "--resolution-method",
+            "research",
+        ],
+    );
+    let kept_only = document(&[KEPT]);
+    let before = state_files(&repo);
+
+    let plan = succeeded(&route(&repo, "authoring-plans", &kept_only, true));
+    let refused = route(&repo, "authoring-changes", &kept_only, true);
+
+    assert_eq!(resource(&plan, "sharing")["state"], "deleted", "{plan}");
+    assert!(resource(&plan, "sharing").get("refusal").is_none(), "{plan}");
+    assert_eq!(resource(&plan, "kept")["state"], "unchanged", "{plan}");
+    let topic = kept_by_submission("topic", "topic_only", sharing);
+    assert_eq!(
+        plan["data"]["cascade"],
+        json!([
+            kept_by_submission("resolution", "res_only", sharing),
+            topic,
+            kept_by_submission("question", "question_only", sharing)
+        ]),
+        "{plan}"
+    );
+    let counts = ["deleted", "refused", "conflicts", "unchanged"].map(|count| &plan["data"][count]);
+    assert_eq!(
+        counts,
+        [&json!(1), &json!(3), &json!(0), &json!(1)],
+        "{plan}"
+    );
+
+    assert_eq!(refused.code, Some(1), "{}", refused.stdout);
+    let error = refused.stderr.strip_prefix("Error: ").unwrap();
+    assert_eq!(
+        serde_json::from_str::<Value>(error).unwrap(),
+        json!({"error": {"kind": "enrolled_record_deletion_conflict", "record_kind": "topic",
+                         "record_id": "topic_only", "message": topic["refusal"]["message"]},
+               "meta": {}})
+    );
+    assert_eq!(state_files(&repo), before);
 }

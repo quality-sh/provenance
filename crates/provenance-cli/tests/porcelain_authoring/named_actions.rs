@@ -1,7 +1,7 @@
 use super::*;
 
 fn named_action_repo() -> (tempfile::TempDir, String) {
-    let (directory, repo) = initialized_repo();
+    let (directory, repo) = initialized_repo(None);
     json_output(&[
         "req_actions",
         "create",

@@ -41,7 +41,7 @@ async fn the_api_tool_plan_shows_the_refused_deletion_and_its_cause() {
                        "requirements": []});
     let message = format!(
         "cannot delete requirement {id} because it has a review submission; \
-         keep the requirement in the typed document"
+         keep requirement {id} in the typed document"
     );
 
     let plan = authoring(&session, "authoring-plans", empty).await;
@@ -50,7 +50,7 @@ async fn the_api_tool_plan_shows_the_refused_deletion_and_its_cause() {
         plan["data"]["resources"][0],
         json!({"kind": "requirement", "key": "restated",
                "address": ["fx", "requirement", "restated"], "id": id, "state": "refused",
-               "refusal": {"cause": "review_submission", "message": message}}),
+               "refusal": {"kind": "review_submission", "message": message}}),
         "{plan}"
     );
     assert_eq!(

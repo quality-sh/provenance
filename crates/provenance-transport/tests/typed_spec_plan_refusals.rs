@@ -56,9 +56,9 @@ async fn the_plan_route_shows_the_deletion_that_the_apply_route_refuses() {
     }
     let restated = resource(&applied, "restated")["id"].clone();
     let message = format!(
-        "cannot delete requirement {} because it has a review submission; \
-         keep the requirement in the typed document",
-        restated.as_str().unwrap()
+        "cannot delete requirement {id} because it has a review submission; \
+         keep requirement {id} in the typed document",
+        id = restated.as_str().unwrap()
     );
     let before = state_files(&repo);
 
@@ -71,7 +71,7 @@ async fn the_plan_route_shows_the_deletion_that_the_apply_route_refuses() {
     assert_eq!(entry["state"], "refused", "{plan}");
     assert_eq!(
         entry["refusal"],
-        json!({"cause": "review_submission", "message": message}),
+        json!({"kind": "review_submission", "message": message}),
         "{plan}"
     );
     assert_eq!(resource(&plan, "plain")["state"], "deleted", "{plan}");
