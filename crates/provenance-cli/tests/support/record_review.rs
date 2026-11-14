@@ -203,16 +203,3 @@ pub fn archive_rule(repo: &str, id: &str, commit: &str) {
         &["--status", "archived", "--archived-in-commit", commit],
     );
 }
-
-/// Accepts the current revision of a Requirement, then archives it in
-/// `commit` through an accepted status request.
-pub fn archive_requirement(repo: &str, id: &str, commit: &str) {
-    accept_current(repo, "requirements", "requirement", id);
-    set_status(
-        repo,
-        "requirements",
-        "requirement",
-        id,
-        &["--status", "archived", "--archived-in-commit", commit],
-    );
-}

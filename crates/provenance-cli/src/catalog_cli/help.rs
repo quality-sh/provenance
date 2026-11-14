@@ -146,13 +146,13 @@ To archive a record, set the archived status and give the commit that contains t
   provenance <id> update --status archived --archived-in-commit <full_commit_sha> \\
     --if-match <etag>
 
-For a Rule or a Requirement, this update opens a status request. The status changes when
-an allowed reviewer accepts it.
+For a Rule, this update opens a status request. The status changes when an allowed
+reviewer accepts it.
 
-An archived status is terminal. When a reviewer accepts the archive of a Requirement, the
-archive also archives each Requirement, Rule, and Resolution under it when all its parents
-are archived, and the Topics of each archived Requirement with their Questions. A record
-that also has a parent that is not archived is not archived. It loses only its link to the
-archived Requirement. An abandoned or rejected Resolution keeps its status. Archiving a Topic also archives all Questions in
+An archived status is terminal. Archiving a Requirement also archives each Requirement,
+Rule, and Resolution under it when all its parents are archived, and the Topics of each
+archived Requirement with their Questions. A record that also has a parent that is not
+archived is not archived. It loses only its link to the archived Requirement. An abandoned
+or rejected Resolution keeps its status. Archiving a Topic also archives all Questions in
 that Topic. Merge the pull request with a merge commit: a squash or rebase merge drops the
 commit that the archive names.";

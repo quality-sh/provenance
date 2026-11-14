@@ -1,7 +1,5 @@
 use assert_cmd::Command;
 
-use crate::support::record_review::archive_requirement;
-
 fn run(repo: &str, args: &[&str]) -> String {
     let result = Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
         .args(args)
@@ -26,8 +24,7 @@ fn listed_ids(output: &str) -> Vec<String> {
         .collect()
 }
 
-/// Creates `req_current` and archives its child `req_retired`. The archive
-/// is a status request, so the reviewer accepts it.
+/// Creates `req_current` and archives its child `req_retired`.
 fn archived_repository() -> tempfile::TempDir {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_str().unwrap();
@@ -40,8 +37,6 @@ fn archived_repository() -> tempfile::TempDir {
             "default",
             "--path-prefix",
             ".",
-            "--disposition-actor-id",
-            "reviewer",
         ])
         .assert()
         .success();
@@ -69,7 +64,25 @@ fn archived_repository() -> tempfile::TempDir {
             "req_current",
         ],
     );
-    archive_requirement(repo, "req_retired", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    let current: serde_json::Value = serde_json::from_str(&run(
+        repo,
+        &["api", "requirements/req_retired", "--format", "json"],
+    ))
+    .unwrap();
+    let etag = current["data"]["edit"]["etag"].as_str().unwrap();
+    run(
+        repo,
+        &[
+            "req_retired",
+            "update",
+            "--if-match",
+            etag,
+            "--status",
+            "archived",
+            "--archived-in-commit-json",
+            r#"{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#,
+        ],
+    );
     directory
 }
 

@@ -269,34 +269,3 @@ fn the_direct_write_refusal_comes_before_the_pending_check() {
     );
     assert!(after["decision"]["pending"]["status_request"].is_null());
 }
-
-#[test]
-#[verifies("rule_status_change_waits_for_review", examples)]
-#[verifies("rule_status_approval_sets_status", examples)]
-fn requirement_archive_waits_for_the_reviewer_and_then_cascades() {
-    let (_directory, repo) = accepted_draft_rule();
-    accept_current(&repo, "requirements", "requirement", "req_a");
-    let before = read(&repo, "requirements", "req_a");
-
-    guarded_update(
-        &repo,
-        "requirements",
-        "req_a",
-        &["--status", "archived", "--archived-in-commit", ARCHIVE_COMMIT],
-    );
-
-    let after = read(&repo, "requirements", "req_a");
-    assert_eq!(after["status"], before["status"], "{after}");
-    assert_eq!(read(&repo, "rules", "rule_a")["status"], "draft");
-    let (proposal, request) = pending_status_request(&repo, "requirements", "req_a");
-    assert_eq!(request["status"], "archived");
-    assert_eq!(request["archived_in_commit"]["commit"], ARCHIVE_COMMIT);
-
-    decide(&repo, "requirements", "requirement", "req_a", &proposal, true);
-
-    let archived = read(&repo, "requirements", "req_a");
-    assert_eq!(archived["status"], "archived", "{archived}");
-    let rule = read(&repo, "rules", "rule_a");
-    assert_eq!(rule["status"], "archived", "{rule}");
-    assert_eq!(rule["archived_in_commit"]["commit"], ARCHIVE_COMMIT);
-}
