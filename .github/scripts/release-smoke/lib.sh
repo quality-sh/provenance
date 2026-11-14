@@ -220,7 +220,9 @@ import tomllib
 
 with open(sys.argv[1], "rb") as manifest_file:
     manifest = tomllib.load(manifest_file)
-dependency = manifest.get("dependencies", {}).get("provenance-sdk")
+if "provenance-sdk" in manifest.get("dependencies", {}):
+    raise SystemExit("provenance-sdk is a normal dependency; expected a development dependency")
+dependency = manifest.get("dev-dependencies", {}).get("provenance-sdk")
 requirement = dependency if isinstance(dependency, str) else (dependency or {}).get("version")
 if requirement != sys.argv[2]:
     raise SystemExit(
@@ -229,7 +231,7 @@ if requirement != sys.argv[2]:
 PY
   then
     channel_failure "$channel" \
-      "Cargo.toml does not require provenance-sdk =$version exactly"
+      "Cargo.toml does not require provenance-sdk =$version exactly as a development dependency"
     return 1
   fi
 }

@@ -1,22 +1,24 @@
 # Rust SDK fixture
 
-This small app keeps production code unaware of Provenance. The spec
-declares traceability with `provenance-sdk`; the test follows the built
-spec's handles to the `expiry` rule and verifies ordinary production
-code. `provenance_spec!` checks the identifier-to-key link at compile
-time and `implemented_by!` checks the implementation path exists.
+This small app keeps production code unaware of Provenance. The library
+has no Provenance crate: `provenance-sdk` is a development dependency. The
+spec in `tests/provenance_spec/mod.rs` declares traceability; the test
+follows the built spec's handles to the `expiry` rule and verifies
+ordinary production code. The `apply` example applies the same spec.
+`provenance_spec!` checks the identifier-to-key link at compile time and
+`implemented_by!` checks the implementation path exists.
 
 From this directory, with the Rust CLI built:
 
 ```sh
 ../../target/debug/provenance init --path . --scope default --path-prefix .
-PROVENANCE_REPO="$PWD" cargo run --bin apply
+PROVENANCE_REPO="$PWD" cargo run --example apply
 PROVENANCE_REPO="$PWD" cargo test
 ../../target/debug/provenance api rules --format json
 ../../target/debug/provenance api verification-runs --format json
 ```
 
-`cargo run --bin apply` reconciles the spec; `cargo test` runs the
+`cargo run --example apply` reconciles the spec; `cargo test` runs the
 typed verification in process. The engine links in as a library, so no
 engine binary or environment handshake is involved.
 
@@ -36,13 +38,14 @@ let document = spec("existing-requirements")
         .from(policy)])
     .build()?;
 let input = document.materialize("spec://rust/existing-requirements");
+let repository = Repository::discover(settings.repository.clone(), &settings.scope)?;
 
-let preview = operations::plan(Some(repo.clone()), &scope, input.clone())?;
+let preview = operations::plan(&repository, input.clone())?;
 assert_eq!(
     (preview.reconciliation.created, preview.reconciliation.conflicts),
     (0, 0),
 );
-operations::apply(Some(repo), &scope, input)?;
+operations::apply(&repository, input)?;
 ```
 
 An existing record that is not a document keeps its source type only when the
