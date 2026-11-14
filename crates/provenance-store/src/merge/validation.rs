@@ -158,8 +158,9 @@ pub fn validate_merged_records(
         ShardFamily::Questions => validate_typed_records::<Question>(records, "question"),
         // The merge of landing batches runs the checks of the read on each
         // candidate file before it gives a clean outcome.
-        ShardFamily::IdeationLandings => Ok(()),
-        ShardFamily::Discussions | ShardFamily::Unrecognized => Ok(()),
+        ShardFamily::IdeationLandings | ShardFamily::Discussions | ShardFamily::Unrecognized => {
+            Ok(())
+        }
     }
 }
 

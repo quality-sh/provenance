@@ -20,29 +20,29 @@ use std::collections::{BTreeMap, BTreeSet};
 /// The ideation records of a scope: the records of its direct files, with
 /// the landing batches applied in the order of the landings file.
 #[derive(Debug, Default)]
-pub(crate) struct IdeationRecords {
-    pub(crate) contributions: Vec<Contribution>,
-    pub(crate) synthesis_packets: Vec<SynthesisPacket>,
-    pub(crate) proposals: Vec<ProposalCard>,
-    pub(crate) assertions: Vec<AssertionRecord>,
-    pub(crate) dispositions: Vec<DispositionRecord>,
+pub struct IdeationRecords {
+    pub contributions: Vec<Contribution>,
+    pub synthesis_packets: Vec<SynthesisPacket>,
+    pub proposals: Vec<ProposalCard>,
+    pub assertions: Vec<AssertionRecord>,
+    pub dispositions: Vec<DispositionRecord>,
     /// The ids of the proposals, the assertions and the dispositions.
     immutable_ids: [BTreeSet<String>; 3],
 }
 
 /// A check of the read that a landing batch fails.
 #[derive(Debug)]
-pub(crate) struct LandingRefusal {
+pub struct LandingRefusal {
     /// The record of the batch that fails the check, as `<list>/<id>`, where
     /// the list is the field of the batch that holds the record.
-    pub(crate) record_id: String,
+    pub record_id: String,
     /// The refusal of the check.
-    pub(crate) error: anyhow::Error,
+    pub error: anyhow::Error,
 }
 
 impl IdeationRecords {
     /// The records with no landing batch applied.
-    pub(crate) fn new(
+    pub fn new(
         contributions: Vec<Contribution>,
         synthesis_packets: Vec<SynthesisPacket>,
         proposals: Vec<ProposalCard>,
@@ -66,7 +66,7 @@ impl IdeationRecords {
     /// already hold. The evidence check comes first, then the proposals, the
     /// assertions and the dispositions. `duplicate` gives the error of a
     /// second id.
-    pub(crate) fn check(
+    pub fn check(
         &self,
         batch: &IdeationLandingBatch,
         duplicate: impl Fn(DuplicateImmutableId) -> anyhow::Error,
@@ -102,7 +102,7 @@ impl IdeationRecords {
 
     /// Applies `batch`: each record of the batch replaces the record with its
     /// id, or is added when no record has its id.
-    pub(crate) fn apply(&mut self, batch: IdeationLandingBatch) {
+    pub fn apply(&mut self, batch: IdeationLandingBatch) {
         let [proposals, assertions, dispositions] = &mut self.immutable_ids;
         proposals.extend(ids(&batch.proposals));
         assertions.extend(ids(&batch.assertions));
@@ -116,7 +116,7 @@ impl IdeationRecords {
 
     /// The records of each field of a landing batch, by id, as JSON, in the
     /// order of the fields.
-    pub(crate) fn lists(&self) -> serde_json::Result<[(&'static str, Records); 5]> {
+    pub fn lists(&self) -> serde_json::Result<[(&'static str, Records); 5]> {
         Ok([
             ("contributions", by_id(&self.contributions)?),
             ("synthesis_packets", by_id(&self.synthesis_packets)?),
@@ -128,7 +128,7 @@ impl IdeationRecords {
 }
 
 /// Records as JSON, by id.
-pub(crate) type Records = BTreeMap<String, serde_json::Value>;
+pub type Records = BTreeMap<String, serde_json::Value>;
 
 fn by_id<T: IdeationRecord + serde::Serialize>(records: &[T]) -> serde_json::Result<Records> {
     records
