@@ -11,6 +11,7 @@ use provenance_core::{
     StableId, Withdrawal,
 };
 use provenance_macros::rule;
+use std::collections::HashSet;
 
 const MAX_SAFE_CYCLE: u64 = (1 << 53) - 1;
 
@@ -76,36 +77,19 @@ pub(super) fn cycle_of(proposal: &ProposalCard) -> Option<u64> {
         .and_then(|cycle| cycle.parse().ok())
 }
 
-/// Refuses a Withdrawal that names no review submission, and a second
-/// Withdrawal of one submission, at the line of the Withdrawal at fault.
+/// The ids of the review submissions that the scope's Withdrawals withdraw.
+/// Refuses a Withdrawal that names no review submission, at its line.
 #[rule("rule_inconsistent_records_refusal_names_records")]
-fn check_withdrawals(
-    submission_ids: &std::collections::HashSet<&str>,
+fn withdrawn_submissions(
+    submission_ids: &HashSet<&str>,
     located: &[(Withdrawal, ShardLine)],
-) -> anyhow::Result<()> {
-    let mut withdrawn = std::collections::BTreeMap::new();
-    for (withdrawal, at) in located {
-        let proposal = withdrawal.proposal_id.as_str();
-        if !submission_ids.contains(proposal) {
-            return Err(state_fault(
-                at,
-                format!(
-                    "withdrawal {} names no review submission: {proposal}",
-                    withdrawal.id.as_str()
-                ),
-            ));
-        }
-        if let Some(first) = withdrawn.insert(proposal, withdrawal.id.as_str()) {
-            return Err(state_fault(
-                at,
-                format!(
-                    "review submission {proposal} is withdrawn two times: {first} and {}",
-                    withdrawal.id.as_str()
-                ),
-            ));
-        }
-    }
-    Ok(())
+) -> anyhow::Result<HashSet<String>> {
+    let withdrawn = provenance_core::review::withdrawn_submissions(
+        |proposal| submission_ids.contains(proposal),
+        located.iter().map(|(withdrawal, _)| withdrawal),
+    )
+    .map_err(|fault| state_fault(&located[fault.position].1, fault.to_string()))?;
+    Ok(withdrawn.into_iter().map(str::to_owned).collect())
 }
 
 /// The review state of one scope, read from its records.
@@ -121,7 +105,8 @@ pub(super) struct CycleFacts {
 impl CycleFacts {
     /// Reads the scope's review submissions, Dispositions, Withdrawals and
     /// feedback Discussions, and refuses a Withdrawal that names no review
-    /// submission.
+    /// submission. More than one Withdrawal of one submission withdraws it
+    /// one time.
     pub(super) fn validated(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Self> {
         let proposals = store.list_proposal_definitions(scope)?;
         let submissions = proposals
@@ -132,13 +117,9 @@ impl CycleFacts {
         let submission_ids = submissions
             .iter()
             .map(|proposal| proposal.id.as_str())
-            .collect::<std::collections::HashSet<_>>();
+            .collect::<HashSet<_>>();
         let located = store.list_withdrawals_located(scope)?;
-        check_withdrawals(&submission_ids, &located)?;
-        let withdrawals = located
-            .into_iter()
-            .map(|(withdrawal, _)| withdrawal)
-            .collect::<Vec<_>>();
+        let withdrawn = withdrawn_submissions(&submission_ids, &located)?;
         let feedback = store
             .list_discussions(scope)?
             .into_iter()
@@ -153,7 +134,7 @@ impl CycleFacts {
             &proposals,
             &submissions,
             &dispositions,
-            &withdrawals,
+            withdrawn,
             &feedback,
         );
         Ok(Self {

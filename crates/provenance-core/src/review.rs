@@ -1,9 +1,12 @@
 //! Native review evidence types. Review does not change record lifecycle.
 
 mod review_serde;
+mod stored_rows;
 
 use crate::{NodeType, ScopeId, StableId};
 use serde::{Deserialize, Serialize};
+
+pub use stored_rows::{withdrawn_submissions, WithdrawalWithoutSubmission};
 
 const fn requirement_kind() -> NodeType {
     NodeType::Requirement

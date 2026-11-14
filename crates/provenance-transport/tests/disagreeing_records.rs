@@ -43,47 +43,6 @@ async fn a_withdrawal_that_names_no_submission_is_located() {
 
 #[tokio::test]
 #[verifies("rule_inconsistent_records_refusal_names_records", examples)]
-async fn a_submission_withdrawn_two_times_is_located_at_the_second_withdrawal() {
-    let repo = Repository::new("The shared graph is readable.");
-    support::records::allow_reviewer(&repo);
-    let writer = host(&repo, true);
-    let (status, read) = call(&writer, "GET", "/requirements/req_shared", None).await;
-    assert_eq!(status, 200, "{read}");
-    let etag = read["data"]["edit"]["etag"].as_str().unwrap().to_owned();
-    let (status, saved) = support::resource_http::call_with_headers(
-        &writer,
-        "PATCH",
-        "/requirements/req_shared",
-        Some(json!({"data":{"actor":"agent", "description":"Enrolled."}})),
-        &[("if-match", &etag)],
-    )
-    .await;
-    assert_eq!(status, 200, "{saved}");
-    let proposal = saved["data"]["decision"]["pending"]["proposal_id"]
-        .as_str()
-        .unwrap()
-        .to_owned();
-    write_withdrawals(
-        &repo,
-        &[
-            withdrawal("withdrawal_a", &proposal),
-            withdrawal("withdrawal_b", &proposal),
-        ],
-    );
-    let (status, failure) =
-        call(&host(&repo, false), "GET", "/requirements/req_shared", None).await;
-    assert_eq!(status, 500, "{failure}");
-    assert_eq!(
-        failure["error"],
-        json!({"kind":"invalid_state_file", "file":WITHDRAWALS, "line":2,
-        "message":format!(
-            "review submission {proposal} is withdrawn two times: withdrawal_a and withdrawal_b"
-        )}),
-    );
-}
-
-#[tokio::test]
-#[verifies("rule_inconsistent_records_refusal_names_records", examples)]
 async fn a_requirement_stored_on_two_lines_is_located_at_the_second_line() {
     const REQUIREMENTS: &str = "scopes/default/requirements/req.jsonl";
     let repo = Repository::new("The shared graph is readable.");
