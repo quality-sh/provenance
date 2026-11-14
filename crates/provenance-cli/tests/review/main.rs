@@ -12,6 +12,8 @@ mod support {
 }
 #[path = "../cli_agent_review_paths.rs"]
 mod cli_agent_review_paths;
+#[path = "../cli_decision_refusal_guidance.rs"]
+mod cli_decision_refusal_guidance;
 #[path = "../cli_review_accepted_citation.rs"]
 mod cli_review_accepted_citation;
 #[path = "../cli_review_detach.rs"]
