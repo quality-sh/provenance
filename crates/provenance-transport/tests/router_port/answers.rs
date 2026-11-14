@@ -129,7 +129,7 @@ async fn a_common_failure_from_the_port_passes_with_its_status() {
             field: Some("request.limit".into()),
             reason: InvalidInputReason::InvalidValue,
         },
-        OperationFailure::AccessDenied,
+        OperationFailure::AccessDenied { message: None },
         OperationFailure::HostBusy,
     ];
     for failure in refusals {

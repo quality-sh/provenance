@@ -54,7 +54,7 @@ impl ContextResolver for Gate {
         context: &RequestedContext,
     ) -> Result<(), OperationFailure> {
         if matches!(self.step, Step::Authorize(name) if name == operation) {
-            return Err(OperationFailure::AccessDenied);
+            return Err(OperationFailure::AccessDenied { message: None });
         }
         self.inner.authorize(operation, context)
     }
