@@ -1,5 +1,5 @@
-use batches::RecordConflicts;
 use crate::state_store::readers::ensure_no_legacy_retirement;
+use batches::RecordConflicts;
 use provenance_macros::rule;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
