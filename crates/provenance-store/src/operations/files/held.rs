@@ -86,7 +86,7 @@ impl HeldRepositoryFile {
     }
 
     /// A new random name for a prepared file next to this file.
-    pub fn new_temp_leaf(&self) -> String {
+    pub(crate) fn new_temp_leaf(&self) -> String {
         format!(
             ".{}.provenance-{}.tmp",
             self.leaf,
@@ -111,7 +111,7 @@ impl HeldRepositoryFile {
     /// Makes the prepared file `leaf` next to this file with `bytes`, and
     /// syncs it. The call fails when `leaf` exists, and removes the file that
     /// it made when a later step fails.
-    pub fn create_temp_at(
+    pub(crate) fn create_temp_at(
         &self,
         leaf: &str,
         bytes: &[u8],
