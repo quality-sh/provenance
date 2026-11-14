@@ -27,7 +27,12 @@ fn provenance() -> Command {
 
 fn git_output(repo: &Path, args: &[&str]) -> std::process::Output {
     provenance_store::git_process::git()
-        .args(["-c", "user.name=Reviewer", "-c", "user.email=reviewer@example.com"])
+        .args([
+            "-c",
+            "user.name=Reviewer",
+            "-c",
+            "user.email=reviewer@example.com",
+        ])
         .args(["-c", "commit.gpgsign=false", "-c", "core.autocrlf=false"])
         .args(args)
         .current_dir(repo)
