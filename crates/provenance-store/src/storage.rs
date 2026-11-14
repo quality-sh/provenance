@@ -255,6 +255,19 @@ impl WriteSet {
         }
     }
 
+    /// The same set with the atomicity of each key, on the same base, if it
+    /// has one key; else the set as it is.
+    pub(crate) fn narrowed(self) -> Self {
+        if self.key_count() == 1 {
+            Self {
+                atomicity: Atomicity::PerKey,
+                ..self
+            }
+        } else {
+            self
+        }
+    }
+
     /// Refuses the set with [`PublishFailure::BaseMoved`] when `current` is
     /// not the base of the set. Only a moved base is hashed.
     pub(crate) fn ensure_base(
