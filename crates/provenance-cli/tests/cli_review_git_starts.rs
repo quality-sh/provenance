@@ -130,7 +130,7 @@ fn review_host_starts_git_once_per_value_that_can_change() {
 /// The Git subcommands that each step of
 /// `review_host_starts_git_once_per_value_that_can_change` starts, in order.
 fn expected_starts() -> Vec<(&'static str, Vec<String>)> {
-    let first_read = ["--version", "rev-parse", "log", "cat-file", "cat-file"];
+    let first_read = ["--version", "rev-parse", "log", "cat-file"];
     let reviewer_read = ["config", "config"];
     expected(&[
         ("host start", &[]),
@@ -143,14 +143,17 @@ fn expected_starts() -> Vec<(&'static str, Vec<String>)> {
         ("first history read", &first_read),
         (
             "two history reads at the same HEAD",
-            &["rev-parse", "rev-parse"],
+            &["rev-parse", "cat-file", "rev-parse", "cat-file"],
         ),
         (
             "history read after HEAD moves",
-            &["rev-parse", "log", "cat-file", "cat-file"],
+            &["rev-parse", "log", "cat-file"],
         ),
         ("working tree edit", &["rev-parse"]),
-        ("history read after the working tree edit", &["rev-parse"]),
+        (
+            "history read after the working tree edit",
+            &["rev-parse", "cat-file"],
+        ),
         (
             "history read of a second Requirement",
             &["rev-parse", "cat-file"],
@@ -217,12 +220,10 @@ fn review_host_reads_history_again_after_a_shallow_clone_gets_deeper() {
     assert_eq!(
         [shallow, deeper],
         [
-            ["--version", "rev-parse", "log", "cat-file", "cat-file"]
+            ["--version", "rev-parse", "log", "cat-file"]
                 .map(str::to_owned)
                 .to_vec(),
-            ["rev-parse", "log", "cat-file", "cat-file"]
-                .map(str::to_owned)
-                .to_vec(),
+            ["rev-parse", "log", "cat-file"].map(str::to_owned).to_vec(),
         ]
     );
 }

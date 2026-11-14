@@ -46,10 +46,23 @@ impl GitFileVersions {
         Ok(text)
     }
 
+    /// Starts the batch process. The prefix of a root does not change, so
+    /// the last version read of the root gives it when there is one.
     fn start(&self) -> anyhow::Result<Batch> {
-        let prefix = repository_head(&self.root)
-            .ok_or_else(|| crate::refusal::fault!("record history repository is unavailable"))?
-            .prefix;
+        let known = lock(&LAST_READ)
+            .as_ref()
+            .filter(|read| read.root == self.root)
+            .map(|read| read.prefix.clone());
+        let prefix = match known {
+            Some(prefix) => prefix,
+            None => {
+                repository_head(&self.root)
+                    .ok_or_else(|| {
+                        crate::refusal::fault!("record history repository is unavailable")
+                    })?
+                    .prefix
+            }
+        };
         Batch::start(&self.root, prefix)
     }
 }
@@ -84,6 +97,7 @@ impl FileVersions for GitFileVersions {
 struct ReadVersions {
     root: Utf8PathBuf,
     relative: String,
+    prefix: String,
     head: String,
     shallow: Option<Vec<u8>>,
     versions: Arc<Vec<FileVersion>>,
@@ -99,7 +113,9 @@ static LAST_READ: Mutex<Option<ReadVersions>> = Mutex::new(None);
 /// changed `relative`, parents before children.
 fn file_versions(root: &Utf8Path, relative: &str) -> anyhow::Result<Arc<Vec<FileVersion>>> {
     let Some(Head {
-        commit, shallow, ..
+        prefix,
+        commit,
+        shallow,
     }) = repository_head(root)
     else {
         return Ok(Arc::default());
@@ -119,6 +135,7 @@ fn file_versions(root: &Utf8Path, relative: &str) -> anyhow::Result<Arc<Vec<File
     *lock(&LAST_READ) = Some(ReadVersions {
         root: root.to_owned(),
         relative: relative.to_owned(),
+        prefix,
         head: commit,
         shallow,
         versions: versions.clone(),
