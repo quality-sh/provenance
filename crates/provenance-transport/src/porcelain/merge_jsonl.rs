@@ -114,16 +114,9 @@ fn merge(
             records,
         )?;
     }
-    let conflicts = match &outcome {
-        MergeOutcome::Clean { .. } => Vec::new(),
-        MergeOutcome::Conflicted { conflicts, .. } => conflicts
-            .iter()
-            .map(|conflict| conflict.record_id.clone())
-            .collect(),
-    };
     Ok(Ok(MergeReport {
         outcome: pretty(&outcome)?,
-        conflicts,
+        conflict: outcome.conflict_text(identity),
     }))
 }
 

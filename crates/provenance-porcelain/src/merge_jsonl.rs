@@ -21,8 +21,9 @@ pub struct MergeJsonlInput {
 pub struct MergeReport {
     /// The merge outcome as one pretty JSON document.
     pub outcome: String,
-    /// The ID of each record that the merge left in conflict.
-    pub conflicts: Vec<String>,
+    /// The text that names what the merge left in conflict, and `None` when
+    /// the merge is clean.
+    pub conflict: Option<String>,
 }
 
 /// The port that merges record shards.

@@ -1,5 +1,4 @@
 use crate::state_store::readers::ensure_no_legacy_retirement;
-use batches::RecordConflicts;
 use provenance_macros::rule;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -7,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 mod batches;
 pub mod validation;
 
-pub use batches::BatchRecords;
+pub use batches::{FailedCheck, LeftOutBatch, MergeOrder};
 pub use validation::{changed_statement_diagnostics, validate_merged_records, ShardFamily};
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -22,9 +21,19 @@ pub enum MergeConflictKind {
     DeleteModify,
 }
 
+/// A record that the two sides of a merge change differently.
+///
+/// For a record of a landing batch, the conflict is a record that the two
+/// candidate files of the merge read differently, and `base`, `ours` and
+/// `theirs` are the records that a read of the base landings, of our
+/// landings and of their landings gives. `base` is `None` when the base
+/// landings hold no record with the id, also when a direct file of the scope
+/// holds one, because the merge driver reads only the landings file.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct MergeConflict {
     pub kind: MergeConflictKind,
+    /// The id of the record: its id, or `<list>/<id>` for a record of a
+    /// landing batch, where the list is the field of the batch.
     pub record_id: String,
     /// The base pre-image, so a reader can see what both sides moved away
     /// from. `None` for an add/add clash, where the base held nothing.
@@ -41,6 +50,14 @@ pub enum MergeOutcome<T> {
     },
     Conflicted {
         conflicts: Vec<MergeConflict>,
+        /// For landing batches, the first check that each candidate file
+        /// fails.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        failed_checks: Vec<FailedCheck>,
+        /// For landing batches, each batch that only theirs adds; the
+        /// merged file does not hold it.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        left_out: Vec<LeftOutBatch>,
         partial: T,
     },
 }
@@ -58,6 +75,35 @@ impl<T> MergeOutcome<T> {
             Self::Clean { .. } => panic!("expected conflicted merge"),
             Self::Conflicted { conflicts, .. } => conflicts,
         }
+    }
+
+    /// The text of the conflict that the merge of a shard with `identity`
+    /// leaves, or `None` for a clean merge.
+    #[must_use]
+    pub fn conflict_text(&self, identity: RowIdentity) -> Option<String> {
+        let Self::Conflicted {
+            conflicts,
+            failed_checks,
+            left_out,
+            ..
+        } = self
+        else {
+            return None;
+        };
+        Some(match identity {
+            RowIdentity::Field(_) => {
+                let ids: Vec<_> = conflicts
+                    .iter()
+                    .map(|conflict| conflict.record_id.as_str())
+                    .collect();
+                format!(
+                    "merge left {} conflicting record(s): {}",
+                    ids.len(),
+                    ids.join(", ")
+                )
+            }
+            RowIdentity::Batch => batches::conflict_text(conflicts, failed_checks, left_out),
+        })
     }
 }
 
@@ -158,40 +204,10 @@ pub enum RowIdentity {
     /// Rows with the same string in this field are one record. The merge
     /// writes the records in the order of that string.
     Field(&'static str),
-    /// Equal rows are the same batch. One side can hold equal batches, so the
-    /// second equal row of one side is the same batch as the second equal row
-    /// of another side. The merge writes the batches of the base, then the
-    /// batches that ours adds, then the batches that theirs adds, each in the
-    /// order of its file. A batch holds the records that [`BatchRecords`]
-    /// names, and the merge compares them as records.
-    Batch(BatchRecords),
-}
-
-impl RowIdentity {
-    /// The merge order of the keys of the three sides.
-    fn merge_order(self, sides: [&[(String, CanonicalRecord)]; 3]) -> Vec<String> {
-        let keys = sides
-            .into_iter()
-            .flat_map(|side| side.iter().map(|(key, _)| key.clone()));
-        match self {
-            Self::Field(_) => keys.collect::<BTreeSet<_>>().into_iter().collect(),
-            Self::Batch(_) => {
-                let mut seen = BTreeSet::new();
-                keys.filter(|key| seen.insert(key.clone())).collect()
-            }
-        }
-    }
-
-    /// The conflicts between the records that the rows of the sides hold.
-    fn record_conflicts(
-        self,
-        sides: [&[(String, CanonicalRecord)]; 3],
-    ) -> anyhow::Result<batches::RecordConflicts> {
-        match self {
-            Self::Field(_) => Ok(batches::RecordConflicts::default()),
-            Self::Batch(records) => batches::record_conflicts(records, sides),
-        }
-    }
+    /// The rows are landing batches, and equal rows are the same batch. One
+    /// side can hold equal batches, so the second equal row of one side is
+    /// the same batch as the second equal row of another side.
+    Batch,
 }
 
 /// Gives the key of each row of one side, in the order of the rows.
@@ -212,7 +228,7 @@ impl RowKeys {
     fn key(&mut self, record: &CanonicalRecord) -> anyhow::Result<String> {
         match self.identity {
             RowIdentity::Field(field) => string_id(field, record).map(str::to_owned),
-            RowIdentity::Batch(_) => batch_key(&mut self.equal_rows, record),
+            RowIdentity::Batch => batch_key(&mut self.equal_rows, record),
         }
     }
 }
@@ -230,10 +246,8 @@ fn batch_key(
     Ok(format!("{row}#{count}"))
 }
 
-/// Merges by the row identity of the shard, keeping a change when the other
-/// side matches the base; the records in batch rows merge as records too.
-/// Call [`validate_merged_records`] before publication.
-#[rule("rule_record_merge")]
+/// Merges by the row identity of the shard. Call [`validate_merged_records`]
+/// before publication.
 pub fn merge_records(
     identity: RowIdentity,
     base: &[CanonicalRecord],
@@ -243,12 +257,24 @@ pub fn merge_records(
     let base = keyed_rows(identity, base)?;
     let ours = keyed_rows(identity, ours)?;
     let theirs = keyed_rows(identity, theirs)?;
-    let RecordConflicts {
-        conflicts: record_conflicts,
-        left_out,
-    } = identity.record_conflicts([&base, &ours, &theirs])?;
-    let mut ids = identity.merge_order([&base, &ours, &theirs]);
-    ids.retain(|id| !left_out.contains(id));
+    match identity {
+        RowIdentity::Field(_) => Ok(merge_by_key(base, ours, theirs)),
+        RowIdentity::Batch => batches::merge_batches([&base, &ours, &theirs]),
+    }
+}
+
+/// Merges the records of the three sides by their key, keeping a change when
+/// the other side matches the base.
+#[rule("rule_record_merge")]
+fn merge_by_key(
+    base: Vec<(String, CanonicalRecord)>,
+    ours: Vec<(String, CanonicalRecord)>,
+    theirs: Vec<(String, CanonicalRecord)>,
+) -> MergeOutcome<Vec<CanonicalRecord>> {
+    let ids: BTreeSet<String> = [&base, &ours, &theirs]
+        .into_iter()
+        .flat_map(|rows| rows.iter().map(|(key, _)| key.clone()))
+        .collect();
     let [base, ours, theirs] =
         [base, ours, theirs].map(|rows| rows.into_iter().collect::<BTreeMap<_, _>>());
 
@@ -302,20 +328,21 @@ pub fn merge_records(
             (None, None, None) => unreachable!(),
         }
     }
-    conflicts.extend(record_conflicts);
-
     if conflicts.is_empty() {
-        Ok(MergeOutcome::Clean { records: merged })
+        MergeOutcome::Clean { records: merged }
     } else {
-        Ok(MergeOutcome::Conflicted {
+        MergeOutcome::Conflicted {
             conflicts,
+            failed_checks: Vec::new(),
+            left_out: Vec::new(),
             partial: merged,
-        })
+        }
     }
 }
 
 /// One side of a three-way merge.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum MergeSide {
     Base,
     Ours,
@@ -407,8 +434,6 @@ fn keyed_rows(
     Ok(rows)
 }
 
-#[cfg(test)]
-mod batch_tests;
 #[cfg(test)]
 mod preservation_tests;
 #[cfg(test)]

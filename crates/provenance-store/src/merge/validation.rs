@@ -20,7 +20,7 @@ use provenance_core::model::relations::{missing_required, required_refusal, Rela
 use provenance_core::{Question, Requirement, RequirementReview, Resolution, Rule, Source, Topic};
 use serde_json::Value;
 
-use super::{BatchRecords, CanonicalRecord, RowIdentity};
+use super::{CanonicalRecord, RowIdentity};
 use crate::statement_analysis::{analyze_changed_statements, StatementDiagnostic};
 
 /// The record type a shard holds, read off the repository path of the file
@@ -76,7 +76,7 @@ impl ShardFamily {
     pub const fn row_identity(self) -> RowIdentity {
         match self {
             Self::Discussions => RowIdentity::Field("discussion_id"),
-            Self::IdeationLandings => RowIdentity::Batch(BatchRecords::LANDINGS),
+            Self::IdeationLandings => RowIdentity::Batch,
             Self::Sources
             | Self::RequirementReviews
             | Self::Requirements
@@ -156,9 +156,10 @@ pub fn validate_merged_records(
         ShardFamily::Rules => validate_typed_records::<Rule>(records, "rule"),
         ShardFamily::Topics => validate_typed_records::<Topic>(records, "topic"),
         ShardFamily::Questions => validate_typed_records::<Question>(records, "question"),
-        ShardFamily::IdeationLandings | ShardFamily::Discussions | ShardFamily::Unrecognized => {
-            Ok(())
-        }
+        // The merge of landing batches runs the checks of the read on each
+        // candidate file before it gives a clean outcome.
+        ShardFamily::IdeationLandings => Ok(()),
+        ShardFamily::Discussions | ShardFamily::Unrecognized => Ok(()),
     }
 }
 

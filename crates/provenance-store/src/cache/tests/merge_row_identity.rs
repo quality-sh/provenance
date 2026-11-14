@@ -3,7 +3,7 @@
 
 use super::projection_digest_sensitivity::{aggregate_layout, change_one_record};
 use crate::families::ProjectionFamily;
-use crate::merge::{BatchRecords, RowIdentity, ShardFamily};
+use crate::merge::{RowIdentity, ShardFamily};
 use crate::state_store::IdeationLandingBatch;
 use camino::{Utf8Path, Utf8PathBuf};
 use serde_json::Value;
@@ -83,34 +83,11 @@ fn assert_field_identity(path: &Utf8Path, field: &str, rows: &[Value]) {
     }
 }
 
-/// Each row of a file is a batch with the lists that the identity names, and
-/// each record of a list has a string in the key field.
-fn assert_batch_identity(path: &Utf8Path, records: BatchRecords, rows: &[Value]) {
-    let empty = IdeationLandingBatch {
-        contributions: Vec::new(),
-        synthesis_packets: Vec::new(),
-        proposals: Vec::new(),
-        assertions: Vec::new(),
-        dispositions: Vec::new(),
-    };
-    let written = serde_json::to_value(empty).unwrap();
-    let fields: BTreeSet<&str> = written
-        .as_object()
-        .unwrap()
-        .keys()
-        .map(String::as_str)
-        .collect();
-    assert_eq!(fields, records.lists().iter().copied().collect());
+/// Each row of a file is a landing batch.
+fn assert_batch_identity(path: &Utf8Path, rows: &[Value]) {
     for row in rows {
-        for list in records.lists() {
-            for record in row[list].as_array().unwrap() {
-                assert!(
-                    record.get(records.key()).and_then(Value::as_str).is_some(),
-                    "{path}: a record of {list} has no string {}: {record}",
-                    records.key()
-                );
-            }
-        }
+        let parsed = serde_json::from_value::<IdeationLandingBatch>(row.clone());
+        assert!(parsed.is_ok(), "{path}: a row is not a landing batch: {row}");
     }
 }
 
@@ -125,7 +102,7 @@ fn each_state_file_of_a_scope_has_the_row_identity_of_the_merge_driver() {
         assert!(!rows.is_empty(), "{path}: the fixture writes no row");
         match ShardFamily::for_shard_path(&path).row_identity() {
             RowIdentity::Field(field) => assert_field_identity(&path, field, &rows),
-            RowIdentity::Batch(records) => assert_batch_identity(&path, records, &rows),
+            RowIdentity::Batch => assert_batch_identity(&path, &rows),
         }
     }
 }
