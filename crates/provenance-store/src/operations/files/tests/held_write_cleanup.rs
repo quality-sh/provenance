@@ -33,7 +33,7 @@ fn clone_failure_cleans_up_the_created_temporary_file() {
         anyhow::bail!("clone failed")
     });
 
-    let result = held.create_temp(b"replacement");
+    let result = held.create_temp_at(&held.new_temp_leaf(), b"replacement");
     crate::test_probes::disarm("repository_file_clone_parent");
 
     assert!(matches!(result, Err(RepositoryFileRefusal::Write(_))));
@@ -52,39 +52,11 @@ fn temporary_unlink_failure_leaves_a_documented_artifact() {
         anyhow::bail!("unlink failed")
     });
 
-    let result = held.create_temp(b"replacement");
+    let result = held.create_temp_at(&held.new_temp_leaf(), b"replacement");
     crate::test_probes::disarm("repository_file_clone_parent");
     crate::test_probes::disarm("repository_file_unlink_temp");
 
     assert!(matches!(result, Err(RepositoryFileRefusal::Write(_))));
     assert_eq!(artifacts(&path, ".tmp").len(), 1);
     assert_eq!(std::fs::read(path.join("source.txt")).unwrap(), b"original");
-}
-
-/// A failure after the rename of the prepared file is an error: the
-/// replacement stays in place, and the backup holds the original.
-#[test]
-fn backup_unlink_failure_is_an_error_that_keeps_the_replacement_and_the_backup() {
-    let (_temporary, path, files) = repository();
-    std::fs::write(path.join("source.txt"), b"original").unwrap();
-    let held = files.read_bounded(Utf8Path::new("source.txt"), 20).unwrap();
-    let prepared = held.create_temp(b"replacement").unwrap();
-    crate::test_probes::arm("repository_file_unlink_backup", || {
-        anyhow::bail!("unlink failed")
-    });
-
-    let outcome = held.compare_and_swap(prepared);
-    crate::test_probes::disarm("repository_file_unlink_backup");
-
-    let Err(RepositoryFileRefusal::Write(error)) = outcome else {
-        panic!("the failed removal of the backup must be an error");
-    };
-    assert_eq!(error.to_string(), "unlink failed");
-    let backups = artifacts(&path, ".backup");
-    assert_eq!(backups.len(), 1);
-    assert_eq!(std::fs::read(&backups[0]).unwrap(), b"original");
-    assert_eq!(
-        std::fs::read(path.join("source.txt")).unwrap(),
-        b"replacement"
-    );
 }

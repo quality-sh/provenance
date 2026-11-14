@@ -28,7 +28,7 @@ fn concurrent_first_access_creates_publication_lock_directories_idempotently() {
 #[test]
 fn source_edit_recovery_runs_before_import_recovery() {
     let directory = tempfile::tempdir().unwrap();
-    let root = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
+    let root = Utf8PathBuf::from_path_buf(dunce::canonicalize(directory.path()).unwrap()).unwrap();
     let layout = ProvenanceLayout::new(root);
     std::fs::create_dir_all(layout.state_dir()).unwrap();
     std::fs::create_dir_all(layout.import_transactions_dir()).unwrap();
@@ -40,7 +40,13 @@ fn source_edit_recovery_runs_before_import_recovery() {
 
     let error = with_repository_publication(&layout, |_| Ok(())).unwrap_err();
 
-    assert!(error.to_string().contains("EOF"), "{error:#}");
+    assert_eq!(
+        format!("{error:#}"),
+        format!(
+            "read {}: EOF while parsing an object at line 1 column 1",
+            layout.source_edit_marker_path()
+        )
+    );
     assert!(layout.publication_marker_path().exists());
 }
 

@@ -239,7 +239,7 @@ fn same_before_bytes_with_a_different_identity_are_an_external_change() {
 
     assert!(matches!(
         error.downcast_ref::<SourceEditRecoveryFailure>(),
-        Some(SourceEditRecoveryFailure::ExternalChange)
+        Some(SourceEditRecoveryFailure::ExternalChange { .. })
     ));
     assert_bytes(root, BEFORE, BEFORE);
     assert!(layout.source_edit_marker_path().exists());

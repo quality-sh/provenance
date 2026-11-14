@@ -9,16 +9,6 @@ use std::path::PathBuf;
 pub use super::held_metadata::FileIdentity;
 pub use super::held_recovery::RepositoryFileBackup;
 
-/// The end of a complete install of a prepared file.
-#[derive(Debug, Eq, PartialEq)]
-pub enum RepositoryFileInstall {
-    /// The replacement is in place, and the backup is removed.
-    Installed,
-    /// The replacement is in place. The backup does not hold the file that
-    /// the caller read, so a person changed it, and it stays.
-    InstalledBackupKept { backup: String },
-}
-
 pub struct HeldRepositoryFile {
     relative: Utf8PathBuf,
     parent: File,
@@ -40,7 +30,6 @@ pub struct PreparedRepositoryFile {
     target_leaf: String,
     target_identity: FileIdentity,
     target_digest: [u8; 32],
-    remove_on_drop: bool,
 }
 
 impl HeldRepositoryFile {
@@ -86,31 +75,11 @@ impl HeldRepositoryFile {
         )
     }
 
-    /// Makes a prepared file with a new random name next to this file. The
-    /// prepared file removes itself when it drops before an install.
-    pub fn create_temp(&self, bytes: &[u8]) -> Result<PreparedRepositoryFile, Refusal> {
-        for _ in 0..100 {
-            match self.create_temp_at(&self.new_temp_leaf(), bytes) {
-                Err(Refusal::Write(error)) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                }
-                Ok(mut prepared) => {
-                    prepared.remove_on_drop = true;
-                    return Ok(prepared);
-                }
-                result => return result,
-            }
-        }
-        Err(Refusal::Write(std::io::Error::new(
-            std::io::ErrorKind::AlreadyExists,
-            "could not allocate a repository temporary file",
-        )))
-    }
-
     /// Makes the prepared file `leaf` next to this file with `bytes`, and
     /// syncs it. The call fails when `leaf` exists, and removes the file that
     /// it made when a later step fails. The caller records `leaf` before the
-    /// call and removes the file through that record, so the file stays when
-    /// it drops.
+    /// call and removes the file through that record: the returned file stays
+    /// when it drops.
     pub(crate) fn create_temp_at(
         &self,
         leaf: &str,
@@ -136,7 +105,6 @@ impl HeldRepositoryFile {
             target_leaf: self.leaf.clone(),
             target_identity: self.identity.clone(),
             target_digest: self.digest,
-            remove_on_drop: false,
         })
     }
 
@@ -170,27 +138,15 @@ impl HeldRepositoryFile {
             target_leaf: self.leaf.clone(),
             target_identity: self.identity.clone(),
             target_digest: self.digest,
-            remove_on_drop: false,
         }))
-    }
-
-    /// Puts `prepared` in place of this file, as [`Self::install`] does, and
-    /// then completes the install, as [`Self::finish_install`] does. An error
-    /// before the rename leaves this file in place. An error after the rename
-    /// leaves the replacement in place, and the backup can stay.
-    pub fn compare_and_swap(
-        &self,
-        prepared: PreparedRepositoryFile,
-    ) -> Result<RepositoryFileInstall, Refusal> {
-        let backup = self.recovery_backup();
-        self.install(prepared, &backup)?;
-        self.finish_install(&backup)
     }
 
     /// Renames this file to `backup` and `prepared` onto this file. Each
     /// failure before the rename of `prepared` puts this file back and gives
-    /// the refusal. After that rename the install goes only forward: the
-    /// caller completes it with [`Self::finish_install`].
+    /// the refusal. When the rename back fails, the call gives `Restore`, and
+    /// `backup` holds this file. After the rename of `prepared` the install
+    /// goes only forward: the caller removes `backup` with
+    /// [`Self::remove_own_backup`].
     pub(crate) fn install(
         &self,
         prepared: PreparedRepositoryFile,
@@ -242,13 +198,7 @@ impl HeldRepositoryFile {
             safe_fs::rename_no_replace_in(&prepared.parent, &prepared.leaf, &self.leaf)
                 .map_err(write_refusal)
         })();
-        match install {
-            Ok(()) => {
-                prepared.remove_on_drop = false;
-                Ok(())
-            }
-            Err(error) => self.restore_then_refuse(backup, error),
-        }
+        install.or_else(|error| self.restore_then_refuse(backup, error))
     }
 
     fn restore_then_refuse(&self, backup: &str, refusal: Refusal) -> Result<(), Refusal> {
@@ -313,14 +263,6 @@ impl PreparedRepositoryFile {
     }
 }
 
-impl Drop for PreparedRepositoryFile {
-    fn drop(&mut self) {
-        if self.remove_on_drop && entry_has_identity(&self.parent, &self.leaf, &self.identity) {
-            let _ = unlink_temp(&self.parent, &self.leaf);
-        }
-    }
-}
-
 pub(super) fn open(
     root: &File,
     root_path: &Utf8Path,
@@ -369,14 +311,8 @@ fn unlink(parent: &File, leaf: &str) -> std::io::Result<()> {
 }
 
 fn restore(parent: &File, backup: &str, leaf: &str) -> Result<(), Refusal> {
+    probe_io("repository_file_restore").map_err(Refusal::Restore)?;
     safe_fs::rename_no_replace_in(parent, backup, leaf).map_err(Refusal::Restore)
-}
-
-fn entry_has_identity(parent: &File, leaf: &str, expected: &FileIdentity) -> bool {
-    platform::regular(parent, leaf)
-        .ok()
-        .and_then(|file| identity(&file).ok())
-        .is_some_and(|current| &current == expected)
 }
 
 pub(super) fn unlink_temp(parent: &File, leaf: &str) -> std::io::Result<()> {

@@ -3,8 +3,8 @@
 //!
 //! A write makes its transaction directly in the transaction directory of
 //! its kind, and later names the transaction in the marker of its kind. This
-//! module owns the containment check of a transaction, the write and the
-//! removal of a marker, the end of a write that a marker names, the removal
+//! module owns the containment check of a transaction, the write, the read
+//! and the removal of a marker, the end of a write that a marker names, the removal
 //! of a transaction that did not publish, and the error of each removal.
 //!
 //! A leftover is a real directory with a UTF-8 name. A write makes only such
@@ -48,7 +48,7 @@ impl TransactionKind {
     }
 }
 
-/// A step of the removal of the data of a write.
+/// A step that ends a write or removes its data.
 #[derive(Clone, Copy, Debug)]
 pub enum RemovalStep {
     List,
@@ -56,11 +56,15 @@ pub enum RemovalStep {
     Transaction,
     Unpublished,
     MarkerTemporary,
+    Marker,
+    Marked,
     PreparedFile,
+    Restore,
+    Sync,
     Backup,
 }
 
-/// The error of a step of the removal of the data of a write: the step, the
+/// The error of a step that ends a write or removes its data: the step, the
 /// path that the step used, and the cause.
 #[rule("rule_failed_removal_of_stopped_write_names_its_path")]
 pub fn removal_failure<E>(step: RemovalStep, path: &Utf8Path, error: E) -> anyhow::Error
@@ -76,7 +80,11 @@ where
              store does not use its data, and a person can remove it)"
         ),
         RemovalStep::MarkerTemporary => format!("remove temporary file {path}"),
+        RemovalStep::Marker => format!("remove marker {path}"),
+        RemovalStep::Marked => format!("end the write that {path} names"),
         RemovalStep::PreparedFile => format!("remove prepared file {path}"),
+        RemovalStep::Restore => format!("restore backup {path}"),
+        RemovalStep::Sync => format!("sync directory {path}"),
         RemovalStep::Backup => format!("remove backup {path}"),
     };
     crate::refusal::caused(error, context)
@@ -102,6 +110,22 @@ pub fn write_marker(
             .prefix(&prefix)
             .suffix(MARKER_TEMPORARY_SUFFIX),
     )
+}
+
+/// The marker of `kind`, or `None` when it does not exist. A read or a parse
+/// that fails gives the path of the marker.
+pub fn read_marker<T: serde::de::DeserializeOwned>(
+    layout: &ProvenanceLayout,
+    kind: TransactionKind,
+) -> anyhow::Result<Option<T>> {
+    let marker = kind.marker(layout);
+    let bytes = match std::fs::read(&marker) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        bytes => bytes.map_err(|error| removal_failure(RemovalStep::Read, &marker, error))?,
+    };
+    serde_json::from_slice(&bytes)
+        .map(Some)
+        .map_err(|error| removal_failure(RemovalStep::Read, &marker, error))
 }
 
 fn marker_temporary_prefix(marker: &Utf8Path) -> String {
@@ -179,14 +203,10 @@ fn remove_marker_temporaries(
     Ok(())
 }
 
-/// Ends a write of `kind` whose state is final, published or rolled back:
-/// removes the transaction that its marker names, if it exists, and then
-/// the marker. It reads no file of the transaction, so a removal that
-/// stopped or failed in part leaves a state that it can end. A live write
-/// whose change is published succeeds when this call fails: its marker stays,
-/// or a sync of the cache did not make the removal of the marker durable,
-/// and the next section entry ends the write.
-#[rule("rule_published_write_succeeds_when_its_cleanup_fails")]
+/// Ends a write of `kind` whose state is final: removes the transaction that
+/// its marker names, if it exists, and then the marker. It reads no file of
+/// the transaction, so a removal that stopped or failed in part leaves a
+/// state that it can end.
 pub fn end_marked_write(
     layout: &ProvenanceLayout,
     kind: TransactionKind,
@@ -205,9 +225,10 @@ pub fn end_marked_write(
 
 /// Removes the marker of `kind`, if it exists, and then syncs the cache.
 pub fn clear_marker(layout: &ProvenanceLayout, kind: TransactionKind) -> anyhow::Result<()> {
-    match std::fs::remove_file(kind.marker(layout)) {
+    let marker = kind.marker(layout);
+    match std::fs::remove_file(&marker) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error.into()),
+        Err(error) => Err(removal_failure(RemovalStep::Marker, &marker, error)),
         Ok(()) => sync_directory(&layout.cache_dir()),
     }
 }

@@ -3,13 +3,13 @@ use super::sync_directory;
 use crate::storage::local::durability::write_synced_file;
 use crate::storage::local::whole_set::{InstallState, WholeSetHook};
 use crate::storage::local::{
-    clear_marker, end_marked_write, removal_failure, write_marker, FileInstall, RemovalStep,
-    TransactionKind,
+    removal_failure, write_marker, FileInstall, RemovalStep, TransactionKind,
 };
 use crate::{
     layout::ProvenanceLayout,
     operations::files::{
         FileIdentity, HeldRepositoryFile, PreparedRepositoryFile, RepositoryFileBackup,
+        RepositoryFileRefusal,
     },
 };
 use anyhow::Context as _;
@@ -19,8 +19,8 @@ use sha2::{Digest as _, Sha256};
 
 #[derive(Debug, thiserror::Error)]
 pub enum SourceEditRecoveryFailure {
-    #[error("source file changed outside the pending source-edit transaction")]
-    ExternalChange,
+    #[error("source file {file} changed outside the pending source-edit transaction")]
+    ExternalChange { file: Utf8PathBuf },
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -165,12 +165,26 @@ impl WholeSetHook for SourceEditPublication {
         crate::test_probes::at("source_edit_state_installed")
     }
 
-    fn install_file(&mut self) -> anyhow::Result<InstallState> {
+    /// A failed rename back of the target leaves the initial file in the
+    /// backup, so the write keeps its marker, and the next section entry
+    /// puts the backup back and completes the install.
+    fn install_file(
+        &mut self,
+        live: &ProvenanceLayout,
+    ) -> Result<InstallState, (InstallState, anyhow::Error)> {
         let held = self.held.as_ref().expect("source-edit held file");
         let prepared = self.prepared.take().expect("source-edit prepared file");
         let marker = self.marker.as_ref().expect("source-edit marker");
-        held.install(prepared, &backup(marker)?)?;
-        Ok(InstallState::FileInstalled)
+        let backup = backup(marker).map_err(|error| (InstallState::StateOnly, error))?;
+        match held.install(prepared, &backup) {
+            Ok(()) => Ok(InstallState::FileMoved),
+            Err(RepositoryFileRefusal::Restore(error)) => {
+                let path = artifact(live, marker, &marker.backup_leaf);
+                let error = removal_failure(RemovalStep::Restore, &path, error);
+                Err((InstallState::FileMoved, error))
+            }
+            Err(refusal) => Err((InstallState::StateOnly, refusal.into())),
+        }
     }
 
     fn published(
@@ -185,17 +199,6 @@ impl WholeSetHook for SourceEditPublication {
 
     fn after_published(&mut self) -> anyhow::Result<()> {
         crate::test_probes::at("source_edit_file_installed")
-    }
-
-    fn rollback_finished(&mut self, live: &ProvenanceLayout) -> anyhow::Result<()> {
-        clear_marker(live, TransactionKind::SourceEdit)
-    }
-
-    /// The state and the file are published, so the write succeeds when its
-    /// end fails.
-    fn finish(&mut self, live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
-        let _ = end_marked_write(live, TransactionKind::SourceEdit, transaction);
-        Ok(())
     }
 
     /// Closes the prepared file, with no removal, and then removes it through
@@ -222,27 +225,36 @@ pub(super) fn write_source_edit_marker(
 }
 
 /// Completes the install after the rename of the prepared file onto the
-/// target: removes the store's own prepared file and the backup that holds
-/// the file that the write read, makes these removals durable, and then
-/// writes the `FileInstalled` marker. The live write and the recovery use
-/// it, so a failure keeps the earlier marker, and the next section entry
-/// runs it again.
+/// target: removes the store's own prepared file, syncs the directory of the
+/// target, removes the backup that holds the file that the write read, syncs
+/// that directory again, and then writes the `FileInstalled` marker. Thus
+/// the install is durable before the backup goes. The live write and the
+/// recovery use it, so a failure keeps the earlier marker, and the next
+/// section entry runs it again.
 pub(super) fn complete_install(
     layout: &ProvenanceLayout,
     held: &HeldRepositoryFile,
     marker: &mut SourceEditMarker,
     replacement: &[u8],
 ) -> anyhow::Result<()> {
-    let artifact = |leaf: &str| layout.root().join(&marker.target).with_file_name(leaf);
-    let prepared = artifact(&marker.prepared_leaf);
-    let backup_path = artifact(&marker.backup_leaf);
+    let prepared = artifact(layout, marker, &marker.prepared_leaf);
+    let backup_path = artifact(layout, marker, &marker.backup_leaf);
+    let directory = backup_path.parent().unwrap_or_else(|| layout.root());
+    let unsynced = |error| removal_failure(RemovalStep::Sync, directory, error);
     held.remove_own_prepared(&marker.prepared_leaf, replacement)
         .map_err(|error| removal_failure(RemovalStep::PreparedFile, &prepared, error))?;
-    held.finish_install(&backup(marker)?)
+    held.sync_directory().map_err(unsynced)?;
+    held.remove_own_backup(&backup(marker)?)
         .map_err(|error| removal_failure(RemovalStep::Backup, &backup_path, error))?;
+    held.sync_directory().map_err(unsynced)?;
     marker.phase = SourceEditPhase::FileInstalled;
     crate::test_probes::at("source_edit_before_file_marker_write")?;
     write_source_edit_marker(layout, marker)
+}
+
+/// The path of the working-tree file `leaf` next to the target of `marker`.
+fn artifact(layout: &ProvenanceLayout, marker: &SourceEditMarker, leaf: &str) -> Utf8PathBuf {
+    layout.root().join(&marker.target).with_file_name(leaf)
 }
 
 /// The backup of the target that `marker` records.

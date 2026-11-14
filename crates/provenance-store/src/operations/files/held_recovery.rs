@@ -2,8 +2,8 @@ use super::{
     held::{self, probe_io, unlink_temp, valid_artifact_leaf, HeldRepositoryFile},
     held_io::read,
     held_metadata::FileIdentity,
-    platform, safe_fs, validate_relative, RepositoryFileInstall, RepositoryFileRefusal as Refusal,
-    RepositoryFiles, Utf8Path,
+    platform, safe_fs, validate_relative, RepositoryFileRefusal as Refusal, RepositoryFiles,
+    Utf8Path,
 };
 use crate::storage::local::durability::sync_opened_directory;
 use sha2::{Digest as _, Sha256};
@@ -106,35 +106,28 @@ impl HeldRepositoryFile {
         remove_own_prepared(self.parent(), self.leaf(), leaf, Some(replacement))
     }
 
-    /// Completes an install after the rename of the prepared file onto this
-    /// file: syncs the directory of this file, removes `backup` when it holds
-    /// the file that the write read, and syncs the directory again. Thus the
-    /// install is durable before the backup goes, and the removal is durable
-    /// when the call succeeds. A backup with other bytes stays. The live write
-    /// and the recovery use this call, so a failure leaves a state that the
-    /// next call completes.
-    pub(crate) fn finish_install(
-        &self,
-        backup: &RepositoryFileBackup,
-    ) -> Result<RepositoryFileInstall, Refusal> {
+    /// Flushes the directory of this file, as `sync_opened_directory` does.
+    pub(crate) fn sync_directory(&self) -> std::io::Result<()> {
+        sync_opened_directory(self.parent())
+    }
+
+    /// Removes `backup`, after the rename of the prepared file onto this
+    /// file, when it holds the file that the write read. No file there is a
+    /// success. A backup with other bytes stays, and the call succeeds.
+    pub(crate) fn remove_own_backup(&self, backup: &RepositoryFileBackup) -> Result<(), Refusal> {
         if !valid_artifact_leaf(self.leaf(), backup.leaf(), ".backup") {
             return Err(Refusal::Changed);
         }
-        sync_opened_directory(self.parent()).map_err(Refusal::Write)?;
         let own = match platform::regular(self.parent(), backup.leaf()).map_err(Refusal::from) {
-            Err(Refusal::Missing) => return Ok(RepositoryFileInstall::Installed),
-            Err(Refusal::Denied) => false,
+            Err(Refusal::Missing | Refusal::Denied) => false,
             Err(error) => return Err(error),
             Ok(file) => artifact_matches(file, backup.identity(), backup.digest())?,
         };
         if !own {
-            let backup = backup.leaf().to_owned();
-            return Ok(RepositoryFileInstall::InstalledBackupKept { backup });
+            return Ok(());
         }
         probe_io("repository_file_unlink_backup").map_err(Refusal::Write)?;
-        unlink(self.parent(), backup.leaf())?;
-        sync_opened_directory(self.parent()).map_err(Refusal::Write)?;
-        Ok(RepositoryFileInstall::Installed)
+        unlink(self.parent(), backup.leaf())
     }
 }
 

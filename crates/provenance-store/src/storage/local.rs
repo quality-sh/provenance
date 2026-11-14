@@ -32,7 +32,7 @@ pub(crate) use section::LockedPublicationFile;
 #[cfg(all(test, unix))]
 pub(crate) use transactions::contained_missing_transaction;
 pub(crate) use transactions::{
-    clear_marker, contained_transaction, end_marked_write, removal_failure, remove_leftovers,
+    contained_transaction, end_marked_write, read_marker, removal_failure, remove_leftovers,
     remove_unpublished, write_marker, RemovalStep, TransactionKind,
 };
 

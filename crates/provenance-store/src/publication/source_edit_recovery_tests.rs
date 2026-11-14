@@ -166,7 +166,7 @@ fn recovery_refuses_third_file_bytes_without_overwriting_them() {
 
     assert!(matches!(
         error.downcast_ref::<SourceEditRecoveryFailure>(),
-        Some(SourceEditRecoveryFailure::ExternalChange)
+        Some(SourceEditRecoveryFailure::ExternalChange { .. })
     ));
     assert_eq!(
         std::fs::read(root.join("source.txt")).unwrap(),

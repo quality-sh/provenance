@@ -21,10 +21,7 @@ mod held_metadata;
 #[path = "files/held_recovery.rs"]
 mod held_recovery;
 #[cfg(any(unix, windows))]
-pub use held::{
-    FileIdentity, HeldRepositoryFile, PreparedRepositoryFile, RepositoryFileBackup,
-    RepositoryFileInstall,
-};
+pub use held::{FileIdentity, HeldRepositoryFile, PreparedRepositoryFile, RepositoryFileBackup};
 use std::{fs::File, io::Read};
 #[cfg(test)]
 #[path = "files/tests.rs"]
@@ -62,7 +59,7 @@ pub enum RepositoryFileRefusal {
     #[error("secure repository file access unavailable")]
     Unavailable,
     #[error("repository file read failed: {0}")]
-    Read(#[source] std::io::Error),
+    Read(std::io::Error),
     #[error("repository file exceeds the {limit}-byte limit")]
     TooLarge { limit: usize },
     #[error("repository file is not valid UTF-8")]
@@ -72,9 +69,9 @@ pub enum RepositoryFileRefusal {
     #[error("repository file owner {owner} differs from effective user {effective}")]
     OwnerMismatch { owner: u32, effective: u32 },
     #[error("repository file write failed: {0}")]
-    Write(#[source] std::io::Error),
+    Write(std::io::Error),
     #[error("repository file restore failed: {0}")]
-    Restore(#[source] std::io::Error),
+    Restore(std::io::Error),
 }
 
 impl From<FileAccessRefusal> for RepositoryFileRefusal {

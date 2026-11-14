@@ -1,7 +1,7 @@
 use super::durability::sync_directory;
 use super::transactions::{
-    contained_transaction, end_marked_write, remove_leftovers, remove_unpublished, write_marker,
-    TransactionKind,
+    contained_transaction, end_marked_write, read_marker, remove_leftovers, remove_unpublished,
+    write_marker, TransactionKind,
 };
 use crate::layout::ProvenanceLayout;
 use anyhow::Context;
@@ -46,9 +46,8 @@ pub fn write_publication_marker(
 /// The caller holds the section lock: with no lock, the removal can remove
 /// the transaction of a live write.
 pub(super) fn recover_pending_publication(layout: &ProvenanceLayout) -> anyhow::Result<()> {
-    let marker_path = layout.publication_marker_path();
-    if marker_path.exists() {
-        recover_marked_publication(layout, &marker_path)?;
+    if let Some(marker) = read_marker(layout, TransactionKind::Import)? {
+        recover_marked_publication(layout, &marker)?;
     }
     remove_leftovers(layout, TransactionKind::Import, remove_unpublished)
 }
@@ -57,9 +56,8 @@ pub(super) fn recover_pending_publication(layout: &ProvenanceLayout) -> anyhow::
 /// the write that the marker names.
 fn recover_marked_publication(
     layout: &ProvenanceLayout,
-    marker_path: &Utf8Path,
+    marker: &PublicationMarker,
 ) -> anyhow::Result<()> {
-    let marker: PublicationMarker = serde_json::from_str(&std::fs::read_to_string(marker_path)?)?;
     let published = matches!(marker.phase, PublicationPhase::Published);
     if !published || marker.transaction_dir.exists() {
         let transaction = validated_transaction_dir(layout, &marker.transaction_dir)?;

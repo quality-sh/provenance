@@ -239,9 +239,9 @@ fn a_stop_in_the_cleanup_of_a_failed_source_edit_leaves_no_data_after_the_next_s
     assert_entry_removes_the_stopped_edit(root);
 }
 
-/// A record of a different form, as an earlier form of the store writes it,
-/// does not parse. The section entry fails with the path of the record, the
-/// operation does not run, and the data stays.
+/// A record with a field that the store does not know does not parse. The
+/// section entry fails with the path of the record, the operation does not
+/// run, and the data stays.
 #[test]
 #[verifies("rule_failed_removal_of_stopped_write_names_its_path", examples)]
 fn a_record_that_does_not_parse_stops_the_section_entry_with_its_path() {

@@ -11,7 +11,7 @@ use crate::{
         validate_recovery_artifact_leaf, HeldRepositoryFile, RepositoryFileRefusal, RepositoryFiles,
     },
     storage::local::{
-        contained_transaction, end_marked_write, removal_failure, remove_leftovers,
+        contained_transaction, end_marked_write, read_marker, removal_failure, remove_leftovers,
         remove_unpublished, RemovalStep, TransactionKind,
     },
 };
@@ -25,9 +25,8 @@ use sha2::{Digest as _, Sha256};
 /// The caller holds the section lock: with no lock, the removal can remove
 /// the transaction of a live write.
 pub fn recover_pending_source_edit(layout: &ProvenanceLayout) -> anyhow::Result<()> {
-    let marker_path = layout.source_edit_marker_path();
-    if marker_path.exists() {
-        let mut marker: SourceEditMarker = serde_json::from_slice(&std::fs::read(&marker_path)?)?;
+    let marker = read_marker::<SourceEditMarker>(layout, TransactionKind::SourceEdit)?;
+    if let Some(mut marker) = marker {
         validate_marker_leaves(&marker)?;
         recover_marked_source_edit(layout, &mut marker)?;
     }
@@ -61,7 +60,7 @@ fn recover_marked_source_edit(
         validate_recovery_tree(&transaction)?;
         let replacement = read_replacement(&transaction, marker.after_digest)?;
         let held = recover_target(layout, marker)?;
-        let current = require_known_target(&held, marker)?;
+        let current = require_known_target(layout, &held, marker)?;
         complete_state(layout, &transaction, marker)?;
         if current == marker.before_digest {
             install_replacement(layout, &held, marker, &replacement)?;
@@ -96,22 +95,36 @@ fn recover_target(
                 &marker.backup_identity,
                 marker.backup_digest,
             )
-            .map_err(|_| SourceEditRecoveryFailure::ExternalChange)?,
-        Err(_) => return Err(SourceEditRecoveryFailure::ExternalChange.into()),
+            .map_err(|_| external_change(layout, marker))?,
+        Err(_) => return Err(external_change(layout, marker)),
     };
     Ok(held)
 }
 
 fn require_known_target(
+    layout: &ProvenanceLayout,
     held: &HeldRepositoryFile,
     marker: &SourceEditMarker,
 ) -> anyhow::Result<[u8; 32]> {
     let current = held.digest();
-    if current != marker.before_digest && current != marker.after_digest {
-        return Err(SourceEditRecoveryFailure::ExternalChange.into());
+    let expected = if current == marker.before_digest {
+        &marker.target_identity
+    } else {
+        &marker.prepared_identity
+    };
+    let known = current == marker.before_digest || current == marker.after_digest;
+    if !known || held.identity() != expected {
+        return Err(external_change(layout, marker));
     }
-    require_identity(held, marker, current)?;
     Ok(current)
+}
+
+/// The error of a target that a person changed while the marker names a
+/// write: it names the target and the marker.
+fn external_change(layout: &ProvenanceLayout, marker: &SourceEditMarker) -> anyhow::Error {
+    let file = layout.root().join(&marker.target);
+    let change = SourceEditRecoveryFailure::ExternalChange { file };
+    removal_failure(RemovalStep::Marked, &layout.source_edit_marker_path(), change)
 }
 
 /// Installs the replacement with the prepared file that the marker names.
@@ -139,22 +152,6 @@ fn install_replacement(
         Err(error) => return Err(error.into()),
     };
     held.install(prepared, &backup(marker)?)?;
-    Ok(())
-}
-
-fn require_identity(
-    current: &HeldRepositoryFile,
-    marker: &SourceEditMarker,
-    digest: [u8; 32],
-) -> anyhow::Result<()> {
-    let expected = if digest == marker.before_digest {
-        &marker.target_identity
-    } else {
-        &marker.prepared_identity
-    };
-    if current.identity() != expected {
-        return Err(SourceEditRecoveryFailure::ExternalChange.into());
-    }
     Ok(())
 }
 

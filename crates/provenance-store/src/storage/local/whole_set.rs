@@ -28,11 +28,15 @@ pub trait WholeSetHook {
         transaction: &Utf8Path,
     ) -> anyhow::Result<()>;
     fn state_installed(&mut self, live: &ProvenanceLayout) -> anyhow::Result<()>;
-    fn install_file(&mut self) -> anyhow::Result<InstallState>;
+    /// Installs the working-tree file. A failure gives the state of the file
+    /// with the error, so that the write rolls back only a file that is in
+    /// its initial place.
+    fn install_file(
+        &mut self,
+        live: &ProvenanceLayout,
+    ) -> Result<InstallState, (InstallState, anyhow::Error)>;
     fn published(&mut self, live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()>;
     fn after_published(&mut self) -> anyhow::Result<()>;
-    fn rollback_finished(&mut self, live: &ProvenanceLayout) -> anyhow::Result<()>;
-    fn finish(&mut self, live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()>;
     /// Removes the data of a write that failed and that no marker names, as
     /// the next section entry removes it after a stop.
     fn remove_unpublished(
@@ -47,9 +51,10 @@ pub trait WholeSetHook {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InstallState {
     StateOnly,
-    /// The replacement is in the working tree, so the write goes only
-    /// forward: a later failure keeps the marker for the next section entry.
-    FileInstalled,
+    /// The working-tree file is not in its initial place: the replacement is
+    /// there, or the backup holds the initial file. So the write goes only
+    /// forward: a failure keeps the marker for the next section entry.
+    FileMoved,
 }
 
 /// Lands `writes` on the state directory of `live` as one swap. The copy
@@ -111,6 +116,11 @@ fn apply(staged: &ProvenanceLayout, writes: &WriteSet) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Publishes the staged state and the working-tree file of `hook`. When the
+/// write is published, it succeeds when its end fails: the marker stays, or
+/// a sync of the cache did not make the removal of the marker durable, and
+/// the next section entry ends the write.
+#[rule("rule_published_write_succeeds_when_its_cleanup_fails")]
 fn publish_staged_state(
     live: &ProvenanceLayout,
     staged: &ProvenanceLayout,
@@ -132,7 +142,8 @@ fn publish_staged_state(
     let install_state = install_file(live, staged, &backup, hook)?;
     record_publication(live, staged, transaction, &backup, install_state, hook)?;
     hook.after_published()?;
-    hook.finish(live, transaction)
+    let _ = end_marked_write(live, hook.kind(), transaction);
+    Ok(())
 }
 
 fn install_staged_state(
@@ -155,7 +166,7 @@ fn install_staged_state(
         .and_then(|()| sync_directory(&live.provenance_dir()))
         .and_then(|()| hook.state_installed(live));
     if let Err(error) = state_result {
-        rollback_after_error(live, staged, backup, hook)?;
+        rollback_after_error(live, staged, backup, hook.kind())?;
         return Err(error);
     }
     Ok(())
@@ -167,13 +178,12 @@ fn install_file(
     backup: &Utf8Path,
     hook: &mut dyn WholeSetHook,
 ) -> anyhow::Result<InstallState> {
-    match hook.install_file() {
-        Ok(state) => Ok(state),
-        Err(error) => {
-            rollback_after_error(live, staged, backup, hook)?;
-            Err(error)
+    hook.install_file(live).or_else(|(state, error)| {
+        if state == InstallState::StateOnly {
+            rollback_after_error(live, staged, backup, hook.kind())?;
         }
-    }
+        Err(error)
+    })
 }
 
 fn record_publication(
@@ -187,10 +197,10 @@ fn record_publication(
     let Err(error) = hook.published(live, transaction) else {
         return Ok(());
     };
-    if install_state == InstallState::FileInstalled {
+    if install_state == InstallState::FileMoved {
         return Err(error);
     }
-    rollback_after_error(live, staged, backup, hook)?;
+    rollback_after_error(live, staged, backup, hook.kind())?;
     Err(error)
 }
 
@@ -198,11 +208,10 @@ fn rollback_after_error(
     live: &ProvenanceLayout,
     staged: &ProvenanceLayout,
     backup: &Utf8Path,
-    hook: &mut dyn WholeSetHook,
+    kind: TransactionKind,
 ) -> anyhow::Result<()> {
     rollback_publication(live, staged, backup).map_err(crate::write_error::publication_started)?;
-    hook.rollback_finished(live)
-        .map_err(crate::write_error::publication_started)
+    clear_marker(live, kind).map_err(crate::write_error::publication_started)
 }
 
 fn rollback_publication(
@@ -254,7 +263,10 @@ impl WholeSetHook for StatePublication {
         Ok(())
     }
 
-    fn install_file(&mut self) -> anyhow::Result<InstallState> {
+    fn install_file(
+        &mut self,
+        _live: &ProvenanceLayout,
+    ) -> Result<InstallState, (InstallState, anyhow::Error)> {
         Ok(InstallState::StateOnly)
     }
 
@@ -266,15 +278,6 @@ impl WholeSetHook for StatePublication {
         crate::test_probes::at("state_published")
     }
 
-    fn rollback_finished(&mut self, live: &ProvenanceLayout) -> anyhow::Result<()> {
-        clear_marker(live, TransactionKind::Import)
-    }
-
-    /// The state is published, so the write succeeds when its end fails.
-    fn finish(&mut self, live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
-        let _ = end_marked_write(live, TransactionKind::Import, transaction);
-        Ok(())
-    }
 }
 
 pub fn copy_directory(source: &Utf8Path, destination: &Utf8Path) -> anyhow::Result<()> {

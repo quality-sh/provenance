@@ -5,6 +5,7 @@
 //! backup. After installation, a crash leaves the replacement and backup.
 
 use super::super::*;
+use super::{prepare, swap};
 use camino::Utf8Path;
 
 fn repository() -> (tempfile::TempDir, camino::Utf8PathBuf, RepositoryFiles) {
@@ -37,10 +38,10 @@ fn prepared_file_is_bound_to_the_file_that_created_it() {
     std::fs::write(path.join("b.txt"), b"b").unwrap();
     let a = files.read_bounded(Utf8Path::new("a.txt"), 10).unwrap();
     let b = files.read_bounded(Utf8Path::new("b.txt"), 10).unwrap();
-    let prepared = a.create_temp(b"for a").unwrap();
+    let prepared = prepare(&a, b"for a");
 
     assert!(matches!(
-        b.compare_and_swap(prepared),
+        swap(&b, prepared),
         Err(RepositoryFileRefusal::Changed)
     ));
     assert_eq!(std::fs::read(path.join("b.txt")).unwrap(), b"b");
@@ -51,13 +52,13 @@ fn replaced_prepared_regular_file_is_refused() {
     let (_temporary, path, files) = repository();
     std::fs::write(path.join("source.txt"), b"original").unwrap();
     let held = files.read_bounded(Utf8Path::new("source.txt"), 20).unwrap();
-    let prepared = held.create_temp(b"trusted").unwrap();
+    let prepared = prepare(&held, b"trusted");
     let leaf = prepared_leaf(&path);
     std::fs::rename(&leaf, path.join("held-prepared")).unwrap();
     std::fs::write(&leaf, b"attacker").unwrap();
 
     assert!(matches!(
-        held.compare_and_swap(prepared),
+        swap(&held, prepared),
         Err(RepositoryFileRefusal::Changed | RepositoryFileRefusal::Denied)
     ));
     assert_eq!(std::fs::read(path.join("source.txt")).unwrap(), b"original");
@@ -69,13 +70,13 @@ fn replaced_prepared_hard_link_is_refused() {
     std::fs::write(path.join("source.txt"), b"original").unwrap();
     std::fs::write(path.join("attacker"), b"attacker").unwrap();
     let held = files.read_bounded(Utf8Path::new("source.txt"), 20).unwrap();
-    let prepared = held.create_temp(b"trusted").unwrap();
+    let prepared = prepare(&held, b"trusted");
     let leaf = prepared_leaf(&path);
     std::fs::rename(&leaf, path.join("held-prepared")).unwrap();
     std::fs::hard_link(path.join("attacker"), &leaf).unwrap();
 
     assert!(matches!(
-        held.compare_and_swap(prepared),
+        swap(&held, prepared),
         Err(RepositoryFileRefusal::Changed | RepositoryFileRefusal::Denied)
     ));
     assert_eq!(std::fs::read(path.join("source.txt")).unwrap(), b"original");
@@ -89,13 +90,13 @@ fn replaced_prepared_symlink_is_refused() {
     std::fs::write(path.join("source.txt"), b"original").unwrap();
     std::fs::write(path.join("attacker"), b"attacker").unwrap();
     let held = files.read_bounded(Utf8Path::new("source.txt"), 20).unwrap();
-    let prepared = held.create_temp(b"trusted").unwrap();
+    let prepared = prepare(&held, b"trusted");
     let leaf = prepared_leaf(&path);
     std::fs::rename(&leaf, path.join("held-prepared")).unwrap();
     symlink("attacker", &leaf).unwrap();
 
     assert!(matches!(
-        held.compare_and_swap(prepared),
+        swap(&held, prepared),
         Err(RepositoryFileRefusal::Changed | RepositoryFileRefusal::Denied)
     ));
     assert_eq!(std::fs::read(path.join("source.txt")).unwrap(), b"original");
@@ -109,13 +110,13 @@ fn replaced_prepared_symlink_is_refused() {
     std::fs::write(path.join("source.txt"), b"original").unwrap();
     std::fs::write(path.join("attacker"), b"attacker").unwrap();
     let held = files.read_bounded(Utf8Path::new("source.txt"), 20).unwrap();
-    let prepared = held.create_temp(b"trusted").unwrap();
+    let prepared = prepare(&held, b"trusted");
     let leaf = prepared_leaf(&path);
     std::fs::rename(&leaf, path.join("held-prepared")).unwrap();
     symlink_file(path.join("attacker"), &leaf).unwrap();
 
     assert!(matches!(
-        held.compare_and_swap(prepared),
+        swap(&held, prepared),
         Err(RepositoryFileRefusal::Changed | RepositoryFileRefusal::Denied)
     ));
     assert_eq!(std::fs::read(path.join("source.txt")).unwrap(), b"original");
@@ -127,9 +128,9 @@ fn replacing_a_hard_link_does_not_write_through_to_the_other_name() {
     std::fs::write(path.join("other.txt"), b"original").unwrap();
     std::fs::hard_link(path.join("other.txt"), path.join("source.txt")).unwrap();
     let held = files.read_bounded(Utf8Path::new("source.txt"), 20).unwrap();
-    let prepared = held.create_temp(b"replacement").unwrap();
+    let prepared = prepare(&held, b"replacement");
 
-    held.compare_and_swap(prepared).unwrap();
+    swap(&held, prepared).unwrap();
 
     assert_eq!(
         std::fs::read(path.join("source.txt")).unwrap(),
