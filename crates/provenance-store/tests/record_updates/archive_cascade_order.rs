@@ -24,6 +24,7 @@ async fn ruled_graph(fixture: &Fixture, rule_requirement: &str) {
     fixture.call("create-resolution", json!({"scope_id":"default","id":"resolution_one","title":"Decision","position":"Use the saved record.","rationale":"The record is available.","status":"draft","requirement_ids":["req_one"],"supersedes":[],"inputs":[]})).await.unwrap();
     fixture.call("update-resolution", json!({"scope_id":"default","id":"resolution_one","status":"approved","approved_by":"reviewer","approved_at":1234})).await.unwrap();
     fixture.call("create-rule", json!({"scope_id":"default","id":"rule_one","statement":"The system saves the record.","status":"active","severity":"medium","requirement_ids":[rule_requirement],"resolution_ids":["resolution_one"]})).await.unwrap();
+    fixture.accept_status_request("rule", "rule_one").await;
 }
 
 async fn archive_req_one(fixture: &Fixture) -> Result<Value, Value> {

@@ -106,6 +106,8 @@ mod cli_shard_parse_errors;
 mod cli_source_requirement;
 #[path = "../cli_statement_write_gate.rs"]
 mod cli_statement_write_gate;
+#[path = "../cli_status_request.rs"]
+mod cli_status_request;
 #[path = "../cli_ste_onboarding_concurrency.rs"]
 mod cli_ste_onboarding_concurrency;
 #[path = "../cli_ste_statement_paths.rs"]

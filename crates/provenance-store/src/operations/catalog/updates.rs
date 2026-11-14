@@ -34,7 +34,7 @@ creation!(
     "update-rule",
     UpdateRuleInput,
     provenance_core::Rule,
-    update_rule,
+    request_rule_update,
     [GraphStorage, Dictionary]
 );
 creation!(

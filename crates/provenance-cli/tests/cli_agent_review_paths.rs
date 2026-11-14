@@ -3,6 +3,7 @@ use provenance_macros::verifies;
 use serde_json::{json, Value};
 
 use crate::support;
+use support::record_review::{activate_rule, archive_rule};
 use support::review_paths::{create_requirement, init, json_output, provenance};
 
 fn reject_pending(repo: &str, id: &str, created: &Value) {
@@ -226,28 +227,25 @@ fn review_view_gives_commands_for_each_truncated_feedback_page() {
 fn repo_with_archived_rule() -> (tempfile::TempDir, String) {
     let (directory, repo) = init();
     create_requirement(&repo, "req_terminal");
-    for (id, status) in [("rule_active", "active"), ("rule_archived", "archived")] {
-        let mut args = vec![
-            id,
-            "create",
-            "--type",
-            "rule",
-            "--repo",
-            &repo,
-            "--statement",
-            "The system keeps terminal records available on request.",
-            "--requirement-id",
-            "req_terminal",
-            "--status",
-            status,
-        ];
-        let archived_in_commit;
-        if status == "archived" {
-            archived_in_commit = json!({"commit":"a".repeat(40),"at":null}).to_string();
-            args.extend(["--archived-in-commit-json", &archived_in_commit]);
-        }
-        provenance().args(args).assert().success();
+    for id in ["rule_active", "rule_archived"] {
+        provenance()
+            .args([
+                id,
+                "create",
+                "--type",
+                "rule",
+                "--repo",
+                &repo,
+                "--statement",
+                "The system keeps terminal records available on request.",
+                "--requirement-id",
+                "req_terminal",
+            ])
+            .assert()
+            .success();
     }
+    activate_rule(&repo, "rule_active");
+    archive_rule(&repo, "rule_archived", &"a".repeat(40));
     (directory, repo)
 }
 

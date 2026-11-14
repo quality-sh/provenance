@@ -157,6 +157,7 @@ async fn archive_requires_a_permalink_and_refuses_every_exit() {
         .is_err());
     assert_eq!(std::fs::read_to_string(&rule_path).unwrap_or_default(), "");
     rule(&fixture, "draft", None).await.unwrap();
+    fixture.accept_status_request("rule", "rule_one").await;
     assert!(fixture
         .call(
             "update-rule",
@@ -164,7 +165,11 @@ async fn archive_requires_a_permalink_and_refuses_every_exit() {
         )
         .await
         .is_err());
-    let archived = fixture.call("update-rule", json!({"scope_id":"default","id":"rule_one","status":"archived","archived_in_commit":permalink})).await.unwrap();
+    fixture.call("update-rule", json!({"scope_id":"default","id":"rule_one","status":"archived","archived_in_commit":permalink})).await.unwrap();
+    fixture.accept_status_request("rule", "rule_one").await;
+    let archived =
+        serde_json::to_value(&fixture.store.list_rules(&fixture.scope).unwrap()[0]).unwrap();
+    assert_eq!(archived["status"], "archived");
     for status in ["draft", "review", "active", "deprecated"] {
         assert!(fixture
             .call(

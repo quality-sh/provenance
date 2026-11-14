@@ -19,6 +19,8 @@ pub fn init(repo: &Path) {
             "default",
             "--path-prefix",
             ".",
+            "--disposition-actor-id",
+            "reviewer",
         ])
         .assert()
         .success();

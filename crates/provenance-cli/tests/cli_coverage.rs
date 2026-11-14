@@ -212,6 +212,8 @@ fn strict_scan_reports_unverified_and_unimplemented_as_independent_findings() {
             "default",
             "--path-prefix",
             ".",
+            "--disposition-actor-id",
+            "reviewer",
         ])
         .assert()
         .success();
@@ -254,6 +256,12 @@ fn strict_scan_reports_unverified_and_unimplemented_as_independent_findings() {
         ])
         .assert()
         .success();
+    crate::support::record_review::accept_status_request(
+        repo.to_str().unwrap(),
+        "rules",
+        "rule",
+        "rule_pays_overtime",
+    );
 
     std::fs::write(source_dir.join("payroll.rs"), "fn pays_overtime() {}\n").unwrap();
 

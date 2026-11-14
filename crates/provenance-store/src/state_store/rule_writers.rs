@@ -111,7 +111,7 @@ impl StateStore {
         self.create_native_record(&path, &id, |store| store.write_rule(input))
     }
 
-    fn write_rule(&self, input: CreateRuleInput) -> anyhow::Result<Rule> {
+    pub(crate) fn write_rule(&self, input: CreateRuleInput) -> anyhow::Result<Rule> {
         let CreateRuleInput {
             scope_id,
             id,

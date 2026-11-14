@@ -8,6 +8,8 @@ use provenance_macros::verifies;
 use serde_json::Value;
 use std::path::Path;
 
+use crate::support::record_review::accept_status_request;
+
 fn git(repo: &Path, args: &[&str]) -> String {
     let output = provenance_store::git_process::git()
         .arg("-C")
@@ -79,6 +81,9 @@ fn create_rule(repo: &Path, id: &str, requirement: &str, statement: &str, status
         command.args(["--status", status]);
     }
     command.assert().success();
+    if status == Some("active") {
+        accept_status_request(repo.to_str().unwrap(), "rules", "rule", id);
+    }
 }
 
 /// A real repository with two commits: the base commit holds one Requirement
@@ -103,6 +108,8 @@ fn two_commit_repo_with_added_rule_status(
             "default",
             "--path-prefix",
             ".",
+            "--disposition-actor-id",
+            "reviewer",
         ])
         .assert()
         .success();

@@ -6,6 +6,9 @@ use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::path::Path;
 
+use crate::support;
+use support::record_review::accept_status_request;
+
 fn provenance() -> Command {
     Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
 }
@@ -26,6 +29,8 @@ fn init_repo() -> tempfile::TempDir {
             "default",
             "--path-prefix",
             ".",
+            "--disposition-actor-id",
+            "reviewer",
         ],
     );
     run(
@@ -74,6 +79,9 @@ fn create_rule(repo: &Path, id: &str, status: &str) {
         )
         .assert()
         .success();
+    if status == "active" {
+        accept_status_request(repo.to_str().unwrap(), "rules", "rule", id);
+    }
 }
 
 fn set_binding_policy(repo: &Path, severity: &str) {

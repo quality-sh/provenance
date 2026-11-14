@@ -62,14 +62,18 @@ A word that names an API collection, such as `rules` in `provenance rules list`,
 is not a command. The CLI refuses it with a usage error and shows
 `provenance --help`.
 
-Rule creation defaults to `draft` in the CLI and in catalog operations. Pass
-`--status active` only when a person ratifies the Rule. Coverage reports do not
-produce active-Rule absence findings for a draft Rule.
+Rule creation defaults to `draft` in the CLI and in catalog operations. A
+create or an update with `--status active` or `--status archived` opens a status
+request and does not change the status. The Rule gets the status when an allowed
+reviewer accepts the request. A create with `--status active` writes the Rule as
+`review` until then. Coverage reports do not produce active-Rule absence
+findings for a draft Rule.
 
 A typed specification cannot set a Rule status, so apply creates each new
-specification Rule as `draft`. To make a specification Rule active, a person
-changes its status with `provenance <id> update --status active
---declared-by <owner> --if-match <etag>`. A later apply keeps that status. If a
+specification Rule as `draft`. To make a specification Rule active, request the
+status with `provenance <id> update --status active --declared-by <owner>
+--if-match <etag>`. The Rule is active when an allowed reviewer accepts the
+request. A later apply keeps the accepted status. If a
 Rule declaration changes its key or moves to a different Requirement, apply
 creates a new `draft` Rule and deletes the old Rule. A move between a
 Requirement and the shared specification context keeps the Rule and its status
