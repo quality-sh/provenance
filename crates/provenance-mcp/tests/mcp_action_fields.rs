@@ -2,16 +2,7 @@
 //! its action and refuses each other call with an error that names the field to fix.
 #![cfg(feature = "test-fixture")]
 
-#[allow(dead_code)]
-mod support {
-    #[path = "../../../provenance-transport/tests/support/check_port.rs"]
-    pub mod check_port;
-    pub mod fixture_host;
-    pub mod mcp;
-    #[path = "../../../provenance-transport/tests/support/records.rs"]
-    pub mod records;
-    pub mod schema_check;
-}
+use crate::support;
 
 use provenance_macros::verifies;
 use serde_json::{json, Value};

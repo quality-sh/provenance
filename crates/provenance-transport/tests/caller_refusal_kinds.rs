@@ -2,12 +2,7 @@
 //! status that is not 500, for writes that go through the review store.
 #![cfg(feature = "test-fixture")]
 
-mod support {
-    pub mod asserted_proposal;
-    pub mod ideation;
-    pub mod records;
-    pub mod resource_http;
-}
+use crate::support;
 
 use provenance_macros::verifies;
 use serde_json::{json, Value};

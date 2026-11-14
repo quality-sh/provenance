@@ -1,8 +1,5 @@
 #![cfg(feature = "test-fixture")]
-mod support {
-    pub mod records;
-    pub mod resource_http;
-}
+use crate::support;
 use provenance_macros::verifies;
 use provenance_store::write_error::{WriteError, WriteFailure};
 use serde_json::json;

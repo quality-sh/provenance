@@ -12,6 +12,7 @@ publish.workspace = true
 # Bundled skills are prepared before packaging and are not tracked.
 # Run node tools/skills/prepare.mjs before Cargo collects package files.
 include = ["src/**", "skills/**", "build.rs", "build/**", "tests/**", "Cargo.toml", "README.md"]
+autotests = false
 
 [lints]
 workspace = true
@@ -65,6 +66,118 @@ default = []
 scanner = []
 # Dev-only agent feedback capture. Never enable in release builds.
 dogfood = ["provenance-transport/dogfood"]
+
+# Cargo does not find the test targets itself. Each group binary in
+# tests/<group>/main.rs compiles test files of tests/ as its modules, because
+# each test binary links the full dependency tree. Each other file listed
+# here is a test binary of its own. cli_structure checks that each test file
+# is in one of these targets.
+[[test]]
+name = "api"
+path = "tests/api/main.rs"
+
+[[test]]
+name = "checks"
+path = "tests/checks/main.rs"
+
+[[test]]
+name = "records"
+path = "tests/records/main.rs"
+
+[[test]]
+name = "review"
+path = "tests/review/main.rs"
+
+[[test]]
+name = "setup"
+path = "tests/setup/main.rs"
+
+[[test]]
+name = "cargo_nested_sdk"
+
+[[test]]
+name = "ci_coverage_workflow"
+
+[[test]]
+name = "ci_wasm_kernel"
+
+[[test]]
+name = "cli_agent_review_records"
+
+[[test]]
+name = "cli_dogfood_simulate"
+
+[[test]]
+name = "cli_import_legacy_audit"
+
+[[test]]
+name = "cli_import_lifecycle"
+
+[[test]]
+name = "cli_init_onboarding"
+
+[[test]]
+name = "cli_init_summary"
+
+[[test]]
+name = "cli_review_events"
+
+[[test]]
+name = "cli_review_events_recovery"
+
+[[test]]
+name = "cli_review_events_security"
+
+[[test]]
+name = "cli_skills"
+
+[[test]]
+name = "cli_skills_build_source"
+
+[[test]]
+name = "cli_skills_cleanup"
+
+[[test]]
+name = "cli_skills_copy_tree"
+
+[[test]]
+name = "cli_skills_single_source"
+
+[[test]]
+name = "cli_ste_onboarding"
+
+[[test]]
+name = "cli_structure"
+
+[[test]]
+name = "cli_version"
+
+[[test]]
+name = "crate_dependencies"
+
+[[test]]
+name = "porcelain_notify_bindings"
+
+[[test]]
+name = "release_commands"
+
+[[test]]
+name = "release_onboarding_structure"
+
+[[test]]
+name = "release_structure"
+
+[[test]]
+name = "review_bundle"
+
+[[test]]
+name = "review_native_overflow_probe"
+
+[[test]]
+name = "simulation_cli"
+
+[[test]]
+name = "simulation_cli_planted"
 
 [dev-dependencies]
 pulldown-cmark.workspace = true

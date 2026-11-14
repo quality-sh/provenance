@@ -4,9 +4,7 @@
 
 use serde_json::{json, Value};
 
-mod support {
-    pub mod review_paths;
-}
+use crate::support;
 use support::review_paths::{create_requirement, json_output, provenance};
 
 const REQUIREMENTS: &str = ".provenance/state/scopes/default/requirements/req.jsonl";

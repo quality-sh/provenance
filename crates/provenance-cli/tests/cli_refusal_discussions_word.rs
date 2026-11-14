@@ -4,8 +4,7 @@
 //! Implementation aid: no active Rule states this refusal text, because
 //! `rule_cli_one_discussion_read_form` states the read form and not the refusal.
 
-#[path = "support/bounded_process.rs"]
-mod bounded_process;
+use crate::review_host_support::bounded_process;
 use bounded_process::Bounded;
 use std::path::Path;
 

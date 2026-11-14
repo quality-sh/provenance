@@ -5,8 +5,7 @@
 use assert_cmd::Command;
 use std::path::{Path, PathBuf};
 
-#[path = "export_fixture_support/mod.rs"]
-mod export_fixture_support;
+use crate::export_fixture_support;
 
 fn init(repo: &Path) {
     Command::cargo_bin("provenance")

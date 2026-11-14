@@ -1,6 +1,6 @@
 #[path = "porcelain_authoring/named_actions.rs"]
 mod named_actions;
-mod porcelain_authoring_support;
+use crate::porcelain_authoring_support;
 
 use porcelain_authoring_support::{initialized_repo, json_output, json_stdin_output, provenance};
 use predicates::prelude::PredicateBooleanExt as _;

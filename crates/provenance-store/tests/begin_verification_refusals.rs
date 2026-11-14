@@ -2,8 +2,7 @@
 //! write, over the memory adapter: each gives its own kind, the storage
 //! receives no write set, and the runs cache does not change.
 
-#[path = "support/memory.rs"]
-mod memory;
+use crate::memory;
 
 use memory::{
     begin_input, key, open_review, verification_repository, FixedClock, Recorded, REVIEWS,
