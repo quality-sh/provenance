@@ -405,6 +405,13 @@ class SelectionTests(unittest.TestCase):
             self.assertIn(f"binary_id({binary})", selection["test-filter"])
         self.assertIn("-p provenance-cli", selection["test-packages"])
 
+    def test_a_manifest_change_selects_the_test_layout_check(self):
+        # provenance-cli does not depend on provenance-sdk, so only the
+        # manifest rule selects the check for this change.
+        selection = select("crates/provenance-sdk/Cargo.toml")
+        self.assertIn("binary_id(provenance-cli::cli_structure)", selection["test-filter"])
+        self.assertIn("-p provenance-cli", selection["test-packages"])
+
     def test_dev_dependencies_count_as_dependents(self):
         # provenance-macros has provenance-scanner only as a dev dependency.
         crates = json.loads(select("crates/provenance-scanner/src/lib.rs")["test-crates"])

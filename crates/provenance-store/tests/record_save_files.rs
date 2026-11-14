@@ -1,4 +1,4 @@
-use crate::discussion_support::base::initialization;
+use crate::review_support::initialization;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::ScopeId;

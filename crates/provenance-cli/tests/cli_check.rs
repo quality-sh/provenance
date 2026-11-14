@@ -13,7 +13,7 @@ mod archive_commit;
 #[path = "cli_check/review_rows.rs"]
 mod review_rows;
 
-use crate::review_host_support::bounded_process;
+use crate::bounded_process;
 use bounded_process::Bounded;
 
 #[test]
