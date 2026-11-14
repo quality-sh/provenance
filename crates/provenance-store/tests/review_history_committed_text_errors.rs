@@ -98,7 +98,12 @@ async fn the_oldest_committed_text_that_is_not_utf8_wins() {
 /// Damages the stored object of the file at `path` in `commit`, so that Git
 /// gives its header and then fails. Gives the object id.
 fn damage(temp: &tempfile::TempDir, commit: &str, path: &camino::Utf8Path) -> String {
-    let relative = path.strip_prefix(temp.path()).unwrap();
+    // Git names a file in a commit with `/` between its parts.
+    let relative = path
+        .strip_prefix(temp.path())
+        .unwrap()
+        .as_str()
+        .replace('\\', "/");
     let object = git(temp, &["rev-parse", &format!("{commit}:{relative}")]);
     let file = temp
         .path()
