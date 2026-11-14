@@ -16,8 +16,11 @@
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
 
+/// The test of a string that matches one pattern.
+type Matches = fn(&str) -> bool;
+
 /// Each pattern that a success schema holds, and the test of a string that matches it.
-const PATTERNS: [(&str, fn(&str) -> bool); 3] = [
+const PATTERNS: [(&str, Matches); 3] = [
     ("^[a-z0-9_-]+$", |text| {
         !text.is_empty()
             && text
@@ -121,12 +124,12 @@ impl Shape {
                 }
                 "additionalProperties" => {
                     names.every = true;
-                    let named = schema.get("properties").and_then(Value::as_object);
+                    let stated = schema.get("properties").and_then(Value::as_object);
                     value.as_object().is_none_or(|object| {
                         object
                             .iter()
                             .filter(|(name, _)| {
-                                named.is_none_or(|named| !named.contains_key(*name))
+                                stated.is_none_or(|stated| !stated.contains_key(*name))
                             })
                             .all(|(_, given)| self.closed(rule, given))
                     })
@@ -252,7 +255,7 @@ struct Names<'s> {
     every: bool,
 }
 
-impl<'s> Names<'s> {
+impl Names<'_> {
     fn join(&mut self, other: Self) {
         self.named.extend(other.named);
         self.every |= other.every;
