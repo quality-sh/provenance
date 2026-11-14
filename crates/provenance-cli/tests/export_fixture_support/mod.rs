@@ -15,6 +15,7 @@ pub fn make_default_scope_portable(repo: impl AsRef<Path>) {
     for relative in [
         "scopes/default/threads/discussions.jsonl",
         "scopes/default/ideation/withdrawals.jsonl",
+        "scopes/default/requirements/review.jsonl",
     ] {
         let path = state.join(relative);
         if path.exists() {
