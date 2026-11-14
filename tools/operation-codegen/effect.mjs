@@ -128,25 +128,28 @@ export function effectServerDocument(document) {
   return copy;
 }
 
-function failureSchemaForStatus(document, schema, status, references = new Set()) {
+// Keeps the failure variants of `status`. Inside a failure variant only the
+// payload follows, so a `kind` union of the payload keeps each member.
+function failureSchemaForStatus(document, schema, status, references = new Set(), payload = false) {
   if (schema === null || typeof schema !== 'object') return schema;
-  if (Array.isArray(schema)) return schema.map(value => failureSchemaForStatus(document, value, status, references));
+  if (Array.isArray(schema)) return schema.map(value => failureSchemaForStatus(document, value, status, references, payload));
   if (typeof schema.$ref === 'string' && schema.$ref.startsWith('#/')) {
     if (references.has(schema.$ref)) throw new Error(`Effect failure schema is recursive through ${schema.$ref}`);
     const target = schema.$ref.slice(2).split('/').reduce((value, key) => value[key.replaceAll('~1', '/').replaceAll('~0', '~')], document);
     const next = new Set(references).add(schema.$ref);
-    return failureSchemaForStatus(document, target, status, next);
+    return failureSchemaForStatus(document, target, status, next, payload);
   }
+  const inside = payload || typeof schema.properties?.kind?.const === 'string';
   const narrowed = {};
   for (const [key, value] of Object.entries(schema)) {
-    if (key === 'oneOf' || key === 'anyOf') {
+    if ((key === 'oneOf' || key === 'anyOf') && !inside) {
       const variants = value.filter(variant => {
         const kinds = [...failureKinds(document, variant)];
         return kinds.length === 0 || kinds.some(kind => FAILURE_STATUS.get(kind) === status);
       });
       narrowed[key] = variants.map(variant => failureSchemaForStatus(document, variant, status, references));
     } else {
-      narrowed[key] = failureSchemaForStatus(document, value, status, references);
+      narrowed[key] = failureSchemaForStatus(document, value, status, references, inside);
     }
   }
   return narrowed;
