@@ -27,8 +27,6 @@ mod coverage_binding_settings;
 mod discussion_support;
 #[path = "../history_git_failures.rs"]
 mod history_git_failures;
-#[path = "../history_git_names.rs"]
-mod history_git_names;
 #[path = "../history_versions_contract.rs"]
 mod history_versions_contract;
 #[path = "../manifest_scope_ids.rs"]
