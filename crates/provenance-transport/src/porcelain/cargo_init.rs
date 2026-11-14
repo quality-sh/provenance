@@ -230,7 +230,7 @@ fn package_path_prefix(
     })
 }
 
-/// Adds an absent SDK without replacing a compatible or development declaration.
+/// Adds an absent SDK as a development dependency without replacing an existing declaration.
 #[rule("rule_cargo_init_preserves_sdk_dependency")]
 #[rule("rule_cargo_init_adds_exact_sdk")]
 #[rule("rule_cargo_init_mutates_selected_manifest")]
@@ -255,7 +255,7 @@ fn prepare_sdk(
     let rollback = CargoRollback::capture(paths)?;
     let dependency = format!("{SDK_CRATE}@={}", env!("CARGO_PKG_VERSION"));
     let output = Command::new("cargo")
-        .args(["add", &dependency, "--manifest-path"])
+        .args(["add", &dependency, "--dev", "--manifest-path"])
         .arg(&package.manifest_path)
         .current_dir(workspace_root)
         .output();
@@ -270,7 +270,7 @@ fn prepare_sdk(
             };
             anyhow::ensure!(
                 output.status.success(),
-                "`cargo add {dependency} --manifest-path {}` failed: {}",
+                "`cargo add {dependency} --dev --manifest-path {}` failed: {}",
                 package.manifest_path,
                 String::from_utf8_lossy(diagnostics).trim()
             );

@@ -9,6 +9,7 @@
 mod automatic_submissions;
 #[path = "../discussion_support.rs"]
 mod discussion_support;
+use discussion_support::base as review_support;
 #[path = "../native_review_submissions.rs"]
 mod native_review_submissions;
 #[path = "../requirement_review_reads.rs"]

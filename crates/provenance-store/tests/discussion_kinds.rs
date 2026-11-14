@@ -1,4 +1,4 @@
-use crate::discussion_support::base as review_support;
+use crate::review_support;
 use provenance_core::threads::DiscussionStatus;
 use provenance_core::{NodeType, ScopeId};
 use provenance_store::review::WriteDiscussion;
