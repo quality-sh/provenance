@@ -102,7 +102,7 @@ impl<P: GetPort> crate::Porcelain<P> {
             .port
             .resolve(target)
             .await
-            .map_err(map_read_error)?
+            .map_err(|error| map_read_error(&error))?
             .result
         {
             RecordResolution::Found(record) => Ok(record.node_type()),
@@ -112,7 +112,7 @@ impl<P: GetPort> crate::Porcelain<P> {
     }
 }
 
-fn map_read_error(error: ReadError) -> ActionError {
+fn map_read_error(error: &ReadError) -> ActionError {
     match error {
         ReadError::InvalidOptions | ReadError::InvalidInput { .. } => ActionError::InvalidOptions,
         ReadError::NotFound => ActionError::NotFound,
