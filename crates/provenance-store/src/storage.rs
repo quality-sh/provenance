@@ -347,8 +347,8 @@ pub enum PublishFailure {
 /// serialized. A set with one key lands completely or not at all. A set
 /// whose stored keys and bytes differ from its base is refused before any
 /// key lands. A failure after a stored key changed, or after a whole set
-/// began to land, is [`PublishFailure::Started`]. A set with no key writes no data: the
-/// adapter checks its base, then returns.
+/// began to land, is [`PublishFailure::Started`]. A set with no key writes
+/// no data: the adapter checks its base, then returns.
 pub trait StateStorage: Send + Sync + std::fmt::Debug {
     /// One consistent view of every key and its bytes.
     fn read_view(&self) -> Result<StateView, StorageError>;
