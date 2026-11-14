@@ -8,12 +8,10 @@ mod memory;
 use memory::{
     begin_input, key, open_review, verification_repository, FixedClock, Recorded, REVIEWS,
 };
-use provenance_macros::verifies;
-use provenance_store::operations::{
-    begin_verification, complete_verification, verification_runs,
-};
-use provenance_store::repository::Repository;
 use provenance_core::VerificationRun;
+use provenance_macros::verifies;
+use provenance_store::operations::{begin_verification, complete_verification, verification_runs};
+use provenance_store::repository::Repository;
 use provenance_store::state_store::{BeginVerificationInput, CompleteVerificationInput};
 use provenance_store::storage::StateKey;
 use provenance_store::write_error::WriteError;
@@ -26,6 +24,10 @@ const RUNS: &str = ".provenance/cache/scopes/default/verification-runs.jsonl";
 /// The `file` value of an answer for a line of the runs cache.
 const RUNS_FILE: &str = "verification-runs.jsonl";
 const BAD_LINE: &[u8] = b"{not json\n";
+
+/// The answer body of a refusal, its status, the number of write sets that
+/// the storage received, and the bytes of the runs cache.
+type Answer = (Value, u16, usize, Option<Vec<u8>>);
 
 /// A memory repository with an open review of `rule_expiry`, whose state
 /// also holds `extra`.
@@ -55,13 +57,13 @@ impl Start {
     }
 
     /// The answer of a refused start, as [`Start::answer`] gives it.
-    fn refusal(&self, input: BeginVerificationInput) -> (Value, u16, usize, Option<Vec<u8>>) {
+    fn refusal(&self, input: BeginVerificationInput) -> Answer {
         let error = begin_verification(&self.repository, input).unwrap_err();
         self.answer(error)
     }
 
     /// Like [`Start::refusal`], for a refused completion of a run.
-    fn completion_refusal(&self) -> (Value, u16, usize, Option<Vec<u8>>) {
+    fn completion_refusal(&self) -> Answer {
         let completion = CompleteVerificationInput {
             run: "verification_1767225600000".into(),
             status: "passed".into(),
@@ -73,13 +75,12 @@ impl Start {
 
     /// The runs that the list of runs gives, or its answer as
     /// [`Start::answer`] gives it.
-    fn list(&self) -> Result<Vec<VerificationRun>, (Value, u16, usize, Option<Vec<u8>>)> {
+    fn list(&self) -> Result<Vec<VerificationRun>, Answer> {
         verification_runs(&self.repository, None).map_err(|error| self.answer(error))
     }
 
-    /// The answer body of `error`, its status, the number of write sets
-    /// that the storage received, and the bytes of the runs cache.
-    fn answer(&self, error: anyhow::Error) -> (Value, u16, usize, Option<Vec<u8>>) {
+    /// The [`Answer`] for `error`.
+    fn answer(&self, error: anyhow::Error) -> Answer {
         let error = WriteError(error);
         let answer = serde_json::to_value(&error).unwrap();
         let sets = self.recorded.0.lock().unwrap().len();
