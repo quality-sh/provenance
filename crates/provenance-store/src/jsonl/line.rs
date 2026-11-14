@@ -29,6 +29,15 @@ pub fn without_terminator(line: &[u8]) -> &[u8] {
         .map_or(line, |line| line.strip_suffix(b"\r").unwrap_or(line))
 }
 
+/// The lines of the file `contents`, each with its number from 1 and without
+/// its terminator, in the split of [`without_terminator`].
+pub(super) fn numbered_lines(contents: &[u8]) -> impl Iterator<Item = (usize, &[u8])> {
+    contents
+        .split_inclusive(|byte| *byte == b'\n')
+        .enumerate()
+        .map(|(index, line)| (index + 1, without_terminator(line)))
+}
+
 /// The record of the stored line `bytes`, line `number` of `path`, after
 /// the checks of [`checked_line`].
 #[cfg(feature = "host")]
@@ -53,6 +62,9 @@ pub(super) fn checked_line<'a, T: DeserializeOwned>(
 ) -> anyhow::Result<CheckedLine<'a, T>> {
     let text = std::str::from_utf8(bytes)
         .map_err(|error| state_fault(&ShardLine::new(path, number), error.to_string()))?;
+    // The JSON value gives a syntax fault before a fault of the record, and
+    // the `retired` check reads it. The typed parse then reads the text again,
+    // because a JSON value keeps only the last of two members with one name.
     let value = parse_line(path, number, text)?;
     ensure_no_legacy_retirement(path, number, &value)?;
     let at = |error: serde_json::Error| located(path, number, &error);

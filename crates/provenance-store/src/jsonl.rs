@@ -16,6 +16,7 @@ use std::fs::{File, OpenOptions};
 mod line;
 mod preservation;
 
+use line::numbered_lines;
 #[cfg(feature = "host")]
 pub(crate) use line::record_of_line;
 pub(crate) use line::without_terminator;
@@ -97,14 +98,21 @@ where
 
 /// Reads the records of one file of derived state, such as the verification
 /// runs, under its advisory lock. A file that does not exist has no records.
+/// Each line gives its record through [`record_of_line`], and the read keeps
+/// no stored line.
 #[cfg(feature = "host")]
-pub(crate) fn read_jsonl_locked<T>(path: &Utf8Path, lock_path: &Utf8Path) -> anyhow::Result<Vec<T>>
-where
-    T: DeserializeOwned + Serialize,
-{
+pub(crate) fn read_jsonl_locked<T: DeserializeOwned>(
+    path: &Utf8Path,
+    lock_path: &Utf8Path,
+) -> anyhow::Result<Vec<T>> {
     let _lock = AdvisoryLock::acquire(lock_path)?;
-    let mut loaded = load_jsonl_file(path)?;
-    Ok(std::mem::take(loaded.records_mut()))
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let contents = std::fs::read(path)?;
+    numbered_lines(&contents)
+        .map(|(number, line)| record_of_line(path, number, line))
+        .collect()
 }
 
 /// Loads the file at `path`, or no records when the file does not exist.
@@ -175,8 +183,8 @@ where
         return Ok(LoadedRecords::default());
     };
     let mut loaded = LoadedRecords::default();
-    for (index, line) in contents.split_inclusive(|byte| *byte == b'\n').enumerate() {
-        let line = line::checked_line(path, index + 1, without_terminator(line))?;
+    for (number, line) in numbered_lines(contents) {
+        let line = line::checked_line(path, number, line)?;
         let (record, raw) = RawRecord::keep(path, line)?;
         loaded.push(record, raw);
     }
