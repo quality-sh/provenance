@@ -8,6 +8,7 @@ mod ideation_edits;
 mod ideation_targets;
 mod ideation_validation;
 mod ideation_writers;
+mod immutable_ids;
 mod implementation_bindings;
 mod inputs;
 mod live_parents;
@@ -50,8 +51,7 @@ pub use archive_history::{ArchiveCommitGap, ArchiveCommitGapReason};
 pub use graph_validation::validate_relations;
 pub use ideation_batches::{
     assertion_cites_contribution, assertion_cites_synthesis,
-    ensure_asserted_contribution_unchanged, ensure_asserted_synthesis_unchanged, CONTRIBUTION_KIND,
-    SYNTHESIS_KIND,
+    ensure_asserted_contribution_unchanged, ensure_asserted_synthesis_unchanged,
 };
 pub use ideation_edits::{UpdateContributionInput, UpdateSynthesisPacketInput};
 pub use inputs::{
@@ -329,9 +329,7 @@ impl StateStore {
             )?;
             after_direct_read()?;
             for batch in held.list_ideation_landings(scope)? {
-                overlay_records(&mut records, batch.contributions, |record| {
-                    record.id.as_str()
-                });
+                overlay_records(&mut records, batch.contributions);
             }
             Ok(records)
         })
@@ -391,7 +389,7 @@ impl StateStore {
                 &shards::proposal_cards_path(&held.layout, scope),
             )?;
             for batch in held.list_ideation_landings(scope)? {
-                overlay_records(&mut records, batch.proposals, |record| record.id.as_str());
+                overlay_records(&mut records, batch.proposals);
             }
             Ok(records)
         })

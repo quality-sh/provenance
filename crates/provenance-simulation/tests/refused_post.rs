@@ -51,14 +51,14 @@ fn rows(run: &Run) -> (usize, usize) {
     (threads, messages)
 }
 
-/// Fails probe `test` of the engine layer when `run` breaks a law. The
-/// detail of the report starts with the number of turns.
-fn keep_the_laws(test: &str, turns: usize, run: &Run) {
+/// Fails the probe when `run` breaks a law. The detail of the report starts
+/// with the number of turns.
+fn keep_the_laws(turns: usize, run: &Run) {
     let verdict = laws::check(run).map_err(|mut broken| {
         broken.detail = format!("turns {turns}: {}", broken.detail);
         broken
     });
-    report::probe("engine", test, verdict);
+    report::probe_laws("engine", verdict);
 }
 
 #[test]
@@ -71,8 +71,7 @@ fn a_refused_post_lands_no_thread_and_no_message() {
             steps: refused_post(turns),
         };
         let run = run_case(&case, Config::default());
-        let test = "a_refused_post_lands_no_thread_and_no_message";
-        keep_the_laws(test, turns, &run);
+        keep_the_laws(turns, &run);
         if run.done[0].result.is_err() {
             refused += 1;
             assert_eq!(rows(&run), (0, 0), "turns {turns}");
