@@ -60,10 +60,10 @@ pub use inputs::{
     CreateQuestionInput, CreateRequirementInput, CreateResolutionInput, CreateRuleInput,
     CreateSourceInput, CreateSynthesisPacketInput, CreateTopicInput, DeclarationReferenceInput,
     DeletionRefusal, MaterializeImplementationBindingInput, MaterializeVerificationBindingInput,
-    PostMessageInput, ReconcileState, ReconciledResource, TypedAdoptionTarget, TypedDeclarationKind,
-    TypedFieldChange, TypedImplementationInput, TypedRequirementInput, TypedResourceKind,
-    TypedRuleInput, TypedSourceInput, TypedSpecDiagnostic, TypedSpecInput, TypedSpecResult,
-    UpdateQuestionInput,
+    PostMessageInput, ReconcileState, ReconciledResource, TypedAdoptionTarget,
+    TypedDeclarationKind, TypedFieldChange, TypedImplementationInput, TypedRequirementInput,
+    TypedResourceKind, TypedRuleInput, TypedSourceInput, TypedSpecDiagnostic, TypedSpecInput,
+    TypedSpecResult, UpdateQuestionInput,
 };
 pub use proposal_surfaces::{ProposalDemand, ProposalSurfaceReason, SurfacedProposal, TopicClaim};
 pub use requirement_reviews::{

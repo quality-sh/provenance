@@ -44,9 +44,12 @@ fn holds<T>(
     scope: Option<&ScopeId>,
     id: &StableId,
 ) -> bool {
-    records.iter().map(identity).any(|(record_scope, record_id)| {
-        record_id == id && scope.is_none_or(|scope| scope == record_scope)
-    })
+    records
+        .iter()
+        .map(identity)
+        .any(|(record_scope, record_id)| {
+            record_id == id && scope.is_none_or(|scope| scope == record_scope)
+        })
 }
 
 /// One deletion that typed-spec apply refuses, with its cause.

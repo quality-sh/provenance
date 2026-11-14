@@ -148,7 +148,11 @@ fn decide(repo: &str, id: &str, proposal: &str, accept: bool) -> Value {
 
 fn withdraw(repo: &str, id: &str, proposal: &str) {
     let path = format!("requirements/{id}/submissions/{proposal}/withdraw");
-    api(repo, &path, &json!({"actor": "agent", "declared_by": OWNER}));
+    api(
+        repo,
+        &path,
+        &json!({"actor": "agent", "declared_by": OWNER}),
+    );
 }
 
 /// The bytes of each state file below the repository. The cache is a derived
@@ -243,7 +247,11 @@ fn the_plan_shows_each_deletion_that_the_apply_refuses_with_its_cause() {
     assert!(resource(&plan, "plain").get("refusal").is_none(), "{plan}");
     assert_eq!(resource(&plan, "kept")["state"], "unchanged", "{plan}");
     let counts = ["deleted", "refused", "conflicts", "unchanged"].map(|count| &plan["data"][count]);
-    assert_eq!(counts, [&json!(1), &json!(4), &json!(0), &json!(1)], "{plan}");
+    assert_eq!(
+        counts,
+        [&json!(1), &json!(4), &json!(0), &json!(1)],
+        "{plan}"
+    );
 
     assert_eq!(refused.code, Some(1), "{}", refused.stdout);
     assert_eq!(refused.stdout, "");
