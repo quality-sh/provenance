@@ -98,7 +98,11 @@ fn merge_with_a_retired_row_in(directory: &std::path::Path) -> (Option<i32>, Str
         std::fs::write(&path, format!("{contents}\n")).unwrap();
         path.to_str().unwrap().to_owned()
     });
-    let output = provenance().arg("merge-jsonl").args(&sides).output().unwrap();
+    let output = provenance()
+        .arg("merge-jsonl")
+        .args(&sides)
+        .output()
+        .unwrap();
     (
         output.status.code(),
         String::from_utf8(output.stderr).unwrap(),
