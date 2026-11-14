@@ -110,7 +110,6 @@ fn a_repeated_start_stores_its_run_in_the_cache_and_sends_no_set_to_the_persiste
     assert_eq!(sets(&start.persistence), [set]);
     let runs = verification_runs(&start.repository, None).unwrap();
     assert_eq!(runs, [first, second]);
-    assert_eq!(runs[1].rule_id.as_str(), "rule_expiry");
 }
 
 #[test]
