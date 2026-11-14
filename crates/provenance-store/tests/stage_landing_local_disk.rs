@@ -63,7 +63,8 @@ fn import(repository: &Repository, name: &str) -> anyhow::Result<()> {
             sources,
             ..ScopeShards::default()
         };
-        staged.import_scope(&ScopeId::new("default")?, &shards)
+        staged.import_scope(&ScopeId::new("default")?, &shards)?;
+        Ok(())
     })
 }
 
