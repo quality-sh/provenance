@@ -160,16 +160,26 @@ fn exact<T: DeserializeOwned + Serialize>(body: &Value) -> Option<T> {
     (serde_json::to_value(&value).ok()? == *body).then_some(value)
 }
 
-/// Closes each object schema in `schema` that names its properties, so an object may have no
-/// other member. `unevaluatedProperties` counts the members that an `allOf`, `oneOf` or `$ref`
-/// of the same object names, so a flattened member stays accepted.
+/// Closes each object schema in `schema` that names its properties or joins
+/// other schemas, so an object may have no member that the schema does not
+/// name. `unevaluatedProperties` counts the members that a passing `allOf`,
+/// `anyOf` or `oneOf` branch of the same object names. A branch itself stays
+/// open: it can state a part of the object only, as the `anyOf` of a record
+/// that ties its archive commit to its status does.
 fn close(schema: &mut Value) {
+    close_schema(schema, false);
+}
+
+fn close_schema(schema: &mut Value, branch: bool) {
     let Value::Object(schema) = schema else {
         return;
     };
+    let names = ["properties", "allOf", "anyOf", "oneOf"]
+        .iter()
+        .any(|keyword| schema.contains_key(*keyword));
     let open = !schema.contains_key("additionalProperties")
         && !schema.contains_key("unevaluatedProperties");
-    if open && schema.contains_key("properties") {
+    if names && open && !branch {
         schema.insert("unevaluatedProperties".into(), Value::Bool(false));
     }
     for (keyword, value) in schema.iter_mut() {
@@ -178,15 +188,22 @@ fn close(schema: &mut Value) {
                 "properties" | "patternProperties" | "$defs" | "definitions",
                 Value::Object(named),
             ) => {
-                named.values_mut().for_each(close);
+                named
+                    .values_mut()
+                    .for_each(|value| close_schema(value, false));
             }
-            ("allOf" | "anyOf" | "oneOf" | "prefixItems", Value::Array(each)) => {
-                each.iter_mut().for_each(close);
+            ("allOf" | "anyOf" | "oneOf", Value::Array(branches)) => {
+                branches
+                    .iter_mut()
+                    .for_each(|value| close_schema(value, true));
+            }
+            ("prefixItems", Value::Array(each)) => {
+                each.iter_mut().for_each(|value| close_schema(value, false));
             }
             (
                 "items" | "additionalProperties" | "not" | "if" | "then" | "else" | "contains",
                 value,
-            ) => close(value),
+            ) => close_schema(value, false),
             _ => {}
         }
     }
