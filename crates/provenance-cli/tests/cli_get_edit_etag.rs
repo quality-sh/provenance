@@ -241,3 +241,71 @@ async fn prime_and_the_mcp_instructions_give_the_edit_etag_to_the_update() {
     assert!(instructions.contains(sentence), "{instructions}");
     server.close().await;
 }
+
+/// The refusal object of one CLI command that fails.
+fn cli_refusal(repo: &str, args: &[&str]) -> Value {
+    let output = assert_cmd::Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
+        .args(args)
+        .args(["--repo", repo, "--format", "json"])
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{args:?}: {text}");
+    let line = text.lines().next().unwrap_or_default();
+    let object = line.strip_prefix("Error: ").unwrap_or(line);
+    serde_json::from_str(object).unwrap()
+}
+
+/// When the read model cannot catch up on the state file of the record, the record view
+/// on each interface gives the record that the read model holds, the ETag of that
+/// record, and the freshness warning. The review view and an update refuse.
+#[tokio::test]
+#[verifies("rule_get_record_gives_edit_etag", examples)]
+async fn a_record_with_an_unreadable_state_file_gives_the_etag_of_the_record_that_get_shows() {
+    use std::io::Write as _;
+
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_str().unwrap().to_owned();
+    chain(&repo);
+    let before = cli_json(&repo, &["rule_overtime_pay", "get"]);
+    let rules = directory
+        .path()
+        .join(".provenance/state/scopes/default/rules/rule.jsonl");
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(rules)
+        .unwrap();
+    file.write_all(b"{\"scope_id\":\"default\",\n").unwrap();
+    let server = Server::start(&repo).await;
+
+    let by_cli = cli_json(&repo, &["rule_overtime_pay", "get"]);
+    let arguments = json!({"target":"rule_overtime_pay"});
+    let by_mcp = mcp(&server.client, "get", arguments).await;
+    assert_eq!(by_mcp, by_cli);
+    assert_eq!(by_cli["edit"], before["edit"]);
+    assert!(
+        by_cli["record_metadata"]["freshness_error"].is_string(),
+        "{by_cli}"
+    );
+
+    let review = cli_refusal(&repo, &["rule_overtime_pay", "get", "--view", "review"]);
+    assert_eq!(review["error"]["kind"], "operation_failed", "{review}");
+    let arguments = json!({"target":"rule_overtime_pay","view":"review"});
+    let by_mcp = server.client.call("get", arguments).await;
+    assert_eq!(by_mcp["isError"], json!(true), "{by_mcp}");
+    let text = by_mcp["content"][0]["text"].as_str().unwrap();
+    assert_eq!(serde_json::from_str::<Value>(text).unwrap(), review);
+
+    let etag = etag(&by_cli);
+    let update = [
+        "rule_overtime_pay",
+        "update",
+        "--if-match",
+        &etag,
+        "--description",
+        "Changed.",
+    ];
+    let refused = cli_refusal(&repo, &update);
+    assert_eq!(refused["error"]["kind"], "invalid_state_file", "{refused}");
+    server.close().await;
+}
