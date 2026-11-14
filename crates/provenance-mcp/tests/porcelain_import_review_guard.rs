@@ -5,6 +5,7 @@ use crate::support;
 
 use provenance_macros::verifies;
 use provenance_store::layout::ProvenanceLayout;
+use provenance_transport::repository::RepoContext;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -63,8 +64,10 @@ async fn mcp_import_on_a_scope_with_a_requirement_review_record_is_refused() {
     let layout = ProvenanceLayout::new(dir.path().to_str().unwrap());
     let repository = Repository { dir, layout };
     support::records::allow_reviewer(&repository);
-    let session = Session::start(support::fixture_host::full(&repository)).await;
-    import(&session, &repository, &document("The system keeps the record.")).await;
+    let root = repository.dir.path().to_str().unwrap().to_owned();
+    let session = Session::start(RepoContext::new(root, "default").host().unwrap()).await;
+    let stored = import(&session, &repository, &document("The system keeps the record.")).await;
+    assert_eq!(stored["records"], 2, "{stored}");
     let restated = import(
         &session,
         &repository,

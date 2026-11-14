@@ -2,12 +2,12 @@
 //! change the statement of a Requirement.
 
 use crate::support::import_reviews::{
-    apply_spec, document, import, import_with, patch_statement, reason, reasons, repository,
-    requirement, reviews, rule, state_files, AFTER, BEFORE,
+    apply_spec, document, import, import_with, patch_statement, provenance, reason, reasons,
+    repository, requirement, reviews, rule, state_files, AFTER, BEFORE,
 };
 use provenance_macros::verifies;
 use serde_json::{json, Value};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[test]
 #[verifies("rule_review_record_per_rule", examples)]
@@ -162,6 +162,41 @@ fn a_typed_spec_apply_that_restates_a_requirement_writes_no_record_for_a_rule_th
         BTreeSet::from([
             reason("rule_a", BEFORE, AFTER),
             reason("rule_c", BEFORE, AFTER),
+        ])
+    );
+}
+
+#[test]
+#[verifies("rule_workflowd_plan_explains_impact", examples)]
+fn a_typed_spec_plan_that_restates_a_requirement_asks_no_review_for_a_rule_that_it_removes() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = repository(dir.path(), "repo");
+    apply_spec(&repo, &spec(BEFORE, &["rule_a", "rule_b"]));
+
+    let plan = provenance()
+        .args(["api", "authoring-plans", "--method", "post", "--input", "-"])
+        .args(["--repo", repo.to_str().unwrap()])
+        .args(["--scope", "default", "--format", "json"])
+        .write_stdin(spec(AFTER, &["rule_a", "rule_c"]).to_string())
+        .assert()
+        .success();
+
+    let plan: Value = serde_json::from_slice(&plan.get_output().stdout).unwrap();
+    let review_required = plan["data"]["affected_rules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|rule| {
+            let id = rule["id"].as_str().unwrap().to_owned();
+            (id, rule["evidence"]["review_required"].as_bool().unwrap())
+        })
+        .collect::<BTreeMap<_, _>>();
+    assert_eq!(
+        review_required,
+        BTreeMap::from([
+            ("rule_a".to_owned(), true),
+            ("rule_b".to_owned(), false),
+            ("rule_c".to_owned(), true),
         ])
     );
 }

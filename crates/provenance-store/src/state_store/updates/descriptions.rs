@@ -19,7 +19,6 @@ impl StateStore {
                 required_text(statement)?;
                 super::super::statement_policy::ensure_statement_is_writable(held, statement)?;
             }
-            let rule_ids = held.rule_ids_for_requirement(&input.scope_id, &input.id)?;
             held.list_requirement_reviews(&input.scope_id)?;
             let path = shards::requirements_path(&held.layout, &input.scope_id);
             let mut before = String::new();
@@ -58,7 +57,6 @@ impl StateStore {
                     requirement_id: record.id.clone(),
                     before,
                     after: record.statement.clone(),
-                    rule_ids,
                 };
                 held.record_restatements(&input.scope_id, vec![restatement])
                     .map_err(crate::write_error::publication_started)?;

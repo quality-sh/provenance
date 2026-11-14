@@ -267,9 +267,12 @@ macro_rules! define_imported_scope_shards {
         }
 
         impl StateStore {
-            /// Writes the canonical record shards for one scope and the
-            /// Requirement review records of the change, and gives the number
-            /// of canonical records that it writes.
+            /// Puts the record shards of `shards` in place of each state file
+            /// below the scope folder, writes one Requirement review record
+            /// for each Rule that cites a Requirement whose statement the
+            /// import changes, and gives the number of records of `shards`
+            /// that it writes. The import removes review state that `shards`
+            /// cannot hold, so a caller first calls `ensure_review_portable`.
             pub fn import_scope(
                 &self,
                 scope: &ScopeId,
@@ -309,7 +312,7 @@ macro_rules! define_imported_scope_shards {
                         shards.resolutions, &[], shards.questions, shards.rules,
                     )?;
                     let reviews = super::import_reviews::ImportReviews::read(
-                        store, scope, shards.requirements, shards.rules,
+                        store, scope, shards.requirements,
                     )?;
                     store.delete_state_keys_under(
                         &store.layout.scopes_dir().join(scope.as_str()),

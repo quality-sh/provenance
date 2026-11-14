@@ -19,7 +19,6 @@ impl Replacement {
         scope: &ScopeId,
         result: &TypedSpecResult,
         requirement_resources: &[ReconciledResource],
-        rule_resources: &[ReconciledResource],
     ) -> anyhow::Result<()> {
         let replacements = self
             .sources
@@ -66,7 +65,7 @@ impl Replacement {
                 self.implementations,
             )?;
             self.cascade.publish(store, scope)?;
-            store.raise_requirement_reviews(scope, requirement_resources, rule_resources)
+            store.raise_requirement_reviews(scope, requirement_resources)
         })
     }
 }

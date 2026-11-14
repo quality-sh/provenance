@@ -1,5 +1,5 @@
 use crate::state_store::{
-    requirement_statement_changes, StateStore, TypedResourceKind, TypedSpecResult,
+    requirement_statement_changes, ReconcileState, StateStore, TypedResourceKind, TypedSpecResult,
 };
 use provenance_core::{RequirementReview, ScopeId, StableId};
 use serde::{Deserialize, Serialize};
@@ -65,7 +65,8 @@ impl RuleEvidence {
 /// Collects the reviews already on file plus the ones this plan would raise.
 ///
 /// Records written by a previous apply are the standing answer. The planned
-/// change adds what restating the Requirement now would ask for.
+/// change adds what restating the Requirement now would ask for, for each Rule
+/// that cites the Requirement after the apply.
 pub(super) fn reviews(
     store: &StateStore,
     scope: &ScopeId,
@@ -82,14 +83,22 @@ pub(super) fn reviews(
             push_unique(&mut rules, rule);
         }
     }
+    let typed_rules = reconciliation
+        .resources
+        .iter()
+        .filter(|resource| resource.kind == TypedResourceKind::Rule);
+    let removed: Vec<&StableId> = typed_rules
+        .clone()
+        .filter(|resource| resource.state == ReconcileState::Deleted)
+        .map(|resource| &resource.id)
+        .collect();
     for change in requirement_statement_changes(&reconciliation.resources) {
         let mut affected = store.rule_ids_for_requirement(scope, &change.requirement_id)?;
-        for resource in reconciliation.resources.iter().filter(|resource| {
-            resource.kind == TypedResourceKind::Rule
-                && resource.parent.as_deref() == Some(change.requirement_key.as_str())
-        }) {
+        let key = Some(change.requirement_key.as_str());
+        for resource in typed_rules.clone().filter(|resource| resource.parent.as_deref() == key) {
             push_unique(&mut affected, resource.id.clone());
         }
+        affected.retain(|rule| !removed.contains(&rule));
         for rule in affected {
             push_reason(
                 &mut by_rule,

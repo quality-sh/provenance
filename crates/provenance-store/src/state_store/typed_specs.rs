@@ -108,31 +108,21 @@ impl StateStore {
         super::readers::record_fault(self, &path, shared.id.as_str(), shared.to_string())
     }
 
-    /// Puts the evidence of every Rule under a restated Requirement up for review.
+    /// Puts the evidence of every Rule that cites a restated Requirement after the apply up for
+    /// review.
     fn raise_requirement_reviews(
         &self,
         scope_id: &ScopeId,
         requirements: &[ReconciledResource],
-        rules: &[ReconciledResource],
     ) -> anyhow::Result<()> {
-        let mut restatements = Vec::new();
-        for change in requirement_reviews::requirement_statement_changes(requirements) {
-            let mut rule_ids = self.rule_ids_for_requirement(scope_id, &change.requirement_id)?;
-            for rule in rules
-                .iter()
-                .filter(|rule| rule.parent.as_deref() == Some(change.requirement_key.as_str()))
-            {
-                if !rule_ids.contains(&rule.id) {
-                    rule_ids.push(rule.id.clone());
-                }
-            }
-            restatements.push(requirement_reviews::Restatement {
+        let restatements = requirement_reviews::requirement_statement_changes(requirements)
+            .into_iter()
+            .map(|change| requirement_reviews::Restatement {
                 requirement_id: change.requirement_id,
                 before: change.before,
                 after: change.after,
-                rule_ids,
-            });
-        }
+            })
+            .collect();
         self.record_restatements(scope_id, restatements)
     }
 

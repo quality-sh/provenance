@@ -67,9 +67,7 @@ pub use inputs::{
     UpdateQuestionInput,
 };
 pub use proposal_surfaces::{ProposalDemand, ProposalSurfaceReason, SurfacedProposal, TopicClaim};
-pub use requirement_reviews::{
-    requirement_statement_changes, RequirementReviewInput, RequirementStatementChange,
-};
+pub use requirement_reviews::{requirement_statement_changes, RequirementStatementChange};
 pub use scope_ingestion::ScopeShards;
 pub(crate) use statement_policy::StatementWriteError;
 pub use typed_specs::{decide_typed_spec, TypedSpecDecision, TypedSpecView};

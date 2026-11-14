@@ -50,42 +50,47 @@ pub fn requirement_statement_changes(
 }
 
 /// One Rule whose evidence a restated Requirement puts up for review.
-pub struct RequirementReviewInput {
-    pub rule_id: StableId,
-    pub requirement_id: StableId,
-    pub field: String,
-    pub before: String,
-    pub after: String,
-    pub changed_at: i64,
+struct RequirementReviewInput {
+    rule_id: StableId,
+    requirement_id: StableId,
+    field: String,
+    before: String,
+    after: String,
+    changed_at: i64,
 }
 
-/// One changed Requirement statement and the Rules whose evidence the change puts up for review.
+/// One changed Requirement statement.
 pub(super) struct Restatement {
     pub requirement_id: StableId,
     pub before: String,
     pub after: String,
-    pub rule_ids: Vec<StableId>,
 }
 
 impl StateStore {
-    /// Writes one review record for each Rule of each restated Requirement, at the time of the
-    /// store clock. A record of the same change that is on file stays, so a cleared review does
-    /// not open again.
+    /// Writes one review record for each Rule that cites a restated Requirement after the
+    /// change, at the time of the store clock. The caller writes the change first. A record of
+    /// the same change that is on file stays, so a cleared review does not open again.
     #[rule("rule_review_record_per_rule")]
     pub(super) fn record_restatements(
         &self,
         scope: &ScopeId,
         restatements: Vec<Restatement>,
     ) -> anyhow::Result<()> {
-        if restatements.iter().all(|change| change.rule_ids.is_empty()) {
+        let mut cited = Vec::new();
+        for change in restatements {
+            let rule_ids = self.rule_ids_for_requirement(scope, &change.requirement_id)?;
+            if !rule_ids.is_empty() {
+                cited.push((change, rule_ids));
+            }
+        }
+        if cited.is_empty() {
             return Ok(());
         }
         let changed_at = now_millis(&*self.clock())?;
-        let desired = restatements
+        let desired = cited
             .into_iter()
-            .flat_map(|change| {
-                change
-                    .rule_ids
+            .flat_map(|(change, rule_ids)| {
+                rule_ids
                     .into_iter()
                     .map(move |rule_id| RequirementReviewInput {
                         rule_id,

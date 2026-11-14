@@ -53,7 +53,6 @@ enum Outcome {
     Replace {
         replacement: Box<publication::Replacement>,
         requirement_resources: Vec<ReconciledResource>,
-        rule_resources: Vec<ReconciledResource>,
     },
 }
 
@@ -72,15 +71,8 @@ impl TypedSpecDecision {
             Outcome::Replace {
                 replacement,
                 requirement_resources,
-                rule_resources,
             } => {
-                replacement.publish(
-                    store,
-                    scope_id,
-                    &self.result,
-                    &requirement_resources,
-                    &rule_resources,
-                )?;
+                replacement.publish(store, scope_id, &self.result, &requirement_resources)?;
                 Ok(self.result)
             }
         }
@@ -191,7 +183,6 @@ pub fn decide_typed_spec(
                 cascade,
             }),
             requirement_resources,
-            rule_resources,
         },
     })
 }
