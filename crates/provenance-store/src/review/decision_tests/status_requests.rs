@@ -391,7 +391,10 @@ fn a_requirement_status_request_with_another_field_is_refused() {
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
 
     refused(
-        requirement_request(&store, &json!({"status":"active","statement":"Statement v2"})),
+        requirement_request(
+            &store,
+            &json!({"status":"active","statement":"Statement v2"}),
+        ),
         "cannot change other fields",
     );
 
