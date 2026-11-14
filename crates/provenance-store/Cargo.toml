@@ -136,6 +136,10 @@ name = "discussion_excerpt"
 required-features = ["host"]
 
 [[test]]
+name = "cursor_key_repair"
+required-features = ["host"]
+
+[[test]]
 name = "discussion_kinds"
 required-features = ["host"]
 
