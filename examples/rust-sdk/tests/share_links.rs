@@ -3,8 +3,10 @@
 
 use std::time::{Duration, SystemTime};
 
+mod provenance_spec;
+
 use provenance_sdk::verify;
-use rust_sdk_example::provenance_spec::share_links;
+use provenance_spec::share_links;
 use rust_sdk_example::share_links::create_share_link;
 
 const THIRTY_DAYS: Duration = Duration::from_secs(30 * 24 * 60 * 60);
