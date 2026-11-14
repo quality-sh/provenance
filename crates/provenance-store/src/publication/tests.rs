@@ -69,7 +69,16 @@ fn recovery_rejects_traversal_outside_import_transactions() {
         .unwrap_err()
         .to_string();
 
-    assert!(error.contains(" is outside "), "{error}");
+    assert_eq!(
+        error,
+        format!(
+            "transaction {} is outside {}",
+            layout.import_transactions_dir().join("../../../outside"),
+            dunce::canonicalize(layout.import_transactions_dir())
+                .unwrap()
+                .display()
+        )
+    );
     assert!(outside.join("sentinel").is_file());
 }
 

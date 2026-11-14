@@ -243,11 +243,21 @@ fn every_refusal_states_the_containment_fault() {
                     continue;
                 };
                 let message = error.to_string();
+                let directory = layouts.layout.import_transactions_dir();
+                let cache = &layouts.cache;
+                let texts = [
+                    format!(
+                        "transaction {candidate} is outside {}",
+                        cache.join("import-transactions")
+                    ),
+                    format!("transaction {candidate} is not a directory"),
+                    format!("transaction {candidate} contains a symlink component"),
+                    format!("transaction directory {directory} is outside {cache}"),
+                    format!("transaction directory {directory} is not a directory"),
+                    format!("transaction directory {directory} contains a symlink component"),
+                ];
                 assert!(
-                    message.contains(" is outside ")
-                        || message.contains("is not a directory")
-                        || message.contains("symlink component")
-                        || error.downcast_ref::<std::io::Error>().is_some(),
+                    texts.contains(&message) || error.downcast_ref::<std::io::Error>().is_some(),
                     "transactions {transactions:?}, leaf {leaf:?}, shape {shape}: {message}"
                 );
             }

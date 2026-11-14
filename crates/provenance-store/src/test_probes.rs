@@ -149,20 +149,20 @@ pub fn crash_at(label: &'static str) {
     arm(label, move || anyhow::bail!("injected crash at {label}"));
 }
 
-/// Arms `label` to end the process at its next write to a file, with no
-/// unwind, as a kill does.
+/// Arms `label` to end the process, with no unwind as a kill does, at its
+/// first write of a byte at or past `limit` in a file.
 ///
-/// The probe sets the file size limit to zero, so the system sends `SIGXFSZ`
-/// at the next byte that the process writes to a file. The probe also sets
-/// the core file size limit to zero.
+/// The probe sets the file size limit to `limit`, so the system sends
+/// `SIGXFSZ` at that byte. The probe also sets the core file size limit to
+/// zero.
 #[cfg(all(test, unix, feature = "host"))]
-pub fn stop_at_next_file_write(label: &'static str) {
-    arm(label, || {
+pub fn stop_at_file_size(label: &'static str, limit: u64) {
+    arm(label, move || {
         use rustix::process::{getrlimit, setrlimit, Resource};
-        for resource in [Resource::Core, Resource::Fsize] {
-            let mut limit = getrlimit(resource);
-            limit.current = Some(0);
-            setrlimit(resource, limit)?;
+        for (resource, value) in [(Resource::Core, 0), (Resource::Fsize, limit)] {
+            let mut current = getrlimit(resource);
+            current.current = Some(value);
+            setrlimit(resource, current)?;
         }
         Ok(())
     });

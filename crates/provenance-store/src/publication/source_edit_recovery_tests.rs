@@ -7,16 +7,17 @@ use crate::{
     test_probes,
 };
 use camino::Utf8Path;
+use crate::stopped_child::{files_named, names, run_as_child, stop_in_child};
 use provenance_macros::verifies;
 
-const BEFORE: &[u8] = b"before\n";
-const AFTER: &[u8] = b"after\n";
+pub(super) const BEFORE: &[u8] = b"before\n";
+pub(super) const AFTER: &[u8] = b"after\n";
 
-fn canonical_root(temp: &tempfile::TempDir) -> camino::Utf8PathBuf {
+pub(super) fn canonical_root(temp: &tempfile::TempDir) -> camino::Utf8PathBuf {
     camino::Utf8PathBuf::from_path_buf(dunce::canonicalize(temp.path()).unwrap()).unwrap()
 }
 
-fn fixture() -> tempfile::TempDir {
+pub(super) fn fixture() -> tempfile::TempDir {
     let temp = tempfile::tempdir().unwrap();
     let root_path = canonical_root(&temp);
     let root = root_path.as_path();
@@ -27,7 +28,7 @@ fn fixture() -> tempfile::TempDir {
     temp
 }
 
-fn try_publish(root: &Utf8Path) -> anyhow::Result<()> {
+pub(super) fn try_publish(root: &Utf8Path) -> anyhow::Result<()> {
     let layout = ProvenanceLayout::new(root);
     let files = RepositoryFiles::open(root).unwrap();
     let held = files
@@ -40,12 +41,12 @@ fn try_publish(root: &Utf8Path) -> anyhow::Result<()> {
     })
 }
 
-fn publish(root: &Utf8Path) {
+pub(super) fn publish(root: &Utf8Path) {
     try_publish(root).unwrap();
 }
 
 /// The source file and the state value of the fixture at `root`.
-fn published(root: &Utf8Path) -> (Vec<u8>, Vec<u8>) {
+pub(super) fn published(root: &Utf8Path) -> (Vec<u8>, Vec<u8>) {
     let layout = ProvenanceLayout::new(root);
     (
         std::fs::read(root.join("source.txt")).unwrap(),
@@ -53,30 +54,23 @@ fn published(root: &Utf8Path) -> (Vec<u8>, Vec<u8>) {
     )
 }
 
+/// The test that the stop tests run as a child.
+pub(super) const CHILD: &str = "operations::files::tests::source_edit_recovery_tests::crash_child";
+
 #[test]
 fn crash_child() {
-    let Ok(root) = std::env::var("PROVENANCE_SOURCE_EDIT_CRASH_ROOT") else {
-        return;
-    };
-    let phase = std::env::var("PROVENANCE_SOURCE_EDIT_CRASH_PHASE").unwrap();
-    let phase = match phase.as_str() {
-        "state_prepared" => "state_prepared",
-        "source_edit_temp_prepared" => "source_edit_temp_prepared",
-        "source_edit_prepared" => "source_edit_prepared",
-        "source_edit_backup_created" => "source_edit_backup_created",
-        "source_edit_state_installed" => "source_edit_state_installed",
-        "source_edit_file_installed" => "source_edit_file_installed",
-        _ => panic!("unknown crash phase"),
-    };
-    #[cfg(unix)]
-    if std::env::var_os("PROVENANCE_SOURCE_EDIT_STOP_AT_FILE_WRITE").is_some() {
-        test_probes::stop_at_next_file_write(phase);
-        publish(Utf8Path::new(&root));
-        panic!("the file write after the phase was not reached");
-    }
-    test_probes::arm(phase, || std::process::exit(86));
-    publish(Utf8Path::new(&root));
-    panic!("crash phase was not reached");
+    run_as_child(
+        &[
+            "state_prepared",
+            "repository_file_clone_parent",
+            "source_edit_temp_prepared",
+            "source_edit_prepared",
+            "source_edit_backup_created",
+            "source_edit_state_installed",
+            "source_edit_file_installed",
+        ],
+        publish,
+    );
 }
 
 #[test]
@@ -90,7 +84,7 @@ fn each_source_edit_phase_recovers_matching_file_and_state() {
         let temp = fixture();
         let root_path = canonical_root(&temp);
         let root = root_path.as_path();
-        stop_in_child(root, phase);
+        stop_in_child(CHILD, root, phase);
 
         let layout = ProvenanceLayout::new(root);
         with_repository_publication(&layout, |_| Ok(())).unwrap();
@@ -109,48 +103,13 @@ fn each_source_edit_phase_recovers_matching_file_and_state() {
     }
 }
 
-/// The command that runs the source edit of the fixture at `root` in a
-/// child process, up to the probe at `phase`.
-fn child(root: &Utf8Path, phase: &str) -> std::process::Command {
-    let mut command = std::process::Command::new(std::env::current_exe().unwrap());
-    command
-        .args([
-            "--exact",
-            "operations::files::tests::source_edit_recovery_tests::crash_child",
-            "--nocapture",
-        ])
-        .env("PROVENANCE_SOURCE_EDIT_CRASH_ROOT", root.as_str())
-        .env("PROVENANCE_SOURCE_EDIT_CRASH_PHASE", phase)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
-    command
-}
-
-/// Runs the source edit of the fixture at `root` in a child process. The
-/// probe at `phase` ends the process with no unwind, as a kill does.
-fn stop_in_child(root: &Utf8Path, phase: &str) {
-    let status = child(root, phase).status().unwrap();
-    assert_eq!(status.code(), Some(86), "{phase}");
-}
-
-/// The names of the entries of `directory`.
-fn names(directory: &Utf8Path) -> Vec<String> {
-    std::fs::read_dir(directory)
-        .unwrap()
-        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-        .collect()
-}
-
 /// The names of the prepared files of a source edit next to the target.
-fn prepared_files(root: &Utf8Path) -> Vec<String> {
-    names(root)
-        .into_iter()
-        .filter(|name| Utf8Path::new(name).extension() == Some("tmp"))
-        .collect()
+pub(super) fn prepared_files(root: &Utf8Path) -> Vec<String> {
+    files_named(root, ".source.txt.provenance-", ".tmp")
 }
 
 /// A stop after the copy of the state and before the record of the prepared
-/// file, and a stop after that record and before the marker.
+/// file, and a stop after the prepared file and before the marker.
 #[test]
 #[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
 fn a_stopped_source_edit_leaves_no_transaction_after_the_next_section_entry() {
@@ -159,7 +118,7 @@ fn a_stopped_source_edit_leaves_no_transaction_after_the_next_section_entry() {
         let root_path = canonical_root(&temp);
         let root = root_path.as_path();
         let layout = ProvenanceLayout::new(root);
-        stop_in_child(root, phase);
+        stop_in_child(CHILD, root, phase);
         assert_eq!(
             names(&layout.source_edit_transactions_dir()).len(),
             1,
@@ -169,7 +128,7 @@ fn a_stopped_source_edit_leaves_no_transaction_after_the_next_section_entry() {
         assert_eq!(
             prepared_files(root).len(),
             usize::from(phase == "source_edit_temp_prepared"),
-            "{phase}: the stopped write left its prepared file after its record"
+            "{phase}: the stopped write left its prepared file"
         );
 
         with_repository_publication(&layout, |_| Ok(())).unwrap();
@@ -198,7 +157,7 @@ fn recovery_refuses_third_file_bytes_without_overwriting_them() {
     let temp = fixture();
     let root_path = canonical_root(&temp);
     let root = root_path.as_path();
-    stop_in_child(root, "source_edit_prepared");
+    stop_in_child(CHILD, root, "source_edit_prepared");
     std::fs::write(root.join("source.txt"), b"external\n").unwrap();
     let layout = ProvenanceLayout::new(root);
 
@@ -249,7 +208,7 @@ fn final_marker_clears_when_cleanup_lost_its_result() {
     let temp = fixture();
     let root_path = canonical_root(&temp);
     let root = root_path.as_path();
-    stop_in_child(root, "source_edit_file_installed");
+    stop_in_child(CHILD, root, "source_edit_file_installed");
     let layout = ProvenanceLayout::new(root);
     let marker: serde_json::Value =
         serde_json::from_slice(&std::fs::read(layout.source_edit_marker_path()).unwrap()).unwrap();
@@ -310,9 +269,7 @@ fn a_file_and_a_link_in_the_source_edit_transactions_stay_and_the_section_opens(
 
     with_repository_publication(&layout, |_| Ok(())).unwrap();
 
-    let mut left = names(&transactions);
-    left.sort();
-    assert_eq!(left, ["file", "link"]);
+    assert_eq!(names(&transactions), ["file", "link"]);
     assert_eq!(
         std::fs::read_to_string(outside.join("sentinel")).unwrap(),
         "keep"
@@ -366,14 +323,25 @@ fn a_section_entry_ends_a_published_source_edit_whose_transaction_is_removed_in_
     let root_path = canonical_root(&temp);
     let root = root_path.as_path();
     let layout = ProvenanceLayout::new(root);
-    stop_in_child(root, "source_edit_file_installed");
+    stop_in_child(CHILD, root, "source_edit_file_installed");
     let transactions = layout.source_edit_transactions_dir();
     let transaction = transactions.join(&names(&transactions)[0]);
 
     std::fs::set_permissions(&transactions, std::fs::Permissions::from_mode(0o500)).unwrap();
     let failed = with_repository_publication(&layout, |_| Ok(()));
     std::fs::set_permissions(&transactions, std::fs::Permissions::from_mode(0o755)).unwrap();
-    assert!(failed.is_err(), "the removal fails");
+    let error = crate::write_error::WriteError(failed.unwrap_err());
+    assert!(matches!(
+        error.safe(),
+        crate::write_error::WriteFailure::WriteFailed { .. }
+    ));
+    assert_eq!(
+        format!("{:#}", error.0),
+        format!(
+            "remove transaction directory {transaction}: {}",
+            std::io::Error::from_raw_os_error(13)
+        )
+    );
     assert_eq!(
         names(&transaction),
         Vec::<String>::new(),
@@ -389,28 +357,22 @@ fn a_section_entry_ends_a_published_source_edit_whose_transaction_is_removed_in_
     assert_eq!(published(root), (AFTER.to_vec(), AFTER.to_vec()));
 }
 
-/// The child stops in the write of the prepared marker: the probe before
-/// that write sets the file size limit to zero, so the system ends the child
-/// at the first byte of the temporary file of the marker.
+/// The child stops in the write of the prepared marker: after the probe
+/// before that write, the system ends the child at the first byte of the
+/// temporary file of the marker.
 #[cfg(unix)]
 #[test]
 #[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
 fn a_stop_in_the_write_of_the_source_edit_marker_leaves_no_file_after_the_next_section_entry() {
-    use std::os::unix::process::ExitStatusExt;
     let temp = fixture();
     let root_path = canonical_root(&temp);
     let root = root_path.as_path();
     let layout = ProvenanceLayout::new(root);
-    let status = child(root, "source_edit_temp_prepared")
-        .env("PROVENANCE_SOURCE_EDIT_STOP_AT_FILE_WRITE", "1")
-        .status()
-        .unwrap();
+    crate::stopped_child::stop_in_child_at_file_size(CHILD, root, "source_edit_temp_prepared", 0);
+    let marker_temporaries =
+        || files_named(&layout.cache_dir(), ".source-edit-publication.json.", ".tmp");
     assert_eq!(
-        status.signal(),
-        Some(rustix::process::Signal::XFSZ.as_raw())
-    );
-    assert_eq!(
-        hidden_files(&layout.cache_dir()).len(),
+        marker_temporaries().len(),
         1,
         "the stop left the temporary file of the marker"
     );
@@ -418,19 +380,11 @@ fn a_stop_in_the_write_of_the_source_edit_marker_leaves_no_file_after_the_next_s
 
     with_repository_publication(&layout, |_| Ok(())).unwrap();
 
-    assert_eq!(hidden_files(&layout.cache_dir()), Vec::<String>::new());
+    assert_eq!(marker_temporaries(), Vec::<String>::new());
     assert_eq!(
         names(&layout.source_edit_transactions_dir()),
         Vec::<String>::new()
     );
     assert_eq!(prepared_files(root), Vec::<String>::new());
     assert_eq!(published(root), (BEFORE.to_vec(), BEFORE.to_vec()));
-}
-
-/// The names of the regular files in `directory` whose names start with a dot.
-fn hidden_files(directory: &Utf8Path) -> Vec<String> {
-    names(directory)
-        .into_iter()
-        .filter(|name| name.starts_with('.') && directory.join(name).is_file())
-        .collect()
 }

@@ -82,6 +82,7 @@ fn review_crash_child() {
         "state_after_install_rename" => "state_after_install_rename",
         "repository_file_after_displace" => "repository_file_after_displace",
         "repository_file_after_backup_check" => "repository_file_after_backup_check",
+        "repository_file_unlink_backup" => "repository_file_unlink_backup",
         "source_edit_transaction_removed" => "source_edit_transaction_removed",
         _ => panic!("unknown crash phase"),
     };
@@ -98,6 +99,7 @@ fn every_physical_transition_recovers_exact_file_and_state_bytes() {
         ("state_after_install_rename", (AFTER, AFTER)),
         ("repository_file_after_displace", (AFTER, AFTER)),
         ("repository_file_after_backup_check", (AFTER, AFTER)),
+        ("repository_file_unlink_backup", (AFTER, AFTER)),
         ("source_edit_transaction_removed", (AFTER, AFTER)),
     ] {
         let temp = fixture();
@@ -122,7 +124,10 @@ fn every_physical_transition_recovers_exact_file_and_state_bytes() {
             !names.iter().any(|name| {
                 std::path::Path::new(name)
                     .extension()
-                    .is_some_and(|extension| extension.eq_ignore_ascii_case("tmp"))
+                    .is_some_and(|extension| {
+                        extension.eq_ignore_ascii_case("tmp")
+                            || extension.eq_ignore_ascii_case("backup")
+                    })
             }),
             "{phase}: {names:?}"
         );

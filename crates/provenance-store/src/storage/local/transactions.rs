@@ -186,6 +186,7 @@ pub fn contained_transaction(
         &directory,
         transaction,
         RecoveryUse::Touched,
+        "transaction",
     )
 }
 
@@ -203,6 +204,7 @@ pub fn contained_missing_transaction(
         &kind.directory(layout),
         transaction,
         RecoveryUse::AlreadyGone,
+        "transaction",
     )
     .map(|_| ())
 }
@@ -219,6 +221,7 @@ pub fn contained_directory(
         &layout.cache_dir(),
         &kind.directory(layout),
         RecoveryUse::Touched,
+        "transaction directory",
     )
 }
 
@@ -229,43 +232,46 @@ enum RecoveryUse {
 }
 
 /// Publication recovery touches only the selected transaction directory inside the cache.
+/// `subject` names the candidate in the error texts.
 #[rule("rule_recovery_stays_in_cache")]
 fn recovery_dir_inside_cache(
     canonical_container: &Utf8Path,
     written_container: &Utf8Path,
     candidate: &Utf8Path,
     recovery_use: RecoveryUse,
+    subject: &str,
 ) -> anyhow::Result<Utf8PathBuf> {
     ensure_written_path_has_no_symlinks(
         canonical_container,
         written_container,
         candidate,
         recovery_use,
+        subject,
     )?;
     let parent = candidate
         .parent()
-        .ok_or_else(|| crate::refusal::fault!("transaction path {candidate} has no parent"))?;
+        .ok_or_else(|| crate::refusal::fault!("{subject} {candidate} has no parent"))?;
     let canonical_parent = dunce::canonicalize(parent)?;
     crate::write_error::ensure!(
         Fault,
         canonical_parent == canonical_container.as_std_path(),
-        "transaction path {candidate} is outside {canonical_container}"
+        "{subject} {candidate} is outside {canonical_container}"
     );
     let name = candidate.file_name().ok_or_else(|| {
-        crate::refusal::fault!("transaction path {candidate} is outside {canonical_container}")
+        crate::refusal::fault!("{subject} {candidate} is outside {canonical_container}")
     })?;
     let contained = canonical_container.join(name);
     if recovery_use == RecoveryUse::Touched {
-        let resolved = canonical_utf8(candidate, "transaction path")?;
+        let resolved = canonical_utf8(candidate, subject)?;
         crate::write_error::ensure!(
             Fault,
             resolved == contained,
-            "transaction path {candidate} is outside {canonical_container}"
+            "{subject} {candidate} is outside {canonical_container}"
         );
         crate::write_error::ensure!(
             Fault,
             std::fs::symlink_metadata(&resolved)?.is_dir(),
-            "transaction path {candidate} is not a directory"
+            "{subject} {candidate} is not a directory"
         );
     }
     Ok(contained)
@@ -276,6 +282,7 @@ fn ensure_written_path_has_no_symlinks(
     written_container: &Utf8Path,
     candidate: &Utf8Path,
     recovery_use: RecoveryUse,
+    subject: &str,
 ) -> anyhow::Result<()> {
     let (written_container, relative) = candidate
         .strip_prefix(written_container)
@@ -302,7 +309,7 @@ fn ensure_written_path_has_no_symlinks(
                 })
         })
         .ok_or_else(|| {
-            crate::refusal::fault!("transaction path {candidate} is outside {canonical_container}")
+            crate::refusal::fault!("{subject} {candidate} is outside {canonical_container}")
         })?;
     let mut written = written_container.to_path_buf();
     let component_count = relative.components().count();
@@ -316,7 +323,7 @@ fn ensure_written_path_has_no_symlinks(
                     crate::write_error::ensure!(
                         Fault,
                         !metadata.file_type().is_symlink(),
-                        "transaction path {candidate} contains a symlink component"
+                        "{subject} {candidate} contains a symlink component"
                     );
                     continue;
                 }
@@ -326,7 +333,7 @@ fn ensure_written_path_has_no_symlinks(
         crate::write_error::ensure!(
             Fault,
             !metadata.file_type().is_symlink(),
-            "transaction path {candidate} contains a symlink component"
+            "{subject} {candidate} contains a symlink component"
         );
     }
     Ok(())

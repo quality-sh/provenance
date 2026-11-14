@@ -9,6 +9,7 @@ use crate::cache::tests::fixtures::{open, seeded_layout, sid};
 use crate::cache::{catch_up_state, open_cache};
 use crate::layout::ProvenanceLayout;
 use crate::state_store::StateStore;
+use crate::stopped_child::{files_named, names, run_as_child};
 use crate::test_probes;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ScopeId, Stamp};
@@ -167,60 +168,31 @@ fn assert_reopened(fixture: &Fixture, committed: bool, phase: &str) {
     assert_eq!(serial(&repository), expected_serial, "{phase}: serial");
 }
 
-/// The entries of the transaction directory of the cache under `root`.
+/// The entries of the transaction directory of the cache under `root`, in
+/// name order.
 fn transactions(root: &Utf8Path) -> Vec<Utf8PathBuf> {
     let directory = ProvenanceLayout::new(root).import_transactions_dir();
-    std::fs::read_dir(directory)
-        .unwrap()
-        .map(|entry| Utf8PathBuf::from_path_buf(entry.unwrap().path()).unwrap())
+    names(&directory)
+        .iter()
+        .map(|name| directory.join(name))
         .collect()
 }
 
-/// The command that runs the staged write of `fixture` in a child process,
-/// up to the probe at `phase`.
-fn child(fixture: &Fixture, phase: &str) -> std::process::Command {
-    let mut command = std::process::Command::new(std::env::current_exe().unwrap());
-    command
-        .args([
-            "--exact",
-            "repository::stage_recovery_tests::crash_child",
-            "--nocapture",
-        ])
-        .env("PROVENANCE_STAGE_CRASH_ROOT", fixture.root.as_str())
-        .env("PROVENANCE_STAGE_CRASH_PHASE", phase)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
-    command
-}
+/// The test that the stop tests run as a child.
+const CHILD: &str = "repository::stage_recovery_tests::crash_child";
 
 /// Runs the staged write of `fixture` in a child process. The probe at
 /// `phase` ends the process with no unwind, as a kill does.
 fn stop_in_child(fixture: &Fixture, phase: &str) {
-    let status = child(fixture, phase).status().unwrap();
-    assert_eq!(status.code(), Some(86), "{phase}");
+    crate::stopped_child::stop_in_child(CHILD, &fixture.root, phase);
 }
 
 #[test]
 fn crash_child() {
-    let Ok(root) = std::env::var("PROVENANCE_STAGE_CRASH_ROOT") else {
-        return;
-    };
-    let phase = std::env::var("PROVENANCE_STAGE_CRASH_PHASE").unwrap();
-    let phase = CRASH_PHASES
-        .iter()
-        .map(|(label, _)| *label)
-        .find(|label| *label == phase)
-        .expect("known crash phase");
-    let repository = open(&ProvenanceLayout::new(Utf8PathBuf::from(root)));
-    #[cfg(unix)]
-    if std::env::var_os("PROVENANCE_STAGE_STOP_AT_FILE_WRITE").is_some() {
-        test_probes::stop_at_next_file_write(phase);
-        stage_rule(&repository).unwrap();
-        panic!("the file write after the phase was not reached");
-    }
-    test_probes::arm(phase, || std::process::exit(86));
-    stage_rule(&repository).unwrap();
-    panic!("crash phase was not reached");
+    let phases = CRASH_PHASES.map(|(label, _)| label);
+    run_as_child(&phases, |root| {
+        stage_rule(&open(&ProvenanceLayout::new(root.to_owned()))).unwrap();
+    });
 }
 
 #[test]
@@ -357,7 +329,19 @@ fn a_section_entry_ends_a_published_import_whose_transaction_is_removed_in_part(
     std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o500)).unwrap();
     let failed = crate::publication::with_repository_publication(&layout, |_| Ok(()));
     std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o755)).unwrap();
-    assert!(failed.is_err(), "the removal fails");
+    let error = crate::write_error::WriteError(failed.unwrap_err());
+    assert!(matches!(
+        error.safe(),
+        crate::write_error::WriteFailure::WriteFailed { .. }
+    ));
+    assert_eq!(
+        format!("{:#}", error.0),
+        format!(
+            "remove transaction directory {}: {}",
+            dunce::canonicalize(&transaction).unwrap().display(),
+            std::io::Error::from_raw_os_error(13)
+        )
+    );
     assert_eq!(
         std::fs::read_dir(&transaction).unwrap().count(),
         0,
@@ -368,44 +352,27 @@ fn a_section_entry_ends_a_published_import_whose_transaction_is_removed_in_part(
     assert_reopened(&fixture, true, "state_published");
 }
 
-/// The child stops in the write of the Prepared marker: the probe before
-/// that write sets the file size limit to zero, so the system ends the child
-/// at the first byte of the temporary file of the marker.
+/// The child stops in the write of the Prepared marker: after the probe
+/// before that write, the system ends the child at the first byte of the
+/// temporary file of the marker.
 #[cfg(unix)]
 #[test]
 #[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
 fn a_stop_in_the_write_of_the_import_marker_leaves_no_file_after_the_next_section_entry() {
-    use std::os::unix::process::ExitStatusExt;
     let fixture = fixture();
     let layout = ProvenanceLayout::new(fixture.root.clone());
-    assert_eq!(hidden_cache_files(&layout), Vec::<Utf8PathBuf>::new());
+    let marker_temporaries = || files_named(&layout.cache_dir(), ".import-publication.json.", ".tmp");
+    assert_eq!(marker_temporaries(), Vec::<String>::new());
 
-    let status = child(&fixture, "state_prepared")
-        .env("PROVENANCE_STAGE_STOP_AT_FILE_WRITE", "1")
-        .status()
-        .unwrap();
+    crate::stopped_child::stop_in_child_at_file_size(CHILD, &fixture.root, "state_prepared", 0);
 
     assert_eq!(
-        status.signal(),
-        Some(rustix::process::Signal::XFSZ.as_raw())
-    );
-    assert_eq!(
-        hidden_cache_files(&layout).len(),
+        marker_temporaries().len(),
         1,
         "the stop left the temporary file of the marker"
     );
     assert!(!layout.publication_marker_path().exists());
     crate::publication::with_repository_publication(&layout, |_| Ok(())).unwrap();
-    assert_eq!(hidden_cache_files(&layout), Vec::<Utf8PathBuf>::new());
+    assert_eq!(marker_temporaries(), Vec::<String>::new());
     assert_reopened(&fixture, false, "the write of the Prepared marker");
-}
-
-/// The regular files directly in the cache of `layout` whose names start
-/// with a dot.
-fn hidden_cache_files(layout: &ProvenanceLayout) -> Vec<Utf8PathBuf> {
-    std::fs::read_dir(layout.cache_dir())
-        .unwrap()
-        .map(|entry| Utf8PathBuf::from_path_buf(entry.unwrap().path()).unwrap())
-        .filter(|path| path.is_file() && path.file_name().is_some_and(|name| name.starts_with('.')))
-        .collect()
 }
