@@ -40,7 +40,7 @@ async fn the_plan_route_shows_the_deletion_that_the_apply_route_refuses() {
     let repo = Repository::new("The shared graph is readable.");
     let host = host(&repo, true);
     let kept = ("kept", "The system retains records.");
-    let plain = ("plain", "The system stores records.");
+    let unreviewed = ("plain", "The system stores records.");
     let mut applied = Value::Null;
     // The second statement is a typed change, so the apply opens a submission.
     for statement in ["The host stops.", "The host starts."] {
@@ -48,7 +48,7 @@ async fn the_plan_route_shows_the_deletion_that_the_apply_route_refuses() {
             &host,
             "POST",
             "/authoring-changes",
-            Some(spec(&[("restated", statement), plain, kept])),
+            Some(spec(&[("restated", statement), unreviewed, kept])),
         )
         .await;
         assert_eq!(status, 200, "{answer}");
