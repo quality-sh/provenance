@@ -169,6 +169,32 @@ fn assert_base_moved(result: Result<(), PublishFailure>, base: &StateView, moved
     }
 }
 
+/// A set with no key on the current base changes nothing.
+pub fn an_empty_set_changes_nothing<H: Harness>(mut harness: H) -> H {
+    harness.seed(&[("manifest.json", b"{}"), (X, b"x")]);
+    let before = read(&harness);
+    for atomicity in [Atomicity::PerKey, Atomicity::WholeSet] {
+        let writes = WriteSet::new(atomicity).on_base(Arc::new(before.clone()));
+        publish(&harness, writes).unwrap();
+        assert_eq!(read(&harness), before);
+    }
+    harness
+}
+
+/// A set with no key on a view whose keys and bytes are no longer stored
+/// is refused.
+pub fn an_empty_set_on_a_moved_base_is_refused<H: Harness>(mut harness: H) {
+    harness.seed(&[("manifest.json", b"{}")]);
+    let base = read(&harness);
+    harness.seed(&[(X, b"moved")]);
+    let moved = read(&harness);
+    for atomicity in [Atomicity::PerKey, Atomicity::WholeSet] {
+        let writes = WriteSet::new(atomicity).on_base(Arc::new(base.clone()));
+        assert_base_moved(publish(&harness, writes), &base, &moved);
+        assert_eq!(read(&harness), moved);
+    }
+}
+
 /// A set that puts and deletes one key is refused before any key lands.
 pub fn publish_refuses_a_put_and_delete_of_one_key<H: Harness>(mut harness: H) {
     harness.seed(&[("manifest.json", b"{}")]);
@@ -325,6 +351,25 @@ mod tests {
         a_whole_set_on_a_moved_base_is_refused(local());
         a_whole_set_on_a_moved_base_is_refused(Memory::default());
         a_whole_set_on_a_moved_base_is_refused(Persisting::default());
+    }
+
+    /// The local adapter makes no transaction and no marker for it.
+    #[test]
+    #[verifies("rule_empty_write_set_writes_no_data", examples)]
+    fn each_adapter_an_empty_set_changes_nothing() {
+        let local = an_empty_set_changes_nothing(local());
+        assert!(!local.layout.import_transactions_dir().exists());
+        assert!(!local.layout.publication_marker_path().exists());
+        an_empty_set_changes_nothing(Memory::default());
+        an_empty_set_changes_nothing(Persisting::default());
+    }
+
+    #[test]
+    #[verifies("rule_adapter_refuses_a_set_on_a_moved_base", examples)]
+    fn each_adapter_an_empty_set_on_a_moved_base_is_refused() {
+        an_empty_set_on_a_moved_base_is_refused(local());
+        an_empty_set_on_a_moved_base_is_refused(Memory::default());
+        an_empty_set_on_a_moved_base_is_refused(Persisting::default());
     }
 
     #[test]

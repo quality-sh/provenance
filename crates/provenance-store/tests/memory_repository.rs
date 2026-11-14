@@ -248,6 +248,27 @@ fn a_repository_over_memory_makes_changes_and_imports_records_in_stages() {
     );
 }
 
+/// A stage that changes no key, such as an update to the stored content,
+/// gives the persistence no set and changes nothing.
+#[test]
+#[verifies("rule_empty_write_set_writes_no_data", examples)]
+fn a_stage_that_changes_no_key_gives_no_set() {
+    let memory = memory_repository();
+    let store = memory.repository.store();
+    store
+        .create_requirement(requirement_input("req_owner"))
+        .unwrap();
+    store.update_requirement(owner_description()).unwrap();
+    let before = memory.storage.read_view().unwrap();
+    let count = memory.recorded.0.lock().unwrap().len();
+
+    store.update_requirement(owner_description()).unwrap();
+    memory.repository.stage(false, None, |_| Ok(())).unwrap();
+
+    assert_eq!(memory.recorded.0.lock().unwrap().len(), count);
+    assert_eq!(memory.storage.read_view().unwrap(), before);
+}
+
 /// A change outside the engine refuses one write of a section as
 /// `state_changed` (409), and the next write of the same section reads the
 /// changed state and lands.

@@ -4,6 +4,15 @@ use crate::state_store::RecordStamp::ResolveFromRepository as StampFromGit;
 use provenance_core::NodeType;
 use provenance_macros::verifies;
 
+/// Puts two new empty shards in the stage, so it lands as a whole set.
+fn stage_two_new_shards(staged: &crate::state_store::StateStore) -> anyhow::Result<()> {
+    staged.publish_shards(
+        [NodeType::Topic, NodeType::Question]
+            .map(|kind| (crate::shards::path_for(&staged.layout, &scope(), kind), Vec::new()))
+            .into(),
+    )
+}
+
 #[test]
 fn concurrent_first_access_creates_publication_lock_directories_idempotently() {
     let directory = tempfile::tempdir().unwrap();
@@ -399,7 +408,7 @@ fn read_only_record_kinds_in_the_publication_swap_find_no_record() {
         }
     });
     let published = with_repository_publication(&live, |held| {
-        with_staged_state(held, false, StampFromGit, |_staged| Ok(()))
+        with_staged_state(held, false, StampFromGit, stage_two_new_shards)
     });
     crate::test_probes::disarm("state_after_backup_rename");
     published.unwrap();
