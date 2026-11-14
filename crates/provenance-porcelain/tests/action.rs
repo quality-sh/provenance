@@ -29,6 +29,13 @@ impl GetPort for Port {
     fn impact<'a>(&'a self, _: &'a GraphNode, _: usize) -> PortFuture<'a, Impact> {
         unreachable!("actions do not calculate impact")
     }
+
+    fn edit<'a>(
+        &'a self,
+        _: &'a GraphNode,
+    ) -> PortFuture<'a, provenance_core::review::RequirementEditState> {
+        unreachable!("actions do not read the edit state")
+    }
 }
 
 fn port(result: CoreResolution) -> (Porcelain<Port>, Arc<Mutex<usize>>) {

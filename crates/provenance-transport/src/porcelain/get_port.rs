@@ -179,6 +179,30 @@ impl GetPort for HostGetPort {
         })
     }
 
+    /// Reads the edit state of the record with the read of its member route. A refusal
+    /// keeps the failure object that the route gives.
+    fn edit<'a>(
+        &'a self,
+        record: &'a provenance_core::protocol::GraphNode,
+    ) -> PortFuture<'a, provenance_core::review::RequirementEditState> {
+        Box::pin(async move {
+            self.host
+                .invoke::<catalog::GetReviewedResource>(
+                    catalog::ReviewedResourceRequest {
+                        record_kind: record.node_type(),
+                        id: record.id().clone(),
+                    },
+                    crate::Invocation::native(),
+                )
+                .await
+                .map(|resource| resource.result.edit)
+                .map_err(|failure| {
+                    let framed = catalog::frame_failure::<catalog::GetReviewedResource>(failure);
+                    ReadError::Refused(framed.error)
+                })
+        })
+    }
+
     /// Returns the current decision, edit guard, and feedback for each record kind.
     #[provenance_macros::rule("rule_porcelain_review_returns_current_state")]
     fn review<'a>(

@@ -54,6 +54,12 @@ it in the same change.
   It opens the page in their browser.
 - Before you hand off, read a Requirement and every record under it in order, as a
   builder would: `{command} api requirements/<requirement-id>/document --scope {selected_scope} --format json`.
+- Before you update a record, read it with
+  `{command} <record-id> --scope {selected_scope} --format json` and give its `edit.etag`
+  unchanged to `--if-match`, for example
+  `{command} <requirement-id> update --scope {selected_scope} --if-match <etag> --description <text>`.
+  On MCP, read the record with `get` and give its `edit.etag` unchanged to `change` as
+  `if_match`.
 - Read the decision and review feedback with `{command} <record-id> --scope {selected_scope} --view review`.
   Copy `review.edit.etag` unchanged to `--if-match` on the next guarded update.
   If feedback is truncated, use the continuation commands in the review view.
@@ -75,9 +81,9 @@ it in the same change.
   accepted that content. Revise or withdraw a rejected candidate that no later
   submission replaced. To end a pending review without a replacement, withdraw it.
 - A Question or Topic update needs the current etag. Read it with
-  `{command} <question_id> --scope {selected_scope} --view review --format json` or
-  `{command} <topic_id> --scope {selected_scope} --view review --format json` and pass
-  `review.edit.etag` unchanged as `--if-match`.
+  `{command} <question_id> --scope {selected_scope} --format json` or
+  `{command} <topic_id> --scope {selected_scope} --format json` and pass
+  `edit.etag` unchanged as `--if-match`.
 - To drop a Question or Topic, archive it with its commit evidence. Archiving a
   Topic also archives its Questions. Discussion history stays readable:
   `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | {command} api questions/<question_id> --method patch --header "If-Match: <etag>" --input - --scope {selected_scope} --format json`

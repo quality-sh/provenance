@@ -132,8 +132,8 @@ null, while a plain flag on a string-typed field always supplies text. Arrays
 and objects can also come from one JSON object on standard input with
 `--stdin`, which fills only the body fields that no flag assigned and refuses a
 field that a flag already set. Every review record update takes its guard as
-`--if-match`, which must contain `review.edit.etag` from the latest review
-read, unchanged. Requirement, Topic, and Question updates require it. Source,
+`--if-match`, which must contain `edit.etag` from the latest record read, or
+`review.edit.etag` from the latest review read, unchanged. Requirement, Topic, and Question updates require it. Source,
 Rule, and Resolution updates accept it, and write without a
 check when it is absent. No update accepts the guard as an `--expected-etag`
 flag or as an `expected_etag` body field.

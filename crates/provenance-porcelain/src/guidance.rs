@@ -33,6 +33,7 @@ Unimplemented and Unverified describe absent bindings or evidence; they are not 
 A source citation does not count as an Implementation binding. Coverage checks evaluate code bindings separately from graph reads.\n\n\
 ## Actions\n\n\
 Use search to find IDs, then get to read the selected record and its related views. Create names an explicit record type; actions on an existing record infer its type.\n\
+Before an update, read the record with get. Give its `edit.etag` unchanged to the update as the if-match value.\n\
 Available actions depend on the interface and its access. Each interface lists the inputs and actions it supports.\n\n",
     );
     let commands = [

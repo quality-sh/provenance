@@ -113,6 +113,7 @@ impl<P: GetPort> crate::Porcelain<P> {
 }
 
 fn map_read_error(error: ReadError) -> ActionError {
+    let text = error.to_string();
     match error {
         ReadError::InvalidOptions | ReadError::InvalidInput { .. } => ActionError::InvalidOptions,
         ReadError::NotFound => ActionError::NotFound,
@@ -120,6 +121,10 @@ fn map_read_error(error: ReadError) -> ActionError {
         ReadError::HostBusy(message) | ReadError::Operation(message) => {
             ActionError::Operation(message)
         }
+        ReadError::Refused(detail) => ActionError::OperationDetail {
+            message: text,
+            detail,
+        },
     }
 }
 
