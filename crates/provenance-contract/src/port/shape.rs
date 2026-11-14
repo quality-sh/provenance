@@ -172,11 +172,6 @@ impl Shape {
 /// Whether `value` holds the rule of one keyword that has no subschema. `None` for a rule that
 /// is not of its keyword's form.
 fn rule_holds(keyword: &str, rule: &Value, value: &Value) -> Option<bool> {
-    let length = |value: &Value| match value {
-        Value::String(text) => u64::try_from(text.chars().count()).ok(),
-        Value::Array(items) => u64::try_from(items.len()).ok(),
-        _ => None,
-    };
     Some(match keyword {
         "type" => match rule {
             Value::Array(types) => types.iter().any(|kind| is(kind, value)),
@@ -190,21 +185,8 @@ fn rule_holds(keyword: &str, rule: &Value, value: &Value) -> Option<bool> {
                 .flatten()
                 .all(|name| name.as_str().is_some_and(|name| object.contains_key(name)))
         }),
-        "minimum" => {
-            let least = rule.as_f64()?;
-            value.as_f64().is_none_or(|number| number >= least)
-        }
-        "maximum" => {
-            let most = rule.as_f64()?;
-            value.as_f64().is_none_or(|number| number <= most)
-        }
-        "minItems" | "minLength" => {
-            let least = rule.as_u64()?;
-            length(value).is_none_or(|size| size >= least)
-        }
-        "maxItems" | "maxLength" => {
-            let most = rule.as_u64()?;
-            length(value).is_none_or(|size| size <= most)
+        "minimum" | "maximum" | "minItems" | "maxItems" | "minLength" | "maxLength" => {
+            bound_holds(keyword, rule.as_f64()?, value)
         }
         "pattern" => value.as_str().is_none_or(|text| {
             PATTERNS
@@ -212,6 +194,28 @@ fn rule_holds(keyword: &str, rule: &Value, value: &Value) -> Option<bool> {
                 .any(|(pattern, test)| rule.as_str() == Some(pattern) && test(text))
         }),
         _ => true,
+    })
+}
+
+/// Whether `value` holds the bound `bound` of a `min…` or `max…` keyword: on its number for
+/// `minimum` and `maximum`, else on the length of a string or an array.
+fn bound_holds(keyword: &str, bound: f64, value: &Value) -> bool {
+    let measure = match (keyword, value) {
+        ("minimum" | "maximum", Value::Number(number)) => number.as_f64(),
+        ("minLength" | "maxLength", Value::String(text)) => {
+            u32::try_from(text.chars().count()).ok().map(f64::from)
+        }
+        ("minItems" | "maxItems", Value::Array(items)) => {
+            u32::try_from(items.len()).ok().map(f64::from)
+        }
+        _ => None,
+    };
+    measure.is_none_or(|measure| {
+        if keyword.starts_with("min") {
+            measure >= bound
+        } else {
+            measure <= bound
+        }
     })
 }
 
