@@ -1,10 +1,13 @@
 use crate::state_store::readers::ensure_no_legacy_retirement;
 use provenance_macros::rule;
 use serde_json::Value;
+use batches::RecordConflicts;
 use std::collections::{BTreeMap, BTreeSet};
 
+mod batches;
 pub mod validation;
 
+pub use batches::BatchRecords;
 pub use validation::{changed_statement_diagnostics, validate_merged_records, ShardFamily};
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -159,8 +162,9 @@ pub enum RowIdentity {
     /// second equal row of one side is the same batch as the second equal row
     /// of another side. The merge writes the batches of the base, then the
     /// batches that ours adds, then the batches that theirs adds, each in the
-    /// order of its file.
-    Batch,
+    /// order of its file. A batch holds the records that [`BatchRecords`]
+    /// names, and the merge compares them as records.
+    Batch(BatchRecords),
 }
 
 impl RowIdentity {
@@ -171,10 +175,21 @@ impl RowIdentity {
             .flat_map(|side| side.iter().map(|(key, _)| key.clone()));
         match self {
             Self::Field(_) => keys.collect::<BTreeSet<_>>().into_iter().collect(),
-            Self::Batch => {
+            Self::Batch(_) => {
                 let mut seen = BTreeSet::new();
                 keys.filter(|key| seen.insert(key.clone())).collect()
             }
+        }
+    }
+
+    /// The conflicts between the records that the rows of the sides hold.
+    fn record_conflicts(
+        self,
+        sides: [&[(String, CanonicalRecord)]; 3],
+    ) -> anyhow::Result<batches::RecordConflicts> {
+        match self {
+            Self::Field(_) => Ok(batches::RecordConflicts::default()),
+            Self::Batch(records) => batches::record_conflicts(records, sides),
         }
     }
 }
@@ -197,7 +212,7 @@ impl RowKeys {
     fn key(&mut self, record: &CanonicalRecord) -> anyhow::Result<String> {
         match self.identity {
             RowIdentity::Field(field) => string_id(field, record).map(str::to_owned),
-            RowIdentity::Batch => batch_key(&mut self.equal_rows, record),
+            RowIdentity::Batch(_) => batch_key(&mut self.equal_rows, record),
         }
     }
 }
@@ -216,8 +231,9 @@ fn batch_key(
 }
 
 /// Merges by the row identity of the shard, keeping a change when the other
-/// side matches the base. Call [`validate_merged_records`] before publication:
-/// records valid alone can be invalid together.
+/// side matches the base. For batch rows, the records that the batches hold
+/// are merged as records too. Call [`validate_merged_records`] before
+/// publication: records valid alone can be invalid together.
 #[rule("rule_record_merge")]
 pub fn merge_records(
     identity: RowIdentity,
@@ -228,7 +244,12 @@ pub fn merge_records(
     let base = keyed_rows(identity, base)?;
     let ours = keyed_rows(identity, ours)?;
     let theirs = keyed_rows(identity, theirs)?;
-    let ids = identity.merge_order([&base, &ours, &theirs]);
+    let RecordConflicts {
+        conflicts: record_conflicts,
+        left_out,
+    } = identity.record_conflicts([&base, &ours, &theirs])?;
+    let mut ids = identity.merge_order([&base, &ours, &theirs]);
+    ids.retain(|id| !left_out.contains(id));
     let [base, ours, theirs] =
         [base, ours, theirs].map(|rows| rows.into_iter().collect::<BTreeMap<_, _>>());
 
@@ -282,6 +303,7 @@ pub fn merge_records(
             (None, None, None) => unreachable!(),
         }
     }
+    conflicts.extend(record_conflicts);
 
     if conflicts.is_empty() {
         Ok(MergeOutcome::Clean { records: merged })
@@ -311,14 +333,17 @@ impl std::fmt::Display for MergeSide {
     }
 }
 
-/// Refuses one side of a merge that holds a record id on two rows.
+/// Refuses one side of a merge that holds a record key on two rows.
 ///
 /// Call it before [`merge_records`], on base, then ours, then theirs. The
 /// rows are checked in their order, as [`merge_records`] checks them, so the
-/// first fault of a side wins. A row with no string id gets the refusal of
-/// [`merge_records`]. A second row with an id is `invalid_state_file` at
-/// `shard_path` and its line, and the message names the side, the id and the
-/// line of the first row.
+/// first fault of a side wins. For a field identity, a row with no string in
+/// the field gets the refusal of [`merge_records`], and a second row with a
+/// key is `invalid_state_file` at `shard_path` and its line: the message
+/// names the side, the key and the line of the first row. For a batch
+/// identity, the key of a row holds its count among the equal rows of its
+/// side, so no two rows have one key and the function refuses only a row
+/// that is not canonical JSON.
 pub fn ensure_unique_ids(
     shard_path: &camino::Utf8Path,
     side: MergeSide,
@@ -383,6 +408,8 @@ fn keyed_rows(
     Ok(rows)
 }
 
+#[cfg(test)]
+mod batch_tests;
 #[cfg(test)]
 mod preservation_tests;
 #[cfg(test)]

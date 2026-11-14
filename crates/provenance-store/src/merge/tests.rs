@@ -439,7 +439,7 @@ fn only_the_scoped_discussion_shard_uses_the_discussion_key() {
 fn a_side_that_lands_an_equal_batch_again_keeps_the_two_copies() {
     let batch = |id: &str| serde_json::json!({ "contributions": [{ "id": id }] });
     let merged = merge_records(
-        RowIdentity::Batch,
+        RowIdentity::Batch(BatchRecords::LANDINGS),
         &[batch("a")],
         &[batch("a"), batch("a")],
         &[batch("a"), batch("b")],

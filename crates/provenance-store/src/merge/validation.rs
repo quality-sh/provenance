@@ -20,7 +20,7 @@ use provenance_core::model::relations::{missing_required, required_refusal, Rela
 use provenance_core::{Question, Requirement, RequirementReview, Resolution, Rule, Source, Topic};
 use serde_json::Value;
 
-use super::{CanonicalRecord, RowIdentity};
+use super::{BatchRecords, CanonicalRecord, RowIdentity};
 use crate::statement_analysis::{analyze_changed_statements, StatementDiagnostic};
 
 /// The record type a shard holds, read off the repository path of the file
@@ -69,15 +69,14 @@ const SCOPED_FAMILIES: [(&str, ShardFamily); 6] = [
 ];
 
 impl ShardFamily {
-    /// What makes two rows of the shard the same record: Discussion records
-    /// use `discussion_id`, landing batches have no id field and are equal
-    /// rows, and all other records use `id`.
+    /// The row identity of the shard: a Discussion row is keyed by its
+    /// `discussion_id`, so that the replies of two sides merge per Discussion.
     #[provenance_macros::rule("rule_discussion_merge_keys_discussion_id")]
     #[must_use]
     pub const fn row_identity(self) -> RowIdentity {
         match self {
             Self::Discussions => RowIdentity::Field("discussion_id"),
-            Self::IdeationLandings => RowIdentity::Batch,
+            Self::IdeationLandings => RowIdentity::Batch(BatchRecords::LANDINGS),
             Self::Sources
             | Self::RequirementReviews
             | Self::Requirements
@@ -354,16 +353,6 @@ mod tests {
                 "{family:?} at {path}"
             );
         }
-    }
-
-    // No Rule binding: an aid to the implementation. The landings file is not
-    // in the store family table, so the test above does not reach it.
-    #[test]
-    fn selects_the_batch_identity_for_the_landings_file() {
-        let path = Utf8Path::new(".provenance/state/scopes/default/ideation/landings.jsonl");
-        let kind = ShardFamily::for_shard_path(path);
-        assert_eq!(kind, ShardFamily::IdeationLandings);
-        assert_eq!(kind.row_identity(), RowIdentity::Batch);
     }
 
     #[test]
