@@ -1,23 +1,26 @@
+use super::source_edit_recovery::remove_unpublished_source_edit;
 use super::sync_directory;
 use crate::storage::local::durability::write_synced_file;
 use crate::storage::local::whole_set::{InstallState, WholeSetHook};
-use crate::storage::local::FileInstall;
+use crate::storage::local::{
+    removal_failure, write_marker, FileInstall, RemovalStep, TransactionKind,
+};
 use crate::{
     layout::ProvenanceLayout,
     operations::files::{
         FileIdentity, HeldRepositoryFile, PreparedRepositoryFile, RepositoryFileBackup,
+        RepositoryFileRefusal,
     },
 };
 use anyhow::Context as _;
 use camino::{Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
-use std::io::Write as _;
 
 #[derive(Debug, thiserror::Error)]
 pub enum SourceEditRecoveryFailure {
-    #[error("source file changed outside the pending source-edit transaction")]
-    ExternalChange,
+    #[error("source file {file} changed outside the pending source-edit transaction")]
+    ExternalChange { file: Utf8PathBuf },
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -45,13 +48,14 @@ pub(super) struct SourceEditMarker {
     pub(super) backup_digest: [u8; 32],
 }
 
+/// The record of the prepared file of a source edit, in its transaction.
+/// The store writes it before it makes the file, so that a stop at any later
+/// point leaves a record that names the file.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct PreparedSourceRecord {
     pub(super) target: Utf8PathBuf,
-    pub(super) after_digest: [u8; 32],
     pub(super) prepared_leaf: String,
-    pub(super) prepared_identity: FileIdentity,
 }
 
 /// Publishes a stage and one repository file edit under the live section
@@ -74,7 +78,6 @@ pub fn with_staged_state_and_source_edit<R>(
         held: Some(held),
         replacement: replacement.to_vec(),
         prepared: None,
-        backup: None,
         marker: None,
     };
     section.publish_through(staged.stage_changes()?, |writes| {
@@ -87,21 +90,26 @@ struct SourceEditPublication {
     held: Option<HeldRepositoryFile>,
     replacement: Vec<u8>,
     prepared: Option<PreparedRepositoryFile>,
-    backup: Option<RepositoryFileBackup>,
     marker: Option<SourceEditMarker>,
 }
 
 impl WholeSetHook for SourceEditPublication {
-    fn transactions_dir(&self, live: &ProvenanceLayout) -> Utf8PathBuf {
-        live.source_edit_transactions_dir()
+    fn kind(&self) -> TransactionKind {
+        TransactionKind::SourceEdit
     }
 
-    fn marker_path(&self, live: &ProvenanceLayout) -> Utf8PathBuf {
-        live.source_edit_marker_path()
-    }
-
+    /// Writes the record of the prepared file, then the replacement, each
+    /// synced, and then makes the prepared file. Thus a prepared file exists
+    /// only when its record and the complete replacement are durable.
     fn prepared(&mut self, live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
-        let replacement_path = transaction.join("replacement");
+        let held = self.held.as_ref().expect("source-edit held file");
+        let prepared_record = PreparedSourceRecord {
+            target: held.relative().to_owned(),
+            prepared_leaf: held.new_temp_leaf(),
+        };
+        write_prepared_source_record(transaction, &prepared_record)
+            .context("record prepared source file")?;
+        let replacement_path = transaction.join(REPLACEMENT);
         std::fs::write(&replacement_path, &self.replacement)
             .context("write source-edit replacement record")?;
         std::fs::OpenOptions::new()
@@ -112,21 +120,12 @@ impl WholeSetHook for SourceEditPublication {
             .sync_all()
             .context("flush source-edit replacement record")?;
         sync_directory(transaction).context("flush source-edit transaction")?;
-        let held = self.held.as_ref().expect("source-edit held file");
         let prepared = held
-            .create_temp(&self.replacement)
+            .create_temp_at(&prepared_record.prepared_leaf, &self.replacement)
             .context("prepare source replacement file")?;
+        let prepared_identity = prepared.recovery_identity().clone();
         let backup = held.recovery_backup();
-        let prepared_record = PreparedSourceRecord {
-            target: held.relative().to_owned(),
-            after_digest: Sha256::digest(&self.replacement).into(),
-            prepared_leaf: prepared.recovery_leaf().to_owned(),
-            prepared_identity: prepared.recovery_identity().clone(),
-        };
-        write_prepared_source_record(transaction, &prepared_record)
-            .context("record prepared source file")?;
         self.prepared = Some(prepared);
-        self.backup = Some(backup.clone());
         crate::test_probes::at("source_edit_temp_prepared")?;
         let marker = SourceEditMarker {
             transaction_dir: transaction.to_owned(),
@@ -136,12 +135,12 @@ impl WholeSetHook for SourceEditPublication {
             before_digest: held.digest(),
             after_digest: Sha256::digest(&self.replacement).into(),
             prepared_leaf: prepared_record.prepared_leaf,
-            prepared_identity: prepared_record.prepared_identity,
+            prepared_identity,
             backup_leaf: backup.leaf().to_owned(),
             backup_identity: backup.identity().clone(),
             backup_digest: backup.digest(),
         };
-        write_marker(live, &marker).context("write prepared source-edit marker")?;
+        write_source_edit_marker(live, &marker).context("write prepared source-edit marker")?;
         self.marker = Some(marker);
         crate::test_probes::at("source_edit_prepared")
     }
@@ -155,23 +154,37 @@ impl WholeSetHook for SourceEditPublication {
         sync_directory(&live.provenance_dir())?;
         let marker = self.marker.as_mut().expect("source-edit marker");
         marker.phase = SourceEditPhase::BackupCreated;
-        write_marker(live, marker)?;
+        write_source_edit_marker(live, marker)?;
         crate::test_probes::at("source_edit_backup_created")
     }
 
     fn state_installed(&mut self, live: &ProvenanceLayout) -> anyhow::Result<()> {
         let marker = self.marker.as_mut().expect("source-edit marker");
         marker.phase = SourceEditPhase::StateInstalled;
-        write_marker(live, marker)?;
+        write_source_edit_marker(live, marker)?;
         crate::test_probes::at("source_edit_state_installed")
     }
 
-    fn install_file(&mut self) -> anyhow::Result<InstallState> {
-        let held = self.held.take().expect("source-edit held file");
+    /// A failed rename back of the target leaves the initial file in the
+    /// backup, so the write keeps its marker, and the next section entry
+    /// puts the backup back and completes the install.
+    fn install_file(
+        &mut self,
+        live: &ProvenanceLayout,
+    ) -> Result<InstallState, (InstallState, anyhow::Error)> {
+        let held = self.held.as_ref().expect("source-edit held file");
         let prepared = self.prepared.take().expect("source-edit prepared file");
-        let backup = self.backup.take().expect("source-edit backup");
-        held.compare_and_swap_with_backup(prepared, &backup)?;
-        Ok(InstallState::FileInstalled)
+        let marker = self.marker.as_ref().expect("source-edit marker");
+        let backup = backup(marker).map_err(|error| (InstallState::StateOnly, error))?;
+        match held.install(prepared, &backup) {
+            Ok(()) => Ok(InstallState::FileMoved),
+            Err(RepositoryFileRefusal::Restore(error)) => {
+                let path = artifact(live, marker, &marker.backup_leaf);
+                let error = removal_failure(RemovalStep::Restore, &path, error);
+                Err((InstallState::FileMoved, error))
+            }
+            Err(refusal) => Err((InstallState::StateOnly, refusal.into())),
+        }
     }
 
     fn published(
@@ -179,49 +192,94 @@ impl WholeSetHook for SourceEditPublication {
         live: &ProvenanceLayout,
         _transaction: &Utf8Path,
     ) -> anyhow::Result<()> {
+        let held = self.held.as_ref().expect("source-edit held file");
         let marker = self.marker.as_mut().expect("source-edit marker");
-        marker.phase = SourceEditPhase::FileInstalled;
-        crate::test_probes::at("source_edit_before_file_marker_write")?;
-        write_marker(live, marker)
+        complete_install(live, held, marker, &self.replacement)
     }
 
     fn after_published(&mut self) -> anyhow::Result<()> {
         crate::test_probes::at("source_edit_file_installed")
     }
 
-    fn rollback_finished(&mut self, live: &ProvenanceLayout) -> anyhow::Result<()> {
-        std::fs::remove_file(live.source_edit_marker_path())?;
-        sync_directory(&live.cache_dir())
-    }
-
-    fn finish(&mut self, live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
-        finish(live, transaction)
+    /// Closes the prepared file, with no removal, and then removes it through
+    /// the record of the transaction, as the next section entry does.
+    fn remove_unpublished(
+        &mut self,
+        live: &ProvenanceLayout,
+        transaction: &Utf8Path,
+    ) -> anyhow::Result<()> {
+        self.prepared = None;
+        remove_unpublished_source_edit(live, transaction)
     }
 }
 
-pub(super) fn write_marker(
+pub(super) fn write_source_edit_marker(
     layout: &ProvenanceLayout,
     marker: &SourceEditMarker,
 ) -> anyhow::Result<()> {
-    write_synced_file(
-        &layout.source_edit_marker_path(),
+    write_marker(
+        layout,
+        TransactionKind::SourceEdit,
         &serde_json::to_vec(marker)?,
     )
 }
 
-pub(super) fn finish(layout: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
-    std::fs::remove_dir_all(transaction)?;
-    crate::test_probes::at("source_edit_transaction_removed")?;
-    std::fs::remove_file(layout.source_edit_marker_path())?;
-    sync_directory(&layout.cache_dir())
+/// Completes the install after the rename of the prepared file onto the
+/// target: removes the store's own prepared file, syncs the directory of the
+/// target, removes the backup that holds the file that the write read, syncs
+/// that directory again, and then writes the `FileInstalled` marker. Thus
+/// the install is durable before the backup goes. The live write and the
+/// recovery use it, so a failure keeps the earlier marker, and the next
+/// section entry runs it again.
+pub(super) fn complete_install(
+    layout: &ProvenanceLayout,
+    held: &HeldRepositoryFile,
+    marker: &mut SourceEditMarker,
+    replacement: &[u8],
+) -> anyhow::Result<()> {
+    let prepared = artifact(layout, marker, &marker.prepared_leaf);
+    let backup_path = artifact(layout, marker, &marker.backup_leaf);
+    let directory = backup_path.parent().unwrap_or_else(|| layout.root());
+    let unsynced = |error| removal_failure(RemovalStep::Sync, directory, error);
+    held.remove_own_prepared(&marker.prepared_leaf, replacement)
+        .map_err(|error| removal_failure(RemovalStep::PreparedFile, &prepared, error))?;
+    held.sync_directory().map_err(unsynced)?;
+    held.remove_own_backup(&backup(marker)?)
+        .map_err(|error| removal_failure(RemovalStep::Backup, &backup_path, error))?;
+    held.sync_directory().map_err(unsynced)?;
+    marker.phase = SourceEditPhase::FileInstalled;
+    crate::test_probes::at("source_edit_before_file_marker_write")?;
+    write_source_edit_marker(layout, marker)
 }
 
+/// The path of the working-tree file `leaf` next to the target of `marker`.
+fn artifact(layout: &ProvenanceLayout, marker: &SourceEditMarker, leaf: &str) -> Utf8PathBuf {
+    layout.root().join(&marker.target).with_file_name(leaf)
+}
+
+/// The backup of the target that `marker` records.
+pub(super) fn backup(marker: &SourceEditMarker) -> anyhow::Result<RepositoryFileBackup> {
+    Ok(RepositoryFileBackup::from_recovery(
+        marker.backup_leaf.clone(),
+        marker.backup_identity.clone(),
+        marker.backup_digest,
+    )?)
+}
+
+/// The file of a source-edit transaction that holds the replacement bytes.
+pub(super) const REPLACEMENT: &str = "replacement";
+
+/// The file of a source-edit transaction that holds its record.
+pub(super) const PREPARED_SOURCE_RECORD: &str = "prepared-source.json";
+
+/// Writes `record` in `transaction` with a replace and a sync, so that the
+/// record is complete or does not exist: recovery reads a record that exists.
 fn write_prepared_source_record(
     transaction: &Utf8Path,
     record: &PreparedSourceRecord,
 ) -> anyhow::Result<()> {
-    let mut file = std::fs::File::create(transaction.join("prepared-source.json"))?;
-    file.write_all(&serde_json::to_vec(record)?)?;
-    file.sync_all()?;
-    sync_directory(transaction)
+    write_synced_file(
+        &transaction.join(PREPARED_SOURCE_RECORD),
+        &serde_json::to_vec(record)?,
+    )
 }
