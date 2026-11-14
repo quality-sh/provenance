@@ -17,6 +17,13 @@
 mod answers;
 #[path = "read_operations_on_memory/catch_up.rs"]
 mod catch_up;
+#[path = "read_operations_on_memory/history.rs"]
+mod history;
+#[path = "support/history_fixture.rs"]
+mod history_fixture;
+#[cfg(feature = "host")]
+#[path = "support/history_folder.rs"]
+mod history_folder;
 #[path = "support/memory.rs"]
 mod memory;
 #[path = "support/sqlite_database.rs"]
