@@ -58,6 +58,20 @@ enum Outcome {
 }
 
 impl TypedSpecDecision {
+    /// The decision of a spec that takes a declaration from another owner:
+    /// the plan shows the conflicts and the apply refuses them.
+    fn conflicts(declared_by: String, ownership: OwnershipDecision) -> Self {
+        Self {
+            result: spec_result(
+                declared_by,
+                ownership.conflicts().to_vec(),
+                Vec::new(),
+                Vec::new(),
+            ),
+            outcome: Outcome::Conflicts(ownership),
+        }
+    }
+
     /// Publishes the replacement, or refuses with the ownership conflicts.
     pub(super) fn publish(
         self,
@@ -104,15 +118,7 @@ pub fn decide_typed_spec(
         .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidDeclaration, error))?;
     let ownership = adoption::decide(scope_id, &input, &current, &ids)?;
     if !ownership.conflicts().is_empty() {
-        return Ok(TypedSpecDecision {
-            result: spec_result(
-                input.declared_by,
-                ownership.conflicts().to_vec(),
-                Vec::new(),
-                Vec::new(),
-            ),
-            outcome: Outcome::Conflicts(ownership),
-        });
+        return Ok(TypedSpecDecision::conflicts(input.declared_by, ownership));
     }
     let adopted_rule_ids = adopted_rule_ids(&input);
     let rule_relationships = input.rules.clone();
