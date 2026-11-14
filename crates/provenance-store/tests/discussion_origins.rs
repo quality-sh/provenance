@@ -1,5 +1,4 @@
-#[allow(dead_code)]
-mod review_support;
+use crate::discussion_support::base as review_support;
 use review_support::*;
 use serde_json::json;
 

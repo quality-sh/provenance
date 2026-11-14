@@ -1,4 +1,4 @@
-use crate::support::{
+use super::support::{
     create_requirement, dictionary_pdf, init, provenance, reference_path, APPROVED_TABLE_ROWS,
     UNAPPROVED_TABLE_ROWS, UNAPPROVED_WORD,
 };

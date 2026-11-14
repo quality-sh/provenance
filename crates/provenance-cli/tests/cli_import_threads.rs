@@ -1,5 +1,4 @@
-#[path = "support/thread_record.rs"]
-mod thread_record;
+use crate::thread_record;
 
 use assert_cmd::Command;
 use predicates::prelude::PredicateBooleanExt;

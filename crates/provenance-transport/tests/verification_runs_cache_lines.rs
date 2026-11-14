@@ -2,10 +2,7 @@
 //! gets one answer from each read and each write of the runs: the first line
 //! at fault, as `invalid_state_file`.
 #![cfg(feature = "test-fixture")]
-mod support {
-    pub mod records;
-    pub mod resource_http;
-}
+use crate::support;
 use provenance_core::ScopeId;
 use provenance_store::operations::catalog::Direct;
 use serde_json::{json, Value};

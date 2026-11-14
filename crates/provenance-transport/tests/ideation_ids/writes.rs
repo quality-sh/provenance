@@ -1,10 +1,10 @@
 //! The refusal of each ideation write over an id on two lines of its file.
 
-use crate::repository::{
+use super::repository::{
     copy_row, copy_row_with_key, ideation_repository, merge_assertion_two_times, refused,
     state_path, write_answers, IDEATION, WRITES,
 };
-use crate::support::resource_http::{call, call_with_headers, host};
+use super::support::resource_http::{call, call_with_headers, host};
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 

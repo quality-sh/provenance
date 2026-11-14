@@ -78,7 +78,7 @@ pub fn commit_state(temp: &tempfile::TempDir, message: &str) -> String {
 }
 
 #[path = "../support/initialization.rs"]
-mod initialization;
+pub mod initialization;
 
 /// Uses the same manifest plan as repository initialization.
 #[allow(dead_code)]

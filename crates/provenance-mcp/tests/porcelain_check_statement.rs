@@ -7,17 +7,7 @@ use rmcp::{model::CallToolRequestParams, ServiceExt as _};
 use serde_json::json;
 use std::sync::{Arc, Mutex};
 
-#[allow(dead_code)]
-mod support {
-    #[path = "../../../provenance-transport/tests/support/check_port.rs"]
-    pub mod check_port;
-    #[cfg(feature = "test-fixture")]
-    #[path = "../../../provenance-transport/tests/support/records.rs"]
-    pub mod records;
-    #[cfg(feature = "test-fixture")]
-    #[path = "../../../provenance-transport/tests/support/resource_http.rs"]
-    pub mod resource_http;
-}
+use crate::support;
 
 /// Each supplied statement, with the scope the host bound.
 type SeenStatements = Arc<Mutex<Vec<(String, Option<String>)>>>;

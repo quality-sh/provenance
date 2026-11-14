@@ -4,9 +4,7 @@
 //! Source (beads provenance-8h5u and provenance-9v5u). The full text of the root, create
 //! and update help is in the `surface_names` pins.
 
-mod support {
-    pub mod help_text;
-}
+use crate::support;
 use support::help_text::help;
 
 #[test]
