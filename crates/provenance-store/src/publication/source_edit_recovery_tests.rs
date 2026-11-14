@@ -67,6 +67,7 @@ fn crash_child() {
             "source_edit_prepared",
             "source_edit_backup_created",
             "source_edit_state_installed",
+            "repository_file_unlink_backup",
             "source_edit_file_installed",
         ],
         publish,

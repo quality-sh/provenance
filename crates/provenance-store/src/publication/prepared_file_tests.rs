@@ -2,13 +2,14 @@
 //! that a stop at each point of its write leaves, and the next section entry.
 
 use super::source_edit_recovery_tests::{
-    canonical_root, fixture, prepared_files, published, AFTER, BEFORE, CHILD,
+    canonical_root, fixture, prepared_files, published, try_publish, AFTER, BEFORE, CHILD,
 };
 use crate::{
     layout::ProvenanceLayout,
     operations::files::RepositoryFiles,
     publication::{with_repository_publication, with_staged_state_and_source_edit},
     stopped_child::{names, run_as_child, stop_in_child},
+    test_probes,
 };
 use camino::Utf8Path;
 use provenance_macros::verifies;
@@ -127,6 +128,9 @@ fn a_prepared_file_with_a_leading_part_of_the_replacement_is_removed_at_the_next
 /// A marked source edit finds the prepared file before it installs the
 /// file. A prepared file with a leading part of the replacement is the
 /// store's own data: the recovery removes it and installs the replacement.
+/// The store makes such a file under a marker only when the recovery stops
+/// in the write of a prepared file that it makes again, so the test cuts the
+/// file after a stop at the marker.
 #[test]
 #[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
 fn a_marked_source_edit_replaces_a_prepared_file_with_a_leading_part_of_the_replacement() {
@@ -196,4 +200,74 @@ fn a_prepared_file_that_a_person_changed_stops_the_section_entry_and_stays() {
             "{phase}: the marker of a marked write stays"
         );
     }
+}
+
+/// The test that runs a source edit that fails after it made its prepared
+/// file, as a child.
+const FAILING_CHILD: &str = "operations::files::tests::prepared_file_tests::failing_child";
+
+#[test]
+fn failing_child() {
+    run_as_child(&["repository_file_unlink_temp"], |root| {
+        test_probes::crash_at("source_edit_temp_prepared");
+        let _ = try_publish(root);
+    });
+}
+
+/// The write fails before its marker, after it made the prepared file. On
+/// the error path, the child stops when it starts to remove the prepared
+/// file: the transaction and its record stay, and they name the file.
+#[test]
+#[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
+fn a_stop_in_the_cleanup_of_a_failed_source_edit_leaves_no_data_after_the_next_section_entry() {
+    let temp = fixture();
+    let root_path = canonical_root(&temp);
+    let root = root_path.as_path();
+    stop_in_child(FAILING_CHILD, root, "repository_file_unlink_temp");
+    let transactions = ProvenanceLayout::new(root).source_edit_transactions_dir();
+    assert_eq!(prepared_files(root).len(), 1, "the stop left the prepared file");
+    assert_eq!(
+        names(&transactions).len(),
+        1,
+        "the stop left the transaction that names the prepared file"
+    );
+
+    assert_entry_removes_the_stopped_edit(root);
+}
+
+/// A record of a different form, as an earlier form of the store writes it,
+/// does not parse. The section entry fails with the path of the record, the
+/// operation does not run, and the data stays.
+#[test]
+#[verifies("rule_failed_removal_of_stopped_write_names_its_path", examples)]
+fn a_record_that_does_not_parse_stops_the_section_entry_with_its_path() {
+    let temp = fixture();
+    let root_path = canonical_root(&temp);
+    let root = root_path.as_path();
+    let layout = ProvenanceLayout::new(root);
+    stop_in_child(CHILD, root, "source_edit_temp_prepared");
+    let transactions = layout.source_edit_transactions_dir();
+    let record = transactions
+        .join(&names(&transactions)[0])
+        .join("prepared-source.json");
+    let mut value: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&record).unwrap()).unwrap();
+    value["after_digest"] = serde_json::Value::from(vec![0; 32]);
+    std::fs::write(&record, serde_json::to_vec(&value).unwrap()).unwrap();
+
+    let mut ran = false;
+    let error = with_repository_publication(&layout, |_| {
+        ran = true;
+        Ok(())
+    })
+    .unwrap_err();
+
+    assert_eq!(format!("{error}"), format!("read {record}"));
+    assert!(
+        format!("{error:#}").starts_with(&format!("read {record}: unknown field `after_digest`")),
+        "{error:#}"
+    );
+    assert!(!ran);
+    assert!(record.exists());
+    assert_eq!(prepared_files(root).len(), 1);
 }
