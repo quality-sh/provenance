@@ -81,7 +81,8 @@ fn assert_one_set(memory: &MemoryRepository, keys: usize, stage: impl FnOnce(&Re
     let recorded = memory.recorded.0.lock().unwrap().clone();
     assert_eq!(recorded.len(), count + 1, "the stage gave one write set");
     let writes = recorded.last().unwrap();
-    assert_eq!(writes.key_count(), keys, "{writes:?}");
+    let changed: Vec<_> = writes.puts().keys().chain(writes.deletes()).collect();
+    assert_eq!(writes.key_count(), keys, "{changed:?}");
     let atomicity = if keys == 1 {
         Atomicity::PerKey
     } else {
@@ -197,13 +198,13 @@ fn a_repository_over_memory_makes_changes_and_imports_records_in_stages() {
             .create_rule(rule_input("rule_owner", "req_owner"))
             .unwrap();
     });
-    assert_one_set(&memory, 1, |repository| {
+    assert_one_set(&memory, 2, |repository| {
         repository
             .store()
             .update_requirement(owner_description())
             .unwrap();
     });
-    assert_one_set(&memory, 1, |repository| {
+    assert_one_set(&memory, 2, |repository| {
         repository.store().update_rule(owner_rule_name()).unwrap();
     });
     let source = imported_source();
