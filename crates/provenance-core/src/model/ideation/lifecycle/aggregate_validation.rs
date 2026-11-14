@@ -240,7 +240,8 @@ mod disposition_actor_trigger_tests {
         }))
         .unwrap();
 
-        let error = validate_actor_allowlist(&proposal, &[assertion], "reviewer", &[]).unwrap_err();
+        let error = validate_actor_allowlist(&proposal, &[assertion], "reviewer", &[])
+            .unwrap_err();
         assert_eq!(
             error.downcast_ref::<DispositionActorRefusal>(),
             Some(&DispositionActorRefusal::NoActorsConfigured),

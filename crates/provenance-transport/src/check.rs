@@ -309,8 +309,9 @@ pub fn validate_planned_manifest_in(held: &StateStore, manifest: &Manifest) -> a
 /// The refusal of an init command that gives the manifest field
 /// `disposition_actor_ids` a list without the actor of a stored review decision.
 ///
-/// A stored decision is valid only while the field contains its actor, so the
-/// next step keeps each such actor in the list. The text gives no actor ID.
+/// The state is valid only when the field contains the actor of each stored
+/// decision, so the next step keeps each such actor in the list. The text gives
+/// no actor ID.
 const PLANNED_ACTOR_LIST_REFUSAL: &str = "The list that this init command gives to the manifest \
     field disposition_actor_ids does not contain the actor of a review decision in the state. \
     Give --disposition-actor-id one time for each actor of a review decision in the state, and \

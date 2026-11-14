@@ -281,11 +281,11 @@ fn the_init_command_in_the_refusal_lets_the_same_decision_land() {
     let envelope: Value = serde_json::from_str(answer.trim().strip_prefix("Error: ").unwrap())
         .unwrap_or_else(|error| panic!("{error}: {answer}"));
     let message = envelope["error"]["message"].as_str().unwrap();
-    let command = message
+    let (command, _) = message
         .split_once("use the command provenance ")
         .and_then(|(_, rest)| rest.split_once(". "))
-        .map(|(command, _)| command.replace(PLACEHOLDER, STRANGER))
         .unwrap_or_else(|| panic!("no command in {message}"));
+    let command = command.replace(PLACEHOLDER, STRANGER);
     let (subcommand, args) = command.split_once(' ').unwrap();
     assert_eq!(subcommand, "init", "{message}");
     let args: Vec<&str> = args.split_whitespace().collect();
