@@ -59,31 +59,30 @@ fn the_shipped_packed_consumer_fixture_scans_both_sites() {
         &source,
     );
 
-    let sites: Vec<(String, Option<&str>, Option<Verification>)> = scan
+    let annotations: Vec<(&str, Option<&str>)> = scan
+        .annotations
+        .iter()
+        .map(|site| (site.annotation.rule.as_str(), site.function_name.as_deref()))
+        .collect();
+    assert_eq!(annotations, vec![("rule_packed_consumer_overtime", Some("paysOvertime"))]);
+    let bindings: Vec<(&str, Option<&str>, Option<Verification>)> = scan
         .bindings
         .iter()
         .map(|binding| {
             (
-                binding.rule_id.clone(),
+                binding.rule_id.as_str(),
                 binding.item_name.as_deref(),
                 binding.verification,
             )
         })
         .collect();
     assert_eq!(
-        sites,
-        vec![
-            (
-                "rule_packed_consumer_overtime".to_string(),
-                Some("paysOvertime"),
-                None
-            ),
-            (
-                "rule_packed_consumer_overtime".to_string(),
-                Some("overtimeExamples"),
-                Some(Verification::Examples)
-            ),
-        ]
+        bindings,
+        vec![(
+            "rule_packed_consumer_overtime",
+            Some("overtimeExamples"),
+            Some(Verification::Examples)
+        )]
     );
 }
 

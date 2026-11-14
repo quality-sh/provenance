@@ -1,7 +1,7 @@
 import * as ruleBindings from "@quality-sh/provenance/rules";
 
-const implementation = (hours: number): boolean => hours > 38;
-const paysOvertime: (hours: number) => boolean = ruleBindings.rule("rule_packed_consumer_overtime", implementation);
+// @provenance rule: rule_packed_consumer_overtime
+const paysOvertime = (hours: number): boolean => hours > 38;
 
 function overtimeExamples(): void {
   ruleBindings.verifies("rule_packed_consumer_overtime", "examples");
@@ -13,8 +13,10 @@ function overtimeExamples(): void {
 overtimeExamples();
 
 if (false) {
-  // @ts-expect-error Rule bindings preserve the implementation parameter types.
-  paysOvertime("39");
+  // Production code connects to a Rule with a comment, so the rules subpath
+  // gives only the test helper.
+  // @ts-expect-error The rules subpath has no implementation helper.
+  ruleBindings.rule("rule_packed_consumer_overtime", paysOvertime);
   // The alias keeps this a type-level check: the scanner reports a literal
   // `verifies(` call with a method word outside its vocabulary.
   const checkMethodWord = ruleBindings.verifies;

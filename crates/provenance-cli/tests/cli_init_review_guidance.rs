@@ -1,5 +1,6 @@
 //! The generated AGENTS.md tells an agent when to start the review host, how to hand the
-//! person its link, what a description holds, and how to write graph state.
+//! person its link, what a description holds, how to write graph state, and how to connect
+//! code to a Rule.
 
 use assert_cmd::Command;
 use provenance_macros::verifies;
@@ -170,4 +171,33 @@ fn init_guidance_registers_a_codex_thread_and_ends_it_with_off() {
     ] {
         assert!(prose.contains(text), "missing {text}\n{agents}");
     }
+}
+
+#[test]
+#[verifies("rule_init_production_binding_comment", examples)]
+fn init_guidance_connects_production_code_with_a_comment() {
+    let agents = agents_after_init();
+    let prose = normalized(&agents);
+
+    assert!(
+        prose.contains(
+            "Connect the production code of a Rule to the Rule with a comment directly above \
+             the function, in each language: `// @provenance rule: <rule_id>`, or \
+             `# @provenance rule: <rule_id>` in Python."
+        ),
+        "{agents}"
+    );
+    assert!(
+        prose.contains("The comment adds no package to the application."),
+        "{agents}"
+    );
+    assert!(
+        prose.contains(
+            "In Rust, `#[rule(\"<rule_id>\")]` from `provenance-macros` is an option for \
+             production code."
+        ),
+        "{agents}"
+    );
+    assert!(!agents.contains("provenance_sdk"), "{agents}");
+    assert!(!agents.contains("provenance-sdk"), "{agents}");
 }
