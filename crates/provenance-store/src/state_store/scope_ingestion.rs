@@ -267,8 +267,9 @@ macro_rules! define_imported_scope_shards {
         }
 
         impl StateStore {
-            /// Writes the canonical record shards for one scope and gives the
-            /// number of records that it writes.
+            /// Writes the canonical record shards for one scope and the
+            /// Requirement review records of the change, and gives the number
+            /// of canonical records that it writes.
             pub fn import_scope(
                 &self,
                 scope: &ScopeId,
@@ -307,6 +308,9 @@ macro_rules! define_imported_scope_shards {
                     super::resolution_decisions::ensure_resolution_decisions(
                         shards.resolutions, &[], shards.questions, shards.rules,
                     )?;
+                    let reviews = super::import_reviews::ImportReviews::read(
+                        store, scope, shards.requirements, shards.rules,
+                    )?;
                     store.delete_state_keys_under(
                         &store.layout.scopes_dir().join(scope.as_str()),
                     )?;
@@ -325,6 +329,7 @@ macro_rules! define_imported_scope_shards {
                     $(write_family!(
                         store, scope, shards, written, $canonical_variant, $canonical_field
                     );)*
+                    reviews.write(store, scope)?;
                     Ok(written)
                 })
             }
