@@ -207,20 +207,25 @@ fn a_repository_over_memory_makes_changes_and_imports_records_in_stages() {
     assert_one_set(&memory, 2, |repository| {
         repository.store().update_rule(owner_rule_name()).unwrap();
     });
-    let source = imported_source();
-    assert_one_set(&memory, 1, |repository| {
+    let import = |repository: &Repository, source: &provenance_core::Source| {
         repository
             .stage(false, None, |staged| {
                 staged.import_scope(
                     &imported(),
                     &ScopeShards {
-                        sources: std::slice::from_ref(&source),
+                        sources: std::slice::from_ref(source),
                         ..ScopeShards::default()
                     },
                 )
             })
             .unwrap();
-    });
+    };
+    // The first import writes each shard of the scope; the second changes
+    // only the Source shard.
+    let mut source = imported_source();
+    assert_one_set(&memory, 15, |repository| import(repository, &source));
+    source.name = "Sharing policy, version 2".into();
+    assert_one_set(&memory, 1, |repository| import(repository, &source));
     let before_dry_run = memory.storage.read_view().unwrap();
     memory
         .repository
