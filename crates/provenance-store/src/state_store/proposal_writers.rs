@@ -163,15 +163,18 @@ impl StateStore {
         let path = shards::assertion_records_path(&self.layout, &input.scope_id);
         self.mutate_jsonl_records(&path, |records: &mut Vec<AssertionRecord>| {
             assertions.push(assertion.clone());
-            provenance_core::validate_ideation_aggregate(provenance_core::IdeationAggregate {
-                legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
-                disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
-                contributions: &self.list_contributions(&input.scope_id)?,
-                synthesis_packets: &self.list_synthesis_packets(&input.scope_id)?,
-                proposals: &self.list_proposal_definitions(&input.scope_id)?,
-                assertions: &assertions,
-                dispositions: &self.list_dispositions(&input.scope_id)?,
-            })?;
+            self.check_ideation_aggregate(
+                &input.scope_id,
+                provenance_core::IdeationAggregate {
+                    legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
+                    disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
+                    contributions: &self.list_contributions(&input.scope_id)?,
+                    synthesis_packets: &self.list_synthesis_packets(&input.scope_id)?,
+                    proposals: &self.list_proposal_definitions(&input.scope_id)?,
+                    assertions: &assertions,
+                    dispositions: &self.list_dispositions(&input.scope_id)?,
+                },
+            )?;
             super::read_budget::ensure_within_read_budget(&assertion)?;
             records.push(assertion.clone());
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
@@ -214,15 +217,18 @@ impl StateStore {
             candidate.id.as_str()
         );
         proposals.push(candidate.clone());
-        provenance_core::validate_ideation_aggregate(provenance_core::IdeationAggregate {
-            legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
-            disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
-            contributions: &self.list_contributions(&candidate.scope_id)?,
-            synthesis_packets: &self.list_synthesis_packets(&candidate.scope_id)?,
-            proposals: &proposals,
-            assertions: &self.list_assertion_records(&candidate.scope_id)?,
-            dispositions: &self.list_dispositions(&candidate.scope_id)?,
-        })?;
+        self.check_ideation_aggregate(
+            &candidate.scope_id,
+            provenance_core::IdeationAggregate {
+                legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
+                disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
+                contributions: &self.list_contributions(&candidate.scope_id)?,
+                synthesis_packets: &self.list_synthesis_packets(&candidate.scope_id)?,
+                proposals: &proposals,
+                assertions: &self.list_assertion_records(&candidate.scope_id)?,
+                dispositions: &self.list_dispositions(&candidate.scope_id)?,
+            },
+        )?;
         let path = shards::proposal_cards_path(&self.layout, &candidate.scope_id);
         // The publication section orders each write of this shard, so the
         // check above covers it.
@@ -307,15 +313,18 @@ impl StateStore {
             &self.canonical_artifact_index(&scope_id)?,
         )?;
         dispositions.push(disposition.clone());
-        provenance_core::validate_ideation_aggregate(provenance_core::IdeationAggregate {
-            legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
-            disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
-            contributions: &self.list_contributions(&scope_id)?,
-            synthesis_packets: &self.list_synthesis_packets(&scope_id)?,
-            proposals: &proposals,
-            assertions: &assertions,
-            dispositions: &dispositions,
-        })?;
+        self.check_ideation_aggregate(
+            &scope_id,
+            provenance_core::IdeationAggregate {
+                legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
+                disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
+                contributions: &self.list_contributions(&scope_id)?,
+                synthesis_packets: &self.list_synthesis_packets(&scope_id)?,
+                proposals: &proposals,
+                assertions: &assertions,
+                dispositions: &dispositions,
+            },
+        )?;
         let dispositions_path = shards::dispositions_path(&self.layout, &scope_id);
         self.mutate_jsonl_records(
             &dispositions_path,

@@ -7,6 +7,11 @@ use std::io::Write;
 #[error("failed to persist temporary file: {0}")]
 pub struct ReplaceFailed(#[source] std::io::Error);
 
+/// A failure after the file at the path changed: a sync of its directory.
+#[derive(Debug, thiserror::Error)]
+#[error(transparent)]
+pub struct ChangedUnsynced(pub anyhow::Error);
+
 /// Writes `bytes` to the file at `path` in this order: make the directory of
 /// `path` if it does not exist, write a temporary file in that directory,
 /// sync the temporary file, replace `path` with it, and sync the directory.
@@ -19,7 +24,8 @@ pub struct ReplaceFailed(#[source] std::io::Error);
 ///
 /// If a step fails, the steps after it do not occur. A failed sync gives
 /// `sync <path>` and the I/O error. If a directory sync fails, `path` has the
-/// new bytes, but a power loss can lose them.
+/// new bytes, but a power loss can lose them: the error is a
+/// [`ChangedUnsynced`].
 pub fn write_synced_file(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<()> {
     let (temporary, parent, first_made) = write_temporary(path, bytes)?;
     drop(crate::test_probes::at("state_synced"));
@@ -27,7 +33,7 @@ pub fn write_synced_file(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<()> {
     replace_file(temporary, path)?;
     let last = first_made.and_then(Utf8Path::parent).unwrap_or(parent);
     for directory in parent.ancestors() {
-        sync_parent(directory)?;
+        sync_parent(directory).map_err(ChangedUnsynced)?;
         if directory == last {
             break;
         }
@@ -40,12 +46,18 @@ pub fn write_synced_file(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<()> {
 /// power loss can bring the file back. A file that does not exist is a
 /// success with no sync. A failed remove gives `remove <path>` and the I/O
 /// error, and a failed sync gives `sync <path>` and the I/O error. If the
-/// sync fails, the file is removed, but a power loss can bring it back.
-pub fn remove_synced_file(path: &Utf8Path) -> anyhow::Result<()> {
+/// sync fails, the file is removed, but a power loss can bring it back: the
+/// error is a [`ChangedUnsynced`].
+///
+/// True when it removed a file.
+pub fn remove_synced_file(path: &Utf8Path) -> anyhow::Result<bool> {
     let parent = parent_of(path)?;
     match std::fs::remove_file(crate::long_path::extended(path)?) {
-        Ok(()) => sync_parent(parent),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Ok(()) => {
+            sync_parent(parent).map_err(ChangedUnsynced)?;
+            Ok(true)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
         Err(error) => Err(crate::refusal::caused(error, format!("remove {path}"))),
     }
 }

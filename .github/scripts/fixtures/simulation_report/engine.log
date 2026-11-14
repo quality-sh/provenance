@@ -1,0 +1,117 @@
+[32;1m    Starting[0m [1m38[0m tests across [1m5[0m binaries
+[32;1m        PASS[0m [   0.016s] ( 1/38) [35;1mprovenance-simulation::engine[0m [34;1man_archive_after_an_outside_claim_clears_the_claim_and_keeps_l3[0m
+[32;1m        PASS[0m [   0.029s] ( 2/38) [35;1mprovenance-simulation::engine[0m [34;1man_unknown_outcome_lands_a_prefix_and_keeps_the_laws[0m
+[32;1m        PASS[0m [   0.036s] ( 3/38) [35;1mprovenance-simulation::engine[0m [34;1ma_case_with_every_fault_keeps_the_laws[0m
+[32;1m        PASS[0m [   0.011s] ( 4/38) [35;1mprovenance-simulation::engine[0m [34;1mthe_write_after_a_moved_base_lands[0m
+[32;1m        PASS[0m [   0.029s] ( 5/38) [35;1mprovenance-simulation::engine[0m [34;1mrandom_cases_keep_the_laws[0m
+[32;1m        PASS[0m [   0.015s] ( 6/38) [35;1mprovenance-simulation::engine_planted[0m [34;1ma_clock_that_continues_between_runs_breaks_l8[0m
+[32;1m        PASS[0m [   0.012s] ( 7/38) [35;1mprovenance-simulation::engine_planted[0m [34;1ma_planted_stale_read_breaks_l5[0m
+[32;1m        PASS[0m [   0.015s] ( 8/38) [35;1mprovenance-simulation::engine_planted[0m [34;1ma_refusal_that_lands_the_set_breaks_l1[0m
+[32;1m        PASS[0m [   0.063s] ( 9/38) [35;1mprovenance-simulation::engine[0m [34;1meach_operation_runs_on_the_engine[0m
+[32;1m        PASS[0m [   0.011s] (10/38) [35;1mprovenance-simulation::engine_planted[0m [34;1ma_state_that_does_not_open_after_a_stop_breaks_l2[0m
+[32;1m        PASS[0m [   0.015s] (11/38) [35;1mprovenance-simulation::engine_planted[0m [36ml3[0m[36m::[0m[34;1ma_certain_archive_that_claims_the_topic_breaks_l3[0m
+[32;1m        PASS[0m [   0.013s] (12/38) [35;1mprovenance-simulation::engine_planted[0m [36ml3[0m[36m::[0m[34;1ma_certain_claim_for_a_different_actor_breaks_l3[0m
+[32;1m        PASS[0m [   0.012s] (13/38) [35;1mprovenance-simulation::engine_planted[0m [36ml3[0m[36m::[0m[34;1ma_certain_release_that_closes_the_topic_breaks_l3[0m
+[32;1m        PASS[0m [   0.012s] (14/38) [35;1mprovenance-simulation::engine_planted[0m [36ml3[0m[36m::[0m[34;1ma_claim_cleared_on_an_open_topic_breaks_l3[0m
+[32;1m        PASS[0m [   0.016s] (15/38) [35;1mprovenance-simulation::engine_planted[0m [36ml3[0m[36m::[0m[34;1ma_claim_lost_before_an_archive_of_unknown_outcome_breaks_l3[0m
+[32;1m        PASS[0m [   0.011s] (16/38) [35;1mprovenance-simulation::engine_planted[0m [36ml3[0m[36m::[0m[34;1ma_failed_archive_that_claims_the_topic_breaks_l3[0m
+[32;1m        PASS[0m [   0.014s] (17/38) [35;1mprovenance-simulation::engine_planted[0m [36ml3[0m[36m::[0m[34;1ma_claim_of_unknown_outcome_for_a_different_actor_breaks_l3[0m
+[32;1m        PASS[0m [   0.016s] (18/38) [35;1mprovenance-simulation::engine_planted[0m [36ml3[0m[36m::[0m[34;1ma_claim_on_an_archived_topic_breaks_l3[0m
+[32;1m        PASS[0m [   0.013s] (19/38) [35;1mprovenance-simulation::engine_planted[0m [36ml3[0m[36m::[0m[34;1ma_failed_claim_for_a_different_actor_breaks_l3[0m
+[32;1m        PASS[0m [   0.012s] (20/38) [35;1mprovenance-simulation::engine_planted[0m [36ml3[0m[36m::[0m[34;1ma_failed_release_that_closes_the_topic_breaks_l3[0m
+[32;1m        PASS[0m [   0.012s] (21/38) [35;1mprovenance-simulation::engine_planted[0m [36ml3[0m[36m::[0m[34;1ma_lost_claim_breaks_l3[0m
+[32;1m        PASS[0m [   0.013s] (22/38) [35;1mprovenance-simulation::engine_planted[0m [36ml3[0m[36m::[0m[34;1ma_lost_write_breaks_l3[0m
+[32;1m        PASS[0m [   0.014s] (23/38) [35;1mprovenance-simulation::engine_planted[0m [36ml3[0m[36m::[0m[34;1ma_release_of_unknown_outcome_that_closes_the_topic_breaks_l3[0m
+[32;1m        PASS[0m [   0.011s] (24/38) [35;1mprovenance-simulation::engine_planted[0m [36ml3[0m[36m::[0m[34;1man_archive_of_unknown_outcome_that_claims_the_topic_breaks_l3[0m
+[32;1m        PASS[0m [   0.028s] (25/38) [35;1mprovenance-simulation::engine_planted[0m [36ml3[0m[36m::[0m[34;1ma_stopped_archive_that_claims_the_topic_breaks_l3[0m
+[32;1m        PASS[0m [   0.029s] (26/38) [35;1mprovenance-simulation::engine_planted[0m [36ml3[0m[36m::[0m[34;1ma_stopped_claim_for_a_different_actor_breaks_l3[0m
+[32;1m        PASS[0m [   0.030s] (27/38) [35;1mprovenance-simulation::engine_planted[0m [36ml3[0m[36m::[0m[34;1ma_stopped_release_that_closes_the_topic_breaks_l3[0m
+[32;1m        PASS[0m [   0.016s] (28/38) [35;1mprovenance-simulation::engine_planted[0m [36ml3[0m[36m::[0m[34;1man_archive_that_leaves_the_claim_breaks_l3[0m
+[32;1m        PASS[0m [   0.011s] (29/38) [35;1mprovenance-simulation::engine_planted[0m [34;1mone_law_is_checked_alone[0m
+[32;1m        PASS[0m [   0.005s] (30/38) [35;1mprovenance-simulation::storage_contract[0m [34;1mthe_simulated_storage_keeps_the_storage_contract[0m
+[32;1m        PASS[0m [   0.015s] (31/38) [35;1mprovenance-simulation::engine_planted[0m [34;1mtwo_updates_without_concurrency_control_break_l4[0m
+[31;1m        FAIL[0m [   0.005s] (32/38) [35;1mprovenance-simulation::zz-dash[0m [34;1mzz_check_fails_in_a_probe[0m
+[31;1m [0m [31;1mstdout[0m [31;1m───[0m
+
+    running 1 test
+    test zz_check_fails_in_a_probe ... FAILED
+
+    failures:
+
+    failures:
+        zz_check_fails_in_a_probe
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+    [0m
+[31;1m [0m [31;1mstderr[0m [31;1m───[0m
+
+    [0m[31;1mthread 'zz_check_fails_in_a_probe' (6162) panicked at crates/provenance-simulation/tests/zz-dash.rs:14:5:[0m
+    [31;1massertion `left == right` failed: a planted check[0m
+      left: 1
+     right: 2
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace[0m
+
+[31;1m        FAIL[0m [   0.005s] (33/38) [35;1mprovenance-simulation::zz-dash[0m [34;1mzz_planted_check_broken[0m
+[31;1m [0m [31;1mstdout[0m [31;1m───[0m
+
+    running 1 test
+    test zz_planted_check_broken ... FAILED
+
+    failures:
+
+    failures:
+        zz_planted_check_broken
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+    [0m
+[31;1m [0m [31;1mstderr[0m [31;1m───[0m
+
+    [0m[31;1mthread 'zz_planted_check_broken' (6170) panicked at crates/provenance-simulation/src/report.rs:90:5:[0m
+    [31;1msimulation check broken: law L3 did not see its planted fault: every law held[0m
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace[0m
+
+[31;1m        FAIL[0m [   0.005s] (34/38) [35;1mprovenance-simulation::zz-dash[0m [34;1mzz_probe_breaks_a_law[0m
+[31;1m [0m [31;1mstdout[0m [31;1m───[0m
+
+    running 1 test
+    test zz_probe_breaks_a_law ... FAILED
+
+    failures:
+
+    failures:
+        zz_probe_breaks_a_law
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+    [0m
+[31;1m [0m [31;1mstderr[0m [31;1m───[0m
+
+    [0m[31;1mthread 'zz_probe_breaks_a_law' (6172) panicked at crates/provenance-simulation/src/report.rs:79:9:[0m
+    [31;1msimulation probe broke law L3 in layer engine: a planted break with a second line[0m
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace[0m
+
+[32;1m        PASS[0m [   0.045s] (35/38) [35;1mprovenance-simulation::refused_post[0m [34;1ma_refused_post_lands_no_thread_and_no_message[0m
+[31;1m     SIGABRT[0m [   0.110s] (36/38) [35;1mprovenance-simulation::zz-dash[0m [34;1mzz_test_aborts[0m
+[31;1m [0m [31;1mstdout[0m [31;1m───[0m
+
+    running 1 test[0m
+
+    (test [31;1maborted[0m with signal [1m6[0m: SIGABRT)
+
+[33;1m        SLOW[0m [>  5.000s] (─────) [35;1mprovenance-simulation::zz-dash[0m [34;1mzz_test_hangs[0m
+[31;1m TERMINATING[0m [> 10.000s] (─────) [35;1mprovenance-simulation::zz-dash[0m [34;1mzz_test_hangs[0m
+[31;1m     TIMEOUT[0m [  10.004s] (37/38) [35;1mprovenance-simulation::zz-dash[0m [34;1mzz_test_hangs[0m
+[31;1m [0m [31;1mstdout[0m [31;1m───[0m
+
+    running 1 test[0m
+
+    (test [31;1mtimed out[0m)
+
+[32;1m        PASS[0m [ 117.832s] (38/38) [35;1mprovenance-simulation::engine_planted[0m [34;1mrandom_planted_cases_repeat_by_seed_and_replay_by_blob[0m
+────────────
+[31;1m     Summary[0m [ 117.961s] [1m38[0m tests run: [1m33[0m [32;1mpassed[0m, [1m4[0m [31;1mfailed[0m, [1m1[0m [31;1mtimed out[0m, [1m0[0m [33;1mskipped[0m
+[31;1m        FAIL[0m [   0.005s] (32/38) [35;1mprovenance-simulation::zz-dash[0m [34;1mzz_check_fails_in_a_probe[0m
+[31;1m        FAIL[0m [   0.005s] (33/38) [35;1mprovenance-simulation::zz-dash[0m [34;1mzz_planted_check_broken[0m
+[31;1m        FAIL[0m [   0.005s] (34/38) [35;1mprovenance-simulation::zz-dash[0m [34;1mzz_probe_breaks_a_law[0m
+[31;1m     SIGABRT[0m [   0.110s] (36/38) [35;1mprovenance-simulation::zz-dash[0m [34;1mzz_test_aborts[0m
+[31;1m     TIMEOUT[0m [  10.004s] (37/38) [35;1mprovenance-simulation::zz-dash[0m [34;1mzz_test_hangs[0m
+[31;1merror[0m: test run failed

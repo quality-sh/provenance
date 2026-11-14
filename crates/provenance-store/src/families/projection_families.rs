@@ -6,6 +6,9 @@ use provenance_core::ScopeId;
 pub trait RecordFamily: serde::Serialize {
     const META: &'static FamilyMeta;
 
+    /// The row of the family table that stores this record.
+    const FAMILY: ProjectionFamily;
+
     fn open(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Vec<Self>>
     where
         Self: Sized;
@@ -67,6 +70,8 @@ macro_rules! define_projection_families {
                 terminal_statuses: terminal_statuses!($([$($terminal),*])?),
                 catalog_operations: family_catalog!($($catalog)*),
             };
+
+            const FAMILY: ProjectionFamily = ProjectionFamily::$variant;
 
             fn open(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Vec<Self>> {
                 store.$reader(scope)

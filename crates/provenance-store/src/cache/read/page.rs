@@ -15,6 +15,9 @@ pub const RESOURCE_RECORD_BYTES: usize = PAGE_BYTES - 16_384;
 
 /// The engine steps that the statements of one page may run, joins and
 /// sorts included.
+///
+/// An adapter that counts work in another measure converts this bound
+/// itself, as [`crate::read_database::SqlTransaction::bound_work`] states.
 pub const PAGE_WORK_STEPS: u64 = 10_000_000;
 
 impl ReadSnapshot {

@@ -80,12 +80,16 @@ impl StateStorage for MemoryStateStorage {
     /// whole set lands on a copy that replaces the state only when every key
     /// landed. The persistence keeps the keys that land before any of them
     /// lands: the whole set, or the prefix of a per-key set up to a failing
-    /// key. When it refuses them, no key changes.
+    /// key. When it refuses them, no key changes. A set with no key, or a
+    /// per-key set that fails at its first key, goes to no persistence.
     #[rule("rule_memory_storage_persists_each_publish")]
     fn publish(&self, writes: WriteSet) -> Result<(), PublishFailure> {
         writes.ensure_disjoint()?;
         let mut state = self.state();
         writes.ensure_base(&state.entries)?;
+        if writes.key_count() == 0 {
+            return Ok(());
+        }
         let failing = state.failing.clone();
         let mut landed = state.entries.clone();
         let mut changes: BTreeMap<&StateKey, Option<&Vec<u8>>> = BTreeMap::new();
@@ -97,7 +101,11 @@ impl StateStorage for MemoryStateStorage {
                 return Err(match writes.atomicity() {
                     Atomicity::WholeSet => PublishFailure::Refused(error),
                     Atomicity::PerKey => {
-                        self.persist(&prefix_before(&writes, key))?;
+                        let prefix = prefix_before(&writes, key);
+                        if prefix.key_count() == 0 {
+                            return Err(PublishFailure::Refused(error));
+                        }
+                        self.persist(&prefix)?;
                         state.entries = landed;
                         PublishFailure::Started(error)
                     }

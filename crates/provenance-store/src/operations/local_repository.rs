@@ -244,7 +244,18 @@ mod tests {
                 held,
                 false,
                 crate::state_store::RecordStamp::ResolveFromRepository,
-                |_| Ok(()),
+                // Two new shards, so the stage lands as a whole set.
+                |staged| {
+                    let scope = ScopeId::new("default")?;
+                    staged.publish_shards(
+                        [
+                            provenance_core::NodeType::Topic,
+                            provenance_core::NodeType::Question,
+                        ]
+                        .map(|kind| (crate::shards::path_for(&layout, &scope, kind), Vec::new()))
+                        .into(),
+                    )
+                },
             )
         })
         .unwrap();

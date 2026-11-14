@@ -30,7 +30,7 @@ const FIRST_STOPPED_COUNT: i64 = 588_280;
 async fn stops(pool: &SqlitePool, store: &TestStore, port_only: bool, n: i64) -> bool {
     let mut transaction = crate::read_database::file::begin(pool).await.unwrap();
     if port_only {
-        transaction = Box::new(OtherTransaction(transaction));
+        transaction = OtherTransaction::forward(transaction);
     }
     let snapshot = ReadSnapshot::open(transaction, &store.scope)
         .await

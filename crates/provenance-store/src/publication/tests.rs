@@ -1,3 +1,4 @@
+use super::held_file_tests::stage_two_new_shards;
 use super::read_only::tests::{record_kind_repositories, scope};
 use super::*;
 use crate::state_store::RecordStamp::ResolveFromRepository as StampFromGit;
@@ -370,7 +371,8 @@ fn a_repository_read_in_the_publication_gap_waits_for_the_publication() {
     with_repository_publication(&layout, |held| {
         with_staged_state(held, false, StampFromGit, |staged| {
             let manifest = staged.layout.manifest_path();
-            staged.publish_shard(&manifest, serde_json::to_vec(&published)?)
+            staged.publish_shard(&manifest, serde_json::to_vec(&published)?)?;
+            stage_two_new_shards(staged)
         })
     })
     .unwrap();
@@ -399,7 +401,7 @@ fn read_only_record_kinds_in_the_publication_swap_find_no_record() {
         }
     });
     let published = with_repository_publication(&live, |held| {
-        with_staged_state(held, false, StampFromGit, |_staged| Ok(()))
+        with_staged_state(held, false, StampFromGit, stage_two_new_shards)
     });
     crate::test_probes::disarm("state_after_backup_rename");
     published.unwrap();

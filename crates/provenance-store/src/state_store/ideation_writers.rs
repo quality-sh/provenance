@@ -1,3 +1,4 @@
+use super::ideation_batches::{replace_checked_or_append, replace_or_append};
 use super::{
     CreateContributionInput, CreateSynthesisPacketInput, StateStore, UpdateContributionInput,
     UpdateSynthesisPacketInput,
@@ -124,38 +125,28 @@ impl StateStore {
         }
         let path = shards::contributions_path(&self.layout, &scope_id);
         self.mutate_jsonl_records(&path, |records: &mut Vec<Contribution>| {
-            if let Some(index) = records
-                .iter()
-                .position(|record| record.id == contribution.id)
-            {
+            replace_checked_or_append(records, contribution.clone(), |stored| {
                 crate::write_error::ensure!(AlreadyExists, replace, "contribution already exists");
                 super::ideation_batches::ensure_asserted_contribution_unchanged(
-                    &records[index],
+                    stored,
                     &contribution,
                     &self.list_assertion_records(&scope_id)?,
-                )?;
-                records[index] = contribution.clone();
-            } else {
-                records.push(contribution.clone());
-            }
-            let mut contributions = self.list_contributions(&scope_id)?;
-            if let Some(index) = contributions
-                .iter()
-                .position(|record| record.id == contribution.id)
-            {
-                contributions[index] = contribution.clone();
-            } else {
-                contributions.push(contribution.clone());
-            }
-            provenance_core::validate_ideation_aggregate(provenance_core::IdeationAggregate {
-                legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
-                disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
-                contributions: &contributions,
-                synthesis_packets: &self.list_synthesis_packets(&scope_id)?,
-                proposals: &self.list_proposal_definitions(&scope_id)?,
-                assertions: &self.list_assertion_records(&scope_id)?,
-                dispositions: &self.list_dispositions(&scope_id)?,
+                )
             })?;
+            let mut contributions = self.list_contributions(&scope_id)?;
+            replace_or_append(&mut contributions, contribution.clone());
+            self.check_ideation_aggregate(
+                &scope_id,
+                provenance_core::IdeationAggregate {
+                    legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
+                    disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
+                    contributions: &contributions,
+                    synthesis_packets: &self.list_synthesis_packets(&scope_id)?,
+                    proposals: &self.list_proposal_definitions(&scope_id)?,
+                    assertions: &self.list_assertion_records(&scope_id)?,
+                    dispositions: &self.list_dispositions(&scope_id)?,
+                },
+            )?;
             super::read_budget::ensure_within_read_budget(&contribution)?;
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
             Ok(contribution)
@@ -262,42 +253,32 @@ impl StateStore {
         }
         let path = shards::synthesis_packets_path(&self.layout, &scope_id);
         self.mutate_jsonl_records(&path, |records: &mut Vec<SynthesisPacket>| {
-            if let Some(index) = records
-                .iter()
-                .position(|record| record.id == synthesis_packet.id)
-            {
+            replace_checked_or_append(records, synthesis_packet.clone(), |stored| {
                 crate::write_error::ensure!(
                     AlreadyExists,
                     replace,
                     "synthesis packet already exists"
                 );
                 super::ideation_batches::ensure_asserted_synthesis_unchanged(
-                    &records[index],
+                    stored,
                     &synthesis_packet,
                     &self.list_assertion_records(&scope_id)?,
-                )?;
-                records[index] = synthesis_packet.clone();
-            } else {
-                records.push(synthesis_packet.clone());
-            }
-            let mut synthesis_packets = self.list_synthesis_packets(&scope_id)?;
-            if let Some(index) = synthesis_packets
-                .iter()
-                .position(|record| record.id == synthesis_packet.id)
-            {
-                synthesis_packets[index] = synthesis_packet.clone();
-            } else {
-                synthesis_packets.push(synthesis_packet.clone());
-            }
-            provenance_core::validate_ideation_aggregate(provenance_core::IdeationAggregate {
-                legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
-                disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
-                contributions: &self.list_contributions(&scope_id)?,
-                synthesis_packets: &synthesis_packets,
-                proposals: &self.list_proposal_definitions(&scope_id)?,
-                assertions: &self.list_assertion_records(&scope_id)?,
-                dispositions: &self.list_dispositions(&scope_id)?,
+                )
             })?;
+            let mut synthesis_packets = self.list_synthesis_packets(&scope_id)?;
+            replace_or_append(&mut synthesis_packets, synthesis_packet.clone());
+            self.check_ideation_aggregate(
+                &scope_id,
+                provenance_core::IdeationAggregate {
+                    legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
+                    disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
+                    contributions: &self.list_contributions(&scope_id)?,
+                    synthesis_packets: &synthesis_packets,
+                    proposals: &self.list_proposal_definitions(&scope_id)?,
+                    assertions: &self.list_assertion_records(&scope_id)?,
+                    dispositions: &self.list_dispositions(&scope_id)?,
+                },
+            )?;
             super::read_budget::ensure_within_read_budget(&synthesis_packet)?;
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
             Ok(synthesis_packet)

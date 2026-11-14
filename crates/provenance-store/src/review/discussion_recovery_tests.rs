@@ -80,7 +80,23 @@ fn crash_child() {
                 .unwrap();
         }
         _ => {
-            store.write_discussion(mutation(&root, &operation)).unwrap();
+            // A status change alone changes one shard, and a set of one key
+            // lands with no whole set. A new empty shard in the same stage
+            // makes it reach each probe of the whole set.
+            store
+                .with_repository_publication(|held| {
+                    crate::publication::with_staged_state(
+                        held,
+                        false,
+                        crate::state_store::RecordStamp::ResolveFromRepository,
+                        |staged| {
+                            staged.write_discussion(mutation(&root, &operation))?;
+                            let topics = crate::shards::topics_path(&staged.layout, &scope());
+                            staged.publish_shard(&topics, Vec::new())
+                        },
+                    )
+                })
+                .unwrap();
         }
     }
     panic!("crash phase was not reached");

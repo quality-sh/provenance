@@ -42,8 +42,7 @@ fn the_write_after_a_moved_base_lands() {
         "{:?}",
         run.done
     );
-    let test = "the_write_after_a_moved_base_lands";
-    report::probe("engine", test, laws::check(&run));
+    report::probe_laws("engine", laws::check(&run));
 }
 
 // No Rule: a probe that each fault of the generator meets an engine.
@@ -71,8 +70,7 @@ fn a_case_with_every_fault_keeps_the_laws() {
         write(2, Operation::ReleaseTopic),
     ]);
     let case = Case { engines: 3, steps };
-    let test = "a_case_with_every_fault_keeps_the_laws";
-    let run = check_probe("engine", test, &case, Config::default());
+    let run = check_probe("engine", &case, Config::default());
     assert!(
         met(&run, Outcome::Unknown),
         "no unknown outcome: {:?}",
@@ -112,8 +110,7 @@ fn an_unknown_outcome_lands_a_prefix_and_keeps_the_laws() {
         };
         let run = run_case(&case, Config::default());
         assert!(met(&run, Outcome::Unknown), "the fault met a publish");
-        let test = "an_unknown_outcome_lands_a_prefix_and_keeps_the_laws";
-        report::probe("engine", test, laws::check(&run));
+        report::probe_laws("engine", laws::check(&run));
     }
 }
 
@@ -126,8 +123,7 @@ fn each_operation_runs_on_the_engine() {
         engines: 2,
         steps: alone(&ops),
     };
-    let test = "each_operation_runs_on_the_engine";
-    let run = check_probe("engine", test, &case, Config::default());
+    let run = check_probe("engine", &case, Config::default());
     let ran: Vec<_> = run.done.iter().map(|done| &done.op).collect();
     assert_eq!(ran, ops.iter().collect::<Vec<_>>());
     for done in &run.done {
@@ -187,6 +183,5 @@ fn an_archive_after_an_outside_claim_clears_the_claim_and_keeps_l3() {
         .unwrap();
     assert_eq!(topics[0].status, provenance_core::TopicStatus::Archived);
     assert_eq!(topics[0].claimed_by, None);
-    let test = "an_archive_after_an_outside_claim_clears_the_claim_and_keeps_l3";
-    report::probe("engine", test, laws::check(&run));
+    report::probe_laws("engine", laws::check(&run));
 }
