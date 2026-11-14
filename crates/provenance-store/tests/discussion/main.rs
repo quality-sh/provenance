@@ -25,6 +25,7 @@ mod discussion_outcomes;
 mod discussion_reads;
 #[path = "../discussion_support.rs"]
 mod discussion_support;
+use discussion_support::base as review_support;
 #[path = "../discussion_target_writes.rs"]
 mod discussion_target_writes;
 #[path = "../discussion_writes.rs"]

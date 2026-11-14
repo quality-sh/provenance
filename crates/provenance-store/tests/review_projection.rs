@@ -1,4 +1,4 @@
-use crate::discussion_support::base as review_support;
+use crate::review_support;
 use provenance_store::{cache, layout::ProvenanceLayout};
 use review_support::*;
 use serde_json::json;
