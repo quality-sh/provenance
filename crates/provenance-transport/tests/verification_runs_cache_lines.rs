@@ -95,8 +95,16 @@ const REPEATED: &str = concat!(
 async fn each_read_and_write_of_the_runs_names_the_first_bad_line_of_the_runs_cache() {
     let cases: [(Vec<u8>, u64, &str); 5] = [
         (b"{not json\n\xff\n".to_vec(), 1, "key must be a string"),
-        (b"\xff\n".to_vec(), 1, "invalid utf-8 sequence of 1 bytes from index 0"),
-        (b"{\"id\":\"verification_1\"}\n".to_vec(), 1, "missing field `scope_id`"),
+        (
+            b"\xff\n".to_vec(),
+            1,
+            "invalid utf-8 sequence of 1 bytes from index 0",
+        ),
+        (
+            b"{\"id\":\"verification_1\"}\n".to_vec(),
+            1,
+            "missing field `scope_id`",
+        ),
         (REPEATED.into(), 1, "duplicate field `id`"),
         (
             format!("{RUN}{{\"id\":\"verification_1\"}}\n").into(),
