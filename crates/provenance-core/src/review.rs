@@ -285,6 +285,9 @@ pub struct PendingSubmission {
     pub revision: StableId,
     pub actor: String,
     pub revises: Option<StableId>,
+    /// The lifecycle status that the submission asks for, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status_request: Option<StatusRequest>,
 }
 
 /// One terminal decision as the cycle reads it: the disposition itself, the

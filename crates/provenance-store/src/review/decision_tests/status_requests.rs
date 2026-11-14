@@ -92,6 +92,7 @@ fn activation_opens_a_status_request_and_keeps_the_status() {
     let (proposal, request) = pending_request(&store);
     assert_eq!(request.status, RequestedStatus::Active);
     assert_eq!(title_of(&store, &proposal), "Set status to active");
+    assert_eq!(rule_state(&store).pending.unwrap().status_request, Some(request));
 }
 
 #[test]
@@ -211,4 +212,78 @@ fn a_new_archived_rule_is_refused() {
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
 
     refused(create(&store, "archived"), "cannot have the archived status");
+}
+
+/// A fixture with the proposed Resolution `res_a` and a creation of
+/// `rule_a` with `status` that cites it.
+fn create_citing_proposed_resolution(
+    status: &str,
+) -> (tempfile::TempDir, StateStore, anyhow::Result<Rule>) {
+    let temp = fixture();
+    let store = open(Utf8Path::from_path(temp.path()).unwrap());
+    store
+        .create_resolution(
+            serde_json::from_value(json!({
+                "scope_id":"default","id":"res_a","title":"Pick A",
+                "requirement_ids":["req_a"],"supersedes":[],"position":"Pick A.",
+                "rationale":"A is simpler.","status":"proposed","context":null,"inputs":[],
+                "made_by":null,"approved_by":null,"approved_at":null,
+                "origin_thread":null,"origin_message":null
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    let created = store.request_rule_creation(
+        serde_json::from_value(json!({
+            "scope_id":"default","id":"rule_a","statement":"The rule holds.",
+            "requirement_ids":["req_a"],"resolution_ids":["res_a"],"status":status,
+            "severity":"high"
+        }))
+        .unwrap(),
+    );
+    (temp, store, created)
+}
+
+#[test]
+#[provenance_macros::verifies("rule_status_request_refused_like_direct_write", examples)]
+fn a_new_active_rule_citing_a_proposed_resolution_is_refused() {
+    let (_temp, store, created) = create_citing_proposed_resolution("active");
+
+    refused(created, "cites resolution res_a, which is proposed");
+
+    assert!(store.list_rules(&scope()).unwrap().is_empty());
+}
+
+#[test]
+#[provenance_macros::verifies("rule_status_request_refused_like_direct_write", examples)]
+fn the_direct_write_refusal_comes_before_the_pending_check() {
+    let (_temp, store, created) = create_citing_proposed_resolution("draft");
+    created.unwrap();
+    let pending = rule_state(&store).pending.expect("the creation submission");
+
+    refused(
+        update(&store, json!({"status":"active"})),
+        "cites resolution res_a, which is proposed",
+    );
+
+    assert_eq!(read_rule(&store).status, RuleStatus::Draft);
+    let after = rule_state(&store).pending.expect("the creation submission");
+    assert_eq!(after.proposal_id, pending.proposal_id);
+    assert!(after.status_request.is_none());
+}
+
+#[test]
+#[provenance_macros::verifies("rule_status_request_refused_like_direct_write", examples)]
+fn an_activation_citing_a_proposed_resolution_opens_no_submission() {
+    let (_temp, store, created) = create_citing_proposed_resolution("draft");
+    created.unwrap();
+    accept(&store, &rule_state(&store).pending.unwrap().proposal_id);
+
+    refused(
+        update(&store, json!({"status":"active"})),
+        "cites resolution res_a, which is proposed",
+    );
+
+    assert_eq!(read_rule(&store).status, RuleStatus::Draft);
+    assert!(rule_state(&store).pending.is_none());
 }

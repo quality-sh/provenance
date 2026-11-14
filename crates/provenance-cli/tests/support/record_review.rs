@@ -175,8 +175,7 @@ pub fn pending_status_request(repo: &str, collection: &str, id: &str) -> (String
 /// Requests a status with a guarded update, then accepts the request.
 pub fn set_status(repo: &str, collection: &str, kind: &str, id: &str, change: &[&str]) {
     guarded_update(repo, collection, id, change);
-    let (proposal, _) = pending_status_request(repo, collection, id);
-    decide(repo, collection, kind, id, &proposal, true);
+    accept_status_request(repo, collection, kind, id);
 }
 
 /// Accepts the current revision of a Rule, then activates it through an
@@ -184,4 +183,23 @@ pub fn set_status(repo: &str, collection: &str, kind: &str, id: &str, change: &[
 pub fn activate_rule(repo: &str, id: &str) {
     accept_current(repo, "rules", "rule", id);
     set_status(repo, "rules", "rule", id, &["--status", "active"]);
+}
+
+/// Accepts the pending status request of a record as the reviewer.
+pub fn accept_status_request(repo: &str, collection: &str, kind: &str, id: &str) {
+    let (proposal, _) = pending_status_request(repo, collection, id);
+    decide(repo, collection, kind, id, &proposal, true);
+}
+
+/// Accepts the current revision of a Rule, then archives it in `commit`
+/// through an accepted status request.
+pub fn archive_rule(repo: &str, id: &str, commit: &str) {
+    accept_current(repo, "rules", "rule", id);
+    set_status(
+        repo,
+        "rules",
+        "rule",
+        id,
+        &["--status", "archived", "--archived-in-commit", commit],
+    );
 }

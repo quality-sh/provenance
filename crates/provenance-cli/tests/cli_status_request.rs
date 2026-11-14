@@ -3,13 +3,10 @@
 
 use provenance_macros::verifies;
 
-mod support {
-    pub mod record_review;
-    pub mod review_paths;
-}
+use crate::support;
 use support::record_review::{
-    accept_current, create_rule, data, decide, guarded_update, pending_status_request, read,
-    withdraw,
+    accept_current, create_resolution, create_rule, data, decide, guarded_update,
+    pending_status_request, read, withdraw,
 };
 use support::review_paths::{create_requirement, init, provenance};
 
@@ -36,6 +33,7 @@ fn rule_activation_waits_for_the_reviewer() {
     assert_eq!(after["status"], "draft", "{after}");
     let (proposal, request) = pending_status_request(&repo, "rules", "rule_a");
     assert_eq!(request["status"], "active");
+    assert_eq!(after["decision"]["pending"]["status_request"], request, "{after}");
 
     decide(&repo, "rules", "rule", "rule_a", &proposal, true);
 
@@ -181,4 +179,78 @@ fn a_new_archived_rule_is_refused() {
         ])
         .assert()
         .failure();
+}
+
+/// Runs a JSON command that must fail and returns its standard output and
+/// standard error.
+fn refused(repo: &str, args: &[&str]) -> String {
+    let mut all = args.to_vec();
+    all.extend(["--repo", repo, "--format", "json"]);
+    let output = provenance().args(all).output().unwrap();
+    assert!(!output.status.success());
+    format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    )
+}
+
+/// A repository with the proposed Resolution `res_a`.
+fn proposed_resolution() -> (tempfile::TempDir, String) {
+    let (directory, repo) = init();
+    create_requirement(&repo, "req_a");
+    create_resolution(&repo, "res_a", "req_a");
+    (directory, repo)
+}
+
+const RULE_CITING_RES_A: [&str; 9] = [
+    "rule_a",
+    "create",
+    "--type",
+    "rule",
+    "--statement",
+    "The system keeps each record.",
+    "--requirement-id",
+    "req_a",
+    "--resolution-id",
+];
+
+#[test]
+#[verifies("rule_status_request_refused_like_direct_write", examples)]
+fn a_new_active_rule_citing_a_proposed_resolution_is_refused() {
+    let (_directory, repo) = proposed_resolution();
+
+    let mut args = RULE_CITING_RES_A.to_vec();
+    args.extend(["res_a", "--status", "active"]);
+    let output = refused(&repo, &args);
+
+    assert!(output.contains("resolution_not_approved"), "{output}");
+    let rules = data(&repo, &["api", "rules"]);
+    assert!(!rules.to_string().contains("rule_a"), "{rules}");
+}
+
+#[test]
+#[verifies("rule_status_request_refused_like_direct_write", examples)]
+fn the_direct_write_refusal_comes_before_the_pending_check() {
+    let (_directory, repo) = proposed_resolution();
+    let mut args = RULE_CITING_RES_A.to_vec();
+    args.push("res_a");
+    data(&repo, &args);
+    let before = read(&repo, "rules", "rule_a");
+    let etag = before["edit"]["etag"].as_str().unwrap().to_owned();
+
+    let output = refused(
+        &repo,
+        &["rule_a", "update", "--if-match", &etag, "--status", "active"],
+    );
+
+    assert!(output.contains("resolution_not_approved"), "{output}");
+    assert!(!output.contains("review_submission_conflict"), "{output}");
+    let after = read(&repo, "rules", "rule_a");
+    assert_eq!(after["status"], "draft", "{after}");
+    assert_eq!(
+        after["decision"]["pending"], before["decision"]["pending"],
+        "{after}"
+    );
+    assert!(after["decision"]["pending"]["status_request"].is_null());
 }

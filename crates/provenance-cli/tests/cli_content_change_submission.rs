@@ -6,7 +6,7 @@ use serde_json::Value;
 
 use crate::support;
 use support::record_review::{
-    accept_current, create_resolution, create_rule, current_submission, data, decide,
+    accept_current, activate_rule, create_resolution, create_rule, current_submission, data, decide,
     guarded_update, read, submissions,
 };
 use support::review_paths::{create_requirement, init, json_output, provenance};
@@ -24,8 +24,7 @@ fn assert_pending_at_current_revision(after: &Value, status: &str) {
 fn accepted_active_rule(repo: &str) {
     create_requirement(repo, "req_a");
     create_rule(repo, "rule_a", "req_a");
-    accept_current(repo, "rules", "rule", "rule_a");
-    guarded_update(repo, "rules", "rule_a", &["--status", "active"]);
+    activate_rule(repo, "rule_a");
 }
 
 #[test]

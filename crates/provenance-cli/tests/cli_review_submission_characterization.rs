@@ -5,7 +5,8 @@
 
 use crate::support;
 use support::record_review::{
-    accept_current, create_resolution, create_rule, decide, guarded_update, read,
+    accept_current, accept_status_request, create_resolution, create_rule, decide,
+    guarded_update, read, submissions,
 };
 use support::review_paths::{create_requirement, init};
 
@@ -68,7 +69,7 @@ fn requirement_lifecycle_change_opens_no_submission() {
 }
 
 #[test]
-fn rule_lifecycle_change_after_acceptance_opens_no_submission() {
+fn rule_lifecycle_change_after_acceptance_opens_a_status_request() {
     let (_directory, repo) = init();
     create_requirement(&repo, "req_a");
     create_rule(&repo, "rule_a", "req_a");
@@ -79,12 +80,21 @@ fn rule_lifecycle_change_after_acceptance_opens_no_submission() {
     guarded_update(&repo, "rules", "rule_a", &["--status", "active"]);
 
     let after = read(&repo, "rules", "rule_a");
-    assert_eq!(after["status"], "active");
-    assert!(after["decision"]["pending"].is_null());
+    assert_eq!(after["status"], before["status"]);
+    let pending = &after["decision"]["pending"];
+    assert_eq!(pending["revision"], before["edit"]["revision"], "{after}");
+    assert_eq!(pending["status_request"]["status"], "active", "{after}");
+    assert_eq!(submissions(&repo, "rule", "rule_a"), 2);
     assert_eq!(
         after["decision"]["current_acceptance"],
         before["decision"]["current_acceptance"]
     );
+
+    accept_status_request(&repo, "rules", "rule", "rule_a");
+
+    let accepted = read(&repo, "rules", "rule_a");
+    assert_eq!(accepted["status"], "active");
+    assert!(accepted["decision"]["pending"].is_null(), "{accepted}");
 }
 
 #[test]

@@ -193,10 +193,11 @@ chosen by where the Rule is declared, not inferred from JavaScript object
 reuse. Sources linked with `.from(...)` are collected transitively by `build()`.
 
 A spec cannot set a Rule status. Apply creates each new spec Rule as `draft`.
-To make the Rule active, a person changes its status with
+To make the Rule active, request the status with
 `provenance <id> update --status active --declared-by <owner> --if-match <etag>`,
-where `<owner>` is the declaration owner from `PROVENANCE_SPEC_OWNER`. A later
-apply keeps that status. A new key or a move to a different Requirement gives a
+where `<owner>` is the declaration owner from `PROVENANCE_SPEC_OWNER`. The Rule is
+active when an allowed reviewer accepts the request. A later apply keeps the
+accepted status. A new key or a move to a different Requirement gives a
 new `draft` Rule, and apply deletes the old Rule. A move between a Requirement
 and the spec context keeps the Rule and its status when apply finds one
 existing Rule.

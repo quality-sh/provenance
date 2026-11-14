@@ -1,5 +1,6 @@
 use super::bounded_process::{provenance, Bounded};
-use super::{git, init};
+use super::git;
+use crate::support::record_review::archive_rule;
 use provenance_macros::verifies;
 use std::path::Path;
 use std::process::Output;
@@ -14,16 +15,17 @@ fn graph_check_reports_an_archive_commit_that_a_squash_merge_dropped() {
     git(repo, &["init", "--quiet", "--initial-branch=main"]);
     let base = commit(repo, "Base");
     init(repo);
+    let archive_rule = |id: &str, commit: &str| archive_rule(repo.to_str().unwrap(), id, commit);
     let statement = ["--statement", "The system is safe."];
     cli(repo, "req_safe create --type requirement", &statement);
     for id in ["rule_kept", "rule_dropped"] {
         let create = format!("{id} create --type rule --requirement-id req_safe");
         cli(repo, &create, &statement);
     }
-    archive_rule(repo, "rule_kept", &base);
+    archive_rule("rule_kept", &base);
     git(repo, &["checkout", "--quiet", "-b", "feature"]);
     let branch = commit(repo, "Archive the rule on the branch");
-    archive_rule(repo, "rule_dropped", &branch);
+    archive_rule("rule_dropped", &branch);
     let check = |format: &[&str]| run(repo, "check --graph", format);
     let on_branch = check(&[]);
     assert!(on_branch.status.success(), "{}", text(&on_branch));
@@ -99,11 +101,11 @@ fn text(output: &Output) -> String {
     )
 }
 
-fn archive_rule(repo: &Path, id: &str, commit: &str) {
-    let current = cli(repo, &format!("api rules/{id} --format json"), &[]);
-    let current: serde_json::Value = serde_json::from_str(&current).unwrap();
-    let etag = current["data"]["edit"]["etag"].as_str().unwrap();
-    let stamp = serde_json::json!({ "commit": commit }).to_string();
-    let update = format!("{id} update --if-match {etag} --status archived");
-    cli(repo, &update, &["--archived-in-commit-json", &stamp]);
+/// Declares the default scope with a reviewer, who accepts each archive.
+fn init(repo: &Path) {
+    provenance()
+        .args(["init", "--path", repo.to_str().unwrap(), "--scope", "default"])
+        .args(["--path-prefix", ".", "--disposition-actor-id", "reviewer"])
+        .bounded_assert()
+        .success();
 }

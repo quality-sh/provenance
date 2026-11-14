@@ -47,6 +47,35 @@ fn active_rule(repo: &Path, scope: &str, rule: &str) {
         )
         .assert()
         .success();
+    accept_status_request(repo, scope, rule);
+}
+
+/// Accepts the pending status request of a Rule in `scope` as the reviewer.
+fn accept_status_request(repo: &str, scope: &str, rule: &str) {
+    let path = format!("rules/{rule}");
+    let read = provenance()
+        .args(["api", &path, "--repo", repo, "--scope", scope, "--format", "json"])
+        .output()
+        .unwrap();
+    assert!(read.status.success(), "{}", String::from_utf8_lossy(&read.stderr));
+    let record: Value = serde_json::from_slice(&read.stdout).unwrap();
+    let pending = &record["data"]["decision"]["pending"];
+    assert!(!pending["status_request"].is_null(), "{record}");
+    let proposal = pending["proposal_id"].as_str().unwrap();
+    let decide = format!("rules/{rule}/submissions/{proposal}/decide");
+    provenance()
+        .args(["api", &decide, "--method", "post", "--input", "-"])
+        .args(["--repo", repo, "--scope", scope])
+        .write_stdin(
+            json!({
+                "actor":{"identity_type":"human","id":"reviewer"},
+                "decision":"accepted",
+                "canonical_artifact":{"artifact_type":"rule","artifact_id":rule}
+            })
+            .to_string(),
+        )
+        .assert()
+        .success();
 }
 
 /// The scan report file of `scope`, beside the repository directory so that no scan
@@ -238,6 +267,7 @@ fn the_bindings_check_reports_only_the_selected_scope() {
         ])
         .assert()
         .success();
+    accept_status_request(repo.to_str().unwrap(), "beta", "rule_beta_unbound");
     let findings = |scope: Option<&str>| -> String {
         let mut command = provenance();
         command.args(["check", "--bindings", "--format", "json"]);

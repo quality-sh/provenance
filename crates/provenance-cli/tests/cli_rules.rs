@@ -3,6 +3,8 @@ use assert_cmd::Command;
 use predicates::{prelude::PredicateBooleanExt, str::contains};
 use provenance_macros::verifies;
 
+use crate::support::record_review::{accept_status_request, pending_status_request};
+
 fn provenance() -> Command {
     Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
 }
@@ -19,6 +21,8 @@ fn repo_with_rule() -> tempfile::TempDir {
             "default",
             "--path-prefix",
             ".",
+            "--disposition-actor-id",
+            "reviewer",
         ])
         .assert()
         .success();
@@ -104,6 +108,16 @@ fn rule_create_defaults_to_draft_and_accepts_explicit_active_status() {
             "--status",
             "active",
         ])
+        .assert()
+        .success()
+        .stdout(contains("\"status\": \"review\""));
+    let (_, request) = pending_status_request(repo, "rules", "rule_ratified");
+    assert_eq!(request["status"], "active");
+
+    accept_status_request(repo, "rules", "rule", "rule_ratified");
+
+    provenance()
+        .args(["api", "rules/rule_ratified", "--repo", repo])
         .assert()
         .success()
         .stdout(contains("\"status\": \"active\""));

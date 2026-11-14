@@ -78,6 +78,18 @@ pub(super) fn accepted_request(
         .flatten()
 }
 
+/// Runs the direct write of a status request in a stage that it drops, so
+/// the request gets the refusal that the same change without review gets
+/// and opens no review submission.
+#[rule("rule_status_request_refused_like_direct_write")]
+fn dry_run<R>(
+    held: &StateStore,
+    write: impl FnOnce(&StateStore) -> anyhow::Result<R>,
+) -> anyhow::Result<()> {
+    crate::publication::with_staged_state(held, true, RecordStamp::ResolveFromRepository, write)?;
+    Ok(())
+}
+
 fn rule_fields_changed(input: &UpdateRuleInput) -> bool {
     input.name.is_some()
         || input.description.is_some()
@@ -122,8 +134,13 @@ impl StateStore {
                 .map_err(|error| crate::refusal::refuse!(InvalidUpdate, "{error}"))?;
             let request = StatusRequest {
                 status,
-                archived_in_commit: input.archived_in_commit,
+                archived_in_commit: input.archived_in_commit.clone(),
             };
+            dry_run(held, |staged| {
+                let path = shards::rules_path(&staged.layout, &input.scope_id);
+                let id = input.id.clone();
+                staged.permitting(&[&path], id.as_str(), |store| store.update_rule(input))
+            })?;
             with_record_state(held, RecordStamp::ResolveFromRepository, |staged| {
                 staged.open_status_request(&record, AUTHORING_ACTOR, request)
             })?;
@@ -143,12 +160,18 @@ impl StateStore {
                  the archive"
             )),
             RuleStatus::Active => {
-                input.status = RuleStatus::Review;
                 let path = shards::rules_path(&self.layout, &input.scope_id);
                 let relative = path.strip_prefix(self.layout.root())?.to_owned();
                 let id = input.id.clone();
                 let stamp = self.current_record_stamp()?;
                 self.with_repository_publication(|held| {
+                    let direct = copy_rule_input(&input);
+                    dry_run(held, |staged| {
+                        let path = shards::rules_path(&staged.layout, &direct.scope_id);
+                        let id = direct.id.clone();
+                        staged.permitting(&[&path], id.as_str(), |store| store.write_rule(direct))
+                    })?;
+                    input.status = RuleStatus::Review;
                     with_record_state(held, RecordStamp::resolved(stamp), |staged| {
                         let staged_path = staged.layout.root().join(&relative);
                         let created = staged.permitting(&[&staged_path], id.as_str(), |store| {
@@ -236,6 +259,26 @@ impl StateStore {
                 "a status request applies only to a Rule or a Requirement"
             )),
         }
+    }
+}
+
+/// A copy of a Rule creation input, for the dry run of the direct write.
+fn copy_rule_input(input: &CreateRuleInput) -> CreateRuleInput {
+    CreateRuleInput {
+        scope_id: input.scope_id.clone(),
+        id: input.id.clone(),
+        name: input.name.clone(),
+        description: input.description.clone(),
+        requirement_ids: input.requirement_ids.clone(),
+        resolution_ids: input.resolution_ids.clone(),
+        statement: input.statement.clone(),
+        status: input.status.clone(),
+        archived_in_commit: input.archived_in_commit.clone(),
+        severity: input.severity.clone(),
+        source_document: input.source_document.clone(),
+        source_section: input.source_section.clone(),
+        origin_thread: input.origin_thread.clone(),
+        origin_message: input.origin_message.clone(),
     }
 }
 

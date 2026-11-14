@@ -5,6 +5,11 @@
 //! small. A support module that more than one file uses is declared here
 //! once, and those files import it.
 
+#[path = "../support"]
+mod support {
+    pub mod record_review;
+    pub mod review_paths;
+}
 #[path = "../support/bounded_process.rs"]
 mod bounded_process;
 #[path = "../cli_api_catalog_bounds.rs"]

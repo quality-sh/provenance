@@ -1,5 +1,10 @@
-use provenance_core::{protocol::failure::OperationFailure, Manifest, RepoPathPrefix, ScopeId};
-use provenance_store::{layout::ProvenanceLayout, operations::catalog::*, state_store::StateStore};
+use provenance_core::{
+    protocol::failure::OperationFailure, Manifest, NodeType, RepoPathPrefix, ScopeId, StableId,
+};
+use provenance_store::{
+    layout::ProvenanceLayout, operations::catalog::*, repository_init::plan_manifest,
+    state_store::StateStore,
+};
 use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -117,6 +122,7 @@ impl Fixture {
             "create-source" => CreateSource,
             "create-synthesis-packet" => CreateSynthesisPacket,
             "create-topic" => CreateTopic,
+            "decide-record-review" => DecideRecordReview,
             "release-question" => ReleaseQuestion,
             "update-question" => UpdateQuestion,
             "update-requirement" => UpdateRequirementResource,
@@ -131,6 +137,45 @@ impl Fixture {
     }
     pub async fn source(&self) -> Value {
         self.call("create-source", json!({"scope_id":"default","id":"source_one","name":"Policy","source_type":"policy","url":"https://old.example","reference":"section 1","commit_pin":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","supersedes":[]})).await.unwrap()
+    }
+    /// Accepts the pending submission of a record as the reviewer: the
+    /// creation submission, or the status request that sets an active or
+    /// archived status. The first call names the reviewer in the manifest.
+    pub async fn accept_status_request(&self, kind: &str, id: &str) {
+        let layout = ProvenanceLayout::new(
+            camino::Utf8PathBuf::from_path_buf(self.dir.path().into()).unwrap(),
+        );
+        let existing =
+            serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
+        let manifest = plan_manifest(
+            Some(existing),
+            Some("default"),
+            None,
+            vec!["reviewer".to_owned()],
+            false,
+            None,
+        )
+        .unwrap();
+        std::fs::write(layout.manifest_path(), serde_json::to_vec(&manifest).unwrap()).unwrap();
+        let node: NodeType = serde_json::from_value(json!(kind)).unwrap();
+        let pending = self
+            .store
+            .record_decision_state(&self.scope, node, &StableId::new(id).unwrap())
+            .unwrap()
+            .pending
+            .unwrap_or_else(|| panic!("{kind} {id} has no pending submission"));
+        self.call(
+            "decide-record-review",
+            json!({
+                "scope_id":"default","record_kind":kind,"record_id":id,
+                "actor":{"identity_type":"human","id":"reviewer"},
+                "proposal_id":pending.proposal_id,"decision":"accepted","rationale":null,
+                "canonical_artifact":{"artifact_type":kind,"artifact_id":id},
+                "feedback":null,"declared_by":null
+            }),
+        )
+        .await
+        .unwrap();
     }
     pub async fn requirement(&self) {
         self.call("create-requirement-native", json!({"scope_id":"default","id":"req_one","statement":"The system saves the record.","status":"active","depends_on":[],"supersedes":[]})).await.unwrap();

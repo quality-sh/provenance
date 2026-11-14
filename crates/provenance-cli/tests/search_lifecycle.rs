@@ -2,6 +2,8 @@ use assert_cmd::Command;
 use provenance_macros::verifies;
 use serde_json::Value;
 
+use crate::support::record_review::archive_rule;
+
 fn run(repo: &str, args: &[&str]) -> String {
     let output = Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
         .args(args)
@@ -93,6 +95,8 @@ fn search_shows_lifecycle_and_keeps_archived_records_hidden() {
             "default",
             "--path-prefix",
             ".",
+            "--disposition-actor-id",
+            "reviewer",
         ])
         .assert()
         .success();
@@ -126,17 +130,7 @@ fn search_shows_lifecycle_and_keeps_archived_records_hidden() {
     }
 
     let stamp = r#"{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#;
-    run(
-        repo,
-        &[
-            "rule_search",
-            "update",
-            "--status",
-            "archived",
-            "--archived-in-commit-json",
-            stamp,
-        ],
-    );
+    archive_rule(repo, "rule_search", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
     let current: Value =
         serde_json::from_str(&run(repo, &["api", "questions/question_search"])).unwrap();
     let etag = current["data"]["edit"]["etag"].as_str().unwrap();

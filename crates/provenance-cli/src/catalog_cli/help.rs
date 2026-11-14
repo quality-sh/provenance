@@ -146,6 +146,9 @@ To archive a record, set the archived status and give the commit that contains t
   provenance <id> update --status archived --archived-in-commit <full_commit_sha> \\
     --if-match <etag>
 
+For a Rule, this update opens a status request. The status changes when an allowed
+reviewer accepts it.
+
 An archived status is terminal. Archiving a Requirement also archives each Requirement,
 Rule, and Resolution under it when all its parents are archived, and the Topics of each
 archived Requirement with their Questions. A record that also has a parent that is not

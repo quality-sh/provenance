@@ -505,8 +505,9 @@ change the artifact's kind.
    A Requirement is enough to anchor a Rule. A Resolution producer is not required, and
    inventing one misrecords how the obligation arose.
 
-   Rule creation defaults to `draft`. Keep this default for an agent-created Rule. Pass
-   `--status active` only when a person ratifies the Rule.
+   Rule creation defaults to `draft`. Keep this default for an agent-created Rule.
+   `--status active` opens a status request. The Rule is active when an allowed reviewer
+   accepts the request.
 
    A Rule that a proposed Resolution produced stays in review with `--status review`.
    "The shape of the tree" gives its link to the Resolution. Only an approved
