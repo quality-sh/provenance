@@ -72,12 +72,9 @@ fn a_document_read_gives_the_line_that_stops_its_catch_up() {
     let expected = json!({
         "error": {
             "kind": "document_catch_up_failed",
-            "cause": {
-                "kind": "invalid_state_file",
-                "file": "scopes/default/requirements/req.jsonl",
-                "line": 1,
-                "message": "invalid type: string \"req_parent\", expected a sequence"
-            }
+            "file": "scopes/default/requirements/req.jsonl",
+            "line": 1,
+            "message": "invalid type: string \"req_parent\", expected a sequence"
         },
         "meta": {}
     });
@@ -118,12 +115,9 @@ fn a_document_read_gives_the_line_that_is_not_json() {
         json!({
             "error": {
                 "kind": "document_catch_up_failed",
-                "cause": {
-                    "kind": "invalid_state_file",
-                    "file": "scopes/default/rules/rule.jsonl",
-                    "line": 2,
-                    "message": "expected value"
-                }
+                "file": "scopes/default/rules/rule.jsonl",
+                "line": 2,
+                "message": "expected value"
             },
             "meta": {}
         })

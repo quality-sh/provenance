@@ -177,8 +177,8 @@ file, git) only through a handle that records its word in `live`. A
 failed freshness step answers at the stored serial with the policy word
 `catch_up_failed` and the error text beside the answer. The document read
 is the exception: it does not answer at the stored serial. It refuses with
-`document_catch_up_failed`, and the `cause` of the refusal is the read
-failure of the catch-up error.
+`document_catch_up_failed`, and the refusal gives the file, the line and
+the message of a state line that does not parse.
 
 The settings in `.provenance/settings.json` survive a cache delete. The
 file is tracked beside `state/` and `cache/`. Each query loads

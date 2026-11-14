@@ -15,11 +15,18 @@ pub enum ReadFailure {
     PageRecordTooLarge,
     #[error("document root is missing")]
     DocumentRootMissing,
-    /// The document read did not catch up the document. `cause` is the read
-    /// failure of the catch-up error, such as `invalid_state_file` with the
-    /// file, the line and the message of a state line that does not parse.
-    #[error("catch-up failed: {cause}")]
-    DocumentCatchUpFailed { cause: Box<ReadFailure> },
+    /// The document read did not catch up the document. For a state line
+    /// that does not parse, `file`, `line` and `message` are those of
+    /// `invalid_state_file`. A cause with no file has no `file` and no `line`,
+    /// and `message` is the cause of the catch-up error.
+    #[error("catch-up failed: {message}")]
+    DocumentCatchUpFailed {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        file: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        line: Option<u64>,
+        message: String,
+    },
     #[error("repository file access denied")]
     FileAccessDenied,
     #[error("secure repository file access unavailable")]

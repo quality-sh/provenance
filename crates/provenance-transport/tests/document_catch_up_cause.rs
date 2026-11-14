@@ -1,6 +1,6 @@
-//! A document read on the HTTP route whose catch-up fails on a state line
-//! that does not parse gives the file, the line and the parse message of
-//! that line.
+//! A document read on the HTTP route whose catch-up fails gives the cause:
+//! the file, the line and the parse message of a state line that does not
+//! parse, and the text of a cause that has no file.
 #![cfg(feature = "test-fixture")]
 
 use crate::support;
@@ -46,12 +46,47 @@ async fn a_document_read_gives_the_line_that_stops_its_catch_up() {
         json!({
             "error": {
                 "kind": "document_catch_up_failed",
-                "cause": {
-                    "kind": "invalid_state_file",
-                    "file": "scopes/default/requirements/req.jsonl",
-                    "line": 1,
-                    "message": "invalid type: string \"req_parent\", expected a sequence"
-                }
+                "file": "scopes/default/requirements/req.jsonl",
+                "line": 1,
+                "message": "invalid type: string \"req_parent\", expected a sequence"
+            },
+            "meta": {}
+        })
+    );
+}
+
+/// Appends a Requirement line that depends on `depends_on`.
+fn append_requirement(repo: &Repository, id: &str, depends_on: &str) {
+    let path = repo.dir.path().join(REQUIREMENTS);
+    let line = json!({
+        "scope_id": "default", "id": id, "statement": "The record is readable.",
+        "status": "discovery", "depends_on": [depends_on], "supersedes": []
+    });
+    let text = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(&path, format!("{text}{line}\n")).unwrap();
+}
+
+/// A cycle in the stored records has no file and no line: the document read
+/// gives no file and no line, and the cycle as the message.
+#[tokio::test]
+#[verifies("rule_unclassified_refusal_gives_cause", examples)]
+async fn a_document_read_gives_the_fault_with_no_file_that_stops_its_catch_up() {
+    let repo = Repository::new("The shared graph is readable.");
+    let host = host(&repo, false);
+    let (status, first) = call(&host, "GET", "/requirements/req_shared/document", None).await;
+    assert_eq!(status, 200, "{first}");
+    append_requirement(&repo, "req_c", "req_d");
+    append_requirement(&repo, "req_d", "req_c");
+
+    let (status, refused) = call(&host, "GET", "/requirements/req_shared/document", None).await;
+
+    assert_eq!(status, 409);
+    assert_eq!(
+        refused,
+        json!({
+            "error": {
+                "kind": "document_catch_up_failed",
+                "message": "depends_on forms a cycle: req_c -> req_d -> req_c"
             },
             "meta": {}
         })

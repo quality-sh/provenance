@@ -87,9 +87,7 @@ impl ReadError {
     fn safe(&self) -> ReadFailure {
         let error = native(&self.0);
         if let Some(failed) = error.downcast_ref::<CatchUpFailed>() {
-            return ReadFailure::DocumentCatchUpFailed {
-                cause: Box::new(self.classified(&failed.0)),
-            };
+            return catch_up_failure(self.classified(&failed.0));
         }
         self.classified(error)
     }
@@ -125,17 +123,38 @@ impl ReadError {
     /// paths, for the host log. The wire answer gives the cause with each
     /// path relative to the repository.
     pub fn unclassified_cause(&self) -> Option<String> {
-        (self.common().is_none() && unclassified(&self.safe()))
-            .then(|| format!("{:#}", native(&self.0)))
+        let unclassified = matches!(
+            self.safe(),
+            ReadFailure::ReadFailed { .. } | ReadFailure::DocumentCatchUpFailed { file: None, .. }
+        );
+        (self.common().is_none() && unclassified).then(|| format!("{:#}", native(&self.0)))
     }
 }
 
-/// Whether `failure` is `ReadFailed`, or a failed catch-up whose cause is.
-fn unclassified(failure: &ReadFailure) -> bool {
-    match failure {
-        ReadFailure::ReadFailed { .. } => true,
-        ReadFailure::DocumentCatchUpFailed { cause } => unclassified(cause),
-        _ => false,
+/// The refusal of a document read whose catch-up failed with `cause`. A
+/// state line that does not parse gives its file, its line and its message;
+/// any other cause gives its text as the message.
+fn catch_up_failure(cause: ReadFailure) -> ReadFailure {
+    match cause {
+        ReadFailure::InvalidStateFile {
+            file,
+            line,
+            message,
+        } => ReadFailure::DocumentCatchUpFailed {
+            file: Some(file),
+            line: Some(line),
+            message,
+        },
+        ReadFailure::ReadFailed { cause } => ReadFailure::DocumentCatchUpFailed {
+            file: None,
+            line: None,
+            message: cause,
+        },
+        cause => ReadFailure::DocumentCatchUpFailed {
+            file: None,
+            line: None,
+            message: cause.to_string(),
+        },
     }
 }
 

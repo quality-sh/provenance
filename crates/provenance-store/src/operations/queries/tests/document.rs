@@ -186,12 +186,9 @@ async fn document_failed_catch_up_precedes_missing_root_in_old_projection() {
         failed.error,
         json!({
             "kind": "document_catch_up_failed",
-            "cause": {
-                "kind": "invalid_state_file",
-                "file": "scopes/default/topics/topic.jsonl",
-                "line": 1,
-                "message": "expected value"
-            }
+            "file": "scopes/default/topics/topic.jsonl",
+            "line": 1,
+            "message": "expected value"
         })
     );
 

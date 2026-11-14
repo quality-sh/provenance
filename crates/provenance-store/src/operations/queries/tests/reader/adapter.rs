@@ -367,7 +367,7 @@ impl crate::operations::catalog::ContextResolver for Prepared {
 }
 
 /// A database fault in the catch-up has no file and no line: the document
-/// read gives it as the `read_failed` cause.
+/// read gives no file and no line, and the fault as the message.
 #[tokio::test]
 #[provenance_macros::verifies("rule_unclassified_refusal_gives_cause", examples)]
 async fn a_document_read_gives_the_database_fault_that_stops_its_catch_up() {
@@ -398,7 +398,7 @@ async fn a_document_read_gives_the_database_fault_that_stops_its_catch_up() {
         serde_json::json!({
             "error": {
                 "kind": "document_catch_up_failed",
-                "cause": {"kind": "read_failed", "cause": "the store did not commit the write"}
+                "message": "the store did not commit the write"
             },
             "meta": {}
         })
