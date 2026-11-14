@@ -108,8 +108,6 @@ mod cli_source_requirement;
 mod cli_statement_write_gate;
 #[path = "../cli_status_request.rs"]
 mod cli_status_request;
-#[path = "../cli_ste_onboarding_concurrency.rs"]
-mod cli_ste_onboarding_concurrency;
 #[path = "../cli_ste_statement_paths.rs"]
 mod cli_ste_statement_paths;
 #[path = "../cli_swarm_backtrace_land.rs"]
@@ -145,5 +143,6 @@ mod requirement_archive;
 mod requirement_archive_merge;
 #[path = "../review_host_support/mod.rs"]
 mod review_host_support;
+use review_host_support::bounded_process;
 #[path = "../support/thread_record.rs"]
 mod thread_record;

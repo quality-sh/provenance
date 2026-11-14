@@ -140,6 +140,13 @@ version = "0.0.0"
 [dependencies]
 provenance-sdk = "=0.2.2"
 TOML
+if assert_cargo_sdk_requirement test "$repository/Cargo.toml" 0.2.2 \
+  >/dev/null 2>&1
+then
+  fail "Cargo requirement assertion accepted a normal dependency"
+fi
+sed -i.bak 's/^\[dependencies\]$/[dev-dependencies]/' "$repository/Cargo.toml"
+rm -f -- "$repository/Cargo.toml.bak"
 assert_cargo_sdk_requirement test "$repository/Cargo.toml" 0.2.2
 sed -i.bak 's/=0\.2\.2/0.2.2/' "$repository/Cargo.toml"
 rm -f -- "$repository/Cargo.toml.bak"

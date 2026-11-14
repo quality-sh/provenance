@@ -4,7 +4,7 @@
 //! CLI with it. Set `PROVENANCE_REVIEW_ARCHIVE` to a saved archive, or allow
 //! authenticated `gh run download` access, then run with `--ignored`.
 
-#[path = "review_bundle/archive.rs"]
+#[path = "support/bundle_archive.rs"]
 mod archive;
 #[path = "review_bundle/pin.rs"]
 mod pin;
