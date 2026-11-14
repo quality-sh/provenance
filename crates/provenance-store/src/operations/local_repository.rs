@@ -94,7 +94,7 @@ impl LocalRepository {
             return Err(OperationFailure::UnknownTarget);
         }
         if scope.is_some_and(|scope| scope != self.scope().as_str()) {
-            return Err(OperationFailure::AccessDenied);
+            return Err(OperationFailure::access_denied());
         }
         Ok(())
     }
@@ -223,7 +223,7 @@ mod tests {
         });
         assert_eq!(
             binding.authorize("write-discussion", &other_scope),
-            Err(OperationFailure::AccessDenied)
+            Err(OperationFailure::access_denied())
         );
         let bound = RequestedContext::Scoped(RepositoryContext {
             repository: "native".into(),

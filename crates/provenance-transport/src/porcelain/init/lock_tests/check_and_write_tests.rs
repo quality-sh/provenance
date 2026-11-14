@@ -146,7 +146,7 @@ fn a_write_during_init_does_not_land_between_the_check_and_the_write_of_init() {
     );
     let error = format!("{:#}", write.unwrap_err());
     assert!(
-        error.contains("disposition actor is not in the repository allowlist"),
+        error.contains("does not contain the actor of a review decision"),
         "{error}"
     );
     check(&repo).unwrap();
@@ -182,5 +182,7 @@ fn a_graph_write_after_the_plan_makes_init_refuse_and_write_nothing() {
 }
 
 /// The refusal of init for the disposition by "reviewer".
-const REFUSAL: &str =
-    "the planned Provenance state is not valid: disposition actor is not in the repository allowlist";
+const REFUSAL: &str = "the planned Provenance state is not valid: The list that this init \
+    command gives to the manifest field disposition_actor_ids does not contain the actor of a \
+    review decision in the state. Give --disposition-actor-id one time for each actor of a review \
+    decision in the state, and one time for each other actor that can make a review decision.";
