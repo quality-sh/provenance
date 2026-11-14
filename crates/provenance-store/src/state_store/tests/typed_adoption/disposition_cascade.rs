@@ -61,8 +61,8 @@ fn assert_names_no_record(
     let applied = store.apply_typed_spec(scope, no_op()).unwrap_err();
 
     for error in [planned, applied] {
-        let fault = StateLineInvalid::find(&error)
-            .unwrap_or_else(|| panic!("{artifact_type}: {error:#}"));
+        let fault =
+            StateLineInvalid::find(&error).unwrap_or_else(|| panic!("{artifact_type}: {error:#}"));
         assert_eq!(
             (&fault.path, fault.line, fault.message.as_str()),
             (

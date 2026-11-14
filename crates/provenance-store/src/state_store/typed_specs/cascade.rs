@@ -73,7 +73,11 @@ impl Cascade {
             let remove = changed && record.requirement_ids.is_empty();
             if remove {
                 resolution_ids.insert(record.id.as_str().to_owned());
-                deletions.push(CascadeDeletion::new(NodeType::Resolution, &record.id, cited));
+                deletions.push(CascadeDeletion::new(
+                    NodeType::Resolution,
+                    &record.id,
+                    cited,
+                ));
             }
             !remove
         });
@@ -227,7 +231,11 @@ fn prepare_shaping(
         if remove {
             let requirement = record.requirement_id.clone();
             topic_requirements.insert(record.id.as_str().to_owned(), requirement.clone());
-            deletions.push(CascadeDeletion::new(NodeType::Topic, &record.id, vec![requirement]));
+            deletions.push(CascadeDeletion::new(
+                NodeType::Topic,
+                &record.id,
+                vec![requirement],
+            ));
         } else {
             retain_links(
                 &mut record.links,

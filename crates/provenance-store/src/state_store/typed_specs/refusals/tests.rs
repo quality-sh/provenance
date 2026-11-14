@@ -16,13 +16,17 @@ fn record<T: serde::de::DeserializeOwned>(value: serde_json::Value) -> T {
 }
 
 fn requirement(requirement: &str) -> provenance_core::Requirement {
-    record(json!({"scope_id": "default", "id": requirement, "statement": "The host stops.",
-                  "status": "active"}))
+    record(
+        json!({"scope_id": "default", "id": requirement, "statement": "The host stops.",
+                  "status": "active"}),
+    )
 }
 
 fn topic(topic: &str, requirement: &str) -> provenance_core::Topic {
-    record(json!({"scope_id": "default", "id": topic, "requirement_id": requirement,
-                  "title": "Test", "status": "open", "links": []}))
+    record(
+        json!({"scope_id": "default", "id": topic, "requirement_id": requirement,
+                  "title": "Test", "status": "open", "links": []}),
+    )
 }
 
 fn submission_refusal(kind: &str, record: &str, requirement: &str) -> DeletionRefusal {

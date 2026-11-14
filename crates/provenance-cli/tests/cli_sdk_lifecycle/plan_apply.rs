@@ -315,7 +315,10 @@ fn the_plan_shows_each_cascade_deletion_that_the_apply_refuses() {
     let refused = route(&repo, "authoring-changes", &kept_only, true);
 
     assert_eq!(resource(&plan, "sharing")["state"], "deleted", "{plan}");
-    assert!(resource(&plan, "sharing").get("refusal").is_none(), "{plan}");
+    assert!(
+        resource(&plan, "sharing").get("refusal").is_none(),
+        "{plan}"
+    );
     assert_eq!(resource(&plan, "kept")["state"], "unchanged", "{plan}");
     let topic = kept_by_submission("topic", "topic_only", sharing);
     assert_eq!(
