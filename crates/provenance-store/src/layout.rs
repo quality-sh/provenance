@@ -67,6 +67,17 @@ impl ProvenanceLayout {
             .join("locks")
             .join("repository.publication.lock")
     }
+    /// The file of the key that signs read cursors.
+    #[cfg(feature = "host")]
+    pub(crate) fn cursor_key_path(&self) -> Utf8PathBuf {
+        self.cache_dir().join("read-cursor.key")
+    }
+    /// The lock that a process holds while it makes or replaces the key
+    /// that signs read cursors.
+    #[cfg(feature = "host")]
+    pub(crate) fn cursor_key_lock_path(&self) -> Utf8PathBuf {
+        self.cache_dir().join("locks").join("read-cursor.key.lock")
+    }
     pub fn publication_marker_path(&self) -> Utf8PathBuf {
         self.cache_dir().join("import-publication.json")
     }
