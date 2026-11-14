@@ -6,7 +6,7 @@ use super::cycle_index::CycleIndex;
 use crate::refusal::state_fault;
 use crate::state_store::{message_ids::ShardLine, StateStore};
 use provenance_core::{
-    review::{CycleEntry, CycleFact},
+    review::{CycleEntry, CycleFact, WithdrawalRowFault},
     DispositionDecision, DispositionRecord, NodeType, ProposalCard, ProposalType, ScopeId,
     StableId, Withdrawal,
 };
@@ -78,17 +78,43 @@ pub(super) fn cycle_of(proposal: &ProposalCard) -> Option<u64> {
 }
 
 /// The ids of the review submissions that the scope's Withdrawals withdraw.
-/// Refuses a Withdrawal that names no review submission, at its line.
+/// Refuses, at its line, a Withdrawal that names no review submission or
+/// has the id of an earlier Withdrawal.
 #[rule("rule_inconsistent_records_refusal_names_records")]
-fn withdrawn_submissions(
+fn scope_withdrawn_submission_ids(
     submission_ids: &HashSet<&str>,
     located: &[(Withdrawal, ShardLine)],
 ) -> anyhow::Result<HashSet<String>> {
-    let withdrawn = provenance_core::review::withdrawn_submissions(
+    let withdrawn = provenance_core::review::withdrawn_submission_ids(
         |proposal| submission_ids.contains(proposal),
         located.iter().map(|(withdrawal, _)| withdrawal),
     )
-    .map_err(|fault| state_fault(&located[fault.position].1, fault.to_string()))?;
+    .map_err(|fault| match fault {
+        WithdrawalRowFault::NoSubmission {
+            position,
+            withdrawal,
+            proposal,
+        } => state_fault(
+            &located[position].1,
+            format!(
+                "withdrawal {} names no review submission: {}",
+                withdrawal.as_str(),
+                proposal.as_str()
+            ),
+        ),
+        WithdrawalRowFault::RepeatedId {
+            position,
+            first_position,
+            withdrawal,
+        } => state_fault(
+            &located[position].1,
+            format!(
+                "withdrawal {} is stored again; line {} stores it first",
+                withdrawal.as_str(),
+                located[first_position].1.line
+            ),
+        ),
+    })?;
     Ok(withdrawn.into_iter().map(str::to_owned).collect())
 }
 
@@ -105,8 +131,8 @@ pub(super) struct CycleFacts {
 impl CycleFacts {
     /// Reads the scope's review submissions, Dispositions, Withdrawals and
     /// feedback Discussions, and refuses a Withdrawal that names no review
-    /// submission. More than one Withdrawal of one submission withdraws it
-    /// one time.
+    /// submission or has the id of an earlier Withdrawal. More than one
+    /// Withdrawal of one submission withdraws it one time.
     pub(super) fn validated(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Self> {
         let proposals = store.list_proposal_definitions(scope)?;
         let submissions = proposals
@@ -119,7 +145,7 @@ impl CycleFacts {
             .map(|proposal| proposal.id.as_str())
             .collect::<HashSet<_>>();
         let located = store.list_withdrawals_located(scope)?;
-        let withdrawn = withdrawn_submissions(&submission_ids, &located)?;
+        let withdrawn = scope_withdrawn_submission_ids(&submission_ids, &located)?;
         let feedback = store
             .list_discussions(scope)?
             .into_iter()
@@ -219,7 +245,7 @@ impl CycleFacts {
     }
 
     /// The withdrawn submissions of one record, in submission order.
-    pub(super) fn withdrawn_submissions(
+    pub(super) fn withdrawn_submissions_of_record(
         &self,
         kind: NodeType,
         record_id: &StableId,

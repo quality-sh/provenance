@@ -4,7 +4,7 @@
 //! gives, and the review writes of the scope continue.
 
 use super::review_cycle::{init_with_reviewer, write};
-use super::review_history::{commit, git};
+use super::review_history::{commit, git, git_output};
 use super::*;
 
 const WITHDRAWALS: &str = ".provenance/state/scopes/default/ideation/withdrawals.jsonl";
@@ -75,12 +75,7 @@ fn repository(merge: Merge) -> (tempfile::TempDir, String) {
 
 /// Merges `side` into the first branch in the way `merge` names.
 fn merge_side(repo: &str, merge: Merge) {
-    let merged = provenance_store::git_process::git()
-        .args(["-c", "user.name=Reviewer", "-c", "commit.gpgsign=false"])
-        .args(["merge", "--no-edit", "side"])
-        .current_dir(repo)
-        .output()
-        .unwrap();
+    let merged = git_output(repo, &["merge", "--no-edit", "side"]);
     match merge {
         Merge::Driver => assert!(merged.status.success(), "{merged:?}"),
         Merge::KeepBoth => {
@@ -127,7 +122,16 @@ fn two_withdrawals_read_as_one(merge: Merge) {
 
     let file = std::path::Path::new(&repo).join(WITHDRAWALS);
     let rows = std::fs::read_to_string(file).unwrap();
-    assert_eq!(rows.matches(submission.as_str()).count(), 2, "{rows}");
+    let mut rows = rows
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap())
+        .collect::<Vec<_>>();
+    rows.sort_by_key(|row| row["actor"].as_str().unwrap().to_owned());
+    assert_eq!(rows.len(), 2, "{rows:?}");
+    assert_ne!(rows[0]["id"], rows[1]["id"], "{rows:?}");
+    assert_eq!(rows[0]["proposal_id"], json!(submission));
+    assert_eq!(rows[1]["proposal_id"], json!(submission));
+    assert_eq!((&rows[0]["actor"], &rows[1]["actor"]), (&json!("agent"), &json!("editor")));
     assert_eq!(review_reads(&repo), one_withdrawal);
     assert_eq!(one_withdrawal[0]["withdrawn"], json!([submission]));
     assert_eq!(one_withdrawal[0]["pending"], Value::Null);
