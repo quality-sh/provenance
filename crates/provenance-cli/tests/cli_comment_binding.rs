@@ -79,7 +79,12 @@ fn a_second_comment_for_one_rule_names_the_rule_in_the_finding() {
         .as_array()
         .unwrap()
         .iter()
-        .filter(|warning| warning["message"].as_str().unwrap().contains("more than one"))
+        .filter(|warning| {
+            warning["message"]
+                .as_str()
+                .unwrap()
+                .contains("more than one")
+        })
         .map(|warning| (warning["line"].as_u64(), warning["message"].as_str()))
         .collect::<Vec<_>>();
     assert_eq!(
