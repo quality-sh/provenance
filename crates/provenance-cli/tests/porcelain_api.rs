@@ -473,6 +473,8 @@ mod review_conflicts;
 mod review_cycle;
 #[path = "porcelain_api/review_history.rs"]
 mod review_history;
+#[path = "porcelain_api/review_merged_withdrawals.rs"]
+mod review_merged_withdrawals;
 #[path = "porcelain_api/review_state_files.rs"]
 mod review_state_files;
 #[path = "porcelain_api/scope.rs"]

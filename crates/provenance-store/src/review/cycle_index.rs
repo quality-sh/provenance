@@ -1,12 +1,12 @@
 //! Lookups over one read of a scope's review records.
 //!
-//! [`CycleIndex::new`] reads the Proposal, Disposition, Withdrawal and
-//! feedback lists once. Each lookup then costs one hash probe instead of a
-//! scan of a list. Where a list holds two entries with one id, the index
-//! keeps the first, as a scan with `find` does. The lists of one record keep
-//! the stored order.
+//! [`CycleIndex::new`] reads the Proposal, Disposition and feedback lists
+//! and the withdrawn submissions once. Each lookup then costs one hash probe
+//! instead of a scan of a list. Where a list holds two entries with one id,
+//! the index keeps the first, as a scan with `find` does. The lists of one
+//! record keep the stored order.
 
-use provenance_core::{DispositionRecord, NodeType, ProposalCard, StableId, Withdrawal};
+use provenance_core::{DispositionRecord, NodeType, ProposalCard, StableId};
 use std::collections::{HashMap, HashSet};
 
 /// The review submissions and the Dispositions of one record, as positions
@@ -43,7 +43,7 @@ impl CycleIndex {
         proposals: &[ProposalCard],
         submissions: &[ProposalCard],
         dispositions: &[DispositionRecord],
-        withdrawals: &[Withdrawal],
+        withdrawn: HashSet<String>,
         feedback: &[(StableId, StableId)],
     ) -> Self {
         let mut index = Self {
@@ -53,10 +53,7 @@ impl CycleIndex {
                 .iter()
                 .map(|disposition| disposition.proposal_id.as_str().to_owned())
                 .collect(),
-            withdrawn: withdrawals
-                .iter()
-                .map(|withdrawal| withdrawal.proposal_id.as_str().to_owned())
-                .collect(),
+            withdrawn,
             feedback: HashMap::with_capacity(feedback.len()),
             records: HashMap::new(),
         };

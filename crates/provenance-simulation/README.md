@@ -203,5 +203,3 @@ change the other lines; remove the line of a cause when its fix merges.
 
 - The contract job can fail on O1 when an update of a Requirement that does
   not exist answers a write failure (500): GitHub issue 648.
-- The CLI jobs can fail on L6 when the state holds two withdrawals of one
-  review submission: bead provenance-chgs.

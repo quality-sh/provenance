@@ -21,7 +21,10 @@ pub enum WriteFailure {
         field: Option<String>,
         reason: InvalidInputReason,
     },
-    AccessDenied,
+    AccessDenied {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        message: Option<String>,
+    },
     AlreadyExists,
     InvalidCommitPin,
     ScopeMismatch,
@@ -115,6 +118,21 @@ impl WriteFailure {
         Self::InvalidInput {
             field: Some(field.to_owned()),
             reason: InvalidInputReason::InvalidValue,
+        }
+    }
+
+    /// An `access_denied` refusal with no message, the same as
+    /// [`OperationFailure::access_denied`].
+    pub const fn access_denied() -> Self {
+        Self::AccessDenied { message: None }
+    }
+
+    /// Refuses a review decision by an actor that the manifest does not list,
+    /// with the text of the core refusal as the next step for the caller.
+    #[provenance_macros::rule("rule_decision_refusal_names_reviewer_field")]
+    fn disposition_actor_refused(refusal: provenance_core::DispositionActorRefusal) -> Self {
+        Self::AccessDenied {
+            message: Some(refusal.to_string()),
         }
     }
 
@@ -231,11 +249,8 @@ impl WriteError {
         if let Some(error) = error.downcast_ref::<SourceFailure>() {
             return error.failure.clone();
         }
-        if error
-            .downcast_ref::<provenance_core::DispositionActorRefusal>()
-            .is_some()
-        {
-            return WriteFailure::AccessDenied;
+        if let Some(refusal) = error.downcast_ref::<provenance_core::DispositionActorRefusal>() {
+            return WriteFailure::disposition_actor_refused(*refusal);
         }
         if error
             .downcast_ref::<provenance_core::ApprovalEvidenceRequired>()
@@ -298,7 +313,7 @@ impl WriteError {
         }
         match self.safe() {
             WriteFailure::WriteFailed { .. } | WriteFailure::InvalidStateFile { .. } => 500,
-            WriteFailure::FileAccessDenied | WriteFailure::AccessDenied => 403,
+            WriteFailure::FileAccessDenied | WriteFailure::AccessDenied { .. } => 403,
             WriteFailure::FileUnavailable => 503,
             WriteFailure::ResourceNotFound => 404,
             WriteFailure::RecordOwnershipConflict { .. }
