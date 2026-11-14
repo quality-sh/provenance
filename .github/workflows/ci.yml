@@ -1304,9 +1304,10 @@ jobs:
       - name: Check the application has no Provenance crate
         shell: bash
         run: |
-          normal_tree=$(cd examples/rust-sdk && cargo tree --locked --offline -e normal)
+          normal_tree=$(cd examples/rust-sdk && cargo tree --locked --offline -e normal --prefix none)
           printf '%s\n' "$normal_tree"
-          if grep -q provenance <<<"$normal_tree"; then
+          # The first line is the example package, whose path holds the repository name.
+          if tail -n +2 <<<"$normal_tree" | grep -q provenance; then
             echo "examples/rust-sdk has a Provenance crate in its normal dependencies" >&2
             exit 1
           fi
