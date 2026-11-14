@@ -119,8 +119,15 @@ impl<'r> RecordReview<'r> {
     }
 
     /// The review cycle of the next submission of the record: one more than
-    /// the number of its review submissions. `None` on overflow.
+    /// the highest review cycle of its review submissions. After a person
+    /// removes the line of a submission that is not the last, the next
+    /// submission still takes a cycle that no submission has. `None` on
+    /// overflow.
     pub fn next_cycle(&self) -> Option<u64> {
-        u64::try_from(self.submissions.len()).ok()?.checked_add(1)
+        self.submissions()
+            .filter_map(super::review_cycle)
+            .max()
+            .unwrap_or(0)
+            .checked_add(1)
     }
 }

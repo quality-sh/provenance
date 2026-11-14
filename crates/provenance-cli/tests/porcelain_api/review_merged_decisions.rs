@@ -200,3 +200,35 @@ fn copied_review_row_lines_read_as_one() {
     decide(&repo, "req_b", &other, "accepted", "", None);
     check_passes(&repo);
 }
+
+/// Flow: `req_a` has three review submissions, a person removes the line of
+/// the submission with review cycle 2 and commits, and an edit of `req_a`
+/// opens the next submission. Its review cycle is one more than the highest
+/// review cycle of the record, so no two submissions have one cycle.
+#[test]
+#[verifies("rule_review_proposal_key_names_record_cycle", examples)]
+fn a_submission_after_a_hand_repair_takes_the_next_cycle() {
+    let (_directory, repo) = init_with_reviewer();
+    create(&repo, "req_a");
+    super::review_cycle::describe(&repo, "req_a", "The first change.");
+    super::review_cycle::describe(&repo, "req_a", "The second change.");
+    commit(&repo);
+    let cycle_two = "\"proposal_key\":\"review:requirement:req_a:2\"";
+    let kept = lines(&repo, PROPOSALS)
+        .into_iter()
+        .filter(|line| !line.contains(cycle_two))
+        .collect::<Vec<_>>();
+    assert_eq!(kept.len(), 2);
+    store_lines(&repo, PROPOSALS, &kept);
+
+    super::review_cycle::describe(&repo, "req_a", "The third change.");
+    let submission = pending(&repo, "req_a");
+    let path = format!("proposals/{submission}");
+    let proposal = read(&repo, &["api", &path]);
+    assert_eq!(
+        proposal["data"]["proposal_key"],
+        "review:requirement:req_a:4"
+    );
+    read(&repo, &["api", "requirements/req_a/document"]);
+    check_passes(&repo);
+}
