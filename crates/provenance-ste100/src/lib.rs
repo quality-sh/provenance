@@ -16,7 +16,7 @@ mod word_class;
 pub use dictionary::{
     decode_dictionary_index, decode_dictionary_index_for_source, dictionary_index_file_name,
     dictionary_index_file_name_for_source, encode_dictionary_index, import_dictionary,
-    normalized_data_digest, DictionaryIndexError,
+    DictionaryIndexError,
 };
 pub use dictionary::{
     DictionaryEntry, DictionaryImport, DictionaryImportError, DictionaryImportIdentity,

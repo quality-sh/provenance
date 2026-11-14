@@ -82,3 +82,58 @@ fn a_row_with_no_string_id_before_a_duplicate_id_gives_its_own_refusal() {
         )
     );
 }
+
+/// The standard error of `merge-jsonl` with no `--path` when the input
+/// `ours.jsonl` in `directory` holds a row that does not parse as a record.
+fn merge_with_a_retired_row_in(directory: &std::path::Path) -> (Option<i32>, String) {
+    std::fs::create_dir_all(directory).unwrap();
+    let retired = rule("rule_a").replacen('{', "{\"retired\":true,", 1);
+    let sides = [
+        ("base.jsonl", ""),
+        ("ours.jsonl", retired.as_str()),
+        ("theirs.jsonl", ""),
+    ]
+    .map(|(name, contents)| {
+        let path = directory.join(name);
+        std::fs::write(&path, format!("{contents}\n")).unwrap();
+        path.to_str().unwrap().to_owned()
+    });
+    let output = provenance().arg("merge-jsonl").args(&sides).output().unwrap();
+    (
+        output.status.code(),
+        String::from_utf8(output.stderr).unwrap(),
+    )
+}
+
+/// The refusal of `ours.jsonl` line 1 at `file`.
+fn retired_row_refusal(file: &str) -> (Option<i32>, String) {
+    (
+        Some(1),
+        format!(
+            "Error: {file} line 1: record rule_a contains legacy field `retired`; canonical \
+             JSONL requires record-deletion migration 026 before this build can read it\n"
+        ),
+    )
+}
+
+/// An input below a repository is named by its path below the repository root.
+#[test]
+#[verifies("rule_state_parse_refusal_names_the_line", examples)]
+fn a_merge_input_below_a_repository_is_named_by_its_path_in_the_repository() {
+    let (directory, _repo) = support::review_paths::init();
+
+    let answer = merge_with_a_retired_row_in(&directory.path().join("fixtures/merge"));
+
+    assert_eq!(answer, retired_row_refusal("fixtures/merge/ours.jsonl"));
+}
+
+/// An input that no repository holds is named by its file name only.
+#[test]
+#[verifies("rule_state_parse_refusal_names_the_line", examples)]
+fn a_merge_input_outside_a_repository_is_named_by_its_file_name() {
+    let directory = tempfile::tempdir().unwrap();
+
+    let answer = merge_with_a_retired_row_in(directory.path());
+
+    assert_eq!(answer, retired_row_refusal("ours.jsonl"));
+}

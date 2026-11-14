@@ -114,7 +114,9 @@ async fn each_read_and_write_of_the_runs_names_the_first_bad_line_of_the_runs_ca
     for (cache, line, message) in cases {
         let answers = answers(&cache).await;
         let error = json!({
-            "kind": "invalid_state_file", "file": "verification-runs.jsonl", "line": line,
+            "kind": "invalid_state_file",
+            "file": ".provenance/cache/scopes/default/verification-runs.jsonl",
+            "line": line,
             "message": message
         });
         let refusals = answers

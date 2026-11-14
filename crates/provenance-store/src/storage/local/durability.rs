@@ -7,27 +7,45 @@ use std::io::Write;
 #[error("failed to persist temporary file: {0}")]
 pub struct ReplaceFailed(#[source] std::io::Error);
 
-/// Writes `bytes` to the file at `path` through a temporary file in the same
-/// directory, a sync of that file, one rename over `path`, and a sync of the
-/// directories. A stop leaves the previous contents or all of the new contents
-/// at `path`.
+/// Writes `bytes` to the file at `path` in this order: make the directory of
+/// `path` if it does not exist, write a temporary file in that directory,
+/// sync the temporary file, replace `path` with it, and sync the directory.
+/// If the call made directories, it then syncs each directory above the
+/// directory of `path` up to the parent of the highest new directory, deepest
+/// first. On Unix, after the call returns, a power loss cannot lose the new
+/// bytes of the file or the entry of a new directory. On Windows, a directory
+/// has no sync in this module: the file sync occurs, but a power loss can
+/// lose the rename and the entry of a new directory.
 ///
 /// If a step fails, the steps after it do not occur, no temporary file stays,
-/// and the error names the step and its path. If a directory sync fails,
-/// `path` has the new bytes, but a stop of the electrical supply can remove
+/// and the error names the step and its path, except a failed rename. If a
+/// directory sync fails, `path` has the new bytes, but a power loss can lose
 /// them.
 pub fn write_synced_file(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<()> {
     let (temporary, parent, first_made) = write_temporary(path, bytes)?;
     temporary.as_file().sync_all().map_err(sync_failure(path))?;
     crate::test_probes::at("synced_file_before_rename")?;
     replace_file(temporary, path)?;
-    // The sync of the directory of `path` and of each directory that the call
-    // made, deepest first. On Windows, `sync_directory` does not sync, so a
-    // stop of the electrical supply can remove the rename and the entry of a
-    // new directory.
+    sync_directories(parent, first_made)
+}
+
+/// Syncs the file at `path`, which already has the bytes of a write, and then
+/// syncs its directory as [`write_synced_file`] does after a rename that made
+/// no directory. An earlier write can have stopped after its rename and before
+/// its syncs.
+pub fn sync_written_file(path: &Utf8Path) -> anyhow::Result<()> {
+    open_to_sync(path)
+        .and_then(|file| file.sync_all())
+        .map_err(sync_failure(path))?;
+    sync_directories(parent_of(path)?, None)
+}
+
+/// Syncs `parent`, and then each directory above it up to the parent of
+/// `first_made`, the highest directory that a write made, deepest first.
+fn sync_directories(parent: &Utf8Path, first_made: Option<&Utf8Path>) -> anyhow::Result<()> {
     let last = first_made.and_then(Utf8Path::parent).unwrap_or(parent);
     for directory in parent.ancestors() {
-        sync_directory(directory)?;
+        sync_parent(directory)?;
         if directory == last {
             break;
         }
@@ -44,7 +62,7 @@ pub fn write_synced_file(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<()> {
 pub fn remove_synced_file(path: &Utf8Path) -> anyhow::Result<()> {
     let parent = parent_of(path)?;
     match std::fs::remove_file(crate::long_path::extended(path)?) {
-        Ok(()) => sync_directory(parent),
+        Ok(()) => sync_parent(parent),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(crate::refusal::caused(error, format!("remove {path}"))),
     }
@@ -83,7 +101,7 @@ fn write_temporary<'a>(
     let mut temporary = crate::long_path::extended(parent)
         .and_then(tempfile::NamedTempFile::new_in)
         .map_err(|error| {
-            crate::refusal::caused(error, format!("make a temporary file in {parent}"))
+            crate::refusal::caused(error, format!("make a temporary file for {path}"))
         })?;
     temporary.write_all(bytes).map_err(|error| {
         crate::refusal::caused(error, format!("write a temporary file for {path}"))
@@ -104,14 +122,9 @@ fn parent_of(path: &Utf8Path) -> anyhow::Result<&Utf8Path> {
         .ok_or_else(|| crate::refusal::fault!("{path} has no parent directory"))
 }
 
-/// Syncs `directory`, so that a power loss cannot lose a change of an entry in it.
-///
-/// A relative path of one name, such as the file that git gives to a merge
-/// driver, has an empty parent: the current directory. A failure gives
-/// `sync <path>` and the I/O error. Windows has no directory sync in this
-/// module: the function does nothing there, and a power loss can lose a
-/// recent entry or rename.
-pub fn sync_directory(directory: &Utf8Path) -> anyhow::Result<()> {
+/// Syncs `directory`. A relative path of one name, such as the file that git
+/// gives to a merge driver, has an empty parent: the current directory.
+fn sync_parent(directory: &Utf8Path) -> anyhow::Result<()> {
     let directory = if directory.as_str().is_empty() {
         Utf8Path::new(".")
     } else {
@@ -124,14 +137,6 @@ pub fn sync_directory(directory: &Utf8Path) -> anyhow::Result<()> {
     #[cfg(not(unix))]
     let _ = directory;
     Ok(())
-}
-
-/// Syncs the data of the file at `path`. A failure gives `sync <path>` and the
-/// I/O error.
-pub fn sync_file(path: &Utf8Path) -> anyhow::Result<()> {
-    open_to_sync(path)
-        .and_then(|file| file.sync_all())
-        .map_err(sync_failure(path))
 }
 
 /// Opens the file at `path` so that its sync can run. A Windows sync of a
@@ -176,19 +181,28 @@ fn replace_file(temporary: tempfile::NamedTempFile, target: &Utf8Path) -> anyhow
     Ok(())
 }
 
+/// Flushes directory metadata where the platform supports it.
+///
+/// Windows has no equivalent call in this module. On Windows, file contents are flushed, but a
+/// sudden power loss can lose a recent directory entry or rename. Process-crash recovery remains
+/// available because the operating system keeps the directory changes.
+pub fn sync_directory(path: &Utf8Path) -> anyhow::Result<()> {
+    #[cfg(unix)]
+    std::fs::File::open(path)?.sync_all()?;
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
+}
+
 pub fn sync_tree(path: &Utf8Path) -> anyhow::Result<()> {
     for entry in std::fs::read_dir(path)
         .map_err(|error| crate::refusal::fault!("list publication tree {path}: {error}"))?
     {
-        let entry = entry
-            .map_err(|error| crate::refusal::fault!("list publication tree {path}: {error}"))?;
+        let entry = entry?;
         let child = Utf8PathBuf::from_path_buf(entry.path()).map_err(|path| {
             crate::refusal::fault!("publication path is not UTF-8: {}", path.display())
         })?;
-        let file_type = entry
-            .file_type()
-            .map_err(|error| crate::refusal::fault!("read the type of {child}: {error}"))?;
-        if file_type.is_dir() {
+        if entry.file_type()?.is_dir() {
             sync_tree(&child)?;
         } else {
             let file = open_to_sync(&child).map_err(|error| {

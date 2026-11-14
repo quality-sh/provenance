@@ -10,8 +10,7 @@
 
 use super::support::{
     dictionary_pdf, file_names, half_reference, init, init_command, provenance, reference_path,
-    reference_problem, reference_refusal, HALF_REFERENCE_MESSAGE, REFERENCE_REPAIR,
-    UNAPPROVED_WORD,
+    reference_problem, reference_refusal, HALF_REFERENCE_MESSAGE, UNAPPROVED_WORD,
 };
 use provenance_macros::verifies;
 use serde_json::{json, Value};
@@ -64,11 +63,9 @@ impl Damaged {
             .unwrap()
     }
 
-    fn import(&self, extra: &[&str]) -> Output {
+    fn import(&self) -> Output {
         let pdf = self.pdf.to_str().unwrap();
-        let mut arguments = vec!["dictionary", "import", "--pdf", pdf, "--repo", self.repo()];
-        arguments.extend_from_slice(extra);
-        self.run(&arguments)
+        self.run(&["dictionary", "import", "--pdf", pdf, "--repo", self.repo()])
     }
 
     fn init(&self) -> Output {
@@ -162,15 +159,6 @@ fn refused(message: &str, contents: &str) -> (Option<i32>, String, String, Vec<S
     )
 }
 
-/// The refusal that an import with `--format json` gives, the unchanged
-/// `contents`, and no index file.
-fn refused_as_json(message: &str, contents: &str) -> (Option<i32>, String, String, Vec<String>) {
-    let stderr = format!(
-        r#"{{"error":{{"file":"dictionary.json","hint":"{REFERENCE_REPAIR}","kind":"invalid_state_file","line":1,"message":"{message}"}},"meta":{{}}}}"#
-    );
-    (Some(1), stderr + "\n", contents.to_owned(), Vec::new())
-}
-
 #[test]
 fn the_status_of_an_empty_reference_names_the_parse_error() {
     let damaged = Damaged::new(EMPTY);
@@ -221,7 +209,7 @@ fn a_strict_statement_check_with_half_of_a_reference_fails() {
 fn an_import_over_an_empty_reference_refuses_and_keeps_the_file() {
     let damaged = Damaged::new(EMPTY);
 
-    let import = damaged.import(&[]);
+    let import = damaged.import();
 
     assert_eq!(damaged.refusal(&import), refused(EMPTY_MESSAGE, EMPTY));
 }
@@ -231,7 +219,7 @@ fn an_import_over_an_empty_reference_refuses_and_keeps_the_file() {
 fn an_import_over_half_of_a_reference_refuses_and_keeps_the_technical_names() {
     let damaged = Damaged::new(&half_reference());
 
-    let import = damaged.import(&[]);
+    let import = damaged.import();
 
     assert_eq!(
         damaged.refusal(&import),
@@ -259,32 +247,6 @@ fn an_init_over_half_of_a_reference_refuses_and_keeps_the_technical_names() {
     assert_eq!(
         damaged.refusal(&init),
         refused(HALF_REFERENCE_MESSAGE, &half_reference())
-    );
-}
-
-#[test]
-#[verifies("rule_ste_dictionary_reference_parse_refusal", examples)]
-fn an_import_with_json_output_over_an_empty_reference_gives_the_refusal_object() {
-    let damaged = Damaged::new(EMPTY);
-
-    let import = damaged.import(&["--format", "json"]);
-
-    assert_eq!(
-        damaged.refusal(&import),
-        refused_as_json(EMPTY_MESSAGE, EMPTY)
-    );
-}
-
-#[test]
-#[verifies("rule_ste_dictionary_reference_parse_refusal", examples)]
-fn an_import_with_json_output_over_half_of_a_reference_gives_the_refusal_object() {
-    let damaged = Damaged::new(&half_reference());
-
-    let import = damaged.import(&["--format", "json"]);
-
-    assert_eq!(
-        damaged.refusal(&import),
-        refused_as_json(HALF_REFERENCE_MESSAGE, &half_reference())
     );
 }
 

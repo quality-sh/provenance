@@ -1,4 +1,5 @@
 //! Safe read refusals retain revision facts and logical unit names.
+use camino::Utf8Path;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]
@@ -57,24 +58,61 @@ pub enum ReadFailure {
     ReadFailed { cause: String },
 }
 
-/// A state file that does not parse at one line.
+/// A line of a record file, or the dictionary reference, that does not parse.
 ///
-/// `file` is the path below the state directory, with `/` between its parts,
-/// or only the file name when the file is not below a state directory, so a
-/// refusal never gives an absolute path. `hint` is the step that repairs the
-/// file, when the reader knows one.
+/// The fields are private, so a refusal gets its file only from [`Self::new`],
+/// which never gives an absolute path.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub struct UnparsableStateFile {
-    pub file: String,
-    pub line: u64,
-    /// The parse message, with no position.
-    pub message: String,
-    pub hint: Option<String>,
+    file: String,
+    line: u64,
+    message: String,
+    hint: Option<String>,
 }
 
 impl UnparsableStateFile {
-    /// The `invalid_state_file` failure of the file. The failure has no hint.
+    /// The file at `path` does not parse at `line`. `repository` is the root
+    /// of the repository that holds the file, when one holds it. `message` is
+    /// the parse message with no position, and `hint` is the step that repairs
+    /// the file, when the reader knows one.
     #[provenance_macros::rule("rule_state_parse_refusal_names_the_line")]
+    pub fn new(
+        path: &Utf8Path,
+        repository: Option<&Utf8Path>,
+        line: u64,
+        message: String,
+        hint: Option<String>,
+    ) -> Self {
+        Self {
+            file: shown_file(path, repository),
+            line,
+            message,
+            hint,
+        }
+    }
+
+    /// The file as a refusal gives it.
+    pub fn file(&self) -> &str {
+        &self.file
+    }
+
+    /// The line that does not parse, from 1.
+    pub const fn line(&self) -> u64 {
+        self.line
+    }
+
+    /// The parse message, with no position.
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
+    /// The step that repairs the file, when the reader knows one.
+    pub fn hint(&self) -> Option<&str> {
+        self.hint.as_deref()
+    }
+
+    /// The `invalid_state_file` read failure of the file. The failure has no
+    /// hint.
     pub fn failure(&self) -> ReadFailure {
         ReadFailure::InvalidStateFile {
             file: self.file.clone(),
@@ -86,10 +124,11 @@ impl UnparsableStateFile {
     /// The `invalid_state_file` failure as a JSON object, with the hint as its
     /// `hint` member when the file has one.
     pub fn failure_object(&self) -> serde_json::Map<String, serde_json::Value> {
-        let mut object = match serde_json::to_value(self.failure()) {
-            Ok(serde_json::Value::Object(object)) => object,
-            _ => serde_json::Map::new(),
-        };
+        let mut object = serde_json::Map::new();
+        object.insert("kind".to_owned(), "invalid_state_file".into());
+        object.insert("file".to_owned(), self.file.clone().into());
+        object.insert("line".to_owned(), self.line.into());
+        object.insert("message".to_owned(), self.message.clone().into());
         if let Some(hint) = &self.hint {
             object.insert("hint".to_owned(), hint.clone().into());
         }
@@ -117,6 +156,30 @@ impl std::fmt::Display for UnparsableStateFile {
         }
         Ok(())
     }
+}
+
+/// The path of a file as a refusal gives it, with `/` between its parts: the
+/// path below the `.provenance/state` directory that holds the file, else the
+/// path below `repository`, else the file name.
+pub fn shown_file(path: &Utf8Path, repository: Option<&Utf8Path>) -> String {
+    let parts: Vec<&str> = path.iter().collect();
+    if let Some(at) = parts
+        .windows(2)
+        .rposition(|pair| pair == [".provenance", "state"])
+    {
+        return parts[at + 2..].join("/");
+    }
+    repository
+        .and_then(|repository| path.strip_prefix(repository).ok())
+        .filter(|below| {
+            !below.as_str().is_empty()
+                && below
+                    .components()
+                    .all(|part| matches!(part, camino::Utf8Component::Normal(_)))
+        })
+        .map(|below| below.iter().collect::<Vec<_>>().join("/"))
+        .or_else(|| path.file_name().map(str::to_owned))
+        .unwrap_or_default()
 }
 
 /// What a cache close was waiting for when its deadline passed.

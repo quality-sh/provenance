@@ -79,11 +79,13 @@ fn parse_reference(
     path: &camino::Utf8Path,
     bytes: &[u8],
 ) -> Result<DictionaryReference, UnparsableStateFile> {
-    serde_json::from_slice(bytes).map_err(|error| UnparsableStateFile {
-        file: crate::state_store::readers::state_file(path),
-        line: u64::try_from(error.line()).unwrap_or(u64::MAX),
-        message: crate::state_store::readers::parse_message(&error),
-        hint: Some(REFERENCE_REPAIR.to_owned()),
+    serde_json::from_slice(bytes).map_err(|error| {
+        crate::state_store::readers::unparsable(
+            path,
+            u64::try_from(error.line()).unwrap_or(u64::MAX),
+            crate::state_store::readers::parse_message(&error),
+            Some(REFERENCE_REPAIR.to_owned()),
+        )
     })
 }
 

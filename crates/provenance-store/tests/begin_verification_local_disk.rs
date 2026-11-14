@@ -152,7 +152,7 @@ fn a_run_row_that_cannot_be_written_leaves_the_binding_and_the_cleared_review() 
     assert_write_failed(
         &answer,
         status,
-        "make a temporary file in default: Permission denied (os error 13)",
+        "make a temporary file for verification-runs.jsonl: Permission denied (os error 13)",
     );
     let cause = answer["cause"].as_str().unwrap();
     assert!(cause.contains(".tmp"), "{answer}");

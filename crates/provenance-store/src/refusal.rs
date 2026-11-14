@@ -25,7 +25,6 @@
 
 use crate::state_store::message_ids::ShardLine;
 use provenance_core::protocol::failure::OperationFailure;
-use provenance_core::protocol::read_failure::UnparsableStateFile;
 
 /// The text of a declared internal fault.
 ///
@@ -79,12 +78,12 @@ pub(crate) use refuse;
 /// Stored records that do not agree, located at the record at fault. It reads
 /// as `invalid_state_file` with that file and line.
 pub fn state_fault(at: &ShardLine, message: String) -> anyhow::Error {
-    UnparsableStateFile {
-        file: crate::state_store::readers::state_file(&at.path),
-        line: u64::try_from(at.line).unwrap_or(u64::MAX),
+    crate::state_store::readers::unparsable(
+        &at.path,
+        u64::try_from(at.line).unwrap_or(u64::MAX),
         message,
-        hint: None,
-    }
+        None,
+    )
     .into()
 }
 

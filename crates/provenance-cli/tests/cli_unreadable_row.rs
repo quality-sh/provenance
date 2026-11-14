@@ -123,8 +123,11 @@ fn each_read_and_write_of_a_row_with_the_retired_field_refuses_at_the_row() {
     assert_eq!(refusal(&read), state_file_refusal(RETIRED));
 }
 
+/// The refusal names the runs cache by its path below the repository root,
+/// because the runs cache is not below the state directory.
+///
 /// No Rule binding: `rule_state_parse_refusal_names_the_line` is for record
-/// files below the state directory, and the runs cache is a cache file.
+/// files, and the runs cache is a cache file.
 #[test]
 fn the_list_of_runs_names_a_line_of_the_runs_cache_that_is_not_utf8() {
     let (directory, repo) = support::review_paths::init();
@@ -138,7 +141,8 @@ fn the_list_of_runs_names_a_line_of_the_runs_cache_that_is_not_utf8() {
         .unwrap();
 
     let text = concat!(
-        r#"Error: {"error":{"file":"verification-runs.jsonl","kind":"invalid_state_file","#,
+        r#"Error: {"error":{"file":".provenance/cache/scopes/default/verification-runs.jsonl","#,
+        r#""kind":"invalid_state_file","#,
         r#""line":1,"message":"invalid utf-8 sequence of 1 bytes from index 0"},"meta":{}}"#,
         "\n"
     );

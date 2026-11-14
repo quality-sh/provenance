@@ -70,7 +70,7 @@ fn a_failed_write_of_the_reference_keeps_the_stored_reference() {
     let error = result.expect_err("the write of the temporary file must fail");
     assert!(
         format!("{error:#}").starts_with(&format!(
-            "write the dictionary reference: make a temporary file in {state}: "
+            "write the dictionary reference: make a temporary file for {path}: "
         )),
         "{error:#}"
     );

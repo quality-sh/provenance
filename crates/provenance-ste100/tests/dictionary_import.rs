@@ -129,7 +129,7 @@ fn imports_a_complete_positioned_dictionary_deterministically() {
 
 /// Implementation aid with no Rule: the test decodes the bytes of one index
 /// with no file, and the file name for the source equals the file name for the
-/// identity. The store tests of a stored index carry
+/// identity. The tests of a stored index in `provenance-cli` carry
 /// `rule_ste_dictionary_import_reuse`.
 #[test]
 fn a_verified_index_loads_for_the_same_source_bytes() {
@@ -148,8 +148,8 @@ fn a_verified_index_loads_for_the_same_source_bytes() {
 }
 
 /// Implementation aid with no Rule: the test compares file names only. No
-/// Rule states the file name of an index, and the store tests of a stored
-/// index carry `rule_ste_dictionary_import_reuse`.
+/// Rule states the file name of an index, and the tests of a stored index in
+/// `provenance-cli` carry `rule_ste_dictionary_import_reuse`.
 #[test]
 fn changed_source_or_extractor_version_cannot_reuse_an_index() {
     let pdf = dictionary_pdf(APPROVED_TABLE_ROWS, UNAPPROVED_TABLE_ROWS, 9, true);

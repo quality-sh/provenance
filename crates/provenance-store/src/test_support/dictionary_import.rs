@@ -1,18 +1,15 @@
-//! An import that the store can write as an index and load again, with no PDF.
+//! An import that the store can write as an index. Its data digest is not the
+//! digest of its entries, so a load of its index fails.
 
-use provenance_ste100::{
-    normalized_data_digest, DictionaryImport, DictionaryImportIdentity, StandardIssue,
-};
+use provenance_ste100::{DictionaryImport, DictionaryImportIdentity, StandardIssue};
 
-/// An import with no entries and the true data digest of its entries. A load
-/// by identity checks the identity and the digest, so a stored index of this
-/// import loads again.
+/// An import with no entries.
 pub fn import() -> DictionaryImport {
     DictionaryImport {
         identity: DictionaryImportIdentity {
             issue: StandardIssue::Nine,
             source_sha256: "source".to_owned(),
-            data_sha256: normalized_data_digest(&[]),
+            data_sha256: "data".to_owned(),
             extractor_version: "0.0.0".to_owned(),
         },
         entries: Vec::new(),

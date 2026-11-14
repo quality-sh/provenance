@@ -265,12 +265,9 @@ async fn the_dictionary_import_action_refuses_a_reference_that_does_not_parse() 
 }
 
 /// The materialize action over a record file with a line that does not parse gives the
-/// `invalid_state_file` failure of that line, as an operation route does.
-///
-/// Implementation aid with no Rule: `rule_state_parse_refusal_names_the_line` names the
-/// CLI, MCP and HTTP refusals of the operation routes, and no Rule states the failure of
-/// a repository command.
+/// `invalid_state_file` failure with the relative file path, the line and the message.
 #[tokio::test]
+#[verifies("rule_state_parse_refusal_names_the_line", examples)]
 async fn the_materialize_action_names_a_record_line_that_does_not_parse() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_str().unwrap();

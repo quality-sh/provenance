@@ -1,6 +1,6 @@
 pub use crate::registry_cli::root_command;
 use crate::{catalog_cli, handlers};
-use handlers::{GraphInput, RepositoryInput, RepositoryOptions, ServerInput, WorkspaceInput};
+use handlers::{GraphInput, RepositoryInput, ServerInput, WorkspaceInput};
 use provenance_cli::porcelain;
 use provenance_core::NodeType;
 use provenance_macros::rule;
@@ -33,7 +33,7 @@ mod tests;
 pub enum Invocation {
     Check(CheckInput, crate::registry_cli::BoundContext),
     Prime(PrimeInput),
-    Repository(RepositoryInput, RepositoryOptions),
+    Repository(RepositoryInput, bool),
     Graph(GraphInput),
     Workspace(WorkspaceInput),
     Server(ServerInput),
@@ -160,7 +160,7 @@ impl Invocation {
             Some(registry::Command::Repository(command)) => Self::Repository(
                 RepositoryInput::from_matches(command, selected)
                     .unwrap_or_else(|error| catalog_cli::usage_error(error)),
-                RepositoryOptions::from_matches(command, selected, matches.get_flag("quiet")),
+                matches.get_flag("quiet"),
             ),
             Some(registry::Command::Graph(command)) => Self::Graph(
                 GraphInput::from_matches(command, selected)
@@ -293,9 +293,9 @@ impl Invocation {
     /// `{error,meta}` object instead of text.
     pub fn json_output(&self) -> bool {
         let format = match self {
-            Self::Repository(_, options) => return options.json,
             Self::Check(..)
             | Self::Prime(_)
+            | Self::Repository(..)
             | Self::Graph(_)
             | Self::Workspace(_)
             | Self::Server(_) => None,
@@ -315,9 +315,7 @@ impl Invocation {
         match self {
             Self::Check(input, context) => handlers::check_command(input, context).await,
             Self::Prime(input) => handlers::prime_command(&input),
-            Self::Repository(input, options) => {
-                handlers::repository_command(input, options.quiet).await
-            }
+            Self::Repository(input, quiet) => handlers::repository_command(input, quiet).await,
             Self::Graph(input) => handlers::graph_command(input).await,
             Self::Workspace(input) => handlers::workspace_command(input).await,
             Self::Server(input) => handlers::server_command(input).await,

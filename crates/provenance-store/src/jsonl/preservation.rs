@@ -232,7 +232,7 @@ mod tests {
             .unwrap_err();
         let state = UnparsableStateFile::find(error.as_ref()).unwrap();
         assert_eq!(
-            (state.line, state.message.as_str()),
+            (state.line(), state.message()),
             (2, "duplicate record id `one` prevents a safe typed change")
         );
     }
@@ -248,13 +248,15 @@ mod tests {
         let mut loaded = load::<Row>([r#"{"n":1}"#, r#"{"n":2,"extension":true}"#]);
         loaded.records_mut()[1].n = 3;
         let error = loaded
-            .into_lines(camino::Utf8Path::new("state/scopes/default/records.jsonl"))
+            .into_lines(camino::Utf8Path::new(
+                "/repo/.provenance/state/scopes/default/records.jsonl",
+            ))
             .unwrap_err();
         let state = UnparsableStateFile::find(error.as_ref()).unwrap();
         assert_eq!(
-            (state.file.as_str(), state.line, state.message.as_str()),
+            (state.file(), state.line(), state.message()),
             (
-                "records.jsonl",
+                "scopes/default/records.jsonl",
                 2,
                 "unknown fields cannot survive a typed change to a record without an id"
             )
