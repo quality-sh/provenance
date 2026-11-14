@@ -310,11 +310,6 @@ impl PreparedRepositoryFile {
         &self.identity
     }
 
-    #[allow(clippy::missing_const_for_fn)]
-    pub(crate) fn recovery_leaf(&self) -> &str {
-        &self.leaf
-    }
-
     fn matches_entry(&mut self) -> Result<bool, Refusal> {
         let entry = match platform::regular(&self.parent, &self.leaf).map_err(Refusal::from) {
             Ok(file) => file,

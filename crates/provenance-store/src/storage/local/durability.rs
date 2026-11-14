@@ -163,7 +163,7 @@ pub fn sync_directory(path: &Utf8Path) -> anyhow::Result<()> {
 
 /// Flushes the metadata of the open directory `directory`, as
 /// [`sync_directory`] does: on Windows, the call does nothing.
-pub(crate) fn sync_opened_directory(directory: &std::fs::File) -> std::io::Result<()> {
+pub fn sync_opened_directory(directory: &std::fs::File) -> std::io::Result<()> {
     #[cfg(unix)]
     directory.sync_all()?;
     #[cfg(not(unix))]

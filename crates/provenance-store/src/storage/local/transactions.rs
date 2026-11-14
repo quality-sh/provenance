@@ -153,6 +153,9 @@ pub fn remove_transaction(transaction: &Utf8Path) -> anyhow::Result<()> {
     })
 }
 
+/// Removes the directory at `path`; a failure gives the step, the path and
+/// the system error.
+#[rule("rule_failed_removal_of_stopped_write_names_its_path")]
 fn remove_directory(path: &Utf8Path, step: impl FnOnce() -> String) -> anyhow::Result<()> {
     std::fs::remove_dir_all(path).map_err(|error| crate::refusal::caused(error, step()))
 }

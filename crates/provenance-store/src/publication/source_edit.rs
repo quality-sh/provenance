@@ -12,6 +12,7 @@ use crate::{
 };
 use anyhow::Context as _;
 use camino::{Utf8Path, Utf8PathBuf};
+use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
@@ -200,6 +201,7 @@ impl WholeSetHook for SourceEditPublication {
     /// The state and the file are published, so the write succeeds when the
     /// end of the transaction fails. The `FileInstalled` marker then stays,
     /// and the next section entry ends the transaction.
+    #[rule("rule_published_write_succeeds_when_its_cleanup_fails")]
     fn finish(&mut self, live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
         let _ = end_published(live, transaction);
         Ok(())
