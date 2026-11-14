@@ -60,7 +60,12 @@ fn land(repo: &Path, name: &str) -> String {
     std::fs::write(extractors.join("one.json"), contribution.to_string()).unwrap();
     json(
         repo,
-        &["swarm-backtrace", "land", "--run-dir", run.to_str().unwrap()],
+        &[
+            "swarm-backtrace",
+            "land",
+            "--run-dir",
+            run.to_str().unwrap(),
+        ],
     );
     landing_lines(repo).pop().unwrap()
 }
