@@ -4,7 +4,7 @@ use super::{RepositoryPort, ScopeExport};
 use crate::repository::RepoContext;
 use crate::snapshot::{snapshot, ScopeSnapshot, Store};
 use camino::Utf8Path;
-use provenance_core::ScopeId;
+use provenance_core::{IdeationRecord, ScopeId};
 use provenance_macros::rule;
 use provenance_porcelain::import::{ImportInput, ImportOutput, ImportPort};
 use provenance_porcelain::WorkFuture;
@@ -14,7 +14,7 @@ use provenance_store::repository::Repository;
 use provenance_store::state_store::{
     assertion_cites_contribution, assertion_cites_synthesis,
     ensure_asserted_contribution_unchanged, ensure_asserted_synthesis_unchanged, ScopeShards,
-    StateStore, CONTRIBUTION_KIND, SYNTHESIS_KIND,
+    StateStore,
 };
 use provenance_store::statement_analysis::{analyze_changed_statements, violation_error};
 use serde::Serialize;
@@ -69,24 +69,9 @@ fn import_scope(
             dispositions: &exported.dispositions,
         })?;
         let stored = store.snapshot()?;
-        ensure_immutable_records_preserved(
-            "proposal",
-            &stored.proposal_cards,
-            &exported.proposal_cards,
-            |record| record.id.as_str(),
-        )?;
-        ensure_immutable_records_preserved(
-            "assertion",
-            &stored.assertion_records,
-            &exported.assertion_records,
-            |record| record.id.as_str(),
-        )?;
-        ensure_immutable_records_preserved(
-            "disposition",
-            &stored.dispositions,
-            &exported.dispositions,
-            |record| record.id.as_str(),
-        )?;
+        ensure_immutable_records_preserved(&stored.proposal_cards, &exported.proposal_cards)?;
+        ensure_immutable_records_preserved(&stored.assertion_records, &exported.assertion_records)?;
+        ensure_immutable_records_preserved(&stored.dispositions, &exported.dispositions)?;
         ensure_asserted_evidence_preserved(&stored, &exported)?;
         apply_import(held, &stored, &exported, dry_run)
     })?;
@@ -137,17 +122,16 @@ fn has_removed_service_family(input: &str) -> bool {
     })
 }
 
-fn ensure_immutable_records_preserved<T: Serialize>(
-    kind: &str,
+fn ensure_immutable_records_preserved<T: Serialize + IdeationRecord>(
     existing: &[T],
     incoming: &[T],
-    id: impl Fn(&T) -> &str,
 ) -> anyhow::Result<()> {
+    let kind = T::KIND;
     for current in existing {
-        let record_id = id(current);
+        let record_id = current.immutable_id();
         let replacement = incoming
             .iter()
-            .find(|record| id(record) == record_id)
+            .find(|record| record.immutable_id() == record_id)
             .ok_or_else(|| {
                 anyhow::anyhow!("immutable {kind} {record_id} must be preserved by import")
             })?;
@@ -169,11 +153,11 @@ fn ensure_immutable_records_preserved<T: Serialize>(
 /// for the record's kind, so this and the freeze answer the same question of
 /// the same record.
 #[rule("rule_asserted_evidence_undeletable")]
-fn ensure_asserted_evidence_not_deleted(
-    kind: &str,
-    id: &str,
+fn ensure_asserted_evidence_not_deleted<T: IdeationRecord>(
+    existing: &T,
     cited_by_assertion: bool,
 ) -> anyhow::Result<()> {
+    let (kind, id) = (T::KIND, existing.immutable_id());
     anyhow::ensure!(
         !cited_by_assertion,
         "{kind} {id} is referenced by an assertion and cannot be deleted"
@@ -192,7 +176,7 @@ fn ensure_asserted_evidence_preserved(
         match incoming
             .contributions
             .iter()
-            .find(|record| record.id == existing.id)
+            .find(|record| record.immutable_id() == existing.immutable_id())
         {
             Some(replacement) => {
                 ensure_asserted_contribution_unchanged(
@@ -202,8 +186,7 @@ fn ensure_asserted_evidence_preserved(
                 )?;
             }
             None => ensure_asserted_evidence_not_deleted(
-                CONTRIBUTION_KIND,
-                existing.id.as_str(),
+                existing,
                 assertion_cites_contribution(existing, &stored.assertion_records),
             )?,
         }
@@ -212,7 +195,7 @@ fn ensure_asserted_evidence_preserved(
         match incoming
             .synthesis_packets
             .iter()
-            .find(|record| record.id == existing.id)
+            .find(|record| record.immutable_id() == existing.immutable_id())
         {
             Some(replacement) => {
                 ensure_asserted_synthesis_unchanged(
@@ -222,8 +205,7 @@ fn ensure_asserted_evidence_preserved(
                 )?;
             }
             None => ensure_asserted_evidence_not_deleted(
-                SYNTHESIS_KIND,
-                existing.id.as_str(),
+                existing,
                 assertion_cites_synthesis(existing, &stored.assertion_records),
             )?,
         }
@@ -295,11 +277,13 @@ fn ensure_changed_statements_are_clean(
 }
 
 #[cfg(test)]
+#[path = "../../tests/support/ideation.rs"]
+mod ideation;
+
+#[cfg(test)]
 mod tests {
-    use super::{
-        deserialize_scope_export, ensure_asserted_evidence_not_deleted, CONTRIBUTION_KIND,
-        SYNTHESIS_KIND,
-    };
+    use super::{deserialize_scope_export, ensure_asserted_evidence_not_deleted, ideation};
+    use provenance_core::{Contribution, IdeationRecord, SynthesisPacket};
     use provenance_macros::verifies;
     use serde_json::json;
 
@@ -354,42 +338,57 @@ mod tests {
 
     // The decision ranges over two finite axes and nothing else: the kind of
     // evidence being dropped, and whether an assertion cites it. The kinds are
-    // the two `provenance-store` freezes, named from the store so a third kind
-    // has to be spelled here before it can be dropped silently.
-    const EVIDENCE_KINDS: [(&str, &str); 2] = [
-        (CONTRIBUTION_KIND, "contribution_a"),
-        (SYNTHESIS_KIND, "synthesis_a"),
-    ];
-
+    // the two `provenance-store` freezes, so a third kind has to be named
+    // here before it can be dropped silently.
     #[test]
     #[verifies("rule_asserted_evidence_undeletable", exhaustion)]
     fn evidence_may_be_dropped_exactly_when_no_assertion_cites_it() {
-        for (kind, id) in EVIDENCE_KINDS {
-            for cited_by_assertion in [false, true] {
-                let outcome = ensure_asserted_evidence_not_deleted(kind, id, cited_by_assertion);
+        assert_dropped_exactly_when_not_cited(&contribution());
+        assert_dropped_exactly_when_not_cited(&synthesis_packet());
+    }
 
-                // Independent restatement of the decision: an assertion's
-                // ground stays where it is, and everything else may go.
-                assert_eq!(
-                    outcome.is_ok(),
-                    !cited_by_assertion,
-                    "{kind} {id} cited={cited_by_assertion}"
-                );
-            }
+    fn assert_dropped_exactly_when_not_cited<T: IdeationRecord>(record: &T) {
+        for cited_by_assertion in [false, true] {
+            let outcome = ensure_asserted_evidence_not_deleted(record, cited_by_assertion);
+
+            // Independent restatement of the decision: an assertion's
+            // ground stays where it is, and everything else may go.
+            assert_eq!(
+                outcome.is_ok(),
+                !cited_by_assertion,
+                "{} {} cited={cited_by_assertion}",
+                T::KIND,
+                record.immutable_id()
+            );
         }
     }
 
     #[test]
     #[verifies("rule_asserted_evidence_undeletable", examples)]
     fn the_refusal_names_the_record_that_may_not_go() {
-        for (kind, id) in EVIDENCE_KINDS {
-            let error = ensure_asserted_evidence_not_deleted(kind, id, true)
-                .unwrap_err()
-                .to_string();
-            assert_eq!(
-                error,
-                format!("{kind} {id} is referenced by an assertion and cannot be deleted")
-            );
-        }
+        let error = ensure_asserted_evidence_not_deleted(&contribution(), true).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "contribution contribution_a is referenced by an assertion and cannot be deleted"
+        );
+        let error = ensure_asserted_evidence_not_deleted(&synthesis_packet(), true).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "synthesis packet synthesis_a is referenced by an assertion and cannot be deleted"
+        );
+    }
+
+    fn contribution() -> Contribution {
+        stored(ideation::contribution("contribution_a"))
+    }
+
+    fn synthesis_packet() -> SynthesisPacket {
+        stored(ideation::synthesis("synthesis_a"))
+    }
+
+    /// The stored form of the request body `record` in the scope `default`.
+    fn stored<T: serde::de::DeserializeOwned>(mut record: serde_json::Value) -> T {
+        record["scope_id"] = json!("default");
+        serde_json::from_value(record).unwrap()
     }
 }
