@@ -25,17 +25,35 @@ fn registry_requirements_and_patch_leave_the_manifest_and_lock_unchanged() {
 #[test]
 #[verifies("rule_cargo_init_preserves_sdk_dependency", examples)]
 #[verifies("rule_cargo_init_adds_exact_sdk", examples)]
-fn missing_dependency_is_added_with_an_exact_requirement_by_real_cargo() {
+fn missing_dependency_is_added_as_an_exact_dev_dependency_by_real_cargo() {
     let fixture = CargoProject::new("0.4.0");
     fixture.write_missing_dependency();
 
     fixture.init().success();
 
     let manifest = String::from_utf8(fixture.manifest()).unwrap();
-    assert!(
-        manifest.contains("provenance-sdk = \"=0.4.0\""),
+    assert_eq!(
+        manifest_table(&manifest, "dev-dependencies"),
+        ["provenance-sdk = \"=0.4.0\""],
         "{manifest}"
     );
+    assert!(
+        manifest_table(&manifest, "dependencies").is_empty(),
+        "{manifest}"
+    );
+}
+
+/// The non-empty lines of one top-level manifest table.
+fn manifest_table<'a>(manifest: &'a str, table: &str) -> Vec<&'a str> {
+    let header = format!("[{table}]");
+    manifest
+        .lines()
+        .skip_while(|line| line.trim() != header)
+        .skip(1)
+        .take_while(|line| !line.trim_start().starts_with('['))
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect()
 }
 
 #[test]
