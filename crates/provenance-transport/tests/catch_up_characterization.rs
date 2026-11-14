@@ -13,11 +13,11 @@ use crate::support;
 use provenance_transport::StatementHost;
 use serde_json::{json, Value};
 use support::catch_up_steps::{write, Answer, Surface, STEPS};
+use support::names::Names;
 use support::records::{allow_reviewer, Repository};
 use support::resource_http::{call, call_with_headers, host};
 use support::transcript::{
     assert_same, copy_without_projection, fingerprint, named_answers, read_all, without_generated,
-    Names,
 };
 
 /// The HTTP routes of one host.
