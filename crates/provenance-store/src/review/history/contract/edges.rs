@@ -101,9 +101,11 @@ pub async fn a_change_of_mode_only_is_listed<H: Harness + Sync>(harness: &H) {
     );
 }
 
-/// The text at a commit that the adapter does not hold is `None`, also for
-/// a file that each commit it holds has. An empty name and a revision name
-/// such as `HEAD` are not commit ids, so they name no commit that it holds.
+/// The text at a commit that the adapter does not hold is `None`.
+///
+/// This is also so for a file that each commit it holds has. An empty name
+/// and a revision name such as `HEAD` are not commit ids, so they name no
+/// commit that it holds.
 pub async fn a_commit_that_the_adapter_does_not_hold_has_no_text<H: Harness + Sync>(harness: &H) {
     let adapter = harness.adapter(&edge_graph());
     for commit in [UNKNOWN_COMMIT, "", "HEAD"] {

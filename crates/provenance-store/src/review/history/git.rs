@@ -117,19 +117,16 @@ fn stop_when_idle(texts: &Weak<Mutex<Texts>>) {
         let Some(texts) = texts.upgrade() else {
             return;
         };
-        let stopped = {
-            let mut held = lock(&texts);
-            let idle = seen == Some(held.reads);
+        let mut held = lock(&texts);
+        if seen != Some(held.reads) {
             seen = Some(held.reads);
-            if idle {
-                held.watched = false;
-            }
-            idle.then(|| held.batch.take())
-        };
-        if let Some(batch) = stopped {
-            drop(batch);
-            return;
+            continue;
         }
+        held.watched = false;
+        let batch = held.batch.take();
+        drop(held);
+        drop(batch);
+        return;
     }
 }
 
