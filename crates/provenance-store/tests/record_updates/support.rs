@@ -156,7 +156,11 @@ impl Fixture {
             None,
         )
         .unwrap();
-        std::fs::write(layout.manifest_path(), serde_json::to_vec(&manifest).unwrap()).unwrap();
+        std::fs::write(
+            layout.manifest_path(),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
         let node: NodeType = serde_json::from_value(json!(kind)).unwrap();
         let pending = self
             .store

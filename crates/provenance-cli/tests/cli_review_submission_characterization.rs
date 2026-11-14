@@ -5,8 +5,8 @@
 
 use crate::support;
 use support::record_review::{
-    accept_current, accept_status_request, create_resolution, create_rule, decide,
-    guarded_update, read, submissions,
+    accept_current, accept_status_request, create_resolution, create_rule, decide, guarded_update,
+    read, submissions,
 };
 use support::review_paths::{create_requirement, init};
 

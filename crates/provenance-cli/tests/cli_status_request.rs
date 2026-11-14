@@ -33,7 +33,10 @@ fn rule_activation_waits_for_the_reviewer() {
     assert_eq!(after["status"], "draft", "{after}");
     let (proposal, request) = pending_status_request(&repo, "rules", "rule_a");
     assert_eq!(request["status"], "active");
-    assert_eq!(after["decision"]["pending"]["status_request"], request, "{after}");
+    assert_eq!(
+        after["decision"]["pending"]["status_request"], request,
+        "{after}"
+    );
 
     decide(&repo, "rules", "rule", "rule_a", &proposal, true);
 
@@ -52,7 +55,12 @@ fn rule_archive_waits_for_the_reviewer() {
         &repo,
         "rules",
         "rule_a",
-        &["--status", "archived", "--archived-in-commit", ARCHIVE_COMMIT],
+        &[
+            "--status",
+            "archived",
+            "--archived-in-commit",
+            ARCHIVE_COMMIT,
+        ],
     );
 
     let after = read(&repo, "rules", "rule_a");
@@ -241,7 +249,14 @@ fn the_direct_write_refusal_comes_before_the_pending_check() {
 
     let output = refused(
         &repo,
-        &["rule_a", "update", "--if-match", &etag, "--status", "active"],
+        &[
+            "rule_a",
+            "update",
+            "--if-match",
+            &etag,
+            "--status",
+            "active",
+        ],
     );
 
     assert!(output.contains("resolution_not_approved"), "{output}");

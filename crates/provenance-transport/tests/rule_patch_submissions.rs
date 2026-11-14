@@ -172,7 +172,13 @@ async fn a_status_patch_opens_a_status_request_and_keeps_the_status() {
     assert_ne!(status, 200, "{mixed}");
     assert!(read(&host).await["decision"]["pending"].is_null());
 
-    let (status, changed) = call(&host, "PATCH", RULE, Some(json!({"data":{"status":"active"}}))).await;
+    let (status, changed) = call(
+        &host,
+        "PATCH",
+        RULE,
+        Some(json!({"data":{"status":"active"}})),
+    )
+    .await;
     assert_eq!(status, 200, "{changed}");
     assert_eq!(changed["data"]["status"], "draft", "{changed}");
     let rule = read(&host).await;

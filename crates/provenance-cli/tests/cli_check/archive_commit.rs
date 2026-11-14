@@ -104,7 +104,13 @@ fn text(output: &Output) -> String {
 /// Declares the default scope with a reviewer, who accepts each archive.
 fn init(repo: &Path) {
     provenance()
-        .args(["init", "--path", repo.to_str().unwrap(), "--scope", "default"])
+        .args([
+            "init",
+            "--path",
+            repo.to_str().unwrap(),
+            "--scope",
+            "default",
+        ])
         .args(["--path-prefix", ".", "--disposition-actor-id", "reviewer"])
         .bounded_assert()
         .success();

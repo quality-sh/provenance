@@ -145,8 +145,7 @@ fn a_rule_can_become_active_when_its_resolution_was_approved_in_review() {
     let requested = read(&host, "/rules/rule_keep_result");
     assert_eq!(requested["status"], "review", "{requested}");
     assert_eq!(
-        requested["decision"]["pending"]["status_request"]["status"],
-        "active",
+        requested["decision"]["pending"]["status_request"]["status"], "active",
         "{requested}"
     );
     accept_pending(&host, "rules", "rule", "rule_keep_result");

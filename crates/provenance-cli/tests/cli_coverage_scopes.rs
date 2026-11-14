@@ -54,10 +54,16 @@ fn active_rule(repo: &Path, scope: &str, rule: &str) {
 fn accept_status_request(repo: &str, scope: &str, rule: &str) {
     let path = format!("rules/{rule}");
     let read = provenance()
-        .args(["api", &path, "--repo", repo, "--scope", scope, "--format", "json"])
+        .args([
+            "api", &path, "--repo", repo, "--scope", scope, "--format", "json",
+        ])
         .output()
         .unwrap();
-    assert!(read.status.success(), "{}", String::from_utf8_lossy(&read.stderr));
+    assert!(
+        read.status.success(),
+        "{}",
+        String::from_utf8_lossy(&read.stderr)
+    );
     let record: Value = serde_json::from_slice(&read.stdout).unwrap();
     let pending = &record["data"]["decision"]["pending"];
     assert!(!pending["status_request"].is_null(), "{record}");

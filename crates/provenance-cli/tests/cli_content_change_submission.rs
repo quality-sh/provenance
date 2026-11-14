@@ -6,8 +6,8 @@ use serde_json::Value;
 
 use crate::support;
 use support::record_review::{
-    accept_current, activate_rule, create_resolution, create_rule, current_submission, data, decide,
-    guarded_update, read, submissions,
+    accept_current, activate_rule, create_resolution, create_rule, current_submission, data,
+    decide, guarded_update, read, submissions,
 };
 use support::review_paths::{create_requirement, init, json_output, provenance};
 

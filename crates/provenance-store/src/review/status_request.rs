@@ -20,7 +20,7 @@ use provenance_macros::rule;
 /// The longest summary a status request copies from the record.
 const SUMMARY_CHARS: usize = 1000;
 
-const fn requested_rule_status(status: RuleStatus) -> Option<RequestedStatus> {
+const fn requested_rule_status(status: &RuleStatus) -> Option<RequestedStatus> {
     match status {
         RuleStatus::Active => Some(RequestedStatus::Active),
         RuleStatus::Archived => Some(RequestedStatus::Archived),
@@ -90,7 +90,7 @@ fn dry_run<R>(
     Ok(())
 }
 
-fn rule_fields_changed(input: &UpdateRuleInput) -> bool {
+const fn rule_fields_changed(input: &UpdateRuleInput) -> bool {
     input.name.is_some()
         || input.description.is_some()
         || input.statement.is_some()
@@ -107,7 +107,7 @@ impl StateStore {
     /// archived opens a status request and keeps the stored Rule; every other
     /// update writes the Rule directly.
     pub fn request_rule_update(&self, input: UpdateRuleInput) -> anyhow::Result<Rule> {
-        let Some(status) = input.status.clone().and_then(requested_rule_status) else {
+        let Some(status) = input.status.as_ref().and_then(requested_rule_status) else {
             return self.update_rule(input);
         };
         self.with_repository_publication(|held| {
@@ -118,7 +118,9 @@ impl StateStore {
                 &input.id,
             )?;
             let ReviewRecord::Rule(current) = &record else {
-                return Err(crate::refusal::fault!("the Rule read gave another record kind"));
+                return Err(crate::refusal::fault!(
+                    "the Rule read gave another record kind"
+                ));
             };
             if current.status == rule_status(status) {
                 return held.update_rule(input);
@@ -128,7 +130,9 @@ impl StateStore {
             check_etag(&record, input.expected_etag.as_deref())?;
             let mut requested = current.clone();
             requested.status = rule_status(status);
-            requested.archived_in_commit = input.archived_in_commit.clone();
+            requested
+                .archived_in_commit
+                .clone_from(&input.archived_in_commit);
             requested
                 .validate_transition(current)
                 .map_err(|error| crate::refusal::refuse!(InvalidUpdate, "{error}"))?;

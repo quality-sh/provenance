@@ -130,7 +130,11 @@ fn search_shows_lifecycle_and_keeps_archived_records_hidden() {
     }
 
     let stamp = r#"{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#;
-    archive_rule(repo, "rule_search", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    archive_rule(
+        repo,
+        "rule_search",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    );
     let current: Value =
         serde_json::from_str(&run(repo, &["api", "questions/question_search"])).unwrap();
     let etag = current["data"]["edit"]["etag"].as_str().unwrap();
