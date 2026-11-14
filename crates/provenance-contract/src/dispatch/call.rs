@@ -22,7 +22,7 @@ struct RepositoryCall<R, C> {
 }
 
 /// The selected context and the request of the native call of one operation.
-pub(crate) fn decode_call<O: Operation>(
+pub fn decode_call<O: Operation>(
     call: Value,
 ) -> Result<(Option<RequestedContext>, O::Request), FailureEnvelope> {
     Ok(match O::CONTEXT {

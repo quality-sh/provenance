@@ -16,7 +16,7 @@ use serde::de::IntoDeserializer as _;
 use serde_json::Value;
 
 mod call;
-pub(crate) use call::decode_call;
+pub use call::decode_call;
 
 struct Entry<H: Invoke> {
     name: &'static str,
