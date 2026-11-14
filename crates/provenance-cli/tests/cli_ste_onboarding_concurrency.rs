@@ -6,9 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[path = "cli_dictionary/support.rs"]
-#[allow(dead_code)]
-mod dictionary_support;
+use crate::dictionary_support;
 
 #[path = "cli_ste_onboarding/support.rs"]
 #[allow(dead_code)]

@@ -5,11 +5,7 @@
 //! `provenance-cli/tests/surface_names.rs`.
 #![cfg(feature = "test-fixture")]
 
-#[allow(dead_code)]
-mod support {
-    #[path = "../../../provenance-transport/tests/support/check_port.rs"]
-    pub mod check_port;
-}
+use crate::support;
 
 use provenance_transport::{
     fixture::{FixtureAccess, Target},

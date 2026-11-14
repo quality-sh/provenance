@@ -3,8 +3,7 @@
 //! each set that puts the reviews shard. A start publishes only the shards
 //! that it changes.
 
-#[path = "support/memory.rs"]
-mod memory;
+use crate::memory;
 
 use memory::{
     begin_input, open_review, scope, verification_repository, Failure, FixedClock, Refusing,

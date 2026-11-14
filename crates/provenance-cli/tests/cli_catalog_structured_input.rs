@@ -4,8 +4,7 @@ use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::process::{Command, Output};
 
-#[path = "support/bounded_process.rs"]
-mod bounded_process;
+use crate::bounded_process;
 
 fn provenance() -> Command {
     Command::new(assert_cmd::cargo::cargo_bin!("provenance"))

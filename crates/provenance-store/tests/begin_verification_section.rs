@@ -3,8 +3,7 @@
 //! the start reads the time, which it does in the section, after the checks
 //! and before the write set.
 
-#[path = "support/memory.rs"]
-mod memory;
+use crate::memory;
 
 use memory::{
     begin_input, key, open_review, scope, shard, verification_repository, FixedClock, Recorded,

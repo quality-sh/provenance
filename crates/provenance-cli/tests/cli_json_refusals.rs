@@ -7,9 +7,7 @@ use predicates::prelude::*;
 use provenance_macros::verifies;
 use serde_json::Value;
 
-mod support {
-    pub mod review_paths;
-}
+use crate::support;
 use support::review_paths::{create_requirement, json_output, provenance};
 
 const STALE: &str = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
