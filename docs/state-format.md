@@ -90,9 +90,12 @@ the deleted rows. The store refuses any canonical record that still has a
 `retired` field. The error names record-deletion migration 026.
 
 Requirement review records live in
-`scopes/<scope>/requirements/review.jsonl`. When an applied reconciliation
-restates a Requirement's `statement`, one row per affected Rule records the
-Requirement, the field, both statements, and when the change landed. A review
+`scopes/<scope>/requirements/review.jsonl`. When a Requirement update, an
+applied reconciliation or a scope import restates a Requirement's `statement`,
+one row per affected Rule records the Requirement, the field, both statements,
+and when the change landed. For a scope import, the affected Rules are the Rules
+that cite the Requirement before or after the import. A scope export file does
+not carry these rows, so `import` and `export` refuse a scope that has one. A review
 is identified by that exact restatement, so re-applying the same change never
 reopens a cleared review. A verification run for the Rule recorded after the
 change sets `cleared_at` and `cleared_by_run` while keeping the reason; nothing

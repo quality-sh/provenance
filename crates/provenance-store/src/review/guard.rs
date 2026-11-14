@@ -1,11 +1,8 @@
-//! Review state that import and export cannot carry yet.
+//! Review state that a scope import and a scope export cannot carry.
 
 use crate::state_store::StateStore;
 use provenance_core::{ProposalType, ScopeId};
 use provenance_macros::rule;
-
-/// The refusal for review submissions, Discussions, withdrawals and the review folder.
-const REVIEW_STATE: &str = "review-bearing scopes require lossless import/export support";
 
 /// One kind of stored review state that a scope export file cannot carry, in the order that
 /// the guard checks it.
@@ -43,10 +40,14 @@ impl UnportableState {
         })
     }
 
-    fn refusal(self, scope: &ScopeId) -> String {
+    fn refusal(self, scope: &ScopeId) -> anyhow::Error {
         match self {
-            Self::ReviewFolder | Self::ReviewRecords => REVIEW_STATE.to_owned(),
-            Self::RequirementReviews => format!(
+            Self::ReviewFolder | Self::ReviewRecords => crate::refusal::refuse!(
+                InvalidUpdate,
+                "review-bearing scopes require lossless import/export support"
+            ),
+            Self::RequirementReviews => crate::refusal::refuse!(
+                InvalidUpdate,
                 "scope `{}` has Requirement review records, which an import or an export \
                  cannot carry; read and change the records of this scope through the API",
                 scope.as_str()
@@ -62,12 +63,9 @@ impl StateStore {
     pub fn ensure_review_portable(&self, scope: &ScopeId) -> anyhow::Result<()> {
         self.with_repository_publication(|held| {
             for state in UnportableState::ALL {
-                crate::write_error::ensure!(
-                    InvalidUpdate,
-                    !state.is_in(held, scope)?,
-                    "{}",
-                    state.refusal(scope)
-                );
+                if state.is_in(held, scope)? {
+                    return Err(state.refusal(scope));
+                }
             }
             Ok(())
         })
