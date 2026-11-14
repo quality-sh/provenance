@@ -46,9 +46,9 @@ pub fn commit(repo: &Path, message: &str) {
     git_ok(repo, &["commit", "-m", message]);
 }
 
-/// A repository with one scope where Git merges each state file with the
-/// JSONL merge driver of the built binary.
-pub fn repository() -> tempfile::TempDir {
+/// A Git repository where Git merges each state file with the JSONL merge
+/// driver of the built binary.
+pub fn driver_repository() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path();
     git_ok(repo, &["init", "--initial-branch", "main"]);
@@ -71,7 +71,15 @@ pub fn repository() -> tempfile::TempDir {
         ".provenance/state/**/*.jsonl merge=provenance-jsonl\n",
     )
     .unwrap();
-    Command::new(binary)
+    dir
+}
+
+/// A repository with one scope where Git merges each state file with the
+/// JSONL merge driver of the built binary.
+pub fn repository() -> tempfile::TempDir {
+    let dir = driver_repository();
+    let repo = dir.path();
+    Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
         .args([
             "init",
             "--path",
