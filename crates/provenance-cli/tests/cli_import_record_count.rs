@@ -5,9 +5,10 @@ use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::path::Path;
 
-/// A scope export with one record of each graph type and one verification binding.
+/// The number of records in the document.
 const RECORDS: usize = 4;
 
+/// A scope export with a Source, a Requirement, a Rule and a verification binding.
 fn document() -> Value {
     json!({
         "scope": "default",
@@ -73,8 +74,12 @@ fn import_json_output_counts_each_record_of_the_document() {
 
     for (flags, dry_run) in [(&["--dry-run"][..], true), (&[][..], false)] {
         let flags = [flags, &["--format", "json"][..]].concat();
-        let output: Value = serde_json::from_str(&import(&repo, &input, &flags)).unwrap();
-        assert_eq!(output, json!({"status": "ok", "dry_run": dry_run, "records": RECORDS}));
+        let stdout = import(&repo, &input, &flags);
+        let output: Value = serde_json::from_str(&stdout).unwrap();
+        assert_eq!(
+            output,
+            json!({"status": "ok", "dry_run": dry_run, "records": RECORDS})
+        );
     }
 }
 
@@ -83,7 +88,13 @@ fn repository_with_document(dir: &Path) -> (std::path::PathBuf, std::path::PathB
     let repo = dir.join("repo");
     Command::cargo_bin("provenance")
         .unwrap()
-        .args(["init", "--path", repo.to_str().unwrap(), "--scope", "default"])
+        .args([
+            "init",
+            "--path",
+            repo.to_str().unwrap(),
+            "--scope",
+            "default",
+        ])
         .assert()
         .success();
     let input = dir.join("scope.json");
