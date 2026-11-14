@@ -248,11 +248,12 @@ mod tests {
                 |staged| {
                     let scope = ScopeId::new("default")?;
                     staged.publish_shards(
-                        [provenance_core::NodeType::Topic, provenance_core::NodeType::Question]
-                            .map(|kind| {
-                                (crate::shards::path_for(&layout, &scope, kind), Vec::new())
-                            })
-                            .into(),
+                        [
+                            provenance_core::NodeType::Topic,
+                            provenance_core::NodeType::Question,
+                        ]
+                        .map(|kind| (crate::shards::path_for(&layout, &scope, kind), Vec::new()))
+                        .into(),
                     )
                 },
             )

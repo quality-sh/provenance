@@ -8,7 +8,12 @@ use provenance_macros::verifies;
 fn stage_two_new_shards(staged: &crate::state_store::StateStore) -> anyhow::Result<()> {
     staged.publish_shards(
         [NodeType::Topic, NodeType::Question]
-            .map(|kind| (crate::shards::path_for(&staged.layout, &scope(), kind), Vec::new()))
+            .map(|kind| {
+                (
+                    crate::shards::path_for(&staged.layout, &scope(), kind),
+                    Vec::new(),
+                )
+            })
             .into(),
     )
 }
