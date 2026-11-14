@@ -143,6 +143,7 @@ impl SectionLock for MemorySectionLock {
         let (held, released) = &*self.held;
         let held = held.lock().unwrap_or_else(PoisonError::into_inner);
         if self.refuses && *held {
+            drop(held);
             return Err(crate::refusal::fault!(
                 "the section is held, and this section lock refuses instead of waiting"
             ));

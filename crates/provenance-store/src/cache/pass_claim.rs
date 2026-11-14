@@ -18,11 +18,11 @@ pub struct CatchUpRunning;
 /// Whether a catch-up pass of one repository runs. Each clone of the
 /// repository shares it.
 #[derive(Debug, Default)]
-pub(crate) struct PassSlot(AtomicBool);
+pub struct PassSlot(AtomicBool);
 
 impl PassSlot {
     /// The claim of the one pass, or the refusal when another pass holds it.
-    pub(crate) fn claim(self: &Arc<Self>) -> Result<PassClaim, CatchUpRunning> {
+    pub fn claim(self: &Arc<Self>) -> Result<PassClaim, CatchUpRunning> {
         if self.0.swap(true, Ordering::AcqRel) {
             return Err(CatchUpRunning);
         }
@@ -32,7 +32,7 @@ impl PassSlot {
 
 /// The claim of the running pass. Dropping it frees the slot.
 #[derive(Debug)]
-pub(crate) struct PassClaim(Arc<PassSlot>);
+pub struct PassClaim(Arc<PassSlot>);
 
 impl Drop for PassClaim {
     fn drop(&mut self) {
