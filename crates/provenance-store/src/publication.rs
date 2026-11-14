@@ -20,13 +20,12 @@ mod staged;
 mod write_permission;
 #[cfg(feature = "host")]
 pub use crate::storage::local::durability::{sync_directory, sync_tree};
-#[cfg(feature = "host")]
-pub use crate::storage::local::{
-    clear_publication_marker, recover_pending_publication, write_publication_marker,
-    PublicationPhase,
-};
 #[cfg(all(test, unix, feature = "host"))]
-use crate::storage::local::{validate_missing_transaction_dir, validated_transaction_dir};
+use crate::storage::local::{
+    contained_missing_transaction, validated_transaction_dir, TransactionKind,
+};
+#[cfg(feature = "host")]
+pub use crate::storage::local::{write_publication_marker, PublicationPhase};
 #[cfg(feature = "host")]
 pub use guard::publication_guard;
 pub(crate) use guard::SectionHandle;

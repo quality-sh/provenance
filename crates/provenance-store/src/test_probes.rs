@@ -148,3 +148,24 @@ pub fn disarm(label: &str) {
 pub fn crash_at(label: &'static str) {
     arm(label, move || anyhow::bail!("injected crash at {label}"));
 }
+
+/// Arms `label` to end the process, with no unwind as a kill does, at its
+/// first write of a byte at or past `limit` in a file.
+///
+/// The probe sets the file size limit to `limit`, so the system sends
+/// `SIGXFSZ` at that byte. The probe also sets the core file size limit to
+/// zero. Linux sends the signal to the thread that writes, so the write stops
+/// at that byte. macOS sends it to the process, and the write can continue to
+/// its cleanup before the stop, so this probe is for Linux only.
+#[cfg(all(test, target_os = "linux", feature = "host"))]
+pub fn stop_at_file_size(label: &'static str, limit: u64) {
+    arm(label, move || {
+        use rustix::process::{getrlimit, setrlimit, Resource};
+        for (resource, value) in [(Resource::Core, 0), (Resource::Fsize, limit)] {
+            let mut current = getrlimit(resource);
+            current.current = Some(value);
+            setrlimit(resource, current)?;
+        }
+        Ok(())
+    });
+}

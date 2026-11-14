@@ -1,62 +1,78 @@
 use super::{
     source_edit::{
-        finish, write_marker, PreparedSourceRecord, SourceEditMarker, SourceEditPhase,
-        SourceEditRecoveryFailure,
+        backup, complete_install, write_source_edit_marker, PreparedSourceRecord, SourceEditMarker,
+        SourceEditPhase, SourceEditRecoveryFailure, PREPARED_SOURCE_RECORD, REPLACEMENT,
     },
     sync_directory,
 };
 use crate::{
     layout::ProvenanceLayout,
     operations::files::{
-        validate_recovery_artifact_leaf, HeldRepositoryFile, RepositoryFileBackup,
-        RepositoryFileRefusal, RepositoryFiles,
+        validate_recovery_artifact_leaf, HeldRepositoryFile, RepositoryFileRefusal, RepositoryFiles,
+    },
+    storage::local::{
+        contained_transaction, end_marked_write, read_marker, removal_failure, remove_leftovers,
+        remove_unpublished, RemovalStep, TransactionKind,
     },
 };
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
 use sha2::{Digest as _, Sha256};
 
+/// Completes the source edit that the marker names, and then removes the
+/// data of each source edit that stopped before its marker, with the
+/// working-tree file that the record of its transaction names.
+///
+/// The caller holds the section lock: with no lock, the removal can remove
+/// the transaction of a live write.
 pub fn recover_pending_source_edit(layout: &ProvenanceLayout) -> anyhow::Result<()> {
-    let marker_path = layout.source_edit_marker_path();
-    if !marker_path.exists() {
-        return clean_unmarked_transactions(layout);
+    let marker = read_marker::<SourceEditMarker>(layout, TransactionKind::SourceEdit)?;
+    if let Some(mut marker) = marker {
+        validate_marker_leaves(&marker)?;
+        recover_marked_source_edit(layout, &mut marker)?;
     }
-    let mut marker: SourceEditMarker = serde_json::from_slice(&std::fs::read(&marker_path)?)?;
-    validate_marker_leaves(&marker)?;
-    recover_marked_source_edit(layout, &marker_path, &mut marker)
+    remove_leftovers(layout, TransactionKind::SourceEdit, |transaction| {
+        remove_unpublished_source_edit(layout, transaction)
+    })
 }
 
+/// Removes a source edit that did not publish: the prepared file that the
+/// record of its transaction names, and then the transaction. The section
+/// entry and the error path of the live write use it, so the record stays
+/// until its prepared file is gone.
+pub(super) fn remove_unpublished_source_edit(
+    layout: &ProvenanceLayout,
+    transaction: &Utf8Path,
+) -> anyhow::Result<()> {
+    remove_prepared_file(layout, transaction)?;
+    remove_unpublished(transaction)
+}
+
+/// A marker before `FileInstalled` needs the full transaction. The recovery
+/// writes the `FileInstalled` marker before it removes the transaction, so a
+/// removal that stops or fails leaves a marker that needs no transaction file.
 fn recover_marked_source_edit(
     layout: &ProvenanceLayout,
-    marker_path: &Utf8Path,
     marker: &mut SourceEditMarker,
 ) -> anyhow::Result<()> {
-    if marker.phase == SourceEditPhase::FileInstalled && !marker.transaction_dir.exists() {
-        return finish_without_transaction(layout, marker_path, marker);
+    if marker.phase != SourceEditPhase::FileInstalled {
+        let transaction =
+            contained_transaction(layout, TransactionKind::SourceEdit, &marker.transaction_dir)?;
+        validate_recovery_tree(&transaction)?;
+        let replacement = read_replacement(&transaction, marker.after_digest)?;
+        let held = recover_target(layout, marker)?;
+        let current = require_known_target(layout, &held, marker)?;
+        complete_state(layout, &transaction, marker)?;
+        if current == marker.before_digest {
+            install_replacement(layout, &held, marker, &replacement)?;
+        }
+        complete_install(layout, &held, marker, &replacement)?;
+        crate::test_probes::at("source_edit_file_installed")?;
     }
-    let transaction = validate_transaction(layout, &marker.transaction_dir)?;
-    validate_recovery_tree(&transaction)?;
-    let replacement = read_replacement(&transaction, marker.after_digest)?;
-    let held = recover_target(layout, marker)?;
-    let current = require_known_target(&held, marker)?;
-    complete_state(layout, &transaction, marker)?;
-    complete_file(layout, &held, marker, current, &replacement)?;
-    finish(layout, &transaction)
-}
-
-fn finish_without_transaction(
-    layout: &ProvenanceLayout,
-    marker_path: &Utf8Path,
-    marker: &SourceEditMarker,
-) -> anyhow::Result<()> {
-    validate_missing_transaction(layout, &marker.transaction_dir)?;
-    let current = read_current(layout, marker)?;
-    require_identity(&current, marker, marker.after_digest)?;
-    std::fs::remove_file(marker_path)?;
-    sync_directory(&layout.cache_dir())
+    end_marked_write(layout, TransactionKind::SourceEdit, &marker.transaction_dir)
 }
 
 fn read_replacement(transaction: &Utf8Path, expected: [u8; 32]) -> anyhow::Result<Vec<u8>> {
-    let replacement = read_regular_file(&transaction.join("replacement"))?;
+    let replacement = read_regular_file(&transaction.join(REPLACEMENT))?;
     crate::write_error::ensure!(
         Fault,
         <[u8; 32]>::from(Sha256::digest(&replacement)) == expected,
@@ -79,93 +95,68 @@ fn recover_target(
                 &marker.backup_identity,
                 marker.backup_digest,
             )
-            .map_err(|_| SourceEditRecoveryFailure::ExternalChange)?,
-        Err(_) => return Err(SourceEditRecoveryFailure::ExternalChange.into()),
+            .map_err(|_| external_change(layout, marker))?,
+        Err(_) => return Err(external_change(layout, marker)),
     };
     Ok(held)
 }
 
 fn require_known_target(
+    layout: &ProvenanceLayout,
     held: &HeldRepositoryFile,
     marker: &SourceEditMarker,
 ) -> anyhow::Result<[u8; 32]> {
     let current = held.digest();
-    if current != marker.before_digest && current != marker.after_digest {
-        return Err(SourceEditRecoveryFailure::ExternalChange.into());
+    let expected = if current == marker.before_digest {
+        &marker.target_identity
+    } else {
+        &marker.prepared_identity
+    };
+    let known = current == marker.before_digest || current == marker.after_digest;
+    if !known || held.identity() != expected {
+        return Err(external_change(layout, marker));
     }
-    require_identity(held, marker, current)?;
     Ok(current)
 }
 
-fn complete_file(
-    layout: &ProvenanceLayout,
-    held: &HeldRepositoryFile,
-    marker: &mut SourceEditMarker,
-    current: [u8; 32],
-    replacement: &[u8],
-) -> anyhow::Result<()> {
-    if current == marker.before_digest {
-        return install_replacement(layout, held, marker, replacement);
-    }
-    if let Some(prepared) = held.recover_temp(
-        &marker.prepared_leaf,
-        &marker.prepared_identity,
-        marker.after_digest,
-    )? {
-        drop(prepared);
-    }
-    Ok(())
+/// The error of a target that a person changed while the marker names a
+/// write: it names the target and the marker.
+fn external_change(layout: &ProvenanceLayout, marker: &SourceEditMarker) -> anyhow::Error {
+    let file = layout.root().join(&marker.target);
+    let change = SourceEditRecoveryFailure::ExternalChange { file };
+    removal_failure(
+        RemovalStep::Marked,
+        &layout.source_edit_marker_path(),
+        change,
+    )
 }
 
+/// Installs the replacement with the prepared file that the marker names.
+/// When that file is not the one that the marker records, the recovery
+/// removes it if it is the store's own data, makes it again at the same
+/// name, and records its identity before the swap.
 fn install_replacement(
     layout: &ProvenanceLayout,
     held: &HeldRepositoryFile,
     marker: &mut SourceEditMarker,
     replacement: &[u8],
 ) -> anyhow::Result<()> {
-    let prepared = match held.recover_temp(
-        &marker.prepared_leaf,
-        &marker.prepared_identity,
-        marker.after_digest,
-    )? {
-        Some(prepared) => prepared,
-        None => held.create_temp(replacement)?,
+    let leaf = marker.prepared_leaf.clone();
+    let prepared = match held.recover_temp(&leaf, &marker.prepared_identity, marker.after_digest) {
+        Ok(Some(prepared)) => prepared,
+        Ok(None) | Err(RepositoryFileRefusal::Changed | RepositoryFileRefusal::InvalidUtf8) => {
+            let path = layout.root().join(&marker.target).with_file_name(&leaf);
+            held.remove_own_prepared(&leaf, replacement)
+                .map_err(|error| removal_failure(RemovalStep::PreparedFile, &path, error))?;
+            let prepared = held.create_temp_at(&leaf, replacement)?;
+            marker.prepared_identity = prepared.recovery_identity().clone();
+            write_source_edit_marker(layout, marker)?;
+            prepared
+        }
+        Err(error) => return Err(error.into()),
     };
-    let backup = RepositoryFileBackup::from_recovery(
-        marker.backup_leaf.clone(),
-        marker.backup_identity.clone(),
-        marker.backup_digest,
-    )?;
-    held.compare_and_swap_with_backup(prepared, &backup)?;
-    marker.phase = SourceEditPhase::FileInstalled;
-    write_marker(layout, marker)?;
-    crate::test_probes::at("source_edit_file_installed")?;
+    held.install(prepared, &backup(marker)?)?;
     Ok(())
-}
-
-fn require_identity(
-    current: &HeldRepositoryFile,
-    marker: &SourceEditMarker,
-    digest: [u8; 32],
-) -> anyhow::Result<()> {
-    let expected = if digest == marker.before_digest {
-        &marker.target_identity
-    } else {
-        &marker.prepared_identity
-    };
-    if current.identity() != expected {
-        return Err(SourceEditRecoveryFailure::ExternalChange.into());
-    }
-    Ok(())
-}
-
-fn read_current(
-    layout: &ProvenanceLayout,
-    marker: &SourceEditMarker,
-) -> anyhow::Result<HeldRepositoryFile> {
-    RepositoryFiles::open(layout.root())?
-        .read_bounded(&marker.target, usize::MAX)
-        .map_err(|_| SourceEditRecoveryFailure::ExternalChange.into())
 }
 
 fn validate_marker_leaves(marker: &SourceEditMarker) -> anyhow::Result<()> {
@@ -199,7 +190,7 @@ fn complete_backup_phase(
         crate::test_probes::at("state_after_backup_rename")?;
     }
     marker.phase = SourceEditPhase::BackupCreated;
-    write_marker(layout, marker)?;
+    write_source_edit_marker(layout, marker)?;
     crate::test_probes::at("source_edit_backup_created")
 }
 
@@ -219,7 +210,7 @@ fn complete_install_phase(
         );
     }
     marker.phase = SourceEditPhase::StateInstalled;
-    write_marker(layout, marker)?;
+    write_source_edit_marker(layout, marker)?;
     crate::test_probes::at("source_edit_state_installed")
 }
 
@@ -237,44 +228,46 @@ fn install_staged_state(
     sync_directory(&layout.provenance_dir())
 }
 
-fn clean_unmarked_transactions(layout: &ProvenanceLayout) -> anyhow::Result<()> {
-    for entry in std::fs::read_dir(layout.source_edit_transactions_dir())? {
-        let path = Utf8PathBuf::from_path_buf(entry?.path()).map_err(|path| {
-            crate::refusal::fault!("source-edit transaction is not UTF-8: {}", path.display())
-        })?;
-        let transaction = validate_transaction(layout, &path)?;
-        let record: PreparedSourceRecord = serde_json::from_slice(&read_regular_file(
-            &transaction.join("prepared-source.json"),
-        )?)?;
-        validate_recovery_artifact_leaf(&record.target, &record.prepared_leaf, ".tmp")?;
-        RepositoryFiles::open(layout.root())?.remove_recovery_temp(
+/// Removes the prepared working-tree file that the record of `transaction`
+/// names, when the file is the store's own data. A write records the file
+/// before it makes it, so a transaction with no record has no prepared file.
+/// A write makes the file after the replacement is complete, so with no
+/// replacement, a file with that name is not the store's.
+fn remove_prepared_file(layout: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
+    let record_path = transaction.join(PREPARED_SOURCE_RECORD);
+    let Some(record) = read_if_present(&record_path)? else {
+        return Ok(());
+    };
+    let record: PreparedSourceRecord = serde_json::from_slice(&record)
+        .map_err(|error| removal_failure(RemovalStep::Read, &record_path, error))?;
+    validate_recovery_artifact_leaf(&record.target, &record.prepared_leaf, ".tmp")
+        .map_err(|error| removal_failure(RemovalStep::Read, &record_path, error))?;
+    let replacement = read_if_present(&transaction.join(REPLACEMENT))?;
+    let file = layout
+        .root()
+        .join(&record.target)
+        .with_file_name(&record.prepared_leaf);
+    RepositoryFiles::open(layout.root())?
+        .remove_own_prepared(
             &record.target,
             &record.prepared_leaf,
-            &record.prepared_identity,
-            record.after_digest,
-        )?;
-        std::fs::remove_dir_all(transaction)?;
-    }
-    Ok(())
+            replacement.as_deref(),
+        )
+        .map_err(|error| removal_failure(RemovalStep::PreparedFile, &file, error))
 }
 
-fn validate_transaction(
-    layout: &ProvenanceLayout,
-    transaction: &Utf8Path,
-) -> anyhow::Result<Utf8PathBuf> {
-    let parent = dunce::canonicalize(layout.source_edit_transactions_dir())?;
-    let candidate_parent = transaction
-        .parent()
-        .ok_or_else(|| crate::refusal::fault!("source-edit transaction has no parent"))?;
-    crate::write_error::ensure!(
-        Fault,
-        dunce::canonicalize(candidate_parent)? == parent,
-        "source-edit transaction is outside its transaction directory"
-    );
-    require_real_directory(transaction)?;
-    Utf8PathBuf::from_path_buf(dunce::canonicalize(transaction)?).map_err(|path| {
-        crate::refusal::fault!("source-edit transaction is not UTF-8: {}", path.display())
-    })
+/// The bytes of the regular file at `path`, or `None` when no entry is
+/// there. A failure gives the path.
+fn read_if_present(path: &Utf8Path) -> anyhow::Result<Option<Vec<u8>>> {
+    let read = || match std::fs::symlink_metadata(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
+        Ok(metadata) if !metadata.is_file() => {
+            Err(std::io::Error::other("the entry is not a regular file"))
+        }
+        Ok(_) => std::fs::read(path).map(Some),
+    };
+    read().map_err(|error| removal_failure(RemovalStep::Read, path, error))
 }
 
 fn validate_recovery_tree(transaction: &Utf8Path) -> anyhow::Result<()> {
@@ -320,26 +313,4 @@ fn read_regular_file(path: &Utf8Path) -> anyhow::Result<Vec<u8>> {
         "source-edit recovery path is not a real file: {path}"
     );
     Ok(std::fs::read(path)?)
-}
-
-fn validate_missing_transaction(
-    layout: &ProvenanceLayout,
-    transaction: &Utf8Path,
-) -> anyhow::Result<()> {
-    let parent = dunce::canonicalize(layout.source_edit_transactions_dir())?;
-    let candidate_parent = transaction
-        .parent()
-        .ok_or_else(|| crate::refusal::fault!("source-edit transaction has no parent"))?;
-    crate::write_error::ensure!(
-        Fault,
-        dunce::canonicalize(candidate_parent)? == parent,
-        "source-edit transaction is outside its transaction directory"
-    );
-    match std::fs::symlink_metadata(transaction) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error.into()),
-        Ok(_) => Err(crate::refusal::fault!(
-            "source-edit transaction still exists"
-        )),
-    }
 }

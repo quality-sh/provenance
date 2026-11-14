@@ -1,9 +1,11 @@
-use super::durability::{sync_directory, write_synced_file};
-use super::section::canonical_utf8;
+use super::durability::sync_directory;
+use super::transactions::{
+    contained_transaction, end_marked_write, read_marker, remove_leftovers, remove_unpublished,
+    write_marker, TransactionKind,
+};
 use crate::layout::ProvenanceLayout;
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
-use provenance_macros::rule;
 use serde::Serialize;
 
 #[derive(Clone, Copy, Debug, serde::Deserialize, Serialize)]
@@ -31,193 +33,54 @@ pub fn write_publication_marker(
         transaction_dir,
         phase,
     };
-    write_synced_file(
-        &layout.publication_marker_path(),
+    write_marker(
+        layout,
+        TransactionKind::Import,
         &serde_json::to_vec(&marker)?,
     )
 }
 
-pub fn clear_publication_marker(layout: &ProvenanceLayout) -> anyhow::Result<()> {
-    let path = layout.publication_marker_path();
-    if path.exists() {
-        std::fs::remove_file(path)?;
-        sync_directory(&layout.cache_dir())?;
+/// Completes or rolls back the publication that the marker names, and then
+/// removes the data of each import write that stopped before its marker.
+///
+/// The caller holds the section lock: with no lock, the removal can remove
+/// the transaction of a live write.
+pub(super) fn recover_pending_publication(layout: &ProvenanceLayout) -> anyhow::Result<()> {
+    if let Some(marker) = read_marker(layout, TransactionKind::Import)? {
+        recover_marked_publication(layout, &marker)?;
     }
-    Ok(())
+    remove_leftovers(layout, TransactionKind::Import, remove_unpublished)
 }
 
-pub fn recover_pending_publication(layout: &ProvenanceLayout) -> anyhow::Result<()> {
-    let marker_path = layout.publication_marker_path();
-    if !marker_path.exists() {
-        return Ok(());
-    }
-    let marker: PublicationMarker = serde_json::from_str(&std::fs::read_to_string(&marker_path)?)?;
-    if matches!(marker.phase, PublicationPhase::Published) && !marker.transaction_dir.exists() {
-        validate_missing_transaction_dir(layout, &marker.transaction_dir)?;
-        return clear_publication_marker(layout);
-    }
-    let transaction_dir = validated_transaction_dir(layout, &marker.transaction_dir)?;
-    let backup = transaction_dir.join("backup-state");
-    if !layout.state_dir().exists() {
-        crate::write_error::ensure!(
-            Fault,
-            backup.exists(),
-            "publication recovery found neither live state nor backup state"
-        );
-        std::fs::rename(&backup, layout.state_dir())?;
-        sync_directory(&layout.provenance_dir())?;
-    }
-    if transaction_dir.exists() {
-        std::fs::remove_dir_all(&transaction_dir)?;
-    }
-    clear_publication_marker(layout)
-}
-
-const OUTSIDE_REPOSITORY_CACHE: &str =
-    "publication marker transaction is outside the repository cache";
-const TRANSACTION_NOT_A_DIRECTORY: &str = "publication marker transaction is not a directory";
-const TRANSACTION_HAS_SYMLINK: &str =
-    "publication marker transaction path contains a symlink component";
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum RecoveryUse {
-    Touched,
-    AlreadyGone,
-}
-
-/// Publication recovery touches only the selected transaction directory inside the cache.
-#[rule("rule_recovery_stays_in_cache")]
-fn recovery_dir_inside_cache(
-    canonical_container: &Utf8Path,
-    written_container: &Utf8Path,
-    candidate: &Utf8Path,
-    recovery_use: RecoveryUse,
-) -> anyhow::Result<Utf8PathBuf> {
-    ensure_written_path_has_no_symlinks(
-        canonical_container,
-        written_container,
-        candidate,
-        recovery_use,
-    )?;
-    let parent = candidate
-        .parent()
-        .ok_or_else(|| crate::refusal::fault!("publication marker transaction has no parent"))?;
-    let canonical_parent = dunce::canonicalize(parent)?;
-    crate::write_error::ensure!(
-        Fault,
-        canonical_parent == canonical_container.as_std_path(),
-        "{OUTSIDE_REPOSITORY_CACHE}"
-    );
-    let name = candidate
-        .file_name()
-        .ok_or_else(|| crate::refusal::fault!("{OUTSIDE_REPOSITORY_CACHE}"))?;
-    let contained = canonical_container.join(name);
-    if recovery_use == RecoveryUse::Touched {
-        let resolved = canonical_utf8(candidate, "import transaction path")?;
-        crate::write_error::ensure!(Fault, resolved == contained, "{OUTSIDE_REPOSITORY_CACHE}");
-        crate::write_error::ensure!(
-            Fault,
-            std::fs::symlink_metadata(&resolved)?.is_dir(),
-            "{TRANSACTION_NOT_A_DIRECTORY}"
-        );
-    }
-    Ok(contained)
-}
-
-fn ensure_written_path_has_no_symlinks(
-    canonical_container: &Utf8Path,
-    written_container: &Utf8Path,
-    candidate: &Utf8Path,
-    recovery_use: RecoveryUse,
+/// Puts the backup state in place when the live state is gone, and then ends
+/// the write that the marker names.
+fn recover_marked_publication(
+    layout: &ProvenanceLayout,
+    marker: &PublicationMarker,
 ) -> anyhow::Result<()> {
-    let (written_container, relative) = candidate
-        .strip_prefix(written_container)
-        .map(|relative| (written_container, relative))
-        .ok()
-        .or_else(|| {
-            candidate
-                .strip_prefix(canonical_container)
-                .map(|relative| (canonical_container, relative))
-                .ok()
-        })
-        .or_else(|| {
-            candidate
-                .ancestors()
-                .find(|ancestor| {
-                    dunce::canonicalize(ancestor)
-                        .is_ok_and(|resolved| resolved == canonical_container.as_std_path())
-                })
-                .and_then(|ancestor| {
-                    candidate
-                        .strip_prefix(ancestor)
-                        .map(|relative| (ancestor, relative))
-                        .ok()
-                })
-        })
-        .ok_or_else(|| crate::refusal::fault!("{OUTSIDE_REPOSITORY_CACHE}"))?;
-    let mut written = written_container.to_path_buf();
-    let component_count = relative.components().count();
-    for (index, component) in relative.components().enumerate() {
-        written.push(component.as_str());
-        if recovery_use == RecoveryUse::AlreadyGone && index + 1 == component_count {
-            match std::fs::symlink_metadata(&written) {
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
-                Err(error) => return Err(error.into()),
-                Ok(metadata) => {
-                    crate::write_error::ensure!(
-                        Fault,
-                        !metadata.file_type().is_symlink(),
-                        "{TRANSACTION_HAS_SYMLINK}"
-                    );
-                    continue;
-                }
-            }
+    let published = matches!(marker.phase, PublicationPhase::Published);
+    if !published || marker.transaction_dir.exists() {
+        let transaction = validated_transaction_dir(layout, &marker.transaction_dir)?;
+        let backup = transaction.join("backup-state");
+        if !layout.state_dir().exists() {
+            crate::write_error::ensure!(
+                Fault,
+                backup.exists(),
+                "publication recovery found neither live state nor backup state"
+            );
+            std::fs::rename(&backup, layout.state_dir())?;
+            sync_directory(&layout.provenance_dir())?;
         }
-        let metadata = std::fs::symlink_metadata(&written)?;
-        crate::write_error::ensure!(
-            Fault,
-            !metadata.file_type().is_symlink(),
-            "{TRANSACTION_HAS_SYMLINK}"
-        );
     }
-    Ok(())
+    end_marked_write(layout, TransactionKind::Import, &marker.transaction_dir)
 }
 
+/// The resolved path of the import transaction at `transaction_dir`.
 pub fn validated_transaction_dir(
     layout: &ProvenanceLayout,
     transaction_dir: &Utf8Path,
 ) -> anyhow::Result<Utf8PathBuf> {
-    let canonical_transactions = canonical_transactions_dir(layout)?;
-    recovery_dir_inside_cache(
-        &canonical_transactions,
-        &layout.import_transactions_dir(),
-        transaction_dir,
-        RecoveryUse::Touched,
-    )
-}
-
-pub fn validate_missing_transaction_dir(
-    layout: &ProvenanceLayout,
-    transaction_dir: &Utf8Path,
-) -> anyhow::Result<()> {
-    let canonical_transactions = canonical_transactions_dir(layout)?;
-    recovery_dir_inside_cache(
-        &canonical_transactions,
-        &layout.import_transactions_dir(),
-        transaction_dir,
-        RecoveryUse::AlreadyGone,
-    )
-    .map(|_| ())
-}
-
-pub fn canonical_transactions_dir(layout: &ProvenanceLayout) -> anyhow::Result<Utf8PathBuf> {
-    let canonical_cache = canonical_utf8(&layout.cache_dir(), "repository cache path")?;
-    recovery_dir_inside_cache(
-        &canonical_cache,
-        &layout.cache_dir(),
-        &layout.import_transactions_dir(),
-        RecoveryUse::Touched,
-    )
+    contained_transaction(layout, TransactionKind::Import, transaction_dir)
 }
 
 pub fn create_real_directory(path: &Utf8Path) -> anyhow::Result<()> {

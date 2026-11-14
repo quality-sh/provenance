@@ -1,4 +1,5 @@
 use super::super::*;
+use super::{prepare, swap};
 use camino::Utf8Path;
 use std::io::{Seek as _, Write as _};
 
@@ -43,9 +44,9 @@ fn replacing_the_held_parent_after_read_refuses_without_touching_the_new_parent(
     std::fs::rename(path.join("dir"), path.join("held-dir")).unwrap();
     std::fs::create_dir(path.join("dir")).unwrap();
     std::fs::write(path.join("dir/source.txt"), b"outside").unwrap();
-    let prepared = held.create_temp(b"replacement").unwrap();
+    let prepared = prepare(&held, b"replacement");
 
-    assert!(held.compare_and_swap(prepared).is_err());
+    assert!(swap(&held, prepared).is_err());
     assert_eq!(
         std::fs::read(path.join("dir/source.txt")).unwrap(),
         b"outside"
@@ -68,9 +69,9 @@ fn replacing_the_root_after_read_refuses_without_touching_the_new_root() {
     std::fs::rename(&root, outer_path.join("held-root")).unwrap();
     std::fs::create_dir(&root).unwrap();
     std::fs::write(root.join("source.txt"), b"outside").unwrap();
-    let prepared = held.create_temp(b"replacement").unwrap();
+    let prepared = prepare(&held, b"replacement");
 
-    assert!(held.compare_and_swap(prepared).is_err());
+    assert!(swap(&held, prepared).is_err());
     assert_eq!(std::fs::read(root.join("source.txt")).unwrap(), b"outside");
     assert_eq!(
         std::fs::read(outer_path.join("held-root/source.txt")).unwrap(),
@@ -87,7 +88,7 @@ fn a_write_to_the_displaced_inode_is_kept_in_a_named_backup() {
         .open(path.join("source.txt"))
         .unwrap();
     let held = files.read_bounded(Utf8Path::new("source.txt"), 20).unwrap();
-    let prepared = held.create_temp(b"replacement").unwrap();
+    let prepared = prepare(&held, b"replacement");
     crate::test_probes::arm("repository_file_after_backup_check", move || {
         original.rewind()?;
         original.write_all(b"changed!")?;
@@ -96,14 +97,13 @@ fn a_write_to_the_displaced_inode_is_kept_in_a_named_backup() {
         Ok(())
     });
 
-    let outcome = held.compare_and_swap(prepared).unwrap();
+    let backup = swap(&held, prepared).unwrap();
     crate::test_probes::disarm("repository_file_after_backup_check");
 
-    let RepositoryFileInstall::InstalledBackupKept { backup, reason } = outcome else {
-        panic!("the changed original must remain as a backup");
-    };
-    assert_eq!(reason, BackupRetentionReason::OriginalChanged);
-    assert_eq!(std::fs::read(path.join(backup)).unwrap(), b"changed!");
+    assert_eq!(
+        std::fs::read(path.join(backup.leaf())).unwrap(),
+        b"changed!"
+    );
     assert_eq!(
         std::fs::read(path.join("source.txt")).unwrap(),
         b"replacement"

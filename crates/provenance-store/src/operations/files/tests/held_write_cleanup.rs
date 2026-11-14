@@ -33,7 +33,7 @@ fn clone_failure_cleans_up_the_created_temporary_file() {
         anyhow::bail!("clone failed")
     });
 
-    let result = held.create_temp(b"replacement");
+    let result = held.create_temp_at(&held.new_temp_leaf(), b"replacement");
     crate::test_probes::disarm("repository_file_clone_parent");
 
     assert!(matches!(result, Err(RepositoryFileRefusal::Write(_))));
@@ -52,35 +52,11 @@ fn temporary_unlink_failure_leaves_a_documented_artifact() {
         anyhow::bail!("unlink failed")
     });
 
-    let result = held.create_temp(b"replacement");
+    let result = held.create_temp_at(&held.new_temp_leaf(), b"replacement");
     crate::test_probes::disarm("repository_file_clone_parent");
     crate::test_probes::disarm("repository_file_unlink_temp");
 
     assert!(matches!(result, Err(RepositoryFileRefusal::Write(_))));
     assert_eq!(artifacts(&path, ".tmp").len(), 1);
     assert_eq!(std::fs::read(path.join("source.txt")).unwrap(), b"original");
-}
-
-#[test]
-fn backup_unlink_failure_reports_an_installed_replacement_and_named_backup() {
-    let (_temporary, path, files) = repository();
-    std::fs::write(path.join("source.txt"), b"original").unwrap();
-    let held = files.read_bounded(Utf8Path::new("source.txt"), 20).unwrap();
-    let prepared = held.create_temp(b"replacement").unwrap();
-    crate::test_probes::arm("repository_file_unlink_backup", || {
-        anyhow::bail!("unlink failed")
-    });
-
-    let outcome = held.compare_and_swap(prepared).unwrap();
-    crate::test_probes::disarm("repository_file_unlink_backup");
-
-    let RepositoryFileInstall::InstalledBackupKept { backup, reason } = outcome else {
-        panic!("the failed cleanup must report its backup");
-    };
-    assert_eq!(reason, BackupRetentionReason::RemovalFailed);
-    assert_eq!(std::fs::read(path.join(backup)).unwrap(), b"original");
-    assert_eq!(
-        std::fs::read(path.join("source.txt")).unwrap(),
-        b"replacement"
-    );
 }

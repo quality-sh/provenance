@@ -2,9 +2,8 @@
 //! `.provenance/cache/locks`, the checks of the directories it lives in, and
 //! the recovery of an interrupted publication before the section runs.
 
-use super::recovery::{
-    canonical_transactions_dir, create_real_directory, recover_pending_publication,
-};
+use super::recovery::{create_real_directory, recover_pending_publication};
+use super::transactions::{contained_directory, TransactionKind};
 use crate::layout::ProvenanceLayout;
 use crate::publication::recover_pending_source_edit;
 use crate::storage::SectionLock;
@@ -18,8 +17,9 @@ use std::fs::{File, OpenOptions};
 /// An acquire refuses a `.provenance` directory that resolves outside the
 /// repository and a symbolic link in place of a cache directory, takes the
 /// exclusive lock on the publication lock file, and then completes or rolls
-/// back a publication that a crash interrupted. Other processes take the
-/// same lock file, so the section also excludes them.
+/// back a publication that a crash interrupted and removes the data of each
+/// write that stopped before its marker. Other processes take the same lock
+/// file, so the section also excludes them.
 #[derive(Clone, Debug)]
 pub struct LocalSectionLock {
     layout: ProvenanceLayout,
@@ -120,6 +120,6 @@ pub fn canonical_utf8(path: &Utf8Path, description: &str) -> anyhow::Result<Utf8
 
 fn prepare_transaction_dirs(layout: &ProvenanceLayout) -> anyhow::Result<()> {
     create_real_directory(&layout.import_transactions_dir())?;
-    canonical_transactions_dir(layout)?;
+    contained_directory(layout, TransactionKind::Import)?;
     create_real_directory(&layout.source_edit_transactions_dir())
 }

@@ -1,4 +1,5 @@
 use super::super::*;
+use super::{prepare, swap};
 use camino::Utf8Path;
 use sha2::Digest as _;
 
@@ -24,8 +25,8 @@ fn bounded_read_and_replace_preserve_exact_utf8_bytes() {
     let expected_digest: [u8; 32] = sha2::Sha256::digest(original).into();
     assert_eq!(held.digest(), expected_digest);
 
-    let prepared = held.create_temp(replacement).unwrap();
-    held.compare_and_swap(prepared).unwrap();
+    let prepared = prepare(&held, replacement);
+    swap(&held, prepared).unwrap();
     assert_eq!(std::fs::read(path.join("source.txt")).unwrap(), replacement);
 }
 
@@ -52,17 +53,17 @@ fn bounded_read_refuses_invalid_utf8() {
 }
 
 #[test]
-fn compare_and_swap_refuses_changed_bytes_and_preserves_them() {
+fn install_refuses_changed_bytes_and_preserves_them() {
     let (_temporary, path, files) = repository();
     std::fs::write(path.join("source.txt"), b"original").unwrap();
     let held = files
         .read_bounded(Utf8Path::new("source.txt"), 100)
         .unwrap();
-    let prepared = held.create_temp(b"replacement").unwrap();
+    let prepared = prepare(&held, b"replacement");
     std::fs::write(path.join("source.txt"), b"third party").unwrap();
 
     assert!(matches!(
-        held.compare_and_swap(prepared),
+        swap(&held, prepared),
         Err(RepositoryFileRefusal::Changed)
     ));
     assert_eq!(
@@ -72,18 +73,18 @@ fn compare_and_swap_refuses_changed_bytes_and_preserves_them() {
 }
 
 #[test]
-fn compare_and_swap_refuses_a_new_identity_with_the_same_bytes() {
+fn install_refuses_a_new_identity_with_the_same_bytes() {
     let (_temporary, path, files) = repository();
     std::fs::write(path.join("source.txt"), b"same bytes").unwrap();
     let held = files
         .read_bounded(Utf8Path::new("source.txt"), 100)
         .unwrap();
-    let prepared = held.create_temp(b"replacement").unwrap();
+    let prepared = prepare(&held, b"replacement");
     std::fs::rename(path.join("source.txt"), path.join("old.txt")).unwrap();
     std::fs::write(path.join("source.txt"), b"same bytes").unwrap();
 
     assert!(matches!(
-        held.compare_and_swap(prepared),
+        swap(&held, prepared),
         Err(RepositoryFileRefusal::Changed)
     ));
     assert_eq!(
@@ -143,7 +144,7 @@ fn held_write_refuses_paths_outside_the_root() {
 
 #[cfg(unix)]
 #[test]
-fn compare_and_swap_keeps_the_original_permissions() {
+fn install_keeps_the_original_permissions() {
     use std::os::unix::fs::{MetadataExt as _, PermissionsExt as _};
     let (_temporary, path, files) = repository();
     std::fs::write(path.join("source.txt"), b"original").unwrap();
@@ -157,9 +158,9 @@ fn compare_and_swap_keeps_the_original_permissions() {
         .read_bounded(Utf8Path::new("source.txt"), 100)
         .unwrap();
     let identity = held.identity().clone();
-    let prepared = held.create_temp(b"replacement").unwrap();
+    let prepared = prepare(&held, b"replacement");
 
-    held.compare_and_swap(prepared).unwrap();
+    swap(&held, prepared).unwrap();
 
     let after = std::fs::metadata(path.join("source.txt")).unwrap();
     assert_eq!(after.mode() & 0o7777, before.mode() & 0o7777);
@@ -176,7 +177,7 @@ fn compare_and_swap_keeps_the_original_permissions() {
 
 #[cfg(windows)]
 #[test]
-fn compare_and_swap_keeps_the_read_only_permission() {
+fn install_keeps_the_read_only_permission() {
     let (_temporary, path, files) = repository();
     std::fs::write(path.join("source.txt"), b"original").unwrap();
     let mut permissions = std::fs::metadata(path.join("source.txt"))
@@ -187,9 +188,9 @@ fn compare_and_swap_keeps_the_read_only_permission() {
     let held = files
         .read_bounded(Utf8Path::new("source.txt"), 100)
         .unwrap();
-    let prepared = held.create_temp(b"replacement").unwrap();
+    let prepared = prepare(&held, b"replacement");
 
-    held.compare_and_swap(prepared).unwrap();
+    swap(&held, prepared).unwrap();
 
     assert!(std::fs::metadata(path.join("source.txt"))
         .unwrap()
@@ -203,7 +204,7 @@ fn compare_and_swap_keeps_the_read_only_permission() {
 
 #[cfg(windows)]
 #[test]
-fn compare_and_swap_copies_a_null_dacl() {
+fn install_copies_a_null_dacl() {
     use std::os::windows::fs::OpenOptionsExt as _;
     use std::os::windows::io::AsRawHandle as _;
     use windows_sys::Win32::Foundation::{LocalFree, ERROR_SUCCESS, HANDLE, HLOCAL};
@@ -238,9 +239,9 @@ fn compare_and_swap_copies_a_null_dacl() {
     let held = files
         .read_bounded(Utf8Path::new("source.txt"), 100)
         .unwrap();
-    let prepared = held.create_temp(b"replacement").unwrap();
+    let prepared = prepare(&held, b"replacement");
 
-    held.compare_and_swap(prepared).unwrap();
+    swap(&held, prepared).unwrap();
 
     let installed = std::fs::OpenOptions::new()
         .access_mode(READ_CONTROL)

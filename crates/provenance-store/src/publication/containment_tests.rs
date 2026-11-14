@@ -220,7 +220,11 @@ fn clearing_a_marker_checks_the_place_the_directory_claimed() {
         for leaf in PLANTINGS {
             let layouts = Layouts::build(transactions, leaf);
             for (shape, candidate) in layouts.candidates("t") {
-                let decision = validate_missing_transaction_dir(&layouts.layout, &candidate);
+                let decision = contained_missing_transaction(
+                    &layouts.layout,
+                    TransactionKind::Import,
+                    &candidate,
+                );
                 assert_eq!(
                     decision.is_ok(),
                     every_step_is_a_real_directory_in_the_cache(&layouts.cache, &candidate, false),
@@ -234,7 +238,7 @@ fn clearing_a_marker_checks_the_place_the_directory_claimed() {
 
 #[test]
 #[verifies("rule_recovery_stays_in_cache", property)]
-fn every_refusal_keeps_the_marker_message() {
+fn every_refusal_states_the_containment_fault() {
     for transactions in PLANTINGS {
         for leaf in PLANTINGS {
             let layouts = Layouts::build(transactions, leaf);
@@ -243,11 +247,21 @@ fn every_refusal_keeps_the_marker_message() {
                     continue;
                 };
                 let message = error.to_string();
+                let directory = layouts.layout.import_transactions_dir();
+                let cache = &layouts.cache;
+                let texts = [
+                    format!(
+                        "transaction {candidate} is outside {}",
+                        cache.join("import-transactions")
+                    ),
+                    format!("transaction {candidate} is not a directory"),
+                    format!("transaction {candidate} contains a symlink component"),
+                    format!("transaction directory {directory} is outside {cache}"),
+                    format!("transaction directory {directory} is not a directory"),
+                    format!("transaction directory {directory} contains a symlink component"),
+                ];
                 assert!(
-                    message.contains("outside the repository cache")
-                        || message.contains("is not a directory")
-                        || message.contains("symlink component")
-                        || error.downcast_ref::<std::io::Error>().is_some(),
+                    texts.contains(&message) || error.downcast_ref::<std::io::Error>().is_some(),
                     "transactions {transactions:?}, leaf {leaf:?}, shape {shape}: {message}"
                 );
             }

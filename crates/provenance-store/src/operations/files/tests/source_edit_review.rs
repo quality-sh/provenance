@@ -82,7 +82,8 @@ fn review_crash_child() {
         "state_after_install_rename" => "state_after_install_rename",
         "repository_file_after_displace" => "repository_file_after_displace",
         "repository_file_after_backup_check" => "repository_file_after_backup_check",
-        "source_edit_transaction_removed" => "source_edit_transaction_removed",
+        "repository_file_unlink_backup" => "repository_file_unlink_backup",
+        "marked_transaction_removed" => "marked_transaction_removed",
         _ => panic!("unknown crash phase"),
     };
     test_probes::arm(phase, || std::process::exit(CRASH_EXIT));
@@ -98,7 +99,8 @@ fn every_physical_transition_recovers_exact_file_and_state_bytes() {
         ("state_after_install_rename", (AFTER, AFTER)),
         ("repository_file_after_displace", (AFTER, AFTER)),
         ("repository_file_after_backup_check", (AFTER, AFTER)),
-        ("source_edit_transaction_removed", (AFTER, AFTER)),
+        ("repository_file_unlink_backup", (AFTER, AFTER)),
+        ("marked_transaction_removed", (AFTER, AFTER)),
     ] {
         let temp = fixture();
         let root_path = canonical_root(&temp);
@@ -122,7 +124,10 @@ fn every_physical_transition_recovers_exact_file_and_state_bytes() {
             !names.iter().any(|name| {
                 std::path::Path::new(name)
                     .extension()
-                    .is_some_and(|extension| extension.eq_ignore_ascii_case("tmp"))
+                    .is_some_and(|extension| {
+                        extension.eq_ignore_ascii_case("tmp")
+                            || extension.eq_ignore_ascii_case("backup")
+                    })
             }),
             "{phase}: {names:?}"
         );
@@ -234,7 +239,7 @@ fn same_before_bytes_with_a_different_identity_are_an_external_change() {
 
     assert!(matches!(
         error.downcast_ref::<SourceEditRecoveryFailure>(),
-        Some(SourceEditRecoveryFailure::ExternalChange)
+        Some(SourceEditRecoveryFailure::ExternalChange { .. })
     ));
     assert_bytes(root, BEFORE, BEFORE);
     assert!(layout.source_edit_marker_path().exists());

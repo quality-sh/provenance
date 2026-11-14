@@ -21,7 +21,17 @@ pub struct ReplaceFailed(#[source] std::io::Error);
 /// `sync <path>` and the I/O error. If a directory sync fails, `path` has the
 /// new bytes, but a power loss can lose them.
 pub fn write_synced_file(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<()> {
-    let (temporary, parent, first_made) = write_temporary(path, bytes)?;
+    write_synced_file_named(path, bytes, &tempfile::Builder::new())
+}
+
+/// Writes `bytes` to the file at `path` as [`write_synced_file`] does, with a
+/// temporary file whose name `temporary` gives.
+pub(in crate::storage::local) fn write_synced_file_named(
+    path: &Utf8Path,
+    bytes: &[u8],
+    temporary: &tempfile::Builder<'_, '_>,
+) -> anyhow::Result<()> {
+    let (temporary, parent, first_made) = write_temporary(path, bytes, temporary)?;
     temporary.as_file().sync_all().map_err(sync_failure(path))?;
     replace_file(temporary, path)?;
     let last = first_made.and_then(Utf8Path::parent).unwrap_or(parent);
@@ -57,17 +67,18 @@ pub(in crate::storage::local) fn write_staged_file(
     path: &Utf8Path,
     bytes: &[u8],
 ) -> anyhow::Result<()> {
-    let (temporary, _, _) = write_temporary(path, bytes)?;
+    let (temporary, _, _) = write_temporary(path, bytes, &tempfile::Builder::new())?;
     replace_file(temporary, path)
 }
 
-/// A temporary file with `bytes` in the directory of `path`, that directory,
-/// and the highest directory that this function made, if it made one. The
-/// function makes the directory of `path` and each directory above it that
-/// does not exist.
+/// A temporary file with `bytes` in the directory of `path`, with the name
+/// that `temporary` gives, that directory, and the highest directory that
+/// this function made, if it made one. The function makes the directory of
+/// `path` and each directory above it that does not exist.
 fn write_temporary<'a>(
     path: &'a Utf8Path,
     bytes: &[u8],
+    temporary: &tempfile::Builder<'_, '_>,
 ) -> anyhow::Result<(tempfile::NamedTempFile, &'a Utf8Path, Option<&'a Utf8Path>)> {
     let parent = parent_of(path)?;
     let mut first_made = None;
@@ -78,7 +89,7 @@ fn write_temporary<'a>(
         first_made = Some(directory);
     }
     std::fs::create_dir_all(parent)?;
-    let mut temporary = tempfile::NamedTempFile::new_in(crate::long_path::extended(parent)?)?;
+    let mut temporary = temporary.tempfile_in(crate::long_path::extended(parent)?)?;
     temporary.write_all(bytes)?;
     Ok((temporary, parent, first_made))
 }
@@ -144,9 +155,19 @@ fn replace_file(temporary: tempfile::NamedTempFile, target: &Utf8Path) -> anyhow
 /// available because the operating system keeps the directory changes.
 pub fn sync_directory(path: &Utf8Path) -> anyhow::Result<()> {
     #[cfg(unix)]
-    std::fs::File::open(path)?.sync_all()?;
+    sync_opened_directory(&std::fs::File::open(path)?)?;
     #[cfg(not(unix))]
     let _ = path;
+    Ok(())
+}
+
+/// Flushes the metadata of the open directory `directory`, as
+/// [`sync_directory`] does: on Windows, the call does nothing.
+pub fn sync_opened_directory(directory: &std::fs::File) -> std::io::Result<()> {
+    #[cfg(unix)]
+    directory.sync_all()?;
+    #[cfg(not(unix))]
+    let _ = directory;
     Ok(())
 }
 

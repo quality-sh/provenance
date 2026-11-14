@@ -2,12 +2,18 @@ use super::*;
 #[cfg(unix)]
 use std::io::Read;
 
+#[cfg(any(unix, windows))]
+#[path = "../../publication/backup_tests.rs"]
+mod backup_tests;
 #[path = "tests/held_write_cleanup.rs"]
 mod held_write_cleanup;
 #[path = "tests/held_write_races.rs"]
 mod held_write_races;
 #[path = "tests/held_writes.rs"]
 mod held_writes;
+#[cfg(any(unix, windows))]
+#[path = "../../publication/prepared_file_tests.rs"]
+mod prepared_file_tests;
 #[path = "tests/prepared_files.rs"]
 mod prepared_files;
 #[cfg(any(unix, windows))]
@@ -16,6 +22,24 @@ mod source_edit_recovery_tests;
 #[cfg(any(unix, windows))]
 #[path = "tests/source_edit_review.rs"]
 mod source_edit_review;
+
+/// A prepared file with `bytes` next to `held`, made as a source edit makes
+/// it.
+fn prepare(held: &HeldRepositoryFile, bytes: &[u8]) -> PreparedRepositoryFile {
+    held.create_temp_at(&held.new_temp_leaf(), bytes).unwrap()
+}
+
+/// Puts `prepared` in place of `held` as a source edit does: the install, and
+/// then the removal of the backup. Gives the backup.
+fn swap(
+    held: &HeldRepositoryFile,
+    prepared: PreparedRepositoryFile,
+) -> Result<RepositoryFileBackup, RepositoryFileRefusal> {
+    let backup = held.recovery_backup();
+    held.install(prepared, &backup)?;
+    held.remove_own_backup(&backup)?;
+    Ok(backup)
+}
 
 #[cfg(unix)]
 fn physical_tempdir() -> tempfile::TempDir {
