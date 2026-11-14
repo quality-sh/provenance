@@ -1,56 +1,16 @@
 //! The deletions that typed-spec apply refuses, decided once for the plan and
 //! the apply.
 
-use provenance_core::{
-    CanonicalArtifactType, NodeType, Question, Requirement, Resolution, Rule, ScopeId, Source,
-    StableId, Topic,
-};
+use provenance_core::{NodeType, StableId};
 use provenance_macros::rule;
 
-use super::view::TypedSpecView;
+use super::cascade::CascadeDeletion;
+use super::view::{node_type, ScopeRecords, TypedSpecView};
 use crate::families::review_families::REVIEW_FAMILIES;
 use crate::state_store::{
     CascadedResource, DeletionRefusal, ReconcileState, ReconciledResource, TypedResourceKind,
 };
 use crate::write_error::WriteFailure;
-
-/// The records that a typed-spec publication keeps, by kind.
-pub(super) struct Survivors<'a> {
-    pub(super) sources: &'a [Source],
-    pub(super) requirements: &'a [Requirement],
-    pub(super) rules: &'a [Rule],
-    pub(super) resolutions: &'a [Resolution],
-    pub(super) topics: &'a [Topic],
-    pub(super) questions: &'a [Question],
-}
-
-impl Survivors<'_> {
-    /// Whether the publication keeps the record, in `scope` when it is given.
-    fn contain(&self, kind: NodeType, scope: Option<&ScopeId>, id: &StableId) -> bool {
-        match kind {
-            NodeType::Source => holds(self.sources, |r| (&r.scope_id, &r.id), scope, id),
-            NodeType::Requirement => holds(self.requirements, |r| (&r.scope_id, &r.id), scope, id),
-            NodeType::Rule => holds(self.rules, |r| (&r.scope_id, &r.id), scope, id),
-            NodeType::Resolution => holds(self.resolutions, |r| (&r.scope_id, &r.id), scope, id),
-            NodeType::Topic => holds(self.topics, |r| (&r.scope_id, &r.id), scope, id),
-            NodeType::Question => holds(self.questions, |r| (&r.scope_id, &r.id), scope, id),
-        }
-    }
-}
-
-fn holds<T>(
-    records: &[T],
-    identity: fn(&T) -> (&ScopeId, &StableId),
-    scope: Option<&ScopeId>,
-    id: &StableId,
-) -> bool {
-    records
-        .iter()
-        .map(identity)
-        .any(|(record_scope, record_id)| {
-            record_id == id && scope.is_none_or(|scope| scope == record_scope)
-        })
-}
 
 /// One deletion that typed-spec apply refuses, with its cause.
 pub(super) struct RefusedDeletion {
@@ -89,9 +49,8 @@ impl RefusedDeletion {
 #[rule("rule_typed_plan_shows_refused_deletions")]
 pub(super) fn refused_deletions(
     view: &TypedSpecView,
-    scope: &ScopeId,
-    survivors: &Survivors<'_>,
-    declared: &[ReconciledResource],
+    survivors: &ScopeRecords<'_>,
+    cascade: &[CascadeDeletion],
 ) -> Vec<RefusedDeletion> {
     let mut refused: Vec<RefusedDeletion> = Vec::new();
     let is_refused = |refused: &[RefusedDeletion], kind, id: &StableId| {
@@ -102,7 +61,7 @@ pub(super) fn refused_deletions(
             continue;
         };
         let (kind, id) = (node_type(artifact.artifact_type), &artifact.artifact_id);
-        if survivors.contain(kind, Some(scope), id) || is_refused(&refused, kind, id) {
+        if survivors.contain(kind, None, id) || is_refused(&refused, kind, id) {
             continue;
         }
         let message = format!(
@@ -110,7 +69,7 @@ pub(super) fn refused_deletions(
             kind.as_str(),
             id.as_str(),
             disposition.id.as_str(),
-            correction(kind, id, declared)
+            correction(kind, id, cascade)
         );
         refused.push(RefusedDeletion {
             kind,
@@ -134,7 +93,7 @@ pub(super) fn refused_deletions(
                 "cannot delete {} {} because it has a review submission; {}",
                 kind.as_str(),
                 id.as_str(),
-                correction(kind, id, declared)
+                correction(kind, id, cascade)
             );
             refused.push(RefusedDeletion {
                 kind,
@@ -147,11 +106,12 @@ pub(super) fn refused_deletions(
 }
 
 /// Gives each refused deletion the state `refused` and its cause, in the
-/// entry of the record. A record that has no entry gets a cascade entry.
+/// entry of the record. Each deletion has an entry: the document or the
+/// cascade deletes the record.
 pub(super) fn report(
     refused: &[RefusedDeletion],
     resources: &mut [ReconciledResource],
-    cascade: &mut Vec<CascadedResource>,
+    cascade: &mut [CascadedResource],
 ) {
     for entry in refused {
         let resource = resources
@@ -168,34 +128,33 @@ pub(super) fn report(
         if let Some(cascaded) = cascaded {
             cascaded.state = ReconcileState::Refused;
             cascaded.refusal = Some(entry.refusal.clone());
-            continue;
         }
-        cascade.push(CascadedResource {
-            kind: entry.kind,
-            id: entry.id.clone(),
-            state: ReconcileState::Refused,
-            changes: Vec::new(),
-            refusal: Some(entry.refusal.clone()),
-        });
     }
 }
 
-/// How the caller keeps the record: a declaration stays in the typed
-/// document, and a record that the cascade deletes keeps its Requirement.
-fn correction(kind: NodeType, id: &StableId, declared: &[ReconciledResource]) -> String {
-    let declaration = declared.iter().any(|resource| {
-        node_kind(resource.kind) == kind
-            && &resource.id == id
-            && resource.state == ReconcileState::Deleted
-    });
-    if declaration {
-        format!("keep the {} in the typed document", kind.as_str())
-    } else {
-        format!(
-            "keep the Requirement that the {} cites in the typed document",
-            kind.as_str()
-        )
-    }
+/// How the caller keeps the record: the typed document keeps the record, or
+/// the deleted Requirements that make the cascade delete it.
+fn correction(kind: NodeType, id: &StableId, cascade: &[CascadeDeletion]) -> String {
+    let cause = cascade
+        .iter()
+        .find(|deletion| deletion.kind == kind && &deletion.id == id);
+    let Some(cause) = cause else {
+        return format!("keep {} {} in the typed document", kind.as_str(), id.as_str());
+    };
+    // A Resolution or a Rule stays when one Requirement that it cites stays.
+    // A Question stays only when its Requirement and the Requirement of its
+    // Topic stay.
+    let joint = match kind {
+        NodeType::Resolution | NodeType::Rule => " or ",
+        _ => " and ",
+    };
+    let requirements = cause
+        .requirements
+        .iter()
+        .map(|requirement| format!("requirement {}", requirement.as_str()))
+        .collect::<Vec<_>>()
+        .join(joint);
+    format!("keep {requirements} in the typed document")
 }
 
 fn record_ids(view: &TypedSpecView, kind: NodeType) -> Vec<&StableId> {
@@ -217,13 +176,5 @@ const fn node_kind(kind: TypedResourceKind) -> NodeType {
     }
 }
 
-const fn node_type(kind: CanonicalArtifactType) -> NodeType {
-    match kind {
-        CanonicalArtifactType::Source => NodeType::Source,
-        CanonicalArtifactType::Requirement => NodeType::Requirement,
-        CanonicalArtifactType::Resolution => NodeType::Resolution,
-        CanonicalArtifactType::Rule => NodeType::Rule,
-        CanonicalArtifactType::Topic => NodeType::Topic,
-        CanonicalArtifactType::Question => NodeType::Question,
-    }
-}
+#[cfg(test)]
+mod tests;

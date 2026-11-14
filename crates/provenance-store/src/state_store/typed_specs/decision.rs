@@ -158,9 +158,8 @@ pub fn decide_typed_spec(
     );
     let refused = refusals::refused_deletions(
         view,
-        scope_id,
         &cascade.survivors(&sources, &requirements, &rules),
-        &deleted_resources,
+        cascade.deletions(),
     );
     ensure_resolutions_exist(&view.resolutions, &requirements, &rules)?;
     ensure_acyclic(&requirements)?;

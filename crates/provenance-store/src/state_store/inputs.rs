@@ -179,7 +179,7 @@ pub enum ReconcileState {
 /// text of the refusal that the apply gives.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(tag = "cause", rename_all = "snake_case")]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum DeletionRefusal {
     /// The record has a review submission, in any state.
     ReviewSubmission { message: String },

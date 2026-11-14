@@ -10,8 +10,7 @@ use super::super::{
     CascadedResource, ReconcileState, ReconciledResource, StateStore, TypedFieldChange,
     TypedResourceKind,
 };
-use super::refusals::Survivors;
-use super::view::TypedSpecView;
+use super::view::{ScopeRecords, TypedSpecView};
 use crate::shards;
 
 #[cfg(test)]
@@ -24,12 +23,22 @@ pub(super) struct Cascade {
     topics: Vec<Topic>,
     questions: Vec<Question>,
     changes: Vec<CascadedResource>,
+    deletions: Vec<CascadeDeletion>,
+}
+
+/// A record that the cascade deletes, with the deleted Requirements that
+/// make the cascade delete it.
+pub(super) struct CascadeDeletion {
+    pub(super) kind: NodeType,
+    pub(super) id: StableId,
+    pub(super) requirements: Vec<StableId>,
 }
 
 struct ShapingRecords {
     topics: Vec<Topic>,
     questions: Vec<Question>,
     changes: Vec<CascadedResource>,
+    deletions: Vec<CascadeDeletion>,
 }
 
 impl Cascade {
@@ -57,11 +66,14 @@ impl Cascade {
         let mut resolutions = view.resolutions.clone();
         let before_resolutions = resolutions.clone();
         let mut resolution_ids = BTreeSet::new();
+        let mut deletions = Vec::new();
         resolutions.retain_mut(|record| {
+            let cited = record.requirement_ids.clone();
             let changed = remove_ids(&mut record.requirement_ids, &requirement_ids);
             let remove = changed && record.requirement_ids.is_empty();
             if remove {
                 resolution_ids.insert(record.id.as_str().to_owned());
+                deletions.push(CascadeDeletion::new(NodeType::Resolution, &record.id, cited));
             }
             !remove
         });
@@ -81,11 +93,13 @@ impl Cascade {
             remove_ids(&mut resolution.supersedes, &resolution_ids);
         }
         rules.retain_mut(|record| {
+            let cited = record.requirement_ids.clone();
             let changed = remove_ids(&mut record.requirement_ids, &requirement_ids);
             remove_ids(&mut record.resolution_ids, &resolution_ids);
             let remove = changed && record.requirement_ids.is_empty();
             if remove {
                 rule_ids.insert(record.id.as_str().to_owned());
+                deletions.push(CascadeDeletion::new(NodeType::Rule, &record.id, cited));
             }
             !remove
         });
@@ -119,13 +133,20 @@ impl Cascade {
             |r| &r.id,
         ));
         changes.extend(shaping.changes);
+        deletions.extend(shaping.deletions);
         Self {
             rules: rule_ids,
             resolutions,
             topics: shaping.topics,
             questions: shaping.questions,
             changes,
+            deletions,
         }
+    }
+
+    /// Each record that the cascade deletes, with its cause.
+    pub(super) fn deletions(&self) -> &[CascadeDeletion] {
+        &self.deletions
     }
 
     pub(super) fn report(&self, resources: &mut [ReconciledResource]) -> Vec<CascadedResource> {
@@ -156,8 +177,8 @@ impl Cascade {
         sources: &'a [Source],
         requirements: &'a [Requirement],
         rules: &'a [Rule],
-    ) -> Survivors<'a> {
-        Survivors {
+    ) -> ScopeRecords<'a> {
+        ScopeRecords {
             sources,
             requirements,
             rules,
@@ -199,11 +220,14 @@ fn prepare_shaping(
 ) -> ShapingRecords {
     let mut topics = view.topics.clone();
     let before_topics = topics.clone();
-    let mut topic_ids = BTreeSet::new();
+    let mut topic_requirements = BTreeMap::new();
+    let mut deletions = Vec::new();
     topics.retain_mut(|record| {
         let remove = requirement_ids.contains(record.requirement_id.as_str());
         if remove {
-            topic_ids.insert(record.id.as_str().to_owned());
+            topic_requirements.insert(record.id.as_str().to_owned(), record.requirement_id.clone());
+            let cited = vec![record.requirement_id.clone()];
+            deletions.push(CascadeDeletion::new(NodeType::Topic, &record.id, cited));
         } else {
             retain_links(
                 &mut record.links,
@@ -218,9 +242,18 @@ fn prepare_shaping(
     let mut questions = view.questions.clone();
     let before_questions = questions.clone();
     questions.retain_mut(|record| {
-        let remove = requirement_ids.contains(record.requirement_id.as_str())
-            || topic_ids.contains(record.topic_id.as_str());
-        if !remove {
+        let mut cited = Vec::new();
+        if requirement_ids.contains(record.requirement_id.as_str()) {
+            cited.push(record.requirement_id.clone());
+        }
+        let topic_requirement = topic_requirements.get(record.topic_id.as_str());
+        if let Some(requirement) = topic_requirement.filter(|id| !cited.contains(*id)) {
+            cited.push(requirement.clone());
+        }
+        let remove = !cited.is_empty();
+        if remove {
+            deletions.push(CascadeDeletion::new(NodeType::Question, &record.id, cited));
+        } else {
             clear_id(&mut record.contradicts, requirement_ids);
             clear_id(&mut record.resolution_id, resolution_ids);
             retain_links(
@@ -244,6 +277,17 @@ fn prepare_shaping(
         topics,
         questions,
         changes,
+        deletions,
+    }
+}
+
+impl CascadeDeletion {
+    fn new(kind: NodeType, id: &StableId, requirements: Vec<StableId>) -> Self {
+        Self {
+            kind,
+            id: id.clone(),
+            requirements,
+        }
     }
 }
 
