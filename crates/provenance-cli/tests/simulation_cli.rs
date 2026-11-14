@@ -93,8 +93,7 @@ fn each_operation_writes_through_the_cli() {
     let done: Vec<_> = run.groups.iter().flat_map(|(_, done)| done).collect();
     assert_eq!(done.len(), 7, "{done:?}");
     assert!(done.iter().all(|done| done.result.is_ok()), "{done:?}");
-    let test = "each_operation_writes_through_the_cli";
-    report::probe(&layer(), test, check(&case, &run));
+    report::probe_laws(&layer(), check(&case, &run));
 }
 
 // No Rule: a probe that two updates at once on one etag have one winner.
@@ -108,8 +107,7 @@ fn two_updates_at_once_have_one_winner() {
     assert_eq!(*way, Ran::AtOnce);
     let won = done.iter().filter(|done| done.result.is_ok()).count();
     assert_eq!(won, 1, "{done:?}");
-    let test = "two_updates_at_once_have_one_winner";
-    report::probe(&layer(), test, check(&case, &run));
+    report::probe_laws(&layer(), check(&case, &run));
 }
 
 /// Runs a case with a stop at `at` and checks it: an update, a create on a
@@ -119,7 +117,7 @@ fn two_updates_at_once_have_one_winner() {
 /// Then the marker is gone, the state is the state before the claim, and the
 /// transaction of the claim stays only for a stop before the marker. The run
 /// must keep the laws.
-fn stop_probe(test: &str, at: u8, landing: Landing) {
+fn stop_probe(at: u8, landing: Landing) {
     let started = Instant::now();
     let steps = vec![
         write(0, update(0)),
@@ -153,7 +151,7 @@ fn stop_probe(test: &str, at: u8, landing: Landing) {
         landing == Landing::BeforeMarker,
         "the transaction of the claim after the read"
     );
-    report::probe(&layer(), test, check(&case, &fixture.finish(started)));
+    report::probe_laws(&layer(), check(&case, &fixture.finish(started)));
 }
 
 // No Rule: a probe of the nightly simulation. It runs `stop_probe` with the
@@ -161,8 +159,7 @@ fn stop_probe(test: &str, at: u8, landing: Landing) {
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn a_merged_branch_and_a_stop_before_the_marker_keep_the_laws() {
-    let test = "a_merged_branch_and_a_stop_before_the_marker_keep_the_laws";
-    stop_probe(test, 0, Landing::BeforeMarker);
+    stop_probe(0, Landing::BeforeMarker);
 }
 
 // No Rule: a probe of the nightly simulation. It runs `stop_probe` with the
@@ -171,8 +168,7 @@ fn a_merged_branch_and_a_stop_before_the_marker_keep_the_laws() {
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn a_merged_branch_and_a_stop_after_the_marker_keep_the_laws() {
-    let test = "a_merged_branch_and_a_stop_after_the_marker_keep_the_laws";
-    stop_probe(test, 1, Landing::BeforeInstall);
+    stop_probe(1, Landing::BeforeInstall);
 }
 
 // No Rule: a probe that each kind of write that the simulation sends
@@ -224,6 +220,5 @@ fn a_stop_at_the_transaction_kills_each_kind_of_write() {
         landed,
         "a stop did not kill its write before its answer: {rows:?}"
     );
-    let test = "a_stop_at_the_transaction_kills_each_kind_of_write";
-    report::probe(&layer(), test, check(&case, &run));
+    report::probe_laws(&layer(), check(&case, &run));
 }

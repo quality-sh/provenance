@@ -11,9 +11,11 @@ mod aggregate_validation;
 mod assertion_validation;
 mod legacy_validation;
 mod lineage_validation;
+mod record_kind;
 
 pub use aggregate_validation::validate_disposition_admissible;
 pub use assertion_validation::packet_qualifies_proposal;
+pub use record_kind::{DuplicateImmutableId, IdeationRecord, IdeationRecordKind};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

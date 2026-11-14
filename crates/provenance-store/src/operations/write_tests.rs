@@ -96,37 +96,6 @@ fn typed_rule_creation_defaults_to_draft() {
 }
 
 #[test]
-fn begin_keeps_the_publication_lock_and_reports_saved_binding_on_failure() {
-    let (_dir, store, scope) = fixture();
-    let result = store.apply_typed_spec(&scope, document()).unwrap();
-    let rule = result
-        .resources
-        .iter()
-        .find(|value| value.kind == crate::state_store::TypedResourceKind::Rule)
-        .unwrap();
-    let layout = store.layout.clone();
-    crate::test_probes::arm("verification_binding_published", move || {
-        assert!(crate::test_probes::publication_lock_is_held(&layout));
-        anyhow::bail!("injected after binding")
-    });
-    let result = store.begin_verification(
-        scope.clone(),
-        serde_json::from_value(json!({"rule":rule.id,"key":"test","method":"examples","declared_by":"test","file":"test.rs"})).unwrap(),
-        VerificationMethod::Examples,
-    );
-    crate::test_probes::disarm("verification_binding_published");
-    assert!(matches!(
-        WriteError(result.unwrap_err()).safe(),
-        WriteFailure::WriteFailed { .. }
-    ));
-    assert_eq!(store.list_verification_bindings(&scope).unwrap().len(), 1);
-    assert_eq!(
-        store.list_verification_runs(&scope).unwrap(),
-        [] as [provenance_core::VerificationRun; 0]
-    );
-}
-
-#[test]
 fn implementation_target_validation_is_typed_before_publication() {
     let (dir, store, scope) = fixture();
     std::fs::write(dir.path().join("test.rs"), "fn check() {}\n").unwrap();

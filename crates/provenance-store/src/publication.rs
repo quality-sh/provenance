@@ -4,9 +4,7 @@ use crate::storage::local::LocalSectionLock;
 use crate::storage::{Atomicity, SectionLock, WriteSet};
 #[cfg(feature = "host")]
 use anyhow::Context;
-use camino::Utf8Path;
-#[cfg(feature = "host")]
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::rule;
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -48,6 +46,9 @@ pub(crate) use staged::with_stage_body;
 pub use staged::LiveAccessDuringStage;
 pub(crate) use staged::{refuse_held_access_during_stage, with_staged_state, StageLock};
 pub(crate) use write_permission::{protect_rows, WritePermissions};
+
+/// The path of one shard and its new bytes.
+pub(crate) type ShardBytes = (Utf8PathBuf, Vec<u8>);
 
 /// Runs `operation` in the publication section of `layout`.
 ///
@@ -220,6 +221,23 @@ impl crate::state_store::StateStore {
     #[rule("rule_write_sets_publish_through_the_storage_port")]
     pub(crate) fn publish_shard(&self, path: &Utf8Path, bytes: Vec<u8>) -> anyhow::Result<()> {
         self.publish_set(WriteSet::new(Atomicity::PerKey).put(self.state_key(path)?, bytes))
+    }
+
+    /// Publishes the new bytes of each changed shard at its path as one write
+    /// set, in the form that costs least and lands every shard or none: no
+    /// set for no shard, a one-key set for one shard, and a whole set for
+    /// more shards.
+    pub(crate) fn publish_shards(&self, shards: Vec<ShardBytes>) -> anyhow::Result<()> {
+        let atomicity = match shards.len() {
+            0 => return Ok(()),
+            1 => Atomicity::PerKey,
+            _ => Atomicity::WholeSet,
+        };
+        let mut writes = WriteSet::new(atomicity);
+        for (path, bytes) in shards {
+            writes = writes.put(self.state_key(&path)?, bytes);
+        }
+        self.publish_set(writes)
     }
 
     /// Writes `records` as the shard at `path` in the stage of this store.
