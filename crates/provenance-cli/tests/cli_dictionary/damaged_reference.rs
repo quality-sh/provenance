@@ -8,7 +8,7 @@
 //! states. The strict check fails, as `rule_ste_strict_dictionary_index_gate`
 //! states. The tests of an init with no PDF are in `cli_ste_onboarding`.
 
-use crate::support::{
+use super::support::{
     dictionary_pdf, file_names, half_reference, init, init_command, provenance, reference_path,
     reference_problem, reference_refusal, HALF_REFERENCE_MESSAGE, REFERENCE_REPAIR, UNAPPROVED_WORD,
 };
