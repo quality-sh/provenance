@@ -96,6 +96,7 @@ pub(super) const fn resource(
         id,
         state,
         changes,
+        refusal: None,
     }
 }
 

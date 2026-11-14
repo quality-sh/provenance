@@ -1,6 +1,6 @@
 use provenance_core::{ImplementationBinding, NodeType, Requirement, Rule, ScopeId, Source};
 
-use super::{cascade::Cascade, replace_records};
+use super::{cascade::Cascade, refusals::RefusedDeletion, replace_records};
 use crate::shards;
 use crate::state_store::{ReconciledResource, StateStore, TypedSpecResult};
 
@@ -10,6 +10,8 @@ pub(super) struct Replacement {
     pub rules: Vec<Rule>,
     pub implementations: Vec<ImplementationBinding>,
     pub cascade: Cascade,
+    /// The first deletion that review history keeps, if one does.
+    pub refused: Option<RefusedDeletion>,
 }
 
 impl Replacement {
@@ -44,13 +46,9 @@ impl Replacement {
         for rule in &self.rules {
             rule.validate_archive()?;
         }
-        self.cascade.ensure_dispositions_survive(
-            store,
-            scope,
-            &self.sources,
-            &self.requirements,
-            &self.rules,
-        )?;
+        if let Some(refused) = self.refused {
+            return Err(refused.refuse());
+        }
         store.publish_typed_spec(scope, &result.declared_by, |store| {
             store
                 .replace_graph_records(&shards::sources_path(&store.layout, scope), self.sources)?;

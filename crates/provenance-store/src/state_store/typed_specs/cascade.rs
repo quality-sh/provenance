@@ -2,14 +2,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use provenance_core::{
-    ArtifactLink, ArtifactLinkTargetType, CanonicalArtifactType, NodeType, Question, Requirement,
-    Resolution, Rule, ScopeId, Source, StableId, Topic,
+    ArtifactLink, ArtifactLinkTargetType, NodeType, Question, Requirement, Resolution, Rule,
+    ScopeId, Source, StableId, Topic,
 };
 
 use super::super::{
     CascadedResource, ReconcileState, ReconciledResource, StateStore, TypedFieldChange,
     TypedResourceKind,
 };
+use super::refusals::Survivors;
 use super::view::TypedSpecView;
 use crate::shards;
 
@@ -149,60 +150,21 @@ impl Cascade {
         cascade
     }
 
-    pub(super) fn ensure_dispositions_survive(
-        &self,
-        store: &StateStore,
-        scope: &ScopeId,
-        sources: &[Source],
-        requirements: &[Requirement],
-        rules: &[Rule],
-    ) -> anyhow::Result<()> {
-        for disposition in store.list_dispositions(scope)? {
-            let Some(artifact) = &disposition.canonical_artifact else {
-                continue;
-            };
-            let survives = match artifact.artifact_type {
-                CanonicalArtifactType::Source => {
-                    contains_scoped_id(sources, scope, &artifact.artifact_id, |r| {
-                        (&r.scope_id, &r.id)
-                    })
-                }
-                CanonicalArtifactType::Requirement => {
-                    contains_scoped_id(requirements, scope, &artifact.artifact_id, |r| {
-                        (&r.scope_id, &r.id)
-                    })
-                }
-                CanonicalArtifactType::Resolution => {
-                    contains_scoped_id(&self.resolutions, scope, &artifact.artifact_id, |r| {
-                        (&r.scope_id, &r.id)
-                    })
-                }
-                CanonicalArtifactType::Rule => {
-                    contains_scoped_id(rules, scope, &artifact.artifact_id, |r| {
-                        (&r.scope_id, &r.id)
-                    })
-                }
-                CanonicalArtifactType::Topic => {
-                    contains_scoped_id(&self.topics, scope, &artifact.artifact_id, |r| {
-                        (&r.scope_id, &r.id)
-                    })
-                }
-                CanonicalArtifactType::Question => {
-                    contains_scoped_id(&self.questions, scope, &artifact.artifact_id, |r| {
-                        (&r.scope_id, &r.id)
-                    })
-                }
-            };
-            crate::write_error::ensure!(
-                InvalidUpdate,
-                survives,
-                "cannot delete canonical {} {} because disposition {} names it",
-                canonical_kind(artifact.artifact_type),
-                artifact.artifact_id.as_str(),
-                disposition.id.as_str()
-            );
+    /// The records that the publication keeps, with the cascade applied.
+    pub(super) fn survivors<'a>(
+        &'a self,
+        sources: &'a [Source],
+        requirements: &'a [Requirement],
+        rules: &'a [Rule],
+    ) -> Survivors<'a> {
+        Survivors {
+            sources,
+            requirements,
+            rules,
+            resolutions: &self.resolutions,
+            topics: &self.topics,
+            questions: &self.questions,
         }
-        Ok(())
     }
 
     pub(super) fn publish(self, store: &StateStore, scope: &ScopeId) -> anyhow::Result<()> {
@@ -305,6 +267,7 @@ fn describe_replacement<'a, T: serde::Serialize>(
                     id: record_id.clone(),
                     state: ReconcileState::Deleted,
                     changes: Vec::new(),
+                    refusal: None,
                 });
             };
             let changes = field_changes(record, replacement);
@@ -313,6 +276,7 @@ fn describe_replacement<'a, T: serde::Serialize>(
                 id: record_id.clone(),
                 state: ReconcileState::Updated,
                 changes,
+                refusal: None,
             })
         })
         .collect()
@@ -381,29 +345,6 @@ fn retain_links(
         };
         !deleted.contains(link.target_id.as_str())
     });
-}
-
-fn contains_scoped_id<'a, T>(
-    records: &'a [T],
-    scope: &ScopeId,
-    wanted: &StableId,
-    identity: impl Fn(&'a T) -> (&'a ScopeId, &'a StableId),
-) -> bool {
-    records.iter().any(|record| {
-        let (record_scope, id) = identity(record);
-        record_scope == scope && id == wanted
-    })
-}
-
-const fn canonical_kind(kind: CanonicalArtifactType) -> &'static str {
-    match kind {
-        CanonicalArtifactType::Source => "source",
-        CanonicalArtifactType::Requirement => "requirement",
-        CanonicalArtifactType::Resolution => "resolution",
-        CanonicalArtifactType::Rule => "rule",
-        CanonicalArtifactType::Topic => "topic",
-        CanonicalArtifactType::Question => "question",
-    }
 }
 
 fn remove_ids(ids: &mut Vec<StableId>, deleted: &BTreeSet<String>) -> bool {

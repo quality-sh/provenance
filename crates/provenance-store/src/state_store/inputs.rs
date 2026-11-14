@@ -169,8 +169,25 @@ pub enum ReconcileState {
     Updated,
     Moved,
     Deleted,
+    /// A deletion that typed-spec apply refuses. `refusal` gives the cause.
+    Refused,
     Conflict,
     Unchanged,
+}
+
+/// The cause of a deletion that typed-spec apply refuses. `message` is the
+/// text of the refusal that the apply gives.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(tag = "cause", rename_all = "snake_case")]
+pub enum DeletionRefusal {
+    /// The record has a review submission, in any state.
+    ReviewSubmission { message: String },
+    /// A Disposition names the record as its canonical artifact.
+    Disposition {
+        disposition_id: StableId,
+        message: String,
+    },
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -185,6 +202,8 @@ pub struct ReconciledResource {
     pub state: ReconcileState,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub changes: Vec<TypedFieldChange>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refusal: Option<DeletionRefusal>,
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -204,6 +223,8 @@ pub struct CascadedResource {
     pub state: ReconcileState,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub changes: Vec<TypedFieldChange>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refusal: Option<DeletionRefusal>,
 }
 
 /// One ASD-STE100 violation attached to its typed declaration site.
@@ -229,6 +250,7 @@ pub struct TypedSpecResult {
     pub updated: usize,
     pub moved: usize,
     pub deleted: usize,
+    pub refused: usize,
     pub conflicts: usize,
     pub unchanged: usize,
     pub resources: Vec<ReconciledResource>,

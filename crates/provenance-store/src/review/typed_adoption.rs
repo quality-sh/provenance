@@ -4,7 +4,7 @@ use super::{classifier, decision_state::CycleFacts};
 use crate::{
     families::review_families,
     review::publication::with_record_state,
-    state_store::{RecordStamp, StateStore},
+    state_store::{RecordStamp, ReviewHistory, StateStore},
 };
 use provenance_core::{review::ReviewRecord, ScopeId};
 
@@ -14,6 +14,20 @@ struct TypedChange {
 }
 
 impl StateStore {
+    /// Reads the review history that a typed-spec decision checks before it
+    /// deletes a record, and refuses a Withdrawal that names no review
+    /// submission.
+    pub(crate) fn review_history(&self, scope: &ScopeId) -> anyhow::Result<ReviewHistory> {
+        let facts = CycleFacts::validated(self, scope)?;
+        Ok(ReviewHistory {
+            submitted: facts
+                .submitted_records()
+                .map(|(kind, id)| (kind, id.clone()))
+                .collect(),
+            dispositions: facts.dispositions().to_vec(),
+        })
+    }
+
     pub(crate) fn publish_typed_spec<R>(
         &self,
         scope: &ScopeId,
@@ -29,12 +43,11 @@ impl StateStore {
         with_record_state(self, RecordStamp::ResolveFromRepository, |staged| {
             // The staged copy holds the live records until `publish` runs.
             let current = review_families::review_records(staged, scope)?;
-            let facts = CycleFacts::validated(staged, scope)?;
             let paths = review_families::review_paths(&staged.layout, scope);
             let paths = paths.iter().map(AsRef::as_ref).collect::<Vec<_>>();
             let result = staged.permitting(&paths, "*", publish)?;
             let desired = review_families::review_records(staged, scope)?;
-            let (changes, deleted) = typed_changes(&current, &facts, &desired)?;
+            let (changes, deleted) = typed_changes(&current, &desired)?;
             staged.delete_record_discussions(scope, &deleted)?;
             for change in &changes {
                 staged.commit_typed_change(actor, change)?;
@@ -51,9 +64,10 @@ impl StateStore {
     }
 }
 
+/// The changed records and the deleted records of one publication. The
+/// typed-spec decision has refused each deletion that review history keeps.
 fn typed_changes(
     current: &[ReviewRecord],
-    facts: &CycleFacts,
     desired: &[ReviewRecord],
 ) -> anyhow::Result<(Vec<TypedChange>, Vec<ReviewRecord>)> {
     let mut changes = Vec::new();
@@ -63,9 +77,6 @@ fn typed_changes(
             .iter()
             .find(|record| record.kind() == before.kind() && record.id() == before.id());
         let Some(after) = after else {
-            if facts.has_submissions(before.kind(), before.id()) {
-                return Err(enrolled_deletion_conflict(before));
-            }
             deleted.push(before.clone());
             continue;
         };
@@ -83,16 +94,4 @@ fn typed_changes(
 /// The record without its record stamps.
 fn content(record: &ReviewRecord) -> serde_json::Result<serde_json::Value> {
     provenance_core::model::record_stamps::content_value(record)
-}
-
-fn enrolled_deletion_conflict(before: &ReviewRecord) -> anyhow::Error {
-    crate::refusal::refuse!(
-        (crate::write_error::WriteFailure::EnrolledRecordDeletionConflict {
-            record_kind: before.kind(),
-            record_id: before.id().clone(),
-        }),
-        "cannot delete enrolled {} {} through typed-spec apply",
-        before.kind().as_str(),
-        before.id().as_str()
-    )
 }

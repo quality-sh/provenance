@@ -15,8 +15,8 @@ use super::identity::{
 use super::reconcile::{ensure_acyclic, ensure_resolutions_exist, reconcile};
 use super::view::TypedSpecView;
 use super::{
-    adopted_rule_ids, all_resources, cascade, publication, reconcile_implementations, spec_result,
-    DesiredImplementations,
+    adopted_rule_ids, all_resources, cascade, publication, reconcile_implementations, refusals,
+    spec_result, DesiredImplementations,
 };
 use crate::state_store::{
     ReconciledResource, StateStore, TypedDeclarationKind, TypedSpecInput, TypedSpecResult,
@@ -150,6 +150,12 @@ pub fn decide_typed_spec(
         &mut requirements,
         &mut rules,
     );
+    let refused = refusals::refused_deletions(
+        view,
+        scope_id,
+        &cascade.survivors(&sources, &requirements, &rules),
+        &deleted_resources,
+    );
     ensure_resolutions_exist(&view.resolutions, &requirements, &rules)?;
     ensure_acyclic(&requirements)?;
     let implementation_reconciliation = reconcile_implementations(
@@ -167,7 +173,8 @@ pub fn decide_typed_spec(
         &mut rule_resources,
     )?;
     let mut resources = all_resources(&source_resources, &requirement_resources, &rule_resources);
-    let cascade_resources = cascade.report(&mut resources);
+    let mut cascade_resources = cascade.report(&mut resources);
+    refusals::report(&refused, &mut resources, &mut cascade_resources);
     let mut result = spec_result(
         input.declared_by,
         resources,
@@ -189,6 +196,7 @@ pub fn decide_typed_spec(
                 rules,
                 implementations: implementation_reconciliation.records,
                 cascade,
+                refused: refused.into_iter().next(),
             }),
             requirement_resources,
             rule_resources,
