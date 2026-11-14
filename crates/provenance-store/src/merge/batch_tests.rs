@@ -24,13 +24,14 @@ fn a_record_that_the_batches_of_two_sides_change_differently_conflicts_and_keeps
     );
     let other = batch("contributions", &[contribution("e", "theirs")]);
 
-    let MergeOutcome::Conflicted { conflicts, partial } = merge_records(
+    let outcome = merge_records(
         LANDINGS,
         std::slice::from_ref(&base),
         &[base.clone(), ours.clone()],
         &[base.clone(), theirs, other.clone()],
     )
-    .unwrap() else {
+    .unwrap();
+    let MergeOutcome::Conflicted { conflicts, partial } = outcome else {
         panic!("expected a conflict");
     };
 
@@ -82,10 +83,7 @@ fn a_record_that_the_batches_of_two_sides_hold_with_equal_content_merges_clean()
 fn a_side_with_two_batches_of_one_record_is_compared_by_the_record_that_its_read_gives() {
     let first = batch("contributions", &[contribution("c", "first")]);
     let last = batch("contributions", &[contribution("c", "last")]);
-    let theirs = batch(
-        "contributions",
-        &[contribution("c", "last"), contribution("t", "t")],
-    );
+    let theirs = batch("contributions", &[contribution("c", "last"), contribution("t", "t")]);
 
     let merged = merge_records(LANDINGS, &[], &[first.clone(), last.clone()], &[theirs.clone()])
         .unwrap()

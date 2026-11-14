@@ -14,8 +14,20 @@ const FAMILIES: [&str; 5] = [
     "dispositions",
 ];
 
-/// A repository with the Requirement that the landed records target.
-fn landing_repository() -> tempfile::TempDir {
+/// A repository with the Requirement that the landed records target, and a
+/// directory of its own for the swarm runs that the test lands.
+struct Landing {
+    repo: tempfile::TempDir,
+    runs: tempfile::TempDir,
+}
+
+impl Landing {
+    fn repo(&self) -> &Path {
+        self.repo.path()
+    }
+}
+
+fn landing_repository() -> Landing {
     let dir = repository();
     json(
         dir.path(),
@@ -28,7 +40,10 @@ fn landing_repository() -> tempfile::TempDir {
             "The system is safe.",
         ],
     );
-    dir
+    Landing {
+        repo: dir,
+        runs: tempfile::tempdir().unwrap(),
+    }
 }
 
 fn landings(repo: &Path) -> PathBuf {
@@ -69,8 +84,14 @@ fn contribution(id: &str, finding: &str) -> Value {
 
 /// Lands the swarm run `run` with these contributions and this merge output,
 /// and returns the batch row that the landing adds.
-fn land_run(repo: &Path, run: &str, contributions: &[Value], merge: Option<Value>) -> String {
-    let run = repo.parent().unwrap().join(format!("run_{run}"));
+fn land_run(
+    landing: &Landing,
+    run: &str,
+    contributions: &[Value],
+    merge: Option<Value>,
+) -> String {
+    let repo = landing.repo();
+    let run = landing.runs.path().join(format!("run_{run}"));
     let extractors = run.join("extractors");
     std::fs::create_dir_all(&extractors).unwrap();
     std::fs::write(
@@ -95,9 +116,9 @@ fn land_run(repo: &Path, run: &str, contributions: &[Value], merge: Option<Value
 }
 
 /// Lands a swarm run whose one contribution is `contrib_<name>`.
-fn land(repo: &Path, name: &str) -> String {
+fn land(landing: &Landing, name: &str) -> String {
     let id = format!("contrib_{name}");
-    land_run(repo, name, &[contribution(&id, "The requirement holds.")], None)
+    land_run(landing, name, &[contribution(&id, "The requirement holds.")], None)
 }
 
 /// Checks out a new branch at `into`, merges `from` into it, and returns the
@@ -136,8 +157,9 @@ fn contribution_ids(reads: &[Value]) -> Vec<&str> {
 
 /// The driver run again on the three stages that Git keeps for the landings
 /// file after a conflict: its exit code and the merge outcome it prints.
-fn driver_outcome(repo: &Path) -> (Option<i32>, Value) {
-    let stages = repo.parent().unwrap().join("stages");
+fn driver_outcome(landing: &Landing) -> (Option<i32>, Value) {
+    let repo = landing.repo();
+    let stages = landing.runs.path().join("stages");
     std::fs::create_dir_all(&stages).unwrap();
     let mut sides = Vec::new();
     for stage in 1..=3 {
@@ -160,15 +182,15 @@ fn driver_outcome(repo: &Path) -> (Option<i32>, Value) {
 #[test]
 #[verifies("rule_landing_batch_merge", examples)]
 fn the_merge_keeps_the_different_batches_of_each_side() {
-    let dir = landing_repository();
-    let repo = dir.path();
-    let base = land(repo, "base");
+    let landing = landing_repository();
+    let repo = landing.repo();
+    let base = land(&landing, "base");
     commit(repo, "base");
     git_ok(repo, &["checkout", "-b", "theirs"]);
-    let theirs = land(repo, "theirs");
+    let theirs = land(&landing, "theirs");
     commit(repo, "theirs");
     git_ok(repo, &["checkout", "main"]);
-    let ours = land(repo, "ours");
+    let ours = land(&landing, "ours");
     commit(repo, "ours");
 
     assert_eq!(merge_into(repo, "main", "theirs").status.code(), Some(0));
@@ -182,16 +204,16 @@ fn the_merge_keeps_the_different_batches_of_each_side() {
 #[test]
 #[verifies("rule_landing_batch_merge", examples)]
 fn the_merge_keeps_a_batch_that_the_two_sides_add_one_time() {
-    let dir = landing_repository();
-    let repo = dir.path();
-    let base = land(repo, "base");
+    let landing = landing_repository();
+    let repo = landing.repo();
+    let base = land(&landing, "base");
     commit(repo, "base");
     git_ok(repo, &["checkout", "-b", "theirs"]);
-    let same = land(repo, "same");
-    let theirs = land(repo, "theirs");
+    let same = land(&landing, "same");
+    let theirs = land(&landing, "theirs");
     commit(repo, "theirs");
     git_ok(repo, &["checkout", "main"]);
-    assert_eq!(land(repo, "same"), same);
+    assert_eq!(land(&landing, "same"), same);
     commit(repo, "ours");
 
     assert_eq!(merge_into(repo, "main", "theirs").status.code(), Some(0));
@@ -206,13 +228,13 @@ fn the_merge_keeps_a_batch_that_the_two_sides_add_one_time() {
 #[verifies("rule_landing_batch_merge", examples)]
 #[verifies("rule_record_merge", examples)]
 fn the_merge_removes_a_batch_that_one_side_removes_and_the_other_keeps() {
-    let dir = landing_repository();
-    let repo = dir.path();
-    let kept = land(repo, "kept");
-    let removed = land(repo, "removed");
+    let landing = landing_repository();
+    let repo = landing.repo();
+    let kept = land(&landing, "kept");
+    let removed = land(&landing, "removed");
     commit(repo, "base");
     git_ok(repo, &["checkout", "-b", "theirs"]);
-    let theirs = land(repo, "theirs");
+    let theirs = land(&landing, "theirs");
     assert_eq!(landing_lines(repo), [kept.clone(), removed, theirs.clone()]);
     commit(repo, "theirs");
     git_ok(repo, &["checkout", "main"]);
@@ -232,14 +254,14 @@ fn the_merge_removes_a_batch_that_one_side_removes_and_the_other_keeps() {
 #[verifies("rule_landing_batch_merge", examples)]
 #[verifies("rule_record_merge", examples)]
 fn a_record_that_two_batches_hold_with_equal_content_merges_to_one_read_in_each_direction() {
-    let dir = landing_repository();
-    let repo = dir.path();
-    let base = land(repo, "base");
+    let landing = landing_repository();
+    let repo = landing.repo();
+    let base = land(&landing, "base");
     commit(repo, "base");
     git_ok(repo, &["checkout", "-b", "theirs"]);
     let same = contribution("contrib_same", "Equal on the two sides.");
     let theirs = land_run(
-        repo,
+        &landing,
         "theirs",
         &[same.clone(), contribution("contrib_theirs", "Of theirs.")],
         None,
@@ -248,7 +270,7 @@ fn a_record_that_two_batches_hold_with_equal_content_merges_to_one_read_in_each_
     git_ok(repo, &["checkout", "-b", "ours", "main"]);
     let changed = contribution("contrib_base", "Changed by ours only.");
     let ours = land_run(
-        repo,
+        &landing,
         "ours",
         &[changed, same, contribution("contrib_ours", "Of ours.")],
         None,
@@ -256,42 +278,33 @@ fn a_record_that_two_batches_hold_with_equal_content_merges_to_one_read_in_each_
     commit(repo, "ours");
 
     assert_eq!(merge_into(repo, "ours", "theirs").status.code(), Some(0));
-    assert_eq!(
-        landing_lines(repo),
-        [base.clone(), ours.clone(), theirs.clone()]
-    );
+    assert_eq!(landing_lines(repo), [base.clone(), ours.clone(), theirs.clone()]);
     let into_ours = read_families(repo);
-    assert_eq!(
-        merge_into(repo, "theirs", "ours").status.code(),
-        Some(0)
-    );
+    assert_eq!(merge_into(repo, "theirs", "ours").status.code(), Some(0));
     assert_eq!(landing_lines(repo), [base, theirs, ours]);
     assert_eq!(read_families(repo), into_ours);
     assert_eq!(
         contribution_ids(&into_ours),
         ["contrib_base", "contrib_ours", "contrib_same", "contrib_theirs"]
     );
-    assert_eq!(
-        into_ours[0][0]["strongest_finding"],
-        "Changed by ours only."
-    );
+    assert_eq!(into_ours[0][0]["strongest_finding"], "Changed by ours only.");
 }
 
 #[test]
 #[verifies("rule_record_merge", examples)]
 fn two_batches_that_change_one_contribution_differently_conflict_and_keep_ours() {
-    let dir = landing_repository();
-    let repo = dir.path();
+    let landing = landing_repository();
+    let repo = landing.repo();
     let base_record = contribution("contrib_x", "Finding of the base.");
-    let base = land_run(repo, "base", std::slice::from_ref(&base_record), None);
+    let base = land_run(&landing, "base", std::slice::from_ref(&base_record), None);
     commit(repo, "base");
     git_ok(repo, &["checkout", "-b", "theirs"]);
     let their_record = contribution("contrib_x", "Finding of theirs.");
-    let theirs = land_run(repo, "theirs", std::slice::from_ref(&their_record), None);
+    let theirs = land_run(&landing, "theirs", std::slice::from_ref(&their_record), None);
     commit(repo, "theirs");
     git_ok(repo, &["checkout", "-b", "ours", "main"]);
     let our_record = contribution("contrib_x", "Finding of ours.");
-    let ours = land_run(repo, "ours", std::slice::from_ref(&our_record), None);
+    let ours = land_run(&landing, "ours", std::slice::from_ref(&our_record), None);
     commit(repo, "ours");
 
     for (into, from, kept, mine, other) in [
@@ -305,7 +318,7 @@ fn two_batches_that_change_one_contribution_differently_conflict_and_keep_ours()
             stderr.contains("merge left 1 conflicting record(s): contributions/contrib_x"),
             "{stderr}"
         );
-        let (code, outcome) = driver_outcome(repo);
+        let (code, outcome) = driver_outcome(&landing);
         assert_eq!(code, Some(1));
         assert_eq!(outcome["status"], "conflicted");
         assert_eq!(
@@ -325,8 +338,8 @@ fn two_batches_that_change_one_contribution_differently_conflict_and_keep_ours()
     }
 }
 
-/// The merge output of a run that suggests and lands `proposal_p`, with
-/// `title`, on the claim of `contrib_p`.
+/// The merge output of a run that suggests, lands and asserts `proposal_p`,
+/// with `title`, on the claim of `contrib_p`.
 fn proposal_run(title: &str) -> Value {
     let target = serde_json::json!({"artifact_type": "requirement", "artifact_id": "req_a"});
     serde_json::json!({
@@ -338,6 +351,8 @@ fn proposal_run(title: &str) -> Value {
                 "proposal_type": "requirement_candidate", "summary": "Candidate",
                 "origin_participant_slots": ["slot_a"]}],
             "required_human_decisions": []},
+        "assertions": [{"scope_id": "default", "id": "assertion_p", "proposal_id": "proposal_p",
+            "synthesis_packet_id": "packet_p", "supporting_claim_ids": ["claim_contrib_p"]}],
         "proposals": [{"scope_id": "default", "id": "proposal_p", "proposal_key": "p",
             "proposal_type": "requirement_candidate", "title": title, "summary": "Candidate",
             "traceability": {"target": target, "source_ids": [], "evidence_references": [],
@@ -349,21 +364,21 @@ fn proposal_run(title: &str) -> Value {
 #[test]
 #[verifies("rule_record_merge", examples)]
 fn two_batches_that_add_one_proposal_differently_conflict_and_keep_ours() {
-    let dir = landing_repository();
-    let repo = dir.path();
-    let base = land(repo, "base");
+    let landing = landing_repository();
+    let repo = landing.repo();
+    let base = land(&landing, "base");
     commit(repo, "base");
     let evidence = [contribution("contrib_p", "The claim of the proposal.")];
     git_ok(repo, &["checkout", "-b", "theirs"]);
-    land_run(repo, "theirs", &evidence, Some(proposal_run("Of theirs")));
+    land_run(&landing, "theirs", &evidence, Some(proposal_run("Of theirs")));
     commit(repo, "theirs");
     git_ok(repo, &["checkout", "main"]);
-    let ours = land_run(repo, "ours", &evidence, Some(proposal_run("Of ours")));
+    let ours = land_run(&landing, "ours", &evidence, Some(proposal_run("Of ours")));
     commit(repo, "ours");
 
     let merge = merge_into(repo, "main", "theirs");
     assert_eq!(merge.status.code(), Some(1));
-    let (code, outcome) = driver_outcome(repo);
+    let (code, outcome) = driver_outcome(&landing);
     assert_eq!(code, Some(1));
     let conflicts = outcome["conflicts"].as_array().unwrap();
     assert_eq!(conflicts.len(), 1, "{outcome}");
