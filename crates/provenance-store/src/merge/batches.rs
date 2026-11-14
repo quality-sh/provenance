@@ -11,6 +11,7 @@
 use super::{CanonicalRecord, MergeConflict, MergeConflictKind, MergeOutcome, MergeSide};
 use crate::state_store::landing_read::{IdeationRecords, Records};
 use crate::state_store::IdeationLandingBatch;
+use provenance_core::DuplicateImmutableId;
 use provenance_macros::rule;
 use std::collections::BTreeSet;
 
@@ -158,7 +159,8 @@ impl Candidate {
         for row in rows {
             let batch = batch(row)?;
             if candidate.failed.is_none() {
-                if let Err(refusal) = records.check(&batch, anyhow::Error::new) {
+                let duplicate = |id: DuplicateImmutableId| crate::refusal::fault!("{id}");
+                if let Err(refusal) = records.check(&batch, duplicate) {
                     candidate.failed = Some(FailedCheck {
                         order,
                         side: row.side,
