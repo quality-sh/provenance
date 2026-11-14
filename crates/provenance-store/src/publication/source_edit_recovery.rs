@@ -1,19 +1,22 @@
 use super::{
     source_edit::{
-        end_published, write_source_edit_marker, PreparedSourceRecord, SourceEditMarker,
-        SourceEditPhase, SourceEditRecoveryFailure, PREPARED_SOURCE_RECORD, REPLACEMENT,
+        backup, complete_install, write_source_edit_marker, PreparedSourceRecord,
+        SourceEditMarker, SourceEditPhase, SourceEditRecoveryFailure, PREPARED_SOURCE_RECORD,
+        REPLACEMENT,
     },
     sync_directory,
 };
 use crate::{
     layout::ProvenanceLayout,
     operations::files::{
-        validate_recovery_artifact_leaf, HeldRepositoryFile, RepositoryFileBackup,
-        RepositoryFileRefusal, RepositoryFiles,
+        validate_recovery_artifact_leaf, HeldRepositoryFile, RepositoryFileRefusal,
+        RepositoryFiles,
     },
-    storage::local::{contained_transaction, remove_leftovers, TransactionKind},
+    storage::local::{
+        contained_transaction, end_marked_write, remove_leftovers, remove_unpublished,
+        removal_failure, RemovalStep, TransactionKind,
+    },
 };
-use anyhow::Context as _;
 use camino::Utf8Path;
 use sha2::{Digest as _, Sha256};
 
@@ -31,8 +34,20 @@ pub fn recover_pending_source_edit(layout: &ProvenanceLayout) -> anyhow::Result<
         recover_marked_source_edit(layout, &mut marker)?;
     }
     remove_leftovers(layout, TransactionKind::SourceEdit, |transaction| {
-        remove_prepared_file(layout, transaction)
+        remove_unpublished_source_edit(layout, transaction)
     })
+}
+
+/// Removes a source edit that did not publish: the prepared file that the
+/// record of its transaction names, and then the transaction. The section
+/// entry and the error path of the live write use it, so the record stays
+/// until its prepared file is gone.
+pub(super) fn remove_unpublished_source_edit(
+    layout: &ProvenanceLayout,
+    transaction: &Utf8Path,
+) -> anyhow::Result<()> {
+    remove_prepared_file(layout, transaction)?;
+    remove_unpublished(transaction)
 }
 
 /// A marker before `FileInstalled` needs the full transaction. The recovery
@@ -50,9 +65,13 @@ fn recover_marked_source_edit(
         let held = recover_target(layout, marker)?;
         let current = require_known_target(&held, marker)?;
         complete_state(layout, &transaction, marker)?;
-        complete_file(layout, &held, marker, current, &replacement)?;
+        if current == marker.before_digest {
+            install_replacement(layout, &held, marker, &replacement)?;
+        }
+        complete_install(layout, &held, marker, &replacement)?;
+        crate::test_probes::at("source_edit_file_installed")?;
     }
-    end_published(layout, &marker.transaction_dir)
+    end_marked_write(layout, TransactionKind::SourceEdit, &marker.transaction_dir)
 }
 
 fn read_replacement(transaction: &Utf8Path, expected: [u8; 32]) -> anyhow::Result<Vec<u8>> {
@@ -97,28 +116,6 @@ fn require_known_target(
     Ok(current)
 }
 
-/// Completes the install of the file, and then writes the `FileInstalled`
-/// marker: the install and the removal of the store's own prepared file and
-/// backup are durable before that marker.
-fn complete_file(
-    layout: &ProvenanceLayout,
-    held: &HeldRepositoryFile,
-    marker: &mut SourceEditMarker,
-    current: [u8; 32],
-    replacement: &[u8],
-) -> anyhow::Result<()> {
-    if current == marker.before_digest {
-        install_replacement(layout, held, marker, replacement)?;
-    } else {
-        held.remove_own_prepared(&marker.prepared_leaf, replacement)
-            .with_context(|| removal(layout, &marker.target, &marker.prepared_leaf))?;
-        held.finish_recovered_install(&backup(marker)?)?;
-    }
-    marker.phase = SourceEditPhase::FileInstalled;
-    write_source_edit_marker(layout, marker)?;
-    crate::test_probes::at("source_edit_file_installed")
-}
-
 /// Installs the replacement with the prepared file that the marker names.
 /// When that file is not the one that the marker records, the recovery
 /// removes it if it is the store's own data, makes it again at the same
@@ -133,8 +130,9 @@ fn install_replacement(
     let prepared = match held.recover_temp(&leaf, &marker.prepared_identity, marker.after_digest) {
         Ok(Some(prepared)) => prepared,
         Ok(None) | Err(RepositoryFileRefusal::Changed | RepositoryFileRefusal::InvalidUtf8) => {
+            let path = layout.root().join(&marker.target).with_file_name(&leaf);
             held.remove_own_prepared(&leaf, replacement)
-                .with_context(|| removal(layout, &marker.target, &leaf))?;
+                .map_err(|error| removal_failure(RemovalStep::PreparedFile, &path, error))?;
             let prepared = held.create_temp_at(&leaf, replacement)?;
             marker.prepared_identity = prepared.recovery_identity().clone();
             write_source_edit_marker(layout, marker)?;
@@ -142,16 +140,8 @@ fn install_replacement(
         }
         Err(error) => return Err(error.into()),
     };
-    held.compare_and_swap_with_backup(prepared, &backup(marker)?)?;
+    held.install(prepared, &backup(marker)?)?;
     Ok(())
-}
-
-fn backup(marker: &SourceEditMarker) -> anyhow::Result<RepositoryFileBackup> {
-    Ok(RepositoryFileBackup::from_recovery(
-        marker.backup_leaf.clone(),
-        marker.backup_identity.clone(),
-        marker.backup_digest,
-    )?)
 }
 
 fn require_identity(
@@ -245,35 +235,37 @@ fn install_staged_state(
 /// A write makes the file after the replacement is complete, so with no
 /// replacement, a file with that name is not the store's.
 fn remove_prepared_file(layout: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
-    let Some(record) = read_if_present(&transaction.join(PREPARED_SOURCE_RECORD))? else {
+    let record_path = transaction.join(PREPARED_SOURCE_RECORD);
+    let Some(record) = read_if_present(&record_path)? else {
         return Ok(());
     };
-    let record: PreparedSourceRecord = serde_json::from_slice(&record)?;
-    validate_recovery_artifact_leaf(&record.target, &record.prepared_leaf, ".tmp")?;
+    let record: PreparedSourceRecord = serde_json::from_slice(&record)
+        .map_err(|error| removal_failure(RemovalStep::Read, &record_path, error))?;
+    validate_recovery_artifact_leaf(&record.target, &record.prepared_leaf, ".tmp")
+        .map_err(|error| removal_failure(RemovalStep::Read, &record_path, error))?;
     let replacement = read_if_present(&transaction.join(REPLACEMENT))?;
+    let file = layout.root().join(&record.target).with_file_name(&record.prepared_leaf);
     RepositoryFiles::open(layout.root())?
         .remove_own_prepared(
             &record.target,
             &record.prepared_leaf,
             replacement.as_deref(),
         )
-        .with_context(|| removal(layout, &record.target, &record.prepared_leaf))?;
-    Ok(())
+        .map_err(|error| removal_failure(RemovalStep::PreparedFile, &file, error))
 }
 
-/// The step of the removal of the prepared file `leaf` next to `target`.
-fn removal(layout: &ProvenanceLayout, target: &Utf8Path, leaf: &str) -> String {
-    let file = layout.root().join(target).with_file_name(leaf);
-    format!("remove prepared file {file}")
-}
-
-/// The bytes of the regular file at `path`, or `None` when no entry is there.
+/// The bytes of the regular file at `path`, or `None` when no entry is
+/// there. A failure gives the path.
 fn read_if_present(path: &Utf8Path) -> anyhow::Result<Option<Vec<u8>>> {
-    match std::fs::symlink_metadata(path) {
+    let read = || match std::fs::symlink_metadata(path) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(error.into()),
-        Ok(_) => read_regular_file(path).map(Some),
-    }
+        Err(error) => Err(error),
+        Ok(metadata) if !metadata.is_file() => {
+            Err(std::io::Error::other("the entry is not a regular file"))
+        }
+        Ok(_) => std::fs::read(path).map(Some),
+    };
+    read().map_err(|error| removal_failure(RemovalStep::Read, path, error))
 }
 
 fn validate_recovery_tree(transaction: &Utf8Path) -> anyhow::Result<()> {

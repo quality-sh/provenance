@@ -83,7 +83,7 @@ fn review_crash_child() {
         "repository_file_after_displace" => "repository_file_after_displace",
         "repository_file_after_backup_check" => "repository_file_after_backup_check",
         "repository_file_unlink_backup" => "repository_file_unlink_backup",
-        "source_edit_transaction_removed" => "source_edit_transaction_removed",
+        "marked_transaction_removed" => "marked_transaction_removed",
         _ => panic!("unknown crash phase"),
     };
     test_probes::arm(phase, || std::process::exit(CRASH_EXIT));
@@ -100,7 +100,7 @@ fn every_physical_transition_recovers_exact_file_and_state_bytes() {
         ("repository_file_after_displace", (AFTER, AFTER)),
         ("repository_file_after_backup_check", (AFTER, AFTER)),
         ("repository_file_unlink_backup", (AFTER, AFTER)),
-        ("source_edit_transaction_removed", (AFTER, AFTER)),
+        ("marked_transaction_removed", (AFTER, AFTER)),
     ] {
         let temp = fixture();
         let root_path = canonical_root(&temp);

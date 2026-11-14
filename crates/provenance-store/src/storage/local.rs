@@ -23,15 +23,17 @@ mod transactions;
 pub(crate) mod whole_set;
 #[cfg(any(unix, windows))]
 pub(crate) use file_install::FileInstall;
-pub use recovery::{clear_publication_marker, write_publication_marker, PublicationPhase};
+pub use recovery::{write_publication_marker, PublicationPhase};
 #[cfg(all(test, unix))]
-pub(crate) use recovery::{validate_missing_transaction_dir, validated_transaction_dir};
+pub(crate) use recovery::validated_transaction_dir;
+#[cfg(all(test, unix))]
+pub(crate) use transactions::contained_missing_transaction;
 pub use section::LocalSectionLock;
 #[cfg(test)]
 pub(crate) use section::LockedPublicationFile;
 pub(crate) use transactions::{
-    contained_transaction, remove_leftovers, remove_marked_transaction, write_marker,
-    TransactionKind,
+    clear_marker, contained_transaction, end_marked_write, remove_leftovers, remove_unpublished,
+    removal_failure, write_marker, RemovalStep, TransactionKind,
 };
 
 #[cfg(test)]
@@ -115,7 +117,7 @@ impl LocalStateStorage {
         writes: &WriteSet,
         hook: &mut dyn whole_set::WholeSetHook,
     ) -> Result<(), PublishFailure> {
-        let marker = hook.marker_path(&self.layout);
+        let marker = hook.kind().marker(&self.layout);
         whole_set::land(&self.layout, writes, hook).map_err(|error| {
             if marker.exists() {
                 PublishFailure::Started(error)

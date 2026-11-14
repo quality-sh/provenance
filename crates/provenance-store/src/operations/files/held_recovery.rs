@@ -1,9 +1,9 @@
 use super::{
-    held::{self, valid_artifact_leaf, HeldRepositoryFile},
+    held::{self, probe_io, unlink_temp, valid_artifact_leaf, HeldRepositoryFile},
     held_io::read,
     held_metadata::FileIdentity,
-    platform, safe_fs, validate_relative, RepositoryFileRefusal as Refusal, RepositoryFiles,
-    Utf8Path,
+    platform, safe_fs, validate_relative, RepositoryFileInstall, RepositoryFileRefusal as Refusal,
+    RepositoryFiles, Utf8Path,
 };
 use crate::storage::local::durability::sync_opened_directory;
 use sha2::{Digest as _, Sha256};
@@ -69,7 +69,9 @@ impl RepositoryFiles {
         }
         require_missing(&parent, &target_leaf)?;
         let backup = platform::regular(&parent, backup_leaf).map_err(Refusal::from)?;
-        require_matching_artifact(backup, expected_identity, expected_digest)?;
+        if !artifact_matches(backup, expected_identity, expected_digest)? {
+            return Err(Refusal::Changed);
+        }
         safe_fs::rename_no_replace_in(&parent, backup_leaf, &target_leaf)
             .map_err(Refusal::Restore)?;
         held::open(&self.directory, &self.path, relative, usize::MAX)
@@ -104,22 +106,35 @@ impl HeldRepositoryFile {
         remove_own_prepared(self.parent(), self.leaf(), leaf, Some(replacement))
     }
 
-    /// Completes the install of the replacement that this file holds: removes
-    /// `backup` when it holds the old file, and then syncs the directory of
-    /// this file. A backup with other bytes stays, as the swap keeps it.
-    pub(crate) fn finish_recovered_install(
+    /// Completes an install after the rename of the prepared file onto this
+    /// file: syncs the directory of this file, removes `backup` when it holds
+    /// the file that the write read, and syncs the directory again. Thus the
+    /// install is durable before the backup goes, and the removal is durable
+    /// when the call succeeds. A backup with other bytes stays. The live write
+    /// and the recovery use this call, so a failure leaves a state that the
+    /// next call completes.
+    pub(crate) fn finish_install(
         &self,
         backup: &RepositoryFileBackup,
-    ) -> Result<(), Refusal> {
+    ) -> Result<RepositoryFileInstall, Refusal> {
         if !valid_artifact_leaf(self.leaf(), backup.leaf(), ".backup") {
             return Err(Refusal::Changed);
         }
-        if let Some(file) = optional_artifact(self.parent(), backup.leaf())? {
-            if require_matching_artifact(file, backup.identity(), backup.digest()).is_ok() {
-                unlink(self.parent(), backup.leaf())?;
-            }
+        sync_opened_directory(self.parent()).map_err(Refusal::Write)?;
+        let own = match platform::regular(self.parent(), backup.leaf()).map_err(Refusal::from) {
+            Err(Refusal::Missing) => return Ok(RepositoryFileInstall::Installed),
+            Err(Refusal::Denied) => false,
+            Err(error) => return Err(error),
+            Ok(file) => artifact_matches(file, backup.identity(), backup.digest())?,
+        };
+        if !own {
+            let backup = backup.leaf().to_owned();
+            return Ok(RepositoryFileInstall::InstalledBackupKept { backup });
         }
-        sync_opened_directory(self.parent()).map_err(Refusal::Write)
+        probe_io("repository_file_unlink_backup").map_err(Refusal::Write)?;
+        unlink(self.parent(), backup.leaf())?;
+        sync_opened_directory(self.parent()).map_err(Refusal::Write)?;
+        Ok(RepositoryFileInstall::Installed)
     }
 }
 
@@ -149,7 +164,7 @@ fn remove_own_prepared(
     if !replacement.is_some_and(|replacement| replacement.starts_with(&bytes)) {
         return Err(Refusal::Changed);
     }
-    unlink(parent, leaf)
+    unlink_temp(parent, leaf).map_err(Refusal::Write)
 }
 
 fn unlink(parent: &std::fs::File, leaf: &str) -> Result<(), Refusal> {
@@ -174,17 +189,18 @@ fn optional_artifact(parent: &std::fs::File, leaf: &str) -> Result<Option<std::f
     }
 }
 
-fn require_matching_artifact(
+/// Whether `file` has the identity and the digest that a marker records. A
+/// file that is not UTF-8 does not match.
+fn artifact_matches(
     file: std::fs::File,
     expected_identity: &FileIdentity,
     expected_digest: [u8; 32],
-) -> Result<(), Refusal> {
-    let (bytes, found_identity, _) = read(file, usize::MAX)?;
-    if &found_identity != expected_identity {
-        return Err(Refusal::Changed);
-    }
-    if <[u8; 32]>::from(Sha256::digest(bytes)) != expected_digest {
-        return Err(Refusal::Changed);
-    }
-    Ok(())
+) -> Result<bool, Refusal> {
+    let (bytes, found_identity, _) = match read(file, usize::MAX) {
+        Ok(read) => read,
+        Err(Refusal::InvalidUtf8) => return Ok(false),
+        Err(error) => return Err(error),
+    };
+    Ok(&found_identity == expected_identity
+        && <[u8; 32]>::from(Sha256::digest(bytes)) == expected_digest)
 }

@@ -99,10 +99,9 @@ fn a_write_to_the_displaced_inode_is_kept_in_a_named_backup() {
     let outcome = held.compare_and_swap(prepared).unwrap();
     crate::test_probes::disarm("repository_file_after_backup_check");
 
-    let RepositoryFileInstall::InstalledBackupKept { backup, reason } = outcome else {
+    let RepositoryFileInstall::InstalledBackupKept { backup } = outcome else {
         panic!("the changed original must remain as a backup");
     };
-    assert_eq!(reason, BackupRetentionReason::OriginalChanged);
     assert_eq!(std::fs::read(path.join(backup)).unwrap(), b"changed!");
     assert_eq!(
         std::fs::read(path.join("source.txt")).unwrap(),

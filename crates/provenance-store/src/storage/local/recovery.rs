@@ -1,7 +1,7 @@
 use super::durability::sync_directory;
 use super::transactions::{
-    contained_missing_transaction, contained_transaction, remove_leftovers, remove_transaction,
-    write_marker, TransactionKind,
+    contained_transaction, end_marked_write, remove_leftovers, remove_unpublished, write_marker,
+    TransactionKind,
 };
 use crate::layout::ProvenanceLayout;
 use anyhow::Context;
@@ -40,15 +40,6 @@ pub fn write_publication_marker(
     )
 }
 
-pub fn clear_publication_marker(layout: &ProvenanceLayout) -> anyhow::Result<()> {
-    let path = layout.publication_marker_path();
-    if path.exists() {
-        std::fs::remove_file(path)?;
-        sync_directory(&layout.cache_dir())?;
-    }
-    Ok(())
-}
-
 /// Completes or rolls back the publication that the marker names, and then
 /// removes the data of each import write that stopped before its marker.
 ///
@@ -59,33 +50,31 @@ pub(super) fn recover_pending_publication(layout: &ProvenanceLayout) -> anyhow::
     if marker_path.exists() {
         recover_marked_publication(layout, &marker_path)?;
     }
-    remove_leftovers(layout, TransactionKind::Import, |_| Ok(()))
+    remove_leftovers(layout, TransactionKind::Import, remove_unpublished)
 }
 
+/// Puts the backup state in place when the live state is gone, and then ends
+/// the write that the marker names.
 fn recover_marked_publication(
     layout: &ProvenanceLayout,
     marker_path: &Utf8Path,
 ) -> anyhow::Result<()> {
     let marker: PublicationMarker = serde_json::from_str(&std::fs::read_to_string(marker_path)?)?;
-    if matches!(marker.phase, PublicationPhase::Published) && !marker.transaction_dir.exists() {
-        validate_missing_transaction_dir(layout, &marker.transaction_dir)?;
-        return clear_publication_marker(layout);
+    let published = matches!(marker.phase, PublicationPhase::Published);
+    if !published || marker.transaction_dir.exists() {
+        let transaction = validated_transaction_dir(layout, &marker.transaction_dir)?;
+        let backup = transaction.join("backup-state");
+        if !layout.state_dir().exists() {
+            crate::write_error::ensure!(
+                Fault,
+                backup.exists(),
+                "publication recovery found neither live state nor backup state"
+            );
+            std::fs::rename(&backup, layout.state_dir())?;
+            sync_directory(&layout.provenance_dir())?;
+        }
     }
-    let transaction_dir = validated_transaction_dir(layout, &marker.transaction_dir)?;
-    let backup = transaction_dir.join("backup-state");
-    if !layout.state_dir().exists() {
-        crate::write_error::ensure!(
-            Fault,
-            backup.exists(),
-            "publication recovery found neither live state nor backup state"
-        );
-        std::fs::rename(&backup, layout.state_dir())?;
-        sync_directory(&layout.provenance_dir())?;
-    }
-    if transaction_dir.exists() {
-        remove_transaction(&transaction_dir)?;
-    }
-    clear_publication_marker(layout)
+    end_marked_write(layout, TransactionKind::Import, &marker.transaction_dir)
 }
 
 /// The resolved path of the import transaction at `transaction_dir`.
@@ -94,15 +83,6 @@ pub fn validated_transaction_dir(
     transaction_dir: &Utf8Path,
 ) -> anyhow::Result<Utf8PathBuf> {
     contained_transaction(layout, TransactionKind::Import, transaction_dir)
-}
-
-/// Refuses an import transaction that does not exist when its place is not
-/// in the import transaction directory.
-pub fn validate_missing_transaction_dir(
-    layout: &ProvenanceLayout,
-    transaction_dir: &Utf8Path,
-) -> anyhow::Result<()> {
-    contained_missing_transaction(layout, TransactionKind::Import, transaction_dir)
 }
 
 pub fn create_real_directory(path: &Utf8Path) -> anyhow::Result<()> {

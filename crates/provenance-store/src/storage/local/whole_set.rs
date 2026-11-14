@@ -3,12 +3,13 @@
 //!
 //! The transaction lives under `.provenance/cache`. A marker names its phase,
 //! so recovery at the next section entry completes or rolls back a swap that
-//! a crash interrupted. A transaction that stopped before its marker belongs
-//! to no live write, and the next section entry removes it.
+//! a crash interrupted. A transaction that no marker names belongs to no live
+//! write: the write removes it when it fails, and the next section entry
+//! removes it after a stop.
 
 use super::durability::{sync_directory, sync_tree, write_staged_file};
-use super::recovery::{clear_publication_marker, write_publication_marker, PublicationPhase};
-use super::transactions::remove_transaction;
+use super::recovery::{write_publication_marker, PublicationPhase};
+use super::transactions::{clear_marker, end_marked_write, remove_unpublished, TransactionKind};
 use crate::layout::ProvenanceLayout;
 use crate::storage::WriteSet;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -16,11 +17,10 @@ use provenance_macros::rule;
 
 /// The steps that a publication names in one whole-set transaction.
 ///
-/// The steps say where the transaction and its marker live, what each phase
+/// The steps say the kind of the transaction and its marker, what each phase
 /// records, and which working-tree file lands with the state, if any.
 pub trait WholeSetHook {
-    fn transactions_dir(&self, live: &ProvenanceLayout) -> Utf8PathBuf;
-    fn marker_path(&self, live: &ProvenanceLayout) -> Utf8PathBuf;
+    fn kind(&self) -> TransactionKind;
     fn prepared(&mut self, live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()>;
     fn backup_created(
         &mut self,
@@ -33,11 +33,22 @@ pub trait WholeSetHook {
     fn after_published(&mut self) -> anyhow::Result<()>;
     fn rollback_finished(&mut self, live: &ProvenanceLayout) -> anyhow::Result<()>;
     fn finish(&mut self, live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()>;
+    /// Removes the data of a write that failed and that no marker names, as
+    /// the next section entry removes it after a stop.
+    fn remove_unpublished(
+        &mut self,
+        _live: &ProvenanceLayout,
+        transaction: &Utf8Path,
+    ) -> anyhow::Result<()> {
+        remove_unpublished(transaction)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InstallState {
     StateOnly,
+    /// The replacement is in the working tree, so the write goes only
+    /// forward: a later failure keeps the marker for the next section entry.
     FileInstalled,
 }
 
@@ -56,18 +67,29 @@ pub fn land(
             .duration_since(std::time::UNIX_EPOCH)?
             .as_nanos()
     );
-    let transaction = hook.transactions_dir(live).join(transaction_name);
+    let transaction = hook.kind().directory(live).join(transaction_name);
     std::fs::create_dir(&transaction)?;
-    let _cleanup = TransactionCleanup {
-        transaction: transaction.clone(),
-        publication_marker: hook.marker_path(live),
-    };
+    let result = stage_and_publish(live, writes, &transaction, hook);
+    if result.is_err() && !hook.kind().marker(live).exists() {
+        // The error of the write wins. A failed removal leaves data that the
+        // next section entry removes, or that stops it with its path.
+        let _ = hook.remove_unpublished(live, &transaction);
+    }
+    result
+}
+
+fn stage_and_publish(
+    live: &ProvenanceLayout,
+    writes: &WriteSet,
+    transaction: &Utf8Path,
+    hook: &mut dyn WholeSetHook,
+) -> anyhow::Result<()> {
     let staged_repo = transaction.join("staged-repo");
     let staged = ProvenanceLayout::new(staged_repo.clone());
     copy_directory(&live.state_dir(), &staged.state_dir())?;
     apply(&staged, writes)?;
     crate::test_probes::at("state_prepared")?;
-    publish_staged_state(live, &staged, &staged_repo, &transaction, hook)
+    publish_staged_state(live, &staged, &staged_repo, transaction, hook)
 }
 
 /// Applies `writes` to the copy of the state directory at `staged`, with no
@@ -100,7 +122,7 @@ fn publish_staged_state(
     sync_directory(&staged.provenance_dir())?;
     sync_directory(staged_repo)?;
     sync_directory(transaction)?;
-    sync_directory(&hook.transactions_dir(live))?;
+    sync_directory(&hook.kind().directory(live))?;
     let backup = transaction.join("backup-state");
     hook.prepared(live, transaction)?;
     std::fs::rename(live.state_dir(), &backup).map_err(|error| {
@@ -183,23 +205,6 @@ fn rollback_after_error(
         .map_err(crate::write_error::publication_started)
 }
 
-/// Removes the transaction when it ends with no marker, also on unwind.
-///
-/// A failed removal does not change the result of the write: no marker
-/// names the transaction, so the next section entry removes it.
-struct TransactionCleanup {
-    transaction: Utf8PathBuf,
-    publication_marker: Utf8PathBuf,
-}
-
-impl Drop for TransactionCleanup {
-    fn drop(&mut self) {
-        if !self.publication_marker.exists() && self.transaction.exists() {
-            let _ = remove_transaction(&self.transaction);
-        }
-    }
-}
-
 fn rollback_publication(
     live: &ProvenanceLayout,
     staged: &ProvenanceLayout,
@@ -225,12 +230,8 @@ fn rollback_publication(
 pub struct StatePublication;
 
 impl WholeSetHook for StatePublication {
-    fn transactions_dir(&self, live: &ProvenanceLayout) -> Utf8PathBuf {
-        live.import_transactions_dir()
-    }
-
-    fn marker_path(&self, live: &ProvenanceLayout) -> Utf8PathBuf {
-        live.publication_marker_path()
+    fn kind(&self) -> TransactionKind {
+        TransactionKind::Import
     }
 
     fn prepared(&mut self, live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
@@ -266,16 +267,12 @@ impl WholeSetHook for StatePublication {
     }
 
     fn rollback_finished(&mut self, live: &ProvenanceLayout) -> anyhow::Result<()> {
-        clear_publication_marker(live)
+        clear_marker(live, TransactionKind::Import)
     }
 
-    /// The state is published, so the write succeeds when the removal or the
-    /// clear of the marker fails. The Published marker then stays, and the
-    /// next section entry removes the transaction and clears the marker.
+    /// The state is published, so the write succeeds when its end fails.
     fn finish(&mut self, live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
-        if remove_transaction(transaction).is_ok() {
-            let _ = clear_publication_marker(live);
-        }
+        let _ = end_marked_write(live, TransactionKind::Import, transaction);
         Ok(())
     }
 }

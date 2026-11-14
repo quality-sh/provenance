@@ -6,25 +6,17 @@ use std::fs::File;
 use std::io::Write as _;
 use std::path::PathBuf;
 
-use crate::storage::local::durability::sync_opened_directory;
-
 pub use super::held_metadata::FileIdentity;
 pub use super::held_recovery::RepositoryFileBackup;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum BackupRetentionReason {
-    OriginalChanged,
-    VerificationFailed,
-    RemovalFailed,
-}
-
+/// The end of a complete install of a prepared file.
 #[derive(Debug, Eq, PartialEq)]
 pub enum RepositoryFileInstall {
+    /// The replacement is in place, and the backup is removed.
     Installed,
-    InstalledBackupKept {
-        backup: String,
-        reason: BackupRetentionReason,
-    },
+    /// The replacement is in place. The backup does not hold the file that
+    /// the caller read, so a person changed it, and it stays.
+    InstalledBackupKept { backup: String },
 }
 
 pub struct HeldRepositoryFile {
@@ -94,10 +86,16 @@ impl HeldRepositoryFile {
         )
     }
 
+    /// Makes a prepared file with a new random name next to this file. The
+    /// prepared file removes itself when it drops before an install.
     pub fn create_temp(&self, bytes: &[u8]) -> Result<PreparedRepositoryFile, Refusal> {
         for _ in 0..100 {
             match self.create_temp_at(&self.new_temp_leaf(), bytes) {
                 Err(Refusal::Write(error)) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                }
+                Ok(mut prepared) => {
+                    prepared.remove_on_drop = true;
+                    return Ok(prepared);
                 }
                 result => return result,
             }
@@ -110,7 +108,9 @@ impl HeldRepositoryFile {
 
     /// Makes the prepared file `leaf` next to this file with `bytes`, and
     /// syncs it. The call fails when `leaf` exists, and removes the file that
-    /// it made when a later step fails.
+    /// it made when a later step fails. The caller records `leaf` before the
+    /// call and removes the file through that record, so the file stays when
+    /// it drops.
     pub(crate) fn create_temp_at(
         &self,
         leaf: &str,
@@ -136,7 +136,7 @@ impl HeldRepositoryFile {
             target_leaf: self.leaf.clone(),
             target_identity: self.identity.clone(),
             target_digest: self.digest,
-            remove_on_drop: true,
+            remove_on_drop: false,
         })
     }
 
@@ -170,23 +170,32 @@ impl HeldRepositoryFile {
             target_leaf: self.leaf.clone(),
             target_identity: self.identity.clone(),
             target_digest: self.digest,
-            remove_on_drop: true,
+            remove_on_drop: false,
         }))
     }
 
+    /// Puts `prepared` in place of this file, as [`Self::install`] does, and
+    /// then completes the install, as [`Self::finish_install`] does. An error
+    /// before the rename leaves this file in place. An error after the rename
+    /// leaves the replacement in place, and the backup can stay.
     pub fn compare_and_swap(
         &self,
         prepared: PreparedRepositoryFile,
     ) -> Result<RepositoryFileInstall, Refusal> {
         let backup = self.recovery_backup();
-        self.compare_and_swap_with_backup(prepared, &backup)
+        self.install(prepared, &backup)?;
+        self.finish_install(&backup)
     }
 
-    pub fn compare_and_swap_with_backup(
+    /// Renames this file to `backup` and `prepared` onto this file. Each
+    /// failure before the rename of `prepared` puts this file back and gives
+    /// the refusal. After that rename the install goes only forward: the
+    /// caller completes it with [`Self::finish_install`].
+    pub(crate) fn install(
         &self,
-        mut prepared: PreparedRepositoryFile,
+        prepared: PreparedRepositoryFile,
         backup: &RepositoryFileBackup,
-    ) -> Result<RepositoryFileInstall, Refusal> {
+    ) -> Result<(), Refusal> {
         self.require_prepared_for_target(&prepared)?;
         if backup.identity() != &self.identity
             || backup.digest() != self.digest
@@ -197,8 +206,7 @@ impl HeldRepositoryFile {
         self.displace_to_backup(backup.leaf())?;
         probe_io("repository_file_after_displace").map_err(Refusal::Write)?;
         self.require_matching_backup(backup.leaf())?;
-        self.install_prepared(backup.leaf(), &mut prepared)?;
-        Ok(self.finish_backup(backup.leaf().to_owned()))
+        self.install_prepared(backup.leaf(), prepared)
     }
 
     fn require_prepared_for_target(
@@ -224,7 +232,7 @@ impl HeldRepositoryFile {
     fn install_prepared(
         &self,
         backup: &str,
-        prepared: &mut PreparedRepositoryFile,
+        mut prepared: PreparedRepositoryFile,
     ) -> Result<(), Refusal> {
         let install = (|| {
             probe_io("repository_file_after_backup_check").map_err(Refusal::Write)?;
@@ -234,42 +242,18 @@ impl HeldRepositoryFile {
             safe_fs::rename_no_replace_in(&prepared.parent, &prepared.leaf, &self.leaf)
                 .map_err(write_refusal)
         })();
-        if let Err(error) = install {
-            return self.restore_then_refuse(backup, error);
+        match install {
+            Ok(()) => {
+                prepared.remove_on_drop = false;
+                Ok(())
+            }
+            Err(error) => self.restore_then_refuse(backup, error),
         }
-        if let Err(error) = sync_opened_directory(&self.parent) {
-            safe_fs::rename_no_replace_in(&self.parent, &self.leaf, &prepared.leaf)
-                .map_err(Refusal::Restore)?;
-            return self.restore_then_refuse(backup, Refusal::Write(error));
-        }
-        prepared.remove_on_drop = false;
-        Ok(())
     }
 
     fn restore_then_refuse(&self, backup: &str, refusal: Refusal) -> Result<(), Refusal> {
         restore(&self.parent, backup, &self.leaf)?;
         Err(refusal)
-    }
-
-    fn finish_backup(&self, backup: String) -> RepositoryFileInstall {
-        let retention = match self.matches_backup(&backup) {
-            Ok(true) => None,
-            Ok(false) => Some(BackupRetentionReason::OriginalChanged),
-            Err(_) => Some(BackupRetentionReason::VerificationFailed),
-        };
-        if let Some(reason) = retention {
-            return RepositoryFileInstall::InstalledBackupKept { backup, reason };
-        }
-        if probe_io("repository_file_unlink_backup").is_err()
-            || unlink(&self.parent, &backup).is_err()
-            || sync_opened_directory(&self.parent).is_err()
-        {
-            return RepositoryFileInstall::InstalledBackupKept {
-                backup,
-                reason: BackupRetentionReason::RemovalFailed,
-            };
-        }
-        RepositoryFileInstall::Installed
     }
 
     fn displace_to_backup(&self, backup: &str) -> Result<(), Refusal> {
@@ -395,12 +379,12 @@ fn entry_has_identity(parent: &File, leaf: &str, expected: &FileIdentity) -> boo
         .is_some_and(|current| &current == expected)
 }
 
-fn unlink_temp(parent: &File, leaf: &str) -> std::io::Result<()> {
+pub(super) fn unlink_temp(parent: &File, leaf: &str) -> std::io::Result<()> {
     probe_io("repository_file_unlink_temp")?;
     unlink(parent, leaf)
 }
 
-fn probe_io(label: &str) -> std::io::Result<()> {
+pub(super) fn probe_io(label: &str) -> std::io::Result<()> {
     crate::test_probes::at(label).map_err(std::io::Error::other)
 }
 

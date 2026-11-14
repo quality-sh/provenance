@@ -220,7 +220,11 @@ fn clearing_a_marker_checks_the_place_the_directory_claimed() {
         for leaf in PLANTINGS {
             let layouts = Layouts::build(transactions, leaf);
             for (shape, candidate) in layouts.candidates("t") {
-                let decision = validate_missing_transaction_dir(&layouts.layout, &candidate);
+                let decision = contained_missing_transaction(
+                    &layouts.layout,
+                    TransactionKind::Import,
+                    &candidate,
+                );
                 assert_eq!(
                     decision.is_ok(),
                     every_step_is_a_real_directory_in_the_cache(&layouts.cache, &candidate, false),
