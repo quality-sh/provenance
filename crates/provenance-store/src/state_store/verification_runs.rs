@@ -3,6 +3,7 @@ use provenance_core::{
     validate_optional_commit_pin, ScopeId, StableId, VerificationMethod, VerificationRun,
     VerificationRunStatus,
 };
+use provenance_macros::rule;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::io::{BufRead, BufReader, Read};
@@ -57,7 +58,7 @@ impl StateStore {
                 })?;
             let started_at = now_millis(&*held.clock())?;
             let scope = &binding.binding.scope_id;
-            let rows = held.run_rows(scope)?;
+            let rows = held.list_verification_runs(scope)?;
             let binding_id = binding.binding.id.clone();
             let (run, reviews) = held.run_with_cleared_reviews(scope, |named| {
                 let taken = rows.iter().map(|row| row.id.as_str());
@@ -84,15 +85,11 @@ impl StateStore {
         })
     }
 
-    /// The rows of the runs cache of `scope_id`. The caller holds the section,
-    /// so no other start adds a row before the row of its run lands.
-    fn run_rows(&self, scope_id: &ScopeId) -> anyhow::Result<Vec<VerificationRun>> {
-        let (path, lock_path) = self.run_files(scope_id);
-        crate::jsonl::read_jsonl_locked(&path, &lock_path)
-    }
-
-    /// Adds `run` as a new row of the runs cache, and refuses a run whose id
-    /// a row already holds.
+    /// Stores `run`, whose Rule exists, as a new row of the runs cache, a file
+    /// of derived state that Git does not track, so that no write to
+    /// Git-tracked state is made for the run. Refuses a run whose id a row
+    /// already holds.
+    #[rule("rule_verification_runs_are_cache")]
     fn add_run_row(&self, run: &VerificationRun) -> anyhow::Result<()> {
         let (path, lock_path) = self.run_files(&run.scope_id);
         crate::jsonl::mutate_jsonl_locked(
@@ -171,24 +168,22 @@ impl StateStore {
         })
     }
 
+    /// The rows of the runs cache of `scope_id` in file order, each after the
+    /// line checks that a write of the cache makes. A caller that holds the
+    /// section reads rows that no other start changes before it writes.
     pub fn list_verification_runs(
         &self,
         scope_id: &ScopeId,
     ) -> anyhow::Result<Vec<VerificationRun>> {
         let (path, lock_path) = self.run_files(scope_id);
-        crate::jsonl::with_advisory_lock(&lock_path, || {
-            if !path.exists() {
-                return Ok(Vec::new());
-            }
-            std::fs::read_to_string(path)?
-                .lines()
-                .map(|line| serde_json::from_str(line).map_err(Into::into))
-                .collect()
-        })
+        crate::jsonl::read_jsonl_locked(&path, &lock_path)
     }
 
-    /// Reads verification runs through a bounded typed line reader while the
-    /// run file is locked. The digest identifies the exact live input.
+    /// Reads verification runs one line at a time while the run file is
+    /// locked. A line over `maximum` bytes is refused as `page_record_too_large`
+    /// before it is read whole, and each other line gives its run through the
+    /// line checks that a write of the cache makes. The digest identifies the
+    /// exact live input.
     pub(crate) fn read_verification_runs<R>(
         &self,
         scope_id: &ScopeId,
@@ -220,7 +215,7 @@ impl StateStore {
             }
             let digest = hex::encode(hasher.finalize());
             let mut reader = BufReader::new(std::fs::File::open(&path)?);
-            let mut line_number = 0_i64;
+            let mut line_number = 0_usize;
             let mut next = || {
                 let mut bytes = Vec::new();
                 let count = reader
@@ -230,26 +225,16 @@ impl StateStore {
                 if count == 0 {
                     return Ok(None);
                 }
-                if bytes.last() == Some(&b'\n') {
-                    bytes.pop();
-                }
-                if bytes.last() == Some(&b'\r') {
-                    bytes.pop();
-                }
-                if bytes.len() > maximum {
+                let line = crate::jsonl::without_terminator(&bytes);
+                if line.len() > maximum {
                     return Err(
                         provenance_core::protocol::read_failure::ReadFailure::PageRecordTooLarge
                             .into(),
                     );
                 }
                 line_number += 1;
-                let value: serde_json::Value = serde_json::from_slice(&bytes)?;
-                crate::state_store::readers::ensure_no_legacy_retirement(
-                    &path,
-                    usize::try_from(line_number)?,
-                    &value,
-                )?;
-                Ok(Some((line_number, serde_json::from_value(value)?)))
+                let run = crate::jsonl::record_of_line(&path, line_number, line)?;
+                Ok(Some((i64::try_from(line_number)?, run)))
             };
             read(&digest, &mut next)
         })
