@@ -2,20 +2,24 @@
 //!
 //! The module tree of each test target comes from its root file: each
 //! `mod name;` and `#[path = "..."]` declaration, with the directory rules of
-//! rustc. Each file is parsed once. A file whose path under a `tests`
+//! rustc. A file is parsed once, and only when its text has the word `mod`
+//! (for the module walk) or the word `test` (for the test check). A file whose path under a `tests`
 //! directory has a `support` directory or a name that ends in `_support` is
 //! shared support. Only shared support can load in more than one target, and
 //! it declares no tests.
 //!
 //! Each `tests/<group>/main.rs` must be a test target. Each other `.rs` file
 //! directly in `tests/` must load in a test target. A `.rs` file deeper in
-//! `tests/` must load in a test target only when `syn` parses it and it
-//! declares a test function, so data files, compile-fail inputs and files
-//! that do not parse can stay there.
+//! `tests/` must load in a test target only when its text has a test
+//! attribute: `test]` (`#[test]`, `#[tokio::test]`, `#[hegel::test]`,
+//! `#[rstest]`) or `::test(` (`#[tokio::test(flavor = ...)]`). The text
+//! decides, so a file that does not parse or that makes its tests with a
+//! macro is also seen. Data files and compile-fail inputs without such text
+//! can stay there.
 //!
 //! Sibling `mod` items with one name can only be `#[cfg]` alternatives, as
-//! rustc refuses two of them in one build. A file that more than one of them
-//! loads counts once.
+//! rustc refuses two of them in one build. For each file, the count is the
+//! highest count of one alternative.
 //!
 //! Limits:
 //!
@@ -25,6 +29,12 @@
 //! - Tests that a macro makes, for example a `macro_rules!` that expands to
 //!   `#[test] fn` or a `proptest!` block, are not seen. Shared support that
 //!   makes tests in this way and loads in two targets is not reported.
+//! - A `#[cfg_attr(..., path = "...")]` attribute is not read, so its module
+//!   loads from the default path.
+//! - A file that an `include!` adds is not seen as loaded.
+//! - A `mod` item in a function body is not followed. A double load through
+//!   it is not reported, and a file that loads only through it gives a false
+//!   "in no test target" fault.
 //! - Only targets of kind `test` are examined. A `[[bench]]` or `[[example]]`
 //!   file under `tests/` gives a false "in no test target" or "not a test
 //!   target" fault. A `src/` file that loads a test file with `#[path]` is not
@@ -109,7 +119,10 @@ pub fn layout_faults(metadata: &Value) -> (Vec<String>, usize) {
                 "{} is in no test target of {package}: add it to a group main.rs or as a [[test]]",
                 shown(path, &root),
             ));
-        } else if unloaded_file_declares_tests(path) {
+        } else if sources
+            .text(path)
+            .is_some_and(|text| has_test_attribute(&text))
+        {
             faults.push(format!(
                 "{} declares tests and is in no test target of {package}: load it as a \
                  module of a test target",
@@ -160,37 +173,57 @@ fn rust_files(directory: &Path, depth: usize, files: &mut Vec<(PathBuf, usize)>)
     }
 }
 
-/// Tells if a file that no target loads parses as Rust and declares tests.
-fn unloaded_file_declares_tests(path: &Path) -> bool {
-    fs::read_to_string(path)
-        .ok()
-        .and_then(|text| syn::parse_file(&text).ok())
-        .is_some_and(|syntax| items_declare_tests(&syntax.items))
+/// Tells if `text` has a test attribute: `test]` or `::test(`.
+fn has_test_attribute(text: &str) -> bool {
+    text.contains("test]") || text.contains("::test(")
 }
 
-/// The source files that the module trees load, each parsed once.
+/// Tells if `text` has `word` with no identifier character before or after it.
+fn has_word(text: &str, word: &str) -> bool {
+    let identifier = |character: Option<char>| {
+        character.is_some_and(|character| character.is_alphanumeric() || character == '_')
+    };
+    text.match_indices(word).any(|(start, _)| {
+        !identifier(text[..start].chars().next_back())
+            && !identifier(text[start + word.len()..].chars().next())
+    })
+}
+
+/// The source files that the module trees load, each read once and parsed
+/// at most once.
 #[derive(Default)]
 struct Sources {
-    parsed: BTreeMap<PathBuf, Option<Rc<syn::File>>>,
+    texts: BTreeMap<PathBuf, Option<Rc<str>>>,
+    parsed: BTreeMap<PathBuf, Rc<syn::File>>,
 }
 
 impl Sources {
-    /// Gives the syntax of `path`, or `None` when it does not exist.
-    fn parse(&mut self, path: &Path) -> Option<Rc<syn::File>> {
-        self.parsed
+    /// Gives the text of `path`, or `None` when it does not exist.
+    fn text(&mut self, path: &Path) -> Option<Rc<str>> {
+        self.texts
             .entry(path.to_owned())
-            .or_insert_with(|| {
-                let text = fs::read_to_string(path).ok()?;
-                Some(Rc::new(syn::parse_file(&text).unwrap_or_else(|error| {
-                    panic!("parse {}: {error}", path.display());
-                })))
-            })
+            .or_insert_with(|| fs::read_to_string(path).ok().map(Rc::from))
             .clone()
+    }
+
+    /// Gives the syntax of `path` when its text has `word`, and `None` when
+    /// it does not exist or does not have `word`.
+    fn parse(&mut self, path: &Path, word: &str) -> Option<Rc<syn::File>> {
+        let text = self.text(path)?;
+        if !has_word(&text, word) {
+            return None;
+        }
+        let syntax = self.parsed.entry(path.to_owned()).or_insert_with(|| {
+            Rc::new(syn::parse_file(&text).unwrap_or_else(|error| {
+                panic!("parse {}: {error}", path.display());
+            }))
+        });
+        Some(Rc::clone(syntax))
     }
 
     /// Tells if `path` declares a test function.
     fn declares_tests(&mut self, path: &Path) -> bool {
-        self.parse(path)
+        self.parse(path, "test")
             .is_some_and(|syntax| items_declare_tests(&syntax.items))
     }
 
@@ -211,7 +244,7 @@ impl Sources {
             return;
         }
         files.push(path.to_owned());
-        let Some(syntax) = self.parse(path) else {
+        let Some(syntax) = self.parse(path, "mod") else {
             return;
         };
         ancestors.push(path.to_owned());
@@ -238,7 +271,7 @@ impl Sources {
         ancestors: &mut Vec<PathBuf>,
         files: &mut Vec<PathBuf>,
     ) {
-        let mut loaded_by_name = BTreeMap::<String, BTreeSet<PathBuf>>::new();
+        let mut loaded_by_name = BTreeMap::<String, BTreeMap<PathBuf, usize>>::new();
         for item in items {
             let syn::Item::Mod(module) = item else {
                 continue;
@@ -270,14 +303,18 @@ impl Sources {
                     }
                 }
             }
-            let alternatives = loaded_by_name.entry(name).or_default();
-            let earlier = alternatives.clone();
+            let mut counts = BTreeMap::<PathBuf, usize>::new();
             for file in module_files {
-                if !earlier.contains(&file) {
-                    alternatives.insert(file.clone());
-                    files.push(file);
-                }
+                *counts.entry(file).or_default() += 1;
             }
+            let highest = loaded_by_name.entry(name).or_default();
+            for (file, count) in counts {
+                let entry = highest.entry(file).or_default();
+                *entry = (*entry).max(count);
+            }
+        }
+        for (file, count) in loaded_by_name.into_values().flatten() {
+            files.extend(std::iter::repeat_n(file, count));
         }
     }
 }
