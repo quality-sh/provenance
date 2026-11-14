@@ -111,7 +111,7 @@ fn is_scope_name(name: &str) -> bool {
 
 /// The path of each fixed shard below a scope directory.
 #[cfg_attr(not(feature = "host"), allow(dead_code))]
-fn shard_suffixes() -> impl Iterator<Item = &'static str> {
+pub(crate) fn shard_suffixes() -> impl Iterator<Item = &'static str> {
     ProjectionFamily::ALL
         .into_iter()
         .map(ProjectionFamily::shard_suffix)

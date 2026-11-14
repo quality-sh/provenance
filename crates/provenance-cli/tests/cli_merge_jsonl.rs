@@ -1,3 +1,4 @@
+use crate::support::merge_driver::driver_repository;
 use assert_cmd::Command;
 use provenance_macros::verifies;
 use sha2::Digest;
@@ -161,38 +162,8 @@ fn commit_shard(repository: &Path, contents: &str, message: &str) {
 /// `.gitattributes` line that points the state shards at it.
 #[test]
 fn the_documented_driver_configuration_merges_two_branches() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = driver_repository();
     let repository = directory.path();
-    git(repository, &["init", "--initial-branch", "main"]);
-    git(repository, &["config", "user.email", "test@example.test"]);
-    git(repository, &["config", "user.name", "Test"]);
-    git(
-        repository,
-        &[
-            "config",
-            "merge.provenance-jsonl.name",
-            "Provenance canonical JSONL merge",
-        ],
-    );
-    let binary = assert_cmd::cargo::cargo_bin("provenance");
-    git(
-        repository,
-        &[
-            "config",
-            "merge.provenance-jsonl.driver",
-            &format!(
-                "'{}' merge-jsonl %O %A %B --output %A --path %P",
-                // Git runs the driver through sh, which eats backslashes;
-                // Windows accepts forward slashes in exec paths.
-                binary.to_str().unwrap().replace('\\', "/")
-            ),
-        ],
-    );
-    std::fs::write(
-        repository.join(".gitattributes"),
-        ".provenance/state/**/*.jsonl merge=provenance-jsonl\n",
-    )
-    .unwrap();
 
     commit_shard(repository, &valid_rule("rule_base", "req_base"), "base");
     git(repository, &["checkout", "-b", "theirs"]);
@@ -220,30 +191,8 @@ fn the_documented_driver_configuration_merges_two_branches() {
 /// git must be told the merge failed rather than committing the invalid shard.
 #[test]
 fn the_documented_driver_configuration_refuses_an_invalid_merge() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = driver_repository();
     let repository = directory.path();
-    git(repository, &["init", "--initial-branch", "main"]);
-    git(repository, &["config", "user.email", "test@example.test"]);
-    git(repository, &["config", "user.name", "Test"]);
-    let binary = assert_cmd::cargo::cargo_bin("provenance");
-    git(
-        repository,
-        &[
-            "config",
-            "merge.provenance-jsonl.driver",
-            &format!(
-                "'{}' merge-jsonl %O %A %B --output %A --path %P",
-                // Git runs the driver through sh, which eats backslashes;
-                // Windows accepts forward slashes in exec paths.
-                binary.to_str().unwrap().replace('\\', "/")
-            ),
-        ],
-    );
-    std::fs::write(
-        repository.join(".gitattributes"),
-        ".provenance/state/**/*.jsonl merge=provenance-jsonl\n",
-    )
-    .unwrap();
 
     commit_shard(repository, &valid_rule("rule_base", "req_base"), "base");
     git(repository, &["checkout", "-b", "theirs"]);

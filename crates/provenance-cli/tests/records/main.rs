@@ -7,6 +7,7 @@
 
 #[path = "../support"]
 mod support {
+    pub mod merge_driver;
     pub mod record_review;
     pub mod review_paths;
 }
@@ -58,6 +59,8 @@ mod cli_merge_jsonl;
 mod cli_merge_jsonl_preservation;
 #[path = "../cli_merge_jsonl_refusals.rs"]
 mod cli_merge_jsonl_refusals;
+#[path = "../cli_merge_landing_batches.rs"]
+mod cli_merge_landing_batches;
 #[path = "../cli_multiple_parents.rs"]
 mod cli_multiple_parents;
 #[path = "../cli_origin.rs"]

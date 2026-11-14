@@ -73,18 +73,18 @@ fn merge(
             .map(|row| row.record().clone())
             .collect::<Vec<_>>()
     };
-    let key = target_path
+    let identity = target_path
         .map_or(ShardFamily::Unrecognized, ShardFamily::for_shard_path)
-        .record_key();
+        .row_identity();
     for (side, path, rows) in [
         (MergeSide::Base, base, &base_rows),
         (MergeSide::Ours, ours, &our_rows),
         (MergeSide::Theirs, theirs, &their_rows),
     ] {
-        ensure_unique_ids(target_path.unwrap_or(path), side, key, rows)?;
+        ensure_unique_ids(target_path.unwrap_or(path), side, identity, rows)?;
     }
     let outcome = merge_records(
-        key,
+        identity,
         &record_values(&base_rows),
         &record_values(&our_rows),
         &record_values(&their_rows),
