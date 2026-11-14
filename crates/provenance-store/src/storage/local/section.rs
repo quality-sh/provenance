@@ -17,9 +17,9 @@ use std::fs::{File, OpenOptions};
 /// An acquire refuses a `.provenance` directory that resolves outside the
 /// repository and a symbolic link in place of a cache directory, takes the
 /// exclusive lock on the publication lock file, and then completes or rolls
-/// back a publication that a crash interrupted and removes each transaction
-/// that no marker names. Other processes take the same lock file, so the
-/// section also excludes them.
+/// back a publication that a crash interrupted and removes the data of each
+/// write that stopped before its marker. Other processes take the same lock
+/// file, so the section also excludes them.
 #[derive(Clone, Debug)]
 pub struct LocalSectionLock {
     layout: ProvenanceLayout,
