@@ -12,7 +12,7 @@ use memory::{
 };
 use provenance_core::{RequirementReview, VerificationBinding, VerificationRun};
 use provenance_macros::verifies;
-use provenance_store::operations::begin_verification;
+use provenance_store::operations::{begin_verification, verification_runs};
 use provenance_store::repository::Repository;
 use provenance_store::storage::{Atomicity, StateKey};
 use provenance_store::write_error::WriteError;
@@ -98,17 +98,18 @@ fn a_start_publishes_the_binding_and_the_cleared_reviews_as_one_whole_set() {
     );
 }
 
-// No Rule binding: no Rule states that a start with no change makes no
-// write.
 #[test]
-fn a_repeated_start_sends_no_set_to_the_persistence() {
+#[verifies("rule_verification_runs_are_cache", examples)]
+fn a_repeated_start_stores_its_run_in_the_cache_and_sends_no_set_to_the_persistence() {
     let start = start(None);
-    begin_verification(&start.repository, begin_input()).unwrap();
+    let first = begin_verification(&start.repository, begin_input()).unwrap();
 
-    begin_verification(&start.repository, begin_input()).unwrap();
+    let second = begin_verification(&start.repository, begin_input()).unwrap();
 
-    let first = (Atomicity::WholeSet, vec![REVIEWS.into(), BINDINGS.into()]);
-    assert_eq!(sets(&start.persistence), [first]);
+    let set = (Atomicity::WholeSet, vec![REVIEWS.into(), BINDINGS.into()]);
+    assert_eq!(sets(&start.persistence), [set]);
+    let runs = verification_runs(&start.repository, None).unwrap();
+    assert_eq!(runs, [first, second]);
 }
 
 #[test]

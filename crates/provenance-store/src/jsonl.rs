@@ -5,7 +5,6 @@
 #[cfg(feature = "host")]
 use crate::layout::ProvenanceLayout;
 use crate::publication::{protect_rows, WritePermissions};
-use crate::state_store::readers::{ensure_no_legacy_retirement, parse_line};
 use crate::state_store::StateStore;
 use camino::Utf8Path;
 #[cfg(feature = "host")]
@@ -14,8 +13,12 @@ use serde::{de::DeserializeOwned, Serialize};
 #[cfg(feature = "host")]
 use std::fs::{File, OpenOptions};
 
+mod line;
 mod preservation;
 
+use line::numbered_lines;
+#[cfg(feature = "host")]
+pub(crate) use line::{record_of_line, without_terminator};
 use preservation::{LoadedRecords, RawRecord};
 
 /// An exclusive lock on the lock file at a path. Released on drop.
@@ -94,14 +97,21 @@ where
 
 /// Reads the records of one file of derived state, such as the verification
 /// runs, under its advisory lock. A file that does not exist has no records.
+/// Each line gives its record through [`record_of_line`], and the read keeps
+/// no stored line.
 #[cfg(feature = "host")]
-pub(crate) fn read_jsonl_locked<T>(path: &Utf8Path, lock_path: &Utf8Path) -> anyhow::Result<Vec<T>>
-where
-    T: DeserializeOwned + Serialize,
-{
+pub(crate) fn read_jsonl_locked<T: DeserializeOwned>(
+    path: &Utf8Path,
+    lock_path: &Utf8Path,
+) -> anyhow::Result<Vec<T>> {
     let _lock = AdvisoryLock::acquire(lock_path)?;
-    let mut loaded = load_jsonl_file(path)?;
-    Ok(std::mem::take(loaded.records_mut()))
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let contents = std::fs::read(path)?;
+    numbered_lines(&contents)
+        .map(|(number, line)| record_of_line(path, number, line))
+        .collect()
 }
 
 /// Loads the file at `path`, or no records when the file does not exist.
@@ -110,10 +120,7 @@ fn load_jsonl_file<T>(path: &Utf8Path) -> anyhow::Result<LoadedRecords<T>>
 where
     T: DeserializeOwned + Serialize,
 {
-    let contents = path
-        .exists()
-        .then(|| std::fs::read_to_string(path))
-        .transpose()?;
+    let contents = path.exists().then(|| std::fs::read(path)).transpose()?;
     load_jsonl(path, contents.as_deref())
 }
 
@@ -147,7 +154,7 @@ pub(crate) fn mutate_jsonl_bytes_with<T, R>(
 where
     T: DeserializeOwned + Serialize,
 {
-    let mut loaded = load_jsonl(path, contents)?;
+    let mut loaded = load_jsonl(path, contents.map(str::as_bytes))?;
     let (result, changed) = mutate(loaded.records_mut())?;
     if !changed {
         return Ok((result, None));
@@ -157,11 +164,8 @@ where
     Ok((result, Some(jsonl_bytes(&lines))))
 }
 
-/// The read a write is built on, guarded the same way an ordinary read is.
-///
-/// A mutation rewrites the whole shard. Each raw line passes
-/// [`ensure_no_legacy_retirement`](crate::state_store::readers::ensure_no_legacy_retirement),
-/// the same check the read choke point makes, before any record is built.
+/// The read a write is built on: each line of `contents` gives its record
+/// through the line checks of [`line::checked_line`].
 ///
 /// The raw line stays with its typed record. An unchanged record keeps its
 /// raw line when the shard is saved, so the stored JSON line content that
@@ -170,7 +174,7 @@ where
 /// row's top-level unknown members onto its new line, and the write is
 /// refused before anything is published when a changed row holds stored data
 /// that cannot be carried over safely.
-fn load_jsonl<T>(path: &Utf8Path, contents: Option<&str>) -> anyhow::Result<LoadedRecords<T>>
+fn load_jsonl<T>(path: &Utf8Path, contents: Option<&[u8]>) -> anyhow::Result<LoadedRecords<T>>
 where
     T: DeserializeOwned + Serialize,
 {
@@ -178,10 +182,9 @@ where
         return Ok(LoadedRecords::default());
     };
     let mut loaded = LoadedRecords::default();
-    for (index, line) in contents.lines().enumerate() {
-        let value = parse_line(path, index + 1, line)?;
-        ensure_no_legacy_retirement(path, index + 1, &value)?;
-        let (record, raw) = RawRecord::deserialize(path, line, index + 1)?;
+    for (number, line) in numbered_lines(contents) {
+        let line = line::checked_line(path, number, line)?;
+        let (record, raw) = RawRecord::keep(path, line)?;
         loaded.push(record, raw);
     }
     Ok(loaded)
