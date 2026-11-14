@@ -179,39 +179,34 @@ fn close_schema(schema: &mut Value, closed: bool) {
     let Value::Object(schema) = schema else {
         return;
     };
-    let names = ["properties", "allOf", "anyOf", "oneOf", "$ref"]
+    let shapes_an_object = ["properties", "allOf", "anyOf", "oneOf", "$ref"]
         .iter()
         .any(|keyword| schema.contains_key(*keyword));
     let open = !schema.contains_key("additionalProperties")
         && !schema.contains_key("unevaluatedProperties");
-    if closed && names && open {
+    if closed && shapes_an_object && open {
         schema.insert("unevaluatedProperties".into(), Value::Bool(false));
     }
     for (keyword, value) in schema.iter_mut() {
-        match (keyword.as_str(), value) {
-            ("properties" | "patternProperties", Value::Object(named)) => {
-                named
-                    .values_mut()
-                    .for_each(|value| close_schema(value, true));
+        let (inner, closed): (Vec<&mut Value>, bool) = match (keyword.as_str(), value) {
+            ("properties" | "patternProperties", Value::Object(members)) => {
+                (members.values_mut().collect(), true)
             }
-            ("$defs" | "definitions", Value::Object(named)) => {
-                named
-                    .values_mut()
-                    .for_each(|value| close_schema(value, false));
+            ("$defs" | "definitions", Value::Object(definitions)) => {
+                (definitions.values_mut().collect(), false)
             }
             ("allOf" | "anyOf" | "oneOf", Value::Array(branches)) => {
-                branches
-                    .iter_mut()
-                    .for_each(|value| close_schema(value, false));
+                (branches.iter_mut().collect(), false)
             }
-            ("prefixItems", Value::Array(each)) => {
-                each.iter_mut().for_each(|value| close_schema(value, true));
-            }
+            ("prefixItems", Value::Array(items)) => (items.iter_mut().collect(), true),
             (
                 "items" | "additionalProperties" | "not" | "if" | "then" | "else" | "contains",
                 value,
-            ) => close_schema(value, true),
-            _ => {}
+            ) => (vec![value], true),
+            _ => (Vec::new(), true),
+        };
+        for value in inner {
+            close_schema(value, closed);
         }
     }
 }

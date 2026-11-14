@@ -8,7 +8,9 @@
 use crate::cache::{CatchUpRunning, PassClaim, PassSlot};
 #[cfg(feature = "host")]
 use crate::layout::with_initialized_graph;
-use crate::layout::{GraphNotInitialized, ProvenanceLayout};
+#[cfg(feature = "host")]
+use crate::layout::GraphNotInitialized;
+use crate::layout::ProvenanceLayout;
 use crate::publication::SectionHandle;
 use crate::read_database::ReadDatabase;
 use crate::review::history::FileVersions;
