@@ -62,7 +62,11 @@ fn a_stop_before_the_prepared_file_exists_leaves_no_data_after_the_next_section_
     let root = root_path.as_path();
     crate::stopped_child::stop_in_child_at_file_size(LONG_CHILD, root, "state_prepared", 1024);
     let transactions = ProvenanceLayout::new(root).source_edit_transactions_dir();
-    assert_eq!(names(&transactions).len(), 1, "the stop left its transaction");
+    assert_eq!(
+        names(&transactions).len(),
+        1,
+        "the stop left its transaction"
+    );
     assert_eq!(prepared_files(root), Vec::<String>::new());
 
     assert_entry_removes_the_stopped_edit(root);
@@ -181,7 +185,11 @@ fn a_prepared_file_that_a_person_changed_stops_the_section_entry_and_stays() {
         );
         assert!(!ran, "{phase}");
         assert_eq!(std::fs::read(&prepared).unwrap(), b"changed\n", "{phase}");
-        assert_eq!(std::fs::read(root.join("source.txt")).unwrap(), BEFORE, "{phase}");
+        assert_eq!(
+            std::fs::read(root.join("source.txt")).unwrap(),
+            BEFORE,
+            "{phase}"
+        );
         assert_eq!(
             layout.source_edit_marker_path().exists(),
             phase == "source_edit_prepared",

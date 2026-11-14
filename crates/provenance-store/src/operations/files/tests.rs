@@ -8,11 +8,11 @@ mod held_write_cleanup;
 mod held_write_races;
 #[path = "tests/held_writes.rs"]
 mod held_writes;
-#[path = "tests/prepared_files.rs"]
-mod prepared_files;
 #[cfg(any(unix, windows))]
 #[path = "../../publication/prepared_file_tests.rs"]
 mod prepared_file_tests;
+#[path = "tests/prepared_files.rs"]
+mod prepared_files;
 #[cfg(any(unix, windows))]
 #[path = "../../publication/source_edit_recovery_tests.rs"]
 mod source_edit_recovery_tests;

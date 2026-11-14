@@ -57,9 +57,9 @@ pub mod shards;
 pub mod stale;
 pub mod state_store;
 pub mod statement_analysis;
-pub mod storage;
 #[cfg(all(test, feature = "host"))]
 mod stopped_child;
+pub mod storage;
 mod test_probes;
 #[cfg(feature = "host")]
 pub mod user_cache;

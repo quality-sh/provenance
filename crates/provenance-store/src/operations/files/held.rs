@@ -97,8 +97,8 @@ impl HeldRepositoryFile {
     pub fn create_temp(&self, bytes: &[u8]) -> Result<PreparedRepositoryFile, Refusal> {
         for _ in 0..100 {
             match self.create_temp_at(&self.new_temp_leaf(), bytes) {
-                Err(Refusal::Write(error))
-                    if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(Refusal::Write(error)) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                }
                 result => return result,
             }
         }

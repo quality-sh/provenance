@@ -252,7 +252,11 @@ fn remove_prepared_file(layout: &ProvenanceLayout, transaction: &Utf8Path) -> an
     validate_recovery_artifact_leaf(&record.target, &record.prepared_leaf, ".tmp")?;
     let replacement = read_if_present(&transaction.join(REPLACEMENT))?;
     RepositoryFiles::open(layout.root())?
-        .remove_own_prepared(&record.target, &record.prepared_leaf, replacement.as_deref())
+        .remove_own_prepared(
+            &record.target,
+            &record.prepared_leaf,
+            replacement.as_deref(),
+        )
         .with_context(|| removal(layout, &record.target, &record.prepared_leaf))?;
     Ok(())
 }

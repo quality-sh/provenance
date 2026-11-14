@@ -1,3 +1,4 @@
+use crate::stopped_child::{files_named, names, run_as_child, stop_in_child};
 use crate::{
     layout::ProvenanceLayout,
     operations::files::RepositoryFiles,
@@ -7,7 +8,6 @@ use crate::{
     test_probes,
 };
 use camino::Utf8Path;
-use crate::stopped_child::{files_named, names, run_as_child, stop_in_child};
 use provenance_macros::verifies;
 
 pub(super) const BEFORE: &[u8] = b"before\n";
@@ -370,12 +370,18 @@ fn a_stop_in_the_write_of_the_source_edit_marker_leaves_no_file_after_the_next_s
     let root = root_path.as_path();
     let layout = ProvenanceLayout::new(root);
     crate::stopped_child::stop_in_child_at_file_size(CHILD, root, "source_edit_temp_prepared", 0);
-    let marker_temporaries =
-        || files_named(&layout.cache_dir(), ".source-edit-publication.json.", ".tmp");
+    let marker_temporaries = || {
+        files_named(
+            &layout.cache_dir(),
+            ".source-edit-publication.json.",
+            ".tmp",
+        )
+    };
     assert_eq!(
         marker_temporaries().len(),
         1,
-        "the stop left the temporary file of the marker"
+        "the stop left the temporary file of the marker: {:?}",
+        names(&layout.cache_dir())
     );
     assert!(!layout.source_edit_marker_path().exists());
 

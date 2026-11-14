@@ -140,9 +140,12 @@ fn remove_own_prepared(
     // stop can cut a character.
     let limit = replacement.map_or(0, <[u8]>::len);
     let mut bytes = Vec::new();
-    std::io::Read::take(file, u64::try_from(limit).unwrap_or(u64::MAX).saturating_add(1))
-        .read_to_end(&mut bytes)
-        .map_err(Refusal::Read)?;
+    std::io::Read::take(
+        file,
+        u64::try_from(limit).unwrap_or(u64::MAX).saturating_add(1),
+    )
+    .read_to_end(&mut bytes)
+    .map_err(Refusal::Read)?;
     if !replacement.is_some_and(|replacement| replacement.starts_with(&bytes)) {
         return Err(Refusal::Changed);
     }
