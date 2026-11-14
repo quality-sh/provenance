@@ -253,7 +253,7 @@ Proposals:
   rides in that reference's `summary` and in the proposal's own `summary` —
   `<file>:<symbol> implements <what>`. A rule candidate whose symbol survives only in an
   extractor's chat output is a requirement candidate wearing a better label;
-- the backtrace never writes a `#[rule]` binding and never creates a rule record. It hands
+- the backtrace never writes a binding and never creates a rule record. It hands
   the shaping loop a symbol to bind after a human accepts the proposal — proposals only
   (ground rule 1);
 - set structured `confidence` on the proposal (`0.0`-`1.0`) instead of burying the score

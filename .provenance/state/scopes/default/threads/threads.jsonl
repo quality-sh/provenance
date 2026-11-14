@@ -77,6 +77,7 @@
 {"scope_id":"default","id":"thread_rule_rule_archived_rule_requires_commit","parent":{"node_type":"rule","node_id":"rule_archived_rule_requires_commit"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_rule_rule_evidence_flags_each_cut_list","parent":{"node_type":"rule","node_id":"rule_evidence_flags_each_cut_list"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_rule_rule_impact_reports_a_cut_scan","parent":{"node_type":"rule","node_id":"rule_impact_reports_a_cut_scan"},"status":"active","created_at":1}
+{"scope_id":"default","id":"thread_rule_rule_init_production_binding_comment","parent":{"node_type":"rule","node_id":"rule_init_production_binding_comment"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_rule_rule_query_answers_stop_at_the_limit","parent":{"node_type":"rule","node_id":"rule_query_answers_stop_at_the_limit"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_rule_rule_resolve_symbol_reads_the_named_file_only","parent":{"node_type":"rule","node_id":"rule_resolve_symbol_reads_the_named_file_only"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_rule_rule_scan_cut_is_deterministic","parent":{"node_type":"rule","node_id":"rule_scan_cut_is_deterministic"},"status":"active","created_at":1}
@@ -89,6 +90,7 @@
 {"scope_id":"default","id":"thread_rule_rule_ste_dictionary_import_reuse","parent":{"node_type":"rule","node_id":"rule_ste_dictionary_import_reuse"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_rule_rule_ste_dictionary_no_operational_download","parent":{"node_type":"rule","node_id":"rule_ste_dictionary_no_operational_download"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_rule_rule_ste_dictionary_not_distributed","parent":{"node_type":"rule","node_id":"rule_ste_dictionary_not_distributed"},"status":"active","created_at":1}
+{"scope_id":"default","id":"thread_rule_rule_typescript_rule_helper_identity","parent":{"node_type":"rule","node_id":"rule_typescript_rule_helper_identity"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_rule_rule_typescript_verifies_helper_marker","parent":{"node_type":"rule","node_id":"rule_typescript_verifies_helper_marker"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_rule_rule_validation_version_move_rebuilds_the_projection","parent":{"node_type":"rule","node_id":"rule_validation_version_move_rebuilds_the_projection"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_topic_topic_search_code_lookup","parent":{"node_type":"topic","node_id":"topic_search_code_lookup"},"status":"active","created_at":1}

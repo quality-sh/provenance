@@ -309,8 +309,11 @@ A Rule is an identified atomic behavioural obligation that refines a Requirement
 Resolution may produce it, but is not required. The Rule can exist before production
 code realizes it or evidence verifies it.
 
-`#[rule]` binds the Rule's primary production implementation. It keeps the relationship
-next to the code without making the function the Rule itself:
+A binding marks the Rule's primary production implementation. It keeps the relationship
+next to the code without making the function the Rule itself. A comment
+(`// @provenance rule: <id>`) directly above the item binds in every language and adds no
+package to the application. In Rust, `#[rule]` from `provenance-macros` is the
+alternative; this repository uses it:
 
 ```rust
 #[rule("rule_prov_relation_vocabulary_closed")]
@@ -334,9 +337,11 @@ pub struct Rule {
 Sometimes a type is the primary implementation: a value that cannot be built wrong
 needs no check at the call sites. Construction can also be the evidence method.
 
-The marker is a compiled symbol, not a comment. It moves when the implementation moves,
-it dies when the implementation is deleted, and the id it cites can be checked against
-the graph. One Rule may have at most one such primary implementation for now.
+The attribute is a compiled symbol. It moves when the implementation moves, it dies when
+the implementation is deleted, and the id it cites can be checked against the graph.
+`provenance-macros` runs at compile time and adds nothing to the binary. A comment does
+not move with its item, so it stays directly above it. One Rule may have at most one
+primary implementation.
 
 Tests bind evidence to a Rule and say how it was shown:
 
@@ -379,12 +384,12 @@ How hard that lands is a per-repo dial. Plain, the scan reports and succeeds. Wi
 verified before merge gets that from CI, while a repo still filling in its rules gets
 the same report with no gate.
 
-Other supported languages use inert identity helpers in their native idiom: decorators
-in Python and callable wrappers in JavaScript, TypeScript, Go, and Java. The scanner's
-binding-grade coverage differs by language; [`cli.md`](cli.md#rule-coverage) gives the
-exact matrix. `@provenance` comments remain the universal floor. Comments can drift from
-the function they sit above, so they are the weaker tier and scan alongside native
-bindings.
+In every supported language, production code binds with a `@provenance` comment, which
+adds no package to the application. The scanner also reads a `verifies` call in a
+JavaScript or TypeScript test, and a decorator or wrapper that a Python, JavaScript,
+TypeScript, Go, or Java project defines in its own code.
+[`rule-bindings.md`](rule-bindings.md) gives each form.
+A comment can drift from the function it sits above, so keep the two together.
 
 Rules follow behavioural obligations, not code shape. Do not mint one Rule per function,
 and do not split one obligation across five Rules because the match has five arms. An

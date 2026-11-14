@@ -1387,6 +1387,8 @@ jobs:
           target/debug/provenance api verification-bindings \
             --repo "$fixture_repo" --scope default --query "rule=$rule_id" --format json \
             | jq -e '.data.items | length == 1 and .[0].file == "dist/share-links.test.js"'
+      - name: Load the application from an install without development dependencies
+        run: npm run test:production --prefix examples/typescript-sdk
 
   # One job, six managers: each smoke is seconds long, and six matrix legs
   # cost six runners to save one check row.

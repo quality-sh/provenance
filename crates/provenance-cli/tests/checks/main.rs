@@ -24,6 +24,8 @@ mod cli_check_gaps;
 mod cli_check_porcelain;
 #[path = "../cli_check_threads.rs"]
 mod cli_check_threads;
+#[path = "../cli_comment_binding.rs"]
+mod cli_comment_binding;
 #[path = "../cli_coverage.rs"]
 mod cli_coverage;
 #[path = "../cli_coverage_anchors.rs"]
