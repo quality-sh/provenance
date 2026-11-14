@@ -131,7 +131,10 @@ fn two_withdrawals_read_as_one(merge: Merge) {
     assert_ne!(rows[0]["id"], rows[1]["id"], "{rows:?}");
     assert_eq!(rows[0]["proposal_id"], json!(submission));
     assert_eq!(rows[1]["proposal_id"], json!(submission));
-    assert_eq!((&rows[0]["actor"], &rows[1]["actor"]), (&json!("agent"), &json!("editor")));
+    assert_eq!(
+        (&rows[0]["actor"], &rows[1]["actor"]),
+        (&json!("agent"), &json!("editor"))
+    );
     assert_eq!(review_reads(&repo), one_withdrawal);
     assert_eq!(one_withdrawal[0]["withdrawn"], json!([submission]));
     assert_eq!(one_withdrawal[0]["pending"], Value::Null);

@@ -69,7 +69,10 @@ async fn a_withdrawal_id_on_two_lines_is_located_at_the_second_line() {
     let proposal = pending_submission(&repo).await;
     let edited = json!({"scope_id":"default", "id":"withdrawal_a", "proposal_id":proposal,
         "actor":"agent", "reason":"Edited."});
-    write_withdrawals(&repo, &[withdrawal("withdrawal_a", &proposal), edited.to_string()]);
+    write_withdrawals(
+        &repo,
+        &[withdrawal("withdrawal_a", &proposal), edited.to_string()],
+    );
     let (status, failure) =
         call(&host(&repo, false), "GET", "/requirements/req_shared", None).await;
     assert_eq!(status, 500, "{failure}");
