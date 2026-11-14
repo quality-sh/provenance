@@ -31,9 +31,17 @@ pub fn store_dictionary_index(
         sync_directory(utf8(directory)?)?;
         return Ok(path);
     }
+    match load_dictionary_index(directory, &import.identity) {
+        Err(DictionaryIndexError::NotFound { .. }) => {}
+        Ok(_) | Err(_) => std::fs::remove_file(&path)?,
+    }
     let contents = encode_dictionary_index(import)
         .map_err(|error| crate::refusal::caused(error, format!("encode {target}")))?;
-    write_synced_file(target, &contents)?;
+    let staged = path.with_extension("partial");
+    std::fs::write(&staged, contents)?;
+    crate::test_probes::at("synced_file_before_rename")?;
+    std::fs::rename(&staged, &path)?;
+    let _ = write_synced_file;
     Ok(path)
 }
 
