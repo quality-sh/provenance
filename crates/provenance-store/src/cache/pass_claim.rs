@@ -26,9 +26,12 @@ pub struct CatchUpRunning;
 #[derive(Debug, Default)]
 pub struct PassSlot(AtomicBool);
 
+/// A read database that a repository handle holds, and its slot.
+type Kept = (Weak<dyn ReadDatabase>, Arc<PassSlot>);
+
 /// The slot of each read database that a repository handle holds. An entry
 /// goes when its read database is dropped.
-static SLOTS: Mutex<Vec<(Weak<dyn ReadDatabase>, Arc<PassSlot>)>> = Mutex::new(Vec::new());
+static SLOTS: Mutex<Vec<Kept>> = Mutex::new(Vec::new());
 
 impl PassSlot {
     /// The slot of the passes that write `database`. Each handle over the
@@ -44,11 +47,13 @@ impl PassSlot {
             .iter()
             .find(|(kept, _)| std::ptr::addr_eq(kept.as_ptr(), Arc::as_ptr(database)))
             .map(|(_, slot)| Arc::clone(slot));
-        shared.unwrap_or_else(|| {
+        let slot = shared.unwrap_or_else(|| {
             let slot = Arc::<Self>::default();
             slots.push((Arc::downgrade(database), Arc::clone(&slot)));
             slot
-        })
+        });
+        drop(slots);
+        slot
     }
 
     /// The claim of the one pass, or the refusal when another pass holds it.
