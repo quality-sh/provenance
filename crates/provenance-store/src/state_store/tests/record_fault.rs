@@ -8,7 +8,8 @@
 //! surface reaches the fallback, and no test shows that none can. No Rule
 //! states this fallback.
 
-use crate::state_store::readers::{record_fault, StateLineInvalid};
+use crate::state_store::readers::record_fault;
+use provenance_core::protocol::read_failure::UnparsableStateFile;
 
 const MESSAGE: &str = "requirement req_a does not agree with its Rule";
 
@@ -23,13 +24,13 @@ fn fault_over(shard: &str) -> anyhow::Error {
 #[test]
 fn a_second_read_that_fails_gives_the_first_fault_with_no_line() {
     let error = fault_over("not a record\n");
-    assert!(StateLineInvalid::find(&error).is_none(), "{error:#}");
+    assert!(UnparsableStateFile::find(error.as_ref()).is_none(), "{error:#}");
     assert_eq!(format!("{error:#}"), MESSAGE);
 }
 
 #[test]
 fn a_second_read_that_does_not_find_the_id_gives_the_first_fault_with_no_line() {
     let error = fault_over("{\"id\":\"req_b\"}\n");
-    assert!(StateLineInvalid::find(&error).is_none(), "{error:#}");
+    assert!(UnparsableStateFile::find(error.as_ref()).is_none(), "{error:#}");
     assert_eq!(format!("{error:#}"), MESSAGE);
 }
