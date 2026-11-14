@@ -225,9 +225,9 @@ fn prepare_shaping(
     topics.retain_mut(|record| {
         let remove = requirement_ids.contains(record.requirement_id.as_str());
         if remove {
-            topic_requirements.insert(record.id.as_str().to_owned(), record.requirement_id.clone());
-            let cited = vec![record.requirement_id.clone()];
-            deletions.push(CascadeDeletion::new(NodeType::Topic, &record.id, cited));
+            let requirement = record.requirement_id.clone();
+            topic_requirements.insert(record.id.as_str().to_owned(), requirement.clone());
+            deletions.push(CascadeDeletion::new(NodeType::Topic, &record.id, vec![requirement]));
         } else {
             retain_links(
                 &mut record.links,

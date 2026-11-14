@@ -323,7 +323,7 @@ fn the_plan_shows_each_cascade_deletion_that_the_apply_refuses() {
         json!([
             kept_by_submission("resolution", "res_only", sharing),
             topic,
-            kept_by_submission("question", "question_only", sharing)
+            kept_by_submission("question", "question_only", sharing),
         ]),
         "{plan}"
     );

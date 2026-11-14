@@ -139,7 +139,8 @@ fn correction(kind: NodeType, id: &StableId, cascade: &[CascadeDeletion]) -> Str
         .iter()
         .find(|deletion| deletion.kind == kind && &deletion.id == id);
     let Some(cause) = cause else {
-        return format!("keep {} {} in the typed document", kind.as_str(), id.as_str());
+        let (kind, id) = (kind.as_str(), id.as_str());
+        return format!("keep {kind} {id} in the typed document");
     };
     // A Resolution or a Rule stays when one Requirement that it cites stays.
     // A Question stays only when its Requirement and the Requirement of its
