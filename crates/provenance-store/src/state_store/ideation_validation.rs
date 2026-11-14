@@ -7,8 +7,8 @@ use super::{IdeationLandingBatch, StateStore};
 use crate::refusal::state_fault;
 use crate::shards;
 use provenance_core::{
-    AssertionRecord, Contribution, DispositionRecord, IdeationAggregate, ProposalCard, ScopeId,
-    SynthesisPacket,
+    AssertionRecord, Contribution, DispositionRecord, DuplicateImmutableId, IdeationRecord,
+    ProposalCard, ScopeId, SynthesisPacket,
 };
 use std::collections::BTreeSet;
 
@@ -49,30 +49,10 @@ impl StateStore {
         let mut proposals = BTreeSet::new();
         let mut assertions = BTreeSet::new();
         let mut dispositions = BTreeSet::new();
-        let path = shards::proposal_cards_path(&self.layout, scope);
-        insert_all(
-            "proposal",
-            &direct_proposals,
-            |r| r.id.as_str(),
-            &mut proposals,
-            |id, message| super::readers::record_fault(self, &path, id, message),
-        )?;
-        let path = shards::assertion_records_path(&self.layout, scope);
-        insert_all(
-            "assertion",
-            &direct_assertions,
-            |r| r.id.as_str(),
-            &mut assertions,
-            |id, message| super::readers::record_fault(self, &path, id, message),
-        )?;
-        let path = shards::dispositions_path(&self.layout, scope);
-        insert_all(
-            "disposition",
-            &direct_dispositions,
-            |r| r.id.as_str(),
-            &mut dispositions,
-            |id, message| super::readers::record_fault(self, &path, id, message),
-        )?;
+        let stored = |duplicate| self.duplicate_id_fault(scope, duplicate);
+        insert_all(&direct_proposals, &mut proposals, stored)?;
+        insert_all(&direct_assertions, &mut assertions, stored)?;
+        insert_all(&direct_dispositions, &mut dispositions, stored)?;
         let landings = shards::ideation_landings_path(&self.layout, scope);
         for (index, batch) in self.list_ideation_landings(scope)?.into_iter().enumerate() {
             let at = ShardLine::new(&landings, index + 1);
@@ -82,47 +62,29 @@ impl StateStore {
                 &batch,
                 &assertions_in_order,
             )?;
-            insert_all(
-                "proposal",
-                &batch.proposals,
-                |r| r.id.as_str(),
-                &mut proposals,
-                |_, message| state_fault(&at, message),
-            )?;
-            insert_all(
-                "assertion",
-                &batch.assertions,
-                |r| r.id.as_str(),
-                &mut assertions,
-                |_, message| state_fault(&at, message),
-            )?;
-            insert_all(
-                "disposition",
-                &batch.dispositions,
-                |r| r.id.as_str(),
-                &mut dispositions,
-                |_, message| state_fault(&at, message),
-            )?;
-            overlay_records(&mut contributions, batch.contributions, |record| {
-                record.id.as_str()
-            });
-            overlay_records(&mut synthesis_packets, batch.synthesis_packets, |record| {
-                record.id.as_str()
-            });
+            let landed = |duplicate: DuplicateImmutableId| state_fault(&at, duplicate.to_string());
+            insert_all(&batch.proposals, &mut proposals, landed)?;
+            insert_all(&batch.assertions, &mut assertions, landed)?;
+            insert_all(&batch.dispositions, &mut dispositions, landed)?;
+            overlay_records(&mut contributions, batch.contributions);
+            overlay_records(&mut synthesis_packets, batch.synthesis_packets);
             assertions_in_order.extend(batch.assertions);
         }
         let proposals = self.list_proposal_definitions(scope)?;
         let assertions = self.list_assertion_records(scope)?;
         let dispositions = self.list_dispositions(scope)?;
-        provenance_core::validate_ideation_aggregate(IdeationAggregate {
-            legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
-            disposition_actor_ids,
-            contributions: &contributions,
-            synthesis_packets: &synthesis_packets,
-            proposals: &proposals,
-            assertions: &assertions,
-            dispositions: &dispositions,
-        })?;
+        self.check_ideation_aggregate(
+            scope,
+            provenance_core::IdeationAggregate {
+                legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
+                disposition_actor_ids,
+                contributions: &contributions,
+                synthesis_packets: &synthesis_packets,
+                proposals: &proposals,
+                assertions: &assertions,
+                dispositions: &dispositions,
+            },
+        )?;
         let canonical_artifacts = self.canonical_artifact_index(scope)?;
         for disposition in &dispositions {
             canonical_artifacts.ensure_exists(disposition.canonical_artifact.as_ref())?;
@@ -156,20 +118,20 @@ fn ensure_batch_evidence_unchanged(
     Ok(())
 }
 
-fn insert_all<'a, T>(
-    kind: &str,
-    records: &'a [T],
-    id: impl Fn(&'a T) -> &'a str,
+/// Adds the id of each of `records` to `seen`. The refusal of an id that
+/// `seen` already holds is `at_fault` of it.
+fn insert_all<T: IdeationRecord>(
+    records: &[T],
     seen: &mut BTreeSet<String>,
-    at_fault: impl Fn(&str, String) -> anyhow::Error,
+    at_fault: impl Fn(DuplicateImmutableId) -> anyhow::Error,
 ) -> anyhow::Result<()> {
     for record in records {
-        let record_id = id(record);
-        if !seen.insert(record_id.to_owned()) {
-            return Err(at_fault(
-                record_id,
-                format!("duplicate immutable {kind} id {record_id}"),
-            ));
+        let id = record.immutable_id();
+        if !seen.insert(id.to_owned()) {
+            return Err(at_fault(DuplicateImmutableId {
+                kind: T::KIND,
+                id: id.to_owned(),
+            }));
         }
     }
     Ok(())

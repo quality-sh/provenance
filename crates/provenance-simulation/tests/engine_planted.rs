@@ -7,8 +7,14 @@
 
 #[allow(dead_code)]
 mod support {
+    // rustfmt reads this path from a directory with the name of the test
+    // file, and the compiler from `tests/support/`; both name one file.
+    #[path = "../support/cases.rs"]
     pub mod cases;
 }
+
+#[path = "engine_planted/l3.rs"]
+mod l3;
 
 use hegel::{Hegel, Settings, TestCase, Verbosity};
 use provenance_simulation::generate::{Case, Fault, Operation, Step};
@@ -155,49 +161,6 @@ fn a_state_that_does_not_open_after_a_stop_breaks_l2() {
     let case = Case { engines: 2, steps };
     let run = run_case(&case, planted(Plant::FailReopen, "L2"));
     expect_law(laws::check_only(&run, "L2"), "L2");
-}
-
-// No Rule: proof that L3 can fail. The storage drops the first set of an
-// engine and answers that it landed.
-#[test]
-#[ignore = "a planted fault of the nightly simulation"]
-fn a_lost_write_breaks_l3() {
-    let case = Case {
-        engines: 2,
-        steps: alone(&[Operation::UpdateRequirement { n: 0, stale: false }]),
-    };
-    let run = run_case(&case, planted(Plant::LoseWrite, "L3"));
-    expect_law(laws::check_only(&run, "L3"), "L3");
-}
-
-/// The outside claim, then an archive of the Requirement of the Topic by
-/// engine 0, each one alone.
-fn claim_then_archive() -> Case {
-    let mut steps = vec![Step::OutsideWrite(Operation::ClaimTopic)];
-    steps.extend(alone(&[Operation::ArchiveRequirement { n: 0 }]));
-    Case { engines: 2, steps }
-}
-
-// No Rule: proof that L3 sees a claim that an archive leaves. The storage
-// drops the archive and answers that it landed, so the Topic keeps the claim.
-#[test]
-#[ignore = "a planted fault of the nightly simulation"]
-fn an_archive_that_leaves_the_claim_breaks_l3() {
-    let run = run_case(&claim_then_archive(), planted(Plant::LoseWrite, "L3"));
-    expect_law(laws::check_only(&run, "L3"), "L3");
-}
-
-// No Rule: proof that L3 sees a claim that is lost with no archive. The
-// storage drops the claim of engine 0 and answers that it landed.
-#[test]
-#[ignore = "a planted fault of the nightly simulation"]
-fn a_lost_claim_breaks_l3() {
-    let case = Case {
-        engines: 2,
-        steps: alone(&[Operation::ClaimTopic]),
-    };
-    let run = run_case(&case, planted(Plant::LoseWrite, "L3"));
-    expect_law(laws::check_only(&run, "L3"), "L3");
 }
 
 // No Rule: proof that L4 can fail. With no section lock and no base check,

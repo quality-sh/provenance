@@ -1,9 +1,10 @@
-use crate::write_error::publication_started;
+use camino::Utf8PathBuf;
 use provenance_core::{
     validate_optional_commit_pin, ScopeId, StableId, VerificationMethod, VerificationRun,
     VerificationRunStatus,
 };
 use sha2::{Digest, Sha256};
+use std::collections::BTreeSet;
 use std::io::{BufRead, BufReader, Read};
 
 use super::requirement_reviews::now_millis;
@@ -16,6 +17,12 @@ impl StateStore {
     /// The caller parses the method word; this function receives it typed and
     /// writes it only through `VerificationMethod::to_string()` at the
     /// run-row edge.
+    ///
+    /// In the section, the checks and the bytes of each write come first.
+    /// Then the binding and the cleared reviews that changed publish as one
+    /// write set, and the run row goes into the cache last. A start that
+    /// changes no binding and clears no review publishes no set. A failure
+    /// of the run row leaves the set that landed before it.
     pub fn begin_verification(
         &self,
         scope_id: ScopeId,
@@ -39,7 +46,7 @@ impl StateStore {
         self.with_repository_publication(|held| {
             let rule_id = verification_rule(held, &scope_id, input.rule, input.declaration)?;
             let binding =
-                held.materialize_verification_binding(MaterializeVerificationBindingInput {
+                held.verification_binding_change(MaterializeVerificationBindingInput {
                     scope_id: scope_id.clone(),
                     rule_id: rule_id.clone(),
                     key: input.key,
@@ -48,50 +55,73 @@ impl StateStore {
                     file: file.clone(),
                     symbol: input.symbol.clone(),
                 })?;
-            (|| -> anyhow::Result<VerificationRun> {
-                crate::test_probes::at("verification_binding_published")?;
-                let started_at = now_millis(&*held.clock())?;
-                let path = held.layout.verification_runs_path(&scope_id);
-                let lock_path = held.layout.verification_runs_lock_path(&scope_id);
-                let run = crate::jsonl::mutate_jsonl_locked(
-                    &path,
-                    &lock_path,
-                    |records: &mut Vec<VerificationRun>| {
-                        let id = next_run_id(records, started_at)?;
-                        let run = VerificationRun {
-                            scope_id,
-                            id,
-                            binding_id: Some(binding.id),
-                            rule_id,
-                            method: method.to_string(),
-                            declared_by: input.declared_by,
-                            file: Some(file),
-                            symbol: input.symbol,
-                            commit,
-                            status: VerificationRunStatus::Running,
-                            started_at,
-                            completed_at: None,
-                            error: None,
-                        };
-                        records.push(run.clone());
-                        records.sort_by(|left, right| {
-                            left.started_at
-                                .cmp(&right.started_at)
-                                .then(left.id.as_str().cmp(right.id.as_str()))
-                        });
-                        Ok(run)
-                    },
-                )?;
-                held.clear_requirement_reviews(
-                    &run.scope_id,
-                    &run.rule_id,
-                    &run.id,
-                    run.started_at,
-                )?;
-                Ok(run)
-            })()
-            .map_err(publication_started)
+            let started_at = now_millis(&*held.clock())?;
+            let scope = &binding.binding.scope_id;
+            let rows = held.run_rows(scope)?;
+            let binding_id = binding.binding.id.clone();
+            let (run, reviews) = held.run_with_cleared_reviews(scope, |named| {
+                let taken = rows.iter().map(|row| row.id.as_str());
+                let taken: BTreeSet<&str> = taken.chain(named.iter().copied()).collect();
+                Ok(VerificationRun {
+                    scope_id,
+                    id: next_run_id(&taken, started_at)?,
+                    binding_id: Some(binding_id),
+                    rule_id,
+                    method: method.to_string(),
+                    declared_by: input.declared_by,
+                    file: Some(file),
+                    symbol: input.symbol,
+                    commit,
+                    status: VerificationRunStatus::Running,
+                    started_at,
+                    completed_at: None,
+                    error: None,
+                })
+            })?;
+            held.publish_shards(binding.shard.into_iter().chain(reviews).collect())?;
+            held.add_run_row(&run)?;
+            Ok(run)
         })
+    }
+
+    /// The rows of the runs cache of `scope_id`. The caller holds the section,
+    /// so no other start adds a row before the row of its run lands.
+    fn run_rows(&self, scope_id: &ScopeId) -> anyhow::Result<Vec<VerificationRun>> {
+        let (path, lock_path) = self.run_files(scope_id);
+        crate::jsonl::read_jsonl_locked(&path, &lock_path)
+    }
+
+    /// Adds `run` as a new row of the runs cache, and refuses a run whose id
+    /// a row already holds.
+    fn add_run_row(&self, run: &VerificationRun) -> anyhow::Result<()> {
+        let (path, lock_path) = self.run_files(&run.scope_id);
+        crate::jsonl::mutate_jsonl_locked(
+            &path,
+            &lock_path,
+            |records: &mut Vec<VerificationRun>| {
+                crate::write_error::ensure!(
+                    Fault,
+                    records.iter().all(|row| row.id != run.id),
+                    "the runs cache already holds verification run `{}`",
+                    run.id.as_str()
+                );
+                records.push(run.clone());
+                records.sort_by(|left, right| {
+                    left.started_at
+                        .cmp(&right.started_at)
+                        .then(left.id.as_str().cmp(right.id.as_str()))
+                });
+                Ok(())
+            },
+        )
+    }
+
+    /// The runs cache of `scope_id` and its lock file.
+    fn run_files(&self, scope_id: &ScopeId) -> (Utf8PathBuf, Utf8PathBuf) {
+        (
+            self.layout.verification_runs_path(scope_id),
+            self.layout.verification_runs_lock_path(scope_id),
+        )
     }
 
     pub fn complete_verification(
@@ -111,8 +141,7 @@ impl StateStore {
         );
         let completed_at = now_millis(&*self.clock())?;
         self.with_repository_publication(|held| {
-            let path = held.layout.verification_runs_path(scope_id);
-            let lock_path = held.layout.verification_runs_lock_path(scope_id);
+            let (path, lock_path) = held.run_files(scope_id);
             crate::jsonl::mutate_jsonl_locked(
                 &path,
                 &lock_path,
@@ -146,8 +175,7 @@ impl StateStore {
         &self,
         scope_id: &ScopeId,
     ) -> anyhow::Result<Vec<VerificationRun>> {
-        let path = self.layout.verification_runs_path(scope_id);
-        let lock_path = self.layout.verification_runs_lock_path(scope_id);
+        let (path, lock_path) = self.run_files(scope_id);
         crate::jsonl::with_advisory_lock(&lock_path, || {
             if !path.exists() {
                 return Ok(Vec::new());
@@ -170,8 +198,7 @@ impl StateStore {
             &mut dyn FnMut() -> anyhow::Result<Option<(i64, VerificationRun)>>,
         ) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
-        let path = self.layout.verification_runs_path(scope_id);
-        let lock_path = self.layout.verification_runs_lock_path(scope_id);
+        let (path, lock_path) = self.run_files(scope_id);
         crate::jsonl::with_advisory_lock(&lock_path, || {
             let mut file = match std::fs::File::open(&path) {
                 Ok(file) => file,
@@ -285,11 +312,11 @@ fn verification_rule(
     Ok(rule_id)
 }
 
-fn next_run_id(records: &[VerificationRun], started_at: i64) -> anyhow::Result<StableId> {
+fn next_run_id(taken: &BTreeSet<&str>, started_at: i64) -> anyhow::Result<StableId> {
     let base = format!("verification_{started_at}");
     let mut candidate = base.clone();
     let mut suffix = 2_u64;
-    while records.iter().any(|run| run.id.as_str() == candidate) {
+    while taken.contains(candidate.as_str()) {
         candidate = format!("{base}_{suffix}");
         suffix = suffix
             .checked_add(1)

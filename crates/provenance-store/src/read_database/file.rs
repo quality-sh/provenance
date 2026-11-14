@@ -6,8 +6,8 @@
 //! and does not make it. A write makes the file in WAL mode.
 
 use super::{
-    OverBudget, ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue, Statement,
-    Transaction, Unopened, WriteWork,
+    OutOfRange, OverBudget, ReadDatabase, ReadWork, SqlFuture, SqlRow, SqlTransaction, SqlValue,
+    Statement, Transaction, Unopened, WriteWork,
 };
 use crate::cache::{open_cache, open_stored_cache, CacheConnection};
 use crate::layout::ProvenanceLayout;
@@ -26,6 +26,9 @@ pub const MAX_LIST_VALUES: usize = 500;
 /// The engine steps between two calls of the progress handler that bounds
 /// the work of a transaction.
 const STEPS_PER_CALL: u64 = 1000;
+
+#[cfg(test)]
+mod rows_read;
 
 /// The read database in the cache directory of one layout.
 #[derive(Debug, Clone)]
@@ -126,7 +129,7 @@ struct FileTransaction(sqlx::Transaction<'static, Sqlite>);
 impl SqlTransaction for FileTransaction {
     fn fetch<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, Vec<SqlRow>> {
         Box::pin(async move {
-            let rows = bound(sql, values)
+            let rows = bound(sql, values)?
                 .fetch_all(&mut *self.0)
                 .await
                 .map_err(statement_error)?;
@@ -138,7 +141,7 @@ impl SqlTransaction for FileTransaction {
 
     fn execute<'a>(&'a mut self, sql: &'a str, values: Vec<SqlValue>) -> SqlFuture<'a, u64> {
         Box::pin(async move {
-            Ok(bound(sql, values)
+            Ok(bound(sql, values)?
                 .execute(&mut *self.0)
                 .await
                 .map_err(statement_error)?
@@ -159,11 +162,21 @@ impl SqlTransaction for FileTransaction {
                     break;
                 }
             }
-            if failure.is_some() {
-                self.execute("ROLLBACK TO attempt", Vec::new()).await?;
+            if let Some(error) = failure {
+                if let Err(rollback) = self.execute("ROLLBACK TO attempt", Vec::new()).await {
+                    // A statement that writes and that the work bound
+                    // stops ends the transaction, and its savepoint too.
+                    return Err(if error.is::<OverBudget>() {
+                        error
+                    } else {
+                        rollback
+                    });
+                }
+                self.execute("RELEASE attempt", Vec::new()).await?;
+                return Ok(Err(error));
             }
             self.execute("RELEASE attempt", Vec::new()).await?;
-            Ok(failure.map_or(Ok(()), Err))
+            Ok(Ok(()))
         })
     }
 
@@ -172,11 +185,23 @@ impl SqlTransaction for FileTransaction {
     }
 
     /// Sets the `SQLite` progress handler on the connection: one call each
-    /// [`STEPS_PER_CALL`] steps, and a handler that answers false stops
-    /// the statement with `SQLITE_INTERRUPT`.
-    fn bound_work(&mut self, steps: u64) -> SqlFuture<'_, ()> {
+    /// [`STEPS_PER_CALL`] steps of a statement, and a handler that answers
+    /// false stops the statement while it runs, with `SQLITE_INTERRUPT`.
+    /// The calls of all the statements count against one bound.
+    ///
+    /// `SQLite` counts the steps of one prepared statement over all its
+    /// runs, and the connection keeps a prepared statement for each
+    /// statement text. So a statement text whose runs together do fewer
+    /// steps than one interval does not call the handler, and the steps of
+    /// a text after its last call are not counted. A text that runs again
+    /// adds its steps to the steps of its earlier runs.
+    ///
+    /// `SQLite` rolls back the whole transaction when it stops a statement
+    /// that writes, and the connection then runs each later statement
+    /// outside a transaction.
+    fn bound_work(&mut self, bound: u64) -> SqlFuture<'_, ()> {
         Box::pin(async move {
-            let most = steps / STEPS_PER_CALL;
+            let most = bound / STEPS_PER_CALL;
             let mut handle = self.0.lock_handle().await?;
             let mut calls = 0;
             handle.set_progress_handler(i32::try_from(STEPS_PER_CALL)?, move || {
@@ -206,7 +231,15 @@ fn statement_error(error: sqlx::Error) -> anyhow::Error {
     }
 }
 
-fn bound(sql: &str, values: Vec<SqlValue>) -> Query<'_, Sqlite, SqliteArguments> {
+/// The statement `sql` with `values` bound.
+///
+/// An integer past the range of the port is refused before the statement
+/// runs.
+fn bound(
+    sql: &str,
+    values: Vec<SqlValue>,
+) -> Result<Query<'_, Sqlite, SqliteArguments>, OutOfRange> {
+    OutOfRange::check(&values)?;
     let mut query = sqlx::query(sqlx::AssertSqlSafe(sql));
     for value in values {
         query = match value {
@@ -217,7 +250,7 @@ fn bound(sql: &str, values: Vec<SqlValue>) -> Query<'_, Sqlite, SqliteArguments>
             SqlValue::Blob(value) => query.bind(value),
         };
     }
-    query
+    Ok(query)
 }
 
 fn decode(row: &SqliteRow) -> anyhow::Result<SqlRow> {
@@ -232,7 +265,7 @@ fn decode(row: &SqliteRow) -> anyhow::Result<SqlRow> {
                 "REAL" => SqlValue::Real(row.try_get(index)?),
                 "TEXT" => SqlValue::Text(row.try_get(index)?),
                 "BLOB" => SqlValue::Blob(row.try_get(index)?),
-                _ => SqlValue::Integer(row.try_get(index)?),
+                _ => SqlValue::Integer(OutOfRange::integer(row.try_get(index)?)?),
             })
         })
         .collect()

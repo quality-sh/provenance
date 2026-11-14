@@ -21,6 +21,11 @@ impl ScopeRecords {
     ) -> anyhow::Result<Self> {
         store.validate_ideation_scope_with_actor_ids(scope_id, disposition_actor_ids)?;
         store.validate_graph_scope(scope_id)?;
+        // The snapshot has no Discussions and no Requirement reviews. Each
+        // is read here, so a line of them that does not parse names its
+        // file and its line, as a line of the snapshot families does.
+        store.list_discussions(scope_id)?;
+        store.list_requirement_reviews(scope_id)?;
         Ok(Self {
             scope_id: scope_id.clone(),
             snapshot: snapshot(store, scope_id)?,
