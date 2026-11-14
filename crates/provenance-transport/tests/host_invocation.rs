@@ -79,7 +79,9 @@ async fn a_refused_identity_does_not_wait_for_a_work_slot() {
     assert!(
         matches!(
             answer,
-            Poll::Ready(Err(OperationError::Common(OperationFailure::AccessDenied { .. })))
+            Poll::Ready(Err(OperationError::Common(
+                OperationFailure::AccessDenied { .. }
+            )))
         ),
         "the refused call answers before any slot wait: {answer:?}"
     );
@@ -248,7 +250,9 @@ async fn the_default_host_permits_data_free_calls_only() {
         .await;
     assert!(matches!(
         refused,
-        Err(OperationError::Common(OperationFailure::AccessDenied { message: None }))
+        Err(OperationError::Common(OperationFailure::AccessDenied {
+            message: None
+        }))
     ));
     host.shutdown().await;
 }

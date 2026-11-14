@@ -82,7 +82,12 @@ fn assert_guidance(error: &Value, answer: &str) {
 
 fn refused_by_cli(actor_ids: &[&str]) {
     let (repo, proposal) = repository(actor_ids);
-    let refused = api(repo.path(), "post", &decide_path(&proposal), Some(&decision(STRANGER)));
+    let refused = api(
+        repo.path(),
+        "post",
+        &decide_path(&proposal),
+        Some(&decision(STRANGER)),
+    );
     assert_eq!(refused.status.code(), Some(1), "{}", stderr(&refused));
     assert!(refused.stdout.is_empty(), "{refused:?}");
     let answer = stderr(&refused);

@@ -145,7 +145,10 @@ fn a_write_during_init_does_not_land_between_the_check_and_the_write_of_init() {
         "the write of \"reviewer\" landed between the check and the write of init"
     );
     let error = format!("{:#}", write.unwrap_err());
-    assert!(error.contains("does not contain the actor of a review decision"), "{error}");
+    assert!(
+        error.contains("does not contain the actor of a review decision"),
+        "{error}"
+    );
     check(&repo).unwrap();
 }
 
