@@ -139,14 +139,16 @@ fn unloaded_check(parse_error: &str) -> (Option<i32>, Value, String) {
 }
 
 /// The strict statement check of a reference that does not parse with
-/// `parse_error`: the statements category cannot run, and the check fails.
+/// `parse_error`: the statements category cannot run, its reason is the
+/// problem of the reference, and the check fails with the same text.
 fn unavailable_strict_check(parse_error: &str) -> (Option<i32>, Value, String) {
     let check = json!({"categories": [{
         "category": "statements",
         "status": "unavailable",
-        "reason": reference_problem(parse_error),
+        "findings": [],
+        "unavailable_reason": reference_problem(parse_error),
     }]});
-    (Some(1), check, String::new())
+    (Some(1), check, reference_refusal(parse_error))
 }
 
 /// The refusal that a write gives for a reference whose first line does
