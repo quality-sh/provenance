@@ -93,7 +93,7 @@ impl ContextResolver for Gate {
         context: &RequestedContext,
     ) -> Result<(), OperationFailure> {
         if self.state.refuse.load(Ordering::SeqCst) {
-            return Err(OperationFailure::AccessDenied);
+            return Err(OperationFailure::access_denied());
         }
         self.access.authorize(operation, context)
     }
