@@ -373,7 +373,8 @@ mod tests {
     #[verifies("rule_empty_write_set_writes_no_data", examples)]
     fn each_adapter_an_empty_set_changes_nothing() {
         let local = an_empty_set_changes_nothing(local());
-        assert!(!local.layout.import_transactions_dir().exists());
+        let transactions = local.layout.import_transactions_dir();
+        assert_eq!(std::fs::read_dir(transactions).unwrap().count(), 0);
         assert!(!local.layout.publication_marker_path().exists());
         an_empty_set_changes_nothing(Memory::default());
         an_empty_set_changes_nothing(Persisting::default());
