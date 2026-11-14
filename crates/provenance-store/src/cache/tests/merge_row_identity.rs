@@ -61,7 +61,10 @@ fn state_files() -> (tempfile::TempDir, Vec<Utf8PathBuf>) {
         .map(|entry| entry.unwrap().path().to_owned())
         .filter(|path| crate::shards::is_message_month_shard_name(path.file_name().unwrap()))
         .collect::<Vec<_>>();
-    assert!(!months.is_empty(), "the fixture writes no month file of messages");
+    assert!(
+        !months.is_empty(),
+        "the fixture writes no month file of messages"
+    );
     files.extend(months);
     (dir, files)
 }
@@ -73,7 +76,10 @@ fn assert_field_identity(path: &Utf8Path, field: &str, rows: &[Value]) {
     for row in rows {
         let key = row.get(field).and_then(Value::as_str);
         assert!(key.is_some(), "{path}: a row has no string {field}: {row}");
-        assert!(keys.insert(key), "{path}: two rows have the {field} {key:?}");
+        assert!(
+            keys.insert(key),
+            "{path}: two rows have the {field} {key:?}"
+        );
     }
 }
 
@@ -88,7 +94,12 @@ fn assert_batch_identity(path: &Utf8Path, records: BatchRecords, rows: &[Value])
         dispositions: Vec::new(),
     };
     let written = serde_json::to_value(empty).unwrap();
-    let fields: BTreeSet<&str> = written.as_object().unwrap().keys().map(String::as_str).collect();
+    let fields: BTreeSet<&str> = written
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
     assert_eq!(fields, records.lists().iter().copied().collect());
     for row in rows {
         for list in records.lists() {

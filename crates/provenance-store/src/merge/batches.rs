@@ -53,7 +53,10 @@ impl BatchRecords {
         let mut read = BTreeMap::new();
         for row in rows {
             for record in list_records(list, row)? {
-                read.insert(super::string_id(self.key, record)?.to_owned(), record.clone());
+                read.insert(
+                    super::string_id(self.key, record)?.to_owned(),
+                    record.clone(),
+                );
             }
         }
         Ok(read)

@@ -68,8 +68,14 @@ fn a_proposal_that_the_batches_of_two_sides_add_differently_is_an_add_add_confli
 #[test]
 #[verifies("rule_record_merge", examples)]
 fn a_record_that_the_batches_of_two_sides_hold_with_equal_content_merges_clean() {
-    let ours = batch("contributions", &[contribution("c", "same"), contribution("o", "o")]);
-    let theirs = batch("contributions", &[contribution("c", "same"), contribution("t", "t")]);
+    let ours = batch(
+        "contributions",
+        &[contribution("c", "same"), contribution("o", "o")],
+    );
+    let theirs = batch(
+        "contributions",
+        &[contribution("c", "same"), contribution("t", "t")],
+    );
 
     let merged = merge_records(
         LANDINGS,
@@ -88,7 +94,10 @@ fn a_record_that_the_batches_of_two_sides_hold_with_equal_content_merges_clean()
 fn a_side_with_two_batches_of_one_record_is_compared_by_the_record_that_its_read_gives() {
     let first = batch("contributions", &[contribution("c", "first")]);
     let last = batch("contributions", &[contribution("c", "last")]);
-    let theirs = batch("contributions", &[contribution("c", "last"), contribution("t", "t")]);
+    let theirs = batch(
+        "contributions",
+        &[contribution("c", "last"), contribution("t", "t")],
+    );
 
     let merged = merge_records(
         LANDINGS,

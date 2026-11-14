@@ -84,12 +84,7 @@ fn contribution(id: &str, finding: &str) -> Value {
 
 /// Lands the swarm run `run` with these contributions and this merge output,
 /// and returns the batch row that the landing adds.
-fn land_run(
-    landing: &Landing,
-    run: &str,
-    contributions: &[Value],
-    merge: Option<Value>,
-) -> String {
+fn land_run(landing: &Landing, run: &str, contributions: &[Value], merge: Option<Value>) -> String {
     let repo = landing.repo();
     let run = landing.runs.path().join(format!("run_{run}"));
     let extractors = run.join("extractors");
@@ -118,7 +113,12 @@ fn land_run(
 /// Lands a swarm run whose one contribution is `contrib_<name>`.
 fn land(landing: &Landing, name: &str) -> String {
     let id = format!("contrib_{name}");
-    land_run(landing, name, &[contribution(&id, "The requirement holds.")], None)
+    land_run(
+        landing,
+        name,
+        &[contribution(&id, "The requirement holds.")],
+        None,
+    )
 }
 
 /// Checks out a new branch at `into`, merges `from` into it, and returns the
@@ -278,16 +278,27 @@ fn a_record_that_two_batches_hold_with_equal_content_merges_to_one_read_in_each_
     commit(repo, "ours");
 
     assert_eq!(merge_into(repo, "ours", "theirs").status.code(), Some(0));
-    assert_eq!(landing_lines(repo), [base.clone(), ours.clone(), theirs.clone()]);
+    assert_eq!(
+        landing_lines(repo),
+        [base.clone(), ours.clone(), theirs.clone()]
+    );
     let into_ours = read_families(repo);
     assert_eq!(merge_into(repo, "theirs", "ours").status.code(), Some(0));
     assert_eq!(landing_lines(repo), [base, theirs, ours]);
     assert_eq!(read_families(repo), into_ours);
     assert_eq!(
         contribution_ids(&into_ours),
-        ["contrib_base", "contrib_ours", "contrib_same", "contrib_theirs"]
+        [
+            "contrib_base",
+            "contrib_ours",
+            "contrib_same",
+            "contrib_theirs"
+        ]
     );
-    assert_eq!(into_ours[0][0]["strongest_finding"], "Changed by ours only.");
+    assert_eq!(
+        into_ours[0][0]["strongest_finding"],
+        "Changed by ours only."
+    );
 }
 
 #[test]
@@ -300,7 +311,12 @@ fn two_batches_that_change_one_contribution_differently_conflict_and_keep_ours()
     commit(repo, "base");
     git_ok(repo, &["checkout", "-b", "theirs"]);
     let their_record = contribution("contrib_x", "Finding of theirs.");
-    let theirs = land_run(&landing, "theirs", std::slice::from_ref(&their_record), None);
+    let theirs = land_run(
+        &landing,
+        "theirs",
+        std::slice::from_ref(&their_record),
+        None,
+    );
     commit(repo, "theirs");
     git_ok(repo, &["checkout", "-b", "ours", "main"]);
     let our_record = contribution("contrib_x", "Finding of ours.");
@@ -333,7 +349,10 @@ fn two_batches_that_change_one_contribution_differently_conflict_and_keep_ours()
         );
         assert_eq!(landing_lines(repo), [base.clone(), kept.clone()]);
         let read = json(repo, &["api", "contributions"]);
-        assert_eq!(read["data"]["items"][0]["strongest_finding"], mine["strongest_finding"]);
+        assert_eq!(
+            read["data"]["items"][0]["strongest_finding"],
+            mine["strongest_finding"]
+        );
         git_ok(repo, &["merge", "--abort"]);
     }
 }
@@ -370,7 +389,12 @@ fn two_batches_that_add_one_proposal_differently_conflict_and_keep_ours() {
     commit(repo, "base");
     let evidence = [contribution("contrib_p", "The claim of the proposal.")];
     git_ok(repo, &["checkout", "-b", "theirs"]);
-    land_run(&landing, "theirs", &evidence, Some(proposal_run("Of theirs")));
+    land_run(
+        &landing,
+        "theirs",
+        &evidence,
+        Some(proposal_run("Of theirs")),
+    );
     commit(repo, "theirs");
     git_ok(repo, &["checkout", "main"]);
     let ours = land_run(&landing, "ours", &evidence, Some(proposal_run("Of ours")));

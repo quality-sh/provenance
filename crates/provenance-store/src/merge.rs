@@ -1,7 +1,7 @@
+use batches::RecordConflicts;
 use crate::state_store::readers::ensure_no_legacy_retirement;
 use provenance_macros::rule;
 use serde_json::Value;
-use batches::RecordConflicts;
 use std::collections::{BTreeMap, BTreeSet};
 
 mod batches;
