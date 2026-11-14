@@ -13,8 +13,7 @@ use provenance_store::repository::Repository;
 use provenance_store::review_changes::ReviewStateSnapshot;
 use provenance_store::state_store::{CreateSourceInput, StateStore};
 
-#[path = "support/initialization.rs"]
-mod initialization;
+use crate::discussion_support::base::initialization;
 
 fn scope() -> ScopeId {
     ScopeId::new("default").unwrap()

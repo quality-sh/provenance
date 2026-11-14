@@ -212,9 +212,22 @@ def binaries_of_test_files(crate, crate_directory):
     A file in src/ belongs to the library tests, which have the crate name as
     their binary id. Production files in src/ are left out. A file in src/
     counts as a test file when its name contains "test", so a name such as
-    latest.rs also counts; this makes the check stricter and is safe.
+    latest.rs also counts; this makes the check stricter and is safe. A group
+    binary tests/<group>/main.rs compiles test files of tests/ as modules, so
+    the group binary owns these files.
     """
     tests = crate_directory / "tests"
+    members = {}
+    for main in sorted(tests.glob("*/main.rs")):
+        for member in re.findall(r'#\[path = "\.\./(\w+)\.rs"\]', main.read_text()):
+            members.setdefault(member, []).append(f"{crate}::{main.parent.name}")
+
+    def owners(top):
+        if top.name == "main.rs":
+            return [f"{crate}::{top.parent.name}"]
+        return members.get(top.stem, [f"{crate}::{top.stem}"])
+
+    tops = sorted(tests.glob("*.rs")) + sorted(tests.glob("*/main.rs"))
     binaries = {}
     for path in sorted(crate_directory.rglob("*.rs")):
         relative = path.relative_to(crate_directory)
@@ -223,15 +236,18 @@ def binaries_of_test_files(crate, crate_directory):
                 binaries[path] = [crate]
         elif relative.parts[0] == "tests":
             name = relative.parts[1].removesuffix(".rs")
-            if (tests / f"{name}.rs").is_file():
+            if (tests / name / "main.rs").is_file():
                 binaries[path] = [f"{crate}::{name}"]
+            elif (tests / f"{name}.rs").is_file():
+                binaries[path] = owners(tests / f"{name}.rs")
             else:
                 # A shared module directory: the binaries that name it own the file.
                 names = re.compile(rf"\bmod {re.escape(name)}\b|/{re.escape(name)}/")
                 binaries[path] = [
-                    f"{crate}::{top.stem}"
-                    for top in sorted(tests.glob("*.rs"))
+                    binary
+                    for top in tops
                     if names.search(top.read_text())
+                    for binary in owners(top)
                 ]
     return binaries
 

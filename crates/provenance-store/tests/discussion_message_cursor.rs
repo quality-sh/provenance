@@ -1,5 +1,5 @@
 //! Discussion message continuations bind the effective page limit.
-mod discussion_support;
+use crate::discussion_support;
 use discussion_support::*;
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_macros::verifies;

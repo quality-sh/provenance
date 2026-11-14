@@ -1,5 +1,5 @@
+use super::support::records::allow_reviewer;
 use super::*;
-use crate::support::records::allow_reviewer;
 
 async fn enroll(host: &StatementHost) -> (String, String) {
     let (status, read, etag) = call(host, "GET", "/requirements/req_shared", None, &[]).await;

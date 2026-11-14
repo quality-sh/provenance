@@ -7,13 +7,7 @@ use provenance_porcelain::get::{Bounds, GetInput, GetOutcome, Traversal, View, V
 use rmcp::{model::CallToolRequestParams, ServiceExt as _};
 use serde_json::{json, Value};
 
-#[allow(dead_code)]
-mod support {
-    #[path = "../../../provenance-transport/tests/support/records.rs"]
-    pub mod records;
-    #[path = "../../../provenance-transport/tests/support/resource_http.rs"]
-    pub mod resource_http;
-}
+use crate::support;
 
 fn target(kind: NodeType) -> String {
     match kind {

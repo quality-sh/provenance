@@ -1,6 +1,5 @@
 #![cfg(any(unix, windows))]
-#[allow(dead_code)]
-mod review_support;
+use crate::discussion_support::base as review_support;
 
 use camino::Utf8Path;
 use provenance_core::review::{EvidenceQuery, ReviewHistoryQuery};

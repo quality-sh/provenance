@@ -2,8 +2,7 @@
 //! the memory adapter and a fixed clock. No Rule states the form or the
 //! uniqueness of a run id, so these tests have no Rule binding.
 
-#[path = "support/memory.rs"]
-mod memory;
+use crate::memory;
 
 use memory::{begin_input, open_review, scope, verification_repository, FixedClock, Recorded};
 use provenance_core::RequirementReview;
