@@ -63,10 +63,11 @@ pub(super) fn lines(repo: &str, file: &str) -> Vec<String> {
 
 /// Writes `lines` to one state file and commits it.
 pub(super) fn store_lines(repo: &str, file: &str, lines: &[String]) {
-    let text = lines
-        .iter()
-        .map(|line| format!("{line}\n"))
-        .collect::<String>();
+    let mut text = String::new();
+    for line in lines {
+        text.push_str(line);
+        text.push('\n');
+    }
     directory_file(repo, file, &text);
     commit(repo);
 }

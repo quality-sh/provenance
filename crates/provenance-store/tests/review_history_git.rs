@@ -226,10 +226,11 @@ async fn merge_that_resolves_a_conflict_to_new_content_adds_one_version() {
         .rposition(|line| line.contains(cycle_two))
         .unwrap();
     lines.remove(removed);
-    let kept = lines
-        .iter()
-        .map(|line| format!("{line}\n"))
-        .collect::<String>();
+    let mut kept = String::new();
+    for line in lines {
+        kept.push_str(line);
+        kept.push('\n');
+    }
     std::fs::write(&proposals, kept).unwrap();
     store
         .save_requirement(save(

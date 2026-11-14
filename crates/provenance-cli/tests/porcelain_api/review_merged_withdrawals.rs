@@ -91,9 +91,9 @@ pub(super) fn merge_side(repo: &str, merge: Merge) -> Vec<String> {
                 // lines that only the side branch added.
                 let ours = git(repo, &["show", &format!(":2:{file}")]);
                 let theirs = git(repo, &["show", &format!(":3:{file}")]);
-                let mut lines = ours.lines().collect::<Vec<_>>();
-                let added = theirs.lines().filter(|line| !lines.contains(line));
-                lines.extend(added.collect::<Vec<_>>());
+                let first = ours.lines().collect::<Vec<_>>();
+                let mut lines = first.clone();
+                lines.extend(theirs.lines().filter(|line| !first.contains(line)));
                 directory_file(repo, file, &format!("{}\n", lines.join("\n")));
             }
             commit(repo);
