@@ -84,14 +84,17 @@ impl StateStore {
         let desired = restatements
             .into_iter()
             .flat_map(|change| {
-                change.rule_ids.into_iter().map(move |rule_id| RequirementReviewInput {
-                    rule_id,
-                    requirement_id: change.requirement_id.clone(),
-                    field: "statement".into(),
-                    before: change.before.clone(),
-                    after: change.after.clone(),
-                    changed_at,
-                })
+                change
+                    .rule_ids
+                    .into_iter()
+                    .map(move |rule_id| RequirementReviewInput {
+                        rule_id,
+                        requirement_id: change.requirement_id.clone(),
+                        field: "statement".into(),
+                        before: change.before.clone(),
+                        after: change.after.clone(),
+                        changed_at,
+                    })
             })
             .map(|review| review.into_record(scope))
             .collect::<anyhow::Result<Vec<_>>>()?;

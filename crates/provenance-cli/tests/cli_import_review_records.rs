@@ -237,7 +237,12 @@ fn reasons(records: &[Value]) -> BTreeSet<(String, String, String, String)> {
         .map(|record| {
             assert_eq!(record["requirement_id"], "req_record", "{record}");
             let text = |field: &str| record[field].as_str().unwrap().to_owned();
-            (text("rule_id"), text("field"), text("before"), text("after"))
+            (
+                text("rule_id"),
+                text("field"),
+                text("before"),
+                text("after"),
+            )
         })
         .collect()
 }
