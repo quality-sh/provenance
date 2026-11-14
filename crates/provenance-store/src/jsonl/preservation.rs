@@ -205,6 +205,7 @@ fn record_id(value: &serde_json::Value) -> Option<&str> {
 mod tests {
     use super::{LoadedRecords, RawRecord};
     use crate::jsonl::line::checked_line;
+    use provenance_core::protocol::read_failure::UnparsableStateFile;
     use serde::{de::DeserializeOwned, Serialize};
 
     /// The rows of `lines` as a load of a file keeps them.
@@ -229,7 +230,7 @@ mod tests {
         let error = loaded
             .into_lines(camino::Utf8Path::new("state/scopes/default/records.jsonl"))
             .unwrap_err();
-        let state = crate::state_store::readers::StateLineInvalid::find(&error).unwrap();
+        let state = UnparsableStateFile::find(error.as_ref()).unwrap();
         assert_eq!(
             (state.line, state.message.as_str()),
             (2, "duplicate record id `one` prevents a safe typed change")
@@ -249,11 +250,11 @@ mod tests {
         let error = loaded
             .into_lines(camino::Utf8Path::new("state/scopes/default/records.jsonl"))
             .unwrap_err();
-        let state = crate::state_store::readers::StateLineInvalid::find(&error).unwrap();
+        let state = UnparsableStateFile::find(error.as_ref()).unwrap();
         assert_eq!(
-            (state.path.as_str(), state.line, state.message.as_str()),
+            (state.file.as_str(), state.line, state.message.as_str()),
             (
-                "state/scopes/default/records.jsonl",
+                "records.jsonl",
                 2,
                 "unknown fields cannot survive a typed change to a record without an id"
             )

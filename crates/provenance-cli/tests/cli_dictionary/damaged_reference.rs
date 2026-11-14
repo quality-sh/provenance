@@ -3,16 +3,17 @@
 //! file with half of a JSON object.
 //!
 //! The status and the statement check are implementation aids with no Rule:
-//! they record what the product answers. The import and the init refuse and
-//! keep the file, as `rule_ste_dictionary_reference_parse_refusal` states.
-//! The tests of an init with no PDF are in `cli_ste_onboarding`.
+//! they record what the product answers. The import and the init refuse, keep
+//! the file and write no index, as `rule_ste_dictionary_reference_parse_refusal`
+//! states. The strict check fails, as `rule_ste_strict_dictionary_index_gate`
+//! states. The tests of an init with no PDF are in `cli_ste_onboarding`.
 
 use crate::support::{
-    dictionary_pdf, imported_dictionary, init, init_command, provenance, reference_path,
-    UNAPPROVED_WORD,
+    dictionary_pdf, file_names, half_reference, init, init_command, provenance,
+    reference_path, reference_problem, reference_refusal, HALF_REFERENCE_MESSAGE,
+    REFERENCE_REPAIR, UNAPPROVED_WORD,
 };
 use provenance_macros::verifies;
-use provenance_store::dictionary_index::store_dictionary_index;
 use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::process::Output;
@@ -23,17 +24,8 @@ const EMPTY: &str = "";
 /// The parse message of [`EMPTY`].
 const EMPTY_MESSAGE: &str = "EOF while parsing a value";
 
-/// The parse message of [`half`].
-const HALF_MESSAGE: &str = "EOF while parsing a string";
-
-/// A reference that stops in the name of its third field. It holds a
-/// technical name that a write must not lose.
-fn half() -> String {
-    format!(r#"{{"technical_names": ["{UNAPPROVED_WORD}"], "issue": 9, "source_sha"#)
-}
-
-/// A repository whose dictionary reference holds `contents`, the index
-/// directory that holds the index of the fixture, and the fixture PDF.
+/// A repository whose dictionary reference holds `contents`, an empty index
+/// directory, and the fixture PDF.
 struct Damaged {
     _scratch: tempfile::TempDir,
     repo: PathBuf,
@@ -48,9 +40,9 @@ impl Damaged {
         let index_directory = scratch.path().join("index");
         let pdf = scratch.path().join("dictionary.pdf");
         std::fs::create_dir_all(&repo).unwrap();
+        std::fs::create_dir_all(&index_directory).unwrap();
         std::fs::write(&pdf, dictionary_pdf()).unwrap();
         init(&repo);
-        store_dictionary_index(imported_dictionary(), &index_directory).unwrap();
         std::fs::write(reference_path(&repo), contents).unwrap();
         Self {
             _scratch: scratch,
@@ -72,23 +64,11 @@ impl Damaged {
             .unwrap()
     }
 
-    fn import(&self) -> Output {
+    fn import(&self, extra: &[&str]) -> Output {
         let pdf = self.pdf.to_str().unwrap();
-        self.run(&["dictionary", "import", "--pdf", pdf, "--repo", self.repo()])
-    }
-
-    fn import_as_json(&self) -> Output {
-        let pdf = self.pdf.to_str().unwrap();
-        self.run(&[
-            "dictionary",
-            "import",
-            "--pdf",
-            pdf,
-            "--repo",
-            self.repo(),
-            "--format",
-            "json",
-        ])
+        let mut arguments = vec!["dictionary", "import", "--pdf", pdf, "--repo", self.repo()];
+        arguments.extend_from_slice(extra);
+        self.run(&arguments)
     }
 
     fn init(&self) -> Output {
@@ -98,13 +78,14 @@ impl Damaged {
             .unwrap()
     }
 
-    /// The exit code and standard error of a refused write, and the bytes of
-    /// the reference after it.
-    fn refusal(&self, output: &Output) -> (Option<i32>, String, String) {
+    /// The exit code and standard error of a refused write, the bytes of the
+    /// reference after it, and the names in the index directory.
+    fn refusal(&self, output: &Output) -> (Option<i32>, String, String, Vec<String>) {
         (
             output.status.code(),
             String::from_utf8_lossy(&output.stderr).into_owned(),
             std::fs::read_to_string(reference_path(&self.repo)).unwrap(),
+            file_names(&self.index_directory),
         )
     }
 
@@ -119,17 +100,12 @@ impl Damaged {
         ]))
     }
 
-    fn statement_check(&self) -> (Option<i32>, Value, String) {
+    fn statement_check(&self, extra: &[&str]) -> (Option<i32>, Value, String) {
         let statement = format!("The {UNAPPROVED_WORD} item stops.");
-        answer(&self.run(&[
-            "check",
-            "--repo",
-            self.repo(),
-            "--statement",
-            &statement,
-            "--format",
-            "json",
-        ]))
+        let mut arguments = vec!["check", "--repo", self.repo(), "--statement", &statement];
+        arguments.extend_from_slice(extra);
+        arguments.extend_from_slice(&["--format", "json"]);
+        answer(&self.run(&arguments))
     }
 
     /// The status of a reference whose first line does not parse with
@@ -140,7 +116,7 @@ impl Damaged {
             "index_directory": self.index_directory.display().to_string(),
             "index_present": false,
             "analyzer": "built_in_rules",
-            "load_problem": problem(parse_error),
+            "load_problem": reference_problem(parse_error),
         });
         (Some(0), status, String::new())
     }
@@ -150,7 +126,10 @@ impl Damaged {
 /// `parse_error`: a warning that Rule 1.1 did not run, and no finding for
 /// the unapproved word.
 fn unloaded_check(parse_error: &str) -> (Option<i32>, Value, String) {
-    let warning = format!("ASD-STE100 Rule 1.1 did not run: {}", problem(parse_error));
+    let warning = format!(
+        "ASD-STE100 Rule 1.1 did not run: {}",
+        reference_problem(parse_error)
+    );
     let check = json!({"categories": [{
         "category": "statements",
         "status": "findings",
@@ -159,38 +138,35 @@ fn unloaded_check(parse_error: &str) -> (Option<i32>, Value, String) {
     (Some(0), check, String::new())
 }
 
-/// The repair that each answer gives for a reference that does not parse.
-const REPAIR: &str =
-    "get the file again from git or correct its JSON, and then do the command again";
-
-/// The problem that the status and the check give for a reference whose first
-/// line does not parse with `message`.
-fn problem(message: &str) -> String {
-    format!("dictionary.json line 1: {message}; {REPAIR}")
-}
-
-/// The `invalid_state_file` failure object of a reference whose first line
-/// does not parse with `message`.
-fn failure(message: &str) -> String {
-    format!(
-        r#"{{"error":{{"file":"dictionary.json","kind":"invalid_state_file","line":1,"message":"{message}"}},"meta":{{}}}}"#
-    )
+/// The strict statement check of a reference that does not parse with
+/// `parse_error`: the statements category cannot run, and the check fails.
+fn unavailable_strict_check(parse_error: &str) -> (Option<i32>, Value, String) {
+    let check = json!({"categories": [{
+        "category": "statements",
+        "status": "unavailable",
+        "reason": reference_problem(parse_error),
+    }]});
+    (Some(1), check, String::new())
 }
 
 /// The refusal that a write gives for a reference whose first line does
-/// not parse with `message`, and the unchanged `contents`.
-fn refused(message: &str, contents: &str) -> (Option<i32>, String, String) {
-    let stderr = format!("Error: {}; {REPAIR}\n", failure(message));
-    (Some(1), stderr, contents.to_owned())
+/// not parse with `message`, the unchanged `contents`, and no index file.
+fn refused(message: &str, contents: &str) -> (Option<i32>, String, String, Vec<String>) {
+    (
+        Some(1),
+        reference_refusal(message),
+        contents.to_owned(),
+        Vec::new(),
+    )
 }
 
-/// The refusal that an import with `--format json` gives, and the
-/// unchanged `contents`.
-fn refused_as_json(message: &str, contents: &str) -> (Option<i32>, String, String) {
+/// The refusal that an import with `--format json` gives, the unchanged
+/// `contents`, and no index file.
+fn refused_as_json(message: &str, contents: &str) -> (Option<i32>, String, String, Vec<String>) {
     let stderr = format!(
-        r#"{{"error":{{"file":"dictionary.json","hint":"{REPAIR}","kind":"invalid_state_file","line":1,"message":"{message}"}},"meta":{{}}}}"#
+        r#"{{"error":{{"file":"dictionary.json","hint":"{REFERENCE_REPAIR}","kind":"invalid_state_file","line":1,"message":"{message}"}},"meta":{{}}}}"#
     );
-    (Some(1), stderr + "\n", contents.to_owned())
+    (Some(1), stderr + "\n", contents.to_owned(), Vec::new())
 }
 
 #[test]
@@ -202,23 +178,40 @@ fn the_status_of_an_empty_reference_names_the_parse_error() {
 
 #[test]
 fn the_status_of_half_of_a_reference_names_the_parse_error() {
-    let damaged = Damaged::new(&half());
+    let damaged = Damaged::new(&half_reference());
 
-    assert_eq!(damaged.status(), damaged.unloaded_status(HALF_MESSAGE));
+    assert_eq!(
+        damaged.status(),
+        damaged.unloaded_status(HALF_REFERENCE_MESSAGE)
+    );
 }
 
 #[test]
 fn a_statement_check_with_an_empty_reference_warns_that_rule_1_1_did_not_run() {
     let damaged = Damaged::new(EMPTY);
 
-    assert_eq!(damaged.statement_check(), unloaded_check(EMPTY_MESSAGE));
+    assert_eq!(damaged.statement_check(&[]), unloaded_check(EMPTY_MESSAGE));
 }
 
 #[test]
 fn a_statement_check_with_half_of_a_reference_warns_that_rule_1_1_did_not_run() {
-    let damaged = Damaged::new(&half());
+    let damaged = Damaged::new(&half_reference());
 
-    assert_eq!(damaged.statement_check(), unloaded_check(HALF_MESSAGE));
+    assert_eq!(
+        damaged.statement_check(&[]),
+        unloaded_check(HALF_REFERENCE_MESSAGE)
+    );
+}
+
+#[test]
+#[verifies("rule_ste_strict_dictionary_index_gate", examples)]
+fn a_strict_statement_check_with_half_of_a_reference_fails() {
+    let damaged = Damaged::new(&half_reference());
+
+    assert_eq!(
+        damaged.statement_check(&["--strict"]),
+        unavailable_strict_check(HALF_REFERENCE_MESSAGE)
+    );
 }
 
 #[test]
@@ -226,7 +219,7 @@ fn a_statement_check_with_half_of_a_reference_warns_that_rule_1_1_did_not_run() 
 fn an_import_over_an_empty_reference_refuses_and_keeps_the_file() {
     let damaged = Damaged::new(EMPTY);
 
-    let import = damaged.import();
+    let import = damaged.import(&[]);
 
     assert_eq!(damaged.refusal(&import), refused(EMPTY_MESSAGE, EMPTY));
 }
@@ -234,11 +227,14 @@ fn an_import_over_an_empty_reference_refuses_and_keeps_the_file() {
 #[test]
 #[verifies("rule_ste_dictionary_reference_parse_refusal", examples)]
 fn an_import_over_half_of_a_reference_refuses_and_keeps_the_technical_names() {
-    let damaged = Damaged::new(&half());
+    let damaged = Damaged::new(&half_reference());
 
-    let import = damaged.import();
+    let import = damaged.import(&[]);
 
-    assert_eq!(damaged.refusal(&import), refused(HALF_MESSAGE, &half()));
+    assert_eq!(
+        damaged.refusal(&import),
+        refused(HALF_REFERENCE_MESSAGE, &half_reference())
+    );
 }
 
 #[test]
@@ -254,11 +250,14 @@ fn an_init_over_an_empty_reference_refuses_and_keeps_the_file() {
 #[test]
 #[verifies("rule_ste_dictionary_reference_parse_refusal", examples)]
 fn an_init_over_half_of_a_reference_refuses_and_keeps_the_technical_names() {
-    let damaged = Damaged::new(&half());
+    let damaged = Damaged::new(&half_reference());
 
     let init = damaged.init();
 
-    assert_eq!(damaged.refusal(&init), refused(HALF_MESSAGE, &half()));
+    assert_eq!(
+        damaged.refusal(&init),
+        refused(HALF_REFERENCE_MESSAGE, &half_reference())
+    );
 }
 
 #[test]
@@ -266,7 +265,7 @@ fn an_init_over_half_of_a_reference_refuses_and_keeps_the_technical_names() {
 fn an_import_with_json_output_over_an_empty_reference_gives_the_refusal_object() {
     let damaged = Damaged::new(EMPTY);
 
-    let import = damaged.import_as_json();
+    let import = damaged.import(&["--format", "json"]);
 
     assert_eq!(
         damaged.refusal(&import),
@@ -277,13 +276,13 @@ fn an_import_with_json_output_over_an_empty_reference_gives_the_refusal_object()
 #[test]
 #[verifies("rule_ste_dictionary_reference_parse_refusal", examples)]
 fn an_import_with_json_output_over_half_of_a_reference_gives_the_refusal_object() {
-    let damaged = Damaged::new(&half());
+    let damaged = Damaged::new(&half_reference());
 
-    let import = damaged.import_as_json();
+    let import = damaged.import(&["--format", "json"]);
 
     assert_eq!(
         damaged.refusal(&import),
-        refused_as_json(HALF_MESSAGE, &half())
+        refused_as_json(HALF_REFERENCE_MESSAGE, &half_reference())
     );
 }
 

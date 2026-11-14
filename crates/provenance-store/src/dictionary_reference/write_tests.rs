@@ -9,6 +9,7 @@ use super::{dictionary_reference_path, set_project_dictionary};
 use crate::layout::ProvenanceLayout;
 use crate::test_support::closed_directory::{close, Closed};
 use crate::test_support::dictionary_import::import;
+use crate::test_support::directory::entry_names;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::verifies;
 
@@ -23,19 +24,6 @@ fn repository(temp: &tempfile::TempDir) -> (ProvenanceLayout, Utf8PathBuf, Utf8P
     let state = layout.state_dir();
     std::fs::create_dir_all(&state).expect("make the state directory");
     (layout, state, root.join("index"))
-}
-
-fn entry_names(directory: &Utf8Path) -> Vec<String> {
-    std::fs::read_dir(directory)
-        .expect("list the directory")
-        .map(|entry| {
-            entry
-                .expect("read an entry")
-                .file_name()
-                .to_string_lossy()
-                .into_owned()
-        })
-        .collect()
 }
 
 #[test]

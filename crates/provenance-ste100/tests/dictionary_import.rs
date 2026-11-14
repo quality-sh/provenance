@@ -127,8 +127,11 @@ fn imports_a_complete_positioned_dictionary_deterministically() {
     assert_eq!(prefix_entry.non_ste_example, None);
 }
 
+/// Implementation aid with no Rule: the test decodes the bytes of one index
+/// with no file, and the file name for the source equals the file name for the
+/// identity. The store tests of a stored index carry
+/// `rule_ste_dictionary_import_reuse`.
 #[test]
-#[verifies("rule_ste_dictionary_import_reuse", examples)]
 fn a_verified_index_loads_for_the_same_source_bytes() {
     let pdf = dictionary_pdf(APPROVED_TABLE_ROWS, UNAPPROVED_TABLE_ROWS, 9, true);
     let import = import_dictionary(&pdf).expect("import the fixture");
@@ -144,8 +147,10 @@ fn a_verified_index_loads_for_the_same_source_bytes() {
     );
 }
 
+/// Implementation aid with no Rule: the test compares file names only. No
+/// Rule states the file name of an index, and the store tests of a stored
+/// index carry `rule_ste_dictionary_import_reuse`.
 #[test]
-#[verifies("rule_ste_dictionary_import_reuse", examples)]
 fn changed_source_or_extractor_version_cannot_reuse_an_index() {
     let pdf = dictionary_pdf(APPROVED_TABLE_ROWS, UNAPPROVED_TABLE_ROWS, 9, true);
     let mut old_import = import_dictionary(&pdf).expect("import the fixture");

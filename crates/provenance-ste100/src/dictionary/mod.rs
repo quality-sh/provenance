@@ -10,6 +10,8 @@ mod parse;
 mod pdf;
 
 #[cfg(feature = "host")]
+pub use digest::normalized_data_digest;
+#[cfg(feature = "host")]
 pub use index::{
     decode_dictionary_index, decode_dictionary_index_for_source, dictionary_index_file_name,
     dictionary_index_file_name_for_source, encode_dictionary_index, DictionaryIndexError,

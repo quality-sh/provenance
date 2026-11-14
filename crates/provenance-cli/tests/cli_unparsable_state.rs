@@ -86,3 +86,23 @@ fn a_get_names_the_state_line_that_does_not_parse() {
     let refusal = refusal(&repo, &["req_a", "get", "--format", "json"]);
     assert_names_the_line(&refusal);
 }
+
+/// A repository command with `--format json` prints a refusal that carries a typed
+/// failure as the one object on standard error, with no `Error: ` prefix.
+///
+/// Implementation aid with no Rule: `rule_cli_json_refusal_object` names the record
+/// commands, and no Rule states the refusal form of a repository command.
+#[test]
+fn a_materialize_with_json_output_gives_the_refusal_object_of_the_state_line() {
+    let (_directory, repo) = unknown_artifact_type();
+    let output = provenance()
+        .args(["materialize", "--repo", &repo, "--format", "json"])
+        .output()
+        .unwrap();
+    let text = String::from_utf8(output.stderr).unwrap();
+    assert_eq!(output.status.code(), Some(1), "{text}");
+    assert_eq!(text.lines().count(), 1, "{text}");
+    let refusal: Value =
+        serde_json::from_str(&text).unwrap_or_else(|error| panic!("{error}: {text}"));
+    assert_names_the_line(&refusal);
+}

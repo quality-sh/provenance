@@ -1,5 +1,4 @@
 use camino::{Utf8Path, Utf8PathBuf};
-use provenance_macros::rule;
 use std::io::Write;
 
 /// A failure of [`replace_file`]. It has the text of a `tempfile` persist
@@ -8,18 +7,19 @@ use std::io::Write;
 #[error("failed to persist temporary file: {0}")]
 pub struct ReplaceFailed(#[source] std::io::Error);
 
-/// Writes `bytes` to the file at `path` so that a stop leaves the previous
-/// contents or all of the new contents, and a stop of the electrical supply
-/// does not remove a complete write.
-#[rule("rule_ste_dictionary_file_write_is_whole")]
-#[rule("rule_ste_dictionary_file_write_is_durable")]
+/// Writes `bytes` to the file at `path` through a temporary file in the same
+/// directory, a sync of that file, one rename over `path`, and a sync of the
+/// directories. A stop leaves the previous contents or all of the new contents
+/// at `path`.
+///
+/// If a step fails, the steps after it do not occur, no temporary file stays,
+/// and the error names the step and its path. If a directory sync fails,
+/// `path` has the new bytes, but a stop of the electrical supply can remove
+/// them.
 pub fn write_synced_file(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<()> {
-    // If a step fails, the steps after it do not occur, no temporary file
-    // stays, and the error names the step and its path. If a directory sync
-    // fails, `path` has the new bytes, but a stop of the electrical supply can
-    // remove them.
     let (temporary, parent, first_made) = write_temporary(path, bytes)?;
     temporary.as_file().sync_all().map_err(sync_failure(path))?;
+    crate::test_probes::at("synced_file_before_rename")?;
     replace_file(temporary, path)?;
     // The sync of the directory of `path` and of each directory that the call
     // made, deepest first. On Windows, `sync_directory` does not sync, so a
@@ -126,6 +126,24 @@ pub fn sync_directory(directory: &Utf8Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Syncs the data of the file at `path`. A failure gives `sync <path>` and the
+/// I/O error.
+pub fn sync_file(path: &Utf8Path) -> anyhow::Result<()> {
+    open_to_sync(path)
+        .and_then(|file| file.sync_all())
+        .map_err(sync_failure(path))
+}
+
+/// Opens the file at `path` so that its sync can run. A Windows sync of a
+/// file needs write access, and a handle with read access only gets
+/// `ERROR_ACCESS_DENIED`. Unix syncs a handle with read access only.
+fn open_to_sync(path: &Utf8Path) -> std::io::Result<std::fs::File> {
+    std::fs::OpenOptions::new()
+        .read(true)
+        .write(cfg!(windows))
+        .open(path)
+}
+
 /// A failed sync of `path`, with the path and the I/O error.
 fn sync_failure(path: &Utf8Path) -> impl FnOnce(std::io::Error) -> anyhow::Error + '_ {
     move |error| crate::refusal::caused(error, format!("sync {path}"))
@@ -173,16 +191,9 @@ pub fn sync_tree(path: &Utf8Path) -> anyhow::Result<()> {
         if file_type.is_dir() {
             sync_tree(&child)?;
         } else {
-            // Windows' FlushFileBuffers needs write access; a read-only
-            // handle is refused with ERROR_ACCESS_DENIED. Unix fsyncs a
-            // read descriptor happily.
-            let file = std::fs::OpenOptions::new()
-                .read(true)
-                .write(cfg!(windows))
-                .open(&child)
-                .map_err(|error| {
-                    crate::refusal::fault!("sync publication file {child}: {error}")
-                })?;
+            let file = open_to_sync(&child).map_err(|error| {
+                crate::refusal::fault!("sync publication file {child}: {error}")
+            })?;
             file.sync_all().map_err(|error| {
                 crate::refusal::fault!("sync publication file {child}: {error}")
             })?;

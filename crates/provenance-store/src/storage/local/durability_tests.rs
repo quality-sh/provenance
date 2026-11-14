@@ -6,12 +6,12 @@
 //! temporary file.
 
 use super::durability::write_synced_file;
-use camino::Utf8PathBuf;
+use crate::test_support::directory::{entry_names, utf8};
 
 #[test]
 fn a_directory_that_cannot_be_made_names_the_step_and_the_path() -> anyhow::Result<()> {
     let temp = tempfile::tempdir()?;
-    let root = utf8(temp.path())?;
+    let root = utf8(temp.path());
     let blocker = root.join("state");
     std::fs::write(&blocker, b"a file, not a directory")?;
 
@@ -32,7 +32,7 @@ fn a_directory_that_cannot_be_made_names_the_step_and_the_path() -> anyhow::Resu
 #[test]
 fn a_directory_that_cannot_be_found_names_the_step_and_the_path() -> anyhow::Result<()> {
     let temp = tempfile::tempdir()?;
-    let root = utf8(temp.path())?;
+    let root = utf8(temp.path());
     let blocker = root.join("state");
     std::fs::write(&blocker, b"a file, not a directory")?;
     let below = blocker.join("scopes");
@@ -53,7 +53,7 @@ fn a_directory_that_cannot_be_found_names_the_step_and_the_path() -> anyhow::Res
 #[test]
 fn a_failed_rename_leaves_no_temporary_file() -> anyhow::Result<()> {
     let temp = tempfile::tempdir()?;
-    let root = utf8(temp.path())?;
+    let root = utf8(temp.path());
     let target = root.join("dictionary.json");
     std::fs::create_dir_all(target.join("occupied"))?;
 
@@ -65,14 +65,6 @@ fn a_failed_rename_leaves_no_temporary_file() -> anyhow::Result<()> {
         text.starts_with("failed to persist temporary file: "),
         "{text}"
     );
-    let names = std::fs::read_dir(&root)?
-        .map(|entry| Ok(entry?.file_name().to_string_lossy().into_owned()))
-        .collect::<std::io::Result<Vec<_>>>()?;
-    assert_eq!(names, ["dictionary.json"]);
+    assert_eq!(entry_names(&root), ["dictionary.json"]);
     Ok(())
-}
-
-fn utf8(path: &std::path::Path) -> anyhow::Result<Utf8PathBuf> {
-    Utf8PathBuf::from_path_buf(path.to_path_buf())
-        .map_err(|path| anyhow::anyhow!("{} is not UTF-8", path.display()))
 }

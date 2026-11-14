@@ -10,7 +10,7 @@ use anyhow::Context;
 #[cfg(feature = "host")]
 use camino::Utf8PathBuf;
 #[cfg(feature = "host")]
-use provenance_core::protocol::read_failure::StateFileRefusal;
+use provenance_core::protocol::read_failure::UnparsableStateFile;
 #[cfg(feature = "host")]
 use provenance_macros::rule;
 use provenance_ste100::DictionaryImport;
@@ -57,7 +57,7 @@ pub enum DictionaryResolution {
     Loaded(ProjectDictionary),
     /// The reference does not parse, so it names no index. The refusal gives
     /// the file, the line, the parse message and the repair.
-    Unparsable(StateFileRefusal),
+    Unparsable(UnparsableStateFile),
     /// The reference names an index that this machine cannot load.
     Unavailable {
         identity: DictionaryImportIdentity,
@@ -78,12 +78,12 @@ const REFERENCE_REPAIR: &str =
 fn parse_reference(
     path: &camino::Utf8Path,
     bytes: &[u8],
-) -> Result<DictionaryReference, StateFileRefusal> {
-    serde_json::from_slice(bytes).map_err(|error| StateFileRefusal {
+) -> Result<DictionaryReference, UnparsableStateFile> {
+    serde_json::from_slice(bytes).map_err(|error| UnparsableStateFile {
         file: crate::state_store::readers::state_file(path),
         line: u64::try_from(error.line()).unwrap_or(u64::MAX),
         message: crate::state_store::readers::parse_message(&error),
-        hint: REFERENCE_REPAIR.to_owned(),
+        hint: Some(REFERENCE_REPAIR.to_owned()),
     })
 }
 
@@ -194,7 +194,7 @@ pub fn current_reference(layout: &ProvenanceLayout) -> anyhow::Result<CurrentRef
 pub fn current_reference_from(
     layout: &ProvenanceLayout,
     file: Option<&[u8]>,
-) -> Result<CurrentReference, StateFileRefusal> {
+) -> Result<CurrentReference, UnparsableStateFile> {
     let technical_names = match file {
         None => Vec::new(),
         Some(bytes) => parse_reference(&dictionary_reference_path(layout), bytes)?.technical_names,

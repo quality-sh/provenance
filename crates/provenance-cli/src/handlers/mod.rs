@@ -88,6 +88,38 @@ impl RepositoryInput {
     }
 }
 
+/// The output options of one repository command.
+pub struct RepositoryOptions {
+    /// The caller asked for no summary.
+    pub quiet: bool,
+    /// The caller gave the global `--format json` option, so a refusal that carries a
+    /// typed failure prints as one `{error,meta}` object. A command with a `format` field
+    /// of its own reads that field as the form of its result and does not take the global
+    /// option, so its refusal is text.
+    pub json: bool,
+}
+
+impl RepositoryOptions {
+    /// Reads the options of `command` from the matches of its parser.
+    pub fn from_matches(
+        command: RepositoryCommand,
+        matches: &clap::ArgMatches,
+        quiet: bool,
+    ) -> Self {
+        let declaration = registry::Command::Repository(command).declaration();
+        let own_format = declaration
+            .input
+            .fields()
+            .iter()
+            .any(|field| field.name == "format");
+        let format = matches.try_get_one::<String>("format").ok().flatten();
+        Self {
+            quiet,
+            json: !own_format && format.is_some_and(|format| format == "json"),
+        }
+    }
+}
+
 /// Runs one repository command.
 #[allow(clippy::redundant_pub_crate)]
 pub(super) async fn repository_command(input: RepositoryInput, quiet: bool) -> anyhow::Result<()> {

@@ -1,6 +1,7 @@
 #[cfg(unix)]
 pub mod closed_directory;
 pub mod dictionary_import;
+pub mod directory;
 #[path = "../tests/support/initialization.rs"]
 mod initialization;
 pub use initialization::{allow_reviewer, initialize};

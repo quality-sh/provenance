@@ -1,6 +1,6 @@
 //! The write of an index file: the new file replaces a stored index with one
 //! rename, the directory has a sync after the rename and when an equal index
-//! is stored, and a failed write keeps the stored file.
+//! is stored, and a write that stops before its rename keeps the stored file.
 //!
 //! No test stops the process or the electrical supply: each test shows the
 //! order of the steps of one write.
@@ -8,6 +8,7 @@
 use super::store_dictionary_index;
 use crate::test_support::closed_directory::{close, Closed};
 use crate::test_support::dictionary_import::import;
+use crate::test_support::directory::entry_names;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::verifies;
 use provenance_ste100::{dictionary_index_file_name, encode_dictionary_index};
@@ -22,21 +23,6 @@ fn index_directory(temp: &tempfile::TempDir) -> (Utf8PathBuf, Utf8PathBuf) {
     std::fs::create_dir(&directory).expect("make the index directory");
     let path = directory.join(dictionary_index_file_name(&import().identity));
     (directory, path)
-}
-
-fn entry_names(directory: &Utf8Path) -> Vec<String> {
-    let mut names: Vec<String> = std::fs::read_dir(directory)
-        .expect("list the directory")
-        .map(|entry| {
-            entry
-                .expect("read an entry")
-                .file_name()
-                .to_string_lossy()
-                .into_owned()
-        })
-        .collect();
-    names.sort();
-    names
 }
 
 fn file_name(path: &Utf8Path) -> String {
@@ -67,20 +53,26 @@ fn a_replace_of_a_stored_index_syncs_the_directory_after_the_rename() {
     assert_eq!(entry_names(&directory), [file_name(&path)]);
 }
 
+/// The write stops with an error at the point between the sync of the
+/// temporary file and the rename. A stop of the process at that point also
+/// leaves the temporary file in the directory.
 #[test]
 #[verifies("rule_ste_dictionary_file_write_is_whole", examples)]
-fn a_failed_write_of_the_new_index_keeps_the_stored_index() {
+fn a_write_stopped_before_its_rename_keeps_the_stored_index() {
     let temp = tempfile::tempdir().expect("make a temporary directory");
     let (directory, path) = index_directory(&temp);
     std::fs::write(&path, STORED).expect("store an index");
 
-    let closed = close(&directory, Closed::Writes);
+    crate::test_probes::crash_at("synced_file_before_rename");
     let result = store_dictionary_index(&import(), directory.as_std_path());
-    drop(closed);
+    crate::test_probes::disarm("synced_file_before_rename");
 
-    assert!(result.is_err(), "unexpected result: {result:?}");
+    let error = result.expect_err("the write must stop before its rename");
+    assert_eq!(
+        format!("{error:#}"),
+        "injected crash at synced_file_before_rename"
+    );
     assert_eq!(std::fs::read(&path).expect("read the index"), STORED);
-    assert_eq!(entry_names(&directory), [file_name(&path)]);
 }
 
 #[test]

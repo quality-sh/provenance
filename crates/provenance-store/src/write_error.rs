@@ -1,9 +1,9 @@
 //! Source failures retain native diagnostics separately from the safe wire form.
-use crate::state_store::readers::StateLineInvalid;
 use crate::state_store::{
     ReconciledResource, StatementWriteError, TypedSpecDiagnostic, TypedSpecWriteError,
 };
 use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
+use provenance_core::protocol::read_failure::UnparsableStateFile;
 use serde::Serialize;
 
 mod cause;
@@ -265,12 +265,12 @@ impl WriteError {
                 _ => WriteFailure::FileUnavailable,
             };
         }
-        StateLineInvalid::find(error).map_or_else(
+        UnparsableStateFile::find(error.as_ref()).map_or_else(
             || self.write_failed(),
-            |error| WriteFailure::InvalidStateFile {
-                file: error.file(),
-                line: error.line,
-                message: error.message.clone(),
+            |state| WriteFailure::InvalidStateFile {
+                file: state.file.clone(),
+                line: state.line,
+                message: state.message.clone(),
             },
         )
     }

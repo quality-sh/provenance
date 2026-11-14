@@ -57,29 +57,58 @@ pub enum ReadFailure {
     ReadFailed { cause: String },
 }
 
-/// A state file that does not parse, with the step that repairs it.
+/// A state file that does not parse at one line.
 ///
-/// A command that has no operation route gives this refusal. Each surface
-/// gives it as the `invalid_state_file` failure, with the step as its hint.
+/// `file` is the path below the state directory, with `/` between its parts,
+/// or only the file name when the file is not below a state directory, so a
+/// refusal never gives an absolute path. `hint` is the step that repairs the
+/// file, when the reader knows one.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("{file} line {line}: {message}; {hint}")]
-pub struct StateFileRefusal {
-    /// The file path below the state directory.
+pub struct UnparsableStateFile {
     pub file: String,
     pub line: u64,
-    /// The parse message.
+    /// The parse message, with no position.
     pub message: String,
-    /// The step that repairs the file.
-    pub hint: String,
+    pub hint: Option<String>,
 }
 
-impl StateFileRefusal {
-    /// The `invalid_state_file` failure of the file, with no hint.
+impl UnparsableStateFile {
+    /// The `invalid_state_file` failure of the file. The failure has no hint.
+    #[provenance_macros::rule("rule_state_parse_refusal_names_the_line")]
     pub fn failure(&self) -> ReadFailure {
         ReadFailure::InvalidStateFile {
             file: self.file.clone(),
             line: self.line,
             message: self.message.clone(),
+        }
+    }
+
+    /// The `invalid_state_file` failure as a JSON object, with the hint as its
+    /// `hint` member when the file has one.
+    pub fn failure_object(&self) -> serde_json::Map<String, serde_json::Value> {
+        let mut object = match serde_json::to_value(self.failure()) {
+            Ok(serde_json::Value::Object(object)) => object,
+            _ => serde_json::Map::new(),
+        };
+        if let Some(hint) = &self.hint {
+            object.insert("hint".to_owned(), hint.clone().into());
+        }
+        object
+    }
+
+    /// The first state file that does not parse in the cause chain of `error`.
+    pub fn find<'a>(error: &'a (dyn std::error::Error + 'static)) -> Option<&'a Self> {
+        std::iter::successors(Some(error), |cause| cause.source())
+            .find_map(|cause| cause.downcast_ref::<Self>())
+    }
+}
+
+impl std::fmt::Display for UnparsableStateFile {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{} line {}: {}", self.file, self.line, self.message)?;
+        match &self.hint {
+            Some(hint) => write!(formatter, "; {hint}"),
+            None => Ok(()),
         }
     }
 }

@@ -3,13 +3,12 @@ use crate::cache::CompletionTimedOut;
 use crate::operations::files::FileAccessRefusal;
 use crate::operations::reader::ReadRefusal;
 use crate::stale::git::GitRefusal;
-use crate::state_store::readers::StateLineInvalid;
 use crate::write_error::{
     failure_cause, in_repository, native, SourceFailure, WriteError, WriteFailure,
 };
 use provenance_core::protocol::{
     failure::OperationFailure,
-    read_failure::{MovedUnit, ReadFailure},
+    read_failure::{MovedUnit, ReadFailure, UnparsableStateFile},
 };
 use provenance_macros::rule;
 
@@ -101,7 +100,8 @@ impl ReadError {
         if let Some(error) = error.downcast_ref::<SourceFailure>() {
             return store_refusal(&error.failure).unwrap_or_else(|| self.read_failed());
         }
-        StateLineInvalid::find(error).map_or_else(|| self.read_failed(), state_line_failure)
+        UnparsableStateFile::find(error.as_ref())
+            .map_or_else(|| self.read_failed(), UnparsableStateFile::failure)
     }
     fn read_failed(&self) -> ReadFailure {
         ReadFailure::ReadFailed {
@@ -114,17 +114,6 @@ impl ReadError {
     pub fn unclassified_cause(&self) -> Option<String> {
         (self.common().is_none() && matches!(self.safe(), ReadFailure::ReadFailed { .. }))
             .then(|| format!("{:#}", native(&self.0)))
-    }
-}
-
-/// The shard below the state directory, the line and the parse message of a
-/// state line that does not parse.
-#[rule("rule_state_parse_refusal_names_the_line")]
-fn state_line_failure(error: &StateLineInvalid) -> ReadFailure {
-    ReadFailure::InvalidStateFile {
-        file: error.file(),
-        line: error.line,
-        message: error.message.clone(),
     }
 }
 

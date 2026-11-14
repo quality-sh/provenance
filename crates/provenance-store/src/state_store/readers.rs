@@ -5,34 +5,6 @@ use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use serde::de::DeserializeOwned;
 
-/// A stored line that is not one record of its family.
-///
-/// `serde_json` reports a position inside the one line it was given, which
-/// reads as "line 1" for every row; the shard path and the row number are
-/// what locate the fault. The display gives the path below the state
-/// directory, so check output and a refusal name the same place.
-#[derive(Debug, thiserror::Error)]
-#[error("{} line {line}: {message}", state_relative(path))]
-pub struct StateLineInvalid {
-    pub path: Utf8PathBuf,
-    pub line: u64,
-    pub message: String,
-}
-
-impl StateLineInvalid {
-    /// The shard path below the state directory, or only its file name when
-    /// the shard is not below a state directory. A refusal that leaves the
-    /// host gives this value and never an absolute path.
-    pub fn file(&self) -> String {
-        state_file(&self.path)
-    }
-
-    /// The first unparsable state line in the cause chain of `error`.
-    pub fn find(error: &anyhow::Error) -> Option<&Self> {
-        error.chain().find_map(|cause| cause.downcast_ref::<Self>())
-    }
-}
-
 /// The shard path below the state directory, or only its file name when the
 /// shard is not below a state directory.
 pub fn state_file(path: &Utf8Path) -> String {
@@ -53,13 +25,6 @@ pub fn parse_message(error: &serde_json::Error) -> String {
     text.rfind(" at line ")
         .map_or(text.as_str(), |at| &text[..at])
         .to_owned()
-}
-
-/// The shard path below the state directory, with `/` between its parts on
-/// every platform. A shard path joins native separators to a family suffix
-/// that has `/`, so the plain display mixes the two on Windows.
-fn state_relative(path: &Utf8Path) -> String {
-    below_state(path).unwrap_or_else(|| path.to_string())
 }
 
 fn below_state(path: &Utf8Path) -> Option<String> {

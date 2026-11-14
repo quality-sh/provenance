@@ -3,47 +3,29 @@
 //! `rule_ste_dictionary_reference_parse_refusal` states. The tests of an init
 //! with a PDF are in `cli_dictionary`.
 
-use super::dictionary_support::{dictionary_pdf, reference_path};
+use super::dictionary_support::{
+    dictionary_pdf, file_names, half_reference, reference_path, reference_refusal,
+    HALF_REFERENCE_MESSAGE,
+};
 use super::support::{serial, Fixture, TestServer};
 use provenance_macros::verifies;
-use std::path::Path;
 
-/// A reference that stops in the name of its third field. It holds a
-/// technical name that a write must not lose.
-const HALF: &str = r#"{"technical_names": ["bword"], "issue": 9, "source_sha"#;
-
-/// The text of the refusal of [`HALF`].
-const REFUSAL: &str = concat!(
-    r#"Error: {"error":{"file":"dictionary.json","kind":"invalid_state_file","line":1,"#,
-    r#""message":"EOF while parsing a string"},"meta":{}}; get the file again from git or "#,
-    "correct its JSON, and then do the command again\n"
-);
-
-/// An initialized repository whose reference is [`HALF`].
+/// An initialized repository whose reference is half of a reference, with an
+/// empty index directory.
 fn damaged() -> Fixture {
     let fixture = Fixture::new();
     fixture.init().assert().success();
-    std::fs::write(reference_path(&fixture.repo), HALF).unwrap();
+    std::fs::write(reference_path(&fixture.repo), half_reference()).unwrap();
+    let _ = std::fs::remove_dir_all(&fixture.index_dir);
+    std::fs::create_dir_all(&fixture.index_dir).unwrap();
     fixture
 }
 
-/// The names in the asset cache directory, sorted.
-fn asset_files(directory: &Path) -> Vec<String> {
-    let Ok(entries) = std::fs::read_dir(directory) else {
-        return Vec::new();
-    };
-    let mut names: Vec<String> = entries
-        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-        .collect();
-    names.sort();
-    names
-}
-
 /// Runs init with no PDF and the asset URL `url`. Asserts the refusal, the
-/// unchanged reference, no request to `server` and no new file in the asset
-/// cache.
+/// unchanged reference, no request to `server`, no new file in the asset
+/// cache and no index file.
 fn assert_refused(fixture: &Fixture, server: &TestServer, url: &str) {
-    let assets = asset_files(&fixture.asset_dir);
+    let assets = file_names(&fixture.asset_dir);
 
     let output = fixture
         .init()
@@ -56,11 +38,17 @@ fn assert_refused(fixture: &Fixture, server: &TestServer, url: &str) {
             output.status.code(),
             String::from_utf8_lossy(&output.stderr).into_owned(),
             std::fs::read_to_string(reference_path(&fixture.repo)).unwrap(),
+            file_names(&fixture.index_dir),
         ),
-        (Some(1), REFUSAL.to_owned(), HALF.to_owned())
+        (
+            Some(1),
+            reference_refusal(HALF_REFERENCE_MESSAGE),
+            half_reference(),
+            Vec::<String>::new(),
+        )
     );
     assert_eq!(server.requests(), Vec::<String>::new());
-    assert_eq!(asset_files(&fixture.asset_dir), assets);
+    assert_eq!(file_names(&fixture.asset_dir), assets);
 }
 
 #[test]

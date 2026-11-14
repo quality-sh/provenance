@@ -11,6 +11,7 @@ use crate::layout::ProvenanceLayout;
 use crate::publication::{with_repository_publication, write_publication_marker, PublicationPhase};
 use crate::storage::{Atomicity, PublishFailure, StateKey, StateStorage, WriteSet};
 use crate::test_support::closed_directory::{close, Closed};
+use crate::test_support::directory::utf8;
 use camino::{Utf8Path, Utf8PathBuf};
 
 const KEY: &str = "scopes/a/rules/rule.jsonl";
@@ -18,7 +19,7 @@ const KEY: &str = "scopes/a/rules/rule.jsonl";
 #[test]
 fn a_per_key_put_syncs_the_directory_after_the_rename() -> anyhow::Result<()> {
     let temp = tempfile::tempdir()?;
-    let layout = layout_in(&temp)?;
+    let layout = layout_in(&temp);
     let path = layout.state_dir().join(KEY);
     let directory = parent(&path)?;
     std::fs::create_dir_all(&directory)?;
@@ -39,7 +40,7 @@ fn a_per_key_put_syncs_the_directory_after_the_rename() -> anyhow::Result<()> {
 #[test]
 fn a_per_key_delete_syncs_the_directory_after_the_remove() -> anyhow::Result<()> {
     let temp = tempfile::tempdir()?;
-    let layout = layout_in(&temp)?;
+    let layout = layout_in(&temp);
     let path = layout.state_dir().join(KEY);
     let directory = parent(&path)?;
     std::fs::create_dir_all(&directory)?;
@@ -59,7 +60,7 @@ fn a_per_key_delete_syncs_the_directory_after_the_remove() -> anyhow::Result<()>
 #[test]
 fn a_per_key_put_syncs_the_parent_of_a_new_directory() -> anyhow::Result<()> {
     let temp = tempfile::tempdir()?;
-    let layout = layout_in(&temp)?;
+    let layout = layout_in(&temp);
     let path = layout.state_dir().join(KEY);
     let new_directory = parent(&path)?;
     let scope = parent(&new_directory)?;
@@ -81,7 +82,7 @@ fn a_per_key_put_syncs_the_parent_of_a_new_directory() -> anyhow::Result<()> {
 #[test]
 fn a_jsonl_file_write_syncs_the_directory_after_the_rename() -> anyhow::Result<()> {
     let temp = tempfile::tempdir()?;
-    let root = utf8(temp.path())?;
+    let root = utf8(temp.path());
     let side = root.join("side.jsonl");
     std::fs::write(&side, "{\"id\":\"new\"}\n")?;
     let directory = root.join("target");
@@ -107,7 +108,7 @@ fn a_jsonl_file_write_syncs_the_directory_after_the_rename() -> anyhow::Result<(
 #[test]
 fn a_publication_marker_write_syncs_the_cache_directory() -> anyhow::Result<()> {
     let temp = tempfile::tempdir()?;
-    let layout = layout_in(&temp)?;
+    let layout = layout_in(&temp);
     let cache = layout.cache_dir();
     let transaction = layout.import_transactions_dir().join("transaction");
     std::fs::create_dir_all(&transaction)?;
@@ -129,7 +130,7 @@ fn a_publication_marker_write_syncs_the_cache_directory() -> anyhow::Result<()> 
 #[test]
 fn a_failed_directory_sync_names_the_directory() -> anyhow::Result<()> {
     let temp = tempfile::tempdir()?;
-    let directory = utf8(temp.path())?.join("published");
+    let directory = utf8(temp.path()).join("published");
     std::fs::create_dir(&directory)?;
 
     let closed = close(&directory, Closed::Reads);
@@ -143,13 +144,8 @@ fn a_failed_directory_sync_names_the_directory() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn layout_in(temp: &tempfile::TempDir) -> anyhow::Result<ProvenanceLayout> {
-    Ok(ProvenanceLayout::new(utf8(temp.path())?))
-}
-
-fn utf8(path: &std::path::Path) -> anyhow::Result<Utf8PathBuf> {
-    Utf8PathBuf::from_path_buf(path.to_path_buf())
-        .map_err(|path| anyhow::anyhow!("{} is not UTF-8", path.display()))
+fn layout_in(temp: &tempfile::TempDir) -> ProvenanceLayout {
+    ProvenanceLayout::new(utf8(temp.path()))
 }
 
 fn parent(path: &Utf8Path) -> anyhow::Result<Utf8PathBuf> {

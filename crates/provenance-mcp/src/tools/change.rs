@@ -7,7 +7,7 @@ mod output;
 use crate::exposed::{Place, EXPOSED};
 use crate::surface::{Effect, SchemaDeclaration};
 use provenance_core::protocol::failure::OperationFailure;
-use provenance_core::protocol::read_failure::StateFileRefusal;
+use provenance_core::protocol::read_failure::UnparsableStateFile;
 use provenance_porcelain::action_input::ActionInput;
 use provenance_porcelain::registry::{Command, GraphCommand, RepositoryCommand};
 use provenance_porcelain::{dictionary, import, materialize, swarm_backtrace};
@@ -209,17 +209,12 @@ fn readable(structured: Value, text: String) -> CallToolResult {
 }
 
 /// The failure of one repository command. A host refusal keeps its kind. A state file
-/// refusal in the cause chain is its `invalid_state_file` failure with the repair as
-/// the hint. Each other failure is `operation_failed`, and the message names each cause.
+/// that does not parse, anywhere in the cause chain, gives its `invalid_state_file`
+/// failure, with its hint when it has one. Each other failure is `operation_failed`, and
+/// the message names each cause.
 fn failed(error: &(dyn std::error::Error + Send + Sync + 'static)) -> CallToolResult {
-    let root: &(dyn std::error::Error + 'static) = error;
-    if let Some(refusal) = std::iter::successors(Some(root), |cause| cause.source())
-        .find_map(|cause| cause.downcast_ref::<StateFileRefusal>())
-    {
-        let failure = refusal.failure();
-        let mut detail = serde_json::to_value(failure).expect("a failure is JSON");
-        detail["hint"] = json!(refusal.hint);
-        return crate::surface::detail_error(detail);
+    if let Some(state) = UnparsableStateFile::find(error) {
+        return crate::surface::detail_error(Value::Object(state.failure_object()));
     }
     let mut detail = error.downcast_ref::<OperationFailure>().map_or_else(
         || json!({"kind": "operation_failed"}),
