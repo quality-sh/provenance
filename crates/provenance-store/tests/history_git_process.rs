@@ -58,9 +58,7 @@ fn logging_git() {
 /// The number of `cat-file` processes that started in the repository at
 /// `root`.
 fn starts(root: &Path) -> usize {
-    std::fs::read_to_string(root.join(".git/cat-file-pids"))
-        .map(|pids| pids.lines().count())
-        .unwrap_or(0)
+    std::fs::read_to_string(root.join(".git/cat-file-pids")).map_or(0, |pids| pids.lines().count())
 }
 
 #[tokio::test]
