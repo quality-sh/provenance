@@ -264,7 +264,7 @@ fn a_read_that_cannot_replace_a_key_file_names_the_key_file_and_the_path_that_fa
     let remove_locks = |cache: &Utf8Path| std::fs::remove_dir_all(cache.join("locks")).unwrap();
     let (cache, cause) = refusal_in_a_read_only_cache(remove_locks);
     let locks = cache.join("locks");
-    let expected = format!("create advisory lock directory {locks}: Permission denied");
+    let expected = format!("make directory {locks}: Permission denied");
     assert!(cause.starts_with(&expected), "{cause}");
     let (cache, cause) = refusal_in_a_read_only_cache(|_| {});
     assert!(cause.contains("Permission denied"), "{cause}");
