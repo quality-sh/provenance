@@ -14,9 +14,19 @@ use provenance_store::{
     layout::ProvenanceLayout,
     operations::read_policy::{FreshnessPolicy, ReadPolicy},
     review::read_discussion_messages,
+    state_store::StateStore,
 };
 use std::sync::{mpsc, Arc, Barrier};
 use std::time::Duration;
+
+/// A repository with its temporary directory, and its canonical root: the
+/// store opens a repository at the canonical root, so each path that an
+/// error names is below that root.
+fn canonical_fixture() -> (tempfile::TempDir, Utf8PathBuf, StateStore) {
+    let (temp, store) = fixture();
+    let root = Utf8PathBuf::from_path_buf(dunce::canonicalize(temp.path()).unwrap()).unwrap();
+    (temp, root, store)
+}
 
 /// The key file in the cache of the repository at `root`.
 fn key_path(root: &Utf8Path) -> Utf8PathBuf {
@@ -49,17 +59,16 @@ const ANNOTATE_ONLY: ReadPolicy = ReadPolicy::with_freshness(FreshnessPolicy::An
 /// A read with the key file `bad` succeeds, the file then holds a key of
 /// 32 bytes, and the next read accepts the cursor of the first read.
 async fn assert_replaced(bad: &[u8]) {
-    let (temp, store) = fixture();
-    let root = Utf8Path::from_path(temp.path()).unwrap();
+    let (_temp, root, store) = canonical_fixture();
     let latest = five_messages(&store);
-    write_key_file(root, bad);
-    let first = page(root, ReadPolicy::default(), &latest, None)
+    write_key_file(&root, bad);
+    let first = page(&root, ReadPolicy::default(), &latest, None)
         .await
         .unwrap();
     assert_eq!(first.result.entries.len(), 2);
-    assert_eq!(std::fs::read(key_path(root)).unwrap().len(), 32);
+    assert_eq!(std::fs::read(key_path(&root)).unwrap().len(), 32);
     let cursor = first.result.next_cursor.expect("page one continues");
-    let second = page(root, ReadPolicy::default(), &latest, Some(cursor))
+    let second = page(&root, ReadPolicy::default(), &latest, Some(cursor))
         .await
         .unwrap();
     assert_eq!(second.result.entries.len(), 2);
@@ -82,23 +91,22 @@ async fn a_read_replaces_a_key_file_of_a_wrong_length() {
 /// The refusal of a cursor of page one after `lose` acts on the cache of
 /// the repository at its root.
 async fn refusal_after(lose: impl FnOnce(&Utf8Path)) -> ReadFailure {
-    let (temp, store) = fixture();
-    let root = Utf8Path::from_path(temp.path()).unwrap();
+    let (_temp, root, store) = canonical_fixture();
     let latest = five_messages(&store);
-    let first = page(root, ReadPolicy::default(), &latest, None)
+    let first = page(&root, ReadPolicy::default(), &latest, None)
         .await
         .unwrap();
     let cursor = first.result.next_cursor.expect("page one continues");
-    lose(root);
-    let error = page(root, ReadPolicy::default(), &latest, Some(cursor))
+    lose(&root);
+    let error = page(&root, ReadPolicy::default(), &latest, Some(cursor))
         .await
         .unwrap_err();
     let refusal = error
         .downcast_ref::<ReadFailure>()
         .unwrap_or_else(|| panic!("a typed read refusal: {error:#}"))
         .clone();
-    assert_eq!(std::fs::read(key_path(root)).unwrap().len(), 32);
-    let restarted = page(root, ReadPolicy::default(), &latest, None)
+    assert_eq!(std::fs::read(key_path(&root)).unwrap().len(), 32);
+    let restarted = page(&root, ReadPolicy::default(), &latest, None)
         .await
         .unwrap();
     assert_eq!(restarted.result.entries.len(), 2);
@@ -138,8 +146,7 @@ fn reads_that_replace_a_key_file_at_the_same_time_use_one_key() {
     const READS: usize = 8;
     const ROUNDS: usize = 10;
     const LIMIT: Duration = Duration::from_secs(60);
-    let (temp, store) = fixture();
-    let root = Utf8Path::from_path(temp.path()).unwrap().to_owned();
+    let (_temp, root, store) = canonical_fixture();
     let latest = five_messages(&store);
     let runtime = new_runtime();
     runtime
@@ -223,16 +230,15 @@ fn reads_that_replace_a_key_file_at_the_same_time_use_one_key() {
 #[cfg(unix)]
 fn refusal_in_a_read_only_cache(prepare: impl FnOnce(&Utf8Path)) -> (Utf8PathBuf, String) {
     use std::os::unix::fs::PermissionsExt;
-    let (temp, store) = fixture();
-    let root = Utf8Path::from_path(temp.path()).unwrap();
+    let (_temp, root, store) = canonical_fixture();
     let latest = five_messages(&store);
     let runtime = new_runtime();
     runtime
-        .block_on(page(root, ReadPolicy::default(), &latest, None))
+        .block_on(page(&root, ReadPolicy::default(), &latest, None))
         .unwrap();
-    write_key_file(root, b"");
-    let repository = repository(root);
-    let cache = ProvenanceLayout::new(root).cache_dir();
+    write_key_file(&root, b"");
+    let repository = repository(&root);
+    let cache = ProvenanceLayout::new(&root).cache_dir();
     prepare(&cache);
     let mode = |mode| std::fs::Permissions::from_mode(mode);
     std::fs::set_permissions(&cache, mode(0o555)).unwrap();
@@ -245,11 +251,11 @@ fn refusal_in_a_read_only_cache(prepare: impl FnOnce(&Utf8Path)) -> (Utf8PathBuf
         "this user can write a directory of mode 0555, so the test cannot make a read-only cache"
     );
     let error = format!("{:#}", read.map(|_| ()).unwrap_err());
-    assert_eq!(std::fs::read(key_path(root)).unwrap(), b"");
+    assert_eq!(std::fs::read(key_path(&root)).unwrap(), b"");
     let context = format!(
         "the cursor key file {} is absent or does not hold a key, and the store cannot replace \
          it: ",
-        key_path(root)
+        key_path(&root)
     );
     let cause = error
         .strip_prefix(&context)
