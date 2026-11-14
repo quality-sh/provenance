@@ -189,8 +189,9 @@ fn reads_that_replace_a_key_file_at_the_same_time_use_one_key() {
 }
 
 /// The cache of a repository and the error of a read with an empty key
-/// file when that cache is read-only. `prepare` acts on the cache before
-/// the read. The cause of the error follows the key file of the cache.
+/// file when that cache is read-only. The repository opens first, as in a
+/// process that serves reads, and `prepare` then acts on the cache. The
+/// cause of the error follows the key file of the cache.
 #[cfg(unix)]
 fn refusal_in_a_read_only_cache(prepare: impl FnOnce(&Utf8Path)) -> (Utf8PathBuf, String) {
     use std::os::unix::fs::PermissionsExt;
@@ -202,12 +203,14 @@ fn refusal_in_a_read_only_cache(prepare: impl FnOnce(&Utf8Path)) -> (Utf8PathBuf
         .block_on(page(root, ReadPolicy::default(), &latest, None))
         .unwrap();
     write_key_file(root, b"");
+    let repository = repository(root);
     let cache = ProvenanceLayout::new(root).cache_dir();
     prepare(&cache);
     let mode = |mode| std::fs::Permissions::from_mode(mode);
     std::fs::set_permissions(&cache, mode(0o555)).unwrap();
     let writable = std::fs::File::create(cache.join("probe")).is_ok();
-    let read = runtime.block_on(page(root, ANNOTATE_ONLY, &latest, None));
+    let query = messages_query(&latest, 2, None);
+    let read = runtime.block_on(read_discussion_messages(&repository, ANNOTATE_ONLY, query));
     std::fs::set_permissions(&cache, mode(0o755)).unwrap();
     assert!(
         !writable,
@@ -236,6 +239,6 @@ fn a_read_that_cannot_replace_a_key_file_names_the_key_file_and_the_path_that_fa
     let expected = format!("create advisory lock directory {locks}: Permission denied");
     assert!(cause.starts_with(&expected), "{cause}");
     let (cache, cause) = refusal_in_a_read_only_cache(|_| {});
-    assert!(cause.contains(cache.as_str()), "{cause}");
-    assert!(cause.contains("Permission denied"), "{cause}");
+    let temporary = format!("Permission denied (os error 13) at path \"{cache}/.tmp");
+    assert!(cause.starts_with(&temporary), "{cause}");
 }
