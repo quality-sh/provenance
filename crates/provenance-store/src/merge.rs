@@ -231,9 +231,8 @@ fn batch_key(
 }
 
 /// Merges by the row identity of the shard, keeping a change when the other
-/// side matches the base. For batch rows, the records that the batches hold
-/// are merged as records too. Call [`validate_merged_records`] before
-/// publication: records valid alone can be invalid together.
+/// side matches the base; the records in batch rows merge as records too.
+/// Call [`validate_merged_records`] before publication.
 #[rule("rule_record_merge")]
 pub fn merge_records(
     identity: RowIdentity,

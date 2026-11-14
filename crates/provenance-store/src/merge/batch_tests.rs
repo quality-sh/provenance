@@ -71,9 +71,14 @@ fn a_record_that_the_batches_of_two_sides_hold_with_equal_content_merges_clean()
     let ours = batch("contributions", &[contribution("c", "same"), contribution("o", "o")]);
     let theirs = batch("contributions", &[contribution("c", "same"), contribution("t", "t")]);
 
-    let merged = merge_records(LANDINGS, &[], &[ours.clone()], &[theirs.clone()])
-        .unwrap()
-        .unwrap_clean();
+    let merged = merge_records(
+        LANDINGS,
+        &[],
+        std::slice::from_ref(&ours),
+        std::slice::from_ref(&theirs),
+    )
+    .unwrap()
+    .unwrap_clean();
 
     assert_eq!(merged, [ours, theirs]);
 }
@@ -85,9 +90,14 @@ fn a_side_with_two_batches_of_one_record_is_compared_by_the_record_that_its_read
     let last = batch("contributions", &[contribution("c", "last")]);
     let theirs = batch("contributions", &[contribution("c", "last"), contribution("t", "t")]);
 
-    let merged = merge_records(LANDINGS, &[], &[first.clone(), last.clone()], &[theirs.clone()])
-        .unwrap()
-        .unwrap_clean();
+    let merged = merge_records(
+        LANDINGS,
+        &[],
+        &[first.clone(), last.clone()],
+        std::slice::from_ref(&theirs),
+    )
+    .unwrap()
+    .unwrap_clean();
 
     assert_eq!(merged, [first, last, theirs]);
 }
