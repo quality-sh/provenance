@@ -96,10 +96,7 @@ pub async fn invoke(
     page_write: bool,
 ) -> Result<(response::Success, Option<String>), ErasedFailure> {
     if !host.advertises(matched.definition.name) {
-        return Err(ErasedFailure::new(
-            None,
-            OperationFailure::AccessDenied { message: None },
-        ));
+        return Err(ErasedFailure::new(None, OperationFailure::access_denied()));
     }
     identity::reject(&data, &matched.path, matched.definition)?;
     let identity = host.bound_identity();

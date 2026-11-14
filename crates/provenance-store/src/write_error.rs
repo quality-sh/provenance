@@ -121,6 +121,12 @@ impl WriteFailure {
         }
     }
 
+    /// An `access_denied` refusal with no message, the same as
+    /// [`OperationFailure::access_denied`].
+    pub const fn access_denied() -> Self {
+        Self::AccessDenied { message: None }
+    }
+
     /// Refuses a review decision by an actor that the manifest does not list,
     /// with the text of the core refusal as the next step for the caller.
     #[provenance_macros::rule("rule_decision_refusal_names_reviewer_field")]

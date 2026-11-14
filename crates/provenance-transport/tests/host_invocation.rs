@@ -80,7 +80,7 @@ async fn a_refused_identity_does_not_wait_for_a_work_slot() {
         matches!(
             answer,
             Poll::Ready(Err(OperationError::Common(
-                OperationFailure::AccessDenied { .. }
+                OperationFailure::AccessDenied { message: None }
             )))
         ),
         "the refused call answers before any slot wait: {answer:?}"

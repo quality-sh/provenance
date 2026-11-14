@@ -217,7 +217,7 @@ mod disposition_actor_trigger_tests {
     use serde_json::json;
 
     use super::validate_actor_allowlist;
-    use crate::model::{AssertionRecord, PromotionState, ProposalCard};
+    use crate::model::{AssertionRecord, DispositionActorRefusal, PromotionState, ProposalCard};
 
     #[test]
     #[verifies("rule_disposition_actor_allowlist", examples)]
@@ -240,10 +240,12 @@ mod disposition_actor_trigger_tests {
         }))
         .unwrap();
 
-        let error = validate_actor_allowlist(&proposal, &[assertion], "reviewer", &[])
-            .unwrap_err()
-            .to_string();
-        assert!(error.contains("disposition_actor_ids is empty"), "{error}");
+        let error = validate_actor_allowlist(&proposal, &[assertion], "reviewer", &[]).unwrap_err();
+        assert_eq!(
+            error.downcast_ref::<DispositionActorRefusal>(),
+            Some(&DispositionActorRefusal::NoActorsConfigured),
+            "{error}"
+        );
 
         proposal.promotion_state = PromotionState::Accepted;
         validate_actor_allowlist(&proposal, &[], "reviewer", &[]).unwrap();

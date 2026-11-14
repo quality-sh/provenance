@@ -277,14 +277,17 @@ fn an_unauthorized_actor_cannot_accept_a_review() {
         &artifact(),
     )
     .unwrap_err();
-    assert!(
-        error.to_string().contains("disposition_actor_ids"),
-        "{error}"
-    );
-    assert!(matches!(
-        crate::write_error::WriteError(error).safe(),
-        crate::write_error::WriteFailure::AccessDenied { message: Some(_) }
-    ));
+    let text = "The manifest field disposition_actor_ids does not contain the actor of a review \
+                decision. To change this field, use the command provenance init \
+                --disposition-actor-id <DISPOSITION_ACTOR_ID>. Give --disposition-actor-id one \
+                time for each actor that can make a review decision.";
+    assert_eq!(error.to_string(), text);
+    let crate::write_error::WriteFailure::AccessDenied { message } =
+        crate::write_error::WriteError(error).safe()
+    else {
+        panic!("the refusal is not access_denied");
+    };
+    assert_eq!(message.as_deref(), Some(text));
     assert_eq!(
         store.list_dispositions(&scope()).unwrap(),
         [] as [provenance_core::DispositionRecord; 0]

@@ -34,7 +34,7 @@ pub enum OperationFailure {
     MethodNotAllowed,
     #[error("listener authentication required")]
     Unauthenticated,
-    #[error("access denied")]
+    #[error("access denied{}", access_denied_detail(message.as_deref()))]
     AccessDenied {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         message: Option<String>,
@@ -51,7 +51,18 @@ pub enum OperationFailure {
     Internal,
 }
 
+/// The part of the `access_denied` display text that gives its message.
+fn access_denied_detail(message: Option<&str>) -> String {
+    message.map_or_else(String::new, |message| format!(": {message}"))
+}
+
 impl OperationFailure {
+    /// An `access_denied` refusal with no message, for each cause that tells
+    /// the caller nothing more than the kind.
+    pub const fn access_denied() -> Self {
+        Self::AccessDenied { message: None }
+    }
+
     pub const fn status_code(&self) -> u16 {
         match self {
             Self::InvalidInput { .. } | Self::ProtocolMismatch { .. } => 400,
@@ -163,7 +174,7 @@ mod tests {
     /// as the wire answer gives it.
     #[test]
     fn an_access_denied_failure_displays_its_message() {
-        let bare = OperationFailure::AccessDenied { message: None };
+        let bare = OperationFailure::access_denied();
         assert_eq!(bare.to_string(), "access denied");
         let guided = OperationFailure::AccessDenied {
             message: Some("Name the field.".to_owned()),

@@ -294,8 +294,27 @@ pub fn validate_planned_manifest(repo: &Utf8Path, manifest: &Manifest) -> anyhow
 /// which it writes, and a new repository has no graph that can change.
 #[rule("rule_init_validates_planned_repository")]
 pub fn validate_planned_manifest_in(held: &StateStore, manifest: &Manifest) -> anyhow::Result<()> {
-    validate_locked(held, manifest, true)
+    validate_locked(held, manifest, true).map_err(|error| {
+        if error
+            .downcast_ref::<provenance_core::DispositionActorRefusal>()
+            .is_some()
+        {
+            anyhow::Error::msg(PLANNED_ACTOR_LIST_REFUSAL)
+        } else {
+            error
+        }
+    })
 }
+
+/// The refusal of an init command that gives the manifest field
+/// `disposition_actor_ids` a list without the actor of a stored review decision.
+///
+/// A stored decision is valid only while the field contains its actor, so the
+/// next step keeps each such actor in the list. The text gives no actor ID.
+const PLANNED_ACTOR_LIST_REFUSAL: &str = "The list that this init command gives to the manifest \
+    field disposition_actor_ids does not contain the actor of a review decision in the state. \
+    Give --disposition-actor-id one time for each actor of a review decision in the state, and \
+    one time for each other actor that can make a review decision.";
 
 /// Finishes an interrupted publication before `init` reads the repository.
 pub fn recover_before_init(repo: &Utf8Path) -> anyhow::Result<()> {

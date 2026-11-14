@@ -61,7 +61,7 @@ impl StatementHost {
     ) -> Result<O::Success, O::Failure> {
         // A wire call is advertised by its public route in the routing adapter.
         if matches!(options.framing, Framing::Native) && !self.advertises(O::NAME) {
-            return Err(OperationFailure::AccessDenied { message: None }.into());
+            return Err(OperationFailure::access_denied().into());
         }
         let selected = match options.selected {
             Some(selected) => Some(selected),

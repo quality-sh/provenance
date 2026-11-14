@@ -114,7 +114,7 @@ impl crate::HttpCredential for FixtureAccess {
             != Some(self.authority.as_str())
             || headers.contains_key("origin")
         {
-            return Err(OperationFailure::AccessDenied { message: None });
+            return Err(OperationFailure::access_denied());
         }
         Ok(())
     }
@@ -137,7 +137,7 @@ impl FixtureAccess {
         if granted {
             Ok(())
         } else {
-            Err(OperationFailure::AccessDenied { message: None })
+            Err(OperationFailure::access_denied())
         }
     }
 }
@@ -189,7 +189,7 @@ impl ContextResolver for FixtureAccess {
                 .iter()
                 .find(|(granted, _)| *granted == target)
                 .map(|(_, scope)| scope.as_str())
-                .ok_or(OperationFailure::AccessDenied { message: None })?;
+                .ok_or_else(OperationFailure::access_denied)?;
             return Ok(PreparedContext::for_repository(PreparedRepository {
                 repository: Repository::open(root, scope)?,
                 requested_target: target,

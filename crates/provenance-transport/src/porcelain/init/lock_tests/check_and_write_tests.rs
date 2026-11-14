@@ -182,7 +182,7 @@ fn a_graph_write_after_the_plan_makes_init_refuse_and_write_nothing() {
 }
 
 /// The refusal of init for the disposition by "reviewer".
-const REFUSAL: &str = "the planned Provenance state is not valid: The manifest field \
-    disposition_actor_ids does not contain the actor of a review decision. To change this field, \
-    use the command provenance init --disposition-actor-id <DISPOSITION_ACTOR_ID>. Give \
-    --disposition-actor-id one time for each actor that can make a review decision.";
+const REFUSAL: &str = "the planned Provenance state is not valid: The list that this init \
+    command gives to the manifest field disposition_actor_ids does not contain the actor of a \
+    review decision in the state. Give --disposition-actor-id one time for each actor of a review \
+    decision in the state, and one time for each other actor that can make a review decision.";
