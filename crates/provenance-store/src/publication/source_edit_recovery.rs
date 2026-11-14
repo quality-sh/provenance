@@ -1,20 +1,18 @@
 use super::{
     source_edit::{
-        backup, complete_install, write_source_edit_marker, PreparedSourceRecord,
-        SourceEditMarker, SourceEditPhase, SourceEditRecoveryFailure, PREPARED_SOURCE_RECORD,
-        REPLACEMENT,
+        backup, complete_install, write_source_edit_marker, PreparedSourceRecord, SourceEditMarker,
+        SourceEditPhase, SourceEditRecoveryFailure, PREPARED_SOURCE_RECORD, REPLACEMENT,
     },
     sync_directory,
 };
 use crate::{
     layout::ProvenanceLayout,
     operations::files::{
-        validate_recovery_artifact_leaf, HeldRepositoryFile, RepositoryFileRefusal,
-        RepositoryFiles,
+        validate_recovery_artifact_leaf, HeldRepositoryFile, RepositoryFileRefusal, RepositoryFiles,
     },
     storage::local::{
-        contained_transaction, end_marked_write, remove_leftovers, remove_unpublished,
-        removal_failure, RemovalStep, TransactionKind,
+        contained_transaction, end_marked_write, removal_failure, remove_leftovers,
+        remove_unpublished, RemovalStep, TransactionKind,
     },
 };
 use camino::Utf8Path;
@@ -244,7 +242,10 @@ fn remove_prepared_file(layout: &ProvenanceLayout, transaction: &Utf8Path) -> an
     validate_recovery_artifact_leaf(&record.target, &record.prepared_leaf, ".tmp")
         .map_err(|error| removal_failure(RemovalStep::Read, &record_path, error))?;
     let replacement = read_if_present(&transaction.join(REPLACEMENT))?;
-    let file = layout.root().join(&record.target).with_file_name(&record.prepared_leaf);
+    let file = layout
+        .root()
+        .join(&record.target)
+        .with_file_name(&record.prepared_leaf);
     RepositoryFiles::open(layout.root())?
         .remove_own_prepared(
             &record.target,

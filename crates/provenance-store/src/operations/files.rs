@@ -22,8 +22,8 @@ mod held_metadata;
 mod held_recovery;
 #[cfg(any(unix, windows))]
 pub use held::{
-    FileIdentity, HeldRepositoryFile, PreparedRepositoryFile,
-    RepositoryFileBackup, RepositoryFileInstall,
+    FileIdentity, HeldRepositoryFile, PreparedRepositoryFile, RepositoryFileBackup,
+    RepositoryFileInstall,
 };
 use std::{fs::File, io::Read};
 #[cfg(test)]

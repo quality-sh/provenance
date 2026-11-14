@@ -23,17 +23,17 @@ mod transactions;
 pub(crate) mod whole_set;
 #[cfg(any(unix, windows))]
 pub(crate) use file_install::FileInstall;
-pub use recovery::{write_publication_marker, PublicationPhase};
 #[cfg(all(test, unix))]
 pub(crate) use recovery::validated_transaction_dir;
-#[cfg(all(test, unix))]
-pub(crate) use transactions::contained_missing_transaction;
+pub use recovery::{write_publication_marker, PublicationPhase};
 pub use section::LocalSectionLock;
 #[cfg(test)]
 pub(crate) use section::LockedPublicationFile;
+#[cfg(all(test, unix))]
+pub(crate) use transactions::contained_missing_transaction;
 pub(crate) use transactions::{
-    clear_marker, contained_transaction, end_marked_write, remove_leftovers, remove_unpublished,
-    removal_failure, write_marker, RemovalStep, TransactionKind,
+    clear_marker, contained_transaction, end_marked_write, removal_failure, remove_leftovers,
+    remove_unpublished, write_marker, RemovalStep, TransactionKind,
 };
 
 #[cfg(test)]

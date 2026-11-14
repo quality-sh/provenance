@@ -225,7 +225,11 @@ fn a_stop_in_the_cleanup_of_a_failed_source_edit_leaves_no_data_after_the_next_s
     let root = root_path.as_path();
     stop_in_child(FAILING_CHILD, root, "repository_file_unlink_temp");
     let transactions = ProvenanceLayout::new(root).source_edit_transactions_dir();
-    assert_eq!(prepared_files(root).len(), 1, "the stop left the prepared file");
+    assert_eq!(
+        prepared_files(root).len(),
+        1,
+        "the stop left the prepared file"
+    );
     assert_eq!(
         names(&transactions).len(),
         1,
