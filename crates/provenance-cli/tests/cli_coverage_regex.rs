@@ -1,4 +1,5 @@
-//! Two-file command regression for GitHub issue #442.
+//! TypeScript sources through `check --bindings`: regex literals, a comment that connects
+//! production code to a Rule, and a `rule(` call that does not.
 use assert_cmd::Command;
 use provenance_macros::verifies;
 use serde_json::Value;
@@ -77,6 +78,53 @@ fn issue_442_finds_both_typescript_annotations() {
             .filter(|warning| warning["message"] == "unknown rule id `rule_demo_a`")
             .count(),
         2,
+        "{report}"
+    );
+}
+
+fn sites(report: &Value, key: &str, name: &str) -> Vec<(String, String)> {
+    report[key]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|site| {
+            (
+                site["rule_id"].as_str().unwrap().to_owned(),
+                site[name].as_str().unwrap_or_default().to_owned(),
+            )
+        })
+        .collect()
+}
+
+#[test]
+#[verifies("rule_prov_annot_012", examples)]
+fn a_comment_connects_the_exported_const_below_it() {
+    let source = "// @provenance rule: rule_overtime\n\
+                  export const paysOvertime = (hours: number): boolean => hours > 38;\n";
+    let report = scan(&[("src/pay.ts", source)]);
+
+    assert_eq!(
+        sites(&report, "annotations", "function_name"),
+        [("rule_overtime".to_owned(), "paysOvertime".to_owned())],
+        "{report}"
+    );
+}
+
+#[test]
+// Implementation aid: production TypeScript code connects to a Rule with a
+// comment only, so a call to a function named `rule` is ordinary code. No Rule
+// in the graph states this absence.
+fn a_rule_call_is_not_an_implementation_binding() {
+    let source = "import { rule } from \"./rules.js\";\n\
+                  export const paysOvertime = rule(\"rule_overtime\", (h: number) => h > 38);\n";
+    let report = scan(&[("src/pay.ts", source)]);
+
+    assert!(
+        sites(&report, "bindings", "item_name").is_empty(),
+        "{report}"
+    );
+    assert!(
+        sites(&report, "annotations", "function_name").is_empty(),
         "{report}"
     );
 }
