@@ -30,6 +30,8 @@ mod snapshot;
 
 #[cfg(feature = "host")]
 pub(crate) use cursor::Cursor;
+#[cfg(feature = "host")]
+use freshness::FailedCatchUp;
 pub(crate) use cursor::Position;
 #[cfg(feature = "host")]
 pub use live::{Disturbed, Live, LiveHandle};
@@ -95,6 +97,13 @@ pub enum ReadRefusal {
     #[error("the projection in {database} holds a revision but no family digests, so the cache is incomplete; run `provenance materialize`")]
     HalfMigrated { database: Utf8PathBuf },
 }
+
+#[cfg(feature = "host")]
+/// The refusal of a [`current`] read whose catch-up failed. The source is
+/// the error of the catch-up.
+#[derive(Debug, thiserror::Error)]
+#[error("catch-up failed")]
+pub struct CatchUpFailed(#[source] pub anyhow::Error);
 
 #[cfg(feature = "host")]
 fn one_line(text: &str) -> String {
@@ -197,5 +206,22 @@ pub async fn answer<R: Send>(
     run: impl for<'c> FnOnce(&'c ReadContext) -> ReadFuture<'c, R> + Send,
 ) -> anyhow::Result<Stamped<R>> {
     let fresh = freshness::run(repository, policy.freshness).await?;
-    fresh.complete(repository, policy.scan_limit, run).await
+    fresh
+        .complete(repository, policy.scan_limit, FailedCatchUp::ReadsStored, run)
+        .await
+}
+
+#[cfg(feature = "host")]
+/// Runs one read as [`answer`] does, but refuses with [`CatchUpFailed`]
+/// when the catch-up fails, so the read never answers at the stored serial
+/// after a failed catch-up.
+pub async fn current<R: Send>(
+    repository: &Repository,
+    policy: ReadPolicy,
+    run: impl for<'c> FnOnce(&'c ReadContext) -> ReadFuture<'c, R> + Send,
+) -> anyhow::Result<Stamped<R>> {
+    let fresh = freshness::run(repository, policy.freshness).await?;
+    fresh
+        .complete(repository, policy.scan_limit, FailedCatchUp::Refuses, run)
+        .await
 }

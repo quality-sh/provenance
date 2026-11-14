@@ -3,7 +3,7 @@ use crate::operations::reader::Cursor;
 use crate::repository::Repository;
 use provenance_core::protocol::{
     read_failure::ReadFailure, DocumentEntry, DocumentReviewTotals, ReadDocumentQuery,
-    ReadDocumentResult, StampPolicy, Stamped,
+    ReadDocumentResult, Stamped,
 };
 use provenance_core::{NodeType, StableId};
 use provenance_macros::rule;
@@ -25,19 +25,10 @@ pub async fn read_document_answer(
     policy: ReadPolicy,
     request: ReadDocumentQuery,
 ) -> anyhow::Result<Stamped<ReadDocumentResult>> {
-    let answer = served(repository, policy, move |ctx| {
-        // Keep page errors until the freshness policy is checked.
-        Box::pin(async move { Ok(read(ctx, request).await) })
+    crate::operations::reader::current(repository, policy, move |ctx| {
+        Box::pin(read(ctx, request))
     })
-    .await?;
-    if answer.stamp.policy == StampPolicy::CatchUpFailed {
-        return Err(ReadFailure::DocumentCatchUpFailed.into());
-    }
-    Ok(Stamped {
-        result: answer.result?,
-        stamp: answer.stamp,
-        freshness_error: answer.freshness_error,
-    })
+    .await
 }
 
 /// Returns at most one document: nearest, then deepest, then lowest Requirement ID.

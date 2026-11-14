@@ -41,7 +41,7 @@ pub(super) async fn run(repository: &Repository) -> anyhow::Result<Freshness> {
     Ok(Freshness {
         check: Check::Stale(guard),
         policy: StampPolicy::RefuseStale,
-        error: None,
+        failure: None,
     })
 }
 

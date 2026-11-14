@@ -1,7 +1,7 @@
 //! Keep native error sources while publishing a closed safe projection.
 use crate::cache::CompletionTimedOut;
 use crate::operations::files::FileAccessRefusal;
-use crate::operations::reader::ReadRefusal;
+use crate::operations::reader::{CatchUpFailed, ReadRefusal};
 use crate::stale::git::GitRefusal;
 use crate::state_store::readers::StateLineInvalid;
 use crate::write_error::{
@@ -82,17 +82,27 @@ impl ReadError {
         }
     }
     /// The closed failure for the native error. An error of no known kind
-    /// reads as `ReadFailed`.
+    /// reads as `ReadFailed`. Only the document read refuses a failed
+    /// catch-up, so that refusal is `DocumentCatchUpFailed`.
     fn safe(&self) -> ReadFailure {
         let error = native(&self.0);
+        if let Some(failed) = error.downcast_ref::<CatchUpFailed>() {
+            return ReadFailure::DocumentCatchUpFailed {
+                cause: Box::new(self.classified(&failed.0)),
+            };
+        }
+        self.classified(error)
+    }
+    /// The closed failure for `error`, the native error or a cause in it.
+    fn classified(&self, error: &anyhow::Error) -> ReadFailure {
         if let Some(error) = error.downcast_ref::<ReadFailure>() {
             return error.clone();
         }
         if let Some(error) = error.downcast_ref::<GitRefusal>() {
             return git_failure(error);
         }
-        if let Some(error) = error.downcast_ref::<FileAccessRefusal>() {
-            return file_failure(error).unwrap_or_else(|| self.read_failed());
+        if let Some(refusal) = error.downcast_ref::<FileAccessRefusal>() {
+            return file_failure(refusal).unwrap_or_else(|| self.read_failed(error));
         }
         if let Some(error) = error.downcast_ref::<CompletionTimedOut>() {
             return completion_failure(error);
@@ -100,22 +110,32 @@ impl ReadError {
         if let Some(error) = error.downcast_ref::<ReadRefusal>() {
             return refusal_failure(error);
         }
-        if let Some(error) = error.downcast_ref::<SourceFailure>() {
-            return store_refusal(&error.failure).unwrap_or_else(|| self.read_failed());
+        if let Some(refusal) = error.downcast_ref::<SourceFailure>() {
+            return store_refusal(&refusal.failure).unwrap_or_else(|| self.read_failed(error));
         }
-        StateLineInvalid::find(error).map_or_else(|| self.read_failed(), state_line_failure)
+        StateLineInvalid::find(error).map_or_else(|| self.read_failed(error), state_line_failure)
     }
-    fn read_failed(&self) -> ReadFailure {
+    /// The `ReadFailed` failure of `error`, the native error or a cause in it.
+    fn read_failed(&self, error: &anyhow::Error) -> ReadFailure {
         ReadFailure::ReadFailed {
-            cause: failure_cause(&self.0),
+            cause: failure_cause(&self.0, error),
         }
     }
     /// The native cause chain of a failure of no known kind, with absolute
     /// paths, for the host log. The wire answer gives the cause with each
     /// path relative to the repository.
     pub fn unclassified_cause(&self) -> Option<String> {
-        (self.common().is_none() && matches!(self.safe(), ReadFailure::ReadFailed { .. }))
+        (self.common().is_none() && unclassified(&self.safe()))
             .then(|| format!("{:#}", native(&self.0)))
+    }
+}
+
+/// Whether `failure` is `ReadFailed`, or a failed catch-up whose cause is.
+fn unclassified(failure: &ReadFailure) -> bool {
+    match failure {
+        ReadFailure::ReadFailed { .. } => true,
+        ReadFailure::DocumentCatchUpFailed { cause } => unclassified(cause),
+        _ => false,
     }
 }
 
