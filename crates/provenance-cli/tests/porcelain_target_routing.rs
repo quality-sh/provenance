@@ -1,4 +1,4 @@
-mod porcelain_authoring_support;
+use crate::porcelain_authoring_support;
 
 use provenance_macros::verifies;
 use provenance_mcp::Client;

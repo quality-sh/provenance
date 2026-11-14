@@ -1,9 +1,7 @@
 //! A Rule or Question answer that cites a Resolution that is not approved is refused with a
 //! message that says what to do, and the routes it names succeed.
-#[path = "shaping_support/fixtures.rs"]
-mod fixtures;
-#[path = "shaping_support/provenance.rs"]
-mod provenance;
+use crate::fixtures;
+use crate::provenance;
 
 use fixtures::{create_source_and_requirement, create_topic, init};
 use predicates::str::contains;

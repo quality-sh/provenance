@@ -6,9 +6,8 @@
 //! git adapter shows that the expected answers are Git's, and the memory
 //! adapter shows that an adapter with no Git gives the same answers.
 
-mod discussion_support;
-#[path = "support/memory.rs"]
-mod memory;
+use crate::discussion_support;
+use crate::memory;
 #[path = "history_versions_contract/wrong.rs"]
 mod wrong;
 

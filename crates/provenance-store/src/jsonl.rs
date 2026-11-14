@@ -31,7 +31,9 @@ pub(crate) struct AdvisoryLock {
 impl AdvisoryLock {
     pub(crate) fn acquire(path: &Utf8Path) -> anyhow::Result<Self> {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
+            std::fs::create_dir_all(parent).map_err(|error| {
+                crate::refusal::caused(error, format!("create advisory lock directory {parent}"))
+            })?;
         }
         let file = OpenOptions::new()
             .read(true)
@@ -39,9 +41,10 @@ impl AdvisoryLock {
             .create(true)
             .truncate(false)
             .open(path)
-            .map_err(|error| crate::refusal::fault!("open advisory lock {path}: {error}"))?;
-        file.lock_exclusive()
-            .map_err(|error| crate::refusal::fault!("acquire advisory lock {path}: {error}"))?;
+            .map_err(|error| crate::refusal::caused(error, format!("open advisory lock {path}")))?;
+        file.lock_exclusive().map_err(|error| {
+            crate::refusal::caused(error, format!("acquire advisory lock {path}"))
+        })?;
         Ok(Self { file })
     }
 }

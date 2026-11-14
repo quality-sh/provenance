@@ -1,5 +1,5 @@
-mod porcelain_authoring_support;
-mod review_host_support;
+use crate::porcelain_authoring_support;
+use crate::review_host_support;
 
 use porcelain_authoring_support::{
     initialized_repo, json_output, json_stdin_output, local_host, local_host_with_identity,

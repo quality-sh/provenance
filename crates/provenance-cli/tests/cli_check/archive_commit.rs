@@ -1,5 +1,5 @@
+use super::bounded_process::{provenance, Bounded};
 use super::{git, init};
-use crate::bounded_process::{provenance, Bounded};
 use provenance_macros::verifies;
 use std::path::Path;
 use std::process::Output;

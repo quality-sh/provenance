@@ -3,16 +3,7 @@
 //! a maximum, and no description shows the Rust code behind the schema.
 #![cfg(feature = "test-fixture")]
 
-#[allow(dead_code)]
-mod support {
-    #[path = "../../../provenance-transport/tests/support/check_port.rs"]
-    pub mod check_port;
-    pub mod fixture_host;
-    pub mod mcp;
-    #[path = "../../../provenance-transport/tests/support/records.rs"]
-    pub mod records;
-    pub mod schema_check;
-}
+use crate::support;
 
 use serde_json::{json, Value};
 use support::{mcp::Session, records::Repository};

@@ -1,13 +1,11 @@
-#[path = "review_host_support/mod.rs"]
-mod review_host_support;
+use crate::review_host_support;
 
+#[cfg(unix)]
+use crate::persistent_browser;
 use provenance_macros::verifies;
 use review_host_support::{
     launch_code, redeem, repository, start, start_with, BrowserRecorder, Host,
 };
-#[cfg(unix)]
-#[path = "review_host_support/persistent_browser.rs"]
-mod persistent_browser;
 
 use serde_json::Value;
 use std::{path::Path, process::Command, time::Duration};

@@ -1,7 +1,6 @@
 use assert_cmd::Command;
 
-#[path = "export_fixture_support/mod.rs"]
-mod export_fixture_support;
+use crate::export_fixture_support;
 
 #[test]
 fn import_replaces_only_target_scope_and_removes_all_stale_target_shards() {
