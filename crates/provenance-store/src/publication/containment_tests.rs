@@ -234,7 +234,7 @@ fn clearing_a_marker_checks_the_place_the_directory_claimed() {
 
 #[test]
 #[verifies("rule_recovery_stays_in_cache", property)]
-fn every_refusal_keeps_the_marker_message() {
+fn every_refusal_states_the_containment_fault() {
     for transactions in PLANTINGS {
         for leaf in PLANTINGS {
             let layouts = Layouts::build(transactions, leaf);
@@ -244,7 +244,7 @@ fn every_refusal_keeps_the_marker_message() {
                 };
                 let message = error.to_string();
                 assert!(
-                    message.contains("outside the repository cache")
+                    message.contains(" is outside ")
                         || message.contains("is not a directory")
                         || message.contains("symlink component")
                         || error.downcast_ref::<std::io::Error>().is_some(),

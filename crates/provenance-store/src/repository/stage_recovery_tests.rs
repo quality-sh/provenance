@@ -176,10 +176,11 @@ fn transactions(root: &Utf8Path) -> Vec<Utf8PathBuf> {
         .collect()
 }
 
-/// Runs the staged write of `fixture` in a child process. The probe at
-/// `phase` ends the process with no unwind, as a kill does.
-fn stop_in_child(fixture: &Fixture, phase: &str) {
-    let status = std::process::Command::new(std::env::current_exe().unwrap())
+/// The command that runs the staged write of `fixture` in a child process,
+/// up to the probe at `phase`.
+fn child(fixture: &Fixture, phase: &str) -> std::process::Command {
+    let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+    command
         .args([
             "--exact",
             "repository::stage_recovery_tests::crash_child",
@@ -188,9 +189,14 @@ fn stop_in_child(fixture: &Fixture, phase: &str) {
         .env("PROVENANCE_STAGE_CRASH_ROOT", fixture.root.as_str())
         .env("PROVENANCE_STAGE_CRASH_PHASE", phase)
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .unwrap();
+        .stderr(std::process::Stdio::null());
+    command
+}
+
+/// Runs the staged write of `fixture` in a child process. The probe at
+/// `phase` ends the process with no unwind, as a kill does.
+fn stop_in_child(fixture: &Fixture, phase: &str) {
+    let status = child(fixture, phase).status().unwrap();
     assert_eq!(status.code(), Some(86), "{phase}");
 }
 
@@ -206,6 +212,12 @@ fn crash_child() {
         .find(|label| *label == phase)
         .expect("known crash phase");
     let repository = open(&ProvenanceLayout::new(Utf8PathBuf::from(root)));
+    #[cfg(unix)]
+    if std::env::var_os("PROVENANCE_STAGE_STOP_AT_FILE_WRITE").is_some() {
+        test_probes::stop_at_next_file_write(phase);
+        stage_rule(&repository).unwrap();
+        panic!("the file write after the phase was not reached");
+    }
     test_probes::arm(phase, || std::process::exit(86));
     stage_rule(&repository).unwrap();
     panic!("crash phase was not reached");
@@ -267,8 +279,8 @@ fn a_failed_removal_of_a_stopped_transaction_names_the_step_and_the_path() {
     assert_eq!(
         format!("{:#}", error.0),
         format!(
-            "remove transaction directory {} (give this process write permission to this \
-             directory and to the directory that holds it): {}",
+            "remove transaction directory {} (no marker names this directory, thus the store \
+             does not use its data, and a person can remove it): {}",
             left.display(),
             std::io::Error::from_raw_os_error(13)
         )
@@ -313,7 +325,6 @@ fn the_removal_of_a_stopped_transaction_keeps_a_link_and_its_target() {
 
 #[test]
 #[verifies("rule_live_projection_shows_only_published_state", examples)]
-#[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
 fn errors_before_published_roll_back_and_an_error_at_published_keeps_new_state() {
     for (phase, _) in CRASH_PHASES {
         let fixture = fixture();
@@ -327,4 +338,71 @@ fn errors_before_published_roll_back_and_an_error_at_published_keeps_new_state()
         );
         assert_reopened(&fixture, phase == "state_published", phase);
     }
+}
+
+/// The write stops after its Published marker. With no write permission on
+/// the import transaction directory, the next section entry removes the
+/// contents of the transaction and then fails to remove the transaction.
+#[cfg(unix)]
+#[test]
+#[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
+fn a_section_entry_ends_a_published_import_whose_transaction_is_removed_in_part() {
+    use std::os::unix::fs::PermissionsExt;
+    let fixture = fixture();
+    stop_in_child(&fixture, "state_published");
+    let layout = ProvenanceLayout::new(fixture.root.clone());
+    let transaction = transactions(&fixture.root)[0].clone();
+    let directory = layout.import_transactions_dir();
+
+    std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o500)).unwrap();
+    let failed = crate::publication::with_repository_publication(&layout, |_| Ok(()));
+    std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(failed.is_err(), "the removal fails");
+    assert_eq!(
+        std::fs::read_dir(&transaction).unwrap().count(),
+        0,
+        "a part is removed"
+    );
+    assert!(layout.publication_marker_path().exists());
+
+    assert_reopened(&fixture, true, "state_published");
+}
+
+/// The child stops in the write of the Prepared marker: the probe before
+/// that write sets the file size limit to zero, so the system ends the child
+/// at the first byte of the temporary file of the marker.
+#[cfg(unix)]
+#[test]
+#[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
+fn a_stop_in_the_write_of_the_import_marker_leaves_no_file_after_the_next_section_entry() {
+    use std::os::unix::process::ExitStatusExt;
+    let fixture = fixture();
+    let layout = ProvenanceLayout::new(fixture.root.clone());
+    assert_eq!(hidden_cache_files(&layout), Vec::<Utf8PathBuf>::new());
+
+    let status = child(&fixture, "state_prepared")
+        .env("PROVENANCE_STAGE_STOP_AT_FILE_WRITE", "1")
+        .status()
+        .unwrap();
+
+    assert_eq!(status.signal(), Some(rustix::process::Signal::XFSZ.as_raw()));
+    assert_eq!(
+        hidden_cache_files(&layout).len(),
+        1,
+        "the stop left the temporary file of the marker"
+    );
+    assert!(!layout.publication_marker_path().exists());
+    crate::publication::with_repository_publication(&layout, |_| Ok(())).unwrap();
+    assert_eq!(hidden_cache_files(&layout), Vec::<Utf8PathBuf>::new());
+    assert_reopened(&fixture, false, "the write of the Prepared marker");
+}
+
+/// The regular files directly in the cache of `layout` whose names start
+/// with a dot.
+fn hidden_cache_files(layout: &ProvenanceLayout) -> Vec<Utf8PathBuf> {
+    std::fs::read_dir(layout.cache_dir())
+        .unwrap()
+        .map(|entry| Utf8PathBuf::from_path_buf(entry.unwrap().path()).unwrap())
+        .filter(|path| path.is_file() && path.file_name().is_some_and(|name| name.starts_with('.')))
+        .collect()
 }
