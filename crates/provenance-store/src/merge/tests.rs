@@ -146,7 +146,11 @@ fn expected(id: &str, case: [Slot; 3]) -> (Option<Value>, Option<MergeConflict>)
 fn parts(outcome: MergeOutcome<Vec<Value>>) -> (Vec<Value>, Vec<MergeConflict>) {
     match outcome {
         MergeOutcome::Clean { records } => (records, Vec::new()),
-        MergeOutcome::Conflicted { conflicts, partial } => (partial, conflicts),
+        MergeOutcome::Conflicted {
+            conflicts,
+            partial,
+            ..
+        } => (partial, conflicts),
     }
 }
 
