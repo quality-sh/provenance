@@ -4,11 +4,14 @@
 //! bounded answer. Each reads the opened repository through the reader
 //! entry under the supplied policy. Every answer carries a stamp.
 
+#[cfg(feature = "host")]
 use provenance_core::protocol::{
-    EvidenceQuery, EvidenceResult, GetQuery, GetResult, ImpactQuery, ImpactResult, NeighborsQuery,
-    NeighborsResult, ResolveRecordQuery, ResolveRecordResult, ResolveSymbolQuery,
-    ResolveSymbolResult, SearchQuery, SearchResult, StaleQuery, StaleResult, Stamped, TraceQuery,
-    TraceResult,
+    EvidenceQuery, EvidenceResult, ImpactQuery, ImpactResult, ResolveSymbolQuery,
+    ResolveSymbolResult, StaleQuery, StaleResult,
+};
+use provenance_core::protocol::{
+    GetQuery, GetResult, NeighborsQuery, NeighborsResult, ResolveRecordQuery, ResolveRecordResult,
+    SearchQuery, SearchResult, Stamped, TraceQuery, TraceResult,
 };
 
 use super::read_policy::ReadPolicy;
@@ -18,17 +21,26 @@ use crate::repository::Repository;
 mod document;
 pub(crate) use document::read_document_answer;
 pub use document::{containing_review_documents, read_document};
+// It reads the working tree, git or the scanner.
+#[cfg(feature = "host")]
 mod evidence;
+// It reads the working tree, git or the scanner.
+#[cfg(feature = "host")]
 mod impact;
 mod nodes;
 pub(crate) mod page;
 mod records;
 mod review_states;
+// It reads the working tree, git or the scanner.
+#[cfg(feature = "host")]
 mod stale;
+// It reads the working tree, git or the scanner.
+#[cfg(feature = "host")]
 mod symbols;
 mod walk;
 
 #[cfg(test)]
+#[cfg(feature = "host")]
 mod tests;
 
 async fn served<R: Send>(
@@ -144,6 +156,7 @@ pub(crate) async fn trace_answer(
     .await
 }
 
+#[cfg(feature = "host")]
 pub async fn impact(
     repository: &Repository,
     policy: ReadPolicy,
@@ -154,6 +167,7 @@ pub async fn impact(
         .and_then(|answer| page::checked("impact", answer))
 }
 
+#[cfg(feature = "host")]
 pub(crate) async fn impact_answer(
     repository: &Repository,
     policy: ReadPolicy,
@@ -165,6 +179,7 @@ pub(crate) async fn impact_answer(
     .await
 }
 
+#[cfg(feature = "host")]
 pub async fn evidence(
     repository: &Repository,
     policy: ReadPolicy,
@@ -175,6 +190,7 @@ pub async fn evidence(
         .and_then(|answer| page::checked("evidence", answer))
 }
 
+#[cfg(feature = "host")]
 pub(crate) async fn evidence_answer(
     repository: &Repository,
     policy: ReadPolicy,
@@ -186,6 +202,7 @@ pub(crate) async fn evidence_answer(
     .await
 }
 
+#[cfg(feature = "host")]
 pub async fn stale(
     repository: &Repository,
     policy: ReadPolicy,
@@ -196,6 +213,7 @@ pub async fn stale(
         .and_then(|answer| page::checked("stale", answer))
 }
 
+#[cfg(feature = "host")]
 pub(crate) async fn stale_answer(
     repository: &Repository,
     policy: ReadPolicy,
@@ -207,6 +225,7 @@ pub(crate) async fn stale_answer(
     .await
 }
 
+#[cfg(feature = "host")]
 pub async fn resolve_symbol(
     repository: &Repository,
     policy: ReadPolicy,
@@ -217,6 +236,7 @@ pub async fn resolve_symbol(
         .and_then(|answer| page::checked("resolve-symbol", answer))
 }
 
+#[cfg(feature = "host")]
 pub(crate) async fn resolve_symbol_answer(
     repository: &Repository,
     policy: ReadPolicy,

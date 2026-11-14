@@ -15,6 +15,11 @@ crates/provenance-mcp/tests/fixtures/surface_names/** text eol=lf
 # that the readers give.
 crates/provenance-store/src/operations/queries/tests/**/*.txt text eol=lf
 
+# The checked transcripts of the read operations are compared byte for byte
+# with the answers.
+crates/provenance-transport/tests/fixtures/site_operations.json text eol=lf
+crates/provenance-store/tests/fixtures/read_operations_on_memory.json text eol=lf
+
 # Other tracked Claude skills retain LF on every platform.
 .claude/skills/** text eol=lf
 

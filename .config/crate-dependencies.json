@@ -480,7 +480,9 @@
         "filetime",
         "fs_at",
         "jsonschema",
-        "tempfile"
+        "sqlx",
+        "tempfile",
+        "tokio"
       ]
     },
     "provenance-transport": {

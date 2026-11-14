@@ -1805,6 +1805,13 @@ jobs:
         env:
           TARGET: ${{ steps.kernel.outputs.target }}
         run: cargo check --locked -p provenance-store --target "$TARGET" --features test-fixture
+      - name: Test the read operations on memory without host
+        # Natively, over memory storage and an SQLite read database in memory
+        # behind the contract wrapper, which the test catches up as an
+        # embedder does.
+        run: >-
+          cargo test --locked -p provenance-store --features test-fixture
+          --test read_operations_on_memory
 
   # The one status the branch ruleset requires. Conditional jobs skip when a
   # pull request leaves their inputs untouched, and a skipped matrix job never

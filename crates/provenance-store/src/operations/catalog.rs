@@ -1,6 +1,8 @@
 //! Typed operations shared by native and network callers.
 
 mod actions;
+// It checks repository paths and runs the scanner.
+#[cfg(feature = "host")]
 mod authoring;
 mod relationships;
 pub use actions::*;
@@ -14,6 +16,8 @@ mod drafts;
 pub use drafts::*;
 mod discussion_reads;
 mod entry;
+// It reads the working tree, git or the verification files.
+#[cfg(feature = "host")]
 mod evidence;
 mod failures;
 mod ideation;
@@ -29,6 +33,8 @@ mod shapes;
 mod statement;
 mod target_discussion_writes;
 mod updates;
+// The verification runs are files of the local cache.
+#[cfg(feature = "host")]
 pub(super) mod verification_resources;
 pub use discussion_discovery::*;
 pub use discussion_reads::*;
@@ -38,6 +44,7 @@ pub use resource_members::{GetReviewedResource, ReviewResource, ReviewedResource
 pub use review_reads::*;
 pub use updates::*;
 
+#[cfg(feature = "host")]
 pub use authoring::{Apply, BeginVerification, CompleteVerification, Plan};
 pub use context::{
     ContextKind, ContextResolver, ExecutionNeed, ExecutionNeeds, PreparedContext, PreparedRead,
@@ -60,10 +67,12 @@ pub use statement::CheckStatement;
 pub use target_discussion_writes::{WriteTargetDiscussion, WriteTargetDiscussionRequest};
 
 #[cfg(test)]
+#[cfg(feature = "host")]
 mod tests;
 
 pub use records::{Get, Info, Neighbors, ReadDocument, ResolveRecord, Search, Trace};
 
+#[cfg(feature = "host")]
 pub use evidence::{
     Evidence, Impact, ResolveSymbol, Stale, VerificationBindings, VerificationRuns,
 };

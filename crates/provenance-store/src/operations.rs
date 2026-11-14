@@ -4,8 +4,10 @@
 //! process. The CLI is a thin argv and stdio adapter over these
 //! functions; nothing semantic lives in the adapter.
 //!
-//! Without the `host` feature only the read snapshot and its handles
-//! (`reader`) and the stored revision (`stamp`) build.
+//! Without the `host` feature the read operations build (`catalog`,
+//! `queries`, `reader`, `read_operations`): they answer from the read
+//! database as it stands, with no publication guard. The write operations,
+//! the file and git reads, and the scan of the working tree need `host`.
 
 #[cfg(feature = "host")]
 use anyhow::Context as _;
@@ -14,31 +16,27 @@ use std::str::FromStr as _;
 
 #[cfg(feature = "host")]
 use camino::Utf8Path;
+use provenance_core::{EngineInfo, SDK_PROTOCOL_VERSION};
 #[cfg(feature = "host")]
-use provenance_core::{EngineInfo, ScopeId, StableId, SDK_PROTOCOL_VERSION};
+use provenance_core::{ScopeId, StableId};
 #[cfg(feature = "host")]
 use provenance_macros::rule;
 
-#[cfg(feature = "host")]
 use crate::repository::Repository;
 #[cfg(feature = "host")]
 use crate::state_store::{
     BeginVerificationInput, CompleteVerificationInput, StateStore, TypedSpecInput, TypedSpecResult,
 };
 
-#[cfg(feature = "host")]
 pub mod catalog;
-#[cfg(feature = "host")]
 pub mod family_operations;
 #[cfg(feature = "host")]
 pub mod files;
-#[cfg(feature = "host")]
 pub mod local_repository;
 #[cfg(feature = "host")]
 mod plan;
-#[cfg(feature = "host")]
 pub mod queries;
-#[cfg(feature = "host")]
+pub mod read_operations;
 pub mod read_policy;
 pub mod reader;
 #[cfg(feature = "host")]
@@ -47,12 +45,10 @@ pub mod stamp;
 #[cfg(feature = "host")]
 pub use crate::write_error;
 
-#[cfg(feature = "host")]
 pub use local_repository::LocalRepository;
 #[cfg(feature = "host")]
 pub use plan::{AffectedRule, ReviewReason, RuleEvidence, TypedSpecPlan};
 
-#[cfg(feature = "host")]
 /// Advertises the engine contract. The engine version is the store's own.
 pub fn engine_info(repository: &Repository) -> EngineInfo {
     EngineInfo {

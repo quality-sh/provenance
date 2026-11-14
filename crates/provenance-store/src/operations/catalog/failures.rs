@@ -1,7 +1,10 @@
 //! Keep native error sources while publishing a closed safe projection.
+#[cfg(feature = "host")]
 use crate::cache::CompletionTimedOut;
+#[cfg(feature = "host")]
 use crate::operations::files::FileAccessRefusal;
 use crate::operations::reader::ReadRefusal;
+#[cfg(feature = "host")]
 use crate::stale::git::GitRefusal;
 use crate::state_store::readers::StateLineInvalid;
 use crate::write_error::{
@@ -52,15 +55,7 @@ impl ReadError {
         if let Some(error) = self.common() {
             return error.status_code();
         }
-        match self.safe() {
-            ReadFailure::ResourceNotFound => 404,
-            ReadFailure::ReadFailed { .. } | ReadFailure::InvalidStateFile { .. } => 500,
-            ReadFailure::FileAccessDenied => 403,
-            ReadFailure::FileUnavailable
-            | ReadFailure::GitUnavailable
-            | ReadFailure::CacheCloseTimedOut { .. } => 503,
-            _ => 409,
-        }
+        self.safe().status_code()
     }
     /// A common refusal that a read handler raised itself, such as an input
     /// refusal; it keeps its own kind and status. A store refusal of a common
@@ -88,12 +83,16 @@ impl ReadError {
         if let Some(error) = error.downcast_ref::<ReadFailure>() {
             return error.clone();
         }
+        // Git, the working tree and the local cache close exist only with `host`.
+        #[cfg(feature = "host")]
         if let Some(error) = error.downcast_ref::<GitRefusal>() {
             return git_failure(error);
         }
+        #[cfg(feature = "host")]
         if let Some(error) = error.downcast_ref::<FileAccessRefusal>() {
             return file_failure(error).unwrap_or_else(|| self.read_failed());
         }
+        #[cfg(feature = "host")]
         if let Some(error) = error.downcast_ref::<CompletionTimedOut>() {
             return completion_failure(error);
         }
@@ -139,6 +138,7 @@ const fn store_refusal(failure: &WriteFailure) -> Option<ReadFailure> {
     }
 }
 
+#[cfg(feature = "host")]
 const fn git_failure(error: &GitRefusal) -> ReadFailure {
     match error {
         GitRefusal::Unavailable { .. } => ReadFailure::GitUnavailable,
@@ -146,6 +146,7 @@ const fn git_failure(error: &GitRefusal) -> ReadFailure {
     }
 }
 
+#[cfg(feature = "host")]
 /// The failure of a file refusal that has a kind; a missing or unreadable
 /// file has no kind of its own.
 const fn file_failure(error: &FileAccessRefusal) -> Option<ReadFailure> {
@@ -156,6 +157,7 @@ const fn file_failure(error: &FileAccessRefusal) -> Option<ReadFailure> {
     }
 }
 
+#[cfg(feature = "host")]
 /// The stage of a cache close that missed its deadline, without the lock
 /// path or the connection count.
 #[rule("rule_cache_completion_names_its_stage_at_the_deadline")]
@@ -214,5 +216,6 @@ impl schemars::JsonSchema for ReadError {
 }
 
 #[cfg(test)]
+#[cfg(feature = "host")]
 #[path = "failures_tests.rs"]
 mod tests;

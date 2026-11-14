@@ -40,6 +40,8 @@ macro_rules! define_record_lists {
 
 crate::families::record_families!(define_record_lists);
 
+// The verification runs are files of the local cache.
+#[cfg(feature = "host")]
 scoped_list!(
     ListVerificationRuns,
     "list-verification-runs",

@@ -109,6 +109,12 @@ name = "local_host"
 path = "tests/local_host.rs"
 required-features = ["test-fixture"]
 
+# It sets the home, temporary and working directories of the process.
+[[test]]
+name = "router_port"
+path = "tests/router_port.rs"
+required-features = ["test-fixture"]
+
 # Each test uses the adapters, so each test needs host.
 [[test]]
 name = "host_invocation"

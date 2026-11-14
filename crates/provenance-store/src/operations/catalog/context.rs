@@ -177,8 +177,10 @@ pub trait ContextResolver: Send + Sync {
 }
 /// Tests only: a resolver with no repositories.
 #[cfg(test)]
+#[cfg(feature = "host")]
 pub(super) struct NoRepositories;
 #[cfg(test)]
+#[cfg(feature = "host")]
 impl ContextResolver for NoRepositories {
     fn authorize(&self, _: &'static str, _: &RequestedContext) -> Result<(), OperationFailure> {
         Err(OperationFailure::UnavailableNeeds)
@@ -195,6 +197,7 @@ impl ContextResolver for NoRepositories {
 }
 
 #[cfg(test)]
+#[cfg(feature = "host")]
 mod tests {
     use super::{PreparedContext, PreparedRepository};
     use provenance_core::protocol::failure::OperationFailure;

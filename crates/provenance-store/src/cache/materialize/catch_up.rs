@@ -42,7 +42,9 @@ pub struct CatchUpReport {
 
 #[cfg(feature = "host")]
 pub async fn catch_up_state(repository: &Repository) -> anyhow::Result<CatchUpReport> {
-    let guard = publication::publication_guard(repository).await?;
+    let guard = publication::publication_guard(repository)
+        .await?
+        .for_pass()?;
     catch_up_with_guard(guard, repository.read_database()?).await
 }
 

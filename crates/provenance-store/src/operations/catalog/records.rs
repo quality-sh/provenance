@@ -150,4 +150,5 @@ const fn graph_needs<R>(_: &R) -> ExecutionNeeds {
         ExecutionNeed::ProjectionMaintenance,
     ]
 }
+#[cfg(feature = "host")]
 pub(super) use query;

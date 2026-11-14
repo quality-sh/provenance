@@ -12,6 +12,7 @@
 //! reach this. A served process must move synchronous publication sections
 //! to `spawn_blocking` or make them async first.
 
+use crate::cache::CatchUpRunning;
 use crate::layout::ProvenanceLayout;
 use crate::repository::Repository;
 use crate::state_store::SectionView;
@@ -27,7 +28,8 @@ use std::sync::Arc;
 /// lock. The private fields restrict construction to this module.
 pub struct PublicationGuard {
     // The mutex makes the guard `Sync`, so a holder can borrow it across an await.
-    // An async guard keeps the close of its section here too.
+    // An async guard keeps the close of its section here too, and the guard of a
+    // catch-up pass keeps the claim of the pass.
     _lock: Option<std::sync::Mutex<Box<dyn Send>>>,
     repository: Repository,
 }
@@ -38,6 +40,35 @@ impl PublicationGuard {
     #[cfg_attr(not(feature = "host"), allow(dead_code))]
     pub(crate) fn layout(&self) -> &ProvenanceLayout {
         self.repository.layout()
+    }
+
+    /// A guard whose exclusion of the other publishes the caller holds
+    /// itself: it takes no lock and never waits. It holds the catch-up
+    /// claim of the repository, or refuses at once when another pass holds
+    /// it.
+    pub(crate) fn held_by_caller(repository: &Repository) -> Result<Self, CatchUpRunning> {
+        Self {
+            _lock: None,
+            repository: repository.clone(),
+        }
+        .for_pass()
+    }
+
+    /// This guard, holding the catch-up claim of its repository until it is
+    /// dropped. Refuses at once when another pass holds the claim.
+    pub(crate) fn for_pass(self) -> Result<Self, CatchUpRunning> {
+        let claim = self.repository.claim_catch_up()?;
+        let Self {
+            _lock: lock,
+            repository,
+        } = self;
+        // The claim is released before the lock, so a holder that waits for the lock finds
+        // the claim free when it takes the lock.
+        let held: Box<dyn Send> = Box::new((claim, lock));
+        Ok(Self {
+            _lock: Some(std::sync::Mutex::new(held)),
+            repository,
+        })
     }
 
     /// The opened repository the guard protects. Under a synchronous section
