@@ -169,6 +169,14 @@ name = "discussion_writes"
 required-features = ["host"]
 
 [[test]]
+name = "history_git_failures"
+required-features = ["host"]
+
+[[test]]
+name = "history_git_process"
+required-features = ["host"]
+
+[[test]]
 name = "history_text_memory"
 required-features = ["host"]
 
