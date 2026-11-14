@@ -149,18 +149,18 @@ fn reads_that_replace_a_key_file_at_the_same_time_use_one_key() {
         Arc::new(Barrier::new(READS + 1)),
         Arc::new(Barrier::new(READS + 1)),
     );
-    let (ready_sender, ready) = mpsc::channel();
+    let (at_start, arrivals) = mpsc::channel();
     let (sender, cursors) = mpsc::channel();
     let readers: Vec<_> = (0..READS)
         .map(|_| {
             let (root, latest) = (root.clone(), latest.clone());
             let (start, end) = (start.clone(), end.clone());
-            let (ready_sender, sender) = (ready_sender.clone(), sender.clone());
+            let (at_start, sender) = (at_start.clone(), sender.clone());
             std::thread::spawn(move || {
                 let runtime = new_runtime();
                 let repository = repository(&root);
                 for _ in 0..ROUNDS {
-                    ready_sender.send(()).unwrap();
+                    at_start.send(()).unwrap();
                     start.wait();
                     let query = messages_query(&latest, 2, None);
                     let read = runtime.block_on(read_discussion_messages(
@@ -179,11 +179,11 @@ fn reads_that_replace_a_key_file_at_the_same_time_use_one_key() {
             })
         })
         .collect();
-    drop((ready_sender, sender));
+    drop((at_start, sender));
     for round in 0..ROUNDS {
         write_key_file(&root, b"");
         for _ in 0..READS {
-            ready.recv_timeout(LIMIT).unwrap_or_else(|error| {
+            arrivals.recv_timeout(LIMIT).unwrap_or_else(|error| {
                 panic!("round {round}: a reader thread did not reach the start: {error}")
             });
         }
