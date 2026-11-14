@@ -58,17 +58,17 @@ fn reports_malformed_directive_location() {
 }
 
 #[test]
-fn scans_javascript_rule_call_bound_to_const() {
+fn javascript_rule_call_is_not_a_binding() {
     let scan = scan_file(
         Utf8Path::new("rules.js"),
         Language::JavaScript,
         r#"export const paysOvertime = rule("rule_overtime", (hours) => hours > 38);"#,
     );
 
-    assert_eq!(scan.bindings.len(), 1);
-    assert_eq!(scan.bindings[0].rule_id, "rule_overtime");
-    assert_eq!(scan.bindings[0].item_name.as_deref(), Some("paysOvertime"));
-    assert_eq!(scan.bindings[0].verification, None);
+    assert_eq!(
+        scan.bindings,
+        [] as [provenance_scanner::AttributeBinding; 0]
+    );
 }
 
 #[test]
@@ -91,26 +91,30 @@ fn scans_javascript_verifies_call_in_named_function() {
 }
 
 #[test]
-fn scans_typescript_sdk_rule_and_verifies_helpers() {
+fn scans_typescript_comment_and_verifies_helper() {
     let scan = scan_file(
         Utf8Path::new("rules.ts"),
         Language::TypeScript,
-        r#"import { rule, verifies } from "@quality-sh/provenance/rules";
+        r#"import { verifies } from "@quality-sh/provenance/rules";
 
-export const paysOvertime = rule("rule_overtime", (hours: number) => hours > 38);
+// @provenance rule: rule_overtime
+export const paysOvertime = (hours: number) => hours > 38;
 const overtimeProperty = () => {
   verifies("rule_overtime", "property");
 };"#,
     );
 
-    assert_eq!(scan.bindings.len(), 2);
-    assert_eq!(scan.bindings[0].item_name.as_deref(), Some("paysOvertime"));
-    assert_eq!(scan.bindings[0].verification, None);
+    assert_eq!(scan.annotations.len(), 1);
     assert_eq!(
-        scan.bindings[1].item_name.as_deref(),
+        scan.annotations[0].function_name.as_deref(),
+        Some("paysOvertime")
+    );
+    assert_eq!(scan.bindings.len(), 1);
+    assert_eq!(
+        scan.bindings[0].item_name.as_deref(),
         Some("overtimeProperty")
     );
-    assert_eq!(scan.bindings[1].verification, Some(Verification::Property));
+    assert_eq!(scan.bindings[0].verification, Some(Verification::Property));
 }
 
 #[test]
@@ -159,7 +163,10 @@ fn scans_java_static_helper_bound_to_field() {
 #[test]
 fn ignores_call_shaped_text_in_comments() {
     for (language, source) in [
-        (Language::JavaScript, r#"// rule("rule_not_bound", fn)"#),
+        (
+            Language::JavaScript,
+            r#"// verifies("rule_not_bound", "examples")"#,
+        ),
         (
             Language::TypeScript,
             "/*\nverifies(\"rule_not_bound\", examples)\n*/",
@@ -179,7 +186,7 @@ fn ignores_call_shaped_text_in_strings_and_trailing_comments() {
         Utf8Path::new("fixtures.ts"),
         Language::TypeScript,
         r#"const fixture = 'verifies("rule_not_bound", "examples")';
-const value = 1; // rule("rule_not_bound", implementation)"#,
+const value = 1; // verifies("rule_not_bound", "examples")"#,
     );
 
     assert_eq!(
@@ -193,10 +200,13 @@ fn scans_calls_before_trailing_comments() {
     let scan = scan_file(
         Utf8Path::new("rules.js"),
         Language::JavaScript,
-        r#"const paysOvertime = rule("rule_overtime", implementation); // binding"#,
+        r#"const overtimeExamples = () => verifies("rule_overtime", "examples"); // binding"#,
     );
 
-    assert_eq!(scan.bindings[0].item_name.as_deref(), Some("paysOvertime"));
+    assert_eq!(
+        scan.bindings[0].item_name.as_deref(),
+        Some("overtimeExamples")
+    );
 }
 
 #[test]
@@ -218,8 +228,8 @@ fn typed_const_and_go_var_bindings_use_variable_names() {
     for (language, source, expected) in [
         (
             Language::TypeScript,
-            r#"const paysOvertime: RuleFn = rule("rule_overtime", implementation);"#,
-            "paysOvertime",
+            r#"const overtimeExamples: Check = () => verifies("rule_overtime", "examples");"#,
+            "overtimeExamples",
         ),
         (
             Language::Go,
@@ -254,7 +264,7 @@ fn scans_binding_after_unicode_source_text() {
     let scan = scan_file(
         Utf8Path::new("rules.ts"),
         Language::TypeScript,
-        r#"const réglage = 1; const paysOvertime = rule("rule_overtime", implementation);"#,
+        r#"const réglage = 1; const check = () => verifies("rule_overtime", "examples");"#,
     );
 
     assert_eq!(scan.bindings[0].rule_id, "rule_overtime");
@@ -279,7 +289,7 @@ fn ignores_bindings_inside_multiline_strings() {
     for (language, source) in [
         (
             Language::TypeScript,
-            "const fixture = `\nconst fake = rule(\"rule_not_bound\", fn);\n`;",
+            "const fixture = `\nverifies(\"rule_not_bound\", \"examples\");\n`;",
         ),
         (
             Language::Go,
@@ -309,10 +319,13 @@ fn scans_binding_after_closed_block_comment() {
     let scan = scan_file(
         Utf8Path::new("rules.js"),
         Language::JavaScript,
-        r#"/* decision */ const paysOvertime = rule("rule_overtime", implementation);"#,
+        r#"/* decision */ const overtimeExamples = () => verifies("rule_overtime", "examples");"#,
     );
 
-    assert_eq!(scan.bindings[0].item_name.as_deref(), Some("paysOvertime"));
+    assert_eq!(
+        scan.bindings[0].item_name.as_deref(),
+        Some("overtimeExamples")
+    );
 }
 
 #[test]
@@ -360,7 +373,7 @@ fn multiline_delimiters_inside_regular_strings_do_not_hide_bindings() {
     for (language, source) in [
         (
             Language::JavaScript,
-            "const punctuation = \"`\";\nconst native = rule(\"rule_native\", implementation);",
+            "const punctuation = \"`\";\nverifies(\"rule_native\", \"examples\");",
         ),
         (
             Language::Python,
@@ -378,7 +391,7 @@ fn scans_binding_after_multiline_string_closes_on_same_line() {
     let scan = scan_file(
         Utf8Path::new("rules.ts"),
         Language::TypeScript,
-        "const fixture = `\ntext\n`; const native = rule(\"rule_native\", implementation);",
+        "const fixture = `\ntext\n`; verifies(\"rule_native\", \"examples\");",
     );
 
     assert_eq!(scan.bindings[0].rule_id, "rule_native");
@@ -404,7 +417,7 @@ fn multiline_delimiters_in_comments_do_not_hide_later_bindings() {
         ),
         (
             Language::JavaScript,
-            "/*\n`\n*/\nconst native = rule(\"rule_native\", implementation);",
+            "/*\n`\n*/\nverifies(\"rule_native\", \"examples\");",
         ),
     ] {
         let scan = scan_file(Utf8Path::new("rules.txt"), language, source);
@@ -464,7 +477,7 @@ fn template_literal_after_inline_block_comment_hides_its_contents() {
     let scan = scan_file(
         Utf8Path::new("rules.js"),
         Language::JavaScript,
-        "/* note */ const s = `start\nconst fake = rule(\"rule_not_bound\", fn);\n`;\n",
+        "/* note */ const s = `start\nverifies(\"rule_not_bound\", \"examples\");\n`;\n",
     );
 
     assert_eq!(

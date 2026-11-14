@@ -23,8 +23,8 @@ fn scan_typescript(source: &str) -> Value {
     std::fs::write(repo.join("src/pay.ts"), source).unwrap();
     let report = repo.join("report.json");
     provenance()
-        .args(["check", "--bindings", "--path", "src", "--scope", "default"])
-        .arg("--output")
+        .args(["check", "--bindings", "--path", "src"])
+        .args(["--scope", "default", "--output"])
         .arg(&report)
         .current_dir(repo)
         .assert()
@@ -71,6 +71,12 @@ fn a_rule_call_is_not_an_implementation_binding() {
          export const paysOvertime = rule(\"rule_overtime\", (hours: number) => hours > 38);\n",
     );
 
-    assert!(sites(&report, "bindings", "item_name").is_empty(), "{report}");
-    assert!(sites(&report, "annotations", "function_name").is_empty(), "{report}");
+    assert!(
+        sites(&report, "bindings", "item_name").is_empty(),
+        "{report}"
+    );
+    assert!(
+        sites(&report, "annotations", "function_name").is_empty(),
+        "{report}"
+    );
 }

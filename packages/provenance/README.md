@@ -79,17 +79,23 @@ Rule binding and coverage warnings. It does not check Requirement or Rule
 prose. Keep `--path .` when CI must detect missing bindings across the complete
 repository.
 
-## Runtime Rule bindings
+## Rule bindings
 
-The same install supplies inert helpers that put Rule IDs next to production
-implementations and tests. Import these helpers from the `rules` subpath:
+Production code binds to a Rule with a comment directly above the function or
+`const`. The comment needs no import, so an install that omits development
+dependencies still loads the application:
 
 ```ts
-import { rule, verifies } from "@quality-sh/provenance/rules";
+// @provenance rule: rule_overtime
+export const paysOvertime = (hours: number) => hours > 38;
+```
 
-export const paysOvertime = rule("rule_overtime", (hours: number) =>
-  hours > 38,
-);
+A test binds evidence with `verifies` from the `rules` subpath. This package
+is a development dependency, so import `verifies` only in test code:
+
+```ts
+import { verifies } from "@quality-sh/provenance/rules";
+import { paysOvertime } from "./pay.js";
 
 test("hours above 38 attract overtime", function overtimeExamples() {
   verifies("rule_overtime", "examples");
@@ -97,15 +103,13 @@ test("hours above 38 attract overtime", function overtimeExamples() {
 });
 ```
 
-`rule` returns the exact function. `verifies` returns nothing. Neither helper
-registers state or changes application behavior. The scanner reads both calls
-and creates the Implementation binding and Verification binding. Keep
-`rule("id",` on one line. Put `verifies("id", "method")` in a named function or
-in a function-valued `const`.
-
-The top-level `rule("local-key")` export remains the Rule declaration builder.
-The `rules` subpath keeps the scanner helpers separate from that authoring
-interface.
+`verifies` returns nothing and does not change the test. The scanner reads the
+comment and the call, and creates the Implementation binding and the
+Verification binding. Put `verifies("id", "method")` in a named function or in
+a function-valued `const`. The top-level `rule("local-key")` export is the Rule
+declaration builder; it is not a binding.
+[Rule bindings](https://github.com/quality-sh/provenance/blob/main/docs/rule-bindings.md)
+gives each form.
 
 Define a spec without touching the engine:
 

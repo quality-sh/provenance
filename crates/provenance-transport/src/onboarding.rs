@@ -27,8 +27,19 @@ it in the same change.
   with the package manager.{skill_command_note}
 - Plan: `{command} prime --quiet`
 - New obligation: `{command} rule_<slug> create --type rule --scope {selected_scope} --requirement-id <req> --statement "<testable clause>"`
-- Annotate implementation with `rule`, tests with `verifies`. Annotations move
-  with code.
+- Connect the production code of a Rule to the Rule with a comment directly above
+  the function, in each language: `// @provenance rule: <rule_id>`, or
+  `# @provenance rule: <rule_id>` in Python. The comment adds no package to the
+  application. A comment does not move with its function, so keep the two together.
+- Connect a test to a Rule with `@provenance verification: <method>` above its
+  `@provenance rule: <rule_id>` line. A test can also use a helper from a development
+  dependency: `verifies("<rule_id>", "<method>")` from `@quality-sh/provenance/rules`
+  in TypeScript, or `#[verifies("<rule_id>", <method>)]` from `provenance-macros` under
+  `[dev-dependencies]` in Rust. The method is exhaustion, property, examples,
+  conformance, construction, or proof. Put `construction` on a type, not on a test.
+- In Rust, `#[rule("<rule_id>")]` from `provenance-macros` is an option for production
+  code. It puts `provenance-macros` under `[dependencies]`. That crate is a procedural
+  macro: it runs at compile time and adds nothing to the binary.
 - Change a Requirement, Rule, or Resolution with a guarded record update.
   A native create command opens its review submission. A content change opens a
   review submission, unless a reviewer accepted that content.
@@ -236,6 +247,7 @@ pub fn project(existing: &[u8], invocation: &Invocation, scope: &str) -> anyhow:
 #[rule("rule_init_description_guidance")]
 #[rule("rule_init_guidance_background_review_host")]
 #[rule("rule_init_follow_monitor_guidance")]
+#[rule("rule_init_production_binding_comment")]
 fn instructions(invocation: &Invocation, scope: &str) -> String {
     INSTRUCTIONS
         .replace("{skill_command_note}", &invocation.skill_command_note())

@@ -87,7 +87,7 @@ fn regex_quotes_do_not_turn_template_contents_into_annotations() {
 fn regex_contents_are_not_helper_bindings_or_block_comments() {
     let report = scan(
         "helpers.ts",
-        "const pattern = /rule(\"rule_fake\", value)[/*]`/;\nrule(\"rule_real\", value);\n// @provenance rule: rule_annotation\nfunction f() {}\n",
+        "const pattern = /verifies(\"rule_fake\", \"examples\")[/*]`/;\nverifies(\"rule_real\", \"examples\");\n// @provenance rule: rule_annotation\nfunction f() {}\n",
     );
     assert_eq!(report.annotations.len(), 1, "{report:?}");
     assert_eq!(report.bindings.len(), 1, "{report:?}");

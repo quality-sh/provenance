@@ -192,8 +192,8 @@ each Proposal.
    obligation. The winning artifact is a sketch the human reacted to, so the normal
    fan-out is spawned Requirements. Create a Rule only when the Resolution establishes a
    precise atomic obligation. The Rule may be Unimplemented; bind its primary production
-   implementation with `#[rule("<id>")]` when one exists. **Do not mint a vague Rule only
-   to make the decision look landed.** The Resolution is already the landing. See the
+   implementation, in the form that the Provenance section of AGENTS.md gives, when one
+   exists. **Do not mint a vague Rule only to make the decision look landed.** The Resolution is already the landing. See the
    `provenance-shaping` skill for Rule and binding guidance.
 
 ## Caveats (empirical — from the Statesman provenance scoping record)

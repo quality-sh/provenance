@@ -170,16 +170,17 @@ production behaviour.
 
 ## Coexistence with existing bindings
 
-The `@quality-sh/provenance/rules` identity helpers, scanner patterns, Rust
-attributes, and comment directives remain compatible. Typed declarations create
+Comment directives, the `verifies` test helper from
+`@quality-sh/provenance/rules`, Rust attributes, and other scanner patterns
+remain compatible. Typed declarations create
 the same canonical Rule records that those bindings cite. A codebase can keep a
 scanner-recognized Implementation binding while tests use imported handles.
 
 The experiment resolved the semantic question it exposed. A Rule is an
 independent behavioural obligation, so a typed declaration may materialize a
-valid Rule before any production function realizes it. `#[rule]` and the
-equivalent language helpers bind a primary implementation; they do not define
-the Rule. A missing implementation is reported as Unimplemented. Existing
+valid Rule before any production function realizes it. A
+`// @provenance rule:` comment, `#[rule]`, and the other scanner forms bind a
+primary implementation; they do not define the Rule. A missing implementation is reported as Unimplemented. Existing
 Rule records, source-citation fields, decorators, attributes, and scanner
 patterns keep their shape, so retrofit and typed authoring target the same
 canonical model without a data migration.

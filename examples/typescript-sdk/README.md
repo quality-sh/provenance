@@ -21,8 +21,12 @@ The app applies the spec and runs typed verification through that connection.
 The harness stops the fixture after both consumers finish. Importing `provenance.spec.ts` alone has no
 engine or persistence side effect.
 
-The `file:../../packages/provenance` dependency exercises normal npm package
-resolution from the source checkout. The packed-install test covers the
+The `file:../../packages/provenance` development dependency exercises normal
+npm package resolution from the source checkout. Only the spec, the apply
+script, and the test import it. `npm run test:production` removes the
+development dependencies from `node_modules` and loads `dist/share-links.js`,
+to show that the application runs without Provenance installed. Run
+`npm install` again after it. The packed-install test covers the
 published package shape and its bundled engine separately.
 
 Build the fixture from the repository root with

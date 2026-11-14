@@ -7,6 +7,11 @@
 //! no structural validation, no address logic, and no semantic layer
 //! lives here; provenance-core owns authoring and provenance-store owns
 //! identity, planning, and mutation. The parity ledger is PARITY.md.
+//!
+//! The `rule` and `verifies` attributes are re-exported from `provenance-macros` for test
+//! code under `[dev-dependencies]`. This crate depends on the store, so production code
+//! does not take `#[rule]` from it: production code binds a Rule with a
+//! `// @provenance rule: <id>` comment, or takes `#[rule]` from `provenance-macros`.
 
 mod macros;
 mod settings;
