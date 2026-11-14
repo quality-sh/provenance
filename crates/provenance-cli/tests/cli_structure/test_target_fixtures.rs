@@ -150,3 +150,110 @@ fn shared_support_without_tests_may_load_in_several_targets() {
     );
     assert!(faults.is_empty(), "{faults:#?}");
 }
+
+#[test]
+fn a_group_main_that_is_not_a_test_target_is_a_fault() {
+    let faults = faults("autotests = false\n", &[("tests/group/main.rs", ONE_TEST)]);
+    assert_eq!(
+        naming(&faults, "tests/group/main.rs", "not a test target").len(),
+        1,
+        "{faults:#?}"
+    );
+    assert_eq!(faults.len(), 1, "{faults:#?}");
+}
+
+#[test]
+fn a_file_with_tests_in_a_subdirectory_that_loads_nowhere_is_a_fault() {
+    let faults = faults(
+        "autotests = false\n[[test]]\nname = \"group\"\npath = \"tests/group/main.rs\"\n",
+        &[
+            ("tests/group/main.rs", "mod reads;\n"),
+            ("tests/group/reads.rs", ONE_TEST),
+            ("tests/group/writes.rs", ONE_TEST),
+            ("tests/group/data/input.rs", "fn main() {}\n"),
+            ("tests/group/data/broken.rs", "fn main( {\n"),
+            ("tests/group/data/notes.txt", "#[test]\n"),
+        ],
+    );
+    assert_eq!(
+        naming(&faults, "tests/group/writes.rs", "in no test target").len(),
+        1,
+        "{faults:#?}"
+    );
+    assert_eq!(faults.len(), 1, "{faults:#?}");
+}
+
+#[test]
+fn a_module_of_a_file_loads_from_the_directory_with_the_file_name() {
+    let faults = faults(
+        "",
+        &[
+            ("tests/a.rs", "mod reads;\n"),
+            ("tests/reads.rs", "pub fn decoy() {}\n"),
+            ("tests/a/reads.rs", ONE_TEST),
+            ("tests/b.rs", "#[path = \"a/reads.rs\"]\nmod reads;\n"),
+        ],
+    );
+    assert_eq!(
+        naming(&faults, "tests/a/reads.rs", "loads 2 times").len(),
+        1,
+        "{faults:#?}"
+    );
+    assert_eq!(faults.len(), 1, "{faults:#?}");
+}
+
+#[test]
+fn a_module_of_a_mod_rs_file_loads_from_the_directory_of_that_file() {
+    let faults = faults(
+        "",
+        &[
+            ("tests/a.rs", "mod x;\n"),
+            ("tests/a/x/mod.rs", "mod y;\n"),
+            ("tests/a/x/y.rs", ONE_TEST),
+            ("tests/b.rs", "#[path = \"a/x/y.rs\"]\nmod y;\n"),
+        ],
+    );
+    assert_eq!(
+        naming(&faults, "tests/a/x/y.rs", "loads 2 times").len(),
+        1,
+        "{faults:#?}"
+    );
+    assert_eq!(faults.len(), 1, "{faults:#?}");
+}
+
+#[test]
+fn a_path_in_an_inline_module_starts_at_the_directory_of_that_module() {
+    let faults = faults(
+        "",
+        &[
+            (
+                "tests/a.rs",
+                "mod inner {\n    #[path = \"z.rs\"]\n    mod z;\n}\n",
+            ),
+            ("tests/z.rs", "pub fn decoy() {}\n"),
+            ("tests/a/inner/z.rs", ONE_TEST),
+            ("tests/b.rs", "#[path = \"a/inner/z.rs\"]\nmod z;\n"),
+        ],
+    );
+    assert_eq!(
+        naming(&faults, "tests/a/inner/z.rs", "loads 2 times").len(),
+        1,
+        "{faults:#?}"
+    );
+    assert_eq!(faults.len(), 1, "{faults:#?}");
+}
+
+#[test]
+fn two_cfg_alternatives_of_one_module_load_its_file_once() {
+    let faults = faults(
+        "",
+        &[
+            (
+                "tests/a.rs",
+                "#[cfg(unix)]\nmod x;\n#[cfg(not(unix))]\nmod x;\n",
+            ),
+            ("tests/a/x.rs", ONE_TEST),
+        ],
+    );
+    assert!(faults.is_empty(), "{faults:#?}");
+}
