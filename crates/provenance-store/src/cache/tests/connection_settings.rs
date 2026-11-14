@@ -7,7 +7,7 @@ use super::fixtures::{open, seeded_layout};
 /// The values that `PRAGMA synchronous`, `PRAGMA temp_store` and
 /// `PRAGMA cache_size` give for FULL, MEMORY and a page cache of
 /// 16,000 KiB.
-pub(crate) const CACHE_SETTINGS: (i64, i64, i64) = (2, 2, -16_000);
+pub const CACHE_SETTINGS: (i64, i64, i64) = (2, 2, -16_000);
 
 /// The values of the same three settings with the `SQLite` defaults: FULL,
 /// DEFAULT and a page cache of 2,000 KiB.
@@ -15,7 +15,7 @@ const SQLITE_DEFAULTS: (i64, i64, i64) = (2, 0, -2_000);
 
 /// Reads the three settings from the one connection of the pool, then
 /// completes the connection.
-pub(crate) async fn settings_of(connection: CacheConnection) -> (i64, i64, i64) {
+pub async fn settings_of(connection: CacheConnection) -> (i64, i64, i64) {
     let pool = connection.pool();
     let read = |pragma: &'static str| sqlx::query_scalar::<_, i64>(pragma).fetch_one(pool);
     let settings = (
