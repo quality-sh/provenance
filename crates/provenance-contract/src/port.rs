@@ -17,6 +17,9 @@ use serde_json::Value;
 use std::future::Future;
 use std::sync::LazyLock;
 
+mod shape;
+use shape::Shape;
+
 /// The context that a checked call selects, and the needs of its request.
 type Checked = (Option<RequestedContext>, ExecutionNeeds);
 
@@ -26,7 +29,7 @@ struct Checks {
     check: fn(Value) -> Result<Checked, Box<FailureEnvelope>>,
     /// The success schema of the operation, closed: an object of the answer has no member that
     /// the schema does not name.
-    success: jsonschema::Validator,
+    success: Shape,
     /// Each status that the operation gives.
     statuses: Vec<u16>,
 }
@@ -34,15 +37,11 @@ struct Checks {
 impl Checks {
     fn of<O: Operation>() -> Self {
         let definition = crate::schema::raw_definition::<O>();
-        let mut success = definition.success_schema;
-        close(&mut success);
         Self {
             name: O::NAME,
             check: check::<O>,
-            success: jsonschema::options()
-                .with_draft(jsonschema::Draft::Draft202012)
-                .build(&success)
-                .expect("the closed success schema of a read operation compiles"),
+            success: Shape::new(definition.success_schema)
+                .unwrap_or_else(|unread| panic!("the success schema of {}: {unread}", O::NAME)),
             statuses: definition.http_statuses,
         }
     }
@@ -80,8 +79,9 @@ static CHECKS: LazyLock<[Checks; 10]> = LazyLock::new(|| {
 ///   response meta, and the one status of its kind, which the operation gives.
 ///
 /// Any other answer becomes the `internal` failure, and the host log keeps what the port gave.
-/// The check of a success walks the answer once for each schema node that applies to a value,
-/// so its cost grows with the size of the answer and not with the number of operations.
+/// The check of a success walks each value of the answer once for each schema node that applies
+/// to it, and again for each branch of an `anyOf` or `oneOf` that it tries, so its cost grows
+/// with the size of the answer. It uses no schema engine.
 pub async fn invoke_port<R, A>(
     operation: &str,
     call: Value,
@@ -120,7 +120,7 @@ fn checked(
     answer: Result<Value, FailureEnvelope>,
 ) -> Result<Value, Box<FailureEnvelope>> {
     let given = match &answer {
-        Ok(success) if checks.success.is_valid(success) => None,
+        Ok(success) if checks.success.accepts(success) => None,
         Err(failure) if declared(checks, failure) => None,
         Ok(success) => Some(format!("a success that its schema refuses: {success}")),
         Err(failure) => Some(format!(
@@ -160,64 +160,13 @@ fn exact<T: DeserializeOwned + Serialize>(body: &Value) -> Option<T> {
     (serde_json::to_value(&value).ok()? == *body).then_some(value)
 }
 
-/// Closes each object schema in `schema` that names its properties, joins
-/// other schemas or refers to a definition, so an object may have no member
-/// that the schema does not name. `unevaluatedProperties` counts the members
-/// that a passing `allOf`, `anyOf` or `oneOf` branch, or the definition that
-/// `$ref` names, states for the same object.
-///
-/// A branch and a definition stay open themselves: a branch can state a
-/// part of the object only, as the `anyOf` of a record that ties its archive
-/// commit to its status does, and a definition can be a part that a
-/// flattened member joins to other members. The schema that uses them is
-/// closed.
-fn close(schema: &mut Value) {
-    close_schema(schema, true);
-}
-
-fn close_schema(schema: &mut Value, closed: bool) {
-    let Value::Object(schema) = schema else {
-        return;
-    };
-    let shapes_an_object = ["properties", "allOf", "anyOf", "oneOf", "$ref"]
-        .iter()
-        .any(|keyword| schema.contains_key(*keyword));
-    let open = !schema.contains_key("additionalProperties")
-        && !schema.contains_key("unevaluatedProperties");
-    if closed && shapes_an_object && open {
-        schema.insert("unevaluatedProperties".into(), Value::Bool(false));
-    }
-    for (keyword, value) in schema.iter_mut() {
-        let (inner, closed): (Vec<&mut Value>, bool) = match (keyword.as_str(), value) {
-            ("properties" | "patternProperties", Value::Object(members)) => {
-                (members.values_mut().collect(), true)
-            }
-            ("$defs" | "definitions", Value::Object(definitions)) => {
-                (definitions.values_mut().collect(), false)
-            }
-            ("allOf" | "anyOf" | "oneOf", Value::Array(branches)) => {
-                (branches.iter_mut().collect(), false)
-            }
-            ("prefixItems", Value::Array(items)) => (items.iter_mut().collect(), true),
-            (
-                "items" | "additionalProperties" | "not" | "if" | "then" | "else" | "contains",
-                value,
-            ) => (vec![value], true),
-            _ => (Vec::new(), true),
-        };
-        for value in inner {
-            close_schema(value, closed);
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::CHECKS;
     use provenance_store::operations::read_operations::READ_OPERATIONS;
 
     /// Implementation aid: the table names the operations of the published list, in its order,
-    /// and each closed success schema compiles.
+    /// and the check reads each success schema.
     #[test]
     fn the_checks_cover_the_published_list() {
         let names: Vec<_> = CHECKS.iter().map(|checks| checks.name).collect();
