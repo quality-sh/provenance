@@ -62,8 +62,9 @@ impl PublicationGuard {
             _lock: lock,
             repository,
         } = self;
-        // The lock is released before the claim.
-        let held: Box<dyn Send> = Box::new((lock, claim));
+        // The claim is released before the lock, so a holder that waits for the lock finds
+        // the claim free when it takes the lock.
+        let held: Box<dyn Send> = Box::new((claim, lock));
         Ok(Self {
             _lock: Some(std::sync::Mutex::new(held)),
             repository,
