@@ -147,7 +147,7 @@ fn correction(kind: NodeType, id: &StableId, cascade: &[CascadeDeletion]) -> Str
     // Topic stay.
     let joint = match kind {
         NodeType::Resolution | NodeType::Rule => " or ",
-        _ => " and ",
+        NodeType::Source | NodeType::Requirement | NodeType::Topic | NodeType::Question => " and ",
     };
     let requirements = cause
         .requirements
