@@ -26,13 +26,11 @@
 //!
 //! [`LocalRepository`]: super::LocalRepository
 
-use crate::repository::Repository;
 use provenance_core::protocol::failure::ErasedFailure;
 use serde_json::Value;
 use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
 
 mod in_process;
 pub use in_process::InProcessReadOperations;
@@ -70,22 +68,4 @@ pub fn read_operation(operation: &str) -> Option<&'static str> {
         .iter()
         .copied()
         .find(|name| *name == operation)
-}
-
-impl Repository {
-    /// This repository with `reads` as the port of its read operations.
-    ///
-    /// The contract router sends each operation of [`READ_OPERATIONS`] to
-    /// the port, and does not run it. A clone keeps the port.
-    #[must_use]
-    pub fn with_read_operations(&self, reads: Arc<dyn ReadOperations>) -> Self {
-        let mut repository = self.clone();
-        repository.reads = Some(reads);
-        repository
-    }
-
-    /// The port of the read operations, if the caller gave one.
-    pub fn read_operations(&self) -> Option<&Arc<dyn ReadOperations>> {
-        self.reads.as_ref()
-    }
 }

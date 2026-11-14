@@ -44,7 +44,7 @@ pub struct Repository {
     /// Set only on the repository of a section guard.
     section: Option<SectionHandle>,
     /// The read operations port, when the caller gave one.
-    pub(crate) reads: Option<Arc<dyn ReadOperations>>,
+    reads: Option<Arc<dyn ReadOperations>>,
 }
 
 #[derive(Debug)]
@@ -424,6 +424,21 @@ impl Repository {
         self.store().with_repository_publication(|held| {
             crate::publication::with_staged_state(held, dry_run, record_stamp, prepare)
         })
+    }
+
+    /// This repository with `reads` as the port of its read operations.
+    ///
+    /// The contract router sends each read operation to the port. A clone keeps the port.
+    #[must_use]
+    pub fn with_read_operations(&self, reads: Arc<dyn ReadOperations>) -> Self {
+        let mut repository = self.clone();
+        repository.reads = Some(reads);
+        repository
+    }
+
+    /// The port of the read operations, if the caller gave one.
+    pub fn read_operations(&self) -> Option<&Arc<dyn ReadOperations>> {
+        self.reads.as_ref()
     }
 }
 
