@@ -1,5 +1,9 @@
+#[path = "support/thread_record.rs"]
+mod thread_record;
+
 use assert_cmd::Command;
 use predicates::prelude::PredicateBooleanExt;
+use thread_record::thread_in;
 
 #[test]
 fn import_rejects_duplicate_thread_ids_and_names_the_offender() {
@@ -186,16 +190,6 @@ fn thread(id: &str, status: &str, created_at: i64) -> serde_json::Value {
     let mut thread = thread_in(id, "default", "req_parent", created_at);
     thread["status"] = serde_json::json!(status);
     thread
-}
-
-fn thread_in(id: &str, scope_id: &str, parent_id: &str, created_at: i64) -> serde_json::Value {
-    serde_json::json!({
-        "scope_id": scope_id,
-        "id": id,
-        "parent": {"node_type": "requirement", "node_id": parent_id},
-        "status": "resolved",
-        "created_at": created_at
-    })
 }
 
 fn add_scope_with_requirement(repo: &std::path::Path, scope_id: &str, requirement_id: &str) {
