@@ -284,6 +284,7 @@ pub fn copy_directory(source: &Utf8Path, destination: &Utf8Path) -> anyhow::Resu
         if file_type.is_dir() {
             copy_directory(&source_path, &target)?;
         } else if file_type.is_file() {
+            drop(crate::test_probes::at("state_tree_copied"));
             std::fs::copy(source_path, target)?;
         } else {
             return Err(crate::refusal::fault!(

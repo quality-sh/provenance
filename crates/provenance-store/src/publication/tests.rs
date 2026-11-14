@@ -490,3 +490,52 @@ fn a_read_only_write_is_refused_and_creates_no_path() {
         assert!(!path.exists(), "{path} exists");
     }
 }
+
+
+/// Not for main: counts the syncs and the copied files of each landing.
+#[test]
+fn zz_landing_cost() {
+    use std::{cell::Cell, rc::Rc};
+    let count = |label: &'static str| {
+        let counter = Rc::new(Cell::new(0u32));
+        let inner = counter.clone();
+        crate::test_probes::arm(label, move || {
+            inner.set(inner.get() + 1);
+            Ok(())
+        });
+        counter
+    };
+    let (_directory, live, _copy) = record_kind_repositories();
+    let synced = count("state_synced");
+    let copied = count("state_tree_copied");
+    let shard = |kind| crate::shards::path_for(&live, &scope(), kind);
+    let report = |case: &str| {
+        println!("COST {case}: syncs={} copied_files={}", synced.get(), copied.get());
+        synced.set(0);
+        copied.set(0);
+    };
+    let staged = |shards: Vec<NodeType>| {
+        with_repository_publication(&live, |held| {
+            with_staged_state(held, false, StampFromGit, |staged| {
+                for kind in &shards {
+                    staged.publish_shard(&shard(*kind), Vec::new())?;
+                }
+                Ok(())
+            })
+        })
+        .unwrap();
+    };
+    synced.set(0);
+    copied.set(0);
+    staged(vec![]);
+    report("empty stage");
+    staged(vec![NodeType::Topic]);
+    report("one-key stage");
+    staged(vec![NodeType::Question, NodeType::Resolution]);
+    report("two-key stage");
+    with_repository_publication(&live, |held| held.publish_shard(&shard(NodeType::Rule), Vec::new()))
+        .unwrap();
+    report("publish_shard");
+    crate::test_probes::disarm("state_synced");
+    crate::test_probes::disarm("state_tree_copied");
+}

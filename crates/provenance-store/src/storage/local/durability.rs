@@ -22,6 +22,7 @@ pub struct ReplaceFailed(#[source] std::io::Error);
 /// new bytes, but a power loss can lose them.
 pub fn write_synced_file(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<()> {
     let (temporary, parent, first_made) = write_temporary(path, bytes)?;
+    drop(crate::test_probes::at("state_synced"));
     temporary.as_file().sync_all().map_err(sync_failure(path))?;
     replace_file(temporary, path)?;
     let last = first_made.and_then(Utf8Path::parent).unwrap_or(parent);
@@ -96,6 +97,7 @@ fn sync_parent(directory: &Utf8Path) -> anyhow::Result<()> {
     } else {
         directory
     };
+    drop(crate::test_probes::at("state_synced"));
     #[cfg(unix)]
     std::fs::File::open(directory)
         .and_then(|opened| opened.sync_all())
@@ -143,6 +145,7 @@ fn replace_file(temporary: tempfile::NamedTempFile, target: &Utf8Path) -> anyhow
 /// sudden power loss can lose a recent directory entry or rename. Process-crash recovery remains
 /// available because the operating system keeps the directory changes.
 pub fn sync_directory(path: &Utf8Path) -> anyhow::Result<()> {
+    drop(crate::test_probes::at("state_synced"));
     #[cfg(unix)]
     std::fs::File::open(path)?.sync_all()?;
     #[cfg(not(unix))]
@@ -171,6 +174,7 @@ pub fn sync_tree(path: &Utf8Path) -> anyhow::Result<()> {
                 .map_err(|error| {
                     crate::refusal::fault!("sync publication file {child}: {error}")
                 })?;
+            drop(crate::test_probes::at("state_synced"));
             file.sync_all().map_err(|error| {
                 crate::refusal::fault!("sync publication file {child}: {error}")
             })?;
