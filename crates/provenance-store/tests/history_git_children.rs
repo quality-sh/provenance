@@ -16,7 +16,8 @@ use camino::Utf8Path;
 use children::git_children;
 use provenance_store::review::history::{FileVersions, GitFileVersions};
 use repository::repository;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::fmt::Write as _;
+use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 static SERIAL: Mutex<()> = Mutex::new(());
@@ -132,15 +133,16 @@ fn a_process_that_writes_much_to_standard_error_still_answers() {
     let _serial = serial();
     let temp = tempfile::tempdir().unwrap();
     let (root, commit) = repository(&temp, &[("good.jsonl", "good\n")]);
-    let missing = (0..2000)
-        .map(|index| format!("missing-{}-{index}\n", "x".repeat(100)))
-        .collect::<String>();
+    let long = "x".repeat(100);
+    let mut missing = String::new();
+    for index in 0..2000 {
+        writeln!(missing, "missing-{long}-{index}").unwrap();
+    }
     std::fs::write(temp.path().join(".git/objects/info/alternates"), missing).unwrap();
-    let versions = Arc::new(GitFileVersions::new(root));
+    let versions = GitFileVersions::new(root);
     let (sender, receiver) = std::sync::mpsc::channel();
-    let reader = versions.clone();
     std::thread::spawn(move || {
-        let _ = sender.send(text(&reader, "good.jsonl", &commit).unwrap());
+        let _ = sender.send(text(&versions, "good.jsonl", &commit).unwrap());
     });
     let good = receiver.recv_timeout(Duration::from_secs(30));
     assert_eq!(good, Ok(Some("good\n".to_owned())), "the read did not end");
