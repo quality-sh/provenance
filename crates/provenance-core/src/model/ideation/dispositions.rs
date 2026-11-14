@@ -19,7 +19,7 @@ pub enum DispositionActorRefusal {
     )]
     NoActorsConfigured,
     #[error(
-        "The manifest field disposition_actor_ids does not contain the actor of this review \
+        "The manifest field disposition_actor_ids does not contain the actor of a review \
          decision. {NEXT_STEP}"
     )]
     ActorNotListed,

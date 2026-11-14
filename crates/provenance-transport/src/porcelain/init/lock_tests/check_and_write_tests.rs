@@ -145,10 +145,7 @@ fn a_write_during_init_does_not_land_between_the_check_and_the_write_of_init() {
         "the write of \"reviewer\" landed between the check and the write of init"
     );
     let error = format!("{:#}", write.unwrap_err());
-    assert!(
-        error.contains("disposition actor is not in the repository allowlist"),
-        "{error}"
-    );
+    assert!(error.contains("does not contain the actor of a review decision"), "{error}");
     check(&repo).unwrap();
 }
 
@@ -182,5 +179,7 @@ fn a_graph_write_after_the_plan_makes_init_refuse_and_write_nothing() {
 }
 
 /// The refusal of init for the disposition by "reviewer".
-const REFUSAL: &str =
-    "the planned Provenance state is not valid: disposition actor is not in the repository allowlist";
+const REFUSAL: &str = "the planned Provenance state is not valid: The manifest field \
+    disposition_actor_ids does not contain the actor of a review decision. To change this field, \
+    use the command provenance init --disposition-actor-id <DISPOSITION_ACTOR_ID>. Give \
+    --disposition-actor-id one time for each actor that can make a review decision.";
