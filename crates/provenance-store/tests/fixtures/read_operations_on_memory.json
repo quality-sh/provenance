@@ -1,1 +1,194 @@
-[]
+[
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "has_more": false,
+        "items": [],
+        "limit": 50,
+        "next_cursor": null
+      }
+    },
+    "operation": "page-sources"
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "has_more": false,
+        "items": [
+          {
+            "id": "req_expiry",
+            "scope_id": "default",
+            "statement": "Share links expire",
+            "status": "active"
+          }
+        ],
+        "limit": 1,
+        "next_cursor": null
+      }
+    },
+    "operation": "page-requirements"
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "has_more": false,
+        "items": [],
+        "limit": 50,
+        "next_cursor": null
+      }
+    },
+    "operation": "page-resolutions"
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "has_more": false,
+        "items": [
+          {
+            "id": "rule_expiry",
+            "requirement_ids": [
+              "req_expiry"
+            ],
+            "scope_id": "default",
+            "severity": "medium",
+            "statement": "Share links expire",
+            "status": "active"
+          }
+        ],
+        "limit": 50,
+        "next_cursor": null
+      }
+    },
+    "operation": "page-rules"
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "has_more": false,
+        "items": [],
+        "limit": 50,
+        "next_cursor": null
+      }
+    },
+    "operation": "page-topics"
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "has_more": false,
+        "items": [],
+        "limit": 50,
+        "next_cursor": null
+      }
+    },
+    "operation": "page-questions"
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "decision": {
+          "current_acceptance": null,
+          "current_revision": "aa65e05444f0867b73d2058a4432425c51e0b24b9e8f91d917050aadafee049a",
+          "decisions": [],
+          "pending": null,
+          "record_kind": "rule",
+          "requirement_id": "rule_expiry",
+          "withdrawn": []
+        },
+        "edit": {
+          "etag": "sha256:aaa7ce6124674bb85a52875c8b0a5dd17c394230f74445f93ad623029878635d",
+          "revision": "aa65e05444f0867b73d2058a4432425c51e0b24b9e8f91d917050aadafee049a"
+        },
+        "id": "rule_expiry",
+        "requirement_ids": [
+          "req_expiry"
+        ],
+        "scope_id": "default",
+        "severity": "medium",
+        "statement": "Share links expire",
+        "status": "active"
+      }
+    },
+    "operation": "get-reviewed-resource"
+  },
+  {
+    "answer": {
+      "entries": [
+        {
+          "kind": "member",
+          "node": {
+            "id": "req_expiry",
+            "node_type": "requirement",
+            "scope_id": "default",
+            "statement": "Share links expire",
+            "status": "active"
+          },
+          "review": {
+            "comment_count": 0,
+            "outcome": null,
+            "pending_proposal_id": null
+          }
+        },
+        {
+          "kind": "member",
+          "node": {
+            "id": "rule_expiry",
+            "node_type": "rule",
+            "requirement_ids": [
+              "req_expiry"
+            ],
+            "scope_id": "default",
+            "severity": "medium",
+            "statement": "Share links expire",
+            "status": "active"
+          },
+          "review": {
+            "comment_count": 0,
+            "outcome": null,
+            "pending_proposal_id": null
+          }
+        }
+      ],
+      "has_more": false,
+      "limit": 50,
+      "next_cursor": null,
+      "operation": "read-document",
+      "protocol_version": 9,
+      "review_totals": {
+        "accepted": 0,
+        "pending": 0,
+        "rejected": 0
+      },
+      "root_id": "req_expiry"
+    },
+    "operation": "read-document"
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [],
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": null
+      }
+    },
+    "operation": "review-discussions"
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "operation": "review-discussion-messages"
+  }
+]

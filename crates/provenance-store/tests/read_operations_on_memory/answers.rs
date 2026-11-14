@@ -206,9 +206,8 @@ fn a_refusing_memory_section_lock_refuses_a_held_section() {
     let other = lock.clone();
     let (sender, receiver) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        sender
-            .send(other.acquire().map(drop).map_err(|error| error.to_string()))
-            .unwrap()
+        let refused = other.acquire().map(drop).map_err(|error| error.to_string());
+        sender.send(refused).unwrap();
     });
     let refused = receiver
         .recv_timeout(std::time::Duration::from_secs(10))
