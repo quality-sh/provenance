@@ -82,9 +82,7 @@ macro_rules! canonical_reader {
             self.with_repository_read(|held| {
                 let mut records = read_jsonl_shared(held, &shards::$path(&held.layout, scope))?;
                 for batch in held.list_ideation_landings(scope)? {
-                    overlay_records(&mut records, batch.synthesis_packets, |record| {
-                        record.id.as_str()
-                    });
+                    overlay_records(&mut records, batch.synthesis_packets);
                 }
                 Ok(records)
             })
@@ -100,7 +98,7 @@ macro_rules! canonical_reader {
             self.with_repository_read(|held| {
                 let mut records = read_jsonl_shared(held, &shards::$path(&held.layout, scope))?;
                 for batch in held.list_ideation_landings(scope)? {
-                    overlay_records(&mut records, batch.assertions, |record| record.id.as_str());
+                    overlay_records(&mut records, batch.assertions);
                 }
                 Ok(records)
             })
@@ -111,9 +109,7 @@ macro_rules! canonical_reader {
             self.with_repository_read(|held| {
                 let mut records = read_jsonl_shared(held, &shards::$path(&held.layout, scope))?;
                 for batch in held.list_ideation_landings(scope)? {
-                    overlay_records(&mut records, batch.dispositions, |record| {
-                        record.id.as_str()
-                    });
+                    overlay_records(&mut records, batch.dispositions);
                 }
                 Ok(records)
             })

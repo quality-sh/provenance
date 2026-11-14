@@ -174,6 +174,8 @@ pub fn read_jsonl_located<T: DeserializeOwned>(
 /// line with the id `id` when the shard holds it twice, else at its only
 /// line. The shard is read again only here, on the refusal path. When that
 /// read fails or does not find the id, the refusal is `message` with no line.
+/// The read finds the id in the `id` key of each line, so it does not find a
+/// line that holds the id under an alias of that key.
 pub fn record_fault(
     store: &StateStore,
     path: &Utf8Path,
