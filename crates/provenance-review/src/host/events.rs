@@ -123,7 +123,7 @@ async fn upgrade(State(state): State<RouteState>, request: Request) -> Response 
     let headers = request.headers();
     let native = headers.contains_key("x-provenance-launch-key");
     if request.uri().query().is_some() || request.uri().authority().is_some() {
-        return super::refusal(OperationFailure::AccessDenied);
+        return super::refusal(OperationFailure::access_denied());
     }
     let authentication = if native {
         authenticate_native(&state, headers)
@@ -165,7 +165,7 @@ fn authenticate_native(state: &RouteState, headers: &HeaderMap) -> Result<(), Op
     .iter()
     .any(|name| headers.contains_key(*name))
     {
-        return Err(OperationFailure::AccessDenied);
+        return Err(OperationFailure::access_denied());
     }
     let mut keys = headers.get_all("x-provenance-launch-key").iter();
     let key = keys.next().and_then(|value| value.to_str().ok());
@@ -180,7 +180,7 @@ fn authenticate_browser(state: &RouteState, headers: &HeaderMap) -> Result<(), O
         || !metadata(headers, "sec-fetch-mode", "websocket")
         || !metadata(headers, "sec-fetch-dest", "empty")
     {
-        return Err(OperationFailure::AccessDenied);
+        return Err(OperationFailure::access_denied());
     }
     // A browser cannot set Authorization on a socket; the page session comes as a subprotocol.
     if headers.contains_key(header::AUTHORIZATION) || !state.codes.offers_session(headers) {
