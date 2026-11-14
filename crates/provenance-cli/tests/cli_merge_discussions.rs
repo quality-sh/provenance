@@ -1,7 +1,4 @@
-#[path = "support/merge_driver.rs"]
-mod merge_driver;
-
-use merge_driver::{cli, commit, git, git_ok, json};
+use crate::support::merge_driver::{self, cli, commit, git, git_ok, json};
 use provenance_macros::verifies;
 use serde_json::Value;
 use std::path::Path;
