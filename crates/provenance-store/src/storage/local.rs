@@ -10,6 +10,7 @@ use super::{Atomicity, PublishFailure, StateKey, StateStorage, StateView, Storag
 use crate::layout::ProvenanceLayout;
 use crate::shards;
 use camino::Utf8Path;
+use provenance_macros::rule;
 use std::collections::BTreeMap;
 
 #[cfg(all(test, unix))]
@@ -75,7 +76,8 @@ impl StateStorage for LocalStateStorage {
 
     /// With a base, the adapter reads the tree under the lock and compares
     /// its keys and bytes with the base before any key lands. With no base,
-    /// it reads nothing.
+    /// it reads nothing. A set with no key then returns: it makes no
+    /// transaction, file or marker.
     ///
     /// A per-key set lands each key in key order: a put with a temporary
     /// file and a rename, a delete with a remove. It syncs as
@@ -88,6 +90,7 @@ impl StateStorage for LocalStateStorage {
 }
 
 impl LocalStateStorage {
+    #[rule("rule_empty_write_set_writes_no_data")]
     fn publish_with(
         &self,
         writes: &WriteSet,
@@ -99,6 +102,9 @@ impl LocalStateStorage {
                 .read_view()
                 .map_err(|error| PublishFailure::Refused(error.into()))?;
             writes.ensure_base(view.entries())?;
+        }
+        if writes.key_count() == 0 {
+            return Ok(());
         }
         match writes.atomicity() {
             Atomicity::WholeSet => self.land_whole_set(writes, hook),
@@ -126,6 +132,10 @@ impl LocalStateStorage {
         })
     }
 
+    /// A failure before the first key changed lands no key: the set is
+    /// refused. A failure after it, or a failed sync of a changed key, began
+    /// to land.
+    #[rule("rule_failure_before_a_key_changes_is_refused")]
     fn land_per_key(&self, writes: &WriteSet) -> Result<(), PublishFailure> {
         let mut changes: BTreeMap<&StateKey, Option<&[u8]>> = BTreeMap::new();
         changes.extend(writes.deletes().iter().map(|key| (key, None)));
@@ -146,14 +156,20 @@ impl LocalStateStorage {
             })
             .collect::<anyhow::Result<Vec<_>>>()
             .map_err(PublishFailure::Refused)?;
+        let mut touched = false;
         for (key, bytes) in changes {
             let path = self.layout.state_dir().join(key.as_str());
-            bytes
-                .map_or_else(
-                    || durability::remove_synced_file(&path),
-                    |bytes| durability::write_synced_file(&path, bytes),
-                )
-                .map_err(PublishFailure::Started)?;
+            let landed = bytes.map_or_else(
+                || durability::remove_synced_file(&path),
+                |bytes| durability::write_synced_file(&path, bytes).map(|()| true),
+            );
+            match landed {
+                Ok(landed) => touched |= landed,
+                Err(error) if touched || error.is::<durability::ChangedUnsynced>() => {
+                    return Err(PublishFailure::Started(error));
+                }
+                Err(error) => return Err(PublishFailure::Refused(error)),
+            }
         }
         Ok(())
     }

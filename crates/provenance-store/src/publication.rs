@@ -224,16 +224,13 @@ impl crate::state_store::StateStore {
     }
 
     /// Publishes the new bytes of each changed shard at its path as one write
-    /// set, in the form that costs least and lands every shard or none: no
-    /// set for no shard, a one-key set for one shard, and a whole set for
-    /// more shards.
+    /// set that lands every shard or none. No shard sends no set;
+    /// [`Self::publish_set`] sends one shard as a one-key set.
     pub(crate) fn publish_shards(&self, shards: Vec<ShardBytes>) -> anyhow::Result<()> {
-        let atomicity = match shards.len() {
-            0 => return Ok(()),
-            1 => Atomicity::PerKey,
-            _ => Atomicity::WholeSet,
-        };
-        let mut writes = WriteSet::new(atomicity);
+        if shards.is_empty() {
+            return Ok(());
+        }
+        let mut writes = WriteSet::new(Atomicity::WholeSet);
         for (path, bytes) in shards {
             writes = writes.put(self.state_key(&path)?, bytes);
         }
@@ -296,7 +293,10 @@ impl crate::state_store::StateStore {
     /// Publishes `writes`. A staged store lands them on the overlay of its
     /// stage. A store with a section view puts the view as the base of a set
     /// that has no base, and applies the set to the view once it lands. Any
-    /// other store publishes through its adapter.
+    /// other store publishes through its adapter, and gives it a set of one
+    /// key with the atomicity of each key: one key lands whole either way,
+    /// and a per-key set needs no copy of the state.
+    #[rule("rule_store_sends_the_smallest_write_set")]
     fn publish_set(&self, writes: WriteSet) -> anyhow::Result<()> {
         if let Some(stage) = self.stage() {
             writes
@@ -312,7 +312,7 @@ impl crate::state_store::StateStore {
             stage.apply(&writes);
             return Ok(());
         }
-        self.publish_through(writes, |writes| self.storage().publish(writes))
+        self.publish_through(writes.narrowed(), |writes| self.storage().publish(writes))
     }
 
     /// Publishes `writes` with `publish`, in the section view of this store

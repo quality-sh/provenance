@@ -4,7 +4,7 @@
 //! the persistence of the adapter, and the directory stays empty. The state
 //! starts with the manifest, one Requirement and one Rule. Live writes make
 //! and change a verification binding of the Rule; stages make and change a
-//! Requirement and a Rule and import a scope, each as one whole set.
+//! Requirement and a Rule and import a scope, each as one set.
 //!
 //! The tests run with and without the `host` feature; without it the store
 //! has no code that can reach the local disk.
@@ -71,18 +71,25 @@ fn a_repository_over_memory_writes_live_records_with_no_file() {
     );
 }
 
-/// Runs `stage` and asserts that it gave the persistence one whole set on
-/// the revision before it.
-fn assert_one_whole_set(memory: &MemoryRepository, stage: impl FnOnce(&Repository)) {
+/// Runs `stage` and asserts that it gave the persistence one set of `keys`
+/// keys on the revision before it: a per-key set for one key, else a whole
+/// set.
+fn assert_one_set(memory: &MemoryRepository, keys: usize, stage: impl FnOnce(&Repository)) {
     let before = memory.storage.read_view().unwrap();
     let count = memory.recorded.0.lock().unwrap().len();
     stage(&memory.repository);
     let recorded = memory.recorded.0.lock().unwrap().clone();
     assert_eq!(recorded.len(), count + 1, "the stage gave one write set");
     let writes = recorded.last().unwrap();
-    assert_eq!(writes.atomicity(), Atomicity::WholeSet);
+    let changed: Vec<_> = writes.puts().keys().chain(writes.deletes()).collect();
+    assert_eq!(writes.key_count(), keys, "{changed:?}");
+    let atomicity = if keys == 1 {
+        Atomicity::PerKey
+    } else {
+        Atomicity::WholeSet
+    };
+    assert_eq!(writes.atomicity(), atomicity);
     assert_eq!(writes.base(), Some(before.revision()));
-    assert!(writes.key_count() > 0);
 }
 
 fn requirement_input(id: &str) -> CreateRequirementInput {
@@ -176,43 +183,49 @@ fn imported_source() -> provenance_core::Source {
 #[test]
 #[verifies("rule_engine_runs_on_any_storage", examples)]
 #[verifies("rule_stage_lands_as_one_whole_set", examples)]
+#[verifies("rule_store_sends_the_smallest_write_set", examples)]
 fn a_repository_over_memory_makes_changes_and_imports_records_in_stages() {
     let memory = memory_repository();
-    assert_one_whole_set(&memory, |repository| {
+    assert_one_set(&memory, 2, |repository| {
         repository
             .store()
             .create_requirement(requirement_input("req_owner"))
             .unwrap();
     });
-    assert_one_whole_set(&memory, |repository| {
+    assert_one_set(&memory, 2, |repository| {
         repository
             .store()
             .create_rule(rule_input("rule_owner", "req_owner"))
             .unwrap();
     });
-    assert_one_whole_set(&memory, |repository| {
+    assert_one_set(&memory, 2, |repository| {
         repository
             .store()
             .update_requirement(owner_description())
             .unwrap();
     });
-    assert_one_whole_set(&memory, |repository| {
+    assert_one_set(&memory, 2, |repository| {
         repository.store().update_rule(owner_rule_name()).unwrap();
     });
-    let source = imported_source();
-    assert_one_whole_set(&memory, |repository| {
+    let import = |repository: &Repository, source: &provenance_core::Source| {
         repository
             .stage(false, None, |staged| {
                 staged.import_scope(
                     &imported(),
                     &ScopeShards {
-                        sources: std::slice::from_ref(&source),
+                        sources: std::slice::from_ref(source),
                         ..ScopeShards::default()
                     },
                 )
             })
             .unwrap();
-    });
+    };
+    // The first import writes each shard of the scope; the second changes
+    // only the Source shard.
+    let mut source = imported_source();
+    assert_one_set(&memory, 15, |repository| import(repository, &source));
+    source.name = "Sharing policy, version 2".into();
+    assert_one_set(&memory, 1, |repository| import(repository, &source));
     let before_dry_run = memory.storage.read_view().unwrap();
     memory
         .repository
@@ -246,6 +259,27 @@ fn a_repository_over_memory_makes_changes_and_imports_records_in_stages() {
         memory.replayed().revision(),
         memory.storage.read_view().unwrap().revision()
     );
+}
+
+/// A stage that changes no key, such as an update to the stored content,
+/// gives the persistence no set and changes nothing.
+#[test]
+#[verifies("rule_empty_write_set_writes_no_data", examples)]
+fn a_stage_that_changes_no_key_gives_no_set() {
+    let memory = memory_repository();
+    let store = memory.repository.store();
+    store
+        .create_requirement(requirement_input("req_owner"))
+        .unwrap();
+    store.update_requirement(owner_description()).unwrap();
+    let before = memory.storage.read_view().unwrap();
+    let count = memory.recorded.0.lock().unwrap().len();
+
+    store.update_requirement(owner_description()).unwrap();
+    memory.repository.stage(false, None, |_| Ok(())).unwrap();
+
+    assert_eq!(memory.recorded.0.lock().unwrap().len(), count);
+    assert_eq!(memory.storage.read_view().unwrap(), before);
 }
 
 /// A change outside the engine refuses one write of a section as

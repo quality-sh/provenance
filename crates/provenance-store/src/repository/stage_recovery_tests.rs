@@ -40,7 +40,9 @@ fn stamp() -> Stamp {
     .unwrap()
 }
 
-/// Adds one Rule to the staged Rule shard.
+/// Adds one Rule to the staged Rule shard and one Requirement to the staged
+/// Requirement shard. A stage of two shards lands as a whole set, so it
+/// reaches each crash probe of the whole set.
 fn write_rule(staged: &StateStore) -> anyhow::Result<()> {
     let path = crate::shards::rules_path(&staged.layout, &scope());
     let mut rules = staged.list_rules(&scope())?;
@@ -51,6 +53,14 @@ fn write_rule(staged: &StateStore) -> anyhow::Result<()> {
     rule.updated = None;
     rules.push(rule);
     staged.replace_graph_records_guarded(&path, rules)?;
+    let path = crate::shards::requirements_path(&staged.layout, &scope());
+    let mut requirements = staged.list_requirements(&scope())?;
+    let mut requirement = requirements[0].clone();
+    requirement.id = sid("req_staged_publication");
+    requirement.created = None;
+    requirement.updated = None;
+    requirements.push(requirement);
+    staged.replace_graph_records_guarded(&path, requirements)?;
     Ok(())
 }
 

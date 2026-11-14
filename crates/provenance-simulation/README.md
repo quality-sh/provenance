@@ -30,7 +30,7 @@ Each layer is one job, so a failure names one layer.
 | L8 | engine, contract | One case gives the same final bytes each time. |
 | O1 | contract | No answer is a write failure (500) unless a fault met the operation. |
 | O2 | contract | The times of the messages increase in the order that they landed. |
-| O3 | contract | A stage lands as one whole set on the revision where it started. |
+| O3 | contract | A stage lands as one set on the revision where it started: a whole set, or a per-key set for a change of one key. |
 
 Each law apart from L0 has a planted test: `tests/engine_planted.rs`,
 `tests/contract_planted.rs` and
