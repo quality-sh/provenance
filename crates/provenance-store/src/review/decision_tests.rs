@@ -457,3 +457,5 @@ mod error_order;
 mod legacy;
 #[path = "decision_tests/rejection_tests.rs"]
 mod rejection_tests;
+#[path = "decision_tests/status_requests.rs"]
+mod status_requests;

@@ -107,6 +107,7 @@ pub use decision_input::{
     DecideRecordReview, ReviewFeedback, SubmitRecordReview, WithdrawRecordReview,
 };
 mod automatic_submission;
+mod status_request;
 mod cycle_index;
 mod decision;
 // The document review reads serve the host queries only.

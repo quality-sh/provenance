@@ -82,6 +82,8 @@ impl StateStore {
                 "stale review selection"
             ));
         }
+        let request =
+            crate::review::status_request::accepted_request(input.decision, binding).cloned();
         let disposition_id = new_id(&*self.ids());
         let path = shards::dispositions_path(&self.layout, &input.scope_id);
         self.permitting(&[&path], "*", |store| {
@@ -110,6 +112,9 @@ impl StateStore {
                 )
             })
             .transpose()?;
+        if let Some(request) = request {
+            self.apply_status_request(&record, &request)?;
+        }
         Ok(Receipt {
             id: disposition_id.clone(),
             record_kind: kind,
