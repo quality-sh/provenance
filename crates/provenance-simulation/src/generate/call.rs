@@ -5,6 +5,7 @@ use super::{
     FIRST_REQUIREMENT, SCOPE, TOPIC,
 };
 use crate::{scope, stable};
+use provenance_core::review::PendingSubmission;
 use provenance_store::repository::Repository;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -140,6 +141,33 @@ impl Task {
             ),
             Operation::BindTwice { .. } => None,
         })
+    }
+
+    /// The call that completes a successful `call` of this operation, or
+    /// `None`. An archive through the contract opens a status request, so the
+    /// allowed reviewer accepts it; the archive and its cascade then apply.
+    pub fn follow_up(&self, repository: &Repository) -> anyhow::Result<Option<Call>> {
+        let Operation::ArchiveRequirement { n } = &self.op else {
+            return Ok(None);
+        };
+        let id = requirement_id(*n);
+        let state = repository
+            .store()
+            .requirement_decision_state(&scope(), &stable(&id))?;
+        let requested = |pending: &PendingSubmission| pending.status_request.is_some();
+        let Some(pending) = state.pending.filter(requested) else {
+            return Ok(None);
+        };
+        Ok(Some(Call {
+            operation: "decide-record-review",
+            request: json!({
+                "scope_id": SCOPE, "record_kind": "requirement", "record_id": id,
+                "proposal_id": pending.proposal_id,
+                "actor": {"identity_type": "human", "id": DECIDER},
+                "decision": "accepted",
+                "canonical_artifact": {"artifact_type": "requirement", "artifact_id": id},
+            }),
+        }))
     }
 
     /// What a successful contract `call` of this operation did, from its

@@ -36,6 +36,14 @@ async fn archive_req_one(fixture: &Fixture) -> Result<Value, Value> {
         .await
 }
 
+/// Archives `req_one` through an accepted status request: the reviewer
+/// accepts its creation submission, then the archive request.
+async fn accept_archive_of_req_one(fixture: &Fixture) {
+    fixture.accept_status_request("requirement", "req_one").await;
+    archive_req_one(fixture).await.unwrap();
+    fixture.accept_status_request("requirement", "req_one").await;
+}
+
 /// The stored status of each record, in the order of `ids`.
 fn statuses(fixture: &Fixture, ids: &[&str]) -> Vec<String> {
     let store = &fixture.store;
@@ -75,7 +83,7 @@ fn archived_citation(owner: &str) -> String {
 async fn archive_cascade_archives_a_resolution_and_the_question_it_answers() {
     let fixture = Fixture::new();
     answered_graph(&fixture, "req_one").await;
-    archive_req_one(&fixture).await.unwrap();
+    accept_archive_of_req_one(&fixture).await;
     assert_eq!(
         statuses(
             &fixture,
@@ -92,7 +100,7 @@ async fn archive_cascade_archives_a_resolution_and_the_question_it_answers() {
 async fn archive_cascade_archives_a_resolution_and_the_rule_it_produces() {
     let fixture = Fixture::new();
     ruled_graph(&fixture, "req_one").await;
-    archive_req_one(&fixture).await.unwrap();
+    accept_archive_of_req_one(&fixture).await;
     assert_eq!(
         statuses(&fixture, &["req_one", "resolution_one", "rule_one"]),
         ["archived", "archived", "archived"]

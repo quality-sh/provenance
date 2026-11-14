@@ -66,21 +66,21 @@ fn repository() -> tempfile::TempDir {
     directory
 }
 
-/// Archives a record. A Rule archive is a status request, so the reviewer
-/// accepts the Rule's creation first and the archive after it.
+/// Archives a record. An archive is a status request, so the reviewer
+/// accepts the record's creation first and the archive after it.
 fn archive(repo: &str, id: &str, commit_flags: &[&str]) -> Value {
-    let rule = id.starts_with("rule_");
-    if rule {
-        accept_current(repo, "rules", "rule", id);
-    }
+    let (collection, kind) = if id.starts_with("rule_") {
+        ("rules", "rule")
+    } else {
+        ("requirements", "requirement")
+    };
+    accept_current(repo, collection, kind, id);
     let current = run(repo, &[id, "get"]);
     let etag = current["edit"]["etag"].as_str().unwrap().to_owned();
     let mut args = vec![id, "update", "--if-match", &etag, "--status", "archived"];
     args.extend_from_slice(commit_flags);
     run(repo, &args);
-    if rule {
-        accept_status_request(repo, "rules", "rule", id);
-    }
+    accept_status_request(repo, collection, kind, id);
     run(repo, &[id, "get"])["record"]["value"].clone()
 }
 
