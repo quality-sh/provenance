@@ -5,6 +5,8 @@
 //! small. A support module that more than one file uses is declared here
 //! once, and those files import it.
 
+#[path = "../cursor_key_repair.rs"]
+mod cursor_key_repair;
 #[path = "../discussion_compatibility.rs"]
 mod discussion_compatibility;
 #[path = "../discussion_discovery.rs"]
