@@ -8,7 +8,7 @@
 //! the names that the shared contract does not reach: the length of a commit
 //! id of a SHA-256 repository, and upper case.
 
-#[path = "history_git/repository.rs"]
+#[path = "history_git_support/repository.rs"]
 mod repository;
 
 use provenance_store::review::history::{FileVersions, GitFileVersions};

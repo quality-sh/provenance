@@ -11,7 +11,7 @@
 //! `history_git_children` tests the life of the process on each platform.
 #![cfg(unix)]
 
-#[path = "history_git/repository.rs"]
+#[path = "history_git_support/repository.rs"]
 mod repository;
 
 use provenance_store::review::history::{FileVersions, GitFileVersions};

@@ -7,9 +7,9 @@
 //! test process. Each test holds `SERIAL` while it runs, so no other test of
 //! this binary has a Git child at that time.
 
-#[path = "history_git/children.rs"]
+#[path = "history_git_support/children.rs"]
 mod children;
-#[path = "history_git/repository.rs"]
+#[path = "history_git_support/repository.rs"]
 mod repository;
 
 use camino::Utf8Path;
