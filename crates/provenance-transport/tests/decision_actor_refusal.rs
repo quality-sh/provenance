@@ -43,7 +43,9 @@ async fn an_actor_outside_the_allowlist_gets_access_denied() {
 
     let (status, refused) = call(&host, "POST", &path, Some(decision("intruder"))).await;
     assert_eq!(status, 403, "{refused}");
-    assert_eq!(refused["error"], json!({"kind":"access_denied"}));
+    assert_eq!(refused["error"]["kind"], "access_denied", "{refused}");
+    let message = refused["error"]["message"].as_str().unwrap_or_default();
+    assert!(message.contains("disposition_actor_ids"), "{refused}");
 
     let (status, read) = call(&host, "GET", "/requirements/req_shared", None).await;
     assert_eq!(status, 200, "{read}");

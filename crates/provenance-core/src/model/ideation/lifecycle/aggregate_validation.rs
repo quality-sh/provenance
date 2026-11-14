@@ -243,7 +243,7 @@ mod disposition_actor_trigger_tests {
         let error = validate_actor_allowlist(&proposal, &[assertion], "reviewer", &[])
             .unwrap_err()
             .to_string();
-        assert!(error.starts_with("no disposition actors configured"));
+        assert!(error.contains("disposition_actor_ids is empty"), "{error}");
 
         proposal.promotion_state = PromotionState::Accepted;
         validate_actor_allowlist(&proposal, &[], "reviewer", &[]).unwrap();

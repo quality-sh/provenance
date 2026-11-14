@@ -38,12 +38,7 @@ async fn disposition_actor_allowlist_and_its_empty_list_are_retained() {
     )
     .await
     .unwrap_err();
-    assert!(
-        empty
-            .to_string()
-            .contains("no disposition actors configured"),
-        "{empty}"
-    );
+    assert!(empty.to_string().contains("disposition_actor_ids is empty"), "{empty}");
     allow_actor(&store, "reviewer");
     let error = invoke_typed::<CreateDisposition>(
         prepared(&dir, &scope),

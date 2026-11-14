@@ -277,10 +277,10 @@ fn an_unauthorized_actor_cannot_accept_a_review() {
         &artifact(),
     )
     .unwrap_err();
-    assert!(error.to_string().contains("allowlist"), "{error}");
+    assert!(error.to_string().contains("disposition_actor_ids"), "{error}");
     assert!(matches!(
         crate::write_error::WriteError(error).safe(),
-        crate::write_error::WriteFailure::AccessDenied
+        crate::write_error::WriteFailure::AccessDenied { message: Some(_) }
     ));
     assert_eq!(
         store.list_dispositions(&scope()).unwrap(),

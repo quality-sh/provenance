@@ -238,7 +238,7 @@ fn a_store_refusal_inside_a_read_keeps_its_kind_and_status() {
             400,
         ),
         (
-            refusal(WriteFailure::AccessDenied),
+            refusal(WriteFailure::AccessDenied { message: None }),
             serde_json::json!({"kind":"access_denied"}),
             403,
         ),

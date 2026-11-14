@@ -247,11 +247,14 @@ fn actor_outside_the_allowlist_cannot_dispose_a_live_proposal() {
     let error = validate_allowlist_case(&["reviewer".into()], "intruder", true)
         .unwrap_err()
         .to_string();
-    // A populated allowlist gets the message it always got, with nothing
-    // appended: the list is set, so the id really is the problem.
+    // A populated allowlist names the field and the init command, and gives
+    // no actor ID of the list.
     assert_eq!(
         error,
-        "disposition actor is not in the repository allowlist"
+        "The manifest field disposition_actor_ids does not contain the actor of this review \
+         decision. To change this field, use the command provenance init \
+         --disposition-actor-id <DISPOSITION_ACTOR_ID>. Give --disposition-actor-id one time \
+         for each actor that can make a review decision."
     );
 }
 
@@ -260,9 +263,11 @@ fn actor_outside_the_allowlist_cannot_dispose_a_live_proposal() {
 fn empty_allowlist_rejects_every_disposition() {
     // Spelled out rather than read from the rule: an unlisted actor is told
     // that the list itself is unset, because no id would have passed.
-    let expected = "no disposition actors configured: repository manifest \
-                    disposition_actor_ids is empty; set it with \
-                    provenance init --disposition-actor-id <ACTOR_ID>";
+    let expected = "The manifest field disposition_actor_ids is empty, thus no actor can make a \
+                    review decision. To change this field, use the command provenance init \
+                    --disposition-actor-id <DISPOSITION_ACTOR_ID>. Give \
+                    --disposition-actor-id one time for each actor that can make a review \
+                    decision.";
     for actor in ["reviewer", "auditor", "agent_1"] {
         let error = validate_allowlist_case(&[], actor, true)
             .unwrap_err()

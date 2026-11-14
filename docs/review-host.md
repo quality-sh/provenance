@@ -309,7 +309,10 @@ ID as `provenance init` does. If neither gives a value, the response does not
 contain `reviewer`. `reviewer.allowed` is `true` when `actorId` is in
 `dispositionActorIds`, and `false` when it is not. The identity is the
 statement of the person. It is not proof. A disposition write from an actor
-that is not in `dispositionActorIds` gets 403 `access_denied`, as before.
+that is not in `dispositionActorIds` gets 403 `access_denied`. Its `message`
+names the manifest field `disposition_actor_ids` and the command
+`provenance init --disposition-actor-id <DISPOSITION_ACTOR_ID>` that changes it.
+The message does not give an actor ID.
 
 The generic renderer does not read credentials, fetch host configuration, or
 mount itself. Its index is an empty shell. The concrete application in

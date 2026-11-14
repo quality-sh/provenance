@@ -91,7 +91,8 @@ async fn invoke_admitted(host: StatementHost, request: Request) -> Response {
         return failure::response(ErasedFailure::new(None, OperationFailure::UnknownOperation));
     };
     if !host.advertises(matched.definition.name) {
-        return failure::response(ErasedFailure::new(None, OperationFailure::AccessDenied));
+        let refusal = OperationFailure::AccessDenied { message: None };
+        return failure::response(ErasedFailure::new(None, refusal));
     }
     let query = match routing::query(request.uri().query()) {
         Ok(query) => query,

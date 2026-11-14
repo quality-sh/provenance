@@ -35,7 +35,10 @@ pub enum OperationFailure {
     #[error("listener authentication required")]
     Unauthenticated,
     #[error("access denied")]
-    AccessDenied,
+    AccessDenied {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        message: Option<String>,
+    },
     #[error("unknown repository target")]
     UnknownTarget,
     #[error("unknown scope")]
@@ -55,7 +58,7 @@ impl OperationFailure {
             Self::UnknownOperation | Self::UnknownTarget | Self::UnknownScope => 404,
             Self::MethodNotAllowed => 405,
             Self::Unauthenticated => 401,
-            Self::AccessDenied => 403,
+            Self::AccessDenied { .. } => 403,
             Self::UnavailableNeeds | Self::HostBusy => 503,
             Self::Internal => 500,
         }

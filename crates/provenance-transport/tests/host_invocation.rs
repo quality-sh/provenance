@@ -23,7 +23,7 @@ use provenance_macros::verifies;
 use provenance_store::operations::catalog::{self, ResolveRecord};
 use provenance_transport::{Invocation, StatementHost};
 use serde_json::json;
-use std::{sync::Arc, time::Duration};
+use std::{sync::Arc, task::Poll, time::Duration};
 use support::{
     gate::{Control, Gate},
     records::Repository,
@@ -79,7 +79,7 @@ async fn a_refused_identity_does_not_wait_for_a_work_slot() {
     assert!(
         matches!(
             answer,
-            std::task::Poll::Ready(Err(OperationError::Common(OperationFailure::AccessDenied)))
+            Poll::Ready(Err(OperationError::Common(OperationFailure::AccessDenied { .. })))
         ),
         "the refused call answers before any slot wait: {answer:?}"
     );
@@ -248,7 +248,7 @@ async fn the_default_host_permits_data_free_calls_only() {
         .await;
     assert!(matches!(
         refused,
-        Err(OperationError::Common(OperationFailure::AccessDenied))
+        Err(OperationError::Common(OperationFailure::AccessDenied { message: None }))
     ));
     host.shutdown().await;
 }
