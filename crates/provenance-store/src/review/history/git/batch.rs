@@ -7,15 +7,6 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Stdio};
 use std::thread::JoinHandle;
 
-/// A `git cat-file` process that failed, with its standard error.
-///
-/// A history read reads on after an error from a text, and this failure
-/// wins over that error, as when one Git process read every text of the
-/// file.
-#[derive(Debug, thiserror::Error)]
-#[error("git cat-file failed: {0}")]
-pub(in crate::review::history) struct Failed(String);
-
 /// A running `git cat-file --batch` process in one repository.
 #[derive(Debug)]
 pub(super) struct Batch {
@@ -137,9 +128,10 @@ impl Batch {
             .and_then(|reader| reader.join().ok())
             .unwrap_or_default();
         match status {
-            Ok(status) if !status.success() => {
-                Failed(String::from_utf8_lossy(&diagnostic).trim().to_owned()).into()
-            }
+            Ok(status) if !status.success() => crate::refusal::fault!(
+                "git cat-file failed: {}",
+                String::from_utf8_lossy(&diagnostic).trim()
+            ),
             _ => crate::refusal::fault!("git cat-file output ended early"),
         }
     }

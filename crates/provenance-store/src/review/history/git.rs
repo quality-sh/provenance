@@ -5,10 +5,8 @@ mod batch;
 
 use super::versions::{BoxFuture, FileVersion, FileVersions};
 use crate::stale::git::command;
-pub(super) use batch::Failed;
 use batch::{refuse_line_break, Batch};
 use camino::{Utf8Path, Utf8PathBuf};
-use std::cell::Cell;
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError, Weak};
 use std::time::Duration;
 
@@ -25,10 +23,6 @@ use std::time::Duration;
 /// dropped, at an error, or when the adapter reads no text for one to two
 /// seconds, so an adapter that an embedder keeps does not keep the pack files
 /// of the repository open. The next text starts a new process.
-///
-/// After a text error, a history read through this adapter asks for the
-/// remaining texts of the file, and a Git failure among them wins over that
-/// error, as when one Git process read every text of the file.
 pub struct GitFileVersions {
     root: Utf8PathBuf,
     texts: OnceLock<Arc<Mutex<Texts>>>,
@@ -150,20 +144,6 @@ fn is_commit_id(commit: &str, length: usize) -> bool {
         && commit.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
-thread_local! {
-    /// The last text call on this thread went to a git adapter.
-    static GIT_TEXT: Cell<bool> = const { Cell::new(false) };
-}
-
-/// Calls `text`, and tells whether a git adapter gave the text on this
-/// thread. The git adapter reads a text before it returns its future, so
-/// the answer is known when `text` returns.
-pub(super) fn answered_by_git<T>(text: impl FnOnce() -> T) -> (T, bool) {
-    GIT_TEXT.set(false);
-    let answer = text();
-    (answer, GIT_TEXT.take())
-}
-
 /// Shows the root; the batch process is not a value of the adapter.
 impl std::fmt::Debug for GitFileVersions {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -195,9 +175,7 @@ impl FileVersions for GitFileVersions {
         path: &'a str,
         commit: &'a str,
     ) -> BoxFuture<'a, anyhow::Result<Option<String>>> {
-        let text = self.read_text(path, commit);
-        GIT_TEXT.set(true);
-        Box::pin(std::future::ready(text))
+        Box::pin(std::future::ready(self.read_text(path, commit)))
     }
 }
 

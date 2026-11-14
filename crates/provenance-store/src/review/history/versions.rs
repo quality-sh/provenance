@@ -94,9 +94,10 @@ pub trait FileVersions: Send + Sync + Debug {
     /// A history read asks for one text at a time and keeps only what it
     /// finds in it, so an adapter that reads each text on demand holds at
     /// most one text of the read. An error of a text ends the history read
-    /// with that error, and the read asks the adapter for no more texts.
-    /// Only the git adapter, [`GitFileVersions`](super::GitFileVersions), gets
-    /// the remaining texts of the file after an error.
+    /// with that error, and the read asks the adapter for no more texts. The
+    /// one exception is the `FromUtf8Error` of a text that is not UTF-8:
+    /// after it, the read asks for the remaining texts, and another error
+    /// among them ends the read and wins. Else the first UTF-8 error wins.
     fn text<'a>(
         &'a self,
         path: &'a str,

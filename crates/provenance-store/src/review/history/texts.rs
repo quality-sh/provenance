@@ -1,34 +1,32 @@
 //! Reads the texts of one file at a list of commits, one text at a time.
 
-use super::git::{answered_by_git, Failed};
 use super::versions::FileVersions;
+use std::string::FromUtf8Error;
 
 /// Gives the text of `path` at each commit of `commits`, in order, to `each`,
 /// and keeps no text after `each` returns.
 ///
-/// The first error ends the read, except an error of the git adapter. After
-/// that error the read goes on through the remaining commits and gives no
-/// more texts to `each`. A failure of the Git process among them wins over
-/// the first error, as when one Git process read every text of the file.
-/// Else the first error wins. No other adapter can give that failure, so
-/// the read asks another adapter for no text after an error.
+/// An error of a text ends the read at once and is its error, except the
+/// [`FromUtf8Error`] of a text that is not UTF-8. After that error the read
+/// asks for the remaining texts and gives no more texts to `each`. Another
+/// error among them ends the read and wins. Else the first UTF-8 error wins.
+/// The rule is the same for each adapter.
 pub(super) async fn each_text(
     history: &dyn FileVersions,
     path: &str,
     commits: &[&str],
     mut each: impl FnMut(Option<String>) + Send,
 ) -> anyhow::Result<()> {
-    let mut first = None;
+    let mut not_utf8 = None;
     for commit in commits {
-        let (text, git) = answered_by_git(|| history.text(path, commit));
-        match text.await {
-            Ok(text) if first.is_none() => each(text),
+        match history.text(path, commit).await {
+            Ok(text) if not_utf8.is_none() => each(text),
             Ok(_) => {}
-            Err(error) if git && !error.is::<Failed>() => {
-                first.get_or_insert(error);
+            Err(error) if error.is::<FromUtf8Error>() => {
+                not_utf8.get_or_insert(error);
             }
             Err(error) => return Err(error),
         }
     }
-    first.map_or(Ok(()), Err)
+    not_utf8.map_or(Ok(()), Err)
 }
