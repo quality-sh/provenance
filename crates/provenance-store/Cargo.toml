@@ -141,6 +141,10 @@ name = "history_text_memory"
 required-features = ["host"]
 
 [[test]]
+name = "history_text_calls"
+required-features = ["host"]
+
+[[test]]
 name = "review_history_head_move"
 required-features = ["host"]
 
