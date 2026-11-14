@@ -72,7 +72,7 @@ impl StateStore {
     /// store clock. A record of the same change that is on file stays, so a cleared review does
     /// not open again.
     #[rule("rule_review_record_per_rule")]
-    pub(crate) fn record_restatements(
+    pub(super) fn record_restatements(
         &self,
         scope: &ScopeId,
         restatements: Vec<Restatement>,
