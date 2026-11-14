@@ -23,7 +23,7 @@ pub fn run_as_child(phases: &[&'static str], write: impl FnOnce(&Utf8Path)) {
         .find(|label| **label == phase)
         .expect("known phase");
     match std::env::var(FILE_SIZE) {
-        #[cfg(unix)]
+        #[cfg(target_os = "linux")]
         Ok(limit) => test_probes::stop_at_file_size(phase, limit.parse().unwrap()),
         _ => test_probes::arm(phase, || std::process::exit(STOPPED)),
     }
@@ -54,7 +54,7 @@ pub fn stop_in_child(test: &str, root: &Utf8Path, phase: &str) {
 /// Runs the test `test` as a child for the repository at `root`. After the
 /// probe at `phase`, the system ends the child with `SIGXFSZ` at its first
 /// write of a byte at or past `limit` in a file.
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 pub fn stop_in_child_at_file_size(test: &str, root: &Utf8Path, phase: &str, limit: u64) {
     use std::os::unix::process::ExitStatusExt;
     let status = child(test, root, phase)

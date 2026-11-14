@@ -387,7 +387,7 @@ fn a_published_import_answers_success_when_the_removal_of_its_transaction_fails(
 /// The child stops in the write of the Prepared marker: after the probe
 /// before that write, the system ends the child at the first byte of the
 /// temporary file of the marker.
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 #[test]
 #[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
 fn a_stop_in_the_write_of_the_import_marker_leaves_no_file_after_the_next_section_entry() {

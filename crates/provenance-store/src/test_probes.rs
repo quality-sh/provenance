@@ -154,8 +154,10 @@ pub fn crash_at(label: &'static str) {
 ///
 /// The probe sets the file size limit to `limit`, so the system sends
 /// `SIGXFSZ` at that byte. The probe also sets the core file size limit to
-/// zero.
-#[cfg(all(test, unix, feature = "host"))]
+/// zero. Linux sends the signal to the thread that writes, so the write stops
+/// at that byte. macOS sends it to the process, and the write can continue to
+/// its cleanup before the stop, so this probe is for Linux only.
+#[cfg(all(test, target_os = "linux", feature = "host"))]
 pub fn stop_at_file_size(label: &'static str, limit: u64) {
     arm(label, move || {
         use rustix::process::{getrlimit, setrlimit, Resource};

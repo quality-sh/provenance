@@ -361,7 +361,7 @@ fn a_section_entry_ends_a_published_source_edit_whose_transaction_is_removed_in_
 /// The child stops in the write of the prepared marker: after the probe
 /// before that write, the system ends the child at the first byte of the
 /// temporary file of the marker.
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 #[test]
 #[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
 fn a_stop_in_the_write_of_the_source_edit_marker_leaves_no_file_after_the_next_section_entry() {
@@ -380,13 +380,7 @@ fn a_stop_in_the_write_of_the_source_edit_marker_leaves_no_file_after_the_next_s
     assert_eq!(
         marker_temporaries().len(),
         1,
-        "the stop left the temporary file of the marker: {:?} {:?} {:?}",
-        names(&layout.cache_dir()),
-        names(root),
-        names(&layout.source_edit_transactions_dir())
-            .iter()
-            .map(|name| names(&layout.source_edit_transactions_dir().join(name)))
-            .collect::<Vec<_>>()
+        "the stop left the temporary file of the marker"
     );
     assert!(!layout.source_edit_marker_path().exists());
 

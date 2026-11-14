@@ -17,7 +17,7 @@ use provenance_macros::verifies;
 const LONG: [u8; 4096] = [b'x'; 4096];
 
 /// The test that runs a source edit with the replacement [`LONG`] as a child.
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 const LONG_CHILD: &str = "operations::files::tests::prepared_file_tests::long_child";
 
 #[test]
@@ -53,7 +53,7 @@ fn assert_entry_removes_the_stopped_edit(root: &Utf8Path) {
 /// the probe before that write, the system ends the child at the first byte
 /// past the length of the record of the prepared file. The record names the
 /// prepared file, and the file does not exist.
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 #[test]
 #[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
 fn a_stop_before_the_prepared_file_exists_leaves_no_data_after_the_next_section_entry() {
@@ -74,7 +74,7 @@ fn a_stop_before_the_prepared_file_exists_leaves_no_data_after_the_next_section_
 
 /// The child stops at the first byte that it writes after it made and synced
 /// the prepared file.
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 #[test]
 #[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
 fn a_stop_after_the_prepared_file_is_made_leaves_no_data_after_the_next_section_entry() {
