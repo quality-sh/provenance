@@ -103,7 +103,7 @@ fn each_test_file_is_in_a_test_target() {
             .map(|target| PathBuf::from(target["src_path"].as_str().expect("target path")))
             .collect::<BTreeSet<_>>();
         let mut loaded = BTreeSet::new();
-        let mut texts = Vec::new();
+        let mut test_files = Vec::new();
         for entry in entries {
             let path = entry.expect("read tests entry").path();
             let group_main = path.join("main.rs");
@@ -121,19 +121,19 @@ fn each_test_file_is_in_a_test_target() {
                     }
                 }
             } else if path.extension().is_some_and(|extension| extension == "rs") {
-                texts.push((
+                test_files.push((
                     path.clone(),
                     fs::read_to_string(&path).expect("read test file"),
                 ));
             }
         }
-        for (path, _) in &texts {
+        for (path, _) in &test_files {
             files_seen += 1;
             let stem = path
                 .file_stem()
                 .and_then(|stem| stem.to_str())
                 .expect("file stem");
-            let support = texts.iter().any(|(other, text)| {
+            let support = test_files.iter().any(|(other, text)| {
                 other != path
                     && (text.contains(&format!("mod {stem};"))
                         || text.contains(&format!("\"{stem}.rs\"")))
