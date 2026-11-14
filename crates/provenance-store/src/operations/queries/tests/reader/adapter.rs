@@ -22,7 +22,7 @@ use provenance_core::{NodeType, RequirementStatus};
 use std::sync::Arc;
 
 /// The repository of `store` over `database`.
-fn over(store: &TestStore, database: Option<Arc<dyn ReadDatabase>>) -> Repository {
+pub(super) fn over(store: &TestStore, database: Option<Arc<dyn ReadDatabase>>) -> Repository {
     let layout = store.layout();
     Repository::with_storage(
         RepositoryIdentity::new(store.root.clone(), store.scope.clone(), Settings::default()),
@@ -37,7 +37,7 @@ fn over(store: &TestStore, database: Option<Arc<dyn ReadDatabase>>) -> Repositor
 fn over_the_other_adapter(store: &TestStore) -> Repository {
     over(
         store,
-        Some(Arc::new(Other(FileReadDatabase::new(store.layout())))),
+        Some(Arc::new(Other::new(FileReadDatabase::new(store.layout())))),
     )
 }
 
@@ -219,7 +219,7 @@ impl SqlTransaction for Uncommitted {
 impl ReadDatabase for LateCommitFails {
     fn read<'a>(&'a self, work: ReadWork<'a>) -> SqlFuture<'a, ()> {
         self.0
-            .read(Box::new(move |lent| work(Box::new(OtherTransaction(lent)))))
+            .read(Box::new(move |lent| work(OtherTransaction::forward(lent))))
     }
 
     fn write<'a>(&'a self, work: WriteWork<'a>) -> SqlFuture<'a, ()> {

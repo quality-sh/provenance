@@ -1,4 +1,6 @@
+use super::modern_lifecycle::add_modern_lifecycle;
 use super::support::{create_system_source, export_scope, import_scope, init_repo, write_json};
+use provenance_macros::verifies;
 use std::path::PathBuf;
 
 #[test]
@@ -163,38 +165,102 @@ impl ModernLifecycleFixture {
     }
 }
 
-fn add_modern_lifecycle(lifecycle: &mut serde_json::Value) {
-    lifecycle["contributions"] = serde_json::json!([{
-        "scope_id": "default", "id": "contribution_a",
-        "target": {"artifact_type": "source", "artifact_id": "source_a"},
-        "participant_slot": "reviewer", "stance": "support", "strongest_finding": "Observed",
-        "evidence_references": [{"reference_id": "evidence_a", "evidence_type": "source", "summary": "Pinned"}],
-        "material_claims": [{"claim_id": "claim_a", "statement": "Observed", "evidence_type": "source", "evidence_reference_ids": ["evidence_a"]}],
-        "risks": [], "objections": [], "challenges": [], "suggested_artifact_changes": [],
-        "unsupported_recommendations": [], "uncertainty": {"level": "low", "rationale": "Direct"}, "open_questions": []
-    }]);
-    lifecycle["synthesis_packets"] = serde_json::json!([{
-        "scope_id": "default", "id": "synthesis_a",
-        "target": {"artifact_type": "source", "artifact_id": "source_a"}, "summary": "Adjudicated",
-        "consensus": [], "contested_claims": [], "minority_objections": [], "evidence_gaps": [],
-        "unsupported_speculation": [], "open_questions": [],
-        "suggested_artifacts": [{"proposal_id": "proposal_a", "proposal_key": "proposal-a", "proposal_type": "requirement_candidate", "summary": "Candidate", "origin_participant_slots": ["reviewer"]}],
-        "required_human_decisions": []
-    }]);
-    lifecycle["proposal_cards"] = serde_json::json!([{
-        "scope_id": "default", "id": "proposal_a", "proposal_key": "proposal-a",
-        "proposal_type": "requirement_candidate", "title": "Candidate", "summary": "Candidate",
-        "traceability": {"target": {"artifact_type": "source", "artifact_id": "source_a"}, "source_ids": ["source_a"], "evidence_references": [], "supporting_claim_ids": ["claim_a"]},
-        "promotion_state": "proposed"
-    }]);
-    lifecycle["assertion_records"] = serde_json::json!([{
-        "scope_id": "default", "id": "assertion_a", "proposal_id": "proposal_a",
-        "synthesis_packet_id": "synthesis_a", "supporting_claim_ids": ["claim_a"]
-    }]);
-    lifecycle["dispositions"] = serde_json::json!([{
-        "scope_id": "default", "id": "disposition_a", "proposal_id": "proposal_a",
-        "decision": "accepted", "rationale": "Reviewed", "actor": {"identity_type": "human", "id": "reviewer"},
-        "canonical_artifact": {"artifact_type": "source", "artifact_id": "source_a"},
-        "external_action": {"system": "github", "scope": "acme/payroll", "kind": "deployment", "key": "prod-44"}
-    }]);
+/// The exit code, the standard output and the standard error of a command.
+fn answer(output: &std::process::Output) -> (Option<i32>, String, String) {
+    (
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout).into_owned(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    )
+}
+
+impl ModernLifecycleFixture {
+    /// The fixture after an import of its lifecycle, with the row of
+    /// `proposal_a` on two lines of `proposal_cards.jsonl`. The result also
+    /// gives the path of the file and its one row.
+    fn with_a_proposal_id_on_two_lines() -> (Self, PathBuf, String) {
+        let fixture = Self::new();
+        fixture.import_lifecycle().success();
+        let cards = fixture
+            .repo
+            .join(".provenance/state/scopes/default/ideation/proposal_cards.jsonl");
+        let row = std::fs::read_to_string(&cards).unwrap();
+        assert_eq!(row.lines().count(), 1, "{row}");
+        std::fs::write(&cards, format!("{row}{row}")).unwrap();
+        (fixture, cards, row)
+    }
+}
+
+/// The fault of `proposal_a` on the lines 1 and 2 of `proposal_cards.jsonl`.
+const DUPLICATE_PROPOSAL: &str = "scopes/default/ideation/proposal_cards.jsonl line 2: \
+    duplicate immutable proposal id proposal_a at line 1 and at line 2";
+
+/// `provenance check` over a scope with `proposal_a` on two lines of
+/// `proposal_cards.jsonl` fails and gives the fault at the second line, with
+/// a message that names the two lines.
+#[test]
+#[verifies("rule_inconsistent_records_refusal_names_records", examples)]
+fn check_names_the_two_lines_of_a_proposal_id() {
+    let (fixture, _, _) = ModernLifecycleFixture::with_a_proposal_id_on_two_lines();
+    let check = super::support::provenance()
+        .args(["check", "--repo", fixture.repo.to_str().unwrap()])
+        .output()
+        .unwrap();
+    let (code, stdout, stderr) = answer(&check);
+    let finding = format!("  - {DUPLICATE_PROPOSAL}");
+    assert_eq!(
+        (code, stdout.lines().any(|line| line == finding)),
+        (Some(1), true),
+        "{stdout}{stderr}"
+    );
+}
+
+/// `provenance export` over a scope with `proposal_a` on two lines of
+/// `proposal_cards.jsonl` refuses with the fault at the second line, with a
+/// message that names the two lines, and writes no export.
+#[test]
+#[verifies("rule_inconsistent_records_refusal_names_records", examples)]
+fn export_names_the_two_lines_of_a_proposal_id() {
+    let (fixture, _, _) = ModernLifecycleFixture::with_a_proposal_id_on_two_lines();
+    let output = fixture.root.join("export.json");
+    let export = super::support::provenance()
+        .args(["export", "--repo", fixture.repo.to_str().unwrap()])
+        .args(["--scope", "default", "--format", "json", "--output"])
+        .arg(&output)
+        .output()
+        .unwrap();
+    let (code, stdout, stderr) = answer(&export);
+    let refusal = format!("Error: {DUPLICATE_PROPOSAL}");
+    assert_eq!(
+        (
+            code,
+            stderr.lines().any(|line| line == refusal),
+            output.exists()
+        ),
+        (Some(1), true, false),
+        "{stdout}{stderr}"
+    );
+}
+
+/// An import of a valid export replaces a scope with `proposal_a` on two
+/// lines of `proposal_cards.jsonl`, and the id is on one line after it.
+///
+/// No Rule: an implementation aid. It pins that an import of a valid export
+/// repairs a scope that has an id on two lines.
+#[test]
+fn an_import_replaces_a_scope_with_a_proposal_id_on_two_lines() {
+    let (fixture, cards, row) = ModernLifecycleFixture::with_a_proposal_id_on_two_lines();
+    let import = fixture
+        .import_value("repair.json", &fixture.lifecycle)
+        .get_output()
+        .clone();
+    let imported = (
+        Some(0),
+        "{\n  \"status\": \"ok\",\n  \"dry_run\": false,\n  \"records\": 6\n}\n".to_owned(),
+        String::new(),
+    );
+    assert_eq!(
+        (answer(&import), std::fs::read_to_string(&cards).unwrap()),
+        (imported, row)
+    );
 }

@@ -97,12 +97,11 @@ fn a_stale_update_through_the_contract_is_a_conflict() {
         "{results:?}"
     );
     assert!(
-        matches!(results[1], Err(text) if text.starts_with(&refusal_prefix(409))),
+        matches!(results[1], Err(answer) if answer.starts_with(&refusal_prefix(409))),
         "{results:?}"
     );
-    let test = "a_stale_update_through_the_contract_is_a_conflict";
     let verdict = laws::check(&run).and_then(|()| contract_laws(&run));
-    report::probe("contract", test, verdict);
+    report::probe_laws("contract", verdict);
 }
 
 // No Rule: a probe that each operation of the generator answers through the
@@ -126,8 +125,7 @@ fn each_operation_runs_through_the_contract() {
             done.result
         );
     }
-    let test = "each_operation_runs_through_the_contract";
-    check_probe("contract", test, &case, CONTRACT);
+    check_probe("contract", &case, CONTRACT);
 }
 
 // No Rule binding: the store example binds the Rule. This probe shows that a
@@ -156,7 +154,6 @@ fn a_post_on_a_moved_base_through_the_contract_is_state_changed() {
         "{:?}",
         run.done
     );
-    let test = "a_post_on_a_moved_base_through_the_contract_is_state_changed";
     let verdict = laws::check(&run).and_then(|()| contract_laws(&run));
-    report::probe("contract", test, verdict);
+    report::probe_laws("contract", verdict);
 }

@@ -7,7 +7,7 @@ use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{
     packet_qualifies_proposal, validate_optional_confidence_score, AssertionRecord, Contribution,
-    DispositionRecord, ProposalCard, ScopeId, StableId, SynthesisPacket,
+    DispositionRecord, IdeationRecord, ProposalCard, ScopeId, SynthesisPacket,
 };
 use provenance_porcelain::swarm_backtrace::{
     SwarmBacktraceLandInput, SwarmBacktraceLandOutput, SwarmBacktraceLandPort,
@@ -75,40 +75,20 @@ fn land(
 
     for contribution in &contributions {
         validate_contribution_record(contribution)?;
-        ensure_scope(
-            &scope_id,
-            &contribution.scope_id,
-            "contribution",
-            &contribution.id,
-        )?;
+        ensure_scope(&scope_id, contribution, &contribution.scope_id)?;
     }
     for synthesis_packet in &synthesis_packets {
-        ensure_scope(
-            &scope_id,
-            &synthesis_packet.scope_id,
-            "synthesis packet",
-            &synthesis_packet.id,
-        )?;
+        ensure_scope(&scope_id, synthesis_packet, &synthesis_packet.scope_id)?;
     }
     for proposal in &proposals {
         validate_proposal_card_record(proposal)?;
-        ensure_scope(&scope_id, &proposal.scope_id, "proposal", &proposal.id)?;
+        ensure_scope(&scope_id, proposal, &proposal.scope_id)?;
     }
     for assertion in &assertions {
-        ensure_scope(
-            &scope_id,
-            &assertion.scope_id,
-            "assertion",
-            assertion.id.as_stable_id(),
-        )?;
+        ensure_scope(&scope_id, assertion, &assertion.scope_id)?;
     }
     for disposition in &dispositions {
-        ensure_scope(
-            &scope_id,
-            &disposition.scope_id,
-            "disposition",
-            &disposition.id,
-        )?;
+        ensure_scope(&scope_id, disposition, &disposition.scope_id)?;
     }
 
     let contribution_count = contributions.len();
@@ -241,15 +221,9 @@ fn preflight_land(
     assertions: &[AssertionRecord],
     replace: bool,
 ) -> anyhow::Result<()> {
-    ensure_unique_run_ids(
-        "contribution",
-        contributions.iter().map(|record| &record.id),
-    )?;
-    ensure_unique_run_ids(
-        "synthesis packet",
-        synthesis_packets.iter().map(|record| &record.id),
-    )?;
-    ensure_unique_run_ids("proposal", proposals.iter().map(|record| &record.id))?;
+    ensure_unique_run_ids(contributions)?;
+    ensure_unique_run_ids(synthesis_packets)?;
+    ensure_unique_run_ids(proposals)?;
     // Same decision the store applies when it validates the merged aggregate,
     // run early over the run's own records so a bad run fails before the
     // landing lock is taken.
@@ -274,49 +248,29 @@ fn preflight_land(
         return Ok(());
     }
 
-    let existing_contributions = store.list_contributions(scope_id)?;
-    ensure_no_existing_ids(
-        "contribution",
-        existing_contributions.iter().map(|record| &record.id),
-        contributions.iter().map(|record| &record.id),
-    )?;
-    let existing_synthesis_packets = store.list_synthesis_packets(scope_id)?;
-    ensure_no_existing_ids(
-        "synthesis packet",
-        existing_synthesis_packets.iter().map(|record| &record.id),
-        synthesis_packets.iter().map(|record| &record.id),
-    )
+    ensure_no_existing_ids(&store.list_contributions(scope_id)?, contributions)?;
+    ensure_no_existing_ids(&store.list_synthesis_packets(scope_id)?, synthesis_packets)
 }
 
-fn ensure_unique_run_ids<'a>(
-    artifact: &str,
-    ids: impl IntoIterator<Item = &'a StableId>,
-) -> anyhow::Result<()> {
+fn ensure_unique_run_ids<T: IdeationRecord>(records: &[T]) -> anyhow::Result<()> {
+    let kind = T::KIND;
     let mut seen = BTreeSet::new();
-    for id in ids {
-        anyhow::ensure!(
-            seen.insert(id.as_str().to_string()),
-            "duplicate {artifact} id {} in run",
-            id.as_str()
-        );
+    for id in records.iter().map(IdeationRecord::immutable_id) {
+        anyhow::ensure!(seen.insert(id), "duplicate {kind} id {id} in run");
     }
     Ok(())
 }
 
-fn ensure_no_existing_ids<'existing, 'incoming>(
-    artifact: &str,
-    existing_ids: impl IntoIterator<Item = &'existing StableId>,
-    incoming_ids: impl IntoIterator<Item = &'incoming StableId>,
-) -> anyhow::Result<()> {
-    let existing_ids = existing_ids
-        .into_iter()
-        .map(|id| id.as_str().to_string())
+fn ensure_no_existing_ids<T: IdeationRecord>(existing: &[T], incoming: &[T]) -> anyhow::Result<()> {
+    let kind = T::KIND;
+    let existing_ids = existing
+        .iter()
+        .map(IdeationRecord::immutable_id)
         .collect::<BTreeSet<_>>();
-    for id in incoming_ids {
+    for id in incoming.iter().map(IdeationRecord::immutable_id) {
         anyhow::ensure!(
-            !existing_ids.contains(id.as_str()),
-            "{artifact} {} already exists; land again with replace to replace generated records",
-            id.as_str()
+            !existing_ids.contains(id),
+            "{kind} {id} already exists; land again with replace to replace generated records"
         );
     }
     Ok(())
@@ -327,16 +281,17 @@ fn utf8_path(path: std::path::PathBuf) -> anyhow::Result<Utf8PathBuf> {
         .map_err(|path| anyhow::anyhow!("path is not valid UTF-8: {}", path.display()))
 }
 
-fn ensure_scope(
+/// Refuses `record` when its scope `actual` is not `expected`.
+fn ensure_scope<T: IdeationRecord>(
     expected: &ScopeId,
+    record: &T,
     actual: &ScopeId,
-    artifact: &str,
-    id: &StableId,
 ) -> anyhow::Result<()> {
     anyhow::ensure!(
         actual == expected,
-        "{artifact} {} scope_id must match --scope {}",
-        id.as_str(),
+        "{} {} scope_id must match --scope {}",
+        T::KIND,
+        record.immutable_id(),
         expected.as_str()
     );
     Ok(())

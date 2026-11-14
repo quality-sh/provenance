@@ -2,10 +2,12 @@ use super::read_budget::ensure_slice_within_read_budget;
 use super::{ensure_new_ids_assignable, read_ideation_landings, IdeationLandingBatch, StateStore};
 use crate::shards;
 use provenance_core::{
-    AssertionRecord, Contribution, IdeationAggregate, ProposalCard, ScopeId, SynthesisPacket,
+    AssertionRecord, Contribution, IdeationRecord, IdeationRecordKind, ProposalCard, ScopeId,
+    SynthesisPacket,
 };
 use provenance_macros::rule;
 use std::collections::BTreeSet;
+use std::convert::Infallible;
 
 impl StateStore {
     /// Runs `operation` in the section of this store under the lifecycle
@@ -89,9 +91,7 @@ impl StateStore {
             ensure_new_ids_assignable(&dispositions, &incoming.dispositions, |record| {
                 record.id.as_str()
             })?;
-            merge_immutable("proposal", &mut proposals, &incoming.proposals, |r| {
-                r.id.as_str()
-            })?;
+            merge_immutable(&mut proposals, &incoming.proposals)?;
             for replacement in &incoming.contributions {
                 if let Some(existing) = contributions
                     .iter()
@@ -108,40 +108,24 @@ impl StateStore {
                     ensure_asserted_synthesis_unchanged(existing, replacement, &assertions)?;
                 }
             }
-            merge_replaceable(
-                "contribution",
-                &mut contributions,
-                &incoming.contributions,
-                replace,
-                |r| r.id.as_str(),
-            )?;
-            merge_replaceable(
-                "synthesis packet",
-                &mut synthesis_packets,
-                &incoming.synthesis_packets,
-                replace,
-                |r| r.id.as_str(),
-            )?;
-            merge_immutable("assertion", &mut assertions, &incoming.assertions, |r| {
-                r.id.as_str()
-            })?;
-            merge_immutable(
-                "disposition",
-                &mut dispositions,
-                &incoming.dispositions,
-                |r| r.id.as_str(),
-            )?;
+            merge_replaceable(&mut contributions, &incoming.contributions, replace)?;
+            merge_replaceable(&mut synthesis_packets, &incoming.synthesis_packets, replace)?;
+            merge_immutable(&mut assertions, &incoming.assertions)?;
+            merge_immutable(&mut dispositions, &incoming.dispositions)?;
             validate_batch_proposals(&incoming.proposals)?;
             let manifest = self.manifest()?;
-            provenance_core::validate_ideation_aggregate(IdeationAggregate {
-                legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
-                disposition_actor_ids: &manifest.disposition_actor_ids,
-                contributions: &contributions,
-                synthesis_packets: &synthesis_packets,
-                proposals: &proposals,
-                assertions: &assertions,
-                dispositions: &dispositions,
-            })?;
+            self.check_ideation_aggregate(
+                scope,
+                provenance_core::IdeationAggregate {
+                    legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
+                    disposition_actor_ids: &manifest.disposition_actor_ids,
+                    contributions: &contributions,
+                    synthesis_packets: &synthesis_packets,
+                    proposals: &proposals,
+                    assertions: &assertions,
+                    dispositions: &dispositions,
+                },
+            )?;
             for disposition in &incoming.dispositions {
                 crate::write_error::ensure!(
                     InvalidUpdate,
@@ -196,9 +180,7 @@ fn validate_batch_proposals(proposals: &[ProposalCard]) -> anyhow::Result<()> {
 /// contribution is reached through the claim ids an assertion supports, a
 /// synthesis packet through the packet id an assertion names.
 #[rule("rule_asserted_evidence_immutable")]
-pub fn ensure_asserted_evidence_unchanged<T: serde::Serialize>(
-    kind: &str,
-    id: &str,
+pub fn ensure_asserted_evidence_unchanged<T: serde::Serialize + IdeationRecord>(
     existing: &T,
     replacement: &T,
     cited_by_assertion: impl FnOnce() -> bool,
@@ -206,6 +188,7 @@ pub fn ensure_asserted_evidence_unchanged<T: serde::Serialize>(
     if serde_json::to_value(existing)? == serde_json::to_value(replacement)? {
         return Ok(());
     }
+    let (kind, id) = (T::KIND, existing.immutable_id());
     crate::write_error::ensure!(
         InvalidUpdate,
         !cited_by_assertion(),
@@ -213,11 +196,6 @@ pub fn ensure_asserted_evidence_unchanged<T: serde::Serialize>(
     );
     Ok(())
 }
-
-/// The kinds the freeze names, so a caller in another crate spells them the
-/// same way this one does.
-pub const CONTRIBUTION_KIND: &str = "contribution";
-pub const SYNTHESIS_KIND: &str = "synthesis packet";
 
 /// An assertion cites a contribution through the claim ids it supports.
 pub fn assertion_cites_contribution(
@@ -244,13 +222,8 @@ pub fn ensure_asserted_contribution_unchanged(
     replacement: &Contribution,
     assertions: &[AssertionRecord],
 ) -> anyhow::Result<()> {
-    ensure_asserted_evidence_unchanged(
-        CONTRIBUTION_KIND,
-        existing.id.as_str(),
-        existing,
-        replacement,
-        || assertion_cites_contribution(existing, assertions),
-    )
+    let cited = || assertion_cites_contribution(existing, assertions);
+    ensure_asserted_evidence_unchanged(existing, replacement, cited)
 }
 
 pub fn ensure_asserted_synthesis_unchanged(
@@ -258,34 +231,16 @@ pub fn ensure_asserted_synthesis_unchanged(
     replacement: &SynthesisPacket,
     assertions: &[AssertionRecord],
 ) -> anyhow::Result<()> {
-    ensure_asserted_evidence_unchanged(
-        SYNTHESIS_KIND,
-        existing.id.as_str(),
-        existing,
-        replacement,
-        || assertion_cites_synthesis(existing, assertions),
-    )
+    let cited = || assertion_cites_synthesis(existing, assertions);
+    ensure_asserted_evidence_unchanged(existing, replacement, cited)
 }
 
 fn ensure_scope(scope: &ScopeId, batch: &IdeationLandingBatch) -> anyhow::Result<()> {
-    for (kind, actual) in batch
-        .contributions
-        .iter()
-        .map(|r| ("contribution", &r.scope_id))
-        .chain(
-            batch
-                .synthesis_packets
-                .iter()
-                .map(|r| ("synthesis packet", &r.scope_id)),
-        )
-        .chain(batch.proposals.iter().map(|r| ("proposal", &r.scope_id)))
-        .chain(batch.assertions.iter().map(|r| ("assertion", &r.scope_id)))
-        .chain(
-            batch
-                .dispositions
-                .iter()
-                .map(|r| ("disposition", &r.scope_id)),
-        )
+    for (kind, actual) in scope_ids(&batch.contributions, |r| &r.scope_id)
+        .chain(scope_ids(&batch.synthesis_packets, |r| &r.scope_id))
+        .chain(scope_ids(&batch.proposals, |r| &r.scope_id))
+        .chain(scope_ids(&batch.assertions, |r| &r.scope_id))
+        .chain(scope_ids(&batch.dispositions, |r| &r.scope_id))
     {
         crate::write_error::ensure!(
             ScopeMismatch,
@@ -296,44 +251,50 @@ fn ensure_scope(scope: &ScopeId, batch: &IdeationLandingBatch) -> anyhow::Result
     Ok(())
 }
 
-fn merge_replaceable<T: Clone>(
-    kind: &str,
+/// The kind and the scope of each of `records`.
+fn scope_ids<T: IdeationRecord>(
+    records: &[T],
+    scope_id: impl Fn(&T) -> &ScopeId,
+) -> impl Iterator<Item = (IdeationRecordKind, &ScopeId)> {
+    records
+        .iter()
+        .map(move |record| (T::KIND, scope_id(record)))
+}
+
+fn merge_replaceable<T: Clone + IdeationRecord>(
     existing: &mut Vec<T>,
     incoming: &[T],
     replace: bool,
-    id: impl Fn(&T) -> &str,
 ) -> anyhow::Result<()> {
+    let kind = T::KIND;
     let mut incoming_ids = BTreeSet::new();
     for record in incoming {
-        let record_id = id(record);
+        let record_id = record.immutable_id();
         crate::write_error::ensure!(
             InvalidUpdate,
             incoming_ids.insert(record_id),
             "duplicate {kind} id {record_id} in batch"
         );
-        if let Some(index) = existing.iter().position(|current| id(current) == record_id) {
+        replace_checked_or_append(existing, record.clone(), |_| {
             crate::write_error::ensure!(
                 AlreadyExists,
                 replace,
                 "{kind} {record_id} already exists"
             );
-            existing[index] = record.clone();
-        } else {
-            existing.push(record.clone());
-        }
+            Ok(())
+        })?;
     }
     Ok(())
 }
 
-fn merge_immutable<T: Clone>(
-    kind: &str,
+fn merge_immutable<T: Clone + IdeationRecord>(
     existing: &mut Vec<T>,
     incoming: &[T],
-    id: impl Fn(&T) -> &str,
 ) -> anyhow::Result<()> {
+    let kind = T::KIND;
     let mut incoming_ids = BTreeSet::new();
     for record in incoming {
-        let record_id = id(record);
+        let record_id = record.immutable_id();
         crate::write_error::ensure!(
             InvalidUpdate,
             incoming_ids.insert(record_id),
@@ -341,7 +302,9 @@ fn merge_immutable<T: Clone>(
         );
         crate::write_error::ensure!(
             AlreadyExists,
-            !existing.iter().any(|current| id(current) == record_id),
+            !existing
+                .iter()
+                .any(|current| current.immutable_id() == record_id),
             "{kind} {record_id} already exists and is immutable"
         );
         existing.push(record.clone());
@@ -349,16 +312,38 @@ fn merge_immutable<T: Clone>(
     Ok(())
 }
 
-pub(super) fn overlay_records<T>(records: &mut Vec<T>, incoming: Vec<T>, id: impl Fn(&T) -> &str) {
+/// Puts each of `incoming` in `records` with [`replace_or_append`], and then
+/// puts `records` in id order.
+pub(super) fn overlay_records<T: IdeationRecord>(records: &mut Vec<T>, incoming: Vec<T>) {
     for record in incoming {
-        if let Some(index) = records
-            .iter()
-            .position(|current| id(current) == id(&record))
-        {
-            records[index] = record;
-        } else {
-            records.push(record);
-        }
+        replace_or_append(records, record);
     }
-    records.sort_by(|a, b| id(a).cmp(id(b)));
+    records.sort_by(|a, b| a.immutable_id().cmp(b.immutable_id()));
+}
+
+/// Puts `record` in place of the record of `records` with its id, or at the
+/// end when no record has its id.
+pub(super) fn replace_or_append<T: IdeationRecord>(records: &mut Vec<T>, record: T) {
+    let Ok(()) = replace_checked_or_append(records, record, |_| Ok::<(), Infallible>(()));
+}
+
+/// Puts `record` in place of the record of `records` with its id, or at the
+/// end when no record has its id. Before a replacement, `check_stored` reads
+/// the stored record with that id; when it refuses, `records` stays as it is.
+pub(super) fn replace_checked_or_append<T: IdeationRecord, E>(
+    records: &mut Vec<T>,
+    record: T,
+    check_stored: impl FnOnce(&T) -> Result<(), E>,
+) -> Result<(), E> {
+    match records
+        .iter()
+        .position(|current| current.immutable_id() == record.immutable_id())
+    {
+        Some(index) => {
+            check_stored(&records[index])?;
+            records[index] = record;
+        }
+        None => records.push(record),
+    }
+    Ok(())
 }
