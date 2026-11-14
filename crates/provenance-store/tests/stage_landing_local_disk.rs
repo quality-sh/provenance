@@ -7,11 +7,11 @@
 mod initialization;
 
 use camino::Utf8Path;
-use provenance_core::{RequirementStatus, ScopeId, StableId};
+use provenance_core::{RequirementStatus, ScopeId, Source, StableId};
 use provenance_macros::verifies;
 use provenance_store::layout::ProvenanceLayout;
 use provenance_store::repository::Repository;
-use provenance_store::state_store::{CreateRequirementInput, UpdateRequirementInput};
+use provenance_store::state_store::{CreateRequirementInput, ScopeShards};
 use provenance_store::write_error::{WriteError, WriteFailure};
 use std::collections::BTreeMap;
 use std::os::unix::fs::PermissionsExt;
@@ -39,19 +39,32 @@ impl Drop for ReadOnly {
     }
 }
 
-/// An initialized repository with the Requirement `req_owner`, whose stages
-/// cannot make a transaction.
+/// An initialized repository with one imported Source, whose stages cannot
+/// make a transaction.
 fn repository() -> (tempfile::TempDir, ProvenanceLayout, Repository, ReadOnly) {
     let directory = tempfile::tempdir().unwrap();
     let layout = ProvenanceLayout::new(Utf8Path::from_path(directory.path()).unwrap());
     initialization::initialize(&layout, &[]);
     let repository = Repository::open(directory.path(), "default").unwrap();
-    repository
-        .store()
-        .create_requirement(requirement("req_owner"))
-        .unwrap();
+    import(&repository, "Sharing policy").unwrap();
     let read_only = ReadOnly::new(layout.import_transactions_dir().into_std_path_buf());
     (directory, layout, repository, read_only)
+}
+
+/// Imports the default scope with the one Source `source_policy`, named
+/// `name`. The first import writes each shard of the scope.
+fn import(repository: &Repository, name: &str) -> anyhow::Result<()> {
+    let source: Source = serde_json::from_value(serde_json::json!({
+        "scope_id": "default", "id": "source_policy", "name": name, "source_type": "policy"
+    }))?;
+    repository.stage(false, None, |staged| {
+        let sources = std::slice::from_ref(&source);
+        let shards = ScopeShards {
+            sources,
+            ..ScopeShards::default()
+        };
+        staged.import_scope(&ScopeId::new("default")?, &shards)
+    })
 }
 
 fn requirement(id: &str) -> CreateRequirementInput {
@@ -130,24 +143,14 @@ fn a_stage_that_changes_no_key_on_a_moved_base_is_state_changed() {
 #[verifies("rule_store_sends_the_smallest_write_set", examples)]
 fn a_stage_that_changes_one_key_lands_with_no_transaction() {
     let (_directory, layout, repository, _read_only) = repository();
-    let update = UpdateRequirementInput {
-        scope_id: ScopeId::new("default").unwrap(),
-        id: StableId::new("req_owner").unwrap(),
-        expected_etag: None,
-        declared_by: None,
-        statement: None,
-        description: Some("Each share link names its owner.".into()),
-        status: None,
-        archived_in_commit: None,
-        clear_fields: Vec::new(),
-    };
 
-    let updated = repository.store().update_requirement(update).unwrap();
+    import(&repository, "Sharing policy, version 2").unwrap();
 
-    assert_eq!(
-        updated.description.as_deref(),
-        Some("Each share link names its owner.")
-    );
+    let sources = repository
+        .store()
+        .list_sources(&ScopeId::new("default").unwrap())
+        .unwrap();
+    assert_eq!(sources[0].name, "Sharing policy, version 2");
     assert!(!layout.publication_marker_path().exists());
 }
 
