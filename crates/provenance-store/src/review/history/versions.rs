@@ -73,6 +73,10 @@ pub trait FileVersions: Send + Sync + Debug {
     /// same file until a commit changed the file. When `HEAD` did not change
     /// the file, `HEAD` is not listed. A history with no commit, or with no
     /// commit that changed the file, gives no versions.
+    ///
+    /// An adapter can give the same list, the same `Arc`, again while its
+    /// history does not change. A history read keeps what it found for the
+    /// last list that it read, so a new read of that list reads no text.
     fn versions<'a>(
         &'a self,
         path: &'a str,
@@ -81,8 +85,11 @@ pub trait FileVersions: Send + Sync + Debug {
     /// The text of `path` at `commit`.
     ///
     /// The commit need not have changed the file. `None` when the file is
-    /// not in that commit, and when the adapter does not hold the commit. An
-    /// error when the text is not UTF-8.
+    /// not in that commit, and when the adapter does not hold the commit. A
+    /// name that is not a commit id of the adapter, such as an empty name or
+    /// `HEAD`, names no commit that it holds. When the text is not UTF-8, the
+    /// error is the [`FromUtf8Error`](std::string::FromUtf8Error) of its
+    /// bytes.
     ///
     /// A history read asks for one text at a time and keeps only what it
     /// finds in it, so an adapter that reads each text on demand holds at

@@ -6,8 +6,10 @@ mod batch;
 use super::versions::{BoxFuture, FileVersion, FileVersions};
 use crate::stale::git::command;
 use batch::Batch;
+pub(super) use batch::Failed;
 use camino::{Utf8Path, Utf8PathBuf};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError, Weak};
+use std::time::Duration;
 
 /// The file versions of the Git history of one working tree.
 ///
@@ -17,33 +19,55 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 /// clone gives the commits it holds.
 ///
 /// The texts come from one `git cat-file --batch` process that the adapter
-/// starts at its first text and stops when it is dropped. The process gives
-/// one text per call, so the adapter holds at most one text.
-#[derive(Debug)]
+/// starts at its first text. The process gives one text per call, so the
+/// adapter holds at most one text. The process stops when the adapter is
+/// dropped, at an error, or when the adapter reads no text for one to two
+/// seconds, so an adapter that an embedder keeps does not keep the pack files
+/// of the repository open. The next text starts a new process.
 pub struct GitFileVersions {
     root: Utf8PathBuf,
-    texts: Mutex<Option<Batch>>,
+    texts: OnceLock<Arc<Mutex<Texts>>>,
 }
+
+/// The batch process of an adapter, and what its idle stop compares.
+#[derive(Debug, Default)]
+struct Texts {
+    batch: Option<Batch>,
+    /// The number of texts read.
+    reads: u64,
+    /// A thread waits to stop the process when it is idle.
+    watched: bool,
+}
+
+/// How long the idle stop waits between two looks at the process.
+const IDLE: Duration = Duration::from_secs(1);
 
 impl GitFileVersions {
     /// The adapter over the Git history of the working tree at `root`.
     pub const fn new(root: Utf8PathBuf) -> Self {
         Self {
             root,
-            texts: Mutex::new(None),
+            texts: OnceLock::new(),
         }
+    }
+
+    fn texts(&self) -> &Arc<Mutex<Texts>> {
+        self.texts.get_or_init(Arc::default)
     }
 
     /// Reads one text through the batch process, which it starts when there
     /// is none. The process is out of its lock while it reads, so two reads
     /// at the same time use two processes, and the adapter keeps one of them.
-    /// An error stops the process, so the next text starts a new one.
+    /// An error of the process stops it, so the next text starts a new one.
     fn read_text(&self, relative: &str, commit: &str) -> anyhow::Result<Option<String>> {
-        let taken = lock(&self.texts).take();
+        if !is_commit_id(commit) {
+            return Ok(None);
+        }
+        let taken = lock(self.texts()).batch.take();
         let mut batch = taken.map_or_else(|| self.start(), Ok)?;
-        let text = batch.text(commit, relative)?;
-        *lock(&self.texts) = Some(batch);
-        Ok(text)
+        let bytes = batch.bytes(commit, relative)?;
+        self.keep(batch);
+        Ok(bytes.map(String::from_utf8).transpose()?)
     }
 
     /// Starts the batch process. The prefix of a root does not change, so
@@ -64,6 +88,65 @@ impl GitFileVersions {
             }
         };
         Batch::start(&self.root, prefix)
+    }
+
+    /// Puts the process back after a read, and starts the idle stop when no
+    /// thread waits to stop it.
+    fn keep(&self, batch: Batch) {
+        let mut texts = lock(self.texts());
+        texts.reads += 1;
+        let other = texts.batch.replace(batch);
+        if !texts.watched {
+            let watched = Arc::downgrade(self.texts());
+            texts.watched = std::thread::Builder::new()
+                .name("git cat-file idle stop".to_owned())
+                .spawn(move || stop_when_idle(&watched))
+                .is_ok();
+        }
+        drop(texts);
+        drop(other);
+    }
+}
+
+/// Stops the process when no text was read between two looks, `IDLE` apart.
+/// Ends when the adapter is dropped.
+fn stop_when_idle(texts: &Weak<Mutex<Texts>>) {
+    let mut seen = None;
+    loop {
+        std::thread::sleep(IDLE);
+        let Some(texts) = texts.upgrade() else {
+            return;
+        };
+        let stopped = {
+            let mut held = lock(&texts);
+            let idle = seen == Some(held.reads);
+            seen = Some(held.reads);
+            if idle {
+                held.watched = false;
+            }
+            idle.then(|| held.batch.take())
+        };
+        if let Some(batch) = stopped {
+            drop(batch);
+            return;
+        }
+    }
+}
+
+/// A full commit id: 40 hexadecimal digits, or 64 in a SHA-256 repository.
+/// Another name, such as an empty name or `HEAD`, is not a commit that the
+/// adapter holds.
+fn is_commit_id(commit: &str) -> bool {
+    matches!(commit.len(), 40 | 64) && commit.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+/// Shows the root; the batch process is not a value of the adapter.
+impl std::fmt::Debug for GitFileVersions {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("GitFileVersions")
+            .field("root", &self.root)
+            .finish_non_exhaustive()
     }
 }
 
@@ -230,7 +313,7 @@ fn repository_head(root: &Utf8Path) -> Option<Head> {
 
 /// A cache entry holds only read results, so a poisoned lock still holds a
 /// whole entry. A text read takes the batch process out of its lock while it
-/// reads, so a poisoned batch lock holds no process.
+/// reads, so a poisoned batch lock holds a whole process or none.
 fn lock<T>(cache: &Mutex<T>) -> MutexGuard<'_, T> {
     cache.lock().unwrap_or_else(PoisonError::into_inner)
 }
