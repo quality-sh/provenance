@@ -11,12 +11,12 @@ fn rule_id() -> StableId {
 }
 
 fn read_rule(store: &StateStore) -> Rule {
-    match crate::families::review_families::record(store, &scope(), NodeType::Rule, &rule_id())
-        .unwrap()
-    {
-        ReviewRecord::Rule(rule) => rule,
-        other => panic!("expected a Rule, got {other:?}"),
-    }
+    let record =
+        crate::families::review_families::record(store, &scope(), NodeType::Rule, &rule_id());
+    let Ok(ReviewRecord::Rule(rule)) = record else {
+        panic!("rule_a is not a readable Rule");
+    };
+    rule
 }
 
 fn rule_state(store: &StateStore) -> provenance_core::review::RequirementDecisionState {
