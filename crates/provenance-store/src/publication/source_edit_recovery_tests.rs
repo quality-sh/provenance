@@ -380,8 +380,13 @@ fn a_stop_in_the_write_of_the_source_edit_marker_leaves_no_file_after_the_next_s
     assert_eq!(
         marker_temporaries().len(),
         1,
-        "the stop left the temporary file of the marker: {:?}",
-        names(&layout.cache_dir())
+        "the stop left the temporary file of the marker: {:?} {:?} {:?}",
+        names(&layout.cache_dir()),
+        names(root),
+        names(&layout.source_edit_transactions_dir())
+            .iter()
+            .map(|name| names(&layout.source_edit_transactions_dir().join(name)))
+            .collect::<Vec<_>>()
     );
     assert!(!layout.source_edit_marker_path().exists());
 
