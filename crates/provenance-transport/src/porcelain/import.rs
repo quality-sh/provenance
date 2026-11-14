@@ -29,7 +29,9 @@ impl ImportPort for RepositoryPort {
     }
 }
 
-/// Refuses an import that changes or removes shipped-v1 terminal proposals.
+/// Puts the records of the scope export file `input` in place of the records of the selected
+/// scope and gives the number of records that the import writes. A dry run does each check and
+/// changes nothing.
 fn import_scope(
     context: &RepoContext,
     input: &Utf8Path,
