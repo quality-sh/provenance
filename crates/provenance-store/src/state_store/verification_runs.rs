@@ -179,9 +179,11 @@ impl StateStore {
         crate::jsonl::read_jsonl_locked(&path, &lock_path)
     }
 
-    /// Reads verification runs through a bounded typed line reader while the
-    /// run file is locked. Each line gets the line checks that a write of the
-    /// cache makes. The digest identifies the exact live input.
+    /// Reads verification runs one line at a time while the run file is
+    /// locked. A line over `maximum` bytes is refused as `page_record_too_large`
+    /// before it is read whole, and each other line gives its run through the
+    /// line checks that a write of the cache makes. The digest identifies the
+    /// exact live input.
     pub(crate) fn read_verification_runs<R>(
         &self,
         scope_id: &ScopeId,
@@ -223,20 +225,14 @@ impl StateStore {
                 if count == 0 {
                     return Ok(None);
                 }
-                if bytes.last() == Some(&b'\n') {
-                    bytes.pop();
-                }
-                if bytes.last() == Some(&b'\r') {
-                    bytes.pop();
-                }
-                if bytes.len() > maximum {
+                let line = crate::jsonl::without_terminator(&bytes);
+                if line.len() > maximum {
                     return Err(
                         provenance_core::protocol::read_failure::ReadFailure::PageRecordTooLarge
                             .into(),
                     );
                 }
                 line_number += 1;
-                let line = std::str::from_utf8(&bytes)?;
                 let run = crate::jsonl::record_of_line(&path, line_number, line)?;
                 Ok(Some((i64::try_from(line_number)?, run)))
             };

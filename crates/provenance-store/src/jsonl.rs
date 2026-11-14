@@ -5,7 +5,6 @@
 #[cfg(feature = "host")]
 use crate::layout::ProvenanceLayout;
 use crate::publication::{protect_rows, WritePermissions};
-use crate::state_store::readers::{ensure_no_legacy_retirement, parse_line};
 use crate::state_store::StateStore;
 use camino::Utf8Path;
 #[cfg(feature = "host")]
@@ -14,8 +13,12 @@ use serde::{de::DeserializeOwned, Serialize};
 #[cfg(feature = "host")]
 use std::fs::{File, OpenOptions};
 
+mod line;
 mod preservation;
 
+#[cfg(feature = "host")]
+pub(crate) use line::record_of_line;
+pub(crate) use line::without_terminator;
 use preservation::{LoadedRecords, RawRecord};
 
 /// An exclusive lock on the lock file at a path. Released on drop.
@@ -110,10 +113,7 @@ fn load_jsonl_file<T>(path: &Utf8Path) -> anyhow::Result<LoadedRecords<T>>
 where
     T: DeserializeOwned + Serialize,
 {
-    let contents = path
-        .exists()
-        .then(|| std::fs::read_to_string(path))
-        .transpose()?;
+    let contents = path.exists().then(|| std::fs::read(path)).transpose()?;
     load_jsonl(path, contents.as_deref())
 }
 
@@ -147,7 +147,7 @@ pub(crate) fn mutate_jsonl_bytes_with<T, R>(
 where
     T: DeserializeOwned + Serialize,
 {
-    let mut loaded = load_jsonl(path, contents)?;
+    let mut loaded = load_jsonl(path, contents.map(str::as_bytes))?;
     let (result, changed) = mutate(loaded.records_mut())?;
     if !changed {
         return Ok((result, None));
@@ -157,11 +157,8 @@ where
     Ok((result, Some(jsonl_bytes(&lines))))
 }
 
-/// The read a write is built on, guarded the same way an ordinary read is.
-///
-/// A mutation rewrites the whole shard. Each raw line passes
-/// [`ensure_no_legacy_retirement`](crate::state_store::readers::ensure_no_legacy_retirement),
-/// the same check the read choke point makes, before any record is built.
+/// The read a write is built on: each line of `contents` gives its record
+/// through the line checks of [`line::checked_line`].
 ///
 /// The raw line stays with its typed record. An unchanged record keeps its
 /// raw line when the shard is saved, so the stored JSON line content that
@@ -170,7 +167,7 @@ where
 /// row's top-level unknown members onto its new line, and the write is
 /// refused before anything is published when a changed row holds stored data
 /// that cannot be carried over safely.
-fn load_jsonl<T>(path: &Utf8Path, contents: Option<&str>) -> anyhow::Result<LoadedRecords<T>>
+fn load_jsonl<T>(path: &Utf8Path, contents: Option<&[u8]>) -> anyhow::Result<LoadedRecords<T>>
 where
     T: DeserializeOwned + Serialize,
 {
@@ -178,42 +175,12 @@ where
         return Ok(LoadedRecords::default());
     };
     let mut loaded = LoadedRecords::default();
-    for (index, line) in contents.lines().enumerate() {
-        let (record, raw) = checked_line(path, index + 1, line)?;
+    for (index, line) in contents.split_inclusive(|byte| *byte == b'\n').enumerate() {
+        let line = line::checked_line(path, index + 1, without_terminator(line))?;
+        let (record, raw) = RawRecord::keep(path, line)?;
         loaded.push(record, raw);
     }
     Ok(loaded)
-}
-
-/// The record of one stored line of a file of derived state, after the line
-/// checks that a write of the file makes. A reader that does not load the
-/// whole file reads each line here.
-#[cfg(feature = "host")]
-pub(crate) fn record_of_line<T>(
-    path: &Utf8Path,
-    line_number: usize,
-    line: &str,
-) -> anyhow::Result<T>
-where
-    T: DeserializeOwned + Serialize,
-{
-    checked_line(path, line_number, line).map(|(record, _)| record)
-}
-
-/// The line checks of a stored line: it is one JSON value, it holds no
-/// removed field, and it is one record of `T` that can be read back safely.
-/// A refusal is `invalid_state_file` at the line.
-fn checked_line<T>(
-    path: &Utf8Path,
-    line_number: usize,
-    line: &str,
-) -> anyhow::Result<(T, RawRecord)>
-where
-    T: DeserializeOwned + Serialize,
-{
-    let value = parse_line(path, line_number, line)?;
-    ensure_no_legacy_retirement(path, line_number, &value)?;
-    RawRecord::deserialize(path, line, line_number)
 }
 
 /// Writes one JSONL shard while the caller holds the publication lock. It
