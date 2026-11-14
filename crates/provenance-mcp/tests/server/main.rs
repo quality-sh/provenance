@@ -39,6 +39,8 @@ mod host_invocation;
 mod mcp_action_fields;
 #[path = "../mcp_change_results.rs"]
 mod mcp_change_results;
+#[path = "../mcp_document_catch_up_cause.rs"]
+mod mcp_document_catch_up_cause;
 #[path = "../mcp_error_envelopes.rs"]
 mod mcp_error_envelopes;
 #[path = "../mcp_guidance.rs"]

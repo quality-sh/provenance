@@ -35,6 +35,8 @@ mod disagreeing_records;
 mod discussion_parent_routes;
 #[path = "../discussion_write_refusals.rs"]
 mod discussion_write_refusals;
+#[path = "../document_catch_up_cause.rs"]
+mod document_catch_up_cause;
 #[path = "../document_review_characterization.rs"]
 mod document_review_characterization;
 #[path = "../document_visibility.rs"]
