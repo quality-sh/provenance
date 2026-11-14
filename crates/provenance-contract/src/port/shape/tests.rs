@@ -33,7 +33,18 @@ const TEXT: &str = "\\S";
 
 /// The cases of each keyword. A keyword can have more than one case.
 fn cases() -> Vec<Case> {
-    let integer = json!({"type": "integer"});
+    [
+        value_cases(),
+        member_cases(),
+        branch_cases(),
+        bound_cases(),
+        pattern_cases(),
+    ]
+    .concat()
+}
+
+/// The cases of the keywords on one value: `$ref`, `type`, `enum` and `const`.
+fn value_cases() -> Vec<Case> {
     vec![
         case(
             "$ref",
@@ -65,6 +76,13 @@ fn cases() -> Vec<Case> {
             vec![json!("requirement")],
             vec![json!("rule")],
         ),
+    ]
+}
+
+/// The cases of the keywords on the members and items of a value.
+fn member_cases() -> Vec<Case> {
+    let integer = json!({"type": "integer"});
+    vec![
         case(
             "properties",
             json!({"properties": {"n": integer}}),
@@ -89,6 +107,13 @@ fn cases() -> Vec<Case> {
             vec![json!([]), json!([1, 2])],
             vec![json!([1, "2"])],
         ),
+    ]
+}
+
+/// The cases of `allOf`, `anyOf` and `oneOf`.
+fn branch_cases() -> Vec<Case> {
+    let integer = json!({"type": "integer"});
+    vec![
         case(
             "allOf",
             json!({"allOf": [integer, {"minimum": 0}]}),
@@ -108,6 +133,12 @@ fn cases() -> Vec<Case> {
             vec![json!(-1), json!(0.5)],
             vec![json!(1), json!(-0.5)],
         ),
+    ]
+}
+
+/// The cases of the six bounds.
+fn bound_cases() -> Vec<Case> {
+    vec![
         case(
             "minimum",
             json!({"minimum": 2}),
@@ -144,6 +175,12 @@ fn cases() -> Vec<Case> {
             vec![json!("ab"), json!("éé")],
             vec![json!("abc")],
         ),
+    ]
+}
+
+/// A case of each known pattern.
+fn pattern_cases() -> Vec<Case> {
+    vec![
         case(
             "pattern",
             json!({"pattern": SCOPE}),
@@ -256,8 +293,8 @@ fn each_keyword_of_the_success_schemas_has_a_case() {
     for checks in crate::port::CHECKS.iter() {
         walk(&checks.success.root, &mut keywords, &mut patterns);
     }
-    let cases = cases();
-    let checked: BTreeSet<&str> = cases.iter().map(|case| case.keyword).collect();
+    let all = cases();
+    let checked: BTreeSet<&str> = all.iter().map(|case| case.keyword).collect();
     let unchecked: Vec<&String> = keywords
         .iter()
         .filter(|keyword| {
@@ -268,7 +305,7 @@ fn each_keyword_of_the_success_schemas_has_a_case() {
         .collect();
     assert_eq!(unchecked, Vec::<&String>::new(), "keywords with no case");
 
-    let cased: BTreeSet<&str> = cases
+    let cased: BTreeSet<&str> = all
         .iter()
         .filter_map(|case| case.schema.get("pattern").and_then(Value::as_str))
         .collect();
