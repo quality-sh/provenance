@@ -368,19 +368,11 @@ fn read_ideation_records_held(
     let landings: Vec<IdeationLandingBatch> =
         read_jsonl_held(store, &shards::ideation_landings_path(layout, scope))?;
     for batch in landings {
-        overlay_records(&mut records.contributions, batch.contributions, |r| {
-            r.id.as_str()
-        });
-        overlay_records(
-            &mut records.synthesis_packets,
-            batch.synthesis_packets,
-            |r| r.id.as_str(),
-        );
-        overlay_records(&mut records.proposals, batch.proposals, |r| r.id.as_str());
-        overlay_records(&mut records.assertions, batch.assertions, |r| r.id.as_str());
-        overlay_records(&mut records.dispositions, batch.dispositions, |r| {
-            r.id.as_str()
-        });
+        overlay_records(&mut records.contributions, batch.contributions);
+        overlay_records(&mut records.synthesis_packets, batch.synthesis_packets);
+        overlay_records(&mut records.proposals, batch.proposals);
+        overlay_records(&mut records.assertions, batch.assertions);
+        overlay_records(&mut records.dispositions, batch.dispositions);
     }
     Ok(records)
 }

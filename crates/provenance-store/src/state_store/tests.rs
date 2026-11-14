@@ -104,6 +104,8 @@ mod ideation;
 #[cfg(feature = "host")]
 mod ideation_duplicates;
 #[cfg(feature = "host")]
+mod ideation_overlay_order;
+#[cfg(feature = "host")]
 mod ideation_targets;
 #[cfg(feature = "host")]
 mod implementation_bindings;
