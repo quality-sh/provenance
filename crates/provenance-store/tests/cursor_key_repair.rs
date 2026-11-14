@@ -10,8 +10,7 @@ use provenance_core::{
 };
 use provenance_macros::verifies;
 use provenance_store::{
-    layout::ProvenanceLayout, operations::read_policy::ReadPolicy,
-    review::read_discussion_messages,
+    layout::ProvenanceLayout, operations::read_policy::ReadPolicy, review::read_discussion_messages,
 };
 use std::sync::{Arc, Barrier};
 
