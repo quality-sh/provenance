@@ -1,5 +1,6 @@
 use super::super::comparison::test_stores::{self, TestStore};
 use super::get_through;
+use crate::cache::tests::connection_settings::{settings_of, CACHE_SETTINGS};
 use crate::operations::read_policy::{FreshnessPolicy, ReadPolicy};
 use provenance_core::protocol::StampPolicy;
 use provenance_macros::verifies;
@@ -132,6 +133,32 @@ async fn a_half_migrated_projection_refuses_without_taking_the_lock() {
         ),
         "{error:#}"
     );
+}
+
+/// An implementation aid with no Rule binding: a stored read of a cache
+/// directory that this process cannot write falls back to the immutable
+/// image, and that open sets the cache settings. The stored-read open keeps
+/// the `SQLite` defaults, so the cache settings show that the answer comes
+/// from the immutable image.
+#[tokio::test]
+async fn the_immutable_fallback_of_a_stored_read_sets_the_cache_settings() {
+    let store = test_stores::seeded_queries();
+    get_through(&store, ReadPolicy::default()).await.unwrap();
+    let mut restore = Restore(Vec::new());
+    restore.set(store.layout().cache_dir(), 0o555);
+    let probe = store.layout().cache_dir().join("probe");
+    if std::fs::write(&probe, b"").is_ok() {
+        std::fs::remove_file(probe).unwrap();
+        eprintln!(
+            "SKIPPED the_immutable_fallback_of_a_stored_read_sets_the_cache_settings: this user \
+             writes through mode 0o555, so the fixture cannot make the directory unwritable"
+        );
+        return;
+    }
+    let connection = crate::cache::open_stored_cache(&store.layout())
+        .await
+        .unwrap();
+    assert_eq!(settings_of(connection).await, CACHE_SETTINGS);
 }
 
 #[tokio::test]
