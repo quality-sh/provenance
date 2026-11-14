@@ -389,5 +389,11 @@ fn two_batches_that_add_one_proposal_differently_conflict_and_keep_ours() {
     assert_eq!(conflicts[0]["theirs"]["title"], "Of theirs");
     assert_eq!(landing_lines(repo), [base, ours]);
     let read = json(repo, &["api", "proposals"]);
-    assert_eq!(read["data"]["items"][0]["title"], "Of ours", "{read}");
+    let proposal = read["data"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["id"] == "proposal_p")
+        .unwrap();
+    assert_eq!(proposal["title"], "Of ours", "{read}");
 }
