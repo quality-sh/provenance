@@ -25,20 +25,30 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// The memory adapter, with a count of its text calls. It gives the same
-/// version list, the same `Arc`, each time for a path.
+/// version list, the same `Arc`, each time for a path. The text of a
+/// commit in `unavailable` is an error that is not a UTF-8 error.
 #[derive(Debug)]
 struct Counted {
     memory: MemoryFileVersions,
     lists: Mutex<BTreeMap<String, Arc<Vec<FileVersion>>>>,
     texts: AtomicUsize,
+    unavailable: Vec<String>,
 }
+
+/// The error of a text in `Counted::unavailable`.
+const UNAVAILABLE: &str = "text store is unavailable";
 
 impl Counted {
     fn new(commits: &[Commit]) -> Arc<Self> {
+        Self::failing(commits, &[])
+    }
+
+    fn failing(commits: &[Commit], unavailable: &[&str]) -> Arc<Self> {
         Arc::new(Self {
             memory: MemoryFileVersions::new(commits),
             lists: Mutex::default(),
             texts: AtomicUsize::new(0),
+            unavailable: unavailable.iter().map(|&commit| commit.to_owned()).collect(),
         })
     }
 
@@ -66,6 +76,9 @@ impl FileVersions for Counted {
         commit: &'a str,
     ) -> BoxFuture<'a, anyhow::Result<Option<String>>> {
         self.texts.fetch_add(1, Ordering::SeqCst);
+        if self.unavailable.iter().any(|name| name == commit) {
+            return Box::pin(async { Err(anyhow::anyhow!(UNAVAILABLE)) });
+        }
         self.memory.text(path, commit)
     }
 }
@@ -109,23 +122,60 @@ async fn history(repository: &Repository, id: &str) -> anyhow::Result<ReviewHist
         .result)
 }
 
-/// Only a Git failure of the git adapter can win over an earlier text error,
-/// so the read asks another adapter for no text after an error.
-#[tokio::test]
-async fn a_text_error_of_another_adapter_ends_the_read() {
-    let (temp, _store) = fixture();
-    let (relative, text) = records(&temp);
-    let mut entries = vec![Entry::new(b"\xff\n".to_vec(), false)];
-    entries.extend((1..5).map(|index| Entry::text(&format!("{text}{index}\n"))));
-    let versions = Counted::new(&chain(&relative, entries));
+/// Five versions of the records file: `c0` is the oldest. The text at each
+/// index of `not_utf8` is not UTF-8.
+fn versions(temp: &tempfile::TempDir, not_utf8: &[usize], unavailable: &[&str]) -> Arc<Counted> {
+    let (relative, text) = records(temp);
+    let entries = (0..5)
+        .map(|index| {
+            if not_utf8.contains(&index) {
+                Entry::new(b"\xff\n".to_vec(), false)
+            } else {
+                Entry::text(&format!("{text}{index}\n"))
+            }
+        })
+        .collect();
+    Counted::failing(&chain(&relative, entries), unavailable)
+}
+
+/// The error of a history read of `req_a` through `versions`.
+async fn read_error(temp: &tempfile::TempDir, versions: &Arc<Counted>) -> String {
     let root = Utf8Path::from_path(temp.path()).unwrap();
     let repository = repository(root).with_file_versions(versions.clone());
     let error = history(&repository, "req_a").await.unwrap_err();
-    assert_eq!(
-        format!("{error:#}"),
-        "invalid utf-8 sequence of 1 bytes from index 0"
-    );
-    assert_eq!(versions.calls(), 1, "text calls after the error");
+    format!("{error:#}")
+}
+
+const NOT_UTF8: &str = "invalid utf-8 sequence of 1 bytes from index 0";
+
+/// An error that is not a UTF-8 error ends the read at once: the read asks
+/// for no text after it.
+#[tokio::test]
+async fn a_text_error_that_is_not_utf8_ends_the_read() {
+    let (temp, _store) = fixture();
+    let versions = versions(&temp, &[], &["c2"]);
+    assert_eq!(read_error(&temp, &versions).await, UNAVAILABLE);
+    assert_eq!(versions.calls(), 3, "two versions before the error, and the error");
+}
+
+/// After a text that is not UTF-8, the read asks for the remaining texts,
+/// and a later error of another kind wins.
+#[tokio::test]
+async fn a_later_error_wins_over_a_text_that_is_not_utf8() {
+    let (temp, _store) = fixture();
+    let versions = versions(&temp, &[0], &["c3"]);
+    assert_eq!(read_error(&temp, &versions).await, UNAVAILABLE);
+    assert_eq!(versions.calls(), 4, "no text call after the later error");
+}
+
+/// With no later error of another kind, the first text that is not UTF-8
+/// gives the error, after the read asks for each remaining text.
+#[tokio::test]
+async fn the_first_text_that_is_not_utf8_wins_with_no_later_error() {
+    let (temp, _store) = fixture();
+    let versions = versions(&temp, &[0, 2], &[]);
+    assert_eq!(read_error(&temp, &versions).await, NOT_UTF8);
+    assert_eq!(versions.calls(), 5, "each version");
 }
 
 /// A new read of the same version list reads no text, and a read of another
