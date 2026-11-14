@@ -1,3 +1,5 @@
+#[path = "cli_dictionary/damaged_reference.rs"]
+mod damaged_reference;
 #[path = "cli_dictionary/gate.rs"]
 mod gate;
 #[path = "cli_dictionary/import_command.rs"]
