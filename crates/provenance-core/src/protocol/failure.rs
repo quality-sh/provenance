@@ -154,3 +154,20 @@ impl From<FailureEnvelope> for ErasedFailure {
         Self::new(None, value.error)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::OperationFailure;
+
+    /// A Rust caller that formats an `access_denied` failure sees its message,
+    /// as the wire answer gives it.
+    #[test]
+    fn an_access_denied_failure_displays_its_message() {
+        let bare = OperationFailure::AccessDenied { message: None };
+        assert_eq!(bare.to_string(), "access denied");
+        let guided = OperationFailure::AccessDenied {
+            message: Some("Name the field.".to_owned()),
+        };
+        assert_eq!(guided.to_string(), "access denied: Name the field.");
+    }
+}
