@@ -208,7 +208,9 @@ fn planned_actor_change_is_rejected_without_managed_file_writes() {
 
     init(&repo, &["--disposition-actor-id", "maintainer"])
         .failure()
-        .stderr(predicates::str::contains("repository allowlist"));
+        .stderr(predicates::str::contains(
+            "does not contain the actor of a review decision in the state",
+        ));
 
     assert_eq!(
         std::fs::read(repo.join(".provenance/state/manifest.json")).unwrap(),
