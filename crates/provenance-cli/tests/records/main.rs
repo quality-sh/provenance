@@ -7,6 +7,7 @@
 
 #[path = "../support"]
 mod support {
+    pub mod import_reviews;
     pub mod record_review;
     pub mod review_paths;
 }
@@ -40,6 +41,8 @@ mod cli_id_charset_conformance;
 mod cli_import_exact_replacement;
 #[path = "../cli_import_record_count.rs"]
 mod cli_import_record_count;
+#[path = "../cli_import_review_guard.rs"]
+mod cli_import_review_guard;
 #[path = "../cli_import_review_records.rs"]
 mod cli_import_review_records;
 #[path = "../cli_import_threads.rs"]
