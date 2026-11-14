@@ -53,7 +53,7 @@ fn withdrawal(id: &str, submission: &Value, reason: &str) -> Value {
 #[verifies("rule_check_reports_review_row_faults", examples)]
 fn check_reports_two_submissions_with_one_cycle_at_the_second_line() {
     let (directory, submission) = repository();
-    let mut copied = submission.clone();
+    let mut copied = submission;
     copied["id"] = json!("submission_by_hand");
     append(directory.path(), PROPOSALS, &copied);
     let line = lines(directory.path(), PROPOSALS).len();

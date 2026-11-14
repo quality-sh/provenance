@@ -212,6 +212,25 @@ async fn merge_that_resolves_a_conflict_to_new_content_adds_one_version() {
         "merger",
         &["merge", "-q", "--no-edit", "-X", "ours", "feature"],
     );
+    // Each branch opened a review submission of req_a with review cycle 2.
+    // The merger removes the line of one of them, as the refusal of two
+    // submissions with one cycle says.
+    let proposals = temp
+        .path()
+        .join(".provenance/state/scopes/default/ideation/proposal_cards.jsonl");
+    let text = std::fs::read_to_string(&proposals).unwrap();
+    let mut lines = text.lines().collect::<Vec<_>>();
+    let cycle_two = "\"proposal_key\":\"review:requirement:req_a:2\"";
+    let removed = lines
+        .iter()
+        .rposition(|line| line.contains(cycle_two))
+        .unwrap();
+    lines.remove(removed);
+    let kept = lines
+        .iter()
+        .map(|line| format!("{line}\n"))
+        .collect::<String>();
+    std::fs::write(&proposals, kept).unwrap();
     store
         .save_requirement(save(
             &store,

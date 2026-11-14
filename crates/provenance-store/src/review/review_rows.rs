@@ -42,10 +42,9 @@ impl StoredRows {
             store,
             &shards::proposal_cards_path(layout, scope),
         )?);
-        let (dispositions, disposition_lines) = split(read_jsonl_located(
-            store,
-            &shards::dispositions_path(layout, scope),
-        )?);
+        // The order of the reads decides which error of a malformed file
+        // wins: the Withdrawals, then the Discussions, then the
+        // Dispositions.
         let (withdrawals, withdrawal_lines) = split(store.list_withdrawals_located(scope)?);
         let mut feedback = HashMap::new();
         for discussion in store.list_discussions(scope)? {
@@ -55,6 +54,10 @@ impl StoredRows {
                     .or_insert(discussion.root_message_id);
             }
         }
+        let (dispositions, disposition_lines) = split(read_jsonl_located(
+            store,
+            &shards::dispositions_path(layout, scope),
+        )?);
         Ok(Self {
             proposals,
             dispositions,
