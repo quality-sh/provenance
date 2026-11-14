@@ -2,7 +2,7 @@
 //!
 //! Implementation aid: no active Rule states the text of these refusals.
 
-use crate::review_host_support::bounded_process;
+use crate::bounded_process;
 use bounded_process::Bounded;
 
 /// Clap writes the name of the executable file in the usage line. On Windows, this name
