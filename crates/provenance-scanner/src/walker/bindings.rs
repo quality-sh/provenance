@@ -2,9 +2,8 @@
 //!
 //! Rust binds through `#[rule]`/`#[verifies]` attributes (plain, qualified,
 //! or wrapped across lines by rustfmt), Python through `@rule(...)`
-//! decorators, Go and Java through `rule(...)` calls, and JS/TS tests through
-//! `verifies(...)` calls, all found by the binding lexer. JS/TS production
-//! code binds only through comment annotations, so it imports no package.
+//! decorators, and JS/TS/Go/Java through `rule(...)` and `verifies(...)`
+//! calls found by the binding lexer.
 
 use std::str::FromStr;
 
@@ -52,7 +51,7 @@ pub(super) fn parse_binding_line(
                 }),
             )
         }
-        Language::JavaScript | Language::TypeScript => parse_verifies_call(line, in_block_comment),
+        Language::JavaScript | Language::TypeScript => parse_script_call(line, in_block_comment),
         Language::Go | Language::Java => Ok(parse_rule_call(line, in_block_comment)),
     }
 }
@@ -88,32 +87,46 @@ fn parse_python_decorator(line: &str) -> Option<(String, Option<Verification>)> 
     Some((quoted_literal(rest)?.0, None))
 }
 
-fn parse_verifies_call(
+fn parse_script_call(
     line: &str,
     in_block_comment: bool,
 ) -> Result<Option<ParsedBinding>, MalformedBinding> {
-    let Some(rest) = call_arguments(line, in_block_comment, "verifies") else {
+    if let Some(rest) = call_arguments(line, in_block_comment, "verifies") {
+        // A function or method declared with the name `verifies`, such as the
+        // helper's own `function verifies(ruleId, method)`, is not a binding
+        // site. A member call (`provenance.verifies(...)`) binds when it reads
+        // as one; otherwise it calls some other `verifies` and gives no
+        // warning. Every other call must read as a binding.
+        let before = &line[..line.len() - rest.len() - "verifies(".len()];
+        if declares_verifies(before, rest) {
+            return Ok(None);
+        }
+        let member_call = before.trim_end().ends_with('.');
+        let binding = quoted_literal(rest).and_then(|(rule_id, after_id)| {
+            let method = argument_after_comma(after_id).and_then(parse_method)?;
+            Some(one_line(rule_id, Some(method)))
+        });
+        return match binding {
+            Some(binding) => Ok(Some(binding)),
+            None if member_call => Ok(None),
+            None => Err(malformed_verifies(line)),
+        };
+    }
+    // A Rule-options object after the id marks the SDK's typed Rule
+    // declaration (`requirement.rule("key", { statement })`), which builds a
+    // test graph and never binds production code. A project's own binding
+    // helper — free or through a namespace import — passes an implementation
+    // function or value, so any other payload binds.
+    let Some(rest) = call_arguments(line, in_block_comment, "rule") else {
         return Ok(None);
     };
-    // A function or method declared with the name `verifies`, such as the
-    // helper's own `function verifies(ruleId, method)`, is not a binding
-    // site. A member call (`provenance.verifies(...)`) binds when it reads
-    // as one; otherwise it calls some other `verifies` and gives no
-    // warning. Every other call must read as a binding.
-    let before = &line[..line.len() - rest.len() - "verifies(".len()];
-    if declares_verifies(before, rest) {
+    let Some((rule_id, after_id)) = quoted_literal(rest) else {
         return Ok(None);
-    }
-    let member_call = before.trim_end().ends_with('.');
-    let binding = quoted_literal(rest).and_then(|(rule_id, after_id)| {
-        let method = argument_after_comma(after_id).and_then(parse_method)?;
-        Some(one_line(rule_id, Some(method)))
-    });
-    match binding {
-        Some(binding) => Ok(Some(binding)),
-        None if member_call => Ok(None),
-        None => Err(malformed_verifies(line)),
-    }
+    };
+    let Some(payload) = after_id.trim_start().strip_prefix(',') else {
+        return Ok(None);
+    };
+    Ok((!payload.trim_start().starts_with('{')).then(|| one_line(rule_id, None)))
 }
 
 /// Declaration keywords and modifiers that can come before a function or
