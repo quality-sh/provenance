@@ -1,7 +1,9 @@
 use super::sync_directory;
 use crate::storage::local::durability::write_synced_file;
 use crate::storage::local::whole_set::{InstallState, WholeSetHook};
-use crate::storage::local::{remove_transaction, FileInstall};
+use crate::storage::local::{
+    remove_marked_transaction, write_marker, FileInstall, TransactionKind,
+};
 use crate::{
     layout::ProvenanceLayout,
     operations::files::{
@@ -140,7 +142,7 @@ impl WholeSetHook for SourceEditPublication {
             backup_identity: backup.identity().clone(),
             backup_digest: backup.digest(),
         };
-        write_marker(live, &marker).context("write prepared source-edit marker")?;
+        write_source_edit_marker(live, &marker).context("write prepared source-edit marker")?;
         self.marker = Some(marker);
         crate::test_probes::at("source_edit_prepared")
     }
@@ -154,14 +156,14 @@ impl WholeSetHook for SourceEditPublication {
         sync_directory(&live.provenance_dir())?;
         let marker = self.marker.as_mut().expect("source-edit marker");
         marker.phase = SourceEditPhase::BackupCreated;
-        write_marker(live, marker)?;
+        write_source_edit_marker(live, marker)?;
         crate::test_probes::at("source_edit_backup_created")
     }
 
     fn state_installed(&mut self, live: &ProvenanceLayout) -> anyhow::Result<()> {
         let marker = self.marker.as_mut().expect("source-edit marker");
         marker.phase = SourceEditPhase::StateInstalled;
-        write_marker(live, marker)?;
+        write_source_edit_marker(live, marker)?;
         crate::test_probes::at("source_edit_state_installed")
     }
 
@@ -181,7 +183,7 @@ impl WholeSetHook for SourceEditPublication {
         let marker = self.marker.as_mut().expect("source-edit marker");
         marker.phase = SourceEditPhase::FileInstalled;
         crate::test_probes::at("source_edit_before_file_marker_write")?;
-        write_marker(live, marker)
+        write_source_edit_marker(live, marker)
     }
 
     fn after_published(&mut self) -> anyhow::Result<()> {
@@ -189,28 +191,43 @@ impl WholeSetHook for SourceEditPublication {
     }
 
     fn rollback_finished(&mut self, live: &ProvenanceLayout) -> anyhow::Result<()> {
-        std::fs::remove_file(live.source_edit_marker_path())?;
-        sync_directory(&live.cache_dir())
+        clear_marker(live)
     }
 
+    /// The state and the file are published, so the write succeeds when the
+    /// end of the transaction fails. The `FileInstalled` marker then stays,
+    /// and the next section entry ends the transaction.
     fn finish(&mut self, live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
-        finish(live, transaction)
+        let _ = end_published(live, transaction);
+        Ok(())
     }
 }
 
-pub(super) fn write_marker(
+pub(super) fn write_source_edit_marker(
     layout: &ProvenanceLayout,
     marker: &SourceEditMarker,
 ) -> anyhow::Result<()> {
-    write_synced_file(
-        &layout.source_edit_marker_path(),
+    write_marker(
+        layout,
+        TransactionKind::SourceEdit,
         &serde_json::to_vec(marker)?,
     )
 }
 
-pub(super) fn finish(layout: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
-    remove_transaction(transaction)?;
+/// Ends a source edit whose state and file are published: removes its
+/// transaction, if the transaction exists, and then the marker. It reads no
+/// file of the transaction, so a removal that stopped or failed after it
+/// removed a part of the transaction leaves a state that it can end.
+pub(super) fn end_published(
+    layout: &ProvenanceLayout,
+    transaction: &Utf8Path,
+) -> anyhow::Result<()> {
+    remove_marked_transaction(layout, TransactionKind::SourceEdit, transaction)?;
     crate::test_probes::at("source_edit_transaction_removed")?;
+    clear_marker(layout)
+}
+
+fn clear_marker(layout: &ProvenanceLayout) -> anyhow::Result<()> {
     std::fs::remove_file(layout.source_edit_marker_path())?;
     sync_directory(&layout.cache_dir())
 }

@@ -2,9 +2,8 @@
 //! `.provenance/cache/locks`, the checks of the directories it lives in, and
 //! the recovery of an interrupted publication before the section runs.
 
-use super::recovery::{
-    canonical_transactions_dir, create_real_directory, recover_pending_publication,
-};
+use super::recovery::{create_real_directory, recover_pending_publication};
+use super::transactions::{contained_directory, TransactionKind};
 use crate::layout::ProvenanceLayout;
 use crate::publication::recover_pending_source_edit;
 use crate::storage::SectionLock;
@@ -121,6 +120,6 @@ pub fn canonical_utf8(path: &Utf8Path, description: &str) -> anyhow::Result<Utf8
 
 fn prepare_transaction_dirs(layout: &ProvenanceLayout) -> anyhow::Result<()> {
     create_real_directory(&layout.import_transactions_dir())?;
-    canonical_transactions_dir(layout)?;
+    contained_directory(layout, TransactionKind::Import)?;
     create_real_directory(&layout.source_edit_transactions_dir())
 }

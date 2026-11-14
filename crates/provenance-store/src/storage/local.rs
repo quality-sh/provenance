@@ -29,7 +29,10 @@ pub(crate) use recovery::{validate_missing_transaction_dir, validated_transactio
 pub use section::LocalSectionLock;
 #[cfg(test)]
 pub(crate) use section::LockedPublicationFile;
-pub(crate) use transactions::{remove_leftovers, remove_transaction, TransactionKind};
+pub(crate) use transactions::{
+    contained_transaction, remove_leftovers, remove_marked_transaction, write_marker,
+    TransactionKind,
+};
 
 #[cfg(test)]
 pub(crate) use whole_set::copy_directory;
