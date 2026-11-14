@@ -3,7 +3,6 @@ use crate::publication::ShardBytes;
 #[cfg(feature = "host")]
 use provenance_core::VerificationRun;
 use provenance_core::{RequirementReview, ScopeId, StableId};
-#[cfg(feature = "host")]
 use provenance_macros::rule;
 use sha2::{Digest, Sha256};
 #[cfg(feature = "host")]
@@ -60,21 +59,40 @@ pub struct RequirementReviewInput {
     pub changed_at: i64,
 }
 
+/// One changed Requirement statement and the Rules whose evidence the change puts up for review.
+pub(crate) struct Restatement {
+    pub requirement_id: StableId,
+    pub before: String,
+    pub after: String,
+    pub rule_ids: Vec<StableId>,
+}
+
 impl StateStore {
-    /// Records why each Rule's evidence needs review after a Requirement changed.
-    ///
-    /// Re-applying the same change keeps the record already on file, so a
-    /// review a verification run already cleared does not reopen itself.
-    pub(crate) fn record_requirement_reviews(
+    /// Writes one review record for each Rule of each restated Requirement, at the time of the
+    /// store clock. A record of the same change that is on file stays, so a cleared review does
+    /// not open again.
+    #[rule("rule_review_record_per_rule")]
+    pub(crate) fn record_restatements(
         &self,
         scope: &ScopeId,
-        reviews: Vec<RequirementReviewInput>,
+        restatements: Vec<Restatement>,
     ) -> anyhow::Result<()> {
-        if reviews.is_empty() {
+        if restatements.iter().all(|change| change.rule_ids.is_empty()) {
             return Ok(());
         }
-        let desired = reviews
+        let changed_at = now_millis(&*self.clock())?;
+        let desired = restatements
             .into_iter()
+            .flat_map(|change| {
+                change.rule_ids.into_iter().map(move |rule_id| RequirementReviewInput {
+                    rule_id,
+                    requirement_id: change.requirement_id.clone(),
+                    field: "statement".into(),
+                    before: change.before.clone(),
+                    after: change.after.clone(),
+                    changed_at,
+                })
+            })
             .map(|review| review.into_record(scope))
             .collect::<anyhow::Result<Vec<_>>>()?;
         let path = shards::requirement_reviews_path(&self.layout, scope);

@@ -115,13 +115,8 @@ impl StateStore {
         requirements: &[ReconciledResource],
         rules: &[ReconciledResource],
     ) -> anyhow::Result<()> {
-        let changes = requirement_reviews::requirement_statement_changes(requirements);
-        if changes.is_empty() {
-            return Ok(());
-        }
-        let changed_at = requirement_reviews::now_millis(&*self.clock())?;
-        let mut reviews = Vec::new();
-        for change in changes {
+        let mut restatements = Vec::new();
+        for change in requirement_reviews::requirement_statement_changes(requirements) {
             let mut rule_ids = self.rule_ids_for_requirement(scope_id, &change.requirement_id)?;
             for rule in rules
                 .iter()
@@ -131,18 +126,14 @@ impl StateStore {
                     rule_ids.push(rule.id.clone());
                 }
             }
-            reviews.extend(rule_ids.into_iter().map(|rule_id| {
-                requirement_reviews::RequirementReviewInput {
-                    rule_id,
-                    requirement_id: change.requirement_id.clone(),
-                    field: change.field.clone(),
-                    before: change.before.clone(),
-                    after: change.after.clone(),
-                    changed_at,
-                }
-            }));
+            restatements.push(requirement_reviews::Restatement {
+                requirement_id: change.requirement_id,
+                before: change.before,
+                after: change.after,
+                rule_ids,
+            });
         }
-        self.record_requirement_reviews(scope_id, reviews)
+        self.record_restatements(scope_id, restatements)
     }
 
     fn validate_typed_spec(
