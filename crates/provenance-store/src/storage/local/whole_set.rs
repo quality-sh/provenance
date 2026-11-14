@@ -277,7 +277,6 @@ impl WholeSetHook for StatePublication {
     fn after_published(&mut self) -> anyhow::Result<()> {
         crate::test_probes::at("state_published")
     }
-
 }
 
 pub fn copy_directory(source: &Utf8Path, destination: &Utf8Path) -> anyhow::Result<()> {

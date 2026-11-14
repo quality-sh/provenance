@@ -53,9 +53,8 @@ fn a_failed_removal_of_the_backup_keeps_the_marker_until_a_section_entry_removes
     test_probes::disarm("repository_file_unlink_backup");
 
     let (backup, phase) = marked_backup(&layout);
-    let expected = format!(
-        "remove backup {backup}: repository file write failed: injected unlink failure"
-    );
+    let expected =
+        format!("remove backup {backup}: repository file write failed: injected unlink failure");
     assert_eq!(format!("{:#}", written.unwrap_err()), expected);
     assert_eq!(phase, "state_installed");
     assert_eq!(published(root), (AFTER.to_vec(), AFTER.to_vec()));

@@ -100,7 +100,10 @@ fn a_write_to_the_displaced_inode_is_kept_in_a_named_backup() {
     let backup = swap(&held, prepared).unwrap();
     crate::test_probes::disarm("repository_file_after_backup_check");
 
-    assert_eq!(std::fs::read(path.join(backup.leaf())).unwrap(), b"changed!");
+    assert_eq!(
+        std::fs::read(path.join(backup.leaf())).unwrap(),
+        b"changed!"
+    );
     assert_eq!(
         std::fs::read(path.join("source.txt")).unwrap(),
         b"replacement"

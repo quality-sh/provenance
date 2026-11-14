@@ -124,7 +124,11 @@ fn require_known_target(
 fn external_change(layout: &ProvenanceLayout, marker: &SourceEditMarker) -> anyhow::Error {
     let file = layout.root().join(&marker.target);
     let change = SourceEditRecoveryFailure::ExternalChange { file };
-    removal_failure(RemovalStep::Marked, &layout.source_edit_marker_path(), change)
+    removal_failure(
+        RemovalStep::Marked,
+        &layout.source_edit_marker_path(),
+        change,
+    )
 }
 
 /// Installs the replacement with the prepared file that the marker names.
