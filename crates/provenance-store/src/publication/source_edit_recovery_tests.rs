@@ -161,7 +161,11 @@ fn a_stopped_source_edit_leaves_no_transaction_after_the_next_section_entry() {
             Vec::<String>::new(),
             "{phase}: the cache keeps no transaction data"
         );
-        assert_eq!(std::fs::read(root.join("source.txt")).unwrap(), BEFORE, "{phase}");
+        assert_eq!(
+            std::fs::read(root.join("source.txt")).unwrap(),
+            BEFORE,
+            "{phase}"
+        );
         assert_eq!(
             std::fs::read(layout.state_dir().join("value")).unwrap(),
             BEFORE,

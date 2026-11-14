@@ -221,5 +221,8 @@ fn write_prepared_source_record(
     transaction: &Utf8Path,
     record: &PreparedSourceRecord,
 ) -> anyhow::Result<()> {
-    write_synced_file(&transaction.join("prepared-source.json"), &serde_json::to_vec(record)?)
+    write_synced_file(
+        &transaction.join("prepared-source.json"),
+        &serde_json::to_vec(record)?,
+    )
 }

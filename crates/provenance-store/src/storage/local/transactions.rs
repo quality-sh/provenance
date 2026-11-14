@@ -52,10 +52,7 @@ pub fn remove_leftovers(
 }
 
 /// The resolved path of each leftover of `kind`, in name order.
-fn leftovers(
-    layout: &ProvenanceLayout,
-    kind: TransactionKind,
-) -> anyhow::Result<Vec<Utf8PathBuf>> {
+fn leftovers(layout: &ProvenanceLayout, kind: TransactionKind) -> anyhow::Result<Vec<Utf8PathBuf>> {
     let directory = kind.directory(layout);
     let listed = |error: std::io::Error| crate::refusal::caused(error, format!("list {directory}"));
     let mut found = Vec::new();
@@ -95,7 +92,10 @@ fn correction(error: &std::io::Error) -> Option<&'static str> {
     {
         const ERROR_SHARING_VIOLATION: i32 = 32;
         const ERROR_LOCK_VIOLATION: i32 = 33;
-        if matches!(error.raw_os_error(), Some(ERROR_SHARING_VIOLATION | ERROR_LOCK_VIOLATION)) {
+        if matches!(
+            error.raw_os_error(),
+            Some(ERROR_SHARING_VIOLATION | ERROR_LOCK_VIOLATION)
+        ) {
             return Some("close the program that has a file of this directory open");
         }
     }

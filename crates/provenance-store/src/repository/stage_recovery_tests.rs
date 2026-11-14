@@ -260,7 +260,10 @@ fn a_failed_removal_of_a_stopped_transaction_names_the_step_and_the_path() {
     std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o755)).unwrap();
 
     let error = crate::write_error::WriteError(result.unwrap_err());
-    assert!(matches!(error.safe(), crate::write_error::WriteFailure::WriteFailed { .. }));
+    assert!(matches!(
+        error.safe(),
+        crate::write_error::WriteFailure::WriteFailed { .. }
+    ));
     assert_eq!(
         format!("{:#}", error.0),
         format!(
