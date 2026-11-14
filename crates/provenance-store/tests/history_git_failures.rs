@@ -105,6 +105,19 @@ async fn a_sha1_length_name_in_a_sha256_repository_has_no_text() {
     assert_eq!(text, None);
 }
 
+/// With `HEAD` on a branch with no commit, the adapter gives no versions and
+/// no text, also for a commit that the repository holds.
+#[tokio::test]
+async fn a_head_with_no_commit_gives_no_text() {
+    let temp = tempfile::tempdir().unwrap();
+    let (root, commit) = repository(&temp, &[("good.jsonl", "good\n")]);
+    git(root.as_std_path(), &["checkout", "-q", "--orphan", "empty"]);
+    let versions = GitFileVersions::new(root);
+    let text = versions.text("good.jsonl", &commit).await.unwrap();
+    assert_eq!(text, None);
+    assert!(versions.versions("good.jsonl").await.unwrap().is_empty());
+}
+
 /// Makes the stored object of `path` at `commit` an object of a type that
 /// Git does not know, so that `git cat-file` stops before it answers.
 pub fn unknown_type(root: &Path, commit: &str, path: &str) {

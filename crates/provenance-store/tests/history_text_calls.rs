@@ -48,7 +48,10 @@ impl Counted {
             memory: MemoryFileVersions::new(commits),
             lists: Mutex::default(),
             texts: AtomicUsize::new(0),
-            unavailable: unavailable.iter().map(|&commit| commit.to_owned()).collect(),
+            unavailable: unavailable
+                .iter()
+                .map(|&commit| commit.to_owned())
+                .collect(),
         })
     }
 
@@ -155,7 +158,11 @@ async fn a_text_error_that_is_not_utf8_ends_the_read() {
     let (temp, _store) = fixture();
     let versions = versions(&temp, &[], &["c2"]);
     assert_eq!(read_error(&temp, &versions).await, UNAVAILABLE);
-    assert_eq!(versions.calls(), 3, "two versions before the error, and the error");
+    assert_eq!(
+        versions.calls(),
+        3,
+        "two versions before the error, and the error"
+    );
 }
 
 /// After a text that is not UTF-8, the read asks for the remaining texts,
