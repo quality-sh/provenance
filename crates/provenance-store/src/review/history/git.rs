@@ -89,14 +89,13 @@ impl GitFileVersions {
             .as_ref()
             .filter(|read| read.root == self.root)
             .map(|read| (read.prefix.clone(), read.head.len()));
-        let (prefix, id_length) = match known {
-            Some(known) => known,
-            None => {
-                let head = repository_head(&self.root).ok_or_else(|| {
-                    crate::refusal::fault!("record history repository is unavailable")
-                })?;
-                (head.prefix, head.commit.len())
-            }
+        let (prefix, id_length) = if let Some(known) = known {
+            known
+        } else {
+            let head = repository_head(&self.root).ok_or_else(|| {
+                crate::refusal::fault!("record history repository is unavailable")
+            })?;
+            (head.prefix, head.commit.len())
         };
         Batch::start(&self.root, prefix, id_length)
     }
