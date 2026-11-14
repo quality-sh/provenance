@@ -39,9 +39,7 @@ async fn disposition_actor_allowlist_and_its_empty_list_are_retained() {
     .await
     .unwrap_err();
     assert!(
-        empty
-            .to_string()
-            .contains("no disposition actors configured"),
+        empty.to_string().contains("disposition_actor_ids is empty"),
         "{empty}"
     );
     allow_actor(&store, "reviewer");
@@ -57,7 +55,7 @@ async fn disposition_actor_allowlist_and_its_empty_list_are_retained() {
     assert!(
         error
             .to_string()
-            .contains("disposition actor is not in the repository allowlist"),
+            .contains("does not contain the actor of a review decision"),
         "{error}"
     );
     assert_eq!(

@@ -1,7 +1,8 @@
 use super::*;
 
-pub fn git(repo: &str, args: &[&str]) -> String {
-    let result = provenance_store::git_process::git()
+/// Runs one Git command on `repo` and gives its output, whatever its status.
+pub fn git_output(repo: &str, args: &[&str]) -> std::process::Output {
+    provenance_store::git_process::git()
         .args([
             "-c",
             "user.name=Reviewer",
@@ -12,7 +13,11 @@ pub fn git(repo: &str, args: &[&str]) -> String {
         .args(args)
         .current_dir(repo)
         .output()
-        .unwrap();
+        .unwrap()
+}
+
+pub fn git(repo: &str, args: &[&str]) -> String {
+    let result = git_output(repo, args);
     assert!(result.status.success(), "git {args:?} failed: {result:?}");
     String::from_utf8(result.stdout).unwrap().trim().to_owned()
 }
