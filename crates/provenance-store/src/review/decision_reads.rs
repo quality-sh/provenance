@@ -194,7 +194,7 @@ impl StateStore {
             pending,
             current_acceptance,
             decisions: recorded,
-            withdrawn: facts.withdrawn_submissions(kind, record_id),
+            withdrawn: facts.withdrawn_submissions_of_record(kind, record_id),
         })
     }
 
