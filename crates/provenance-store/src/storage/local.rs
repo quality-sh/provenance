@@ -156,7 +156,7 @@ impl LocalStateStorage {
             })
             .collect::<anyhow::Result<Vec<_>>>()
             .map_err(PublishFailure::Refused)?;
-        let mut changed = false;
+        let mut touched = false;
         for (key, bytes) in changes {
             let path = self.layout.state_dir().join(key.as_str());
             let landed = bytes.map_or_else(
@@ -164,8 +164,8 @@ impl LocalStateStorage {
                 |bytes| durability::write_synced_file(&path, bytes).map(|()| true),
             );
             match landed {
-                Ok(landed) => changed |= landed,
-                Err(error) if changed || error.is::<durability::ChangedUnsynced>() => {
+                Ok(landed) => touched |= landed,
+                Err(error) if touched || error.is::<durability::ChangedUnsynced>() => {
                     return Err(PublishFailure::Started(error));
                 }
                 Err(error) => return Err(PublishFailure::Refused(error)),
