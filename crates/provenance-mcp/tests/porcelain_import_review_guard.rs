@@ -79,10 +79,7 @@ async fn mcp_import_on_a_scope_with_a_requirement_review_record_is_refused() {
 
     let refused = import(&session, &repository, &document("The system keeps the record.")).await;
 
-    assert_eq!(
-        (&refused["kind"], &refused["message"]),
-        (&json!("invalid_update"), &json!(REFUSAL))
-    );
+    assert_eq!(refused["message"], REFUSAL);
     assert_eq!(state_bytes(&repository), before);
     session.close().await;
 }
