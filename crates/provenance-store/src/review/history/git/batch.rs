@@ -27,12 +27,28 @@ pub(super) struct Batch {
     diagnostic: Option<JoinHandle<Vec<u8>>>,
     /// The path of the repository root inside its work tree.
     prefix: String,
+    /// The number of digits of a commit id of the repository.
+    id_length: usize,
+}
+
+/// Refuses a part of a request name with a line break. Git reads a request
+/// to its line feed, and takes a carriage return before the line feed as
+/// part of the line break. Another line feed would make two requests, and
+/// the answer of the second would be read as the answer to the next text.
+pub(super) fn refuse_line_break(part: &str) -> anyhow::Result<()> {
+    crate::write_error::ensure!(
+        Fault,
+        !part.contains('\n') && !part.ends_with('\r'),
+        "git cat-file cannot read a name with a line break"
+    );
+    Ok(())
 }
 
 impl Batch {
     /// Starts the process in `root`, whose path inside its work tree is
-    /// `prefix`.
-    pub(super) fn start(root: &Utf8Path, prefix: String) -> anyhow::Result<Self> {
+    /// `prefix` and whose commit ids have `id_length` digits.
+    pub(super) fn start(root: &Utf8Path, prefix: String, id_length: usize) -> anyhow::Result<Self> {
+        refuse_line_break(&prefix)?;
         let mut child = command(root)
             .args(["cat-file", "--batch"])
             .stdin(Stdio::piped())
@@ -42,18 +58,34 @@ impl Batch {
         let input = child.stdin.take().expect("piped stdin");
         let output = BufReader::new(child.stdout.take().expect("piped stdout"));
         let mut stderr = child.stderr.take().expect("piped stderr");
-        let diagnostic = std::thread::spawn(move || {
-            let mut bytes = Vec::new();
-            let _ = stderr.read_to_end(&mut bytes);
-            bytes
-        });
+        let diagnostic = std::thread::Builder::new()
+            .name("git cat-file standard error".to_owned())
+            .spawn(move || {
+                let mut bytes = Vec::new();
+                let _ = stderr.read_to_end(&mut bytes);
+                bytes
+            });
+        let diagnostic = match diagnostic {
+            Ok(diagnostic) => diagnostic,
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(error.into());
+            }
+        };
         Ok(Self {
             child,
             input,
             output,
             diagnostic: Some(diagnostic),
             prefix,
+            id_length,
         })
+    }
+
+    /// The number of digits of a commit id of the repository.
+    pub(super) const fn id_length(&self) -> usize {
+        self.id_length
     }
 
     /// The bytes of `relative` at `commit`. `None` when Git holds no object
@@ -64,16 +96,8 @@ impl Batch {
         commit: &str,
         relative: &str,
     ) -> anyhow::Result<Option<Vec<u8>>> {
+        // The adapter refuses a path with a line break, and `start` a prefix.
         let name = format!("{commit}:{}{relative}", self.prefix);
-        // Git reads a request to its line feed, and takes a carriage return
-        // before the line feed as part of the line break. Another line feed
-        // would make two requests, and the answer of the second would be
-        // read as the answer to the next text.
-        crate::write_error::ensure!(
-            Fault,
-            !name.contains('\n') && !name.ends_with('\r'),
-            "git cat-file cannot read a name with a line break"
-        );
         let request = self
             .input
             .write_all(format!("{name}\n").as_bytes())

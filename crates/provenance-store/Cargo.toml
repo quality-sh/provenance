@@ -145,6 +145,10 @@ name = "history_text_calls"
 required-features = ["host"]
 
 [[test]]
+name = "history_git_children"
+required-features = ["host"]
+
+[[test]]
 name = "review_history_head_move"
 required-features = ["host"]
 
@@ -167,3 +171,6 @@ jsonschema.workspace = true
 filetime.workspace = true
 tempfile.workspace = true
 trybuild.workspace = true
+
+[target.'cfg(windows)'.dev-dependencies]
+windows-sys = { workspace = true, features = ["Win32_System_Diagnostics_ToolHelp"] }

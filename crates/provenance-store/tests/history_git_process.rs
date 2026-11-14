@@ -1,12 +1,15 @@
-//! The life of the `git cat-file` process of the git adapter.
+//! The `git cat-file` process of the git adapter, seen through a `git` that
+//! logs it.
 //!
-//! Implementation aid with no Rule binding: no Rule states how long the git
-//! adapter keeps a Git process. A `git` first on PATH runs the real Git, and
-//! for `cat-file` writes the process id to `.git/cat-file-pids` of the
-//! repository. A word in `.git/cat-file-mode` changes what it does:
-//! `noisy` writes more than a pipe holds to standard error first, and
-//! `short` gives an answer that ends before its object. The script is a
-//! shell script, so the tests are Unix-only.
+//! Implementation aid with no Rule binding: no Rule states when the git
+//! adapter starts a Git process. A `git` first on PATH runs the real Git,
+//! and for `cat-file` writes the process id to `.git/cat-file-pids` of the
+//! repository. When `.git/cat-file-mode` holds `short`, it gives an answer
+//! that ends before its object. The real Git cannot give such an answer,
+//! and the process list cannot show a process that started and stopped
+//! between two looks. The script is a shell script, so the tests are
+//! Unix-only. `history_git_children` tests the life of the process on each
+//! platform.
 #![cfg(unix)]
 
 #[path = "history_git/repository.rs"]
@@ -16,7 +19,6 @@ use provenance_store::review::history::{FileVersions, GitFileVersions};
 use repository::repository;
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
-use std::time::{Duration, Instant};
 
 /// Puts the logging `git` first on PATH, once for the test binary, before
 /// any test starts Git.
@@ -35,10 +37,9 @@ fn logging_git() {
             &wrapper,
             format!(
                 "#!/bin/sh\ncase \" $* \" in *' cat-file '*)\n\
-                 mode=$(cat .git/cat-file-mode 2>/dev/null)\n\
                  echo $$ >> .git/cat-file-pids\n\
-                 if [ \"$mode\" = short ]; then read -r name; printf 'x blob 10\\nabc'; exit 0; fi\n\
-                 if [ \"$mode\" = noisy ]; then head -c 200000 /dev/zero | tr '\\000' e >&2; fi;;\n\
+                 if [ \"$(cat .git/cat-file-mode 2>/dev/null)\" = short ]; then\n\
+                 read -r name; printf 'x blob 10\\nabc'; exit 0; fi;;\n\
                  esac\nexec '{real}' \"$@\"\n"
             ),
         )
@@ -54,85 +55,27 @@ fn logging_git() {
     });
 }
 
-/// The last `cat-file` process that started in the repository at `root`.
-fn last_pid(root: &Path) -> String {
-    let pids = std::fs::read_to_string(root.join(".git/cat-file-pids")).unwrap();
-    pids.lines().last().unwrap().to_owned()
-}
-
-/// A process that ended and that its parent waited for is gone; a process
-/// that ended with no wait stays as a zombie, which `kill -0` still finds.
-fn running(pid: &str) -> bool {
-    std::process::Command::new("sh")
-        .args(["-c", &format!("kill -0 {pid} 2>/dev/null")])
-        .status()
-        .unwrap()
-        .success()
-}
-
-/// The text of `good.jsonl` at `commit`, read on its own thread, or `None`
-/// when the read does not end in 30 seconds.
-fn text_or_hang(versions: std::sync::Arc<GitFileVersions>, commit: String) -> Option<String> {
-    let (sender, receiver) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .build()
-            .unwrap();
-        let text = runtime.block_on(versions.text("good.jsonl", &commit));
-        let _ = sender.send(text.unwrap());
-    });
-    receiver
-        .recv_timeout(Duration::from_secs(30))
-        .ok()
-        .flatten()
+/// The number of `cat-file` processes that started in the repository at
+/// `root`.
+fn starts(root: &Path) -> usize {
+    std::fs::read_to_string(root.join(".git/cat-file-pids"))
+        .map(|pids| pids.lines().count())
+        .unwrap_or(0)
 }
 
 #[tokio::test]
-async fn a_dropped_adapter_stops_its_process_at_once() {
+async fn a_refused_name_starts_no_process() {
     logging_git();
     let temp = tempfile::tempdir().unwrap();
     let (root, commit) = repository(&temp, &[("good.jsonl", "good\n")]);
     let versions = GitFileVersions::new(root);
-    let text = versions.text("good.jsonl", &commit).await.unwrap();
-    assert_eq!(text.as_deref(), Some("good\n"));
-    let pid = last_pid(temp.path());
-    assert!(running(&pid), "the process stopped before the drop");
-    drop(versions);
-    assert!(!running(&pid), "the process {pid} stays after the drop");
-}
-
-#[tokio::test]
-async fn an_idle_process_stops_while_its_adapter_is_held() {
-    logging_git();
-    let temp = tempfile::tempdir().unwrap();
-    let (root, commit) = repository(&temp, &[("good.jsonl", "good\n")]);
-    let versions = GitFileVersions::new(root);
-    versions.text("good.jsonl", &commit).await.unwrap();
-    let pid = last_pid(temp.path());
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while running(&pid) && Instant::now() < deadline {
-        std::thread::sleep(Duration::from_millis(100));
+    for path in ["go\nod.jsonl", "good.jsonl\r"] {
+        assert!(versions.text(path, &commit).await.is_err(), "{path:?}");
     }
-    assert!(!running(&pid), "the idle process {pid} stays");
+    assert_eq!(starts(temp.path()), 0);
     let text = versions.text("good.jsonl", &commit).await.unwrap();
     assert_eq!(text.as_deref(), Some("good\n"));
-    assert_ne!(last_pid(temp.path()), pid, "no new process started");
-}
-
-/// The adapter reads the standard error of the process while the process
-/// runs, so the process does not wait for it to be read.
-#[tokio::test]
-async fn a_process_that_writes_much_to_standard_error_still_answers() {
-    logging_git();
-    let temp = tempfile::tempdir().unwrap();
-    let (root, commit) = repository(&temp, &[("good.jsonl", "good\n")]);
-    std::fs::write(temp.path().join(".git/cat-file-mode"), "noisy").unwrap();
-    let versions = std::sync::Arc::new(GitFileVersions::new(root));
-    assert_eq!(
-        text_or_hang(versions, commit).as_deref(),
-        Some("good\n"),
-        "the read did not end"
-    );
+    assert_eq!(starts(temp.path()), 1);
 }
 
 #[tokio::test]

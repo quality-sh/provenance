@@ -17,8 +17,18 @@ pub fn git(root: &Path, args: &[&str]) -> String {
 /// A repository whose one commit holds each of `files` with its text. Gives
 /// the root and the commit id.
 pub fn repository(temp: &tempfile::TempDir, files: &[(&str, &str)]) -> (Utf8PathBuf, String) {
+    repository_in(temp, &["init", "-q"], files)
+}
+
+/// A repository that `init` makes, whose one commit holds each of `files`
+/// with its text. Gives the root and the commit id.
+pub fn repository_in(
+    temp: &tempfile::TempDir,
+    init: &[&str],
+    files: &[(&str, &str)],
+) -> (Utf8PathBuf, String) {
     let root = temp.path();
-    git(root, &["init", "-q"]);
+    git(root, init);
     for (path, text) in files {
         std::fs::write(root.join(path), text).unwrap();
         git(root, &["add", path]);

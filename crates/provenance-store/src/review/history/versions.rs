@@ -93,7 +93,10 @@ pub trait FileVersions: Send + Sync + Debug {
     ///
     /// A history read asks for one text at a time and keeps only what it
     /// finds in it, so an adapter that reads each text on demand holds at
-    /// most one text of the read.
+    /// most one text of the read. An error of a text ends the history read
+    /// with that error, and the read asks the adapter for no more texts.
+    /// Only the git adapter, [`GitFileVersions`](super::GitFileVersions), gets
+    /// the remaining texts of the file after an error.
     fn text<'a>(
         &'a self,
         path: &'a str,

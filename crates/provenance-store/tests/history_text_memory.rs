@@ -4,8 +4,8 @@
 //! Implementation aid with no Rule binding: the test process counts the
 //! bytes that it holds through its allocator. A history read of many large
 //! committed texts adds less than two texts at its peak, and less than a
-//! quarter of one text stays after it. The count does not depend on timing. This binary holds one test, so no other test adds
-//! to the count.
+//! quarter of one text stays after it. The count does not depend on
+//! timing. This binary holds one test, so no other test adds to the count.
 
 mod discussion_support;
 use camino::Utf8Path;

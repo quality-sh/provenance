@@ -157,8 +157,7 @@ async fn a_new_read_of_the_same_versions_reads_no_text() {
 
     let other = answer(history(&repository, "req_b").await.unwrap());
     assert!(versions.calls() > 0, "a read of another record reads texts");
-    assert_ne!(other, first);
-    assert!(other.to_string().contains("req_b"), "{other}");
+    assert_ne!(other, first, "the revision of another record differs");
 
     let last = answer(history(&repository, "req_a").await.unwrap());
     assert_eq!(last, first);

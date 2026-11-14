@@ -5,9 +5,10 @@ mod batch;
 
 use super::versions::{BoxFuture, FileVersion, FileVersions};
 use crate::stale::git::command;
-use batch::Batch;
 pub(super) use batch::Failed;
+use batch::{refuse_line_break, Batch};
 use camino::{Utf8Path, Utf8PathBuf};
+use std::cell::Cell;
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError, Weak};
 use std::time::Duration;
 
@@ -24,6 +25,10 @@ use std::time::Duration;
 /// dropped, at an error, or when the adapter reads no text for one to two
 /// seconds, so an adapter that an embedder keeps does not keep the pack files
 /// of the repository open. The next text starts a new process.
+///
+/// After a text error, a history read through this adapter asks for the
+/// remaining texts of the file, and a Git failure among them wins over that
+/// error, as when one Git process read every text of the file.
 pub struct GitFileVersions {
     root: Utf8PathBuf,
     texts: OnceLock<Arc<Mutex<Texts>>>,
@@ -59,35 +64,41 @@ impl GitFileVersions {
     /// is none. The process is out of its lock while it reads, so two reads
     /// at the same time use two processes, and the adapter keeps one of them.
     /// An error of the process stops it, so the next text starts a new one.
+    /// A name that the adapter refuses does not use the process.
     fn read_text(&self, relative: &str, commit: &str) -> anyhow::Result<Option<String>> {
-        if !is_commit_id(commit) {
+        refuse_line_break(relative)?;
+        if !is_commit_id(commit, commit.len()) {
             return Ok(None);
         }
         let taken = lock(self.texts()).batch.take();
         let mut batch = taken.map_or_else(|| self.start(), Ok)?;
-        let bytes = batch.bytes(commit, relative)?;
+        let bytes = if is_commit_id(commit, batch.id_length()) {
+            batch.bytes(commit, relative)?
+        } else {
+            None
+        };
         self.keep(batch);
         Ok(bytes.map(String::from_utf8).transpose()?)
     }
 
-    /// Starts the batch process. The prefix of a root does not change, so
-    /// the last version read of the root gives it when there is one.
+    /// Starts the batch process. The prefix of a root and the length of its
+    /// commit ids do not change, so the last version read of the root gives
+    /// them when there is one.
     fn start(&self) -> anyhow::Result<Batch> {
         let known = lock(&LAST_READ)
             .as_ref()
             .filter(|read| read.root == self.root)
-            .map(|read| read.prefix.clone());
-        let prefix = match known {
-            Some(prefix) => prefix,
+            .map(|read| (read.prefix.clone(), read.head.len()));
+        let (prefix, id_length) = match known {
+            Some(known) => known,
             None => {
-                repository_head(&self.root)
-                    .ok_or_else(|| {
-                        crate::refusal::fault!("record history repository is unavailable")
-                    })?
-                    .prefix
+                let head = repository_head(&self.root).ok_or_else(|| {
+                    crate::refusal::fault!("record history repository is unavailable")
+                })?;
+                (head.prefix, head.commit.len())
             }
         };
-        Batch::start(&self.root, prefix)
+        Batch::start(&self.root, prefix, id_length)
     }
 
     /// Puts the process back after a read, and starts the idle stop when no
@@ -130,11 +141,28 @@ fn stop_when_idle(texts: &Weak<Mutex<Texts>>) {
     }
 }
 
-/// A full commit id: 40 hexadecimal digits, or 64 in a SHA-256 repository.
-/// Another name, such as an empty name or `HEAD`, is not a commit that the
-/// adapter holds.
-fn is_commit_id(commit: &str) -> bool {
-    matches!(commit.len(), 40 | 64) && commit.bytes().all(|byte| byte.is_ascii_hexdigit())
+/// A full commit id of a repository whose commit ids have `length` digits:
+/// 40 hexadecimal digits, or 64 in a SHA-256 repository. Git reads upper-case
+/// digits as the same id. Another name, such as an empty name, `HEAD` or the
+/// first 40 digits of a SHA-256 id, is not a commit that the adapter holds.
+fn is_commit_id(commit: &str, length: usize) -> bool {
+    matches!(length, 40 | 64)
+        && commit.len() == length
+        && commit.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+thread_local! {
+    /// The last text call on this thread went to a git adapter.
+    static GIT_TEXT: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Calls `text`, and tells whether a git adapter gave the text on this
+/// thread. The git adapter reads a text before it returns its future, so
+/// the answer is known when `text` returns.
+pub(super) fn answered_by_git<T>(text: impl FnOnce() -> T) -> (T, bool) {
+    GIT_TEXT.set(false);
+    let answer = text();
+    (answer, GIT_TEXT.take())
 }
 
 /// Shows the root; the batch process is not a value of the adapter.
@@ -169,6 +197,7 @@ impl FileVersions for GitFileVersions {
         commit: &'a str,
     ) -> BoxFuture<'a, anyhow::Result<Option<String>>> {
         let text = self.read_text(path, commit);
+        GIT_TEXT.set(true);
         Box::pin(std::future::ready(text))
     }
 }
