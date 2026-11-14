@@ -78,10 +78,11 @@ fn rule_doc_headers_stay_within_their_budget() {
 /// crate in exactly one test target.
 ///
 /// A crate with `autotests = false` lists its test targets. A group target
-/// `tests/<group>/main.rs` loads test files of `tests/` as modules. A new test
-/// file that no target loads is not compiled, so its tests do not run. A file
-/// in two targets runs its tests two times. This is an aid for the test
-/// layout. No Rule states the layout.
+/// `tests/<group>/main.rs` loads test files of `tests/` as modules. A group
+/// main.rs that is not a target, and a new test file that no target loads, are
+/// not compiled, so their tests do not run. A file in two targets runs its
+/// tests two times. This is an aid for the test layout. No Rule states the
+/// layout.
 #[test]
 fn each_test_file_is_in_a_test_target() {
     let (faults, files_seen) =
