@@ -65,7 +65,7 @@ impl InitEnding {
         if let InitResult::Applied(summary) = &mut self.result {
             for (path, existed) in changes {
                 if *existed {
-                    summary.push_changed(path, "added the Provenance SDK dependency");
+                    summary.push_changed(path, "added the Provenance SDK development dependency");
                 } else {
                     summary.push_new(path, "created by Cargo");
                 }
