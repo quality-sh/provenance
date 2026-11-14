@@ -6,13 +6,15 @@ use camino::{Utf8Path, Utf8PathBuf};
 use discussion_support::*;
 use provenance_core::{
     protocol::{read_failure::ReadFailure, Stamped},
-    threads::{Discussion, DiscussionMessagesPage, DiscussionMessagesQuery, DiscussionSelector},
+    threads::{Discussion, DiscussionMessagesPage},
 };
 use provenance_macros::verifies;
 use provenance_store::{
-    layout::ProvenanceLayout, operations::read_policy::ReadPolicy, review::read_discussion_messages,
+    layout::ProvenanceLayout,
+    operations::read_policy::{FreshnessPolicy, ReadPolicy},
+    review::read_discussion_messages,
 };
-use std::sync::{Arc, Barrier};
+use std::sync::{mpsc, Arc, Barrier};
 
 /// The key file in the cache of the repository at `root`.
 fn key_path(root: &Utf8Path) -> Utf8PathBuf {
@@ -28,50 +30,36 @@ fn write_key_file(root: &Utf8Path, bytes: &[u8]) {
     std::fs::write(path, bytes).unwrap();
 }
 
-/// A Discussion with five Messages: three pages at a limit of two.
-fn discussion(store: &provenance_store::state_store::StateStore) -> Discussion {
-    let mut latest = start(store, "a");
-    for n in 0..4 {
-        latest = store
-            .write_discussion(reply(&latest, &format!("reply_{n}")))
-            .unwrap();
-    }
-    latest
-}
-
-/// One page of two Messages of `latest`, from `cursor` or from the start.
+/// One page of two Messages of `latest` under `policy`, from `cursor` or
+/// from the start.
 async fn page(
     root: &Utf8Path,
+    policy: ReadPolicy,
     latest: &Discussion,
     cursor: Option<String>,
 ) -> anyhow::Result<Stamped<DiscussionMessagesPage>> {
-    read_discussion_messages(
-        &repository(root),
-        ReadPolicy::default(),
-        DiscussionMessagesQuery {
-            parent: latest.parent.clone(),
-            selector: DiscussionSelector::Discussion {
-                discussion_id: latest.discussion_id.clone(),
-            },
-            limit: 2,
-            cursor,
-        },
-    )
-    .await
+    read_discussion_messages(&repository(root), policy, messages_query(latest, 2, cursor)).await
 }
+
+/// The policy of a read that takes no publication guard.
+const ANNOTATE_ONLY: ReadPolicy = ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly);
 
 /// A read with the key file `bad` succeeds, the file then holds a key of
 /// 32 bytes, and the next read accepts the cursor of the first read.
 async fn assert_replaced(bad: &[u8]) {
     let (temp, store) = fixture();
     let root = Utf8Path::from_path(temp.path()).unwrap();
-    let latest = discussion(&store);
+    let latest = five_messages(&store);
     write_key_file(root, bad);
-    let first = page(root, &latest, None).await.unwrap();
+    let first = page(root, ReadPolicy::default(), &latest, None)
+        .await
+        .unwrap();
     assert_eq!(first.result.entries.len(), 2);
     assert_eq!(std::fs::read(key_path(root)).unwrap().len(), 32);
     let cursor = first.result.next_cursor.expect("page one continues");
-    let second = page(root, &latest, Some(cursor)).await.unwrap();
+    let second = page(root, ReadPolicy::default(), &latest, Some(cursor))
+        .await
+        .unwrap();
     assert_eq!(second.result.entries.len(), 2);
     assert!(second.result.next_cursor.is_some(), "page two continues");
 }
@@ -94,17 +82,23 @@ async fn a_read_replaces_a_key_file_of_a_wrong_length() {
 async fn refusal_after(lose: impl FnOnce(&Utf8Path)) -> ReadFailure {
     let (temp, store) = fixture();
     let root = Utf8Path::from_path(temp.path()).unwrap();
-    let latest = discussion(&store);
-    let first = page(root, &latest, None).await.unwrap();
+    let latest = five_messages(&store);
+    let first = page(root, ReadPolicy::default(), &latest, None)
+        .await
+        .unwrap();
     let cursor = first.result.next_cursor.expect("page one continues");
     lose(root);
-    let error = page(root, &latest, Some(cursor)).await.unwrap_err();
+    let error = page(root, ReadPolicy::default(), &latest, Some(cursor))
+        .await
+        .unwrap_err();
     let refusal = error
         .downcast_ref::<ReadFailure>()
         .unwrap_or_else(|| panic!("a typed read refusal: {error:#}"))
         .clone();
     assert_eq!(std::fs::read(key_path(root)).unwrap().len(), 32);
-    let restarted = page(root, &latest, None).await.unwrap();
+    let restarted = page(root, ReadPolicy::default(), &latest, None)
+        .await
+        .unwrap();
     assert_eq!(restarted.result.entries.len(), 2);
     refusal
 }
@@ -121,49 +115,127 @@ async fn a_cursor_of_a_lost_key_gets_the_refusal_of_a_cursor_after_a_cache_delet
     assert_eq!(after_loss, after_delete);
 }
 
+/// A runtime for one thread of the concurrent test.
+fn new_runtime() -> tokio::runtime::Runtime {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+}
+
+/// In each round, eight reads on eight threads start at one barrier with an
+/// empty key file. One read with the catch-up policy first makes the
+/// projection current; the reads of a round take no publication guard, so
+/// nothing puts them in a line before they reach the key.
 #[test]
 #[verifies("rule_read_replaces_an_invalid_cursor_key", examples)]
 fn reads_that_replace_a_key_file_at_the_same_time_use_one_key() {
     const READS: usize = 8;
+    const ROUNDS: usize = 10;
     let (temp, store) = fixture();
     let root = Utf8Path::from_path(temp.path()).unwrap().to_owned();
-    let latest = discussion(&store);
-    write_key_file(&root, b"");
-    let barrier = Arc::new(Barrier::new(READS));
-    // Each read starts on its own thread before any read is joined, so the
-    // reads meet at the barrier.
-    let mut readers = Vec::with_capacity(READS);
-    for _ in 0..READS {
-        let (root, latest, barrier) = (root.clone(), latest.clone(), barrier.clone());
-        readers.push(std::thread::spawn(move || {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .unwrap();
-            barrier.wait();
-            runtime
-                .block_on(page(&root, &latest, None))
-                .unwrap()
-                .result
-                .next_cursor
-                .expect("page one continues")
-        }));
-    }
-    let mut cursors = Vec::with_capacity(READS);
-    for reader in readers {
-        cursors.push(reader.join().unwrap());
-    }
-    let key = std::fs::read(key_path(&root)).unwrap();
-    assert_eq!(key.len(), 32);
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
+    let latest = five_messages(&store);
+    let runtime = new_runtime();
+    runtime
+        .block_on(page(&root, ReadPolicy::default(), &latest, None))
         .unwrap();
-    for cursor in cursors {
-        let next = runtime
-            .block_on(page(&root, &latest, Some(cursor)))
-            .unwrap();
-        assert_eq!(next.result.entries.len(), 2);
+    let (start, end) = (
+        Arc::new(Barrier::new(READS + 1)),
+        Arc::new(Barrier::new(READS + 1)),
+    );
+    let (sender, cursors) = mpsc::channel();
+    let readers: Vec<_> = (0..READS)
+        .map(|_| {
+            let (root, latest) = (root.clone(), latest.clone());
+            let (start, end, sender) = (start.clone(), end.clone(), sender.clone());
+            std::thread::spawn(move || {
+                let runtime = new_runtime();
+                let repository = repository(&root);
+                for _ in 0..ROUNDS {
+                    start.wait();
+                    let query = messages_query(&latest, 2, None);
+                    let read = runtime.block_on(read_discussion_messages(
+                        &repository,
+                        ANNOTATE_ONLY,
+                        query,
+                    ));
+                    // A send and not a panic, so that each thread reaches the
+                    // barrier at the end of each round.
+                    let cursor = read.map(|page| page.result.next_cursor);
+                    sender.send(cursor.map_err(|error| format!("{error:#}"))).unwrap();
+                    end.wait();
+                }
+            })
+        })
+        .collect();
+    for round in 0..ROUNDS {
+        write_key_file(&root, b"");
+        start.wait();
+        end.wait();
+        let key = std::fs::read(key_path(&root)).unwrap();
+        assert_eq!(key.len(), 32, "round {round}");
+        for _ in 0..READS {
+            let cursor = cursors.recv().unwrap().unwrap().expect("page one continues");
+            let next = runtime
+                .block_on(page(&root, ReadPolicy::default(), &latest, Some(cursor)))
+                .unwrap_or_else(|error| panic!("round {round}: {error:#}"));
+            assert_eq!(next.result.entries.len(), 2);
+        }
+        assert_eq!(std::fs::read(key_path(&root)).unwrap(), key, "round {round}");
     }
-    assert_eq!(std::fs::read(key_path(&root)).unwrap(), key);
+    for reader in readers {
+        reader.join().unwrap();
+    }
+}
+
+/// The cache of a repository and the error of a read with an empty key
+/// file when that cache is read-only. `prepare` acts on the cache before
+/// the read. The cause of the error follows the key file of the cache.
+#[cfg(unix)]
+fn refusal_in_a_read_only_cache(prepare: impl FnOnce(&Utf8Path)) -> (Utf8PathBuf, String) {
+    use std::os::unix::fs::PermissionsExt;
+    let (temp, store) = fixture();
+    let root = Utf8Path::from_path(temp.path()).unwrap();
+    let latest = five_messages(&store);
+    let runtime = new_runtime();
+    runtime
+        .block_on(page(root, ReadPolicy::default(), &latest, None))
+        .unwrap();
+    write_key_file(root, b"");
+    let cache = ProvenanceLayout::new(root).cache_dir();
+    prepare(&cache);
+    let mode = |mode| std::fs::Permissions::from_mode(mode);
+    std::fs::set_permissions(&cache, mode(0o555)).unwrap();
+    let writable = std::fs::File::create(cache.join("probe")).is_ok();
+    let read = runtime.block_on(page(root, ANNOTATE_ONLY, &latest, None));
+    std::fs::set_permissions(&cache, mode(0o755)).unwrap();
+    assert!(
+        !writable,
+        "this user can write a directory of mode 0555, so the test cannot make a read-only cache"
+    );
+    let error = format!("{:#}", read.map(|_| ()).unwrap_err());
+    assert_eq!(std::fs::read(key_path(root)).unwrap(), b"");
+    let context = format!(
+        "the cursor key file {} is absent or does not hold a key, and the store cannot replace \
+         it: ",
+        key_path(root)
+    );
+    let cause = error
+        .strip_prefix(&context)
+        .unwrap_or_else(|| panic!("an error that names the key file: {error}"));
+    (cache, cause.to_owned())
+}
+
+#[cfg(unix)]
+#[test]
+#[verifies("rule_read_replaces_an_invalid_cursor_key", examples)]
+fn a_read_that_cannot_replace_a_key_file_names_the_key_file_and_the_path_that_failed() {
+    let remove_locks = |cache: &Utf8Path| std::fs::remove_dir_all(cache.join("locks")).unwrap();
+    let (cache, cause) = refusal_in_a_read_only_cache(remove_locks);
+    let locks = cache.join("locks");
+    let expected = format!("create advisory lock directory {locks}: Permission denied");
+    assert!(cause.starts_with(&expected), "{cause}");
+    let (cache, cause) = refusal_in_a_read_only_cache(|_| {});
+    assert!(cause.contains(cache.as_str()), "{cause}");
+    assert!(cause.contains("Permission denied"), "{cause}");
 }

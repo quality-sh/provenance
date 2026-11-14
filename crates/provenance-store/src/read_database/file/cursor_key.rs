@@ -4,6 +4,7 @@
 use crate::jsonl::AdvisoryLock;
 use crate::layout::ProvenanceLayout;
 use crate::storage::local::durability::write_synced_file;
+use anyhow::Context;
 use camino::Utf8Path;
 use provenance_macros::rule;
 use std::io::Read;
@@ -11,29 +12,37 @@ use std::io::Read;
 /// The number of bytes of a valid key.
 const KEY_BYTES: usize = 32;
 
-/// The key in the key file of the cache. A key file that does not exist or
-/// that does not hold 32 bytes is replaced with a new key.
+/// A cache with no cursor key or a damaged cursor key does not stop a read
+/// that gives or accepts a cursor: the read makes one new key, and callers
+/// that find no key at the same time sign with that one key.
 ///
-/// A valid key is read without the lock, so a cache directory that this
-/// process cannot write still gives its key. Only a holder of the lock
-/// writes the file, and it reads the file again first: of all the callers
-/// that find no valid key at the same time, the first holder makes the key
-/// and the others read it. The key file and its directory are synced before
-/// the lock is released and before the key is returned.
+/// A valid key is read without the lock, so a cache that this process
+/// cannot write still gives its key. The wait for the lock blocks the
+/// calling thread, and a holder keeps the lock only for one synced write.
 #[rule("rule_read_replaces_an_invalid_cursor_key")]
 pub(super) fn cursor_key(layout: &ProvenanceLayout) -> anyhow::Result<[u8; KEY_BYTES]> {
     let path = layout.cursor_key_path();
     if let Some(key) = stored_key(&path)? {
         return Ok(key);
     }
+    replace_key(layout, &path).with_context(|| {
+        format!(
+            "the cursor key file {path} is absent or does not hold a key, and the store \
+             cannot replace it"
+        )
+    })
+}
+
+/// The key that the holder of the lock finds or writes at `path`.
+fn replace_key(layout: &ProvenanceLayout, path: &Utf8Path) -> anyhow::Result<[u8; KEY_BYTES]> {
     let _lock = AdvisoryLock::acquire(&layout.cursor_key_lock_path())?;
-    if let Some(key) = stored_key(&path)? {
+    if let Some(key) = stored_key(path)? {
         return Ok(key);
     }
     let mut key = [0; KEY_BYTES];
     key[..16].copy_from_slice(uuid::Uuid::new_v4().as_bytes());
     key[16..].copy_from_slice(uuid::Uuid::new_v4().as_bytes());
-    write_synced_file(&path, &key)?;
+    write_synced_file(path, &key)?;
     Ok(key)
 }
 
