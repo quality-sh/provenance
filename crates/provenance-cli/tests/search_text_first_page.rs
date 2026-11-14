@@ -7,8 +7,7 @@
 //! These tests have no Rule, because no active Rule states that a page holds a
 //! record when more records match.
 
-#[path = "support/search_repository.rs"]
-mod search_repository;
+use crate::search_repository;
 
 use provenance_mcp::Client;
 use search_repository::{

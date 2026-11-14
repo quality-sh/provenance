@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 #[path = "review_support/mod.rs"]
-mod base;
+pub mod base;
 pub use base::*;
 use provenance_core::threads::{Discussion, DiscussionMessagesQuery, DiscussionSelector};
 use provenance_store::{review::WriteDiscussion, state_store::StateStore};

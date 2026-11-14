@@ -9,9 +9,7 @@ use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::path::Path;
 
-mod support {
-    pub mod review_paths;
-}
+use crate::support;
 use support::review_paths::{init_scope as init, provenance};
 
 fn active_rule(repo: &Path, scope: &str, rule: &str) {

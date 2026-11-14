@@ -12,7 +12,6 @@ mod missing_index;
 mod status;
 #[path = "cli_dictionary/supplied_statement.rs"]
 mod supplied_statement;
-#[path = "cli_dictionary/support.rs"]
-mod support;
+use crate::dictionary_support as support;
 #[path = "cli_dictionary/technical_names.rs"]
 mod technical_names;

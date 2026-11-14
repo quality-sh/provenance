@@ -8,9 +8,7 @@ use provenance_transport::StatementHost;
 use serde_json::{json, Value};
 use tower::ServiceExt as _;
 
-mod support {
-    pub mod records;
-}
+use crate::support;
 use support::records::Repository;
 
 fn host(repo: &Repository) -> StatementHost {

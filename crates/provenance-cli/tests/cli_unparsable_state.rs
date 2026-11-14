@@ -5,9 +5,7 @@
 use provenance_macros::verifies;
 use serde_json::Value;
 
-mod support {
-    pub mod review_paths;
-}
+use crate::support;
 use support::review_paths::{create_requirement, provenance};
 
 const CARDS: &str = "scopes/default/ideation/proposal_cards.jsonl";

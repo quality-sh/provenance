@@ -9,9 +9,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-mod support {
-    pub mod review_paths;
-}
+use crate::support;
 use support::review_paths::{create_requirement, init, json_output, provenance};
 
 fn init_with_requirement() -> (tempfile::TempDir, String) {

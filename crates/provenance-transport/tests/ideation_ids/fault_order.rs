@@ -6,7 +6,7 @@
 //! aggregate check of the proposal ids, and the catch-up parses the
 //! assertion file before it checks the ids.
 
-use crate::repository::{
+use super::repository::{
     add_broken_line, answers, at_stored, copy_row, ideation_repository, refused, IDEATION,
 };
 use serde_json::json;

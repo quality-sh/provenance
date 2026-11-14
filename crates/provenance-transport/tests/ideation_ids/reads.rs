@@ -1,12 +1,12 @@
 //! The reads over an id on two lines of its file: each answers at the stored
 //! serial, and its `freshness_error` gives the located fault.
 
-use crate::repository::{
+use super::repository::{
     at_stored, copy_row, copy_row_with_key, freshness_parts, ideation_repository,
     merge_assertion_two_times, read_answers,
 };
-use crate::support::records::Repository;
-use crate::writes::located;
+use super::support::records::Repository;
+use super::writes::located;
 use provenance_macros::verifies;
 use serde_json::Value;
 

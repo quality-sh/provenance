@@ -3,10 +3,7 @@
 //! content-change submission fix for other record kinds must keep. They are
 //! implementation aids and verify no Rule.
 
-mod support {
-    pub mod record_review;
-    pub mod review_paths;
-}
+use crate::support;
 use support::record_review::{
     accept_current, create_resolution, create_rule, decide, guarded_update, read,
 };

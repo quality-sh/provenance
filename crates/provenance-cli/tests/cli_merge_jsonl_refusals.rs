@@ -3,9 +3,7 @@
 use provenance_macros::verifies;
 use serde_json::json;
 
-mod support {
-    pub mod review_paths;
-}
+use crate::support;
 use support::review_paths::provenance;
 
 fn rule(id: &str) -> String {

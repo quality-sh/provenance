@@ -1,10 +1,6 @@
 #![cfg(feature = "test-fixture")]
 
-#[allow(dead_code)]
-mod support {
-    #[path = "../../../provenance-transport/tests/support/records.rs"]
-    pub mod records;
-}
+use crate::support;
 
 use provenance_store::operations::catalog::{self, Operation as _};
 use provenance_transport::{

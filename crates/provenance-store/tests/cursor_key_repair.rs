@@ -2,7 +2,7 @@
 //! a valid key, callers at the same time sign with one key, a cursor that
 //! the lost key signed refuses as after a delete of the cache, and a read
 //! that cannot replace the key names the key file and the cause.
-mod discussion_support;
+use crate::discussion_support;
 use camino::{Utf8Path, Utf8PathBuf};
 use discussion_support::*;
 use provenance_core::{

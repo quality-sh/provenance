@@ -1,4 +1,4 @@
-use crate::support::{
+use super::support::{
     create_requirement, imported_dictionary, init, provenance, statement_report, write_reference,
     NOUN_AND_VERB_WORD, UNAPPROVED_NOUN, UNAPPROVED_VERB,
 };
