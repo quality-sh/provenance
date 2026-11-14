@@ -33,7 +33,7 @@ def pays_overtime(hours: int) -> bool:
 ```
 
 The comment needs no import and no package. An install that omits development
-dependencies, such as `npm ci --omit=dev`, still loads the application. The
+dependencies, such as `npm ci --omit=dev`, loads the application. The
 comment binds to the first function declared in the six lines below it. It does
 not move with its function the way a compiled symbol does, so keep the two
 together when you move code.
@@ -74,8 +74,7 @@ test("hours above 38 attract overtime", function overtimeExamples() {
 `verifies` returns nothing, registers no state, and does not change the test.
 Put `verifies("id", "method")` in a named function or in a function-valued
 `const`; the scanner takes the name of that function. Import `verifies` only in
-test code. The scanner does not read a `rule(` call in TypeScript or
-JavaScript: production code uses the comment.
+test code.
 
 In Rust, a test takes `#[verifies]` from `provenance-macros` under
 `[dev-dependencies]`:
@@ -147,9 +146,9 @@ binds. The scanner does not read `cfg_attr` rewrites.
 
 ## Helpers in the project's own code
 
-The scanner also reads a helper that a Python, Go, or Java project defines in
-its own code. Such a helper is project code and adds no dependency. The comment
-stays the default form.
+The scanner also reads a helper that a Python, TypeScript, JavaScript, Go, or
+Java project defines in its own code. Such a helper is project code and adds no
+dependency. The comment stays the default form.
 
 ### Python decorator
 
@@ -175,6 +174,30 @@ def pays_overtime(hours: int) -> bool:
 
 The scanner recognizes `@rule("id")` directly above a `def`. The scanner does
 not read a Python verification decorator; a Python test uses the comment.
+
+### TypeScript wrapper
+
+```ts
+// src/rules.ts
+export function rule<Implementation>(
+  _ruleId: string,
+  implementation: Implementation,
+): Implementation {
+  return implementation;
+}
+```
+
+```ts
+import { rule } from "./rules.js";
+
+export const paysOvertime = rule("rule_overtime", (hours: number) => hours > 38);
+```
+
+The scanner recognizes a same-line `rule("id",` call, free or through a member
+such as `rules.rule(`, and takes the `const` on the left of `=` as the item
+name. A call that has an object after the id, such as
+`requirement.rule("key", { statement })` in a spec, declares a Rule and does
+not bind. The same reading applies to JavaScript.
 
 ### Go wrapper
 

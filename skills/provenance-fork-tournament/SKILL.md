@@ -193,8 +193,9 @@ each Proposal.
    fan-out is spawned Requirements. Create a Rule only when the Resolution establishes a
    precise atomic obligation. The Rule may be Unimplemented; bind its primary production
    implementation, in the form that the Provenance section of AGENTS.md gives, when one
-   exists. **Do not mint a vague Rule only to make the decision look landed.** The Resolution is already the landing. See the
-   `provenance-shaping` skill for Rule and binding guidance.
+   exists. **Do not mint a vague Rule only to make the decision look landed.** The
+   Resolution is already the landing. See the `provenance-shaping` skill for Rule and
+   binding guidance.
 
 ## Caveats (empirical — from the Statesman provenance scoping record)
 

@@ -515,7 +515,7 @@ change the artifact's kind.
    Resolution in the answer text.
 
 2. **The bindings, when they exist.** An Implementation binding sits on the primary
-   production implementation; at most one function or type may carry an id for now. A
+   production implementation; at most one function or type may carry an id. A
    Verification binding sits on the evidence and names its method. Verification binds to
    the known Rule and does not require an implementation binding. The Provenance section
    of AGENTS.md gives the binding form for each language.
@@ -692,8 +692,8 @@ Before moving to the next question, verify the current answer has been handled:
 - the records have the shape that "The shape of the tree" gives;
 - each new record has a pending review submission ("Every record goes to review");
 - each precise atomic behavioural obligation is landed as a Rule; any known primary
-  implementation and evidence carry `#[rule]` and `#[verifies]` bindings, and
-  `check --bindings` reports any remaining absence honestly;
+  implementation and evidence carry bindings in the form that the Provenance section of
+  AGENTS.md gives, and `check --bindings` reports any remaining absence honestly;
 - no-gos and out-of-scope rejections are explicit in the Requirement description;
 - source references and evidence are attached where they exist;
 - proposal definitions remain immutable `proposed` records; assertion lineage uses assertion

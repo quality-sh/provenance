@@ -83,7 +83,7 @@ repository.
 
 Production code binds to a Rule with a comment directly above the function or
 `const`. The comment needs no import, so an install that omits development
-dependencies still loads the application:
+dependencies loads the application:
 
 ```ts
 // @provenance rule: rule_overtime

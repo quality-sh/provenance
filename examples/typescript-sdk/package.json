@@ -6,7 +6,7 @@
     "build": "tsc -p tsconfig.json",
     "apply": "node dist/apply.js",
     "test": "npm run build && node test-fixture.mjs",
-    "test:production": "npm prune --omit=dev --no-save && node production-load.mjs"
+    "test:production": "npm run build && node production-load.mjs"
   },
   "devDependencies": {
     "@quality-sh/provenance": "file:../../packages/provenance",

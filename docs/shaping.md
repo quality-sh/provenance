@@ -340,7 +340,8 @@ needs no check at the call sites. Construction can also be the evidence method.
 The attribute is a compiled symbol. It moves when the implementation moves, it dies when
 the implementation is deleted, and the id it cites can be checked against the graph.
 `provenance-macros` runs at compile time and adds nothing to the binary. A comment does
-not move with its item, so it stays directly above it. One Rule may have at most one such primary implementation for now.
+not move with its item, so it stays directly above it. One Rule may have at most one
+primary implementation.
 
 Tests bind evidence to a Rule and say how it was shown:
 
@@ -385,8 +386,9 @@ the same report with no gate.
 
 In every supported language, production code binds with a `@provenance` comment, which
 adds no package to the application. The scanner also reads a `verifies` call in a
-JavaScript or TypeScript test, and a decorator or wrapper that a Python, Go, or Java
-project defines in its own code. [`rule-bindings.md`](rule-bindings.md) gives each form.
+JavaScript or TypeScript test, and a decorator or wrapper that a Python, JavaScript,
+TypeScript, Go, or Java project defines in its own code.
+[`rule-bindings.md`](rule-bindings.md) gives each form.
 A comment can drift from the function it sits above, so keep the two together.
 
 Rules follow behavioural obligations, not code shape. Do not mint one Rule per function,

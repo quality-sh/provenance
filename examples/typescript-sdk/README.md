@@ -23,11 +23,11 @@ engine or persistence side effect.
 
 The `file:../../packages/provenance` development dependency exercises normal
 npm package resolution from the source checkout. Only the spec, the apply
-script, and the test import it. `npm run test:production` removes the
-development dependencies from `node_modules` and loads `dist/share-links.js`,
-to show that the application runs without Provenance installed. Run
-`npm install` again after it. The packed-install test covers the
-published package shape and its bundled engine separately.
+script, and the test import it. `npm run test:production` builds the app,
+installs a copy of it with `npm ci --omit=dev`, and loads `dist/share-links.js`
+from that copy, where `@quality-sh/provenance` does not resolve. The
+packed-install test covers the published package shape and its bundled engine
+separately.
 
 Build the fixture from the repository root with
 `cargo build -p provenance-transport --features test-fixture --bin existing-root-host-fixture`.
