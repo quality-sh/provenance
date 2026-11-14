@@ -1,9 +1,6 @@
 //! A read-only caller cannot write a review submission, decision or withdrawal.
 #![cfg(feature = "test-fixture")]
-mod support {
-    pub mod records;
-    pub mod resource_http;
-}
+use crate::support;
 use serde_json::json;
 use support::records::{allow_reviewer, Repository};
 use support::resource_http::{call, call_with_headers, host};

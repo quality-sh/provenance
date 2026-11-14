@@ -10,13 +10,7 @@ use std::sync::{
 };
 
 #[cfg(feature = "test-fixture")]
-#[allow(dead_code)]
-mod support {
-    #[path = "../../../provenance-transport/tests/support/records.rs"]
-    pub mod records;
-    #[path = "../../../provenance-transport/tests/support/resource_http.rs"]
-    pub mod resource_http;
-}
+use crate::support;
 
 fn validator(schema: &Value) -> Validator {
     compile(schema).expect("emitted MCP schema is valid")

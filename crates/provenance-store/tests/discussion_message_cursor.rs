@@ -1,38 +1,19 @@
 //! Discussion message continuations bind the effective page limit.
-mod discussion_support;
+use crate::discussion_support;
 use discussion_support::*;
-use provenance_core::{
-    protocol::read_failure::ReadFailure,
-    threads::{Discussion, DiscussionMessagesQuery, DiscussionSelector},
-};
+use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_macros::verifies;
 use provenance_store::{operations::read_policy::ReadPolicy, review::read_discussion_messages};
 use serde_json::json;
-
-fn messages_query(latest: &Discussion, limit: usize) -> DiscussionMessagesQuery {
-    DiscussionMessagesQuery {
-        parent: latest.parent.clone(),
-        selector: DiscussionSelector::Discussion {
-            discussion_id: latest.discussion_id.clone(),
-        },
-        limit,
-        cursor: None,
-    }
-}
 
 #[tokio::test]
 #[verifies("rule_cursor_binds_query_identity", examples)]
 async fn message_pages_continue_at_the_same_limit_and_refuse_a_changed_limit() {
     let (temp, store) = fixture();
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
-    let mut latest = start(&store, "a");
-    for n in 0..4 {
-        latest = store
-            .write_discussion(reply(&latest, &format!("reply_{n}")))
-            .unwrap();
-    }
-    let query = messages_query(&latest, 2);
-    let first = read_discussion_messages(&repository(root), ReadPolicy::default(), query.clone())
+    let latest = five_messages(&store);
+    let query = messages_query(&latest, 2, None);
+    let first = read_discussion_messages(&repository(root), ReadPolicy::default(), query)
         .await
         .unwrap();
     assert_eq!(first.result.entries.len(), 2);
@@ -44,10 +25,7 @@ async fn message_pages_continue_at_the_same_limit_and_refuse_a_changed_limit() {
     let second = read_discussion_messages(
         &repository(root),
         ReadPolicy::default(),
-        DiscussionMessagesQuery {
-            cursor: Some(cursor.clone()),
-            ..query.clone()
-        },
+        messages_query(&latest, 2, Some(cursor.clone())),
     )
     .await
     .unwrap();
@@ -56,11 +34,7 @@ async fn message_pages_continue_at_the_same_limit_and_refuse_a_changed_limit() {
     let changed = read_discussion_messages(
         &repository(root),
         ReadPolicy::default(),
-        DiscussionMessagesQuery {
-            cursor: Some(cursor),
-            limit: 3,
-            ..query
-        },
+        messages_query(&latest, 3, Some(cursor)),
     )
     .await
     .unwrap_err();

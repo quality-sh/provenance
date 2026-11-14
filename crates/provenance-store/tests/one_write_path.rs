@@ -1,5 +1,4 @@
-#[allow(dead_code)]
-mod review_support;
+use crate::discussion_support::base as review_support;
 use provenance_core::review::{ReviewHistoryQuery, SaveOutcome};
 use provenance_core::StableId;
 use provenance_store::{

@@ -1,8 +1,7 @@
 use assert_cmd::Command;
 use provenance_macros::verifies;
 
-#[path = "export_fixture_support/mod.rs"]
-mod export_fixture_support;
+use crate::export_fixture_support;
 
 #[allow(clippy::too_many_lines)]
 #[test]

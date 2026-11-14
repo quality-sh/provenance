@@ -1,11 +1,8 @@
-use provenance_macros::verifies;
-mod support {
-    pub mod review_paths;
-}
-use support::review_paths::{create_requirement, init, json_output, provenance};
-#[path = "support/bounded_process.rs"]
-mod bounded_process;
+use crate::review_host_support::bounded_process;
+use crate::support;
 use bounded_process::Bounded;
+use provenance_macros::verifies;
+use support::review_paths::{create_requirement, init, json_output, provenance};
 
 fn json(repo: &str, args: &[&str]) -> serde_json::Value {
     json_output(provenance().args(args).args(["--repo", repo]))

@@ -1,4 +1,4 @@
-mod discussion_support;
+use crate::discussion_support;
 
 use discussion_support::{fixture, repository, write};
 use provenance_core::{
