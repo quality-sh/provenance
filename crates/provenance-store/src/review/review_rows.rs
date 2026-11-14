@@ -159,3 +159,23 @@ impl CycleFacts<'_> {
         })
     }
 }
+
+impl StateStore {
+    /// Each fault of the stored review rows of `scope`, as the text of its
+    /// refusal: the file, the line and the message that a read of the
+    /// record gives. A withdrawal that names no review submission is one of
+    /// them.
+    #[rule("rule_check_reports_review_row_faults")]
+    pub fn review_row_faults(&self, scope: &ScopeId) -> anyhow::Result<Vec<String>> {
+        let stored = StoredRows::read(self, scope)?;
+        let reading = read_review_rows(StoredReviewRows {
+            proposals: &stored.proposals,
+            dispositions: &stored.dispositions,
+            withdrawals: &stored.withdrawals,
+        });
+        Ok(reading
+            .faults()
+            .map(|fault| super::review_row_refusal::refusal(&stored, fault).to_string())
+            .collect())
+    }
+}

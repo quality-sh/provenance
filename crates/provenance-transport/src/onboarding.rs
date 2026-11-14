@@ -85,7 +85,9 @@ it in the same change.
 - Merge a pull request that archives records with a merge commit. A squash or
   rebase merge drops the commit that the archive names.
 - Write graph state only through the Provenance CLI or SDK. Do not edit
-  `.provenance/state` directly.
+  `.provenance/state` by hand, with one exception: when a read or `check`
+  refuses review rows that do not agree and names a line, remove that line
+  as the refusal says, then commit.
 - Pre-commit: `{command} check --quiet`. It checks the graph, the statements, and
   the Rule bindings. Commit graph updates with the code.
 - ASD owns ASD-STE100. STEMG maintains it. Use the official Issue 9 request page:
@@ -231,6 +233,7 @@ pub fn project(existing: &[u8], invocation: &Invocation, scope: &str) -> anyhow:
 #[rule("rule_init_statement_preflight_guidance")]
 #[rule("rule_init_statement_claim_limit")]
 #[rule("rule_init_canonical_write_path")]
+#[rule("rule_init_review_row_hand_repair")]
 #[rule("rule_init_guidance_selected_scope")]
 #[rule("rule_init_review_host_guidance")]
 #[rule("rule_init_description_guidance")]

@@ -10,6 +10,8 @@ mod dictionary_support;
 
 #[path = "cli_check/archive_commit.rs"]
 mod archive_commit;
+#[path = "cli_check/review_rows.rs"]
+mod review_rows;
 
 use crate::review_host_support::bounded_process;
 use bounded_process::Bounded;

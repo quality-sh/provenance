@@ -39,7 +39,23 @@ fn init_guidance_requires_cli_or_sdk_writes_and_forbids_direct_state_edits() {
         "{agents}"
     );
     assert!(
-        prose.contains("Do not edit `.provenance/state` directly."),
+        prose.contains("Do not edit `.provenance/state` by hand, with one exception:"),
+        "{agents}"
+    );
+}
+
+#[test]
+#[verifies("rule_init_review_row_hand_repair", examples)]
+fn init_guidance_permits_only_the_review_row_repair_by_hand() {
+    let agents = agents_after_init();
+    let prose = normalized(&agents);
+
+    assert!(
+        prose.contains(
+            "Do not edit `.provenance/state` by hand, with one exception: when a read or \
+             `check` refuses review rows that do not agree and names a line, remove that line \
+             as the refusal says, then commit."
+        ),
         "{agents}"
     );
 }
