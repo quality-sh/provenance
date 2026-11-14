@@ -47,13 +47,22 @@ pub fn commit(repo: &Path, message: &str) {
 }
 
 /// A Git repository where Git merges each state file with the JSONL merge
-/// driver of the built binary.
+/// driver of the built binary, configured as `.gitattributes.example` says,
+/// with an absolute binary path.
 pub fn driver_repository() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path();
     git_ok(repo, &["init", "--initial-branch", "main"]);
     git_ok(repo, &["config", "user.email", "test@example.test"]);
     git_ok(repo, &["config", "user.name", "Test"]);
+    git_ok(
+        repo,
+        &[
+            "config",
+            "merge.provenance-jsonl.name",
+            "Provenance canonical JSONL merge",
+        ],
+    );
     let binary = assert_cmd::cargo::cargo_bin!("provenance");
     git_ok(
         repo,
@@ -62,6 +71,8 @@ pub fn driver_repository() -> tempfile::TempDir {
             "merge.provenance-jsonl.driver",
             &format!(
                 "'{}' merge-jsonl %O %A %B --output %A --path %P",
+                // Git runs the driver through sh, which removes backslashes;
+                // Windows accepts forward slashes in the path of a program.
                 binary.to_str().unwrap().replace('\\', "/")
             ),
         ],

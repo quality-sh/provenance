@@ -157,9 +157,9 @@ fn commit_shard(repository: &Path, contents: &str, message: &str) {
     git(repository, &["commit", "-m", message]);
 }
 
-/// The documented one-time setup, run for real: the driver command from
-/// `docs/cli.md` with an absolute binary path, and the repository
-/// `.gitattributes` line that points the state shards at it.
+/// The documented one-time setup, run for real: the driver configuration and
+/// the `.gitattributes` line of `.gitattributes.example`, with an absolute
+/// binary path.
 #[test]
 fn the_documented_driver_configuration_merges_two_branches() {
     let directory = driver_repository();
