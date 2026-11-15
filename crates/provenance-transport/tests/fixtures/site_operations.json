@@ -1,0 +1,2311 @@
+[
+  {
+    "body": {
+      "data": {
+        "items": [
+          {
+            "id": "source_shared",
+            "name": "Shared source",
+            "scope_id": "default",
+            "source_type": "document",
+            "url": null
+          }
+        ]
+      },
+      "meta": {
+        "freshness_error": null,
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "GET /sources",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "decision": {
+          "current_acceptance": null,
+          "current_revision": "<generated>",
+          "decisions": [],
+          "pending": {
+            "actor": "authoring",
+            "proposal_id": "<generated>",
+            "revises": null,
+            "revision": "<generated>"
+          },
+          "record_kind": "source",
+          "requirement_id": "source_shared",
+          "withdrawn": []
+        },
+        "edit": {
+          "etag": "<generated>",
+          "revision": "<generated>"
+        },
+        "id": "source_shared",
+        "name": "Shared source",
+        "scope_id": "default",
+        "source_type": "document",
+        "url": null
+      },
+      "meta": {
+        "freshness_error": null
+      }
+    },
+    "call": "GET /sources/source_shared",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "<generated>"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "reviewer",
+        "discussion_id": "<generated>",
+        "disposition_id": null,
+        "message_ids": [
+          "<generated>"
+        ],
+        "outcomes": [],
+        "parent": {
+          "node_id": "source_shared",
+          "node_type": "source"
+        },
+        "root_message_id": "<generated>",
+        "scope_id": "default",
+        "status": "active",
+        "thread_id": "thread_source_source_shared",
+        "version": 1
+      },
+      "meta": {}
+    },
+    "call": "POST /sources/source_shared/discussions",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "1"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "items": [
+          {
+            "container_status": "active",
+            "discussion": {
+              "actor": "reviewer",
+              "discussion_id": "<generated>",
+              "disposition_id": null,
+              "message_ids": [
+                "<generated>"
+              ],
+              "outcomes": [],
+              "parent": {
+                "node_id": "source_shared",
+                "node_type": "source"
+              },
+              "root_message_id": "<generated>",
+              "scope_id": "default",
+              "status": "active",
+              "thread_id": "thread_source_source_shared",
+              "version": 1
+            },
+            "kind": "addressed"
+          }
+        ]
+      },
+      "meta": {
+        "freshness_error": null,
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "GET /sources/source_shared/discussions",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "reviewer",
+        "discussion_id": "<generated>",
+        "disposition_id": null,
+        "message_ids": [
+          "<generated>",
+          "<generated>"
+        ],
+        "outcomes": [],
+        "parent": {
+          "node_id": "source_shared",
+          "node_type": "source"
+        },
+        "root_message_id": "<generated>",
+        "scope_id": "default",
+        "status": "active",
+        "thread_id": "thread_source_source_shared",
+        "version": 2
+      },
+      "meta": {}
+    },
+    "call": "POST /sources/source_shared/discussions/{discussion}/messages",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "2"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "items": [
+          {
+            "body": "Discussion of source_shared.",
+            "created_at": "<time>",
+            "id": "<generated>",
+            "role": "user",
+            "scope_id": "default",
+            "thread_id": "thread_source_source_shared"
+          },
+          {
+            "body": "Reply on source_shared.",
+            "created_at": "<time>",
+            "id": "<generated>",
+            "role": "assistant",
+            "scope_id": "default",
+            "thread_id": "thread_source_source_shared"
+          }
+        ]
+      },
+      "meta": {
+        "freshness_error": null,
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "GET /sources/source_shared/discussions/{discussion}/messages",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "reviewer",
+        "discussion_id": "<generated>",
+        "disposition_id": null,
+        "message_ids": [
+          "<generated>",
+          "<generated>"
+        ],
+        "outcomes": [],
+        "parent": {
+          "node_id": "source_shared",
+          "node_type": "source"
+        },
+        "root_message_id": "<generated>",
+        "scope_id": "default",
+        "status": "resolved",
+        "thread_id": "thread_source_source_shared",
+        "version": 3
+      },
+      "meta": {}
+    },
+    "call": "PATCH /sources/source_shared/discussions/{discussion}",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "3"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "agent",
+        "fact": "withdrawn",
+        "id": "<generated>",
+        "proposal_id": "<generated>",
+        "record_kind": "source",
+        "requirement_id": "source_shared",
+        "scope_id": "default",
+        "sequence": 1
+      },
+      "meta": {}
+    },
+    "call": "POST /sources/source_shared/submissions/{proposal}/withdraw",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "error": {
+        "current_revision": "<generated>",
+        "current_submission": null,
+        "kind": "review_submission_conflict"
+      },
+      "meta": {}
+    },
+    "call": "POST /sources/source_shared/submissions/{proposal}/decide",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 409
+  },
+  {
+    "body": {
+      "data": {
+        "items": [
+          {
+            "id": "req_shared",
+            "scope_id": "default",
+            "statement": "The graph is readable.",
+            "status": "active"
+          }
+        ]
+      },
+      "meta": {
+        "freshness_error": null,
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "GET /requirements",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "decision": {
+          "current_acceptance": null,
+          "current_revision": "<generated>",
+          "decisions": [],
+          "pending": {
+            "actor": "authoring",
+            "proposal_id": "<generated>",
+            "revises": null,
+            "revision": "<generated>"
+          },
+          "requirement_id": "req_shared",
+          "withdrawn": []
+        },
+        "edit": {
+          "etag": "<generated>",
+          "revision": "<generated>"
+        },
+        "id": "req_shared",
+        "scope_id": "default",
+        "statement": "The graph is readable.",
+        "status": "active"
+      },
+      "meta": {
+        "freshness_error": null
+      }
+    },
+    "call": "GET /requirements/req_shared",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "<generated>"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "reviewer",
+        "discussion_id": "<generated>",
+        "disposition_id": null,
+        "message_ids": [
+          "<generated>"
+        ],
+        "outcomes": [],
+        "parent": {
+          "node_id": "req_shared",
+          "node_type": "requirement"
+        },
+        "root_message_id": "<generated>",
+        "scope_id": "default",
+        "status": "active",
+        "thread_id": "thread_requirement_req_shared",
+        "version": 1
+      },
+      "meta": {}
+    },
+    "call": "POST /requirements/req_shared/discussions",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "1"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "items": [
+          {
+            "container_status": "active",
+            "discussion": {
+              "actor": "reviewer",
+              "discussion_id": "<generated>",
+              "disposition_id": null,
+              "message_ids": [
+                "<generated>"
+              ],
+              "outcomes": [],
+              "parent": {
+                "node_id": "req_shared",
+                "node_type": "requirement"
+              },
+              "root_message_id": "<generated>",
+              "scope_id": "default",
+              "status": "active",
+              "thread_id": "thread_requirement_req_shared",
+              "version": 1
+            },
+            "kind": "addressed"
+          }
+        ]
+      },
+      "meta": {
+        "freshness_error": null,
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "GET /requirements/req_shared/discussions",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "reviewer",
+        "discussion_id": "<generated>",
+        "disposition_id": null,
+        "message_ids": [
+          "<generated>",
+          "<generated>"
+        ],
+        "outcomes": [],
+        "parent": {
+          "node_id": "req_shared",
+          "node_type": "requirement"
+        },
+        "root_message_id": "<generated>",
+        "scope_id": "default",
+        "status": "active",
+        "thread_id": "thread_requirement_req_shared",
+        "version": 2
+      },
+      "meta": {}
+    },
+    "call": "POST /requirements/req_shared/discussions/{discussion}/messages",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "2"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "items": [
+          {
+            "body": "Discussion of req_shared.",
+            "created_at": "<time>",
+            "id": "<generated>",
+            "role": "user",
+            "scope_id": "default",
+            "thread_id": "thread_requirement_req_shared"
+          },
+          {
+            "body": "Reply on req_shared.",
+            "created_at": "<time>",
+            "id": "<generated>",
+            "role": "assistant",
+            "scope_id": "default",
+            "thread_id": "thread_requirement_req_shared"
+          }
+        ]
+      },
+      "meta": {
+        "freshness_error": null,
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "GET /requirements/req_shared/discussions/{discussion}/messages",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "reviewer",
+        "discussion_id": "<generated>",
+        "disposition_id": null,
+        "message_ids": [
+          "<generated>",
+          "<generated>"
+        ],
+        "outcomes": [],
+        "parent": {
+          "node_id": "req_shared",
+          "node_type": "requirement"
+        },
+        "root_message_id": "<generated>",
+        "scope_id": "default",
+        "status": "resolved",
+        "thread_id": "thread_requirement_req_shared",
+        "version": 3
+      },
+      "meta": {}
+    },
+    "call": "PATCH /requirements/req_shared/discussions/{discussion}",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "3"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "agent",
+        "fact": "withdrawn",
+        "id": "<generated>",
+        "proposal_id": "<generated>",
+        "requirement_id": "req_shared",
+        "scope_id": "default",
+        "sequence": 1
+      },
+      "meta": {}
+    },
+    "call": "POST /requirements/req_shared/submissions/{proposal}/withdraw",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "error": {
+        "current_revision": "<generated>",
+        "current_submission": null,
+        "kind": "review_submission_conflict"
+      },
+      "meta": {}
+    },
+    "call": "POST /requirements/req_shared/submissions/{proposal}/decide",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 409
+  },
+  {
+    "body": {
+      "data": {
+        "items": [
+          {
+            "id": "resolution_shared",
+            "inputs": [],
+            "position": "The shared graph is readable.",
+            "rationale": "The reader uses the shared contract.",
+            "requirement_ids": [
+              "req_shared"
+            ],
+            "scope_id": "default",
+            "status": "draft",
+            "title": "Shared resolution"
+          }
+        ]
+      },
+      "meta": {
+        "freshness_error": null,
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "GET /resolutions",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "decision": {
+          "current_acceptance": null,
+          "current_revision": "<generated>",
+          "decisions": [],
+          "pending": {
+            "actor": "authoring",
+            "proposal_id": "<generated>",
+            "revises": null,
+            "revision": "<generated>"
+          },
+          "record_kind": "resolution",
+          "requirement_id": "resolution_shared",
+          "withdrawn": []
+        },
+        "edit": {
+          "etag": "<generated>",
+          "revision": "<generated>"
+        },
+        "id": "resolution_shared",
+        "inputs": [],
+        "position": "The shared graph is readable.",
+        "rationale": "The reader uses the shared contract.",
+        "requirement_ids": [
+          "req_shared"
+        ],
+        "scope_id": "default",
+        "status": "draft",
+        "title": "Shared resolution"
+      },
+      "meta": {
+        "freshness_error": null
+      }
+    },
+    "call": "GET /resolutions/resolution_shared",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "<generated>"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "reviewer",
+        "discussion_id": "<generated>",
+        "disposition_id": null,
+        "message_ids": [
+          "<generated>"
+        ],
+        "outcomes": [],
+        "parent": {
+          "node_id": "resolution_shared",
+          "node_type": "resolution"
+        },
+        "root_message_id": "<generated>",
+        "scope_id": "default",
+        "status": "active",
+        "thread_id": "thread_resolution_resolution_shared",
+        "version": 1
+      },
+      "meta": {}
+    },
+    "call": "POST /resolutions/resolution_shared/discussions",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "1"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "items": [
+          {
+            "container_status": "active",
+            "discussion": {
+              "actor": "reviewer",
+              "discussion_id": "<generated>",
+              "disposition_id": null,
+              "message_ids": [
+                "<generated>"
+              ],
+              "outcomes": [],
+              "parent": {
+                "node_id": "resolution_shared",
+                "node_type": "resolution"
+              },
+              "root_message_id": "<generated>",
+              "scope_id": "default",
+              "status": "active",
+              "thread_id": "thread_resolution_resolution_shared",
+              "version": 1
+            },
+            "kind": "addressed"
+          }
+        ]
+      },
+      "meta": {
+        "freshness_error": null,
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "GET /resolutions/resolution_shared/discussions",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "reviewer",
+        "discussion_id": "<generated>",
+        "disposition_id": null,
+        "message_ids": [
+          "<generated>",
+          "<generated>"
+        ],
+        "outcomes": [],
+        "parent": {
+          "node_id": "resolution_shared",
+          "node_type": "resolution"
+        },
+        "root_message_id": "<generated>",
+        "scope_id": "default",
+        "status": "active",
+        "thread_id": "thread_resolution_resolution_shared",
+        "version": 2
+      },
+      "meta": {}
+    },
+    "call": "POST /resolutions/resolution_shared/discussions/{discussion}/messages",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "2"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "items": [
+          {
+            "body": "Discussion of resolution_shared.",
+            "created_at": "<time>",
+            "id": "<generated>",
+            "role": "user",
+            "scope_id": "default",
+            "thread_id": "thread_resolution_resolution_shared"
+          },
+          {
+            "body": "Reply on resolution_shared.",
+            "created_at": "<time>",
+            "id": "<generated>",
+            "role": "assistant",
+            "scope_id": "default",
+            "thread_id": "thread_resolution_resolution_shared"
+          }
+        ]
+      },
+      "meta": {
+        "freshness_error": null,
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "GET /resolutions/resolution_shared/discussions/{discussion}/messages",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "reviewer",
+        "discussion_id": "<generated>",
+        "disposition_id": null,
+        "message_ids": [
+          "<generated>",
+          "<generated>"
+        ],
+        "outcomes": [],
+        "parent": {
+          "node_id": "resolution_shared",
+          "node_type": "resolution"
+        },
+        "root_message_id": "<generated>",
+        "scope_id": "default",
+        "status": "resolved",
+        "thread_id": "thread_resolution_resolution_shared",
+        "version": 3
+      },
+      "meta": {}
+    },
+    "call": "PATCH /resolutions/resolution_shared/discussions/{discussion}",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "3"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "agent",
+        "fact": "withdrawn",
+        "id": "<generated>",
+        "proposal_id": "<generated>",
+        "record_kind": "resolution",
+        "requirement_id": "resolution_shared",
+        "scope_id": "default",
+        "sequence": 1
+      },
+      "meta": {}
+    },
+    "call": "POST /resolutions/resolution_shared/submissions/{proposal}/withdraw",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "error": {
+        "current_revision": "<generated>",
+        "current_submission": null,
+        "kind": "review_submission_conflict"
+      },
+      "meta": {}
+    },
+    "call": "POST /resolutions/resolution_shared/submissions/{proposal}/decide",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 409
+  },
+  {
+    "body": {
+      "data": {
+        "items": [
+          {
+            "id": "rule_shared",
+            "requirement_ids": [
+              "req_shared"
+            ],
+            "scope_id": "default",
+            "severity": "high",
+            "statement": "The shared graph is readable.",
+            "status": "active"
+          }
+        ]
+      },
+      "meta": {
+        "freshness_error": null,
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "GET /rules",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "decision": {
+          "current_acceptance": null,
+          "current_revision": "<generated>",
+          "decisions": [],
+          "pending": {
+            "actor": "authoring",
+            "proposal_id": "<generated>",
+            "revises": null,
+            "revision": "<generated>"
+          },
+          "record_kind": "rule",
+          "requirement_id": "rule_shared",
+          "withdrawn": []
+        },
+        "edit": {
+          "etag": "<generated>",
+          "revision": "<generated>"
+        },
+        "id": "rule_shared",
+        "requirement_ids": [
+          "req_shared"
+        ],
+        "scope_id": "default",
+        "severity": "high",
+        "statement": "The shared graph is readable.",
+        "status": "active"
+      },
+      "meta": {
+        "freshness_error": null
+      }
+    },
+    "call": "GET /rules/rule_shared",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "<generated>"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "reviewer",
+        "discussion_id": "<generated>",
+        "disposition_id": null,
+        "message_ids": [
+          "<generated>"
+        ],
+        "outcomes": [],
+        "parent": {
+          "node_id": "rule_shared",
+          "node_type": "rule"
+        },
+        "root_message_id": "<generated>",
+        "scope_id": "default",
+        "status": "active",
+        "thread_id": "thread_rule_rule_shared",
+        "version": 1
+      },
+      "meta": {}
+    },
+    "call": "POST /rules/rule_shared/discussions",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "1"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "items": [
+          {
+            "container_status": "active",
+            "discussion": {
+              "actor": "reviewer",
+              "discussion_id": "<generated>",
+              "disposition_id": null,
+              "message_ids": [
+                "<generated>"
+              ],
+              "outcomes": [],
+              "parent": {
+                "node_id": "rule_shared",
+                "node_type": "rule"
+              },
+              "root_message_id": "<generated>",
+              "scope_id": "default",
+              "status": "active",
+              "thread_id": "thread_rule_rule_shared",
+              "version": 1
+            },
+            "kind": "addressed"
+          }
+        ]
+      },
+      "meta": {
+        "freshness_error": null,
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "GET /rules/rule_shared/discussions",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "reviewer",
+        "discussion_id": "<generated>",
+        "disposition_id": null,
+        "message_ids": [
+          "<generated>",
+          "<generated>"
+        ],
+        "outcomes": [],
+        "parent": {
+          "node_id": "rule_shared",
+          "node_type": "rule"
+        },
+        "root_message_id": "<generated>",
+        "scope_id": "default",
+        "status": "active",
+        "thread_id": "thread_rule_rule_shared",
+        "version": 2
+      },
+      "meta": {}
+    },
+    "call": "POST /rules/rule_shared/discussions/{discussion}/messages",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "2"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "items": [
+          {
+            "body": "Discussion of rule_shared.",
+            "created_at": "<time>",
+            "id": "<generated>",
+            "role": "user",
+            "scope_id": "default",
+            "thread_id": "thread_rule_rule_shared"
+          },
+          {
+            "body": "Reply on rule_shared.",
+            "created_at": "<time>",
+            "id": "<generated>",
+            "role": "assistant",
+            "scope_id": "default",
+            "thread_id": "thread_rule_rule_shared"
+          }
+        ]
+      },
+      "meta": {
+        "freshness_error": null,
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "GET /rules/rule_shared/discussions/{discussion}/messages",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "reviewer",
+        "discussion_id": "<generated>",
+        "disposition_id": null,
+        "message_ids": [
+          "<generated>",
+          "<generated>"
+        ],
+        "outcomes": [],
+        "parent": {
+          "node_id": "rule_shared",
+          "node_type": "rule"
+        },
+        "root_message_id": "<generated>",
+        "scope_id": "default",
+        "status": "resolved",
+        "thread_id": "thread_rule_rule_shared",
+        "version": 3
+      },
+      "meta": {}
+    },
+    "call": "PATCH /rules/rule_shared/discussions/{discussion}",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "3"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "agent",
+        "fact": "withdrawn",
+        "id": "<generated>",
+        "proposal_id": "<generated>",
+        "record_kind": "rule",
+        "requirement_id": "rule_shared",
+        "scope_id": "default",
+        "sequence": 1
+      },
+      "meta": {}
+    },
+    "call": "POST /rules/rule_shared/submissions/{proposal}/withdraw",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "error": {
+        "current_revision": "<generated>",
+        "current_submission": null,
+        "kind": "review_submission_conflict"
+      },
+      "meta": {}
+    },
+    "call": "POST /rules/rule_shared/submissions/{proposal}/decide",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 409
+  },
+  {
+    "body": {
+      "data": {
+        "items": [
+          {
+            "id": "topic_shared",
+            "links": [],
+            "requirement_id": "req_shared",
+            "scope_id": "default",
+            "status": "open",
+            "title": "Shared topic"
+          }
+        ]
+      },
+      "meta": {
+        "freshness_error": null,
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "GET /topics",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "decision": {
+          "current_acceptance": null,
+          "current_revision": "<generated>",
+          "decisions": [],
+          "pending": {
+            "actor": "authoring",
+            "proposal_id": "<generated>",
+            "revises": null,
+            "revision": "<generated>"
+          },
+          "record_kind": "topic",
+          "requirement_id": "topic_shared",
+          "withdrawn": []
+        },
+        "edit": {
+          "etag": "<generated>",
+          "revision": "<generated>"
+        },
+        "id": "topic_shared",
+        "links": [],
+        "requirement_id": "req_shared",
+        "scope_id": "default",
+        "status": "open",
+        "title": "Shared topic"
+      },
+      "meta": {
+        "freshness_error": null
+      }
+    },
+    "call": "GET /topics/topic_shared",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "<generated>"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "reviewer",
+        "discussion_id": "<generated>",
+        "disposition_id": null,
+        "message_ids": [
+          "<generated>"
+        ],
+        "outcomes": [],
+        "parent": {
+          "node_id": "topic_shared",
+          "node_type": "topic"
+        },
+        "root_message_id": "<generated>",
+        "scope_id": "default",
+        "status": "active",
+        "thread_id": "thread_topic_topic_shared",
+        "version": 1
+      },
+      "meta": {}
+    },
+    "call": "POST /topics/topic_shared/discussions",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "1"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "items": [
+          {
+            "container_status": "active",
+            "discussion": {
+              "actor": "reviewer",
+              "discussion_id": "<generated>",
+              "disposition_id": null,
+              "message_ids": [
+                "<generated>"
+              ],
+              "outcomes": [],
+              "parent": {
+                "node_id": "topic_shared",
+                "node_type": "topic"
+              },
+              "root_message_id": "<generated>",
+              "scope_id": "default",
+              "status": "active",
+              "thread_id": "thread_topic_topic_shared",
+              "version": 1
+            },
+            "kind": "addressed"
+          }
+        ]
+      },
+      "meta": {
+        "freshness_error": null,
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "GET /topics/topic_shared/discussions",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "reviewer",
+        "discussion_id": "<generated>",
+        "disposition_id": null,
+        "message_ids": [
+          "<generated>",
+          "<generated>"
+        ],
+        "outcomes": [],
+        "parent": {
+          "node_id": "topic_shared",
+          "node_type": "topic"
+        },
+        "root_message_id": "<generated>",
+        "scope_id": "default",
+        "status": "active",
+        "thread_id": "thread_topic_topic_shared",
+        "version": 2
+      },
+      "meta": {}
+    },
+    "call": "POST /topics/topic_shared/discussions/{discussion}/messages",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "2"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "items": [
+          {
+            "body": "Discussion of topic_shared.",
+            "created_at": "<time>",
+            "id": "<generated>",
+            "role": "user",
+            "scope_id": "default",
+            "thread_id": "thread_topic_topic_shared"
+          },
+          {
+            "body": "Reply on topic_shared.",
+            "created_at": "<time>",
+            "id": "<generated>",
+            "role": "assistant",
+            "scope_id": "default",
+            "thread_id": "thread_topic_topic_shared"
+          }
+        ]
+      },
+      "meta": {
+        "freshness_error": null,
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "GET /topics/topic_shared/discussions/{discussion}/messages",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "reviewer",
+        "discussion_id": "<generated>",
+        "disposition_id": null,
+        "message_ids": [
+          "<generated>",
+          "<generated>"
+        ],
+        "outcomes": [],
+        "parent": {
+          "node_id": "topic_shared",
+          "node_type": "topic"
+        },
+        "root_message_id": "<generated>",
+        "scope_id": "default",
+        "status": "resolved",
+        "thread_id": "thread_topic_topic_shared",
+        "version": 3
+      },
+      "meta": {}
+    },
+    "call": "PATCH /topics/topic_shared/discussions/{discussion}",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "3"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "agent",
+        "fact": "withdrawn",
+        "id": "<generated>",
+        "proposal_id": "<generated>",
+        "record_kind": "topic",
+        "requirement_id": "topic_shared",
+        "scope_id": "default",
+        "sequence": 1
+      },
+      "meta": {}
+    },
+    "call": "POST /topics/topic_shared/submissions/{proposal}/withdraw",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "error": {
+        "current_revision": "<generated>",
+        "current_submission": null,
+        "kind": "review_submission_conflict"
+      },
+      "meta": {}
+    },
+    "call": "POST /topics/topic_shared/submissions/{proposal}/decide",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 409
+  },
+  {
+    "body": {
+      "data": {
+        "items": [
+          {
+            "depends_on": [],
+            "id": "question_shared",
+            "links": [],
+            "question": "Which shared record applies?",
+            "requirement_id": "req_shared",
+            "resolution_method": "research",
+            "scope_id": "default",
+            "status": "open",
+            "topic_id": "topic_shared"
+          }
+        ]
+      },
+      "meta": {
+        "freshness_error": null,
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "GET /questions",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "decision": {
+          "current_acceptance": null,
+          "current_revision": "<generated>",
+          "decisions": [],
+          "pending": {
+            "actor": "authoring",
+            "proposal_id": "<generated>",
+            "revises": null,
+            "revision": "<generated>"
+          },
+          "record_kind": "question",
+          "requirement_id": "question_shared",
+          "withdrawn": []
+        },
+        "depends_on": [],
+        "edit": {
+          "etag": "<generated>",
+          "revision": "<generated>"
+        },
+        "id": "question_shared",
+        "links": [],
+        "question": "Which shared record applies?",
+        "requirement_id": "req_shared",
+        "resolution_method": "research",
+        "scope_id": "default",
+        "status": "open",
+        "topic_id": "topic_shared"
+      },
+      "meta": {
+        "freshness_error": null
+      }
+    },
+    "call": "GET /questions/question_shared",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "<generated>"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "reviewer",
+        "discussion_id": "<generated>",
+        "disposition_id": null,
+        "message_ids": [
+          "<generated>"
+        ],
+        "outcomes": [],
+        "parent": {
+          "node_id": "question_shared",
+          "node_type": "question"
+        },
+        "root_message_id": "<generated>",
+        "scope_id": "default",
+        "status": "active",
+        "thread_id": "thread_question_question_shared",
+        "version": 1
+      },
+      "meta": {}
+    },
+    "call": "POST /questions/question_shared/discussions",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "1"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "items": [
+          {
+            "container_status": "active",
+            "discussion": {
+              "actor": "reviewer",
+              "discussion_id": "<generated>",
+              "disposition_id": null,
+              "message_ids": [
+                "<generated>"
+              ],
+              "outcomes": [],
+              "parent": {
+                "node_id": "question_shared",
+                "node_type": "question"
+              },
+              "root_message_id": "<generated>",
+              "scope_id": "default",
+              "status": "active",
+              "thread_id": "thread_question_question_shared",
+              "version": 1
+            },
+            "kind": "addressed"
+          }
+        ]
+      },
+      "meta": {
+        "freshness_error": null,
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "GET /questions/question_shared/discussions",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "reviewer",
+        "discussion_id": "<generated>",
+        "disposition_id": null,
+        "message_ids": [
+          "<generated>",
+          "<generated>"
+        ],
+        "outcomes": [],
+        "parent": {
+          "node_id": "question_shared",
+          "node_type": "question"
+        },
+        "root_message_id": "<generated>",
+        "scope_id": "default",
+        "status": "active",
+        "thread_id": "thread_question_question_shared",
+        "version": 2
+      },
+      "meta": {}
+    },
+    "call": "POST /questions/question_shared/discussions/{discussion}/messages",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "2"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "items": [
+          {
+            "body": "Discussion of question_shared.",
+            "created_at": "<time>",
+            "id": "<generated>",
+            "role": "user",
+            "scope_id": "default",
+            "thread_id": "thread_question_question_shared"
+          },
+          {
+            "body": "Reply on question_shared.",
+            "created_at": "<time>",
+            "id": "<generated>",
+            "role": "assistant",
+            "scope_id": "default",
+            "thread_id": "thread_question_question_shared"
+          }
+        ]
+      },
+      "meta": {
+        "freshness_error": null,
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "GET /questions/question_shared/discussions/{discussion}/messages",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "reviewer",
+        "discussion_id": "<generated>",
+        "disposition_id": null,
+        "message_ids": [
+          "<generated>",
+          "<generated>"
+        ],
+        "outcomes": [],
+        "parent": {
+          "node_id": "question_shared",
+          "node_type": "question"
+        },
+        "root_message_id": "<generated>",
+        "scope_id": "default",
+        "status": "resolved",
+        "thread_id": "thread_question_question_shared",
+        "version": 3
+      },
+      "meta": {}
+    },
+    "call": "PATCH /questions/question_shared/discussions/{discussion}",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "3"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "agent",
+        "fact": "withdrawn",
+        "id": "<generated>",
+        "proposal_id": "<generated>",
+        "record_kind": "question",
+        "requirement_id": "question_shared",
+        "scope_id": "default",
+        "sequence": 1
+      },
+      "meta": {}
+    },
+    "call": "POST /questions/question_shared/submissions/{proposal}/withdraw",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "error": {
+        "current_revision": "<generated>",
+        "current_submission": null,
+        "kind": "review_submission_conflict"
+      },
+      "meta": {}
+    },
+    "call": "POST /questions/question_shared/submissions/{proposal}/decide",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 409
+  },
+  {
+    "body": {
+      "data": {
+        "decision": {
+          "current_acceptance": null,
+          "current_revision": "<generated>",
+          "decisions": [],
+          "pending": {
+            "actor": "agent",
+            "proposal_id": "<generated>",
+            "revises": null,
+            "revision": "<generated>"
+          },
+          "requirement_id": "req_new",
+          "withdrawn": []
+        },
+        "edit": {
+          "etag": "<generated>",
+          "revision": "<generated>"
+        },
+        "id": "req_new",
+        "refines": [
+          "req_shared"
+        ],
+        "scope_id": "default",
+        "statement": "The record req_new is readable.",
+        "status": "discovery"
+      },
+      "meta": {}
+    },
+    "call": "POST /requirements",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "<generated>"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "agent",
+        "fact": "withdrawn",
+        "id": "<generated>",
+        "proposal_id": "<generated>",
+        "requirement_id": "req_new",
+        "scope_id": "default",
+        "sequence": 1
+      },
+      "meta": {}
+    },
+    "call": "POST /requirements/req_new/submissions/{proposal}/withdraw",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "decision": {
+          "current_acceptance": null,
+          "current_revision": "<generated>",
+          "decisions": [],
+          "pending": null,
+          "requirement_id": "req_new",
+          "withdrawn": [
+            "<generated>"
+          ]
+        },
+        "edit": {
+          "etag": "<generated>",
+          "revision": "<generated>"
+        },
+        "id": "req_new",
+        "refines": [
+          "req_shared"
+        ],
+        "scope_id": "default",
+        "statement": "The record req_new is readable.",
+        "status": "discovery"
+      },
+      "meta": {
+        "freshness_error": null
+      }
+    },
+    "call": "GET /requirements/req_new",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "<generated>"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "decision": {
+          "current_acceptance": null,
+          "current_revision": "<generated>",
+          "decisions": [],
+          "pending": {
+            "actor": "agent",
+            "proposal_id": "<generated>",
+            "revises": null,
+            "revision": "<generated>"
+          },
+          "requirement_id": "req_new",
+          "withdrawn": [
+            "<generated>"
+          ]
+        },
+        "edit": {
+          "etag": "<generated>",
+          "revision": "<generated>"
+        },
+        "id": "req_new",
+        "refines": [
+          "req_shared"
+        ],
+        "scope_id": "default",
+        "statement": "The record req_new is new.",
+        "status": "discovery"
+      },
+      "meta": {}
+    },
+    "call": "PATCH /requirements/req_new",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "<generated>"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "actor": "reviewer",
+        "disposition_id": "<generated>",
+        "fact": "decided",
+        "id": "<generated>",
+        "proposal_id": "<generated>",
+        "requirement_id": "req_new",
+        "scope_id": "default",
+        "sequence": 2
+      },
+      "meta": {}
+    },
+    "call": "POST /requirements/req_new/submissions/{proposal}/decide",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "entries": [
+          {
+            "kind": "member",
+            "node": {
+              "id": "req_shared",
+              "node_type": "requirement",
+              "scope_id": "default",
+              "statement": "The graph is readable.",
+              "status": "active"
+            },
+            "review": {
+              "comment_count": 0,
+              "outcome": null,
+              "pending_proposal_id": null
+            }
+          },
+          {
+            "kind": "member",
+            "node": {
+              "id": "req_new",
+              "node_type": "requirement",
+              "refines": [
+                "req_shared"
+              ],
+              "scope_id": "default",
+              "statement": "The record req_new is new.",
+              "status": "discovery"
+            },
+            "review": {
+              "comment_count": 0,
+              "outcome": "accepted",
+              "pending_proposal_id": null
+            }
+          },
+          {
+            "kind": "member",
+            "node": {
+              "id": "resolution_shared",
+              "inputs": [],
+              "node_type": "resolution",
+              "position": "The shared graph is readable.",
+              "rationale": "The reader uses the shared contract.",
+              "requirement_ids": [
+                "req_shared"
+              ],
+              "scope_id": "default",
+              "status": "draft",
+              "title": "Shared resolution"
+            },
+            "review": {
+              "comment_count": 0,
+              "outcome": null,
+              "pending_proposal_id": null
+            }
+          },
+          {
+            "kind": "member",
+            "node": {
+              "id": "rule_shared",
+              "node_type": "rule",
+              "requirement_ids": [
+                "req_shared"
+              ],
+              "scope_id": "default",
+              "severity": "high",
+              "statement": "The shared graph is readable.",
+              "status": "active"
+            },
+            "review": {
+              "comment_count": 0,
+              "outcome": null,
+              "pending_proposal_id": null
+            }
+          },
+          {
+            "kind": "member",
+            "node": {
+              "id": "topic_shared",
+              "links": [],
+              "node_type": "topic",
+              "requirement_id": "req_shared",
+              "scope_id": "default",
+              "status": "open",
+              "title": "Shared topic"
+            },
+            "review": {
+              "comment_count": 0,
+              "outcome": null,
+              "pending_proposal_id": null
+            }
+          },
+          {
+            "kind": "member",
+            "node": {
+              "depends_on": [],
+              "id": "question_shared",
+              "links": [],
+              "node_type": "question",
+              "question": "Which shared record applies?",
+              "requirement_id": "req_shared",
+              "resolution_method": "research",
+              "scope_id": "default",
+              "status": "open",
+              "topic_id": "topic_shared"
+            },
+            "review": {
+              "comment_count": 0,
+              "outcome": null,
+              "pending_proposal_id": null
+            }
+          },
+          {
+            "kind": "thread",
+            "thread": {
+              "created_at": "<time>",
+              "id": "thread_question_question_shared",
+              "parent": {
+                "node_id": "question_shared",
+                "node_type": "question"
+              },
+              "scope_id": "default",
+              "status": "active"
+            }
+          },
+          {
+            "kind": "thread",
+            "thread": {
+              "created_at": "<time>",
+              "id": "thread_requirement_req_shared",
+              "parent": {
+                "node_id": "req_shared",
+                "node_type": "requirement"
+              },
+              "scope_id": "default",
+              "status": "active"
+            }
+          },
+          {
+            "kind": "thread",
+            "thread": {
+              "created_at": "<time>",
+              "id": "thread_resolution_resolution_shared",
+              "parent": {
+                "node_id": "resolution_shared",
+                "node_type": "resolution"
+              },
+              "scope_id": "default",
+              "status": "active"
+            }
+          },
+          {
+            "kind": "thread",
+            "thread": {
+              "created_at": "<time>",
+              "id": "thread_rule_rule_shared",
+              "parent": {
+                "node_id": "rule_shared",
+                "node_type": "rule"
+              },
+              "scope_id": "default",
+              "status": "active"
+            }
+          },
+          {
+            "kind": "thread",
+            "thread": {
+              "created_at": "<time>",
+              "id": "thread_topic_topic_shared",
+              "parent": {
+                "node_id": "topic_shared",
+                "node_type": "topic"
+              },
+              "scope_id": "default",
+              "status": "active"
+            }
+          },
+          {
+            "kind": "message",
+            "message": {
+              "body": "Discussion of req_shared.",
+              "created_at": "<time>",
+              "id": "<generated>",
+              "role": "user",
+              "scope_id": "default",
+              "thread_id": "thread_requirement_req_shared"
+            }
+          },
+          {
+            "kind": "message",
+            "message": {
+              "body": "Reply on req_shared.",
+              "created_at": "<time>",
+              "id": "<generated>",
+              "role": "assistant",
+              "scope_id": "default",
+              "thread_id": "thread_requirement_req_shared"
+            }
+          },
+          {
+            "kind": "message",
+            "message": {
+              "body": "Discussion of resolution_shared.",
+              "created_at": "<time>",
+              "id": "<generated>",
+              "role": "user",
+              "scope_id": "default",
+              "thread_id": "thread_resolution_resolution_shared"
+            }
+          },
+          {
+            "kind": "message",
+            "message": {
+              "body": "Reply on resolution_shared.",
+              "created_at": "<time>",
+              "id": "<generated>",
+              "role": "assistant",
+              "scope_id": "default",
+              "thread_id": "thread_resolution_resolution_shared"
+            }
+          },
+          {
+            "kind": "message",
+            "message": {
+              "body": "Discussion of rule_shared.",
+              "created_at": "<time>",
+              "id": "<generated>",
+              "role": "user",
+              "scope_id": "default",
+              "thread_id": "thread_rule_rule_shared"
+            }
+          },
+          {
+            "kind": "message",
+            "message": {
+              "body": "Reply on rule_shared.",
+              "created_at": "<time>",
+              "id": "<generated>",
+              "role": "assistant",
+              "scope_id": "default",
+              "thread_id": "thread_rule_rule_shared"
+            }
+          },
+          {
+            "kind": "message",
+            "message": {
+              "body": "Discussion of topic_shared.",
+              "created_at": "<time>",
+              "id": "<generated>",
+              "role": "user",
+              "scope_id": "default",
+              "thread_id": "thread_topic_topic_shared"
+            }
+          },
+          {
+            "kind": "message",
+            "message": {
+              "body": "Reply on topic_shared.",
+              "created_at": "<time>",
+              "id": "<generated>",
+              "role": "assistant",
+              "scope_id": "default",
+              "thread_id": "thread_topic_topic_shared"
+            }
+          },
+          {
+            "kind": "message",
+            "message": {
+              "body": "Discussion of question_shared.",
+              "created_at": "<time>",
+              "id": "<generated>",
+              "role": "user",
+              "scope_id": "default",
+              "thread_id": "thread_question_question_shared"
+            }
+          },
+          {
+            "kind": "message",
+            "message": {
+              "body": "Reply on question_shared.",
+              "created_at": "<time>",
+              "id": "<generated>",
+              "role": "assistant",
+              "scope_id": "default",
+              "thread_id": "thread_question_question_shared"
+            }
+          }
+        ],
+        "review_totals": {
+          "accepted": 1,
+          "pending": 0,
+          "rejected": 0
+        },
+        "root_id": "req_shared"
+      },
+      "meta": {
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "GET /requirements/req_shared/document",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "compatibility": {
+          "read_derivation": 3,
+          "wire": 9
+        },
+        "package": {
+          "name": "provenance",
+          "version": "0.4.0"
+        },
+        "repository": "selected",
+        "scope": "default"
+      },
+      "meta": {}
+    },
+    "call": "GET /metadata",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "decision": {
+          "current_acceptance": null,
+          "current_revision": "<generated>",
+          "decisions": [],
+          "pending": null,
+          "record_kind": "source",
+          "requirement_id": "source_shared",
+          "withdrawn": [
+            "<generated>"
+          ]
+        },
+        "edit": {
+          "etag": "<generated>",
+          "revision": "<generated>"
+        },
+        "id": "source_shared",
+        "name": "Shared source",
+        "scope_id": "default",
+        "source_type": "document",
+        "url": null
+      },
+      "meta": {
+        "freshness_error": null
+      }
+    },
+    "call": "GET /sources/source_shared",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "<generated>"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "decision": {
+          "current_acceptance": null,
+          "current_revision": "<generated>",
+          "decisions": [],
+          "pending": null,
+          "requirement_id": "req_shared",
+          "withdrawn": [
+            "<generated>"
+          ]
+        },
+        "edit": {
+          "etag": "<generated>",
+          "revision": "<generated>"
+        },
+        "id": "req_shared",
+        "scope_id": "default",
+        "statement": "The graph is readable.",
+        "status": "active"
+      },
+      "meta": {
+        "freshness_error": null
+      }
+    },
+    "call": "GET /requirements/req_shared",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "<generated>"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "decision": {
+          "current_acceptance": null,
+          "current_revision": "<generated>",
+          "decisions": [],
+          "pending": null,
+          "record_kind": "resolution",
+          "requirement_id": "resolution_shared",
+          "withdrawn": [
+            "<generated>"
+          ]
+        },
+        "edit": {
+          "etag": "<generated>",
+          "revision": "<generated>"
+        },
+        "id": "resolution_shared",
+        "inputs": [],
+        "position": "The shared graph is readable.",
+        "rationale": "The reader uses the shared contract.",
+        "requirement_ids": [
+          "req_shared"
+        ],
+        "scope_id": "default",
+        "status": "draft",
+        "title": "Shared resolution"
+      },
+      "meta": {
+        "freshness_error": null
+      }
+    },
+    "call": "GET /resolutions/resolution_shared",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "<generated>"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "decision": {
+          "current_acceptance": null,
+          "current_revision": "<generated>",
+          "decisions": [],
+          "pending": null,
+          "record_kind": "rule",
+          "requirement_id": "rule_shared",
+          "withdrawn": [
+            "<generated>"
+          ]
+        },
+        "edit": {
+          "etag": "<generated>",
+          "revision": "<generated>"
+        },
+        "id": "rule_shared",
+        "requirement_ids": [
+          "req_shared"
+        ],
+        "scope_id": "default",
+        "severity": "high",
+        "statement": "The shared graph is readable.",
+        "status": "active"
+      },
+      "meta": {
+        "freshness_error": null
+      }
+    },
+    "call": "GET /rules/rule_shared",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "<generated>"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "decision": {
+          "current_acceptance": null,
+          "current_revision": "<generated>",
+          "decisions": [],
+          "pending": null,
+          "record_kind": "topic",
+          "requirement_id": "topic_shared",
+          "withdrawn": [
+            "<generated>"
+          ]
+        },
+        "edit": {
+          "etag": "<generated>",
+          "revision": "<generated>"
+        },
+        "id": "topic_shared",
+        "links": [],
+        "requirement_id": "req_shared",
+        "scope_id": "default",
+        "status": "open",
+        "title": "Shared topic"
+      },
+      "meta": {
+        "freshness_error": null
+      }
+    },
+    "call": "GET /topics/topic_shared",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "<generated>"
+    },
+    "status": 200
+  },
+  {
+    "body": {
+      "data": {
+        "decision": {
+          "current_acceptance": null,
+          "current_revision": "<generated>",
+          "decisions": [],
+          "pending": null,
+          "record_kind": "question",
+          "requirement_id": "question_shared",
+          "withdrawn": [
+            "<generated>"
+          ]
+        },
+        "depends_on": [],
+        "edit": {
+          "etag": "<generated>",
+          "revision": "<generated>"
+        },
+        "id": "question_shared",
+        "links": [],
+        "question": "Which shared record applies?",
+        "requirement_id": "req_shared",
+        "resolution_method": "research",
+        "scope_id": "default",
+        "status": "open",
+        "topic_id": "topic_shared"
+      },
+      "meta": {
+        "freshness_error": null
+      }
+    },
+    "call": "GET /questions/question_shared",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "<generated>"
+    },
+    "status": 200
+  }
+]
