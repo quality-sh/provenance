@@ -3,6 +3,7 @@
 
 use provenance_macros::verifies;
 use provenance_mcp::Client;
+use provenance_porcelain::guidance::guidance_for;
 use serde_json::{json, Value};
 use std::process::Stdio;
 
@@ -104,10 +105,10 @@ async fn mcp_serves_the_tools_of_the_cli_repository() {
     let server = Server::start(&repo).await;
     let client = &server.client;
 
-    // prime and the server instructions hold the same shared guidance; each adds its
-    // own first steps.
+    // prime holds the guidance of the commands that the CLI shows, and adds its own first
+    // steps.
     let prime = cli(&["prime", "--repo", &repo]);
-    let shared = provenance_porcelain::guidance::guidance().guidance;
+    let shared = guidance_for(provenance_cli::exposed::name, false).guidance;
     assert!(prime.starts_with(&shared), "{prime}");
     assert_eq!(
         client.instructions().as_deref(),

@@ -63,6 +63,11 @@ pub fn shows(command: Command) -> bool {
     EXPOSED.contains(&command)
 }
 
+/// The name with which the CLI shows `command`, or `None` when the CLI does not show it.
+pub fn name(command: Command) -> Option<&'static str> {
+    shows(command).then(|| command.declaration().name)
+}
+
 /// The porcelain command that the CLI root words select. A target action is not found
 /// by its words.
 pub fn find(words: &[&str]) -> Option<Command> {

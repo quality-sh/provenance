@@ -111,7 +111,11 @@ pub fn tool(host: &StatementHost, input: &ActionInput) -> Option<Tool> {
         return None;
     }
     let description = provenance_porcelain::guidance::change_description(
-        |command| commands(input).any(|write| write == command),
+        |command| {
+            commands(input)
+                .any(|write| write == command)
+                .then(|| crate::exposed::name(command))
+        },
         notifies(input),
     )?;
     Some(crate::surface::tool(

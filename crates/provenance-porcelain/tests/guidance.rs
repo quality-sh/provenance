@@ -3,7 +3,7 @@
 //! names waits for the approval of the owner.
 
 use provenance_porcelain::action::Action;
-use provenance_porcelain::guidance::{change_description, guidance, guidance_for};
+use provenance_porcelain::guidance::{change_description, guidance_for};
 use provenance_porcelain::registry::Command;
 
 /// Phrases that do not name a command, each with the start of the one line that holds
@@ -55,17 +55,33 @@ fn names(text: &str, name: &str) -> bool {
     })
 }
 
+/// The declaration name of each command for which `shown` is true.
+fn declared(shown: impl Fn(Command) -> bool) -> impl Fn(Command) -> Option<&'static str> {
+    move |command| shown(command).then(|| command.declaration().name)
+}
+
+/// The guidance of a consumer that shows notify and each command for which `shown` is
+/// true.
+fn guidance_of(shown: impl Fn(Command) -> bool) -> String {
+    guidance_for(declared(shown), true).guidance
+}
+
+/// The guidance of a consumer that shows each command and notify.
+fn guidance() -> String {
+    guidance_of(|_| true)
+}
+
 #[test]
 fn the_guidance_names_no_command_that_the_consumer_does_not_show() {
     for hidden in Command::ALL.iter().copied() {
-        let text = guidance_for(|command| command != hidden, true).guidance;
+        let text = guidance_of(|command| command != hidden);
         let name = hidden.declaration().name;
         assert!(
             !names(&command_text(&text), name),
             "the guidance without {name} names it:\n{text}"
         );
     }
-    let text = guidance_for(|_| true, false).guidance;
+    let text = guidance_for(declared(|_| true), false).guidance;
     assert!(
         !names(&command_text(&text), "notify"),
         "the guidance without notify names it:\n{text}"
@@ -76,14 +92,13 @@ fn the_guidance_names_no_command_that_the_consumer_does_not_show() {
 fn the_change_line_with_each_write_is_the_change_declaration_description() {
     let description = Command::Change.declaration().description;
     assert_eq!(
-        change_description(|_| true, true).as_deref(),
+        change_description(declared(|_| true), true).as_deref(),
         Some(description)
     );
-    assert!(guidance()
-        .guidance
-        .contains(&format!("\n- change: {description}\n")));
+    let line = format!("\n- change: {description}\n");
+    assert!(guidance().contains(&line));
     assert_eq!(
-        change_description(|command| command == Command::Change, false),
+        change_description(declared(|command| command == Command::Change), false),
         None
     );
 }
@@ -94,7 +109,7 @@ fn the_create_sentence_names_existing_record_actions_only_when_one_is_shown() {
         matches!(command, Command::Action(action)
             if Action::RECORD.contains(&action) && action != Action::Create)
     };
-    let text = guidance_for(|command| !existing(command), true).guidance;
+    let text = guidance_of(|command| !existing(command));
     assert!(
         text.contains(" Create names an explicit record type.\n"),
         "{text}"
@@ -103,7 +118,7 @@ fn the_create_sentence_names_existing_record_actions_only_when_one_is_shown() {
         !text.contains("actions on an existing record infer its type"),
         "{text}"
     );
-    assert!(guidance().guidance.contains(
+    assert!(guidance().contains(
         "\nUse search to find IDs, then get to read the selected record and its related views. \
          Create names an explicit record type; actions on an existing record infer its type.\n"
     ));
@@ -114,14 +129,11 @@ fn the_create_sentence_names_existing_record_actions_only_when_one_is_shown() {
 /// evidence: the trace line names get and goes with it.
 #[test]
 fn guidance_with_trace_and_without_get_gives_no_trace_line() {
-    let without_get = guidance_for(|command| command != Command::Get, true).guidance;
-    let without_get_and_trace = guidance_for(
-        |command| !matches!(command, Command::Get | Command::Trace),
-        true,
-    )
-    .guidance;
+    let without_get = guidance_of(|command| command != Command::Get);
+    let without_get_and_trace =
+        guidance_of(|command| !matches!(command, Command::Get | Command::Trace));
     assert_eq!(without_get, without_get_and_trace);
-    assert!(guidance().guidance.contains("\n- trace: "));
+    assert!(guidance().contains("\n- trace: "));
 }
 
 /// The `edit.etag` sentence names get and update, so a consumer gets it only when it shows
@@ -131,12 +143,11 @@ fn the_etag_sentence_needs_get_and_update() {
     let sentence = "Before an update, read the record with get. Give its `edit.etag` unchanged \
                     to the update as the if-match value.\n";
     let update = Command::Action(Action::Update);
-    let without_update = guidance_for(|command| command != update, true).guidance;
+    let without_update = guidance_of(|command| command != update);
     assert!(!without_update.contains(sentence), "{without_update}");
-    let without_get = guidance_for(|command| command != Command::Get, true).guidance;
+    let without_get = guidance_of(|command| command != Command::Get);
     assert!(!without_get.contains(sentence), "{without_get}");
-    let get_and_update =
-        guidance_for(|command| command == Command::Get || command == update, true).guidance;
+    let get_and_update = guidance_of(|command| command == Command::Get || command == update);
     assert_eq!(
         get_and_update.matches(sentence).count(),
         1,

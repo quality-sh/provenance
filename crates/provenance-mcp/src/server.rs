@@ -32,7 +32,7 @@ impl Server {
 /// The instructions of a server that shows every command and every write: the shared
 /// domain guidance followed by the first calls.
 pub fn instructions() -> String {
-    crate::guidance::instructions(|_| true, true)
+    crate::guidance::instructions(crate::exposed::shows, true)
 }
 
 impl ServerHandler for Server {

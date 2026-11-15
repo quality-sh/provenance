@@ -75,16 +75,14 @@ const REPOSITORY_WRITES: [Command; 4] = [
     Command::Graph(GraphCommand::SwarmBacktraceLand),
 ];
 
-/// Produce guidance without a repository, a graph query, or a cache.
-pub fn guidance() -> Guidance {
-    guidance_for(|_| true, true)
-}
-
-/// Produce the guidance of a consumer that shows the commands for which `shown` is true.
+/// Produce the guidance of a consumer that shows the commands that `name` names.
 ///
-/// The notify write is shown when `notify` is true. A sentence or a command line names
-/// only shown commands, and the change line names only the shown writes.
-pub fn guidance_for(shown: impl Fn(Command) -> bool, notify: bool) -> Guidance {
+/// `name` gives the name with which the consumer shows a command, or `None` for a command
+/// that it does not show. The notify write is shown when `notify` is true. A sentence or a command line names
+/// only shown commands, each line with the name of the consumer, and the change line names
+/// only the shown writes.
+pub fn guidance_for(name: impl Fn(Command) -> Option<&'static str>, notify: bool) -> Guidance {
+    let shown = |command: Command| name(command).is_some();
     let mut text = String::from(DOMAIN);
     let opening: Vec<String> = [
         (shown(Command::Search) && shown(Command::Get)).then(|| SEARCH_THEN_GET.to_owned()),
@@ -116,19 +114,20 @@ pub fn guidance_for(shown: impl Fn(Command) -> bool, notify: bool) -> Guidance {
             .chain(Action::DISCUSSION)
             .map(Command::Action),
     );
-    let each_named_shown =
-        |command: Command| shown(command) && also_named(command).iter().all(|other| shown(*other));
-    for command in commands.filter(|command| each_named_shown(*command)) {
-        let declaration = command.declaration();
+    let names_shown = |command: &Command| also_named(*command).iter().all(|other| shown(*other));
+    for command in commands.filter(names_shown) {
+        let Some(shown_name) = name(command) else {
+            continue;
+        };
         let description = if command == Command::Change {
-            let Some(description) = change_description(&shown, notify) else {
+            let Some(description) = change_description(&name, notify) else {
                 continue;
             };
             description
         } else {
-            declaration.description.to_owned()
+            command.declaration().description.to_owned()
         };
-        writeln!(text, "- {}: {description}", declaration.name)
+        writeln!(text, "- {shown_name}: {description}")
             .expect("writing to a String cannot fail");
     }
     text.truncate(text.trim_end().len());
@@ -149,16 +148,16 @@ fn create_sentence(shown: impl Fn(Command) -> bool) -> Option<String> {
 
 /// The description of the change command that names only the shown writes.
 ///
-/// A write is shown when `shown` is true for its command, and notify is shown when
-/// `notify` is true. With each write shown, it is the change declaration description.
-/// No write gives no description.
-pub fn change_description(shown: impl Fn(Command) -> bool, notify: bool) -> Option<String> {
+/// `name` gives the name with which the consumer shows a write, or `None` for a write that
+/// it does not show. Notify is shown when `notify` is true. With each write shown with its
+/// declaration name, it is the change declaration description. No write gives no
+/// description.
+pub fn change_description(
+    name: impl Fn(Command) -> Option<&'static str>,
+    notify: bool,
+) -> Option<String> {
     let names = |commands: &[Command]| -> Vec<&'static str> {
-        commands
-            .iter()
-            .filter(|command| shown(**command))
-            .map(|command| command.declaration().name)
-            .collect()
+        commands.iter().filter_map(|command| name(*command)).collect()
     };
     let groups = [
         (

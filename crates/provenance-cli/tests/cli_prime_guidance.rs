@@ -1,5 +1,6 @@
 use assert_cmd::Command;
 use provenance_macros::verifies;
+use provenance_porcelain::guidance::guidance_for;
 use serde_json::Value;
 
 fn prime(repo: &std::path::Path, extra: &[&str]) -> String {
@@ -111,10 +112,11 @@ async fn cli_and_mcp_share_the_same_guidance() {
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = Client::connect(client_io).await.unwrap();
-    let shared = provenance_porcelain::guidance::guidance().guidance;
+    let cli = guidance_for(provenance_cli::exposed::name, false).guidance;
+    let (shared, _) = cli.split_once("\n## Actions\n").unwrap();
     let instructions = client.instructions().unwrap();
-    assert!(text.starts_with(&shared), "{text}");
-    assert!(instructions.starts_with(&shared), "{instructions}");
+    assert!(text.starts_with(&cli), "{text}");
+    assert!(instructions.starts_with(shared), "{instructions}");
     for guidance in [&text, &instructions] {
         let headings = guidance
             .lines()
@@ -136,7 +138,7 @@ async fn cli_and_mcp_share_the_same_guidance() {
         "{instructions}"
     );
     let tools = client.tools().await;
-    for name in ["get", "search", "trace", "change", "discussions"] {
+    for name in ["get", "search", "trace", "discussions"] {
         let tool = tools.iter().find(|tool| tool["name"] == name).unwrap();
         let description = tool["description"].as_str().unwrap();
         assert!(
