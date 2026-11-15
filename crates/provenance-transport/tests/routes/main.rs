@@ -13,9 +13,11 @@ mod support {
     pub mod asserted_proposal;
     pub mod catch_up_steps;
     pub mod ideation;
+    pub mod names;
     pub mod records;
     pub mod resource_http;
     pub mod transcript;
+    pub mod views;
 }
 #[path = "../caller_refusal_kinds.rs"]
 mod caller_refusal_kinds;

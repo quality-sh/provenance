@@ -3,6 +3,6 @@
 //! The verification and proposal resources use the same shapes. `provenance-contract` names
 //! these types when it registers routes and dispatch entries.
 
-pub use super::catalog::{
-    resource_lists::*, resource_members::*, resource_pages::*, verification_resources::*,
-};
+#[cfg(feature = "host")]
+pub use super::catalog::verification_resources::*;
+pub use super::catalog::{resource_lists::*, resource_members::*, resource_pages::*};
