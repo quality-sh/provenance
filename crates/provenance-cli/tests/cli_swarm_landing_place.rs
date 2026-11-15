@@ -139,7 +139,7 @@ fn a_landing_into_a_file_out_of_id_order_gives_the_file_of_the_direct_write() {
     land_run(&landing, "m", &[contribution("contrib_m", "M.")], None);
     let path = repo.join(CONTRIBUTIONS);
     let sorted = std::fs::read_to_string(&path).unwrap();
-    let reversed: String = sorted.lines().rev().map(|row| format!("{row}\n")).collect();
+    let reversed: String = sorted.lines().rev().flat_map(|row| [row, "\n"]).collect();
     let first = reversed.lines().next().unwrap();
     assert!(first.contains(r#""id":"contrib_z""#), "{reversed}");
     std::fs::write(&path, reversed).unwrap();
