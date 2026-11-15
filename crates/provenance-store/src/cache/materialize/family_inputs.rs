@@ -2,9 +2,8 @@
 //! reads. A catch-up parses again only the families that a write can
 //! change.
 //!
-//! A family reader can read more than its own shard. The ideation readers
-//! add the records of the landings shard. The proposal cards take their
-//! state from the assertions and the dispositions. A Discussion is checked
+//! A family reader can read more than its own shard. The proposal cards
+//! take their state from the assertions and the dispositions. A Discussion is checked
 //! against its Thread, its Messages and its parent record. Each family names
 //! the shards that its reader reads, and the directories come from the
 //! shard paths in [`crate::shards`]. The reader gets a store fenced to
@@ -15,49 +14,28 @@ use crate::shards;
 use provenance_core::ScopeId;
 use std::collections::BTreeSet;
 
-/// One shard that a family reader reads.
-#[derive(Clone, Copy)]
-enum Input {
-    Family(ProjectionFamily),
-    Landings,
-}
-
-impl Input {
-    fn directory(self) -> &'static str {
-        shards::shard_directory(match self {
-            Self::Family(family) => family.shard_suffix(),
-            Self::Landings => shards::IDEATION_LANDINGS,
-        })
-    }
-}
-
-/// The shards that the reader of `family` reads. The match names each
-/// family, so a new family must name its shards.
-fn inputs(family: ProjectionFamily) -> Vec<Input> {
-    use Input::{Family, Landings};
+/// The families whose shards the reader of `family` reads. The match names
+/// each family, so a new family must name its shards.
+fn inputs(family: ProjectionFamily) -> Vec<ProjectionFamily> {
     use ProjectionFamily as F;
     match family {
-        F::Contributions | F::SynthesisPackets | F::AssertionRecords | F::Dispositions => {
-            vec![Family(family), Landings]
-        }
-        F::ProposalCards => vec![
-            Family(F::ProposalCards),
-            Family(F::AssertionRecords),
-            Family(F::Dispositions),
-            Landings,
-        ],
+        F::ProposalCards => vec![F::ProposalCards, F::AssertionRecords, F::Dispositions],
         F::Discussions => vec![
-            Family(F::Discussions),
-            Family(F::Threads),
-            Family(F::Messages),
-            Family(F::Sources),
-            Family(F::Requirements),
-            Family(F::Resolutions),
-            Family(F::Rules),
-            Family(F::Topics),
-            Family(F::Questions),
+            F::Discussions,
+            F::Threads,
+            F::Messages,
+            F::Sources,
+            F::Requirements,
+            F::Resolutions,
+            F::Rules,
+            F::Topics,
+            F::Questions,
         ],
-        F::Sources
+        F::Contributions
+        | F::SynthesisPackets
+        | F::AssertionRecords
+        | F::Dispositions
+        | F::Sources
         | F::Requirements
         | F::RequirementReviews
         | F::Topics
@@ -68,14 +46,17 @@ fn inputs(family: ProjectionFamily) -> Vec<Input> {
         | F::Messages
         | F::Withdrawals
         | F::ImplementationBindings
-        | F::VerificationBindings => vec![Family(family)],
+        | F::VerificationBindings => vec![family],
     }
 }
 
 /// The directories below a scope directory that the reader of `family`
 /// reads.
 pub(super) fn input_directories(family: ProjectionFamily) -> Vec<&'static str> {
-    let directories: BTreeSet<_> = inputs(family).into_iter().map(Input::directory).collect();
+    let directories: BTreeSet<_> = inputs(family)
+        .into_iter()
+        .map(|input| shards::shard_directory(input.shard_suffix()))
+        .collect();
     directories.into_iter().collect()
 }
 

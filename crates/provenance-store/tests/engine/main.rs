@@ -62,3 +62,5 @@ mod staged_view;
 mod state_view;
 #[path = "../stray_state_entries.rs"]
 mod stray_state_entries;
+#[path = "../swarm_run_merge_domain.rs"]
+mod swarm_run_merge_domain;
