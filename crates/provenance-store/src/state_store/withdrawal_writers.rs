@@ -10,9 +10,9 @@ use provenance_core::{ProposalCard, ScopeId, Withdrawal};
 impl StateStore {
     /// Reads the scope's Withdrawal records, each ID one time.
     pub fn list_withdrawals(&self, scope: &ScopeId) -> anyhow::Result<Vec<Withdrawal>> {
+        let withdrawals = read_jsonl(self, &shards::withdrawals_path(&self.layout, scope))?;
         let proposals: Vec<ProposalCard> =
             read_jsonl(self, &shards::proposal_cards_path(&self.layout, scope))?;
-        let withdrawals = read_jsonl(self, &shards::withdrawals_path(&self.layout, scope))?;
         Ok(super::review_rows_once::withdrawals_once(&proposals, withdrawals))
     }
 
