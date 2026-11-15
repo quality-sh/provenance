@@ -2,7 +2,7 @@
 use crate::publication::ShardBytes;
 #[cfg(feature = "host")]
 use provenance_core::VerificationRun;
-use provenance_core::{RequirementReview, ScopeId, StableId};
+use provenance_core::{RequirementReview, Rule, ScopeId, StableId};
 use provenance_macros::rule;
 use sha2::{Digest, Sha256};
 #[cfg(feature = "host")]
@@ -10,6 +10,9 @@ use std::collections::BTreeSet;
 
 use super::{readers::read_jsonl, ReconciledResource, StateStore, TypedResourceKind};
 use crate::shards;
+
+/// The field of a Requirement whose change puts the evidence of its Rules up for review.
+const STATEMENT: &str = "statement";
 
 /// One restated Requirement obligation drawn from a reconciliation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,7 +38,7 @@ pub fn requirement_statement_changes(
             resource
                 .changes
                 .iter()
-                .filter(|change| change.field == "statement")
+                .filter(|change| change.field == STATEMENT)
                 .filter_map(|change| {
                     Some(RequirementStatementChange {
                         requirement_id: resource.id.clone(),
@@ -49,11 +52,20 @@ pub fn requirement_statement_changes(
         .collect()
 }
 
+/// The Rules of `rules` that cite `requirement`. A change of the statement of `requirement` puts
+/// the evidence of these Rules up for review, so `rules` is the state after the change.
+pub(crate) fn rules_citing(rules: &[Rule], requirement: &StableId) -> Vec<StableId> {
+    rules
+        .iter()
+        .filter(|rule| rule.requirement_ids.contains(requirement))
+        .map(|rule| rule.id.clone())
+        .collect()
+}
+
 /// One Rule whose evidence a restated Requirement puts up for review.
 struct RequirementReviewInput {
     rule_id: StableId,
     requirement_id: StableId,
-    field: String,
     before: String,
     after: String,
     changed_at: i64,
@@ -76,13 +88,18 @@ impl StateStore {
         scope: &ScopeId,
         restatements: Vec<Restatement>,
     ) -> anyhow::Result<()> {
-        let mut cited = Vec::new();
-        for change in restatements {
-            let rule_ids = self.rule_ids_for_requirement(scope, &change.requirement_id)?;
-            if !rule_ids.is_empty() {
-                cited.push((change, rule_ids));
-            }
+        if restatements.is_empty() {
+            return Ok(());
         }
+        let rules = self.list_rules(scope)?;
+        let cited = restatements
+            .into_iter()
+            .map(|change| {
+                let rule_ids = rules_citing(&rules, &change.requirement_id);
+                (change, rule_ids)
+            })
+            .filter(|(_, rule_ids)| !rule_ids.is_empty())
+            .collect::<Vec<_>>();
         if cited.is_empty() {
             return Ok(());
         }
@@ -95,7 +112,6 @@ impl StateStore {
                     .map(move |rule_id| RequirementReviewInput {
                         rule_id,
                         requirement_id: change.requirement_id.clone(),
-                        field: "statement".into(),
                         before: change.before.clone(),
                         after: change.after.clone(),
                         changed_at,
@@ -177,12 +193,7 @@ impl StateStore {
         scope: &ScopeId,
         requirement_id: &StableId,
     ) -> anyhow::Result<Vec<StableId>> {
-        Ok(self
-            .list_rules(scope)?
-            .into_iter()
-            .filter(|rule| rule.requirement_ids.contains(requirement_id))
-            .map(|rule| rule.id)
-            .collect())
+        Ok(rules_citing(&self.list_rules(scope)?, requirement_id))
     }
 
     /// The reviews still waiting on a verification run.
@@ -206,7 +217,7 @@ impl RequirementReviewInput {
             id,
             rule_id: self.rule_id,
             requirement_id: self.requirement_id,
-            field: self.field,
+            field: STATEMENT.to_owned(),
             before: self.before,
             after: self.after,
             changed_at: self.changed_at,
@@ -228,7 +239,7 @@ fn review_id(input: &RequirementReviewInput) -> anyhow::Result<StableId> {
         "{}\0{}\0{}\0{}",
         input.rule_id.as_str(),
         input.requirement_id.as_str(),
-        input.field,
+        STATEMENT,
         input.after
     );
     let digest = hex::encode(Sha256::digest(identity.as_bytes()));

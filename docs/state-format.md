@@ -94,12 +94,13 @@ Requirement review records live in
 applied reconciliation or a scope import restates a Requirement's `statement`,
 one row for each Rule that cites the Requirement after the change records the
 Requirement, the field, both statements, and when the change landed. A Rule that
-the change removes gets no row. A review is identified by that exact
-restatement, so re-applying the same change never reopens a cleared review. A
-verification run for the Rule recorded after the change sets `cleared_at` and
-`cleared_by_run` while keeping the reason; nothing is deleted. Plan reads these
-rows to report review-required evidence, and previews the reviews an unapplied
-diff would raise without writing them.
+the change removes, or moves to another Requirement, gets no row. A review is
+identified by that exact restatement, so re-applying the same change never
+reopens a cleared review. A verification run for the Rule recorded after the
+change sets `cleared_at` and `cleared_by_run` while keeping the reason; nothing
+is deleted. Plan reads these rows to report review-required evidence, and
+previews the reviews an unapplied diff would raise without writing them: the
+same Rules that the apply gives a row.
 
 A scope export file does not hold these rows, so `import` and `export` refuse a
 scope that has one, open or cleared. Thus the first import that changes the
@@ -107,7 +108,7 @@ statement of a Requirement that a Rule cites passes and writes the rows. Each
 later import or export of that scope is refused, also after a verification run
 clears the rows. The records of that scope stay readable and changeable through
 the API routes. `import` and `export` also refuse a scope that has a review
-submission, a Discussion, a withdrawal or a `review` folder.
+submission, a Discussion or a withdrawal.
 
 A Rule with no active implementation binding is a valid unimplemented Rule.
 A rule's source document and section are citations and do not count as

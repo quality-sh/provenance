@@ -58,7 +58,7 @@ fn state_bytes(repository: &Repository) -> BTreeMap<PathBuf, Vec<u8>> {
 }
 
 #[tokio::test]
-#[verifies("rule_import_export_refuse_requirement_reviews", examples)]
+#[verifies("rule_import_export_refuse_review_data", examples)]
 async fn mcp_import_on_a_scope_with_a_requirement_review_record_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let layout = ProvenanceLayout::new(dir.path().to_str().unwrap());

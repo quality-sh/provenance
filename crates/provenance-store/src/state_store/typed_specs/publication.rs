@@ -2,7 +2,7 @@ use provenance_core::{ImplementationBinding, NodeType, Requirement, Rule, ScopeI
 
 use super::{cascade::Cascade, replace_records};
 use crate::shards;
-use crate::state_store::{ReconciledResource, StateStore, TypedSpecResult};
+use crate::state_store::{StateStore, TypedSpecResult};
 
 pub(super) struct Replacement {
     pub sources: Vec<Source>,
@@ -18,7 +18,6 @@ impl Replacement {
         store: &StateStore,
         scope: &ScopeId,
         result: &TypedSpecResult,
-        requirement_resources: &[ReconciledResource],
     ) -> anyhow::Result<()> {
         let replacements = self
             .sources
@@ -65,7 +64,7 @@ impl Replacement {
                 self.implementations,
             )?;
             self.cascade.publish(store, scope)?;
-            store.raise_requirement_reviews(scope, requirement_resources)
+            store.raise_requirement_reviews(scope, &result.resources)
         })
     }
 }

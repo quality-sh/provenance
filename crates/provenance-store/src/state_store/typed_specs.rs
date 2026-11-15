@@ -40,12 +40,6 @@ struct DesiredImplementations<'a> {
     deleted_rule_ids: &'a BTreeSet<String>,
 }
 
-#[derive(Clone, Copy)]
-enum ReconcileMode {
-    Plan,
-    Apply,
-}
-
 impl StateStore {
     /// Reconciles one language-owned desired-state document with canonical state.
     ///
@@ -61,7 +55,7 @@ impl StateStore {
         input: TypedSpecInput,
     ) -> anyhow::Result<TypedSpecResult> {
         self.with_repository_publication(|held| {
-            held.reconcile_typed_spec(scope_id, input, ReconcileMode::Apply)
+            held.decide_stored_typed_spec(scope_id, input)?.publish(held, scope_id)
         })
     }
 
@@ -71,25 +65,27 @@ impl StateStore {
         scope_id: &ScopeId,
         input: TypedSpecInput,
     ) -> anyhow::Result<TypedSpecResult> {
-        self.with_repository_read(|held| {
-            held.reconcile_typed_spec(scope_id, input, ReconcileMode::Plan)
-        })
+        Ok(self.plan_typed_spec_decision(scope_id, input)?.result)
     }
 
-    fn reconcile_typed_spec(
+    /// Decides one typed spec against the stored records without publishing the decision.
+    pub(crate) fn plan_typed_spec_decision(
         &self,
         scope_id: &ScopeId,
         input: TypedSpecInput,
-        mode: ReconcileMode,
-    ) -> anyhow::Result<TypedSpecResult> {
+    ) -> anyhow::Result<TypedSpecDecision> {
+        self.with_repository_read(|held| held.decide_stored_typed_spec(scope_id, input))
+    }
+
+    fn decide_stored_typed_spec(
+        &self,
+        scope_id: &ScopeId,
+        input: TypedSpecInput,
+    ) -> anyhow::Result<TypedSpecDecision> {
         self.validate_typed_spec(scope_id, &input)?;
         let view = self.typed_spec_view(scope_id)?;
-        let decision = decide_typed_spec(scope_id, input, &view)
-            .map_err(|error| self.locate_shared_address(scope_id, error))?;
-        match mode {
-            ReconcileMode::Plan => Ok(decision.result),
-            ReconcileMode::Apply => decision.publish(self, scope_id),
-        }
+        decide_typed_spec(scope_id, input, &view)
+            .map_err(|error| self.locate_shared_address(scope_id, error))
     }
 
     /// Gives a [`identity::SharedDeclarationAddress`] as `invalid_state_file`
@@ -113,9 +109,9 @@ impl StateStore {
     fn raise_requirement_reviews(
         &self,
         scope_id: &ScopeId,
-        requirements: &[ReconciledResource],
+        resources: &[ReconciledResource],
     ) -> anyhow::Result<()> {
-        let restatements = requirement_reviews::requirement_statement_changes(requirements)
+        let restatements = requirement_reviews::requirement_statement_changes(resources)
             .into_iter()
             .map(|change| requirement_reviews::Restatement {
                 requirement_id: change.requirement_id,

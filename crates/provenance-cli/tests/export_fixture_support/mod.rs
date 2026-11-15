@@ -22,10 +22,6 @@ pub fn make_default_scope_portable(repo: impl AsRef<Path>) {
             std::fs::remove_file(path).unwrap();
         }
     }
-    let review = state.join("scopes/default/review");
-    if review.exists() {
-        std::fs::remove_dir_all(review).unwrap();
-    }
     rewrite_manifest(&state.join("manifest.json"));
     rewrite_records(&state.join("scopes/default"));
 }

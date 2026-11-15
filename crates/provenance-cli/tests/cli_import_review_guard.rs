@@ -20,7 +20,7 @@ const REVIEW_HISTORY_REFUSAL: &str = "Error: scope `default` holds a review subm
      other records of this scope with the routes that `provenance api --scope default` lists\n";
 
 #[test]
-#[verifies("rule_import_export_refuse_requirement_reviews", examples)]
+#[verifies("rule_import_export_refuse_review_data", examples)]
 fn an_import_on_a_scope_with_a_requirement_review_record_is_refused_and_changes_no_file() {
     let dir = tempfile::tempdir().unwrap();
     let repo = restated_repository(dir.path());
@@ -33,7 +33,7 @@ fn an_import_on_a_scope_with_a_requirement_review_record_is_refused_and_changes_
 }
 
 #[test]
-#[verifies("rule_import_export_refuse_requirement_reviews", examples)]
+#[verifies("rule_import_export_refuse_review_data", examples)]
 fn a_dry_run_of_an_import_on_a_scope_with_a_requirement_review_record_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let repo = restated_repository(dir.path());
@@ -50,7 +50,7 @@ fn a_dry_run_of_an_import_on_a_scope_with_a_requirement_review_record_is_refused
 }
 
 #[test]
-#[verifies("rule_import_export_refuse_requirement_reviews", examples)]
+#[verifies("rule_import_export_refuse_review_data", examples)]
 fn an_export_of_a_scope_with_a_requirement_review_record_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let repo = restated_repository(dir.path());
@@ -61,7 +61,7 @@ fn an_export_of_a_scope_with_a_requirement_review_record_is_refused() {
 }
 
 #[test]
-#[verifies("rule_import_export_refuse_requirement_reviews", examples)]
+#[verifies("rule_import_export_refuse_review_data", examples)]
 fn an_import_on_a_scope_whose_requirement_review_records_a_verification_run_cleared_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let repo = restated_repository(dir.path());
@@ -82,7 +82,7 @@ fn an_import_on_a_scope_whose_requirement_review_records_a_verification_run_clea
 /// A change through the API writes a Requirement review record and opens a review submission.
 /// The submission is the cause that the refusal names.
 #[test]
-#[verifies("rule_import_export_refuse_requirement_reviews", examples)]
+#[verifies("rule_import_export_refuse_review_data", examples)]
 fn an_export_of_a_scope_with_a_submission_and_a_review_record_names_the_submission() {
     let dir = tempfile::tempdir().unwrap();
     let repo = repository(dir.path(), "repo");
@@ -96,7 +96,7 @@ fn an_export_of_a_scope_with_a_submission_and_a_review_record_names_the_submissi
 }
 
 #[test]
-#[verifies("rule_import_export_refuse_requirement_reviews", examples)]
+#[verifies("rule_import_export_refuse_review_data", examples)]
 fn an_import_on_a_scope_without_review_state_passes() {
     let dir = tempfile::tempdir().unwrap();
     let repo = repository(dir.path(), "repo");

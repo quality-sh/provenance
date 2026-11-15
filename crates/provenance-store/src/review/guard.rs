@@ -9,8 +9,6 @@ use provenance_macros::rule;
 /// guard checks it.
 #[derive(Clone, Copy)]
 enum UnportableState {
-    /// The folder `review` below the scope folder.
-    ReviewFolder,
     /// A review submission, a Discussion or a withdrawal.
     ReviewHistory,
     /// A row of `requirements/review.jsonl`.
@@ -18,20 +16,10 @@ enum UnportableState {
 }
 
 impl UnportableState {
-    const ALL: [Self; 3] = [
-        Self::ReviewFolder,
-        Self::ReviewHistory,
-        Self::RequirementReviews,
-    ];
+    const ALL: [Self; 2] = [Self::ReviewHistory, Self::RequirementReviews];
 
     fn is_in(self, held: &StateStore, scope: &ScopeId) -> anyhow::Result<bool> {
         Ok(match self {
-            Self::ReviewFolder => held
-                .layout
-                .scopes_dir()
-                .join(scope.as_str())
-                .join("review")
-                .try_exists()?,
             Self::ReviewHistory => {
                 !held.list_discussions(scope)?.is_empty()
                     || !held.list_withdrawals(scope)?.is_empty()
@@ -49,7 +37,6 @@ impl UnportableState {
     fn refusal(self, scope: &ScopeId) -> anyhow::Error {
         let scope = scope.as_str();
         let held = match self {
-            Self::ReviewFolder => format!("the review folder scopes/{scope}/review"),
             Self::ReviewHistory => "a review submission, a Discussion or a withdrawal".to_owned(),
             Self::RequirementReviews => {
                 format!("a Requirement review record in scopes/{scope}/requirements/review.jsonl")
@@ -68,7 +55,7 @@ impl UnportableState {
 impl StateStore {
     /// Refuses a scope import or a scope export of a scope that holds review state that a scope
     /// export file cannot hold.
-    #[rule("rule_import_export_refuse_requirement_reviews")]
+    #[rule("rule_import_export_refuse_review_data")]
     pub fn ensure_review_portable(&self, scope: &ScopeId) -> anyhow::Result<()> {
         self.with_repository_publication(|held| {
             for state in UnportableState::ALL {

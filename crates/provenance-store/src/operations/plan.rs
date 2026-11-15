@@ -53,8 +53,9 @@ pub(super) fn typed_spec(
     let store = repository.store();
     let scope = repository.scope();
     let repo = repository.working_tree();
-    let reconciliation = store.plan_typed_spec(scope, input)?;
-    let reviews = evidence::reviews(&store, scope, &reconciliation)?;
+    let decision = store.plan_typed_spec_decision(scope, input)?;
+    let reviews = evidence::reviews(&store, scope, &decision)?;
+    let reconciliation = decision.result;
     let mut changed_rules = affected_rule_ids(&store, scope, &reconciliation)?;
     changed_rules.extend(reviews.rules.iter().cloned());
     changed_rules.sort_by(|left, right| left.as_str().cmp(right.as_str()));
