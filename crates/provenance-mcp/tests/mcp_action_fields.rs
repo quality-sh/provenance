@@ -127,7 +127,7 @@ async fn discussion_reads_and_writes_refuse_fields_of_another_action() {
         (
             "change",
             json!({"action":"reply","target":id}),
-            ("actor", "required"),
+            ("expected_version", "required"),
         ),
         (
             "change",

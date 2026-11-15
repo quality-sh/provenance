@@ -4,11 +4,8 @@
 //! submission sets the status.
 
 use super::{
-    automatic_submission::{record_submission, AUTHORING_ACTOR},
-    input::RequirementRelations,
-    owner_matches,
-    publication::with_record_state,
-    SaveRequirement,
+    automatic_submission::record_submission, input::RequirementRelations, owner_matches,
+    publication::with_record_state, write_actor::AUTHORING_ACTOR, SaveRequirement,
 };
 use crate::{
     shards,

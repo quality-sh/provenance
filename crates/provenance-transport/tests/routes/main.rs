@@ -108,3 +108,5 @@ mod verification_run_read_budget;
 mod verification_runs_cache_lines;
 #[path = "../wire.rs"]
 mod wire;
+#[path = "../write_actor_default.rs"]
+mod write_actor_default;

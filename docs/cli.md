@@ -62,6 +62,12 @@ A word that names an API collection, such as `rules` in `provenance rules list`,
 is not a command. The CLI refuses it with a usage error and shows
 `provenance --help`.
 
+A Requirement `create` or `update`, `discuss`, and `reply` take an optional
+`--actor`. A Requirement `create` or `update` or a `discuss` that gives no actor records
+the actor `authoring`, on the CLI, on MCP, and on the HTTP API. A `reply` stores no actor. A
+JSON `null` actor is invalid input. A Rule or Resolution write takes no actor and
+records `authoring`. `submit`, `claim`, and `release` need `--actor`.
+
 Rule creation defaults to `draft` in the CLI and in catalog operations. An
 update with `--status active` or `--status archived`, or a create with
 `--status active`, opens a status request and does not change the status. A
