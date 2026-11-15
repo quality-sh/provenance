@@ -6,10 +6,7 @@
 //! read pages. Each read has a time limit, so a read that does not end
 //! fails the test.
 
-use super::{
-    fixture, history_entry, records, repository, statement_edits, Counted, ErasedFailure,
-    ONE_READER,
-};
+use super::{fixture, history_entry, records, repository, statement_edits, Counted, ONE_READER};
 use camino::Utf8Path;
 use provenance_store::review::history::contract::{Commit, Entry, MemoryFileVersions};
 use provenance_store::review::history::{BoxFuture, FileVersion, FileVersions};
@@ -31,7 +28,7 @@ const OVER_THE_BUDGET: usize = 1_200_000;
 /// The answer of the entry operation for `entry` of `req_a`, over three
 /// commits that change `req_a`, where the author name of `c1` has
 /// `author` bytes.
-async fn entry_after_a_large_author(author: usize, entry: &str) -> Result<Value, ErasedFailure> {
+async fn entry_after_a_large_author(author: usize, entry: &str) -> Result<Value, Value> {
     let _one = ONE_READER.lock().await;
     let (temp, _store) = fixture();
     let mut commits = statement_edits(&temp, 3);
@@ -59,7 +56,7 @@ async fn a_version_larger_than_the_budget_gives_page_budget_exceeded() {
     let refused = entry_after_a_large_author(OVER_THE_BUDGET, "c1")
         .await
         .unwrap_err();
-    assert_eq!(refused.error, json!({"kind": "page_budget_exceeded"}));
+    assert_eq!(refused, json!({"kind": "page_budget_exceeded"}));
     let after = entry_after_a_large_author(OVER_THE_BUDGET, "c2")
         .await
         .unwrap();
@@ -122,5 +119,5 @@ async fn a_commit_that_lands_during_the_read_gives_one_answer() {
     let answer = tokio::time::timeout(LIMIT, history_entry(&repository, "working"))
         .await
         .expect("the entry read ends");
-    assert_eq!(answer.map_err(|failure| failure.error), Ok(expected));
+    assert_eq!(answer, Ok(expected));
 }

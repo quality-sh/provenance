@@ -14,7 +14,6 @@ mod discussion_support;
 mod entry_edges;
 use camino::Utf8Path;
 use discussion_support::*;
-use provenance_core::protocol::failure::ErasedFailure;
 use provenance_core::review::{ReviewHistoryPage, ReviewHistoryQuery};
 use provenance_core::{NodeType, StableId};
 use provenance_store::layout::ProvenanceLayout;
@@ -269,8 +268,9 @@ fn statement_edits(temp: &tempfile::TempDir, count: usize) -> Vec<Commit> {
     chain(&relative, entries)
 }
 
-/// The answer of `review-history-entry` for the entry `entry` of `req_a`.
-async fn history_entry(repository: &Repository, entry: &str) -> Result<Value, ErasedFailure> {
+/// The answer of `review-history-entry` for the entry `entry` of `req_a`,
+/// or the error of its failure.
+async fn history_entry(repository: &Repository, entry: &str) -> Result<Value, Value> {
     let binding = LocalRepository::bind(repository.clone(), "folder").unwrap();
     let request = json!({
         "context": {"repository": "folder", "scope": "default"},
@@ -279,6 +279,7 @@ async fn history_entry(repository: &Repository, entry: &str) -> Result<Value, Er
     InProcessReadOperations::new(&binding)
         .run("review-history-entry", request)
         .await
+        .map_err(|failure| failure.error)
 }
 
 /// The entry operation reads the history of the record once, also when the
