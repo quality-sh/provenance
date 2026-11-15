@@ -17,8 +17,10 @@ use super::{script_call_name, AnnotationLocation, AttributeBinding, Language};
 
 /// The sites of one file and the walker's lexical state below each site that
 /// the reader names.
-#[derive(Default)]
 pub(super) struct Sites<'a> {
+    language: Language,
+    lines: &'a [&'a str],
+    original_lines: &'a [&'a str],
     comment_lines: Vec<usize>,
     site_lines: Vec<usize>,
     unnamed: Vec<Unnamed<'a>>,
@@ -40,6 +42,22 @@ enum Site {
 }
 
 impl<'a> Sites<'a> {
+    /// The sites of the file whose lexical lines are `lines`.
+    pub(super) const fn new(
+        language: Language,
+        lines: &'a [&'a str],
+        original_lines: &'a [&'a str],
+    ) -> Self {
+        Self {
+            language,
+            lines,
+            original_lines,
+            comment_lines: Vec::new(),
+            site_lines: Vec::new(),
+            unnamed: Vec::new(),
+        }
+    }
+
     /// A comment on line `line` that holds the annotations at `annotations`.
     pub(super) fn comment(&mut self, line: usize, start: LineStart<'a>, annotations: Range<usize>) {
         self.comment_lines.push(line);
@@ -75,12 +93,10 @@ impl<'a> Sites<'a> {
     /// `script_call_name`.
     pub(super) fn name(
         self,
-        language: Language,
-        lines: &[&str],
-        original_lines: &[&str],
         annotations: &mut [AnnotationLocation],
         bindings: &mut [AttributeBinding],
     ) {
+        let (language, lines, original_lines) = (self.language, self.lines, self.original_lines);
         let mut next_site: Option<(usize, Option<String>)> = None;
         for unnamed in self.unnamed.into_iter().rev() {
             let boundaries = match unnamed.site {

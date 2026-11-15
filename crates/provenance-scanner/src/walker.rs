@@ -10,8 +10,8 @@ use bindings::parse_binding_or_warn;
 pub use bounded::scan_path_bounded;
 use consumed::{consume_binding_lines, consume_comment_lines};
 use declaration::LineStart;
-use names::Sites;
 pub use ignore::selects_source_path;
+use names::Sites;
 use rust_lines::{rust_annotation_marker_position, rust_line_states, RustLexicalState};
 
 mod bindings;
@@ -195,7 +195,7 @@ fn scan_file_contents(
     let start_below = |next: usize, in_block_comment: bool, delimiter: Option<String>| {
         line_start(&rust_states[next..], language, in_block_comment, delimiter)
     };
-    let mut sites = Sites::default();
+    let mut sites = Sites::new(language, &lines, &original_lines);
     let mut idx = 0;
     let mut in_block_comment = false;
     let mut multiline_delimiter = None;
@@ -276,7 +276,7 @@ fn scan_file_contents(
         consume_comment_lines(language, &lines[idx + 1..=end_idx], &mut in_block_comment);
         idx = end_idx + 1;
     }
-    sites.name(language, &lines, &original_lines, &mut annotations, &mut bindings);
+    sites.name(&mut annotations, &mut bindings);
     FileScan {
         file_path: file_path.to_path_buf(),
         language,

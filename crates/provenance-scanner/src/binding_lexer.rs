@@ -9,19 +9,24 @@ pub fn call_arguments<'a>(
     let marker = format!("{function}(");
     let bytes = line.as_bytes();
     let mut found = None;
-    lex_line(line, starts_in_block_comment, CommentSyntax::CStyle, |range, piece| {
-        if piece == Piece::Code {
-            found = line[range.clone()]
-                .match_indices(&marker)
-                .map(|(offset, _)| range.start + offset)
-                .find(|start| is_name_start(bytes, *start));
-        }
-        if found.is_some() {
-            ControlFlow::Break(())
-        } else {
-            ControlFlow::Continue(())
-        }
-    });
+    lex_line(
+        line,
+        starts_in_block_comment,
+        CommentSyntax::CStyle,
+        |range, piece| {
+            if piece == Piece::Code {
+                found = line[range.clone()]
+                    .match_indices(&marker)
+                    .map(|(offset, _)| range.start + offset)
+                    .find(|start| is_name_start(bytes, *start));
+            }
+            if found.is_some() {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            }
+        },
+    );
     found.map(|start| &line[start + marker.len()..])
 }
 
