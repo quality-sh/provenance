@@ -117,7 +117,7 @@ fn expected(opening: &[&str], lines: &[&str], first_steps: bool) -> String {
 }
 
 /// The listed tools and the instructions of one served host.
-pub(crate) async fn served_tools(host: StatementHost) -> (Vec<Tool>, String) {
+pub async fn served_tools(host: StatementHost) -> (Vec<Tool>, String) {
     let session = Session::start(host).await;
     let instructions = session
         .client
@@ -140,7 +140,7 @@ async fn served(host: StatementHost) -> (Vec<String>, String) {
 }
 
 /// A host that writes the repository, without the operations that `denied` names.
-pub(crate) fn host_without(repository: &Repository, denied: &[&str]) -> StatementHost {
+pub fn host_without(repository: &Repository, denied: &[&str]) -> StatementHost {
     let access = fixture_host::access(repository).allow_writes();
     StatementHost::with_fixture_access(
         denied
@@ -150,7 +150,7 @@ pub(crate) fn host_without(repository: &Repository, denied: &[&str]) -> Statemen
 }
 
 /// The operations of the record actions in `actions`.
-pub(crate) fn operations_of(actions: &[Action]) -> Vec<&'static str> {
+pub fn operations_of(actions: &[Action]) -> Vec<&'static str> {
     actions
         .iter()
         .flat_map(|action| provenance_contract::target_definitions(*action))
