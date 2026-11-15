@@ -361,7 +361,7 @@ fn a_read_names_the_line_of_a_withdrawal_that_names_no_submission() {
             "command": "api requirements/req_a",
             "format": "json",
             "stderr": [
-                "Error: {\"error\":{\"file\":\"scopes/default/ideation/withdrawals.jsonl\",\"kind\":\"invalid_state_file\",\"line\":1,\"message\":\"withdrawal withdrawal_lost names no review submission: proposal_missing\"},\"meta\":{}}"
+                "Error: {\"error\":{\"file\":\"scopes/default/ideation/withdrawals.jsonl\",\"kind\":\"invalid_state_file\",\"line\":1,\"message\":\"withdrawal withdrawal_lost names no review submission: proposal_missing. To repair, remove ideation/withdrawals.jsonl line 1, then commit.\"},\"meta\":{}}"
             ],
             "stdout_empty": true
         }]),
