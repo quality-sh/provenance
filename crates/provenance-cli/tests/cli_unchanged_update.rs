@@ -7,10 +7,7 @@ use provenance_macros::verifies;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
-mod support {
-    pub mod review_paths;
-}
-use support::review_paths::{create_requirement, init, json_output, provenance};
+use crate::support::review_paths::{create_requirement, init, json_output, provenance};
 
 /// The command that sets the description of `req_a` to one text.
 fn update_description(repo: &str) -> assert_cmd::Command {

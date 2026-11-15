@@ -72,9 +72,12 @@ pub enum Fault {
     /// The next publish lands `landed` keys and its outcome is unknown.
     UnknownOutcome { landed: u8 },
     /// The engine stops where it is; a new engine takes its place. The CLI
-    /// layer kills the write process at a point of its publish: an even `at`
-    /// when its transaction appears, an odd `at` when the publication marker
-    /// appears while its transaction exists.
+    /// layer kills the write process at a point of its publish. For a write
+    /// of two keys or more: an even `at` when its transaction appears, an
+    /// odd `at` when the publication marker appears while its transaction
+    /// exists. For a write of one key: an even `at` when its temporary file
+    /// appears in the state tree, an odd `at` when that file goes after the
+    /// rename.
     Stop { engine: u8, at: u8 },
 }
 
