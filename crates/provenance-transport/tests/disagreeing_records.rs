@@ -299,7 +299,11 @@ async fn a_decision_on_a_submission_on_lines_that_disagree_refuses_only_its_reco
     ] {
         let (status, answer) = call(&reader, "GET", path, None).await;
         assert_eq!(status, 200, "{path} {answer}");
-        assert_eq!(answer["meta"]["freshness_error"], json!(null), "{path} {answer}");
+        assert_eq!(
+            answer["meta"]["freshness_error"],
+            json!(null),
+            "{path} {answer}"
+        );
     }
     // The write of req_other wrote the file again, so the lines moved.
     let text = std::fs::read_to_string(state.join(PROPOSALS)).unwrap();

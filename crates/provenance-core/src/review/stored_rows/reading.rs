@@ -242,13 +242,15 @@ impl<'a> ReviewReading<'a> {
         cycles.sort_by_key(|(_, positions)| positions[1]);
         cycles
             .into_iter()
-            .map(|(cycle, positions)| ReviewRowFault::OneCycleTwoSubmissions {
-                cycle,
-                submissions: positions
-                    .into_iter()
-                    .map(|position| self.submission_lines(position))
-                    .collect(),
-            })
+            .map(
+                |(cycle, positions)| ReviewRowFault::OneCycleTwoSubmissions {
+                    cycle,
+                    submissions: positions
+                        .into_iter()
+                        .map(|position| self.submission_lines(position))
+                        .collect(),
+                },
+            )
             .collect()
     }
 
@@ -297,11 +299,9 @@ impl<'a> ReviewReading<'a> {
                 });
             }
         }
-        let approves = |position: usize| {
-            dispositions[position].decision == DispositionDecision::Accepted
-        };
-        if rows.decisions.iter().any(|&position| approves(position))
-            && !rows.withdrawals.is_empty()
+        let approves =
+            |position: usize| dispositions[position].decision == DispositionDecision::Accepted;
+        if rows.decisions.iter().any(|&position| approves(position)) && !rows.withdrawals.is_empty()
         {
             faults.push(ReviewRowFault::AcceptedAndWithdrawn {
                 submission: submission.clone(),

@@ -25,10 +25,7 @@ fn line_naming(repo: &str, file: &str, field: &str, id: &str) -> usize {
 /// The refusal of a write of `body` to `path`.
 fn refused_write(repo: &str, method: &str, path: &str, body: &Value) -> Value {
     let input = directory_file(repo, "write.json", &body.to_string());
-    refused(
-        repo,
-        &["api", path, "--method", method, "--input", &input],
-    )
+    refused(repo, &["api", path, "--method", method, "--input", &input])
 }
 
 /// Flow: a reviewer rejects the submission of `req_a`, the agent withdraws
@@ -43,7 +40,14 @@ fn refused_write(repo: &str, method: &str, path: &str, body: &Value) -> Value {
 fn a_submission_id_on_lines_that_disagree_refuses_only_its_record() {
     let (_directory, repo) = repository(Merge::Driver);
     let submission = pending(&repo, "req_a");
-    decide(&repo, "req_a", &submission, "rejected", "Name the scope.", None);
+    decide(
+        &repo,
+        "req_a",
+        &submission,
+        "rejected",
+        "Name the scope.",
+        None,
+    );
     withdraw(&repo, "req_a", &submission, "agent", "Start again.");
     commit(&repo);
     let first = line_naming(&repo, PROPOSALS, "id", &submission);
@@ -189,7 +193,11 @@ fn rows_beside_a_withdrawal_or_a_newer_submission_read_as_before() {
             match step {
                 "withdraw" => withdraw(&repo, "req_a", &submission, "agent", actor),
                 "change" => {
-                    describe(&repo, "req_a", &format!("The change of the {actor} branch."));
+                    describe(
+                        &repo,
+                        "req_a",
+                        &format!("The change of the {actor} branch."),
+                    );
                 }
                 result => decide(&repo, "req_a", &submission, result, actor, None),
             }
@@ -205,12 +213,20 @@ fn rows_beside_a_withdrawal_or_a_newer_submission_read_as_before() {
             .iter()
             .filter(|step| !matches!(**step, "withdraw" | "change"))
             .count();
-        assert_eq!(state["decisions"].as_array().unwrap().len(), decided, "{state}");
+        assert_eq!(
+            state["decisions"].as_array().unwrap().len(),
+            decided,
+            "{state}"
+        );
         if side == "withdraw" {
             assert_eq!(state["withdrawn"], json!([submission]), "{state}");
         }
         if first == "change" {
-            assert_ne!(state["pending"]["proposal_id"], json!(submission), "{state}");
+            assert_ne!(
+                state["pending"]["proposal_id"],
+                json!(submission),
+                "{state}"
+            );
             assert!(state["pending"]["proposal_id"].is_string(), "{state}");
         }
         read(&repo, &["api", "requirements/req_a/document"]);
@@ -277,14 +293,17 @@ fn a_citation_of_a_resolution_whose_rows_disagree_gives_its_refusal() {
     assert_eq!(resolution["kind"], "invalid_state_file", "{resolution}");
     let rule = read(&repo, &["api", "rules/rule_a"]);
     let etag = rule["data"]["edit"]["etag"].as_str().unwrap().to_owned();
-    let input = directory_file(
-        &repo,
-        "rule.json",
-        &json!({"status":"active"}).to_string(),
-    );
+    let input = directory_file(&repo, "rule.json", &json!({"status":"active"}).to_string());
     let header = format!("If-Match: {etag}");
     let arguments = [
-        "api", "rules/rule_a", "--method", "patch", "--input", &input, "--header", &header,
+        "api",
+        "rules/rule_a",
+        "--method",
+        "patch",
+        "--input",
+        &input,
+        "--header",
+        &header,
     ];
     assert_eq!(refused(&repo, &arguments), resolution);
     read(&repo, &["api", "rules/rule_a"]);

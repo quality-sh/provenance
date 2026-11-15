@@ -24,8 +24,7 @@ fn closed_record_read_refuses_unknown_fields() {
 
 mod stored_rows {
     use crate::review::{
-        read_review_rows, ReviewRowFamily, ReviewRowFault, RowAt, StoredReviewRows,
-        SubmissionLines,
+        read_review_rows, ReviewRowFamily, ReviewRowFault, RowAt, StoredReviewRows, SubmissionLines,
     };
     use crate::{
         DispositionDecision, DispositionRecord, NodeType, ProposalCard, StableId, Withdrawal,

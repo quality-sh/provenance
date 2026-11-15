@@ -196,7 +196,9 @@ impl StateStore {
         }
         let proposals: Vec<(ProposalCard, ShardLine)> =
             read_jsonl_located(self, &shards::proposal_cards_path(&self.layout, scope))?;
-        Ok(proposals.iter().any(|(proposal, _)| is_review_submission(proposal)))
+        Ok(proposals
+            .iter()
+            .any(|(proposal, _)| is_review_submission(proposal)))
     }
 
     /// The review submission with this ID, as [`CycleFacts::submission`]

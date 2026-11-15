@@ -13,7 +13,10 @@ impl StateStore {
         let withdrawals = read_jsonl(self, &shards::withdrawals_path(&self.layout, scope))?;
         let proposals: Vec<ProposalCard> =
             read_jsonl(self, &shards::proposal_cards_path(&self.layout, scope))?;
-        Ok(super::review_rows_once::withdrawals_once(&proposals, withdrawals))
+        Ok(super::review_rows_once::withdrawals_once(
+            &proposals,
+            withdrawals,
+        ))
     }
 
     /// Reads the scope's Withdrawal records, each with its shard line.
@@ -42,7 +45,8 @@ impl StateStore {
         }
         crate::write_error::ensure!(
             InvalidUpdate,
-            self.stored_review_submission(&scope, &withdrawal.proposal_id)?.is_some(),
+            self.stored_review_submission(&scope, &withdrawal.proposal_id)?
+                .is_some(),
             "a withdrawal names a review submission"
         );
         self.mutate_jsonl_records(&path, |records: &mut Vec<Withdrawal>| {

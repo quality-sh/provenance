@@ -21,8 +21,7 @@ impl UnportableState {
     fn is_in(self, held: &StateStore, scope: &ScopeId) -> anyhow::Result<bool> {
         Ok(match self {
             Self::ReviewHistory => {
-                !held.list_discussions(scope)?.is_empty()
-                    || held.has_review_rows(scope)?
+                !held.list_discussions(scope)?.is_empty() || held.has_review_rows(scope)?
             }
             Self::RequirementReviews => !held.list_requirement_reviews(scope)?.is_empty(),
         })
