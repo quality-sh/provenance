@@ -164,11 +164,20 @@ async fn hand_edits_that_validation_refuses_keep_their_refusals() {
         json!({"read": "/topics/topic_a", "status": 200, "freshness_error": error,
             "items": null, "error": null})
     };
+    let topic_fresh = json!({"read": "/topics/topic_a", "status": 200, "freshness_error": null,
+        "items": null, "error": null});
     let cycle_error = "depends_on forms a cycle: req_c -> req_d -> req_c";
     assert_eq!(cycle, at_stored(cycle_error, topic(cycle_error)));
-    let card_error = "scopes/default/ideation/proposal_cards.jsonl line 10: \
-        duplicate immutable proposal id <generated> at line 1 and at line 10";
-    assert_eq!(duplicate_card, at_stored(card_error, topic(card_error)));
+    // The copied line is a review submission. Two equal lines of one review
+    // row ID read as one row, so the catch-up loads it one time.
+    let fresh = json!([
+        {"read": "/requirements", "status": 200, "freshness_error": null, "items": 3,
+            "error": null},
+        topic_fresh,
+        {"read": "/proposals", "status": 200, "freshness_error": null, "items": 9,
+            "error": null},
+    ]);
+    assert_eq!(duplicate_card, fresh);
     let line_error = "scopes/default/topics/topic.jsonl line 2: EOF while parsing a value";
     let unreadable = json!({"read": "/topics/topic_a", "status": 500, "freshness_error": null,
         "items": null, "error": {"file": "scopes/default/topics/topic.jsonl",
