@@ -63,8 +63,8 @@ is not a command. The CLI refuses it with a usage error and shows
 `provenance --help`.
 
 A Requirement `create` or `update`, `discuss`, and `reply` take an optional
-`--actor`. A Requirement write or a `discuss` that gives no actor records the actor
-`authoring`, on the CLI, on MCP, and on the HTTP API. A `reply` stores no actor. A
+`--actor`. A Requirement `create` or `update` or a `discuss` that gives no actor records
+the actor `authoring`, on the CLI, on MCP, and on the HTTP API. A `reply` stores no actor. A
 JSON `null` actor is invalid input. A Rule or Resolution write takes no actor and
 records `authoring`. `submit`, `claim`, and `release` need `--actor`.
 

@@ -419,7 +419,7 @@
       "type": "string"
     },
     "actor": {
-      "description": "The actor is optional for a write that makes or changes a Requirement, and for a Discussion start or reply. A Requirement write or a Discussion start with no actor records the actor `authoring`. Actions: create, update, claim, release, submit, discuss, reply.",
+      "description": "The actor is optional for a Requirement creation or update, and for a Discussion start or reply. A Requirement creation or update, or a Discussion start, with no actor records the actor `authoring`. Actions: create, update, claim, release, submit, discuss, reply.",
       "type": "string"
     },
     "answer": {

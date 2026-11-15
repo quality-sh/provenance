@@ -8,9 +8,9 @@ use serde_json::{json, Value};
 use std::path::Path;
 
 /// The description of the optional actor input.
-const ACTOR_DESCRIPTION: &str = "The actor is optional for a write that makes or changes a \
-     Requirement, and for a Discussion start or reply. A Requirement write or a Discussion \
-     start with no actor records the actor `authoring`.";
+const ACTOR_DESCRIPTION: &str = "The actor is optional for a Requirement creation or update, and \
+     for a Discussion start or reply. A Requirement creation or update, or a Discussion start, \
+     with no actor records the actor `authoring`.";
 
 /// The stored rows of the Discussion files of the scope `default`: the Discussion rows and
 /// the message rows.
