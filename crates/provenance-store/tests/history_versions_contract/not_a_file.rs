@@ -18,7 +18,7 @@ fn held_submodule() -> Entry {
     Entry::submodule("base")
 }
 
-fn directory() -> Entry {
+const fn directory() -> Entry {
     Entry::directory()
 }
 
