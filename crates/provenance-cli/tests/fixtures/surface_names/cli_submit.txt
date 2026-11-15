@@ -34,10 +34,3 @@ Options:
       --title-json <title-json>                              
   -h, --help                                                 Print help
 
-Option --builds-on: Assertion lineage. A resubmission's rejection link lives on the cycle,
-never here.
-Option --declared-by: The owning agent of the record, checked like an edit's `declared_by`.
-Option --expected-revision: Refuses when the record moved on since the caller read it.
-Option --revises: The rejected proposal this submission revises. The store checks the
-rejection and records both links.
-

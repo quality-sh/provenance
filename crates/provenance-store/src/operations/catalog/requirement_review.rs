@@ -33,9 +33,11 @@ fn resource_from(snapshot: review::RequirementResourceSnapshot) -> RequirementRe
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct CreateRequirementRequest {
-    #[doc = "The actor of the write. It is optional for a write that makes or changes a \
-             Requirement and for a write that starts or replies to a Discussion. A write that \
-             gives no actor records the actor `authoring`."]
+    #[serde(default, deserialize_with = "provenance_core::actor_input::given")]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "String", description = provenance_core::actor_input::DESCRIPTION)
+    )]
     pub actor: Option<String>,
     pub id: StableId,
     pub statement: String,
@@ -87,9 +89,11 @@ scoped_write_operation!(
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct UpdateRequirementRequest {
-    #[doc = "The actor of the write. It is optional for a write that makes or changes a \
-             Requirement and for a write that starts or replies to a Discussion. A write that \
-             gives no actor records the actor `authoring`."]
+    #[serde(default, deserialize_with = "provenance_core::actor_input::given")]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "String", description = provenance_core::actor_input::DESCRIPTION)
+    )]
     pub actor: Option<String>,
     pub expected_etag: String,
     pub declared_by: Option<String>,

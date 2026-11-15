@@ -11,8 +11,10 @@ use serde::Deserialize;
 pub struct WriteDiscussionRequest {
     pub scope_id: ScopeId,
     pub parent: ThreadParent,
-    /// The actor of the write. A status change must give an actor. A start or a reply that
-    /// gives no actor records the actor `authoring`.
+    /// The actor of the write. A status change must give an actor. A start that gives no
+    /// actor records the actor `authoring`, and a reply needs no actor.
+    #[serde(default, deserialize_with = "provenance_core::actor_input::given")]
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub actor: Option<String>,
     pub declared_by: Option<String>,
     pub action: review::DiscussionAction,
@@ -26,6 +28,12 @@ scoped_write_operation!(
     &[409],
     &[ExecutionNeed::GraphStorage],
     scope = scope_id,
+    validate = |request: &WriteDiscussionRequest| match request.action {
+        review::DiscussionAction::SetStatus { .. } if request.actor.is_none() => {
+            Err(review::write_actor::missing_actor())
+        }
+        _ => Ok(()),
+    },
     |store, _scope, request| {
         let actor = match request.action {
             review::DiscussionAction::SetStatus { .. } => {

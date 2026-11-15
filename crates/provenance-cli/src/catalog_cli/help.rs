@@ -2,7 +2,7 @@
 //! contracts: an action shows only the fields that it accepts.
 use super::fields;
 use serde_json::Value;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 #[provenance_macros::rule("rule_create_help_accepted_fields")]
 pub(super) fn target(
@@ -27,21 +27,12 @@ pub(super) fn target(
             if action == provenance_contract::TargetAction::Create {
                 allowed.insert("type".into());
             }
-            let mut notes = BTreeMap::new();
             for (_, definition) in
                 provenance_contract::target_definitions(action).filter(|(registered, _)| {
                     !needs_type && kind.is_none_or(|kind| *registered == kind)
                 })
             {
-                let declared = fields::declared(definition)?;
-                allowed.extend(fields::accepted_flags(&declared));
-                for field in &declared {
-                    if let Some(description) = fields::description(field) {
-                        notes
-                            .entry(field.name.clone())
-                            .or_insert_with(|| description.to_owned());
-                    }
-                }
+                allowed.extend(fields::accepted_flags(&fields::declared(definition)?));
             }
             if action == provenance_contract::TargetAction::Update
                 && kind.is_none_or(|kind| kind == provenance_core::NodeType::Requirement)
@@ -57,21 +48,16 @@ pub(super) fn target(
                 arg.hide(hidden).hide_possible_values(given_type)
             });
             let create = action == provenance_contract::TargetAction::Create;
-            let guidance = if needs_type {
-                Some(format!("{SELECT_TYPE}\n\n{CITE_GUIDANCE}"))
+            if needs_type {
+                command = command.after_help(format!("{SELECT_TYPE}\n\n{CITE_GUIDANCE}"));
             } else if create && kind == Some(provenance_core::NodeType::Question) {
-                Some(QUESTION_GUIDANCE.to_owned())
+                command = command.after_help(QUESTION_GUIDANCE);
             } else if create && kind == Some(provenance_core::NodeType::Requirement) {
-                Some(CITE_POINTER.to_owned())
+                command = command.after_help(CITE_POINTER);
             } else if action == provenance_contract::TargetAction::Update
                 && allowed.contains("archived-in-commit")
             {
-                Some(ARCHIVE_GUIDANCE.to_owned())
-            } else {
-                None
-            };
-            if let Some(text) = after_help(&notes, guidance) {
-                command = command.after_help(text);
+                command = command.after_help(ARCHIVE_GUIDANCE);
             }
         } else if provenance_porcelain::action::Action::DISCUSSION.contains(&action) {
             command = discussion_help(command, action);
@@ -87,22 +73,8 @@ fn description(action: crate::invocation::grammar::TargetVerb) -> Option<&'stati
         .map(|command| command.declaration().description)
 }
 
-/// The text after the options: one note for each field that the request schema describes,
-/// and then the guidance of the action. A note is not in the row of its option, so a long
-/// description does not move the help of each option to the next line, and a note does not
-/// start with `--`, so it does not read as an option row.
-fn after_help(notes: &BTreeMap<String, String>, guidance: Option<String>) -> Option<String> {
-    let notes = notes
-        .iter()
-        .map(|(flag, description)| format!("Option --{flag}: {description}"))
-        .collect::<Vec<_>>();
-    let notes = (!notes.is_empty()).then(|| notes.join("\n"));
-    let parts = notes.into_iter().chain(guidance).collect::<Vec<_>>();
-    (!parts.is_empty()).then(|| parts.join("\n\n"))
-}
-
-/// Discussion action help lists the typed input fields of that action, marks the ones the
-/// action cannot run without, and gives a note for each field that the schema describes.
+/// Discussion action help lists the typed input fields of that action and
+/// marks the ones the action cannot run without.
 fn discussion_help(
     command: clap::Command,
     action: provenance_porcelain::action::Action,
@@ -114,13 +86,10 @@ fn discussion_help(
         .and_then(Value::as_object)
         .map_or_default(|properties| {
             properties
-                .iter()
-                .filter(|(field, _)| !bound.contains(&field.as_str()))
-                .map(|(field, property)| {
-                    let description = property.get("description").and_then(Value::as_str);
-                    (fields::cli_name(field), description.map(str::to_owned))
-                })
-                .collect::<BTreeMap<_, _>>()
+                .keys()
+                .filter(|field| !bound.contains(&field.as_str()))
+                .map(|field| fields::cli_name(field))
+                .collect::<BTreeSet<_>>()
         });
     let required = required_discussion_flags(&schema);
     let mut allowed = super::COMMON
@@ -129,20 +98,12 @@ fn discussion_help(
         .chain(["stdin", "help"])
         .map(str::to_owned)
         .collect::<BTreeSet<_>>();
-    allowed.extend(properties.keys().cloned());
-    let notes = properties
-        .into_iter()
-        .filter_map(|(flag, description)| Some((flag, description?)))
-        .collect::<BTreeMap<_, _>>();
-    let command = command.mut_args(|arg| {
+    allowed.extend(properties);
+    command.mut_args(|arg| {
         let name = arg.get_id().as_str().to_owned();
         let hidden = !allowed.contains(&name);
         arg.hide(hidden).required(required.contains(&name))
-    });
-    let Some(text) = after_help(&notes, None) else {
-        return command;
-    };
-    command.after_help(text)
+    })
 }
 
 /// The flags a Discussion action needs on the command line: the required

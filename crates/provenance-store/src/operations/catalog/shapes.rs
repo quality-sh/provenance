@@ -291,8 +291,7 @@ macro_rules! scoped_write_operation {
      $statuses:expr, $needs:expr, scope = none,
      |$store:ident, $scope:ident, $input:ident| $body:expr) => {
         $crate::operations::catalog::shapes::scoped_write_operation!(
-            @base $visibility $name, $wire, $request, $success, $statuses, $needs,
-            |$store, $scope, $input| $body
+            @base $visibility $name, $wire, $request, $success, $statuses, $needs, []
         );
         impl $crate::operations::catalog::shapes::ScopedWriteSpec for $name {
             fn request_scope(_: &Self::Request) -> Option<&provenance_core::ScopeId> {
@@ -311,8 +310,32 @@ macro_rules! scoped_write_operation {
      $statuses:expr, $needs:expr, scope = $scope_field:ident,
      |$store:ident, $scope:ident, $input:ident| $body:expr) => {
         $crate::operations::catalog::shapes::scoped_write_operation!(
-            @base $visibility $name, $wire, $request, $success, $statuses, $needs,
+            $visibility $name, $wire, $request, $success, $statuses, $needs,
+            scope = $scope_field, items = [],
             |$store, $scope, $input| $body
+        );
+    };
+    ($visibility:vis $name:ident, $wire:literal, $request:ty, $success:ty,
+     $statuses:expr, $needs:expr, scope = $scope_field:ident, validate = $validate:expr,
+     |$store:ident, $scope:ident, $input:ident| $body:expr) => {
+        $crate::operations::catalog::shapes::scoped_write_operation!(
+            $visibility $name, $wire, $request, $success, $statuses, $needs,
+            scope = $scope_field, items = [
+                fn validate_external(
+                    request: &Self::Request,
+                ) -> Result<(), provenance_core::protocol::failure::OperationFailure> {
+                    ($validate)(request)
+                }
+            ],
+            |$store, $scope, $input| $body
+        );
+    };
+    ($visibility:vis $name:ident, $wire:literal, $request:ty, $success:ty,
+     $statuses:expr, $needs:expr, scope = $scope_field:ident, items = [$($extra:item)*],
+     |$store:ident, $scope:ident, $input:ident| $body:expr) => {
+        $crate::operations::catalog::shapes::scoped_write_operation!(
+            @base $visibility $name, $wire, $request, $success, $statuses, $needs,
+            [$($extra)*]
         );
         impl $crate::operations::catalog::shapes::ScopedWriteSpec for $name {
             fn request_scope(request: &Self::Request) -> Option<&provenance_core::ScopeId> {
@@ -328,8 +351,7 @@ macro_rules! scoped_write_operation {
         }
     };
     (@base $visibility:vis $name:ident, $wire:literal, $request:ty, $success:ty,
-     $statuses:expr, $needs:expr,
-     |$store:ident, $scope:ident, $input:ident| $body:expr) => {
+     $statuses:expr, $needs:expr, [$($extra:item)*]) => {
         $visibility struct $name;
         impl $crate::operations::catalog::shapes::OperationSpec for $name {
             type Request = $request;
@@ -341,6 +363,7 @@ macro_rules! scoped_write_operation {
             fn needs(_: &Self::Request) -> $crate::operations::catalog::ExecutionNeeds {
                 $needs
             }
+            $($extra)*
         }
     };
 }

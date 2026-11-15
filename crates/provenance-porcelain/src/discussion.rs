@@ -147,9 +147,12 @@ pub struct ConversationInput {
 #[serde(deny_unknown_fields)]
 pub struct StartInput {
     pub parent: ThreadParent,
-    #[doc = "The actor of the write. It is optional for a write that makes or changes a \
-             Requirement and for a write that starts or replies to a Discussion. A write that \
-             gives no actor records the actor `authoring`."]
+    #[serde(
+        default,
+        deserialize_with = "provenance_core::actor_input::given",
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[schemars(with = "String", description = provenance_core::actor_input::DESCRIPTION)]
     pub actor: Option<String>,
     pub declared_by: Option<String>,
     pub role: MessageRole,
@@ -161,9 +164,12 @@ pub struct StartInput {
 #[serde(deny_unknown_fields)]
 pub struct ReplyInput {
     pub discussion_id: StableId,
-    #[doc = "The actor of the write. It is optional for a write that makes or changes a \
-             Requirement and for a write that starts or replies to a Discussion. A write that \
-             gives no actor records the actor `authoring`."]
+    #[serde(
+        default,
+        deserialize_with = "provenance_core::actor_input::given",
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[schemars(with = "String", description = provenance_core::actor_input::DESCRIPTION)]
     pub actor: Option<String>,
     pub declared_by: Option<String>,
     pub expected_version: u64,

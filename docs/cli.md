@@ -63,9 +63,10 @@ is not a command. The CLI refuses it with a usage error and shows
 `provenance --help`.
 
 A Requirement `create` or `update`, `discuss`, and `reply` take an optional
-`--actor`. A write that gives no actor records the actor `authoring`, on the CLI,
-on MCP, and on the HTTP API. A Rule or Resolution write takes no actor and records
-`authoring`. `submit`, `claim`, and `release` need `--actor`.
+`--actor`. A Requirement write or a `discuss` that gives no actor records the actor
+`authoring`, on the CLI, on MCP, and on the HTTP API. A `reply` stores no actor. A
+JSON `null` actor is invalid input. A Rule or Resolution write takes no actor and
+records `authoring`. `submit`, `claim`, and `release` need `--actor`.
 
 Rule creation defaults to `draft` in the CLI and in catalog operations. Pass
 `--status active` only when a person ratifies the Rule. Coverage reports do not
