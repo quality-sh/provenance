@@ -1,4 +1,3 @@
-use super::validate_submission_address;
 use crate::{
     review::publication::with_record_state,
     review::{
@@ -42,11 +41,9 @@ impl StateStore {
             crate::review::ensure_manifest_scope(held, &scope)?;
             let stored = StoredRows::read(held, &scope)?;
             let facts = stored.facts()?;
+            let addressed = addressed.as_ref().map(|(kind, id)| (*kind, id));
+            facts.ensure_addressed(&input.proposal_id, addressed)?;
             let proposal = review_submission(held, &scope, &facts, &input.proposal_id)?;
-            validate_submission_address(
-                &proposal,
-                addressed.as_ref().map(|(kind, id)| (*kind, id)),
-            )?;
             let kind = NodeType::from(proposal.traceability.target.artifact_type);
             let record_id = &proposal.traceability.target.artifact_id;
             crate::families::review_families::record(held, &scope, kind, record_id)?;

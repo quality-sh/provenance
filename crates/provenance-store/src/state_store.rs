@@ -379,15 +379,17 @@ impl StateStore {
             let assertions = held.list_assertion_records(scope)?;
             let dispositions = held.list_dispositions(scope)?;
             let proposals = held.list_proposal_definitions(scope)?;
+            let withdrawals = held.list_withdrawals(scope)?;
             let reading = provenance_core::review::read_review_rows(
                 provenance_core::review::StoredReviewRows {
                     proposals: &proposals,
                     dispositions: &dispositions,
-                    withdrawals: &[],
+                    withdrawals: &withdrawals,
                 },
             );
             // A review submission takes its state from the result of its
-            // decisions only when they agree; else it keeps its stored state.
+            // decisions only when its rows agree; else it keeps its stored
+            // state.
             let decided = |proposal: &ProposalCard| {
                 !reading.is_submission(&proposal.id)
                     || reading.agreed_decision(&proposal.id).is_some()

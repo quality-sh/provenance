@@ -130,9 +130,28 @@ impl CycleFacts<'_> {
     }
 
     /// Whether a Proposal is a review submission.
-    #[cfg_attr(not(feature = "host"), allow(dead_code))]
     pub(super) fn is_submission(&self, proposal: &StableId) -> bool {
         self.reading.is_submission(proposal)
+    }
+
+    /// Refuses a review submission that a write addresses through a record
+    /// that no line of the submission names. The lines of the submission
+    /// answer this, so the refusal does not depend on the other review rows
+    /// of its record. A Proposal that is not a review submission passes.
+    pub(super) fn ensure_addressed(
+        &self,
+        proposal: &StableId,
+        addressed: Option<(NodeType, &StableId)>,
+    ) -> anyhow::Result<()> {
+        let belongs = addressed.is_none_or(|(kind, record)| {
+            !self.is_submission(proposal) || self.reading.submission_names(proposal, kind, record)
+        });
+        crate::write_error::ensure!(
+            InvalidUpdate,
+            belongs,
+            "the review submission does not belong to the addressed record"
+        );
+        Ok(())
     }
 
     /// The feedback Message a decision published, if it did.

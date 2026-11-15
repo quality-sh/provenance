@@ -203,43 +203,46 @@ impl StateStore {
             withdrawn: review.withdrawn(),
         })
     }
+}
 
-    /// The draft, review and proposed Resolutions among `resolutions` whose current
-    /// revision a reviewer accepted. A citation check reads them as approved, because an
-    /// approval does not change the lifecycle status. Refuses when the review rows of one
-    /// of them do not agree, with the refusal of a read of that Resolution.
+/// Whether a reviewer accepted the current revision of a Resolution of one
+/// scope. It reads the review rows of the scope at the first question, so a
+/// citation check that needs no acceptance reads no review rows.
+pub(crate) struct ResolutionAcceptance<'s> {
+    store: &'s StateStore,
+    scope: &'s ScopeId,
+    rows: Option<StoredRows>,
+}
+
+impl<'s> ResolutionAcceptance<'s> {
+    pub(crate) const fn new(store: &'s StateStore, scope: &'s ScopeId) -> Self {
+        Self {
+            store,
+            scope,
+            rows: None,
+        }
+    }
+
+    /// Whether `resolution` is a draft, review or proposed Resolution whose
+    /// current revision a reviewer accepted. A citation check reads it as
+    /// approved, because an approval does not change the lifecycle status.
+    /// Refuses with the refusal of a read of `resolution` when its review
+    /// rows do not agree.
     #[rule("rule_review_acceptance_approves_resolution_citation")]
-    pub(crate) fn accepted_resolution_ids(
-        &self,
-        scope: &ScopeId,
-        resolutions: &[Resolution],
-    ) -> anyhow::Result<Vec<StableId>> {
-        let candidates = resolutions
-            .iter()
-            .filter(|resolution| {
-                matches!(
-                    resolution.status,
-                    ResolutionStatus::Draft | ResolutionStatus::Review | ResolutionStatus::Proposed
-                )
-            })
-            .collect::<Vec<_>>();
-        let mut accepted = Vec::new();
-        if candidates.is_empty() {
-            return Ok(accepted);
+    pub(crate) fn accepts(&mut self, resolution: &Resolution) -> anyhow::Result<bool> {
+        if !matches!(
+            resolution.status,
+            ResolutionStatus::Draft | ResolutionStatus::Review | ResolutionStatus::Proposed
+        ) {
+            return Ok(false);
         }
-        let stored = StoredRows::read(self, scope)?;
-        let facts = stored.facts()?;
-        for resolution in candidates {
-            // Refuses with the fault of a Resolution whose review rows do not
-            // agree: the citation needs its review state.
-            let record = ReviewRecord::Resolution(resolution.clone());
-            if Self::record_decision_state_from_parts(&record, &facts)?
-                .current_acceptance
-                .is_some()
-            {
-                accepted.push(resolution.id.clone());
-            }
-        }
-        Ok(accepted)
+        let rows = match self.rows.take() {
+            Some(rows) => rows,
+            None => StoredRows::read(self.store, self.scope)?,
+        };
+        let rows = self.rows.insert(rows);
+        let record = ReviewRecord::Resolution(resolution.clone());
+        let state = StateStore::record_decision_state_from_parts(&record, &rows.facts()?)?;
+        Ok(state.current_acceptance.is_some())
     }
 }

@@ -309,7 +309,7 @@ macro_rules! define_imported_scope_shards {
                     // A scope with review records has no export, so no imported
                     // Resolution has a review acceptance.
                     super::resolution_decisions::ensure_resolution_decisions(
-                        shards.resolutions, &[], shards.questions, shards.rules,
+                        shards.resolutions, |_| Ok(false), shards.questions, shards.rules,
                     )?;
                     let reviews = super::import_reviews::ImportReviews::read(
                         store, scope, shards.requirements,

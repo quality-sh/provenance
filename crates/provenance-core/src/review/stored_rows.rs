@@ -185,6 +185,9 @@ pub struct ReviewReading<'a> {
     submission_ids: HashMap<&'a str, Vec<usize>>,
     /// The submissions that read as one row, by ID, with their rows.
     submissions: HashMap<&'a str, (usize, SubmissionRows)>,
+    /// The rows of each submission whose ID is on lines that disagree, in
+    /// the line order of the first line of the ID.
+    disputed: Vec<(&'a str, SubmissionRows)>,
     /// The rows of each record, by the name of its kind, then by its ID.
     records: HashMap<&'static str, HashMap<&'a str, RecordRows>>,
 }
@@ -209,8 +212,10 @@ fn submission_order(proposal: &ProposalCard) -> (u64, &str) {
     )
 }
 
-/// Reads the stored review rows of one scope as a whole.
+/// Reads the stored review rows of one scope as a whole, and finds each
+/// condition in which the review rows of a record do not agree.
 #[rule("rule_equal_review_row_lines_read_as_one")]
+#[rule("rule_disagreeing_review_rows_refuse_record")]
 pub fn read_review_rows(rows: StoredReviewRows<'_>) -> ReviewReading<'_> {
     let mut reading = ReviewReading {
         rows,
@@ -219,11 +224,13 @@ pub fn read_review_rows(rows: StoredReviewRows<'_>) -> ReviewReading<'_> {
         scope_fault: None,
         submission_ids: HashMap::new(),
         submissions: HashMap::new(),
+        disputed: Vec::new(),
         records: HashMap::new(),
     };
     reading.read_submissions();
     reading.read_decisions();
     reading.read_withdrawals();
+    reading.read_disputed_submissions();
     reading.read_records();
     reading
 }
@@ -233,6 +240,14 @@ impl ReviewReading<'_> {
     /// two lines that disagree.
     pub fn is_submission(&self, proposal: &StableId) -> bool {
         self.submission_ids.contains_key(proposal.as_str())
+    }
+
+    /// Whether a line of the review submission with this ID names the
+    /// record. The lines of the submission answer this also when the review
+    /// rows of its record do not agree.
+    pub fn submission_names(&self, id: &StableId, kind: NodeType, record: &StableId) -> bool {
+        self.records_of_submission(id.as_str())
+            .contains(&(kind.as_str(), record.as_str()))
     }
 
     /// The review state of one record, or the first fault of its rows.
@@ -275,11 +290,12 @@ impl ReviewReading<'_> {
 
     /// Each fault, in the order of the reading: an ID on lines that
     /// disagree (submissions, then decisions, then withdrawals, each in line
-    /// order) and a withdrawal that names no review submission, then for
-    /// each record in the line order of its first submission: each review
-    /// cycle that more than one submission has, then submission by
-    /// submission in line order, decisions with different results and an
-    /// approval with a withdrawal.
+    /// order) and a withdrawal that names no review submission; then for
+    /// each submission whose ID is on lines that disagree, in line order,
+    /// decisions with different results and an approval with a withdrawal;
+    /// then for each record in the line order of its first submission: each
+    /// review cycle that more than one submission has, then submission by
+    /// submission in line order, the same two faults.
     pub fn faults(&self) -> impl Iterator<Item = &ReviewRowFault> {
         self.faults.iter()
     }
@@ -293,7 +309,9 @@ impl ReviewReading<'_> {
         &self.once
     }
 
-    /// The result of the decisions on one submission when they agree.
+    /// The result of the decisions on one submission when the rows of the
+    /// submission agree: the decisions have one result, and no withdrawal
+    /// names an approved submission.
     #[rule("rule_same_result_decisions_read_as_one")]
     pub fn agreed_decision(&self, submission: &StableId) -> Option<DispositionDecision> {
         let (_, rows) = self.submissions.get(submission.as_str())?;
@@ -302,6 +320,9 @@ impl ReviewReading<'_> {
             .iter()
             .map(|&position| self.rows.dispositions[position].decision);
         let first = results.next()?;
-        results.all(|result| result == first).then_some(first)
+        let withdrawn = !rows.withdrawals.is_empty();
+        let agree = results.all(|result| result == first)
+            && !(first == DispositionDecision::Accepted && withdrawn);
+        agree.then_some(first)
     }
 }

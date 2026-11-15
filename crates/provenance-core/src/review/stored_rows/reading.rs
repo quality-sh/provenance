@@ -7,7 +7,6 @@ use super::{
     ReviewReading, ReviewRowFamily, ReviewRowFault, RowAt, SubmissionLines, SubmissionRows,
 };
 use crate::{DispositionDecision, StableId};
-use provenance_macros::rule;
 use std::collections::HashMap;
 
 impl<'a> ReviewReading<'a> {
@@ -83,6 +82,7 @@ impl<'a> ReviewReading<'a> {
                     second,
                 );
                 self.fault(fault, &records);
+                self.disputed.push((first, SubmissionRows::default()));
                 continue;
             }
             let position = group.positions[0];
@@ -132,6 +132,8 @@ impl<'a> ReviewReading<'a> {
             if let Some((_, rows)) = self.submissions.get_mut(submission) {
                 rows.decisions.push(first);
                 kept.push(first);
+            } else if let Some(rows) = self.disputed_rows(submission) {
+                rows.decisions.push(first);
             }
         }
         kept.sort_unstable();
@@ -181,14 +183,39 @@ impl<'a> ReviewReading<'a> {
             } else if let Some((_, rows)) =
                 self.submissions.get_mut(withdrawal.proposal_id.as_str())
             {
+                rows.withdrawals.push(first);
+                kept.push(first);
+            } else if let Some(rows) = self.disputed_rows(withdrawal.proposal_id.as_str()) {
                 // A withdrawal of a submission whose ID is on lines that
                 // disagree is a part of the fault of that submission.
                 rows.withdrawals.push(first);
-                kept.push(first);
             }
         }
         kept.sort_unstable();
         self.once.withdrawals = kept;
+    }
+
+    fn disputed_rows(&mut self, submission: &str) -> Option<&mut SubmissionRows> {
+        self.disputed
+            .iter_mut()
+            .find(|(id, _)| *id == submission)
+            .map(|(_, rows)| rows)
+    }
+
+    /// Gives the faults of the decisions and the withdrawals of each
+    /// submission whose ID is on lines that disagree to each record that a
+    /// line of the ID names, so that one check reports each fault.
+    pub(super) fn read_disputed_submissions(&mut self) {
+        let proposals = self.rows.proposals;
+        let disputed = std::mem::take(&mut self.disputed);
+        for (id, rows) in &disputed {
+            let records = self.records_of_submission(id);
+            let submission = &proposals[self.submission_ids[id][0]].id;
+            for fault in self.submission_faults(submission, rows) {
+                self.fault(fault, &records);
+            }
+        }
+        self.disputed = disputed;
     }
 
     pub(super) fn read_records(&mut self) {
@@ -205,7 +232,9 @@ impl<'a> ReviewReading<'a> {
             in_line_order.sort_unstable();
             let mut faults = self.shared_cycles(&in_line_order);
             for &position in &in_line_order {
-                faults.extend(self.submission_faults(&proposals[position].id));
+                let id = &proposals[position].id;
+                let (_, rows) = &self.submissions[id.as_str()];
+                faults.extend(self.submission_faults(id, rows));
             }
             for fault in faults {
                 self.fault(fault, &[key]);
@@ -271,10 +300,13 @@ impl<'a> ReviewReading<'a> {
     }
 
     /// The decisions or the withdrawals of one submission that do not agree.
-    #[rule("rule_disagreeing_review_rows_refuse_record")]
-    fn submission_faults(&self, submission: &StableId) -> Vec<ReviewRowFault> {
+    /// `rows` are the decisions and the withdrawals that name it.
+    fn submission_faults(
+        &self,
+        submission: &StableId,
+        rows: &SubmissionRows,
+    ) -> Vec<ReviewRowFault> {
         let dispositions = self.rows.dispositions;
-        let (_, rows) = &self.submissions[submission.as_str()];
         let lines = self.lines_naming(submission);
         let of_family = |family| {
             lines

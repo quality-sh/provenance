@@ -394,9 +394,9 @@ their record refuse with `invalid_state_file`:
 - More than one submission of one record has the same review cycle.
 
 A decision or a withdrawal that names a submission whose ID is on lines that
-do not agree is a part of the same fault. A write that needs the review state
-of the record, such as an active Rule that cites a Resolution, gives the same
-refusal.
+do not agree is a part of the same fault. A write that needs the approval of
+the record gives the same refusal: an active Rule or an answered Question that
+cites a Resolution that is not approved needs the approval of that Resolution.
 
 The refusal names the file and the line of one row, and its message names the
 rows and each line that the repair removes. For example:
@@ -412,11 +412,13 @@ with its file and its line.
 A withdrawal that names no review submission makes each review read of the
 scope refuse. Its message names the line of the withdrawal.
 
-To repair the rows, remove each line that the message names, then commit.
-When the message gives a choice, such as the decisions of one result or the
-lines of one submission, remove each line of the choice that you do not keep.
-After this, the reads of the record and `provenance check` pass. This is the
-only hand edit of `.provenance/state` that the generated AGENTS.md permits.
+To repair the rows, do the repair step that the message gives, then commit.
+Some steps give a choice: keep one line of an ID, keep the decisions of one
+result, keep the approval or the withdrawals, or keep one submission. Remove
+only the lines that the step tells you to remove. `provenance check` reports
+each fault of the record, and after the repair of each, the reads of the
+record and `provenance check` pass. This is the only hand edit of
+`.provenance/state` that the generated AGENTS.md permits.
 
 ## Agent guidance
 

@@ -105,7 +105,7 @@ it in the same change.
   rebase merge drops the commit that the archive names.
 - Write graph state only through the Provenance CLI or SDK. Do not edit
   `.provenance/state` by hand, with one exception: when a read or `check`
-  refuses review rows, remove each line that the refusal names, then commit.
+  refuses review rows, do the repair step that the refusal gives, then commit.
 - Pre-commit: `{command} check --quiet`. It checks the graph, the statements, and
   the Rule bindings. Commit graph updates with the code.
 - ASD owns ASD-STE100. STEMG maintains it. Use the official Issue 9 request page:

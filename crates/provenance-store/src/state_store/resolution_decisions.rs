@@ -55,7 +55,8 @@ impl StateStore {
     }
 
     /// Refuses an answered Question or an active Rule that cites a Resolution that is not
-    /// approved, unless a reviewer accepted the current revision of that Resolution.
+    /// approved, unless a reviewer accepted the current revision of that Resolution. Only the
+    /// citations that the check reads need the review rows of their Resolution.
     fn ensure_cited_resolutions(
         &self,
         scope: &ScopeId,
@@ -63,29 +64,23 @@ impl StateStore {
         questions: &[Question],
         rules: &[Rule],
     ) -> anyhow::Result<()> {
-        let cited = resolutions
-            .iter()
-            .filter(|resolution| resolution.status != ResolutionStatus::Approved)
-            .filter(|resolution| {
-                questions
-                    .iter()
-                    .any(|q| q.resolution_id.as_ref() == Some(&resolution.id))
-                    || rules
-                        .iter()
-                        .any(|r| r.resolution_ids.contains(&resolution.id))
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-        let accepted = self.accepted_resolution_ids(scope, &cited)?;
-        ensure_resolution_decisions(resolutions, &accepted, questions, rules)
+        let mut acceptance = crate::review::ResolutionAcceptance::new(self, scope);
+        ensure_resolution_decisions(
+            resolutions,
+            |resolution| acceptance.accepts(resolution),
+            questions,
+            rules,
+        )
     }
 }
 
 /// Refuses an answered Question or an active Rule that cites a Resolution that is neither
-/// approved nor in `accepted`, the Resolutions whose current revision a reviewer accepted.
+/// approved nor `accepted`: a reviewer accepted its current revision. The check asks
+/// `accepted` only for a cited Resolution that is not approved, in the order of the
+/// citations.
 pub(super) fn ensure_resolution_decisions(
     resolutions: &[Resolution],
-    accepted: &[StableId],
+    mut accepted: impl FnMut(&Resolution) -> anyhow::Result<bool>,
     questions: &[Question],
     rules: &[Rule],
 ) -> anyhow::Result<()> {
@@ -94,12 +89,12 @@ pub(super) fn ensure_resolution_decisions(
         .filter(|q| q.status == QuestionStatus::Answered)
     {
         if let Some(id) = &question.resolution_id {
-            ensure_approved(resolutions, accepted, id, "question", &question.id)?;
+            ensure_approved(resolutions, &mut accepted, id, "question", &question.id)?;
         }
     }
     for rule in rules.iter().filter(|r| r.status == RuleStatus::Active) {
         for id in &rule.resolution_ids {
-            ensure_approved(resolutions, accepted, id, "rule", &rule.id)?;
+            ensure_approved(resolutions, &mut accepted, id, "rule", &rule.id)?;
         }
     }
     Ok(())
@@ -110,21 +105,20 @@ pub(super) fn ensure_resolution_decisions(
 #[provenance_macros::rule("rule_unapproved_resolution_refusal_says_what_to_do")]
 fn ensure_approved(
     resolutions: &[Resolution],
-    accepted: &[StableId],
+    accepted: &mut impl FnMut(&Resolution) -> anyhow::Result<bool>,
     id: &StableId,
     kind: &str,
     owner: &StableId,
 ) -> anyhow::Result<()> {
-    let status = resolutions
-        .iter()
-        .find(|resolution| &resolution.id == id)
-        .map(|resolution| resolution.status.clone());
-    if status == Some(ResolutionStatus::Approved) || accepted.contains(id) {
-        return Ok(());
+    let resolution = resolutions.iter().find(|resolution| &resolution.id == id);
+    if let Some(resolution) = resolution {
+        if resolution.status == ResolutionStatus::Approved || accepted(resolution)? {
+            return Ok(());
+        }
     }
-    let state = status.map_or_else(
+    let state = resolution.map_or_else(
         || "does not exist".to_owned(),
-        |status| format!("is {}", status_word(&status)),
+        |resolution| format!("is {}", status_word(&resolution.status)),
     );
     let id = id.as_str();
     let message = format!(
