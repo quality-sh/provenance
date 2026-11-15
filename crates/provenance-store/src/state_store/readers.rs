@@ -24,7 +24,7 @@ pub fn unparsable(
     path: &Utf8Path,
     line: u64,
     message: String,
-    hint: Option<String>,
+    correction: Option<String>,
 ) -> UnparsableStateFile {
     let absolute = std::path::absolute(path)
         .ok()
@@ -33,7 +33,7 @@ pub fn unparsable(
     let repository = store_root(path)
         .map(Utf8Path::to_path_buf)
         .or_else(working_project);
-    UnparsableStateFile::new(path, repository.as_deref(), line, message, hint)
+    UnparsableStateFile::new(path, repository.as_deref(), line, message, correction)
 }
 
 /// The root of the store that holds `path`: the parent of the nearest

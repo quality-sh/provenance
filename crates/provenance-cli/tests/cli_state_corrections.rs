@@ -16,12 +16,12 @@ use support::review_paths::provenance;
 
 /// The hint of a record file that does not parse. The other tests compare
 /// with the public constant; this file pins the text that a person reads.
-const HINT: &str = "To correct this fault, do one of these steps. \
-    Get .provenance/state from a commit that Provenance can read, which can remove records \
-    and changes not in that commit. \
-    Or remove .provenance/state, which removes all records, the scopes, the disposition actors \
-    and the technical names of the dictionary. \
-    Then do the command provenance init.";
+const HINT: &str = "To correct this fault, use one of these two procedures. \
+    Procedure 1: get .provenance/state from a commit where Provenance can read it. \
+    This can remove records and changes that are not in that commit. \
+    Procedure 2: remove .provenance/state and then do the command provenance init. \
+    This removes all records, the scopes, the disposition actors and the technical names of \
+    the dictionary.";
 
 const REQUIREMENTS: &str = "scopes/default/requirements/req.jsonl";
 

@@ -17,9 +17,8 @@ pub(super) use files::{files_read, FileDigest, UnitRead};
 
 use crate::storage::StateView;
 
-use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
-use provenance_core::{Manifest, ScopeId};
+use provenance_core::ScopeId;
 use std::collections::BTreeMap;
 
 /// One hash unit. `name` is the key of its digest row.
@@ -61,8 +60,7 @@ impl Unit {
 pub fn scope_ids(state_dir: &Utf8Path) -> anyhow::Result<Vec<ScopeId>> {
     let path = state_dir.join("manifest.json");
     let bytes = read_through_rename(&path)?;
-    let manifest: Manifest =
-        serde_json::from_slice(&bytes).with_context(|| format!("parse manifest {path}"))?;
+    let manifest = crate::state_store::parse_manifest(&path, &bytes)?;
     Ok(manifest.scopes.into_iter().map(|scope| scope.id).collect())
 }
 
@@ -100,13 +98,17 @@ pub fn units_for(scopes: &[ScopeId]) -> Vec<Unit> {
 }
 
 /// The stored digest of each unit of `view`, by unit name, in the order of
-/// [`units_for`]. The units are the ones that the manifest of `view` names.
-pub fn view_stored_digests(view: &StateView) -> anyhow::Result<Vec<(String, String)>> {
+/// [`units_for`]. The units are the ones that the manifest of `view` names;
+/// `path` is the manifest file that a refusal gives.
+pub fn view_stored_digests(
+    path: &Utf8Path,
+    view: &StateView,
+) -> anyhow::Result<Vec<(String, String)>> {
     let manifest = crate::storage::StateKey::new("manifest.json")?;
     let bytes = view
         .get(&manifest)
         .ok_or_else(|| crate::refusal::fault!("the canonical state has no manifest"))?;
-    let manifest: Manifest = serde_json::from_slice(bytes).context("parse the manifest")?;
+    let manifest = crate::state_store::parse_manifest(path, bytes)?;
     let scopes: Vec<ScopeId> = manifest.scopes.into_iter().map(|scope| scope.id).collect();
     Ok(units_for(&scopes)
         .into_iter()

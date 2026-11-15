@@ -267,7 +267,8 @@ impl StateStore {
         replacements: impl IntoIterator<Item = (NodeType, &'a StableId)>,
         replaced_kinds: &[NodeType],
     ) -> anyhow::Result<()> {
-        let manifest = super::manifest_from_bytes(&self.read_state(&self.layout.manifest_path())?)?;
+        let path = self.layout.manifest_path();
+        let manifest = super::parse_manifest(&path, &self.read_state(&path)?)?;
         ensure_replacement_ids_unique(
             Some(scope_id),
             replacements.into_iter().map(|(kind, id)| (Some(kind), id)),

@@ -76,14 +76,14 @@ fn hint_detail(hint: Option<&str>) -> String {
 }
 
 /// The hint of a file below `.provenance/state` that does not parse and that
-/// has no correction of its own: the two steps that give a state that reads,
-/// each with what it removes.
-pub const STATE_CORRECTIONS: &str = "To correct this fault, do one of these steps. \
-    Get .provenance/state from a commit that Provenance can read, which can remove records \
-    and changes not in that commit. \
-    Or remove .provenance/state, which removes all records, the scopes, the disposition actors \
-    and the technical names of the dictionary. \
-    Then do the command provenance init.";
+/// has no correction of its own: the two procedures that give a state that
+/// reads, each with what it removes.
+pub const STATE_CORRECTIONS: &str = "To correct this fault, use one of these two procedures. \
+    Procedure 1: get .provenance/state from a commit where Provenance can read it. \
+    This can remove records and changes that are not in that commit. \
+    Procedure 2: remove .provenance/state and then do the command provenance init. \
+    This removes all records, the scopes, the disposition actors and the technical names of \
+    the dictionary.";
 
 /// The location of a state line that does not parse.
 ///
@@ -118,7 +118,8 @@ fn file_and_line<'de, D: serde::Deserializer<'de>>(
     }
 }
 
-/// A line of a record file, or the dictionary reference, that does not parse.
+/// A line of a file of the state, such as a record file, the manifest or the
+/// dictionary reference, that does not parse.
 ///
 /// The fields are private, so a refusal gets its file only from [`Self::new`],
 /// which never gives an absolute path, and its next step only from
