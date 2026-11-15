@@ -1,7 +1,7 @@
 //! Canonical staged writer for one or more native graph record changes.
 
 use crate::{
-    review::{automatic_submission::AUTHORING_ACTOR, publication::with_record_state},
+    review::{publication::with_record_state, write_actor::AUTHORING_ACTOR},
     state_store::{
         read_budget::ensure_slice_within_read_budget, record_stamps::GraphRecord, RecordStamp,
         StateStore,

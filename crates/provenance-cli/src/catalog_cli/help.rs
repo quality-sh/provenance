@@ -109,7 +109,7 @@ fn discussion_help(
 /// The flags a Discussion action needs on the command line: the required
 /// schema fields that neither the target nor a CLI default supplies.
 pub fn required_discussion_flags(schema: &Value) -> BTreeSet<String> {
-    let supplied = ["target", "actor", "role"];
+    let supplied = ["target", "role"];
     schema
         .get("required")
         .and_then(Value::as_array)
