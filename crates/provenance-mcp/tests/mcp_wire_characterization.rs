@@ -12,12 +12,13 @@ use provenance_transport::{
     fixture::{FixtureAccess, Target},
     StatementHost,
 };
+use rmcp::ServerHandler as _;
 use serde_json::{json, Value};
 use std::sync::Arc;
 use support::{check_port::FixtureCheckPort, records::Repository};
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader, DuplexStream, Lines};
 
-const TOOL_LIST_FNV1A: u64 = 8_000_862_618_406_419_788;
+const TOOL_LIST_FNV1A: u64 = 14_349_219_473_279_263_112;
 
 /// The porcelain tools, in list order. The list has no plumbing tools.
 const PORCELAIN_TOOL_NAMES: &[&str] = &[
@@ -140,6 +141,13 @@ fn check_host() -> StatementHost {
     StatementHost::default().with_check_port(Arc::new(FixtureCheckPort))
 }
 
+/// The instructions of the full host, as the server handler gives them.
+fn instructions(repository: &Repository) -> Option<String> {
+    provenance_mcp::Server::new(full_host(repository))
+        .get_info()
+        .instructions
+}
+
 fn server_info() -> Value {
     json!({"name":"provenance","version":env!("CARGO_PKG_VERSION")})
 }
@@ -155,7 +163,7 @@ async fn discover_response_keeps_its_fields() {
             "_meta":{"io.modelcontextprotocol/serverInfo":server_info()},
             "cacheScope":"private",
             "capabilities":{"tools":{}},
-            "instructions":provenance_mcp::instructions(),
+            "instructions":instructions(&repository),
             "resultType":"complete",
             "supportedVersions":["2024-11-05","2025-03-26","2025-06-18","2025-11-25","2026-07-28"],
             "ttlMs":0
@@ -183,7 +191,7 @@ async fn initialize_negotiates_the_older_protocols() {
                 "protocolVersion":agreed,
                 "capabilities":{"tools":{}},
                 "serverInfo":server_info(),
-                "instructions":provenance_mcp::instructions(),
+                "instructions":instructions(&repository),
             }),
             "requested {requested}"
         );

@@ -80,7 +80,7 @@ fn the_create_sentence_names_existing_record_actions_only_when_one_is_shown() {
     };
     let text = guidance_for(|command| !existing(command), true).guidance;
     assert!(
-        text.contains("\nCreate names an explicit record type.\n"),
+        text.contains(" Create names an explicit record type.\n"),
         "{text}"
     );
     assert!(

@@ -56,19 +56,21 @@ create, update, answer, claim, release, or submit on the target record; discuss 
 for a Discussion; notify to register a client thread for review changes; or materialize, \
 import, dictionary import, or swarm-backtrace land on the repository files. A call that \
 lacks a field that the action and record kind need gets the schema of their fields.";
-const CHANGE_WITHOUT_NOTIFY: &str = "- change: Write to the graph. The action argument \
+const CHANGE_WITHOUT_REPOSITORY: &str = "- change: Write to the graph. The action argument \
 selects the write: create, update, answer, claim, release, or submit on the target record; \
-discuss or reply for a Discussion; or materialize, import, dictionary import, or \
-swarm-backtrace land on the repository files. A call that lacks a field that the action and \
-record kind need gets the schema of their fields.";
+discuss or reply for a Discussion; or notify to register a client thread for review changes. \
+A call that lacks a field that the action and record kind need gets the schema of their \
+fields.";
+const CHANGE_RECORD_AND_DISCUSSION: &str = "- change: Write to the graph. The action argument \
+selects the write: create, update, answer, claim, release, or submit on the target record; or \
+discuss or reply for a Discussion. A call that lacks a field that the action and record kind \
+need gets the schema of their fields.";
 const CHANGE_CREATE_DISCUSS_REPLY: &str = "- change: Write to the graph. The action argument \
-selects the write: create on the target record; discuss or reply for a Discussion; or \
-materialize, import, dictionary import, or swarm-backtrace land on the repository files. A \
-call that lacks a field that the action and record kind need gets the schema of their fields.";
+selects the write: create on the target record; or discuss or reply for a Discussion. A call \
+that lacks a field that the action and record kind need gets the schema of their fields.";
 const CHANGE_CREATE_REPLY: &str = "- change: Write to the graph. The action argument selects \
-the write: create on the target record; reply for a Discussion; or materialize, import, \
-dictionary import, or swarm-backtrace land on the repository files. A call that lacks a \
-field that the action and record kind need gets the schema of their fields.";
+the write: create on the target record; or reply for a Discussion. A call that lacks a field \
+that the action and record kind need gets the schema of their fields.";
 const CREATE: &str = "- create: Create the target ID as an explicit record type.";
 const UPDATE: &str = "- update: Update the existing target while preserving omitted fields.";
 const ANSWER: &str = "- answer: Answer the target Question.";
@@ -142,7 +144,7 @@ fn operations_of(actions: &[Action]) -> Vec<&'static str> {
 }
 
 #[tokio::test]
-async fn a_host_with_every_tool_gives_the_shared_guidance_and_first_steps() {
+async fn a_host_with_every_tool_names_its_writes_and_gives_first_steps() {
     let repository = Repository::new("The shared graph is readable.");
     let (names, instructions) = served(fixture_host::full(&repository)).await;
     assert_eq!(
@@ -157,13 +159,15 @@ async fn a_host_with_every_tool_gives_the_shared_guidance_and_first_steps() {
             "discussions"
         ]
     );
-    let lines = [
+    // The fixture host has no repository files, so the change tool has no
+    // repository write.
+    let mut lines = [
         GET,
         TRACE,
         SEARCH,
         CHECK,
         API,
-        CHANGE,
+        CHANGE_WITHOUT_REPOSITORY,
         CREATE,
         UPDATE,
         ANSWER,
@@ -179,7 +183,12 @@ async fn a_host_with_every_tool_gives_the_shared_guidance_and_first_steps() {
         instructions,
         expected(&[SEARCH_THEN_GET, CREATE_TYPE], &lines, true)
     );
-    assert_eq!(instructions, provenance_mcp::instructions());
+    // A server that shows each command and each write gives the full guidance.
+    lines[5] = CHANGE;
+    assert_eq!(
+        provenance_mcp::instructions(),
+        expected(&[SEARCH_THEN_GET, CREATE_TYPE], &lines, true)
+    );
 }
 
 #[tokio::test]
@@ -243,7 +252,7 @@ async fn a_host_with_get_and_without_search_gives_no_first_steps() {
         GET,
         TRACE,
         API,
-        CHANGE_WITHOUT_NOTIFY,
+        CHANGE_RECORD_AND_DISCUSSION,
         CREATE,
         UPDATE,
         ANSWER,
@@ -329,7 +338,7 @@ fn lines_without(without: &str) -> Vec<&'static str> {
         TRACE,
         SEARCH,
         API,
-        CHANGE_WITHOUT_NOTIFY,
+        CHANGE_RECORD_AND_DISCUSSION,
         CREATE,
         UPDATE,
         ANSWER,
