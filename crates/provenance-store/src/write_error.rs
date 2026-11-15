@@ -64,6 +64,7 @@ pub enum WriteFailure {
     EnrolledRecordDeletionConflict {
         record_kind: provenance_core::NodeType,
         record_id: provenance_core::StableId,
+        message: String,
     },
     ClaimConflict {
         holder: String,

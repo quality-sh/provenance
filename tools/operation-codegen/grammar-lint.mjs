@@ -312,6 +312,15 @@ export const FAILURE_STATUS = new Map([
   ['record_too_large', 400], ['invalid_state_file', 500],
 ]);
 
+// The `kind` of `schema` when it is a failure variant: an object with a
+// constant `kind`. Else undefined.
+export function failureVariantKind(schema) {
+  const kind = schema?.properties?.kind?.const;
+  return typeof kind === 'string' ? kind : undefined;
+}
+
+// The `kind` of each failure variant below `schema`. The fields of a failure
+// variant are its payload, so a `kind` union in them is not a failure variant.
 export function failureKinds(document, schema, seen = new Set(), kinds = new Set()) {
   if (Array.isArray(schema)) {
     for (const child of schema) failureKinds(document, child, seen, kinds);
@@ -325,8 +334,8 @@ export function failureKinds(document, schema, seen = new Set(), kinds = new Set
     failureKinds(document, resolvePointer(document, reference), seen, kinds);
     return kinds;
   }
-  const kind = schema.properties?.kind?.const;
-  if (typeof kind === 'string') kinds.add(kind);
+  const kind = failureVariantKind(schema);
+  if (kind !== undefined) return kinds.add(kind);
   for (const child of Object.values(schema)) failureKinds(document, child, seen, kinds);
   return kinds;
 }
