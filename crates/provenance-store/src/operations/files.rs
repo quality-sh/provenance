@@ -3,6 +3,9 @@ use camino::{Utf8Path, Utf8PathBuf};
 use provenance_scanner::{FileScan, Language};
 #[path = "files/native.rs"]
 mod native;
+#[cfg(windows)]
+#[path = "files/rename_info.rs"]
+pub(crate) mod rename_info;
 #[path = "files/safe_fs.rs"]
 mod safe_fs;
 #[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]

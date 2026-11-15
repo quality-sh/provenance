@@ -1,25 +1,14 @@
 //! An edit of AGENTS.md, or an open handle on it, while a second init
 //! replaces it. The init runs through `InitPort::init`, the port that the
 //! CLI calls.
-use super::{init_input, init_through_the_port, tree};
-use camino::{Utf8Path, Utf8PathBuf};
+use super::{
+    init_input, init_through_the_port, repository_with_changed_agents, reviewers,
+    temporary_files, PERSON_AGENTS,
+};
+use camino::Utf8Path;
 use provenance_macros::verifies;
-use provenance_store::repository::Repository;
 
-const PERSON_AGENTS: &str = "# Team notes\n";
 const EDIT: &str = "# Team notes\n\nAn edit while init runs.\n";
-
-/// An initialized repository in which the person changed AGENTS.md, so that
-/// a second init replaces it. The second init replaces no other project
-/// file.
-fn repository_with_changed_agents() -> (tempfile::TempDir, Utf8PathBuf) {
-    let directory = tempfile::tempdir().unwrap();
-    let repo = Utf8PathBuf::from_path_buf(directory.path().join("repo")).unwrap();
-    std::fs::create_dir_all(&repo).unwrap();
-    init_through_the_port(init_input(&repo, &["reviewer"]), || {}).unwrap();
-    std::fs::write(repo.join("AGENTS.md"), PERSON_AGENTS).unwrap();
-    (directory, repo)
-}
 
 /// A second init that writes `EDIT` to AGENTS.md the first time that it
 /// comes to `point`.
@@ -38,23 +27,6 @@ fn init_with_an_edit_at(
             }
         });
     })
-}
-
-fn reviewers(repo: &Utf8Path) -> Vec<String> {
-    Repository::open(repo, "default")
-        .unwrap()
-        .manifest()
-        .unwrap()
-        .disposition_actor_ids
-}
-
-/// The paths of `repo` with `.provenance-` in the name: the temporary files
-/// of init.
-fn temporary_files(repo: &Utf8Path) -> Vec<String> {
-    tree(repo)
-        .into_keys()
-        .filter(|name| name.contains(".provenance-"))
-        .collect()
 }
 
 /// An edit of AGENTS.md after init wrote its temporary file and before init

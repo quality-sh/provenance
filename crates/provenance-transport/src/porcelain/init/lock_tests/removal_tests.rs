@@ -2,7 +2,7 @@
 //! file with the plan, then one remove and a sync of its folder, with no
 //! backup name. A stop is real: a child process runs `InitPort::init`, the
 //! port that the CLI calls, and exits when init comes to a point.
-use super::{init_input, init_through_the_port, tree};
+use super::{init_input, init_through_the_port, temporary_files};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::verifies;
 
@@ -103,14 +103,6 @@ fn legacy_folder(repo: &Utf8Path) -> Vec<String> {
     names
 }
 
-/// The paths of `repo` with `.provenance-` in the name.
-fn init_names(repo: &Utf8Path) -> Vec<String> {
-    tree(repo)
-        .into_keys()
-        .filter(|name| name.contains(".provenance-"))
-        .collect()
-}
-
 /// A stop after the compare and before the remove keeps the legacy skill
 /// file with its bytes, and the next init removes it.
 #[test]
@@ -125,7 +117,7 @@ fn a_stop_before_the_remove_keeps_the_file() {
         legacy_skill()
     );
     assert_eq!(legacy_folder(&repo), ["SKILL.md", "notes.md"]);
-    assert_eq!(init_names(&repo), Vec::<String>::new());
+    assert_eq!(temporary_files(&repo), Vec::<String>::new());
     init_through_the_port(init_input(&repo, &["reviewer"]), || {}).unwrap();
     assert_eq!(legacy_folder(&repo), ["notes.md"]);
 }
@@ -140,7 +132,7 @@ fn a_stop_after_the_remove_leaves_no_file_and_no_other_name() {
     stop_second_init(&repo, "project_file_removed");
 
     assert_eq!(legacy_folder(&repo), ["notes.md"]);
-    assert_eq!(init_names(&repo), Vec::<String>::new());
+    assert_eq!(temporary_files(&repo), Vec::<String>::new());
     init_through_the_port(init_input(&repo, &["reviewer"]), || {}).unwrap();
     assert_eq!(legacy_folder(&repo), ["notes.md"]);
 }
@@ -168,7 +160,7 @@ fn an_edit_before_the_compare_of_the_removal_is_refused_and_kept() {
     );
     assert_eq!(std::fs::read_to_string(&legacy).unwrap(), EDIT);
     assert_eq!(legacy_folder(&repo), ["SKILL.md", "notes.md"]);
-    assert_eq!(init_names(&repo), Vec::<String>::new());
+    assert_eq!(temporary_files(&repo), Vec::<String>::new());
 }
 
 /// An edit of the legacy skill file after the compare and before the remove:
@@ -190,7 +182,7 @@ fn an_edit_after_the_compare_of_the_removal_is_removed() {
     .unwrap();
 
     assert_eq!(legacy_folder(&repo), ["notes.md"]);
-    assert_eq!(init_names(&repo), Vec::<String>::new());
+    assert_eq!(temporary_files(&repo), Vec::<String>::new());
 }
 
 /// On Windows, init removes a read-only legacy skill file.
@@ -208,5 +200,5 @@ fn a_read_only_legacy_skill_file_is_removed() {
     init_through_the_port(init_input(&repo, &["reviewer"]), || {}).unwrap();
 
     assert_eq!(legacy_folder(&repo), ["notes.md"]);
-    assert_eq!(init_names(&repo), Vec::<String>::new());
+    assert_eq!(temporary_files(&repo), Vec::<String>::new());
 }

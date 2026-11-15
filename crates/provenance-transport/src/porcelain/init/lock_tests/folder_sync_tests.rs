@@ -4,24 +4,13 @@
 //! that the rename works and the sync of the folder fails, and gives the
 //! permission back after the rename. The CLI cannot make the sync fail at
 //! that point.
-use super::{init_input, init_through_the_port, tree};
-use camino::{Utf8Path, Utf8PathBuf};
+use super::{
+    init_input, init_through_the_port, repository_with_changed_agents, reviewers,
+    temporary_files, PERSON_AGENTS,
+};
+use camino::Utf8Path;
 use provenance_macros::verifies;
-use provenance_store::repository::Repository;
 use std::os::unix::fs::PermissionsExt;
-
-const PERSON_AGENTS: &str = "# Team notes\n";
-
-/// An initialized repository in which the person changed AGENTS.md, so that
-/// a second init replaces it and no other project file.
-fn repository_with_changed_agents() -> (tempfile::TempDir, Utf8PathBuf) {
-    let directory = tempfile::tempdir().unwrap();
-    let repo = Utf8PathBuf::from_path_buf(directory.path().join("repo")).unwrap();
-    std::fs::create_dir_all(&repo).unwrap();
-    init_through_the_port(init_input(&repo, &["reviewer"]), || {}).unwrap();
-    std::fs::write(repo.join("AGENTS.md"), PERSON_AGENTS).unwrap();
-    (directory, repo)
-}
 
 /// A second init in which the sync of the folder of AGENTS.md fails after
 /// each of the first `failures` renames of AGENTS.md. Init prints the error
@@ -51,14 +40,6 @@ fn init_with_failed_folder_syncs(
     ended
 }
 
-fn reviewers(repo: &Utf8Path) -> Vec<String> {
-    Repository::open(repo, "default")
-        .unwrap()
-        .manifest()
-        .unwrap()
-        .disposition_actor_ids
-}
-
 /// The text of the failed sync of `folder`.
 fn failed_sync(folder: &Utf8Path) -> String {
     format!(
@@ -74,11 +55,7 @@ fn assert_restored(repo: &Utf8Path) {
         PERSON_AGENTS
     );
     assert_eq!(reviewers(repo), ["reviewer"]);
-    let left: Vec<String> = tree(repo)
-        .into_keys()
-        .filter(|name| name.contains(".provenance-"))
-        .collect();
-    assert_eq!(left, Vec::<String>::new());
+    assert_eq!(temporary_files(repo), Vec::<String>::new());
 }
 
 /// The folder sync fails after AGENTS.md was replaced: init says that the

@@ -350,14 +350,7 @@ mod tests {
         // its rename, so init fails after it wrote the skill files.
         let probe_repo = repo.clone();
         crate::test_probes::arm("project_file_compared", move || {
-            for entry in probe_repo.read_dir_utf8().unwrap() {
-                let entry = entry.unwrap();
-                let temporary = entry.file_name().starts_with(".AGENTS.md.provenance-")
-                    && entry.path().extension() == Some("tmp");
-                if temporary {
-                    std::fs::remove_file(entry.path()).unwrap();
-                }
-            }
+            lock_tests::remove_temporary_files(&probe_repo, "AGENTS.md");
         });
 
         let error = plan.apply().unwrap_err();

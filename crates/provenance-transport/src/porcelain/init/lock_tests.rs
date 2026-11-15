@@ -59,9 +59,12 @@ fn manifest_text(layout: &ProvenanceLayout) -> String {
     String::from_utf8(std::fs::read(layout.manifest_path()).unwrap()).unwrap()
 }
 
+/// The text of AGENTS.md after a person changed it.
+const PERSON_AGENTS: &str = "# Team notes\n";
+
 /// A person changes AGENTS.md, so a second init replaces it.
 fn change_agents(repo: &Utf8Path) {
-    std::fs::write(repo.join("AGENTS.md"), "# Team notes\n").unwrap();
+    std::fs::write(repo.join("AGENTS.md"), PERSON_AGENTS).unwrap();
 }
 
 /// Opens the repository as the review follow and the commands do, on its own thread.
@@ -234,14 +237,7 @@ fn a_failed_second_init_restores_the_state_and_frees_the_lock() {
         if seen.get().is_none() {
             seen.set(Some(!lock_is_free(&probe_layout)));
         }
-        for entry in probe_repo.read_dir_utf8().unwrap() {
-            let entry = entry.unwrap();
-            let temporary = entry.file_name().starts_with("..gitignore.provenance-")
-                && entry.path().extension() == Some("tmp");
-            if temporary {
-                std::fs::remove_file(entry.path()).unwrap();
-            }
-        }
+        remove_temporary_files(&probe_repo, ".gitignore");
     });
     let error = plan.apply().unwrap_err();
     crate::test_probes::disarm("project_file_compared");
@@ -266,6 +262,48 @@ fn a_failed_second_init_restores_the_state_and_frees_the_lock() {
         .unwrap();
     let after = manifest_text(&layout);
     assert!(after.contains("new-reviewer"), "{after}");
+}
+
+/// An initialized repository in which the person changed AGENTS.md, so that
+/// a second init replaces it and no other project file.
+fn repository_with_changed_agents() -> (tempfile::TempDir, Utf8PathBuf) {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = Utf8PathBuf::from_path_buf(directory.path().join("repo")).unwrap();
+    std::fs::create_dir_all(&repo).unwrap();
+    init_through_the_port(init_input(&repo, &["reviewer"]), || {}).unwrap();
+    change_agents(&repo);
+    (directory, repo)
+}
+
+/// The reviewers in the manifest of the scope `default` of `repo`.
+fn reviewers(repo: &Utf8Path) -> Vec<String> {
+    Repository::open(repo, "default")
+        .unwrap()
+        .manifest()
+        .unwrap()
+        .disposition_actor_ids
+}
+
+/// The paths of `repo` with `.provenance-` in the name: the temporary files
+/// of init.
+fn temporary_files(repo: &Utf8Path) -> Vec<String> {
+    tree(repo)
+        .into_keys()
+        .filter(|name| name.contains(".provenance-"))
+        .collect()
+}
+
+/// Removes the temporary file of the replacement of `file_name` in `folder`.
+/// A probe at `project_file_compared` calls it, so that the rename of that
+/// file fails after the compare.
+pub(super) fn remove_temporary_files(folder: &Utf8Path, file_name: &str) {
+    let prefix = format!(".{file_name}.provenance-");
+    for entry in folder.read_dir_utf8().unwrap() {
+        let entry = entry.unwrap();
+        if entry.file_name().starts_with(&prefix) && entry.path().extension() == Some("tmp") {
+            std::fs::remove_file(entry.path()).unwrap();
+        }
+    }
 }
 
 /// The input of an init of the scope `default` at the root of `repo`, as the

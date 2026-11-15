@@ -1,7 +1,11 @@
-//! A synced write of a file with a check of the target before the rename.
+//! A synced write or removal of a file with a check of the file before the
+//! one step that changes it.
 
-use super::{keep, sync_directories, sync_failure, write_temporary, ChangedUnsynced};
-use camino::Utf8Path;
+use super::{
+    keep, parent_of, sync_directories, sync_failure, sync_parent, write_temporary,
+    ChangedUnsynced,
+};
+use std::path::Path;
 
 #[cfg(test)]
 mod tests;
@@ -9,17 +13,6 @@ mod tests;
 /// The length of the random part of a temporary file name.
 const RANDOM_LENGTH: usize = 6;
 const SUFFIX: &str = ".tmp";
-
-/// The file that [`write_synced_file_checked`] put at its path with the rename.
-#[derive(Debug)]
-#[must_use]
-pub struct ReplacedFile {
-    /// The permissions of the new file.
-    pub permissions: std::fs::Permissions,
-    /// The sync of the directories after the rename. An error tells that the
-    /// path has the new bytes, but a power loss can lose them.
-    pub synced: Result<(), ChangedUnsynced>,
-}
 
 /// Replaces the file at `path` with `bytes` in one rename, after `check`.
 ///
@@ -41,15 +34,17 @@ pub struct ReplacedFile {
 /// temporary file is deleted and the call gives the error of `check`. After
 /// `check` returns, the call does no step on `path` before the rename. A
 /// failed rename gives the I/O error and deletes the temporary file. After
-/// the rename, the call gives a [`ReplacedFile`], also when a directory sync
-/// fails.
+/// the rename, the call gives the permissions of the new file. If a
+/// directory sync fails, the inner error gives them with the
+/// [`ChangedUnsynced`]: `path` has the new bytes, but a power loss can lose
+/// them.
 pub fn write_synced_file_checked(
-    path: &Utf8Path,
+    path: &Path,
     bytes: &[u8],
     temporary_prefix: &str,
     permissions: Option<&std::fs::Permissions>,
     check: impl FnOnce() -> anyhow::Result<()>,
-) -> anyhow::Result<ReplacedFile> {
+) -> anyhow::Result<Result<std::fs::Permissions, (std::fs::Permissions, ChangedUnsynced)>> {
     remove_stopped_temporaries(path, temporary_prefix)?;
     let mut builder = tempfile::Builder::new();
     builder
@@ -93,20 +88,51 @@ pub fn write_synced_file_checked(
     rename_kept_over_read_only(file, &temporary, &target)?;
     #[cfg(not(windows))]
     super::rename_kept(file, &temporary, &target)?;
-    let synced = sync_directories(parent, first_made).map_err(|error| {
+    Ok(match unsynced(sync_directories(parent, first_made)) {
+        Ok(()) => Ok(permissions),
+        Err(unsynced) => Err((permissions, unsynced)),
+    })
+}
+
+/// Removes the file at `path` in one remove, after `check`, and then syncs
+/// its directory.
+///
+/// After `check` returns, the call does no step on `path` before the remove.
+/// A file that does not exist is a success with no sync. An error tells
+/// that `path` is as it was before the call: the error of `check`, or
+/// `remove <path>` and the I/O error. After the remove, the call gives
+/// `Ok`. If the directory sync fails, the inner error is the
+/// [`ChangedUnsynced`]: the file is removed, but a power loss can bring it
+/// back. On Windows, a power loss can bring the file back.
+pub fn remove_synced_file_checked(
+    path: &Path,
+    check: impl FnOnce() -> anyhow::Result<()>,
+) -> anyhow::Result<Result<(), ChangedUnsynced>> {
+    let parent = parent_of(path)?;
+    let target = crate::long_path::extended(path)?;
+    check()?;
+    match std::fs::remove_file(target) {
+        Ok(()) => Ok(unsynced(sync_parent(parent))),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Ok(())),
+        Err(error) => Err(crate::refusal::caused(
+            error,
+            format!("remove {}", path.display()),
+        )),
+    }
+}
+
+/// The result of a directory sync after the file changed.
+fn unsynced(synced: anyhow::Result<()>) -> Result<(), ChangedUnsynced> {
+    synced.map_err(|error| {
         error
             .downcast::<ChangedUnsynced>()
             .unwrap_or_else(ChangedUnsynced)
-    });
-    Ok(ReplacedFile {
-        permissions,
-        synced,
     })
 }
 
 /// Deletes the temporary file at `path`, also when it is read-only: Windows
 /// does not delete a read-only file.
-fn delete_temporary(path: &std::path::Path) {
+fn delete_temporary(path: &Path) {
     #[cfg(windows)]
     if let Ok(metadata) = std::fs::metadata(path) {
         let mut permissions = metadata.permissions();
@@ -121,12 +147,12 @@ fn delete_temporary(path: &std::path::Path) {
 /// Removes each regular file in the directory of `path` whose name is
 /// `prefix`, six letters or digits, and `.tmp`, whichever call or person
 /// made it. A directory that does not exist has no such file.
-fn remove_stopped_temporaries(path: &Utf8Path, prefix: &str) -> anyhow::Result<()> {
+fn remove_stopped_temporaries(path: &Path, prefix: &str) -> anyhow::Result<()> {
     let Some(parent) = path.parent() else {
         return Ok(());
     };
-    let directory = if parent.as_str().is_empty() {
-        Utf8Path::new(".")
+    let directory = if parent.as_os_str().is_empty() {
+        Path::new(".")
     } else {
         parent
     };
@@ -160,8 +186,8 @@ fn remove_stopped_temporaries(path: &Utf8Path, prefix: &str) -> anyhow::Result<(
 }
 
 /// A failed list of `directory`, with the path and the I/O error.
-fn list_failure(directory: &Utf8Path, error: std::io::Error) -> anyhow::Error {
-    crate::refusal::caused(error, format!("list directory {directory}"))
+fn list_failure(directory: &Path, error: std::io::Error) -> anyhow::Error {
+    crate::refusal::caused(error, format!("list directory {}", directory.display()))
 }
 
 /// Whether `name` is `prefix`, six letters or digits, and `.tmp`.
@@ -227,55 +253,28 @@ fn rename_ignoring_read_only(
     path: &std::path::Path,
     target: &std::path::Path,
 ) -> std::io::Result<()> {
-    use std::mem::{offset_of, size_of};
-    use std::os::windows::ffi::OsStrExt;
+    use crate::operations::files::rename_info::RenameInfo;
     use std::os::windows::fs::OpenOptionsExt;
     use std::os::windows::io::AsRawHandle;
     use windows_sys::Win32::Foundation::HANDLE;
     use windows_sys::Win32::Storage::FileSystem::{
         FileRenameInfoEx, SetFileInformationByHandle, DELETE, FILE_FLAG_BACKUP_SEMANTICS,
-        FILE_FLAG_OPEN_REPARSE_POINT, FILE_RENAME_INFO, FILE_RENAME_INFO_0, FILE_SHARE_DELETE,
-        FILE_SHARE_READ, FILE_SHARE_WRITE,
+        FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
     };
     let source = std::fs::OpenOptions::new()
         .access_mode(DELETE)
         .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
         .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS)
         .open(path)?;
-    let name: Vec<u16> = target.as_os_str().encode_wide().collect();
-    let name_bytes = name
-        .len()
-        .checked_mul(size_of::<u16>())
-        .ok_or(std::io::ErrorKind::InvalidInput)?;
-    let buffer_size = offset_of!(FILE_RENAME_INFO, FileName)
-        .checked_add(name_bytes)
-        .and_then(|size| size.checked_add(size_of::<u16>()))
-        .ok_or(std::io::ErrorKind::InvalidInput)?;
-    let mut storage = vec![0_usize; buffer_size.div_ceil(size_of::<usize>())];
-    let info = storage.as_mut_ptr().cast::<FILE_RENAME_INFO>();
-    let name_length = u32::try_from(name_bytes).map_err(|_| std::io::ErrorKind::InvalidInput)?;
-    let size = u32::try_from(buffer_size).map_err(|_| std::io::ErrorKind::InvalidInput)?;
-    // SAFETY: `storage` has room for the structure and the name with its
-    // terminating zero, and it lives until the call returns.
+    let info = RenameInfo::new(target.as_os_str(), RENAME_FLAGS, None)?;
+    // SAFETY: `info` holds a whole `FILE_RENAME_INFO` of `info.size()` bytes,
+    // and `source` is an open handle, until the call returns.
     let done = unsafe {
-        info.write(FILE_RENAME_INFO {
-            Anonymous: FILE_RENAME_INFO_0 {
-                Flags: RENAME_FLAGS,
-            },
-            RootDirectory: 0,
-            FileNameLength: name_length,
-            FileName: [0],
-        });
-        std::ptr::copy_nonoverlapping(
-            name.as_ptr(),
-            std::ptr::addr_of_mut!((*info).FileName).cast::<u16>(),
-            name.len(),
-        );
         SetFileInformationByHandle(
             source.as_raw_handle() as HANDLE,
             FileRenameInfoEx,
-            info.cast_const().cast(),
-            size,
+            info.as_ptr(),
+            info.size(),
         )
     };
     if done == 0 {

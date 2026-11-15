@@ -1,7 +1,6 @@
 use anyhow::Context;
-use camino::Utf8Path;
 use provenance_store::publication::{
-    remove_synced_file, write_synced_file_checked, ChangedUnsynced,
+    remove_synced_file_checked, write_synced_file_checked, ChangedUnsynced,
 };
 use std::io::ErrorKind;
 use std::path::Path;
@@ -155,18 +154,16 @@ fn remove_if_owned(
     if matches!(expected, FileSnapshot::Missing) {
         return Ok(Ok(()));
     }
-    let target = utf8(path)?;
-    crate::test_probes::at("project_file_removal_checked");
-    anyhow::ensure!(
-        &FileSnapshot::read(path)? == expected,
-        "{} changed during removal",
-        path.display()
-    );
-    crate::test_probes::at("project_file_removal_compared");
-    let removed = match remove_synced_file(target) {
-        Ok(_) => Ok(()),
-        Err(error) => Err(error.downcast::<ChangedUnsynced>()?),
-    };
+    let removed = remove_synced_file_checked(path, || {
+        crate::test_probes::at("project_file_removal_checked");
+        anyhow::ensure!(
+            &FileSnapshot::read(path)? == expected,
+            "{} changed during removal",
+            path.display()
+        );
+        crate::test_probes::at("project_file_removal_compared");
+        Ok(())
+    })?;
     crate::test_probes::at("project_file_removed");
     Ok(removed)
 }
@@ -182,9 +179,9 @@ fn replace_file(
     permissions: Option<&std::fs::Permissions>,
 ) -> anyhow::Result<Changed> {
     expected.recheck(path)?;
-    let target = utf8(path)?;
-    let prefix = format!(".{}.provenance-", target.file_name().unwrap_or_default());
-    let replaced = write_synced_file_checked(target, contents, &prefix, permissions, || {
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    let prefix = format!(".{name}.provenance-");
+    let replaced = write_synced_file_checked(path, contents, &prefix, permissions, || {
         crate::test_probes::at("project_file_prepared");
         anyhow::ensure!(
             &FileSnapshot::read(path)? == expected,
@@ -196,17 +193,17 @@ fn replace_file(
     })
     .with_context(|| format!("failed to replace {}", path.display()))?;
     crate::test_probes::at("project_file_replaced");
+    let (permissions, synced) = match replaced {
+        Ok(permissions) => (permissions, Ok(())),
+        Err((permissions, unsynced)) => (permissions, Err(unsynced)),
+    };
     Ok(Changed {
         after: FileSnapshot::Regular {
             bytes: contents.to_vec(),
-            permissions: replaced.permissions,
+            permissions,
         },
-        synced: replaced.synced,
+        synced,
     })
-}
-
-fn utf8(path: &Path) -> anyhow::Result<&Utf8Path> {
-    Utf8Path::from_path(path).with_context(|| format!("{} is not a UTF-8 path", path.display()))
 }
 
 fn restore_displaced(backup: &Path, path: &Path) -> anyhow::Result<()> {

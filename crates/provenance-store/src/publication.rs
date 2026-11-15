@@ -20,8 +20,8 @@ mod staged;
 mod write_permission;
 #[cfg(feature = "host")]
 pub use crate::storage::local::durability::{
-    remove_synced_file, sync_directory, sync_tree, write_synced_file_checked, ChangedUnsynced,
-    ReplacedFile,
+    remove_synced_file_checked, sync_directory, sync_tree, write_synced_file_checked,
+    ChangedUnsynced,
 };
 #[cfg(all(test, unix, feature = "host"))]
 use crate::storage::local::{
