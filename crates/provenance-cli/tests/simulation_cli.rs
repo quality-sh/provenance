@@ -239,7 +239,11 @@ fn a_merged_branch_and_a_stop_of_a_one_key_write_keep_the_laws() {
 // No Rule: a probe that each kind of write that the simulation sends
 // publishes through a transaction or a temporary file. A stop at the first
 // point kills a write of two keys before the marker. A write of one key
-// stops before or after its rename, or ends with a success first.
+// stops before or after its rename, or ends with a success first. A record
+// has one pending submission at most. So a submit that no stop meets gives
+// the stopped withdrawal its proposal, and a second withdrawal ends that
+// submission if the stop landed before the rename. Then the stopped submit
+// has no pending submission in its way.
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn a_stop_at_the_first_point_of_each_kind_of_write_keeps_the_laws() {
@@ -250,10 +254,12 @@ fn a_stop_at_the_first_point_of_each_kind_of_write_keeps_the_laws() {
         write(1, update(0)),
         stop.clone(),
         write(1, Operation::SubmitReview),
-        stop.clone(),
-        write(1, Operation::SubmitReview),
         Step::Turn(1),
         write(1, Operation::WithdrawReview { n: 0 }),
+        stop.clone(),
+        write(1, Operation::WithdrawReview { n: 0 }),
+        Step::Turn(1),
+        write(1, Operation::SubmitReview),
         stop.clone(),
         write(1, Operation::ClaimTopic),
         stop.clone(),
@@ -273,8 +279,8 @@ fn a_stop_at_the_first_point_of_each_kind_of_write_keeps_the_laws() {
     let kinds = [
         Operation::CreateRequirement { n: 0 },
         update(0),
-        Operation::SubmitReview,
         Operation::WithdrawReview { n: 0 },
+        Operation::SubmitReview,
         Operation::ClaimTopic,
         Operation::ReleaseTopic,
     ];
