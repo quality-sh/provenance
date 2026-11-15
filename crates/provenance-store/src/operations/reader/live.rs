@@ -111,24 +111,8 @@ impl<'c> LiveHandle<'c> {
     }
 
     #[cfg(feature = "host")]
-    /// The scope's verification runs.
-    pub fn runs(&self, scope: &ScopeId) -> anyhow::Result<Vec<VerificationRun>> {
-        self.only(Live::VerificationRuns);
-        self.context.repository().store().read_verification_runs(
-            scope,
-            crate::cache::read::page::RECORD_BYTES,
-            |_, next| {
-                let mut runs = Vec::new();
-                while let Some((_, run)) = next()? {
-                    runs.push(run);
-                }
-                Ok(runs)
-            },
-        )
-    }
-
-    #[cfg(feature = "host")]
     /// Reads the scope's verification runs without loading the file at once.
+    /// Each read of the runs takes its rows through this one budget.
     pub(crate) fn read_runs<R>(
         &self,
         scope: &ScopeId,

@@ -1,7 +1,10 @@
-use crate::operations::reader::{Live, ReadContext};
+use crate::operations::reader::{Live, ReadContext, PAGE_BYTES};
 use provenance_core::protocol::{take_page, EvidenceQuery, EvidenceResult, StaleEvidence};
-use provenance_core::{ImplementationBinding, RequirementReview, StableId, VerificationBinding};
+use provenance_core::{
+    ImplementationBinding, RequirementReview, StableId, VerificationBinding, VerificationRun,
+};
 use provenance_macros::rule;
+use std::collections::VecDeque;
 
 use super::super::sites;
 
@@ -41,20 +44,10 @@ pub(super) async fn evidence(
         .table::<VerificationBinding>()
         .page_by_field("rule_id", &by_rule, "", request.limit)
         .await?;
-    let mut runs = ctx
+    let (verification_runs, verification_runs_has_more) = ctx
         .live(Live::VerificationRuns)
-        .runs(&scope)?
-        .into_iter()
-        .filter(|run| run.rule_id == rule)
-        .collect::<Vec<_>>();
-    runs.sort_by(|left, right| {
-        right
-            .started_at
-            .cmp(&left.started_at)
-            .then_with(|| right.id.as_str().cmp(left.id.as_str()))
-    });
-    let latest_verification_run = runs.first().cloned();
-    runs.truncate(request.limit + 1);
+        .read_runs(&scope, |_, next| newest_runs(next, &rule, request.limit))?;
+    let latest_verification_run = verification_runs.first().cloned();
     // The table answers in id order; only the reviews still waiting on a
     // run are open, so the open-only cut is part of the candidate query.
     let (reviews, reviews_has_more) = snapshot
@@ -63,7 +56,6 @@ pub(super) async fn evidence(
         .await?;
     let review_required = !reviews.is_empty();
 
-    let (verification_runs, verification_runs_has_more) = take_page(runs, request.limit);
     let stale = request
         .base
         .map(|base| {
@@ -111,4 +103,42 @@ pub(super) async fn evidence(
         verification_runs_has_more,
         reviews_has_more,
     })
+}
+
+/// The newest runs of `rule`, newest first, and whether the Rule has more
+/// runs. The runs given stay inside `limit` and inside the bytes of one page,
+/// as the page read of the runs counts them. While the file is read, only the
+/// runs that can still be in the answer stay in memory.
+fn newest_runs(
+    next: &mut dyn FnMut() -> anyhow::Result<Option<(i64, VerificationRun)>>,
+    rule: &StableId,
+    limit: usize,
+) -> anyhow::Result<(Vec<VerificationRun>, bool)> {
+    // Oldest first, each run with its serialized bytes.
+    let mut kept: VecDeque<(VerificationRun, usize)> = VecDeque::new();
+    let mut bytes = 0;
+    let mut matched = 0_usize;
+    while let Some((_, run)) = next()? {
+        if run.rule_id != *rule {
+            continue;
+        }
+        matched += 1;
+        let size = serde_json::to_vec(&run)?.len();
+        let at = kept.partition_point(|(older, _)| start_order(older) < start_order(&run));
+        kept.insert(at, (run, size));
+        bytes += size;
+        while kept.len() > limit || bytes > PAGE_BYTES {
+            let Some((_, size)) = kept.pop_front() else {
+                break;
+            };
+            bytes -= size;
+        }
+    }
+    let has_more = matched > kept.len();
+    Ok((kept.into_iter().rev().map(|(run, _)| run).collect(), has_more))
+}
+
+/// The order of the runs from the oldest start to the newest.
+fn start_order(run: &VerificationRun) -> (i64, &str) {
+    (run.started_at, run.id.as_str())
 }

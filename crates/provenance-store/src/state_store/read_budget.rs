@@ -239,6 +239,10 @@ macro_rules! define_family_budgets {
 
 crate::families::record_families!(define_family_budgets);
 
+// A row of the runs cache is one serialized run, and the page read, the
+// member read, and the evidence read of the runs count the bytes of that line.
+payload_budget!(provenance_core::VerificationRun);
+
 impl ReadBudget for provenance_core::Thread {
     fn read_bytes(&self) -> anyhow::Result<usize> {
         Ok(self.scope_id.as_str().len()

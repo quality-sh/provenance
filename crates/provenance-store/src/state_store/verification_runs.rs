@@ -19,11 +19,12 @@ impl StateStore {
     /// writes it only through `VerificationMethod::to_string()` at the
     /// run-row edge.
     ///
-    /// In the section, the checks and the bytes of each write come first.
-    /// Then the binding and the cleared reviews that changed publish as one
-    /// write set, and the run row goes into the cache last. A start that
-    /// changes no binding and clears no review publishes no set. A failure
-    /// of the run row leaves the set that landed before it.
+    /// In the section, the checks and the bytes of each write come first,
+    /// the read budget of the run row included. Then the binding and the
+    /// cleared reviews that changed publish as one write set, and the run row
+    /// goes into the cache last. A start that changes no binding and clears
+    /// no review publishes no set. A failure of the run row leaves the set
+    /// that landed before it.
     pub fn begin_verification(
         &self,
         scope_id: ScopeId,
@@ -79,6 +80,7 @@ impl StateStore {
                     error: None,
                 })
             })?;
+            super::read_budget::ensure_within_read_budget(&run)?;
             held.publish_shards(binding.shard.into_iter().chain(reviews).collect())?;
             held.add_run_row(&run)?;
             Ok(run)
@@ -121,6 +123,8 @@ impl StateStore {
         )
     }
 
+    /// Refuses a completion whose run row passes the read budget before the
+    /// runs cache changes.
     pub fn complete_verification(
         &self,
         scope_id: &ScopeId,
@@ -162,6 +166,7 @@ impl StateStore {
                     run.status = status;
                     run.completed_at = Some(completed_at.max(run.started_at));
                     run.error = input.error;
+                    super::read_budget::ensure_within_read_budget(run)?;
                     Ok(run.clone())
                 },
             )
