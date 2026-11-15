@@ -56,3 +56,9 @@ def pays_holiday():
 *rest, last = values
 def after_star():
     return rest
+
+
+# @provenance rule: rule_comment_above_decorator
+@rule("rule_decorator_below_comment")
+def pays_both():
+    return True

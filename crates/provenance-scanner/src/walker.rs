@@ -10,6 +10,7 @@ use bindings::parse_binding_or_warn;
 pub use bounded::scan_path_bounded;
 use consumed::{consume_binding_lines, consume_comment_lines};
 use declaration::LineStart;
+use names::Sites;
 pub use ignore::selects_source_path;
 use rust_lines::{rust_annotation_marker_position, rust_line_states, RustLexicalState};
 
@@ -20,6 +21,7 @@ mod bounded_tests;
 mod consumed;
 mod declaration;
 mod ignore;
+mod names;
 mod rust_lines;
 mod script_literals;
 
@@ -193,6 +195,7 @@ fn scan_file_contents(
     let start_below = |next: usize, in_block_comment: bool, delimiter: Option<String>| {
         line_start(&rust_states[next..], language, in_block_comment, delimiter)
     };
+    let mut sites = Sites::default();
     let mut idx = 0;
     let mut in_block_comment = false;
     let mut multiline_delimiter = None;
@@ -232,14 +235,13 @@ fn scan_file_contents(
                 &mut multiline_delimiter,
                 &mut in_block_comment,
             );
-            let below = start_below(end_idx + 1, in_block_comment, multiline_delimiter.clone());
-            let item_name =
-                binding_item_name(language, &lines, end_idx, below, binding.verification);
+            let start = start_below(end_idx + 1, in_block_comment, multiline_delimiter.clone());
+            sites.binding(idx, end_idx, start, bindings.len());
             bindings.push(AttributeBinding {
                 file_path: file_path.to_path_buf(),
                 line: idx + 1,
-                anchor: EvidenceAnchor::new(item_name.clone(), original_lines[idx]),
-                item_name,
+                anchor: EvidenceAnchor::new(None, original_lines[idx]),
+                item_name: None,
                 rule_id: binding.rule_id,
                 verification: binding.verification,
             });
@@ -259,20 +261,22 @@ fn scan_file_contents(
         let (comment, end_idx) = collect_annotation_comment(&lines, idx, marker_position);
         let parsed = parse_annotations(&comment);
         warnings.extend(parsed.warnings);
-        let below = start_below(idx + 1, in_block_comment, multiline_delimiter.clone());
-        let function_name = declaration::item_name(language, &lines[idx + 1..], below);
+        let first = annotations.len();
         for annotation in parsed.annotations {
             annotations.push(AnnotationLocation {
                 file_path: file_path.to_path_buf(),
                 line: idx + 1,
-                function_name: function_name.clone(),
-                anchor: EvidenceAnchor::new(function_name.clone(), original_lines[idx]),
+                function_name: None,
+                anchor: EvidenceAnchor::new(None, original_lines[idx]),
                 annotation,
             });
         }
+        let start = start_below(idx + 1, in_block_comment, multiline_delimiter.clone());
+        sites.comment(idx, start, first..annotations.len());
         consume_comment_lines(language, &lines[idx + 1..=end_idx], &mut in_block_comment);
         idx = end_idx + 1;
     }
+    sites.name(language, &lines, &original_lines, &mut annotations, &mut bindings);
     FileScan {
         file_path: file_path.to_path_buf(),
         language,
@@ -354,16 +358,13 @@ fn line_start(
     }
 }
 
-fn binding_item_name(
-    language: Language,
+/// The item name of a JavaScript or TypeScript call site whose last line is
+/// `idx`.
+fn script_call_name(
     lines: &[&str],
     idx: usize,
-    below: LineStart<'_>,
     verification: Option<Verification>,
 ) -> Option<String> {
-    if matches!(language, Language::Rust | Language::Python) {
-        return declaration::item_name(language, &lines[idx + 1..], below);
-    }
     assignment_name(lines[idx]).or_else(|| {
         if verification.is_some() {
             enclosing_script_function(lines, idx)

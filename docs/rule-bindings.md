@@ -53,7 +53,10 @@ lines, to the first declaration. When that declaration is a function, a method,
 or a type, its name is the item name. In JavaScript and TypeScript, a `const`,
 `let`, or `var` declaration also gives its name; `let first, second` gives the
 first name, `first`. The read stops where the grammar decides, so a
-declaration can take any number of lines. The forms are:
+declaration can take any number of lines. The read of a comment also stops at
+the next binding comment, and the read of an attribute or a decorator stops at
+the next binding (a comment, an attribute, a decorator, or a call). So a comment
+above a `@rule` decorator and the decorator name the same `def`. The forms are:
 
 - Rust: `fn`, `struct`, `enum`, `union`, `trait`, or `type`, after `pub` or
   `pub(...)`, and `const`, `async`, `unsafe`, `extern`, or `default`. A raw
@@ -93,6 +96,8 @@ name. Limits: these forms give no item name:
   cannot tell it from the conditional expression `ready ? (start) : stop;`.
 - A JavaScript or TypeScript method whose `{` is on a line below the `)`: the
   tokens cannot tell it from a call statement that a block follows.
+- For a comment, a declaration below the next binding comment; for an
+  attribute or a decorator, a declaration below the next binding.
 - A Rust attribute directly below a binding comment is not scanned as a
   binding: the comment takes in the attribute line.
 

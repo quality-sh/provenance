@@ -174,6 +174,8 @@ fn a_python_binding_names_the_function_or_class_below_it() {
         ("rule_long_decorator", Some("test_long")),
         ("rule_decorator", Some("pays_holiday")),
         ("rule_star_assignment", None),
+        ("rule_comment_above_decorator", Some("pays_both")),
+        ("rule_decorator_below_comment", Some("pays_both")),
     ]);
     assert_eq!(item_names(&report), expected, "{report}");
 }
