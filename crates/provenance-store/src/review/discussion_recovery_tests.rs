@@ -65,6 +65,7 @@ fn crash_child() {
         "state_backup_created" => "state_backup_created",
         "state_installed" => "state_installed",
         "state_published" => "state_published",
+        "synced_file_before_rename" => "synced_file_before_rename",
         _ => panic!("unknown phase"),
     };
     let store = open(Utf8Path::new(&root));
@@ -80,23 +81,7 @@ fn crash_child() {
                 .unwrap();
         }
         _ => {
-            // A status change alone changes one shard, and a set of one key
-            // lands with no whole set. A new empty shard in the same stage
-            // makes it reach each probe of the whole set.
-            store
-                .with_repository_publication(|held| {
-                    crate::publication::with_staged_state(
-                        held,
-                        false,
-                        crate::state_store::RecordStamp::ResolveFromRepository,
-                        |staged| {
-                            staged.write_discussion(mutation(&root, &operation))?;
-                            let topics = crate::shards::topics_path(&staged.layout, &scope());
-                            staged.publish_shard(&topics, Vec::new())
-                        },
-                    )
-                })
-                .unwrap();
+            store.write_discussion(mutation(&root, &operation)).unwrap();
         }
     }
     panic!("crash phase was not reached");
@@ -119,16 +104,33 @@ fn edit(store: &StateStore) -> super::SaveRequirement {
     serde_json::from_value(json!({"actor":"ben","expected_etag":store.requirement_edit_state(&scope(),&id).unwrap().etag,"update":{"scope_id":"default","id":"req_a","description":"After"},"relationships":null})).unwrap()
 }
 
+/// The stop points of a write of two keys or more, a whole set, and if the
+/// write is complete after a stop there.
+const WHOLE_SET_PHASES: &[(&str, bool)] = &[
+    ("state_prepared", false),
+    ("state_marker_prepared", false),
+    ("state_backup_created", false),
+    ("state_installed", true),
+    ("state_published", true),
+];
+
+/// The stop point of a write of one key: its synced temporary file before
+/// the rename.
+const ONE_KEY_PHASES: &[(&str, bool)] = &[("synced_file_before_rename", false)];
+
+/// A start, a reply, a creation and an edit change two shards or more, so
+/// each lands as a whole set. A status change changes one shard, so it
+/// lands as a set of one key.
 #[test]
 fn process_restart_recovers_membership_status_and_outcome_as_one_state() {
-    for operation in ["start", "reply", "resolve", "create", "edit"] {
-        for (phase, committed) in [
-            ("state_prepared", false),
-            ("state_marker_prepared", false),
-            ("state_backup_created", false),
-            ("state_installed", true),
-            ("state_published", true),
-        ] {
+    for (operation, phases) in [
+        ("start", WHOLE_SET_PHASES),
+        ("reply", WHOLE_SET_PHASES),
+        ("resolve", ONE_KEY_PHASES),
+        ("create", WHOLE_SET_PHASES),
+        ("edit", WHOLE_SET_PHASES),
+    ] {
+        for &(phase, committed) in phases {
             let temp = fixture();
             let root = Utf8Path::from_path(temp.path()).unwrap();
             let status = std::process::Command::new(std::env::current_exe().unwrap())

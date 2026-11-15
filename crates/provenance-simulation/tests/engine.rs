@@ -168,18 +168,20 @@ fn each_operation_runs_on_the_engine() {
         );
     }
     // An archive that leaves its status request open writes the request,
-    // and a decision changes one key. So each lands one per-key set on its
-    // base, as law O3 counts it.
+    // and a decision changes one key: each lands one per-key set of one key
+    // on its base. An archive with acceptance lands its request so, and
+    // then the acceptance and its cascade as one whole set.
     for done in &run.done {
-        if !matches!(
-            done.op,
+        let expected: &[&str] = match done.op {
             Operation::ArchiveRequirement {
-                leave_open: true,
-                ..
-            } | Operation::DecideReview { .. }
-        ) {
-            continue;
-        }
+                leave_open: true, ..
+            }
+            | Operation::DecideReview { .. } => &["one key"],
+            Operation::ArchiveRequirement {
+                leave_open: false, ..
+            } => &["one key", "whole set"],
+            _ => continue,
+        };
         let landed: Vec<_> = run
             .publishes
             .iter()
@@ -188,12 +190,16 @@ fn each_operation_runs_on_the_engine() {
                     && publish.on_base
                     && publish.outcome == Outcome::Landed
             })
+            .map(|publish| match (publish.whole_set, publish.keys) {
+                (true, _) => "whole set",
+                (false, 1) => "one key",
+                (false, _) => "per-key set of another size",
+            })
             .collect();
-        assert!(
-            landed.len() == 1 && !landed[0].whole_set,
-            "{:?} did not land one per-key set: {:?}",
-            done.op,
-            run.publishes
+        assert_eq!(
+            landed, expected,
+            "{:?} landed other sets: {:?}",
+            done.op, run.publishes
         );
     }
 }

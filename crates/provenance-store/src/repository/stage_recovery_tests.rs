@@ -182,9 +182,9 @@ fn one_key_child() {
 }
 
 /// A stop between the synced temporary file of the key and its rename keeps
-/// the old bytes of the key. The temporary file stays (provenance-nzbp), and
-/// no read sees it.
+/// the old bytes of the key. The temporary file stays, and no read sees it.
 #[test]
+#[verifies("rule_one_key_write_set_lands_whole", examples)]
 fn a_one_key_stage_stopped_before_its_rename_keeps_the_key_and_one_temporary_file() {
     let (_dir, layout, _scope) = seeded_layout();
     let root = layout.root().to_owned();
