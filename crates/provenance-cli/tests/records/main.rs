@@ -120,6 +120,8 @@ mod cli_statement_write_gate;
 mod cli_ste_statement_paths;
 #[path = "../cli_swarm_backtrace_land.rs"]
 mod cli_swarm_backtrace_land;
+#[path = "../cli_swarm_landing_place.rs"]
+mod cli_swarm_landing_place;
 #[path = "../cli_time_range.rs"]
 mod cli_time_range;
 #[path = "../cli_typed_deletion_mixed_ids.rs"]

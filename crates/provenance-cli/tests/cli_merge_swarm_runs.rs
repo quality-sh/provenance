@@ -2,8 +2,8 @@
 //! driver of the built binary. Each merge result passes `provenance check`.
 
 use crate::support::landing_runs::{
-    contribution, contribution_ids, ideation_files, land, land_run, landing_repository, merge_into,
-    proposal_run, read_families, read_record, Landing,
+    api_write, contribution, contribution_ids, ideation_files, land, land_run, landing_repository,
+    merge_into, proposal_run, read_families, read_record, Landing,
 };
 use crate::support::merge_driver::{commit, git, git_ok};
 use provenance_macros::verifies;
@@ -228,7 +228,7 @@ fn an_assertion_and_a_change_of_its_evidence_on_the_other_branch_merge_clean() {
         &landing,
         "assert",
         &[],
-        Some(proposal_run("P", "claim_contrib_c")),
+        Some(proposal_run("p", "P", "claim_contrib_c")),
     );
     commit(repo, "assert");
 
@@ -240,5 +240,52 @@ fn an_assertion_and_a_change_of_its_evidence_on_the_other_branch_merge_clean() {
     assert_eq!(
         read_record(&reads[3], "assertion_p")["supporting_claim_ids"],
         serde_json::json!(["claim_contrib_c"])
+    );
+}
+
+/// A repository where `main` lands `contrib_c` again with the finding
+/// `landed`, and the branch `theirs` changes `contrib_c` to the finding
+/// `direct` with the direct write of the API.
+fn a_landing_and_a_direct_change(landed: &str, direct: &str) -> Landing {
+    let landing = landing_repository();
+    let repo = landing.repo();
+    let c = |finding: &str| contribution("contrib_c", finding);
+    land_run(&landing, "base", &[c("Base.")], None);
+    commit(repo, "base");
+    git_ok(repo, &["checkout", "-b", "theirs"]);
+    let path = "/contributions/contrib_c";
+    api_write(&landing, "patch", path, &c(direct), &["scope_id", "id"]);
+    commit(repo, "direct");
+    git_ok(repo, &["checkout", "main"]);
+    land_run(&landing, "landed", &[c(landed)], None);
+    commit(repo, "landed");
+    landing
+}
+
+#[test]
+#[verifies("rule_swarm_run_records_in_kind_files", examples)]
+#[verifies("rule_record_merge", examples)]
+fn a_landing_and_a_different_direct_change_of_one_record_conflict() {
+    let landing = a_landing_and_a_direct_change("Landed.", "Direct.");
+    let output = merge_into(landing.repo(), "main", "theirs");
+    assert_eq!(output.status.code(), Some(1));
+    let text = [output.stdout, output.stderr].concat();
+    let text = String::from_utf8_lossy(&text);
+    assert!(
+        text.contains("merge left 1 conflicting record(s): contrib_c"),
+        "{text}"
+    );
+}
+
+#[test]
+#[verifies("rule_swarm_run_records_in_kind_files", examples)]
+#[verifies("rule_record_merge", examples)]
+fn a_landing_and_an_equal_direct_change_of_one_record_merge_to_one_copy() {
+    let landing = a_landing_and_a_direct_change("Changed.", "Changed.");
+    let reads = clean_in_each_direction(&landing, "main", "theirs");
+    assert_eq!(contribution_ids(&reads), ["contrib_c"]);
+    assert_eq!(
+        read_record(&reads[0], "contrib_c")["strongest_finding"],
+        "Changed."
     );
 }

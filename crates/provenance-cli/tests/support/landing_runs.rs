@@ -97,22 +97,26 @@ pub fn contribution(id: &str, finding: &str) -> Value {
     })
 }
 
-/// The merge output of a run that suggests, lands and asserts `proposal_p`,
-/// with `title`, on the claim `claim`.
-pub fn proposal_run(title: &str, claim: &str) -> Value {
+/// The merge output of a run that suggests, lands and asserts
+/// `proposal_<name>`, with `title`, on the claim `claim`. The run adjudicates
+/// it in the synthesis packet `packet_<name>`, and its assertion is
+/// `assertion_<name>`.
+pub fn proposal_run(name: &str, title: &str, claim: &str) -> Value {
     let target = serde_json::json!({"artifact_type": "requirement", "artifact_id": "req_a"});
+    let (packet, proposal) = (format!("packet_{name}"), format!("proposal_{name}"));
     serde_json::json!({
-        "synthesis_packet": {"scope_id": "default", "id": "packet_p", "target": target,
+        "synthesis_packet": {"scope_id": "default", "id": packet, "target": target,
             "summary": "Adjudicated", "consensus": [], "contested_claims": [],
             "minority_objections": [], "evidence_gaps": [], "unsupported_speculation": [],
             "open_questions": [],
-            "suggested_artifacts": [{"proposal_id": "proposal_p", "proposal_key": "p",
+            "suggested_artifacts": [{"proposal_id": proposal, "proposal_key": name,
                 "proposal_type": "requirement_candidate", "summary": "Candidate",
                 "origin_participant_slots": ["slot_a"]}],
             "required_human_decisions": []},
-        "assertions": [{"scope_id": "default", "id": "assertion_p", "proposal_id": "proposal_p",
-            "synthesis_packet_id": "packet_p", "supporting_claim_ids": [claim]}],
-        "proposals": [{"scope_id": "default", "id": "proposal_p", "proposal_key": "p",
+        "assertions": [{"scope_id": "default", "id": format!("assertion_{name}"),
+            "proposal_id": proposal, "synthesis_packet_id": packet,
+            "supporting_claim_ids": [claim]}],
+        "proposals": [{"scope_id": "default", "id": proposal, "proposal_key": name,
             "proposal_type": "requirement_candidate", "title": title, "summary": "Candidate",
             "traceability": {"target": target, "source_ids": [], "evidence_references": [],
                 "supporting_claim_ids": [claim]},
@@ -143,6 +147,22 @@ pub fn land_run(landing: &Landing, run: &str, contributions: &[Value], merge: Op
             "--run-dir",
             run.to_str().unwrap(),
         ],
+    );
+}
+
+/// Writes one record with the API route `path` and `method`: `record`
+/// without its fields `omitted` is the body.
+pub fn api_write(landing: &Landing, method: &str, path: &str, record: &Value, omitted: &[&str]) {
+    let mut body = record.clone();
+    for field in omitted {
+        body.as_object_mut().unwrap().remove(*field);
+    }
+    let input = landing.runs.path().join("body.json");
+    std::fs::write(&input, body.to_string()).unwrap();
+    let input = input.to_str().unwrap();
+    json(
+        landing.repo(),
+        &["api", path, "--method", method, "--input", input],
     );
 }
 
