@@ -187,17 +187,25 @@ fn init_guidance_connects_production_code_with_a_comment() {
         ),
         "{agents}"
     );
-    assert!(
-        prose.contains("The comment adds no package to the application."),
-        "{agents}"
-    );
-    assert!(
-        prose.contains(
-            "In Rust, `#[rule(\"<rule_id>\")]` from `provenance-macros` is an option for \
-             production code."
-        ),
-        "{agents}"
-    );
+}
+
+#[test]
+// Implementation aid: no Rule states these sentences. They keep the Provenance packages out of
+// the application dependencies, put the `construction` comment on the type that it verifies, and
+// keep the Rust attribute as an option.
+fn init_guidance_keeps_provenance_packages_out_of_production_dependencies() {
+    let agents = agents_after_init();
+    let prose = normalized(&agents);
+
+    for text in [
+        "The comment adds no package to the application.",
+        "For `construction`, put the comment directly above the type, not above a test; \
+         `#[verifies]` on a type needs `provenance-macros` under `[dependencies]`.",
+        "In Rust, `#[rule(\"<rule_id>\")]` from `provenance-macros` is an option for production \
+         code.",
+    ] {
+        assert!(prose.contains(text), "missing {text}\n{agents}");
+    }
     assert!(!agents.contains("provenance_sdk"), "{agents}");
     assert!(!agents.contains("provenance-sdk"), "{agents}");
 }
