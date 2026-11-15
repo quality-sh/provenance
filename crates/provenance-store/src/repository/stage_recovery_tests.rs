@@ -18,7 +18,6 @@ use std::collections::BTreeMap;
 
 const STAGED_RULE: &str = "rule_staged_publication";
 
-
 fn scope() -> ScopeId {
     ScopeId::new("default").unwrap()
 }

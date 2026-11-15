@@ -141,14 +141,26 @@ impl StateStore {
             }
             let layout = &held.layout;
             let files = [
-                held.kind_file(shards::contributions_path(layout, scope), incoming.contributions)?,
+                held.kind_file(
+                    shards::contributions_path(layout, scope),
+                    incoming.contributions,
+                )?,
                 held.kind_file(
                     shards::synthesis_packets_path(layout, scope),
                     incoming.synthesis_packets,
                 )?,
-                held.kind_file(shards::proposal_cards_path(layout, scope), incoming.proposals)?,
-                held.kind_file(shards::assertion_records_path(layout, scope), incoming.assertions)?,
-                held.kind_file(shards::dispositions_path(layout, scope), incoming.dispositions)?,
+                held.kind_file(
+                    shards::proposal_cards_path(layout, scope),
+                    incoming.proposals,
+                )?,
+                held.kind_file(
+                    shards::assertion_records_path(layout, scope),
+                    incoming.assertions,
+                )?,
+                held.kind_file(
+                    shards::dispositions_path(layout, scope),
+                    incoming.dispositions,
+                )?,
             ];
             held.publish_shards(files.into_iter().flatten().collect())
         })
@@ -157,11 +169,7 @@ impl StateStore {
     /// The new bytes of the state file at `path` with each of `records` in
     /// place of the row with its id, or after the last row. No bytes when
     /// `records` is empty.
-    fn kind_file<T>(
-        &self,
-        path: Utf8PathBuf,
-        records: Vec<T>,
-    ) -> anyhow::Result<Option<ShardBytes>>
+    fn kind_file<T>(&self, path: Utf8PathBuf, records: Vec<T>) -> anyhow::Result<Option<ShardBytes>>
     where
         T: IdeationRecord + DeserializeOwned + Serialize,
     {

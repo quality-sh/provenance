@@ -97,7 +97,11 @@ struct Domain {
 impl Domain {
     fn repository(&self, entries: &Entries) -> (Arc<MemoryStateStorage>, Repository) {
         let persistence = Arc::new(Recorded::default());
-        memory_repository_over(self.root.path(), StateView::new(entries.clone()), persistence)
+        memory_repository_over(
+            self.root.path(),
+            StateView::new(entries.clone()),
+            persistence,
+        )
     }
 
     /// The state after a landing of `run` with `--replace`, or `None` when
@@ -106,7 +110,10 @@ impl Domain {
     fn land(&self, entries: &Entries, run: &Value) -> Option<Entries> {
         let (storage, repository) = self.repository(entries);
         let batch: IdeationLandingBatch = serde_json::from_value(run.clone()).unwrap();
-        if let Err(error) = repository.store().land_ideation_batch(&scope(), batch, true) {
+        if let Err(error) = repository
+            .store()
+            .land_ideation_batch(&scope(), batch, true)
+        {
             let text = error.to_string();
             assert!(
                 text.contains("cannot be replaced") || text.contains("is immutable"),
@@ -131,11 +138,26 @@ impl Domain {
         let store = repository.store();
         store.validate_ideation_scope(&scope()).unwrap();
         let read = [
-            ("contributions", values(&store.list_contributions(&scope()).unwrap())),
-            ("synthesis_packets", values(&store.list_synthesis_packets(&scope()).unwrap())),
-            ("proposal_cards", values(&store.list_proposal_definitions(&scope()).unwrap())),
-            ("assertions", values(&store.list_assertion_records(&scope()).unwrap())),
-            ("dispositions", values(&store.list_dispositions(&scope()).unwrap())),
+            (
+                "contributions",
+                values(&store.list_contributions(&scope()).unwrap()),
+            ),
+            (
+                "synthesis_packets",
+                values(&store.list_synthesis_packets(&scope()).unwrap()),
+            ),
+            (
+                "proposal_cards",
+                values(&store.list_proposal_definitions(&scope()).unwrap()),
+            ),
+            (
+                "assertions",
+                values(&store.list_assertion_records(&scope()).unwrap()),
+            ),
+            (
+                "dispositions",
+                values(&store.list_dispositions(&scope()).unwrap()),
+            ),
         ]
         .into_iter()
         .flat_map(|(file, records)| {
@@ -201,7 +223,11 @@ fn merge(base: &Entries, ours: &Entries, theirs: &Entries) -> (Entries, BTreeSet
 fn rule(base: &Read, ours: &Read, theirs: &Read) -> (Read, BTreeSet<String>) {
     let mut read = Read::new();
     let mut conflicts = BTreeSet::new();
-    let keys: BTreeSet<_> = base.keys().chain(ours.keys()).chain(theirs.keys()).collect();
+    let keys: BTreeSet<_> = base
+        .keys()
+        .chain(ours.keys())
+        .chain(theirs.keys())
+        .collect();
     for record in keys {
         let (b, o, t) = (base.get(record), ours.get(record), theirs.get(record));
         let value = if o == t || t == b {
@@ -262,7 +288,10 @@ fn each_merge_of_swarm_runs_follows_the_record_rule() {
     };
     let initial = crate::memory::initial_state().into_entries();
     let base = domain
-        .land(&initial, &json!({"contributions": [contribution("c", "Base.")]}))
+        .land(
+            &initial,
+            &json!({"contributions": [contribution("c", "Base.")]}),
+        )
         .unwrap();
     let sides = histories(&domain, &base, 2);
     let singles = histories(&domain, &base, 1);
@@ -285,8 +314,14 @@ fn each_merge_of_swarm_runs_follows_the_record_rule() {
             for third in &singles {
                 assert_merge(&mut domain, &base, &merged, third);
             }
-            let ones: Vec<_> = pool.iter().filter_map(|run| domain.land(&merged, run)).collect();
-            let twos: Vec<_> = pool.iter().filter_map(|run| domain.land(&reverse, run)).collect();
+            let ones: Vec<_> = pool
+                .iter()
+                .filter_map(|run| domain.land(&merged, run))
+                .collect();
+            let twos: Vec<_> = pool
+                .iter()
+                .filter_map(|run| domain.land(&reverse, run))
+                .collect();
             for one in &ones {
                 for two in &twos {
                     assert_merge(&mut domain, &merged, one, two);

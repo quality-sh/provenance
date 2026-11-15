@@ -2,8 +2,8 @@
 //! driver of the built binary. Each merge result passes `provenance check`.
 
 use crate::support::landing_runs::{
-    contribution, contribution_ids, ideation_files, land, land_run, landing_repository,
-    merge_into, proposal_run, read_families, read_record, Landing,
+    contribution, contribution_ids, ideation_files, land, land_run, landing_repository, merge_into,
+    proposal_run, read_families, read_record, Landing,
 };
 use crate::support::merge_driver::{commit, git, git_ok};
 use provenance_macros::verifies;
@@ -33,7 +33,10 @@ fn clean_merge(
 fn clean_in_each_direction(landing: &Landing, ours: &str, theirs: &str) -> Vec<Value> {
     let (files, reads) = clean_merge(landing, ours, theirs);
     let (other_files, other_reads) = clean_merge(landing, theirs, ours);
-    assert!(files == other_files, "the two directions give the same files");
+    assert!(
+        files == other_files,
+        "the two directions give the same files"
+    );
     assert_eq!(reads, other_reads);
     reads
 }
@@ -152,7 +155,12 @@ fn a_conflict_keeps_our_record_and_the_next_merge_is_clean() {
     land_run(&landing, "base", &[c("Base.")], None);
     commit(repo, "base");
     git_ok(repo, &["checkout", "-b", "theirs"]);
-    land_run(&landing, "theirs", &[c("Theirs."), contribution("contrib_d", "D.")], None);
+    land_run(
+        &landing,
+        "theirs",
+        &[c("Theirs."), contribution("contrib_d", "D.")],
+        None,
+    );
     commit(repo, "theirs");
     git_ok(repo, &["checkout", "main"]);
     land_run(&landing, "ours", &[c("Ours.")], None);
@@ -169,7 +177,10 @@ fn a_conflict_keeps_our_record_and_the_next_merge_is_clean() {
     commit(repo, "keep ours");
     let reads = read_families(repo);
     assert_eq!(contribution_ids(&reads), ["contrib_c", "contrib_d"]);
-    assert_eq!(read_record(&reads[0], "contrib_c")["strongest_finding"], "Ours.");
+    assert_eq!(
+        read_record(&reads[0], "contrib_c")["strongest_finding"],
+        "Ours."
+    );
 
     git_ok(repo, &["checkout", "theirs"]);
     land(&landing, "later");
@@ -182,7 +193,10 @@ fn a_conflict_keeps_our_record_and_the_next_merge_is_clean() {
         contribution_ids(&reads),
         ["contrib_c", "contrib_d", "contrib_later"]
     );
-    assert_eq!(read_record(&reads[0], "contrib_c")["strongest_finding"], "Ours.");
+    assert_eq!(
+        read_record(&reads[0], "contrib_c")["strongest_finding"],
+        "Ours."
+    );
 }
 
 /// One branch asserts a proposal on the claim of `contrib_c`. The other
@@ -194,17 +208,35 @@ fn a_conflict_keeps_our_record_and_the_next_merge_is_clean() {
 fn an_assertion_and_a_change_of_its_evidence_on_the_other_branch_merge_clean() {
     let landing = landing_repository();
     let repo = landing.repo();
-    land_run(&landing, "base", &[contribution("contrib_c", "Base.")], None);
+    land_run(
+        &landing,
+        "base",
+        &[contribution("contrib_c", "Base.")],
+        None,
+    );
     commit(repo, "base");
     git_ok(repo, &["checkout", "-b", "theirs"]);
-    land_run(&landing, "change", &[contribution("contrib_c", "Changed.")], None);
+    land_run(
+        &landing,
+        "change",
+        &[contribution("contrib_c", "Changed.")],
+        None,
+    );
     commit(repo, "change");
     git_ok(repo, &["checkout", "main"]);
-    land_run(&landing, "assert", &[], Some(proposal_run("P", "claim_contrib_c")));
+    land_run(
+        &landing,
+        "assert",
+        &[],
+        Some(proposal_run("P", "claim_contrib_c")),
+    );
     commit(repo, "assert");
 
     let reads = clean_in_each_direction(&landing, "main", "theirs");
-    assert_eq!(read_record(&reads[0], "contrib_c")["strongest_finding"], "Changed.");
+    assert_eq!(
+        read_record(&reads[0], "contrib_c")["strongest_finding"],
+        "Changed."
+    );
     assert_eq!(
         read_record(&reads[3], "assertion_p")["supporting_claim_ids"],
         serde_json::json!(["claim_contrib_c"])
