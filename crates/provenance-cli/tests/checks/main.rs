@@ -7,6 +7,7 @@
 
 #[path = "../support"]
 mod support {
+    pub mod record_review;
     pub mod review_paths;
     pub mod review_row_findings;
 }

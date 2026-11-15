@@ -102,6 +102,7 @@ pub use decision_input::{
 mod automatic_submission;
 mod decision;
 mod decision_reads;
+mod status_request;
 pub(crate) use decision_reads::{DocumentReviewState, ResolutionAcceptance};
 mod decision_state;
 mod review_row_refusal;

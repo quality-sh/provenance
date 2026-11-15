@@ -809,7 +809,7 @@
             "scope_id": "default",
             "severity": "high",
             "statement": "The shared graph is readable.",
-            "status": "active"
+            "status": "review"
           }
         ]
       },
@@ -837,7 +837,10 @@
             "actor": "authoring",
             "proposal_id": "<generated>",
             "revises": null,
-            "revision": "<generated>"
+            "revision": "<generated>",
+            "status_request": {
+              "status": "active"
+            }
           },
           "record_kind": "rule",
           "requirement_id": "rule_shared",
@@ -854,7 +857,7 @@
         "scope_id": "default",
         "severity": "high",
         "statement": "The shared graph is readable.",
-        "status": "active"
+        "status": "review"
       },
       "meta": {
         "freshness_error": null
@@ -1825,7 +1828,7 @@
               "scope_id": "default",
               "severity": "high",
               "statement": "The shared graph is readable.",
-              "status": "active"
+              "status": "review"
             },
             "review": {
               "comment_count": 0,
@@ -2220,7 +2223,7 @@
         "scope_id": "default",
         "severity": "high",
         "statement": "The shared graph is readable.",
-        "status": "active"
+        "status": "review"
       },
       "meta": {
         "freshness_error": null

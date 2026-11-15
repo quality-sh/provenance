@@ -110,6 +110,10 @@ impl HostAccess for LocalRepository {
         ))
     }
 
+    fn reviewer_ids(&self) -> Option<Vec<String>> {
+        self.disposition_actor_ids().ok()
+    }
+
     fn read_operations(
         &self,
     ) -> Option<std::sync::Arc<dyn provenance_store::operations::read_operations::ReadOperations>>

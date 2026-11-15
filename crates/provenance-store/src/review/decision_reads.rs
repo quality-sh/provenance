@@ -165,14 +165,17 @@ impl StateStore {
         let pending = review
             .pending_at(current_revision.as_ref())
             .cloned()
-            .map(|proposal| PendingSubmission {
-                proposal_id: proposal.id,
-                revision: proposal
+            .map(|proposal| {
+                let binding = proposal
                     .record_revision
-                    .expect("pending submissions carry bindings")
-                    .revision,
-                actor: proposal.actor.unwrap_or_default(),
-                revises: proposal.revises,
+                    .expect("pending submissions carry bindings");
+                PendingSubmission {
+                    proposal_id: proposal.id,
+                    revision: binding.revision,
+                    actor: proposal.actor.unwrap_or_default(),
+                    revises: proposal.revises,
+                    status_request: binding.status_request,
+                }
             });
         let recorded: Vec<RecordedDecision> = review
             .decisions()
