@@ -27,12 +27,7 @@ async fn session() -> (Repository, Session) {
 
 /// Reads one record with its edit and decision state through the `api` tool.
 async fn read(client: &Client, collection: &str, id: &str) -> Value {
-    let read = call(
-        client,
-        "api",
-        json!({"path": format!("{collection}/{id}")}),
-    )
-    .await;
+    let read = call(client, "api", json!({"path": format!("{collection}/{id}")})).await;
     assert_ne!(read.is_error, Some(true), "{read:?}");
     read.structured_content.unwrap()["data"].clone()
 }
@@ -57,7 +52,10 @@ async fn pending_request(client: &Client, collection: &str, id: &str) -> (String
     let pending = &record["decision"]["pending"];
     let proposal = pending["proposal_id"].as_str().unwrap().to_owned();
     let status = pending["status_request"]["status"].as_str();
-    (proposal, status.unwrap_or_else(|| panic!("{record}")).to_owned())
+    (
+        proposal,
+        status.unwrap_or_else(|| panic!("{record}")).to_owned(),
+    )
 }
 
 #[tokio::test]
@@ -92,7 +90,10 @@ async fn a_rule_archive_names_the_status_request_and_keeps_the_status() {
         readable.contains("Until then, rule_shared keeps the status active."),
         "{readable}"
     );
-    assert!(readable.contains("update rule rule_shared\n\n"), "{readable}");
+    assert!(
+        readable.contains("update rule rule_shared\n\n"),
+        "{readable}"
+    );
 
     accept_status_request(client, "rules", "rule_shared").await;
     let archived = read(client, "rules", "rule_shared").await;
@@ -127,7 +128,10 @@ async fn a_requirement_archive_names_the_status_request_and_cascades_on_acceptan
         readable.starts_with(&format!("Status request {proposal} is open.")),
         "{readable}"
     );
-    assert_eq!(read(client, "rules", "rule_shared").await["status"], "active");
+    assert_eq!(
+        read(client, "rules", "rule_shared").await["status"],
+        "active"
+    );
 
     accept_status_request(client, "requirements", "req_shared").await;
     let requirement = read(client, "requirements", "req_shared").await;
@@ -167,10 +171,19 @@ async fn a_status_change_that_needs_no_review_has_no_request_note() {
     let (_repository, session) = session().await;
     let client = &session.client;
 
-    let result = update(client, "rules", "rule_shared", json!({"status": "deprecated"})).await;
+    let result = update(
+        client,
+        "rules",
+        "rule_shared",
+        json!({"status": "deprecated"}),
+    )
+    .await;
 
     assert_ne!(result.is_error, Some(true), "{result:?}");
     let readable = text(&result);
-    assert!(readable.starts_with("update rule rule_shared\n\n"), "{readable}");
+    assert!(
+        readable.starts_with("update rule rule_shared\n\n"),
+        "{readable}"
+    );
     session.close().await;
 }

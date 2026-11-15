@@ -327,7 +327,9 @@ async fn status_request_note(
     let pending = &current["data"]["decision"]["pending"];
     let status = pending["status_request"]["status"].as_str()?;
     let proposal = pending["proposal_id"].as_str()?;
-    let kept = current["data"]["status"].as_str().unwrap_or("its current status");
+    let kept = current["data"]["status"]
+        .as_str()
+        .unwrap_or("its current status");
     Some(format!(
         "Status request {proposal} is open. The status of {target} changes to {status} when \
          an allowed reviewer accepts the request. Until then, {target} keeps the status \
