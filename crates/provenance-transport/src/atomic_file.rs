@@ -1,12 +1,11 @@
 use anyhow::Context;
 use camino::Utf8Path;
-use provenance_store::publication::write_synced_file_checked;
+use provenance_store::publication::{remove_synced_file, write_synced_file_checked, ChangedUnsynced};
 use std::io::ErrorKind;
 use std::path::Path;
 
 mod commit;
 mod rollback;
-use commit::displace_to_backup;
 pub use rollback::FileRollbackJournal;
 
 #[provenance_macros::rule("rule_init_managed_paths_stay_in_repository")]
@@ -111,43 +110,64 @@ impl FileSnapshot {
         }
     }
 
+    /// Puts this state back at `path` when `path` still holds `owned`. An
+    /// error after the file changed tells that the file was restored and
+    /// that its folder was not synced.
     pub fn restore_if_owned(&self, path: &Path, owned: &Self) -> anyhow::Result<()> {
-        owned.recheck(path)?;
-        match self {
-            Self::Missing => remove_if_owned(path, owned),
-            Self::Regular { bytes, permissions } => {
-                replace_file(path, owned, bytes, Some(permissions)).map(|_| ())
-            }
-        }
-        .with_context(|| format!("failed to restore {}", path.display()))
+        let synced = owned
+            .recheck(path)
+            .and_then(|()| match self {
+                Self::Missing => remove_if_owned(path, owned),
+                Self::Regular { bytes, permissions } => {
+                    replace_file(path, owned, bytes, Some(permissions))
+                        .map(|replaced| replaced.synced)
+                }
+            })
+            .with_context(|| format!("failed to restore {}", path.display()))?;
+        synced.map_err(|unsynced| unsynced_error(path, "restored", unsynced))
     }
 }
 
-fn remove_if_owned(path: &Path, expected: &FileSnapshot) -> anyhow::Result<()> {
-    remove_if_owned_with_hook(path, expected, || {})
+/// A project file that init changed: the state that init wrote, and the
+/// sync of its folder after the change.
+struct Changed {
+    after: FileSnapshot,
+    synced: Result<(), ChangedUnsynced>,
 }
 
-fn remove_if_owned_with_hook(
+/// The error of a file that init `changed` and whose folder it did not sync.
+fn unsynced_error(path: &Path, changed: &str, unsynced: ChangedUnsynced) -> anyhow::Error {
+    anyhow::Error::new(unsynced).context(format!(
+        "{} was {changed}, but its folder was not synced",
+        path.display()
+    ))
+}
+
+/// Removes the file at `path`, which init planned from `expected`, after a
+/// compare of `path` with `expected`, with one remove and a sync of its
+/// folder.
+fn remove_if_owned(
     path: &Path,
     expected: &FileSnapshot,
-    before_commit: impl FnOnce(),
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Result<(), ChangedUnsynced>> {
     expected.recheck(path)?;
     if matches!(expected, FileSnapshot::Missing) {
-        return Ok(());
+        return Ok(Ok(()));
     }
-    before_commit();
-    let backup = displace_to_backup(path).map_err(|error| displacement_error(path, error))?;
-    let displaced = FileSnapshot::read(&backup)?;
-    if &displaced != expected {
-        restore_displaced(&backup, path)?;
-        anyhow::bail!("{} changed during removal", path.display());
-    }
-    if let Err(error) = commit::remove_preserved(&backup) {
-        restore_displaced(&backup, path)?;
-        return Err(error.into());
-    }
-    Ok(())
+    let target = utf8(path)?;
+    crate::test_probes::at("project_file_removal_checked");
+    anyhow::ensure!(
+        &FileSnapshot::read(path)? == expected,
+        "{} changed during removal",
+        path.display()
+    );
+    crate::test_probes::at("project_file_removal_compared");
+    let removed = match remove_synced_file(target) {
+        Ok(_) => Ok(()),
+        Err(error) => Err(error.downcast::<ChangedUnsynced>()?),
+    };
+    crate::test_probes::at("project_file_removed");
+    Ok(removed)
 }
 
 /// Replaces the file at `path`, which init planned from `expected`, with
@@ -159,12 +179,11 @@ fn replace_file(
     expected: &FileSnapshot,
     contents: &[u8],
     permissions: Option<&std::fs::Permissions>,
-) -> anyhow::Result<FileSnapshot> {
+) -> anyhow::Result<Changed> {
     expected.recheck(path)?;
-    let target = Utf8Path::from_path(path)
-        .with_context(|| format!("{} is not a UTF-8 path", path.display()))?;
+    let target = utf8(path)?;
     let prefix = format!(".{}.provenance-", target.file_name().unwrap_or_default());
-    let permissions = write_synced_file_checked(target, contents, &prefix, permissions, || {
+    let replaced = write_synced_file_checked(target, contents, &prefix, permissions, || {
         crate::test_probes::at("project_file_prepared");
         anyhow::ensure!(
             &FileSnapshot::read(path)? == expected,
@@ -176,21 +195,17 @@ fn replace_file(
     })
     .with_context(|| format!("failed to replace {}", path.display()))?;
     crate::test_probes::at("project_file_replaced");
-    Ok(FileSnapshot::Regular {
-        bytes: contents.to_vec(),
-        permissions,
+    Ok(Changed {
+        after: FileSnapshot::Regular {
+            bytes: contents.to_vec(),
+            permissions: replaced.permissions,
+        },
+        synced: replaced.synced,
     })
 }
 
-fn displacement_error(path: &Path, error: std::io::Error) -> anyhow::Error {
-    if error.kind() == ErrorKind::Unsupported {
-        anyhow::Error::new(error).context(format!(
-            "failed to preserve {} during removal",
-            path.display()
-        ))
-    } else {
-        anyhow::Error::new(error).context(format!("{} changed during removal", path.display()))
-    }
+fn utf8(path: &Path) -> anyhow::Result<&Utf8Path> {
+    Utf8Path::from_path(path).with_context(|| format!("{} is not a UTF-8 path", path.display()))
 }
 
 fn restore_displaced(backup: &Path, path: &Path) -> anyhow::Result<()> {
@@ -245,22 +260,6 @@ mod tests {
         let error = replace_file(&path, &before, b"planned\n", None).unwrap_err();
 
         assert!(error.to_string().contains("changed after"));
-        assert_eq!(std::fs::read(path).unwrap(), b"concurrent\n");
-    }
-
-    #[test]
-    fn guarded_remove_does_not_delete_an_edit_created_during_commit() {
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("file.txt");
-        std::fs::write(&path, "owned\n").unwrap();
-        let owned = FileSnapshot::read(&path).unwrap();
-
-        let error = remove_if_owned_with_hook(&path, &owned, || {
-            std::fs::write(&path, "concurrent\n").unwrap();
-        })
-        .unwrap_err();
-
-        assert!(format!("{error:#}").contains("changed during removal"));
         assert_eq!(std::fs::read(path).unwrap(), b"concurrent\n");
     }
 

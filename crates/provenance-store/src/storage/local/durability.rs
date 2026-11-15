@@ -3,12 +3,13 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 mod checked;
-pub use checked::write_synced_file_checked;
+pub use checked::{write_synced_file_checked, ReplacedFile};
 
-/// A failure of [`replace_file`]. It has the text of a `tempfile` persist
-/// failure, and its source is the I/O error.
+/// A failure of [`replace_file`]. Its text is the start of the text of a
+/// `tempfile` persist failure. Its source is the I/O error, so that the
+/// chain of the error gives the I/O error one time.
 #[derive(Debug, thiserror::Error)]
-#[error("failed to persist temporary file: {0}")]
+#[error("failed to persist temporary file")]
 pub struct ReplaceFailed(#[source] std::io::Error);
 
 /// A failure after the file at the path changed: a sync of its directory.

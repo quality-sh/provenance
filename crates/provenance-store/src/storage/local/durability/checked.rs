@@ -1,45 +1,57 @@
 //! A synced write of a file with a check of the target before the rename.
 
-use super::{keep, rename_kept, sync_directories, sync_failure, write_temporary};
+use super::{keep, sync_directories, sync_failure, write_temporary, ChangedUnsynced};
 use camino::Utf8Path;
 
 #[cfg(test)]
 mod tests;
+#[cfg(windows)]
+mod windows_rename;
 
 /// The length of the random part of a temporary file name.
 const RANDOM_LENGTH: usize = 6;
 const SUFFIX: &str = ".tmp";
 
+/// The file that [`write_synced_file_checked`] put at its path with the rename.
+#[derive(Debug)]
+#[must_use]
+pub struct ReplacedFile {
+    /// The permissions of the new file.
+    pub permissions: std::fs::Permissions,
+    /// The sync of the directories after the rename. An error tells that the
+    /// path has the new bytes, but a power loss can lose them.
+    pub synced: Result<(), ChangedUnsynced>,
+}
+
 /// Replaces the file at `path` with `bytes` in one rename, after `check`.
 ///
-/// The steps, in order: remove each temporary file of `temporary_prefix`
-/// that a stopped call left in the directory of `path`, write the temporary
-/// file in that directory, set its permissions, sync it, call `check`, rename
-/// the temporary file onto `path` in one step, and sync the directories as
-/// [`super::write_synced_file`] does. The function gives the permissions of
-/// the new file.
-///
-/// The name of the temporary file is `temporary_prefix`, six letters or
-/// digits, and `.tmp`. Only a regular file with a name of that form is a
-/// temporary file of a stopped call. A stop before the rename leaves `path`
-/// with its old bytes and can leave the temporary file. A stop after the
-/// rename leaves `path` with all of the new bytes.
+/// The steps, in order: remove each regular file in the directory of `path`
+/// whose name is `temporary_prefix`, six letters or digits, and `.tmp`, write
+/// the temporary file in that directory with a name of that form, set its
+/// permissions, sync it, call `check`, rename the temporary file onto `path`
+/// in one step, and sync the directories as [`super::write_synced_file`]
+/// does. The removal does not know which call made a file. The caller gives
+/// a prefix that only its own temporary files have. A stop before the rename
+/// leaves `path` with its old bytes and can leave the temporary file. A stop
+/// after the rename leaves `path` with all of the new bytes.
 ///
 /// `permissions` are the permissions of the new file. With `None`, the new
-/// file gets the permissions that `std::fs::File::create` gives.
+/// file gets the permissions that `std::fs::File::create` gives. On Windows,
+/// the rename also replaces a read-only file.
 ///
-/// When `check` fails, the temporary file is deleted, `path` keeps its old
-/// bytes, and the call gives the error of `check`. After `check` returns,
-/// the call does no step on `path` before the rename. A failed rename gives
-/// the I/O error, deletes the temporary file, and leaves `path` with its old
-/// bytes.
+/// An error tells that `path` keeps its old bytes. When `check` fails, the
+/// temporary file is deleted and the call gives the error of `check`. After
+/// `check` returns, the call does no step on `path` before the rename. A
+/// failed rename gives the I/O error and deletes the temporary file. After
+/// the rename, the call gives a [`ReplacedFile`], also when a directory sync
+/// fails.
 pub fn write_synced_file_checked(
     path: &Utf8Path,
     bytes: &[u8],
     temporary_prefix: &str,
     permissions: Option<&std::fs::Permissions>,
     check: impl FnOnce() -> anyhow::Result<()>,
-) -> anyhow::Result<std::fs::Permissions> {
+) -> anyhow::Result<ReplacedFile> {
     remove_stopped_temporaries(path, temporary_prefix)?;
     let mut builder = tempfile::Builder::new();
     builder
@@ -75,18 +87,39 @@ pub fn write_synced_file_checked(
         Ok(permissions) => permissions,
         Err(error) => {
             drop(file);
-            let _ = std::fs::remove_file(&temporary);
+            delete_temporary(&temporary);
             return Err(error);
         }
     };
-    rename_kept(file, &temporary, &target)?;
-    sync_directories(parent, first_made)?;
-    Ok(permissions)
+    #[cfg(windows)]
+    windows_rename::rename_kept(file, &temporary, &target)?;
+    #[cfg(not(windows))]
+    super::rename_kept(file, &temporary, &target)?;
+    let synced = sync_directories(parent, first_made)
+        .map_err(|error| error.downcast::<ChangedUnsynced>().unwrap_or_else(ChangedUnsynced));
+    Ok(ReplacedFile {
+        permissions,
+        synced,
+    })
+}
+
+/// Deletes the temporary file at `path`, also when it is read-only: Windows
+/// does not delete a read-only file.
+fn delete_temporary(path: &std::path::Path) {
+    #[cfg(windows)]
+    if let Ok(metadata) = std::fs::metadata(path) {
+        let mut permissions = metadata.permissions();
+        if permissions.readonly() {
+            permissions.set_readonly(false);
+            let _ = std::fs::set_permissions(path, permissions);
+        }
+    }
+    let _ = std::fs::remove_file(path);
 }
 
 /// Removes each regular file in the directory of `path` whose name is
-/// `prefix`, six letters or digits, and `.tmp`. A directory that does not
-/// exist has no such file.
+/// `prefix`, six letters or digits, and `.tmp`, whichever call or person
+/// made it. A directory that does not exist has no such file.
 fn remove_stopped_temporaries(path: &Utf8Path, prefix: &str) -> anyhow::Result<()> {
     let Some(parent) = path.parent() else {
         return Ok(());

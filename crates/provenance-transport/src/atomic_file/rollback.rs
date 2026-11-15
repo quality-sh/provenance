@@ -1,4 +1,5 @@
 use super::{ErrorKind, FileSnapshot};
+use provenance_store::publication::ChangedUnsynced;
 use anyhow::Context;
 use std::path::{Path, PathBuf};
 
@@ -33,6 +34,9 @@ impl FileRollbackJournal {
         }
     }
 
+    /// Replaces the file at `path`, which init planned from `before`, and
+    /// records the change before it gives an error of the folder sync, so
+    /// that a rollback restores the file.
     pub fn replace(
         &mut self,
         path: &Path,
@@ -40,24 +44,31 @@ impl FileRollbackJournal {
         contents: &[u8],
     ) -> anyhow::Result<()> {
         self.create_dir_all(path.parent().unwrap_or_else(|| Path::new(".")))?;
-        let after = super::replace_file(path, before, contents, before.permissions())?;
-        self.changes.push(FileChange::File {
-            path: path.to_path_buf(),
-            before: before.clone(),
-            after,
-        });
-        Ok(())
+        let changed = super::replace_file(path, before, contents, before.permissions())?;
+        self.record(path, before, changed.after, changed.synced, "replaced")
     }
 
+    /// Removes the file at `path`, which init planned from `before`, and
+    /// records the change before it gives an error of the folder sync.
     pub fn remove(&mut self, path: &Path, before: &FileSnapshot) -> anyhow::Result<()> {
-        super::remove_if_owned(path, before)?;
-        let after = FileSnapshot::Missing;
+        let synced = super::remove_if_owned(path, before)?;
+        self.record(path, before, FileSnapshot::Missing, synced, "removed")
+    }
+
+    fn record(
+        &mut self,
+        path: &Path,
+        before: &FileSnapshot,
+        after: FileSnapshot,
+        synced: Result<(), ChangedUnsynced>,
+        changed: &str,
+    ) -> anyhow::Result<()> {
         self.changes.push(FileChange::File {
             path: path.to_path_buf(),
             before: before.clone(),
             after,
         });
-        Ok(())
+        synced.map_err(|unsynced| super::unsynced_error(path, changed, unsynced))
     }
 
     pub fn displace_checked(
