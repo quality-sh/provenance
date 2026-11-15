@@ -5,6 +5,7 @@
 
 use super::history_fixture::History;
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::io::Write as _;
 use std::path::Path;
 use std::process::Stdio;
@@ -28,7 +29,7 @@ impl Folder {
     }
 }
 
-fn git(root: &Path, env: &[(&str, String)], args: &[&str], input: Option<&[u8]>) -> String {
+fn git(root: &Path, args: &[&str], input: Option<&[u8]>) -> String {
     let mut command = provenance_store::git_process::git();
     command
         .args(args)
@@ -36,9 +37,6 @@ fn git(root: &Path, env: &[(&str, String)], args: &[&str], input: Option<&[u8]>)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    for (name, value) in env {
-        command.env(name, value);
-    }
     let mut child = command.spawn().unwrap();
     let mut stdin = child.stdin.take().unwrap();
     stdin.write_all(input.unwrap_or_default()).unwrap();
@@ -52,67 +50,59 @@ fn git(root: &Path, env: &[(&str, String)], args: &[&str], input: Option<&[u8]>)
 pub fn folder(history: &History) -> Folder {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
-    git(root, &[], &["init", "-q"], None);
+    git(root, &["init", "-q"], None);
     let mut ids: BTreeMap<String, String> = BTreeMap::new();
     for commit in &history.commits {
         let base = commit
             .parents
             .first()
             .map_or("--empty", |first| ids[first.as_str()].as_str());
-        git(root, &[], &["read-tree", base], None);
+        git(root, &["read-tree", base], None);
         for (path, entry) in &commit.changes {
             let Some(entry) = entry else {
-                git(root, &[], &["update-index", "--force-remove", path], None);
+                git(root, &["update-index", "--force-remove", path], None);
                 continue;
             };
-            let blob = git(
-                root,
-                &[],
-                &["hash-object", "-w", "--stdin"],
-                Some(&entry.bytes),
-            );
+            let blob = git(root, &["hash-object", "-w", "--stdin"], Some(&entry.bytes));
             let entry = format!("100644,{blob},{path}");
             git(
                 root,
-                &[],
                 &["update-index", "--add", "--cacheinfo", &entry],
                 None,
             );
         }
-        let tree = git(root, &[], &["write-tree"], None);
-        let mut args = vec!["commit-tree".to_owned(), tree];
+        let tree = git(root, &["write-tree"], None);
+        let mut object = format!("tree {tree}\n");
         for parent in &commit.parents {
-            args.push("-p".to_owned());
-            args.push(ids[parent.as_str()].clone());
+            writeln!(object, "parent {}", ids[parent.as_str()]).unwrap();
         }
-        args.extend(["-m".to_owned(), commit.name.clone()]);
-        let env = [
-            ("GIT_AUTHOR_NAME", commit.author.clone()),
-            ("GIT_AUTHOR_EMAIL", format!("{}@example.com", commit.author)),
-            ("GIT_COMMITTER_NAME", commit.committer.clone()),
-            (
-                "GIT_COMMITTER_EMAIL",
-                format!("{}@example.com", commit.committer),
-            ),
-            ("GIT_AUTHOR_DATE", format!("{} +0000", commit.authored_at)),
-            (
-                "GIT_COMMITTER_DATE",
-                format!("{} +0000", commit.committed_at),
-            ),
-        ];
-        let args = args.iter().map(String::as_str).collect::<Vec<_>>();
-        ids.insert(commit.name.clone(), git(root, &env, &args, None));
+        let author = &commit.author;
+        let committer = &commit.committer;
+        writeln!(
+            object,
+            "author {author} <{author}@example.com> {} +0000",
+            commit.authored_at
+        )
+        .unwrap();
+        writeln!(
+            object,
+            "committer {committer} <{committer}@example.com> {} +0000",
+            commit.committed_at
+        )
+        .unwrap();
+        writeln!(object, "\n{}", commit.name).unwrap();
+        let id = git(
+            root,
+            &["hash-object", "-t", "commit", "-w", "--stdin"],
+            Some(object.as_bytes()),
+        );
+        ids.insert(commit.name.clone(), id);
     }
     let head = &ids[history.commits.last().unwrap().name.as_str()];
-    git(root, &[], &["update-ref", "refs/heads/main", head], None);
-    git(
-        root,
-        &[],
-        &["symbolic-ref", "HEAD", "refs/heads/main"],
-        None,
-    );
-    git(root, &[], &["read-tree", "HEAD"], None);
-    git(root, &[], &["checkout-index", "-a", "-f"], None);
+    git(root, &["update-ref", "refs/heads/main", head], None);
+    git(root, &["symbolic-ref", "HEAD", "refs/heads/main"], None);
+    git(root, &["read-tree", "HEAD"], None);
+    git(root, &["checkout-index", "-a", "-f"], None);
     for (path, bytes) in &history.working {
         let path = root.join(path);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
