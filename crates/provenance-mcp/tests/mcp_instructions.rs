@@ -1,13 +1,13 @@
-//! The server instructions name only the commands that the server shows. These tests
-//! have no Rule binding: the Rule that states which commands the instructions name
-//! waits for the approval of the owner.
+//! The server instructions name only the tools that the server lists and the actions
+//! that the host grants. These tests have no Rule binding: the Rule that states which
+//! commands the instructions name waits for the approval of the owner.
 #![cfg(feature = "test-fixture")]
 
 use crate::support::{fixture_host, mcp::Session, records::Repository};
 use provenance_porcelain::action::Action;
-use provenance_porcelain::registry::Command;
 use provenance_store::operations::catalog::{self, Operation as _};
 use provenance_transport::StatementHost;
+use rmcp::model::Tool;
 
 /// The domain text before the action lines.
 const DOMAIN: &str = "# Provenance\n\n\
@@ -33,6 +33,7 @@ const SEARCH_THEN_GET: &str =
     "Use search to find IDs, then get to read the selected record and its related views.";
 const CREATE_TYPE: &str =
     "Create names an explicit record type; actions on an existing record infer its type.";
+const CREATE_ONLY: &str = "Create names an explicit record type.";
 const ACCESS: &str = "Available actions depend on the interface and its access. \
 Each interface lists the inputs and actions it supports.\n\n";
 
@@ -55,6 +56,19 @@ create, update, answer, claim, release, or submit on the target record; discuss 
 for a Discussion; notify to register a client thread for review changes; or materialize, \
 import, dictionary import, or swarm-backtrace land on the repository files. A call that \
 lacks a field that the action and record kind need gets the schema of their fields.";
+const CHANGE_WITHOUT_NOTIFY: &str = "- change: Write to the graph. The action argument \
+selects the write: create, update, answer, claim, release, or submit on the target record; \
+discuss or reply for a Discussion; or materialize, import, dictionary import, or \
+swarm-backtrace land on the repository files. A call that lacks a field that the action and \
+record kind need gets the schema of their fields.";
+const CHANGE_CREATE_DISCUSS_REPLY: &str = "- change: Write to the graph. The action argument \
+selects the write: create on the target record; discuss or reply for a Discussion; or \
+materialize, import, dictionary import, or swarm-backtrace land on the repository files. A \
+call that lacks a field that the action and record kind need gets the schema of their fields.";
+const CHANGE_CREATE_REPLY: &str = "- change: Write to the graph. The action argument selects \
+the write: create on the target record; reply for a Discussion; or materialize, import, \
+dictionary import, or swarm-backtrace land on the repository files. A call that lacks a \
+field that the action and record kind need gets the schema of their fields.";
 const CREATE: &str = "- create: Create the target ID as an explicit record type.";
 const UPDATE: &str = "- update: Update the existing target while preserving omitted fields.";
 const ANSWER: &str = "- answer: Answer the target Question.";
@@ -85,23 +99,26 @@ fn expected(opening: &[&str], lines: &[&str], first_steps: bool) -> String {
     text
 }
 
-/// The tool names and the instructions of one served host.
-async fn served(host: StatementHost) -> (Vec<String>, String) {
+/// The listed tools and the instructions of one served host.
+async fn served_tools(host: StatementHost) -> (Vec<Tool>, String) {
     let session = Session::start(host).await;
     let instructions = session
         .client
         .peer_info()
         .and_then(|info| info.instructions.clone())
         .expect("server instructions");
-    let names = session
-        .client
-        .list_all_tools()
-        .await
-        .unwrap()
+    let tools = session.client.list_all_tools().await.unwrap();
+    session.close().await;
+    (tools, instructions)
+}
+
+/// The tool names and the instructions of one served host.
+async fn served(host: StatementHost) -> (Vec<String>, String) {
+    let (tools, instructions) = served_tools(host).await;
+    let names = tools
         .into_iter()
         .map(|tool| tool.name.into_owned())
         .collect();
-    session.close().await;
     (names, instructions)
 }
 
@@ -140,9 +157,27 @@ async fn a_host_with_every_tool_gives_the_shared_guidance_and_first_steps() {
             "discussions"
         ]
     );
+    let lines = [
+        GET,
+        TRACE,
+        SEARCH,
+        CHECK,
+        API,
+        CHANGE,
+        CREATE,
+        UPDATE,
+        ANSWER,
+        CLAIM,
+        RELEASE,
+        SUBMIT,
+        DISCUSSIONS,
+        DISCUSSION,
+        DISCUSS,
+        REPLY,
+    ];
     assert_eq!(
         instructions,
-        provenance_porcelain::guidance::guidance().guidance + FIRST_STEPS
+        expected(&[SEARCH_THEN_GET, CREATE_TYPE], &lines, true)
     );
     assert_eq!(instructions, provenance_mcp::instructions());
 }
@@ -161,12 +196,12 @@ async fn a_host_with_api_and_change_names_no_other_command() {
     );
     // An action on an existing record resolves the record first, so without
     // resolve-record the change tool has only create, discuss, and reply.
-    let lines = [API, CHANGE, CREATE, DISCUSS, REPLY];
+    let lines = [API, CHANGE_CREATE_DISCUSS_REPLY, CREATE, DISCUSS, REPLY];
     assert_eq!(
         served(host).await,
         (
             vec!["api".to_owned(), "change".to_owned()],
-            expected(&[CREATE_TYPE], &lines, false)
+            expected(&[CREATE_ONLY], &lines, false)
         )
     );
 }
@@ -178,7 +213,15 @@ async fn a_host_without_search_or_get_gives_no_first_steps() {
         &repository,
         &[catalog::ResolveRecord::NAME, catalog::Search::NAME],
     );
-    let lines = [API, CHANGE, CREATE, DISCUSSIONS, DISCUSSION, DISCUSS, REPLY];
+    let lines = [
+        API,
+        CHANGE_CREATE_DISCUSS_REPLY,
+        CREATE,
+        DISCUSSIONS,
+        DISCUSSION,
+        DISCUSS,
+        REPLY,
+    ];
     assert_eq!(
         served(host).await,
         (
@@ -187,7 +230,7 @@ async fn a_host_without_search_or_get_gives_no_first_steps() {
                 "change".to_owned(),
                 "discussions".to_owned()
             ],
-            expected(&[CREATE_TYPE], &lines, false)
+            expected(&[CREATE_ONLY], &lines, false)
         )
     );
 }
@@ -200,7 +243,7 @@ async fn a_host_with_get_and_without_search_gives_no_first_steps() {
         GET,
         TRACE,
         API,
-        CHANGE,
+        CHANGE_WITHOUT_NOTIFY,
         CREATE,
         UPDATE,
         ANSWER,
@@ -237,7 +280,7 @@ async fn a_read_only_host_gives_no_change_line() {
 }
 
 #[tokio::test]
-async fn a_change_tool_with_create_and_reply_gives_only_their_action_lines() {
+async fn a_change_tool_with_create_and_reply_names_only_those_actions() {
     let repository = Repository::new("The shared graph is readable.");
     let mut denied = operations_of(&[
         Action::Update,
@@ -247,9 +290,7 @@ async fn a_change_tool_with_create_and_reply_gives_only_their_action_lines() {
         Action::Submit,
     ]);
     denied.push(catalog::WriteDiscussion::NAME);
-    let session = Session::start(host_without(&repository, &denied)).await;
-    let tools = session.client.list_all_tools().await.unwrap();
-    session.close().await;
+    let (tools, instructions) = served_tools(host_without(&repository, &denied)).await;
     let change = tools.iter().find(|tool| tool.name == "change").unwrap();
     let actions: Vec<&str> = change.input_schema["properties"]["action"]["enum"]
         .as_array()
@@ -259,40 +300,36 @@ async fn a_change_tool_with_create_and_reply_gives_only_their_action_lines() {
         .filter(|action| Action::parse(action).is_some())
         .collect();
     assert_eq!(actions, ["create", "reply"]);
+    assert_eq!(
+        change.description.as_deref(),
+        CHANGE_CREATE_REPLY.strip_prefix("- change: ")
+    );
     let lines = [
         GET,
         TRACE,
         SEARCH,
         API,
-        CHANGE,
+        CHANGE_CREATE_REPLY,
         CREATE,
         DISCUSSIONS,
         DISCUSSION,
         REPLY,
     ];
     assert_eq!(
-        served(host_without(&repository, &denied)).await.1,
-        expected(&[SEARCH_THEN_GET, CREATE_TYPE], &lines, true)
+        instructions,
+        expected(&[SEARCH_THEN_GET, CREATE_ONLY], &lines, true)
     );
 }
 
-#[tokio::test]
-async fn a_host_with_only_api_gives_only_the_api_line() {
-    let (names, instructions) = served(StatementHost::default()).await;
-    assert_eq!(names, ["api"]);
-    assert_eq!(instructions, expected(&[], &[API], false));
-}
-
-/// No host lists trace without get: both tools need the same read grant. The shared
-/// guidance of a consumer that shows trace and not get is the evidence.
-#[test]
-fn guidance_with_trace_and_without_get_gives_no_line_that_names_get() {
-    let shown = |command: Command| command != Command::Get;
-    let lines = [
+/// The lines of a host that writes and reads, without notify and check, and without
+/// the Discussion read that `without` names.
+fn lines_without(without: &str) -> Vec<&'static str> {
+    [
+        GET,
+        TRACE,
         SEARCH,
-        CHECK,
         API,
-        CHANGE,
+        CHANGE_WITHOUT_NOTIFY,
         CREATE,
         UPDATE,
         ANSWER,
@@ -303,9 +340,47 @@ fn guidance_with_trace_and_without_get_gives_no_line_that_names_get() {
         DISCUSSION,
         DISCUSS,
         REPLY,
-    ];
+    ]
+    .into_iter()
+    .filter(|line| *line != without)
+    .collect()
+}
+
+#[tokio::test]
+async fn a_host_without_the_discussion_list_gives_no_discussions_line() {
+    let repository = Repository::new("The shared graph is readable.");
+    let host = host_without(&repository, &[catalog::ListDiscussions::NAME]);
+    let (names, instructions) = served(host).await;
+    assert!(names.iter().any(|name| name == "discussions"), "{names:?}");
     assert_eq!(
-        provenance_porcelain::guidance::guidance_for(shown).guidance,
-        expected(&[CREATE_TYPE], &lines, false)
+        instructions,
+        expected(
+            &[SEARCH_THEN_GET, CREATE_TYPE],
+            &lines_without(DISCUSSIONS),
+            true
+        )
     );
+}
+
+#[tokio::test]
+async fn a_host_with_the_discussion_list_and_without_one_discussion_gives_no_discussion_line() {
+    let repository = Repository::new("The shared graph is readable.");
+    let host = host_without(&repository, &[catalog::GetDiscussionConversation::NAME]);
+    let (names, instructions) = served(host).await;
+    assert!(names.iter().any(|name| name == "discussions"), "{names:?}");
+    assert_eq!(
+        instructions,
+        expected(
+            &[SEARCH_THEN_GET, CREATE_TYPE],
+            &lines_without(DISCUSSION),
+            true
+        )
+    );
+}
+
+#[tokio::test]
+async fn a_host_with_only_api_gives_only_the_api_line() {
+    let (names, instructions) = served(StatementHost::default()).await;
+    assert_eq!(names, ["api"]);
+    assert_eq!(instructions, expected(&[], &[API], false));
 }
