@@ -151,23 +151,12 @@ fn a_new_link_to_an_archived_parent_keeps_its_reason() {
     let (_directory, repo) = support::review_paths::init();
     create_requirement(&repo, "req_old");
     create_requirement(&repo, "req_child");
-    let guard = etag(&repo, "req_old");
-    json_output(provenance().args([
-        "req_old",
-        "update",
-        "--if-match",
-        &guard,
-        "--repo",
+    // The archive is a status request: the reviewer accepts it.
+    support::record_review::archive_requirement(
         &repo,
-        "--actor",
-        "author",
-        "--status",
-        "archived",
-        "--archived-in-commit-json",
-        r#"{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#,
-        "--format",
-        "json",
-    ]));
+        "req_old",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    );
     let guard = etag(&repo, "req_child");
     let mut rows = Vec::new();
     both(

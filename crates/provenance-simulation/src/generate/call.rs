@@ -5,6 +5,7 @@ use super::{
     FIRST_REQUIREMENT, SCOPE, TOPIC,
 };
 use crate::{scope, stable};
+use provenance_core::StableId;
 use provenance_store::repository::Repository;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -69,7 +70,7 @@ impl Task {
                     }),
                 )
             }
-            Operation::ArchiveRequirement { n } => {
+            Operation::ArchiveRequirement { n, .. } => {
                 let id = requirement_id(*n);
                 call(
                     "update-requirement",
@@ -142,6 +143,33 @@ impl Task {
         })
     }
 
+    /// The call that completes a successful `call` of this operation, or
+    /// `None`. An archive through the contract opens a status request, so the
+    /// allowed reviewer accepts it; the archive and its cascade then apply.
+    pub fn follow_up(&self, repository: &Repository) -> anyhow::Result<Option<Call>> {
+        let Operation::ArchiveRequirement {
+            n,
+            leave_open: false,
+        } = &self.op
+        else {
+            return Ok(None);
+        };
+        let id = requirement_id(*n);
+        let Some(proposal) = open_status_request(repository, &id)? else {
+            return Ok(None);
+        };
+        Ok(Some(Call {
+            operation: "decide-record-review",
+            request: json!({
+                "scope_id": SCOPE, "record_kind": "requirement", "record_id": id,
+                "proposal_id": proposal,
+                "actor": {"identity_type": "human", "id": DECIDER},
+                "decision": "accepted",
+                "canonical_artifact": {"artifact_type": "requirement", "artifact_id": id},
+            }),
+        }))
+    }
+
     /// What a successful contract `call` of this operation did, from its
     /// `answer`.
     pub fn effect(&self, call: &Call, answer: &Value) -> anyhow::Result<Effect> {
@@ -159,9 +187,24 @@ impl Task {
                 description: self.description(),
                 etag: text(&call.request["expected_etag"])?,
             },
-            Operation::ArchiveRequirement { n } => Effect::Archived {
+            Operation::ArchiveRequirement {
+                n,
+                leave_open: false,
+            } => Effect::Archived {
                 id: requirement_id(*n),
             },
+            Operation::ArchiveRequirement {
+                leave_open: true, ..
+            } => {
+                let pending = &answer["decision"]["pending"];
+                if pending["status_request"].is_null() {
+                    Effect::Skipped
+                } else {
+                    Effect::Proposal {
+                        id: text(&pending["proposal_id"])?,
+                    }
+                }
+            }
             Operation::PostMessage => Effect::Message {
                 id: text(&answer["message"]["id"])?,
             },
@@ -189,4 +232,18 @@ impl Task {
             }
         })
     }
+}
+
+/// The open status request of the Requirement `id`, if it has one.
+pub(super) fn open_status_request(
+    repository: &Repository,
+    id: &str,
+) -> anyhow::Result<Option<StableId>> {
+    let state = repository
+        .store()
+        .requirement_decision_state(&scope(), &stable(id))?;
+    Ok(state
+        .pending
+        .filter(|pending| pending.status_request.is_some())
+        .map(|pending| pending.proposal_id))
 }

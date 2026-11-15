@@ -114,6 +114,8 @@ mod cli_source_requirement;
 mod cli_state_corrections;
 #[path = "../cli_statement_write_gate.rs"]
 mod cli_statement_write_gate;
+#[path = "../cli_status_request.rs"]
+mod cli_status_request;
 #[path = "../cli_ste_statement_paths.rs"]
 mod cli_ste_statement_paths;
 #[path = "../cli_swarm_backtrace_land.rs"]

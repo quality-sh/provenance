@@ -6,6 +6,8 @@ use provenance_macros::verifies;
 use serde_json::Value;
 use std::path::Path;
 
+use crate::support::record_review::accept_status_request;
+
 fn git(repo: &Path, args: &[&str]) -> String {
     let output = provenance_store::git_process::git()
         .arg("-C")
@@ -55,6 +57,8 @@ fn repo_with_rule(status: &str) -> tempfile::TempDir {
             "default",
             "--path-prefix",
             ".",
+            "--disposition-actor-id",
+            "reviewer",
         ])
         .assert()
         .success();
@@ -92,6 +96,9 @@ fn repo_with_rule(status: &str) -> tempfile::TempDir {
         ])
         .assert()
         .success();
+    if status == "active" {
+        accept_status_request(repo.to_str().unwrap(), "rules", "rule", "rule_anchor");
+    }
     directory
 }
 

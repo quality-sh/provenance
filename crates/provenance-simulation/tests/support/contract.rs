@@ -102,18 +102,29 @@ pub fn invoke(
     .map_err(Box::new)
 }
 
-/// Runs `task` through the contract; an operation with no contract call runs
-/// on the store, as the engine layer does.
-pub fn apply_contract(repository: &Repository, task: &Task) -> anyhow::Result<Effect> {
-    let Some(call) = task.call(repository)? else {
-        return generate::apply(repository, task);
-    };
+/// Sends one generated call through the contract; a refusal is an error
+/// whose text starts with [`refusal_prefix`].
+fn send(repository: &Repository, call: &generate::Call) -> anyhow::Result<Value> {
     match invoke(repository, call.operation, &call.request) {
-        Ok(answer) => task.effect(&call, &answer),
+        Ok(answer) => Ok(answer),
         Err(failure) => anyhow::bail!(
             "{} {}",
             refusal_prefix(failure.status_code()),
             serde_json::to_string(&failure)?
         ),
     }
+}
+
+/// Runs `task` through the contract, with the call that completes it when it
+/// has one; an operation with no contract call runs on the store, as the
+/// engine layer does.
+pub fn apply_contract(repository: &Repository, task: &Task) -> anyhow::Result<Effect> {
+    let Some(call) = task.call(repository)? else {
+        return generate::apply(repository, task);
+    };
+    let answer = send(repository, &call)?;
+    if let Some(follow_up) = task.follow_up(repository)? {
+        send(repository, &follow_up)?;
+    }
+    task.effect(&call, &answer)
 }

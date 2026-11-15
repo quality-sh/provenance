@@ -8,6 +8,7 @@ use crate::support;
 
 use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use serde_json::{json, Value};
+use support::decisions::accept_pending;
 use support::records::Repository;
 use support::resource_http::{call, call_with_headers, host};
 
@@ -93,6 +94,7 @@ async fn write_rows(repo: &Repository) -> Vec<Value> {
     )
     .await;
     assert_eq!(status, 200, "{created}");
+    accept_pending(&host, "requirements", "requirement", "req_old").await;
     let guard = etag(&host, "req_old").await;
     let (status, archived) = call_with_headers(
         &host,
@@ -104,6 +106,8 @@ async fn write_rows(repo: &Repository) -> Vec<Value> {
     )
     .await;
     assert_eq!(status, 200, "{archived}");
+    // The archive is a status request: the reviewer accepts it.
+    accept_pending(&host, "requirements", "requirement", "req_old").await;
     rows.push(row(
         "create under an archived parent",
         call(
@@ -351,6 +355,7 @@ async fn a_proposal_refusal_has_a_declared_kind() {
 #[tokio::test]
 async fn each_refusal_keeps_its_kind_status_and_fields() {
     let repo = Repository::new("The shared graph is readable.");
+    support::records::allow_reviewer(&repo);
     let mut rows = write_rows(&repo).await;
     rows.extend(read_rows(&repo).await);
     rows.extend(state_rows(&repo).await);

@@ -15,7 +15,7 @@ use provenance_macros::verifies;
 use provenance_simulation::generate::{Case, Effect, Fault, Operation, Step};
 use provenance_simulation::storage::Outcome;
 use provenance_simulation::{check_case, check_probe, laws, report, run_case, stats, Config, Run};
-use support::cases::{alone, each_operation, moved_base_case, write};
+use support::cases::{alone, each_operation, moved_base_case, write, ARCHIVE_FIRST};
 
 #[hegel::test]
 #[ignore = "random cases run nightly: cargo nextest run --profile simulation --run-ignored all"]
@@ -158,7 +158,7 @@ fn an_archive_after_an_outside_claim_clears_the_claim_and_keeps_l3() {
     let case = Case {
         engines: 2,
         steps: vec![
-            write(0, Operation::ArchiveRequirement { n: 0 }),
+            write(0, ARCHIVE_FIRST),
             Step::OutsideWrite(Operation::ClaimTopic),
         ],
     };
