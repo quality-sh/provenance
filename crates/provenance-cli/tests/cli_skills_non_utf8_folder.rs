@@ -21,7 +21,10 @@ fn non_utf8_folder(parent: &Path) -> PathBuf {
 fn assert_installed(root: &Path) {
     let canonical = root.join(".agents/skills").join(SKILL).join("SKILL.md");
     let text = std::fs::read_to_string(&canonical).unwrap();
-    assert!(text.starts_with("---\nname: provenance-fork-tournament"), "{text}");
+    assert!(
+        text.starts_with("---\nname: provenance-fork-tournament"),
+        "{text}"
+    );
     let claude = root.join(".claude/skills").join(SKILL).join("SKILL.md");
     assert_eq!(std::fs::read_to_string(claude).unwrap(), text);
 }

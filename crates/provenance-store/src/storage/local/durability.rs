@@ -47,7 +47,10 @@ pub(in crate::storage::local) fn write_synced_file_named(
     builder: &tempfile::Builder<'_, '_>,
 ) -> anyhow::Result<()> {
     let (temporary, parent, first_made) = write_temporary(path.as_std_path(), bytes, builder)?;
-    temporary.as_file().sync_all().map_err(sync_failure(path.as_std_path()))?;
+    temporary
+        .as_file()
+        .sync_all()
+        .map_err(sync_failure(path.as_std_path()))?;
     crate::test_probes::at("synced_file_before_rename")?;
     replace_file(temporary, path)?;
     sync_directories(parent, first_made)
@@ -109,8 +112,7 @@ pub(in crate::storage::local) fn write_staged_file(
     path: &Utf8Path,
     bytes: &[u8],
 ) -> anyhow::Result<()> {
-    let (temporary, _, _) =
-        write_temporary(path.as_std_path(), bytes, &tempfile::Builder::new())?;
+    let (temporary, _, _) = write_temporary(path.as_std_path(), bytes, &tempfile::Builder::new())?;
     replace_file(temporary, path)
 }
 
@@ -131,16 +133,13 @@ fn write_temporary<'a>(
         }
         first_made = Some(directory);
     }
-    std::fs::create_dir_all(parent)
-        .map_err(|error| crate::refusal::caused(error, format!("make directory {}", parent.display())))?;
+    std::fs::create_dir_all(parent).map_err(step_failure("make directory", parent))?;
     let mut temporary = crate::long_path::extended(parent)
         .and_then(|directory| builder.tempfile_in(directory))
-        .map_err(|error| {
-            crate::refusal::caused(error, format!("make a temporary file for {}", path.display()))
-        })?;
-    temporary.write_all(bytes).map_err(|error| {
-        crate::refusal::caused(error, format!("write a temporary file for {}", path.display()))
-    })?;
+        .map_err(step_failure("make a temporary file for", path))?;
+    temporary
+        .write_all(bytes)
+        .map_err(step_failure("write a temporary file for", path))?;
     Ok((temporary, parent, first_made))
 }
 
@@ -149,7 +148,7 @@ fn write_temporary<'a>(
 fn directory_exists(directory: &Path) -> anyhow::Result<bool> {
     crate::long_path::extended(directory)
         .and_then(|extended| extended.try_exists())
-        .map_err(|error| crate::refusal::caused(error, format!("find directory {}", directory.display())))
+        .map_err(step_failure("find directory", directory))
 }
 
 fn parent_of(path: &Path) -> anyhow::Result<&Path> {
@@ -186,7 +185,15 @@ fn open_to_sync(path: &Utf8Path) -> std::io::Result<std::fs::File> {
 
 /// A failed sync of `path`, with the path and the I/O error.
 fn sync_failure(path: &Path) -> impl FnOnce(std::io::Error) -> anyhow::Error + '_ {
-    move |error| crate::refusal::caused(error, format!("sync {}", path.display()))
+    step_failure("sync", path)
+}
+
+/// A failed `step` on `path`, with the step, the path and the I/O error.
+fn step_failure<'a>(
+    step: &'a str,
+    path: &'a Path,
+) -> impl FnOnce(std::io::Error) -> anyhow::Error + 'a {
+    move |error| crate::refusal::caused(error, format!("{step} {}", path.display()))
 }
 
 /// Replaces the file at `target` with `temporary`, a file in the same
