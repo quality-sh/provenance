@@ -128,13 +128,8 @@ pub fn typed_spec(statement: &str, rules: &[(&str, &str)]) -> Value {
 
 /// Changes the statement of `req_record` through the API.
 pub fn patch_statement(repo: &Path, statement: &str) {
+    let etag = requirement_etag(repo);
     let repo = repo.to_str().unwrap();
-    let read = provenance()
-        .args(["req_record", "get", "--format", "json", "--repo", repo])
-        .assert()
-        .success();
-    let read: Value = serde_json::from_slice(&read.get_output().stdout).unwrap();
-    let etag = read["edit"]["etag"].as_str().unwrap();
     provenance()
         .args(["api", "requirements/req_record", "--method", "patch"])
         .args(["--header", &format!("If-Match: {etag}")])
@@ -143,6 +138,17 @@ pub fn patch_statement(repo: &Path, statement: &str) {
         .write_stdin(json!({"actor": "agent", "statement": statement}).to_string())
         .assert()
         .success();
+}
+
+/// The etag of `req_record`, which a change through the API names in `If-Match`.
+pub fn requirement_etag(repo: &Path) -> String {
+    let read = provenance()
+        .args(["req_record", "get", "--format", "json"])
+        .args(["--repo", repo.to_str().unwrap()])
+        .assert()
+        .success();
+    let read: Value = serde_json::from_slice(&read.get_output().stdout).unwrap();
+    read["edit"]["etag"].as_str().unwrap().to_owned()
 }
 
 /// Begins a verification run for `rule`, which clears the open review records of that Rule.

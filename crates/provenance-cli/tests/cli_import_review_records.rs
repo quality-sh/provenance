@@ -3,9 +3,10 @@
 
 use crate::cli_ste_statement_paths::support::provenance_tree;
 use crate::support::import_reviews::{
-    apply_spec, document, import, import_with, patch_statement, reason, reasons, repository,
-    requirement, reviews, rule, typed_spec, AFTER, BEFORE,
+    apply_spec, document, import, import_with, patch_statement, reason, reasons, refusal,
+    repository, requirement, requirement_etag, reviews, rule, typed_spec, AFTER, BEFORE,
 };
+use crate::support::review_paths::provenance;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
@@ -197,4 +198,41 @@ fn now_millis() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap();
     i64::try_from(elapsed.as_millis()).unwrap()
+}
+
+/// Implementation aid with no Rule binding: it shows which error wins when a Requirement change
+/// through the API meets a `rules.jsonl` that does not parse, and that no file changes.
+#[test]
+fn a_requirement_change_through_the_api_with_an_unreadable_rule_file_names_the_rule_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = repository(dir.path(), "repo");
+    import(&repo, &document(BEFORE, &["rule_a"])).success();
+    let etag = requirement_etag(&repo);
+    let rules = repo.join(".provenance/state/scopes/default/rules/rule.jsonl");
+    let mut text = std::fs::read_to_string(&rules).unwrap();
+    text.push_str("{\"broken\n");
+    std::fs::write(&rules, text).unwrap();
+    let before = provenance_tree(&repo);
+
+    for change in [
+        json!({"actor": "agent", "statement": AFTER}),
+        json!({"actor": "agent", "description": "The record is the account record."}),
+    ] {
+        let refused = refusal(
+            provenance()
+                .args(["api", "requirements/req_record", "--method", "patch"])
+                .args(["--header", &format!("If-Match: {etag}")])
+                .args(["--input", "-", "--repo", repo.to_str().unwrap()])
+                .args(["--scope", "default", "--format", "json"])
+                .write_stdin(change.to_string())
+                .assert(),
+        );
+
+        let error: Value = serde_json::from_str(refused.1.strip_prefix("Error: ").unwrap()).unwrap();
+        assert_eq!(refused.0, Some(1), "{change}");
+        assert_eq!(error["error"]["kind"], "invalid_state_file", "{change}");
+        assert_eq!(error["error"]["file"], "scopes/default/rules/rule.jsonl");
+        assert_eq!(error["error"]["line"], 2, "{change}");
+        assert_eq!(provenance_tree(&repo), before, "{change}");
+    }
 }
