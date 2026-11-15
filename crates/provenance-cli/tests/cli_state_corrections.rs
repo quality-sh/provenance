@@ -1,11 +1,11 @@
-//! A refusal for a state file that does not parse names the two steps that
-//! correct the state and what each step removes, and each step, done as the
-//! refusal says, gives a state that Provenance can read. The state of each
-//! test has a Requirement line whose `refines` is a string and not a list, as
-//! in a line of an older form. The tests of the two steps also use a line that
-//! a person cut. A get over that state answers at the stored serial, and its
+//! A refusal for a state file that does not parse names the two procedures
+//! that correct the state and what each procedure removes, and each procedure,
+//! done as the refusal says, gives a state that Provenance can read. The state
+//! of most tests has a Requirement line whose `refines` is a string and not a
+//! list, as in a line of an older form. The tests of the two procedures also
+//! use a line that a person cut, and a manifest of each of these two forms. A
+//! get over a bad Requirement line answers at the stored serial, and its
 //! freshness warning is the text of the refusal.
-
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::path::Path;
@@ -13,6 +13,7 @@ use std::process::Stdio;
 
 use crate::support;
 use support::review_paths::provenance;
+use support::stale_repo::{commit, git, init_repo};
 
 /// The hint of a record file that does not parse. The other tests compare
 /// with the public constant; this file pins the text that a person reads.
@@ -72,32 +73,14 @@ fn create(repo: &Path, args: &[&str]) {
     passes(repo, &[&args[..1], &flags, &statement, &args[1..]].concat());
 }
 
-fn git(repo: &Path, args: &[&str]) {
-    let output = provenance_store::git_process::git()
-        .args(args)
-        .current_dir(repo)
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
 /// A Git repository with a commit of `req_parent` and `req_child`, where
 /// `req_child` refines `req_parent`.
 fn committed() -> tempfile::TempDir {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = init_repo();
     let repo = directory.path();
-    git(repo, &["init", "--quiet"]);
-    support::review_paths::init_scope(repo, "default", ".");
     create(repo, &["req_parent"]);
     create(repo, &["req_child", "--refines", "req_parent"]);
-    git(repo, &["add", "--all"]);
-    let identity = ["-c", "user.name=Test", "-c", "user.email=test@example.com"];
-    let commit = [&identity[..], &["commit", "--quiet", "-m", "records"]].concat();
-    git(repo, &commit);
+    commit(repo, "records");
     directory
 }
 
@@ -273,21 +256,45 @@ fn read(repo: &Path, id: &str) -> Value {
     read
 }
 
-/// The second way, done as the hint says: remove .provenance/state, then do
+/// Adds a technical name to the dictionary reference of the state.
+fn add_technical_name(repo: &Path) {
+    let path = repo.join(".provenance/state/dictionary.json");
+    let mut reference: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    reference["technical_names"] = json!(["Provenance"]);
+    std::fs::write(&path, serde_json::to_vec_pretty(&reference).unwrap()).unwrap();
+}
+
+/// The JSON file at `file` below the state directory.
+fn state_json(repo: &Path, file: &str) -> Value {
+    let path = repo.join(".provenance/state").join(file);
+    serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+}
+
+/// Procedure 2, done as the hint says: remove .provenance/state and then do
 /// the command provenance init. After them, the state reads, and it holds none
-/// of the records.
+/// of the records, scopes, disposition actors and technical names that it held.
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
 fn init_after_the_removal_of_the_state_gives_a_state_that_reads() {
     for fault in FAULTS {
         let directory = committed();
         let repo = directory.path();
+        std::fs::create_dir(repo.join("other")).unwrap();
+        support::review_paths::init_scope(repo, "other", "other");
         fault(repo);
         assert_eq!(hint(repo), json!(HINT));
+        add_technical_name(repo);
 
         std::fs::remove_dir_all(repo.join(".provenance/state")).unwrap();
         passes(repo, &["init"]);
 
+        let manifest = state_json(repo, "manifest.json");
+        let scopes = json!([{"id": "default", "path_prefix": "."}]);
+        assert_eq!(manifest["scopes"], scopes, "{manifest}");
+        let actors = manifest["disposition_actor_ids"].as_array().unwrap();
+        assert!(!actors.contains(&json!("reviewer")), "{manifest}");
+        let reference = state_json(repo, "dictionary.json");
+        assert_eq!(reference.get("technical_names"), None, "{reference}");
         let (code, stdout, stderr) = run(repo, &["req_child", "get", "--format", "json"]);
         assert_eq!(code, Some(1), "{stdout}");
         let refused: Value = serde_json::from_str(&stderr).unwrap();
@@ -298,8 +305,8 @@ fn init_after_the_removal_of_the_state_gives_a_state_that_reads() {
     }
 }
 
-/// The first way, done as the hint says: get .provenance/state from a commit
-/// that Provenance can read. The state then reads and holds the records of
+/// Procedure 1, done as the hint says: get .provenance/state from a commit
+/// where Provenance can read it. The state then reads and holds the records of
 /// that commit, and a record that is not in that commit is removed.
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]

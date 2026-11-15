@@ -10,8 +10,10 @@ mod support {
     pub mod import_reviews;
     pub mod record_review;
     pub mod review_paths;
+    pub mod stale_repo;
     pub mod state_files;
 }
+use support::review_paths;
 #[path = "../cli_approval_evidence.rs"]
 mod cli_approval_evidence;
 #[path = "../cli_archive_commit_plain_flag.rs"]
