@@ -195,7 +195,12 @@ fn check_rejects_missing_wrong_kind_and_wrong_scope_canonical_artifacts() {
 
         provenance(dir.path())
             .failure()
-            .stderr(contains("canonical artifact does not exist"));
+            .stderr(contains(format!(
+                "{{\"file\":\"scopes/default/ideation/dispositions.jsonl\",\
+                 \"kind\":\"invalid_state_file\",\"line\":1,\
+                 \"message\":\"disposition disposition_a names {artifact_type} {artifact_id}, \
+                 which the scope does not have\"}}"
+            )));
     }
 }
 

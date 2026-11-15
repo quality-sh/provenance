@@ -7,10 +7,10 @@ use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
-const OWNER: &str = "spec://typescript/share-links";
-const KEPT: (&str, &str) = ("kept", "The system retains records.");
+pub(super) const OWNER: &str = "spec://typescript/share-links";
+pub(super) const KEPT: (&str, &str) = ("kept", "The system retains records.");
 
-fn document(requirements: &[(&str, &str)]) -> Value {
+pub(super) fn document(requirements: &[(&str, &str)]) -> Value {
     let requirements = requirements
         .iter()
         .map(|(key, statement)| json!({"key": key, "statement": statement}))
@@ -24,13 +24,13 @@ fn document(requirements: &[(&str, &str)]) -> Value {
     })
 }
 
-struct Answer {
-    code: Option<i32>,
-    stdout: String,
-    stderr: String,
+pub(super) struct Answer {
+    pub(super) code: Option<i32>,
+    pub(super) stdout: String,
+    pub(super) stderr: String,
 }
 
-fn run(arguments: &[&str], input: Option<&Value>) -> Answer {
+pub(super) fn run(arguments: &[&str], input: Option<&Value>) -> Answer {
     let mut command = provenance();
     command.args(arguments);
     if let Some(input) = input {
@@ -45,7 +45,7 @@ fn run(arguments: &[&str], input: Option<&Value>) -> Answer {
 }
 
 /// Sends `input` to an authoring route, in the JSON form or in the text form.
-fn route(repo: &str, route: &str, input: &Value, json_form: bool) -> Answer {
+pub(super) fn route(repo: &str, route: &str, input: &Value, json_form: bool) -> Answer {
     let mut arguments = vec![
         "api", route, "--method", "post", "--input", "-", "--repo", repo, "--scope", "default",
     ];
@@ -55,7 +55,7 @@ fn route(repo: &str, route: &str, input: &Value, json_form: bool) -> Answer {
     run(&arguments, Some(input))
 }
 
-fn succeeded(answer: &Answer) -> Value {
+pub(super) fn succeeded(answer: &Answer) -> Value {
     assert_eq!(answer.code, Some(0), "{}", answer.stderr);
     serde_json::from_str(&answer.stdout).unwrap()
 }
@@ -68,7 +68,7 @@ fn api(repo: &str, path: &str, body: &Value) -> Value {
 }
 
 /// Applies `requirements` and gives the id of each key.
-fn apply(repo: &str, requirements: &[(&str, &str)]) -> BTreeMap<String, String> {
+pub(super) fn apply(repo: &str, requirements: &[(&str, &str)]) -> BTreeMap<String, String> {
     let applied = succeeded(&route(
         repo,
         "authoring-changes",
@@ -86,9 +86,11 @@ fn apply(repo: &str, requirements: &[(&str, &str)]) -> BTreeMap<String, String> 
         .collect()
 }
 
-fn submit(repo: &str, id: &str) -> String {
+/// Opens a review submission of the record `id`, whose owner is
+/// `declared_by`, and gives the id of the submission.
+pub(super) fn submit(repo: &str, id: &str, declared_by: Option<&str>) -> String {
     let body = json!({
-        "actor": "agent", "declared_by": OWNER, "title": "Review",
+        "actor": "agent", "declared_by": declared_by, "title": "Review",
         "summary": "Review the record.", "confidence": null,
         "source_ids": [], "evidence_references": [], "builds_on": [],
         "expected_revision": null, "revises": null
@@ -134,7 +136,7 @@ fn withdraw(repo: &str, id: &str, proposal: &str) {
     );
 }
 
-fn resource<'a>(plan: &'a Value, key: &str) -> &'a Value {
+pub(super) fn resource<'a>(plan: &'a Value, key: &str) -> &'a Value {
     plan["data"]["resources"]
         .as_array()
         .unwrap()
@@ -166,12 +168,12 @@ fn the_plan_shows_each_deletion_that_the_apply_refuses_with_its_cause() {
         KEPT,
     ];
     let ids = apply(&repo, &all);
-    submit(&repo, &ids["pending"]);
-    let proposal = submit(&repo, &ids["rejected"]);
+    submit(&repo, &ids["pending"], Some(OWNER));
+    let proposal = submit(&repo, &ids["rejected"], Some(OWNER));
     decide(&repo, &ids["rejected"], &proposal, false);
-    let proposal = submit(&repo, &ids["withdrawn"]);
+    let proposal = submit(&repo, &ids["withdrawn"], Some(OWNER));
     withdraw(&repo, &ids["withdrawn"], &proposal);
-    let proposal = submit(&repo, &ids["accepted"]);
+    let proposal = submit(&repo, &ids["accepted"], Some(OWNER));
     let accepted = decide(&repo, &ids["accepted"], &proposal, true);
     let disposition = accepted["data"]["disposition_id"].as_str().unwrap();
     let kept_only = document(&[KEPT]);
@@ -244,7 +246,7 @@ fn a_plan_with_no_refused_deletion_applies() {
     assert_eq!(error["error"]["kind"], "resource_not_found", "{error}");
 }
 
-fn create(repo: &str, id: &str, kind: &str, fields: &[&str]) {
+pub(super) fn create(repo: &str, id: &str, kind: &str, fields: &[&str]) {
     let mut arguments = vec![
         id, "create", "--type", kind, "--repo", repo, "--format", "json",
     ];
