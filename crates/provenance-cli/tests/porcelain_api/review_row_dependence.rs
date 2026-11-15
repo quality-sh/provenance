@@ -156,13 +156,17 @@ fn the_list_read_keeps_the_stored_state_of_an_accepted_and_withdrawn_submission(
     assert_eq!(item["promotion_state"], "proposed", "{item}");
 }
 
-/// Flow: one reviewer approves the submission S of `req_a`, and a second
-/// line approves it again with a different actor and rationale. The result
+/// Flow: the manifest names two reviewers. One approves the submission S
+/// of `req_a`, and a second line approves it again with the other actor and
+/// a different rationale. The result
 /// is the decision, so S reads as accepted and `check` passes.
 #[test]
 #[verifies("rule_same_result_decisions_read_as_one", examples)]
 fn two_approvals_by_different_actors_read_as_one() {
     let (_directory, repo) = repository(Merge::Driver);
+    let actors = ["--disposition-actor-id", REVIEWER, "--disposition-actor-id"];
+    let init = ["init", "--path", &repo, "--scope", "default", "--path-prefix", "."];
+    success(&[&init[..], &actors[..], &["second_reviewer"]].concat());
     let submission = pending(&repo, "req_a");
     super::review_merged_decisions::decide(&repo, "req_a", &submission, "accepted", "", None);
     commit(&repo);
