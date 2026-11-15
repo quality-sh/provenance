@@ -13,6 +13,7 @@ use provenance_core::protocol::{
     failure::OperationFailure,
     read_failure::{MovedUnit, ReadFailure, UnparsableStateFile},
 };
+use provenance_macros::rule;
 
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
@@ -87,6 +88,7 @@ impl ReadError {
     /// The refusal of a document read whose catch-up failed with `cause`: the
     /// location and the message of a state line that does not parse, else
     /// the cause as text.
+    #[rule("rule_document_catch_up_refusal_gives_typed_cause")]
     fn catch_up_refusal(&self, cause: &anyhow::Error) -> ReadFailure {
         let message = match self.classified(cause, UnparsableStateFile::catch_up_failure) {
             failure @ ReadFailure::DocumentCatchUpFailed { .. } => return failure,
