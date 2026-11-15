@@ -10,6 +10,8 @@ use anyhow::Context;
 #[cfg(feature = "host")]
 use camino::Utf8PathBuf;
 #[cfg(feature = "host")]
+use provenance_core::protocol::read_failure::UnparsableStateFile;
+#[cfg(feature = "host")]
 use provenance_macros::rule;
 use provenance_ste100::DictionaryImport;
 #[cfg(feature = "host")]
@@ -53,45 +55,66 @@ pub enum DictionaryResolution {
     NoReference,
     /// The reference loaded its index from the machine directory.
     Loaded(ProjectDictionary),
-    /// The reference exists, but this machine holds no matching index for it.
+    /// The reference does not parse, so it names no index. The refusal gives
+    /// the file, the line, the parse message and the repair.
+    Unparsable(UnparsableStateFile),
+    /// The reference names an index that this machine cannot load.
     Unavailable {
-        identity: Option<DictionaryImportIdentity>,
+        identity: DictionaryImportIdentity,
         directory: Option<PathBuf>,
         reason: String,
     },
+}
+
+/// The step that repairs a dictionary reference that does not parse.
+#[cfg(feature = "host")]
+const REFERENCE_REPAIR: &str =
+    "get the file again from git or correct its JSON, and then do the command again";
+
+/// Parses the reference at `path`. The refusal of a reference that does not
+/// parse gives the file below the state directory, the line, the parse message
+/// and the repair.
+#[cfg(feature = "host")]
+fn parse_reference(
+    path: &camino::Utf8Path,
+    bytes: &[u8],
+) -> Result<DictionaryReference, UnparsableStateFile> {
+    serde_json::from_slice(bytes).map_err(|error| {
+        crate::state_store::readers::unparsable(
+            path,
+            u64::try_from(error.line()).unwrap_or(u64::MAX),
+            crate::state_store::readers::parse_message(&error),
+            Some(REFERENCE_REPAIR.to_owned()),
+        )
+    })
 }
 
 /// Separates a missing reference from a reference that cannot load, so a strict
 /// gate can fail on the second and stay silent on the first.
 #[cfg(feature = "host")]
 pub fn resolve_project_dictionary(layout: &ProvenanceLayout) -> DictionaryResolution {
-    let Ok(reference) = std::fs::read(dictionary_reference_path(layout).as_std_path()) else {
+    let path = dictionary_reference_path(layout);
+    let Ok(bytes) = std::fs::read(path.as_std_path()) else {
         return DictionaryResolution::NoReference;
     };
-    let reference: DictionaryReference = match serde_json::from_slice(&reference) {
+    let reference = match parse_reference(&path, &bytes) {
         Ok(reference) => reference,
-        Err(error) => {
-            return DictionaryResolution::Unavailable {
-                identity: None,
-                directory: index_directory(),
-                reason: format!("the reference is not a dictionary identity: {error}"),
-            };
-        }
+        Err(refusal) => return DictionaryResolution::Unparsable(refusal),
     };
     let Some(directory) = index_directory() else {
         return DictionaryResolution::Unavailable {
-            identity: Some(reference.identity),
+            identity: reference.identity,
             directory: None,
             reason: "no machine data directory is available".to_owned(),
         };
     };
-    match provenance_ste100::load_dictionary_index(&directory, &reference.identity) {
+    match crate::dictionary_index::load_dictionary_index(&directory, &reference.identity) {
         Ok(import) => DictionaryResolution::Loaded(ProjectDictionary {
             import,
             technical_names: reference.technical_names,
         }),
         Err(error) => DictionaryResolution::Unavailable {
-            identity: Some(reference.identity),
+            identity: reference.identity,
             directory: Some(directory),
             reason: error.to_string(),
         },
@@ -104,49 +127,81 @@ pub fn resolve_project_dictionary(layout: &ProvenanceLayout) -> DictionaryResolu
 pub fn load_project_dictionary(layout: &ProvenanceLayout) -> Option<ProjectDictionary> {
     match resolve_project_dictionary(layout) {
         DictionaryResolution::Loaded(dictionary) => Some(dictionary),
-        DictionaryResolution::NoReference | DictionaryResolution::Unavailable { .. } => None,
+        DictionaryResolution::NoReference
+        | DictionaryResolution::Unparsable(_)
+        | DictionaryResolution::Unavailable { .. } => None,
     }
 }
 
-/// Stores the index in the machine data directory and writes the project reference.
+/// Stores the index in `index_directory` and then writes the project
+/// reference, so that the reference names only an index that is stored.
+///
+/// A current reference that does not parse stops the call before a write.
 #[cfg(feature = "host")]
 pub fn set_project_dictionary(
     layout: &ProvenanceLayout,
     import: &DictionaryImport,
+    index_directory: &std::path::Path,
 ) -> anyhow::Result<Utf8PathBuf> {
-    let directory = index_directory()
-        .ok_or_else(|| crate::refusal::fault!("no machine data directory is available"))?;
-    provenance_ste100::store_dictionary_index(import, &directory)
-        .context("store the dictionary index")?;
     let path = dictionary_reference_path(layout);
-    std::fs::create_dir_all(layout.state_dir().as_std_path())
-        .context("create the project state directory")?;
-    let reference = reference_bytes(layout, &import.identity)?;
-    std::fs::write(path.as_std_path(), reference).context("write the dictionary reference")?;
+    let reference = current_reference(layout)?.bytes_for(&import.identity)?;
+    crate::dictionary_index::store_dictionary_index(import, index_directory)
+        .context("store the dictionary index")?;
+    crate::storage::local::durability::write_synced_file(&path, &reference)
+        .context("write the dictionary reference")?;
     Ok(path)
 }
 
-/// The reference bytes for a new dictionary identity. The bytes keep the
-/// technical names of the current reference.
+/// The part of the committed reference that a write of a new dictionary
+/// identity keeps: the technical names.
 #[cfg(feature = "host")]
-pub fn reference_bytes(
-    layout: &ProvenanceLayout,
-    identity: &DictionaryImportIdentity,
-) -> anyhow::Result<Vec<u8>> {
-    let technical_names = match std::fs::read(dictionary_reference_path(layout).as_std_path()) {
-        Ok(current) => serde_json::from_slice::<DictionaryReference>(&current)
-            .map_or_default(|current| current.technical_names),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+#[derive(Debug)]
+pub struct CurrentReference {
+    technical_names: Vec<String>,
+}
+
+#[cfg(feature = "host")]
+impl CurrentReference {
+    /// The reference bytes for `identity`, with the technical names of the
+    /// current reference.
+    pub fn bytes_for(&self, identity: &DictionaryImportIdentity) -> anyhow::Result<Vec<u8>> {
+        let reference = DictionaryReference {
+            identity: identity.clone(),
+            technical_names: self.technical_names.clone(),
+        };
+        let mut bytes =
+            serde_json::to_vec_pretty(&reference).context("serialize the dictionary reference")?;
+        bytes.push(b'\n');
+        Ok(bytes)
+    }
+}
+
+/// Reads the committed reference and gives its part that a write keeps, or the
+/// refusal of [`current_reference_from`].
+#[cfg(feature = "host")]
+pub fn current_reference(layout: &ProvenanceLayout) -> anyhow::Result<CurrentReference> {
+    let path = dictionary_reference_path(layout);
+    let bytes = match std::fs::read(path.as_std_path()) {
+        Ok(bytes) => Some(bytes),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
         Err(error) => return Err(error).context("read the dictionary reference"),
     };
-    let reference = DictionaryReference {
-        identity: identity.clone(),
-        technical_names,
+    Ok(current_reference_from(layout, bytes.as_deref())?)
+}
+
+/// Refuses a dictionary reference that does not parse, so that no write of
+/// the reference loses its technical names.
+#[rule("rule_ste_dictionary_reference_parse_refusal")]
+#[cfg(feature = "host")]
+pub fn current_reference_from(
+    layout: &ProvenanceLayout,
+    file: Option<&[u8]>,
+) -> Result<CurrentReference, UnparsableStateFile> {
+    let technical_names = match file {
+        None => Vec::new(),
+        Some(bytes) => parse_reference(&dictionary_reference_path(layout), bytes)?.technical_names,
     };
-    let mut bytes =
-        serde_json::to_vec_pretty(&reference).context("serialize the dictionary reference")?;
-    bytes.push(b'\n');
-    Ok(bytes)
+    Ok(CurrentReference { technical_names })
 }
 
 /// The warning for a reference that exists without a loadable index, because
@@ -154,21 +209,25 @@ pub fn reference_bytes(
 #[rule("rule_ste_dictionary_index_missing_warning")]
 #[cfg(feature = "host")]
 pub fn missing_index_warning(layout: &ProvenanceLayout) -> Option<String> {
-    let DictionaryResolution::Unavailable {
-        directory, reason, ..
-    } = resolve_project_dictionary(layout)
-    else {
-        return None;
-    };
-    let directory = directory.map_or_else(
-        || "the machine data directory".to_owned(),
-        |directory| directory.display().to_string(),
-    );
-    Some(format!(
-        "ASD-STE100 Rule 1.1 did not run: the dictionary reference has no loadable index \
-         in {directory}: {reason}. Run `provenance dictionary import` with the local Issue 9 \
-         PDF on this machine"
-    ))
+    match resolve_project_dictionary(layout) {
+        DictionaryResolution::NoReference | DictionaryResolution::Loaded(_) => None,
+        DictionaryResolution::Unparsable(refusal) => {
+            Some(format!("ASD-STE100 Rule 1.1 did not run: {refusal}"))
+        }
+        DictionaryResolution::Unavailable {
+            directory, reason, ..
+        } => {
+            let directory = directory.map_or_else(
+                || "the machine data directory".to_owned(),
+                |directory| directory.display().to_string(),
+            );
+            Some(format!(
+                "ASD-STE100 Rule 1.1 did not run: the dictionary reference has no loadable \
+                 index in {directory}: {reason}. Run `provenance dictionary import` with the \
+                 local Issue 9 PDF on this machine"
+            ))
+        }
+    }
 }
 
 /// The machine directory that holds imported dictionary index files.
@@ -203,3 +262,7 @@ fn data_directory() -> Option<PathBuf> {
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")))
 }
+
+#[cfg(test)]
+#[cfg(all(unix, feature = "host"))]
+mod write_tests;
