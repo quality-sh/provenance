@@ -65,7 +65,7 @@ fn refusal(arguments: &[&str]) -> Value {
     envelope(&String::from_utf8_lossy(&result.stderr))
 }
 
-pub(crate) fn envelope(stderr: &str) -> Value {
+pub fn envelope(stderr: &str) -> Value {
     let text = stderr.trim();
     let text = text.strip_prefix("Error: ").unwrap_or(text);
     serde_json::from_str(text).unwrap_or_else(|error| panic!("{error}: {stderr}"))

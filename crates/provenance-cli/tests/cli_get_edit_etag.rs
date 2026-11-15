@@ -124,9 +124,9 @@ async fn a_get_of_each_record_gives_the_same_edit_etag_on_the_cli_and_on_mcp() {
         let called = called["content"][0]["text"].as_str();
         assert_eq!(called, text.strip_suffix('\n'), "{id}");
 
-        let link = cli_json(&repo, &[id, "--review-link", "--no-open"]);
-        let message = link["message"].as_str().unwrap();
-        assert_eq!(link, json!({"review_url":null,"message":message}), "{id}");
+        let answer = cli_json(&repo, &[id, "--review-link", "--no-open"]);
+        let message = answer["message"].as_str().unwrap();
+        assert_eq!(answer, json!({"review_url":null,"message":message}), "{id}");
         let arguments = json!({"target":id,"review_link":true});
         let linked = server.client.call("get", arguments).await;
         let mut expected = by_cli.clone();
