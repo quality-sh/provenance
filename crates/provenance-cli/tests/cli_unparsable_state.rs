@@ -39,14 +39,15 @@ fn refusal(repo: &str, args: &[&str]) -> Value {
     serde_json::from_str(object).unwrap_or_else(|error| panic!("{args:?}: {error}: {text}"))
 }
 
-fn assert_names_the_line(refusal: &Value) {
+fn assert_names_the_line(repo: &str, refusal: &Value) {
     let error = &refusal["error"];
     assert_eq!(error["kind"], "invalid_state_file", "{refusal}");
     assert_eq!(error["file"], CARDS, "{refusal}");
     assert_eq!(error["line"], 1, "{refusal}");
     let message = error["message"].as_str().unwrap_or_default();
     assert!(message.starts_with("unknown variant `widget`"), "{refusal}");
-    assert!(!refusal.to_string().contains(".provenance"), "{refusal}");
+    let repo = serde_json::to_string(repo).unwrap();
+    assert!(!refusal.to_string().contains(repo.trim_matches('"')), "{refusal}");
 }
 
 #[test]
@@ -66,7 +67,7 @@ fn a_create_names_the_state_line_that_does_not_parse() {
             "json",
         ],
     );
-    assert_names_the_line(&refusal);
+    assert_names_the_line(&repo, &refusal);
 }
 
 #[test]
@@ -74,7 +75,7 @@ fn a_create_names_the_state_line_that_does_not_parse() {
 fn an_api_read_names_the_state_line_that_does_not_parse() {
     let (_directory, repo) = unknown_artifact_type();
     let refusal = refusal(&repo, &["api", "/requirements/req_a"]);
-    assert_names_the_line(&refusal);
+    assert_names_the_line(&repo, &refusal);
 }
 
 #[test]
@@ -82,5 +83,5 @@ fn an_api_read_names_the_state_line_that_does_not_parse() {
 fn a_get_names_the_state_line_that_does_not_parse() {
     let (_directory, repo) = unknown_artifact_type();
     let refusal = refusal(&repo, &["req_a", "get", "--format", "json"]);
-    assert_names_the_line(&refusal);
+    assert_names_the_line(&repo, &refusal);
 }
