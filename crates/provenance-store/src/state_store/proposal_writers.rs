@@ -26,7 +26,7 @@ impl StateStore {
             "assertion proposal_id must match proposal id"
         );
         let scope = proposal.scope_id.clone();
-        self.with_lifecycle_lock(&scope, |held| {
+        self.with_repository_publication(|held| {
             let proposal = proposal_from_input(proposal)?;
             let assertion = AssertionRecord {
                 scope_id: assertion.scope_id,
@@ -51,8 +51,7 @@ impl StateStore {
     }
 
     pub fn assert_proposal(&self, input: CreateAssertionInput) -> anyhow::Result<AssertionRecord> {
-        let scope = input.scope_id.clone();
-        self.with_lifecycle_lock(&scope, |held| held.write_assertion(input))
+        self.with_repository_publication(|held| held.write_assertion(input))
     }
 
     pub fn assert_proposal_after_human_decision(
@@ -61,7 +60,7 @@ impl StateStore {
         decision_keys: &[StableId],
     ) -> anyhow::Result<AssertionRecord> {
         let scope = input.scope_id.clone();
-        self.with_lifecycle_lock(&scope, |held| {
+        self.with_repository_publication(|held| {
             held.ensure_proposal_not_disposed(&scope, &input.proposal_id)?;
             let mut synthesis = held
                 .list_synthesis_packets(&scope)?
@@ -186,8 +185,7 @@ impl StateStore {
         &self,
         input: CreateProposalCardInput,
     ) -> anyhow::Result<ProposalCard> {
-        let scope = input.scope_id.clone();
-        self.with_lifecycle_lock(&scope, |held| held.write_proposal_card(input))
+        self.with_repository_publication(|held| held.write_proposal_card(input))
     }
 
     fn write_proposal_card(&self, input: CreateProposalCardInput) -> anyhow::Result<ProposalCard> {
@@ -244,8 +242,7 @@ impl StateStore {
         &self,
         input: CreateDispositionInput,
     ) -> anyhow::Result<DispositionRecord> {
-        let scope = input.scope_id.clone();
-        self.with_lifecycle_lock(&scope, |held| held.write_disposition(input))
+        self.with_repository_publication(|held| held.write_disposition(input))
     }
 
     fn write_disposition(

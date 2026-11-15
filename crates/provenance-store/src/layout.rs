@@ -55,13 +55,6 @@ impl ProvenanceLayout {
             .join(relative)
             .with_extension("jsonl.lock"))
     }
-    pub fn lifecycle_lock_path(&self, scope: &provenance_core::ScopeId) -> Utf8PathBuf {
-        self.cache_dir()
-            .join("locks")
-            .join("scopes")
-            .join(scope.as_str())
-            .join("ideation.lifecycle.lock")
-    }
     pub fn publication_lock_path(&self) -> Utf8PathBuf {
         self.cache_dir()
             .join("locks")

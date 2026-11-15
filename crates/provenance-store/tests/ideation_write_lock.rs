@@ -201,7 +201,6 @@ fn six_writes_on_a_folder_leave_these_files() {
     assert_eq!(
         added,
         [
-            "scopes/default/ideation.lifecycle.lock",
             "scopes/default/ideation/assertions.jsonl.lock",
             "scopes/default/ideation/contributions.jsonl.lock",
             "scopes/default/ideation/proposal_cards.jsonl.lock",
