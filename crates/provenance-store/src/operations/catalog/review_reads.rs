@@ -1,7 +1,6 @@
 //! Resource adapters for review history and addressed Discussions.
 use super::{shapes::graph_read_operation, ExecutionNeed};
 use crate::review;
-#[cfg(feature = "host")]
 use provenance_core::review::{EvidencePage, EvidenceQuery, RecordVersion, ReviewHistoryQuery};
 pub use provenance_core::threads::DiscussionResultPage;
 use provenance_core::{
@@ -99,8 +98,6 @@ const fn limit() -> usize {
     50
 }
 
-// The history reads need `host`.
-#[cfg(feature = "host")]
 review_read!(
     ReviewHistory,
     "review-history",
@@ -136,7 +133,6 @@ pub struct HistoryEntryRequest {
     pub entry_id: StableId,
 }
 
-#[cfg(feature = "host")]
 review_read!(
     ReviewHistoryEntry,
     "review-history-entry",
@@ -198,7 +194,6 @@ pub struct HistoryEvidenceRequest {
     pub offset: u64,
 }
 
-#[cfg(feature = "host")]
 review_read!(
     ReviewEvidence,
     "review-evidence",

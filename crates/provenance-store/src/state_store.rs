@@ -104,18 +104,25 @@ impl StateStore {
 
     /// The committed file versions that the history reads of this store
     /// read: the ones that the repository was given, or else the Git
-    /// history of the layout root.
-    #[cfg(feature = "host")]
-    pub(crate) fn file_versions(&self) -> std::sync::Arc<dyn crate::review::history::FileVersions> {
-        self.identity
+    /// history of the layout root. Without `host` a repository that was
+    /// given none has no history to read, and the read fails.
+    pub(crate) fn file_versions(
+        &self,
+    ) -> anyhow::Result<std::sync::Arc<dyn crate::review::history::FileVersions>> {
+        let given = self
+            .identity
             .as_ref()
             .and_then(RepositoryIdentity::file_versions)
-            .cloned()
-            .unwrap_or_else(|| {
+            .cloned();
+        #[cfg(feature = "host")]
+        let given = given.or_else(|| {
+            Some(
                 std::sync::Arc::new(crate::review::history::GitFileVersions::new(
                     self.layout.root().to_owned(),
-                ))
-            })
+                )) as _,
+            )
+        });
+        given.ok_or_else(|| crate::refusal::fault!("the repository has no file versions"))
     }
 
     /// The clock that the writes of this store read: the one of the

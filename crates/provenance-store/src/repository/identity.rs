@@ -145,7 +145,6 @@ impl RepositoryIdentity {
 
     /// The committed file versions that record history reads, if the
     /// repository has its own.
-    #[cfg(feature = "host")]
     pub(crate) fn file_versions(&self) -> Option<&Arc<dyn FileVersions>> {
         self.file_versions.as_ref()
     }
