@@ -2,6 +2,7 @@
 
 use crate::action::{Action, ActionError};
 use provenance_core::{
+    actor_input::ActorInput,
     protocol::{Stamp, Stamped},
     threads::{
         Discussion, DiscussionConversationResult, DiscussionResultPage, DiscussionStatus,
@@ -147,7 +148,12 @@ pub struct ConversationInput {
 #[serde(deny_unknown_fields)]
 pub struct StartInput {
     pub parent: ThreadParent,
-    pub actor: String,
+    #[serde(
+        default,
+        skip_serializing_if = "ActorInput::is_absent",
+        serialize_with = "ActorInput::serialize_given"
+    )]
+    pub actor: ActorInput,
     pub declared_by: Option<String>,
     pub role: MessageRole,
     pub body: String,
@@ -158,7 +164,12 @@ pub struct StartInput {
 #[serde(deny_unknown_fields)]
 pub struct ReplyInput {
     pub discussion_id: StableId,
-    pub actor: String,
+    #[serde(
+        default,
+        skip_serializing_if = "ActorInput::is_absent",
+        serialize_with = "ActorInput::serialize_given"
+    )]
+    pub actor: ActorInput,
     pub declared_by: Option<String>,
     pub expected_version: u64,
     pub role: MessageRole,
