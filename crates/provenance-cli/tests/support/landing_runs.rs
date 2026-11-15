@@ -147,7 +147,7 @@ pub fn land(landing: &Landing, name: &str) {
         name,
         &[contribution(&id, "The requirement holds.")],
         None,
-    )
+    );
 }
 
 /// Checks out a new branch at `into`, merges `from` into it, and returns the
