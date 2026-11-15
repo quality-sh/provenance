@@ -1,1 +1,3842 @@
-[]
+[
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": "Reviewer",
+            "before": null,
+            "changed_fields": [
+              "id",
+              "scope_id",
+              "statement",
+              "status"
+            ],
+            "commit": "create",
+            "committed_at": 1700000060,
+            "id": "create",
+            "origin": null,
+            "outcome": "created",
+            "revision": "435366304d2feab94f597ee71327513a684f5136d63d87543e41187922f9c859"
+          },
+          {
+            "author": "alice",
+            "before": "create",
+            "changed_fields": [
+              "statement"
+            ],
+            "commit": "alice",
+            "committed_at": 1700000360,
+            "id": "alice",
+            "origin": null,
+            "outcome": "changed",
+            "revision": "77507255f69fd220bc02c7689818a2b4e125eea3d7b9d05cf01e7902324332b7"
+          },
+          {
+            "author": "dave",
+            "before": "alice",
+            "changed_fields": [
+              "description"
+            ],
+            "commit": "record",
+            "committed_at": 1700000600,
+            "id": "record",
+            "origin": {
+              "discussion_id": "00000000-0000-0000-0000-00000000000a",
+              "message_id": "msg_00000000-0000-0000-0000-000000000009",
+              "thread_id": "thread_requirement_req_a"
+            },
+            "outcome": "changed",
+            "revision": "ae962240247dc91dd109bf34510e33cc22999f76313f4f30d3722bdb69ae4897"
+          },
+          {
+            "author": null,
+            "before": "record",
+            "changed_fields": [
+              "description"
+            ],
+            "commit": null,
+            "committed_at": null,
+            "id": "working",
+            "origin": null,
+            "outcome": "changed",
+            "revision": "a7aa084bd88072e1bf282c7606b6098d402e7e9fdcbbe0bca6844320a702cb96"
+          }
+        ],
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "record_id": "req_a",
+      "record_kind": "requirement"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": "Reviewer",
+            "before": null,
+            "changed_fields": [
+              "id",
+              "scope_id",
+              "statement",
+              "status"
+            ],
+            "commit": "create",
+            "committed_at": 1700000060,
+            "id": "create",
+            "origin": null,
+            "outcome": "created",
+            "revision": "435366304d2feab94f597ee71327513a684f5136d63d87543e41187922f9c859"
+          }
+        ],
+        "has_more": true,
+        "limit": 1,
+        "next_cursor": true
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "limit": 1,
+      "record_id": "req_a",
+      "record_kind": "requirement"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": "alice",
+            "before": "create",
+            "changed_fields": [
+              "statement"
+            ],
+            "commit": "alice",
+            "committed_at": 1700000360,
+            "id": "alice",
+            "origin": null,
+            "outcome": "changed",
+            "revision": "77507255f69fd220bc02c7689818a2b4e125eea3d7b9d05cf01e7902324332b7"
+          }
+        ],
+        "has_more": true,
+        "limit": 1,
+        "next_cursor": true
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "cursor": "<cursor>",
+      "limit": 1,
+      "record_id": "req_a",
+      "record_kind": "requirement"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": "dave",
+            "before": "alice",
+            "changed_fields": [
+              "description"
+            ],
+            "commit": "record",
+            "committed_at": 1700000600,
+            "id": "record",
+            "origin": {
+              "discussion_id": "00000000-0000-0000-0000-00000000000a",
+              "message_id": "msg_00000000-0000-0000-0000-000000000009",
+              "thread_id": "thread_requirement_req_a"
+            },
+            "outcome": "changed",
+            "revision": "ae962240247dc91dd109bf34510e33cc22999f76313f4f30d3722bdb69ae4897"
+          }
+        ],
+        "has_more": true,
+        "limit": 1,
+        "next_cursor": true
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "cursor": "<cursor>",
+      "limit": 1,
+      "record_id": "req_a",
+      "record_kind": "requirement"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": null,
+            "before": "record",
+            "changed_fields": [
+              "description"
+            ],
+            "commit": null,
+            "committed_at": null,
+            "id": "working",
+            "origin": null,
+            "outcome": "changed",
+            "revision": "a7aa084bd88072e1bf282c7606b6098d402e7e9fdcbbe0bca6844320a702cb96"
+          }
+        ],
+        "has_more": false,
+        "limit": 1,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "cursor": "<cursor>",
+      "limit": 1,
+      "record_id": "req_a",
+      "record_kind": "requirement"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "cause": "invalid utf-8 sequence of 1 bytes from index 0",
+        "kind": "read_failed"
+      },
+      "status": 500
+    },
+    "call": "review-history broken",
+    "request": {
+      "record_id": "req_b",
+      "record_kind": "requirement"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "cause": "invalid utf-8 sequence of 1 bytes from index 0",
+        "kind": "read_failed"
+      },
+      "status": 500
+    },
+    "call": "review-history broken",
+    "request": {
+      "limit": 1,
+      "record_id": "req_b",
+      "record_kind": "requirement"
+    }
+  },
+  {
+    "answer": {
+      "author": "Reviewer",
+      "before": null,
+      "changed_fields": [
+        "id",
+        "scope_id",
+        "statement",
+        "status"
+      ],
+      "commit": "create",
+      "committed_at": 1700000060,
+      "id": "create",
+      "origin": null,
+      "outcome": "created",
+      "revision": "435366304d2feab94f597ee71327513a684f5136d63d87543e41187922f9c859"
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "create",
+      "record_id": "req_a",
+      "record_kind": "requirement"
+    }
+  },
+  {
+    "answer": {
+      "author": "alice",
+      "before": "create",
+      "changed_fields": [
+        "statement"
+      ],
+      "commit": "alice",
+      "committed_at": 1700000360,
+      "id": "alice",
+      "origin": null,
+      "outcome": "changed",
+      "revision": "77507255f69fd220bc02c7689818a2b4e125eea3d7b9d05cf01e7902324332b7"
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "alice",
+      "record_id": "req_a",
+      "record_kind": "requirement"
+    }
+  },
+  {
+    "answer": {
+      "author": "dave",
+      "before": "alice",
+      "changed_fields": [
+        "description"
+      ],
+      "commit": "record",
+      "committed_at": 1700000600,
+      "id": "record",
+      "origin": {
+        "discussion_id": "00000000-0000-0000-0000-00000000000a",
+        "message_id": "msg_00000000-0000-0000-0000-000000000009",
+        "thread_id": "thread_requirement_req_a"
+      },
+      "outcome": "changed",
+      "revision": "ae962240247dc91dd109bf34510e33cc22999f76313f4f30d3722bdb69ae4897"
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "record",
+      "record_id": "req_a",
+      "record_kind": "requirement"
+    }
+  },
+  {
+    "answer": {
+      "author": null,
+      "before": "record",
+      "changed_fields": [
+        "description"
+      ],
+      "commit": null,
+      "committed_at": null,
+      "id": "working",
+      "origin": null,
+      "outcome": "changed",
+      "revision": "a7aa084bd88072e1bf282c7606b6098d402e7e9fdcbbe0bca6844320a702cb96"
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "working",
+      "record_id": "req_a",
+      "record_kind": "requirement"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "req_a",
+      "record_kind": "requirement"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "cause": "invalid utf-8 sequence of 1 bytes from index 0",
+        "kind": "read_failed"
+      },
+      "status": 500
+    },
+    "call": "review-history-entry broken",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "req_b",
+      "record_kind": "requirement"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"id\":\"req_a\",\"scope_id\":\"default\",\"statement\":\"The system stores records.\",\"status\":\"active\"}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "statement",
+        "json_text": "\"The system stores records.\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "field": "statement",
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "field": "statement",
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "field": "offset",
+        "kind": "invalid_input",
+        "reason": "invalid_value"
+      },
+      "status": 400
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "offset": 100000,
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"id\":\"req_a\",\"scope_id\":\"default\",\"statement\":\"The system stores records for one year.\",\"status\":\"active\"}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "alice"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "alice",
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "statement",
+        "json_text": "\"The system stores records for one year.\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "alice"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "alice",
+      "field": "statement",
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"id\":\"req_a\",\"scope_id\":\"default\",\"statement\":\"The system stores records.\",\"status\":\"active\"}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "alice",
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "statement",
+        "json_text": "\"The system stores records.\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "alice",
+      "field": "statement",
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "field": "offset",
+        "kind": "invalid_input",
+        "reason": "invalid_value"
+      },
+      "status": 400
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "alice",
+      "offset": 100000,
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"description\":\"Text A.\",\"id\":\"req_a\",\"scope_id\":\"default\",\"statement\":\"The system stores records for one year.\",\"status\":\"active\"}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "record"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "record",
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "statement",
+        "json_text": "\"The system stores records for one year.\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "record"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "record",
+      "field": "statement",
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"id\":\"req_a\",\"scope_id\":\"default\",\"statement\":\"The system stores records for one year.\",\"status\":\"active\"}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "alice"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "record",
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "statement",
+        "json_text": "\"The system stores records for one year.\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "alice"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "record",
+      "field": "statement",
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "field": "offset",
+        "kind": "invalid_input",
+        "reason": "invalid_value"
+      },
+      "status": 400
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "record",
+      "offset": 100000,
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"description\":\"Text B.\",\"id\":\"req_a\",\"scope_id\":\"default\",\"statement\":\"The system stores records for one year.\",\"status\":\"active\"}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "working"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "working",
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "statement",
+        "json_text": "\"The system stores records for one year.\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "working"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "working",
+      "field": "statement",
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"description\":\"Text A.\",\"id\":\"req_a\",\"scope_id\":\"default\",\"statement\":\"The system stores records for one year.\",\"status\":\"active\"}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "record"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "working",
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "statement",
+        "json_text": "\"The system stores records for one year.\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "record"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "working",
+      "field": "statement",
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "field": "offset",
+        "kind": "invalid_input",
+        "reason": "invalid_value"
+      },
+      "status": 400
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "working",
+      "offset": 100000,
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "field": "statement",
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "field": "statement",
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "offset": 100000,
+      "record_id": "req_a",
+      "record_kind": "requirement",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "cause": "invalid utf-8 sequence of 1 bytes from index 0",
+        "kind": "read_failed"
+      },
+      "status": 500
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "req_b",
+      "record_kind": "requirement",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "cause": "invalid utf-8 sequence of 1 bytes from index 0",
+        "kind": "read_failed"
+      },
+      "status": 500
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "field": "statement",
+      "record_id": "req_b",
+      "record_kind": "requirement",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "cause": "invalid utf-8 sequence of 1 bytes from index 0",
+        "kind": "read_failed"
+      },
+      "status": 500
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "req_b",
+      "record_kind": "requirement",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "cause": "invalid utf-8 sequence of 1 bytes from index 0",
+        "kind": "read_failed"
+      },
+      "status": 500
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "field": "statement",
+      "record_id": "req_b",
+      "record_kind": "requirement",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "cause": "invalid utf-8 sequence of 1 bytes from index 0",
+        "kind": "read_failed"
+      },
+      "status": 500
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "offset": 100000,
+      "record_id": "req_b",
+      "record_kind": "requirement",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": "Reviewer",
+            "before": null,
+            "changed_fields": [
+              "id",
+              "requirement_ids",
+              "scope_id",
+              "severity",
+              "statement",
+              "status"
+            ],
+            "commit": "create",
+            "committed_at": 1700000060,
+            "id": "create",
+            "origin": null,
+            "outcome": "created",
+            "revision": "196c1021fca7a5c44a3e447f1029ff9b169c197ffdf5ab580e77dee8e944d95a"
+          },
+          {
+            "author": "bob",
+            "before": "create",
+            "changed_fields": [
+              "statement"
+            ],
+            "commit": "bob",
+            "committed_at": 1700000420,
+            "id": "bob",
+            "origin": null,
+            "outcome": "changed",
+            "revision": "95bcaaad20792a3aded2c2814b14b288326f87c29cfd23cbec205d7a1e6c1126"
+          },
+          {
+            "author": "merger",
+            "before": "bob",
+            "changed_fields": [
+              "description"
+            ],
+            "commit": "merge",
+            "committed_at": 1700000480,
+            "id": "merge",
+            "origin": null,
+            "outcome": "changed",
+            "revision": "3be389bbf84ed2aa506930e4b5094469ca247d2e493712b712d42eced492efe0"
+          }
+        ],
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "record_id": "rule_a",
+      "record_kind": "rule"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": "Reviewer",
+            "before": null,
+            "changed_fields": [
+              "id",
+              "requirement_ids",
+              "scope_id",
+              "severity",
+              "statement",
+              "status"
+            ],
+            "commit": "create",
+            "committed_at": 1700000060,
+            "id": "create",
+            "origin": null,
+            "outcome": "created",
+            "revision": "196c1021fca7a5c44a3e447f1029ff9b169c197ffdf5ab580e77dee8e944d95a"
+          }
+        ],
+        "has_more": true,
+        "limit": 1,
+        "next_cursor": true
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "limit": 1,
+      "record_id": "rule_a",
+      "record_kind": "rule"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": "bob",
+            "before": "create",
+            "changed_fields": [
+              "statement"
+            ],
+            "commit": "bob",
+            "committed_at": 1700000420,
+            "id": "bob",
+            "origin": null,
+            "outcome": "changed",
+            "revision": "95bcaaad20792a3aded2c2814b14b288326f87c29cfd23cbec205d7a1e6c1126"
+          }
+        ],
+        "has_more": true,
+        "limit": 1,
+        "next_cursor": true
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "cursor": "<cursor>",
+      "limit": 1,
+      "record_id": "rule_a",
+      "record_kind": "rule"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": "merger",
+            "before": "bob",
+            "changed_fields": [
+              "description"
+            ],
+            "commit": "merge",
+            "committed_at": 1700000480,
+            "id": "merge",
+            "origin": null,
+            "outcome": "changed",
+            "revision": "3be389bbf84ed2aa506930e4b5094469ca247d2e493712b712d42eced492efe0"
+          }
+        ],
+        "has_more": false,
+        "limit": 1,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "cursor": "<cursor>",
+      "limit": 1,
+      "record_id": "rule_a",
+      "record_kind": "rule"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [],
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history broken",
+    "request": {
+      "record_id": "rule_a",
+      "record_kind": "rule"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [],
+        "has_more": false,
+        "limit": 1,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history broken",
+    "request": {
+      "limit": 1,
+      "record_id": "rule_a",
+      "record_kind": "rule"
+    }
+  },
+  {
+    "answer": {
+      "author": "Reviewer",
+      "before": null,
+      "changed_fields": [
+        "id",
+        "requirement_ids",
+        "scope_id",
+        "severity",
+        "statement",
+        "status"
+      ],
+      "commit": "create",
+      "committed_at": 1700000060,
+      "id": "create",
+      "origin": null,
+      "outcome": "created",
+      "revision": "196c1021fca7a5c44a3e447f1029ff9b169c197ffdf5ab580e77dee8e944d95a"
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "create",
+      "record_id": "rule_a",
+      "record_kind": "rule"
+    }
+  },
+  {
+    "answer": {
+      "author": "bob",
+      "before": "create",
+      "changed_fields": [
+        "statement"
+      ],
+      "commit": "bob",
+      "committed_at": 1700000420,
+      "id": "bob",
+      "origin": null,
+      "outcome": "changed",
+      "revision": "95bcaaad20792a3aded2c2814b14b288326f87c29cfd23cbec205d7a1e6c1126"
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "bob",
+      "record_id": "rule_a",
+      "record_kind": "rule"
+    }
+  },
+  {
+    "answer": {
+      "author": "merger",
+      "before": "bob",
+      "changed_fields": [
+        "description"
+      ],
+      "commit": "merge",
+      "committed_at": 1700000480,
+      "id": "merge",
+      "origin": null,
+      "outcome": "changed",
+      "revision": "3be389bbf84ed2aa506930e4b5094469ca247d2e493712b712d42eced492efe0"
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "merge",
+      "record_id": "rule_a",
+      "record_kind": "rule"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "rule_a",
+      "record_kind": "rule"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-history-entry broken",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "rule_a",
+      "record_kind": "rule"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"id\":\"rule_a\",\"requirement_ids\":[\"req_a\"],\"scope_id\":\"default\",\"severity\":\"high\",\"statement\":\"Each record is stored.\",\"status\":\"active\"}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "statement",
+        "json_text": "\"Each record is stored.\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "field": "statement",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "field": "statement",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "field": "offset",
+        "kind": "invalid_input",
+        "reason": "invalid_value"
+      },
+      "status": 400
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "offset": 100000,
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"id\":\"rule_a\",\"requirement_ids\":[\"req_a\"],\"scope_id\":\"default\",\"severity\":\"high\",\"statement\":\"Each record is stored once.\",\"status\":\"active\"}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "bob"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "bob",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "statement",
+        "json_text": "\"Each record is stored once.\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "bob"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "bob",
+      "field": "statement",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"id\":\"rule_a\",\"requirement_ids\":[\"req_a\"],\"scope_id\":\"default\",\"severity\":\"high\",\"statement\":\"Each record is stored.\",\"status\":\"active\"}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "bob",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "statement",
+        "json_text": "\"Each record is stored.\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "bob",
+      "field": "statement",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "field": "offset",
+        "kind": "invalid_input",
+        "reason": "invalid_value"
+      },
+      "status": 400
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "bob",
+      "offset": 100000,
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"description\":\"Alice describes the rule.\",\"id\":\"rule_a\",\"requirement_ids\":[\"req_a\"],\"scope_id\":\"default\",\"severity\":\"high\",\"statement\":\"Each record is stored once.\",\"status\":\"active\"}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "merge"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "merge",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "statement",
+        "json_text": "\"Each record is stored once.\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "merge"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "merge",
+      "field": "statement",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"id\":\"rule_a\",\"requirement_ids\":[\"req_a\"],\"scope_id\":\"default\",\"severity\":\"high\",\"statement\":\"Each record is stored once.\",\"status\":\"active\"}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "bob"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "merge",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "statement",
+        "json_text": "\"Each record is stored once.\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "bob"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "merge",
+      "field": "statement",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "field": "offset",
+        "kind": "invalid_input",
+        "reason": "invalid_value"
+      },
+      "status": 400
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "merge",
+      "offset": 100000,
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "field": "statement",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "field": "statement",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "offset": 100000,
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "field": "statement",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "field": "statement",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "offset": 100000,
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": "Reviewer",
+            "before": null,
+            "changed_fields": [
+              "id",
+              "name",
+              "scope_id",
+              "source_type",
+              "url"
+            ],
+            "commit": "create",
+            "committed_at": 1700000060,
+            "id": "create",
+            "origin": null,
+            "outcome": "created",
+            "revision": "0ff034d06c2769d355367ed0f0bff4f4ed84190ccbac1f9675e2926758f30a85"
+          }
+        ],
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "record_id": "source_a",
+      "record_kind": "source"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": "Reviewer",
+            "before": null,
+            "changed_fields": [
+              "id",
+              "name",
+              "scope_id",
+              "source_type",
+              "url"
+            ],
+            "commit": "create",
+            "committed_at": 1700000060,
+            "id": "create",
+            "origin": null,
+            "outcome": "created",
+            "revision": "0ff034d06c2769d355367ed0f0bff4f4ed84190ccbac1f9675e2926758f30a85"
+          }
+        ],
+        "has_more": false,
+        "limit": 1,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "limit": 1,
+      "record_id": "source_a",
+      "record_kind": "source"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": "Reviewer",
+            "before": null,
+            "changed_fields": [
+              "id",
+              "name",
+              "scope_id",
+              "source_type",
+              "url"
+            ],
+            "commit": "create",
+            "committed_at": 1700000060,
+            "id": "create",
+            "origin": null,
+            "outcome": "created",
+            "revision": "b917582fa8f53a16cd519985ffdcb74f9390dbbca3893fdb0a8d4a55e9f0bf71"
+          }
+        ],
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "record_id": "source_gone",
+      "record_kind": "source"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": "Reviewer",
+            "before": null,
+            "changed_fields": [
+              "id",
+              "name",
+              "scope_id",
+              "source_type",
+              "url"
+            ],
+            "commit": "create",
+            "committed_at": 1700000060,
+            "id": "create",
+            "origin": null,
+            "outcome": "created",
+            "revision": "b917582fa8f53a16cd519985ffdcb74f9390dbbca3893fdb0a8d4a55e9f0bf71"
+          }
+        ],
+        "has_more": false,
+        "limit": 1,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "limit": 1,
+      "record_id": "source_gone",
+      "record_kind": "source"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [],
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history broken",
+    "request": {
+      "record_id": "source_a",
+      "record_kind": "source"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [],
+        "has_more": false,
+        "limit": 1,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history broken",
+    "request": {
+      "limit": 1,
+      "record_id": "source_a",
+      "record_kind": "source"
+    }
+  },
+  {
+    "answer": {
+      "author": "Reviewer",
+      "before": null,
+      "changed_fields": [
+        "id",
+        "name",
+        "scope_id",
+        "source_type",
+        "url"
+      ],
+      "commit": "create",
+      "committed_at": 1700000060,
+      "id": "create",
+      "origin": null,
+      "outcome": "created",
+      "revision": "0ff034d06c2769d355367ed0f0bff4f4ed84190ccbac1f9675e2926758f30a85"
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "create",
+      "record_id": "source_a",
+      "record_kind": "source"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "source_a",
+      "record_kind": "source"
+    }
+  },
+  {
+    "answer": {
+      "author": "Reviewer",
+      "before": null,
+      "changed_fields": [
+        "id",
+        "name",
+        "scope_id",
+        "source_type",
+        "url"
+      ],
+      "commit": "create",
+      "committed_at": 1700000060,
+      "id": "create",
+      "origin": null,
+      "outcome": "created",
+      "revision": "b917582fa8f53a16cd519985ffdcb74f9390dbbca3893fdb0a8d4a55e9f0bf71"
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "create",
+      "record_id": "source_gone",
+      "record_kind": "source"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "source_gone",
+      "record_kind": "source"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-history-entry broken",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "source_a",
+      "record_kind": "source"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"id\":\"source_a\",\"name\":\"Storage notes\",\"scope_id\":\"default\",\"source_type\":\"document\",\"url\":null}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "record_id": "source_a",
+      "record_kind": "source",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "name",
+        "json_text": "\"Storage notes\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "field": "name",
+      "record_id": "source_a",
+      "record_kind": "source",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "record_id": "source_a",
+      "record_kind": "source",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "field": "name",
+      "record_id": "source_a",
+      "record_kind": "source",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "field": "offset",
+        "kind": "invalid_input",
+        "reason": "invalid_value"
+      },
+      "status": 400
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "offset": 100000,
+      "record_id": "source_a",
+      "record_kind": "source",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "source_a",
+      "record_kind": "source",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "field": "name",
+      "record_id": "source_a",
+      "record_kind": "source",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "source_a",
+      "record_kind": "source",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "field": "name",
+      "record_id": "source_a",
+      "record_kind": "source",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "offset": 100000,
+      "record_id": "source_a",
+      "record_kind": "source",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"id\":\"source_gone\",\"name\":\"Old notes\",\"scope_id\":\"default\",\"source_type\":\"document\",\"url\":null}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "record_id": "source_gone",
+      "record_kind": "source",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "name",
+        "json_text": "\"Old notes\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "field": "name",
+      "record_id": "source_gone",
+      "record_kind": "source",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "record_id": "source_gone",
+      "record_kind": "source",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "field": "name",
+      "record_id": "source_gone",
+      "record_kind": "source",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "field": "offset",
+        "kind": "invalid_input",
+        "reason": "invalid_value"
+      },
+      "status": 400
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "offset": 100000,
+      "record_id": "source_gone",
+      "record_kind": "source",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "source_gone",
+      "record_kind": "source",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "field": "name",
+      "record_id": "source_gone",
+      "record_kind": "source",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "source_gone",
+      "record_kind": "source",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "field": "name",
+      "record_id": "source_gone",
+      "record_kind": "source",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "offset": 100000,
+      "record_id": "source_gone",
+      "record_kind": "source",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "source_a",
+      "record_kind": "source",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "field": "name",
+      "record_id": "source_a",
+      "record_kind": "source",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "source_a",
+      "record_kind": "source",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "field": "name",
+      "record_id": "source_a",
+      "record_kind": "source",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "offset": 100000,
+      "record_id": "source_a",
+      "record_kind": "source",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": "Reviewer",
+            "before": null,
+            "changed_fields": [
+              "id",
+              "links",
+              "requirement_id",
+              "scope_id",
+              "status",
+              "title"
+            ],
+            "commit": "rename",
+            "committed_at": 1700000120,
+            "id": "rename",
+            "origin": null,
+            "outcome": "created",
+            "revision": "0fd48f465af93172efe7c2b32005b4269e174be6027ff7c8c994eb3d880cf0bf"
+          }
+        ],
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "record_id": "topic_a",
+      "record_kind": "topic"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": "Reviewer",
+            "before": null,
+            "changed_fields": [
+              "id",
+              "links",
+              "requirement_id",
+              "scope_id",
+              "status",
+              "title"
+            ],
+            "commit": "rename",
+            "committed_at": 1700000120,
+            "id": "rename",
+            "origin": null,
+            "outcome": "created",
+            "revision": "0fd48f465af93172efe7c2b32005b4269e174be6027ff7c8c994eb3d880cf0bf"
+          }
+        ],
+        "has_more": false,
+        "limit": 1,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "limit": 1,
+      "record_id": "topic_a",
+      "record_kind": "topic"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [],
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history broken",
+    "request": {
+      "record_id": "topic_a",
+      "record_kind": "topic"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [],
+        "has_more": false,
+        "limit": 1,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history broken",
+    "request": {
+      "limit": 1,
+      "record_id": "topic_a",
+      "record_kind": "topic"
+    }
+  },
+  {
+    "answer": {
+      "author": "Reviewer",
+      "before": null,
+      "changed_fields": [
+        "id",
+        "links",
+        "requirement_id",
+        "scope_id",
+        "status",
+        "title"
+      ],
+      "commit": "rename",
+      "committed_at": 1700000120,
+      "id": "rename",
+      "origin": null,
+      "outcome": "created",
+      "revision": "0fd48f465af93172efe7c2b32005b4269e174be6027ff7c8c994eb3d880cf0bf"
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "rename",
+      "record_id": "topic_a",
+      "record_kind": "topic"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "topic_a",
+      "record_kind": "topic"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-history-entry broken",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "topic_a",
+      "record_kind": "topic"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"id\":\"topic_a\",\"links\":[],\"requirement_id\":\"req_a\",\"scope_id\":\"default\",\"status\":\"open\",\"title\":\"Storage\"}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "rename"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "rename",
+      "record_id": "topic_a",
+      "record_kind": "topic",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "title",
+        "json_text": "\"Storage\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "rename"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "rename",
+      "field": "title",
+      "record_id": "topic_a",
+      "record_kind": "topic",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "rename",
+      "record_id": "topic_a",
+      "record_kind": "topic",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "rename",
+      "field": "title",
+      "record_id": "topic_a",
+      "record_kind": "topic",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "field": "offset",
+        "kind": "invalid_input",
+        "reason": "invalid_value"
+      },
+      "status": 400
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "rename",
+      "offset": 100000,
+      "record_id": "topic_a",
+      "record_kind": "topic",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "topic_a",
+      "record_kind": "topic",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "field": "title",
+      "record_id": "topic_a",
+      "record_kind": "topic",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "topic_a",
+      "record_kind": "topic",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "field": "title",
+      "record_id": "topic_a",
+      "record_kind": "topic",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "offset": 100000,
+      "record_id": "topic_a",
+      "record_kind": "topic",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "topic_a",
+      "record_kind": "topic",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "field": "title",
+      "record_id": "topic_a",
+      "record_kind": "topic",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "topic_a",
+      "record_kind": "topic",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "field": "title",
+      "record_id": "topic_a",
+      "record_kind": "topic",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "offset": 100000,
+      "record_id": "topic_a",
+      "record_kind": "topic",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": "Reviewer",
+            "before": null,
+            "changed_fields": [
+              "depends_on",
+              "id",
+              "links",
+              "question",
+              "requirement_id",
+              "resolution_method",
+              "scope_id",
+              "status",
+              "topic_id"
+            ],
+            "commit": "create",
+            "committed_at": 1700000060,
+            "id": "create",
+            "origin": null,
+            "outcome": "created",
+            "revision": "68abe67dcaaad3868553ccac541046215e14b4009110123fd3b09d11eef8eda4"
+          },
+          {
+            "author": "alice",
+            "before": "create",
+            "changed_fields": [
+              "question"
+            ],
+            "commit": "alice",
+            "committed_at": 1700000360,
+            "id": "alice",
+            "origin": null,
+            "outcome": "changed",
+            "revision": "2ad1eeb3a6b7feee36f1bfbd5035df175c096755efb2a0629ec2e20cba1337fd"
+          }
+        ],
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "record_id": "question_a",
+      "record_kind": "question"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": "Reviewer",
+            "before": null,
+            "changed_fields": [
+              "depends_on",
+              "id",
+              "links",
+              "question",
+              "requirement_id",
+              "resolution_method",
+              "scope_id",
+              "status",
+              "topic_id"
+            ],
+            "commit": "create",
+            "committed_at": 1700000060,
+            "id": "create",
+            "origin": null,
+            "outcome": "created",
+            "revision": "68abe67dcaaad3868553ccac541046215e14b4009110123fd3b09d11eef8eda4"
+          }
+        ],
+        "has_more": true,
+        "limit": 1,
+        "next_cursor": true
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "limit": 1,
+      "record_id": "question_a",
+      "record_kind": "question"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": "alice",
+            "before": "create",
+            "changed_fields": [
+              "question"
+            ],
+            "commit": "alice",
+            "committed_at": 1700000360,
+            "id": "alice",
+            "origin": null,
+            "outcome": "changed",
+            "revision": "2ad1eeb3a6b7feee36f1bfbd5035df175c096755efb2a0629ec2e20cba1337fd"
+          }
+        ],
+        "has_more": false,
+        "limit": 1,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "cursor": "<cursor>",
+      "limit": 1,
+      "record_id": "question_a",
+      "record_kind": "question"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [],
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history broken",
+    "request": {
+      "record_id": "question_a",
+      "record_kind": "question"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [],
+        "has_more": false,
+        "limit": 1,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history broken",
+    "request": {
+      "limit": 1,
+      "record_id": "question_a",
+      "record_kind": "question"
+    }
+  },
+  {
+    "answer": {
+      "author": "Reviewer",
+      "before": null,
+      "changed_fields": [
+        "depends_on",
+        "id",
+        "links",
+        "question",
+        "requirement_id",
+        "resolution_method",
+        "scope_id",
+        "status",
+        "topic_id"
+      ],
+      "commit": "create",
+      "committed_at": 1700000060,
+      "id": "create",
+      "origin": null,
+      "outcome": "created",
+      "revision": "68abe67dcaaad3868553ccac541046215e14b4009110123fd3b09d11eef8eda4"
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "create",
+      "record_id": "question_a",
+      "record_kind": "question"
+    }
+  },
+  {
+    "answer": {
+      "author": "alice",
+      "before": "create",
+      "changed_fields": [
+        "question"
+      ],
+      "commit": "alice",
+      "committed_at": 1700000360,
+      "id": "alice",
+      "origin": null,
+      "outcome": "changed",
+      "revision": "2ad1eeb3a6b7feee36f1bfbd5035df175c096755efb2a0629ec2e20cba1337fd"
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "alice",
+      "record_id": "question_a",
+      "record_kind": "question"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "question_a",
+      "record_kind": "question"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-history-entry broken",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "question_a",
+      "record_kind": "question"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"depends_on\":[],\"id\":\"question_a\",\"links\":[],\"question\":\"How long are records stored?\",\"requirement_id\":\"req_a\",\"resolution_method\":\"research\",\"scope_id\":\"default\",\"status\":\"open\",\"topic_id\":\"topic_a\"}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "record_id": "question_a",
+      "record_kind": "question",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "question",
+        "json_text": "\"How long are records stored?\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "field": "question",
+      "record_id": "question_a",
+      "record_kind": "question",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "record_id": "question_a",
+      "record_kind": "question",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "field": "question",
+      "record_id": "question_a",
+      "record_kind": "question",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "field": "offset",
+        "kind": "invalid_input",
+        "reason": "invalid_value"
+      },
+      "status": 400
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "offset": 100000,
+      "record_id": "question_a",
+      "record_kind": "question",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"depends_on\":[],\"id\":\"question_a\",\"links\":[],\"question\":\"Are records kept for one year?\",\"requirement_id\":\"req_a\",\"resolution_method\":\"research\",\"scope_id\":\"default\",\"status\":\"open\",\"topic_id\":\"topic_a\"}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "alice"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "alice",
+      "record_id": "question_a",
+      "record_kind": "question",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "question",
+        "json_text": "\"Are records kept for one year?\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "alice"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "alice",
+      "field": "question",
+      "record_id": "question_a",
+      "record_kind": "question",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"depends_on\":[],\"id\":\"question_a\",\"links\":[],\"question\":\"How long are records stored?\",\"requirement_id\":\"req_a\",\"resolution_method\":\"research\",\"scope_id\":\"default\",\"status\":\"open\",\"topic_id\":\"topic_a\"}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "alice",
+      "record_id": "question_a",
+      "record_kind": "question",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "question",
+        "json_text": "\"How long are records stored?\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "alice",
+      "field": "question",
+      "record_id": "question_a",
+      "record_kind": "question",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "field": "offset",
+        "kind": "invalid_input",
+        "reason": "invalid_value"
+      },
+      "status": 400
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "alice",
+      "offset": 100000,
+      "record_id": "question_a",
+      "record_kind": "question",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "question_a",
+      "record_kind": "question",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "field": "question",
+      "record_id": "question_a",
+      "record_kind": "question",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "question_a",
+      "record_kind": "question",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "field": "question",
+      "record_id": "question_a",
+      "record_kind": "question",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "offset": 100000,
+      "record_id": "question_a",
+      "record_kind": "question",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "question_a",
+      "record_kind": "question",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "field": "question",
+      "record_id": "question_a",
+      "record_kind": "question",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "question_a",
+      "record_kind": "question",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "field": "question",
+      "record_id": "question_a",
+      "record_kind": "question",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "offset": 100000,
+      "record_id": "question_a",
+      "record_kind": "question",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": "Reviewer",
+            "before": null,
+            "changed_fields": [
+              "id",
+              "inputs",
+              "position",
+              "rationale",
+              "requirement_ids",
+              "scope_id",
+              "status",
+              "title"
+            ],
+            "commit": "create",
+            "committed_at": 1700000060,
+            "id": "create",
+            "origin": null,
+            "outcome": "created",
+            "revision": "a363008869cc23b88feb718b668c0aa00f162a6617cd2c4bc4c96825d3e17c93"
+          },
+          {
+            "author": "bob",
+            "before": "create",
+            "changed_fields": [
+              "position"
+            ],
+            "commit": "bob",
+            "committed_at": 1700000420,
+            "id": "bob",
+            "origin": null,
+            "outcome": "changed",
+            "revision": "85265a2cf54378a3a7facaff7c41ae5896f7476ee9d3b649bfb366c0213192da"
+          }
+        ],
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "record_id": "resolution_a",
+      "record_kind": "resolution"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": "Reviewer",
+            "before": null,
+            "changed_fields": [
+              "id",
+              "inputs",
+              "position",
+              "rationale",
+              "requirement_ids",
+              "scope_id",
+              "status",
+              "title"
+            ],
+            "commit": "create",
+            "committed_at": 1700000060,
+            "id": "create",
+            "origin": null,
+            "outcome": "created",
+            "revision": "a363008869cc23b88feb718b668c0aa00f162a6617cd2c4bc4c96825d3e17c93"
+          }
+        ],
+        "has_more": true,
+        "limit": 1,
+        "next_cursor": true
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "limit": 1,
+      "record_id": "resolution_a",
+      "record_kind": "resolution"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": "bob",
+            "before": "create",
+            "changed_fields": [
+              "position"
+            ],
+            "commit": "bob",
+            "committed_at": 1700000420,
+            "id": "bob",
+            "origin": null,
+            "outcome": "changed",
+            "revision": "85265a2cf54378a3a7facaff7c41ae5896f7476ee9d3b649bfb366c0213192da"
+          }
+        ],
+        "has_more": false,
+        "limit": 1,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "cursor": "<cursor>",
+      "limit": 1,
+      "record_id": "resolution_a",
+      "record_kind": "resolution"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [],
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history broken",
+    "request": {
+      "record_id": "resolution_a",
+      "record_kind": "resolution"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [],
+        "has_more": false,
+        "limit": 1,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history broken",
+    "request": {
+      "limit": 1,
+      "record_id": "resolution_a",
+      "record_kind": "resolution"
+    }
+  },
+  {
+    "answer": {
+      "author": "Reviewer",
+      "before": null,
+      "changed_fields": [
+        "id",
+        "inputs",
+        "position",
+        "rationale",
+        "requirement_ids",
+        "scope_id",
+        "status",
+        "title"
+      ],
+      "commit": "create",
+      "committed_at": 1700000060,
+      "id": "create",
+      "origin": null,
+      "outcome": "created",
+      "revision": "a363008869cc23b88feb718b668c0aa00f162a6617cd2c4bc4c96825d3e17c93"
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "create",
+      "record_id": "resolution_a",
+      "record_kind": "resolution"
+    }
+  },
+  {
+    "answer": {
+      "author": "bob",
+      "before": "create",
+      "changed_fields": [
+        "position"
+      ],
+      "commit": "bob",
+      "committed_at": 1700000420,
+      "id": "bob",
+      "origin": null,
+      "outcome": "changed",
+      "revision": "85265a2cf54378a3a7facaff7c41ae5896f7476ee9d3b649bfb366c0213192da"
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "bob",
+      "record_id": "resolution_a",
+      "record_kind": "resolution"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "resolution_a",
+      "record_kind": "resolution"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-history-entry broken",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "resolution_a",
+      "record_kind": "resolution"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"id\":\"resolution_a\",\"inputs\":[],\"position\":\"Records are stored.\",\"rationale\":\"Readers need old records.\",\"requirement_ids\":[\"req_a\"],\"scope_id\":\"default\",\"status\":\"draft\",\"title\":\"Storage time\"}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "record_id": "resolution_a",
+      "record_kind": "resolution",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "position",
+        "json_text": "\"Records are stored.\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "field": "position",
+      "record_id": "resolution_a",
+      "record_kind": "resolution",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "record_id": "resolution_a",
+      "record_kind": "resolution",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "field": "position",
+      "record_id": "resolution_a",
+      "record_kind": "resolution",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "field": "offset",
+        "kind": "invalid_input",
+        "reason": "invalid_value"
+      },
+      "status": 400
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "offset": 100000,
+      "record_id": "resolution_a",
+      "record_kind": "resolution",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"id\":\"resolution_a\",\"inputs\":[],\"position\":\"Records are stored for one year.\",\"rationale\":\"Readers need old records.\",\"requirement_ids\":[\"req_a\"],\"scope_id\":\"default\",\"status\":\"draft\",\"title\":\"Storage time\"}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "bob"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "bob",
+      "record_id": "resolution_a",
+      "record_kind": "resolution",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "position",
+        "json_text": "\"Records are stored for one year.\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "bob"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "bob",
+      "field": "position",
+      "record_id": "resolution_a",
+      "record_kind": "resolution",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"id\":\"resolution_a\",\"inputs\":[],\"position\":\"Records are stored.\",\"rationale\":\"Readers need old records.\",\"requirement_ids\":[\"req_a\"],\"scope_id\":\"default\",\"status\":\"draft\",\"title\":\"Storage time\"}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "bob",
+      "record_id": "resolution_a",
+      "record_kind": "resolution",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "position",
+        "json_text": "\"Records are stored.\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "bob",
+      "field": "position",
+      "record_id": "resolution_a",
+      "record_kind": "resolution",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "field": "offset",
+        "kind": "invalid_input",
+        "reason": "invalid_value"
+      },
+      "status": 400
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "bob",
+      "offset": 100000,
+      "record_id": "resolution_a",
+      "record_kind": "resolution",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "resolution_a",
+      "record_kind": "resolution",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "field": "position",
+      "record_id": "resolution_a",
+      "record_kind": "resolution",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "resolution_a",
+      "record_kind": "resolution",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "field": "position",
+      "record_id": "resolution_a",
+      "record_kind": "resolution",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "offset": 100000,
+      "record_id": "resolution_a",
+      "record_kind": "resolution",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "resolution_a",
+      "record_kind": "resolution",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "field": "position",
+      "record_id": "resolution_a",
+      "record_kind": "resolution",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "resolution_a",
+      "record_kind": "resolution",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "field": "position",
+      "record_id": "resolution_a",
+      "record_kind": "resolution",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence broken",
+    "request": {
+      "entry_id": "missing",
+      "offset": 100000,
+      "record_id": "resolution_a",
+      "record_kind": "resolution",
+      "side": "after"
+    }
+  }
+]
