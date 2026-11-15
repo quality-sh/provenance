@@ -1,7 +1,9 @@
 //! A set of one key: it lands all of its bytes or none, and it writes no
 //! other key.
 
-use super::*;
+use super::{
+    expected, key, publish, read, A, Arc, Atomicity, B, C, Harness, PublishFailure, WriteSet, X,
+};
 
 /// A one-key set lands all of the new bytes of its key.
 pub fn a_one_key_set_lands_all_of_its_bytes<H: Harness>(mut harness: H) {

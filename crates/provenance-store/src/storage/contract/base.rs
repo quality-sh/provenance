@@ -1,7 +1,10 @@
 //! The base of a set: a set on the stored keys and bytes lands, and a set
 //! on a base that moved is refused before any key lands, whatever its keys.
 
-use super::*;
+use super::{
+    expected, key, publish, read, A, Arc, Atomicity, B, Harness, PublishFailure, StateView,
+    WriteSet, X, Y,
+};
 
 /// A set on a view with the stored keys and bytes lands.
 pub fn publish_on_the_current_base_lands<H: Harness>(mut harness: H) {

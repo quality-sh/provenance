@@ -2,7 +2,7 @@
 //! a failure, a whole set lands every key or none, and a set that puts and
 //! deletes one key is refused.
 
-use super::*;
+use super::{expected, key, publish, read, A, Atomicity, B, C, Harness, PublishFailure, WriteSet, X};
 
 /// A per-key set with no base lands its puts and deletes.
 pub fn publish_lands_puts_and_deletes<H: Harness>(mut harness: H) {

@@ -335,6 +335,40 @@ fn a_section_reads_the_state_again_after_a_moved_base() {
     assert_eq!(bindings[0].file.as_str(), "tests/third.test.ts");
 }
 
+/// A write that changes no key, such as a binding with the rows that are
+/// stored, on a state that changed outside the engine is refused as
+/// `state_changed` (409), as a write that changes a key is.
+#[test]
+#[verifies("rule_moved_base_refusal_is_state_changed", examples)]
+fn an_unchanged_binding_after_an_outside_change_is_state_changed() {
+    let memory = memory_repository();
+    let store = memory.repository.store();
+    store
+        .with_repository_publication(|section| {
+            section.materialize_verification_binding(binding("tests/first.test.ts"))?;
+
+            let manifest = StateKey::new("manifest.json").unwrap();
+            let mut bytes = initial_state().get(&manifest).unwrap().to_vec();
+            bytes.push(b'\n');
+            memory
+                .storage
+                .publish(WriteSet::new(Atomicity::PerKey).put(manifest, bytes))
+                .unwrap();
+
+            let refused = section
+                .materialize_verification_binding(binding("tests/first.test.ts"))
+                .map(|binding| binding.file);
+            let refused = WriteError(refused.expect_err("the unchanged binding landed"));
+            assert!(
+                matches!(refused.safe(), WriteFailure::StateChanged { .. }),
+                "{refused:#}"
+            );
+            assert_eq!(refused.status(), 409);
+            Ok(())
+        })
+        .unwrap();
+}
+
 // A source edit changes a working-tree file, so it is a host operation.
 #[cfg(feature = "host")]
 #[test]

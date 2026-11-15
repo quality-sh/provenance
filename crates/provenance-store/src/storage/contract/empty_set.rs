@@ -1,7 +1,7 @@
 //! A set with no key: it lands and changes nothing, and it writes no
 //! stored key.
 
-use super::*;
+use super::{publish, read, A, Arc, Atomicity, B, Harness, WriteSet, X};
 
 /// A set with no key on the current base changes nothing.
 pub fn an_empty_set_changes_nothing<H: Harness>(mut harness: H) -> H {

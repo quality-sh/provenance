@@ -1,7 +1,7 @@
 //! The read view: each key with its bytes, and a revision that follows
 //! each key and byte.
 
-use super::*;
+use super::{expected, read, BTreeMap, Harness, Revision, SHARDS, X, Y};
 
 /// A view holds every key with the bytes it was given, and nothing else.
 pub fn view_returns_every_key_with_its_bytes<H: Harness>(mut harness: H) {
