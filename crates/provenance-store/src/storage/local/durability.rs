@@ -79,8 +79,9 @@ fn sync_directories(parent: &Utf8Path, first_made: Option<&Utf8Path>) -> anyhow:
     Ok(())
 }
 
-/// Removes the file at `path` and then syncs its directory. On Unix, after
-/// the call returns, a power loss cannot bring the file back. On Windows, a
+/// Removes the file at `path` and then syncs its directory.
+///
+/// On Unix, after the call returns, a power loss cannot bring the file back. On Windows, a
 /// power loss can bring the file back. A file that does not exist is a
 /// success with no sync. A failed remove gives `remove <path>` and the I/O
 /// error, and a failed sync gives `sync <path>` and the I/O error. If the
