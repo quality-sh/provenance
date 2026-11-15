@@ -151,7 +151,8 @@ fn registration_whose_catch_up_fails_refuses_with_no_path() {
         .path()
         .join(".provenance/state/scopes/default/requirements/req.jsonl");
     let text = std::fs::read_to_string(&shard).unwrap();
-    let mut line: serde_json::Value = serde_json::from_str(text.lines().next().unwrap()).unwrap();
+    let first = text.lines().next().unwrap();
+    let mut line: serde_json::Value = serde_json::from_str(first).unwrap();
     line["id"] = json!("req_after_failure");
     std::fs::write(&shard, format!("{text}{line}\n")).unwrap();
 
