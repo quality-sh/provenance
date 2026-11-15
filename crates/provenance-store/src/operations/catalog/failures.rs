@@ -80,10 +80,11 @@ impl ReadError {
     /// catch-up, so that refusal is `DocumentCatchUpFailed`.
     fn safe(&self) -> ReadFailure {
         let error = native(&self.0);
-        match error.downcast_ref::<CatchUpFailed>() {
-            Some(failed) => self.catch_up_refusal(&failed.0),
-            None => self.classified(error, UnparsableStateFile::failure),
-        }
+        let catch_up = error.downcast_ref::<CatchUpFailed>();
+        catch_up.map_or_else(
+            || self.classified(error, UnparsableStateFile::failure),
+            |failed| self.catch_up_refusal(&failed.0),
+        )
     }
     /// The refusal of a document read whose catch-up failed with `cause`: the
     /// location and the message of a state line that does not parse, else
@@ -129,10 +130,8 @@ impl ReadError {
         if let Some(refusal) = error.downcast_ref::<SourceFailure>() {
             return store_refusal(&refusal.failure).unwrap_or_else(|| self.read_failed(error));
         }
-        match UnparsableStateFile::find(error.as_ref()) {
-            Some(unparsable) => state_line(unparsable),
-            None => self.read_failed(error),
-        }
+        UnparsableStateFile::find(error.as_ref())
+            .map_or_else(|| self.read_failed(error), state_line)
     }
     /// The `ReadFailed` failure of `error`, the native error or a cause in it.
     fn read_failed(&self, error: &anyhow::Error) -> ReadFailure {
