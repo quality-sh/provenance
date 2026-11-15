@@ -18,7 +18,7 @@ const DEFAULT_POLICY: &str = "annotate_only";
 const PINNED: &str = include_str!("../fixtures/read_operations_on_memory.json");
 
 /// One call of each read operation.
-fn reads() -> Vec<(&'static str, Value)> {
+pub(crate) fn reads() -> Vec<(&'static str, Value)> {
     let parent = json!({ "node_type": "requirement", "node_id": "req_expiry" });
     vec![
         ("page-sources", json!({})),

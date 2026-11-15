@@ -10,13 +10,28 @@
 //! their stamps and with each commit id as its name in the graph, equal the
 //! checked file over a folder repository with real Git history.
 //!
+//! Over memory storage, with the history contract's memory adapter of the
+//! same commits and a read database in memory, each operation runs through
+//! the in-process port and gives the same answers, with and without
+//! `host`.
+//!
 //! Implementation aid with no Rule binding: these tests pin the answers of
 //! the history operations so that a change of the path they read through
 //! cannot change them.
 
 use crate::history_fixture::{history, History, Sources};
-use crate::memory::FixedClock;
-use provenance_store::repository::IdSource;
+use crate::memory::{FixedClock, Recorded};
+use crate::read_in;
+use crate::sqlite_database::MemorySqlite;
+use provenance_store::cache::catch_up_in_publish;
+use provenance_store::operations::read_operations::READ_OPERATIONS;
+use provenance_store::read_database::contract::Other;
+use provenance_store::repository::{IdSource, Repository, RepositoryIdentity};
+use provenance_store::review::history::contract::MemoryFileVersions;
+use provenance_store::settings::Settings;
+use provenance_store::storage::memory::{MemorySectionLock, MemoryStateStorage};
+use provenance_store::storage::StateView;
+use std::collections::BTreeSet;
 use serde_json::{json, Value};
 use std::future::Future;
 use std::pin::Pin;
@@ -231,6 +246,71 @@ pub fn assert_pinned(observed: &str) {
         "the answers differ from the checked file:\n{}\n=== OBSERVED\n{observed}\n=== END",
         diff.join("\n")
     );
+}
+
+/// Runs each operation through the in-process port of a repository over
+/// memory storage.
+struct MemoryReads(Repository);
+
+impl Reads for MemoryReads {
+    fn read<'a>(
+        &'a self,
+        scope: &'a str,
+        operation: &'static str,
+        request: Value,
+    ) -> Pin<Box<dyn Future<Output = Value> + 'a>> {
+        let context = json!({"repository": "memory", "scope": scope});
+        Box::pin(read_in(&self.0, context, operation, request))
+    }
+}
+
+/// A repository over memory storage that holds the working copy of
+/// `history`, at a working tree that does not exist, with the memory
+/// adapter of its commits and a read database in memory, caught up.
+async fn memory_repository(history: &History) -> Repository {
+    let storage = Arc::new(MemoryStateStorage::loaded(
+        StateView::new(history.state()),
+        Arc::new(Recorded::default()),
+    ));
+    let missing = tempfile::tempdir().unwrap();
+    let root = camino::Utf8PathBuf::from_path_buf(missing.path().join("project")).unwrap();
+    let identity = RepositoryIdentity::new(
+        root,
+        provenance_core::ScopeId::new("default").unwrap(),
+        Settings::default(),
+    );
+    let repository = Repository::with_storage(
+        identity,
+        storage,
+        Arc::new(MemorySectionLock::refusing()),
+        Some(Arc::new(Other::new(MemorySqlite::new().await))),
+    )
+    .unwrap()
+    .with_file_versions(Arc::new(MemoryFileVersions::new(&history.commits)));
+    catch_up_in_publish(&repository).await.unwrap();
+    repository
+}
+
+#[tokio::test]
+async fn the_history_operations_over_memory_give_the_answers_of_the_folder() {
+    let repository = memory_repository(&fixture()).await;
+    let answers = run(&MemoryReads(repository)).await;
+    assert_pinned(&serde_json::to_string_pretty(&answers).unwrap());
+}
+
+/// Implementation aid: each operation of the port is a read of the review
+/// page or a row of `CASES`, so a new operation of the port fails here
+/// until a test covers it.
+#[test]
+fn each_operation_of_the_port_has_a_case() {
+    let history: BTreeSet<_> = CASES.iter().map(|case| case.operation).collect();
+    let reads: BTreeSet<_> = crate::answers::reads()
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect();
+    let covered: BTreeSet<_> = history.union(&reads).copied().collect();
+    assert_eq!(covered, READ_OPERATIONS.iter().copied().collect());
+    assert!(history.is_disjoint(&reads));
 }
 
 #[cfg(feature = "host")]

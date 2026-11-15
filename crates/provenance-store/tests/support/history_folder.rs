@@ -2,7 +2,6 @@
 //! history: each commit made with Git's plumbing, so it has exactly the
 //! parents, files, authors and times of the graph, then the work tree at the
 //! last commit and the saved working copy over it.
-#![allow(dead_code)]
 
 use super::history_fixture::History;
 use std::collections::BTreeMap;

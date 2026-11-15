@@ -14,10 +14,10 @@
 //!   it keeps the side that changed the Requirement, the Question and the
 //!   Resolution, and gives the Rule the changes of both sides.
 //! - `outcome` commits only the Discussion file after a save of `req_a`
-//!   from its Discussion, and `record` then commits the Requirement file.
+//!   from its Discussion, and `record` then commits the other files that
+//!   the save changed.
 //! - `delete` removes `source_gone`.
 //! - The working copy holds one more save of `req_a`.
-#![allow(dead_code)]
 
 use camino::Utf8PathBuf;
 use provenance_core::threads::DiscussionOrigin;
@@ -392,14 +392,10 @@ pub fn history(sources: &Sources) -> History {
         .save_requirement_from_discussion(describe(&store, "Text A."), &origin)
         .unwrap();
     let saved = files(&storage);
-    let changed = saved
+    let discussions = saved
         .keys()
-        .filter(|path| merged.get(*path) != saved.get(*path) && !path.contains("/requirements/"))
-        .cloned()
-        .collect::<Vec<_>>();
-    let [discussions] = changed.as_slice() else {
-        panic!("the save changed one file apart from the Requirement file: {changed:?}");
-    };
+        .find(|path| path.ends_with("/discussions.jsonl") && merged.get(*path) != saved.get(*path))
+        .expect("the save changed the Discussion file");
     let mut outcome = merged.clone();
     outcome.insert(discussions.clone(), saved[discussions].clone());
     graph.commit("outcome", &["merge"], "carol", outcome);
