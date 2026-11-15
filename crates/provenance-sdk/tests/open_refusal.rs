@@ -2,7 +2,9 @@
 //! keeps the fault of the manifest as its cause, with the file, the line and
 //! the two procedures that correct the state.
 
-use provenance_core::protocol::read_failure::{ReadFailure, UnparsableStateFile, STATE_CORRECTIONS};
+use provenance_core::protocol::read_failure::{
+    ReadFailure, UnparsableStateFile, STATE_CORRECTIONS,
+};
 use provenance_macros::verifies;
 use provenance_sdk::{OpenFailure, Repository};
 

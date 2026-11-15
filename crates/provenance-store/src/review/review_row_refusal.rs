@@ -212,7 +212,10 @@ fn repair(rows: &StoredRows, fault: &ReviewRowFault) -> String {
             "keep one submission and remove the lines of each other submission"
         }
         ReviewRowFault::NoSubmission { lines, .. } => {
-            return format!("To repair, remove {}, then commit.", lines_text(rows, lines));
+            return format!(
+                "To repair, remove {}, then commit.",
+                lines_text(rows, lines)
+            );
         }
     };
     format!("To repair, {step}, then commit.")
@@ -221,5 +224,9 @@ fn repair(rows: &StoredRows, fault: &ReviewRowFault) -> String {
 /// `invalid_state_file` at the line of the row that the fault names.
 #[rule("rule_inconsistent_records_refusal_names_records")]
 pub(super) fn refusal(rows: &StoredRows, fault: &ReviewRowFault) -> anyhow::Error {
-    corrected_state_fault(rows.line(fault.at()), message(rows, fault), &repair(rows, fault))
+    corrected_state_fault(
+        rows.line(fault.at()),
+        message(rows, fault),
+        &repair(rows, fault),
+    )
 }

@@ -4,7 +4,9 @@
 //! and the page configuration with `invalid_state_file`, the line of the
 //! manifest and the two procedures that correct the state.
 
-use provenance_core::protocol::read_failure::{ReadFailure, UnparsableStateFile, STATE_CORRECTIONS};
+use provenance_core::protocol::read_failure::{
+    ReadFailure, UnparsableStateFile, STATE_CORRECTIONS,
+};
 use provenance_macros::verifies;
 use provenance_porcelain::check::{Category, CheckPort, PortFuture};
 use provenance_review::{HostOptions, RepositoryScope};
@@ -37,7 +39,11 @@ async fn a_manifest_that_stops_parsing_refuses_each_read_and_write_with_the_corr
     })
     .await
     .unwrap();
-    std::fs::write(repository.layout.manifest_path(), "{\"scopes\":\"default\"}\n").unwrap();
+    std::fs::write(
+        repository.layout.manifest_path(),
+        "{\"scopes\":\"default\"}\n",
+    )
+    .unwrap();
 
     let endpoint = host.startup().endpoint().to_owned();
     let bearer = host.startup().bearer().to_owned();
@@ -64,8 +70,12 @@ async fn a_manifest_that_stops_parsing_refuses_each_read_and_write_with_the_corr
         "hint":STATE_CORRECTIONS});
     assert_eq!(
         answers,
-        ["GET /requirements/req_shared", "POST /requirements", "GET /review-config"]
-            .map(|call| json!({"call": call, "status": 500, "error": refusal}))
+        [
+            "GET /requirements/req_shared",
+            "POST /requirements",
+            "GET /review-config"
+        ]
+        .map(|call| json!({"call": call, "status": 500, "error": refusal}))
     );
 }
 
@@ -73,7 +83,11 @@ async fn a_manifest_that_stops_parsing_refuses_each_read_and_write_with_the_corr
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
 fn the_open_of_a_manifest_that_does_not_parse_has_the_fault_as_its_cause() {
     let repository = Repository::new("The review library opens the repository for a read.");
-    std::fs::write(repository.layout.manifest_path(), "{\"scopes\":\"default\"}\n").unwrap();
+    std::fs::write(
+        repository.layout.manifest_path(),
+        "{\"scopes\":\"default\"}\n",
+    )
+    .unwrap();
     let place = RepositoryScope::new(repository.dir.path().to_str().unwrap(), "default");
 
     let error = place.open().unwrap_err();
@@ -110,7 +124,10 @@ fn call(
         Err(error) => panic!("{method} {route}: {error}"),
     };
     let status = response.status();
-    (status, serde_json::from_str(&response.into_string().unwrap()).unwrap())
+    (
+        status,
+        serde_json::from_str(&response.into_string().unwrap()).unwrap(),
+    )
 }
 
 /// Points every platform's per-user cache at one isolated directory.

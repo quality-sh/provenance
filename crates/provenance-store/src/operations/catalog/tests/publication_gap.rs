@@ -8,10 +8,8 @@ fn repository() -> (tempfile::TempDir, LocalRepository) {
     let dir = tempfile::tempdir().unwrap();
     let layout = ProvenanceLayout::new(dir.path().to_str().unwrap());
     std::fs::create_dir_all(layout.state_dir()).unwrap();
-    let manifest = Manifest::default_with_scope(
-        ScopeId::new("default").unwrap(),
-        RepoPathPrefix::new("."),
-    );
+    let manifest =
+        Manifest::default_with_scope(ScopeId::new("default").unwrap(), RepoPathPrefix::new("."));
     std::fs::write(
         layout.manifest_path(),
         serde_json::to_vec(&manifest).unwrap(),

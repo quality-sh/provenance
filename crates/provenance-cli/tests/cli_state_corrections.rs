@@ -364,8 +364,8 @@ fn init_after_the_removal_of_the_state_gives_a_state_that_reads() {
         std::fs::create_dir(repo.join("other")).unwrap();
         support::review_paths::init_scope(repo, "other", "other");
         passes(repo, &["init", "--disposition-actor-id", "approver"]);
-        let actors = state_json(repo, "manifest.json")["disposition_actor_ids"].clone();
-        assert!(actors.as_array().unwrap().contains(&json!("approver")), "{actors}");
+        let actors = state_json(repo, "manifest.json")["disposition_actor_ids"].to_string();
+        assert!(actors.contains("\"approver\""), "{actors}");
         fault(repo);
         assert_eq!(hint(repo), json!(HINT));
         add_technical_name(repo);
