@@ -49,7 +49,10 @@ fn assert_names_the_line(repo: &str, refusal: &Value) {
     let message = error["message"].as_str().unwrap_or_default();
     assert!(message.starts_with("unknown variant `widget`"), "{refusal}");
     let repo = serde_json::to_string(repo).unwrap();
-    assert!(!refusal.to_string().contains(repo.trim_matches('"')), "{refusal}");
+    assert!(
+        !refusal.to_string().contains(repo.trim_matches('"')),
+        "{refusal}"
+    );
 }
 
 #[test]
