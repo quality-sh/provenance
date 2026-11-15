@@ -1,8 +1,6 @@
 //! Regression tests for provenance-ps18. No matching Rule exists in the graph.
-#[path = "shaping_support/fixtures.rs"]
-mod fixtures;
-#[path = "shaping_support/provenance.rs"]
-mod provenance;
+use crate::fixtures;
+use crate::provenance;
 
 use fixtures::{create_source_and_requirement, create_topic, init};
 use predicates::str::contains;

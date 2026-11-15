@@ -27,8 +27,21 @@ it in the same change.
   with the package manager.{skill_command_note}
 - Plan: `{command} prime --quiet`
 - New obligation: `{command} rule_<slug> create --type rule --scope {selected_scope} --requirement-id <req> --statement "<testable clause>"`
-- Annotate implementation with `rule`, tests with `verifies`. Annotations move
-  with code.
+- Connect the production code of a Rule to the Rule with a comment directly above
+  the function, in each language: `// @provenance rule: <rule_id>`, or
+  `# @provenance rule: <rule_id>` in Python. The comment adds no package to the
+  application. A comment does not move with its function, so keep the two together.
+- Connect a test to a Rule with `@provenance verification: <method>` above its
+  `@provenance rule: <rule_id>` line. A test can also use a helper from a development
+  dependency: `verifies("<rule_id>", "<method>")` from `@quality-sh/provenance/rules`
+  in TypeScript, or `#[verifies("<rule_id>", <method>)]` from `provenance-macros` under
+  `[dev-dependencies]` in Rust. The method is exhaustion, property, examples,
+  conformance, construction, or proof. For `construction`, put the comment directly
+  above the type, not above a test; `#[verifies]` on a type needs `provenance-macros`
+  under `[dependencies]`.
+- In Rust, `#[rule("<rule_id>")]` from `provenance-macros` is an option for production
+  code. It puts `provenance-macros` under `[dependencies]`. That crate is a procedural
+  macro: it runs at compile time and adds nothing to the binary.
 - Change a Requirement, Rule, or Resolution with a guarded record update.
   A native create command opens its review submission. A content change opens a
   review submission, unless a reviewer accepted that content.
@@ -54,6 +67,12 @@ it in the same change.
   It opens the page in their browser.
 - Before you hand off, read a Requirement and every record under it in order, as a
   builder would: `{command} api requirements/<requirement-id>/document --scope {selected_scope} --format json`.
+- Before you update a record, read it with
+  `{command} <record-id> --scope {selected_scope} --format json` and give its `edit.etag`
+  unchanged to `--if-match`, for example
+  `{command} <requirement-id> update --scope {selected_scope} --if-match <etag> --description <text>`.
+  On MCP, read the record with `get` and give its `edit.etag` unchanged to `change` as
+  `if_match`.
 - Read the decision and review feedback with `{command} <record-id> --scope {selected_scope} --view review`.
   Copy `review.edit.etag` unchanged to `--if-match` on the next guarded update.
   If feedback is truncated, use the continuation commands in the review view.
@@ -75,9 +94,9 @@ it in the same change.
   accepted that content. Revise or withdraw a rejected candidate that no later
   submission replaced. To end a pending review without a replacement, withdraw it.
 - A Question or Topic update needs the current etag. Read it with
-  `{command} <question_id> --scope {selected_scope} --view review --format json` or
-  `{command} <topic_id> --scope {selected_scope} --view review --format json` and pass
-  `review.edit.etag` unchanged as `--if-match`.
+  `{command} <question_id> --scope {selected_scope} --format json` or
+  `{command} <topic_id> --scope {selected_scope} --format json` and pass
+  `edit.etag` unchanged as `--if-match`.
 - To drop a Question or Topic, archive it with its commit evidence. Archiving a
   Topic also archives its Questions. Discussion history stays readable:
   `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | {command} api questions/<question_id> --method patch --header "If-Match: <etag>" --input - --scope {selected_scope} --format json`
@@ -236,6 +255,7 @@ pub fn project(existing: &[u8], invocation: &Invocation, scope: &str) -> anyhow:
 #[rule("rule_init_description_guidance")]
 #[rule("rule_init_guidance_background_review_host")]
 #[rule("rule_init_follow_monitor_guidance")]
+#[rule("rule_init_production_binding_comment")]
 fn instructions(invocation: &Invocation, scope: &str) -> String {
     INSTRUCTIONS
         .replace("{skill_command_note}", &invocation.skill_command_note())

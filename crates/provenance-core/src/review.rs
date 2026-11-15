@@ -1,9 +1,12 @@
 //! Native review evidence types. Review does not change record lifecycle.
 
 mod review_serde;
+mod stored_rows;
 
 use crate::{NodeType, ScopeId, StableId};
 use serde::{Deserialize, Serialize};
+
+pub use stored_rows::{withdrawn_submission_ids, WithdrawalRowFault};
 
 const fn requirement_kind() -> NodeType {
     NodeType::Requirement
@@ -90,6 +93,14 @@ macro_rules! define_review_record {
                 match self {
                     Self::Requirement(record) => Some(record),
                     _ => None,
+                }
+            }
+        }
+
+        impl From<crate::protocol::GraphNode> for ReviewRecord {
+            fn from(node: crate::protocol::GraphNode) -> Self {
+                match node {
+                    $( crate::protocol::GraphNode::$variant(record) => Self::$variant(*record), )*
                 }
             }
         }

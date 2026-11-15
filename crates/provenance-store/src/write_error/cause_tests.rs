@@ -8,7 +8,7 @@ fn cause(root: Option<&str>, native: &str) -> String {
         Some(root) => in_repository(Path::new(root), error),
         None => error,
     };
-    failure_cause(&error)
+    failure_cause(&error, super::native(&error))
 }
 
 /// A path below the repository root is relative to that root, with `/`

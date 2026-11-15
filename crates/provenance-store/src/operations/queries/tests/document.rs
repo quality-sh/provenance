@@ -182,7 +182,15 @@ async fn document_failed_catch_up_precedes_missing_root_in_old_projection() {
         json!({"context":{"repository":"test","scope":"default","freshness":"catch_up"},"request":{"id":"req_new"}}),
         catalog::Direct(Arc::new(Target(root_of(&dir)))),
     ).await.unwrap_err();
-    assert_eq!(failed.error, json!({"kind":"document_catch_up_failed"}));
+    assert_eq!(
+        failed.error,
+        json!({
+            "kind": "document_catch_up_failed",
+            "file": "scopes/default/topics/topic.jsonl",
+            "line": 1,
+            "message": "expected value"
+        })
+    );
 
     std::fs::write(path, saved).unwrap();
     let recovered =

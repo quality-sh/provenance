@@ -1,6 +1,5 @@
 //! Paths outside the asset bundle answer like the host API, with a JSON failure envelope.
-#[path = "review_host_support/mod.rs"]
-mod review_host_support;
+use crate::review_host_support;
 
 use review_host_support::{repository, request, response, start};
 use serde_json::Value;

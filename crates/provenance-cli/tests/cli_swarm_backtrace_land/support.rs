@@ -1,4 +1,4 @@
-use crate::bounded_process::{provenance, Bounded};
+use super::bounded_process::{provenance, Bounded};
 
 pub fn init_repo(repo: &str) {
     provenance()
@@ -13,7 +13,7 @@ pub fn init_repo(repo: &str) {
         ])
         .bounded_assert()
         .success();
-    crate::export_fixture_support::make_default_scope_portable(repo);
+    super::export_fixture_support::make_default_scope_portable(repo);
 }
 
 pub fn create_source(repo: &str) {

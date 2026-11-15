@@ -1,6 +1,7 @@
 //! The one entry every query read goes through.
 //!
-//! A read takes the publication guard for the freshness step only. It then
+//! With `host` a read takes the publication guard for the freshness step
+//! only; without `host` it takes none (see the freshness step). It then
 //! answers from a snapshot pinned inside one `SQLite` read transaction, so it
 //! never queues behind a publication or behind another reader. The stamp
 //! on the answer is derived from the handles the read took: a projection
@@ -20,52 +21,39 @@
 //! before the answer leaves.
 
 mod cursor;
-#[cfg(feature = "host")]
 mod freshness;
-#[cfg(feature = "host")]
 mod live;
-#[cfg(feature = "host")]
 mod refuse_stale;
 mod snapshot;
 
-#[cfg(feature = "host")]
 pub(crate) use cursor::Cursor;
 pub(crate) use cursor::Position;
 #[cfg(feature = "host")]
-pub use live::{Disturbed, Live, LiveHandle};
-#[cfg(feature = "host")]
+pub use live::Disturbed;
+pub use live::{Live, LiveHandle};
 pub use refuse_stale::MovedUnit;
 pub(crate) use snapshot::one_row;
 pub use snapshot::{ReadSnapshot, RecordIdentities, RecordIdentity, Relations, Table};
 
-#[cfg(feature = "host")]
 pub(crate) use crate::cache::read::page::{check_limit, page_error, PAGE_BYTES, RECORD_BYTES};
 /// The projection readers that run over the handles: the fetched relation
 /// front and the kind probe. The operations reach them from here, so a
 /// query module never names the cache.
 pub use crate::cache::read::{kind_of, SqlFront};
 
-#[cfg(feature = "host")]
 use super::read_policy::ReadPolicy;
-#[cfg(feature = "host")]
 use crate::repository::Repository;
-#[cfg(feature = "host")]
 use camino::{Utf8Path, Utf8PathBuf};
-#[cfg(feature = "host")]
 use provenance_core::protocol::{StampPolicy, Stamped};
-#[cfg(feature = "host")]
 use provenance_macros::rule;
-#[cfg(feature = "host")]
 use std::collections::BTreeSet;
 use std::future::Future;
 use std::pin::Pin;
-#[cfg(feature = "host")]
 use std::sync::Mutex;
 
 /// The future one read runs over its context.
 pub type ReadFuture<'c, R> = Pin<Box<dyn Future<Output = anyhow::Result<R>> + Send + 'c>>;
 
-#[cfg(feature = "host")]
 /// Why a read refused. A read with no stored revision refuses here and
 /// names `provenance materialize`, under every freshness policy.
 #[derive(Debug, thiserror::Error)]
@@ -96,12 +84,18 @@ pub enum ReadRefusal {
     HalfMigrated { database: Utf8PathBuf },
 }
 
-#[cfg(feature = "host")]
+/// The refusal of a [`current`] read whose catch-up failed.
+///
+/// The error of the catch-up is a field and not a source, so the text of the
+/// refusal is this text alone and holds no path.
+#[derive(Debug, thiserror::Error)]
+#[error("catch-up failed; restart the document read")]
+pub struct CatchUpFailed(pub anyhow::Error);
+
 fn one_line(text: &str) -> String {
     text.replace('\r', "\\r").replace('\n', "\\n")
 }
 
-#[cfg(feature = "host")]
 /// Everything one read may reach: the pinned snapshot and the live parts.
 pub struct ReadContext {
     snapshot: ReadSnapshot,
@@ -111,7 +105,6 @@ pub struct ReadContext {
     policy: StampPolicy,
 }
 
-#[cfg(feature = "host")]
 impl ReadContext {
     const fn new(
         snapshot: ReadSnapshot,
@@ -129,6 +122,7 @@ impl ReadContext {
     }
 
     #[cfg(test)]
+    #[cfg(feature = "host")]
     pub(crate) fn for_test(snapshot: ReadSnapshot, repository: Repository) -> Self {
         Self::new(
             snapshot,
@@ -183,7 +177,6 @@ impl ReadContext {
     }
 }
 
-#[cfg(feature = "host")]
 /// Runs one read: the freshness step under the guard, then `run` over a
 /// pinned snapshot, then the stamp. Every query answer leaves through here,
 /// so every answer carries a stamp.
@@ -197,5 +190,24 @@ pub async fn answer<R: Send>(
     run: impl for<'c> FnOnce(&'c ReadContext) -> ReadFuture<'c, R> + Send,
 ) -> anyhow::Result<Stamped<R>> {
     let fresh = freshness::run(repository, policy.freshness).await?;
-    fresh.complete(repository, policy.scan_limit, run).await
+    fresh
+        .complete(repository, policy.scan_limit, run)
+        .await?
+        .answer()
+}
+
+/// Runs one read as [`answer`] does, but refuses when the catch-up fails.
+///
+/// The refusal is [`CatchUpFailed`]. A read with no stored revision refuses
+/// with [`ReadRefusal::NoProjection`] first, as under [`answer`].
+pub async fn current<R: Send>(
+    repository: &Repository,
+    policy: ReadPolicy,
+    run: impl for<'c> FnOnce(&'c ReadContext) -> ReadFuture<'c, R> + Send,
+) -> anyhow::Result<Stamped<R>> {
+    let fresh = freshness::run(repository, policy.freshness).await?;
+    fresh
+        .complete(repository, policy.scan_limit, run)
+        .await?
+        .current()
 }

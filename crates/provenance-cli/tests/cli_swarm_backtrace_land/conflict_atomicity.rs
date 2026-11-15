@@ -169,7 +169,7 @@ fn invalid_swarm_assertion_evidence_is_atomic() {
             "assertion claim claim_missing must have exactly one owner",
         ));
 
-    crate::export_fixture_support::make_default_scope_portable(&repo);
+    super::export_fixture_support::make_default_scope_portable(&repo);
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
@@ -378,7 +378,7 @@ fn swarm_backtrace_land_rejects_existing_ids_before_writing() {
             "contribution contrib_backtrace_refute_auth already exists",
         ));
 
-    crate::export_fixture_support::make_default_scope_portable(&repo);
+    super::export_fixture_support::make_default_scope_portable(&repo);
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
@@ -449,7 +449,7 @@ fn swarm_backtrace_land_refuses_to_replace_immutable_proposals() {
         .failure()
         .stderr(predicates::str::contains("immutable"));
 
-    crate::export_fixture_support::make_default_scope_portable(&repo);
+    super::export_fixture_support::make_default_scope_portable(&repo);
     Command::cargo_bin("provenance")
         .unwrap()
         .args([

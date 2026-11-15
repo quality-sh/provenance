@@ -2,10 +2,7 @@
 //! for each new content, and none for identical content or for content that
 //! a reviewer accepted.
 #![cfg(feature = "test-fixture")]
-mod support {
-    pub mod records;
-    pub mod resource_http;
-}
+use crate::support;
 use provenance_macros::verifies;
 use provenance_transport::StatementHost;
 use serde_json::{json, Value};

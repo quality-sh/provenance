@@ -1,13 +1,6 @@
 //! A shaping claim has one holder; another actor cannot take or drop it.
 #![cfg(feature = "test-fixture")]
-#[allow(dead_code)]
-mod support {
-    pub mod mcp;
-    #[path = "../../../provenance-transport/tests/support/records.rs"]
-    pub mod records;
-    #[path = "../../../provenance-transport/tests/support/resource_http.rs"]
-    pub mod resource_http;
-}
+use crate::support;
 use provenance_macros::verifies;
 use serde_json::json;
 use support::mcp::Session;

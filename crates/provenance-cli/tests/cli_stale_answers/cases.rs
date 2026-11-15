@@ -2,7 +2,7 @@
 //! deleted file, files changed then reverted across two ranges, one blob
 //! at two paths, and the evidence query with a base.
 
-use crate::support::{
+use super::support::{
     apply_rules, cli_api, cli_stale, commit, function, init_repo, write, Goldens,
 };
 use provenance_core::protocol::{StaleQuery, SDK_PROTOCOL_VERSION};
@@ -98,11 +98,11 @@ pub fn cases() -> Cases {
     write(repo, "src/three.rs", &twin);
     let second = commit(repo, "second");
     std::fs::remove_file(repo.join("src/three.rs")).unwrap();
-    crate::support::git(repo, &["checkout", &first, "--", "."]);
+    super::support::git(repo, &["checkout", &first, "--", "."]);
     let third = commit(repo, "third");
     assert_eq!(
-        crate::support::git(repo, &["rev-parse", &format!("{first}^{{tree}}")]),
-        crate::support::git(repo, &["rev-parse", &format!("{third}^{{tree}}")]),
+        super::support::git(repo, &["rev-parse", &format!("{first}^{{tree}}")]),
+        super::support::git(repo, &["rev-parse", &format!("{third}^{{tree}}")]),
     );
     Cases {
         directory,

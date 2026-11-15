@@ -2,17 +2,6 @@ import type { components } from "./generated/schema.js";
 
 export type VerificationMethod = components["schemas"]["GetRuleEvidenceSuccessVerificationMethod"];
 
-type AnyFunction = (...args: never[]) => unknown;
-
-/** Bind a Rule's primary implementation without changing the function. */
-// @provenance rule: rule_typescript_rule_helper_identity
-export function rule<FunctionType extends AnyFunction>(
-  _ruleId: string,
-  implementation: FunctionType,
-): FunctionType {
-  return implementation;
-}
-
 /** Mark the containing test with its verification method. */
 // @provenance rule: rule_typescript_verifies_helper_marker
 export function verifies(

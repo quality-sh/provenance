@@ -3,10 +3,7 @@
 //! names the records.
 #![cfg(feature = "test-fixture")]
 
-mod support {
-    pub mod records;
-    pub mod resource_http;
-}
+use crate::support;
 
 use provenance_macros::verifies;
 use serde_json::json;
@@ -41,12 +38,10 @@ async fn a_withdrawal_that_names_no_submission_is_located() {
     );
 }
 
-#[tokio::test]
-#[verifies("rule_inconsistent_records_refusal_names_records", examples)]
-async fn a_submission_withdrawn_two_times_is_located_at_the_second_withdrawal() {
-    let repo = Repository::new("The shared graph is readable.");
-    support::records::allow_reviewer(&repo);
-    let writer = host(&repo, true);
+/// The pending review submission of `req_shared`, which an edit opens.
+async fn pending_submission(repo: &Repository) -> String {
+    support::records::allow_reviewer(repo);
+    let writer = host(repo, true);
     let (status, read) = call(&writer, "GET", "/requirements/req_shared", None).await;
     assert_eq!(status, 200, "{read}");
     let etag = read["data"]["edit"]["etag"].as_str().unwrap().to_owned();
@@ -59,16 +54,24 @@ async fn a_submission_withdrawn_two_times_is_located_at_the_second_withdrawal() 
     )
     .await;
     assert_eq!(status, 200, "{saved}");
-    let proposal = saved["data"]["decision"]["pending"]["proposal_id"]
+    saved["data"]["decision"]["pending"]["proposal_id"]
         .as_str()
         .unwrap()
-        .to_owned();
+        .to_owned()
+}
+
+/// The public surface writes each Withdrawal one time with a new id, so
+/// only a hand edit of the state file puts one id on two lines.
+#[tokio::test]
+#[verifies("rule_inconsistent_records_refusal_names_records", examples)]
+async fn a_withdrawal_id_on_two_lines_is_located_at_the_second_line() {
+    let repo = Repository::new("The shared graph is readable.");
+    let proposal = pending_submission(&repo).await;
+    let edited = json!({"scope_id":"default", "id":"withdrawal_a", "proposal_id":proposal,
+        "actor":"agent", "reason":"Edited."});
     write_withdrawals(
         &repo,
-        &[
-            withdrawal("withdrawal_a", &proposal),
-            withdrawal("withdrawal_b", &proposal),
-        ],
+        &[withdrawal("withdrawal_a", &proposal), edited.to_string()],
     );
     let (status, failure) =
         call(&host(&repo, false), "GET", "/requirements/req_shared", None).await;
@@ -76,9 +79,32 @@ async fn a_submission_withdrawn_two_times_is_located_at_the_second_withdrawal() 
     assert_eq!(
         failure["error"],
         json!({"kind":"invalid_state_file", "file":WITHDRAWALS, "line":2,
-        "message":format!(
-            "review submission {proposal} is withdrawn two times: withdrawal_a and withdrawal_b"
-        )}),
+            "message":"withdrawal withdrawal_a is stored again; line 1 stores it first"}),
+    );
+}
+
+/// Two Withdrawals of one submission are not a fault, so the refusal names
+/// the later Withdrawal that names no review submission, at its own line.
+#[tokio::test]
+#[verifies("rule_inconsistent_records_refusal_names_records", examples)]
+async fn a_withdrawal_that_names_no_submission_after_two_withdrawals_is_located() {
+    let repo = Repository::new("The shared graph is readable.");
+    let proposal = pending_submission(&repo).await;
+    write_withdrawals(
+        &repo,
+        &[
+            withdrawal("withdrawal_a", &proposal),
+            withdrawal("withdrawal_b", &proposal),
+            withdrawal("withdrawal_lost", "proposal_missing"),
+        ],
+    );
+    let (status, failure) =
+        call(&host(&repo, false), "GET", "/requirements/req_shared", None).await;
+    assert_eq!(status, 500, "{failure}");
+    assert_eq!(
+        failure["error"],
+        json!({"kind":"invalid_state_file", "file":WITHDRAWALS, "line":3,
+            "message":"withdrawal withdrawal_lost names no review submission: proposal_missing"}),
     );
 }
 

@@ -2,8 +2,7 @@
 
 #[path = "support/modern_lifecycle.rs"]
 mod modern_lifecycle;
-#[path = "support/thread_record.rs"]
-mod thread_record;
+use crate::thread_record;
 
 use assert_cmd::Command;
 use modern_lifecycle::add_modern_lifecycle;

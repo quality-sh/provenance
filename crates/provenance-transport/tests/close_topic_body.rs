@@ -1,9 +1,6 @@
 //! `POST /topics/{id}/close` takes no request body.
 #![cfg(feature = "test-fixture")]
-mod support {
-    pub mod records;
-    pub mod resource_http;
-}
+use crate::support;
 use provenance_macros::verifies;
 use provenance_porcelain::api::{ApiArguments, ApiErrorKind, ApiMethod, ApiOutcome, ApiRequest};
 use provenance_porcelain::Porcelain;

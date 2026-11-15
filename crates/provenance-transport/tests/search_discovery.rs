@@ -1,9 +1,6 @@
 #![cfg(feature = "test-fixture")]
 
-mod support {
-    pub mod records;
-    pub mod resource_http;
-}
+use crate::support;
 
 use axum::{body::Body, http::Request};
 use provenance_core::{RuleSeverity, RuleStatus, ScopeId, StableId};

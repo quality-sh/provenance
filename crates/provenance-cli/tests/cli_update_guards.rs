@@ -7,9 +7,7 @@ use predicates::prelude::*;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 
-mod support {
-    pub mod review_paths;
-}
+use crate::support;
 use support::review_paths::{init, json_output, provenance};
 
 /// One record of every review kind.

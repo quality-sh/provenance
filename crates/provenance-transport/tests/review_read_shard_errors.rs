@@ -1,9 +1,6 @@
 //! A shard that does not parse reaches the review page without the host path.
 #![cfg(feature = "test-fixture")]
-mod support {
-    pub mod records;
-    pub mod resource_http;
-}
+use crate::support;
 use provenance_core::{NodeType, ScopeId};
 use support::records::Repository;
 use support::resource_http::{call, host};

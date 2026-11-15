@@ -1,4 +1,4 @@
-use crate::porcelain_authoring_support::{
+use super::porcelain_authoring_support::{
     initialized_repo, json_output, json_stdin_output, provenance,
 };
 use serde_json::{json, Value};
@@ -148,7 +148,7 @@ fn expected_cascade(removed: &str, retained: &str) -> Value {
 
 #[test]
 fn deleting_a_requirement_removes_its_ids_from_surviving_records() {
-    let (_directory, repo) = initialized_repo();
+    let (_directory, repo) = initialized_repo(None);
     let (removed, retained) = cited_requirement(&repo);
     let after = document(&json!([other_requirement()]));
 

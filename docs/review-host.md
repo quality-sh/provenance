@@ -309,7 +309,10 @@ ID as `provenance init` does. If neither gives a value, the response does not
 contain `reviewer`. `reviewer.allowed` is `true` when `actorId` is in
 `dispositionActorIds`, and `false` when it is not. The identity is the
 statement of the person. It is not proof. A disposition write from an actor
-that is not in `dispositionActorIds` gets 403 `access_denied`, as before.
+that is not in `dispositionActorIds` gets 403 `access_denied`. Its `message`
+names the manifest field `disposition_actor_ids` and the command
+`provenance init --disposition-actor-id <DISPOSITION_ACTOR_ID>` that changes it.
+The message does not give an actor ID.
 
 The generic renderer does not read credentials, fetch host configuration, or
 mount itself. Its index is an empty shell. The concrete application in
@@ -406,7 +409,8 @@ authorization, repository and scope access, embedded assets, and shutdown.
 
 ## Validation
 
-Run `cargo test -p provenance-cli --test cli_review_host --test cli_review_refusal_connections --test review_asset_build --test review_archive`
+Run `cargo test -p provenance-cli --test review -- cli_review_host:: cli_review_refusal_connections:: review_archive::`,
+`cargo test -p provenance-review --test review_asset_build`
 and `cargo test -p provenance-transport --features test-fixture` after generation.
 Run `node --test tools/review-host/*.test.ts` for composition and session checks.
 Run `node tools/review-host/verify-page-session.ts BINARY` to run the page

@@ -5,6 +5,7 @@ mod deletion;
 mod identity;
 mod publication;
 mod reconcile;
+mod refusals;
 mod rule_addresses;
 mod view;
 
@@ -21,7 +22,7 @@ use super::{
 pub use decision::{decide_typed_spec, TypedSpecDecision};
 use decision::{CurrentTypedState, DesiredTypedIds};
 pub(in crate::state_store) use rule_addresses::rule_address;
-pub use view::TypedSpecView;
+pub use view::{ReviewHistory, TypedSpecView};
 
 #[derive(Clone, Copy)]
 pub(super) struct DesiredTypedGraph<'a> {
@@ -40,12 +41,6 @@ struct DesiredImplementations<'a> {
     deleted_rule_ids: &'a BTreeSet<String>,
 }
 
-#[derive(Clone, Copy)]
-enum ReconcileMode {
-    Plan,
-    Apply,
-}
-
 impl StateStore {
     /// Reconciles one language-owned desired-state document with canonical state.
     ///
@@ -61,7 +56,8 @@ impl StateStore {
         input: TypedSpecInput,
     ) -> anyhow::Result<TypedSpecResult> {
         self.with_repository_publication(|held| {
-            held.reconcile_typed_spec(scope_id, input, ReconcileMode::Apply)
+            held.decide_stored_typed_spec(scope_id, input)?
+                .publish(held, scope_id)
         })
     }
 
@@ -71,25 +67,27 @@ impl StateStore {
         scope_id: &ScopeId,
         input: TypedSpecInput,
     ) -> anyhow::Result<TypedSpecResult> {
-        self.with_repository_read(|held| {
-            held.reconcile_typed_spec(scope_id, input, ReconcileMode::Plan)
-        })
+        Ok(self.plan_typed_spec_decision(scope_id, input)?.result)
     }
 
-    fn reconcile_typed_spec(
+    /// Decides one typed spec against the stored records without publishing the decision.
+    pub(crate) fn plan_typed_spec_decision(
         &self,
         scope_id: &ScopeId,
         input: TypedSpecInput,
-        mode: ReconcileMode,
-    ) -> anyhow::Result<TypedSpecResult> {
+    ) -> anyhow::Result<TypedSpecDecision> {
+        self.with_repository_read(|held| held.decide_stored_typed_spec(scope_id, input))
+    }
+
+    fn decide_stored_typed_spec(
+        &self,
+        scope_id: &ScopeId,
+        input: TypedSpecInput,
+    ) -> anyhow::Result<TypedSpecDecision> {
         self.validate_typed_spec(scope_id, &input)?;
         let view = self.typed_spec_view(scope_id)?;
-        let decision = decide_typed_spec(scope_id, input, &view)
-            .map_err(|error| self.locate_shared_address(scope_id, error))?;
-        match mode {
-            ReconcileMode::Plan => Ok(decision.result),
-            ReconcileMode::Apply => decision.publish(self, scope_id),
-        }
+        decide_typed_spec(scope_id, input, &view)
+            .map_err(|error| self.locate_shared_address(scope_id, error))
     }
 
     /// Gives a [`identity::SharedDeclarationAddress`] as `invalid_state_file`
@@ -108,41 +106,22 @@ impl StateStore {
         super::readers::record_fault(self, &path, shared.id.as_str(), shared.to_string())
     }
 
-    /// Puts the evidence of every Rule under a restated Requirement up for review.
+    /// Puts the evidence of every Rule that cites a restated Requirement after the apply up for
+    /// review.
     fn raise_requirement_reviews(
         &self,
         scope_id: &ScopeId,
-        requirements: &[ReconciledResource],
-        rules: &[ReconciledResource],
+        resources: &[ReconciledResource],
     ) -> anyhow::Result<()> {
-        let changes = requirement_reviews::requirement_statement_changes(requirements);
-        if changes.is_empty() {
-            return Ok(());
-        }
-        let changed_at = requirement_reviews::now_millis(&*self.clock())?;
-        let mut reviews = Vec::new();
-        for change in changes {
-            let mut rule_ids = self.rule_ids_for_requirement(scope_id, &change.requirement_id)?;
-            for rule in rules
-                .iter()
-                .filter(|rule| rule.parent.as_deref() == Some(change.requirement_key.as_str()))
-            {
-                if !rule_ids.contains(&rule.id) {
-                    rule_ids.push(rule.id.clone());
-                }
-            }
-            reviews.extend(rule_ids.into_iter().map(|rule_id| {
-                requirement_reviews::RequirementReviewInput {
-                    rule_id,
-                    requirement_id: change.requirement_id.clone(),
-                    field: change.field.clone(),
-                    before: change.before.clone(),
-                    after: change.after.clone(),
-                    changed_at,
-                }
-            }));
-        }
-        self.record_requirement_reviews(scope_id, reviews)
+        let restatements = requirement_reviews::requirement_statement_changes(resources)
+            .into_iter()
+            .map(|change| requirement_reviews::Restatement {
+                requirement_id: change.requirement_id,
+                before: change.before,
+                after: change.after,
+            })
+            .collect();
+        self.record_restatements(scope_id, restatements)
     }
 
     fn validate_typed_spec(
@@ -197,6 +176,7 @@ fn spec_result(
         updated: count_state(&resources, &cascade, ReconcileState::Updated),
         moved: count_state(&resources, &cascade, ReconcileState::Moved),
         deleted: count_state(&resources, &cascade, ReconcileState::Deleted),
+        refused: count_state(&resources, &cascade, ReconcileState::Refused),
         conflicts: count_state(&resources, &cascade, ReconcileState::Conflict),
         unchanged: count_state(&resources, &cascade, ReconcileState::Unchanged),
         resources,

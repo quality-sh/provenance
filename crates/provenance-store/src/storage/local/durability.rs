@@ -17,19 +17,53 @@ pub struct ChangedUnsynced(pub anyhow::Error);
 /// sync the temporary file, replace `path` with it, and sync the directory.
 /// If the call made directories, it then syncs each directory above the
 /// directory of `path` up to the parent of the highest new directory, deepest
-/// first. On Unix, after the call returns, a power loss cannot lose the new
-/// bytes of the file or the entry of a new directory. On Windows, a directory
-/// has no sync in this module: the file sync occurs, but a power loss can
-/// lose the rename and the entry of a new directory.
+/// first. It does not sync a directory that was there before the call, above
+/// the directory of `path`. On Unix, after the call returns, a power loss
+/// cannot lose the new bytes of the file or the entry of a directory that the
+/// call made, if each directory that was there before the call has its entry
+/// on the disk. On Windows, a directory has no sync in this module: the file
+/// sync occurs, but a power loss can lose the rename and the entry of a new
+/// directory.
 ///
-/// If a step fails, the steps after it do not occur. A failed sync gives
-/// `sync <path>` and the I/O error. If a directory sync fails, `path` has the
-/// new bytes, but a power loss can lose them: the error is a
+/// If a step fails, the steps after it do not occur, no temporary file stays,
+/// and the error names the step and its path, except a failed rename. A failed
+/// sync gives `sync <path>` and the I/O error. If a directory sync fails,
+/// `path` has the new bytes, but a power loss can lose them: the error is a
 /// [`ChangedUnsynced`].
 pub fn write_synced_file(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<()> {
-    let (temporary, parent, first_made) = write_temporary(path, bytes)?;
+    write_synced_file_named(path, bytes, &tempfile::Builder::new())
+}
+
+/// Writes `bytes` to the file at `path` as [`write_synced_file`] does, with a
+/// temporary file whose name `builder` gives.
+pub(in crate::storage::local) fn write_synced_file_named(
+    path: &Utf8Path,
+    bytes: &[u8],
+    builder: &tempfile::Builder<'_, '_>,
+) -> anyhow::Result<()> {
+    let (temporary, parent, first_made) = write_temporary(path, bytes, builder)?;
     temporary.as_file().sync_all().map_err(sync_failure(path))?;
+    crate::test_probes::at("synced_file_before_rename")?;
     replace_file(temporary, path)?;
+    sync_directories(parent, first_made)
+}
+
+/// Syncs the file at `path`, which already has the bytes of a write, and then
+/// syncs the directory of `path`.
+///
+/// It does not sync a directory above the directory of `path`. The call that
+/// makes a directory syncs its entry, so the entry of a directory above is on
+/// the disk only if the call that made it synced it.
+pub fn sync_written_file(path: &Utf8Path) -> anyhow::Result<()> {
+    open_to_sync(path)
+        .and_then(|file| file.sync_all())
+        .map_err(sync_failure(path))?;
+    sync_directories(parent_of(path)?, None)
+}
+
+/// Syncs `parent`, and then each directory above it up to the parent of
+/// `first_made`, the highest directory that a write made, deepest first.
+fn sync_directories(parent: &Utf8Path, first_made: Option<&Utf8Path>) -> anyhow::Result<()> {
     let last = first_made.and_then(Utf8Path::parent).unwrap_or(parent);
     for directory in parent.ancestors() {
         sync_parent(directory).map_err(ChangedUnsynced)?;
@@ -69,30 +103,46 @@ pub(in crate::storage::local) fn write_staged_file(
     path: &Utf8Path,
     bytes: &[u8],
 ) -> anyhow::Result<()> {
-    let (temporary, _, _) = write_temporary(path, bytes)?;
+    let (temporary, _, _) = write_temporary(path, bytes, &tempfile::Builder::new())?;
     replace_file(temporary, path)
 }
 
-/// A temporary file with `bytes` in the directory of `path`, that directory,
-/// and the highest directory that this function made, if it made one. The
-/// function makes the directory of `path` and each directory above it that
-/// does not exist.
+/// A temporary file with `bytes` in the directory of `path`, with the name
+/// that `builder` gives, that directory, and the highest directory that
+/// this function made, if it made one. The function makes the directory of
+/// `path` and each directory above it that does not exist.
 fn write_temporary<'a>(
     path: &'a Utf8Path,
     bytes: &[u8],
+    builder: &tempfile::Builder<'_, '_>,
 ) -> anyhow::Result<(tempfile::NamedTempFile, &'a Utf8Path, Option<&'a Utf8Path>)> {
     let parent = parent_of(path)?;
     let mut first_made = None;
     for directory in parent.ancestors() {
-        if directory.as_str().is_empty() || crate::long_path::extended(directory)?.try_exists()? {
+        if directory.as_str().is_empty() || directory_exists(directory)? {
             break;
         }
         first_made = Some(directory);
     }
-    std::fs::create_dir_all(parent)?;
-    let mut temporary = tempfile::NamedTempFile::new_in(crate::long_path::extended(parent)?)?;
-    temporary.write_all(bytes)?;
+    std::fs::create_dir_all(parent)
+        .map_err(|error| crate::refusal::caused(error, format!("make directory {parent}")))?;
+    let mut temporary = crate::long_path::extended(parent)
+        .and_then(|directory| builder.tempfile_in(directory))
+        .map_err(|error| {
+            crate::refusal::caused(error, format!("make a temporary file for {path}"))
+        })?;
+    temporary.write_all(bytes).map_err(|error| {
+        crate::refusal::caused(error, format!("write a temporary file for {path}"))
+    })?;
     Ok((temporary, parent, first_made))
+}
+
+/// Tells if `directory` exists. A failure gives `find directory <path>` and
+/// the I/O error.
+fn directory_exists(directory: &Utf8Path) -> anyhow::Result<bool> {
+    crate::long_path::extended(directory)
+        .and_then(|extended| extended.try_exists())
+        .map_err(|error| crate::refusal::caused(error, format!("find directory {directory}")))
 }
 
 fn parent_of(path: &Utf8Path) -> anyhow::Result<&Utf8Path> {
@@ -115,6 +165,16 @@ fn sync_parent(directory: &Utf8Path) -> anyhow::Result<()> {
     #[cfg(not(unix))]
     let _ = directory;
     Ok(())
+}
+
+/// Opens the file at `path` so that its sync can run. A Windows sync of a
+/// file needs write access, and a handle with read access only gets
+/// `ERROR_ACCESS_DENIED`. Unix syncs a handle with read access only.
+fn open_to_sync(path: &Utf8Path) -> std::io::Result<std::fs::File> {
+    std::fs::OpenOptions::new()
+        .read(true)
+        .write(cfg!(windows))
+        .open(path)
 }
 
 /// A failed sync of `path`, with the path and the I/O error.
@@ -156,9 +216,19 @@ fn replace_file(temporary: tempfile::NamedTempFile, target: &Utf8Path) -> anyhow
 /// available because the operating system keeps the directory changes.
 pub fn sync_directory(path: &Utf8Path) -> anyhow::Result<()> {
     #[cfg(unix)]
-    std::fs::File::open(path)?.sync_all()?;
+    sync_opened_directory(&std::fs::File::open(path)?)?;
     #[cfg(not(unix))]
     let _ = path;
+    Ok(())
+}
+
+/// Flushes the metadata of the open directory `directory`, as
+/// [`sync_directory`] does: on Windows, the call does nothing.
+pub fn sync_opened_directory(directory: &std::fs::File) -> std::io::Result<()> {
+    #[cfg(unix)]
+    directory.sync_all()?;
+    #[cfg(not(unix))]
+    let _ = directory;
     Ok(())
 }
 
@@ -173,16 +243,9 @@ pub fn sync_tree(path: &Utf8Path) -> anyhow::Result<()> {
         if entry.file_type()?.is_dir() {
             sync_tree(&child)?;
         } else {
-            // Windows' FlushFileBuffers needs write access; a read-only
-            // handle is refused with ERROR_ACCESS_DENIED. Unix fsyncs a
-            // read descriptor happily.
-            let file = std::fs::OpenOptions::new()
-                .read(true)
-                .write(cfg!(windows))
-                .open(&child)
-                .map_err(|error| {
-                    crate::refusal::fault!("sync publication file {child}: {error}")
-                })?;
+            let file = open_to_sync(&child).map_err(|error| {
+                crate::refusal::fault!("sync publication file {child}: {error}")
+            })?;
             file.sync_all().map_err(|error| {
                 crate::refusal::fault!("sync publication file {child}: {error}")
             })?;

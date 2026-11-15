@@ -1,8 +1,7 @@
 //! A Resolution that the reviewer approves on the review page can be cited at once. The
 //! approval leaves the lifecycle status proposed, and the citation check reads the
 //! accepted current revision as approval.
-#[path = "review_host_support/mod.rs"]
-mod review_host_support;
+use crate::review_host_support;
 
 use provenance_macros::verifies;
 use review_host_support::{

@@ -1,4 +1,4 @@
-use crate::support::{create_requirement, imported_dictionary, init, provenance, write_reference};
+use super::support::{create_requirement, imported_dictionary, init, provenance, write_reference};
 use provenance_macros::verifies;
 use serde_json::Value;
 use std::path::{Path, PathBuf};

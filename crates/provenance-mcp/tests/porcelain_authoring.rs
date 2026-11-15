@@ -1,14 +1,6 @@
 #![cfg(feature = "test-fixture")]
 
-#[allow(dead_code)]
-mod support {
-    #[path = "../../../provenance-transport/tests/support/records.rs"]
-    pub mod records;
-    #[allow(dead_code)]
-    #[path = "../../../provenance-transport/tests/support/resource_http.rs"]
-    pub mod resource_http;
-    pub mod schema_check;
-}
+use crate::support;
 
 use provenance_core::{ScopeId, StableId};
 use provenance_macros::verifies;

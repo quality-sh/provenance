@@ -5,6 +5,7 @@ use crate::{
             ContextResolver, ExecutionNeed, ExecutionNeeds, PreparedContext, PreparedRead,
             PreparedRepository, PreparedScope, RequestedContext,
         },
+        read_operations::ReadOperations,
         read_policy::ReadPolicy,
     },
     repository::Repository,
@@ -13,11 +14,14 @@ use provenance_core::{
     protocol::failure::{InvalidInputReason, OperationFailure},
     ScopeId,
 };
+use std::sync::Arc;
 
 /// One opened repository bound under an alias, with its scope as the one grant.
 pub struct LocalRepository {
     repository: Repository,
     alias: String,
+    /// The read operations port, when the caller gave one.
+    reads: Option<Arc<dyn ReadOperations>>,
 }
 
 impl LocalRepository {
@@ -32,7 +36,28 @@ impl LocalRepository {
         Ok(Self {
             repository,
             alias: alias.to_owned(),
+            reads: None,
         })
+    }
+
+    /// This binding with `reads` as the port of its read operations. The
+    /// contract router sends each read operation of this binding to the
+    /// port.
+    #[must_use]
+    pub fn with_read_operations(self, reads: Arc<dyn ReadOperations>) -> Self {
+        Self {
+            reads: Some(reads),
+            ..self
+        }
+    }
+
+    /// The same repository under the same alias, with no port.
+    pub(crate) fn without_read_operations(&self) -> Self {
+        Self {
+            repository: self.repository.clone(),
+            alias: self.alias.clone(),
+            reads: None,
+        }
     }
 
     /// The bound alias.
@@ -43,6 +68,11 @@ impl LocalRepository {
     /// The bound scope.
     pub fn scope(&self) -> &ScopeId {
         self.repository.scope()
+    }
+
+    /// The read operations port of this binding, if it has one.
+    pub fn read_operations(&self) -> Option<Arc<dyn ReadOperations>> {
+        self.reads.clone()
     }
 
     /// Read disposition actors from the repository bound at startup.
@@ -64,7 +94,7 @@ impl LocalRepository {
             return Err(OperationFailure::UnknownTarget);
         }
         if scope.is_some_and(|scope| scope != self.scope().as_str()) {
-            return Err(OperationFailure::AccessDenied);
+            return Err(OperationFailure::access_denied());
         }
         Ok(())
     }
@@ -139,6 +169,7 @@ impl ContextResolver for LocalRepository {
 }
 
 #[cfg(test)]
+#[cfg(feature = "host")]
 mod tests {
     use super::*;
     use crate::layout::ProvenanceLayout;
@@ -192,7 +223,7 @@ mod tests {
         });
         assert_eq!(
             binding.authorize("write-discussion", &other_scope),
-            Err(OperationFailure::AccessDenied)
+            Err(OperationFailure::access_denied())
         );
         let bound = RequestedContext::Scoped(RepositoryContext {
             repository: "native".into(),

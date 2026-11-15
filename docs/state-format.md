@@ -90,14 +90,25 @@ the deleted rows. The store refuses any canonical record that still has a
 `retired` field. The error names record-deletion migration 026.
 
 Requirement review records live in
-`scopes/<scope>/requirements/review.jsonl`. When an applied reconciliation
-restates a Requirement's `statement`, one row per affected Rule records the
-Requirement, the field, both statements, and when the change landed. A review
-is identified by that exact restatement, so re-applying the same change never
+`scopes/<scope>/requirements/review.jsonl`. When a Requirement update, an
+applied reconciliation or a scope import restates a Requirement's `statement`,
+one row for each Rule that cites the Requirement after the change records the
+Requirement, the field, both statements, and when the change landed. A Rule that
+the change removes, or moves to another Requirement, gets no row. A review is
+identified by that exact restatement, so re-applying the same change never
 reopens a cleared review. A verification run for the Rule recorded after the
 change sets `cleared_at` and `cleared_by_run` while keeping the reason; nothing
 is deleted. Plan reads these rows to report review-required evidence, and
-previews the reviews an unapplied diff would raise without writing them.
+previews the reviews an unapplied diff would raise without writing them: the
+same Rules that the apply gives a row.
+
+A scope export file does not hold these rows, so `import` and `export` refuse a
+scope that has one, open or cleared. Thus the first import that changes the
+statement of a Requirement that a Rule cites passes and writes the rows. Each
+later import or export of that scope is refused, also after a verification run
+clears the rows. The records of that scope stay readable and changeable through
+the API routes. `import` and `export` also refuse a scope that has a review
+submission, a Discussion or a withdrawal.
 
 A Rule with no active implementation binding is a valid unimplemented Rule.
 A rule's source document and section are citations and do not count as
@@ -131,8 +142,8 @@ artifact type and ID; missing, cross-scope, and cross-kind collisions fail close
 write or import publication and during repository checking and cache materialization.
 
 Repository access first takes `.provenance/cache/locks/repository.publication.lock`. Writers then
-take a scope lifecycle lock when applicable and finally a shard lock; this repository, lifecycle,
-shard order is mandatory. Multi-shard writers hold the publication lock for their complete
+take a shard lock; this repository, shard order is mandatory. Ideation writes take no other lock:
+the publication lock is the lock of their read, check and write. Multi-shard writers hold the publication lock for their complete
 operation, and aggregate readers hold it for their complete view or copy one locked snapshot.
 Import holds the publication lock across recovery, snapshot, staged validation, and publication,
 so cooperative readers and writers cannot observe or modify the brief directory-rename gap. Lock

@@ -8,21 +8,16 @@
 //! answer, its order or a refusal.
 #![cfg(feature = "test-fixture")]
 
-mod support {
-    pub mod catch_up_steps;
-    pub mod records;
-    pub mod resource_http;
-    pub mod transcript;
-}
+use crate::support;
 
 use provenance_transport::StatementHost;
 use serde_json::{json, Value};
 use support::catch_up_steps::{write, Answer, Surface, STEPS};
+use support::names::Names;
 use support::records::{allow_reviewer, Repository};
 use support::resource_http::{call, call_with_headers, host};
 use support::transcript::{
     assert_same, copy_without_projection, fingerprint, named_answers, read_all, without_generated,
-    Names,
 };
 
 /// The HTTP routes of one host.
@@ -72,7 +67,7 @@ async fn reads_after_each_write_equal_a_full_rebuild() {
     }
     let text = serde_json::to_string_pretty(&transcript).unwrap();
     assert_eq!(fingerprint(&transcript[..15]), "841ce06d32c8aee2", "{text}");
-    assert_eq!(fingerprint(&transcript), "0dd73f21afae1653", "{text}");
+    assert_eq!(fingerprint(&transcript), "982f4db196345d97", "{text}");
 }
 
 /// A hand edit that each validator refuses, and the answer the next read

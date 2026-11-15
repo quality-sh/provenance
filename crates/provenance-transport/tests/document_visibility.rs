@@ -2,10 +2,7 @@
 //! that no longer resolve.
 #![cfg(feature = "test-fixture")]
 
-mod support {
-    pub mod records;
-    pub mod resource_http;
-}
+use crate::support;
 
 use provenance_core::{
     NodeType, QuestionStatus, RequirementStatus, ResolutionMethod, ScopeId, StableId, TopicStatus,

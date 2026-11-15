@@ -1,9 +1,9 @@
 //! Source failures retain native diagnostics separately from the safe wire form.
-use crate::state_store::readers::StateLineInvalid;
 use crate::state_store::{
     ReconciledResource, StatementWriteError, TypedSpecDiagnostic, TypedSpecWriteError,
 };
 use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
+use provenance_core::protocol::read_failure::UnparsableStateFile;
 use serde::Serialize;
 
 mod cause;
@@ -21,7 +21,10 @@ pub enum WriteFailure {
         field: Option<String>,
         reason: InvalidInputReason,
     },
-    AccessDenied,
+    AccessDenied {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        message: Option<String>,
+    },
     AlreadyExists,
     InvalidCommitPin,
     ScopeMismatch,
@@ -61,6 +64,7 @@ pub enum WriteFailure {
     EnrolledRecordDeletionConflict {
         record_kind: provenance_core::NodeType,
         record_id: provenance_core::StableId,
+        message: String,
     },
     ClaimConflict {
         holder: String,
@@ -118,6 +122,21 @@ impl WriteFailure {
         }
     }
 
+    /// An `access_denied` refusal with no message, the same as
+    /// [`OperationFailure::access_denied`].
+    pub const fn access_denied() -> Self {
+        Self::AccessDenied { message: None }
+    }
+
+    /// Refuses a review decision by an actor that the manifest does not list,
+    /// with the text of the core refusal as the next step for the caller.
+    #[provenance_macros::rule("rule_decision_refusal_names_reviewer_field")]
+    fn disposition_actor_refused(refusal: provenance_core::DispositionActorRefusal) -> Self {
+        Self::AccessDenied {
+            message: Some(refusal.to_string()),
+        }
+    }
+
     #[provenance_macros::rule("rule_ownership_refusal_names_owner")]
     pub(crate) fn record_ownership_conflict(owner: Option<&str>) -> Self {
         let message = owner.map_or_else(
@@ -127,6 +146,18 @@ impl WriteFailure {
         Self::RecordOwnershipConflict {
             owner: owner.map(str::to_owned),
             message,
+        }
+    }
+}
+
+/// The `invalid_state_file` write failure has the data of the read failure of
+/// the same name.
+impl From<&UnparsableStateFile> for WriteFailure {
+    fn from(state: &UnparsableStateFile) -> Self {
+        Self::InvalidStateFile {
+            file: state.file().to_owned(),
+            line: state.line(),
+            message: state.message().to_owned(),
         }
     }
 }
@@ -231,11 +262,8 @@ impl WriteError {
         if let Some(error) = error.downcast_ref::<SourceFailure>() {
             return error.failure.clone();
         }
-        if error
-            .downcast_ref::<provenance_core::DispositionActorRefusal>()
-            .is_some()
-        {
-            return WriteFailure::AccessDenied;
+        if let Some(refusal) = error.downcast_ref::<provenance_core::DispositionActorRefusal>() {
+            return WriteFailure::disposition_actor_refused(*refusal);
         }
         if error
             .downcast_ref::<provenance_core::ApprovalEvidenceRequired>()
@@ -265,18 +293,12 @@ impl WriteError {
                 _ => WriteFailure::FileUnavailable,
             };
         }
-        StateLineInvalid::find(error).map_or_else(
-            || self.write_failed(),
-            |error| WriteFailure::InvalidStateFile {
-                file: error.file(),
-                line: error.line,
-                message: error.message.clone(),
-            },
-        )
+        UnparsableStateFile::find(error.as_ref())
+            .map_or_else(|| self.write_failed(), WriteFailure::from)
     }
     fn write_failed(&self) -> WriteFailure {
         WriteFailure::WriteFailed {
-            cause: failure_cause(&self.0),
+            cause: failure_cause(&self.0, native(&self.0)),
         }
     }
     /// The native cause chain of a failure of no known kind, with absolute
@@ -298,7 +320,7 @@ impl WriteError {
         }
         match self.safe() {
             WriteFailure::WriteFailed { .. } | WriteFailure::InvalidStateFile { .. } => 500,
-            WriteFailure::FileAccessDenied | WriteFailure::AccessDenied => 403,
+            WriteFailure::FileAccessDenied | WriteFailure::AccessDenied { .. } => 403,
             WriteFailure::FileUnavailable => 503,
             WriteFailure::ResourceNotFound => 404,
             WriteFailure::RecordOwnershipConflict { .. }

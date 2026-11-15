@@ -14,7 +14,6 @@ use crate::layout::ProvenanceLayout;
 use sqlx::query::Query;
 use sqlx::sqlite::{SqliteArguments, SqliteRow};
 use sqlx::{Row, Sqlite, SqlitePool, TypeInfo, ValueRef};
-use std::io::{Read, Write};
 
 /// The maximum number of values that one statement binds in the file.
 pub const MAX_BOUND_VALUES: usize = 999;
@@ -27,6 +26,7 @@ pub const MAX_LIST_VALUES: usize = 500;
 /// the work of a transaction.
 const STEPS_PER_CALL: u64 = 1000;
 
+mod cursor_key;
 #[cfg(test)]
 mod rows_read;
 
@@ -87,25 +87,7 @@ impl ReadDatabase for FileReadDatabase {
     }
 
     fn cursor_key(&self) -> anyhow::Result<[u8; 32]> {
-        let dir = self.layout.cache_dir();
-        let path = dir.join("read-cursor.key");
-        if !path.exists() {
-            let mut file = tempfile::NamedTempFile::new_in(crate::long_path::extended(&dir)?)?;
-            file.write_all(uuid::Uuid::new_v4().as_bytes())?;
-            file.write_all(uuid::Uuid::new_v4().as_bytes())?;
-            match file.persist_noclobber(crate::long_path::extended(&path)?) {
-                Ok(_) => {}
-                Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {}
-                Err(error) => return Err(error.into()),
-            }
-        }
-        let mut bytes = Vec::new();
-        std::fs::File::open(path)?
-            .take(33)
-            .read_to_end(&mut bytes)?;
-        let key: Result<[u8; 32], _> = bytes.try_into();
-        crate::write_error::ensure!(Fault, key.is_ok(), "invalid cursor signing key");
-        Ok(key.unwrap_or_default())
+        cursor_key::cursor_key(&self.layout)
     }
 
     fn location(&self) -> String {

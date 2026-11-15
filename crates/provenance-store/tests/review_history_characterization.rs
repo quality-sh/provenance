@@ -6,7 +6,7 @@
 //! `read_history` and `read_evidence` before the history reads go through
 //! the file versions port, so the port cannot change them.
 
-mod discussion_support;
+use crate::discussion_support;
 use discussion_support::*;
 use provenance_core::review::{EvidenceQuery, RecordVersion, ReviewHistoryQuery};
 use provenance_core::threads::DiscussionOrigin;

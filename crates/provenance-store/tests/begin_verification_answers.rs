@@ -5,8 +5,7 @@
 //! the write order of the start of a run changes. It has no Rule, because no
 //! Rule states these exact rows.
 
-#[path = "support/memory.rs"]
-mod memory;
+use crate::memory;
 
 use memory::{begin_input, open_review, scope, verification_repository, FixedClock, Recorded};
 use provenance_store::operations::{begin_verification, complete_verification};

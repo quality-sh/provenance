@@ -1,8 +1,6 @@
 #![cfg(feature = "test-fixture")]
 
-mod support {
-    pub mod records;
-}
+use crate::support;
 #[path = "support/review.rs"]
 mod review;
 

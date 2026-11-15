@@ -6,12 +6,7 @@ use provenance_store::state_store::CreateRequirementInput;
 use provenance_transport::StatementHost;
 use serde_json::json;
 
-#[allow(dead_code)]
-mod support {
-    pub mod mcp;
-    #[path = "../../../provenance-transport/tests/support/records.rs"]
-    pub mod records;
-}
+use crate::support;
 use provenance_macros::verifies;
 use support::{
     mcp::{call as call_tool, Session},

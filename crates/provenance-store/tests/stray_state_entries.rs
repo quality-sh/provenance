@@ -18,8 +18,7 @@ use provenance_store::state_store::{
 };
 use std::os::unix::fs::PermissionsExt;
 
-#[path = "support/initialization.rs"]
-mod initialization;
+use crate::review_support::initialization;
 
 fn scope() -> ScopeId {
     ScopeId::new("default").unwrap()

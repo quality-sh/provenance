@@ -12,12 +12,15 @@ mod support {
     pub mod api_process;
     #[path = "../../../provenance-transport/tests/support/catch_up_steps.rs"]
     pub mod catch_up_steps;
+    #[path = "../../../provenance-transport/tests/support/names.rs"]
+    pub mod names;
     #[path = "../../../provenance-transport/tests/support/transcript.rs"]
     pub mod transcript;
+    #[path = "../../../provenance-transport/tests/support/views.rs"]
+    pub mod views;
 }
 
-#[path = "support/bounded_process.rs"]
-mod bounded_process;
+use crate::bounded_process;
 
 use provenance_mcp::Client;
 use provenance_transport::fixture::records::Repository;

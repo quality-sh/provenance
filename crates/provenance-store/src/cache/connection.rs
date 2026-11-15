@@ -239,10 +239,22 @@ fn stored_cache_options(layout: &ProvenanceLayout) -> SqliteConnectOptions {
     SqliteConnectOptions::new().filename(layout.cache_db_path())
 }
 
+/// The options of the writable open, of the open of an existing cache and
+/// of the immutable-image open.
+///
+/// Temporary tables, temporary indexes, sorts and statement journals stay in
+/// memory, and the page cache can hold up to 16,000 KiB. These settings
+/// apply only to the connection and write nothing to the file, so a
+/// read-only or immutable open accepts them. The stored-read open does not
+/// use these options: `cache_size` reads the schema inside the open, and a
+/// stored read uses no temporary file and fits the default page cache, so
+/// the probe is its first read of the file.
 pub fn cache_options(layout: &ProvenanceLayout) -> SqliteConnectOptions {
     SqliteConnectOptions::new()
         .filename(layout.cache_db_path())
         .journal_mode(SqliteJournalMode::Wal)
+        .pragma("temp_store", "MEMORY")
+        .pragma("cache_size", "-16000")
 }
 
 /// Connects, retrying while the switch to WAL is refused as busy. The

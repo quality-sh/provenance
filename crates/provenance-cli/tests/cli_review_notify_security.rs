@@ -2,10 +2,8 @@
 //! the repository, a thread name, or another repository or scope, and queues nothing.
 #![cfg(target_os = "linux")]
 
-#[path = "review_host_support/codex.rs"]
-mod codex;
-#[path = "review_host_support/mod.rs"]
-mod review_host_support;
+use crate::codex;
+use crate::review_host_support;
 
 use codex::{notify, Codex};
 use provenance_macros::verifies;

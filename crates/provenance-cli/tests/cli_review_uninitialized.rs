@@ -4,9 +4,7 @@
 //! manifest path that is not a file, and this test pins the refusal of a
 //! missing graph.
 
-mod support {
-    pub mod review_paths;
-}
+use crate::support;
 use support::review_paths::provenance;
 
 fn refusal(extra: &[&str]) -> (Option<i32>, Vec<String>) {

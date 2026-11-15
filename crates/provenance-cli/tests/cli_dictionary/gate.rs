@@ -1,9 +1,9 @@
-use crate::support::{
+use super::support::{
     create_requirement, error_json, imported_dictionary, init, provenance, statement_report,
     write_reference, UNAPPROVED_WORD,
 };
 use provenance_macros::verifies;
-use provenance_ste100::store_dictionary_index;
+use provenance_store::dictionary_index::store_dictionary_index;
 use serde_json::Value;
 use std::path::Path;
 

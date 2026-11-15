@@ -1,5 +1,4 @@
-#[path = "support/initialization.rs"]
-mod initialization;
+use crate::review_support::initialization;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::ScopeId;

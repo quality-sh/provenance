@@ -4,10 +4,7 @@
 use provenance_macros::verifies;
 use serde_json::Value;
 
-mod support {
-    pub mod record_review;
-    pub mod review_paths;
-}
+use crate::support;
 use support::record_review::{
     accept_current, create_resolution, create_rule, current_submission, data, decide,
     guarded_update, read, submissions,

@@ -5,7 +5,9 @@ use crate::operations::reader::{
 };
 use crate::repository::Repository;
 use provenance_core::protocol::{read_failure::ReadFailure, Stamped};
-use provenance_core::review::{EvidencePage, EvidenceQuery, ReviewHistoryPage, ReviewHistoryQuery};
+use provenance_core::review::{
+    EvidencePage, EvidenceQuery, RecordVersion, ReviewHistoryPage, ReviewHistoryQuery,
+};
 use provenance_core::{NodeType, StableId};
 use provenance_macros::rule;
 use serde_json::Value;
@@ -64,17 +66,50 @@ async fn history(
     })
 }
 
-/// Reads the versions of one record from Git and the saved working copy.
+/// Reads the version `entry` of one record from one read of its versions.
+pub async fn read_history_entry(
+    repository: &Repository,
+    policy: ReadPolicy,
+    kind: NodeType,
+    id: StableId,
+    entry: StableId,
+) -> anyhow::Result<Stamped<RecordVersion>> {
+    let answer = reader::answer(repository, policy, move |ctx| {
+        Box::pin(async move {
+            ctx.snapshot().bound_page_work().await?;
+            let versions = versions(ctx, kind, id).await?;
+            let found = versions
+                .into_iter()
+                .map(|versioned| versioned.version)
+                .find(|version| version.id == entry)
+                .ok_or(ReadFailure::ResourceNotFound)?;
+            Ok(found)
+        })
+    })
+    .await?;
+    crate::operations::queries::page::checked("review-history-entry", answer)
+}
+
+/// Reads the versions of one record from the committed file versions and
+/// the saved working copy.
 async fn versions(
     ctx: &ReadContext,
     kind: NodeType,
     id: StableId,
 ) -> anyhow::Result<Vec<VersionedRecord>> {
-    // Git history and the working copy are outside the projection stamp.
+    // The committed versions and the working copy are outside the projection
+    // stamp.
     ctx.live(Live::Diff);
     let store = ctx.live(Live::Canonical).store();
     let scope = ctx.snapshot().scope().clone();
-    tokio::task::spawn_blocking(move || store.record_versions(&scope, kind, &id)).await?
+    // The host's section lock and the git adapter block, so the host reads
+    // on a thread where a blocking call is permitted.
+    #[cfg(feature = "host")]
+    let versions =
+        tokio::task::spawn_blocking(move || store.record_versions(&scope, kind, &id)).await??;
+    #[cfg(not(feature = "host"))]
+    let versions = store.read_record_versions(&scope, kind, &id).await?;
+    Ok(versions)
 }
 
 /// Reads a bounded span of one record version, or of the version before it.

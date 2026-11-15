@@ -2,9 +2,7 @@ use predicates::str::contains;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 
-mod support {
-    pub mod review_paths;
-}
+use crate::support;
 use support::review_paths::{create_requirement, init, json_output, provenance};
 
 fn reject_pending(repo: &str, id: &str, created: &Value) {

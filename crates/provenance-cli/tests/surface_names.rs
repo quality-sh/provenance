@@ -4,10 +4,7 @@
 //! here first. A changed name changes its pin in the same commit. The MCP input schema
 //! pins are in `provenance-mcp/tests/surface_names.rs`.
 
-#[allow(dead_code)]
-mod support {
-    pub mod surface;
-}
+use crate::support;
 
 use std::path::PathBuf;
 use support::surface::help;

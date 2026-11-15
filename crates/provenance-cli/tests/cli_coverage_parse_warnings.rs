@@ -6,9 +6,7 @@
 
 use serde_json::Value;
 
-mod support {
-    pub mod review_paths;
-}
+use crate::support;
 use support::review_paths::{create_requirement, init, provenance};
 
 /// The coverage report for one source file. The bindings check always validates

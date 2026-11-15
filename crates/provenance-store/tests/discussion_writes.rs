@@ -1,4 +1,4 @@
-mod discussion_support;
+use crate::discussion_support;
 use discussion_support::*;
 use provenance_core::{threads::DiscussionStatus, ThreadStatus};
 use serde_json::json;
