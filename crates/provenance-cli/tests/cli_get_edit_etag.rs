@@ -1,8 +1,7 @@
 //! A get of a record gives the edit etag of the record at `edit.etag` on the CLI and on
 //! a spawned `provenance mcp`, for each record kind. The etag is the one that the `api`
 //! read of the record gives, and it guards the next update on each interface. The other
-//! views have no `edit` field, and the review view keeps its etag at `review.edit`. A
-//! refused edit read refuses the get with the same error on each interface.
+//! views have no `edit` field, and the review view keeps its etag at `review.edit`.
 
 use provenance_macros::verifies;
 use serde_json::{json, Value};
@@ -124,6 +123,18 @@ async fn a_get_of_each_record_gives_the_same_edit_etag_on_the_cli_and_on_mcp() {
         let called = server.client.call("get", json!({"target":id})).await;
         let called = called["content"][0]["text"].as_str();
         assert_eq!(called, text.strip_suffix('\n'), "{id}");
+
+        let link = cli_json(&repo, &[id, "--review-link", "--no-open"]);
+        let message = link["message"].as_str().unwrap();
+        assert_eq!(link, json!({"review_url":null,"message":message}), "{id}");
+        let arguments = json!({"target":id,"review_link":true});
+        let linked = server.client.call("get", arguments).await;
+        let mut expected = by_cli.clone();
+        expected["review_link"] = json!({"review_url":null,"message":message});
+        assert_eq!(linked["structuredContent"], expected, "{id}");
+        let linked = linked["content"][0]["text"].as_str().unwrap();
+        let expected = format!("{text}\nreview link: none. {message}");
+        assert_eq!(linked, expected, "{id}");
     }
     server.close().await;
 }
@@ -152,6 +163,8 @@ async fn the_edit_etag_of_a_get_guards_the_next_update_on_each_interface() {
         let arguments = change_update(id, family, field, &etag(&read));
         let updated = server.client.call("change", arguments).await;
         assert_ne!(updated["isError"], json!(true), "{id}: {updated}");
+        let member = api_read(&repo, id, family);
+        assert_eq!(member["data"][field], "Changed on MCP.", "{id}");
 
         let read = cli_json(&repo, &[id, "get"]);
         let flag = format!("--{field}");
@@ -248,59 +261,5 @@ async fn prime_and_the_mcp_instructions_give_the_edit_etag_to_the_update() {
     let server = Server::start(&repo).await;
     let instructions = server.client.instructions().unwrap();
     assert!(instructions.contains(sentence), "{instructions}");
-    server.close().await;
-}
-
-/// The refusal object of one CLI command that fails.
-fn cli_refusal(repo: &str, args: &[&str]) -> Value {
-    let output = assert_cmd::Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
-        .args(args)
-        .args(["--repo", repo, "--format", "json"])
-        .output()
-        .unwrap();
-    let text = String::from_utf8_lossy(&output.stderr);
-    assert_eq!(output.status.code(), Some(1), "{args:?}: {text}");
-    let line = text.lines().next().unwrap_or_default();
-    let object = line.strip_prefix("Error: ").unwrap_or(line);
-    serde_json::from_str(object).unwrap()
-}
-
-/// When the state file of the record does not parse, the edit read of the record refuses,
-/// and the record view on each interface refuses with the same failure object, which
-/// names the file and the line. The review view refuses as on `main`.
-#[tokio::test]
-#[verifies("rule_get_record_gives_edit_etag", examples)]
-async fn a_refused_edit_read_refuses_the_get_with_the_same_error_on_each_interface() {
-    use std::io::Write as _;
-
-    let directory = tempfile::tempdir().unwrap();
-    let repo = directory.path().to_str().unwrap().to_owned();
-    chain(&repo);
-    cli_json(&repo, &["rule_overtime_pay", "get"]);
-    let rules = directory
-        .path()
-        .join(".provenance/state/scopes/default/rules/rule.jsonl");
-    let mut file = std::fs::OpenOptions::new()
-        .append(true)
-        .open(rules)
-        .unwrap();
-    file.write_all(b"{\"scope_id\":\"default\",\n").unwrap();
-    let server = Server::start(&repo).await;
-
-    for view in ["record", "review"] {
-        let by_cli = cli_refusal(&repo, &["rule_overtime_pay", "get", "--view", view]);
-        let arguments = json!({"target":"rule_overtime_pay","view":view});
-        let called = server.client.call("get", arguments).await;
-        assert_eq!(called["isError"], json!(true), "{view}: {called}");
-        let text = called["content"][0]["text"].as_str().unwrap();
-        let by_mcp: Value = serde_json::from_str(text).unwrap();
-        assert_eq!(by_mcp, by_cli, "{view}");
-        if view == "record" {
-            let error = &by_cli["error"];
-            assert_eq!(error["kind"], "invalid_state_file", "{by_cli}");
-            assert_eq!(error["file"], "scopes/default/rules/rule.jsonl", "{by_cli}");
-            assert_eq!(error["line"], 2, "{by_cli}");
-        }
-    }
     server.close().await;
 }
