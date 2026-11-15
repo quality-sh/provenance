@@ -1,7 +1,7 @@
 use provenance_core::protocol::{GraphNode, RecordResolution as CoreResolution};
 use provenance_porcelain::action::{Action, ActionError};
 use provenance_porcelain::get::{
-    GetPort, Impact, PortFuture, RecordResolution, Traversal, TraversalRequest,
+    GetPort, Impact, PortFuture, ReadError, RecordResolution, Traversal, TraversalRequest,
 };
 use provenance_porcelain::Porcelain;
 use std::sync::{Arc, Mutex};
@@ -28,6 +28,13 @@ impl GetPort for Port {
 
     fn impact<'a>(&'a self, _: &'a GraphNode, _: usize) -> PortFuture<'a, Impact> {
         unreachable!("actions do not calculate impact")
+    }
+
+    fn edit(
+        &self,
+        _: &GraphNode,
+    ) -> Result<provenance_core::review::RequirementEditState, ReadError> {
+        unreachable!("actions do not read the edit state")
     }
 }
 

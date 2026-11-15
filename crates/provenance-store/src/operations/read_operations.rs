@@ -49,8 +49,9 @@ pub trait ReadOperations: Send + Sync + Debug {
 /// The wire names of the operations that a [`ReadOperations`] port runs.
 ///
 /// They are the page of each record family that the review page lists, one
-/// reviewed record, the document of a Requirement, and the Discussions and
-/// messages of a record. None of them writes.
+/// reviewed record, the document of a Requirement, the Discussions and
+/// messages of a record, and the history of a record: its versions, one
+/// version, and the evidence of one version. None of them writes.
 pub const READ_OPERATIONS: &[&str] = &[
     "page-sources",
     "page-requirements",
@@ -62,6 +63,9 @@ pub const READ_OPERATIONS: &[&str] = &[
     "read-document",
     "review-discussions",
     "review-discussion-messages",
+    "review-history",
+    "review-history-entry",
+    "review-evidence",
 ];
 
 /// The name in [`READ_OPERATIONS`] that equals `operation`.

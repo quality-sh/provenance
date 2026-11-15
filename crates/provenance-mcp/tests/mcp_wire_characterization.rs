@@ -17,7 +17,7 @@ use std::sync::Arc;
 use support::{check_port::FixtureCheckPort, records::Repository};
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader, DuplexStream, Lines};
 
-const TOOL_LIST_FNV1A: u64 = 10_405_230_615_369_551_754;
+const TOOL_LIST_FNV1A: u64 = 7_423_102_099_526_298_026;
 
 /// The porcelain tools, in list order. The list has no plumbing tools.
 const PORCELAIN_TOOL_NAMES: &[&str] = &[
@@ -174,6 +174,8 @@ evaluate code bindings separately from graph reads.\n\n\
 ## Actions\n\n\
 Use search to find IDs, then get to read the selected record and its related views. \
 Create names an explicit record type; actions on an existing record infer its type.\n\
+Before an update, read the record with get. Give its `edit.etag` unchanged to the \
+update as the if-match value.\n\
 Available actions depend on the interface and its access. Each interface lists the \
 inputs and actions it supports.\n\n\
 - get: Read one repository record by its repository-local ID. Select its record view, \

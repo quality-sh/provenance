@@ -179,6 +179,16 @@ impl GetPort for HostGetPort {
         })
     }
 
+    /// The edit state comes from the record that resolve read, with the digest that a
+    /// guarded update checks.
+    fn edit(
+        &self,
+        record: &provenance_core::protocol::GraphNode,
+    ) -> Result<provenance_core::review::RequirementEditState, ReadError> {
+        provenance_store::review::edit_state(&record.clone().into())
+            .map_err(|error| ReadError::Operation(error.to_string()))
+    }
+
     /// Returns the current decision, edit guard, and feedback for each record kind.
     #[provenance_macros::rule("rule_porcelain_review_returns_current_state")]
     fn review<'a>(

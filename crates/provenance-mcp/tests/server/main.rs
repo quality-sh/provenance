@@ -31,6 +31,8 @@ mod support {
     #[cfg(feature = "test-fixture")]
     pub mod schema_check;
 }
+#[path = "../change_refusal_kinds.rs"]
+mod change_refusal_kinds;
 #[path = "../claim_holder.rs"]
 mod claim_holder;
 #[path = "../host_invocation.rs"]

@@ -123,3 +123,23 @@ fn guidance_with_trace_and_without_get_gives_no_trace_line() {
     assert_eq!(without_get, without_get_and_trace);
     assert!(guidance().guidance.contains("\n- trace: "));
 }
+
+/// The `edit.etag` sentence names get and update, so a consumer gets it only when it shows
+/// the two commands.
+#[test]
+fn the_etag_sentence_needs_get_and_update() {
+    let sentence = "Before an update, read the record with get. Give its `edit.etag` unchanged \
+                    to the update as the if-match value.\n";
+    let update = Command::Action(Action::Update);
+    let without_update = guidance_for(|command| command != update, true).guidance;
+    assert!(!without_update.contains(sentence), "{without_update}");
+    let without_get = guidance_for(|command| command != Command::Get, true).guidance;
+    assert!(!without_get.contains(sentence), "{without_get}");
+    let get_and_update =
+        guidance_for(|command| command == Command::Get || command == update, true).guidance;
+    assert_eq!(
+        get_and_update.matches(sentence).count(),
+        1,
+        "{get_and_update}"
+    );
+}

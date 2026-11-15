@@ -3,7 +3,8 @@
 use super::{ReadAnswer, ReadOperations};
 use crate::operations::catalog::{
     frame_failure, invoke_typed, ContextKind, ContextResolver as _, GetReviewedResource, Operation,
-    ReadDocument, RequestedContext, ReviewDiscussionMessages, ReviewDiscussions,
+    ReadDocument, RequestedContext, ReviewDiscussionMessages, ReviewDiscussions, ReviewEvidence,
+    ReviewHistory, ReviewHistoryEntry,
 };
 use crate::operations::family_operations::{
     PageQuestions, PageRequirements, PageResolutions, PageRules, PageSources, PageTopics,
@@ -74,7 +75,7 @@ const fn entry<O: Operation>() -> Entry {
 }
 
 /// The operations of [`super::READ_OPERATIONS`], in its order.
-const fn entries() -> [Entry; 10] {
+const fn entries() -> [Entry; 13] {
     [
         entry::<PageSources>(),
         entry::<PageRequirements>(),
@@ -86,6 +87,9 @@ const fn entries() -> [Entry; 10] {
         entry::<ReadDocument>(),
         entry::<ReviewDiscussions>(),
         entry::<ReviewDiscussionMessages>(),
+        entry::<ReviewHistory>(),
+        entry::<ReviewHistoryEntry>(),
+        entry::<ReviewEvidence>(),
     ]
 }
 

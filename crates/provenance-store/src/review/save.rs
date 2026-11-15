@@ -49,6 +49,15 @@ pub(super) fn current_revision(record: &ReviewRecord) -> anyhow::Result<Option<S
     classifier::review_revision(record.kind(), record).map(Some)
 }
 
+/// The edit state of one record: the etag that a guarded update of the record
+/// checks, and its review revision. Both come from the record content only.
+pub fn edit_state(record: &ReviewRecord) -> anyhow::Result<RequirementEditState> {
+    Ok(RequirementEditState {
+        etag: etag(record)?,
+        revision: current_revision(record)?,
+    })
+}
+
 impl StateStore {
     pub(super) fn requirement(
         &self,
@@ -97,7 +106,7 @@ impl StateStore {
     ) -> anyhow::Result<RequirementEditState> {
         self.with_repository_publication(|held| {
             let record = held.requirement(scope, id)?;
-            Self::record_edit_state_for_record(&record.into())
+            edit_state(&record.into())
         })
     }
 
@@ -109,24 +118,13 @@ impl StateStore {
     ) -> anyhow::Result<RequirementEditState> {
         self.with_repository_publication(|held| {
             let record = crate::families::review_families::record(held, scope, kind, id)?;
-            Self::record_edit_state_for_record(&record)
-        })
-    }
-
-    pub(super) fn record_edit_state_for_record(
-        record: &ReviewRecord,
-    ) -> anyhow::Result<RequirementEditState> {
-        Ok(RequirementEditState {
-            etag: etag(record)?,
-            revision: current_revision(record)?,
+            edit_state(&record)
         })
     }
 
     /// Publishes a Requirement edit and the review state it opens together.
     pub fn save_requirement(&self, input: SaveRequirement) -> anyhow::Result<RequirementEditState> {
-        self.save_requirement_with_origin(input, None, |_, after| {
-            Self::record_edit_state_for_record(&after.into())
-        })
+        self.save_requirement_with_origin(input, None, |_, after| edit_state(&after.into()))
     }
 
     #[cfg_attr(not(feature = "host"), allow(dead_code))]
@@ -147,9 +145,7 @@ impl StateStore {
         input: SaveRequirement,
         origin: &DiscussionOrigin,
     ) -> anyhow::Result<RequirementEditState> {
-        self.save_requirement_with_origin(input, Some(origin), |_, after| {
-            Self::record_edit_state_for_record(&after.into())
-        })
+        self.save_requirement_with_origin(input, Some(origin), |_, after| edit_state(&after.into()))
     }
 
     fn save_requirement_with_origin<R>(

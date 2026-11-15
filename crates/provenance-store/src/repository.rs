@@ -153,8 +153,9 @@ impl Repository {
     /// This repository with the committed file versions that its record
     /// history reads.
     ///
-    /// A repository that has none reads the Git history of its working
-    /// tree, as one from `open` does. The new handle shares the storage, the
+    /// With `host` a repository that has none reads the Git history of its
+    /// working tree, as one from `open` does; without it, one that has none
+    /// has no committed history. The new handle shares the storage, the
     /// lock, the read database and the kept source scans of this one.
     #[must_use]
     pub fn with_file_versions(&self, versions: Arc<dyn FileVersions>) -> Self {
@@ -215,18 +216,7 @@ impl Repository {
         if let Some(root) = root {
             return Self::open(cwd.join(root), scope);
         }
-        let found = cwd
-            .ancestors()
-            .find(|ancestor| {
-                ancestor
-                    .join(".provenance")
-                    .join("state")
-                    .join("manifest.json")
-                    .is_file()
-                    || ancestor.join(".git").exists()
-            })
-            .unwrap_or(cwd.as_path())
-            .to_path_buf();
+        let found = crate::layout::enclosing_project(&cwd).unwrap_or(&cwd);
         Self::open(found, scope)
     }
 

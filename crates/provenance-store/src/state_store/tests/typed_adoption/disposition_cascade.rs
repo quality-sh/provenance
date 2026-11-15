@@ -1,5 +1,6 @@
 use super::{document, initialized_store};
-use crate::state_store::readers::StateLineInvalid;
+use crate::state_store::readers::state_file;
+use provenance_core::protocol::read_failure::UnparsableStateFile;
 use provenance_core::ScopeId;
 use provenance_macros::verifies;
 
@@ -61,12 +62,12 @@ fn assert_names_no_record(
     let applied = store.apply_typed_spec(scope, no_op()).unwrap_err();
 
     for error in [planned, applied] {
-        let fault =
-            StateLineInvalid::find(&error).unwrap_or_else(|| panic!("{artifact_type}: {error:#}"));
+        let fault = UnparsableStateFile::find(error.as_ref())
+            .unwrap_or_else(|| panic!("{artifact_type}: {error:#}"));
         assert_eq!(
-            (&fault.path, fault.line, fault.message.as_str()),
+            (fault.file(), fault.line(), fault.message()),
             (
-                &path,
+                state_file(&path).as_str(),
                 1,
                 format!(
                     "disposition disposition_artifact names {artifact_type} artifact_test, \
