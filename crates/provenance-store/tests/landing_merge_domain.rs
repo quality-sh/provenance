@@ -135,10 +135,10 @@ fn merge(reads: &mut Reads, base: &[Value], ours: &[Value], theirs: &[Value]) ->
     match outcome {
         MergeOutcome::Clean { records } => {
             assert!(!record_conflict && one_sequence);
-            let mut expected = our_read.clone();
-            for (id, record) in &their_read {
-                if their_changes.contains(id) || !our_changes.contains(id) {
-                    expected.insert(id.clone(), record.clone());
+            let mut expected = our_read;
+            for (id, record) in their_read {
+                if their_changes.contains(&id) || !our_changes.contains(&id) {
+                    expected.insert(id, record);
                 }
             }
             let read = reads.of(&records);
@@ -155,10 +155,9 @@ fn merge(reads: &mut Reads, base: &[Value], ours: &[Value], theirs: &[Value]) ->
                 unreachable!()
             };
             assert_eq!(partial, ours);
-            let rows: Vec<_> = report["left_out"]
-                .as_array()
-                .map(|left_out| left_out.iter().map(|batch| batch["row"].clone()).collect())
-                .unwrap_or_default();
+            let rows: Vec<_> = report["left_out"].as_array().map_or_else(Vec::new, |left_out| {
+                left_out.iter().map(|batch| batch["row"].clone()).collect()
+            });
             let held_by_ours = common_rows(&[], theirs, ours);
             let only_theirs: Vec<_> = (1..=theirs.len())
                 .filter(|row| !held_by_ours[row - 1])

@@ -3,10 +3,11 @@ use provenance_macros::rule;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
+mod batch_report;
 mod batches;
 pub mod validation;
 
-pub use batches::{FailedCheck, LeftOutBatch, MergeOrder};
+pub use batch_report::{FailedCheck, LeftOutBatch, MergeOrder, SequenceDifference};
 pub use validation::{changed_statement_diagnostics, validate_merged_records, ShardFamily};
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -23,12 +24,13 @@ pub enum MergeConflictKind {
 
 /// A record that the two sides of a merge change differently.
 ///
-/// For a record of a landing batch, the conflict is a record that the two
-/// candidate files of the merge read differently, and `base`, `ours` and
-/// `theirs` are the records that a read of the base landings, of our
-/// landings and of their landings gives. `base` is `None` when the base
-/// landings hold no record with the id, also when a direct file of the scope
-/// holds one, because the merge driver reads only the landings file.
+/// For a record of a landing batch, the conflict is a record that each side
+/// changes in a batch that only that side holds, and that our read and their
+/// read give differently. `base`, `ours` and `theirs` are the records that a
+/// read of the base landings, of our landings and of their landings gives.
+/// `base` is `None` when the base landings hold no record with the id, also
+/// when a direct file of the scope holds one, because the merge driver reads
+/// only the landings file.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct MergeConflict {
     pub kind: MergeConflictKind,
@@ -50,12 +52,16 @@ pub enum MergeOutcome<T> {
     },
     Conflicted {
         conflicts: Vec<MergeConflict>,
-        /// For landing batches, the first check that each candidate file
-        /// fails.
+        /// For landing batches, the first common batch that the two sides
+        /// do not hold in one sequence.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        sequence: Option<SequenceDifference>,
+        /// For landing batches, the first check that the merged file fails,
+        /// with our batches first and with their batches first.
         #[serde(skip_serializing_if = "Vec::is_empty")]
         failed_checks: Vec<FailedCheck>,
-        /// For landing batches, each batch that only theirs adds; the
-        /// merged file does not hold it.
+        /// For landing batches, each batch of theirs that our file does not
+        /// hold; the merged file is our file.
         #[serde(skip_serializing_if = "Vec::is_empty")]
         left_out: Vec<LeftOutBatch>,
         partial: T,
@@ -83,6 +89,7 @@ impl<T> MergeOutcome<T> {
     pub fn conflict_text(&self, identity: RowIdentity) -> Option<String> {
         let Self::Conflicted {
             conflicts,
+            sequence,
             failed_checks,
             left_out,
             ..
@@ -102,7 +109,9 @@ impl<T> MergeOutcome<T> {
                     ids.join(", ")
                 )
             }
-            RowIdentity::Batch => batches::conflict_text(conflicts, failed_checks, left_out),
+            RowIdentity::Batch => {
+                batch_report::conflict_text(conflicts, sequence.as_ref(), failed_checks, left_out)
+            }
         })
     }
 }
@@ -235,7 +244,6 @@ impl RowKeys {
 
 /// The key of one batch row: its canonical JSON and the number of rows of
 /// its side up to it that are equal to it.
-#[rule("rule_landing_batch_merge")]
 fn batch_key(
     equal_rows: &mut BTreeMap<String, usize>,
     record: &CanonicalRecord,
@@ -333,6 +341,7 @@ fn merge_by_key(
     } else {
         MergeOutcome::Conflicted {
             conflicts,
+            sequence: None,
             failed_checks: Vec::new(),
             left_out: Vec::new(),
             partial: merged,

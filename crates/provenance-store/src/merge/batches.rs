@@ -1,240 +1,146 @@
 //! The merge of the landing batches of `ideation/landings.jsonl`.
 //!
-//! A read applies the batches in the order of the file, so the merge cannot
-//! decide record by record. It makes two candidate files: our batches, then
-//! the batches that only theirs adds; and their batches, then the batches
-//! that only ours adds. The merge is clean when each candidate passes the
-//! checks of the read and the two candidates read the same record for each
-//! id. Then the merged file is the first candidate. If not, the merge is a
-//! conflict and the file is our file.
+//! A common batch is a batch of the base, or a batch that the two sides add
+//! with equal rows. Each other batch is held by one side only, and that side
+//! changes each record of the batch. A record that only one side changes
+//! gets the read of that side. A record that the two sides change is a
+//! conflict when our read of it and their read of it are different.
+//!
+//! The merged file keeps the sequence of each side: the common batches, and
+//! before each one and after the last one, the batches that only ours holds
+//! there and the batches that only theirs holds there. Then the last batch
+//! of the file that holds a record is the last such batch of one side, so the
+//! read of the file gives each record as the rule above gives it. The file
+//! must also pass the checks of the read with either run first.
 
+use super::batch_report::{FailedCheck, LeftOutBatch, MergeOrder, SequenceDifference};
 use super::{CanonicalRecord, MergeConflict, MergeConflictKind, MergeOutcome, MergeSide};
-use crate::state_store::landing_read::{IdeationRecords, Records};
+use crate::state_store::landing_read::IdeationRecords;
 use crate::state_store::IdeationLandingBatch;
-use provenance_core::DuplicateImmutableId;
 use provenance_macros::rule;
 use std::collections::BTreeSet;
 
-/// The order of the batches of a candidate file.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MergeOrder {
-    /// Our batches, then the batches that only theirs adds.
-    OursThenTheirs,
-    /// Their batches, then the batches that only ours adds.
-    TheirsThenOurs,
-}
-
-impl std::fmt::Display for MergeOrder {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Self::OursThenTheirs => "ours, theirs",
-            Self::TheirsThenOurs => "theirs, ours",
-        })
-    }
-}
-
-/// The first check of the read that a candidate file fails.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-pub struct FailedCheck {
-    /// The order of the candidate.
-    pub order: MergeOrder,
-    /// The side whose batch fails the check.
-    pub side: MergeSide,
-    /// The line of that batch in the file of its side, from 1.
-    pub line: usize,
-    /// The record of the batch that fails the check, as `<list>/<id>`.
-    pub record_id: String,
-    /// The refusal of the check.
-    pub check: String,
-}
-
-/// A batch that only theirs adds and that the merged file does not hold.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-pub struct LeftOutBatch {
-    /// The line of the batch in their file, from 1.
-    pub line: usize,
-    /// Each record of the batch, as `<list>/<id>`.
-    pub record_ids: Vec<String>,
-}
-
-/// The records of each field of a landing batch, by id.
-type Lists = [(&'static str, Records); 5];
-
-/// One row of a side, with its key and its line in the file of the side.
-#[derive(Clone, Copy)]
+/// One row of a side: its key, its batch, and its number in the file of the
+/// side, from 1.
 struct Row<'a> {
     side: MergeSide,
-    line: usize,
+    number: usize,
     key: &'a str,
     record: &'a CanonicalRecord,
+    batch: IdeationLandingBatch,
 }
+
+/// The ids of the records of a batch or a read, for each field of a landing
+/// batch, in the order of the fields.
+type Ids = [BTreeSet<String>; 5];
 
 /// Merges the batch rows of the three sides, each row with its key.
 #[rule("rule_landing_batch_merge_conflict")]
 pub(super) fn merge_batches(
     [base, ours, theirs]: [&[(String, CanonicalRecord)]; 3],
 ) -> anyhow::Result<MergeOutcome<Vec<CanonicalRecord>>> {
-    let [base, ours, theirs] = [
-        (MergeSide::Base, base),
-        (MergeSide::Ours, ours),
-        (MergeSide::Theirs, theirs),
-    ]
-    .map(|(side, rows)| numbered(side, rows));
-    let only_ours = only_one_side(&ours, [&base, &theirs]);
-    let only_theirs = only_one_side(&theirs, [&base, &ours]);
-    let first = Candidate::read(MergeOrder::OursThenTheirs, ours.iter().chain(&only_theirs))?;
-    let second = Candidate::read(MergeOrder::TheirsThenOurs, theirs.iter().chain(&only_ours))?;
-    let conflicts = read_conflicts(&first.lists, &second.lists, [&base, &ours, &theirs])?;
-    let failed_checks: Vec<_> = [first.failed, second.failed]
+    let base = rows(MergeSide::Base, base)?;
+    let ours = rows(MergeSide::Ours, ours)?;
+    let theirs = rows(MergeSide::Theirs, theirs)?;
+    let common = common_batches(&base, &ours, &theirs);
+    let conflicts = record_conflicts([&base, &ours, &theirs], &common)?;
+    let sequence = sequence_difference(&ours, &theirs, &common);
+    let (failed_checks, merged) = if sequence.is_none() {
+        let ours_first = merged_file(&ours, &theirs, &common);
+        let theirs_first = merged_file(&theirs, &ours, &common);
+        let failed_checks: Vec<_> = [
+            failed_check(MergeOrder::OursFirst, &ours_first),
+            failed_check(MergeOrder::TheirsFirst, &theirs_first),
+        ]
         .into_iter()
         .flatten()
         .collect();
-    if conflicts.is_empty() && failed_checks.is_empty() {
-        return Ok(MergeOutcome::Clean {
-            records: first.rows,
-        });
+        let merged = ours_first.iter().map(|row| row.record.clone()).collect();
+        (failed_checks, merged)
+    } else {
+        (Vec::new(), Vec::new())
+    };
+    if conflicts.is_empty() && sequence.is_none() && failed_checks.is_empty() {
+        return Ok(MergeOutcome::Clean { records: merged });
     }
+    let held: BTreeSet<&str> = ours.iter().map(|row| row.key).collect();
     Ok(MergeOutcome::Conflicted {
         conflicts,
+        sequence,
         failed_checks,
-        left_out: only_theirs
+        left_out: theirs
             .iter()
+            .filter(|row| !held.contains(row.key))
             .map(|row| {
                 Ok(LeftOutBatch {
-                    line: row.line,
-                    record_ids: record_ids(&read([row])?)?,
+                    row: row.number,
+                    record_ids: record_ids(&read([row]))?,
                 })
             })
-            .collect::<anyhow::Result<_>>()?,
+            .collect::<serde_json::Result<_>>()?,
         partial: ours.iter().map(|row| row.record.clone()).collect(),
     })
 }
 
-fn numbered(side: MergeSide, rows: &[(String, CanonicalRecord)]) -> Vec<Row<'_>> {
+/// Parses each row of `side` as a landing batch.
+fn rows(side: MergeSide, rows: &[(String, CanonicalRecord)]) -> anyhow::Result<Vec<Row<'_>>> {
     rows.iter()
         .enumerate()
-        .map(|(index, (key, record))| Row {
-            side,
-            line: index + 1,
-            key,
-            record,
+        .map(|(index, (key, record))| {
+            let number = index + 1;
+            let batch = serde_json::from_value(record.clone()).map_err(|error| {
+                crate::refusal::fault!("row {number} of {side} is not a landing batch: {error}")
+            })?;
+            Ok(Row {
+                side,
+                number,
+                key,
+                record,
+                batch,
+            })
         })
         .collect()
 }
 
-/// The rows of `side` that no row of the other two sides is the same batch as.
-fn only_one_side<'a>(side: &[Row<'a>], others: [&[Row<'a>]; 2]) -> Vec<Row<'a>> {
-    let held: BTreeSet<&str> = others
+/// The keys of the batches of the base and of the batches that the two
+/// sides add with equal rows.
+fn common_batches<'a>(base: &[Row<'a>], ours: &[Row<'a>], theirs: &[Row<'a>]) -> BTreeSet<&'a str> {
+    let theirs: BTreeSet<&str> = theirs.iter().map(|row| row.key).collect();
+    let added_by_two = ours
         .iter()
-        .flat_map(|rows| rows.iter())
         .map(|row| row.key)
-        .collect();
-    side.iter()
-        .filter(|row| !held.contains(row.key))
-        .copied()
-        .collect()
+        .filter(|key| theirs.contains(key));
+    base.iter().map(|row| row.key).chain(added_by_two).collect()
 }
 
-/// A candidate file: its rows, its read, and the first check that it fails.
-struct Candidate {
-    rows: Vec<CanonicalRecord>,
-    lists: Lists,
-    failed: Option<FailedCheck>,
-}
-
-impl Candidate {
-    /// Reads the rows in their order. Each batch goes through the checks of
-    /// the read until one check fails, and the read applies each batch.
-    fn read<'r, 'a: 'r>(
-        order: MergeOrder,
-        rows: impl IntoIterator<Item = &'r Row<'a>>,
-    ) -> anyhow::Result<Self> {
-        let mut records = IdeationRecords::default();
-        let mut candidate = Self {
-            rows: Vec::new(),
-            lists: Default::default(),
-            failed: None,
-        };
-        for row in rows {
-            let batch = batch(row)?;
-            if candidate.failed.is_none() {
-                let duplicate = |id: DuplicateImmutableId| crate::refusal::fault!("{id}");
-                if let Err(refusal) = records.check(&batch, duplicate) {
-                    candidate.failed = Some(FailedCheck {
-                        order,
-                        side: row.side,
-                        line: row.line,
-                        record_id: refusal.record_id,
-                        check: refusal.error.to_string(),
-                    });
-                }
-            }
-            records.apply(batch);
-            candidate.rows.push(row.record.clone());
-        }
-        candidate.lists = records.lists()?;
-        Ok(candidate)
-    }
-}
-
-fn batch(row: &Row<'_>) -> anyhow::Result<IdeationLandingBatch> {
-    serde_json::from_value(row.record.clone()).map_err(|error| {
-        crate::refusal::fault!(
-            "line {} of {} is not a landing batch: {error}",
-            row.line,
-            row.side
-        )
-    })
-}
-
-/// The read of the rows with no check.
-fn read<'r, 'a: 'r>(
-    rows: impl IntoIterator<Item = &'r Row<'a>>,
-) -> anyhow::Result<IdeationRecords> {
-    let mut records = IdeationRecords::default();
-    for row in rows {
-        records.apply(batch(row)?);
-    }
-    Ok(records)
-}
-
-/// Each record of the read, as `<list>/<id>`, in the order of the lists and
-/// then of the ids.
-fn record_ids(records: &IdeationRecords) -> serde_json::Result<Vec<String>> {
-    Ok(records
-        .lists()?
-        .iter()
-        .flat_map(|(list, records)| records.keys().map(move |id| format!("{list}/{id}")))
-        .collect())
-}
-
-/// A conflict for each record that the two candidates read differently, with
-/// the record that the base, our file and their file read.
-fn read_conflicts(
-    first: &Lists,
-    second: &Lists,
+/// A conflict for each record that each side changes and that our read and
+/// their read give differently, in the order of the fields and then of the
+/// ids, with the record that the base, our file and their file read. A side
+/// that changes a record reads it, so the kind is `add_add` or
+/// `divergent_edit`.
+fn record_conflicts(
     [base, ours, theirs]: [&[Row<'_>]; 3],
-) -> anyhow::Result<Vec<MergeConflict>> {
+    common: &BTreeSet<&str>,
+) -> serde_json::Result<Vec<MergeConflict>> {
     let reads = [
-        read(base)?.lists()?,
-        read(ours)?.lists()?,
-        read(theirs)?.lists()?,
+        read(base).lists()?,
+        read(ours).lists()?,
+        read(theirs).lists()?,
     ];
+    let [our_changes, their_changes] = [changes(ours, common)?, changes(theirs, common)?];
     let mut conflicts = Vec::new();
-    for (index, ((list, first), (_, second))) in first.iter().zip(second).enumerate() {
-        let ids: BTreeSet<&String> = first.keys().chain(second.keys()).collect();
-        for id in ids {
-            if first.get(id) == second.get(id) {
-                continue;
-            }
+    for (index, (list, _)) in reads[0].iter().enumerate() {
+        for id in our_changes[index].intersection(&their_changes[index]) {
             let record = |side: usize| reads[side][index].1.get(id).cloned();
             let (base, ours, theirs) = (record(0), record(1), record(2));
+            if ours == theirs {
+                continue;
+            }
             conflicts.push(MergeConflict {
-                kind: match (&base, &ours, &theirs) {
-                    (None, _, _) => MergeConflictKind::AddAdd,
-                    (Some(_), Some(_), Some(_)) => MergeConflictKind::DivergentEdit,
-                    (Some(_), _, _) => MergeConflictKind::DeleteModify,
+                kind: if base.is_none() {
+                    MergeConflictKind::AddAdd
+                } else {
+                    MergeConflictKind::DivergentEdit
                 },
                 record_id: format!("{list}/{id}"),
                 base,
@@ -246,60 +152,100 @@ fn read_conflicts(
     Ok(conflicts)
 }
 
-/// The text of a conflict of the landings file: what the file holds, what
-/// the merge left out, and the next step.
-pub(super) fn conflict_text(
-    conflicts: &[MergeConflict],
-    failed_checks: &[FailedCheck],
-    left_out: &[LeftOutBatch],
-) -> String {
-    let mut lines = vec![String::from(
-        "the merge of the landing batches depends on the order of the two sides, so the \
-         file holds the batches of our side",
-    )];
-    if !conflicts.is_empty() {
-        let ids: Vec<_> = conflicts
-            .iter()
-            .map(|conflict| conflict.record_id.as_str())
-            .collect();
-        lines.push(format!(
-            "records that the two orders read differently: {}",
-            ids.join(", ")
-        ));
+/// The records that a side changes: each record of each batch of the side
+/// that is not a common batch.
+fn changes(side: &[Row<'_>], common: &BTreeSet<&str>) -> serde_json::Result<Ids> {
+    let mut ids = Ids::default();
+    for row in side.iter().filter(|row| !common.contains(row.key)) {
+        for (changed, (_, records)) in ids.iter_mut().zip(read([row]).lists()?) {
+            changed.extend(records.into_keys());
+        }
     }
-    if !failed_checks.is_empty() {
-        let checks: Vec<_> = failed_checks
-            .iter()
-            .map(|failed| {
-                format!(
-                    "line {} of {} in the order {}: {}",
-                    failed.line, failed.side, failed.order, failed.check
-                )
-            })
-            .collect();
-        lines.push(format!("checks that an order fails: {}", checks.join("; ")));
+    Ok(ids)
+}
+
+/// The first place where ours and theirs hold their common batches
+/// differently, or `None` when the two sides hold them in one sequence.
+fn sequence_difference(
+    ours: &[Row<'_>],
+    theirs: &[Row<'_>],
+    common: &BTreeSet<&str>,
+) -> Option<SequenceDifference> {
+    let mut ours = ours.iter().filter(|row| common.contains(row.key));
+    let mut theirs = theirs.iter().filter(|row| common.contains(row.key));
+    loop {
+        let (our_row, their_row) = (ours.next(), theirs.next());
+        if our_row.is_none() && their_row.is_none() {
+            return None;
+        }
+        if our_row.map(|row| row.key) != their_row.map(|row| row.key) {
+            return Some(SequenceDifference {
+                ours: our_row.map(|row| row.number),
+                theirs: their_row.map(|row| row.number),
+            });
+        }
     }
-    if !left_out.is_empty() {
-        let batches: Vec<_> = left_out
-            .iter()
-            .map(|batch| {
-                format!(
-                    "line {} of theirs: {}",
-                    batch.line,
-                    batch.record_ids.join(", ")
-                )
-            })
-            .collect();
-        lines.push(format!(
-            "batches of theirs that the file does not hold: {}",
-            batches.join("; ")
-        ));
+}
+
+/// The batches of the two sides in one file that keeps the sequence of each
+/// side. The file holds the common batches in their sequence, and before
+/// each one and after the last one, the run of `first` and then the run of
+/// `second` that its side holds there. The two sides must hold the common
+/// batches in one sequence.
+#[rule("rule_landing_batch_merge")]
+fn merged_file<'r, 'a>(
+    first: &'r [Row<'a>],
+    second: &'r [Row<'a>],
+    common: &BTreeSet<&str>,
+) -> Vec<&'r Row<'a>> {
+    let is_common = |row: &Row<'_>| common.contains(row.key);
+    let mut first_runs = first.split(is_common);
+    let mut second_runs = second.split(is_common);
+    let mut common_rows = first.iter().filter(|&row| is_common(row));
+    let mut file = Vec::new();
+    loop {
+        file.extend(first_runs.next().into_iter().flatten());
+        file.extend(second_runs.next().into_iter().flatten());
+        match common_rows.next() {
+            Some(row) => file.push(row),
+            None => return file,
+        }
     }
-    lines.push(String::from(
-        "Git keeps their version of the file as stage 3 of the path. To add a contribution or \
-         a synthesis packet of theirs, land their swarm run again with `provenance \
-         swarm-backtrace land --replace --run-dir <run>`, and then mark the path as resolved. \
-         A landing cannot replace a proposal, an assertion or a disposition.",
-    ));
-    lines.join("\n")
+}
+
+/// The first check of the read that `file` fails.
+fn failed_check(order: MergeOrder, file: &[&Row<'_>]) -> Option<FailedCheck> {
+    let mut records = IdeationRecords::default();
+    for row in file {
+        if let Err(refusal) = records.check(&row.batch) {
+            return Some(FailedCheck {
+                order,
+                side: row.side,
+                row: row.number,
+                record_id: refusal.record_id,
+                check: refusal.cause.to_string(),
+            });
+        }
+        records.apply(row.batch.clone());
+    }
+    None
+}
+
+/// The read of the rows with no check.
+fn read<'r, 'a: 'r>(rows: impl IntoIterator<Item = &'r Row<'a>>) -> IdeationRecords {
+    let mut records = IdeationRecords::default();
+    for row in rows {
+        records.apply(row.batch.clone());
+    }
+    records
+}
+
+/// Each record of the read, as `<list>/<id>`, in the order of the lists and
+/// then of the ids.
+fn record_ids(records: &IdeationRecords) -> serde_json::Result<Vec<String>> {
+    Ok(records
+        .lists()?
+        .iter()
+        .flat_map(|(list, records)| records.keys().map(move |id| format!("{list}/{id}")))
+        .collect())
 }

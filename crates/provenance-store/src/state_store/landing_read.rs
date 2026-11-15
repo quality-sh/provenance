@@ -36,63 +36,88 @@ pub struct LandingRefusal {
     /// The record of the batch that fails the check, as `<list>/<id>`, where
     /// the list is the field of the batch that holds the record.
     pub record_id: String,
-    /// The refusal of the check.
-    pub error: anyhow::Error,
+    pub cause: RefusalCause,
+}
+
+/// Why a check of the read refuses a landing batch.
+#[derive(Debug)]
+pub enum RefusalCause {
+    /// The batch changes a contribution or a synthesis packet that an
+    /// assertion cites.
+    Evidence(anyhow::Error),
+    /// The batch holds a proposal, an assertion or a disposition whose id
+    /// the records or the batch already hold.
+    Duplicate(DuplicateImmutableId),
+}
+
+impl std::fmt::Display for RefusalCause {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Evidence(error) => std::fmt::Display::fmt(error, f),
+            Self::Duplicate(duplicate) => std::fmt::Display::fmt(duplicate, f),
+        }
+    }
 }
 
 impl IdeationRecords {
-    /// The records with no landing batch applied.
+    /// The records of the direct files, with no landing batch applied.
+    /// Refuses the first proposal, assertion or disposition, in that order,
+    /// whose id an earlier record of its list holds.
     pub fn new(
         contributions: Vec<Contribution>,
         synthesis_packets: Vec<SynthesisPacket>,
         proposals: Vec<ProposalCard>,
         assertions: Vec<AssertionRecord>,
         dispositions: Vec<DispositionRecord>,
-    ) -> Self {
+    ) -> Result<Self, DuplicateImmutableId> {
+        let none = BTreeSet::new();
+        ensure_new_ids(&proposals, &none, |duplicate| duplicate)?;
+        ensure_new_ids(&assertions, &none, |duplicate| duplicate)?;
+        ensure_new_ids(&dispositions, &none, |duplicate| duplicate)?;
         let immutable_ids = [ids(&proposals), ids(&assertions), ids(&dispositions)];
-        Self {
+        Ok(Self {
             contributions,
             synthesis_packets,
             proposals,
             assertions,
             dispositions,
             immutable_ids,
-        }
+        })
     }
 
     /// Refuses `batch` when it changes a contribution or a synthesis packet
     /// that an assertion of these records cites, or when it holds a proposal,
     /// an assertion or a disposition whose id these records or the batch
     /// already hold. The evidence check comes first, then the proposals, the
-    /// assertions and the dispositions. `duplicate` gives the error of a
-    /// second id.
-    pub fn check(
-        &self,
-        batch: &IdeationLandingBatch,
-        duplicate: impl Fn(DuplicateImmutableId) -> anyhow::Error,
-    ) -> Result<(), LandingRefusal> {
-        let refused = |list: &str, id: &str| {
-            let record_id = format!("{list}/{id}");
-            move |error| LandingRefusal { record_id, error }
+    /// assertions and the dispositions.
+    pub fn check(&self, batch: &IdeationLandingBatch) -> Result<(), LandingRefusal> {
+        let refused = |list: &str, id: &str, cause| LandingRefusal {
+            record_id: format!("{list}/{id}"),
+            cause,
+        };
+        let evidence = |list: &'static str, id: &str| {
+            let id = id.to_owned();
+            move |error| refused(list, &id, RefusalCause::Evidence(error))
         };
         for replacement in &batch.contributions {
             if let Some(existing) = find(&self.contributions, replacement) {
+                let id = replacement.immutable_id();
                 ensure_asserted_contribution_unchanged(existing, replacement, &self.assertions)
-                    .map_err(refused("contributions", replacement.immutable_id()))?;
+                    .map_err(evidence("contributions", id))?;
             }
         }
         for replacement in &batch.synthesis_packets {
             if let Some(existing) = find(&self.synthesis_packets, replacement) {
+                let id = replacement.immutable_id();
                 ensure_asserted_synthesis_unchanged(existing, replacement, &self.assertions)
-                    .map_err(refused("synthesis_packets", replacement.immutable_id()))?;
+                    .map_err(evidence("synthesis_packets", id))?;
             }
         }
         let [proposals, assertions, dispositions] = &self.immutable_ids;
         let second = |list: &'static str| {
-            let duplicate = &duplicate;
-            move |id: DuplicateImmutableId| {
-                let refusal = refused(list, &id.id);
-                refusal(duplicate(id))
+            move |duplicate: DuplicateImmutableId| {
+                let id = duplicate.id.clone();
+                refused(list, &id, RefusalCause::Duplicate(duplicate))
             }
         };
         ensure_new_ids(&batch.proposals, proposals, second("proposals"))?;
