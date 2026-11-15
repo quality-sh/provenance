@@ -85,14 +85,19 @@ fn input<T: serde::de::DeserializeOwned>(value: Value) -> T {
     serde_json::from_value(value).unwrap()
 }
 
-/// Runs the six writes in the order of the module comment.
-fn six_writes(store: &StateStore) {
+/// Asserts `proposal_one`. Each other write refuses the state before it.
+fn assert_proposal_one(store: &StateStore) {
     store
         .assert_proposal(input(json!({
             "scope_id":"default", "id":"assertion_one", "proposal_id":"proposal_one",
             "synthesis_packet_id":"synthesis_evidence", "supporting_claim_ids":["claim_a"]
         })))
         .unwrap();
+}
+
+/// Runs the six writes in the order of the module comment.
+fn six_writes(store: &StateStore) {
+    assert_proposal_one(store);
     store
         .create_contribution(input(contribution(
             "contribution_two",
@@ -195,7 +200,13 @@ fn six_writes_on_a_folder_leave_these_files() {
         .collect();
     assert_eq!(
         added,
-        ["scopes/default/ideation.lifecycle.lock"],
+        [
+            "scopes/default/ideation.lifecycle.lock",
+            "scopes/default/ideation/assertions.jsonl.lock",
+            "scopes/default/ideation/contributions.jsonl.lock",
+            "scopes/default/ideation/proposal_cards.jsonl.lock",
+            "scopes/default/ideation/synthesis_packets.jsonl.lock",
+        ],
         "{before:?}"
     );
     let ideation = layout.state_dir().join("scopes/default/ideation");
@@ -220,6 +231,7 @@ fn contribution_input(id: &str) -> provenance_store::state_store::CreateContribu
 fn two_writers_on_one_folder_lose_no_write() {
     let root = tempfile::tempdir().unwrap();
     let first = folder_repository(root.path());
+    assert_proposal_one(&first.store());
     let second = Repository::open(root.path(), "default").unwrap();
     let start = std::sync::Arc::new(std::sync::Barrier::new(2));
     let writers: Vec<_> = [("a", first), ("b", second)]
@@ -253,6 +265,7 @@ fn two_writers_on_one_folder_lose_no_write() {
 fn an_ideation_write_waits_for_the_publication_lock_file() {
     let root = tempfile::tempdir().unwrap();
     let repository = folder_repository(root.path());
+    assert_proposal_one(&repository.store());
     let lock_path: Utf8PathBuf = repository.layout().publication_lock_path();
     let lock = std::fs::OpenOptions::new()
         .read(true)
