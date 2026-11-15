@@ -26,6 +26,39 @@ pub fn checked<R: Serialize>(
     Ok(answer)
 }
 
+/// The bytes by which the native envelope of `answer` passes the response
+/// budget, or zero when it fits.
+#[cfg(feature = "host")]
+pub(super) fn excess<R: Serialize>(
+    operation: &'static str,
+    answer: &Stamped<R>,
+) -> anyhow::Result<usize> {
+    let response = QueryResponse::new(
+        operation,
+        Stamped {
+            result: &answer.result,
+            stamp: answer.stamp.clone(),
+            freshness_error: answer.freshness_error.clone(),
+        },
+    );
+    let mut count = Count(0);
+    serde_json::to_writer(&mut count, &response)?;
+    Ok(count.0.saturating_sub(QUERY_RESPONSE_BYTES))
+}
+
+#[cfg(feature = "host")]
+struct Count(usize);
+#[cfg(feature = "host")]
+impl Write for Count {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.0 += bytes.len();
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
 struct Budget(usize);
 impl Write for Budget {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {

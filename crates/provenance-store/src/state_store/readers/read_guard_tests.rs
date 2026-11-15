@@ -29,6 +29,7 @@ fn load_through_a_write(line: &str) -> anyhow::Result<()> {
     crate::jsonl::mutate_jsonl_locked(
         &shard,
         &shard.with_extension("lock"),
+        usize::MAX,
         |records: &mut Vec<Value>| {
             records.clear();
             Ok(())

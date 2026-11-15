@@ -1,5 +1,5 @@
 use crate::operations::reader::{Live, ReadContext, PAGE_BYTES};
-use provenance_core::protocol::{take_page, EvidenceQuery, EvidenceResult, StaleEvidence};
+use provenance_core::protocol::{take_page, EvidenceQuery, EvidenceResult, Stamped, StaleEvidence};
 use provenance_core::{
     ImplementationBinding, RequirementReview, StableId, VerificationBinding, VerificationRun,
 };
@@ -103,6 +103,27 @@ pub(super) async fn evidence(
         verification_runs_has_more,
         reviews_has_more,
     })
+}
+
+/// The native answer with the oldest runs of its run list left out until the
+/// answer fits the response budget of its envelope, and the cut flagged.
+/// The newest run stays in `latest_verification_run`.
+pub(super) fn within_response(
+    mut answer: Stamped<EvidenceResult>,
+) -> anyhow::Result<Stamped<EvidenceResult>> {
+    let mut excess = super::page::excess("evidence", &answer)?;
+    let result = &mut answer.result;
+    while excess > 0 {
+        let Some(run) = result.verification_runs.pop() else {
+            break;
+        };
+        // A run leaves with its bytes and the comma before it.
+        let comma = usize::from(!result.verification_runs.is_empty());
+        excess = excess.saturating_sub(serde_json::to_vec(&run)?.len() + comma);
+        result.verification_runs_has_more = true;
+        result.has_more = true;
+    }
+    Ok(answer)
 }
 
 /// The newest runs of `rule`, newest first, and whether the Rule has more

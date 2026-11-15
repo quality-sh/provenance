@@ -97,6 +97,7 @@ impl StateStore {
         crate::jsonl::mutate_jsonl_locked(
             &path,
             &lock_path,
+            run_row_budget(),
             |records: &mut Vec<VerificationRun>| {
                 crate::write_error::ensure!(
                     Fault,
@@ -123,8 +124,9 @@ impl StateStore {
         )
     }
 
-    /// Refuses a completion whose run row passes the read budget before the
-    /// runs cache changes.
+    /// Refuses a completion whose stored run row passes the read budget
+    /// before the runs cache changes. The stored row keeps each member of the
+    /// stored line that the run type does not know, and the budget counts it.
     pub fn complete_verification(
         &self,
         scope_id: &ScopeId,
@@ -146,6 +148,7 @@ impl StateStore {
             crate::jsonl::mutate_jsonl_locked(
                 &path,
                 &lock_path,
+                run_row_budget(),
                 |records: &mut Vec<VerificationRun>| {
                     let run = records
                         .iter_mut()
@@ -166,7 +169,6 @@ impl StateStore {
                     run.status = status;
                     run.completed_at = Some(completed_at.max(run.started_at));
                     run.error = input.error;
-                    super::read_budget::ensure_within_read_budget(run)?;
                     Ok(run.clone())
                 },
             )
@@ -300,6 +302,12 @@ fn verification_rule(
         }
     };
     Ok(rule_id)
+}
+
+/// The bytes of one stored line of the runs cache that the reads of the runs
+/// give.
+fn run_row_budget() -> usize {
+    <VerificationRun as super::read_budget::ReadBudget>::read_budget()
 }
 
 fn next_run_id(taken: &BTreeSet<&str>, started_at: i64) -> anyhow::Result<StableId> {

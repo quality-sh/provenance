@@ -129,7 +129,17 @@ impl<T: Serialize> LoadedRecords<T> {
     /// the row's top-level unknown members are carried onto the new line. The
     /// write is refused when a changed row holds stored data that cannot be
     /// carried over, before anything is published.
-    pub(super) fn into_lines(mut self, path: &Utf8Path) -> anyhow::Result<Vec<String>> {
+    pub(super) fn into_lines(self, path: &Utf8Path) -> anyhow::Result<Vec<String>> {
+        self.into_checked_lines(path, |_| Ok(()))
+    }
+
+    /// Like [`Self::into_lines`], but `written` checks each line that the
+    /// write changes or adds, as it is stored, before the lines are given.
+    pub(super) fn into_checked_lines(
+        mut self,
+        path: &Utf8Path,
+        mut written: impl FnMut(&str) -> anyhow::Result<()>,
+    ) -> anyhow::Result<Vec<String>> {
         let mut lines = Vec::with_capacity(self.records.len());
         let mut added_without_id = false;
         for record in &self.records {
@@ -141,13 +151,17 @@ impl<T: Serialize> LoadedRecords<T> {
             if let Some(id) = record_id(&known) {
                 if let Some(index) = unique_id_match(path, &self.raw, id)? {
                     let raw = take(&mut self.raw, index);
-                    lines.push(raw.changed_line(path, record)?);
+                    let line = raw.changed_line(path, record)?;
+                    written(&line)?;
+                    lines.push(line);
                     continue;
                 }
             } else {
                 added_without_id = true;
             }
-            lines.push(serde_json::to_string(record)?);
+            let line = serde_json::to_string(record)?;
+            written(&line)?;
+            lines.push(line);
         }
         let kept_without_id = self
             .raw

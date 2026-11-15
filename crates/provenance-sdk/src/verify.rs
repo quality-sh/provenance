@@ -9,7 +9,7 @@ use provenance_macros::rule;
 use provenance_store::operations;
 use provenance_store::repository::Repository;
 use provenance_store::state_store::{
-    BeginVerificationInput, CompleteVerificationInput, DeclarationReferenceInput,
+    fit_failure_text, BeginVerificationInput, CompleteVerificationInput, DeclarationReferenceInput,
 };
 
 use crate::Settings;
@@ -43,7 +43,9 @@ impl<'a> From<&'a RuleHandle> for VerifyTarget<'a> {
 ///
 /// The callback runs under `catch_unwind`. An `Err` or an unwind first
 /// records the run as failed with a serialized payload, then propagates;
-/// a completion failure stays subordinate to the callback failure. With
+/// a completion failure stays subordinate to the callback failure: it is the
+/// cause of the returned `Err`, and it goes to the standard error before an
+/// unwind continues. With
 /// `panic = "abort"` an unwind never reaches the recorder. The call
 /// site's file becomes the binding file, so call this from the test that
 /// carries the evidence.
@@ -94,6 +96,8 @@ pub fn verify<'a, E: std::fmt::Display>(
             },
         )
     };
+    // The store cuts a failure text that does not fit the run row.
+    let fail = |text: &str| complete("failed", Some(fit_failure_text(&run, text)?));
     match catch_unwind(AssertUnwindSafe(callback)) {
         Ok(Ok(())) => {
             complete("passed", None)?;
@@ -101,12 +105,22 @@ pub fn verify<'a, E: std::fmt::Display>(
         }
         Ok(Err(error)) => {
             let payload = error.to_string();
-            // The callback failure stays the primary failure.
-            let _ = complete("failed", Some(payload.clone()));
-            Err(anyhow::anyhow!(payload))
+            // The callback failure stays the primary failure, and a refused
+            // completion is its cause.
+            match fail(&payload) {
+                Ok(_) => Err(anyhow::anyhow!(payload)),
+                Err(refusal) => Err(refusal.context(payload)),
+            }
         }
         Err(panic) => {
-            let _ = complete("failed", Some(panic_payload(panic.as_ref())));
+            // The panic goes on with its own payload, so the refusal of the
+            // completion goes to the standard error of the test.
+            if let Err(refusal) = fail(&panic_payload(panic.as_ref())) {
+                eprintln!(
+                    "verification run `{}` is not recorded as failed: {refusal:#}",
+                    run.id.as_str()
+                );
+            }
             std::panic::resume_unwind(panic);
         }
     }

@@ -1,6 +1,7 @@
 mod access;
 mod archive_history;
 mod canonical_artifacts;
+mod failure_text;
 mod family_readers;
 mod graph_validation;
 mod ideation_batches;
@@ -42,6 +43,7 @@ mod verification_bindings;
 mod verification_runs;
 mod withdrawal_writers;
 mod writers;
+pub use failure_text::fit_failure_text;
 pub use updates::*;
 
 pub use access::GuardedStore;
