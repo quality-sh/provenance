@@ -10,6 +10,7 @@ mod ideation_validation;
 mod ideation_writers;
 mod immutable_ids;
 mod implementation_bindings;
+mod import_reviews;
 mod inputs;
 pub(crate) mod landing_read;
 mod live_parents;
@@ -67,9 +68,7 @@ pub use inputs::{
     TypedSpecResult, UpdateQuestionInput,
 };
 pub use proposal_surfaces::{ProposalDemand, ProposalSurfaceReason, SurfacedProposal, TopicClaim};
-pub use requirement_reviews::{
-    requirement_statement_changes, RequirementReviewInput, RequirementStatementChange,
-};
+pub use requirement_reviews::{requirement_statement_changes, RequirementStatementChange};
 pub use scope_ingestion::ScopeShards;
 pub(crate) use statement_policy::StatementWriteError;
 pub use typed_specs::{decide_typed_spec, ReviewHistory, TypedSpecDecision, TypedSpecView};
