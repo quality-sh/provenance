@@ -85,7 +85,12 @@ fn main() {
             let workspace = std::path::Path::new(&workspace_path);
             let mut manifest = fs::read_to_string(&manifest_path).unwrap();
             if !manifest.contains("provenance-sdk") {
-                manifest.push_str("\n[dependencies]\nprovenance-sdk = \"=0.4.0\"\n");
+                let table = if arguments.iter().any(|argument| argument == "--dev") {
+                    "dev-dependencies"
+                } else {
+                    "dependencies"
+                };
+                manifest.push_str(&format!("\n[{table}]\nprovenance-sdk = \"=0.4.0\"\n"));
                 fs::write(&manifest_path, manifest).unwrap();
             }
             fs::write(env::var_os("FAKE_CARGO_LOCK").unwrap(), "version = 4\n").unwrap();

@@ -31,13 +31,13 @@ mod support {
     pub mod transcript;
 }
 
-#[path = "simulation_cli/fixture.rs"]
+#[path = "simulation_cli_support/fixture.rs"]
 mod fixture;
-#[path = "simulation_cli/laws.rs"]
+#[path = "simulation_cli_support/laws.rs"]
 mod laws;
-#[path = "simulation_cli/process.rs"]
+#[path = "simulation_cli_support/process.rs"]
 mod process;
-#[path = "simulation_cli/reads.rs"]
+#[path = "simulation_cli_support/reads.rs"]
 mod reads;
 
 use fixture::{run_cli, run_steps, state_entries};
