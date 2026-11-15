@@ -35,6 +35,8 @@ const SEARCH_THEN_GET: &str =
 const CREATE_TYPE: &str =
     "Create names an explicit record type; actions on an existing record infer its type.";
 const CREATE_ONLY: &str = "Create names an explicit record type.";
+const ETAG_BEFORE_UPDATE: &str = "Before an update, read the record with get. Give its \
+`edit.etag` unchanged to the update as the if-match value.";
 const ACCESS: &str = "Available actions depend on the interface and its access. \
 Each interface lists the inputs and actions it supports.\n\n";
 
@@ -89,11 +91,15 @@ const FIRST_STEPS: &str = "\n\nFor a focused start, call search with {\"text\":\
 then get with {\"target\":\"<id>\",\"view\":\"children\",\"depth\":<N>}.";
 
 /// The expected instructions: the domain text, the opening sentences on one line, the
-/// access sentence, the command lines, and the first steps when `first_steps` is true.
+/// `edit.etag` sentence when the lines hold get and update, the access sentence, the command
+/// lines, and the first steps when `first_steps` is true.
 fn expected(opening: &[&str], lines: &[&str], first_steps: bool) -> String {
     let mut text = DOMAIN.to_owned();
     if !opening.is_empty() {
         text = text + &opening.join(" ") + "\n";
+    }
+    if lines.contains(&GET) && lines.contains(&UPDATE) {
+        text = text + ETAG_BEFORE_UPDATE + "\n";
     }
     text = text + ACCESS + &lines.join("\n");
     if first_steps {

@@ -41,6 +41,11 @@ const CREATE: (&str, &str) = (
     "; actions on an existing record infer its type",
 );
 
+/// The sentence of a consumer that shows get and update: the `edit.etag` of a get guards
+/// the update.
+const ETAG_BEFORE_UPDATE: &str = "Before an update, read the record with get. \
+Give its `edit.etag` unchanged to the update as the if-match value.\n";
+
 /// The sentence after the opening sentences, which names no command.
 const ACCESS: &str = "Available actions depend on the interface and its access. \
 Each interface lists the inputs and actions it supports.\n\n";
@@ -91,6 +96,9 @@ pub fn guidance_for(shown: impl Fn(Command) -> bool, notify: bool) -> Guidance {
     if !opening.is_empty() {
         text.push_str(&opening.join(" "));
         text.push('\n');
+    }
+    if shown(Command::Get) && shown(Command::Action(Action::Update)) {
+        text.push_str(ETAG_BEFORE_UPDATE);
     }
     text.push_str(ACCESS);
     let commands = [

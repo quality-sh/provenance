@@ -2,7 +2,7 @@
 
 use anyhow::Context as _;
 use provenance_macros::rule;
-use provenance_porcelain::get::{GetInput, ReviewLink, View, ViewResult, NO_REVIEW_HOST};
+use provenance_porcelain::get::{GetInput, ReviewLink, View, NO_REVIEW_HOST};
 pub use provenance_review::AffectedReviewRecord;
 use provenance_review::{PageResult, ReviewLocation};
 use provenance_transport::repository::RepoContext;
@@ -29,16 +29,16 @@ pub async fn print(
     let mut input = GetInput::new(record_id, View::Record);
     input.review_link = true;
     let record = host.porcelain().get().get(input).await?;
-    if let ViewResult::ReviewLink(ReviewLink {
+    if let Some(ReviewLink {
         review_url: None,
         message,
-    }) = record.result
+    }) = record.review_link()
     {
         return print_output(
             &LinkOutput {
                 review_url: None,
                 opened: None,
-                message,
+                message: message.clone(),
             },
             format,
         );
