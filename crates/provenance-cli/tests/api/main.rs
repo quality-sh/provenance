@@ -33,6 +33,10 @@ mod cli_mcp_record_actions;
 mod cli_mcp_server;
 #[path = "../cli_mcp_shared_commands.rs"]
 mod cli_mcp_shared_commands;
+#[path = "../cli_mcp_write_actor.rs"]
+mod cli_mcp_write_actor;
+#[path = "../cli_mcp_write_actor_parity.rs"]
+mod cli_mcp_write_actor_parity;
 #[path = "../porcelain_api.rs"]
 mod porcelain_api;
 #[path = "../porcelain_authoring.rs"]
