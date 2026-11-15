@@ -54,7 +54,7 @@ pub fn requirement_statement_changes(
 
 /// The Rules of `rules` that cite `requirement`. A change of the statement of `requirement` puts
 /// the evidence of these Rules up for review, so `rules` is the state after the change.
-pub(crate) fn rules_citing(rules: &[Rule], requirement: &StableId) -> Vec<StableId> {
+pub fn rules_citing(rules: &[Rule], requirement: &StableId) -> Vec<StableId> {
     rules
         .iter()
         .filter(|rule| rule.requirement_ids.contains(requirement))
