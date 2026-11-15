@@ -20,7 +20,7 @@ async fn answer(host: StatementHost, arguments: Value) -> Value {
     let session = Session::start(host).await;
     let result = support::mcp::call(&session.client, "change", arguments).await;
     session.close().await;
-    result
+    serde_json::to_value(result).unwrap()
 }
 
 /// The MCP answer of one refusal with this `{error, meta}` object.
