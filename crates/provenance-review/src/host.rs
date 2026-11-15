@@ -364,9 +364,8 @@ async fn configuration(
         return refusal(error);
     }
     let actor_ids = match disposition_actor_ids(config.repository.clone()).await {
-        Ok(Ok(actor_ids)) => actor_ids,
-        Ok(Err(error)) => return read_refusal(error),
-        Err(error) => return refusal(error),
+        Ok(actor_ids) => actor_ids,
+        Err(refused) => return refused,
     };
     let path = config.path.clone();
     let cached = config.reviewer.clone();
@@ -389,13 +388,13 @@ async fn configuration(
 }
 
 /// The manifest read can wait for the publication lock, so it runs off the runtime workers.
-/// The outer failure is a read task that did not finish.
-async fn disposition_actor_ids(
-    repository: Arc<LocalRepository>,
-) -> Result<Result<Vec<String>, ReadError>, OperationFailure> {
-    tokio::task::spawn_blocking(move || repository.disposition_actor_ids())
-        .await
-        .map_err(|_| OperationFailure::Internal)
+/// The refusal is the read failure of the manifest, or `internal` for a read task that did
+/// not finish.
+async fn disposition_actor_ids(repository: Arc<LocalRepository>) -> Result<Vec<String>, Response> {
+    match tokio::task::spawn_blocking(move || repository.disposition_actor_ids()).await {
+        Ok(read) => read.map_err(read_refusal),
+        Err(_) => Err(refusal(OperationFailure::Internal)),
+    }
 }
 
 async fn protect_origin(
