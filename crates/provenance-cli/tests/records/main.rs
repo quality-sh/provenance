@@ -112,6 +112,8 @@ mod cli_shard_parse_errors;
 mod cli_source_requirement;
 #[path = "../cli_statement_write_gate.rs"]
 mod cli_statement_write_gate;
+#[path = "../cli_status_request.rs"]
+mod cli_status_request;
 #[path = "../cli_ste_statement_paths.rs"]
 mod cli_ste_statement_paths;
 #[path = "../cli_swarm_backtrace_land.rs"]
@@ -126,6 +128,8 @@ mod cli_typed_deletion_month_shards;
 mod cli_typed_deletion_origins;
 #[path = "../cli_typed_spec_review_plan.rs"]
 mod cli_typed_spec_review_plan;
+#[path = "../cli_unchanged_update.rs"]
+mod cli_unchanged_update;
 #[path = "../cli_unclassified_cause.rs"]
 mod cli_unclassified_cause;
 #[path = "../cli_unparsable_state.rs"]

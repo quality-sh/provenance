@@ -255,6 +255,19 @@ impl WriteSet {
         }
     }
 
+    /// The same set with the atomicity of each key, on the same base, if it
+    /// has one key; else the set as it is.
+    pub(crate) fn narrowed(self) -> Self {
+        if self.key_count() == 1 {
+            Self {
+                atomicity: Atomicity::PerKey,
+                ..self
+            }
+        } else {
+            self
+        }
+    }
+
     /// Refuses the set with [`PublishFailure::BaseMoved`] when `current` is
     /// not the base of the set. Only a moved base is hashed.
     pub(crate) fn ensure_base(
@@ -312,15 +325,16 @@ impl WriteSet {
 /// Why a write set did not land completely.
 #[derive(Debug, thiserror::Error)]
 pub enum PublishFailure {
-    /// No key landed.
+    /// No key landed. A per-key set that fails before its first key
+    /// changes is refused.
     #[error("{0:#}")]
     Refused(anyhow::Error),
     /// The stored keys and bytes were not those of the base of the set. No
     /// key landed.
     #[error("the state moved from revision {} to {} before the write", .base.as_str(), .current.as_str())]
     BaseMoved { base: Revision, current: Revision },
-    /// The failure came after the first key began to land. A per-key set
-    /// can have a prefix of its keys landed.
+    /// The failure came after a stored key changed, or after a whole set
+    /// began to land. A per-key set can have a prefix of its keys landed.
     #[error("{0:#}")]
     Started(anyhow::Error),
 }
@@ -332,8 +346,9 @@ pub enum PublishFailure {
 /// state; see each adapter for what that section is. Publishes are
 /// serialized. A set with one key lands completely or not at all. A set
 /// whose stored keys and bytes differ from its base is refused before any
-/// key lands. A failure after the first key began to land is
-/// [`PublishFailure::Started`].
+/// key lands. A failure after a stored key changed, or after a whole set
+/// began to land, is [`PublishFailure::Started`]. A set with no key writes
+/// no data: the adapter checks its base, then returns.
 pub trait StateStorage: Send + Sync + std::fmt::Debug {
     /// One consistent view of every key and its bytes.
     fn read_view(&self) -> Result<StateView, StorageError>;

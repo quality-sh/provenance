@@ -113,6 +113,10 @@ name = "memory_repository_stage_reads"
 name = "read_process_state"
 
 [[test]]
+name = "stage_landing_local_disk"
+required-features = ["host"]
+
+[[test]]
 name = "compile_fail"
 required-features = ["host"]
 

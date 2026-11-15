@@ -100,6 +100,13 @@ impl FixtureAccess {
     pub(crate) fn bound_identity(&self) -> Option<(String, String)> {
         self.grants.iter().next().cloned()
     }
+    /// The reviewer list in the manifest of the bound repository.
+    pub(crate) fn reviewer_ids(&self) -> Option<Vec<String>> {
+        let (alias, scope) = self.bound_identity()?;
+        let root = self.targets.get(&alias)?;
+        let repository = provenance_store::repository::Repository::open(root, &scope).ok()?;
+        Some(repository.manifest().ok()?.disposition_actor_ids)
+    }
 }
 
 impl crate::HttpCredential for FixtureAccess {

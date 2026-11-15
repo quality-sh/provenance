@@ -242,6 +242,11 @@ pub async fn call(
     if let Some(refused) = field_refusal(action, route.kind, &schema, &arguments) {
         return refused;
     }
+    let requested = arguments
+        .get("status")
+        .and_then(Value::as_str)
+        .filter(|_| matches!(action, Action::Create | Action::Update))
+        .map(str::to_owned);
     let request = match request_arguments(route.definition, arguments) {
         Ok(request) => request,
         Err(refused) => return refused,
@@ -254,13 +259,31 @@ pub async fn call(
     };
     match written {
         (Ok(value), note) => {
+            let kind = route.kind;
+            let opened = match &requested {
+                Some(status) => {
+                    host.open_status_request(kind, &target, status, &value)
+                        .await
+                }
+                None => None,
+            };
             let mut structured = value.clone();
+            if let Some(opened) = &opened {
+                let record = if structured.get("data").is_some() {
+                    &mut structured["data"]
+                } else {
+                    &mut structured
+                };
+                record["decision"] = opened.decision.clone();
+            }
             if let Some(object) = structured.as_object_mut() {
                 object.insert("type".into(), json!(route.kind.as_str()));
             }
             let mut result = CallToolResult::structured(structured);
             let readable = render_readable(action, &target, route.kind, &value);
-            result.content = vec![ContentBlock::text(note.unwrap_or_default() + &readable)];
+            let request_note = opened.map(|opened| opened.note + "\n");
+            let text = request_note.unwrap_or_default() + &note.unwrap_or_default() + &readable;
+            result.content = vec![ContentBlock::text(text)];
             result
         }
         (Err(failure), _) => crate::surface::failure_result(failure),

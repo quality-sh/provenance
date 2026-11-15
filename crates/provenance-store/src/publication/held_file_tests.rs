@@ -6,6 +6,18 @@
 
 use super::*;
 use crate::state_store::RecordStamp::ResolveFromRepository as StampFromGit;
+use crate::state_store::StateStore;
+
+/// Puts two new empty shards in the stage, so it lands as a whole set.
+pub(super) fn stage_two_new_shards(staged: &StateStore) -> anyhow::Result<()> {
+    let scope = provenance_core::ScopeId::new("default")?;
+    let shard = |kind| crate::shards::path_for(&staged.layout, &scope, kind);
+    let kinds = [
+        provenance_core::NodeType::Topic,
+        provenance_core::NodeType::Question,
+    ];
+    staged.publish_shards(kinds.map(|kind| (shard(kind), Vec::new())).into())
+}
 
 /// This test has no Rule: no active Rule states that a write passes while a
 /// reader has a file of the state open.
@@ -45,7 +57,9 @@ fn a_publication_passes_while_a_reader_has_the_marker_open() {
     let result = with_repository_publication(&layout, |held| {
         with_staged_state(held, false, StampFromGit, |staged| {
             let manifest = staged.layout.manifest_path();
-            staged.publish_shard(&manifest, serde_json::to_vec(&published)?)
+            staged.publish_shard(&manifest, serde_json::to_vec(&published)?)?;
+            // A stage of one key lands with no swap.
+            stage_two_new_shards(staged)
         })
     });
     crate::test_probes::disarm("state_after_backup_rename");

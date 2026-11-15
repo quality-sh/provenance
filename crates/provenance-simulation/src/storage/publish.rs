@@ -93,14 +93,15 @@ impl World {
                             .unwrap_or_default(),
                         Atomicity::WholeSet => 0,
                     };
-                    land_prefix(&mut state.entries, writes, landed);
-                    (
-                        Err(PublishFailure::Started(anyhow::anyhow!(
-                            "the simulated storage failed to land {}",
-                            broken.as_str()
-                        ))),
-                        Outcome::Unknown,
-                    )
+                    let error =
+                        anyhow::anyhow!("the simulated storage failed to land {}", broken.as_str());
+                    if writes.atomicity() == Atomicity::PerKey && landed == 0 {
+                        // No key changed, so the set is refused.
+                        (Err(PublishFailure::Refused(error)), Outcome::Refused)
+                    } else {
+                        land_prefix(&mut state.entries, writes, landed);
+                        (Err(PublishFailure::Started(error)), Outcome::Unknown)
+                    }
                 }
                 None => {
                     let lose = self.plant == Some(Plant::LoseWrite)

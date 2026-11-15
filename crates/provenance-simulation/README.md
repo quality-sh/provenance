@@ -30,7 +30,7 @@ Each layer is one job, so a failure names one layer.
 | L8 | engine, contract | One case gives the same final bytes each time. |
 | O1 | contract | No answer is a write failure (500) unless a fault met the operation. |
 | O2 | contract | The times of the messages increase in the order that they landed. |
-| O3 | contract | A stage lands as one whole set on the revision where it started. |
+| O3 | contract | A stage lands as one set on the revision where it started: a whole set, or a per-key set for a change of one key. |
 
 Each law apart from L0 has a planted test: `tests/engine_planted.rs`,
 `tests/contract_planted.rs` and
@@ -91,19 +91,25 @@ law. After a broken law, Hegel shrinks the case; each run of the shrink adds
 only to "shrink runs".
 
 A stop of a CLI write kills the write process at a point of its publish
-that the test sees on disk: an even `at` when the transaction directory of
-the write appears, an odd `at` when the publication marker appears while
-that transaction exists. The order of a publish is in
-`provenance_store::storage::local::whole_set::land`. After the kill, the
-transaction, the marker, the phase of the marker and the live state tell
-where the stop landed. Each stop that a case draws adds 1 to one of these
-rows:
+that the test sees on disk. A write of two keys or more publishes through a
+transaction directory and a publication marker: an even `at` stops it when
+its transaction appears, an odd `at` when the marker appears while that
+transaction exists. The order of this publish is in
+`provenance_store::storage::local::whole_set::land`. A write of one key
+writes a temporary file next to the key in the state tree and renames it to
+the key: an even `at` stops it when the temporary file appears, an odd `at`
+when the temporary file goes after the rename. After the kill, the
+transaction, the marker, the phase of the marker, the temporary file and
+the live state tell where the stop landed. Each stop that a case draws adds
+1 to one of these rows:
 
 | Row | What the stop did |
 | --- | ----------------- |
 | stops before the marker | It killed the write while its transaction existed and no marker was there. |
 | stops after the marker and before the install | It killed the write after the marker and before the install of the new state. |
 | stops after the install and before the answer | It killed the write after the install of the new state. |
+| stops before the rename of the key | It killed a one-key write while its temporary file existed, before the rename. |
+| stops after the rename of the key and before the answer | It killed a one-key write after the rename of its temporary file to the key. |
 | stops after the answer | The write gave its answer, a success or a refusal, before the kill. |
 | stops of a write that ended before its stop point | The write ended before the test saw its point, and the state did not change. |
 | stops whose point the test did not see | The write ended and changed the state, but the test did not see its point. |
@@ -115,12 +121,22 @@ The row "stops that left no live state" counts the stops that killed a
 write before its answer and left no live state. The next read recovers
 the live state from the transaction.
 
-Three probes of the CLI layer stop a write on each run. One stops a claim at
-its transaction, and the stop must land before the marker. One stops a
-claim at the marker, and the stop must land after the marker and before the
-install; a read after the stop must remove the marker and give the state
-before the claim. One stops each kind of write that the simulation sends
-at its transaction, and each stop must kill its write before its answer.
+Five probes of the CLI layer stop a write on each run. One stops an update
+of two keys at its transaction, and the stop must land before the marker.
+One stops the update at the marker, and the stop must land after the marker
+and before the install. After each of the two, a read must remove the
+marker and the transaction and give the state before the update. One stops
+a claim, a write of one key, when its temporary file appears, and the stop
+must land before the rename; after a read, the state is the state before
+the claim, and the temporary file stays, but no read sees it. One stops the
+claim when its temporary file goes, and the stop must land after the
+rename; after a read, only the Topic key changed. One stops each kind of
+write that the simulation sends at its first point: a write of two keys
+must stop before the marker, and a write of one key before the rename. On
+macOS the rename of a one-key write can occur after the test saw its
+temporary file and before the kill lands: the probe before the rename does
+not run there, and the probe of each kind also accepts a stop after the
+rename.
 
 ## When a failure issue opens
 

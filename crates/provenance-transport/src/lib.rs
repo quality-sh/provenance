@@ -248,6 +248,11 @@ impl StatementHost {
     pub fn bound_identity(&self) -> Option<(String, String)> {
         self.access.bound_identity()
     }
+    /// The reviewer list of the bound repository, when the host access can
+    /// read it.
+    pub fn reviewer_ids(&self) -> Option<Vec<String>> {
+        self.access.reviewer_ids()
+    }
 
     async fn admit(&self) -> Result<OwnedSemaphorePermit, FailureEnvelope> {
         tokio::select! {

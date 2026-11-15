@@ -1,7 +1,7 @@
 use super::requirement_archive::{
     append_rule, archive, assert_invalid_update, child, requirement, COMMIT,
 };
-use super::seeded_requirement_store;
+use super::reviewed_requirement_store;
 use crate::state_store::StateStore;
 use provenance_core::{Resolution, Rule, ScopeId};
 use provenance_macros::verifies;
@@ -70,7 +70,7 @@ fn without_link_fields(record: &impl serde::Serialize) -> Value {
 }
 
 fn sibling_store() -> (tempfile::TempDir, StateStore, ScopeId) {
-    let (directory, store, scope) = seeded_requirement_store();
+    let (directory, store, scope) = reviewed_requirement_store();
     child(&store, "req_left", "req_overtime");
     child(&store, "req_right", "req_overtime");
     (directory, store, scope)
@@ -125,7 +125,7 @@ fn already_archived_parent_does_not_keep_a_child_live() {
 #[verifies("rule_archive_keeps_archived_parent_links", examples)]
 #[verifies("rule_archive_records_each_commit", examples)]
 fn resolution_under_an_archived_requirement_is_archived() {
-    let (_directory, store, scope) = seeded_requirement_store();
+    let (_directory, store, scope) = reviewed_requirement_store();
     create_resolution(&store, "res_only", &["req_overtime"]);
     archive(&store, "req_overtime");
     let after = serde_json::to_value(resolution(&store, &scope, "res_only")).unwrap();
@@ -153,7 +153,7 @@ fn resolution_with_a_surviving_parent_loses_only_the_archived_link() {
 #[test]
 #[verifies("rule_archive_is_terminal_for_each_record", examples)]
 fn archived_resolution_refuses_a_live_status() {
-    let (_directory, store, scope) = seeded_requirement_store();
+    let (_directory, store, scope) = reviewed_requirement_store();
     create_resolution(&store, "res_only", &["req_overtime"]);
     archive(&store, "req_overtime");
     let archived = resolution(&store, &scope, "res_only");

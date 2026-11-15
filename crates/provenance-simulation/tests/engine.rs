@@ -15,7 +15,7 @@ use provenance_macros::verifies;
 use provenance_simulation::generate::{Case, Effect, Fault, Operation, Step};
 use provenance_simulation::storage::Outcome;
 use provenance_simulation::{check_case, check_probe, laws, report, run_case, stats, Config, Run};
-use support::cases::{alone, each_operation, moved_base_case, write};
+use support::cases::{alone, each_operation, moved_base_case, write, ARCHIVE_FIRST};
 
 #[hegel::test]
 #[ignore = "random cases run nightly: cargo nextest run --profile simulation --run-ignored all"]
@@ -114,6 +114,39 @@ fn an_unknown_outcome_lands_a_prefix_and_keeps_the_laws() {
     }
 }
 
+// No Rule: a probe of the two landings of a one-key write that loses its
+// answer. A stop before the rename lands no key; a stop after it lands the
+// key.
+#[test]
+#[ignore = "a probe of the nightly simulation"]
+fn a_one_key_write_that_loses_its_answer_lands_its_key_or_no_key() {
+    let claim = || write(1, Operation::ClaimTopic);
+    let entries =
+        |steps: Vec<Step>| run_case(&Case { engines: 2, steps }, Config::default()).entries;
+    let no_claim = entries(Vec::new());
+    let claimed = entries(vec![claim()]);
+    assert_ne!(no_claim, claimed, "the claim changed no key");
+    for (landed, expected) in [(0, &no_claim), (1, &claimed)] {
+        let case = Case {
+            engines: 2,
+            steps: vec![Step::Fault(Fault::UnknownOutcome { landed }), claim()],
+        };
+        let run = run_case(&case, Config::default());
+        let unknown: Vec<_> = run
+            .publishes
+            .iter()
+            .filter(|publish| publish.outcome == Outcome::Unknown)
+            .collect();
+        assert!(
+            unknown.len() == 1 && !unknown[0].whole_set,
+            "landed {landed}: not one per-key unknown publish: {:?}",
+            run.publishes
+        );
+        assert_eq!(&run.entries, expected, "landed {landed}");
+        report::probe_laws("engine", laws::check(&run));
+    }
+}
+
 // No Rule: a probe that each operation of the generator succeeds alone.
 #[test]
 #[ignore = "a probe of the nightly simulation"]
@@ -134,31 +167,48 @@ fn each_operation_runs_on_the_engine() {
             done.result
         );
     }
+    // An archive that leaves its status request open writes the request,
+    // and a decision changes one key. So each lands one per-key set on its
+    // base, as law O3 counts it.
     for done in &run.done {
-        if matches!(
+        if !matches!(
             done.op,
-            Operation::DecideReview { .. } | Operation::ArchiveRequirement { .. }
+            Operation::ArchiveRequirement {
+                leave_open: true,
+                ..
+            } | Operation::DecideReview { .. }
         ) {
-            let staged = run.publishes.iter().any(|publish| {
-                publish.operation == done.operation
-                    && publish.whole_set
-                    && publish.outcome == Outcome::Landed
-            });
-            assert!(staged, "{:?} landed no stage: {:?}", done.op, run.publishes);
+            continue;
         }
+        let landed: Vec<_> = run
+            .publishes
+            .iter()
+            .filter(|publish| {
+                publish.operation == done.operation
+                    && publish.on_base
+                    && publish.outcome == Outcome::Landed
+            })
+            .collect();
+        assert!(
+            landed.len() == 1 && !landed[0].whole_set,
+            "{:?} did not land one per-key set: {:?}",
+            done.op,
+            run.publishes
+        );
     }
 }
 
 // No Rule: a probe that L3 follows the claim through an archive. The archive
 // of the Requirement of the Topic reads the state after the outside claim and
-// lands after it, so the Topic is archived and holds no claim.
+// lands after it: its status request, then the acceptance. So the Topic is
+// archived and holds no claim.
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn an_archive_after_an_outside_claim_clears_the_claim_and_keeps_l3() {
     let case = Case {
         engines: 2,
         steps: vec![
-            write(0, Operation::ArchiveRequirement { n: 0 }),
+            write(0, ARCHIVE_FIRST),
             Step::OutsideWrite(Operation::ClaimTopic),
         ],
     };
@@ -169,7 +219,7 @@ fn an_archive_after_an_outside_claim_clears_the_claim_and_keeps_l3() {
         .filter(|publish| publish.outcome == Outcome::Landed)
         .map(|publish| publish.engine)
         .collect();
-    assert_eq!(landed, [None, Some(0)], "{:?}", run.publishes);
+    assert_eq!(landed, [None, Some(0), Some(0)], "{:?}", run.publishes);
     assert!(
         run.done.iter().all(|done| done.result.is_ok()),
         "{:?}",

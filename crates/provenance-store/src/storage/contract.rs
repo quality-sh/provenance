@@ -169,6 +169,32 @@ fn assert_base_moved(result: Result<(), PublishFailure>, base: &StateView, moved
     }
 }
 
+/// A set with no key on the current base changes nothing.
+pub fn an_empty_set_changes_nothing<H: Harness>(mut harness: H) -> H {
+    harness.seed(&[("manifest.json", b"{}"), (X, b"x")]);
+    let before = read(&harness);
+    for atomicity in [Atomicity::PerKey, Atomicity::WholeSet] {
+        let writes = WriteSet::new(atomicity).on_base(Arc::new(before.clone()));
+        publish(&harness, writes).unwrap();
+        assert_eq!(read(&harness), before);
+    }
+    harness
+}
+
+/// A set with no key on a view whose keys and bytes are no longer stored
+/// is refused.
+pub fn an_empty_set_on_a_moved_base_is_refused<H: Harness>(mut harness: H) {
+    harness.seed(&[("manifest.json", b"{}")]);
+    let base = read(&harness);
+    harness.seed(&[(X, b"moved")]);
+    let moved = read(&harness);
+    for atomicity in [Atomicity::PerKey, Atomicity::WholeSet] {
+        let writes = WriteSet::new(atomicity).on_base(Arc::new(base.clone()));
+        assert_base_moved(publish(&harness, writes), &base, &moved);
+        assert_eq!(read(&harness), moved);
+    }
+}
+
 /// A set that puts and deletes one key is refused before any key lands.
 pub fn publish_refuses_a_put_and_delete_of_one_key<H: Harness>(mut harness: H) {
     harness.seed(&[("manifest.json", b"{}")]);
@@ -194,7 +220,7 @@ pub fn a_one_key_set_lands_all_of_its_bytes<H: Harness>(mut harness: H) {
 }
 
 /// A one-key set that fails while it lands leaves the state as it was and
-/// reports that landing started.
+/// is refused.
 pub fn a_failed_one_key_set_lands_nothing<H: Harness>(mut harness: H) {
     harness.seed(&[("manifest.json", b"{}")]);
     harness.break_key(X);
@@ -202,7 +228,22 @@ pub fn a_failed_one_key_set_lands_nothing<H: Harness>(mut harness: H) {
     let writes = WriteSet::new(Atomicity::PerKey).put(key(X), b"x".to_vec());
     assert!(matches!(
         publish(&harness, writes),
-        Err(PublishFailure::Started(_))
+        Err(PublishFailure::Refused(_))
+    ));
+    assert_eq!(read(&harness), before);
+}
+
+/// A per-key set that fails at its first key changes no key and is refused.
+pub fn a_per_key_set_that_fails_at_its_first_key_is_refused<H: Harness>(mut harness: H) {
+    harness.seed(&[("manifest.json", b"{}")]);
+    harness.break_key(A);
+    let before = read(&harness);
+    let writes = WriteSet::new(Atomicity::PerKey)
+        .put(key(A), b"a".to_vec())
+        .put(key(B), b"b".to_vec());
+    assert!(matches!(
+        publish(&harness, writes),
+        Err(PublishFailure::Refused(_))
     ));
     assert_eq!(read(&harness), before);
 }
@@ -327,6 +368,26 @@ mod tests {
         a_whole_set_on_a_moved_base_is_refused(Persisting::default());
     }
 
+    /// The local adapter makes no transaction and no marker for it.
+    #[test]
+    #[verifies("rule_empty_write_set_writes_no_data", examples)]
+    fn each_adapter_an_empty_set_changes_nothing() {
+        let local = an_empty_set_changes_nothing(local());
+        let transactions = local.layout.import_transactions_dir();
+        assert_eq!(std::fs::read_dir(transactions).unwrap().count(), 0);
+        assert!(!local.layout.publication_marker_path().exists());
+        an_empty_set_changes_nothing(Memory::default());
+        an_empty_set_changes_nothing(Persisting::default());
+    }
+
+    #[test]
+    #[verifies("rule_adapter_refuses_a_set_on_a_moved_base", examples)]
+    fn each_adapter_an_empty_set_on_a_moved_base_is_refused() {
+        an_empty_set_on_a_moved_base_is_refused(local());
+        an_empty_set_on_a_moved_base_is_refused(Memory::default());
+        an_empty_set_on_a_moved_base_is_refused(Persisting::default());
+    }
+
     #[test]
     #[verifies("rule_one_key_write_set_lands_whole", examples)]
     fn each_adapter_a_one_key_set_lands_all_of_its_bytes() {
@@ -346,11 +407,19 @@ mod tests {
     #[test]
     #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
     #[verifies("rule_one_key_write_set_lands_whole", examples)]
-    #[verifies("rule_failure_after_landing_starts_is_an_unknown_outcome", examples)]
+    #[verifies("rule_failure_before_a_key_changes_is_refused", examples)]
     fn each_adapter_a_failed_one_key_set_lands_nothing() {
         a_failed_one_key_set_lands_nothing(local());
         a_failed_one_key_set_lands_nothing(Memory::default());
         a_failed_one_key_set_lands_nothing(Persisting::default());
+    }
+
+    #[test]
+    #[verifies("rule_failure_before_a_key_changes_is_refused", examples)]
+    fn each_adapter_a_per_key_set_that_fails_at_its_first_key_is_refused() {
+        a_per_key_set_that_fails_at_its_first_key_is_refused(local());
+        a_per_key_set_that_fails_at_its_first_key_is_refused(Memory::default());
+        a_per_key_set_that_fails_at_its_first_key_is_refused(Persisting::default());
     }
 
     #[test]

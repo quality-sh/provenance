@@ -14,7 +14,10 @@ use crate::{
     write_error::{WriteError, WriteFailure},
 };
 use camino::Utf8Path;
-use provenance_core::{review::ReviewRecord, Requirement, ScopeId, SourceReference, StableId};
+use provenance_core::{
+    review::{ReviewRecord, StatusRequest},
+    Requirement, ScopeId, SourceReference, StableId,
+};
 
 impl StateStore {
     pub(crate) fn replace_native_records<T: GraphRecord>(
@@ -70,13 +73,29 @@ impl StateStore {
         id: &StableId,
         write: impl FnOnce(&Self) -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
+        self.create_native_record_with(path, id, None, write)
+    }
+
+    /// Creates one native record and opens its review submission in the same
+    /// write. With a status request, the creation submission is that request.
+    pub(crate) fn create_native_record_with<T: GraphRecord>(
+        &self,
+        path: &Utf8Path,
+        id: &StableId,
+        status_request: Option<StatusRequest>,
+        write: impl FnOnce(&Self) -> anyhow::Result<T>,
+    ) -> anyhow::Result<T> {
         let relative = path.strip_prefix(self.layout.root())?.to_owned();
         let stamp = self.current_record_stamp()?;
         self.with_repository_publication(|held| {
             with_record_state(held, RecordStamp::resolved(stamp), |staged| {
                 let staged_path = staged.layout.root().join(&relative);
                 let created = staged.permitting(&[&staged_path], id.as_str(), write)?;
-                staged.open_creation_submission(&created.clone().into(), AUTHORING_ACTOR)?;
+                let record = created.clone().into();
+                status_request.map_or_else(
+                    || staged.open_creation_submission(&record, AUTHORING_ACTOR),
+                    |request| staged.open_status_request(&record, AUTHORING_ACTOR, request),
+                )?;
                 Ok(created)
             })
         })

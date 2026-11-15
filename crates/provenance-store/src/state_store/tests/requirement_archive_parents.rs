@@ -1,5 +1,5 @@
 use super::requirement_archive::{append_requirement, archive, child, requirement, COMMIT};
-use super::seeded_requirement_store;
+use super::reviewed_requirement_store;
 use crate::state_store::StateStore;
 use provenance_core::ScopeId;
 use provenance_macros::verifies;
@@ -23,7 +23,7 @@ fn value(store: &StateStore, scope: &ScopeId, id: &str) -> Value {
 
 /// `req_left` and `req_right` both refine `req_overtime`.
 fn sibling_store() -> (tempfile::TempDir, StateStore, ScopeId) {
-    let (directory, store, scope) = seeded_requirement_store();
+    let (directory, store, scope) = reviewed_requirement_store();
     child(&store, "req_left", "req_overtime");
     child(&store, "req_right", "req_overtime");
     (directory, store, scope)
@@ -48,7 +48,7 @@ fn requirement_under_two_cascaded_parents_is_archived_with_its_links() {
 #[verifies("rule_archive_prunes_only_parent_edge", examples)]
 #[verifies("rule_archive_does_not_create_roots", examples)]
 fn requirement_with_a_surviving_parent_loses_only_the_archived_link() {
-    let (_directory, store, scope) = seeded_requirement_store();
+    let (_directory, store, scope) = reviewed_requirement_store();
     create(&store, "req_kept", &[]);
     create(&store, "req_both", &["req_kept", "req_overtime"]);
     create(&store, "req_reversed", &["req_overtime", "req_kept"]);
