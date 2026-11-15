@@ -420,7 +420,7 @@ mod tests {
     }
 
     fn ids(rows: &[AssertionRecord]) -> Vec<&str> {
-        rows.iter().map(|row| row.immutable_id()).collect()
+        rows.iter().map(IdeationRecord::immutable_id).collect()
     }
 
     /// Implementation aid: `add_to_file` puts a new record in id order and
