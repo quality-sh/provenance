@@ -63,10 +63,8 @@ const CHANGE: (&str, &str) = (
 /// field.
 const NOTIFY: &str = "notify";
 
-/// Produce the guidance of an interface: one line for each command that it shows, in its
-/// order, with the name that selects it on the interface and its registry description.
-/// `writes` holds the commands that its change command selects, and notify is one of them
-/// when `notify` is true. An internal command gets no line.
+/// Produce the guidance of an interface: a line for each command that it shows, with its
+/// name there and its registry description, and a change line that names `writes`.
 #[rule("rule_guidance_names_accepted_commands")]
 pub fn guidance_for(
     commands: &[(Command, String)],
