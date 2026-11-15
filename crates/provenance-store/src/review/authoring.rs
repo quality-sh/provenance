@@ -92,10 +92,10 @@ impl StateStore {
                 let staged_path = staged.layout.root().join(&relative);
                 let created = staged.permitting(&[&staged_path], id.as_str(), write)?;
                 let record = created.clone().into();
-                match status_request {
-                    Some(request) => staged.open_status_request(&record, AUTHORING_ACTOR, request),
-                    None => staged.open_creation_submission(&record, AUTHORING_ACTOR),
-                }?;
+                status_request.map_or_else(
+                    || staged.open_creation_submission(&record, AUTHORING_ACTOR),
+                    |request| staged.open_status_request(&record, AUTHORING_ACTOR, request),
+                )?;
                 Ok(created)
             })
         })
