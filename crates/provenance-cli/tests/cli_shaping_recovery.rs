@@ -1,5 +1,6 @@
 use crate::fixtures;
 use crate::provenance;
+use crate::support::state_files::state_files;
 
 use fixtures::{create_source_and_requirement, create_topic, init};
 use provenance::{provenance, provenance_stdin};
@@ -438,26 +439,4 @@ fn assert_matches_oracle(repo: &str, state: &Value) {
             .collect::<Vec<_>>(),
         blocked
     );
-}
-
-fn state_files(repo: &str) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u8>> {
-    fn read(
-        path: &std::path::Path,
-        files: &mut std::collections::BTreeMap<std::path::PathBuf, Vec<u8>>,
-    ) {
-        for entry in std::fs::read_dir(path).unwrap() {
-            let path = entry.unwrap().path();
-            if path.is_dir() {
-                read(&path, files);
-            } else {
-                files.insert(path.clone(), std::fs::read(path).unwrap());
-            }
-        }
-    }
-    let mut files = std::collections::BTreeMap::new();
-    read(
-        &std::path::Path::new(repo).join(".provenance/state"),
-        &mut files,
-    );
-    files
 }

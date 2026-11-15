@@ -269,6 +269,7 @@ fn typed_omission_refuses_enrolled_deletion() {
         WriteFailure::EnrolledRecordDeletionConflict {
             record_kind: NodeType::Source,
             record_id,
+            ..
         } if record_id == records[0].1
     ));
     assert_eq!(
