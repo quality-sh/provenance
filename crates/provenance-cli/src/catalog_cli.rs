@@ -141,14 +141,10 @@ pub async fn dispatch_target(
     if writes_statement {
         statement_warning::print_if_rule_one_one_did_not_run(&repo.repo);
     }
-    let opened = match &requested {
-        Some(status) => host.open_status_request(route.kind, &target, status, &value).await,
+    let note = match &requested {
+        Some(status) => opened_request(&host, &route, &target, status, &mut value).await,
         None => None,
     };
-    if let Some(opened) = &opened {
-        value["data"]["decision"] = opened.decision.clone();
-        value["meta"]["notes"] = serde_json::json!([opened.note.trim_end()]);
-    }
     let affected = route.definition.registration.review_link.map(|kind| {
         crate::review_link::AffectedReviewRecord {
             kind,
@@ -159,8 +155,8 @@ pub async fn dispatch_target(
     if json {
         crate::output::print_json(&value)?;
     } else {
-        if let Some(opened) = &opened {
-            println!("{}", opened.note);
+        if let Some(note) = &note {
+            println!("{note}");
         }
         println!(
             "{}",
@@ -168,6 +164,24 @@ pub async fn dispatch_target(
         );
     }
     Ok(())
+}
+
+/// The note of the status request that a write of `target` opened, if it
+/// opened one. The result gets the decision state under `data.decision` and
+/// the note under `meta.notes`.
+async fn opened_request(
+    host: &provenance_transport::StatementHost,
+    route: &provenance_transport::porcelain::TargetRoute,
+    target: &str,
+    requested: &str,
+    value: &mut serde_json::Value,
+) -> Option<String> {
+    let opened = host
+        .open_status_request(route.kind, target, requested, value)
+        .await?;
+    value["data"]["decision"] = opened.decision;
+    value["meta"]["notes"] = serde_json::json!([opened.note.trim_end()]);
+    Some(opened.note)
 }
 
 fn failure_with_guidance(
