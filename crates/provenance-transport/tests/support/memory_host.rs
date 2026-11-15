@@ -80,9 +80,20 @@ pub async fn memory_repository(
     root: &Utf8Path,
 ) -> (Opened, Arc<MemoryStateStorage>) {
     let settings = Settings::load(&folder.layout).unwrap();
-    let identity =
-        RepositoryIdentity::new(root.to_owned(), ScopeId::new("default").unwrap(), settings);
-    let storage = Arc::new(MemoryStateStorage::new(state(folder)));
+    over_memory(root, "default", settings, state(folder)).await
+}
+
+/// A repository of `scope` over memory storage that holds `state`, at the
+/// working tree `root`, which need not exist, with an `SQLite` read
+/// database in memory behind the contract's wrapper.
+pub async fn over_memory(
+    root: &Utf8Path,
+    scope: &str,
+    settings: Settings,
+    state: BTreeMap<StateKey, Vec<u8>>,
+) -> (Opened, Arc<MemoryStateStorage>) {
+    let identity = RepositoryIdentity::new(root.to_owned(), ScopeId::new(scope).unwrap(), settings);
+    let storage = Arc::new(MemoryStateStorage::new(state));
     let repository = Opened::with_storage(
         identity,
         storage.clone(),

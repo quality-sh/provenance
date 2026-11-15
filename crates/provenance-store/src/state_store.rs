@@ -104,18 +104,28 @@ impl StateStore {
 
     /// The committed file versions that the history reads of this store
     /// read: the ones that the repository was given, or else the Git
-    /// history of the layout root.
-    #[cfg(feature = "host")]
+    /// history of the layout root. Without `host` a repository that was
+    /// given none has no committed history, as a layout root that is not a
+    /// Git work tree has none, so its history lists the saved version only.
     pub(crate) fn file_versions(&self) -> std::sync::Arc<dyn crate::review::history::FileVersions> {
-        self.identity
+        let given = self
+            .identity
             .as_ref()
             .and_then(RepositoryIdentity::file_versions)
-            .cloned()
-            .unwrap_or_else(|| {
+            .cloned();
+        #[cfg(feature = "host")]
+        let git = || {
+            Some(
                 std::sync::Arc::new(crate::review::history::GitFileVersions::new(
                     self.layout.root().to_owned(),
-                ))
-            })
+                )) as _,
+            )
+        };
+        #[cfg(not(feature = "host"))]
+        let git = || None;
+        given
+            .or_else(git)
+            .unwrap_or_else(|| std::sync::Arc::new(crate::review::history::NoFileVersions) as _)
     }
 
     /// The clock that the writes of this store read: the one of the

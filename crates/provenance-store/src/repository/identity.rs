@@ -135,8 +135,8 @@ impl RepositoryIdentity {
     }
 
     /// This identity with the committed file versions that record history
-    /// reads. An identity with none reads the Git history of its working
-    /// tree.
+    /// reads. With `host` an identity with none reads the Git history of its
+    /// working tree; without it, one with none has no committed history.
     #[must_use]
     pub fn with_file_versions(mut self, versions: Arc<dyn FileVersions>) -> Self {
         self.file_versions = Some(versions);
@@ -145,7 +145,6 @@ impl RepositoryIdentity {
 
     /// The committed file versions that record history reads, if the
     /// repository has its own.
-    #[cfg(feature = "host")]
     pub(crate) fn file_versions(&self) -> Option<&Arc<dyn FileVersions>> {
         self.file_versions.as_ref()
     }

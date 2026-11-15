@@ -92,21 +92,20 @@ impl ProvenanceLayout {
     }
 }
 
-pub fn locate_repo_root(start: &Utf8Path) -> anyhow::Result<Utf8PathBuf> {
-    for candidate in start.ancestors() {
-        if candidate.join(".git").exists()
-            || candidate
-                .join(".provenance")
-                .join("state")
-                .join("manifest.json")
-                .exists()
-        {
-            return Ok(candidate.to_path_buf());
-        }
-    }
-    Err(crate::refusal::fault!(
-        "could not locate repository root from {start}"
-    ))
+/// The project that holds `directory`.
+///
+/// The project is the nearest of `directory` and its ancestors with a manifest
+/// file or a `.git`. A repository open with no root and a refusal of a file
+/// that no store holds both take the project from this rule.
+pub fn enclosing_project(directory: &Utf8Path) -> Option<&Utf8Path> {
+    directory.ancestors().find(|ancestor| {
+        ancestor
+            .join(".provenance")
+            .join("state")
+            .join("manifest.json")
+            .is_file()
+            || ancestor.join(".git").exists()
+    })
 }
 
 #[derive(Debug)]

@@ -1,9 +1,8 @@
-use std::{
-    fs::OpenOptions,
-    path::{Path, PathBuf},
-};
+//! The format of a dictionary index file: its name, its bytes and the checks
+//! of an index that a reader gives back. The file I/O is in `provenance-store`.
 
-use fs2::FileExt;
+use std::path::{Path, PathBuf};
+
 use provenance_macros::rule;
 
 use super::{digest, DictionaryImport, DictionaryImportIdentity, DICTIONARY_EXTRACTOR_VERSION};
@@ -60,95 +59,71 @@ impl std::fmt::Display for DictionaryIndexError {
 
 impl std::error::Error for DictionaryIndexError {}
 
-/// Stores one import as a reusable index file named by its identity.
-#[rule("rule_ste_dictionary_import_reuse")]
-pub fn store_dictionary_index(
-    import: &DictionaryImport,
-    directory: &Path,
-) -> Result<PathBuf, DictionaryIndexError> {
-    let path = index_path(directory, &import.identity);
-    std::fs::create_dir_all(directory).map_err(|error| io_error(directory, &error))?;
-    let lock_path = path.with_extension("lock");
-    let lock = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(&lock_path)
-        .map_err(|error| io_error(&lock_path, &error))?;
-    FileExt::lock_exclusive(&lock).map_err(|error| io_error(&lock_path, &error))?;
-    match load_dictionary_index(directory, &import.identity) {
-        Ok(stored) if stored == *import => return Ok(path),
-        Ok(_) => std::fs::remove_file(&path).map_err(|error| io_error(&path, &error))?,
-        Err(DictionaryIndexError::NotFound { .. }) => {}
-        Err(_) => std::fs::remove_file(&path).map_err(|error| io_error(&path, &error))?,
-    }
-    let contents = serde_json::to_vec(import).map_err(|error| DictionaryIndexError::Io {
-        path: path.clone(),
-        message: error.to_string(),
-    })?;
-    let staged = path.with_extension("partial");
-    std::fs::write(&staged, contents).map_err(|error| io_error(&staged, &error))?;
-    std::fs::rename(&staged, &path).map_err(|error| io_error(&path, &error))?;
-    Ok(path)
+/// The name of the index file of `identity` in the index directory.
+pub fn dictionary_index_file_name(identity: &DictionaryImportIdentity) -> String {
+    file_name(
+        identity.issue,
+        &identity.source_sha256,
+        &identity.extractor_version,
+    )
 }
 
-/// Loads a stored index only when it matches the requested identity.
-pub fn load_dictionary_index(
-    directory: &Path,
-    identity: &DictionaryImportIdentity,
+/// The name of the index file of an import of the PDF `source` with this
+/// extractor.
+pub fn dictionary_index_file_name_for_source(source: &[u8]) -> String {
+    file_name(
+        StandardIssue::Nine,
+        &digest::source_digest(source),
+        DICTIONARY_EXTRACTOR_VERSION,
+    )
+}
+
+/// The bytes of the index file of `import`.
+pub fn encode_dictionary_index(import: &DictionaryImport) -> serde_json::Result<Vec<u8>> {
+    serde_json::to_vec(import)
+}
+
+/// The import in the index file `contents` at `path`, only when it matches
+/// the requested identity.
+pub fn decode_dictionary_index(
+    contents: &[u8],
+    requested: &DictionaryImportIdentity,
+    path: &Path,
 ) -> Result<DictionaryImport, DictionaryIndexError> {
-    let path = index_path(directory, identity);
-    let import = read_index(&path)?;
-    verify_index(&import, identity, &path)?;
+    let import = parse_index(contents, path)?;
+    verify_index(&import, requested, path)?;
     Ok(import)
 }
 
-/// Loads a validated index for these PDF bytes and the current extractor.
-pub fn load_dictionary_index_for_source(
-    directory: &Path,
+/// The import in the index file `contents` at `path`, only when it is a
+/// complete import of the PDF `source` with this extractor.
+pub fn decode_dictionary_index_for_source(
+    contents: &[u8],
     source: &[u8],
+    path: &Path,
 ) -> Result<DictionaryImport, DictionaryIndexError> {
-    let source_sha256 = digest::source_digest(source);
-    let path = index_path_parts(
-        directory,
-        StandardIssue::Nine,
-        &source_sha256,
-        DICTIONARY_EXTRACTOR_VERSION,
-    );
-    let import = read_index(&path)?;
+    let import = parse_index(contents, path)?;
     let requested = DictionaryImportIdentity {
         issue: StandardIssue::Nine,
-        source_sha256,
+        source_sha256: digest::source_digest(source),
         data_sha256: import.identity.data_sha256.clone(),
         extractor_version: DICTIONARY_EXTRACTOR_VERSION.to_owned(),
     };
-    verify_index(&import, &requested, &path)?;
+    verify_index(&import, &requested, path)?;
     super::validate_entries(&import.entries).map_err(|error| {
         DictionaryIndexError::InvalidStructure {
-            path,
+            path: path.to_path_buf(),
             message: error.to_string(),
         }
     })?;
     Ok(import)
 }
 
-fn read_index(path: &Path) -> Result<DictionaryImport, DictionaryIndexError> {
-    let contents = match std::fs::read(path) {
-        Ok(contents) => contents,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Err(DictionaryIndexError::NotFound {
-                path: path.to_path_buf(),
-            });
-        }
-        Err(error) => return Err(io_error(path, &error)),
-    };
-    let import: DictionaryImport =
-        serde_json::from_slice(&contents).map_err(|error| DictionaryIndexError::Malformed {
-            path: path.to_path_buf(),
-            message: error.to_string(),
-        })?;
-    Ok(import)
+fn parse_index(contents: &[u8], path: &Path) -> Result<DictionaryImport, DictionaryIndexError> {
+    serde_json::from_slice(contents).map_err(|error| DictionaryIndexError::Malformed {
+        path: path.to_path_buf(),
+        message: error.to_string(),
+    })
 }
 
 /// Rejects a stored index whose content does not match its recorded digest.
@@ -171,265 +146,14 @@ fn verify_index(
     Ok(())
 }
 
-fn index_path(directory: &Path, identity: &DictionaryImportIdentity) -> PathBuf {
-    index_path_parts(
-        directory,
-        identity.issue,
-        &identity.source_sha256,
-        &identity.extractor_version,
-    )
-}
-
-fn index_path_parts(
-    directory: &Path,
-    issue: StandardIssue,
-    source_sha256: &str,
-    extractor_version: &str,
-) -> PathBuf {
-    directory.join(format!(
+fn file_name(issue: StandardIssue, source_sha256: &str, extractor_version: &str) -> String {
+    format!(
         "issue-{}-{}-{}.json",
         u8::from(issue),
         source_sha256,
         extractor_version
-    ))
-}
-
-fn io_error(path: &Path, error: &std::io::Error) -> DictionaryIndexError {
-    DictionaryIndexError::Io {
-        path: path.to_path_buf(),
-        message: error.to_string(),
-    }
+    )
 }
 
 #[cfg(test)]
-mod tests {
-    use std::path::PathBuf;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
-    use provenance_macros::verifies;
-
-    use super::super::{digest, DictionaryEntry, DictionaryStatus, PartOfSpeech};
-    use super::{load_dictionary_index, store_dictionary_index, DictionaryIndexError};
-
-    static DIRECTORY_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
-    fn scratch_directory() -> PathBuf {
-        let ordinal = DIRECTORY_COUNTER.fetch_add(1, Ordering::Relaxed);
-        std::env::temp_dir().join(format!(
-            "provenance-ste100-index-{}-{ordinal}",
-            std::process::id()
-        ))
-    }
-
-    fn fixture_import() -> super::DictionaryImport {
-        let entries = vec![
-            DictionaryEntry {
-                headword: "AAWORD".to_owned(),
-                word_forms: vec!["AAWORD".to_owned()],
-                part_of_speech: PartOfSpeech::Noun,
-                status: DictionaryStatus::Approved,
-                approved_meaning_or_alternatives: "A meaning".to_owned(),
-                ste_example: "USE THE ITEM.".to_owned(),
-                non_ste_example: None,
-            },
-            DictionaryEntry {
-                headword: "bword".to_owned(),
-                word_forms: vec!["bword".to_owned()],
-                part_of_speech: PartOfSpeech::Verb,
-                status: DictionaryStatus::Unapproved,
-                approved_meaning_or_alternatives: "USE (v)".to_owned(),
-                ste_example: "USE THE ITEM.".to_owned(),
-                non_ste_example: Some("Bword the item.".to_owned()),
-            },
-        ];
-        super::DictionaryImport {
-            identity: digest::identity(b"synthetic source bytes", &entries),
-            entries,
-        }
-    }
-
-    #[test]
-    #[verifies("rule_ste_dictionary_import_reuse", examples)]
-    fn a_stored_index_loads_again_without_the_source_document() {
-        let directory = scratch_directory();
-        let import = fixture_import();
-
-        let path = store_dictionary_index(&import, &directory).expect("store the index");
-        let loaded = load_dictionary_index(&directory, &import.identity).expect("load the index");
-
-        assert!(path.starts_with(&directory));
-        assert_eq!(loaded, import);
-        std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
-    }
-
-    #[test]
-    #[verifies("rule_ste_dictionary_import_reuse", examples)]
-    fn storing_an_identical_index_again_is_idempotent() {
-        let directory = scratch_directory();
-        let import = fixture_import();
-
-        let first = store_dictionary_index(&import, &directory).expect("store the first index");
-        let second = store_dictionary_index(&import, &directory).expect("store the index again");
-
-        assert_eq!(second, first);
-        assert_eq!(
-            load_dictionary_index(&directory, &import.identity).expect("load the index"),
-            import
-        );
-        std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
-    }
-
-    #[test]
-    #[verifies("rule_ste_dictionary_index_digest_verification", examples)]
-    fn an_edited_index_file_fails_closed() {
-        let directory = scratch_directory();
-        let import = fixture_import();
-
-        let path = store_dictionary_index(&import, &directory).expect("store the index");
-        let stored = std::fs::read_to_string(&path).expect("read the index file");
-        let edited = stored.replace("AAWORD", "ABWORD");
-        assert_ne!(stored, edited, "the edit must change the file");
-        std::fs::write(&path, edited).expect("edit the index file");
-
-        let error = load_dictionary_index(&directory, &import.identity)
-            .expect_err("an edited index must fail closed");
-
-        assert!(
-            matches!(error, DictionaryIndexError::DigestMismatch { .. }),
-            "unexpected error: {error:?}"
-        );
-        std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
-    }
-
-    #[test]
-    #[verifies("rule_ste_dictionary_index_digest_verification", examples)]
-    fn an_index_for_a_different_identity_fails_closed() {
-        let directory = scratch_directory();
-        let import = fixture_import();
-
-        store_dictionary_index(&import, &directory).expect("store the index");
-        let mut other = import.identity;
-        other.extractor_version = format!("{}-other", other.extractor_version);
-
-        let error = load_dictionary_index(&directory, &other)
-            .expect_err("a different identity must not load this index");
-
-        assert!(
-            matches!(error, DictionaryIndexError::NotFound { .. }),
-            "unexpected error: {error:?}"
-        );
-        std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
-    }
-
-    #[test]
-    #[verifies("rule_ste_dictionary_index_digest_verification", examples)]
-    fn an_index_file_with_a_different_recorded_identity_fails_closed() {
-        let directory = scratch_directory();
-        let import = fixture_import();
-        let mut other = import.identity.clone();
-        other.extractor_version = format!("{}-other", other.extractor_version);
-
-        let path = store_dictionary_index(&import, &directory).expect("store the index");
-        let other_path = super::index_path(&directory, &other);
-        std::fs::rename(&path, &other_path).expect("move the index file");
-
-        let error = load_dictionary_index(&directory, &other)
-            .expect_err("a moved index must not satisfy another identity");
-
-        assert!(
-            matches!(error, DictionaryIndexError::IdentityMismatch { .. }),
-            "unexpected error: {error:?}"
-        );
-        std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
-    }
-
-    #[test]
-    fn a_missing_index_reports_not_found() {
-        let directory = scratch_directory();
-        let import = fixture_import();
-
-        let error =
-            load_dictionary_index(&directory, &import.identity).expect_err("nothing was stored");
-
-        assert!(
-            matches!(error, DictionaryIndexError::NotFound { .. }),
-            "unexpected error: {error:?}"
-        );
-    }
-
-    #[test]
-    #[verifies("rule_ste_dictionary_structure_validation", examples)]
-    fn a_source_match_does_not_accept_an_incomplete_index() {
-        let directory = scratch_directory();
-        let import = fixture_import();
-        store_dictionary_index(&import, &directory).expect("store the index");
-
-        let error = super::load_dictionary_index_for_source(&directory, b"synthetic source bytes")
-            .expect_err("an incomplete index must not load for a new project");
-
-        assert!(matches!(
-            error,
-            DictionaryIndexError::InvalidStructure { .. }
-        ));
-        std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
-    }
-
-    /// The dictionary status gives the first five texts as its load problem, and a strict
-    /// check gives them in its failure. No command gives the text of an incomplete index,
-    /// because onboarding imports the PDF when the index does not load. A caller of
-    /// `load_dictionary_index_for_source` gets that text. No Rule states the texts, so this
-    /// test has no Rule binding. It makes the cause of each index fault and shows the text of
-    /// that fault.
-    #[test]
-    fn each_index_fault_gives_its_diagnostic() {
-        let directory = scratch_directory();
-        let import = fixture_import();
-        let path = super::index_path(&directory, &import.identity);
-        let at = path.display();
-        let load = || {
-            load_dictionary_index(&directory, &import.identity)
-                .expect_err("the index has a fault")
-                .to_string()
-        };
-
-        assert_eq!(load(), format!("no index file at {at}"));
-
-        std::fs::create_dir_all(&path).expect("put a directory at the index path");
-        let access = load();
-        let cause = access.strip_prefix(&format!("index file access at {at}: "));
-        assert!(cause.is_some_and(|cause| !cause.is_empty()), "{access}");
-        std::fs::remove_dir(&path).expect("remove the directory at the index path");
-
-        std::fs::write(&path, "{").expect("write a file that is not a JSON document");
-        let malformed = load();
-        let cause = malformed.strip_prefix(&format!("malformed index file at {at}: "));
-        assert!(cause.is_some_and(|cause| !cause.is_empty()), "{malformed}");
-
-        let mut other = fixture_import();
-        other.identity.extractor_version.push_str("-other");
-        let other_path = store_dictionary_index(&other, &directory).expect("store another index");
-        std::fs::copy(&other_path, &path).expect("put the other index at the index path");
-        assert_eq!(
-            load(),
-            format!("the index file at {at} records a different import identity")
-        );
-
-        store_dictionary_index(&import, &directory).expect("store the index");
-        let stored = std::fs::read_to_string(&path).expect("read the index file");
-        std::fs::write(&path, stored.replace("AAWORD", "ABWORD")).expect("edit the index file");
-        assert_eq!(
-            load(),
-            format!("the index file at {at} does not match its recorded data digest")
-        );
-
-        store_dictionary_index(&import, &directory).expect("store the index again");
-        let rows = super::super::validate_entries(&import.entries).expect_err("two rows");
-        let error = super::load_dictionary_index_for_source(&directory, b"synthetic source bytes")
-            .expect_err("an incomplete index must not load");
-        assert_eq!(
-            error.to_string(),
-            format!("the index file at {at} has invalid dictionary structure: {rows}")
-        );
-        std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
-    }
-}
+mod tests;
