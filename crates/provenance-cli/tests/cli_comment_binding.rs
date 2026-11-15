@@ -134,7 +134,7 @@ fn a_rust_binding_names_the_function_or_type_below_it() {
 
     let expected = named(&[
         ("rule_struct", Some("Payroll")),
-        ("rule_impl_block", Some("pays")),
+        ("rule_impl_block", None),
         ("rule_enum", Some("Shift")),
         ("rule_generic_struct", Some("Ledger")),
         ("rule_const_fn", Some("limit")),
@@ -143,6 +143,13 @@ fn a_rust_binding_names_the_function_or_type_below_it() {
         ("rule_alias", Some("Hours")),
         ("rule_attribute_enum", Some("Kind")),
         ("rule_attribute_struct", Some("Entry")),
+        ("rule_attribute_impl", None),
+        ("rule_const_then_doc", None),
+        ("rule_static", None),
+        ("rule_mod", None),
+        ("rule_long_derive", Some("Wide")),
+        ("rule_attribute_long_derive", Some("WideEntry")),
+        ("rule_raw_identifier", Some("match")),
         ("rule_end", None),
     ]);
     assert_eq!(item_names(&report), expected, "{report}");
@@ -158,6 +165,10 @@ fn a_python_binding_names_the_function_or_class_below_it() {
         ("rule_method", Some("pays")),
         ("rule_decorated_async", Some("test_pays")),
         ("rule_decorated_class", Some("Ledger")),
+        ("rule_assignment", None),
+        ("rule_if_block", None),
+        ("rule_long_decorator", Some("test_long")),
+        ("rule_decorator", Some("pays_holiday")),
     ]);
     assert_eq!(item_names(&report), expected, "{report}");
 }
@@ -172,6 +183,8 @@ fn a_go_binding_names_the_function_or_type_below_it() {
         ("rule_method", Some("Pays")),
         ("rule_interface", Some("Rates")),
         ("rule_generic_func", Some("Max")),
+        ("rule_type_group", None),
+        ("rule_var", None),
     ]);
     assert_eq!(item_names(&report), expected, "{report}");
 }
@@ -183,6 +196,8 @@ fn a_java_binding_names_the_method_or_type_below_it() {
 
     let expected = named(&[
         ("rule_final_class", Some("Payroll")),
+        ("rule_field", None),
+        ("rule_long_annotation", Some("cast")),
         ("rule_static_method", Some("paysOvertime")),
         ("rule_annotated_test", Some("paysOvertimeExamples")),
         ("rule_wrapped_generic", Some("max")),
@@ -203,6 +218,8 @@ fn a_typescript_binding_names_the_exported_declaration_below_it() {
         ("rule_alias", Some("Hours")),
         ("rule_default_class", Some("Ledger")),
         ("rule_decorated_method", Some("total")),
+        ("rule_arrow_property", None),
+        ("rule_describe", None),
         ("rule_async_function", Some("paysOvertime")),
         ("rule_const_enum", Some("Shift")),
         ("rule_abstract_class", Some("Base")),
@@ -219,7 +236,9 @@ fn a_javascript_binding_names_the_exported_declaration_below_it() {
         ("rule_class", Some("Token")),
         ("rule_default_function", Some("pays")),
         ("rule_generator", Some("shifts")),
-        ("rule_test_callback", Some("overtimeExamples")),
+        ("rule_test_callback", None),
+        ("rule_arrow_test", None),
+        ("rule_anonymous_default", None),
     ]);
     assert_eq!(item_names(&report), expected, "{report}");
 }

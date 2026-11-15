@@ -18,3 +18,35 @@ async def test_pays(hours):
 @dataclass(frozen=True)
 class Ledger:
     entries: list
+
+
+# @provenance rule: rule_assignment
+LIMIT = 38
+
+
+def after_assign():
+    pass
+
+
+# @provenance rule: rule_if_block
+if True:
+    def inner():
+        pass
+
+
+# @provenance rule: rule_long_decorator
+@pytest.mark.parametrize(
+    "hours",
+    [
+        39,
+        40,
+    ],
+)
+def test_long(hours):
+    assert hours > 38
+
+
+@rule("rule_decorator")
+@cached
+def pays_holiday():
+    return True

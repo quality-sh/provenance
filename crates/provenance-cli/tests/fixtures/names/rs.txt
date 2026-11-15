@@ -55,4 +55,48 @@ pub enum Kind {
 #[rule("rule_attribute_struct")]
 pub struct Entry;
 
+#[rule("rule_attribute_impl")]
+impl Payroll {
+    fn other(&self) {}
+}
+
+// @provenance rule: rule_const_then_doc
+pub const LIMIT: u32 = 38;
+
+/// The pay rule.
+///
+/// It reads the hours.
+pub fn unrelated() {}
+
+// @provenance rule: rule_static
+pub static NAME: &str = "payroll";
+
+// @provenance rule: rule_mod
+mod tests {
+    fn helper() {}
+}
+
+// @provenance rule: rule_long_derive
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+)]
+pub struct Wide;
+
+#[rule("rule_attribute_long_derive")]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+)]
+pub struct WideEntry;
+
+// @provenance rule: rule_raw_identifier
+pub fn r#match() {}
+
 // @provenance rule: rule_end

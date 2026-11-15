@@ -7,34 +7,8 @@ use provenance_macros::verifies;
 use serde_json::Value;
 use std::path::Path;
 
+use crate::stale_repo::{commit, git, write};
 use crate::support::record_review::archive_rule;
-
-fn git(repo: &Path, args: &[&str]) -> String {
-    let output = provenance_store::git_process::git()
-        .arg("-C")
-        .arg(repo)
-        .args(args)
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "git {args:?} failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8(output.stdout).unwrap().trim().to_string()
-}
-
-fn write(repo: &Path, relative: &str, contents: &str) {
-    let path = repo.join(relative);
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::write(path, contents).unwrap();
-}
-
-fn commit(repo: &Path, message: &str) -> String {
-    git(repo, &["add", "."]);
-    git(repo, &["commit", "-q", "-m", message]);
-    git(repo, &["rev-parse", "HEAD"])
-}
 
 fn provenance(repo: &Path) -> Command {
     let mut command = Command::cargo_bin("provenance").unwrap();
@@ -97,6 +71,23 @@ fn repo_with_inactive_rules() -> tempfile::TempDir {
     }
     archive_rule(repo.to_str().unwrap(), "rule_archived", &"a".repeat(40));
     directory
+}
+
+/// The `report build` envelope of the change from `base` to `head`.
+fn report_build(repo: &Path, base: &str, head: &str) -> Vec<u8> {
+    let output = provenance(repo)
+        .args(["report", "build", "--repo"])
+        .arg(repo)
+        .args(["--base", base, "--head", head])
+        .args(["--repository", "example/payroll"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    output.stdout
 }
 
 /// A test in each language that the scanner reads, by file extension.
@@ -187,17 +178,30 @@ fn a_test_comment_on_an_inactive_rule_is_a_verification_in_each_language() {
     }
     let head = commit(repo, "bindings to inactive Rules");
 
+    let envelope: Value = serde_json::from_slice(&report_build(repo, &base, &head)).unwrap();
+
+    for rule in ["rule_deprecated", "rule_archived"] {
+        assert_eq!(sites(&envelope, rule), expected(rule), "{rule}");
+    }
+}
+
+#[test]
+#[verifies("rule_report_inactive_test_site_is_a_verification", examples)]
+fn the_rendered_report_shows_a_test_comment_on_an_archived_rule_as_a_verification() {
+    let directory = repo_with_inactive_rules();
+    let repo = directory.path();
+    let base = commit(repo, "inactive Rules");
+    let test = "# @provenance verification: examples\n\
+                # @provenance rule: rule_archived\n\
+                def test_keeps_each_record():\n    pass\n";
+    write(repo, "tests/test_records.py", test);
+    let head = commit(repo, "a test of an archived Rule");
+    let envelope = repo.join("envelope.json");
+    std::fs::write(&envelope, report_build(repo, &base, &head)).unwrap();
+
     let output = provenance(repo)
-        .args(["report", "build", "--repo"])
-        .arg(repo)
-        .args([
-            "--base",
-            &base,
-            "--head",
-            &head,
-            "--repository",
-            "example/payroll",
-        ])
+        .args(["report", "render", "--input"])
+        .arg(&envelope)
         .output()
         .unwrap();
     assert!(
@@ -205,9 +209,14 @@ fn a_test_comment_on_an_inactive_rule_is_a_verification_in_each_language() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let envelope: Value = serde_json::from_slice(&output.stdout).unwrap();
-
-    for rule in ["rule_deprecated", "rule_archived"] {
-        assert_eq!(sites(&envelope, rule), expected(rule), "{rule}");
-    }
+    let markdown = String::from_utf8(output.stdout).unwrap();
+    let sites = markdown
+        .lines()
+        .filter(|line| line.starts_with("- Current "))
+        .collect::<Vec<_>>();
+    let link = format!("https://github.com/example/payroll/blob/{head}/tests/test_records.py#L1");
+    let expected = format!(
+        "- Current verification: [`tests/test_records.py:1`]({link}) (method `examples`)."
+    );
+    assert_eq!(sites, [expected.as_str()], "{markdown}");
 }

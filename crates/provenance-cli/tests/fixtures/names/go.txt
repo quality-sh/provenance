@@ -19,3 +19,15 @@ type Rates interface {
 func Max[T int | float64](items []T) T {
 	return items[0]
 }
+
+// @provenance rule: rule_type_group
+type (
+	Ledger struct{}
+)
+
+func Later() {}
+
+// @provenance rule: rule_var
+var Limit = 38
+
+func AfterVar() {}

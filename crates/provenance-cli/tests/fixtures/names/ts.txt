@@ -16,7 +16,18 @@ export default class Ledger {
   public async total(): Promise<number> {
     return 0;
   }
+
+  // @provenance rule: rule_arrow_property
+  total = () => {
+    return 1;
+  };
 }
+
+// @provenance verification: examples
+// @provenance rule: rule_describe
+describe("payroll", () => {
+  it("pays", () => {});
+});
 
 // @provenance rule: rule_async_function
 export async function paysOvertime(hours: number): Promise<boolean> {
