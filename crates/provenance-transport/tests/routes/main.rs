@@ -91,6 +91,8 @@ mod search_discovery;
 mod target_config;
 #[path = "../typed_spec_discussion_deletion.rs"]
 mod typed_spec_discussion_deletion;
+#[path = "../unadvertised_route_refusals.rs"]
+mod unadvertised_route_refusals;
 #[path = "../verification_runs_cache_lines.rs"]
 mod verification_runs_cache_lines;
 #[path = "../wire.rs"]
