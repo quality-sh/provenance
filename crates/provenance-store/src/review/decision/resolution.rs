@@ -12,7 +12,7 @@ use crate::{
 };
 use provenance_core::{
     review::{CycleEntry, CycleFact},
-    CanonicalArtifactType, DispositionDecision, NodeType, StableId, ThreadParent,
+    DispositionDecision, NodeType, StableId, ThreadParent,
 };
 use provenance_macros::rule;
 
@@ -186,15 +186,7 @@ fn validate_decision_input(
         ));
     }
     if let Some(artifact) = &input.canonical_artifact {
-        let artifact_kind = match artifact.artifact_type {
-            CanonicalArtifactType::Source => NodeType::Source,
-            CanonicalArtifactType::Requirement => NodeType::Requirement,
-            CanonicalArtifactType::Resolution => NodeType::Resolution,
-            CanonicalArtifactType::Rule => NodeType::Rule,
-            CanonicalArtifactType::Topic => NodeType::Topic,
-            CanonicalArtifactType::Question => NodeType::Question,
-        };
-        if artifact_kind != kind || artifact.artifact_id != *record_id {
+        if NodeType::from(artifact.artifact_type) != kind || artifact.artifact_id != *record_id {
             return Err(crate::refusal::refuse!(
                 InvalidUpdate,
                 "the approval artifact is not the reviewed record"

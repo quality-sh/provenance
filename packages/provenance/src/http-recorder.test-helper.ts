@@ -57,7 +57,7 @@ export async function recordingHost(responses: Readonly<Record<string, unknown>>
         const input = body.data as { declared_by: string };
         result = {
           declared_by: input.declared_by, created: 0, updated: 0,
-          moved: 0, deleted: 0, conflicts: 0, unchanged: 0, resources: [],
+          moved: 0, deleted: 0, refused: 0, conflicts: 0, unchanged: 0, resources: [],
           ...(command === "plan" ? { affected_rules: [] } : {}),
         };
       } else if (command === "begin-verification") {

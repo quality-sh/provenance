@@ -216,6 +216,32 @@ test('declared statuses cover every live failure variant status', () => {
   assert.ok(documentGrammarErrors(doc).some(error => /file_unavailable.*503|503.*file_unavailable/.test(error)));
 });
 
+// A check of the generator itself, with no Rule: a failure variant can carry a
+// union tagged `kind` in its payload, as the plan entries of a typed spec do.
+test('a kind union in the payload of a failure variant is not a failure variant', () => {
+  const doc = document([{ path: '/requirements', method: 'post' }]);
+  doc.paths['/requirements'].post.responses['400'].content['application/json'].schema = {
+    properties: { error: { $ref: '#/components/schemas/WriteFailure' } },
+    required: ['error', 'meta'],
+  };
+  doc.components.schemas.WriteFailure = {
+    oneOf: [{
+      properties: {
+        kind: { const: 'ownership_conflict' },
+        conflicts: { items: { properties: { refusal: { $ref: '#/components/schemas/Refusal' } } } },
+      },
+    }],
+  };
+  doc.components.schemas.Refusal = {
+    oneOf: [
+      { properties: { kind: { const: 'review_submission' } } },
+      { properties: { kind: { const: 'disposition' } } },
+    ],
+  };
+  const errors = documentGrammarErrors(doc).filter(error => /failure variant/.test(error));
+  assert.deepEqual(errors, []);
+});
+
 test('Discussion refusal statuses match the write runtime', () => {
   const doc = document([{ path: '/requirements/{id}/discussions', method: 'post' }]);
   const response = doc.paths['/requirements/{id}/discussions'].post.responses['400'];

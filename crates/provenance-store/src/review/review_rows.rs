@@ -105,6 +105,19 @@ impl CycleFacts<'_> {
             .map_err(|fault| super::review_row_refusal::refusal(self.rows, fault))
     }
 
+    /// The kind and the ID of the record of each review submission line, in
+    /// line order. A submission whose ID is on lines that disagree counts.
+    pub(super) fn submitted_records(&self) -> impl Iterator<Item = (NodeType, &StableId)> + '_ {
+        self.rows
+            .proposals
+            .iter()
+            .filter(|proposal| self.is_submission(&proposal.id))
+            .map(|submission| {
+                let target = &submission.traceability.target;
+                (NodeType::from(target.artifact_type), &target.artifact_id)
+            })
+    }
+
     /// Whether a Proposal is a review submission.
     #[cfg_attr(not(feature = "host"), allow(dead_code))]
     pub(super) fn is_submission(&self, proposal: &StableId) -> bool {
