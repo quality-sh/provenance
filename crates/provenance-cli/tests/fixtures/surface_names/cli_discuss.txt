@@ -18,5 +18,5 @@ Options:
       --role <role>                
   -h, --help                       Print help
 
---actor: The actor of the write. It is optional for a write that makes or changes a Requirement and for a write that starts or replies to a Discussion. A write that gives no actor records the actor `authoring`.
+Option --actor: The actor of the write. It is optional for a write that makes or changes a Requirement and for a write that starts or replies to a Discussion. A write that gives no actor records the actor `authoring`.
 

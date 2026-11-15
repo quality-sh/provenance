@@ -89,11 +89,12 @@ fn description(action: crate::invocation::grammar::TargetVerb) -> Option<&'stati
 
 /// The text after the options: one note for each field that the request schema describes,
 /// and then the guidance of the action. A note is not in the row of its option, so a long
-/// description does not move the help of each option to the next line.
+/// description does not move the help of each option to the next line, and a note does not
+/// start with `--`, so it does not read as an option row.
 fn after_help(notes: &BTreeMap<String, String>, guidance: Option<String>) -> Option<String> {
     let notes = notes
         .iter()
-        .map(|(flag, description)| format!("--{flag}: {description}"))
+        .map(|(flag, description)| format!("Option --{flag}: {description}"))
         .collect::<Vec<_>>();
     let notes = (!notes.is_empty()).then(|| notes.join("\n"));
     let parts = notes.into_iter().chain(guidance).collect::<Vec<_>>();
