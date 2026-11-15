@@ -9,6 +9,7 @@
 mod automatic_submissions;
 #[path = "../discussion_support.rs"]
 mod discussion_support;
+use discussion_support::base as review_support;
 #[path = "../native_review_submissions.rs"]
 mod native_review_submissions;
 #[path = "../requirement_review_reads.rs"]
@@ -19,6 +20,8 @@ mod review_cycle_records;
 mod review_history;
 #[path = "../review_history_characterization.rs"]
 mod review_history_characterization;
+#[path = "../review_history_committed_text_errors.rs"]
+mod review_history_committed_text_errors;
 #[path = "../review_history_git.rs"]
 mod review_history_git;
 #[path = "../review_markers.rs"]

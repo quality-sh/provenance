@@ -98,7 +98,7 @@ required-features = ["host", "test-fixture"]
 # tests/<group>/main.rs compiles test files of tests/ as its modules, because
 # each test binary links the full dependency tree. Each other file listed
 # here is a test binary of its own. cli_structure checks that each test file
-# is in one of these targets.
+# is in exactly one of these targets.
 [[test]]
 name = "routes"
 path = "tests/routes/main.rs"
@@ -107,6 +107,12 @@ required-features = ["host"]
 [[test]]
 name = "local_host"
 path = "tests/local_host.rs"
+required-features = ["test-fixture"]
+
+# It sets the home, temporary and working directories of the process.
+[[test]]
+name = "router_port"
+path = "tests/router_port.rs"
 required-features = ["test-fixture"]
 
 # Each test uses the adapters, so each test needs host.

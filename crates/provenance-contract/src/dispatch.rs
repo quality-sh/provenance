@@ -8,26 +8,15 @@ use provenance_core::{
 };
 use provenance_store::operations::{
     catalog::{
-        self as operation, frame_failure, ContextKind, Invoke, Operation, OperationFuture,
-        RequestedContext,
+        self as operation, frame_failure, Invoke, Operation, OperationFuture, RequestedContext,
     },
     family_operations as family,
 };
-use serde::{de::IntoDeserializer as _, Deserialize};
+use serde::de::IntoDeserializer as _;
 use serde_json::Value;
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct DataFreeCall<R> {
-    request: R,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct RepositoryCall<R, C> {
-    context: C,
-    request: R,
-}
+mod call;
+pub use call::decode_call;
 
 struct Entry<H: Invoke> {
     name: &'static str,
@@ -273,36 +262,7 @@ fn invoke_resolved<O: Operation, H: Invoke>(
     host: H,
 ) -> OperationFuture<Value, FailureEnvelope> {
     Box::pin(async move {
-        let (selected, request) = match O::CONTEXT {
-            ContextKind::Repository => {
-                let call: RepositoryCall<
-                    O::Request,
-                    provenance_core::protocol::repository::RepositoryTarget,
-                > = decode::<O, _>(call)?;
-                (
-                    Some(RequestedContext::Repository(call.context)),
-                    call.request,
-                )
-            }
-            ContextKind::Scope => {
-                let call: RepositoryCall<
-                    O::Request,
-                    provenance_core::protocol::repository::RepositoryScope,
-                > = decode::<O, _>(call)?;
-                (Some(RequestedContext::Scope(call.context)), call.request)
-            }
-            ContextKind::Scoped => {
-                let call: RepositoryCall<
-                    O::Request,
-                    provenance_core::protocol::repository::RepositoryContext,
-                > = decode::<O, _>(call)?;
-                (Some(RequestedContext::Scoped(call.context)), call.request)
-            }
-            ContextKind::DataFree => {
-                let call: DataFreeCall<O::Request> = decode::<O, _>(call)?;
-                (None, call.request)
-            }
-        };
+        let (selected, request) = decode_call::<O>(call)?;
         let success = host
             .invoke::<O>(selected, request)
             .await
