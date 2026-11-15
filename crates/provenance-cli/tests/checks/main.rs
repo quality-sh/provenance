@@ -56,6 +56,8 @@ mod cli_stale_typed_implementations;
 mod cli_stale_typed_verifications;
 #[path = "../report_build.rs"]
 mod report_build;
+#[path = "../report_inactive_binding_roles.rs"]
+mod report_inactive_binding_roles;
 #[path = "../report_render_cli.rs"]
 mod report_render_cli;
 #[path = "../report_source_integrity.rs"]

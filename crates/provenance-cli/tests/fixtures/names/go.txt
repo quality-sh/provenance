@@ -1,0 +1,33 @@
+package pay
+
+// @provenance rule: rule_struct
+type Payroll struct {
+	Hours int
+}
+
+// @provenance rule: rule_method
+func (p *Payroll) Pays() bool {
+	return p.Hours > 38
+}
+
+// @provenance rule: rule_interface
+type Rates interface {
+	Rate() int
+}
+
+// @provenance rule: rule_generic_func
+func Max[T int | float64](items []T) T {
+	return items[0]
+}
+
+// @provenance rule: rule_type_group
+type (
+	Ledger struct{}
+)
+
+func Later() {}
+
+// @provenance rule: rule_var
+var Limit = 38
+
+func AfterVar() {}

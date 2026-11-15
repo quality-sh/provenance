@@ -1,0 +1,43 @@
+// @provenance rule: rule_class
+export class Token {}
+
+// @provenance rule: rule_interface
+export interface Shape {
+  area(): number;
+}
+
+// @provenance rule: rule_alias
+export type Hours = number;
+
+// @provenance rule: rule_default_class
+export default class Ledger {
+  // @provenance rule: rule_decorated_method
+  @memoize()
+  public async total(): Promise<number> {
+    return 0;
+  }
+
+  // @provenance rule: rule_arrow_property
+  total = () => {
+    return 1;
+  };
+}
+
+// @provenance verification: examples
+// @provenance rule: rule_describe
+describe("payroll", () => {
+  it("pays", () => {});
+});
+
+// @provenance rule: rule_async_function
+export async function paysOvertime(hours: number): Promise<boolean> {
+  return hours > 38;
+}
+
+// @provenance rule: rule_const_enum
+export const enum Shift {
+  Day,
+}
+
+// @provenance rule: rule_abstract_class
+export abstract class Base {}

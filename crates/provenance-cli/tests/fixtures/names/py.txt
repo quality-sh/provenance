@@ -1,0 +1,52 @@
+# @provenance rule: rule_class
+class Payroll(Base):
+    # @provenance rule: rule_method
+    def pays(self):
+        return True
+
+
+# @provenance verification: examples
+# @provenance rule: rule_decorated_async
+@pytest.mark.parametrize(
+    "hours", [39, 40]
+)
+async def test_pays(hours):
+    assert hours > 38
+
+
+# @provenance rule: rule_decorated_class
+@dataclass(frozen=True)
+class Ledger:
+    entries: list
+
+
+# @provenance rule: rule_assignment
+LIMIT = 38
+
+
+def after_assign():
+    pass
+
+
+# @provenance rule: rule_if_block
+if True:
+    def inner():
+        pass
+
+
+# @provenance rule: rule_long_decorator
+@pytest.mark.parametrize(
+    "hours",
+    [
+        39,
+        40,
+    ],
+)
+def test_long(hours):
+    assert hours > 38
+
+
+@rule("rule_decorator")
+@cached
+def pays_holiday():
+    return True

@@ -1,0 +1,29 @@
+// @provenance rule: rule_class
+export class Token {}
+
+// @provenance rule: rule_default_function
+export default function pays(hours) {
+  return hours > 38;
+}
+
+// @provenance rule: rule_generator
+export function* shifts() {
+  yield 1;
+}
+
+// @provenance verification: examples
+// @provenance rule: rule_test_callback
+test("hours above 38", function overtimeExamples() {
+  expect(pays(39)).toBe(true);
+});
+
+// @provenance verification: examples
+// @provenance rule: rule_arrow_test
+test("hours above 38", () => {
+  expect(pays(39)).toBe(true);
+});
+
+// @provenance rule: rule_anonymous_default
+export default function () {}
+
+export function namedAfter() {}
