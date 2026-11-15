@@ -7,37 +7,72 @@
 
 use provenance_macros::rule;
 
-use super::{token_after, Language};
+use super::{block_comment_state, is_annotation_comment_line, Language};
 
-/// The number of code lines below a binding that the scanner reads. Comment
-/// lines, empty lines, and lines that start an attribute, a decorator, or an
-/// annotation do not count.
-const WINDOW: usize = 6;
+/// The number of code lines, from the first line of a declaration, that can
+/// hold its name. In a script class, the parameter list of a method must also
+/// close in these lines. A declaration that takes more lines has no name.
+const HEADER_LINES: usize = 6;
 
-/// The name of the function or type that the first code lines below a binding
-/// declare, or else the name that the line rule of the language finds.
+/// The name of the declaration that starts on the first code line below a
+/// binding, when it is a function, a method, or a type.
 #[rule("rule_site_item_name_is_the_declaration_below")]
-pub(super) fn item_name(language: Language, following: &[&str]) -> Option<String> {
-    let window = window(language, following);
-    let header = window.join("\n");
-    declaration(language, &tokens(language, &header))
-        .or_else(|| window.iter().find_map(|line| line_name(language, line)))
+pub(super) fn item_name(
+    language: Language,
+    following: &[&str],
+    in_block_comment: bool,
+) -> Option<String> {
+    let mut lines = code_lines(language, following, in_block_comment);
+    let mut tokens = Vec::new();
+    let start = loop {
+        tokens.extend(tokens_of(language, lines.next()?));
+        let start = attributes_end(language, &tokens);
+        if start < tokens.len() {
+            break start;
+        }
+    };
+    for line in lines.take(HEADER_LINES - 1) {
+        tokens.extend(tokens_of(language, line));
+    }
+    declaration(language, &tokens[start..])
 }
 
-fn window<'a>(language: Language, following: &[&'a str]) -> Vec<&'a str> {
-    let mut counted = 0;
-    let mut window = Vec::new();
-    for line in following.iter().map(|line| line.trim()) {
-        if counted == WINDOW {
-            break;
+/// The lines below a binding that are not empty and not comment lines.
+fn code_lines<'a>(
+    language: Language,
+    following: &'a [&'a str],
+    mut in_block_comment: bool,
+) -> impl Iterator<Item = &'a str> + 'a {
+    following.iter().copied().filter(move |line| {
+        let comment = is_annotation_comment_line(language, line, in_block_comment);
+        if language != Language::Python {
+            in_block_comment =
+                block_comment_state(line, in_block_comment, language == Language::Rust);
         }
-        if line.is_empty() || is_comment(language, line) {
-            continue;
-        }
-        counted += usize::from(!line.starts_with("#[") && !line.starts_with('@'));
-        window.push(line);
+        !comment && !line.trim().is_empty()
+    })
+}
+
+/// The index after the attributes, decorators, or annotations at the start
+/// of `tokens`, with their argument lists.
+fn attributes_end(language: Language, tokens: &[&str]) -> usize {
+    let mut index = 0;
+    loop {
+        let next = tokens.get(index + 1).copied();
+        index = match (language, tokens.get(index).copied()) {
+            (Language::Rust, Some("#")) => {
+                let inner = usize::from(next == Some("!"));
+                skip_group(tokens, index + 1 + inner, "[", "]")
+            }
+            (Language::Python | Language::JavaScript | Language::TypeScript, Some("@")) => {
+                skip_annotation(tokens, index + 1)
+            }
+            (Language::Java, Some("@")) if next != Some("interface") => {
+                skip_annotation(tokens, index + 1)
+            }
+            _ => return index,
+        };
     }
-    window
 }
 
 /// The declaration at the start of `tokens`, in the grammar of `language`.
@@ -51,52 +86,13 @@ fn declaration(language: Language, tokens: &[&str]) -> Option<String> {
     }
 }
 
-/// The name that one line gives when the code below a binding starts with no
-/// declaration: the word after `fn`, `def`, or `func`; in JavaScript and
-/// TypeScript the word after `function`, `const`, `let`, or `var`, and else,
-/// as in Java, the word after the first space.
-fn line_name(language: Language, line: &str) -> Option<String> {
-    let marker = match language {
-        Language::Rust => "fn ",
-        Language::Python => "def ",
-        Language::Go => "func ",
-        Language::JavaScript | Language::TypeScript | Language::Java => " ",
-    };
-    if matches!(language, Language::JavaScript | Language::TypeScript) {
-        if line.contains("function ") {
-            return token_after(line, "function ");
-        }
-        for declaration in ["const ", "let ", "var "] {
-            if line.contains(declaration) {
-                return token_after(line, declaration);
-            }
-        }
-    }
-    if language == Language::Go && line.starts_with("func (") {
-        let after_receiver = line.split_once(") ")?.1;
-        return token_after(after_receiver, "");
-    }
-    token_after(line, marker)
-}
-
-fn is_comment(language: Language, line: &str) -> bool {
-    if language == Language::Python {
-        return line.starts_with('#');
-    }
-    line.starts_with("//") || line.starts_with("/*") || line.starts_with('*')
-}
-
-/// `fn`, `struct`, `enum`, `union`, `trait`, and `type` after attributes,
-/// visibility, and the function qualifiers.
+/// `fn`, `struct`, `enum`, `union`, `trait`, and `type` after visibility and
+/// the function qualifiers.
 fn rust(tokens: &[&str]) -> Option<String> {
     let mut index = 0;
     loop {
         let next = tokens.get(index + 1).copied();
         match *tokens.get(index)? {
-            "#" => {
-                let inner = usize::from(next == Some("!"));
-                index = skip_group(tokens, index + 1 + inner, "[", "]");
-            }
             "pub" => index = skip_group(tokens, index + 1, "(", ")"),
             "default" | "async" | "unsafe" => index += 1,
             "extern" => index += 1 + usize::from(next.is_some_and(|abi| abi.starts_with('"'))),
@@ -109,16 +105,12 @@ fn rust(tokens: &[&str]) -> Option<String> {
     }
 }
 
-/// `def` and `class` after decorators and `async`.
+/// `def` and `class`, after `async`.
 fn python(tokens: &[&str]) -> Option<String> {
-    let mut index = 0;
-    loop {
-        match *tokens.get(index)? {
-            "@" => index = skip_annotation(tokens, index + 1),
-            "async" => index += 1,
-            "def" | "class" => return named(tokens, index + 1),
-            _ => return None,
-        }
+    let index = usize::from(tokens.first() == Some(&"async"));
+    match *tokens.get(index)? {
+        "def" | "class" => named(tokens, index + 1),
+        _ => None,
     }
 }
 
@@ -269,9 +261,11 @@ fn is_modifier(modifiers: &[&str], token: &str, next: Option<&str>) -> bool {
     modifiers.contains(&token) && next.is_some_and(|next| is_identifier(next) || next == "*")
 }
 
-/// The token at `index` as the name of a declaration.
+/// The token at `index` as the name of a declaration. The name of a Rust raw
+/// identifier `r#match` is `match`.
 fn named(tokens: &[&str], index: usize) -> Option<String> {
     let name = *tokens.get(index)?;
+    let name = name.strip_prefix("r#").unwrap_or(name);
     is_identifier(name).then(|| name.to_string())
 }
 
@@ -315,11 +309,12 @@ fn is_word(character: char) -> bool {
     character.is_alphanumeric() || character == '_' || character == '$'
 }
 
-/// Words, quoted strings, and single punctuation characters. A Rust `'` starts
-/// a lifetime, not a string.
-fn tokens(language: Language, text: &str) -> Vec<&str> {
+/// Words, quoted strings, and single punctuation characters of one line. A
+/// Rust `'` starts a lifetime, not a string, and `r#` with a word is one raw
+/// identifier.
+fn tokens_of(language: Language, line: &str) -> Vec<&str> {
     let mut tokens = Vec::new();
-    let mut characters = text.char_indices().peekable();
+    let mut characters = line.char_indices().peekable();
     while let Some((start, character)) = characters.next() {
         if character.is_whitespace() {
             continue;
@@ -327,6 +322,9 @@ fn tokens(language: Language, text: &str) -> Vec<&str> {
         let quote = character == '"' || (language != Language::Rust && "'`".contains(character));
         let mut end = start + character.len_utf8();
         if is_word(character) {
+            if language == Language::Rust && character == 'r' && is_raw_prefix(&line[end..]) {
+                characters.next();
+            }
             while let Some((index, next)) = characters.next_if(|(_, next)| is_word(*next)) {
                 end = index + next.len_utf8();
             }
@@ -340,7 +338,13 @@ fn tokens(language: Language, text: &str) -> Vec<&str> {
                 escaped = next == '\\' && !escaped;
             }
         }
-        tokens.push(&text[start..end]);
+        tokens.push(&line[start..end]);
     }
     tokens
+}
+
+/// Whether `rest`, the text after an `r`, continues a Rust raw identifier.
+fn is_raw_prefix(rest: &str) -> bool {
+    let mut characters = rest.chars();
+    characters.next() == Some('#') && characters.next().is_some_and(is_word)
 }

@@ -224,7 +224,19 @@ fn scan_file_contents(
             .flatten();
         if let Some(binding) = binding {
             let end_idx = idx + binding.extra_lines;
-            let item_name = binding_item_name(language, &lines, end_idx, binding.verification);
+            consume_binding_lines(
+                language,
+                &lines[idx + 1..=end_idx],
+                &mut multiline_delimiter,
+                &mut in_block_comment,
+            );
+            let item_name = binding_item_name(
+                language,
+                &lines,
+                end_idx,
+                in_block_comment,
+                binding.verification,
+            );
             bindings.push(AttributeBinding {
                 file_path: file_path.to_path_buf(),
                 line: idx + 1,
@@ -233,12 +245,6 @@ fn scan_file_contents(
                 rule_id: binding.rule_id,
                 verification: binding.verification,
             });
-            consume_binding_lines(
-                language,
-                &lines[idx + 1..=end_idx],
-                &mut multiline_delimiter,
-                &mut in_block_comment,
-            );
             idx = end_idx + 1;
             continue;
         }
@@ -256,7 +262,7 @@ fn scan_file_contents(
         let (comment, end_idx) = collect_annotation_comment(&lines, idx, marker_position);
         let parsed = parse_annotations(&comment);
         warnings.extend(parsed.warnings);
-        let function_name = declaration::item_name(language, &lines[idx + 1..]);
+        let function_name = declaration::item_name(language, &lines[idx + 1..], in_block_comment);
         for annotation in parsed.annotations {
             annotations.push(AnnotationLocation {
                 file_path: file_path.to_path_buf(),
@@ -336,10 +342,11 @@ fn binding_item_name(
     language: Language,
     lines: &[&str],
     idx: usize,
+    in_block_comment: bool,
     verification: Option<Verification>,
 ) -> Option<String> {
     if matches!(language, Language::Rust | Language::Python) {
-        return declaration::item_name(language, &lines[idx + 1..]);
+        return declaration::item_name(language, &lines[idx + 1..], in_block_comment);
     }
     assignment_name(lines[idx]).or_else(|| {
         if verification.is_some() {
