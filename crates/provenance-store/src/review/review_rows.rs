@@ -73,12 +73,6 @@ impl StoredRows {
         })
     }
 
-    /// Whether a line of the scope holds a review submission or a
-    /// withdrawal, also when the lines of its ID do not agree.
-    pub(super) fn has_review_rows(&self) -> bool {
-        !self.withdrawals.is_empty() || self.proposals.iter().any(is_review_submission)
-    }
-
     /// The review state of the scope. Refuses, at its line, a withdrawal that
     /// names no review submission.
     pub(super) fn facts(&self) -> anyhow::Result<CycleFacts<'_>> {
@@ -194,6 +188,17 @@ impl CycleFacts<'_> {
 }
 
 impl StateStore {
+    /// Whether a stored line of `scope` holds a withdrawal or a review
+    /// submission, also when the lines of its ID do not agree.
+    pub(super) fn has_review_rows(&self, scope: &ScopeId) -> anyhow::Result<bool> {
+        if !self.list_withdrawals_located(scope)?.is_empty() {
+            return Ok(true);
+        }
+        let proposals: Vec<(ProposalCard, ShardLine)> =
+            read_jsonl_located(self, &shards::proposal_cards_path(&self.layout, scope))?;
+        Ok(proposals.iter().any(|(proposal, _)| is_review_submission(proposal)))
+    }
+
     /// The review submission with this ID, as [`CycleFacts::submission`]
     /// gives it, from one read of the review rows of `scope`.
     pub(crate) fn stored_review_submission(

@@ -190,7 +190,9 @@ fn cli_creates_and_exports_enriched_sources_and_resolutions() {
         .assert()
         .failure()
         .stderr(predicates::str::contains(
-            "review-bearing scopes require lossless import/export support",
+            "scope `default` holds a review submission, a Discussion or a withdrawal, which a \
+             scope export file cannot hold, so an import into this scope and an export of it are \
+             not possible",
         ));
 }
 
