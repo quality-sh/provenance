@@ -40,7 +40,10 @@ async fn materialize_rejects_missing_disposition_canonical_artifact_before_cache
         .to_string();
 
     assert!(
-        error.contains("canonical artifact does not exist"),
+        error.contains(
+            "disposition disposition_a names requirement req_missing, \
+             which the scope does not have"
+        ),
         "{error}"
     );
     assert!(!layout.cache_db_path().exists());
@@ -83,7 +86,10 @@ async fn materialize_rejects_misfiled_disposition_target_before_cache_changes() 
         .to_string();
 
     assert!(
-        error.contains("canonical artifact does not exist"),
+        error.contains(
+            "disposition disposition_a names requirement req_misfiled, \
+             which the scope does not have"
+        ),
         "{error}"
     );
     assert!(!layout.cache_db_path().exists());

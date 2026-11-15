@@ -86,10 +86,9 @@ impl StateStore {
             },
         )?;
         let canonical_artifacts = self.canonical_artifact_index(scope)?;
-        for disposition in &dispositions {
-            canonical_artifacts.ensure_exists(disposition.canonical_artifact.as_ref())?;
-        }
-        Ok(())
+        self.ensure_dispositions_name_records(scope, &dispositions, |kind, id| {
+            canonical_artifacts.contains(kind, id)
+        })
     }
 }
 
