@@ -2,8 +2,10 @@
 //! holds, with and without `host`:
 //!
 //! - The history of `history_fixture.rs` over an adapter that lists the
-//!   commit `alice` but does not hold it: each text at `alice` is `None`, as
-//!   at the edge of a shallow clone. The Rule cases read it.
+//!   commit `bob` but does not hold it: each text at `bob` is `None`, as at
+//!   the edge of a shallow clone. `bob` is on the lineage of the Rule, so
+//!   the Rule cases, which read it, differ from the cases over the whole
+//!   history.
 //! - A history of 205 commits that each change the statement of `req_a`,
 //!   so that the entry operation reads past the first page of 200 versions.
 //!
@@ -99,7 +101,7 @@ async fn the_history_operations_at_the_edges_give_the_checked_answers() {
     let missing = || {
         Some(Arc::new(Missing {
             held: MemoryFileVersions::new(&history.commits),
-            missing: "alice",
+            missing: "bob",
         }) as _)
     };
     let reads = MemoryReads {
@@ -111,6 +113,12 @@ async fn the_history_operations_at_the_edges_give_the_checked_answers() {
         .filter(|case| case.kind == "rule")
         .collect();
     let mut read = run(&reads, &rules).await;
+    let whole = || Some(Arc::new(MemoryFileVersions::new(&history.commits)) as _);
+    let reads = MemoryReads {
+        default: memory_repository(&history, "default", whole()).await,
+        broken: memory_repository(&history, "broken", whole()).await,
+    };
+    assert_ne!(read, run(&reads, &rules).await);
 
     let long = || Some(Arc::new(MemoryFileVersions::new(&long_history(&history.working))) as _);
     let reads = MemoryReads {

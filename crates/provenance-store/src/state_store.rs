@@ -112,14 +112,19 @@ impl StateStore {
             .as_ref()
             .and_then(RepositoryIdentity::file_versions)
             .cloned();
-        given.unwrap_or_else(|| {
-            #[cfg(feature = "host")]
-            let history =
-                crate::review::history::GitFileVersions::new(self.layout.root().to_owned());
-            #[cfg(not(feature = "host"))]
-            let history = crate::review::history::contract::MemoryFileVersions::new(&[]);
-            std::sync::Arc::new(history) as _
-        })
+        #[cfg(feature = "host")]
+        let git = || {
+            Some(
+                std::sync::Arc::new(crate::review::history::GitFileVersions::new(
+                    self.layout.root().to_owned(),
+                )) as _,
+            )
+        };
+        #[cfg(not(feature = "host"))]
+        let git = || None;
+        given
+            .or_else(git)
+            .unwrap_or_else(|| std::sync::Arc::new(crate::review::history::NoFileVersions) as _)
     }
 
     /// The clock that the writes of this store read: the one of the

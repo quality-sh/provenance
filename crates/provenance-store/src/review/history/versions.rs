@@ -104,3 +104,18 @@ pub trait FileVersions: Send + Sync + Debug {
         commit: &'a str,
     ) -> BoxFuture<'a, anyhow::Result<Option<String>>>;
 }
+
+/// The file versions of a repository that has no committed history: no
+/// file has a version and no commit has a text.
+#[derive(Debug)]
+pub(crate) struct NoFileVersions;
+
+impl FileVersions for NoFileVersions {
+    fn versions<'a>(&'a self, _: &'a str) -> BoxFuture<'a, anyhow::Result<Arc<Vec<FileVersion>>>> {
+        Box::pin(std::future::ready(Ok(Arc::default())))
+    }
+
+    fn text<'a>(&'a self, _: &'a str, _: &'a str) -> BoxFuture<'a, anyhow::Result<Option<String>>> {
+        Box::pin(std::future::ready(Ok(None)))
+    }
+}

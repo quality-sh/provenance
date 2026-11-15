@@ -5,8 +5,10 @@
 //! pages, with `limit=1` and each cursor, each version and an entry id that
 //! names no commit, and the evidence after and before each version, of the
 //! whole record and of one content field, and at an offset past its end.
-//! The Requirement cases also read `req_b` in the scope `broken`, whose
-//! Requirement file was not UTF-8 at one commit.
+//! Each list case also reads the history of the record `absent`, which the
+//! scope `default` does not hold. The Requirement cases also read `req_b`
+//! in the scope `broken`, whose Requirement file was not UTF-8 at one
+//! commit.
 //!
 //! The store tests run the cases through the operations, and the transport
 //! tests through the contract routes, so both read the same requests.
@@ -41,6 +43,8 @@ const fn case(
 pub const LIST: &str = "review-history";
 pub const ENTRY: &str = "review-history-entry";
 pub const EVIDENCE: &str = "review-evidence";
+/// A record id that no scope holds.
+const ABSENT: &str = "absent";
 
 /// The history operations, one row for each route of the contract.
 pub const CASES: [Case; 18] = [
@@ -193,6 +197,10 @@ pub async fn run(reads: &dyn Reads, cases: &[Case]) -> Vec<Value> {
         for (scope, id) in records.chain(case.broken.map(|id| ("broken", id))) {
             let requests = requests(reads, case, scope, id).await;
             all.extend(answers(reads, case.operation, scope, requests).await);
+        }
+        if case.operation == LIST {
+            let request = json!({"record_kind": case.kind, "record_id": ABSENT});
+            all.extend(answers(reads, LIST, "default", vec![request]).await);
         }
     }
     all

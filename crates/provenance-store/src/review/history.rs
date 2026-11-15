@@ -17,6 +17,7 @@ mod versions;
 pub(super) use evidence::page as evidence_page;
 #[cfg(feature = "host")]
 pub use git::GitFileVersions;
+pub(crate) use versions::NoFileVersions;
 pub use versions::{BoxFuture, FileVersion, FileVersions};
 
 use super::classifier;
