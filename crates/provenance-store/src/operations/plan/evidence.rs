@@ -1,6 +1,4 @@
-use crate::state_store::{
-    requirement_statement_changes, StateStore, TypedResourceKind, TypedSpecResult,
-};
+use crate::state_store::{StateStore, TypedSpecDecision};
 use provenance_core::{RequirementReview, ScopeId, StableId};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -65,11 +63,12 @@ impl RuleEvidence {
 /// Collects the reviews already on file plus the ones this plan would raise.
 ///
 /// Records written by a previous apply are the standing answer. The planned
-/// change adds what restating the Requirement now would ask for.
+/// change adds what restating the Requirement would ask for, for each Rule
+/// that cites the Requirement after the reconciliation.
 pub(super) fn reviews(
     store: &StateStore,
     scope: &ScopeId,
-    reconciliation: &TypedSpecResult,
+    decision: &TypedSpecDecision,
 ) -> anyhow::Result<Reviews> {
     let open = store.open_requirement_reviews(scope)?;
     let mut by_rule: BTreeMap<String, Vec<ReviewReason>> = BTreeMap::new();
@@ -82,14 +81,7 @@ pub(super) fn reviews(
             push_unique(&mut rules, rule);
         }
     }
-    for change in requirement_statement_changes(&reconciliation.resources) {
-        let mut affected = store.rule_ids_for_requirement(scope, &change.requirement_id)?;
-        for resource in reconciliation.resources.iter().filter(|resource| {
-            resource.kind == TypedResourceKind::Rule
-                && resource.parent.as_deref() == Some(change.requirement_key.as_str())
-        }) {
-            push_unique(&mut affected, resource.id.clone());
-        }
+    for (change, affected) in decision.restatements() {
         for rule in affected {
             push_reason(
                 &mut by_rule,
