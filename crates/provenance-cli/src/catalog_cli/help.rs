@@ -53,10 +53,10 @@ pub(super) fn target(
                 // The per-type help already has the type, so it does not list the types.
                 let given_type = kind.is_some() && arg.get_id() == "type";
                 let arg = arg.hide(hidden).hide_possible_values(given_type);
-                match help.get(arg.get_id().as_str()) {
-                    Some(description) => arg.help(description.clone()),
-                    None => arg,
-                }
+                let Some(description) = help.get(arg.get_id().as_str()) else {
+                    return arg;
+                };
+                arg.help(description.clone())
             });
             let create = action == provenance_contract::TargetAction::Create;
             if needs_type {
@@ -117,10 +117,10 @@ fn discussion_help(
         let name = arg.get_id().as_str().to_owned();
         let hidden = !allowed.contains(&name);
         let arg = arg.hide(hidden).required(required.contains(&name));
-        match properties.get(&name) {
-            Some(Some(description)) => arg.help(description.clone()),
-            _ => arg,
-        }
+        let Some(Some(description)) = properties.get(&name) else {
+            return arg;
+        };
+        arg.help(description.clone())
     })
 }
 
