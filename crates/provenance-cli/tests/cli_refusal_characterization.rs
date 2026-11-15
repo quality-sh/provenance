@@ -231,8 +231,8 @@ fn a_bad_state_line_gives_the_stored_record_and_refuses_a_create() {
     std::fs::write(&path, state).unwrap();
 
     let warning = format!(
-        "scopes/default/requirements/req.jsonl line 2: missing field `scope_id`; {}",
-        STATE_CORRECTIONS
+        "scopes/default/requirements/req.jsonl line 2: missing field `scope_id`; \
+         {STATE_CORRECTIONS}"
     );
     let text = format!("{text}\nwarning: record freshness: {warning}\n");
     assert_eq!(get(&repo, &[]), (Some(0), text, String::new()));
