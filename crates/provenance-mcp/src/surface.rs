@@ -79,7 +79,7 @@ where
 /// Build one MCP tool from its JSON input and output schemas.
 pub fn tool(
     name: &'static str,
-    description: &'static str,
+    description: impl Into<std::borrow::Cow<'static, str>>,
     effect: Effect,
     mut input: Value,
     output: Value,
