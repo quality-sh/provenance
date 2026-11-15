@@ -7,9 +7,7 @@ use super::review_cycle::{write, REVIEWER};
 use super::review_disagreeing_rows::{refused, state_file};
 use super::review_history::{commit, git};
 use super::review_merged_decisions::{decide_on_two_branches, fresh_list, DISPOSITIONS};
-use super::review_merged_withdrawals::{
-    merge_side, pending, read, repository, withdraw, Merge,
-};
+use super::review_merged_withdrawals::{merge_side, pending, read, repository, withdraw, Merge};
 use super::*;
 
 /// Creates the draft Resolution `id`, which cites `req_a`.
@@ -58,9 +56,11 @@ fn patch(repo: &str, path: &str, body: &Value) -> Vec<String> {
         .to_owned();
     let input = directory_file(repo, "patch.json", &body.to_string());
     let header = format!("If-Match: {etag}");
-    ["api", path, "--method", "patch", "--input", &input, "--header", &header, "--repo", repo]
-        .map(str::to_owned)
-        .to_vec()
+    [
+        "api", path, "--method", "patch", "--input", &input, "--header", &header, "--repo", repo,
+    ]
+    .map(str::to_owned)
+    .to_vec()
 }
 
 /// Flow: a draft Rule cites the Resolutions `res_x` and `res_a`. One branch
@@ -145,7 +145,10 @@ fn the_list_read_keeps_the_stored_state_of_an_accepted_and_withdrawn_submission(
     commit(&repo);
     merge_side(&repo, Merge::Driver);
     let fault = refused(&repo, &["api", "requirements/req_a"]);
-    assert_eq!(fault["file"], state_file(super::review_merged_decisions::WITHDRAWALS));
+    assert_eq!(
+        fault["file"],
+        state_file(super::review_merged_decisions::WITHDRAWALS)
+    );
 
     let listed = fresh_list(&repo, "proposals");
     let item = listed["data"]["items"]
@@ -167,7 +170,15 @@ fn the_list_read_keeps_the_stored_state_of_an_accepted_and_withdrawn_submission(
 fn two_approvals_by_different_actors_read_as_one() {
     let (_directory, repo) = repository(Merge::Driver);
     let actors = ["--disposition-actor-id", REVIEWER, "--disposition-actor-id"];
-    let init = ["init", "--path", &repo, "--scope", "default", "--path-prefix", "."];
+    let init = [
+        "init",
+        "--path",
+        &repo,
+        "--scope",
+        "default",
+        "--path-prefix",
+        ".",
+    ];
     success(&[&init[..], &actors[..], &["second_reviewer"]].concat());
     let submission = pending(&repo, "req_a");
     super::review_merged_decisions::decide(&repo, "req_a", &submission, "accepted", "", None);

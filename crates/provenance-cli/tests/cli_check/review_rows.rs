@@ -164,12 +164,26 @@ fn check_reports_each_fault_of_one_record_in_one_run() {
     let (directory, submission) = repository();
     let repo = directory.path();
     bounded_process::provenance()
-        .args(["init", "--path", repo.to_str().unwrap(), "--scope", "default"])
+        .args([
+            "init",
+            "--path",
+            repo.to_str().unwrap(),
+            "--scope",
+            "default",
+        ])
         .args(["--path-prefix", ".", "--disposition-actor-id", "reviewer"])
         .bounded_assert()
         .success();
-    append(repo, DISPOSITIONS, &decision("decision_a", &submission, "accepted"));
-    append(repo, DISPOSITIONS, &decision("decision_b", &submission, "rejected"));
+    append(
+        repo,
+        DISPOSITIONS,
+        &decision("decision_a", &submission, "accepted"),
+    );
+    append(
+        repo,
+        DISPOSITIONS,
+        &decision("decision_b", &submission, "rejected"),
+    );
     let mut changed = submission.clone();
     changed["summary"] = json!("Changed by hand.");
     append(repo, PROPOSALS, &changed);
@@ -206,7 +220,11 @@ fn the_repair_of_a_withdrawal_that_names_no_submission_passes() {
     let (directory, _) = repository();
     let repo = directory.path();
     let missing = json!({"id":"proposal_missing"});
-    append(repo, WITHDRAWALS, &withdrawal("withdrawal_lost", &missing, "Lost."));
+    append(
+        repo,
+        WITHDRAWALS,
+        &withdrawal("withdrawal_lost", &missing, "Lost."),
+    );
     provenance(repo).failure().stderr(contains(
         "To repair, remove ideation/withdrawals.jsonl line 1, then commit.",
     ));
@@ -221,8 +239,16 @@ fn the_repair_of_a_withdrawal_that_names_no_submission_passes() {
 fn the_repair_of_a_withdrawal_id_on_two_lines_passes() {
     let (directory, submission) = repository();
     let repo = directory.path();
-    append(repo, WITHDRAWALS, &withdrawal("withdrawal_a", &submission, "First."));
-    append(repo, WITHDRAWALS, &withdrawal("withdrawal_a", &submission, "Second."));
+    append(
+        repo,
+        WITHDRAWALS,
+        &withdrawal("withdrawal_a", &submission, "First."),
+    );
+    append(
+        repo,
+        WITHDRAWALS,
+        &withdrawal("withdrawal_a", &submission, "Second."),
+    );
     provenance(repo).failure().stderr(contains(
         "withdrawal withdrawal_a is on lines 1 and 2 of ideation/withdrawals.jsonl",
     ));
