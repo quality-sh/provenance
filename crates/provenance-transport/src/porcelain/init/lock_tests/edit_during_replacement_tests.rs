@@ -84,7 +84,9 @@ fn an_edit_before_the_compare_is_refused_and_kept() {
 /// before the rename: the rename puts the planned file in place of the edit,
 /// and init ends with success. This is the limit of the guard against an
 /// edit during init.
-/// This test has no Rule binding: it shows a loss that no Rule promises.
+/// This test has no Rule binding: the description of the Rule
+/// `rule_init_refuses_a_project_file_change_before_its_compare` states this
+/// limit, and the test pins the limit, not an obligation.
 #[test]
 fn an_edit_after_the_compare_is_replaced() {
     let (_directory, repo) = repository_with_changed_agents();
@@ -95,6 +97,57 @@ fn an_edit_after_the_compare_is_replaced() {
     assert!(agents.starts_with(PERSON_AGENTS), "{agents}");
     assert!(!agents.contains("An edit while init runs"), "{agents}");
     assert!(agents.contains("## Provenance"), "{agents}");
+    assert_eq!(reviewers(&repo), ["new-reviewer"]);
+    assert_eq!(temporary_files(&repo), Vec::<String>::new());
+}
+
+/// An edit of AGENTS.md after init planned and validated its write, and
+/// before the write starts: init refuses, AGENTS.md keeps the edit, and the
+/// manifest keeps its reviewer list.
+#[test]
+#[verifies("rule_init_refuses_a_project_file_change_before_its_compare", examples)]
+fn an_edit_before_the_write_starts_is_refused_and_kept() {
+    let (_directory, repo) = repository_with_changed_agents();
+
+    let error = init_with_an_edit_at(&repo, "init_validated").unwrap_err();
+
+    let agents = repo.join("AGENTS.md");
+    assert_eq!(
+        format!("{error:#}"),
+        format!(
+            "{} changed after initialization was planned; retry",
+            agents.as_std_path().display()
+        )
+    );
+    assert_eq!(std::fs::read_to_string(&agents).unwrap(), EDIT);
+    assert_eq!(reviewers(&repo), ["reviewer"]);
+    assert_eq!(temporary_files(&repo), Vec::<String>::new());
+}
+
+/// On Windows, init replaces a read-only AGENTS.md, and the new AGENTS.md is
+/// read-only as the old one was.
+/// This test has no Rule binding: it checks a platform behaviour of the
+/// replacement.
+#[cfg(windows)]
+#[test]
+fn a_read_only_agents_file_is_replaced_and_stays_read_only() {
+    let (_directory, repo) = repository_with_changed_agents();
+    let agents = repo.join("AGENTS.md");
+    let mut permissions = std::fs::metadata(&agents).unwrap().permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(&agents, permissions).unwrap();
+
+    let ended = init_through_the_port(init_input(&repo, &["new-reviewer"]), || {});
+
+    let mut permissions = std::fs::metadata(&agents).unwrap().permissions();
+    let read_only = permissions.readonly();
+    permissions.set_readonly(false);
+    std::fs::set_permissions(&agents, permissions).unwrap();
+    ended.unwrap();
+    assert!(read_only, "the new AGENTS.md is not read-only");
+    let text = std::fs::read_to_string(&agents).unwrap();
+    assert!(text.starts_with(PERSON_AGENTS), "{text}");
+    assert!(text.contains("## Provenance"), "{text}");
     assert_eq!(reviewers(&repo), ["new-reviewer"]);
     assert_eq!(temporary_files(&repo), Vec::<String>::new());
 }

@@ -3,6 +3,9 @@
 use super::{keep, rename_kept, sync_directories, sync_failure, write_temporary};
 use camino::Utf8Path;
 
+#[cfg(test)]
+mod tests;
+
 /// The length of the random part of a temporary file name.
 const RANDOM_LENGTH: usize = 6;
 const SUFFIX: &str = ".tmp";
