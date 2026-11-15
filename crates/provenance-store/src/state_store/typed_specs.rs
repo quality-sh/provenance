@@ -56,7 +56,8 @@ impl StateStore {
         input: TypedSpecInput,
     ) -> anyhow::Result<TypedSpecResult> {
         self.with_repository_publication(|held| {
-            held.decide_stored_typed_spec(scope_id, input)?.publish(held, scope_id)
+            held.decide_stored_typed_spec(scope_id, input)?
+                .publish(held, scope_id)
         })
     }
 
