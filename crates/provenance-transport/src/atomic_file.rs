@@ -130,6 +130,7 @@ impl FileSnapshot {
 
 /// A project file that init changed: the state that init wrote, and the
 /// sync of its folder after the change.
+#[derive(Debug)]
 struct Changed {
     after: FileSnapshot,
     synced: Result<(), ChangedUnsynced>,
