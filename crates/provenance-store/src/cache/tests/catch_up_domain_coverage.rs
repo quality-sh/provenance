@@ -1,8 +1,7 @@
 //! The byte domain of a family is every file its readers read.
 //!
-//! Messages span month shards.
-//! directory. Five ideation families overlay records from the landings
-//! shard. These tests pin each complete byte domain against a fresh rebuild.
+//! Messages span month shards. These tests pin each complete byte domain
+//! against a fresh rebuild.
 
 use super::super::*;
 use super::catch_up_behavior::assert_catch_up_equals_rebuild;

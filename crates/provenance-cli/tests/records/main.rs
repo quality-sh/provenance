@@ -8,6 +8,8 @@
 #[path = "../support"]
 mod support {
     pub mod import_reviews;
+    pub mod landing_runs;
+    pub mod merge_driver;
     pub mod record_review;
     pub mod review_paths;
     pub mod stale_repo;
@@ -66,6 +68,8 @@ mod cli_merge_jsonl;
 mod cli_merge_jsonl_preservation;
 #[path = "../cli_merge_jsonl_refusals.rs"]
 mod cli_merge_jsonl_refusals;
+#[path = "../cli_merge_swarm_runs.rs"]
+mod cli_merge_swarm_runs;
 #[path = "../cli_multiple_parents.rs"]
 mod cli_multiple_parents;
 #[path = "../cli_origin.rs"]
@@ -122,6 +126,8 @@ mod cli_status_request;
 mod cli_ste_statement_paths;
 #[path = "../cli_swarm_backtrace_land.rs"]
 mod cli_swarm_backtrace_land;
+#[path = "../cli_swarm_landing_place.rs"]
+mod cli_swarm_landing_place;
 #[path = "../cli_time_range.rs"]
 mod cli_time_range;
 #[path = "../cli_typed_deletion_mixed_ids.rs"]

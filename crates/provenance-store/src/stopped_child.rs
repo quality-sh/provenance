@@ -1,14 +1,29 @@
 //! A child process of the test binary that runs a write and stops at a
 //! probe, and the reads of the state that the stopped write leaves.
 
+use crate::layout::ProvenanceLayout;
 use crate::test_probes;
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
+use std::collections::BTreeMap;
 
 /// The exit code of a child that a probe ends.
 const STOPPED: i32 = 86;
 const ROOT: &str = "PROVENANCE_STOPPED_CHILD_ROOT";
 const PHASE: &str = "PROVENANCE_STOPPED_CHILD_PHASE";
 const FILE_SIZE: &str = "PROVENANCE_STOPPED_CHILD_FILE_SIZE";
+
+/// The probes of a whole-set publication in their order, and whether a
+/// stop at the probe reopens as the new state.
+pub const CRASH_PHASES: [(&str, bool); 8] = [
+    ("state_prepared", false),
+    ("state_marker_prepared", false),
+    ("state_after_backup_rename", false),
+    ("state_backup_created", false),
+    ("state_before_install", false),
+    ("state_after_install_rename", true),
+    ("state_installed", true),
+    ("state_published", true),
+];
 
 /// Runs `write` on the repository of the parent when this process is a
 /// child of [`stop_in_child`], and stops it at the probe of the phase that
@@ -90,4 +105,33 @@ pub fn files_named(directory: &Utf8Path, prefix: &str, suffix: &str) -> Vec<Stri
                 && directory.join(name).is_file()
         })
         .collect()
+}
+
+/// Every state file under `root`, by path relative to the state directory.
+pub fn state_tree(root: &Utf8Path) -> BTreeMap<Utf8PathBuf, Vec<u8>> {
+    fn visit(base: &Utf8Path, directory: &Utf8Path, tree: &mut BTreeMap<Utf8PathBuf, Vec<u8>>) {
+        for entry in std::fs::read_dir(directory).unwrap() {
+            let path = Utf8PathBuf::from_path_buf(entry.unwrap().path()).unwrap();
+            if path.is_dir() {
+                visit(base, &path, tree);
+            } else {
+                let relative = path.strip_prefix(base).unwrap().to_owned();
+                tree.insert(relative, std::fs::read(&path).unwrap());
+            }
+        }
+    }
+    let state = ProvenanceLayout::new(root).state_dir();
+    let mut tree = BTreeMap::new();
+    visit(&state, &state, &mut tree);
+    tree
+}
+
+/// Copies each state file under `from` to its place below `to`.
+pub fn copy_state(from: &Utf8Path, to: &Utf8Path) {
+    let target = ProvenanceLayout::new(to).state_dir();
+    for (relative, bytes) in state_tree(from) {
+        let path = target.join(relative);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, bytes).unwrap();
+    }
 }

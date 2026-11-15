@@ -1,4 +1,3 @@
-use super::message_ids::ShardLine;
 use super::StateStore;
 use provenance_core::model::relations::kind_word;
 use provenance_core::{
@@ -182,36 +181,15 @@ impl StateStore {
         Ok(())
     }
 
-    /// The refusal `invalid_state_file` at the line that stores the
-    /// Disposition `id`: the line of the last landing that holds it, as a
-    /// later landing replaces an earlier one, else its line in the
-    /// Disposition file.
+    /// The refusal `invalid_state_file` at the line of the Disposition file
+    /// that stores the Disposition `id`.
     fn disposition_fault(&self, scope: &ScopeId, id: &StableId, message: String) -> anyhow::Error {
-        // An error of this read is not given: it would replace the fault.
-        let landings = self
-            .with_repository_read(|held| held.list_ideation_landings(scope))
-            .unwrap_or_default();
-        let landing = landings.iter().rposition(|batch| {
-            batch
-                .dispositions
-                .iter()
-                .any(|disposition| disposition.id == *id)
-        });
-        match landing {
-            Some(index) => crate::refusal::state_fault(
-                &ShardLine::new(
-                    &crate::shards::ideation_landings_path(&self.layout, scope),
-                    index + 1,
-                ),
-                message,
-            ),
-            None => super::readers::record_fault(
-                self,
-                &crate::shards::dispositions_path(&self.layout, scope),
-                id.as_str(),
-                message,
-            ),
-        }
+        super::readers::record_fault(
+            self,
+            &crate::shards::dispositions_path(&self.layout, scope),
+            id.as_str(),
+            message,
+        )
     }
 
     pub(super) fn canonical_artifact_index(

@@ -205,13 +205,6 @@ pub(super) fn read_jsonl_held<T: DeserializeOwned>(
     read_records(store, path)
 }
 
-pub(super) fn read_ideation_landings<T: DeserializeOwned>(
-    store: &StateStore,
-    path: &Utf8Path,
-) -> anyhow::Result<Vec<T>> {
-    store.state_path_access(path, |held| read_records(held, path))
-}
-
 fn read_message_shard_lines<T: DeserializeOwned>(
     store: &StateStore,
     shard_paths: Vec<Utf8PathBuf>,

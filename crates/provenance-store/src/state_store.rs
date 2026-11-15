@@ -74,7 +74,6 @@ pub use typed_specs::{decide_typed_spec, ReviewHistory, TypedSpecDecision, Typed
 pub use typed_statement_policy::TypedSpecWriteError;
 
 use crate::{layout::ProvenanceLayout, repository::RepositoryIdentity, shards};
-use ideation_batches::overlay_records;
 use provenance_core::{
     ensure_record_id_assignable, AssertionRecord, Contribution, DispositionRecord,
     ImplementationBinding, Manifest, Message, ProposalCard, ScopeId, SynthesisPacket, Thread,
@@ -176,7 +175,7 @@ fn ensure_new_ids_assignable<T>(
     }
     Ok(())
 }
-use readers::{read_ideation_landings, read_jsonl_held, read_message_shards_held};
+use readers::{read_jsonl_held, read_message_shards_held};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
@@ -262,6 +261,8 @@ enum Storage {
     },
 }
 
+/// The records of one swarm run. A landing writes each record to the state
+/// file of its kind.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IdeationLandingBatch {
     #[serde(default)]
@@ -320,23 +321,6 @@ impl StateStore {
             .into_iter()
             .collect())
     }
-    fn list_contributions_after_direct_read(
-        &self,
-        scope: &ScopeId,
-        after_direct_read: impl FnOnce() -> anyhow::Result<()>,
-    ) -> anyhow::Result<Vec<Contribution>> {
-        self.with_repository_read(|held| {
-            let mut records = shared_parses::read_jsonl_shared(
-                held,
-                &shards::contributions_path(&held.layout, scope),
-            )?;
-            after_direct_read()?;
-            for batch in held.list_ideation_landings(scope)? {
-                overlay_records(&mut records, batch.contributions);
-            }
-            Ok(records)
-        })
-    }
     pub fn list_proposal_cards_with_actor_ids(
         &self,
         scope: &ScopeId,
@@ -387,14 +371,10 @@ impl StateStore {
     }
     pub fn list_proposal_definitions(&self, scope: &ScopeId) -> anyhow::Result<Vec<ProposalCard>> {
         self.with_repository_read(|held| {
-            let mut records = shared_parses::read_jsonl_shared(
+            shared_parses::read_jsonl_shared(
                 held,
                 &shards::proposal_cards_path(&held.layout, scope),
-            )?;
-            for batch in held.list_ideation_landings(scope)? {
-                overlay_records(&mut records, batch.proposals);
-            }
-            Ok(records)
+            )
         })
     }
 }
