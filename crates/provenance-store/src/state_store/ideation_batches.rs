@@ -336,7 +336,9 @@ fn merge_immutable<T: Clone + IdeationRecord>(
 /// Puts `record` in the rows of the state file of its kind: in place of the
 /// row with its id, or else among the rows in id order. The writers of a kind
 /// whose record a write can replace (a contribution, a synthesis packet) and
-/// each landing give a record its place with this function.
+/// each landing give a record its place with this function. It puts the
+/// complete file in id order; `import` writes a file in the order of the
+/// export file, and the next write of a record of that kind sorts it.
 pub(super) fn place_in_file<T: IdeationRecord>(rows: &mut Vec<T>, record: T) {
     let Ok(()) = place_checked_in_file(rows, record, |_| Ok::<(), Infallible>(()));
 }
@@ -373,8 +375,8 @@ pub(super) fn add_to_file<T: IdeationRecord>(
     Ok(())
 }
 
-/// Puts the rows of a state file in id order: the order of each product write
-/// of a record of the five ideation kinds.
+/// Puts the rows of a state file in id order: the order that each landing and
+/// each write of one record of the five ideation kinds gives the file.
 fn sort_by_id<T: IdeationRecord>(rows: &mut [T]) {
     rows.sort_by(|a, b| a.immutable_id().cmp(b.immutable_id()));
 }

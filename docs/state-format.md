@@ -126,9 +126,10 @@ derived in the order
 `proposed`, `asserted`, then disposition. A swarm landing writes each record of the run to
 the file of its kind: `ideation/contributions.jsonl`, `ideation/synthesis_packets.jsonl`,
 `ideation/proposal_cards.jsonl` or `ideation/assertions.jsonl`. A landing does not write
-dispositions. Each of these files keeps its rows in id order, for a landing and for a write of
-one record. A landing publishes its files in one write, so a read gets each record of the run
-or no record of it. Import validates a staged complete state directory and renames it into place only after
+dispositions. A landing and a write of one record put the complete file of each kind that they
+write in id order. `import` writes each of these files in the order of the export file, and the
+next landing or write of one record of that kind puts the file in id order. A landing publishes
+its files in one write, so a read gets each record of the run or no record of it. Import validates a staged complete state directory and renames it into place only after
 `check` succeeds.
 
 Pre-lifecycle terminal proposal rows are not rewritten. The compiled, versioned shipped-v1
