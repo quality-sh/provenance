@@ -54,7 +54,7 @@ fn parameter(segment: &str) -> Option<&str> {
 
 /// The path of the call of `operation` with `request`: the route of its
 /// case, with each path parameter and each other request field set.
-fn path(operation: &str, request: &Value) -> String {
+pub fn path(operation: &str, request: &Value) -> String {
     let kind = request["record_kind"].as_str().unwrap();
     let case = CASES
         .iter()

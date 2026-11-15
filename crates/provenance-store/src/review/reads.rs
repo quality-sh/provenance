@@ -5,7 +5,9 @@ use crate::operations::reader::{
 };
 use crate::repository::Repository;
 use provenance_core::protocol::{read_failure::ReadFailure, Stamped};
-use provenance_core::review::{EvidencePage, EvidenceQuery, ReviewHistoryPage, ReviewHistoryQuery};
+use provenance_core::review::{
+    EvidencePage, EvidenceQuery, RecordVersion, ReviewHistoryPage, ReviewHistoryQuery,
+};
 use provenance_core::{NodeType, StableId};
 use provenance_macros::rule;
 use serde_json::Value;
@@ -62,6 +64,30 @@ async fn history(
             })
             .transpose()?,
     })
+}
+
+/// Reads the version `entry` of one record from one read of its versions.
+pub async fn read_history_entry(
+    repository: &Repository,
+    policy: ReadPolicy,
+    kind: NodeType,
+    id: StableId,
+    entry: StableId,
+) -> anyhow::Result<Stamped<RecordVersion>> {
+    let answer = reader::answer(repository, policy, move |ctx| {
+        Box::pin(async move {
+            ctx.snapshot().bound_page_work().await?;
+            let versions = versions(ctx, kind, id).await?;
+            let found = versions
+                .into_iter()
+                .map(|versioned| versioned.version)
+                .find(|version| version.id == entry)
+                .ok_or(ReadFailure::ResourceNotFound)?;
+            Ok(found)
+        })
+    })
+    .await?;
+    crate::operations::queries::page::checked("review-history-entry", answer)
 }
 
 /// Reads the versions of one record from the committed file versions and
