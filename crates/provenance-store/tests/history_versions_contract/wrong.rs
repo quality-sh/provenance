@@ -2,7 +2,7 @@
 //! commit names as commit ids.
 
 use provenance_store::review::history::contract::{
-    Adapter, Commit, Entry, Harness, MemoryFileVersions, MOVED_FROM, MOVED_TO,
+    Adapter, Commit, Entry, EntryKind, Harness, MemoryFileVersions, MOVED_FROM, MOVED_TO,
 };
 use provenance_store::review::history::{BoxFuture, FileVersion, FileVersions};
 use std::collections::BTreeMap;
@@ -70,11 +70,14 @@ pub fn lossy_text(commits: &[Commit]) -> Arc<dyn FileVersions> {
     })))
 }
 
-/// An adapter that reads a gitlink as a file whose text is the commit of
-/// the gitlink.
-pub fn gitlink_text(commits: &[Commit]) -> Arc<dyn FileVersions> {
+/// An adapter that reads each entry as a file: a submodule entry has its
+/// commit as its text, and a directory has the text of its file.
+pub fn entry_text(commits: &[Commit]) -> Arc<dyn FileVersions> {
     Arc::new(MemoryFileVersions::new(&changed(commits, |entry| {
-        let bytes = entry.gitlink.map_or(entry.bytes, String::into_bytes);
+        let bytes = match entry.kind {
+            EntryKind::Submodule(commit) => commit.into_bytes(),
+            _ => entry.bytes,
+        };
         Entry::new(bytes, entry.executable)
     })))
 }

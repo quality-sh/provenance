@@ -1,7 +1,7 @@
 //! The git adapter over a Git history that holds the commits of a case.
 
 use camino::Utf8PathBuf;
-use provenance_store::review::history::contract::{Adapter, Commit, Harness};
+use provenance_store::review::history::contract::{Adapter, Commit, EntryKind, Harness};
 use provenance_store::review::history::GitFileVersions;
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -56,19 +56,25 @@ impl Harness for Git {
             git(root, &[], &["read-tree", base], None);
             for (path, entry) in &commit.changes {
                 let path = format!("{}{path}", self.prefix);
+                let inner = format!("{path}/inner");
+                let remove = ["update-index", "--force-remove", &path, &inner];
+                git(root, &[], &remove, None);
                 let Some(entry) = entry else {
-                    git(root, &[], &["update-index", "--force-remove", &path], None);
                     continue;
                 };
-                let entry = entry.gitlink.as_ref().map_or_else(
-                    || {
-                        let input = Some(entry.bytes.as_slice());
-                        let blob = git(root, &[], &["hash-object", "-w", "--stdin"], input);
-                        let mode = if entry.executable { "100755" } else { "100644" };
-                        format!("{mode},{blob},{path}")
-                    },
-                    |commit| format!("160000,{},{path}", ids.get(commit).unwrap_or(commit)),
-                );
+                let blob = || {
+                    let input = Some(entry.bytes.as_slice());
+                    git(root, &[], &["hash-object", "-w", "--stdin"], input)
+                };
+                let entry = match &entry.kind {
+                    EntryKind::File if entry.executable => format!("100755,{},{path}", blob()),
+                    EntryKind::File => format!("100644,{},{path}", blob()),
+                    EntryKind::Submodule(commit) => {
+                        format!("160000,{},{path}", ids.get(commit).unwrap_or(commit))
+                    }
+                    EntryKind::Directory => format!("100644,{},{inner}", blob()),
+                    kind => panic!("the git harness cannot write {kind:?}"),
+                };
                 git(
                     root,
                     &[],

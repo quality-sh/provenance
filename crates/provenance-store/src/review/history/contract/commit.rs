@@ -1,17 +1,27 @@
 //! One commit of a commit graph of the contract, and one entry of a commit.
 
 /// An entry that one commit holds at a path: a file with its bytes and its
-/// mode, or a gitlink.
+/// mode, a submodule entry or a directory.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Entry {
     pub bytes: Vec<u8>,
     /// The file has the executable mode.
     pub executable: bool,
-    /// The commit of a gitlink, the entry of a submodule: a commit name of
-    /// the graph, or a commit id that the graph does not hold. A gitlink has
-    /// no bytes and no text.
-    pub gitlink: Option<String>,
+    pub kind: EntryKind,
+}
+
+/// The kind of an entry. Only a file has a text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum EntryKind {
+    /// A file with the bytes and the mode of the entry.
+    File,
+    /// A submodule entry to a commit: a commit name of the graph, or a commit
+    /// id that the graph does not hold.
+    Submodule(String),
+    /// A directory that holds one file, `inner`, with the bytes of the entry.
+    Directory,
 }
 
 impl Entry {
@@ -20,17 +30,24 @@ impl Entry {
         Self {
             bytes,
             executable,
-            gitlink: None,
+            kind: EntryKind::File,
         }
     }
 
-    /// A gitlink to `commit`, a commit name of the graph or a commit id that
-    /// the graph does not hold.
-    pub fn gitlink(commit: &str) -> Self {
+    /// A submodule entry to `commit`, a commit name of the graph or a commit
+    /// id that the graph does not hold.
+    pub fn submodule(commit: &str) -> Self {
         Self {
-            bytes: Vec::new(),
-            executable: false,
-            gitlink: Some(commit.to_owned()),
+            kind: EntryKind::Submodule(commit.to_owned()),
+            ..Self::new(Vec::new(), false)
+        }
+    }
+
+    /// A directory that holds one file, `inner`, with `text` as its bytes.
+    pub fn directory(text: &str) -> Self {
+        Self {
+            kind: EntryKind::Directory,
+            ..Self::text(text)
         }
     }
 

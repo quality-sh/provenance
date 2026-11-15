@@ -6,26 +6,25 @@
 //! a `cat-file` process reads one request and gives that file as its answer.
 //! The process list cannot show a process that started and stopped between
 //! two looks, and one Git gives only one of the answers that Git versions
-//! give for a gitlink. The script is a shell script, so the tests are
+//! give for a submodule entry. The script is a shell script, so the tests are
 //! Unix-only. `history_git_children` tests the life of the process on each
 //! platform.
 //!
 //! No Rule states when the git adapter starts a Git process, or how it reads
-//! an answer that ends before its object, so those tests are implementation
-//! aids with no Rule binding.
+//! an answer that ends before its object, a `missing` answer or an answer of
+//! an unknown form, so those tests are implementation aids with no Rule
+//! binding.
 #![cfg(unix)]
 
 #[path = "history_git_support/repository.rs"]
 mod repository;
 
 use provenance_macros::verifies;
+use provenance_store::review::history::contract::UNKNOWN_COMMIT;
 use provenance_store::review::history::{FileVersions, GitFileVersions};
 use repository::repository;
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
-
-/// The commit of a gitlink that no repository of the tests holds.
-const GITLINK_COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
 
 /// Puts the logging `git` first on PATH, once for the test binary, before
 /// any test starts Git.
@@ -106,20 +105,28 @@ async fn text_for_answer(answer: fn(&str) -> String) -> anyhow::Result<Option<St
     GitFileVersions::new(root).text("good.jsonl", &commit).await
 }
 
-/// Git 2.56 answers a gitlink whose commit the repository does not hold with
-/// that commit and `submodule`.
+/// Git 2.51 and later answer a submodule entry to a commit that the
+/// repository does not hold with that commit and `submodule`.
 #[tokio::test]
-#[verifies("rule_record_history_submodule_entry_has_no_text", examples)]
-async fn a_gitlink_that_git_answers_as_a_submodule_has_no_text() {
-    let text = text_for_answer(|_| format!("{GITLINK_COMMIT} submodule\n")).await;
+#[verifies("rule_record_history_text_only_from_file", examples)]
+async fn a_submodule_entry_that_git_answers_as_a_submodule_has_no_text() {
+    let text = text_for_answer(|_| format!("{UNKNOWN_COMMIT} submodule\n")).await;
     assert_eq!(text.unwrap(), None);
 }
 
-/// Git 2.43 answers a gitlink whose commit the repository does not hold with
-/// the name of the request and `missing`.
+/// Pins the answer that Git before 2.51 gives for a submodule entry to a
+/// commit that the repository does not hold: the name of the request and
+/// `missing`, the answer for a name with no object.
 #[tokio::test]
-#[verifies("rule_record_history_submodule_entry_has_no_text", examples)]
-async fn a_gitlink_that_git_answers_as_missing_has_no_text() {
+async fn a_missing_answer_has_no_text() {
     let text = text_for_answer(|commit| format!("{commit}:good.jsonl missing\n")).await;
     assert_eq!(text.unwrap(), None);
+}
+
+/// An answer of a form that the adapter does not know is refused, and the
+/// error gives the answer.
+#[tokio::test]
+async fn an_answer_of_an_unknown_form_is_refused() {
+    let error = text_for_answer(|_| "x tree\n".to_owned()).await.unwrap_err();
+    assert_eq!(format!("{error:#}"), "git cat-file returned an unreadable header: x tree");
 }

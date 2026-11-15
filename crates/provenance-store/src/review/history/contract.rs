@@ -8,22 +8,22 @@
 mod cases;
 mod commit;
 mod edges;
-mod gitlink;
 mod memory;
+mod not_a_file;
 
 pub use cases::{
     a_file_that_no_commit_holds_has_no_versions, text_gives_the_file_at_a_commit,
     versions_follow_the_history_of_head,
 };
-pub use commit::{Commit, Entry};
+pub use commit::{Commit, Entry, EntryKind};
 pub use edges::{
     a_change_of_mode_only_is_listed, a_commit_on_two_parent_lines_is_listed_once,
     a_commit_that_the_adapter_does_not_hold_has_no_text, a_text_that_is_not_utf8_is_an_error,
     an_octopus_merge_goes_on_through_the_parent_with_its_file, edge_graph, MODE, OCTOPUS,
     TWO_LINES, UNKNOWN_COMMIT, UNREADABLE,
 };
-pub use gitlink::{a_gitlink_at_the_path_is_listed_with_no_text, gitlink_graph, GITLINK};
 pub use memory::{memory_adapter, MemoryFileVersions};
+pub use not_a_file::{an_entry_that_is_not_a_file_has_no_text, not_a_file_graph, NOT_A_FILE};
 
 use super::versions::FileVersions;
 use std::collections::BTreeMap;

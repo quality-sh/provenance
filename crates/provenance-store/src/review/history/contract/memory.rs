@@ -1,6 +1,6 @@
 //! The memory adapter of the file versions port, over a commit graph.
 
-use super::{Adapter, Commit, Entry};
+use super::{Adapter, Commit, Entry, EntryKind};
 use crate::review::history::versions::{BoxFuture, FileVersion, FileVersions};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -153,7 +153,7 @@ impl FileVersions for MemoryFileVersions {
         let text = self
             .index(commit)
             .and_then(|index| self.entry(index, path))
-            .filter(|entry| entry.gitlink.is_none())
+            .filter(|entry| entry.kind == EntryKind::File)
             .map(|entry| String::from_utf8(entry.bytes.clone()))
             .transpose()
             .map_err(anyhow::Error::from);
