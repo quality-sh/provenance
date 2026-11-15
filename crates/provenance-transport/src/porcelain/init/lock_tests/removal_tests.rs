@@ -13,10 +13,9 @@ const FINISHED: i32 = 87;
 const CHILD: &str = "porcelain::init::lock_tests::removal_tests::stopped_removal_child";
 /// The points of the removal: the compare is done, and the file is removed.
 const POINTS: [&str; 2] = ["project_file_removal_compared", "project_file_removed"];
-const LEGACY: &str = ".agents/skills/shaping/SKILL.md";
-/// A file of the person in the folder of the legacy skill, so that the
-/// folder stays after the removal.
-const NOTES: &str = ".agents/skills/shaping/notes.md";
+/// The folder of the legacy skill, one name for each part, so that a path
+/// has the separators of the system, as the paths of init have.
+const LEGACY_FOLDER: [&str; 3] = [".agents", "skills", "shaping"];
 const EDIT: &str = "An edit of the person.\n";
 
 /// The child process: the second init, which stops at once when it comes to
@@ -38,6 +37,18 @@ fn stopped_removal_child() {
     }
 }
 
+/// The folder of the legacy skill in `repo`.
+fn legacy_folder_path(repo: &Utf8Path) -> Utf8PathBuf {
+    LEGACY_FOLDER
+        .iter()
+        .fold(repo.to_owned(), |path, part| path.join(part))
+}
+
+/// The legacy skill file in `repo`.
+fn legacy_path(repo: &Utf8Path) -> Utf8PathBuf {
+    legacy_folder_path(repo).join("SKILL.md")
+}
+
 /// The text of a skill file that an older release installed with its stamp.
 fn legacy_skill() -> String {
     let frontmatter = "---\nname: shaping\ndescription: An old skill.\n---\n";
@@ -53,9 +64,15 @@ fn repository_with_legacy_skill() -> (tempfile::TempDir, Utf8PathBuf) {
     let repo = Utf8PathBuf::from_path_buf(directory.path().join("repo")).unwrap();
     std::fs::create_dir_all(&repo).unwrap();
     init_through_the_port(init_input(&repo, &["reviewer"]), || {}).unwrap();
-    std::fs::create_dir_all(repo.join(LEGACY).parent().unwrap()).unwrap();
-    std::fs::write(repo.join(LEGACY), legacy_skill()).unwrap();
-    std::fs::write(repo.join(NOTES), "notes of the person\n").unwrap();
+    std::fs::create_dir_all(legacy_folder_path(&repo)).unwrap();
+    std::fs::write(legacy_path(&repo), legacy_skill()).unwrap();
+    // A file of the person in the folder of the legacy skill, so that the
+    // folder stays after the removal.
+    std::fs::write(
+        legacy_folder_path(&repo).join("notes.md"),
+        "notes of the person\n",
+    )
+    .unwrap();
     (directory, repo)
 }
 
@@ -77,10 +94,7 @@ fn stop_second_init(repo: &Utf8Path, point: &str) {
 
 /// The files in the folder of the legacy skill.
 fn legacy_folder(repo: &Utf8Path) -> Vec<String> {
-    let mut names: Vec<String> = repo
-        .join(LEGACY)
-        .parent()
-        .unwrap()
+    let mut names: Vec<String> = legacy_folder_path(repo)
         .read_dir_utf8()
         .unwrap()
         .map(|entry| entry.unwrap().file_name().to_owned())
@@ -107,7 +121,7 @@ fn a_stop_before_the_remove_keeps_the_file() {
     stop_second_init(&repo, "project_file_removal_compared");
 
     assert_eq!(
-        std::fs::read_to_string(repo.join(LEGACY)).unwrap(),
+        std::fs::read_to_string(legacy_path(&repo)).unwrap(),
         legacy_skill()
     );
     assert_eq!(legacy_folder(&repo), ["SKILL.md", "notes.md"]);
@@ -137,7 +151,7 @@ fn a_stop_after_the_remove_leaves_no_file_and_no_other_name() {
 #[verifies("rule_init_refuses_a_project_file_change_before_its_compare", examples)]
 fn an_edit_before_the_compare_of_the_removal_is_refused_and_kept() {
     let (_directory, repo) = repository_with_legacy_skill();
-    let legacy = repo.join(LEGACY);
+    let legacy = legacy_path(&repo);
 
     let edited = legacy.clone();
     let error = init_through_the_port(init_input(&repo, &["reviewer"]), move || {
@@ -166,7 +180,7 @@ fn an_edit_before_the_compare_of_the_removal_is_refused_and_kept() {
 fn an_edit_after_the_compare_of_the_removal_is_removed() {
     let (_directory, repo) = repository_with_legacy_skill();
 
-    let edited = repo.join(LEGACY);
+    let edited = legacy_path(&repo);
     init_through_the_port(init_input(&repo, &["reviewer"]), move || {
         let edited = edited.clone();
         crate::test_probes::arm("project_file_removal_compared", move || {
