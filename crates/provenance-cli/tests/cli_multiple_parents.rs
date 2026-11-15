@@ -3,18 +3,8 @@ use crate::support::record_review::archive_requirement;
 use porcelain_authoring_support::{initialized_repo, json_output, provenance};
 use provenance_macros::verifies;
 
-/// Allows the reviewer to accept the status requests of `repo`.
-fn allow_reviewer(repo: &str) {
-    let path = std::path::Path::new(repo).join(".provenance/state/manifest.json");
-    let mut manifest: provenance_core::Manifest =
-        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-    manifest.disposition_actor_ids.push("reviewer".into());
-    std::fs::write(&path, serde_json::to_vec(&manifest).unwrap()).unwrap();
-}
-
 fn parent_repo() -> (tempfile::TempDir, String) {
-    let (directory, repo) = initialized_repo();
-    allow_reviewer(&repo);
+    let (directory, repo) = initialized_repo(Some("reviewer"));
     for id in ["req_p", "req_q", "req_b", "req_shared", "req_child"] {
         json_output(&[
             id,

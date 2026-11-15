@@ -5,6 +5,7 @@ mod deletion;
 mod identity;
 mod publication;
 mod reconcile;
+mod refusals;
 mod rule_addresses;
 mod view;
 
@@ -21,7 +22,7 @@ use super::{
 pub use decision::{decide_typed_spec, TypedSpecDecision};
 use decision::{CurrentTypedState, DesiredTypedIds};
 pub(in crate::state_store) use rule_addresses::rule_address;
-pub use view::TypedSpecView;
+pub use view::{ReviewHistory, TypedSpecView};
 
 #[derive(Clone, Copy)]
 pub(super) struct DesiredTypedGraph<'a> {
@@ -197,6 +198,7 @@ fn spec_result(
         updated: count_state(&resources, &cascade, ReconcileState::Updated),
         moved: count_state(&resources, &cascade, ReconcileState::Moved),
         deleted: count_state(&resources, &cascade, ReconcileState::Deleted),
+        refused: count_state(&resources, &cascade, ReconcileState::Refused),
         conflicts: count_state(&resources, &cascade, ReconcileState::Conflict),
         unchanged: count_state(&resources, &cascade, ReconcileState::Unchanged),
         resources,
