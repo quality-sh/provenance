@@ -37,8 +37,7 @@ fn init_with_failed_folder_syncs(
         crate::test_probes::arm("project_file_compared", move || {
             renames += 1;
             if renames <= failures {
-                std::fs::set_permissions(&closed, std::fs::Permissions::from_mode(0o300))
-                    .unwrap();
+                std::fs::set_permissions(&closed, std::fs::Permissions::from_mode(0o300)).unwrap();
             }
         });
         let opened = folder.clone();

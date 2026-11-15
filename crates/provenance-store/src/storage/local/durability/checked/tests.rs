@@ -43,7 +43,10 @@ fn the_temporary_file_has_the_prefix_six_letters_or_digits_and_tmp() {
         .and_then(|rest| rest.strip_suffix(".tmp"))
         .unwrap_or_else(|| panic!("{name}"));
     assert_eq!(random.len(), 6, "{name}");
-    assert!(random.bytes().all(|byte| byte.is_ascii_alphanumeric()), "{name}");
+    assert!(
+        random.bytes().all(|byte| byte.is_ascii_alphanumeric()),
+        "{name}"
+    );
     assert_eq!(names(&root), ["AGENTS.md"]);
     assert_eq!(std::fs::read(&path).unwrap(), b"new\n");
 }
@@ -99,7 +102,10 @@ fn a_failed_check_deletes_the_temporary_file_and_keeps_the_old_bytes() {
 fn the_removal_of_old_temporary_files_takes_only_regular_files_of_the_name_form() {
     let (_temp, root) = directory();
     let path = root.join("AGENTS.md");
-    let exact = [".AGENTS.md.provenance-abc123.tmp", ".AGENTS.md.provenance-ZZZZZZ.tmp"];
+    let exact = [
+        ".AGENTS.md.provenance-abc123.tmp",
+        ".AGENTS.md.provenance-ZZZZZZ.tmp",
+    ];
     let near = [
         ".AGENTS.md.provenance-abc12.tmp",
         ".AGENTS.md.provenance-abc1234.tmp",
