@@ -1,9 +1,11 @@
 use pdf_oxide::writer::PdfWriter;
 use provenance_macros::verifies;
 use provenance_ste100::{
-    import_dictionary, load_dictionary_index_for_source, store_dictionary_index,
-    DictionaryImportError, DictionaryIndexError, DictionaryStatus, PartOfSpeech, StandardIssue,
+    decode_dictionary_index, decode_dictionary_index_for_source, dictionary_index_file_name,
+    dictionary_index_file_name_for_source, encode_dictionary_index, import_dictionary,
+    DictionaryImportError, DictionaryStatus, PartOfSpeech, StandardIssue,
 };
+use std::path::Path;
 
 const STATED_APPROVED_WORDS: usize = 875;
 const STATED_UNAPPROVED_WORDS: usize = 1_274;
@@ -125,51 +127,47 @@ fn imports_a_complete_positioned_dictionary_deterministically() {
     assert_eq!(prefix_entry.non_ste_example, None);
 }
 
+/// Implementation aid with no Rule: the test decodes the bytes of one index
+/// with no file, and the file name for the source equals the file name for the
+/// identity. The tests of a stored index in `provenance-cli` carry
+/// `rule_ste_dictionary_import_reuse`.
 #[test]
-#[verifies("rule_ste_dictionary_import_reuse", examples)]
 fn a_verified_index_loads_for_the_same_source_bytes() {
     let pdf = dictionary_pdf(APPROVED_TABLE_ROWS, UNAPPROVED_TABLE_ROWS, 9, true);
     let import = import_dictionary(&pdf).expect("import the fixture");
-    let directory = scratch_directory("matching-source");
-    store_dictionary_index(&import, &directory).expect("store the index");
+    let contents = encode_dictionary_index(&import).expect("encode the index");
 
-    let loaded =
-        load_dictionary_index_for_source(&directory, &pdf).expect("load the matching index");
+    let loaded = decode_dictionary_index_for_source(&contents, &pdf, Path::new("index.json"))
+        .expect("decode the matching index");
 
     assert_eq!(loaded, import);
-    std::fs::remove_dir_all(directory).expect("remove the scratch directory");
+    assert_eq!(
+        dictionary_index_file_name_for_source(&pdf),
+        dictionary_index_file_name(&import.identity)
+    );
 }
 
+/// Implementation aid with no Rule: the test compares file names only. No
+/// Rule states the file name of an index, and the tests of a stored index in
+/// `provenance-cli` carry `rule_ste_dictionary_import_reuse`.
 #[test]
-#[verifies("rule_ste_dictionary_import_reuse", examples)]
 fn changed_source_or_extractor_version_cannot_reuse_an_index() {
     let pdf = dictionary_pdf(APPROVED_TABLE_ROWS, UNAPPROVED_TABLE_ROWS, 9, true);
     let mut old_import = import_dictionary(&pdf).expect("import the fixture");
-    let directory = scratch_directory("changed-source");
     old_import.identity.extractor_version.push_str("-old");
-    store_dictionary_index(&old_import, &directory).expect("store the old index");
 
-    assert!(matches!(
-        load_dictionary_index_for_source(&directory, &pdf),
-        Err(DictionaryIndexError::NotFound { .. })
-    ));
+    assert_ne!(
+        dictionary_index_file_name_for_source(&pdf),
+        dictionary_index_file_name(&old_import.identity)
+    );
 
     old_import.identity.extractor_version = env!("CARGO_PKG_VERSION").to_owned();
-    store_dictionary_index(&old_import, &directory).expect("store the current index");
     let mut changed_pdf = pdf;
     changed_pdf.push(b' ');
-    assert!(matches!(
-        load_dictionary_index_for_source(&directory, &changed_pdf),
-        Err(DictionaryIndexError::NotFound { .. })
-    ));
-    std::fs::remove_dir_all(directory).expect("remove the scratch directory");
-}
-
-fn scratch_directory(name: &str) -> std::path::PathBuf {
-    std::env::temp_dir().join(format!(
-        "provenance-ste100-source-index-{name}-{}",
-        std::process::id()
-    ))
+    assert_ne!(
+        dictionary_index_file_name_for_source(&changed_pdf),
+        dictionary_index_file_name(&old_import.identity)
+    );
 }
 
 #[test]
@@ -192,16 +190,11 @@ fn imports_the_local_official_issue_9_pdf() {
         UNAPPROVED_TABLE_ROWS
     );
 
-    let index_directory = std::env::temp_dir().join(format!(
-        "provenance-ste100-official-index-{}",
-        std::process::id()
-    ));
-    provenance_ste100::store_dictionary_index(&dictionary, &index_directory)
-        .expect("store the official import as an index");
-    let reloaded = provenance_ste100::load_dictionary_index(&index_directory, &dictionary.identity)
-        .expect("load the official index again");
+    let contents = encode_dictionary_index(&dictionary).expect("encode the official import");
+    let reloaded =
+        decode_dictionary_index(&contents, &dictionary.identity, Path::new("index.json"))
+            .expect("decode the official index again");
     assert_eq!(reloaded, dictionary);
-    std::fs::remove_dir_all(&index_directory).expect("remove the scratch directory");
 }
 
 fn status_count(entries: &[provenance_ste100::DictionaryEntry], status: DictionaryStatus) -> usize {

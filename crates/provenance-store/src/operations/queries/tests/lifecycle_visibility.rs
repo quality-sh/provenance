@@ -101,7 +101,9 @@ async fn list_rules(root: &camino::Utf8Path, request: Value) -> anyhow::Result<V
     list_family::<crate::operations::family_operations::PageRules>(root, request).await
 }
 
-async fn list_family<O: catalog::Operation>(
+/// Invokes the family page `O` against the store at `root` in the default
+/// scope. A refusal gives its wire failure as JSON text.
+pub(super) async fn list_family<O: catalog::Operation>(
     root: &camino::Utf8Path,
     request: Value,
 ) -> anyhow::Result<Value> {

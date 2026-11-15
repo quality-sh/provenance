@@ -247,3 +247,40 @@ pub fn write_reference_with_technical_names(
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(&path, serde_json::to_vec_pretty(&reference).unwrap()).unwrap();
 }
+
+/// A dictionary reference that stops in the name of its third field. It holds
+/// a technical name that a write must not lose.
+pub fn half_reference() -> String {
+    format!(r#"{{"technical_names": ["{UNAPPROVED_WORD}"], "issue": 9, "source_sha"#)
+}
+
+/// The parse message of [`half_reference`].
+pub const HALF_REFERENCE_MESSAGE: &str = "EOF while parsing a string";
+
+/// The repair that each answer gives for a reference that does not parse.
+pub const REFERENCE_REPAIR: &str =
+    "get the file again from git or correct its JSON, and then do the command again";
+
+/// The text of the problem of a reference whose first line does not parse
+/// with `message`.
+pub fn reference_problem(message: &str) -> String {
+    format!("dictionary.json line 1: {message}; {REFERENCE_REPAIR}")
+}
+
+/// The standard error of a write that refuses a reference whose first line
+/// does not parse with `message`.
+pub fn reference_refusal(message: &str) -> String {
+    format!("Error: {}\n", reference_problem(message))
+}
+
+/// The names in `directory`, sorted, or no names when it does not exist.
+pub fn file_names(directory: &Path) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(directory) else {
+        return Vec::new();
+    };
+    let mut names: Vec<String> = entries
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}

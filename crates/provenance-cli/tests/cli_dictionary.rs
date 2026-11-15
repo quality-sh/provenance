@@ -1,7 +1,11 @@
+#[path = "cli_dictionary/damaged_reference.rs"]
+mod damaged_reference;
 #[path = "cli_dictionary/gate.rs"]
 mod gate;
 #[path = "cli_dictionary/import_command.rs"]
 mod import_command;
+#[path = "cli_dictionary/index_store.rs"]
+mod index_store;
 #[path = "cli_dictionary/inflections.rs"]
 mod inflections;
 #[path = "cli_dictionary/missing_index.rs"]
