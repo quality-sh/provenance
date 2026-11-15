@@ -1,4 +1,5 @@
-//! A change of a record status to active or archived waits for a reviewer.
+//! A change of the status of a Rule or a Requirement to active or archived waits
+//! for a reviewer.
 //! The CLI write opens a status request, and an approval sets the status.
 
 use provenance_macros::verifies;
@@ -311,4 +312,127 @@ fn requirement_archive_waits_for_the_reviewer_and_then_cascades() {
     let rule = read(&repo, "rules", "rule_a");
     assert_eq!(rule["status"], "archived", "{rule}");
     assert_eq!(rule["archived_in_commit"]["commit"], ARCHIVE_COMMIT);
+}
+
+/// Runs one JSON command against `repo` and returns its complete output.
+fn output(repo: &str, args: &[&str]) -> serde_json::Value {
+    let mut all = args.to_vec();
+    all.extend(["--repo", repo, "--format", "json"]);
+    support::review_paths::json_output(provenance().args(all))
+}
+
+#[test]
+#[verifies("rule_status_change_waits_for_review", examples)]
+fn the_result_of_a_request_names_the_call_that_accepts_it() {
+    let (_directory, repo) = accepted_draft_rule();
+    let etag = read(&repo, "rules", "rule_a")["edit"]["etag"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    let result = output(
+        &repo,
+        &[
+            "rule_a",
+            "update",
+            "--status",
+            "active",
+            "--if-match",
+            &etag,
+        ],
+    );
+
+    assert_eq!(result["data"]["status"], "draft", "{result}");
+    let pending = &result["data"]["decision"]["pending"];
+    assert_eq!(pending["status_request"]["status"], "active", "{result}");
+    let proposal = pending["proposal_id"].as_str().unwrap();
+    let note = result["meta"]["notes"][0].as_str().unwrap();
+    assert!(
+        note.contains(&format!(
+            "`provenance api rules/rule_a/submissions/{proposal}/decide --method post --input -`"
+        )),
+        "{note}"
+    );
+    assert!(
+        note.ends_with("Until then, rule_a keeps the status draft."),
+        "{note}"
+    );
+}
+
+#[test]
+#[verifies("rule_new_active_rule_waits_for_review", examples)]
+fn a_request_with_an_empty_reviewer_list_names_the_command_that_adds_a_reviewer() {
+    let (_directory, repo) = init();
+    provenance()
+        .args(["init", "--path", &repo, "--clear-disposition-actors"])
+        .assert()
+        .success();
+    create_requirement(&repo, "req_a");
+
+    let result = output(
+        &repo,
+        &[
+            "rule_a",
+            "create",
+            "--type",
+            "rule",
+            "--statement",
+            "The system keeps each record.",
+            "--requirement-id",
+            "req_a",
+            "--status",
+            "active",
+        ],
+    );
+
+    assert_eq!(result["data"]["status"], "review", "{result}");
+    let note = result["meta"]["notes"][0].as_str().unwrap();
+    assert!(
+        note.contains(
+            "The manifest field disposition_actor_ids is empty, thus no actor can make a review \
+             decision. To change this field, use the command provenance init \
+             --disposition-actor-id <DISPOSITION_ACTOR_ID>."
+        ),
+        "{note}"
+    );
+}
+
+#[test]
+#[verifies("rule_content_change_opens_review_submission", examples)]
+fn a_content_change_while_a_status_request_is_open_replaces_the_request() {
+    let (_directory, repo) = accepted_draft_rule();
+    guarded_update(&repo, "rules", "rule_a", &["--status", "active"]);
+    let (request, _) = pending_status_request(&repo, "rules", "rule_a");
+
+    guarded_update(&repo, "rules", "rule_a", &["--severity", "low"]);
+
+    let after = read(&repo, "rules", "rule_a");
+    assert_eq!(after["status"], "draft", "{after}");
+    assert_eq!(after["severity"], "low", "{after}");
+    let pending = &after["decision"]["pending"];
+    assert_ne!(pending["proposal_id"], request.as_str(), "{after}");
+    assert!(pending["status_request"].is_null(), "{after}");
+    let path = format!("rules/rule_a/submissions/{request}/decide");
+    let refusal = provenance()
+        .args([
+            "api", &path, "--method", "post", "--input", "-", "--repo", &repo,
+        ])
+        .write_stdin(
+            serde_json::json!({
+                "actor": {"identity_type": "human", "id": "reviewer"},
+                "decision": "accepted",
+                "canonical_artifact": {"artifact_type": "rule", "artifact_id": "rule_a"}
+            })
+            .to_string(),
+        )
+        .output()
+        .unwrap();
+    assert!(!refusal.status.success());
+    let stderr = String::from_utf8_lossy(&refusal.stderr);
+    assert!(stderr.contains("review_submission_conflict"), "{stderr}");
+    assert!(
+        stderr.contains(pending["proposal_id"].as_str().unwrap()),
+        "{stderr}"
+    );
+    assert_eq!(read(&repo, "rules", "rule_a")["status"], "draft");
 }

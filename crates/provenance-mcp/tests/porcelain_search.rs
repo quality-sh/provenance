@@ -11,7 +11,7 @@ use provenance_transport::{
 };
 use rmcp::model::CallToolRequestParams;
 use serde_json::json;
-use support::mcp::{accept_status_request, call, Session};
+use support::mcp::{accept_pending, accept_status_request, call, Session};
 use support::records::{allow_reviewer, Repository};
 
 fn access(repository: &Repository) -> FixtureAccess {
@@ -375,7 +375,7 @@ async fn mcp_search_shows_each_record_lifecycle() {
             "{readable}"
         );
     }
-    accept_status_request(client, "rules", "rule_shared").await;
+    accept_pending(client, "rules", "rule_shared").await;
     let archived = client
         .call_tool(
             CallToolRequestParams::new("change").with_arguments(
