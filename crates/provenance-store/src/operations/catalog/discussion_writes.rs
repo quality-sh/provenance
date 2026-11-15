@@ -2,7 +2,7 @@
 
 use super::{shapes::scoped_write_operation, ExecutionNeed};
 use crate::review;
-use provenance_core::{threads::Discussion, ScopeId, ThreadParent};
+use provenance_core::{actor_input::ActorInput, threads::Discussion, ScopeId, ThreadParent};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -13,13 +13,8 @@ pub struct WriteDiscussionRequest {
     pub parent: ThreadParent,
     /// The actor of the write. A status change must give an actor. A start that gives no
     /// actor records the actor `authoring`, and a reply needs no actor.
-    #[serde(
-        default,
-        deserialize_with = "provenance_core::actor_input::given",
-        skip_serializing_if = "Option::is_none"
-    )]
-    #[cfg_attr(feature = "schema", schemars(with = "String"))]
-    pub actor: Option<String>,
+    #[serde(default)]
+    pub actor: ActorInput,
     pub declared_by: Option<String>,
     pub action: review::DiscussionAction,
 }
@@ -33,13 +28,15 @@ scoped_write_operation!(
     &[ExecutionNeed::GraphStorage],
     scope = scope_id,
     validate = |request: &WriteDiscussionRequest| match request.action {
-        review::DiscussionAction::SetStatus { .. } if request.actor.is_none() => {
+        review::DiscussionAction::SetStatus { .. } if request.actor.is_absent() => {
             Err(review::write_actor::missing_actor())
         }
         _ => Ok(()),
     },
     |store, _scope, request| {
         let actor = match request.action {
+            // A native caller of `invoke_typed` skips `validate_external`, so the status change
+            // of that caller is refused here.
             review::DiscussionAction::SetStatus { .. } => {
                 review::write_actor::named_actor(request.actor)?
             }

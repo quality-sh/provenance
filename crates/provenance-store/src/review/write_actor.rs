@@ -1,6 +1,6 @@
 //! The actor that a write records.
 
-use crate::write_error::WriteFailure;
+use provenance_core::actor_input::ActorInput;
 use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
 use provenance_macros::rule;
 
@@ -10,8 +10,8 @@ pub const AUTHORING_ACTOR: &str = "authoring";
 /// A write that makes or changes a Requirement or starts a Discussion, and gives no actor,
 /// records the actor `authoring`; a write that gives an actor records that actor.
 #[rule("rule_write_without_actor_records_authoring")]
-pub fn recorded_actor(given: Option<String>) -> String {
-    given.unwrap_or_else(|| AUTHORING_ACTOR.to_owned())
+pub fn recorded_actor(given: ActorInput) -> String {
+    given.0.unwrap_or_else(|| AUTHORING_ACTOR.to_owned())
 }
 
 /// The refusal of a write that must name its actor and gives none: `required` on
@@ -23,14 +23,8 @@ pub fn missing_actor() -> OperationFailure {
     }
 }
 
-/// The actor of a write that must name its actor, or a `required` refusal on `request.actor`
-/// when the request gives none.
-pub fn named_actor(given: Option<String>) -> anyhow::Result<String> {
-    given.ok_or_else(|| {
-        let required = WriteFailure::InvalidInput {
-            field: Some("request.actor".to_owned()),
-            reason: InvalidInputReason::Required,
-        };
-        crate::refusal::refuse!((required), "the write needs an actor")
-    })
+/// The actor of a write that must name its actor, or the refusal of [`missing_actor`] when
+/// the request gives none.
+pub fn named_actor(given: ActorInput) -> Result<String, OperationFailure> {
+    given.0.ok_or_else(missing_actor)
 }

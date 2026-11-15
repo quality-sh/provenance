@@ -1,19 +1,55 @@
 //! The optional actor input of a write that makes or changes a Requirement, or that starts or
 //! replies to a Discussion.
 
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serializer};
 
 /// The description of the optional actor input, in each request schema that has it.
 pub const DESCRIPTION: &str = "The actor is optional for a write that makes or changes a \
      Requirement, and for a Discussion start or reply. A Requirement write or a Discussion \
      start with no actor records the actor `authoring`.";
 
-/// Reads a given actor, which is a string.
+/// The optional actor of a write request: the given actor, or `None` when the request has no
+/// actor member.
 ///
-/// A JSON `null` actor is invalid input, as on a write that needs its actor. A request with
-/// no actor member gets `None` from `#[serde(default)]`; `skip_serializing_if =
-/// "Option::is_none"` on the field keeps that default out of the request schema, which allows
-/// no `null`.
-pub fn given<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {
-    String::deserialize(deserializer).map(Some)
+/// A field of this type takes `#[serde(default)]`. A JSON `null` actor is invalid input, as on
+/// a write that needs its actor. The type has no `Serialize`, so the request schema gives the
+/// field no `default`; a request type that serializes gives the field `skip_serializing_if =
+/// "ActorInput::is_absent"` and `serialize_with = "ActorInput::serialize_given"`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ActorInput(pub Option<String>);
+
+impl ActorInput {
+    /// True when the request gives no actor.
+    pub fn is_absent(&self) -> bool {
+        self.0.is_none()
+    }
+
+    /// Writes the given actor as a string, for a request type that serializes.
+    pub fn serialize_given<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match &self.0 {
+            Some(actor) => serializer.serialize_str(actor),
+            None => serializer.serialize_none(),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ActorInput {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer).map(|actor| Self(Some(actor)))
+    }
+}
+
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for ActorInput {
+    fn inline_schema() -> bool {
+        true
+    }
+
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "ActorInput".into()
+    }
+
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({"description": DESCRIPTION, "type": "string"})
+    }
 }

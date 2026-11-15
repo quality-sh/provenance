@@ -2,6 +2,7 @@
 
 use crate::action::{Action, ActionError};
 use provenance_core::{
+    actor_input::ActorInput,
     protocol::{Stamp, Stamped},
     threads::{
         Discussion, DiscussionConversationResult, DiscussionResultPage, DiscussionStatus,
@@ -149,11 +150,10 @@ pub struct StartInput {
     pub parent: ThreadParent,
     #[serde(
         default,
-        deserialize_with = "provenance_core::actor_input::given",
-        skip_serializing_if = "Option::is_none"
+        skip_serializing_if = "ActorInput::is_absent",
+        serialize_with = "ActorInput::serialize_given"
     )]
-    #[schemars(with = "String", description = provenance_core::actor_input::DESCRIPTION)]
-    pub actor: Option<String>,
+    pub actor: ActorInput,
     pub declared_by: Option<String>,
     pub role: MessageRole,
     pub body: String,
@@ -166,11 +166,10 @@ pub struct ReplyInput {
     pub discussion_id: StableId,
     #[serde(
         default,
-        deserialize_with = "provenance_core::actor_input::given",
-        skip_serializing_if = "Option::is_none"
+        skip_serializing_if = "ActorInput::is_absent",
+        serialize_with = "ActorInput::serialize_given"
     )]
-    #[schemars(with = "String", description = provenance_core::actor_input::DESCRIPTION)]
-    pub actor: Option<String>,
+    pub actor: ActorInput,
     pub declared_by: Option<String>,
     pub expected_version: u64,
     pub role: MessageRole,

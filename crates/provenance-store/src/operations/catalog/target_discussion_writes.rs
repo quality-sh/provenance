@@ -1,6 +1,8 @@
 use super::{shapes::scoped_write_operation, ExecutionNeed};
 use crate::review;
-use provenance_core::{threads::Discussion, MessageRole, NodeType, ScopeId, StableId};
+use provenance_core::{
+    actor_input::ActorInput, threads::Discussion, MessageRole, NodeType, ScopeId, StableId,
+};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -8,16 +10,8 @@ use serde::Deserialize;
 #[serde(deny_unknown_fields)]
 pub struct WriteTargetDiscussionRequest {
     pub scope_id: ScopeId,
-    #[serde(
-        default,
-        deserialize_with = "provenance_core::actor_input::given",
-        skip_serializing_if = "Option::is_none"
-    )]
-    #[cfg_attr(
-        feature = "schema",
-        schemars(with = "String", description = provenance_core::actor_input::DESCRIPTION)
-    )]
-    pub actor: Option<String>,
+    #[serde(default)]
+    pub actor: ActorInput,
     pub declared_by: Option<String>,
     pub allowed_parent_kinds: Vec<NodeType>,
     pub discussion_id: StableId,
