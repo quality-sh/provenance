@@ -104,7 +104,9 @@ pub fn set_status<T>(
     let written = write(store).unwrap();
     let state = store.record_decision_state(&scope, kind, &record).unwrap();
     assert!(
-        state.pending.is_some_and(|pending| pending.status_request.is_some()),
+        state
+            .pending
+            .is_some_and(|pending| pending.status_request.is_some()),
         "{kind:?} {id} has no status request"
     );
     accept_pending(store, kind, id);

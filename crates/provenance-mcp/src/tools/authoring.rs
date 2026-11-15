@@ -261,7 +261,10 @@ pub async fn call(
         (Ok(value), note) => {
             let kind = route.kind;
             let opened = match &requested {
-                Some(status) => host.open_status_request(kind, &target, status, &value).await,
+                Some(status) => {
+                    host.open_status_request(kind, &target, status, &value)
+                        .await
+                }
                 None => None,
             };
             let mut structured = value.clone();

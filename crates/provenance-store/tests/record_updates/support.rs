@@ -1,4 +1,6 @@
-use provenance_core::{protocol::failure::OperationFailure, Manifest, NodeType, RepoPathPrefix, ScopeId};
+use provenance_core::{
+    protocol::failure::OperationFailure, Manifest, NodeType, RepoPathPrefix, ScopeId,
+};
 use provenance_store::{layout::ProvenanceLayout, operations::catalog::*, state_store::StateStore};
 use serde_json::{json, Value};
 use std::path::PathBuf;

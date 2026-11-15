@@ -114,9 +114,13 @@ pub fn accept_pending(store: &StateStore, kind: provenance_core::NodeType, id: &
 /// an active or archived status.
 pub fn accept_status_request(store: &StateStore, kind: provenance_core::NodeType, id: &str) {
     let record = StableId::new(id).unwrap();
-    let state = store.record_decision_state(&scope(), kind, &record).unwrap();
+    let state = store
+        .record_decision_state(&scope(), kind, &record)
+        .unwrap();
     assert!(
-        state.pending.is_some_and(|pending| pending.status_request.is_some()),
+        state
+            .pending
+            .is_some_and(|pending| pending.status_request.is_some()),
         "{kind:?} {id} has no status request"
     );
     accept_pending(store, kind, id);

@@ -111,10 +111,7 @@ fn archive_that_only_clears_the_claim(
 fn a_claim_cleared_on_an_open_topic_breaks_l3() {
     let case = Case {
         engines: 2,
-        steps: alone(&[
-            Operation::ClaimTopic,
-            ARCHIVE_FIRST,
-        ]),
+        steps: alone(&[Operation::ClaimTopic, ARCHIVE_FIRST]),
     };
     let run = run_case(&case, with(archive_that_only_clears_the_claim));
     expect_law(laws::check_only(&run, "L3"), "L3");
@@ -139,10 +136,7 @@ fn claim_that_lands_an_empty_stage(repository: &Repository, task: &Task) -> anyh
 fn a_claim_on_an_archived_topic_breaks_l3() {
     let case = Case {
         engines: 2,
-        steps: alone(&[
-            ARCHIVE_FIRST,
-            Operation::ClaimTopic,
-        ]),
+        steps: alone(&[ARCHIVE_FIRST, Operation::ClaimTopic]),
     };
     let run = run_case(&case, with(claim_that_lands_an_empty_stage));
     assert!(met(&run, 1, Outcome::Landed), "{:?}", run.publishes);

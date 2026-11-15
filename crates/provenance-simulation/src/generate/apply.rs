@@ -195,9 +195,11 @@ pub fn apply(repository: &Repository, task: &Task) -> anyhow::Result<Effect> {
             store.update_requirement(archive_update(&id))?;
             let request = super::call::open_status_request(repository, &id)?;
             if *leave_open {
-                return Ok(request.map_or(Effect::Skipped, |proposal| Effect::Proposal {
-                    id: proposal.as_str().to_owned(),
-                }));
+                return Ok(
+                    request.map_or(Effect::Skipped, |proposal| Effect::Proposal {
+                        id: proposal.as_str().to_owned(),
+                    }),
+                );
             }
             // The allowed reviewer accepts the status request, so the archive
             // and its cascade apply.

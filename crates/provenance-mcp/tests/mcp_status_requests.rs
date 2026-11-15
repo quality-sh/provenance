@@ -74,7 +74,10 @@ async fn a_rule_archive_names_the_status_request_and_keeps_the_status() {
     assert_eq!(status, "archived");
     let pending = &written["decision"]["pending"];
     assert_eq!(pending["proposal_id"], proposal.as_str(), "{structured}");
-    assert_eq!(pending["status_request"]["status"], "archived", "{structured}");
+    assert_eq!(
+        pending["status_request"]["status"], "archived",
+        "{structured}"
+    );
     let readable = text(&result);
     assert!(
         readable.starts_with(&format!(
@@ -222,7 +225,10 @@ async fn a_rule_activation_names_the_status_request_and_keeps_the_status() {
     assert_eq!(written["status"], "draft", "{structured}");
     let (proposal, status) = pending_request(client, "rules", "rule_new").await;
     assert_eq!(status, "active");
-    assert_eq!(written["decision"]["pending"]["proposal_id"], proposal.as_str());
+    assert_eq!(
+        written["decision"]["pending"]["proposal_id"],
+        proposal.as_str()
+    );
     let readable = text(&result);
     assert!(
         readable.starts_with(&format!(
