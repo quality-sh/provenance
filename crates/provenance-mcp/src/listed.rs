@@ -3,6 +3,7 @@
 //! one order, and then runs.
 
 use crate::arguments::InputCheck;
+use crate::exposed::{self, Place, EXPOSED};
 use crate::tools;
 use provenance_porcelain::action_input::ActionInput;
 use provenance_porcelain::registry::Command;
@@ -33,6 +34,14 @@ impl Table {
     pub fn find(&self, name: &str) -> Option<&Listed> {
         self.0.iter().find(|listed| listed.tool.name == name)
     }
+
+    /// Whether the server shows this command: a listed tool is the command, or it has
+    /// the command as an action that the host can run.
+    pub fn shows(&self, command: Command) -> bool {
+        self.0
+            .iter()
+            .any(|listed| listed.commands.contains(&command))
+    }
 }
 
 /// One listed tool: the tool that tools/list gives, its compiled input schema, and
@@ -41,6 +50,8 @@ pub struct Listed {
     tool: Tool,
     input: InputCheck,
     runner: Runner,
+    /// The commands that the host can run through this tool.
+    commands: Vec<Command>,
 }
 
 /// What runs the calls of one tool. A tool with an action argument holds its actions.
@@ -52,6 +63,33 @@ enum Runner {
     Check,
     Discussions(ActionInput),
     Change(ActionInput),
+}
+
+impl Runner {
+    /// The commands that the host can run through the tool of `command`. The discussions
+    /// tool has the reads that the host grants. The change tool has its own command and
+    /// each action that the host grants.
+    fn commands(&self, command: Command, host: &StatementHost) -> Vec<Command> {
+        match self {
+            Self::Discussions(_) => [Action::Discussions, Action::Discussion]
+                .into_iter()
+                .filter(|action| host.porcelain().discussion_is_available(*action))
+                .map(Command::Action)
+                .collect(),
+            Self::Change(input) => std::iter::once(command)
+                .chain(
+                    EXPOSED
+                        .iter()
+                        .filter(|(_, place)| *place == Place::Action { tool: "change" })
+                        .map(|(action, _)| *action)
+                        .filter(|action| {
+                            input.actions().any(|word| word == exposed::name(*action))
+                        }),
+                )
+                .collect(),
+            Self::Get | Self::Trace | Self::Search | Self::Api | Self::Check => vec![command],
+        }
+    }
 }
 
 /// One call after its input checks: the tool, and the action that the call selected.
@@ -105,6 +143,7 @@ impl Listed {
             | Command::Workspace(_)
             | Command::Dogfood(_) => return None,
         };
+        let commands = runner.commands(command, host);
         let schema = Value::Object((*tool.input_schema).clone());
         let input = InputCheck::new(schema)
             .unwrap_or_else(|error| panic!("the input schema of {} compiles: {error}", tool.name));
@@ -112,6 +151,7 @@ impl Listed {
             tool,
             input,
             runner,
+            commands,
         })
     }
 

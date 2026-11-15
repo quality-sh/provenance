@@ -36,11 +36,10 @@ pub fn instructions() -> String {
 }
 
 impl ServerHandler for Server {
-    /// Supplies shared domain guidance through native MCP instructions, which name
-    /// only the tools that the server lists.
+    /// Supplies shared domain guidance through native MCP instructions.
     #[provenance_macros::rule("rule_porcelain_mcp_guidance_native")]
     fn get_info(&self) -> ServerConfig {
-        let instructions = crate::guidance::instructions(|name| self.tools.find(name).is_some());
+        let instructions = crate::guidance::instructions(|command| self.tools.shows(command));
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(server_info())
             .with_instructions(instructions)

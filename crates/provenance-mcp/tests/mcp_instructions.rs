@@ -5,6 +5,7 @@
 
 use crate::support::{fixture_host, mcp::Session, records::Repository};
 use provenance_porcelain::action::Action;
+use provenance_porcelain::registry::Command;
 use provenance_store::operations::catalog::{self, Operation as _};
 use provenance_transport::StatementHost;
 
@@ -280,4 +281,31 @@ async fn a_host_with_only_api_gives_only_the_api_line() {
     let (names, instructions) = served(StatementHost::default()).await;
     assert_eq!(names, ["api"]);
     assert_eq!(instructions, expected(&[], &[API], false));
+}
+
+/// No host lists trace without get: both tools need the same read grant. The shared
+/// guidance of a consumer that shows trace and not get is the evidence.
+#[test]
+fn guidance_with_trace_and_without_get_gives_no_line_that_names_get() {
+    let shown = |command: Command| command != Command::Get;
+    let lines = [
+        SEARCH,
+        CHECK,
+        API,
+        CHANGE,
+        CREATE,
+        UPDATE,
+        ANSWER,
+        CLAIM,
+        RELEASE,
+        SUBMIT,
+        DISCUSSIONS,
+        DISCUSSION,
+        DISCUSS,
+        REPLY,
+    ];
+    assert_eq!(
+        provenance_porcelain::guidance::guidance_for(shown).guidance,
+        expected(&[CREATE_TYPE], &lines, false)
+    );
 }
