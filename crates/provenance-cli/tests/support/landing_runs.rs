@@ -55,14 +55,21 @@ pub fn landing_repository() -> Landing {
     }
 }
 
-/// The bytes of each file of the ideation directory, by file name.
+/// The bytes of each file of the ideation directory in the commit `HEAD`, by
+/// file name. These are the bytes that Git keeps, which do not change with
+/// the line ends of a checkout.
 pub fn ideation_files(repo: &Path) -> BTreeMap<String, Vec<u8>> {
-    std::fs::read_dir(repo.join(IDEATION))
+    let tree = format!("HEAD:{IDEATION}");
+    let names = git(repo, &["ls-tree", "--name-only", &tree]);
+    assert!(names.status.success());
+    String::from_utf8(names.stdout)
         .unwrap()
-        .map(|entry| {
-            let entry = entry.unwrap();
-            let name = entry.file_name().into_string().unwrap();
-            (name, std::fs::read(entry.path()).unwrap())
+        .lines()
+        .map(|name| {
+            let blob = format!("{tree}/{name}");
+            let shown = git(repo, &["show", &blob]);
+            assert!(shown.status.success());
+            (name.to_owned(), shown.stdout)
         })
         .collect()
 }
