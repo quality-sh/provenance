@@ -1,6 +1,6 @@
 //! Existing native proposal-lifecycle operations keep their native handlers.
 //! The three reads return the complete native record arrays; the three
-//! creations call the existing writers behind their lifecycle locks. Reads
+//! creations call the existing writers in the publication section. Reads
 //! use `StateStore::list_proposal_cards`, the validated native effective-state
 //! projection, and never the actor-override projection or the raw definition
 //! list.
