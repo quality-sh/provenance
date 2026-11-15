@@ -137,6 +137,22 @@ name = "review_cost"
 required-features = ["host"]
 
 [[test]]
+name = "history_git_process"
+required-features = ["host"]
+
+[[test]]
+name = "history_text_memory"
+required-features = ["host"]
+
+[[test]]
+name = "history_text_calls"
+required-features = ["host"]
+
+[[test]]
+name = "history_git_children"
+required-features = ["host"]
+
+[[test]]
 name = "review_history_head_move"
 required-features = ["host"]
 
@@ -162,3 +178,6 @@ sqlx.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["sync", "time"] }
 trybuild.workspace = true
+
+[target.'cfg(windows)'.dev-dependencies]
+windows-sys = { workspace = true, features = ["Win32_System_Diagnostics_ToolHelp", "Win32_System_Threading"] }

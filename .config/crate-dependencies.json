@@ -482,7 +482,8 @@
         "jsonschema",
         "sqlx",
         "tempfile",
-        "tokio"
+        "tokio",
+        "windows-sys"
       ]
     },
     "provenance-transport": {
