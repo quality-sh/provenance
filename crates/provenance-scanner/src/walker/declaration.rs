@@ -101,8 +101,9 @@ fn rust(tokens: &[&str]) -> Option<String> {
             "default" | "async" | "unsafe" => index += 1,
             "extern" => index += 1 + usize::from(next.is_some_and(|abi| abi.starts_with('"'))),
             "const" if matches!(next, Some("fn" | "async" | "unsafe" | "extern")) => index += 1,
-            "fn" => return named(tokens, index + 1),
-            "struct" | "enum" | "union" | "trait" | "type" => return named(tokens, index + 1),
+            "fn" | "struct" | "enum" | "union" | "trait" | "type" => {
+                return named(tokens, index + 1)
+            }
             _ => return None,
         }
     }
@@ -115,8 +116,7 @@ fn python(tokens: &[&str]) -> Option<String> {
         match *tokens.get(index)? {
             "@" => index = skip_annotation(tokens, index + 1),
             "async" => index += 1,
-            "def" => return named(tokens, index + 1),
-            "class" => return named(tokens, index + 1),
+            "def" | "class" => return named(tokens, index + 1),
             _ => return None,
         }
     }
@@ -165,9 +165,10 @@ fn script(tokens: &[&str]) -> Option<String> {
                 let generator = next == Some("*");
                 return named(tokens, index + 1 + usize::from(generator));
             }
-            "class" | "interface" | "type" | "enum" => return named(tokens, index + 1),
             "const" if next == Some("enum") => index += 1,
-            "const" | "let" | "var" => return named(tokens, index + 1),
+            "class" | "interface" | "type" | "enum" | "const" | "let" | "var" => {
+                return named(tokens, index + 1)
+            }
             "*" => index += 1,
             _ if is_modifier(&SCRIPT_MODIFIERS, token, next) => index += 1,
             "get" | "set" if next.is_some_and(is_identifier) => index += 1,
