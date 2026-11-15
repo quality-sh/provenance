@@ -88,11 +88,7 @@ async fn a_document_read_gives_no_absolute_path_in_the_cause() {
     assert_eq!(status, 409);
     assert_eq!(
         refused,
-        refusal(json!({
-            "message": format!(
-                "cannot hash {shown}: unsupported state entry: {shown}: unsupported state entry: {shown}"
-            )
-        }))
+        refusal(json!({"message": format!("unsupported state entry: {shown}")}))
     );
 }
 
