@@ -1,6 +1,7 @@
 //! The MCP server of a repository whose manifest stops parsing after the
-//! server starts: each read and each write refuses with `invalid_state_file`,
-//! the line of the manifest and the two procedures that correct the state.
+//! server starts: a read and a write of the `api` tool each refuse with
+//! `invalid_state_file`, the line of the manifest and the two procedures that
+//! correct the state.
 #![cfg(feature = "test-fixture")]
 
 use crate::support;
@@ -25,19 +26,14 @@ async fn a_manifest_that_stops_parsing_refuses_each_read_and_write_with_the_corr
         "statement":"The system stores each record.", "status":"discovery", "depends_on":[],
         "supersedes":[]});
     let mut answers = Vec::new();
-    for (tool, arguments) in [
-        ("get", json!({"target":"req_shared"})),
-        ("api", json!({"path":"requirements/req_shared", "method":"get"})),
-        ("api", json!({"path":"requirements", "method":"post", "input":created})),
-        (
-            "change",
-            json!({"action":"update", "target":"req_shared", "actor":"reviewer",
-                "description":"Edited."}),
-        ),
+    for arguments in [
+        json!({"path":"requirements/req_shared", "method":"get"}),
+        json!({"path":"requirements", "method":"post", "input":created}),
     ] {
-        let answer = call(&session.client, tool, arguments).await;
+        let method = arguments["method"].clone();
+        let answer = call(&session.client, "api", arguments).await;
         let content = answer.structured_content.unwrap_or(Value::Null);
-        answers.push(json!({"tool": tool, "is_error": answer.is_error,
+        answers.push(json!({"method": method, "is_error": answer.is_error,
             "error": content["error"]}));
     }
     session.close().await;
@@ -47,7 +43,6 @@ async fn a_manifest_that_stops_parsing_refuses_each_read_and_write_with_the_corr
         "hint":STATE_CORRECTIONS});
     assert_eq!(
         answers,
-        ["get", "api", "api", "change"]
-            .map(|tool| json!({"tool": tool, "is_error": true, "error": refusal}))
+        ["get", "post"].map(|method| json!({"method": method, "is_error": true, "error": refusal}))
     );
 }

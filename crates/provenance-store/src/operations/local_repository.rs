@@ -133,20 +133,23 @@ impl ContextResolver for LocalRepository {
                 requested_target: repository,
             }));
         }
-        // The operation checks the scope grant when it takes its scope, before
+        // The repository opened before this call, so the operation checks that
+        // the manifest still declares the scope when it takes its scope, before
         // recovery or projection access.
         if !needs.contains(&ExecutionNeed::ProjectionMaintenance) {
             return Ok(PreparedContext::for_scope(PreparedScope {
                 repository: self.repository.clone(),
                 requested_target: repository,
-            }));
+            })
+            .with_grant_check());
         }
         Ok(PreparedContext::read(PreparedRead {
             repository: self.repository.clone(),
             policy: ReadPolicy::resolve(self.repository.settings(), freshness),
             requested_target: repository,
             external: true,
-        }))
+        })
+        .with_grant_check())
     }
 }
 

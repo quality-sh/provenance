@@ -211,17 +211,18 @@ fn an_approval_and_withdrawals_refuse_their_record() {
     check_passes(&repo);
 }
 
-/// The message of two submissions of `req_a` with review cycle 1, with the
-/// lines of each.
+/// The refusal of two submissions of `req_a` with review cycle 1: the lines
+/// of each in the message, and the repair in the hint.
 fn one_cycle_message(repo: &str, submissions: [&str; 2]) -> (Value, usize) {
     let line = |submission: &str| line_of(repo, PROPOSALS, &format!("\"id\":\"{submission}\""));
     let (first, second) = (line(submissions[0]), line(submissions[1]));
     let expected = json!({"kind":"invalid_state_file", "file":state_file(PROPOSALS),
         "line":second,
-        "message":format!("requirement req_a has 2 review submissions with review cycle 1. To \
-            repair, keep one submission and remove the lines of each other submission, then \
-            commit. The lines of {}: ideation/proposal_cards.jsonl line {first}. The lines of \
-            {}: ideation/proposal_cards.jsonl line {second}.", submissions[0], submissions[1])});
+        "message":format!("requirement req_a has 2 review submissions with review cycle 1. The \
+            lines of {}: ideation/proposal_cards.jsonl line {first}. The lines of {}: \
+            ideation/proposal_cards.jsonl line {second}", submissions[0], submissions[1]),
+        "hint":"To repair, keep one submission and remove the lines of each other submission, \
+            then commit."});
     (expected, second)
 }
 
