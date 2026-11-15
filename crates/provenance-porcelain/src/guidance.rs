@@ -86,7 +86,7 @@ pub fn guidance_for(name: impl Fn(Command) -> Option<&'static str>, notify: bool
     let mut text = String::from(DOMAIN);
     let opening: Vec<String> = [
         (shown(Command::Search) && shown(Command::Get)).then(|| SEARCH_THEN_GET.to_owned()),
-        create_sentence(&shown),
+        create_sentence(shown),
     ]
     .into_iter()
     .flatten()
