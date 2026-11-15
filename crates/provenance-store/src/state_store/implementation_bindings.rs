@@ -120,6 +120,7 @@ fn desired_bindings(
                                     before: record.declared_by.clone().into(),
                                     after: graph.owner.into(),
                                 }],
+                                refusal: None,
                             }],
                         }),
                         "rule `{}` implementation is owned by `{}`",
