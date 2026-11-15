@@ -34,7 +34,7 @@ Options:
       --url <url>
           
       --actor <actor>
-          The actor of the write. It is optional for a write that makes or changes a Requirement and for a write that starts or replies to a Discussion. A write that gives no actor records the actor `authoring`.
+          
       --depends-on <depends-on>
           
       --description <description>
@@ -153,6 +153,8 @@ Options:
           
   -h, --help
           Print help
+
+--actor: The actor of the write. It is optional for a write that makes or changes a Requirement and for a write that starts or replies to a Discussion. A write that gives no actor records the actor `authoring`.
 
 To archive a record, set the archived status and give the commit that contains the change:
   provenance <id> update --status archived --archived-in-commit <full_commit_sha> \
