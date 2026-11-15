@@ -12,9 +12,14 @@ pub fn state_file(path: &Utf8Path) -> String {
     shown_file(path, None)
 }
 
-/// The refusal of the file at `path`, which does not parse at `line`. The
-/// refusal finds the repository that holds the file, so that it gives a path
-/// that a person can find and never an absolute path.
+/// The refusal of the file at `path`, which does not parse at `line`, with a
+/// path that a person can find and never an absolute path.
+///
+/// Each file of a store is below `<root>/.provenance`, where `<root>` is the
+/// root of the store, so the root of a file below a `.provenance` directory is
+/// the parent of that directory. A file that no store holds, such as a
+/// `merge-jsonl` input, is in the project of the working directory when it is
+/// below the root of that project.
 pub fn unparsable(
     path: &Utf8Path,
     line: u64,
@@ -24,17 +29,25 @@ pub fn unparsable(
     let absolute = std::path::absolute(path)
         .ok()
         .and_then(|absolute| Utf8PathBuf::from_path_buf(absolute).ok());
-    let repository = absolute
-        .as_deref()
+    let path = absolute.as_deref().unwrap_or(path);
+    let repository = store_root(path)
+        .map(Utf8Path::to_path_buf)
+        .or_else(working_project);
+    UnparsableStateFile::new(path, repository.as_deref(), line, message, hint)
+}
+
+/// The root of the store that holds `path`: the parent of the nearest
+/// `.provenance` directory above `path`.
+fn store_root(path: &Utf8Path) -> Option<&Utf8Path> {
+    path.ancestors()
+        .find(|ancestor| ancestor.file_name() == Some(".provenance"))
         .and_then(Utf8Path::parent)
-        .and_then(|directory| crate::layout::locate_repo_root(directory).ok());
-    UnparsableStateFile::new(
-        absolute.as_deref().unwrap_or(path),
-        repository.as_deref(),
-        line,
-        message,
-        hint,
-    )
+}
+
+/// The project of the working directory, by the rule of a repository open.
+fn working_project() -> Option<Utf8PathBuf> {
+    let directory = Utf8PathBuf::from_path_buf(std::env::current_dir().ok()?).ok()?;
+    crate::layout::enclosing_project(&directory).map(Utf8Path::to_path_buf)
 }
 
 /// Names the shard and its line when a stored line is not one JSON record.

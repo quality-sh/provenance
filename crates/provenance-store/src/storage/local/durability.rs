@@ -40,14 +40,21 @@ pub(in crate::storage::local) fn write_synced_file_named(
 }
 
 /// Syncs the file at `path`, which already has the bytes of a write, and then
-/// syncs its directory as [`write_synced_file`] does after a rename that made
-/// no directory. An earlier write can have stopped after its rename and before
-/// its syncs.
+/// syncs its directory and each directory above it, deepest first, up to the
+/// root of `path`: the file system root for an absolute path, the current
+/// directory for a relative path. An earlier [`write_synced_file`] of `path`
+/// can have stopped after its rename and before its syncs, and the
+/// directories that it made are among these directories.
 pub fn sync_written_file(path: &Utf8Path) -> anyhow::Result<()> {
     open_to_sync(path)
         .and_then(|file| file.sync_all())
         .map_err(sync_failure(path))?;
-    sync_directories(parent_of(path)?, None)
+    let parent = parent_of(path)?;
+    let highest = parent
+        .ancestors()
+        .take_while(|directory| directory.parent().is_some())
+        .last();
+    sync_directories(parent, highest)
 }
 
 /// Syncs `parent`, and then each directory above it up to the parent of

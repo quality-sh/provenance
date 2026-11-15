@@ -106,11 +106,6 @@ impl UnparsableStateFile {
         &self.message
     }
 
-    /// The step that repairs the file, when the reader knows one.
-    pub fn hint(&self) -> Option<&str> {
-        self.hint.as_deref()
-    }
-
     /// The `invalid_state_file` read failure of the file. The failure has no
     /// hint.
     pub fn failure(&self) -> ReadFailure {

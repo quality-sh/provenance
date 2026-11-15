@@ -126,14 +126,15 @@ fn retired_row_refusal(file: &str) -> (Option<i32>, String) {
 }
 
 /// An input below the repository of the working directory is named by its
-/// path below the repository root.
+/// path below the repository root. The paths are canonical, as the working
+/// directory of a process is.
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_line", examples)]
 fn a_merge_input_below_a_repository_is_named_by_its_path_in_the_repository() {
     let (directory, _repo) = support::review_paths::init();
+    let root = dunce::canonicalize(directory.path()).unwrap();
 
-    let answer =
-        merge_with_a_retired_row_in(&directory.path().join("fixtures/merge"), directory.path());
+    let answer = merge_with_a_retired_row_in(&root.join("fixtures/merge"), &root);
 
     assert_eq!(answer, retired_row_refusal("fixtures/merge/ours.jsonl"));
 }
@@ -144,10 +145,12 @@ fn a_merge_input_below_a_repository_is_named_by_its_path_in_the_repository() {
 #[verifies("rule_state_parse_refusal_names_the_line", examples)]
 fn a_merge_input_outside_the_repository_is_named_by_its_file_name() {
     let (directory, _repo) = support::review_paths::init();
+    let root = dunce::canonicalize(directory.path()).unwrap();
     let other = tempfile::tempdir().unwrap();
-    std::fs::create_dir(other.path().join(".git")).unwrap();
+    let checkout = dunce::canonicalize(other.path()).unwrap();
+    std::fs::create_dir(checkout.join(".git")).unwrap();
 
-    let answer = merge_with_a_retired_row_in(&other.path().join("inputs"), directory.path());
+    let answer = merge_with_a_retired_row_in(&checkout.join("inputs"), &root);
 
     assert_eq!(answer, retired_row_refusal("ours.jsonl"));
 }
