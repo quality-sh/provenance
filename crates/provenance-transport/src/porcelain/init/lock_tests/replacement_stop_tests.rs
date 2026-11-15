@@ -146,21 +146,29 @@ fn stop_second_init(repo: &Utf8Path, pdf: &Utf8Path, point: &str, stop_at: usize
     }
 }
 
-/// Whether `name` has the name form of a temporary file of init for one of
-/// the replaced files: `.<file name>.provenance-`, six letters or digits,
-/// and `.tmp`, in the folder of that file.
-fn is_init_temporary(name: &str) -> bool {
+/// Whether `name` has the name form of a temporary file of init for a file
+/// that `before` holds in the same folder: `.<file name>.provenance-`, six
+/// letters or digits, and `.tmp`. A Claude skill folder can be a link to the
+/// canonical skill folder, so the tree shows a file of that folder twice.
+fn is_init_temporary(name: &str, before: &BTreeMap<String, Option<Vec<u8>>>) -> bool {
+    let (folder, leaf) = name.rsplit_once('/').unwrap_or(("", name));
+    let Some(rest) = leaf.strip_prefix('.') else {
+        return false;
+    };
     REPLACED.iter().any(|target| {
-        let target = Utf8Path::new(target);
-        let folder = target.parent().unwrap().as_str();
-        let (folder_of_name, leaf) = name.rsplit_once('/').unwrap_or(("", name));
-        let prefix = format!(".{}.provenance-", target.file_name().unwrap());
-        folder_of_name == folder
-            && leaf.strip_prefix(&prefix).is_some_and(|rest| {
-                rest.strip_suffix(".tmp").is_some_and(|random| {
+        let file_name = Utf8Path::new(target).file_name().unwrap();
+        let replaced = if folder.is_empty() {
+            file_name.to_owned()
+        } else {
+            format!("{folder}/{file_name}")
+        };
+        before.contains_key(&replaced)
+            && rest
+                .strip_prefix(&format!("{file_name}.provenance-"))
+                .and_then(|random| random.strip_suffix(".tmp"))
+                .is_some_and(|random| {
                     random.len() == 6 && random.bytes().all(|byte| byte.is_ascii_alphanumeric())
                 })
-            })
     })
 }
 
@@ -231,7 +239,9 @@ fn stop_at_each_replacement(point: &str) {
         }
         for name in stopped.keys() {
             assert!(
-                before.contains_key(name) || after.contains_key(name) || is_init_temporary(name),
+                before.contains_key(name)
+                    || after.contains_key(name)
+                    || is_init_temporary(name, &before),
                 "after stop {stop_at} at {point}, init left {name}"
             );
         }
