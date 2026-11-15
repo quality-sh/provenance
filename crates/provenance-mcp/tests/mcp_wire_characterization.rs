@@ -146,7 +146,8 @@ fn server_info() -> Value {
 
 #[tokio::test]
 async fn discover_response_keeps_its_fields() {
-    let mut wire = Wire::start(StatementHost::default());
+    let repository = Repository::new("The shared graph is readable.");
+    let mut wire = Wire::start(full_host(&repository));
     let response = wire.request("server/discover", json!({})).await;
     assert_eq!(
         response["result"],
@@ -173,7 +174,8 @@ async fn initialize_negotiates_the_older_protocols() {
         ("2026-07-28", "2025-11-25"),
         ("2099-01-01", "2025-11-25"),
     ] {
-        let mut wire = Wire::bare(StatementHost::default());
+        let repository = Repository::new("The shared graph is readable.");
+        let mut wire = Wire::bare(full_host(&repository));
         let result = wire.initialize(requested).await;
         assert_eq!(
             result,

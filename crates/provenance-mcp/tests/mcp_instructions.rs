@@ -53,6 +53,29 @@ fn host_without(repository: &Repository, denied: &[&str]) -> StatementHost {
     )
 }
 
+/// The shared guidance with no first step: the domain text, the action text that
+/// names no tool, and the guidance line of each name in `names`.
+fn without_first_steps(names: &[&str]) -> String {
+    let shared = provenance_porcelain::guidance::guidance().guidance;
+    let (domain, _) = shared.split_once("## Actions").unwrap();
+    let lines: Vec<&str> = names
+        .iter()
+        .map(|name| {
+            shared
+                .lines()
+                .find(|line| line.starts_with(&format!("- {name}: ")))
+                .unwrap()
+        })
+        .collect();
+    format!(
+        "{domain}## Actions\n\n\
+Create names an explicit record type; actions on an existing record infer its type.\n\
+Available actions depend on the interface and its access. \
+Each interface lists the inputs and actions it supports.\n\n{}",
+        lines.join("\n")
+    )
+}
+
 /// The tool names of a host that lists every tool.
 async fn every_tool() -> Vec<String> {
     let repository = Repository::new("The shared graph is readable.");
@@ -115,28 +138,13 @@ async fn a_host_with_api_and_change_names_no_other_tool() {
         Vec::<String>::new(),
         "{instructions}"
     );
-    let shared = provenance_porcelain::guidance::guidance().guidance;
-    let (domain, _) = shared.split_once("## Actions").unwrap();
-    let lines: Vec<&str> = [
-        "api", "change", "create", "update", "answer", "claim", "release", "submit", "discuss",
-        "reply",
-    ]
-    .iter()
-    .map(|name| {
-        shared
-            .lines()
-            .find(|line| line.starts_with(&format!("- {name}: ")))
-            .unwrap()
-    })
-    .collect();
-    let expected = format!(
-        "{domain}## Actions\n\n\
-Create names an explicit record type; actions on an existing record infer its type.\n\
-Available actions depend on the interface and its access. \
-Each interface lists the inputs and actions it supports.\n\n{}",
-        lines.join("\n")
+    assert_eq!(
+        instructions,
+        without_first_steps(&[
+            "api", "change", "create", "update", "answer", "claim", "release", "submit", "discuss",
+            "reply",
+        ])
     );
-    assert_eq!(instructions, expected);
 }
 
 #[tokio::test]
@@ -165,18 +173,8 @@ async fn a_host_without_search_or_get_gives_no_first_steps() {
 }
 
 #[tokio::test]
-async fn a_host_with_no_tool_gives_only_the_domain_guidance() {
+async fn a_host_with_only_api_gives_only_the_api_line() {
     let (names, instructions) = served(StatementHost::default()).await;
-    assert_eq!(names, Vec::<String>::new());
-    let shared = provenance_porcelain::guidance::guidance().guidance;
-    let (domain, _) = shared.split_once("## Actions").unwrap();
-    assert_eq!(
-        instructions,
-        format!(
-            "{domain}## Actions\n\n\
-Create names an explicit record type; actions on an existing record infer its type.\n\
-Available actions depend on the interface and its access. \
-Each interface lists the inputs and actions it supports."
-        )
-    );
+    assert_eq!(names, ["api"]);
+    assert_eq!(instructions, without_first_steps(&["api"]));
 }
