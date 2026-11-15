@@ -151,8 +151,9 @@ fn reads_and_check_pass(repo: &Path) {
     provenance(repo).success();
 }
 
-/// Flow: the submission S of `req_a` has an approval and a rejection, and a
-/// hand edit copies the line of S and changes its summary. One run of
+/// Flow: the manifest names the reviewer. The submission S of `req_a` has an
+/// approval and a rejection, and a hand edit copies the line of S and
+/// changes its summary. One run of
 /// `check` names the two faults. After the repair of each, the read and
 /// `check` pass.
 #[test]
@@ -161,6 +162,11 @@ fn reads_and_check_pass(repo: &Path) {
 fn check_reports_each_fault_of_one_record_in_one_run() {
     let (directory, submission) = repository();
     let repo = directory.path();
+    bounded_process::provenance()
+        .args(["init", "--path", repo.to_str().unwrap(), "--scope", "default"])
+        .args(["--path-prefix", ".", "--disposition-actor-id", "reviewer"])
+        .bounded_assert()
+        .success();
     append(repo, DISPOSITIONS, &decision("decision_a", &submission, "accepted"));
     append(repo, DISPOSITIONS, &decision("decision_b", &submission, "rejected"));
     let mut changed = submission.clone();

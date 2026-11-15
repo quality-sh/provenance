@@ -98,6 +98,8 @@ fn a_change_of_a_resolution_does_not_refuse_for_a_second_resolution() {
     let title = patch(&repo, "resolutions/res_x", &json!({"title":"Two copies"}));
     success(&title.iter().map(String::as_str).collect::<Vec<_>>());
     decide_resolution(&repo, "res_x", "accepted");
+    // The decision of res_x rewrote the file, so the lines of res_a moved.
+    let fault = refused(&repo, &["api", "resolutions/res_a"]);
     let active = patch(&repo, "rules/rule_d", &json!({"status":"active"}));
     let active = active.iter().map(String::as_str).collect::<Vec<_>>();
     assert_eq!(refusal(&active)["error"], fault);
