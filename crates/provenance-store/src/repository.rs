@@ -153,8 +153,9 @@ impl Repository {
     /// This repository with the committed file versions that its record
     /// history reads.
     ///
-    /// A repository that has none reads the Git history of its working
-    /// tree, as one from `open` does. The new handle shares the storage, the
+    /// With `host` a repository that has none reads the Git history of its
+    /// working tree, as one from `open` does; without it, one that has none
+    /// has no committed history. The new handle shares the storage, the
     /// lock, the read database and the kept source scans of this one.
     #[must_use]
     pub fn with_file_versions(&self, versions: Arc<dyn FileVersions>) -> Self {

@@ -95,6 +95,8 @@ mod target_config;
 mod typed_spec_discussion_deletion;
 #[path = "../typed_spec_plan_refusals.rs"]
 mod typed_spec_plan_refusals;
+#[path = "../unadvertised_route_refusals.rs"]
+mod unadvertised_route_refusals;
 #[path = "../verification_runs_cache_lines.rs"]
 mod verification_runs_cache_lines;
 #[path = "../wire.rs"]

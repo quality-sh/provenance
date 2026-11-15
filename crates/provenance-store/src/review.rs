@@ -52,12 +52,10 @@ fn owner_matches(record: &impl serde::Serialize, owner: Option<&str>) -> anyhow:
     Ok(())
 }
 
-// The file versions port and its contract build without host; the history
-// reads in it and the review reads page through the projection on the host.
+// The history reads read the committed versions through the file versions
+// port, and the working copy through the storage.
 pub mod history;
-#[cfg(feature = "host")]
 mod reads;
-#[cfg(feature = "host")]
 pub use reads::{read_evidence, read_history};
 
 #[cfg(test)]
