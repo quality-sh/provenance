@@ -53,7 +53,7 @@ fn land_disposition_of_missing_requirement(repo: &str) {
 }
 
 /// The refusal that `answer` gives: the error object of the JSON form, else
-/// the text.
+/// the text. `check` and `materialize` give the text form.
 fn refusal(answer: &Answer) -> Value {
     assert_eq!(answer.code, Some(1), "{}", answer.stdout);
     let text = answer.stderr.strip_prefix("Error: ").unwrap_or(&answer.stderr);
@@ -77,13 +77,14 @@ fn each_read_refuses_a_landed_disposition_of_a_missing_record_at_its_line() {
 
     let message = "disposition disposition_a names requirement req_missing, \
                    which the scope does not have";
+    let text = json!(format!("Error: {LANDINGS} line 1: {message}"));
     let fault =
         json!({"kind": "invalid_state_file", "file": LANDINGS, "line": 1, "message": message});
     assert_eq!(
         answers.map(|(surface, answer)| (surface, refusal(&answer))),
         [
-            ("check", json!(format!("Error: {LANDINGS} line 1: {message}"))),
-            ("materialize", fault.clone()),
+            ("check", text.clone()),
+            ("materialize", text),
             ("plan", fault.clone()),
             ("apply", fault),
         ]

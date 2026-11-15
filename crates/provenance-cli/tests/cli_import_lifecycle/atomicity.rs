@@ -206,8 +206,8 @@ fn missing_disposition_canonical_artifact_import_is_atomic() {
     import_scope(&repo, &input)
         .failure()
         .stderr(predicates::str::contains(
-            "disposition disposition_a names requirement req_missing, \
-             which the scope does not have",
+            "scopes/default/ideation/dispositions.jsonl line 1: disposition disposition_a \
+             names requirement req_missing, which the scope does not have",
         ));
 
     let after = dir.path().join("after.json");
@@ -280,8 +280,8 @@ fn check_rejects_a_misfiled_disposition_target() {
         .assert()
         .failure()
         .stderr(predicates::str::contains(
-            "disposition disposition_a names requirement req_misfiled, \
-             which the scope does not have",
+            "scopes/default/ideation/dispositions.jsonl line 1: disposition disposition_a \
+             names requirement req_misfiled, which the scope does not have",
         ));
 }
 
