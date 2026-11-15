@@ -70,7 +70,7 @@ impl Task {
                     }),
                 )
             }
-            Operation::ArchiveRequirement { n } => {
+            Operation::ArchiveRequirement { n } | Operation::RequestArchive { n } => {
                 let id = requirement_id(*n);
                 call(
                     "update-requirement",
@@ -186,6 +186,16 @@ impl Task {
             Operation::ArchiveRequirement { n } => Effect::Archived {
                 id: requirement_id(*n),
             },
+            Operation::RequestArchive { .. } => {
+                let pending = &answer["decision"]["pending"];
+                if pending["status_request"].is_null() {
+                    Effect::Skipped
+                } else {
+                    Effect::Proposal {
+                        id: text(&pending["proposal_id"])?,
+                    }
+                }
+            }
             Operation::PostMessage => Effect::Message {
                 id: text(&answer["message"]["id"])?,
             },

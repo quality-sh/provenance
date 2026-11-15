@@ -110,6 +110,11 @@ pub enum Operation {
     ArchiveRequirement {
         n: u8,
     },
+    /// Asks for the archive of a Requirement and leaves the status request
+    /// open, so a later withdrawal or rejection can take it.
+    RequestArchive {
+        n: u8,
+    },
     ClaimTopic,
     ReleaseTopic,
     /// Two verification binding writes in one section.

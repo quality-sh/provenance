@@ -54,6 +54,8 @@ pub fn each_operation() -> Vec<Operation> {
         Operation::WithdrawReview { n: 0 },
         Operation::SubmitReview,
         Operation::DecideReview { n: 1 },
+        Operation::RequestArchive { n: 0 },
+        Operation::DecideReview { n: 2 },
         Operation::WriteDiscussion { reply: false },
         Operation::WriteDiscussion { reply: true },
         Operation::ClaimTopic,

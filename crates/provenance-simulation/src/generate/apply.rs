@@ -40,6 +40,14 @@ fn requirement_update(
     update
 }
 
+/// The update that asks for the archive of the Requirement `id`.
+fn archive_update(id: &str) -> UpdateRequirementInput {
+    requirement_update(id, |update| {
+        update.status = Some(RequirementStatus::Archived);
+        update.archived_in_commit = Some(archive_stamp());
+    })
+}
+
 /// The stamp of an archive.
 pub fn archive_stamp() -> provenance_core::ArchivedStamp {
     provenance_core::ArchivedStamp {
@@ -182,12 +190,19 @@ pub fn apply(repository: &Repository, task: &Task) -> anyhow::Result<Effect> {
                 version: discussion.version,
             }
         }
+        Operation::RequestArchive { n } => {
+            let id = requirement_id(*n);
+            store.update_requirement(archive_update(&id))?;
+            match super::call::open_status_request(repository, &id)? {
+                Some(proposal) => Effect::Proposal {
+                    id: proposal.as_str().to_owned(),
+                },
+                None => Effect::Skipped,
+            }
+        }
         Operation::ArchiveRequirement { n } => {
             let id = requirement_id(*n);
-            store.update_requirement(requirement_update(&id, |update| {
-                update.status = Some(RequirementStatus::Archived);
-                update.archived_in_commit = Some(archive_stamp());
-            }))?;
+            store.update_requirement(archive_update(&id))?;
             // The archive opens a status request. The allowed reviewer accepts
             // it, so the archive and its cascade apply.
             if let Some(proposal) = super::call::open_status_request(repository, &id)? {
