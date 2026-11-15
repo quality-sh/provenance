@@ -14,8 +14,9 @@ mod word_class;
 
 #[cfg(feature = "host")]
 pub use dictionary::{
-    import_dictionary, load_dictionary_index, load_dictionary_index_for_source,
-    store_dictionary_index, DictionaryIndexError,
+    decode_dictionary_index, decode_dictionary_index_for_source, dictionary_index_file_name,
+    dictionary_index_file_name_for_source, encode_dictionary_index, import_dictionary,
+    DictionaryIndexError,
 };
 pub use dictionary::{
     DictionaryEntry, DictionaryImport, DictionaryImportError, DictionaryImportIdentity,

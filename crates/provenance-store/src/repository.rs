@@ -216,18 +216,7 @@ impl Repository {
         if let Some(root) = root {
             return Self::open(cwd.join(root), scope);
         }
-        let found = cwd
-            .ancestors()
-            .find(|ancestor| {
-                ancestor
-                    .join(".provenance")
-                    .join("state")
-                    .join("manifest.json")
-                    .is_file()
-                    || ancestor.join(".git").exists()
-            })
-            .unwrap_or(cwd.as_path())
-            .to_path_buf();
+        let found = crate::layout::enclosing_project(&cwd).unwrap_or(&cwd);
         Self::open(found, scope)
     }
 

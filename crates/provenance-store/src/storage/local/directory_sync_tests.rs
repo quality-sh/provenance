@@ -10,15 +10,16 @@ use super::LocalStateStorage;
 use crate::layout::ProvenanceLayout;
 use crate::publication::{with_repository_publication, write_publication_marker, PublicationPhase};
 use crate::storage::{Atomicity, PublishFailure, StateKey, StateStorage, WriteSet};
+use crate::test_support::closed_directory::{close, Closed};
+use crate::test_support::directory::utf8;
 use camino::{Utf8Path, Utf8PathBuf};
-use std::os::unix::fs::PermissionsExt;
 
 const KEY: &str = "scopes/a/rules/rule.jsonl";
 
 #[test]
 fn a_per_key_put_syncs_the_directory_after_the_rename() -> anyhow::Result<()> {
     let temp = tempfile::tempdir()?;
-    let layout = layout_in(&temp)?;
+    let layout = layout_in(&temp);
     let path = layout.state_dir().join(KEY);
     let directory = parent(&path)?;
     std::fs::create_dir_all(&directory)?;
@@ -26,9 +27,7 @@ fn a_per_key_put_syncs_the_directory_after_the_rename() -> anyhow::Result<()> {
     let key = StateKey::new(KEY)?;
     let writes = WriteSet::new(Atomicity::PerKey).put(key, b"new".to_vec());
 
-    let Some(closed) = close_to_reads(&directory)? else {
-        return Ok(());
-    };
+    let closed = close(&directory, Closed::Reads);
     let result = publish(&layout, writes);
     drop(closed);
 
@@ -41,7 +40,7 @@ fn a_per_key_put_syncs_the_directory_after_the_rename() -> anyhow::Result<()> {
 #[test]
 fn a_per_key_delete_syncs_the_directory_after_the_remove() -> anyhow::Result<()> {
     let temp = tempfile::tempdir()?;
-    let layout = layout_in(&temp)?;
+    let layout = layout_in(&temp);
     let path = layout.state_dir().join(KEY);
     let directory = parent(&path)?;
     std::fs::create_dir_all(&directory)?;
@@ -49,9 +48,7 @@ fn a_per_key_delete_syncs_the_directory_after_the_remove() -> anyhow::Result<()>
     let key = StateKey::new(KEY)?;
     let writes = WriteSet::new(Atomicity::PerKey).delete(key);
 
-    let Some(closed) = close_to_reads(&directory)? else {
-        return Ok(());
-    };
+    let closed = close(&directory, Closed::Reads);
     let result = publish(&layout, writes);
     drop(closed);
 
@@ -63,7 +60,7 @@ fn a_per_key_delete_syncs_the_directory_after_the_remove() -> anyhow::Result<()>
 #[test]
 fn a_per_key_put_syncs_the_parent_of_a_new_directory() -> anyhow::Result<()> {
     let temp = tempfile::tempdir()?;
-    let layout = layout_in(&temp)?;
+    let layout = layout_in(&temp);
     let path = layout.state_dir().join(KEY);
     let new_directory = parent(&path)?;
     let scope = parent(&new_directory)?;
@@ -71,9 +68,7 @@ fn a_per_key_put_syncs_the_parent_of_a_new_directory() -> anyhow::Result<()> {
     let key = StateKey::new(KEY)?;
     let writes = WriteSet::new(Atomicity::PerKey).put(key, b"new".to_vec());
 
-    let Some(closed) = close_to_reads(&scope)? else {
-        return Ok(());
-    };
+    let closed = close(&scope, Closed::Reads);
     let result = publish(&layout, writes);
     drop(closed);
 
@@ -87,7 +82,7 @@ fn a_per_key_put_syncs_the_parent_of_a_new_directory() -> anyhow::Result<()> {
 #[test]
 fn a_jsonl_file_write_syncs_the_directory_after_the_rename() -> anyhow::Result<()> {
     let temp = tempfile::tempdir()?;
-    let root = utf8(temp.path())?;
+    let root = utf8(temp.path());
     let side = root.join("side.jsonl");
     std::fs::write(&side, "{\"id\":\"new\"}\n")?;
     let directory = root.join("target");
@@ -97,9 +92,7 @@ fn a_jsonl_file_write_syncs_the_directory_after_the_rename() -> anyhow::Result<(
     let rows = crate::merge::read_jsonl_rows(&side)?;
     let records = [serde_json::json!({ "id": "new" })];
 
-    let Some(closed) = close_to_reads(&directory)? else {
-        return Ok(());
-    };
+    let closed = close(&directory, Closed::Reads);
     let result = crate::jsonl::write_preserved_jsonl_atomic(&path, &rows, &[], &records);
     drop(closed);
 
@@ -115,14 +108,12 @@ fn a_jsonl_file_write_syncs_the_directory_after_the_rename() -> anyhow::Result<(
 #[test]
 fn a_publication_marker_write_syncs_the_cache_directory() -> anyhow::Result<()> {
     let temp = tempfile::tempdir()?;
-    let layout = layout_in(&temp)?;
+    let layout = layout_in(&temp);
     let cache = layout.cache_dir();
     let transaction = layout.import_transactions_dir().join("transaction");
     std::fs::create_dir_all(&transaction)?;
 
-    let Some(closed) = close_to_reads(&cache)? else {
-        return Ok(());
-    };
+    let closed = close(&cache, Closed::Reads);
     let result = write_publication_marker(&layout, &transaction, PublicationPhase::Prepared);
     drop(closed);
 
@@ -136,13 +127,8 @@ fn a_publication_marker_write_syncs_the_cache_directory() -> anyhow::Result<()> 
     Ok(())
 }
 
-fn layout_in(temp: &tempfile::TempDir) -> anyhow::Result<ProvenanceLayout> {
-    Ok(ProvenanceLayout::new(utf8(temp.path())?))
-}
-
-fn utf8(path: &std::path::Path) -> anyhow::Result<Utf8PathBuf> {
-    Utf8PathBuf::from_path_buf(path.to_path_buf())
-        .map_err(|path| anyhow::anyhow!("{} is not UTF-8", path.display()))
+fn layout_in(temp: &tempfile::TempDir) -> ProvenanceLayout {
+    ProvenanceLayout::new(utf8(temp.path()))
 }
 
 fn parent(path: &Utf8Path) -> anyhow::Result<Utf8PathBuf> {
@@ -173,30 +159,4 @@ fn sync_failed(directory: &Utf8Path) -> String {
         "sync {directory}: {}",
         std::io::Error::from_raw_os_error(13)
     )
-}
-
-/// A directory that is closed to reads. The drop opens it again, so that a
-/// failure or a panic does not keep it closed and the temporary directory
-/// can be deleted.
-struct ClosedDirectory(Utf8PathBuf);
-
-impl Drop for ClosedDirectory {
-    fn drop(&mut self) {
-        let _ = std::fs::set_permissions(&self.0, std::fs::Permissions::from_mode(0o755));
-    }
-}
-
-/// Closes `directory` to reads: the process can write to it and search it.
-/// When the process can open it all the same, as root can, the test cannot
-/// observe the sync: the function opens the directory again, prints a line
-/// and gives nothing.
-fn close_to_reads(directory: &Utf8Path) -> anyhow::Result<Option<ClosedDirectory>> {
-    std::fs::set_permissions(directory, std::fs::Permissions::from_mode(0o300))?;
-    let closed = ClosedDirectory(directory.to_owned());
-    if std::fs::File::open(directory).is_ok() {
-        drop(closed);
-        println!("skipped: the process can open {directory} with no read permission");
-        return Ok(None);
-    }
-    Ok(Some(closed))
 }
