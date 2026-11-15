@@ -9,9 +9,11 @@ use super::review_disagreeing_rows::{
     check_reports, line_of, only_req_a_refuses, refused, remove_lines, row, state_file,
 };
 use super::review_history::{commit, git};
-use super::review_merged_decisions::{decide, lines, store_lines, DISPOSITIONS, PROPOSALS};
+use super::review_merged_decisions::{
+    decide, fresh_list, lines, store_lines, DISPOSITIONS, PROPOSALS,
+};
 use super::review_merged_withdrawals::{
-    check_passes, merge_side, pending, read, repository, withdraw, Merge,
+    check_passes, create, merge_side, pending, read, repository, withdraw, Merge,
 };
 use super::*;
 
@@ -50,14 +52,25 @@ fn a_submission_id_on_lines_that_disagree_refuses_only_its_record() {
     let mut proposals = lines(&repo, PROPOSALS);
     proposals.push(changed.to_string());
     store_lines(&repo, PROPOSALS, &proposals);
+    let named = format!("\"id\":\"{submission}\"");
     let expected = |repo: &str| {
-        let first = line_naming(repo, PROPOSALS, "id", &submission);
-        let second = line_of(repo, PROPOSALS, "Changed by hand.");
+        let holding = lines(repo, PROPOSALS)
+            .iter()
+            .enumerate()
+            .filter(|(_, line)| line.contains(&named))
+            .map(|(index, _)| index + 1)
+            .collect::<Vec<_>>();
+        let (first, second) = (holding[0], holding[1]);
         json!({"kind":"invalid_state_file", "file":state_file(PROPOSALS), "line":second,
             "message":format!("review submission {submission} is on lines {first} and {second} \
                 of ideation/proposal_cards.jsonl with different contents. To repair, keep one of \
                 these lines and remove the others, then commit.")})
     };
+    // The other records of the scope continue.
+    read(&repo, &["api", "requirements/req_b/document"]);
+    fresh_list(&repo, "proposals");
+    fresh_list(&repo, "dispositions");
+    create(&repo, "req_c");
     let addressed = format!("requirements/req_a/submissions/{submission}");
     let decision = super::review_cycle::decision("accepted", "req_a", None);
     assert_eq!(

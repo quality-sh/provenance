@@ -271,30 +271,16 @@ async fn a_decision_on_a_submission_on_lines_that_disagree_refuses_only_its_reco
     let proposal = pending_submission(&repo).await;
     let state = repo.dir.path().join(".provenance/state");
     let text = std::fs::read_to_string(state.join(PROPOSALS)).unwrap();
-    let (first, line) = text
-        .lines()
-        .enumerate()
-        .find(|(_, line)| line.contains(&format!("\"id\":\"{proposal}\"")))
-        .map(|(index, line)| (index + 1, line.to_owned()))
-        .unwrap();
-    let mut changed: serde_json::Value = serde_json::from_str(&line).unwrap();
+    let named = format!("\"id\":\"{proposal}\"");
+    let line = text.lines().find(|line| line.contains(&named)).unwrap();
+    let mut changed: serde_json::Value = serde_json::from_str(line).unwrap();
     changed["summary"] = json!("Changed by hand.");
-    let second = text.lines().count() + 1;
     std::fs::write(state.join(PROPOSALS), format!("{text}{changed}\n")).unwrap();
     let decision = json!({"scope_id":"default", "id":"decision_a", "proposal_id":proposal,
         "decision":"rejected", "rationale":"By hand.",
         "actor":{"identity_type":"human","id":"reviewer"}});
     std::fs::write(state.join(DISPOSITIONS), format!("{decision}\n")).unwrap();
     let reader = host(&repo, true);
-    let (status, failure) = call(&reader, "GET", "/requirements/req_shared", None).await;
-    assert_eq!(status, 500, "{failure}");
-    assert_eq!(
-        failure["error"],
-        json!({"kind":"invalid_state_file", "file":PROPOSALS, "line":second,
-            "message":format!("review submission {proposal} is on lines {first} and {second} of \
-                ideation/proposal_cards.jsonl with different contents. To repair, keep one of \
-                these lines and remove the others, then commit.")}),
-    );
     let (status, created) = call(
         &reader,
         "POST",
@@ -315,4 +301,22 @@ async fn a_decision_on_a_submission_on_lines_that_disagree_refuses_only_its_reco
         assert_eq!(status, 200, "{path} {answer}");
         assert_eq!(answer["meta"]["freshness_error"], json!(null), "{path} {answer}");
     }
+    // The write of req_other wrote the file again, so the lines moved.
+    let text = std::fs::read_to_string(state.join(PROPOSALS)).unwrap();
+    let holding = text
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| line.contains(&named))
+        .map(|(index, _)| index + 1)
+        .collect::<Vec<_>>();
+    let (first, second) = (holding[0], holding[1]);
+    let (status, failure) = call(&reader, "GET", "/requirements/req_shared", None).await;
+    assert_eq!(status, 500, "{failure}");
+    assert_eq!(
+        failure["error"],
+        json!({"kind":"invalid_state_file", "file":PROPOSALS, "line":second,
+            "message":format!("review submission {proposal} is on lines {first} and {second} of \
+                ideation/proposal_cards.jsonl with different contents. To repair, keep one of \
+                these lines and remove the others, then commit.")}),
+    );
 }
