@@ -12,10 +12,13 @@ pub struct ReplaceFailed(#[source] std::io::Error);
 /// sync the temporary file, replace `path` with it, and sync the directory.
 /// If the call made directories, it then syncs each directory above the
 /// directory of `path` up to the parent of the highest new directory, deepest
-/// first. On Unix, after the call returns, a power loss cannot lose the new
-/// bytes of the file or the entry of a new directory. On Windows, a directory
-/// has no sync in this module: the file sync occurs, but a power loss can
-/// lose the rename and the entry of a new directory.
+/// first. It does not sync a directory that was there before the call, above
+/// the directory of `path`. On Unix, after the call returns, a power loss
+/// cannot lose the new bytes of the file or the entry of a directory that the
+/// call made, if each directory that was there before the call has its entry
+/// on the disk. On Windows, a directory has no sync in this module: the file
+/// sync occurs, but a power loss can lose the rename and the entry of a new
+/// directory.
 ///
 /// If a step fails, the steps after it do not occur, no temporary file stays,
 /// and the error names the step and its path, except a failed rename. If a
@@ -39,23 +42,17 @@ pub(in crate::storage::local) fn write_synced_file_named(
     sync_directories(parent, first_made)
 }
 
-/// Syncs the file at `path`, which already has the bytes of a write.
+/// Syncs the file at `path`, which already has the bytes of a write, and then
+/// syncs the directory of `path`.
 ///
-/// The call then syncs the directory of `path` and each directory above it,
-/// deepest first, up to the root of `path`: the file system root for an
-/// absolute path, the current directory for a relative path. An earlier
-/// [`write_synced_file`] of `path` can have stopped after its rename and
-/// before its syncs, and the directories that it made are among these.
+/// It does not sync a directory above the directory of `path`. The call that
+/// makes a directory syncs its entry, so the entry of a directory above is on
+/// the disk only if the call that made it synced it.
 pub fn sync_written_file(path: &Utf8Path) -> anyhow::Result<()> {
     open_to_sync(path)
         .and_then(|file| file.sync_all())
         .map_err(sync_failure(path))?;
-    let parent = parent_of(path)?;
-    let highest = parent
-        .ancestors()
-        .take_while(|directory| directory.parent().is_some())
-        .last();
-    sync_directories(parent, highest)
+    sync_directories(parent_of(path)?, None)
 }
 
 /// Syncs `parent`, and then each directory above it up to the parent of
