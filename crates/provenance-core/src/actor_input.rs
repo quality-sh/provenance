@@ -20,7 +20,7 @@ pub struct ActorInput(pub Option<String>);
 
 impl ActorInput {
     /// True when the request gives no actor.
-    pub fn is_absent(&self) -> bool {
+    pub const fn is_absent(&self) -> bool {
         self.0.is_none()
     }
 
