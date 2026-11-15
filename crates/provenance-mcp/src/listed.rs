@@ -47,9 +47,7 @@ impl Table {
         self.0
             .iter()
             .find_map(|listed| match &listed.runner {
-                Runner::Change(actions) => {
-                    Some(tools::change_commands(&actions.listed).collect())
-                }
+                Runner::Change(actions) => Some(tools::change_commands(&actions.listed).collect()),
                 _ => None,
             })
             .unwrap_or_default()

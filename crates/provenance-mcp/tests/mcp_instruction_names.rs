@@ -107,7 +107,10 @@ async fn a_host_with_every_write_names_each_tool_and_action_that_it_lists() {
     let host = fixture_host::full(&repository).with_repository(RepoContext::new(root, "default"));
     let (tools, instructions) = served_tools(host).await;
     let listed = listed_names(&tools);
-    assert!(listed.iter().any(|name| name == "dictionary_import"), "{listed:?}");
+    assert!(
+        listed.iter().any(|name| name == "dictionary_import"),
+        "{listed:?}"
+    );
     assert_names_listed(&tools, &instructions);
 }
 

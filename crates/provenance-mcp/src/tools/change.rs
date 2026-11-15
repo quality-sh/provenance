@@ -113,8 +113,7 @@ pub fn tool(host: &StatementHost, input: &ActionInput) -> Option<Tool> {
     let writes: Vec<(Command, String)> = commands(input)
         .map(|command| (command, crate::exposed::name(command).to_owned()))
         .collect();
-    let description =
-        provenance_porcelain::guidance::change_description(&writes, notifies(input))?;
+    let description = provenance_porcelain::guidance::change_description(&writes, notifies(input))?;
     Some(crate::surface::tool(
         crate::exposed::name(Command::Change),
         description,

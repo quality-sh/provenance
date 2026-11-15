@@ -112,7 +112,10 @@ async fn mcp_serves_the_tools_of_the_cli_repository() {
     assert!(prime.starts_with(&shared), "{prime}");
     // The repository of the CLI gives the server its repository writes.
     let instructions = client.instructions().unwrap();
-    assert!(instructions.contains("\n- dictionary_import: "), "{instructions}");
+    assert!(
+        instructions.contains("\n- dictionary_import: "),
+        "{instructions}"
+    );
     let tools = client.tools().await;
     let names: Vec<&str> = tools
         .iter()
