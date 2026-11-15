@@ -212,6 +212,51 @@ async fn merge_that_resolves_a_conflict_to_new_content_adds_one_version() {
         "merger",
         &["merge", "-q", "--no-edit", "-X", "ours", "feature"],
     );
+    // Where the two sides of the Proposal file conflict, the merge keeps the
+    // lines of main. The merger also keeps the lines that only feature
+    // added, as a person who keeps both sides does. Each branch opened a
+    // review submission of req_a with review cycle 2, so a read of req_a
+    // refuses.
+    let path = ".provenance/state/scopes/default/ideation/proposal_cards.jsonl";
+    let proposals = temp.path().join(path);
+    let merged = std::fs::read_to_string(&proposals).unwrap();
+    let feature = git_as(&temp, "merger", &["show", &format!("feature:{path}")]);
+    let mut lines = merged.lines().collect::<Vec<_>>();
+    for line in feature.lines() {
+        if !lines.contains(&line) {
+            lines.push(line);
+        }
+    }
+    let store_lines = |lines: &[&str]| {
+        let mut text = String::new();
+        for line in lines {
+            text.push_str(line);
+            text.push('\n');
+        }
+        std::fs::write(&proposals, text).unwrap();
+    };
+    store_lines(&lines);
+    let refusal = store
+        .requirement_decision_state(&scope(), &id())
+        .unwrap_err()
+        .to_string();
+    assert!(
+        refusal.contains("requirement req_a has 2 review submissions with review cycle 2. ")
+            && refusal.ends_with(
+                "; To repair, keep one submission and remove the lines of each other submission, \
+                 then commit."
+            ),
+        "{refusal}"
+    );
+    // The merger removes the line of one of them, as the refusal says:
+    // neither has a decision or a withdrawal.
+    let cycle_two = "\"proposal_key\":\"review:requirement:req_a:2\"";
+    let removed = lines
+        .iter()
+        .rposition(|line| line.contains(cycle_two))
+        .unwrap();
+    lines.remove(removed);
+    store_lines(&lines);
     store
         .save_requirement(save(
             &store,

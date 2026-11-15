@@ -2,6 +2,7 @@
 //! in text and in JSON format. A test with no Rule is a characterization: its
 //! rows pin the kind, the text and the exit code of each refusal.
 
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use serde_json::{json, Value};
 
 use crate::support;
@@ -231,7 +232,7 @@ fn a_bad_state_line_gives_the_stored_record_and_refuses_a_create() {
 
     let warning = format!(
         "scopes/default/requirements/req.jsonl line 2: missing field `scope_id`; {}",
-        provenance_core::protocol::read_failure::STATE_CORRECTIONS
+        STATE_CORRECTIONS
     );
     let text = format!("{text}\nwarning: record freshness: {warning}\n");
     assert_eq!(get(&repo, &[]), (Some(0), text, String::new()));
@@ -268,6 +269,7 @@ fn a_bad_state_line_gives_the_stored_record_and_refuses_a_create() {
                         "scopes/default/requirements/req.jsonl",
                         2,
                         "missing field `scope_id`",
+                        STATE_CORRECTIONS,
                     )
                 ],
                 "stdout_empty": true
@@ -282,6 +284,7 @@ fn a_bad_state_line_gives_the_stored_record_and_refuses_a_create() {
                         "scopes/default/requirements/req.jsonl",
                         2,
                         "missing field `scope_id`",
+                        STATE_CORRECTIONS,
                     )
                 ],
                 "stdout_empty": true
@@ -379,6 +382,7 @@ fn a_read_names_the_line_of_a_withdrawal_that_names_no_submission() {
                     "scopes/default/ideation/withdrawals.jsonl",
                     1,
                     "withdrawal withdrawal_lost names no review submission: proposal_missing",
+                    "To repair, remove ideation/withdrawals.jsonl line 1, then commit.",
                 )
             ],
             "stdout_empty": true
@@ -387,10 +391,9 @@ fn a_read_names_the_line_of_a_withdrawal_that_names_no_submission() {
 }
 
 /// A standard error line of an `invalid_state_file` refusal of `file` at
-/// `line`, with the steps that correct the state as its hint.
-fn refusal_line(prefix: &str, file: &str, line: u64, message: &str) -> String {
+/// `line`, with `hint` as the step that corrects the state.
+fn refusal_line(prefix: &str, file: &str, line: u64, message: &str, hint: &str) -> String {
     let refusal = json!({"error": {"kind": "invalid_state_file", "file": file, "line": line,
-        "message": message, "hint": provenance_core::protocol::read_failure::STATE_CORRECTIONS},
-        "meta": {}});
+        "message": message, "hint": hint}, "meta": {}});
     format!("{prefix}{refusal}")
 }
