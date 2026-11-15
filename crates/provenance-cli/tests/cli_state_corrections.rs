@@ -115,9 +115,60 @@ fn cut(repo: &Path) {
     std::fs::write(&path, lines.join("\n") + "\n").unwrap();
 }
 
-/// The two faults of the `req_child` line: a line of an older form and a line
-/// that a person changed.
-const FAULTS: [fn(&Path); 2] = [damage, cut];
+/// Changes the manifest, so that its disposition actors are one string and
+/// not a list, as in a manifest of an older form. It gives the line and the
+/// parse message of the refusal.
+fn older_manifest(repo: &Path) -> (u64, String) {
+    let path = repo.join(".provenance/state/manifest.json");
+    let mut manifest: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    manifest["disposition_actor_ids"] = json!("reviewer");
+    let text = serde_json::to_string_pretty(&manifest).unwrap();
+    assert!(text.starts_with("{\n  \"disposition_actor_ids\": \"reviewer\","), "{text}");
+    std::fs::write(&path, text + "\n").unwrap();
+    let message = "invalid type: string \"reviewer\", expected a sequence";
+    (2, message.to_owned())
+}
+
+/// Removes the last character of the manifest, as a person who stopped an
+/// edit of the file. It gives the line and the parse message of the refusal.
+fn cut_manifest(repo: &Path) -> (u64, String) {
+    let path = repo.join(".provenance/state/manifest.json");
+    let text = std::fs::read_to_string(&path).unwrap();
+    let text = text.trim_end();
+    assert!(text.ends_with('}'), "{text}");
+    let cut = &text[..text.len() - 1];
+    std::fs::write(&path, cut).unwrap();
+    let line = u64::try_from(cut.lines().count()).unwrap();
+    (line, "EOF while parsing an object".to_owned())
+}
+
+/// The two faults of a manifest, as functions that give the line and the
+/// parse message of the refusal.
+const MANIFEST_FAULTS: [fn(&Path) -> (u64, String); 2] = [older_manifest, cut_manifest];
+
+/// The faults of the state: a `req_child` line of an older form, a
+/// `req_child` line that a person cut, and the two faults of a manifest.
+const FAULTS: [fn(&Path); 4] = [
+    damage,
+    cut,
+    |repo| {
+        older_manifest(repo);
+    },
+    |repo| {
+        cut_manifest(repo);
+    },
+];
+
+/// The refusal text of a manifest that does not parse at `line`.
+fn manifest_cause((line, message): &(u64, String)) -> String {
+    format!("manifest.json line {line}: {message}; {HINT}")
+}
+
+/// The refusal object of a manifest that does not parse at `line`.
+fn manifest_refusal((line, message): &(u64, String)) -> Value {
+    json!({"error": {"kind": "invalid_state_file", "file": "manifest.json", "line": line,
+        "message": message, "hint": HINT}, "meta": {}})
+}
 
 /// A JSON get gives the record at the stored serial with the warning.
 #[test]
@@ -193,19 +244,32 @@ fn init_names_the_two_ways_out_and_changes_no_file() {
 }
 
 /// `check` gives the cause with the hint in each section that the cause stops,
-/// and its error line gives the cause with the hint one time.
+/// and its error line gives the cause with the hint.
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
+fn check_names_the_two_procedures() {
+    let directory = unparsable();
+
+    let (code, stdout, stderr) = run(directory.path(), &["check"]);
+
+    let cause = warning();
+    let sections = format!(
+        "graph: findings\n  - {cause}\nstatements: unavailable\n  - {cause}\nbindings: passed\n"
+    );
+    assert_eq!((code, stdout), (Some(1), sections));
+    assert!(stderr.starts_with(&format!("Error: {cause}")), "{stderr}");
+}
+
+/// An implementation aid with no Rule binding, because no Rule states that the
+/// error line of `check` gives each distinct cause one time. It keeps the
+/// error line of one bad line to one copy of the hint.
+#[test]
 fn check_gives_the_hint_one_time_in_its_error_line() {
     let directory = unparsable();
 
-    let answer = run(directory.path(), &["check"]);
+    let (_, _, stderr) = run(directory.path(), &["check"]);
 
-    let cause = warning();
-    let stdout = format!(
-        "graph: findings\n  - {cause}\nstatements: unavailable\n  - {cause}\nbindings: passed\n"
-    );
-    assert_eq!(answer, (Some(1), stdout, format!("Error: {cause}\n")));
+    assert_eq!(stderr, format!("Error: {}\n", warning()));
 }
 
 /// The MCP get of the record serves the record of the read cache and gives
@@ -349,4 +413,66 @@ fn a_bad_line_of_a_different_family_names_the_same_ways_out() {
     let refusal = json!({"error": {"kind": "invalid_state_file", "file": file, "line": line,
         "message": "missing field `id`", "hint": HINT}, "meta": {}});
     assert_eq!(answer, (Some(1), String::new(), format!("{refusal}\n")));
+}
+
+/// A JSON write and a JSON get over a manifest that does not parse refuse with
+/// the refusal object of the manifest.
+#[test]
+#[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
+fn a_json_command_over_a_bad_manifest_names_the_two_procedures() {
+    for fault in MANIFEST_FAULTS {
+        let directory = committed();
+        let repo = directory.path();
+        let located = fault(repo);
+        let stderr = format!("{}\n", manifest_refusal(&located));
+
+        let write = run(repo, &[&WRITE[..], &["--format", "json"]].concat());
+        let get = run(repo, &["req_child", "get", "--format", "json"]);
+
+        assert_eq!(write, (Some(1), String::new(), stderr.clone()));
+        assert_eq!(get, (Some(1), String::new(), stderr));
+    }
+}
+
+/// A text get and an init over a manifest that does not parse refuse with the
+/// refusal text of the manifest, and the init changes no file.
+#[test]
+#[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
+fn a_text_get_and_init_over_a_bad_manifest_name_the_two_procedures() {
+    for fault in MANIFEST_FAULTS {
+        let directory = committed();
+        let repo = directory.path();
+        let located = fault(repo);
+        let state = repo.join(".provenance/state");
+        let before = support::state_files::files_below(&state);
+        let stderr = format!("Error: {}\n", manifest_cause(&located));
+
+        let get = run(repo, &["req_child", "get"]);
+        let init = run(repo, &["init"]);
+
+        assert_eq!(get, (Some(1), String::new(), stderr.clone()));
+        assert_eq!(init, (Some(1), String::new(), stderr));
+        assert_eq!(support::state_files::files_below(&state), before);
+    }
+}
+
+/// `check` over a manifest that does not parse gives the refusal text of the
+/// manifest in each section that it stops and in its error line.
+#[test]
+#[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
+fn check_over_a_bad_manifest_names_the_two_procedures() {
+    for fault in MANIFEST_FAULTS {
+        let directory = committed();
+        let located = fault(directory.path());
+
+        let (code, stdout, stderr) = run(directory.path(), &["check"]);
+
+        let cause = manifest_cause(&located);
+        let sections = format!(
+            "graph: findings\n  - {cause}\nstatements: unavailable\n  - {cause}\n\
+             bindings: unavailable\n  - {cause}\n"
+        );
+        assert_eq!((code, stdout), (Some(1), sections));
+        assert!(stderr.starts_with(&format!("Error: {cause}")), "{stderr}");
+    }
 }
