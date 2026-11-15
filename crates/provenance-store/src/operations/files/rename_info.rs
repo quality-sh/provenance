@@ -37,7 +37,8 @@ impl<'root> RenameInfo<'root> {
             .checked_add(name_bytes)
             .and_then(|size| size.checked_add(size_of::<u16>()))
             .ok_or(std::io::ErrorKind::InvalidInput)?;
-        let name_length = u32::try_from(name_bytes).map_err(|_| std::io::ErrorKind::InvalidInput)?;
+        let name_length =
+            u32::try_from(name_bytes).map_err(|_| std::io::ErrorKind::InvalidInput)?;
         let size = u32::try_from(buffer_size).map_err(|_| std::io::ErrorKind::InvalidInput)?;
         let mut storage = vec![0_usize; buffer_size.div_ceil(size_of::<usize>())];
         let info = storage.as_mut_ptr().cast::<FILE_RENAME_INFO>();

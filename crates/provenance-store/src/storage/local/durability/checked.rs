@@ -2,8 +2,7 @@
 //! one step that changes it.
 
 use super::{
-    keep, parent_of, sync_directories, sync_failure, sync_parent, write_temporary,
-    ChangedUnsynced,
+    keep, parent_of, sync_directories, sync_failure, sync_parent, write_temporary, ChangedUnsynced,
 };
 use std::path::Path;
 
@@ -114,7 +113,10 @@ pub fn remove_synced_file_checked(
     match std::fs::remove_file(target) {
         Ok(()) => Ok(unsynced(sync_parent(parent))),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Ok(())),
-        Err(error) => Err(crate::refusal::caused(error, format!("remove {}", path.display()))),
+        Err(error) => Err(crate::refusal::caused(
+            error,
+            format!("remove {}", path.display()),
+        )),
     }
 }
 

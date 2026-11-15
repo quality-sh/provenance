@@ -127,5 +127,8 @@ fn the_next_init_removes_a_read_only_temporary_file_of_a_stopped_init() {
     assert!(agents.starts_with(PERSON_AGENTS), "{agents}");
     assert!(agents.contains("## Provenance"), "{agents}");
     let metadata = std::fs::metadata(repo.join("AGENTS.md")).unwrap();
-    assert!(metadata.permissions().readonly(), "AGENTS.md is not read-only");
+    assert!(
+        metadata.permissions().readonly(),
+        "AGENTS.md is not read-only"
+    );
 }

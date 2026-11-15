@@ -2,8 +2,8 @@
 //! replaces it. The init runs through `InitPort::init`, the port that the
 //! CLI calls.
 use super::{
-    init_input, init_through_the_port, repository_with_changed_agents, reviewers,
-    temporary_files, PERSON_AGENTS,
+    init_input, init_through_the_port, repository_with_changed_agents, reviewers, temporary_files,
+    PERSON_AGENTS,
 };
 use camino::Utf8Path;
 use provenance_macros::verifies;

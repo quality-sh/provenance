@@ -5,8 +5,8 @@
 //! permission back after the rename. The CLI cannot make the sync fail at
 //! that point.
 use super::{
-    init_input, init_through_the_port, repository_with_changed_agents, reviewers,
-    temporary_files, PERSON_AGENTS,
+    init_input, init_through_the_port, repository_with_changed_agents, reviewers, temporary_files,
+    PERSON_AGENTS,
 };
 use camino::Utf8Path;
 use provenance_macros::verifies;
