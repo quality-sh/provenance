@@ -17,8 +17,8 @@ mod notify;
 mod read_only;
 pub use api::{call as call_api, lowercase_method, tool as api_tool};
 pub use change::{
-    commands as change_commands, input as change_input, notifies as change_notifies,
-    refusal as change_refusal, run as call_change, tool as change_tool,
+    commands as change_commands, notifies as change_notifies, run as call_change,
+    tool as change_tool, Actions as ChangeActions, Route as ChangeRoute,
 };
 pub use discussions::{
     refusal as discussions_refusal, run as call_discussion, tool as discussions_tool,
