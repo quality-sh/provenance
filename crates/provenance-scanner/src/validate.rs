@@ -52,7 +52,7 @@ pub fn validate_bindings(
                 file_path: Some(site.file_path().to_path_buf()),
                 line: Some(site.line()),
                 message: format!(
-                    "more than one primary implementation binding was found for #[rule(\"{}\")]",
+                    "more than one primary implementation binding was found for rule `{}`",
                     site.rule_id()
                 ),
                 binding_finding: false,

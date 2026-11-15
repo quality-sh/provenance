@@ -1,6 +1,7 @@
-//! Typed Rule declaration calls never become implementation bindings; the
-//! free identity helpers from the `rules` subpath still bind, and unknown
-//! ids on real bindings still warn.
+//! Typed Rule declaration calls never become implementation bindings; a
+//! project's own `rule(` helper binds, free or through a namespace import, the
+//! `verifies` helper from the `rules` subpath binds a test, and unknown ids on
+//! real bindings still warn.
 
 use camino::Utf8Path;
 use provenance_scanner::{scan_file, validate_bindings, Language, Verification};
@@ -21,18 +22,17 @@ fn typed_rule_declaration_call_is_not_an_implementation_binding() {
 
 #[test]
 fn namespace_imported_helpers_bind_their_implementation_and_verification() {
-    // The exact binding lines of the packed-consumer fixture this
-    // repository ships to npm consumers.
     let scan = scan_file(
-        Utf8Path::new("rule-bindings.ts"),
+        Utf8Path::new("overtime.ts"),
         Language::TypeScript,
-        r#"import * as ruleBindings from "@quality-sh/provenance/rules";
+        r#"import * as rules from "./rules.js";
+import * as provenance from "@quality-sh/provenance/rules";
 
 const implementation = (hours: number): boolean => hours > 38;
-const paysOvertime: (hours: number) => boolean = ruleBindings.rule("rule_packed_consumer_overtime", implementation);
+const paysOvertime: (hours: number) => boolean = rules.rule("rule_packed_consumer_overtime", implementation);
 
 function overtimeExamples(): void {
-  ruleBindings.verifies("rule_packed_consumer_overtime", "examples");
+  provenance.verifies("rule_packed_consumer_overtime", "examples");
 }"#,
     );
 
@@ -59,31 +59,38 @@ fn the_shipped_packed_consumer_fixture_scans_both_sites() {
         &source,
     );
 
-    let sites: Vec<(String, Option<&str>, Option<Verification>)> = scan
+    let annotations: Vec<(&str, Option<&str>)> = scan
+        .annotations
+        .iter()
+        .map(|found| {
+            (
+                found.annotation.rule.as_str(),
+                found.function_name.as_deref(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        annotations,
+        vec![("rule_packed_consumer_overtime", Some("paysOvertime"))]
+    );
+    let bindings: Vec<(&str, Option<&str>, Option<Verification>)> = scan
         .bindings
         .iter()
         .map(|binding| {
             (
-                binding.rule_id.clone(),
+                binding.rule_id.as_str(),
                 binding.item_name.as_deref(),
                 binding.verification,
             )
         })
         .collect();
     assert_eq!(
-        sites,
-        vec![
-            (
-                "rule_packed_consumer_overtime".to_string(),
-                Some("paysOvertime"),
-                None
-            ),
-            (
-                "rule_packed_consumer_overtime".to_string(),
-                Some("overtimeExamples"),
-                Some(Verification::Examples)
-            ),
-        ]
+        bindings,
+        vec![(
+            "rule_packed_consumer_overtime",
+            Some("overtimeExamples"),
+            Some(Verification::Examples)
+        )]
     );
 }
 
@@ -108,7 +115,7 @@ fn free_rule_helper_call_remains_a_binding() {
     let scan = scan_file(
         Utf8Path::new("rules.ts"),
         Language::TypeScript,
-        r#"import { rule } from "@quality-sh/provenance/rules";
+        r#"import { rule } from "./rules.js";
 
 export const paysOvertime = rule("rule_overtime", (hours: number) => hours > 38);"#,
     );

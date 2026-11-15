@@ -114,9 +114,9 @@ fn parse_script_call(
     }
     // A Rule-options object after the id marks the SDK's typed Rule
     // declaration (`requirement.rule("key", { statement })`), which builds a
-    // test graph and never binds production code. The binding helper — free
-    // or through a namespace import — passes an implementation function or
-    // value, so any other payload binds.
+    // test graph and never binds production code. A project's own binding
+    // helper — free or through a namespace import — passes an implementation
+    // function or value, so any other payload binds.
     let Some(rest) = call_arguments(line, in_block_comment, "rule") else {
         return Ok(None);
     };
