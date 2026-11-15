@@ -147,10 +147,9 @@ To archive a record, set the archived status and give the commit that contains t
     --if-match <etag>
 
 For a Rule or a Requirement, this update opens a status request. The status changes when
-a reviewer on the reviewer list accepts it. The result names the request and the call
-that accepts it:
-  provenance api <rules|requirements>/<id>/submissions/<proposal_id>/decide \\
-    --method post --input -
+a reviewer on the reviewer list accepts it with a POST through provenance api to
+<rules|requirements>/<id>/submissions/<proposal_id>/decide. The result names the request
+and this call.
 
 An archived status is terminal. When a reviewer accepts the archive of a Requirement, the
 archive also archives each Requirement, Rule, and Resolution under it when all its parents

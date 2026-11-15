@@ -43,6 +43,7 @@ fn seed_plain_citation(
 
 pub fn pinned_store_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
     let (dir, layout, scope) = empty_layout();
+    crate::test_support::allow_reviewer(&layout);
     // Start without HEAD before seeding, even when TMPDIR is inside a worktree.
     // Record stamps must not inherit the parent checkout's commit.
     let initialized = crate::git_process::git()
@@ -157,6 +158,17 @@ fn seed_graph(store: &StateStore, scope: &ScopeId) {
     }
     create_rule_of(store, scope, "rule_penalty_001", "req_penalty");
     create_rule_of(store, scope, LINKED_RULE_ID, "req_top");
+    // Each Rule is created active, so its creation submission is a status
+    // request; the reviewer accepts it.
+    let others = ["rule_penalty_001", LINKED_RULE_ID];
+    let overtime = (2..=9).map(|index| format!("rule_over_{index:03}"));
+    for id in ["rule_overtime_001".to_owned()]
+        .into_iter()
+        .chain(overtime)
+        .chain(others.map(str::to_owned))
+    {
+        crate::test_support::accept_pending(store, provenance_core::NodeType::Rule, &id);
+    }
 }
 
 fn seed_shaping(store: &StateStore, scope: &ScopeId) {

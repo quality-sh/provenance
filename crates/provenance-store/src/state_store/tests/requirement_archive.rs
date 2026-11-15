@@ -1,7 +1,7 @@
 use super::seeded_requirement_store;
 use crate::state_store::StateStore;
 use crate::write_error::{WriteError, WriteFailure};
-use provenance_core::{Requirement, ScopeId};
+use provenance_core::{NodeType, Requirement, ScopeId};
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 
@@ -20,15 +20,15 @@ pub(super) fn child(store: &StateStore, id: &str, parent: &str) {
 }
 
 pub(super) fn archive(store: &StateStore, id: &str) {
-    store
-        .update_requirement(
+    crate::test_support::set_status(store, NodeType::Requirement, id, |store| {
+        store.update_requirement(
             serde_json::from_value(json!({
                 "scope_id":"default", "id":id, "status":"archived",
                 "archived_in_commit":{"commit":COMMIT}
             }))
             .unwrap(),
         )
-        .unwrap();
+    });
 }
 
 pub(super) fn requirement(store: &StateStore, scope: &ScopeId, id: &str) -> Requirement {
