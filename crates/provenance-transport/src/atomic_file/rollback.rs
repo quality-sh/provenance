@@ -1,6 +1,6 @@
 use super::{ErrorKind, FileSnapshot};
-use provenance_store::publication::ChangedUnsynced;
 use anyhow::Context;
+use provenance_store::publication::ChangedUnsynced;
 use std::path::{Path, PathBuf};
 
 #[derive(Default)]

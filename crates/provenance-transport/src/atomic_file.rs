@@ -1,6 +1,8 @@
 use anyhow::Context;
 use camino::Utf8Path;
-use provenance_store::publication::{remove_synced_file, write_synced_file_checked, ChangedUnsynced};
+use provenance_store::publication::{
+    remove_synced_file, write_synced_file_checked, ChangedUnsynced,
+};
 use std::io::ErrorKind;
 use std::path::Path;
 

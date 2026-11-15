@@ -95,8 +95,11 @@ pub fn write_synced_file_checked(
     windows_rename::rename_kept(file, &temporary, &target)?;
     #[cfg(not(windows))]
     super::rename_kept(file, &temporary, &target)?;
-    let synced = sync_directories(parent, first_made)
-        .map_err(|error| error.downcast::<ChangedUnsynced>().unwrap_or_else(ChangedUnsynced));
+    let synced = sync_directories(parent, first_made).map_err(|error| {
+        error
+            .downcast::<ChangedUnsynced>()
+            .unwrap_or_else(ChangedUnsynced)
+    });
     Ok(ReplacedFile {
         permissions,
         synced,
