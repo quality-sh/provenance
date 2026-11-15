@@ -19,7 +19,7 @@ fn held_submodule() -> Entry {
 }
 
 fn directory() -> Entry {
-    Entry::directory("inner\n")
+    Entry::directory()
 }
 
 #[tokio::test]

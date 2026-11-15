@@ -1,12 +1,16 @@
 //! The git adapter over a Git history that holds the commits of a case.
 
 use camino::Utf8PathBuf;
-use provenance_store::review::history::contract::{Adapter, Commit, EntryKind, Harness};
+use provenance_store::review::history::contract::{Adapter, Commit, Entry, Harness};
 use provenance_store::review::history::GitFileVersions;
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::process::Stdio;
 use std::sync::Arc;
+
+/// The text of `inner`, the one file that the harness writes in a directory
+/// entry, because Git does not keep an empty directory.
+pub const INNER_TEXT: &str = "inner\n";
 
 /// A Git repository that holds the commits, made with Git's plumbing so
 /// that each commit has exactly the parents and files of the graph. The
@@ -62,18 +66,20 @@ impl Harness for Git {
                 let Some(entry) = entry else {
                     continue;
                 };
-                let blob = || {
-                    let input = Some(entry.bytes.as_slice());
-                    git(root, &[], &["hash-object", "-w", "--stdin"], input)
+                let blob = |bytes: &[u8]| {
+                    git(root, &[], &["hash-object", "-w", "--stdin"], Some(bytes))
                 };
-                let entry = match &entry.kind {
-                    EntryKind::File if entry.executable => format!("100755,{},{path}", blob()),
-                    EntryKind::File => format!("100644,{},{path}", blob()),
-                    EntryKind::Submodule(commit) => {
+                let entry = match entry {
+                    Entry::File { bytes, executable } => {
+                        let mode = if *executable { "100755" } else { "100644" };
+                        format!("{mode},{},{path}", blob(bytes))
+                    }
+                    Entry::Submodule(commit) => {
                         format!("160000,{},{path}", ids.get(commit).unwrap_or(commit))
                     }
-                    EntryKind::Directory => format!("100644,{},{inner}", blob()),
-                    kind => panic!("the git harness cannot write {kind:?}"),
+                    Entry::Directory => {
+                        format!("100644,{},{inner}", blob(INNER_TEXT.as_bytes()))
+                    }
                 };
                 git(
                     root,

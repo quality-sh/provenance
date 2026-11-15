@@ -2,8 +2,9 @@
 //! commit names as commit ids.
 
 use provenance_store::review::history::contract::{
-    Adapter, Commit, Entry, EntryKind, Harness, MemoryFileVersions, MOVED_FROM, MOVED_TO,
+    Adapter, Commit, Entry, Harness, MemoryFileVersions, MOVED_FROM, MOVED_TO,
 };
+use super::git_harness::INNER_TEXT;
 use provenance_store::review::history::{BoxFuture, FileVersion, FileVersions};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -47,8 +48,9 @@ pub fn each_line(commits: &[Commit]) -> Arc<dyn FileVersions> {
 /// An adapter that compares the texts of a file and not its mode: it does
 /// not list a commit that changes only the mode.
 pub fn ignores_mode(commits: &[Commit]) -> Arc<dyn FileVersions> {
-    Arc::new(MemoryFileVersions::new(&changed(commits, |entry| {
-        Entry::new(entry.bytes, false)
+    Arc::new(MemoryFileVersions::new(&changed(commits, |entry| match entry {
+        Entry::File { bytes, .. } => Entry::new(bytes, false),
+        other => other,
     })))
 }
 
@@ -64,21 +66,22 @@ pub fn head_text(commits: &[Commit]) -> Arc<dyn FileVersions> {
 /// An adapter that gives a text that is not UTF-8 with replacement
 /// characters.
 pub fn lossy_text(commits: &[Commit]) -> Arc<dyn FileVersions> {
-    Arc::new(MemoryFileVersions::new(&changed(commits, |entry| {
-        let text = String::from_utf8_lossy(&entry.bytes).into_owned();
-        Entry::new(text.into_bytes(), entry.executable)
+    Arc::new(MemoryFileVersions::new(&changed(commits, |entry| match entry {
+        Entry::File { bytes, executable } => {
+            let text = String::from_utf8_lossy(&bytes).into_owned();
+            Entry::new(text.into_bytes(), executable)
+        }
+        other => other,
     })))
 }
 
 /// An adapter that reads each entry as a file: a submodule entry has its
-/// commit as its text, and a directory has the text of its file.
+/// commit as its text, and a directory has the text of its file `inner`.
 pub fn entry_text(commits: &[Commit]) -> Arc<dyn FileVersions> {
-    Arc::new(MemoryFileVersions::new(&changed(commits, |entry| {
-        let bytes = match entry.kind {
-            EntryKind::Submodule(commit) => commit.into_bytes(),
-            _ => entry.bytes,
-        };
-        Entry::new(bytes, entry.executable)
+    Arc::new(MemoryFileVersions::new(&changed(commits, |entry| match entry {
+        Entry::Submodule(commit) => Entry::new(commit.into_bytes(), false),
+        Entry::Directory => Entry::text(INNER_TEXT),
+        file @ Entry::File { .. } => file,
     })))
 }
 
