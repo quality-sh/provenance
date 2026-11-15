@@ -217,7 +217,9 @@ macro_rules! page_operation {
             |read, request| async move {
                 Ok(
                     reader::answer(&read.repository, read.policy, move |ctx| {
-                        Box::pin($page(ctx, $wire, request))
+                        Box::pin(async move {
+                            $page(ctx, $wire, request).await.map_err(reader::page_error)
+                        })
                     })
                     .await?
                     .into(),
@@ -343,7 +345,11 @@ graph_read_operation!(
     |read, request| async move {
         Ok(
             reader::answer(&read.repository, read.policy, move |ctx| {
-                Box::pin(verification_binding_page(ctx, request))
+                Box::pin(async move {
+                    verification_binding_page(ctx, request)
+                        .await
+                        .map_err(reader::page_error)
+                })
             })
             .await?
             .into(),

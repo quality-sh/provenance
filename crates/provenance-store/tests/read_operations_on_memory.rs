@@ -35,6 +35,8 @@ mod history_folder;
 mod memory;
 #[path = "support/sqlite_database.rs"]
 mod sqlite_database;
+#[path = "read_operations_on_memory/work_bound.rs"]
+mod work_bound;
 
 use memory::{initial_state, key, scope, shard, Recorded};
 use provenance_core::{RequirementStatus, StableId};
@@ -133,6 +135,21 @@ async fn repository() -> (tempfile::TempDir, Repository, Arc<Switch>) {
 /// storage, one section lock and one read database, which is empty, and the
 /// switch of that read database.
 async fn handles(count: usize) -> (tempfile::TempDir, Vec<Repository>, Arc<Switch>) {
+    let switch = Arc::new(Switch::default());
+    let database: Arc<dyn ReadDatabase> = Arc::new(Other::new(Switched {
+        database: MemorySqlite::new().await,
+        switch: Arc::clone(&switch),
+    }));
+    let (root, handles) = handles_over(count, &database);
+    (root, handles, switch)
+}
+
+/// `count` handles that `Repository::with_storage` makes over one memory
+/// storage, one section lock and the read database `database`.
+fn handles_over(
+    count: usize,
+    database: &Arc<dyn ReadDatabase>,
+) -> (tempfile::TempDir, Vec<Repository>) {
     let root = tempfile::tempdir().unwrap();
     let storage: Arc<dyn StateStorage> = Arc::new(MemoryStateStorage::loaded(
         state(),
@@ -141,11 +158,6 @@ async fn handles(count: usize) -> (tempfile::TempDir, Vec<Repository>, Arc<Switc
     let working_tree =
         camino::Utf8PathBuf::from_path_buf(dunce::canonicalize(root.path()).unwrap()).unwrap();
     let identity = RepositoryIdentity::new(working_tree, scope(), Settings::default());
-    let switch = Arc::new(Switch::default());
-    let database: Arc<dyn ReadDatabase> = Arc::new(Other::new(Switched {
-        database: MemorySqlite::new().await,
-        switch: Arc::clone(&switch),
-    }));
     let lock: Arc<dyn SectionLock> = Arc::new(MemorySectionLock::refusing());
     let handles = (0..count)
         .map(|_| {
@@ -153,12 +165,12 @@ async fn handles(count: usize) -> (tempfile::TempDir, Vec<Repository>, Arc<Switc
                 identity.clone(),
                 Arc::clone(&storage),
                 Arc::clone(&lock),
-                Some(Arc::clone(&database)),
+                Some(Arc::clone(database)),
             )
             .unwrap()
         })
         .collect();
-    (root, handles, switch)
+    (root, handles)
 }
 
 /// The state of the support module, with one record of each family that
