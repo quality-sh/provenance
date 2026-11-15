@@ -182,7 +182,12 @@ async fn the_history_routes_over_memory_storage_answer_as_over_a_folder() {
         clock: Arc::new(SystemClock),
         ids: Arc::new(RandomIds),
     });
+    // Each scope has a folder of its own, so that each folder host has its
+    // own read database, as each memory host has. The commits are the same,
+    // so their ids are too.
+    let broken = folder(&history);
     let folder = folder(&history);
+    assert_eq!(broken.names, folder.names);
     let home = tempfile::tempdir().unwrap();
     let working = tempfile::tempdir().unwrap();
     let temporary = tempfile::tempdir().unwrap();
@@ -191,11 +196,6 @@ async fn the_history_routes_over_memory_storage_answer_as_over_a_folder() {
     let memory = history_in_memory(&history, &folder, &root, "default").await;
     let memory_broken = history_in_memory(&history, &folder, &root, "broken").await;
 
-    // Each scope has a folder of its own, so that each folder host has its
-    // own read database, as each memory host has. The commits are the same,
-    // so their ids are too.
-    let broken = folder(&history);
-    assert_eq!(broken.names, folder.names);
     let opened = |folder: &Folder, scope| Http::over(Opened::open(folder.root(), scope).unwrap());
     let expected =
         history_routes::run(&opened(&folder, "default"), &opened(&broken, "broken")).await;
