@@ -226,8 +226,8 @@ async fn materialize_action_refuses_an_argument_by_name() {
 }
 
 /// The dictionary import action over a dictionary reference that does not parse gives the
-/// `invalid_state_file` failure with the repair as the hint, keeps the file and writes no
-/// index.
+/// `invalid_state_file` failure with the steps that correct the state as the hint, keeps the
+/// file and writes no index.
 #[tokio::test]
 #[verifies("rule_ste_dictionary_reference_parse_refusal", examples)]
 async fn the_dictionary_import_action_refuses_a_reference_that_does_not_parse() {
@@ -252,8 +252,7 @@ async fn the_dictionary_import_action_refuses_a_reference_that_does_not_parse() 
         result["structuredContent"]["error"],
         json!({"kind":"invalid_state_file","file":"dictionary.json","line":1,
                "message":"EOF while parsing a value",
-               "hint":"get the file again from git or correct its JSON, and then do the \
-                       command again"}),
+               "hint":dictionary_support::STATE_CORRECTIONS}),
         "{result}"
     );
     assert_eq!(std::fs::read_to_string(&reference).unwrap(), "");
@@ -265,7 +264,8 @@ async fn the_dictionary_import_action_refuses_a_reference_that_does_not_parse() 
 }
 
 /// The materialize action over a record file with a line that does not parse gives the
-/// `invalid_state_file` failure with the relative file path, the line and the message.
+/// `invalid_state_file` failure with the relative file path, the line, the message and the
+/// steps that correct the state.
 #[tokio::test]
 #[verifies("rule_state_parse_refusal_names_the_line", examples)]
 async fn the_materialize_action_names_a_record_line_that_does_not_parse() {
@@ -291,7 +291,8 @@ async fn the_materialize_action_names_a_record_line_that_does_not_parse() {
     assert_eq!(
         result["structuredContent"]["error"],
         json!({"kind":"invalid_state_file","file":"scopes/default/requirements/req.jsonl",
-               "line":1,"message":"EOF while parsing an object"}),
+               "line":1,"message":"EOF while parsing an object",
+               "hint":dictionary_support::STATE_CORRECTIONS}),
         "{result}"
     );
     wire.close().await;

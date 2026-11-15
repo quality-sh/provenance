@@ -110,6 +110,8 @@ mod cli_shaping_turn_state;
 mod cli_shard_parse_errors;
 #[path = "../cli_source_requirement.rs"]
 mod cli_source_requirement;
+#[path = "../cli_state_corrections.rs"]
+mod cli_state_corrections;
 #[path = "../cli_statement_write_gate.rs"]
 mod cli_statement_write_gate;
 #[path = "../cli_ste_statement_paths.rs"]
