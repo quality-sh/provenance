@@ -1,11 +1,14 @@
 use super::read_budget::ensure_slice_within_read_budget;
-use super::{ensure_new_ids_assignable, read_ideation_landings, IdeationLandingBatch, StateStore};
+use super::{ensure_new_ids_assignable, IdeationLandingBatch, StateStore};
+use crate::publication::ShardBytes;
 use crate::shards;
+use camino::Utf8PathBuf;
 use provenance_core::{
     AssertionRecord, Contribution, IdeationRecord, IdeationRecordKind, ProposalCard, ScopeId,
     SynthesisPacket,
 };
 use provenance_macros::rule;
+use serde::{de::DeserializeOwned, Serialize};
 use std::collections::BTreeSet;
 use std::convert::Infallible;
 
@@ -37,14 +40,6 @@ impl StateStore {
         })
     }
 
-    pub(super) fn list_ideation_landings(
-        &self,
-        scope: &ScopeId,
-    ) -> anyhow::Result<Vec<IdeationLandingBatch>> {
-        let path = shards::ideation_landings_path(&self.layout, scope);
-        super::shared_parses::shared(self, &path, || read_ideation_landings(self, &path))
-    }
-
     pub fn land_ideation_batch(
         &self,
         scope: &ScopeId,
@@ -56,6 +51,9 @@ impl StateStore {
         })
     }
 
+    /// Checks the records of `incoming` with the records of `scope`, and
+    /// publishes the state file of each kind of these records in one write.
+    #[rule("rule_swarm_run_records_in_kind_files")]
     pub(super) fn write_ideation_batch(
         &self,
         scope: &ScopeId,
@@ -68,14 +66,14 @@ impl StateStore {
         ensure_slice_within_read_budget(&incoming.proposals)?;
         ensure_slice_within_read_budget(&incoming.assertions)?;
         ensure_slice_within_read_budget(&incoming.dispositions)?;
-        let path = shards::ideation_landings_path(&self.layout, scope);
-        self.mutate_jsonl_records(&path, |landings: &mut Vec<IdeationLandingBatch>| {
-            let mut contributions = self.list_contributions(scope)?;
-            let mut synthesis_packets = self.list_synthesis_packets(scope)?;
-            self.ensure_batch_targets_exist(scope, &contributions, &synthesis_packets, &incoming)?;
-            let mut proposals = self.list_proposal_definitions(scope)?;
-            let mut assertions = self.list_assertion_records(scope)?;
-            let mut dispositions = self.list_dispositions(scope)?;
+        self.ensure_writable()?;
+        self.with_repository_publication(|held| {
+            let mut contributions = held.list_contributions(scope)?;
+            let mut synthesis_packets = held.list_synthesis_packets(scope)?;
+            held.ensure_batch_targets_exist(scope, &contributions, &synthesis_packets, &incoming)?;
+            let mut proposals = held.list_proposal_definitions(scope)?;
+            let mut assertions = held.list_assertion_records(scope)?;
+            let mut dispositions = held.list_dispositions(scope)?;
             ensure_new_ids_assignable(&contributions, &incoming.contributions, |record| {
                 record.id.as_str()
             })?;
@@ -113,8 +111,8 @@ impl StateStore {
             merge_immutable(&mut assertions, &incoming.assertions)?;
             merge_immutable(&mut dispositions, &incoming.dispositions)?;
             validate_batch_proposals(&incoming.proposals)?;
-            let manifest = self.manifest()?;
-            self.check_ideation_aggregate(
+            let manifest = held.manifest()?;
+            held.check_ideation_aggregate(
                 scope,
                 provenance_core::IdeationAggregate {
                     legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
@@ -137,20 +135,54 @@ impl StateStore {
                     "decisions on review submissions go through the review seam"
                 );
             }
-            let canonical_artifacts = self.canonical_artifact_index(scope)?;
+            let canonical_artifacts = held.canonical_artifact_index(scope)?;
             for disposition in &dispositions {
                 canonical_artifacts.ensure_exists(disposition.canonical_artifact.as_ref())?;
             }
-            landings.push(incoming);
-            Ok(())
+            let layout = &held.layout;
+            let files = [
+                held.kind_file(shards::contributions_path(layout, scope), incoming.contributions)?,
+                held.kind_file(
+                    shards::synthesis_packets_path(layout, scope),
+                    incoming.synthesis_packets,
+                )?,
+                held.kind_file(shards::proposal_cards_path(layout, scope), incoming.proposals)?,
+                held.kind_file(shards::assertion_records_path(layout, scope), incoming.assertions)?,
+                held.kind_file(shards::dispositions_path(layout, scope), incoming.dispositions)?,
+            ];
+            held.publish_shards(files.into_iter().flatten().collect())
         })
+    }
+
+    /// The new bytes of the state file at `path` with each of `records` in
+    /// place of the row with its id, or after the last row. No bytes when
+    /// `records` is empty.
+    fn kind_file<T>(
+        &self,
+        path: Utf8PathBuf,
+        records: Vec<T>,
+    ) -> anyhow::Result<Option<ShardBytes>>
+    where
+        T: IdeationRecord + DeserializeOwned + Serialize,
+    {
+        if records.is_empty() {
+            return Ok(None);
+        }
+        let contents = self.state_text(&path)?;
+        let bytes = crate::jsonl::mutate_jsonl_bytes(self, &path, contents.as_deref(), |rows| {
+            for record in records {
+                replace_or_append(rows, record);
+            }
+            Ok(true)
+        })?;
+        Ok(bytes.map(|bytes| (path, bytes)))
     }
 }
 
 fn validate_batch_proposals(proposals: &[ProposalCard]) -> anyhow::Result<()> {
     for proposal in proposals {
         // Read as the aggregate reads it, so the two cannot disagree
-        // about a landing batch: the intrinsic rule is what a live
+        // about the proposals of a landing: the intrinsic rule is what a live
         // proposal row may claim, and a terminal row is legacy history
         // that `validate_ideation_aggregate` judges by its shipped
         // fingerprint instead.
@@ -310,15 +342,6 @@ fn merge_immutable<T: Clone + IdeationRecord>(
         existing.push(record.clone());
     }
     Ok(())
-}
-
-/// Puts each of `incoming` in `records` with [`replace_or_append`], and then
-/// puts `records` in id order.
-pub(super) fn overlay_records<T: IdeationRecord>(records: &mut Vec<T>, incoming: Vec<T>) {
-    for record in incoming {
-        replace_or_append(records, record);
-    }
-    records.sort_by(|a, b| a.immutable_id().cmp(b.immutable_id()));
 }
 
 /// Puts `record` in place of the record of `records` with its id, or at the

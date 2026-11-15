@@ -32,10 +32,8 @@ pub fn state_path(repo: &Repository, name: &str) -> std::path::PathBuf {
 /// synthesis packet `synthesis_evidence`, the proposal `proposal_a` with its
 /// assertion `assertion_a` and its disposition `disposition_a`, and the
 /// proposal `proposal_b` with no assertion. The result also gives the
-/// answers of the reads over it.
-///
-/// The landings file holds `proposal_a` and its assertion (see
-/// [`create_asserted_proposal`]).
+/// answers of the reads over it. [`create_asserted_proposal`] stores
+/// `proposal_a` and its assertion.
 pub async fn ideation_repository() -> (Repository, Vec<Value>) {
     let repo = Repository::new("The shared graph is readable.");
     allow_reviewer(&repo);

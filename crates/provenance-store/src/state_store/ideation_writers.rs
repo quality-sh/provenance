@@ -102,27 +102,6 @@ impl StateStore {
             uncertainty,
             open_questions,
         };
-        let landed = self.list_ideation_landings(&scope_id)?.iter().any(|batch| {
-            batch
-                .contributions
-                .iter()
-                .any(|record| record.id == contribution.id)
-        });
-        if landed {
-            crate::write_error::ensure!(AlreadyExists, replace, "contribution already exists");
-            self.write_ideation_batch(
-                &scope_id,
-                super::IdeationLandingBatch {
-                    contributions: vec![contribution.clone()],
-                    synthesis_packets: Vec::new(),
-                    proposals: Vec::new(),
-                    assertions: Vec::new(),
-                    dispositions: Vec::new(),
-                },
-                true,
-            )?;
-            return Ok(contribution);
-        }
         let path = shards::contributions_path(&self.layout, &scope_id);
         self.mutate_jsonl_records(&path, |records: &mut Vec<Contribution>| {
             replace_checked_or_append(records, contribution.clone(), |stored| {
@@ -230,27 +209,6 @@ impl StateStore {
             suggested_artifacts,
             required_human_decisions,
         };
-        let landed = self.list_ideation_landings(&scope_id)?.iter().any(|batch| {
-            batch
-                .synthesis_packets
-                .iter()
-                .any(|record| record.id == synthesis_packet.id)
-        });
-        if landed {
-            crate::write_error::ensure!(AlreadyExists, replace, "synthesis packet already exists");
-            self.write_ideation_batch(
-                &scope_id,
-                super::IdeationLandingBatch {
-                    contributions: Vec::new(),
-                    synthesis_packets: vec![synthesis_packet.clone()],
-                    proposals: Vec::new(),
-                    assertions: Vec::new(),
-                    dispositions: Vec::new(),
-                },
-                true,
-            )?;
-            return Ok(synthesis_packet);
-        }
         let path = shards::synthesis_packets_path(&self.layout, &scope_id);
         self.mutate_jsonl_records(&path, |records: &mut Vec<SynthesisPacket>| {
             replace_checked_or_append(records, synthesis_packet.clone(), |stored| {

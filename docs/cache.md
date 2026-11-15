@@ -369,9 +369,8 @@ runtime workers.
 | messages | `read_message_shards` | every `threads/YYYY-MM.jsonl` in the scope |
 | implementation_bindings, verification_bindings | `read_jsonl(<shard>)` | own shard |
 | requirement_reviews | `list_requirement_reviews`, direct line parse | own shard |
-| contributions, synthesis_packets, assertion_records | `read_jsonl` plus the `landings.jsonl` overlay | own shard, `ideation/landings.jsonl` |
-| dispositions | `read_jsonl`, landings overlay | own shard, `ideation/landings.jsonl` |
-| proposal_cards | `project_proposal_cards`: validator (validity only), then `effective_proposal_state(card, assertions, dispositions)` | `proposal_cards.jsonl`, `landings.jsonl`, `assertions.jsonl`, `dispositions.jsonl`; the validator also reads `contributions.jsonl`, `synthesis_packets.jsonl`, and the manifest's actor list |
+| contributions, synthesis_packets, assertion_records, dispositions | `read_jsonl(<shard>)` | own shard |
+| proposal_cards | `project_proposal_cards`: validator (validity only), then `effective_proposal_state(card, assertions, dispositions)` | `proposal_cards.jsonl`, `assertions.jsonl`, `dispositions.jsonl`; the validator also reads `contributions.jsonl`, `synthesis_packets.jsonl`, and the manifest's actor list |
 
 Every file in the table lies in the derived scope's directory or in the
 global unit.

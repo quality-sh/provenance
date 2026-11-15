@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 /// The directory of the ideation state files of the default scope.
 const IDEATION: &str = ".provenance/state/scopes/default/ideation";
 
-/// The read of each family that a landing batch holds.
+/// The read of each family that a swarm run writes.
 const FAMILIES: [&str; 5] = [
     "contributions",
     "synthesis-packets",

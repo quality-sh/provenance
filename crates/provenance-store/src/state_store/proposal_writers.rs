@@ -151,8 +151,7 @@ impl StateStore {
         };
         self.ensure_proposal_not_disposed(&input.scope_id, &assertion.proposal_id)?;
         let mut assertions = self.list_assertion_records(&input.scope_id)?;
-        // The list holds the assertions of the landing batches too, which
-        // the aggregate check refuses with no declared kind.
+        // The aggregate check refuses these too, but with no declared kind.
         crate::write_error::ensure!(
             AlreadyExists,
             !assertions.iter().any(|record| {
