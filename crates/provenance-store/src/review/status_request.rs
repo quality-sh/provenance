@@ -62,7 +62,7 @@ fn dry_run<R>(
 /// Each field of a Rule update other than the status and its guards. Each
 /// field is named, so a new field of the input does not compile until it is
 /// sorted here.
-fn rule_fields_changed(input: &UpdateRuleInput) -> bool {
+const fn rule_fields_changed(input: &UpdateRuleInput) -> bool {
     let UpdateRuleInput {
         scope_id: _,
         id: _,
@@ -126,6 +126,31 @@ fn requirement_fields_changed(input: &SaveRequirement) -> bool {
             || cites.is_some()
     });
     statement.is_some() || description.is_some() || !clear_fields.is_empty() || relations_changed
+}
+
+/// The status request of a Requirement save, when the save changes the
+/// status to active or archived. A save that requests a status and changes
+/// another field is refused.
+pub(super) fn requirement_status_request(
+    input: &SaveRequirement,
+    current: &Requirement,
+) -> anyhow::Result<Option<StatusRequest>> {
+    let Some(status) = input
+        .update
+        .status
+        .as_ref()
+        .and_then(RequestedStatus::of_requirement)
+    else {
+        return Ok(None);
+    };
+    if current.status == status.requirement_status() {
+        return Ok(None);
+    }
+    ensure_status_only(requirement_fields_changed(input))?;
+    Ok(Some(StatusRequest {
+        status,
+        archived_in_commit: input.update.archived_in_commit.clone(),
+    }))
 }
 
 impl StateStore {
@@ -214,32 +239,6 @@ impl StateStore {
             }
             held.create_native_record_with(&path, &id, request, |store| store.write_rule(input))
         })
-    }
-
-    /// The status request of a Requirement save, when the save changes the
-    /// status to active or archived. A save that requests a status and
-    /// changes another field is refused.
-    pub(super) fn requirement_status_request(
-        &self,
-        input: &SaveRequirement,
-        current: &Requirement,
-    ) -> anyhow::Result<Option<StatusRequest>> {
-        let Some(status) = input
-            .update
-            .status
-            .as_ref()
-            .and_then(RequestedStatus::of_requirement)
-        else {
-            return Ok(None);
-        };
-        if current.status == status.requirement_status() {
-            return Ok(None);
-        }
-        ensure_status_only(requirement_fields_changed(input))?;
-        Ok(Some(StatusRequest {
-            status,
-            archived_in_commit: input.update.archived_in_commit.clone(),
-        }))
     }
 
     /// Opens the status request of a Requirement save after the checks of

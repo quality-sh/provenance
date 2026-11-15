@@ -175,7 +175,8 @@ impl StateStore {
             if let Some(origin) = origin {
                 held.validate_discussion_origin(scope, origin)?;
             }
-            if let Some(request) = held.requirement_status_request(&input, &record)? {
+            let request = super::status_request::requirement_status_request(&input, &record)?;
+            if let Some(request) = request {
                 held.request_requirement_status(input, &record, request)?;
                 return complete(held, record);
             }

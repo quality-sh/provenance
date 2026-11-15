@@ -53,15 +53,17 @@ impl crate::StatementHost {
         }
         let proposal = pending["proposal_id"].as_str()?;
         let kept = current["data"]["status"].as_str()?;
-        let mut note = format!(
+        let empty_list = if self.reviewer_ids().is_some_and(|ids| ids.is_empty()) {
+            format!("{}\n", DispositionActorRefusal::NoActorsConfigured)
+        } else {
+            String::new()
+        };
+        let note = format!(
             "Status request {proposal} is open. The status of {target} changes to {requested} \
              when a reviewer on the reviewer list accepts the request with `provenance api \
              {collection}/{target}/submissions/{proposal}/decide --method post --input -`. \
-             Until then, {target} keeps the status {kept}.\n"
+             Until then, {target} keeps the status {kept}.\n{empty_list}"
         );
-        if self.reviewer_ids().is_some_and(|ids| ids.is_empty()) {
-            note.push_str(&format!("{}\n", DispositionActorRefusal::NoActorsConfigured));
-        }
         Some(OpenStatusRequest { decision, note })
     }
 }
