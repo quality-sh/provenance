@@ -29,8 +29,8 @@ impl Server {
     }
 }
 
-/// The instructions of a server that lists every tool: the shared domain guidance
-/// followed by the first calls.
+/// The instructions of a server that shows every command and every write: the shared
+/// domain guidance followed by the first calls.
 pub fn instructions() -> String {
     crate::guidance::instructions(|_| true, true)
 }

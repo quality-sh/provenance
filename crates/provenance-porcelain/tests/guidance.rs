@@ -6,18 +6,34 @@ use provenance_porcelain::action::Action;
 use provenance_porcelain::guidance::{change_description, guidance, guidance_for};
 use provenance_porcelain::registry::Command;
 
-/// Phrases that use a command name as a noun: the trace view of get, and the claim of
-/// a Topic. They do not name the command.
-const NOUNS: [&str; 2] = ["trace view", "Topic claim"];
+/// Phrases that do not name a command, each with the start of the one line that holds
+/// it: the trace view of get, the claim of a Topic, and the HTTP method of an API route.
+const NOT_COMMANDS: [(&str, &str); 3] = [
+    ("- get: ", "trace view"),
+    ("- release: ", "Topic claim"),
+    ("- api: ", "GET /rules"),
+];
 
-/// The action section of a guidance text, with the nouns removed.
-fn action_section(text: &str) -> String {
-    let (_, actions) = text
-        .split_once("## Actions\n\n")
-        .expect("an action section");
-    NOUNS
-        .iter()
-        .fold(actions.to_owned(), |text, noun| text.replace(noun, ""))
+/// The record kind that has the name of a command. The guidance writes the record kind
+/// with a capital letter.
+const RECORD_KIND: &str = "Discussion";
+
+/// The full guidance text in lower case, without the phrases that do not name a
+/// command and without the record kind.
+fn command_text(text: &str) -> String {
+    text.lines()
+        .map(|line| {
+            NOT_COMMANDS
+                .iter()
+                .filter(|(start, _)| line.starts_with(start))
+                .fold(line.to_owned(), |line, (_, phrase)| {
+                    line.replace(phrase, "")
+                })
+                .replace(RECORD_KIND, "")
+                .to_lowercase()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Whether `text` names `name` as whole words, after each other command name that
@@ -45,13 +61,13 @@ fn the_guidance_names_no_command_that_the_consumer_does_not_show() {
         let text = guidance_for(|command| command != hidden, true).guidance;
         let name = hidden.declaration().name;
         assert!(
-            !names(&action_section(&text), name),
+            !names(&command_text(&text), name),
             "the guidance without {name} names it:\n{text}"
         );
     }
     let text = guidance_for(|_| true, false).guidance;
     assert!(
-        !names(&action_section(&text), "notify"),
+        !names(&command_text(&text), "notify"),
         "the guidance without notify names it:\n{text}"
     );
 }

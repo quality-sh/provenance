@@ -5,8 +5,9 @@
 
 use crate::support::{fixture_host, mcp::Session, records::Repository};
 use provenance_porcelain::action::Action;
+use provenance_porcelain::registry::Command;
 use provenance_store::operations::catalog::{self, Operation as _};
-use provenance_transport::StatementHost;
+use provenance_transport::{repository::RepoContext, StatementHost};
 use rmcp::model::Tool;
 
 /// The domain text before the action lines.
@@ -146,7 +147,8 @@ fn operations_of(actions: &[Action]) -> Vec<&'static str> {
 #[tokio::test]
 async fn a_host_with_every_tool_names_its_writes_and_gives_first_steps() {
     let repository = Repository::new("The shared graph is readable.");
-    let (names, instructions) = served(fixture_host::full(&repository)).await;
+    let (tools, instructions) = served_tools(fixture_host::full(&repository)).await;
+    let names: Vec<&str> = tools.iter().map(|tool| tool.name.as_ref()).collect();
     assert_eq!(
         names,
         [
@@ -160,7 +162,12 @@ async fn a_host_with_every_tool_names_its_writes_and_gives_first_steps() {
         ]
     );
     // The fixture host has no repository files, so the change tool has no
-    // repository write.
+    // repository write. It registers notify threads, so the change tool has notify.
+    let change = tools.iter().find(|tool| tool.name == "change").unwrap();
+    assert_eq!(
+        change.description.as_deref(),
+        CHANGE_WITHOUT_REPOSITORY.strip_prefix("- change: ")
+    );
     let mut lines = [
         GET,
         TRACE,
@@ -392,4 +399,42 @@ async fn a_host_with_only_api_gives_only_the_api_line() {
     let (names, instructions) = served(StatementHost::default()).await;
     assert_eq!(names, ["api"]);
     assert_eq!(instructions, expected(&[], &[API], false));
+}
+
+/// Whether `text` names `name`: a space before it, and a space, a comma, or a period
+/// after it.
+fn names(text: &str, name: &str) -> bool {
+    [" ", ",", "."]
+        .iter()
+        .any(|after| text.contains(&format!(" {name}{after}")))
+}
+
+/// The change tool names each write that the host runs. The writes come from the
+/// action values of the change tool, not from the list in the porcelain.
+#[tokio::test]
+async fn a_host_with_every_write_names_each_change_action() {
+    let repository = Repository::new("The shared graph is readable.");
+    let root = repository.dir.path().to_str().unwrap().to_owned();
+    let host = fixture_host::full(&repository).with_repository(RepoContext::new(root, "default"));
+    let (tools, instructions) = served_tools(host).await;
+    let change = tools.iter().find(|tool| tool.name == "change").unwrap();
+    let description = change.description.as_deref().unwrap();
+    for action in change.input_schema["properties"]["action"]["enum"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|action| action.as_str())
+    {
+        let name = Command::ALL
+            .iter()
+            .map(|command| command.declaration().name)
+            .find(|name| provenance_mcp::exposed::spelling(name) == action)
+            .unwrap_or(action);
+        assert!(
+            names(description, name),
+            "{action} is not named: {description}"
+        );
+    }
+    assert_eq!(Some(description), CHANGE.strip_prefix("- change: "));
+    assert_eq!(instructions, provenance_mcp::instructions());
 }
