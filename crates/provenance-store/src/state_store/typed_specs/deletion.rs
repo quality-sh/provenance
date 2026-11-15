@@ -29,6 +29,7 @@ pub(super) fn delete_omitted<T: DeclarationRecord>(
             id: record.stable_id().clone(),
             state: ReconcileState::Deleted,
             changes: Vec::new(),
+            refusal: None,
         });
         false
     });
