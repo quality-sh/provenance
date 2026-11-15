@@ -8,7 +8,8 @@ use crate::support;
 
 use serde_json::{json, Value};
 use support::records::Repository;
-use support::resource_http::{accept_pending, call, call_with_headers, host};
+use support::decisions::accept_pending;
+use support::resource_http::{call, call_with_headers, host};
 
 const REQUIREMENTS: &str = ".provenance/state/scopes/default/requirements/req.jsonl";
 

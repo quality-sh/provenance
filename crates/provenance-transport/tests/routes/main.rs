@@ -12,6 +12,7 @@ mod support {
     #[path = "../support/asserted_proposal.rs"]
     pub mod asserted_proposal;
     pub mod catch_up_steps;
+    pub mod decisions;
     pub mod ideation;
     pub mod names;
     pub mod records;
