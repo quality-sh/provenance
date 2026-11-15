@@ -3,7 +3,6 @@
 //! one order, and then runs.
 
 use crate::arguments::InputCheck;
-use crate::exposed::{self, Place, EXPOSED};
 use crate::tools;
 use provenance_porcelain::action_input::ActionInput;
 use provenance_porcelain::registry::Command;
@@ -42,6 +41,13 @@ impl Table {
             .iter()
             .any(|listed| listed.commands.contains(&command))
     }
+
+    /// Whether the change tool is listed with the notify action.
+    pub fn shows_notify(&self) -> bool {
+        self.0.iter().any(
+            |listed| matches!(&listed.runner, Runner::Change(input) if tools::change_notifies(input)),
+        )
+    }
 }
 
 /// One listed tool: the tool that tools/list gives, its compiled input schema, and
@@ -77,15 +83,7 @@ impl Runner {
                 .map(Command::Action)
                 .collect(),
             Self::Change(input) => std::iter::once(command)
-                .chain(
-                    EXPOSED
-                        .iter()
-                        .filter(|(_, place)| *place == Place::Action { tool: "change" })
-                        .map(|(action, _)| *action)
-                        .filter(|action| {
-                            input.actions().any(|word| word == exposed::name(*action))
-                        }),
-                )
+                .chain(tools::change_commands(input))
                 .collect(),
             Self::Get | Self::Trace | Self::Search | Self::Api | Self::Check => vec![command],
         }
