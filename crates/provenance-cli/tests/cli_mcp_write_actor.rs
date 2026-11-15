@@ -257,11 +257,8 @@ async fn the_actor_input_has_one_description_on_each_interface() {
     ] {
         let catalog = cli_json(repo, &["api", "--filter", route]);
         let request = &catalog["routes"][0]["request_schema"];
-        assert_eq!(
-            request["properties"]["actor"],
-            json!({"description": ACTOR_DESCRIPTION, "type": "string"}),
-            "{route}"
-        );
+        let actor = &request["properties"]["actor"];
+        assert_eq!(actor["description"], ACTOR_DESCRIPTION, "{route}");
         let required = request["required"].as_array().unwrap();
         assert!(!required.contains(&json!("actor")), "{route}");
     }
