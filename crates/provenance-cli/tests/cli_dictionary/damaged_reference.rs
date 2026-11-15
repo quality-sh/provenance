@@ -2,9 +2,9 @@
 //! not parse, for example after a bad merge or a hand edit: an empty file, or a
 //! file with half of a JSON object.
 //!
-//! The status and the statement check are implementation aids with no Rule:
-//! they record what the product answers. The import and the init refuse, keep
-//! the file and write no index, as `rule_ste_dictionary_reference_parse_refusal`
+//! The import and the init refuse, keep the file and write no index, as
+//! `rule_ste_dictionary_reference_parse_refusal` states. The statement check
+//! warns that Rule 1.1 did not run, as `rule_ste_dictionary_index_missing_warning`
 //! states. The strict check fails, as `rule_ste_strict_dictionary_index_gate`
 //! states. The tests of an init with no PDF are in `cli_ste_onboarding`.
 
@@ -159,6 +159,8 @@ fn refused(message: &str, contents: &str) -> (Option<i32>, String, String, Vec<S
     )
 }
 
+/// Implementation aid with no Rule: no Rule states the `load_problem` of the
+/// dictionary status. The test records the answer with its repair step.
 #[test]
 fn the_status_of_an_empty_reference_names_the_parse_error() {
     let damaged = Damaged::new(EMPTY);
@@ -166,6 +168,7 @@ fn the_status_of_an_empty_reference_names_the_parse_error() {
     assert_eq!(damaged.status(), damaged.unloaded_status(EMPTY_MESSAGE));
 }
 
+/// Implementation aid with no Rule, as the test above.
 #[test]
 fn the_status_of_half_of_a_reference_names_the_parse_error() {
     let damaged = Damaged::new(&half_reference());
@@ -177,6 +180,7 @@ fn the_status_of_half_of_a_reference_names_the_parse_error() {
 }
 
 #[test]
+#[verifies("rule_ste_dictionary_index_missing_warning", examples)]
 fn a_statement_check_with_an_empty_reference_warns_that_rule_1_1_did_not_run() {
     let damaged = Damaged::new(EMPTY);
 
@@ -184,6 +188,7 @@ fn a_statement_check_with_an_empty_reference_warns_that_rule_1_1_did_not_run() {
 }
 
 #[test]
+#[verifies("rule_ste_dictionary_index_missing_warning", examples)]
 fn a_statement_check_with_half_of_a_reference_warns_that_rule_1_1_did_not_run() {
     let damaged = Damaged::new(&half_reference());
 

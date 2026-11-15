@@ -1,6 +1,7 @@
 //! The store of an index file in the machine index directory: an import
 //! stored one time loads again with no PDF, a second store of the same import
-//! does not write the file again, and a second store syncs the directory.
+//! does not write the file again, and a second store syncs the directory of
+//! the index and each directory above it.
 
 use super::support::imported_dictionary;
 use provenance_macros::verifies;
@@ -68,6 +69,40 @@ fn a_store_of_an_equal_index_syncs_the_directory() {
         format!(
             "sync {}: {}",
             directory.display(),
+            std::io::Error::from_raw_os_error(13)
+        )
+    );
+    assert_eq!(std::fs::read(&path).expect("read the index"), stored);
+}
+
+/// An earlier store can have made the directories above the index directory
+/// and stopped before their syncs. So the store of an equal index syncs each
+/// directory above the index directory too, up to the root. A directory above
+/// the index directory that the process cannot read makes that sync fail.
+#[cfg(unix)]
+#[test]
+#[verifies("rule_ste_dictionary_file_write_is_durable", examples)]
+fn a_store_of_an_equal_index_syncs_each_directory_above_it() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = tempfile::tempdir().expect("make a temporary directory");
+    let made = temp.path().join("made");
+    let directory = made.join("index");
+    let import = imported_dictionary();
+    let path = store_dictionary_index(import, &directory).expect("store the index");
+    let stored = std::fs::read(&path).expect("read the index");
+
+    let closed = std::fs::Permissions::from_mode(0o300);
+    std::fs::set_permissions(&made, closed).expect("close the directory to reads");
+    let result = store_dictionary_index(import, &directory);
+    let open = std::fs::Permissions::from_mode(0o700);
+    std::fs::set_permissions(&made, open).expect("open the directory again");
+
+    let error = result.expect_err("the sync of the directory above must fail");
+    assert_eq!(
+        format!("{error:#}"),
+        format!(
+            "sync {}: {}",
+            made.display(),
             std::io::Error::from_raw_os_error(13)
         )
     );
