@@ -321,8 +321,9 @@ pub trait GetPort: Send + Sync {
     fn resolve<'a>(&'a self, id: &'a str) -> PortFuture<'a, RecordResolution>;
     fn traverse(&self, request: TraversalRequest) -> PortFuture<'_, Traversal>;
     fn impact<'a>(&'a self, record: &'a GraphNode, limit: usize) -> PortFuture<'a, Impact>;
-    /// The edit state of a resolved record: the etag that its next guarded update needs.
-    fn edit<'a>(&'a self, record: &'a GraphNode) -> PortFuture<'a, RequirementEditState>;
+    /// The edit state of a resolved record: the etag that its next guarded update checks.
+    /// It comes from the resolved record, so it agrees with the record that the get shows.
+    fn edit(&self, record: &GraphNode) -> Result<RequirementEditState, ReadError>;
     fn review<'a>(&'a self, _record: &'a GraphNode, _limit: usize) -> PortFuture<'a, Review> {
         Box::pin(async { Err(ReadError::InvalidOptions) })
     }
@@ -417,14 +418,14 @@ impl<P: GetPort> crate::Porcelain<P> {
 
 impl<P: GetPort> crate::Porcelain<P> {
     /// The record view gives the edit state of the record, so that the next guarded
-    /// update of the record needs no other read. A refused edit read refuses the get.
+    /// update of the record needs no other read.
     #[rule("rule_get_record_gives_edit_etag")]
     async fn record_view(
         &self,
         record: &GraphNode,
         review_link: bool,
     ) -> Result<ViewResult, ReadError> {
-        let edit = self.port.edit(record).await?;
+        let edit = self.port.edit(record)?;
         let review_link = if review_link {
             Some(self.port.review_link(record).await?)
         } else {

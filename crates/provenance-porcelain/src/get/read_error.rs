@@ -17,9 +17,6 @@ pub enum ReadError {
     /// The review host could not finish the request now; the same request can run again.
     HostBusy(String),
     Operation(String),
-    /// The host refused a read with this declared failure object. Its text is the
-    /// `{error, meta}` object, as each consumer shows a refusal of the host.
-    Refused(serde_json::Value),
 }
 
 impl Display for ReadError {
@@ -31,7 +28,6 @@ impl Display for ReadError {
             Self::InvalidInput { message, .. }
             | Self::HostBusy(message)
             | Self::Operation(message) => formatter.write_str(message),
-            Self::Refused(_) => write!(formatter, "{}", self.failure()),
         }
     }
 }
@@ -55,7 +51,6 @@ impl ReadError {
             }),
             Self::HostBusy(_) => serde_json::json!({"kind": "host_busy"}),
             Self::Operation(_) => serde_json::json!({"kind": "operation_failed"}),
-            Self::Refused(error) => return serde_json::json!({"error": error, "meta": {}}),
         };
         error["message"] = serde_json::Value::String(self.to_string());
         serde_json::json!({"error": error, "meta": {}})

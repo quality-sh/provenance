@@ -102,7 +102,7 @@ impl<P: GetPort> crate::Porcelain<P> {
             .port
             .resolve(target)
             .await
-            .map_err(|error| map_read_error(&error))?
+            .map_err(map_read_error)?
             .result
         {
             RecordResolution::Found(record) => Ok(record.node_type()),
@@ -112,13 +112,13 @@ impl<P: GetPort> crate::Porcelain<P> {
     }
 }
 
-fn map_read_error(error: &ReadError) -> ActionError {
+fn map_read_error(error: ReadError) -> ActionError {
     match error {
         ReadError::InvalidOptions | ReadError::InvalidInput { .. } => ActionError::InvalidOptions,
         ReadError::NotFound => ActionError::NotFound,
         ReadError::AmbiguousIdentity => ActionError::AmbiguousIdentity,
-        ReadError::HostBusy(_) | ReadError::Operation(_) | ReadError::Refused(_) => {
-            ActionError::Operation(error.to_string())
+        ReadError::HostBusy(message) | ReadError::Operation(message) => {
+            ActionError::Operation(message)
         }
     }
 }

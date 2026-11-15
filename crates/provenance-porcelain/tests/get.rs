@@ -75,12 +75,10 @@ impl GetPort for FixturePort {
         })
     }
 
-    fn edit<'a>(&'a self, _: &'a GraphNode) -> PortFuture<'a, RequirementEditState> {
-        Box::pin(async {
-            Ok(RequirementEditState {
-                etag: "sha256:fixture".into(),
-                revision: None,
-            })
+    fn edit(&self, _: &GraphNode) -> Result<RequirementEditState, ReadError> {
+        Ok(RequirementEditState {
+            etag: "sha256:fixture".into(),
+            revision: None,
         })
     }
 }
