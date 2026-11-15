@@ -122,8 +122,7 @@ fn assert_reopened(fixture: &Fixture, landed: bool, phase: &str) {
         holds(store.list_assertion_records(&scope), "assertion_a"),
     ];
     assert_eq!(
-        held,
-        [landed; 4],
+        held, [landed; 4],
         "{phase}: the read holds each record of the landing or none"
     );
     let expected = if landed { &fixture.new } else { &fixture.old };
