@@ -35,13 +35,13 @@ async fn pages(author: usize) -> Result<Vec<Vec<String>>, Value> {
             .run("review-history", call)
             .await
             .map_err(|failure| failure.error)?;
-        let ids: Vec<String> = page["entries"]
+        let ids: Vec<String> = page["result"]["entries"]
             .as_array()
             .unwrap()
             .iter()
             .map(|entry| entry["id"].as_str().unwrap().to_owned())
             .collect();
-        let next = &page["next_cursor"];
+        let next = &page["result"]["next_cursor"];
         assert!(
             !(ids.is_empty() && next.is_string()),
             "page {} is empty and gives a cursor; the cursor it was read with: {}",
