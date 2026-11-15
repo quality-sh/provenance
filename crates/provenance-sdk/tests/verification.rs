@@ -195,6 +195,47 @@ fn assert_stored_cut(run: &provenance_core::VerificationRun, text: &str) {
     );
 }
 
+/// Asserts that `actual` is `expected`. A failure gives the byte counts and
+/// not the texts, which are about 1 MB.
+fn assert_same_text(actual: Option<&str>, expected: &str) {
+    assert!(
+        actual == Some(expected),
+        "a text of {:?} bytes and not the expected text of {} bytes",
+        actual.map(str::len),
+        expected.len()
+    );
+}
+
+/// Asserts that the evidence read of `rule` gives `run` as its newest run.
+fn assert_evidence_gives(
+    root: &std::path::Path,
+    rule: &str,
+    run: &provenance_core::VerificationRun,
+) {
+    let given = evidence_run(root, rule);
+    assert!(
+        given.as_ref() == Some(run),
+        "the evidence read gives {:?} and not the run {}",
+        given.as_ref().map(|given| given.id.as_str()),
+        run.id.as_str()
+    );
+}
+
+/// The payload of a `verify` whose callback panics with the text that `text`
+/// makes. The panic hook prints nothing while the callback runs, so that the
+/// test output holds no text of about 1 MB.
+fn panic_payload_of(rule: &str, text: impl FnOnce() -> String) -> String {
+    let hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let unwind = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _ = verify(rule, "expiry-holds", move || -> Result<(), String> {
+            std::panic::panic_any(text())
+        });
+    }));
+    std::panic::set_hook(hook);
+    *unwind.unwrap_err().downcast::<String>().unwrap()
+}
+
 #[test]
 #[verifies("rule_rust_verification_cuts_a_long_failure_text", examples)]
 fn a_failure_text_over_the_run_budget_is_stored_cut_and_returned_whole() {
@@ -205,7 +246,7 @@ fn a_failure_text_over_the_run_budget_is_stored_cut_and_returned_whole() {
     })
     .unwrap_err()
     .to_string();
-    assert_eq!(newest_run(dir.path()).error.as_deref(), Some(fits.as_str()));
+    assert_same_text(newest_run(dir.path()).error.as_deref(), &fits);
 
     let error = verify(&rule, "expiry-holds", || {
         Err::<(), String>(text_for_row(dir.path(), BUDGET + 1))
@@ -214,9 +255,9 @@ fn a_failure_text_over_the_run_budget_is_stored_cut_and_returned_whole() {
 
     let run = newest_run(dir.path());
     let text = "x".repeat(fits.len() + 1);
-    assert_eq!(error.to_string(), text);
+    assert_same_text(Some(&error.to_string()), &text);
     assert_stored_cut(&run, &text);
-    assert_eq!(evidence_run(dir.path(), &rule), Some(run));
+    assert_evidence_gives(dir.path(), &rule, &run);
 }
 
 #[test]
@@ -224,25 +265,14 @@ fn a_failure_text_over_the_run_budget_is_stored_cut_and_returned_whole() {
 fn a_panic_text_over_the_run_budget_is_stored_cut_and_the_panic_goes_on_whole() {
     let (dir, _guard) = repository();
     let rule = seeded_rule(dir.path());
-    let fits = std::panic::catch_unwind(|| {
-        let _ = verify(&rule, "expiry-holds", || -> Result<(), String> {
-            std::panic::panic_any(text_for_row(dir.path(), BUDGET))
-        });
-    })
-    .unwrap_err();
-    let fits = fits.downcast_ref::<String>().unwrap();
-    assert_eq!(newest_run(dir.path()).error.as_ref(), Some(fits));
+    let fits = panic_payload_of(&rule, || text_for_row(dir.path(), BUDGET));
+    assert_same_text(newest_run(dir.path()).error.as_deref(), &fits);
 
-    let unwind = std::panic::catch_unwind(|| {
-        let _ = verify(&rule, "expiry-holds", || -> Result<(), String> {
-            std::panic::panic_any(text_for_row(dir.path(), BUDGET + 1))
-        });
-    })
-    .unwrap_err();
+    let payload = panic_payload_of(&rule, || text_for_row(dir.path(), BUDGET + 1));
 
     let run = newest_run(dir.path());
     let text = "x".repeat(fits.len() + 1);
-    assert_eq!(unwind.downcast_ref::<String>(), Some(&text));
+    assert_same_text(Some(&payload), &text);
     assert_stored_cut(&run, &text);
-    assert_eq!(evidence_run(dir.path(), &rule), Some(run));
+    assert_evidence_gives(dir.path(), &rule, &run);
 }
