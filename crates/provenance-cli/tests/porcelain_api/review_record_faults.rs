@@ -30,6 +30,23 @@ fn refused_write(repo: &str, method: &str, path: &str, body: &Value) -> Value {
     refused(repo, &["api", path, "--method", method, "--input", &input])
 }
 
+/// The refusal of the submission `submission` on two lines that disagree,
+/// at the lines that hold it now.
+fn submission_on_lines(repo: &str, submission: &str) -> Value {
+    let named = format!("\"id\":\"{submission}\"");
+    let holding = lines(repo, PROPOSALS)
+        .iter()
+        .enumerate()
+        .filter(|(_, line)| line.contains(&named))
+        .map(|(index, _)| index + 1)
+        .collect::<Vec<_>>();
+    let (first, second) = (holding[0], holding[1]);
+    json!({"kind":"invalid_state_file", "file":state_file(PROPOSALS), "line":second,
+        "message":format!("review submission {submission} is on lines {first} and {second} of \
+            ideation/proposal_cards.jsonl with different contents. To repair, keep one of these \
+            lines and remove the others, then commit.")})
+}
+
 /// Flow: a reviewer rejects the submission of `req_a`, the agent withdraws
 /// it, and a hand edit copies the line of the submission and changes its
 /// summary. The decision and the withdrawal name a submission whose ID is on
@@ -58,20 +75,7 @@ fn a_submission_id_on_lines_that_disagree_refuses_only_its_record() {
     let mut proposals = lines(&repo, PROPOSALS);
     proposals.push(changed.to_string());
     store_lines(&repo, PROPOSALS, &proposals);
-    let named = format!("\"id\":\"{submission}\"");
-    let expected = |repo: &str| {
-        let holding = lines(repo, PROPOSALS)
-            .iter()
-            .enumerate()
-            .filter(|(_, line)| line.contains(&named))
-            .map(|(index, _)| index + 1)
-            .collect::<Vec<_>>();
-        let (first, second) = (holding[0], holding[1]);
-        json!({"kind":"invalid_state_file", "file":state_file(PROPOSALS), "line":second,
-            "message":format!("review submission {submission} is on lines {first} and {second} \
-                of ideation/proposal_cards.jsonl with different contents. To repair, keep one of \
-                these lines and remove the others, then commit.")})
-    };
+    let expected = |repo: &str| submission_on_lines(repo, &submission);
     // The other records of the scope continue.
     read(&repo, &["api", "requirements/req_b/document"]);
     fresh_list(&repo, "proposals");
@@ -125,20 +129,17 @@ fn an_approval_and_a_withdrawal_of_a_submission_on_lines_that_disagree() {
     let mut proposals = lines(&repo, PROPOSALS);
     proposals.push(changed.to_string());
     store_lines(&repo, PROPOSALS, &proposals);
-    let copied = proposals.len();
     let approval = row(&repo, DISPOSITIONS, 1)["id"].as_str().unwrap().to_owned();
     let withdrawal = row(&repo, WITHDRAWALS, 1)["id"].as_str().unwrap().to_owned();
-    let on_lines = json!({"kind":"invalid_state_file", "file":state_file(PROPOSALS),
-        "line":copied,
-        "message":format!("review submission {submission} is on lines {line} and {copied} of \
-            ideation/proposal_cards.jsonl with different contents. To repair, keep one of these \
-            lines and remove the others, then commit.")});
     let withdrawn = json!({"kind":"invalid_state_file", "file":state_file(WITHDRAWALS), "line":1,
         "message":format!("review submission {submission} of requirement req_a is accepted and \
             withdrawn. The approvals in ideation/dispositions.jsonl: {approval} at line 1. The \
             withdrawals in ideation/withdrawals.jsonl: {withdrawal} at line 1. To repair, remove \
             each approval line or each withdrawal line, then commit.")});
-    only_req_a_refuses(&repo, &on_lines);
+    only_req_a_refuses(&repo, &submission_on_lines(&repo, &submission));
+    // The write of req_c sorted the file again, so the lines moved.
+    let on_lines = submission_on_lines(&repo, &submission);
+    let copied = usize::try_from(on_lines["line"].as_u64().unwrap()).unwrap();
     check_reports_all(&repo, &[on_lines, withdrawn]);
 
     remove_lines(&repo, &[(PROPOSALS, copied), (WITHDRAWALS, 1)]);
