@@ -2,8 +2,7 @@
 use crate::publication::ShardBytes;
 #[cfg(feature = "host")]
 use provenance_core::VerificationRun;
-use provenance_core::{RequirementReview, ScopeId, StableId};
-#[cfg(feature = "host")]
+use provenance_core::{RequirementReview, Rule, ScopeId, StableId};
 use provenance_macros::rule;
 use sha2::{Digest, Sha256};
 #[cfg(feature = "host")]
@@ -11,6 +10,9 @@ use std::collections::BTreeSet;
 
 use super::{readers::read_jsonl, ReconciledResource, StateStore, TypedResourceKind};
 use crate::shards;
+
+/// The field of a Requirement whose change puts the evidence of its Rules up for review.
+const STATEMENT: &str = "statement";
 
 /// One restated Requirement obligation drawn from a reconciliation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,7 +38,7 @@ pub fn requirement_statement_changes(
             resource
                 .changes
                 .iter()
-                .filter(|change| change.field == "statement")
+                .filter(|change| change.field == STATEMENT)
                 .filter_map(|change| {
                     Some(RequirementStatementChange {
                         requirement_id: resource.id.clone(),
@@ -50,31 +52,71 @@ pub fn requirement_statement_changes(
         .collect()
 }
 
+/// The Rules of `rules` that cite `requirement`. A change of the statement of `requirement` puts
+/// the evidence of these Rules up for review, so `rules` is the state after the change.
+pub fn rules_citing(rules: &[Rule], requirement: &StableId) -> Vec<StableId> {
+    rules
+        .iter()
+        .filter(|rule| rule.requirement_ids.contains(requirement))
+        .map(|rule| rule.id.clone())
+        .collect()
+}
+
 /// One Rule whose evidence a restated Requirement puts up for review.
-pub struct RequirementReviewInput {
-    pub rule_id: StableId,
+struct RequirementReviewInput {
+    rule_id: StableId,
+    requirement_id: StableId,
+    before: String,
+    after: String,
+    changed_at: i64,
+}
+
+/// One changed Requirement statement.
+pub(super) struct Restatement {
     pub requirement_id: StableId,
-    pub field: String,
     pub before: String,
     pub after: String,
-    pub changed_at: i64,
 }
 
 impl StateStore {
-    /// Records why each Rule's evidence needs review after a Requirement changed.
-    ///
-    /// Re-applying the same change keeps the record already on file, so a
-    /// review a verification run already cleared does not reopen itself.
-    pub(crate) fn record_requirement_reviews(
+    /// Writes one review record for each Rule that cites a restated Requirement after the
+    /// change, at the time of the store clock. The caller writes the change first. A record of
+    /// the same change that is on file stays, so a cleared review does not open again.
+    #[rule("rule_review_record_per_rule")]
+    pub(super) fn record_restatements(
         &self,
         scope: &ScopeId,
-        reviews: Vec<RequirementReviewInput>,
+        restatements: Vec<Restatement>,
     ) -> anyhow::Result<()> {
-        if reviews.is_empty() {
+        if restatements.is_empty() {
             return Ok(());
         }
-        let desired = reviews
+        let rules = self.list_rules(scope)?;
+        let cited = restatements
             .into_iter()
+            .map(|change| {
+                let rule_ids = rules_citing(&rules, &change.requirement_id);
+                (change, rule_ids)
+            })
+            .filter(|(_, rule_ids)| !rule_ids.is_empty())
+            .collect::<Vec<_>>();
+        if cited.is_empty() {
+            return Ok(());
+        }
+        let changed_at = now_millis(&*self.clock())?;
+        let desired = cited
+            .into_iter()
+            .flat_map(|(change, rule_ids)| {
+                rule_ids
+                    .into_iter()
+                    .map(move |rule_id| RequirementReviewInput {
+                        rule_id,
+                        requirement_id: change.requirement_id.clone(),
+                        before: change.before.clone(),
+                        after: change.after.clone(),
+                        changed_at,
+                    })
+            })
             .map(|review| review.into_record(scope))
             .collect::<anyhow::Result<Vec<_>>>()?;
         let path = shards::requirement_reviews_path(&self.layout, scope);
@@ -151,12 +193,7 @@ impl StateStore {
         scope: &ScopeId,
         requirement_id: &StableId,
     ) -> anyhow::Result<Vec<StableId>> {
-        Ok(self
-            .list_rules(scope)?
-            .into_iter()
-            .filter(|rule| rule.requirement_ids.contains(requirement_id))
-            .map(|rule| rule.id)
-            .collect())
+        Ok(rules_citing(&self.list_rules(scope)?, requirement_id))
     }
 
     /// The reviews still waiting on a verification run.
@@ -180,7 +217,7 @@ impl RequirementReviewInput {
             id,
             rule_id: self.rule_id,
             requirement_id: self.requirement_id,
-            field: self.field,
+            field: STATEMENT.to_owned(),
             before: self.before,
             after: self.after,
             changed_at: self.changed_at,
@@ -202,7 +239,7 @@ fn review_id(input: &RequirementReviewInput) -> anyhow::Result<StableId> {
         "{}\0{}\0{}\0{}",
         input.rule_id.as_str(),
         input.requirement_id.as_str(),
-        input.field,
+        STATEMENT,
         input.after
     );
     let digest = hex::encode(Sha256::digest(identity.as_bytes()));

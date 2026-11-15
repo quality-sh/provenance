@@ -36,7 +36,7 @@ fn a_planned_restatement_puts_the_rules_of_the_requirement_up_for_review() {
         .apply_typed_spec(&scope, spec("Clean requirement"))
         .unwrap();
     let plan = store
-        .plan_typed_spec(&scope, spec("Changed requirement"))
+        .plan_typed_spec_decision(&scope, spec("Changed requirement"))
         .unwrap();
 
     let reviews = reviews(&store, &scope, &plan).unwrap();
@@ -63,7 +63,7 @@ fn an_applied_restatement_stays_on_file_as_a_recorded_review() {
         .apply_typed_spec(&scope, spec("Changed requirement"))
         .unwrap();
     let plan = store
-        .plan_typed_spec(&scope, spec("Changed requirement"))
+        .plan_typed_spec_decision(&scope, spec("Changed requirement"))
         .unwrap();
 
     let reviews = reviews(&store, &scope, &plan).unwrap();
