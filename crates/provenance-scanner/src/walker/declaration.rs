@@ -269,10 +269,14 @@ fn named(tokens: &[&str], index: usize) -> Option<String> {
     is_identifier(name).then(|| name.to_string())
 }
 
-/// The index after an annotation or a decorator name and its argument list.
+/// The index after an annotation or a decorator name, such as
+/// `pytest.mark.parametrize`, and its argument list.
 fn skip_annotation(tokens: &[&str], mut index: usize) -> usize {
-    let part_of_name = |token: &&str| is_identifier(token) || *token == ".";
-    while tokens.get(index).is_some_and(part_of_name) {
+    while tokens.get(index).is_some_and(|token| is_identifier(token)) {
+        index += 1;
+        if tokens.get(index) != Some(&".") {
+            break;
+        }
         index += 1;
     }
     skip_group(tokens, index, "(", ")")
