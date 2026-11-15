@@ -49,6 +49,8 @@ mod mcp_plumbing_names;
 mod mcp_read_tools_do_not_write;
 #[path = "../mcp_schema_dialect.rs"]
 mod mcp_schema_dialect;
+#[path = "../mcp_status_requests.rs"]
+mod mcp_status_requests;
 #[path = "../mcp_tool_schema_size.rs"]
 mod mcp_tool_schema_size;
 #[path = "../mcp_unknown_field_names_fields.rs"]
