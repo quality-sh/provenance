@@ -279,6 +279,7 @@ async fn the_pinned_answers_match_the_committed_file_for_this_derivation() {
             "fresh fixture repositories must produce identical pinned content"
         );
     }
+    eprintln!("=== PINNED\n{}=== END PINNED", render(&answers, &fresh));
     let (header, recorded) = parse(
         &std::fs::read_to_string(pinned_path())
             .expect("pinned_answers.json is committed beside this test"),
