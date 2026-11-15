@@ -238,7 +238,7 @@ fn rename_ignoring_read_only(
     path: &std::path::Path,
     target: &std::path::Path,
 ) -> std::io::Result<()> {
-    use crate::operations::files::rename_info::RenameInfo;
+    use crate::operations::files::RenameInfo;
     use std::os::windows::fs::OpenOptionsExt;
     use std::os::windows::io::AsRawHandle;
     use windows_sys::Win32::Foundation::HANDLE;

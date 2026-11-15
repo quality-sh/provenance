@@ -302,7 +302,7 @@ pub fn rename_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
 
 #[cfg(windows)]
 fn rename_no_replace_at(parent: &File, from: &str, to: &str) -> std::io::Result<()> {
-    use super::rename_info::RenameInfo;
+    use super::RenameInfo;
     use fs_at::os::windows::OpenOptionsExt;
     use std::os::windows::io::{AsHandle, AsRawHandle};
     use windows_sys::Win32::Foundation::{RtlNtStatusToDosError, HANDLE};
