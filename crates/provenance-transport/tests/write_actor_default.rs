@@ -226,7 +226,10 @@ async fn an_api_reply_with_or_without_an_actor_stores_no_actor() {
             messages.extend(rows(&repo, &format!("threads/{name}")));
         }
     }
-    let message_ids = messages.iter().map(|row| row["id"].clone()).collect::<Vec<_>>();
+    let message_ids = messages
+        .iter()
+        .map(|row| row["id"].clone())
+        .collect::<Vec<_>>();
     assert_eq!(discussions[0]["message_ids"], json!(message_ids));
     let thread = &discussions[0]["thread_id"];
     for (row, body) in messages.iter().zip(["A concern.", "A reply.", "A reply."]) {
@@ -268,7 +271,12 @@ async fn a_null_actor_is_refused_on_each_write() {
             json!({"actor":null, "declared_by":null, "role":"user", "body":"A concern."}),
             None,
         ),
-        ("POST", format!("{discussion}/messages"), message, Some("\"1\"")),
+        (
+            "POST",
+            format!("{discussion}/messages"),
+            message,
+            Some("\"1\""),
+        ),
     ];
     let mut answers = Vec::new();
     for (method, path, data, if_match) in writes {

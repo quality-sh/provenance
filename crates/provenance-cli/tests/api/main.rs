@@ -32,10 +32,10 @@ mod cli_get_edit_etag;
 mod cli_get_trace;
 #[path = "../cli_mcp_api_catalog.rs"]
 mod cli_mcp_api_catalog;
-#[path = "../cli_mcp_read_parity.rs"]
-mod cli_mcp_read_parity;
 #[path = "../cli_mcp_optional_actor.rs"]
 mod cli_mcp_optional_actor;
+#[path = "../cli_mcp_read_parity.rs"]
+mod cli_mcp_read_parity;
 #[path = "../cli_mcp_record_actions.rs"]
 mod cli_mcp_record_actions;
 #[path = "../cli_mcp_server.rs"]

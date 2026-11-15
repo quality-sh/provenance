@@ -50,12 +50,29 @@ async fn a_reply_with_no_actor_is_accepted_on_the_cli_and_mcp_and_stores_no_acto
     requirement(repo);
     let started = cli_json(
         repo,
-        &["req_a", "discuss", "--actor", "reviewer", "--body", "A concern."],
+        &[
+            "req_a",
+            "discuss",
+            "--actor",
+            "reviewer",
+            "--body",
+            "A concern.",
+        ],
     );
-    let id = started["receipt"]["discussion_id"].as_str().unwrap().to_owned();
+    let id = started["receipt"]["discussion_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     let replied = cli_json(
         repo,
-        &[id.as_str(), "reply", "--body", "A reply.", "--expected-version", "1"],
+        &[
+            id.as_str(),
+            "reply",
+            "--body",
+            "A reply.",
+            "--expected-version",
+            "1",
+        ],
     );
     assert_eq!(
         (&replied["kind"], &replied["receipt"]["actor"]),
@@ -73,7 +90,10 @@ async fn a_reply_with_no_actor_is_accepted_on_the_cli_and_mcp_and_stores_no_acto
         (&discussions[0]["actor"], &discussions[0]["version"]),
         (&json!("reviewer"), &json!(3))
     );
-    let message_ids = messages.iter().map(|row| row["id"].clone()).collect::<Vec<_>>();
+    let message_ids = messages
+        .iter()
+        .map(|row| row["id"].clone())
+        .collect::<Vec<_>>();
     assert_eq!(discussions[0]["message_ids"], json!(message_ids));
     let thread = &discussions[0]["thread_id"];
     for (row, body) in messages.iter().zip(["A concern.", "A reply.", "A reply."]) {
@@ -94,7 +114,14 @@ async fn a_null_actor_is_refused_on_each_mcp_write() {
     requirement(repo);
     let started = cli_json(
         repo,
-        &["req_a", "discuss", "--actor", "reviewer", "--body", "A concern."],
+        &[
+            "req_a",
+            "discuss",
+            "--actor",
+            "reviewer",
+            "--body",
+            "A concern.",
+        ],
     );
     let id = started["receipt"]["discussion_id"].clone();
     let server = Server::start(repo.to_str().unwrap()).await;
@@ -125,7 +152,11 @@ async fn a_null_actor_is_refused_on_each_mcp_write() {
     assert!(!requirements.contains("req_b"), "{requirements}");
     let (discussions, messages) = discussion_rows(repo);
     assert_eq!(
-        (discussions.len(), &discussions[0]["version"], messages.len()),
+        (
+            discussions.len(),
+            &discussions[0]["version"],
+            messages.len()
+        ),
         (1, &json!(1), 1)
     );
 }
