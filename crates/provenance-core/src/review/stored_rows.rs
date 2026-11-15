@@ -331,6 +331,8 @@ impl ReviewReading<'_> {
         }
         let &first = self.naming.get(id)?.decisions.first()?;
         let result = self.rows.dispositions[first].decision;
-        self.submission_faults(submission).is_empty().then_some(result)
+        self.submission_faults(submission)
+            .is_empty()
+            .then_some(result)
     }
 }

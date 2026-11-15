@@ -247,7 +247,11 @@ fn a_list_read_takes_the_result_only_from_rows_that_agree() {
             dispositions,
             withdrawals,
         });
-        assert_eq!(reading.agreed_decision(&id("sub_a")), *expected, "case {index}");
+        assert_eq!(
+            reading.agreed_decision(&id("sub_a")),
+            *expected,
+            "case {index}"
+        );
     }
 }
 
@@ -335,7 +339,10 @@ impl State {
             } => {
                 options.push(self.lines(approvals.iter().copied()));
                 options.push(self.lines(withdrawals.iter().copied()));
-                (format!("approved and withdrawn {}", submission.as_str()), options)
+                (
+                    format!("approved and withdrawn {}", submission.as_str()),
+                    options,
+                )
             }
             ReviewRowFault::OneCycleTwoSubmissions { cycle, submissions } => {
                 for kept in 0..submissions.len() {
@@ -349,7 +356,10 @@ impl State {
                 let target = &self.proposals[submissions[0].submission.position]
                     .traceability
                     .target;
-                (format!("cycle {cycle} of {}", target.artifact_id.as_str()), options)
+                (
+                    format!("cycle {cycle} of {}", target.artifact_id.as_str()),
+                    options,
+                )
             }
             ReviewRowFault::NoSubmission { lines, .. } => {
                 options.push(self.lines(lines.iter().copied()));
@@ -398,7 +408,9 @@ fn a_repair_step_shows_no_new_fault_and_all_steps_leave_none() {
     };
     let count = fixture.proposals.len() + fixture.dispositions.len() + fixture.withdrawals.len();
     for set in 0..1_u32 << count {
-        let kept = (0..count).map(|line| (set >> line) & 1 == 1).collect::<Vec<_>>();
+        let kept = (0..count)
+            .map(|line| (set >> line) & 1 == 1)
+            .collect::<Vec<_>>();
         let before = State::new(&fixture, &kept).faults();
         let keys = before.iter().map(|(key, _)| key).collect::<HashSet<_>>();
         let mut all_steps = Vec::new();
@@ -434,7 +446,9 @@ fn the_records_of_the_lines_of_a_disputed_submission_refuse() {
     let fault = sub_a_on_lines([0, 1]);
     for record in [REQ_A, "req_b"] {
         assert_eq!(
-            reading.record(NodeType::Requirement, &id(record)).unwrap_err(),
+            reading
+                .record(NodeType::Requirement, &id(record))
+                .unwrap_err(),
             &fault
         );
     }

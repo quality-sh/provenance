@@ -38,7 +38,10 @@ fn a_change_to_active_refuses_for_the_first_citation_that_is_not_approved() {
     for id in ["res_a", "res_b", "res_c"] {
         create_resolution(&repo, id);
     }
-    for (rule, cited) in [("rule_a", ["res_b", "res_a"]), ("rule_c", ["res_c", "res_b"])] {
+    for (rule, cited) in [
+        ("rule_a", ["res_b", "res_a"]),
+        ("rule_c", ["res_c", "res_b"]),
+    ] {
         write(
             &repo,
             "post",

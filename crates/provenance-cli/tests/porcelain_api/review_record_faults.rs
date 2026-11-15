@@ -129,8 +129,14 @@ fn an_approval_and_a_withdrawal_of_a_submission_on_lines_that_disagree() {
     let mut proposals = lines(&repo, PROPOSALS);
     proposals.push(changed.to_string());
     store_lines(&repo, PROPOSALS, &proposals);
-    let approval = row(&repo, DISPOSITIONS, 1)["id"].as_str().unwrap().to_owned();
-    let withdrawal = row(&repo, WITHDRAWALS, 1)["id"].as_str().unwrap().to_owned();
+    let approval = row(&repo, DISPOSITIONS, 1)["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let withdrawal = row(&repo, WITHDRAWALS, 1)["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     let withdrawn = json!({"kind":"invalid_state_file", "file":state_file(WITHDRAWALS), "line":1,
         "message":format!("review submission {submission} of requirement req_a is accepted and \
             withdrawn. The approvals in ideation/dispositions.jsonl: {approval} at line 1. The \
