@@ -145,6 +145,22 @@
   },
   {
     "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [],
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "record_id": "absent",
+      "record_kind": "requirement"
+    }
+  },
+  {
+    "answer": {
       "author": null,
       "before": null,
       "changed_fields": [
@@ -631,6 +647,22 @@
   },
   {
     "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [],
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "record_id": "absent",
+      "record_kind": "rule"
+    }
+  },
+  {
+    "answer": {
       "author": null,
       "before": null,
       "changed_fields": [
@@ -935,6 +967,22 @@
     "request": {
       "limit": 1,
       "record_id": "source_gone",
+      "record_kind": "source"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [],
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "record_id": "absent",
       "record_kind": "source"
     }
   },
@@ -1308,6 +1356,22 @@
   },
   {
     "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [],
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "record_id": "absent",
+      "record_kind": "topic"
+    }
+  },
+  {
+    "answer": {
       "author": null,
       "before": null,
       "changed_fields": [
@@ -1586,6 +1650,22 @@
     "request": {
       "limit": 1,
       "record_id": "question_a",
+      "record_kind": "question"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [],
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "record_id": "absent",
       "record_kind": "question"
     }
   },
@@ -1870,6 +1950,22 @@
     "request": {
       "limit": 1,
       "record_id": "resolution_a",
+      "record_kind": "resolution"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [],
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "record_id": "absent",
       "record_kind": "resolution"
     }
   },

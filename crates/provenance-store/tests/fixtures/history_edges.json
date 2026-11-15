@@ -23,23 +23,11 @@
             "revision": "196c1021fca7a5c44a3e447f1029ff9b169c197ffdf5ab580e77dee8e944d95a"
           },
           {
-            "author": "bob",
+            "author": "merger",
             "before": "create",
             "changed_fields": [
+              "description",
               "statement"
-            ],
-            "commit": "bob",
-            "committed_at": 1700000420,
-            "id": "bob",
-            "origin": null,
-            "outcome": "changed",
-            "revision": "95bcaaad20792a3aded2c2814b14b288326f87c29cfd23cbec205d7a1e6c1126"
-          },
-          {
-            "author": "merger",
-            "before": "bob",
-            "changed_fields": [
-              "description"
             ],
             "commit": "merge",
             "committed_at": 1700000480,
@@ -102,42 +90,11 @@
       "result": {
         "entries": [
           {
-            "author": "bob",
+            "author": "merger",
             "before": "create",
             "changed_fields": [
+              "description",
               "statement"
-            ],
-            "commit": "bob",
-            "committed_at": 1700000420,
-            "id": "bob",
-            "origin": null,
-            "outcome": "changed",
-            "revision": "95bcaaad20792a3aded2c2814b14b288326f87c29cfd23cbec205d7a1e6c1126"
-          }
-        ],
-        "has_more": true,
-        "limit": 1,
-        "next_cursor": true
-      }
-    },
-    "call": "review-history default",
-    "request": {
-      "cursor": "<cursor>",
-      "limit": 1,
-      "record_id": "rule_a",
-      "record_kind": "rule"
-    }
-  },
-  {
-    "answer": {
-      "freshness_error": null,
-      "result": {
-        "entries": [
-          {
-            "author": "merger",
-            "before": "bob",
-            "changed_fields": [
-              "description"
             ],
             "commit": "merge",
             "committed_at": 1700000480,
@@ -157,6 +114,22 @@
       "cursor": "<cursor>",
       "limit": 1,
       "record_id": "rule_a",
+      "record_kind": "rule"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [],
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "record_id": "absent",
       "record_kind": "rule"
     }
   },
@@ -188,31 +161,11 @@
   },
   {
     "answer": {
-      "author": "bob",
+      "author": "merger",
       "before": "create",
       "changed_fields": [
+        "description",
         "statement"
-      ],
-      "commit": "bob",
-      "committed_at": 1700000420,
-      "id": "bob",
-      "origin": null,
-      "outcome": "changed",
-      "revision": "95bcaaad20792a3aded2c2814b14b288326f87c29cfd23cbec205d7a1e6c1126"
-    },
-    "call": "review-history-entry default",
-    "request": {
-      "entry_id": "bob",
-      "record_id": "rule_a",
-      "record_kind": "rule"
-    }
-  },
-  {
-    "answer": {
-      "author": "merger",
-      "before": "bob",
-      "changed_fields": [
-        "description"
       ],
       "commit": "merge",
       "committed_at": 1700000480,
@@ -335,102 +288,6 @@
       "freshness_error": null,
       "result": {
         "field": null,
-        "json_text": "{\"id\":\"rule_a\",\"requirement_ids\":[\"req_a\"],\"scope_id\":\"default\",\"severity\":\"high\",\"statement\":\"Each record is stored once.\",\"status\":\"active\"}",
-        "next_offset": null,
-        "offset": 0,
-        "version": "bob"
-      }
-    },
-    "call": "review-evidence default",
-    "request": {
-      "entry_id": "bob",
-      "record_id": "rule_a",
-      "record_kind": "rule",
-      "side": "after"
-    }
-  },
-  {
-    "answer": {
-      "freshness_error": null,
-      "result": {
-        "field": "statement",
-        "json_text": "\"Each record is stored once.\"",
-        "next_offset": null,
-        "offset": 0,
-        "version": "bob"
-      }
-    },
-    "call": "review-evidence default",
-    "request": {
-      "entry_id": "bob",
-      "field": "statement",
-      "record_id": "rule_a",
-      "record_kind": "rule",
-      "side": "after"
-    }
-  },
-  {
-    "answer": {
-      "freshness_error": null,
-      "result": {
-        "field": null,
-        "json_text": "{\"id\":\"rule_a\",\"requirement_ids\":[\"req_a\"],\"scope_id\":\"default\",\"severity\":\"high\",\"statement\":\"Each record is stored.\",\"status\":\"active\"}",
-        "next_offset": null,
-        "offset": 0,
-        "version": "create"
-      }
-    },
-    "call": "review-evidence default",
-    "request": {
-      "entry_id": "bob",
-      "record_id": "rule_a",
-      "record_kind": "rule",
-      "side": "before"
-    }
-  },
-  {
-    "answer": {
-      "freshness_error": null,
-      "result": {
-        "field": "statement",
-        "json_text": "\"Each record is stored.\"",
-        "next_offset": null,
-        "offset": 0,
-        "version": "create"
-      }
-    },
-    "call": "review-evidence default",
-    "request": {
-      "entry_id": "bob",
-      "field": "statement",
-      "record_id": "rule_a",
-      "record_kind": "rule",
-      "side": "before"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "field": "offset",
-        "kind": "invalid_input",
-        "reason": "invalid_value"
-      },
-      "status": 400
-    },
-    "call": "review-evidence default",
-    "request": {
-      "entry_id": "bob",
-      "offset": 100000,
-      "record_id": "rule_a",
-      "record_kind": "rule",
-      "side": "after"
-    }
-  },
-  {
-    "answer": {
-      "freshness_error": null,
-      "result": {
-        "field": null,
         "json_text": "{\"description\":\"Alice describes the rule.\",\"id\":\"rule_a\",\"requirement_ids\":[\"req_a\"],\"scope_id\":\"default\",\"severity\":\"high\",\"statement\":\"Each record is stored once.\",\"status\":\"active\"}",
         "next_offset": null,
         "offset": 0,
@@ -470,10 +327,10 @@
       "freshness_error": null,
       "result": {
         "field": null,
-        "json_text": "{\"id\":\"rule_a\",\"requirement_ids\":[\"req_a\"],\"scope_id\":\"default\",\"severity\":\"high\",\"statement\":\"Each record is stored once.\",\"status\":\"active\"}",
+        "json_text": "{\"id\":\"rule_a\",\"requirement_ids\":[\"req_a\"],\"scope_id\":\"default\",\"severity\":\"high\",\"statement\":\"Each record is stored.\",\"status\":\"active\"}",
         "next_offset": null,
         "offset": 0,
-        "version": "bob"
+        "version": "create"
       }
     },
     "call": "review-evidence default",
@@ -489,10 +346,10 @@
       "freshness_error": null,
       "result": {
         "field": "statement",
-        "json_text": "\"Each record is stored once.\"",
+        "json_text": "\"Each record is stored.\"",
         "next_offset": null,
         "offset": 0,
-        "version": "bob"
+        "version": "create"
       }
     },
     "call": "review-evidence default",
