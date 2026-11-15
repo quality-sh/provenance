@@ -9,8 +9,7 @@
 
 use crate::memory;
 
-use camino::{Utf8Path, Utf8PathBuf};
-use fs2::FileExt;
+use camino::Utf8Path;
 use memory::{id, key, scope, shard};
 use provenance_core::Contribution;
 use provenance_store::repository::Repository;
@@ -18,7 +17,6 @@ use provenance_store::state_store::StateStore;
 use provenance_store::storage::{StateKey, StateView};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
-use std::time::Duration;
 
 fn target() -> Value {
     json!({"artifact_type":"requirement","artifact_id":"req_expiry"})
@@ -229,6 +227,8 @@ fn contribution_input(id: &str) -> provenance_store::state_store::CreateContribu
 
 /// Characterization: two writers on two handles of one folder repository
 /// run at the same time, and each write lands. No Rule names the count.
+/// The interleaving depends on the scheduler: the gap between the read and
+/// the write of one writer is inside the store and has no public seam.
 #[test]
 fn two_writers_on_one_folder_lose_no_write() {
     let root = tempfile::tempdir().unwrap();
@@ -260,15 +260,41 @@ fn two_writers_on_one_folder_lose_no_write() {
     assert_eq!(contributions.len(), 11);
 }
 
+/// Whether a thread of this process waits for a `flock` on the file at
+/// `path`. The kernel lists each waiting request in `/proc/locks` with `->`
+/// and the device and inode of the file.
+#[cfg(target_os = "linux")]
+fn a_thread_waits_on(path: &Utf8Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let inode = format!(":{}", std::fs::metadata(path).unwrap().ino());
+    let pid = std::process::id().to_string();
+    std::fs::read_to_string("/proc/locks")
+        .unwrap()
+        .lines()
+        .map(|line| line.split_whitespace().collect::<Vec<_>>())
+        .any(|fields| {
+            fields.get(1) == Some(&"->")
+                && fields.get(2) == Some(&"FLOCK")
+                && fields.get(5) == Some(&pid.as_str())
+                && fields.get(6).is_some_and(|device| device.ends_with(&inode))
+        })
+}
+
 /// Characterization: an ideation write waits while another holder, such as
 /// another process, holds the publication lock file of a folder
 /// repository. No Rule names the lock file.
+///
+/// The test reads the wait from the kernel's list of waiting lock requests,
+/// which only Linux gives.
 #[test]
+#[cfg(target_os = "linux")]
 fn an_ideation_write_waits_for_the_publication_lock_file() {
+    use fs2::FileExt;
+    use std::time::{Duration, Instant};
     let root = tempfile::tempdir().unwrap();
     let repository = folder_repository(root.path());
     assert_proposal_one(&repository.store());
-    let lock_path: Utf8PathBuf = repository.layout().publication_lock_path();
+    let lock_path: camino::Utf8PathBuf = repository.layout().publication_lock_path();
     let lock = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
@@ -287,7 +313,15 @@ fn an_ideation_write_waits_for_the_publication_lock_file() {
                 .unwrap();
         }
     });
-    std::thread::sleep(Duration::from_millis(500));
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while !a_thread_waits_on(&lock_path) {
+        assert!(!writer.is_finished(), "the write ran under the held lock");
+        assert!(
+            Instant::now() < deadline,
+            "the write did not wait on the publication lock file"
+        );
+        std::thread::yield_now();
+    }
     assert!(!writer.is_finished(), "the write ran under the held lock");
     FileExt::unlock(&lock).unwrap();
     writer.join().unwrap();
@@ -310,21 +344,31 @@ impl Drop for ReadOnly {
     }
 }
 
-#[test]
+/// Takes the write permission from `dir` until the returned guard drops.
 #[cfg(unix)]
-#[provenance_macros::verifies("rule_engine_runs_on_any_storage", examples)]
-fn six_writes_over_memory_in_a_directory_the_process_cannot_write_make_no_file() {
+fn read_only(dir: &std::path::Path) -> ReadOnly {
     use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let guard = ReadOnly(dir.to_owned());
+    assert!(
+        std::fs::create_dir(dir.join("probe")).is_err(),
+        "the test user can write a read-only directory"
+    );
+    guard
+}
+
+/// On each platform the six writes over memory land and make no file in the
+/// working-tree directory. On Unix the directory is also read-only, so a
+/// write that tried to make a file there would fail.
+#[test]
+#[provenance_macros::verifies("rule_engine_runs_on_any_storage", examples)]
+fn six_writes_over_memory_make_no_file() {
     let root = tempfile::tempdir().unwrap();
     let recorded = std::sync::Arc::new(memory::Recorded::default());
     let (_storage, repository) =
         memory::memory_repository_over(root.path(), StateView::new(entries()), recorded);
-    std::fs::set_permissions(root.path(), std::fs::Permissions::from_mode(0o555)).unwrap();
-    let _guard = ReadOnly(root.path().to_owned());
-    assert!(
-        std::fs::create_dir(root.path().join("probe")).is_err(),
-        "the test user can write a read-only directory"
-    );
+    #[cfg(unix)]
+    let _guard = read_only(root.path());
 
     six_writes(&repository.store());
 

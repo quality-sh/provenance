@@ -413,7 +413,7 @@ impl StateStore {
 /// only the store can see the scope's artifacts.
 ///
 /// The gate reads state the caller has already loaded and writes nothing; the
-/// caller holds the scope's lifecycle lock across both, so the state it judges
+/// caller holds the section lock of the storage across both, so the state it judges
 /// is the state it is judged against. The checks run in the order above, so a
 /// caller who breaks several hears about the first.
 #[rule("rule_disposition_write_gate")]
