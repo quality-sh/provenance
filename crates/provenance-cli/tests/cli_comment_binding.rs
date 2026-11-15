@@ -103,7 +103,9 @@ fn item_names(report: &Value) -> Vec<(String, Option<String>)> {
         .iter()
         .flat_map(|key| report[key].as_array().unwrap())
         .map(|site| {
-            let name = site["function_name"].as_str().or(site["item_name"].as_str());
+            let name = site["function_name"]
+                .as_str()
+                .or_else(|| site["item_name"].as_str());
             (
                 site["line"].as_u64().unwrap(),
                 site["rule_id"].as_str().unwrap().to_owned(),

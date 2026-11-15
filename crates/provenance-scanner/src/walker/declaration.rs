@@ -190,7 +190,8 @@ fn script_method(tokens: &[&str], name: usize) -> Option<String> {
         return None;
     }
     let after = skip_group(tokens, index, "(", ")");
-    matches!(tokens.get(after), Some(&("{" | ":"))).then(|| tokens[name].to_string())
+    let body = matches!(tokens.get(after), Some(&("{" | ":")));
+    body.then(|| tokens[name].to_string())
 }
 
 const JAVA_MODIFIERS: [&str; 13] = [
@@ -276,7 +277,8 @@ fn named(tokens: &[&str], index: usize) -> Option<String> {
 
 /// The index after an annotation or a decorator name and its argument list.
 fn skip_annotation(tokens: &[&str], mut index: usize) -> usize {
-    while tokens.get(index).is_some_and(|token| is_identifier(token) || *token == ".") {
+    let part_of_name = |token: &&str| is_identifier(token) || *token == ".";
+    while tokens.get(index).is_some_and(part_of_name) {
         index += 1;
     }
     skip_group(tokens, index, "(", ")")

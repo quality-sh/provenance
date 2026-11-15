@@ -173,7 +173,8 @@ fn inactive_current_bindings(
         .iter()
         .flat_map(|scan| {
             let annotations = scan.annotations.iter().map(SourceSite::Annotation);
-            annotations.chain(scan.bindings.iter().map(SourceSite::Attribute))
+            let attributes = scan.bindings.iter().map(SourceSite::Attribute);
+            annotations.chain(attributes)
         })
         .filter_map(|site| scanned_binding(inactive, site))
         .collect::<Vec<_>>();
