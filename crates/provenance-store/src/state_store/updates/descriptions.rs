@@ -19,6 +19,9 @@ impl StateStore {
                 required_text(statement)?;
                 super::super::statement_policy::ensure_statement_is_writable(held, statement)?;
             }
+            // A Rule file or a review file that does not parse refuses the change before it
+            // writes, with the file and the line of the fault.
+            held.list_rules(&input.scope_id)?;
             held.list_requirement_reviews(&input.scope_id)?;
             let path = shards::requirements_path(&held.layout, &input.scope_id);
             let mut before = String::new();
