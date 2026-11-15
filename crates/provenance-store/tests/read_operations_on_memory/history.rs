@@ -165,7 +165,7 @@ async fn the_history_operations_over_memory_give_the_answers_of_the_folder() {
 /// not a Git work tree, has no committed history: each record that its
 /// working copy holds lists the saved version only. The build with `host`
 /// reads Git there and finds no history, and the build without `host` has
-/// no history to read, so both give the same answers.
+/// no committed history, so both give the same answers.
 #[tokio::test]
 async fn a_repository_with_no_file_versions_shows_the_saved_version_only() {
     let history = fixture();
