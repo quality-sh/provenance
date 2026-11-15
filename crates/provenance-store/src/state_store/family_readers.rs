@@ -83,6 +83,11 @@ macro_rules! canonical_reader {
             self.project_proposal_cards(scope, None, || Ok(()))
         }
     };
+    ($record:ty, $path:ident, $list:ident, dispositions) => {
+        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            self.with_repository_read(|held| held.disposition_file_rows_once(scope))
+        }
+    };
 }
 
 macro_rules! define_canonical_readers {

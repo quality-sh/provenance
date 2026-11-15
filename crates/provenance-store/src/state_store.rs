@@ -24,6 +24,7 @@ mod reference_methods;
 mod reference_writers;
 mod requirement_reviews;
 mod resolution_decisions;
+mod review_rows_once;
 mod rule_writers;
 mod scope_ingestion;
 pub(crate) use read_fence::FencedStore;
@@ -73,7 +74,7 @@ pub(crate) use statement_policy::StatementWriteError;
 pub use typed_specs::{decide_typed_spec, ReviewHistory, TypedSpecDecision, TypedSpecView};
 pub use typed_statement_policy::TypedSpecWriteError;
 
-use crate::{layout::ProvenanceLayout, repository::RepositoryIdentity, shards};
+use crate::{layout::ProvenanceLayout, repository::RepositoryIdentity};
 use provenance_core::{
     ensure_record_id_assignable, AssertionRecord, Contribution, DispositionRecord,
     ImplementationBinding, Manifest, Message, ProposalCard, ScopeId, SynthesisPacket, Thread,
@@ -361,14 +362,35 @@ impl StateStore {
         self.with_repository_read(|held| {
             let assertions = held.list_assertion_records(scope)?;
             let dispositions = held.list_dispositions(scope)?;
-            Ok(held
-                .list_proposal_definitions(scope)?
-                .into_iter()
-                .map(|mut proposal| {
+            let proposals = held.list_proposal_definitions(scope)?;
+            let withdrawals = held.list_withdrawals(scope)?;
+            let reading = provenance_core::review::read_review_rows(
+                provenance_core::review::StoredReviewRows {
+                    proposals: &proposals,
+                    dispositions: &dispositions,
+                    withdrawals: &withdrawals,
+                },
+            );
+            // A review submission takes its state from the result of its
+            // decisions only when its rows agree; else it keeps its stored
+            // state.
+            let decided = |proposal: &ProposalCard| {
+                !reading.is_submission(&proposal.id)
+                    || reading.agreed_decision(&proposal.id).is_some()
+            };
+            Ok(proposals
+                .iter()
+                .map(|proposal| {
+                    let mut proposal = proposal.clone();
+                    let decisions = if decided(&proposal) {
+                        dispositions.as_slice()
+                    } else {
+                        &[]
+                    };
                     proposal.promotion_state = provenance_core::effective_proposal_state(
                         &proposal,
                         &assertions,
-                        &dispositions,
+                        decisions,
                     );
                     proposal
                 })
@@ -376,12 +398,7 @@ impl StateStore {
         })
     }
     pub fn list_proposal_definitions(&self, scope: &ScopeId) -> anyhow::Result<Vec<ProposalCard>> {
-        self.with_repository_read(|held| {
-            shared_parses::read_jsonl_shared(
-                held,
-                &shards::proposal_cards_path(&held.layout, scope),
-            )
-        })
+        self.with_repository_read(|held| held.proposal_file_rows_once(scope))
     }
 }
 
