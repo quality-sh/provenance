@@ -11,8 +11,10 @@
 //! than the test writes. The page budget refusal is the typed
 //! `page_budget_exceeded` failure, which the transport answers with 409.
 
+use super::lifecycle_visibility::list_family;
 use super::{repository_at, root_of, seeded_store};
 use crate::cache::tests::fixtures::append_record;
+use crate::operations::family_operations::PageRequirements;
 use crate::operations::{queries, read_policy::ReadPolicy};
 use crate::review::{read_discussion_list, read_discussion_messages, read_discussions};
 use crate::state_store::StateStore;
@@ -255,4 +257,35 @@ async fn a_discussion_list_past_the_bound_is_the_page_budget_refusal() {
         .await
     })
     .await;
+}
+
+/// `operations/catalog/resource_pages.rs`: a family page. The page asks
+/// for its largest limit and keeps only the live requirements, so its
+/// statement walks more rows than the bound of no steps allows.
+#[tokio::test]
+#[verifies("rule_query_pages_bound_shared_reads", examples)]
+async fn a_family_page_past_the_bound_is_the_page_budget_refusal() {
+    let (dir, store, scope) = seeded_store();
+    many_requirements(&store, &scope);
+    let root = root_of(&dir);
+    let page = || {
+        list_family::<PageRequirements>(
+            &root,
+            json!({"limit": 200, "cursor": null, "exclude_terminal": true}),
+        )
+    };
+    set_page_work_steps(Some(0));
+    let bounded = page().await;
+    set_page_work_steps(None);
+    let Err(refused) = bounded else {
+        panic!("the page answered within a bound of no steps");
+    };
+    let failure: Value = serde_json::from_str(&refused.to_string()).unwrap();
+    assert_eq!(
+        failure["error"]["kind"], "page_budget_exceeded",
+        "{failure}"
+    );
+    if let Err(failed) = page().await {
+        panic!("the page failed with the engine's bound: {failed:#}");
+    }
 }
