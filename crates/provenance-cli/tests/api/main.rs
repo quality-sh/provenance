@@ -53,3 +53,7 @@ mod search_repository;
 mod search_text_first_page;
 #[path = "../search_text_pages.rs"]
 mod search_text_pages;
+#[path = "../cli_document_catch_up_cause.rs"]
+mod cli_document_catch_up_cause;
+#[path = "../../../provenance-transport/tests/support/state_lines.rs"]
+mod state_lines;

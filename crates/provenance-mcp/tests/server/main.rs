@@ -30,6 +30,9 @@ mod support {
     pub mod resource_http;
     #[cfg(feature = "test-fixture")]
     pub mod schema_check;
+    #[cfg(feature = "test-fixture")]
+    #[path = "../../../provenance-transport/tests/support/state_lines.rs"]
+    pub mod state_lines;
 }
 #[path = "../change_refusal_kinds.rs"]
 mod change_refusal_kinds;
@@ -101,3 +104,5 @@ mod surface_names;
 mod typed_plan_refusals;
 #[path = "../wire.rs"]
 mod wire;
+#[path = "../mcp_document_catch_up_cause.rs"]
+mod mcp_document_catch_up_cause;

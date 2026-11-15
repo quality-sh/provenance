@@ -12,10 +12,12 @@ mod support {
     #[path = "../support/asserted_proposal.rs"]
     pub mod asserted_proposal;
     pub mod catch_up_steps;
+    pub mod depends_on_cycle;
     pub mod ideation;
     pub mod names;
     pub mod records;
     pub mod resource_http;
+    pub mod state_lines;
     pub mod transcript;
     pub mod views;
 }
@@ -101,3 +103,5 @@ mod unadvertised_route_refusals;
 mod verification_runs_cache_lines;
 #[path = "../wire.rs"]
 mod wire;
+#[path = "../document_catch_up_cause.rs"]
+mod document_catch_up_cause;
