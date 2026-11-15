@@ -1,6 +1,6 @@
 use super::{
     native_review_writers::{id, seed_native_records},
-    seeded_requirement_store,
+    reviewed_requirement_store, seeded_requirement_store,
 };
 use crate::state_store::{
     EditQuestionInput, UpdateRequirementInput, UpdateRuleInput, UpdateTopicInput,
@@ -40,7 +40,7 @@ fn assert_lifecycle_then_content(
 
 #[test]
 fn rule_archive_stamp_keeps_revision_after_statement_changes_it() {
-    let (_dir, store, scope) = seeded_requirement_store();
+    let (_dir, store, scope) = reviewed_requirement_store();
     seed_native_records(&store, &scope);
     let created = revision(&store, &scope, NodeType::Rule, "rule_native");
     store
@@ -53,15 +53,15 @@ fn rule_archive_stamp_keeps_revision_after_statement_changes_it() {
         .unwrap();
     let changed = revision(&store, &scope, NodeType::Rule, "rule_native");
     assert_ne!(changed, created);
-    store
-        .update_rule(
+    crate::test_support::set_status(&store, NodeType::Rule, "rule_native", |store| {
+        store.update_rule(
             serde_json::from_value::<UpdateRuleInput>(serde_json::json!({
                 "scope_id":"default", "id":"rule_native", "status":"archived",
                 "archived_in_commit":{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
             }))
             .unwrap(),
         )
-        .unwrap();
+    });
     assert_eq!(
         revision(&store, &scope, NodeType::Rule, "rule_native"),
         changed

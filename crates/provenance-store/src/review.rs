@@ -103,6 +103,7 @@ mod automatic_submission;
 mod cycle_index;
 mod decision;
 mod decision_reads;
+mod status_request;
 pub(crate) use decision_reads::DocumentReviewState;
 mod decision_state;
 
