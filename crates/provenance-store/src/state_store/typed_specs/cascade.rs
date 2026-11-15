@@ -27,11 +27,19 @@ pub(super) struct Cascade {
 }
 
 /// A record that the cascade deletes, with the deleted Requirements that
-/// make the cascade delete it.
+/// keep it when the document keeps them.
 pub(super) struct CascadeDeletion {
     pub(super) kind: NodeType,
     pub(super) id: StableId,
-    pub(super) requirements: Vec<StableId>,
+    pub(super) kept_by: Keep,
+}
+
+/// The deleted Requirements that keep a record that the cascade deletes.
+pub(super) enum Keep {
+    /// The record stays when one of these Requirements stays.
+    AnyOf(Vec<StableId>),
+    /// The record stays only when each of these Requirements stays.
+    AllOf(Vec<StableId>),
 }
 
 struct ShapingRecords {
@@ -76,7 +84,7 @@ impl Cascade {
                 deletions.push(CascadeDeletion::new(
                     NodeType::Resolution,
                     &record.id,
-                    cited,
+                    Keep::AnyOf(cited),
                 ));
             }
             !remove
@@ -103,7 +111,11 @@ impl Cascade {
             let remove = changed && record.requirement_ids.is_empty();
             if remove {
                 rule_ids.insert(record.id.as_str().to_owned());
-                deletions.push(CascadeDeletion::new(NodeType::Rule, &record.id, cited));
+                deletions.push(CascadeDeletion::new(
+                    NodeType::Rule,
+                    &record.id,
+                    Keep::AnyOf(cited),
+                ));
             }
             !remove
         });
@@ -234,7 +246,7 @@ fn prepare_shaping(
             deletions.push(CascadeDeletion::new(
                 NodeType::Topic,
                 &record.id,
-                vec![requirement],
+                Keep::AllOf(vec![requirement]),
             ));
         } else {
             retain_links(
@@ -260,7 +272,11 @@ fn prepare_shaping(
         }
         let remove = !cited.is_empty();
         if remove {
-            deletions.push(CascadeDeletion::new(NodeType::Question, &record.id, cited));
+            deletions.push(CascadeDeletion::new(
+                NodeType::Question,
+                &record.id,
+                Keep::AllOf(cited),
+            ));
         } else {
             clear_id(&mut record.contradicts, requirement_ids);
             clear_id(&mut record.resolution_id, resolution_ids);
@@ -290,11 +306,11 @@ fn prepare_shaping(
 }
 
 impl CascadeDeletion {
-    fn new(kind: NodeType, id: &StableId, requirements: Vec<StableId>) -> Self {
+    fn new(kind: NodeType, id: &StableId, kept_by: Keep) -> Self {
         Self {
             kind,
             id: id.clone(),
-            requirements,
+            kept_by,
         }
     }
 }

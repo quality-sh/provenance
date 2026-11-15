@@ -2,11 +2,10 @@
 
 use crate::dictionary_reference::ProjectDictionary;
 use provenance_core::{
-    CanonicalArtifactType, DispositionRecord, ImplementationBinding, NodeType, Question,
-    Requirement, Resolution, Rule, ScopeId, Source, StableId, Topic,
+    DispositionRecord, ImplementationBinding, NodeType, Question, Requirement, Resolution, Rule,
+    ScopeId, Source, StableId, Topic,
 };
 
-use crate::shards;
 use crate::state_store::StateStore;
 
 /// The records of one scope that a typed-spec decision reads.
@@ -101,18 +100,6 @@ fn holds<T>(
         })
 }
 
-/// The kind of record that a canonical artifact names.
-pub(super) const fn node_type(kind: CanonicalArtifactType) -> NodeType {
-    match kind {
-        CanonicalArtifactType::Source => NodeType::Source,
-        CanonicalArtifactType::Requirement => NodeType::Requirement,
-        CanonicalArtifactType::Resolution => NodeType::Resolution,
-        CanonicalArtifactType::Rule => NodeType::Rule,
-        CanonicalArtifactType::Topic => NodeType::Topic,
-        CanonicalArtifactType::Question => NodeType::Question,
-    }
-}
-
 impl StateStore {
     /// Reads the view under the section the caller holds.
     pub fn typed_spec_view(&self, scope: &ScopeId) -> anyhow::Result<TypedSpecView> {
@@ -127,39 +114,10 @@ impl StateStore {
             dictionary: self.project_dictionary().as_deref().cloned(),
             review: self.review_history(scope)?,
         };
-        self.ensure_dispositions_name_records(scope, &view)?;
-        Ok(view)
-    }
-
-    /// Refuses, at its line, a Disposition that names a record that the
-    /// scope does not have.
-    fn ensure_dispositions_name_records(
-        &self,
-        scope: &ScopeId,
-        view: &TypedSpecView,
-    ) -> anyhow::Result<()> {
         let records = view.records();
-        for disposition in &view.review.dispositions {
-            let Some(artifact) = &disposition.canonical_artifact else {
-                continue;
-            };
-            let kind = node_type(artifact.artifact_type);
-            if records.contain(kind, Some(scope), &artifact.artifact_id) {
-                continue;
-            }
-            let message = format!(
-                "disposition {} names {} {}, which the scope does not have",
-                disposition.id.as_str(),
-                kind.as_str(),
-                artifact.artifact_id.as_str()
-            );
-            return Err(crate::state_store::readers::record_fault(
-                self,
-                &shards::dispositions_path(&self.layout, scope),
-                disposition.id.as_str(),
-                message,
-            ));
-        }
-        Ok(())
+        self.ensure_dispositions_name_records(scope, &view.review.dispositions, |kind, id| {
+            records.contain(kind, Some(scope), id)
+        })?;
+        Ok(view)
     }
 }

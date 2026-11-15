@@ -1,7 +1,10 @@
-//! The order of the deletions that review history keeps. This test is a
-//! characterization of `refused_deletions` and has no Rule binding: no Rule
-//! makes the order an obligation. It shows which refusal the apply gives
-//! when a document has more than one.
+//! The order of the deletions that review history keeps. This is an
+//! implementation-aid test of `refused_deletions` and has no Rule binding: no
+//! Rule makes the order an obligation. The order decides which refusal the
+//! apply gives when a document has more than one. The test gives each kind of
+//! cause and each kind of record on one view in memory, and it lists the
+//! submissions in an order that is not the review record order, so that each
+//! position of the order has a check.
 
 use super::*;
 use crate::state_store::typed_specs::view::ReviewHistory;
@@ -71,12 +74,12 @@ fn a_disposition_comes_first_then_submissions_in_review_record_order() {
         CascadeDeletion {
             kind: NodeType::Topic,
             id: id("topic_x"),
-            requirements: vec![id("req_a")],
+            kept_by: Keep::AllOf(vec![id("req_a")]),
         },
         CascadeDeletion {
             kind: NodeType::Topic,
             id: id("topic_y"),
-            requirements: vec![id("req_b")],
+            kept_by: Keep::AllOf(vec![id("req_b")]),
         },
     ];
 

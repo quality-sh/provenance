@@ -6,7 +6,7 @@ import { hoistSharedFamilies, discriminatedUnions } from './contract-families.mj
 import {
   renderNested, substitute, declaration, formatLongTypes, reuseSchemaDeclarations, eraseSchemaInferences,
 } from './contract-render.mjs';
-import { FAILURE_STATUS, failureKinds } from './grammar-lint.mjs';
+import { FAILURE_STATUS, failureKinds, failureVariantKind } from './grammar-lint.mjs';
 import { exactQuerySuccesses } from './query-successes.mjs';
 
 function pascal(value) {
@@ -139,7 +139,7 @@ function failureSchemaForStatus(document, schema, status, references = new Set()
     const next = new Set(references).add(schema.$ref);
     return failureSchemaForStatus(document, target, status, next, payload);
   }
-  const inside = payload || typeof schema.properties?.kind?.const === 'string';
+  const inside = payload || failureVariantKind(schema) !== undefined;
   const narrowed = {};
   for (const [key, value] of Object.entries(schema)) {
     if ((key === 'oneOf' || key === 'anyOf') && !inside) {

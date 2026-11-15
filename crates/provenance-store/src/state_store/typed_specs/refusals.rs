@@ -4,8 +4,8 @@
 use provenance_core::{NodeType, StableId};
 use provenance_macros::rule;
 
-use super::cascade::CascadeDeletion;
-use super::view::{node_type, ScopeRecords, TypedSpecView};
+use super::cascade::{CascadeDeletion, Keep};
+use super::view::{ScopeRecords, TypedSpecView};
 use crate::families::review_families::REVIEW_FAMILIES;
 use crate::state_store::{
     CascadedResource, DeletionRefusal, ReconcileState, ReconciledResource, TypedResourceKind,
@@ -60,7 +60,7 @@ pub(super) fn refused_deletions(
         let Some(artifact) = &disposition.canonical_artifact else {
             continue;
         };
-        let (kind, id) = (node_type(artifact.artifact_type), &artifact.artifact_id);
+        let (kind, id) = (NodeType::from(artifact.artifact_type), &artifact.artifact_id);
         if survivors.contain(kind, None, id) || is_refused(&refused, kind, id) {
             continue;
         }
@@ -133,7 +133,7 @@ pub(super) fn report(
 }
 
 /// How the caller keeps the record: the typed document keeps the record, or
-/// the deleted Requirements that make the cascade delete it.
+/// the deleted Requirements that keep it when the cascade deletes it.
 fn correction(kind: NodeType, id: &StableId, cascade: &[CascadeDeletion]) -> String {
     let cause = cascade
         .iter()
@@ -142,15 +142,11 @@ fn correction(kind: NodeType, id: &StableId, cascade: &[CascadeDeletion]) -> Str
         let (kind, id) = (kind.as_str(), id.as_str());
         return format!("keep {kind} {id} in the typed document");
     };
-    // A Resolution or a Rule stays when one Requirement that it cites stays.
-    // A Question stays only when its Requirement and the Requirement of its
-    // Topic stay.
-    let joint = match kind {
-        NodeType::Resolution | NodeType::Rule => " or ",
-        NodeType::Source | NodeType::Requirement | NodeType::Topic | NodeType::Question => " and ",
+    let (requirements, joint) = match &cause.kept_by {
+        Keep::AnyOf(requirements) => (requirements, " or "),
+        Keep::AllOf(requirements) => (requirements, " and "),
     };
-    let requirements = cause
-        .requirements
+    let requirements = requirements
         .iter()
         .map(|requirement| format!("requirement {}", requirement.as_str()))
         .collect::<Vec<_>>()
