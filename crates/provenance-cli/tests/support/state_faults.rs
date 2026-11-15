@@ -25,6 +25,7 @@ pub const WRITE: [&str; 6] = [
     "requirement",
     "--statement",
     "The system keeps a record.",
+];
 
 /// The exit code, the standard output and the standard error of a command.
 pub fn run(repo: &Path, args: &[&str]) -> (Option<i32>, String, String) {
