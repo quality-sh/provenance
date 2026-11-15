@@ -13,7 +13,6 @@ use provenance_core::protocol::{
     failure::OperationFailure,
     read_failure::{MovedUnit, ReadFailure, UnparsableStateFile},
 };
-use provenance_macros::rule;
 
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
@@ -149,7 +148,7 @@ const fn file_failure(error: &FileAccessRefusal) -> Option<ReadFailure> {
 #[cfg(feature = "host")]
 /// The stage of a cache close that missed its deadline, without the lock
 /// path or the connection count.
-#[rule("rule_cache_completion_names_its_stage_at_the_deadline")]
+#[provenance_macros::rule("rule_cache_completion_names_its_stage_at_the_deadline")]
 const fn completion_failure(error: &CompletionTimedOut) -> ReadFailure {
     ReadFailure::CacheCloseTimedOut {
         stage: error.stage.public(),
