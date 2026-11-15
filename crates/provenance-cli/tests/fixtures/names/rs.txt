@@ -1,0 +1,58 @@
+// @provenance rule: rule_struct
+pub struct Payroll {
+    hours: u32,
+}
+
+// @provenance rule: rule_impl_block
+impl Payroll {
+    pub fn pays(&self) -> bool {
+        self.hours > 38
+    }
+}
+
+// @provenance rule: rule_enum
+#[derive(Debug, Clone)]
+pub(crate) enum Shift {
+    Day,
+}
+
+/// A ledger of entries.
+// @provenance rule: rule_generic_struct
+#[derive(
+    Debug,
+    Default,
+)]
+pub struct Ledger<T> {
+    entries: Vec<T>,
+}
+
+// @provenance rule: rule_const_fn
+pub const fn limit() -> u32 {
+    38
+}
+
+// @provenance rule: rule_async_fn
+pub(crate) async unsafe fn pays_overtime(
+    hours: u32,
+) -> bool {
+    hours > 38
+}
+
+// @provenance rule: rule_trait
+pub trait Rates {
+    fn rate(&self) -> u32;
+}
+
+// @provenance rule: rule_alias
+pub type Hours = u32;
+
+#[rule("rule_attribute_enum")]
+#[derive(Debug)]
+pub enum Kind {
+    Day,
+}
+
+#[rule("rule_attribute_struct")]
+pub struct Entry;
+
+// @provenance rule: rule_end

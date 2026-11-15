@@ -96,3 +96,128 @@ fn a_second_comment_for_one_rule_names_the_rule_in_the_finding() {
         "{report}"
     );
 }
+
+/// The Rule id and the item name of each site in a scan report, in line order.
+fn item_names(report: &Value) -> Vec<(String, Option<String>)> {
+    let mut sites = ["annotations", "bindings"]
+        .iter()
+        .flat_map(|key| report[key].as_array().unwrap())
+        .map(|site| {
+            let name = site["function_name"].as_str().or(site["item_name"].as_str());
+            (
+                site["line"].as_u64().unwrap(),
+                site["rule_id"].as_str().unwrap().to_owned(),
+                name.map(str::to_owned),
+            )
+        })
+        .collect::<Vec<_>>();
+    sites.sort();
+    sites
+        .into_iter()
+        .map(|(_, rule, name)| (rule, name))
+        .collect()
+}
+
+fn named(pairs: &[(&str, Option<&str>)]) -> Vec<(String, Option<String>)> {
+    pairs
+        .iter()
+        .map(|(rule, name)| ((*rule).to_owned(), name.map(str::to_owned)))
+        .collect()
+}
+
+#[test]
+#[verifies("rule_site_item_name_is_the_declaration_below", examples)]
+fn a_rust_binding_names_the_function_or_type_below_it() {
+    let report = scan("src/pay.rs", include_str!("fixtures/names/rs.txt"));
+
+    let expected = named(&[
+        ("rule_struct", Some("Payroll")),
+        ("rule_impl_block", Some("pays")),
+        ("rule_enum", Some("Shift")),
+        ("rule_generic_struct", Some("Ledger")),
+        ("rule_const_fn", Some("limit")),
+        ("rule_async_fn", Some("pays_overtime")),
+        ("rule_trait", Some("Rates")),
+        ("rule_alias", Some("Hours")),
+        ("rule_attribute_enum", Some("Kind")),
+        ("rule_attribute_struct", Some("Entry")),
+        ("rule_end", None),
+    ]);
+    assert_eq!(item_names(&report), expected, "{report}");
+}
+
+#[test]
+#[verifies("rule_site_item_name_is_the_declaration_below", examples)]
+fn a_python_binding_names_the_function_or_class_below_it() {
+    let report = scan("src/pay.py", include_str!("fixtures/names/py.txt"));
+
+    let expected = named(&[
+        ("rule_class", Some("Payroll")),
+        ("rule_method", Some("pays")),
+        ("rule_decorated_async", Some("test_pays")),
+        ("rule_decorated_class", Some("Ledger")),
+    ]);
+    assert_eq!(item_names(&report), expected, "{report}");
+}
+
+#[test]
+#[verifies("rule_site_item_name_is_the_declaration_below", examples)]
+fn a_go_binding_names_the_function_or_type_below_it() {
+    let report = scan("src/pay.go", include_str!("fixtures/names/go.txt"));
+
+    let expected = named(&[
+        ("rule_struct", Some("Payroll")),
+        ("rule_method", Some("Pays")),
+        ("rule_interface", Some("Rates")),
+        ("rule_generic_func", Some("Max")),
+    ]);
+    assert_eq!(item_names(&report), expected, "{report}");
+}
+
+#[test]
+#[verifies("rule_site_item_name_is_the_declaration_below", examples)]
+fn a_java_binding_names_the_method_or_type_below_it() {
+    let report = scan("src/Pay.java", include_str!("fixtures/names/java.txt"));
+
+    let expected = named(&[
+        ("rule_final_class", Some("Payroll")),
+        ("rule_static_method", Some("paysOvertime")),
+        ("rule_annotated_test", Some("paysOvertimeExamples")),
+        ("rule_wrapped_generic", Some("max")),
+        ("rule_annotation_type", Some("Audited")),
+        ("rule_record", Some("Shift")),
+    ]);
+    assert_eq!(item_names(&report), expected, "{report}");
+}
+
+#[test]
+#[verifies("rule_site_item_name_is_the_declaration_below", examples)]
+fn a_typescript_binding_names_the_exported_declaration_below_it() {
+    let report = scan("src/pay.ts", include_str!("fixtures/names/ts.txt"));
+
+    let expected = named(&[
+        ("rule_class", Some("Token")),
+        ("rule_interface", Some("Shape")),
+        ("rule_alias", Some("Hours")),
+        ("rule_default_class", Some("Ledger")),
+        ("rule_decorated_method", Some("total")),
+        ("rule_async_function", Some("paysOvertime")),
+        ("rule_const_enum", Some("Shift")),
+        ("rule_abstract_class", Some("Base")),
+    ]);
+    assert_eq!(item_names(&report), expected, "{report}");
+}
+
+#[test]
+#[verifies("rule_site_item_name_is_the_declaration_below", examples)]
+fn a_javascript_binding_names_the_exported_declaration_below_it() {
+    let report = scan("src/pay.js", include_str!("fixtures/names/js.txt"));
+
+    let expected = named(&[
+        ("rule_class", Some("Token")),
+        ("rule_default_function", Some("pays")),
+        ("rule_generator", Some("shifts")),
+        ("rule_test_callback", Some("overtimeExamples")),
+    ]);
+    assert_eq!(item_names(&report), expected, "{report}");
+}

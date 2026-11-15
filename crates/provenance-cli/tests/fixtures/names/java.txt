@@ -1,0 +1,27 @@
+// @provenance rule: rule_final_class
+public final class Payroll {
+    // @provenance rule: rule_static_method
+    public static boolean paysOvertime(int hours) {
+        return hours > 38;
+    }
+
+    // @provenance verification: examples
+    // @provenance rule: rule_annotated_test
+    @Test
+    @DisplayName("hours above 38")
+    void paysOvertimeExamples() {
+        assertTrue(paysOvertime(39));
+    }
+
+    // @provenance rule: rule_wrapped_generic
+    public static <T extends Comparable<T>> T
+            max(java.util.List<T> items) {
+        return items.get(0);
+    }
+}
+
+// @provenance rule: rule_annotation_type
+public @interface Audited {}
+
+// @provenance rule: rule_record
+public record Shift(int hours) {}
