@@ -239,7 +239,8 @@ location. When a state line does not parse, the refusal also has the
 location fields of `invalid_state_file`: `file`, the path below the state
 directory, and `line`, from 1. The refusal has `file` and `line` together,
 or neither. A cause that has no file has only `message`, which says what
-the cause is. The client reads the document again after a temporary cause,
+the cause is. A state line that does not parse also gives `hint`, the step
+that corrects it, as `invalid_state_file` gives it. The client reads the document again after a temporary cause,
 such as a cache close that did not finish in time. It corrects a cause in
 the record files first. The client reads these fields and does not parse
 the text.

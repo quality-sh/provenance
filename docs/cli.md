@@ -351,6 +351,8 @@ that store and names the duplicate ID and all its shard lines:
 Message ID msg_000021 appears more than once: <shard>:<line>, <shard>:<line>
 ```
 
+The `hint` of the refusal names this section.
+
 To repair the store by hand:
 
 1. Stop writes to the repository. Make a backup of `.provenance/state`.
