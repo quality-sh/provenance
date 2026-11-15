@@ -139,8 +139,8 @@ impl Repository {
             return Err(OpenFailure::NotInitialized);
         };
         let path = ProvenanceLayout::new(identity.working_tree()).manifest_path();
-        let manifest =
-            crate::state_store::parse_manifest(&path, manifest).map_err(OpenFailure::Io)?;
+        let manifest = crate::state_store::parse_manifest(&path, manifest)
+            .map_err(OpenFailure::Io)?;
         declared_scope(&manifest, identity.scope().as_str())?;
         Ok(Self::with_parts(
             identity,

@@ -142,9 +142,12 @@ fn cut_manifest(repo: &Path) -> (u64, String) {
     (line, "EOF while parsing an object".to_owned())
 }
 
-/// The two faults of a manifest, as functions that give the line and the
-/// parse message of the refusal.
-const MANIFEST_FAULTS: [fn(&Path) -> (u64, String); 2] = [older_manifest, cut_manifest];
+/// A fault of a manifest, which gives the line and the parse message of the
+/// refusal.
+type ManifestFault = fn(&Path) -> (u64, String);
+
+/// The two faults of a manifest.
+const MANIFEST_FAULTS: [ManifestFault; 2] = [older_manifest, cut_manifest];
 
 /// The faults of the state: a `req_child` line of an older form, a
 /// `req_child` line that a person cut, and the two faults of a manifest.
