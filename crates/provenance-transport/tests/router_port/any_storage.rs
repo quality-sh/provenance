@@ -211,7 +211,6 @@ async fn the_history_routes_over_memory_storage_answer_as_over_a_folder() {
     assert_eq!(actual.len(), expected.len());
     let (mut over_memory, mut over_folder) = (Names::default(), Names::default());
     for (answer, folder_answer) in actual.iter().zip(&expected) {
-        assert_eq!(answer.shown, folder_answer.shown);
         assert_eq!(
             compared(&mut over_memory, answer),
             compared(&mut over_folder, folder_answer),

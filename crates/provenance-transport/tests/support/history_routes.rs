@@ -135,42 +135,60 @@ async fn versions(http: &Http, list: &str) -> Vec<String> {
     body.pointer("/data/entries")
         .or_else(|| body.pointer("/data"))
         .and_then(Value::as_array)
-        .map(|entries| {
+        .map_or_else(Vec::new, |entries| {
             entries
                 .iter()
                 .filter_map(|entry| entry["id"].as_str().map(str::to_owned))
                 .collect()
         })
-        .unwrap_or_default()
+}
+
+/// The name of a path parameter segment, without its braces.
+fn parameter(segment: &str) -> Option<&str> {
+    segment.strip_prefix('{')?.strip_suffix('}')
+}
+
+/// `template` with each path parameter that `values` names set to its
+/// value.
+fn fill(template: &str, values: &[(&str, &str)]) -> String {
+    template
+        .split('/')
+        .map(|segment| {
+            parameter(segment)
+                .and_then(|name| values.iter().find(|(known, _)| *known == name))
+                .map_or(segment, |(_, value)| *value)
+        })
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 /// The paths of one row for the record `id`.
 async fn paths(http: &Http, row: &Row, id: &str) -> Vec<String> {
-    let template = route(row.name).replace("{id}", id);
-    let list = route(row.name)
-        .split("/history")
-        .next()
-        .unwrap()
-        .replace("{id}", id)
-        + "/history";
-    if !template.contains("{entry_id}") {
-        return vec![template.clone(), format!("{template}?limit=1")];
+    let template = route(row.name);
+    let names: Vec<_> = template.split('/').filter_map(parameter).collect();
+    if !names.contains(&"entry_id") {
+        let path = fill(template, &[("id", id)]);
+        return vec![path.clone(), format!("{path}?limit=1")];
     }
-    let mut entries = versions(http, &list).await;
+    let list = format!("{}/history", template.split("/history").next().unwrap());
+    let mut entries = versions(http, &fill(&list, &[("id", id)])).await;
     entries.push("missing".to_owned());
     let mut paths = Vec::new();
     for entry in &entries {
-        let path = template.replace("{entry_id}", entry);
-        if !path.contains("{side}") {
-            paths.push(path);
+        if !names.contains(&"side") {
+            paths.push(fill(template, &[("id", id), ("entry_id", entry)]));
             continue;
         }
         for side in ["after", "before"] {
-            let path = path.replace("{side}", side);
+            let path = fill(template, &[("id", id), ("entry_id", entry), ("side", side)]);
             paths.push(format!("{path}?field={}", row.field));
             paths.push(path);
         }
-        paths.push(format!("{}?offset=100000", path.replace("{side}", "after")));
+        let path = fill(
+            template,
+            &[("id", id), ("entry_id", entry), ("side", "after")],
+        );
+        paths.push(format!("{path}?offset=100000"));
     }
     paths
 }

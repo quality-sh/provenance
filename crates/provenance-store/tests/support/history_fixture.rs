@@ -187,9 +187,10 @@ fn edited(tree: &Tree, scope: &str, id: &str, change: impl Fn(Value) -> Option<V
     tree
 }
 
-/// `tree` with the field `name` of the record `id` set to `value`.
-fn with_field(tree: &Tree, scope: &str, id: &str, name: &str, value: &str) -> Tree {
-    edited(tree, scope, id, |mut record| {
+/// `tree` with the field `name` of the record `id` of `default` set to
+/// `value`.
+fn with_field(tree: &Tree, id: &str, name: &str, value: &str) -> Tree {
+    edited(tree, "default", id, |mut record| {
         record[name] = json!(value);
         Some(record)
     })
@@ -339,13 +340,9 @@ fn describe(store: &StateStore, description: &str) -> provenance_store::review::
     .unwrap()
 }
 
-/// Builds the history.
-pub fn history(sources: &Sources) -> History {
-    let mut graph = Graph {
-        trees: Vec::new(),
-        commits: Vec::new(),
-        time: 1_700_000_000,
-    };
+/// The commits `create`, `rename` and `start`, and the origin of the
+/// Discussion that `start` adds.
+fn started(graph: &mut Graph, sources: &Sources) -> DiscussionOrigin {
     let (repository_, storage) = repository(&manifest(), sources);
     let store = repository_.store();
     create(&store);
@@ -356,7 +353,6 @@ pub fn history(sources: &Sources) -> History {
     moved.insert(topics.replace("/topics/", "/topics/old_"), topic_file);
     graph.commit("create", &[], "Reviewer", moved);
     graph.commit("rename", &["create"], "Reviewer", created);
-
     let discussion = store
         .write_discussion(
             serde_json::from_value(json!({
@@ -369,53 +365,41 @@ pub fn history(sources: &Sources) -> History {
             .unwrap(),
         )
         .unwrap();
-    let origin = DiscussionOrigin {
+    graph.commit("start", &["rename"], "Reviewer", files(&storage));
+    DiscussionOrigin {
         discussion_id: discussion.discussion_id.clone(),
         thread_id: discussion.thread_id.clone(),
         message_id: discussion.root_message_id,
-    };
-    graph.commit("start", &["rename"], "Reviewer", files(&storage));
+    }
+}
 
+/// The commits `garble` and `mend`, then `alice`, `bob` and `merge`; gives
+/// the tree of `merge`.
+fn merged(graph: &mut Graph) -> Tree {
     let started = graph.tree("start");
     let broken = file_of(&started, "broken", "req_b");
     let mut garbled = started.clone();
     garbled.insert(broken, vec![0xff, 0xfe, b'\n']);
     graph.commit("garble", &["start"], "Reviewer", garbled);
     graph.commit("mend", &["garble"], "Reviewer", started);
-
     let base = graph.tree("mend");
     let alice = with_field(
         &base,
-        "default",
         "req_a",
         "statement",
         "The system stores records for one year.",
     );
     let alice = with_field(
         &alice,
-        "default",
         "question_a",
         "question",
         "Are records kept for one year?",
     );
-    let alice = with_field(
-        &alice,
-        "default",
-        "rule_a",
-        "description",
-        "Alice describes the rule.",
-    );
+    let alice = with_field(&alice, "rule_a", "description", "Alice describes the rule.");
     graph.commit("alice", &["mend"], "alice", alice.clone());
-    let bob = with_field(
-        &base,
-        "default",
-        "rule_a",
-        "statement",
-        "Each record is stored once.",
-    );
+    let bob = with_field(&base, "rule_a", "statement", "Each record is stored once.");
     let bob = with_field(
         &bob,
-        "default",
         "resolution_a",
         "position",
         "Records are stored for one year.",
@@ -428,13 +412,23 @@ pub fn history(sources: &Sources) -> History {
     }
     let merged = with_field(
         &merged,
-        "default",
         "rule_a",
         "description",
         "Alice describes the rule.",
     );
     graph.commit("merge", &["bob", "alice"], "merger", merged.clone());
+    merged
+}
 
+/// Builds the history.
+pub fn history(sources: &Sources) -> History {
+    let mut graph = Graph {
+        trees: Vec::new(),
+        commits: Vec::new(),
+        time: 1_700_000_000,
+    };
+    let origin = started(&mut graph, sources);
+    let merged = merged(&mut graph);
     let (repository_, storage) = repository(&merged, sources);
     let store = repository_.store();
     store
