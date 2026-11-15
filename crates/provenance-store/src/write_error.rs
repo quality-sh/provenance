@@ -298,7 +298,7 @@ impl WriteError {
     }
     fn write_failed(&self) -> WriteFailure {
         WriteFailure::WriteFailed {
-            cause: failure_cause(&self.0),
+            cause: failure_cause(&self.0, native(&self.0)),
         }
     }
     /// The native cause chain of a failure of no known kind, with absolute

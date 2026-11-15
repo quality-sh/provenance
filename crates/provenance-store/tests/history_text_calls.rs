@@ -7,11 +7,17 @@
 //! what it found for the last version list in the process, so these tests
 //! are in their own binary, and the tests that read a history to its end
 //! take `ONE_READER` so that no other test changes what the process keeps.
-//! `entry_edges` holds the entry reads at the edges of a page.
+//! `entry_edges` holds the entry reads at the edges of a page, and
+//! `page_edges` the history pages at the same edges; its budget refusal
+//! test is evidence of `rule_query_pages_bound_shared_reads`.
 
 mod discussion_support;
 #[path = "history_text_calls/entry_edges.rs"]
 mod entry_edges;
+#[path = "support/history_pages.rs"]
+mod history_pages;
+#[path = "history_text_calls/page_edges.rs"]
+mod page_edges;
 use camino::Utf8Path;
 use discussion_support::*;
 use provenance_core::review::{ReviewHistoryPage, ReviewHistoryQuery};
