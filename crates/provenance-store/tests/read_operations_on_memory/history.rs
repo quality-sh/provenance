@@ -3,22 +3,23 @@
 //! file, a record file that was not UTF-8 at one commit, and an entry id
 //! that names no commit.
 //!
-//! `CASES` holds one row for each history operation of each reviewed kind,
-//! as the contract routes serve them. Each row reads the history of its
-//! record in the scope `default`, and of a record in the scope `broken`,
-//! whose Requirement file was not UTF-8 at one commit. The answers, without
-//! their stamps and with each commit id as its name in the graph, equal the
-//! checked file over a folder repository with real Git history.
+//! `CASES` (`history_cases.rs`) holds one row for each history operation of
+//! each reviewed kind, as the contract routes serve them. The answers,
+//! without their stamps and with each commit id as its name in the graph,
+//! equal the checked file over a folder repository with real Git history.
 //!
 //! Over memory storage, with the history contract's memory adapter of the
 //! same commits and a read database in memory, each operation runs through
 //! the in-process port and gives the same answers, with and without
+//! `host`. A repository that was given no file versions, at a working tree
+//! that does not exist, shows the saved version only, with and without
 //! `host`.
 //!
 //! Implementation aid with no Rule binding: these tests pin the answers of
 //! the history operations so that a change of the path they read through
 //! cannot change them.
 
+use crate::history_cases::{run, Reads, CASES};
 use crate::history_fixture::{history, History, Sources};
 use crate::memory::{FixedClock, Recorded};
 use crate::read_in;
@@ -28,6 +29,7 @@ use provenance_store::operations::read_operations::READ_OPERATIONS;
 use provenance_store::read_database::contract::Other;
 use provenance_store::repository::{IdSource, Repository, RepositoryIdentity};
 use provenance_store::review::history::contract::MemoryFileVersions;
+use provenance_store::review::history::FileVersions;
 use provenance_store::settings::Settings;
 use provenance_store::storage::memory::{MemorySectionLock, MemoryStateStorage};
 use provenance_store::storage::StateView;
@@ -40,77 +42,8 @@ use std::sync::Arc;
 
 /// The checked answers of the cases.
 const PINNED: &str = include_str!("../fixtures/history_operations.json");
-
-/// One history operation of one reviewed kind: the operation, the record
-/// kind, the records of `default` to read and the record of `broken`.
-pub struct Case {
-    pub operation: &'static str,
-    pub kind: &'static str,
-    pub records: &'static [&'static str],
-    pub broken: &'static str,
-}
-
-const fn case(
-    operation: &'static str,
-    kind: &'static str,
-    records: &'static [&'static str],
-    broken: &'static str,
-) -> Case {
-    Case {
-        operation,
-        kind,
-        records,
-        broken,
-    }
-}
-
-const LIST: &str = "review-history";
-const ENTRY: &str = "review-history-entry";
-const EVIDENCE: &str = "review-evidence";
-
-/// The history operations, one row for each route of the contract.
-pub const CASES: [Case; 18] = [
-    case(LIST, "requirement", &["req_a"], "req_b"),
-    case(ENTRY, "requirement", &["req_a"], "req_b"),
-    case(EVIDENCE, "requirement", &["req_a"], "req_b"),
-    case(LIST, "rule", &["rule_a"], "rule_a"),
-    case(ENTRY, "rule", &["rule_a"], "rule_a"),
-    case(EVIDENCE, "rule", &["rule_a"], "rule_a"),
-    case(LIST, "source", &["source_a", "source_gone"], "source_a"),
-    case(ENTRY, "source", &["source_a", "source_gone"], "source_a"),
-    case(EVIDENCE, "source", &["source_a", "source_gone"], "source_a"),
-    case(LIST, "topic", &["topic_a"], "topic_a"),
-    case(ENTRY, "topic", &["topic_a"], "topic_a"),
-    case(EVIDENCE, "topic", &["topic_a"], "topic_a"),
-    case(LIST, "question", &["question_a"], "question_a"),
-    case(ENTRY, "question", &["question_a"], "question_a"),
-    case(EVIDENCE, "question", &["question_a"], "question_a"),
-    case(LIST, "resolution", &["resolution_a"], "resolution_a"),
-    case(ENTRY, "resolution", &["resolution_a"], "resolution_a"),
-    case(EVIDENCE, "resolution", &["resolution_a"], "resolution_a"),
-];
-
-/// The content field of a kind that each evidence case reads.
-fn field(kind: &str) -> &'static str {
-    match kind {
-        "source" => "name",
-        "topic" => "title",
-        "question" => "question",
-        "resolution" => "position",
-        _ => "statement",
-    }
-}
-
-/// Runs one history operation in a scope, and gives its answer: the
-/// success, or the status and body of the failure.
-pub trait Reads: Sync {
-    fn read<'a>(
-        &'a self,
-        scope: &'a str,
-        operation: &'static str,
-        request: Value,
-    ) -> Pin<Box<dyn Future<Output = Value> + Send + 'a>>;
-}
+/// The checked answers of the cases over a repository with no file versions.
+const WITHOUT_VERSIONS: &str = include_str!("../fixtures/history_without_versions.json");
 
 /// Ids made from a counter, so each run makes the same ids.
 #[derive(Debug, Default)]
@@ -130,110 +63,10 @@ pub fn fixture() -> History {
     })
 }
 
-/// The answer without its stamp, and with a page cursor as whether there
-/// is one.
-fn shown(mut answer: Value) -> Value {
-    if let Some(fields) = answer.as_object_mut() {
-        fields.remove("stamp");
-    }
-    if let Some(cursor) = answer.pointer_mut("/result/next_cursor") {
-        *cursor = json!(!cursor.is_null());
-    }
-    answer
-}
-
-/// The version ids of `id` in `scope`, read with `reads`.
-async fn versions(reads: &dyn Reads, scope: &str, kind: &str, id: &str) -> Vec<String> {
-    let answer = reads
-        .read(
-            scope,
-            LIST,
-            json!({"record_kind": kind, "record_id": id, "limit": 200}),
-        )
-        .await;
-    answer
-        .pointer("/result/entries")
-        .and_then(Value::as_array)
-        .map_or_else(Vec::new, |entries| {
-            entries
-                .iter()
-                .map(|entry| entry["id"].as_str().unwrap().to_owned())
-                .collect()
-        })
-}
-
-/// The requests of one case for the record `id`.
-async fn requests(reads: &dyn Reads, case: &Case, scope: &str, id: &str) -> Vec<Value> {
-    let record = json!({"record_kind": case.kind, "record_id": id});
-    let with = |fields: Value| {
-        let mut request = record.clone();
-        request
-            .as_object_mut()
-            .unwrap()
-            .extend(fields.as_object().unwrap().clone());
-        request
-    };
-    if case.operation == LIST {
-        return vec![record.clone(), with(json!({"limit": 1}))];
-    }
-    let mut entries = versions(reads, scope, case.kind, id).await;
-    entries.push("missing".to_owned());
-    let mut requests = Vec::new();
-    for entry in &entries {
-        if case.operation == ENTRY {
-            requests.push(with(json!({"entry_id": entry})));
-            continue;
-        }
-        for side in ["after", "before"] {
-            requests.push(with(json!({"entry_id": entry, "side": side})));
-            requests.push(with(
-                json!({"entry_id": entry, "side": side, "field": field(case.kind)}),
-            ));
-        }
-        requests.push(with(
-            json!({"entry_id": entry, "side": "after", "offset": 100_000}),
-        ));
-    }
-    requests
-}
-
-/// The answers of each case, in the order of `CASES`. A list case follows
-/// the cursor of each page that has one.
-pub async fn run(reads: &dyn Reads) -> Vec<Value> {
-    let mut answers = Vec::new();
-    for case in &CASES {
-        let records = case.records.iter().map(|id| ("default", *id));
-        for (scope, id) in records.chain([("broken", case.broken)]) {
-            for request in requests(reads, case, scope, id).await {
-                let mut request = request;
-                loop {
-                    let answer = reads.read(scope, case.operation, request.clone()).await;
-                    let next = answer
-                        .pointer("/result/next_cursor")
-                        .and_then(Value::as_str)
-                        .map(str::to_owned);
-                    let mut sent = request.clone();
-                    if sent.get("cursor").is_some() {
-                        sent["cursor"] = json!("<cursor>");
-                    }
-                    answers.push(json!({
-                        "call": format!("{} {scope}", case.operation),
-                        "request": sent,
-                        "answer": shown(answer),
-                    }));
-                    let Some(next) = next else { break };
-                    request["cursor"] = json!(next);
-                }
-            }
-        }
-    }
-    answers
-}
-
-/// Fails with each line of `observed` that differs from the checked file,
-/// and with the whole observed text.
-pub fn assert_pinned(observed: &str) {
-    let expected = PINNED.trim_end();
+/// Fails with each line of `observed` that differs from the checked text
+/// `pinned`, and with the whole observed text.
+pub fn assert_pinned(pinned: &str, observed: &str) {
+    let expected = pinned.trim_end();
     if observed == expected {
         return;
     }
@@ -259,9 +92,9 @@ pub fn assert_pinned(observed: &str) {
 
 /// Runs each operation through the in-process port of a repository over
 /// memory storage, one for each scope: a binding serves one scope.
-struct MemoryReads {
-    default: Repository,
-    broken: Repository,
+pub struct MemoryReads {
+    pub default: Repository,
+    pub broken: Repository,
 }
 
 impl Reads for MemoryReads {
@@ -282,9 +115,14 @@ impl Reads for MemoryReads {
 }
 
 /// A repository of `scope` over memory storage that holds the working copy
-/// of `history`, at a working tree that does not exist, with the memory
-/// adapter of its commits and a read database in memory, caught up.
-async fn memory_repository(history: &History, scope: &str) -> Repository {
+/// of `history`, at a working tree that does not exist, with the file
+/// versions `versions` when there are some, and a read database in memory,
+/// caught up.
+pub async fn memory_repository(
+    history: &History,
+    scope: &str,
+    versions: Option<Arc<dyn FileVersions>>,
+) -> Repository {
     let storage = Arc::new(MemoryStateStorage::loaded(
         StateView::new(history.state()),
         Arc::new(Recorded::default()),
@@ -302,8 +140,11 @@ async fn memory_repository(history: &History, scope: &str) -> Repository {
         Arc::new(MemorySectionLock::refusing()),
         Some(Arc::new(Other::new(MemorySqlite::new().await))),
     )
-    .unwrap()
-    .with_file_versions(Arc::new(MemoryFileVersions::new(&history.commits)));
+    .unwrap();
+    let repository = match versions {
+        Some(versions) => repository.with_file_versions(versions),
+        None => repository,
+    };
     catch_up_in_publish(&repository).await.unwrap();
     repository
 }
@@ -311,12 +152,32 @@ async fn memory_repository(history: &History, scope: &str) -> Repository {
 #[tokio::test]
 async fn the_history_operations_over_memory_give_the_answers_of_the_folder() {
     let history = fixture();
+    let versions = || Some(Arc::new(MemoryFileVersions::new(&history.commits)) as _);
     let reads = MemoryReads {
-        default: memory_repository(&history, "default").await,
-        broken: memory_repository(&history, "broken").await,
+        default: memory_repository(&history, "default", versions()).await,
+        broken: memory_repository(&history, "broken", versions()).await,
     };
-    let answers = run(&reads).await;
-    assert_pinned(&serde_json::to_string_pretty(&answers).unwrap());
+    let answers = run(&reads, &CASES).await;
+    assert_pinned(PINNED, &serde_json::to_string_pretty(&answers).unwrap());
+}
+
+/// A repository that was given no file versions, at a working tree that is
+/// not a Git work tree, has no committed history: each record that its
+/// working copy holds lists the saved version only. The build with `host`
+/// reads Git there and finds no history, and the build without `host` has
+/// no history to read, so both give the same answers.
+#[tokio::test]
+async fn a_repository_with_no_file_versions_shows_the_saved_version_only() {
+    let history = fixture();
+    let reads = MemoryReads {
+        default: memory_repository(&history, "default", None).await,
+        broken: memory_repository(&history, "broken", None).await,
+    };
+    let answers = run(&reads, &CASES).await;
+    assert_pinned(
+        WITHOUT_VERSIONS,
+        &serde_json::to_string_pretty(&answers).unwrap(),
+    );
 }
 
 /// Implementation aid: each operation of the port is a read of the review
@@ -336,7 +197,8 @@ fn each_operation_of_the_port_has_a_case() {
 
 #[cfg(feature = "host")]
 mod folder {
-    use super::{assert_pinned, fixture, run, Reads};
+    use super::{assert_pinned, fixture, PINNED};
+    use crate::history_cases::{run, Reads, CASES};
     use crate::history_folder::folder;
     use provenance_core::protocol::repository::RepositoryContext;
     use provenance_store::operations::catalog::{
@@ -411,8 +273,8 @@ mod folder {
             default: bound("default"),
             broken: bound("broken"),
         };
-        let answers = run(&reads).await;
+        let answers = run(&reads, &CASES).await;
         let text = serde_json::to_string_pretty(&answers).unwrap();
-        assert_pinned(&folder.named(&text));
+        assert_pinned(PINNED, &folder.named(&text));
     }
 }

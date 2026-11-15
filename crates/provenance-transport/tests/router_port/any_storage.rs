@@ -16,9 +16,10 @@
 //! No Rule: the plan proposes `rule_contract_router_serves_any_storage` for
 //! the owner's review. This test is an implementation aid.
 
+use crate::support::history_cases::CASES;
 use crate::support::history_fixture::{history, History, Sources};
 use crate::support::history_folder::{folder, Folder};
-use crate::support::history_routes::{self, history_routes, ROWS};
+use crate::support::history_routes::{self, history_routes, route_name};
 use crate::support::memory_host::{bound, compared, in_process, memory_repository, over_memory};
 use crate::support::names::Names;
 use crate::support::records::{allow_reviewer, Repository};
@@ -175,9 +176,9 @@ async fn the_history_routes_over_memory_storage_answer_as_over_a_folder() {
     let _alone = crate::one_at_a_time().await;
     let mut routes = history_routes();
     routes.sort_unstable();
-    let mut rows: Vec<_> = ROWS.iter().map(|row| row.name).collect();
-    rows.sort_unstable();
-    assert_eq!(rows, routes, "each history route has one row");
+    let mut cases: Vec<_> = CASES.iter().map(route_name).collect();
+    cases.sort_unstable();
+    assert_eq!(cases, routes, "each history route has one case");
     let history = history(&Sources {
         clock: Arc::new(SystemClock),
         ids: Arc::new(RandomIds),

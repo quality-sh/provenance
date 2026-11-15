@@ -1058,39 +1058,6 @@
   },
   {
     "answer": {
-      "freshness_error": null,
-      "result": {
-        "entries": [],
-        "has_more": false,
-        "limit": 50,
-        "next_cursor": false
-      }
-    },
-    "call": "review-history broken",
-    "request": {
-      "record_id": "rule_a",
-      "record_kind": "rule"
-    }
-  },
-  {
-    "answer": {
-      "freshness_error": null,
-      "result": {
-        "entries": [],
-        "has_more": false,
-        "limit": 1,
-        "next_cursor": false
-      }
-    },
-    "call": "review-history broken",
-    "request": {
-      "limit": 1,
-      "record_id": "rule_a",
-      "record_kind": "rule"
-    }
-  },
-  {
-    "answer": {
       "author": "Reviewer",
       "before": null,
       "changed_fields": [
@@ -1165,20 +1132,6 @@
       "status": 404
     },
     "call": "review-history-entry default",
-    "request": {
-      "entry_id": "missing",
-      "record_id": "rule_a",
-      "record_kind": "rule"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-history-entry broken",
     "request": {
       "entry_id": "missing",
       "record_id": "rule_a",
@@ -1545,84 +1498,6 @@
   },
   {
     "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "record_id": "rule_a",
-      "record_kind": "rule",
-      "side": "after"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "field": "statement",
-      "record_id": "rule_a",
-      "record_kind": "rule",
-      "side": "after"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "record_id": "rule_a",
-      "record_kind": "rule",
-      "side": "before"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "field": "statement",
-      "record_id": "rule_a",
-      "record_kind": "rule",
-      "side": "before"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "offset": 100000,
-      "record_id": "rule_a",
-      "record_kind": "rule",
-      "side": "after"
-    }
-  },
-  {
-    "answer": {
       "freshness_error": null,
       "result": {
         "entries": [
@@ -1756,39 +1631,6 @@
     "request": {
       "limit": 1,
       "record_id": "source_gone",
-      "record_kind": "source"
-    }
-  },
-  {
-    "answer": {
-      "freshness_error": null,
-      "result": {
-        "entries": [],
-        "has_more": false,
-        "limit": 50,
-        "next_cursor": false
-      }
-    },
-    "call": "review-history broken",
-    "request": {
-      "record_id": "source_a",
-      "record_kind": "source"
-    }
-  },
-  {
-    "answer": {
-      "freshness_error": null,
-      "result": {
-        "entries": [],
-        "has_more": false,
-        "limit": 1,
-        "next_cursor": false
-      }
-    },
-    "call": "review-history broken",
-    "request": {
-      "limit": 1,
-      "record_id": "source_a",
       "record_kind": "source"
     }
   },
@@ -1867,20 +1709,6 @@
     "request": {
       "entry_id": "missing",
       "record_id": "source_gone",
-      "record_kind": "source"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-history-entry broken",
-    "request": {
-      "entry_id": "missing",
-      "record_id": "source_a",
       "record_kind": "source"
     }
   },
@@ -2218,84 +2046,6 @@
   },
   {
     "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "record_id": "source_a",
-      "record_kind": "source",
-      "side": "after"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "field": "name",
-      "record_id": "source_a",
-      "record_kind": "source",
-      "side": "after"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "record_id": "source_a",
-      "record_kind": "source",
-      "side": "before"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "field": "name",
-      "record_id": "source_a",
-      "record_kind": "source",
-      "side": "before"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "offset": 100000,
-      "record_id": "source_a",
-      "record_kind": "source",
-      "side": "after"
-    }
-  },
-  {
-    "answer": {
       "freshness_error": null,
       "result": {
         "entries": [
@@ -2359,39 +2109,6 @@
       }
     },
     "call": "review-history default",
-    "request": {
-      "limit": 1,
-      "record_id": "topic_a",
-      "record_kind": "topic"
-    }
-  },
-  {
-    "answer": {
-      "freshness_error": null,
-      "result": {
-        "entries": [],
-        "has_more": false,
-        "limit": 50,
-        "next_cursor": false
-      }
-    },
-    "call": "review-history broken",
-    "request": {
-      "record_id": "topic_a",
-      "record_kind": "topic"
-    }
-  },
-  {
-    "answer": {
-      "freshness_error": null,
-      "result": {
-        "entries": [],
-        "has_more": false,
-        "limit": 1,
-        "next_cursor": false
-      }
-    },
-    "call": "review-history broken",
     "request": {
       "limit": 1,
       "record_id": "topic_a",
@@ -2432,20 +2149,6 @@
       "status": 404
     },
     "call": "review-history-entry default",
-    "request": {
-      "entry_id": "missing",
-      "record_id": "topic_a",
-      "record_kind": "topic"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-history-entry broken",
     "request": {
       "entry_id": "missing",
       "record_id": "topic_a",
@@ -2620,84 +2323,6 @@
   },
   {
     "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "record_id": "topic_a",
-      "record_kind": "topic",
-      "side": "after"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "field": "title",
-      "record_id": "topic_a",
-      "record_kind": "topic",
-      "side": "after"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "record_id": "topic_a",
-      "record_kind": "topic",
-      "side": "before"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "field": "title",
-      "record_id": "topic_a",
-      "record_kind": "topic",
-      "side": "before"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "offset": 100000,
-      "record_id": "topic_a",
-      "record_kind": "topic",
-      "side": "after"
-    }
-  },
-  {
-    "answer": {
       "freshness_error": null,
       "result": {
         "entries": [
@@ -2820,39 +2445,6 @@
   },
   {
     "answer": {
-      "freshness_error": null,
-      "result": {
-        "entries": [],
-        "has_more": false,
-        "limit": 50,
-        "next_cursor": false
-      }
-    },
-    "call": "review-history broken",
-    "request": {
-      "record_id": "question_a",
-      "record_kind": "question"
-    }
-  },
-  {
-    "answer": {
-      "freshness_error": null,
-      "result": {
-        "entries": [],
-        "has_more": false,
-        "limit": 1,
-        "next_cursor": false
-      }
-    },
-    "call": "review-history broken",
-    "request": {
-      "limit": 1,
-      "record_id": "question_a",
-      "record_kind": "question"
-    }
-  },
-  {
-    "answer": {
       "author": "Reviewer",
       "before": null,
       "changed_fields": [
@@ -2909,20 +2501,6 @@
       "status": 404
     },
     "call": "review-history-entry default",
-    "request": {
-      "entry_id": "missing",
-      "record_id": "question_a",
-      "record_kind": "question"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-history-entry broken",
     "request": {
       "entry_id": "missing",
       "record_id": "question_a",
@@ -3193,84 +2771,6 @@
   },
   {
     "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "record_id": "question_a",
-      "record_kind": "question",
-      "side": "after"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "field": "question",
-      "record_id": "question_a",
-      "record_kind": "question",
-      "side": "after"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "record_id": "question_a",
-      "record_kind": "question",
-      "side": "before"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "field": "question",
-      "record_id": "question_a",
-      "record_kind": "question",
-      "side": "before"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "offset": 100000,
-      "record_id": "question_a",
-      "record_kind": "question",
-      "side": "after"
-    }
-  },
-  {
-    "answer": {
       "freshness_error": null,
       "result": {
         "entries": [
@@ -3391,39 +2891,6 @@
   },
   {
     "answer": {
-      "freshness_error": null,
-      "result": {
-        "entries": [],
-        "has_more": false,
-        "limit": 50,
-        "next_cursor": false
-      }
-    },
-    "call": "review-history broken",
-    "request": {
-      "record_id": "resolution_a",
-      "record_kind": "resolution"
-    }
-  },
-  {
-    "answer": {
-      "freshness_error": null,
-      "result": {
-        "entries": [],
-        "has_more": false,
-        "limit": 1,
-        "next_cursor": false
-      }
-    },
-    "call": "review-history broken",
-    "request": {
-      "limit": 1,
-      "record_id": "resolution_a",
-      "record_kind": "resolution"
-    }
-  },
-  {
-    "answer": {
       "author": "Reviewer",
       "before": null,
       "changed_fields": [
@@ -3479,20 +2946,6 @@
       "status": 404
     },
     "call": "review-history-entry default",
-    "request": {
-      "entry_id": "missing",
-      "record_id": "resolution_a",
-      "record_kind": "resolution"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-history-entry broken",
     "request": {
       "entry_id": "missing",
       "record_id": "resolution_a",
@@ -3753,84 +3206,6 @@
       "status": 404
     },
     "call": "review-evidence default",
-    "request": {
-      "entry_id": "missing",
-      "offset": 100000,
-      "record_id": "resolution_a",
-      "record_kind": "resolution",
-      "side": "after"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "record_id": "resolution_a",
-      "record_kind": "resolution",
-      "side": "after"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "field": "position",
-      "record_id": "resolution_a",
-      "record_kind": "resolution",
-      "side": "after"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "record_id": "resolution_a",
-      "record_kind": "resolution",
-      "side": "before"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
-    "request": {
-      "entry_id": "missing",
-      "field": "position",
-      "record_id": "resolution_a",
-      "record_kind": "resolution",
-      "side": "before"
-    }
-  },
-  {
-    "answer": {
-      "error": {
-        "kind": "resource_not_found"
-      },
-      "status": 404
-    },
-    "call": "review-evidence broken",
     "request": {
       "entry_id": "missing",
       "offset": 100000,

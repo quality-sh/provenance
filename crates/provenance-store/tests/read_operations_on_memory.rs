@@ -22,6 +22,10 @@ mod answers;
 mod catch_up;
 #[path = "read_operations_on_memory/history.rs"]
 mod history;
+#[path = "support/history_cases.rs"]
+mod history_cases;
+#[path = "read_operations_on_memory/history_edges.rs"]
+mod history_edges;
 #[path = "support/history_fixture.rs"]
 mod history_fixture;
 #[cfg(feature = "host")]

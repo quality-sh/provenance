@@ -1,109 +1,27 @@
-//! The 18 history routes of the review page, one row for each, called on
-//! one host over the history of `history_fixture.rs`.
+//! The 18 history routes of the review page, called on one host for each
+//! scope over the history of `history_fixture.rs`.
 //!
-//! Each row reads the history of one record of its kind: its pages, each
-//! version and an entry id that names no commit, and the evidence after and
-//! before each version, of the whole record and of one field, and at an
-//! offset past its end. The Source rows also read `source_gone`, which a
-//! later commit deleted. Each row then reads one record on a host of the
-//! scope `broken`, whose Requirement file was not UTF-8 at one commit.
+//! The routes read the requests of the store's history cases
+//! (`history_cases.rs`): each case is one route, and each request of a case
+//! is one call of its route, with the request fields as path parameters and
+//! query parameters.
 
+use super::history_cases::{self, Case, Reads, CASES, ENTRY, EVIDENCE, LIST};
 use super::router_answer::{Answer, Http};
-use serde_json::Value;
+use serde_json::{json, Value};
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Mutex;
 
-/// One history route: its name in the contract, the records of
-/// `default` and the record of `broken` that it reads, and the field of
-/// its evidence reads.
-pub struct Row {
-    pub name: &'static str,
-    pub records: &'static [&'static str],
-    pub broken: &'static str,
-    pub field: &'static str,
-}
-
-const fn row(
-    name: &'static str,
-    records: &'static [&'static str],
-    broken: &'static str,
-    field: &'static str,
-) -> Row {
-    Row {
-        name,
-        records,
-        broken,
-        field,
+/// The name in the contract of the route of `case`.
+pub fn route_name(case: &Case) -> String {
+    match case.operation {
+        LIST => format!("list-{}-history", case.kind),
+        ENTRY => format!("get-{}-history-entry", case.kind),
+        EVIDENCE => format!("get-{}-history-evidence", case.kind),
+        other => panic!("{other} is not a history operation"),
     }
 }
-
-// The records of `default` that each kind reads.
-const REQUIREMENT: &[&str] = &["req_a"];
-const RULE: &[&str] = &["rule_a"];
-const SOURCE: &[&str] = &["source_a", "source_gone"];
-const TOPIC: &[&str] = &["topic_a"];
-const QUESTION: &[&str] = &["question_a"];
-const RESOLUTION: &[&str] = &["resolution_a"];
-
-/// Each history route of the contract.
-pub const ROWS: [Row; 18] = [
-    row(
-        "list-requirement-history",
-        REQUIREMENT,
-        "req_b",
-        "statement",
-    ),
-    row(
-        "get-requirement-history-entry",
-        REQUIREMENT,
-        "req_b",
-        "statement",
-    ),
-    row(
-        "get-requirement-history-evidence",
-        REQUIREMENT,
-        "req_b",
-        "statement",
-    ),
-    row("list-rule-history", RULE, "rule_a", "statement"),
-    row("get-rule-history-entry", RULE, "rule_a", "statement"),
-    row("get-rule-history-evidence", RULE, "rule_a", "statement"),
-    row("list-source-history", SOURCE, "source_a", "name"),
-    row("get-source-history-entry", SOURCE, "source_a", "name"),
-    row("get-source-history-evidence", SOURCE, "source_a", "name"),
-    row("list-topic-history", TOPIC, "topic_a", "title"),
-    row("get-topic-history-entry", TOPIC, "topic_a", "title"),
-    row("get-topic-history-evidence", TOPIC, "topic_a", "title"),
-    row("list-question-history", QUESTION, "question_a", "question"),
-    row(
-        "get-question-history-entry",
-        QUESTION,
-        "question_a",
-        "question",
-    ),
-    row(
-        "get-question-history-evidence",
-        QUESTION,
-        "question_a",
-        "question",
-    ),
-    row(
-        "list-resolution-history",
-        RESOLUTION,
-        "resolution_a",
-        "position",
-    ),
-    row(
-        "get-resolution-history-entry",
-        RESOLUTION,
-        "resolution_a",
-        "position",
-    ),
-    row(
-        "get-resolution-history-evidence",
-        RESOLUTION,
-        "resolution_a",
-        "position",
-    ),
-];
 
 /// The path of the route `name`.
 pub fn route(name: &str) -> &'static str {
@@ -129,93 +47,95 @@ async fn get(http: &Http, path: String) -> Answer {
         .await
 }
 
-/// The version ids of the record at the list path `list`.
-async fn versions(http: &Http, list: &str) -> Vec<String> {
-    let body = get(http, format!("{list}?limit=200")).await.json();
-    body.pointer("/data/items")
-        .and_then(Value::as_array)
-        .map_or_else(Vec::new, |entries| {
-            entries
-                .iter()
-                .filter_map(|entry| entry["id"].as_str().map(str::to_owned))
-                .collect()
-        })
-}
-
 /// The name of a path parameter segment, without its braces.
 fn parameter(segment: &str) -> Option<&str> {
     segment.strip_prefix('{')?.strip_suffix('}')
 }
 
-/// `template` with each path parameter that `values` names set to its
-/// value.
-fn fill(template: &str, values: &[(&str, &str)]) -> String {
-    template
+/// The path of the call of `operation` with `request`: the route of its
+/// case, with each path parameter and each other request field set.
+fn path(operation: &str, request: &Value) -> String {
+    let kind = request["record_kind"].as_str().unwrap();
+    let case = CASES
+        .iter()
+        .find(|case| case.operation == operation && case.kind == kind)
+        .unwrap_or_else(|| panic!("no case {operation} {kind}"));
+    let text = |name: &str| {
+        request.get(name).map(|value| {
+            value
+                .as_str()
+                .map_or_else(|| value.to_string(), str::to_owned)
+        })
+    };
+    let mut used = vec!["record_kind"];
+    let path = route(&route_name(case))
         .split('/')
         .map(|segment| {
-            parameter(segment)
-                .and_then(|name| values.iter().find(|(known, _)| *known == name))
-                .map_or(segment, |(_, value)| *value)
+            let Some(name) = parameter(segment) else {
+                return segment.to_owned();
+            };
+            let field = if name == "id" { "record_id" } else { name };
+            used.push(field);
+            text(field).unwrap_or_else(|| panic!("no {field} in {request}"))
         })
         .collect::<Vec<_>>()
-        .join("/")
+        .join("/");
+    let query: Vec<_> = request
+        .as_object()
+        .unwrap()
+        .keys()
+        .filter(|name| !used.contains(&name.as_str()))
+        .map(|name| format!("{name}={}", text(name).unwrap()))
+        .collect();
+    if query.is_empty() {
+        path
+    } else {
+        format!("{path}?{}", query.join("&"))
+    }
 }
 
-/// The paths of one row for the record `id`.
-async fn paths(http: &Http, row: &Row, id: &str) -> Vec<String> {
-    let template = route(row.name);
-    let names: Vec<_> = template.split('/').filter_map(parameter).collect();
-    if !names.contains(&"entry_id") {
-        let path = fill(template, &[("id", id)]);
-        return vec![path.clone(), format!("{path}?limit=1")];
-    }
-    let list = format!("{}/history", template.split("/history").next().unwrap());
-    let mut entries = versions(http, &fill(&list, &[("id", id)])).await;
-    entries.push("missing".to_owned());
-    let mut paths = Vec::new();
-    for entry in &entries {
-        if !names.contains(&"side") {
-            paths.push(fill(template, &[("id", id), ("entry_id", entry)]));
-            continue;
-        }
-        for side in ["after", "before"] {
-            let path = fill(template, &[("id", id), ("entry_id", entry), ("side", side)]);
-            paths.push(format!("{path}?field={}", row.field));
-            paths.push(path);
-        }
-        let path = fill(
-            template,
-            &[("id", id), ("entry_id", entry), ("side", "after")],
-        );
-        paths.push(format!("{path}?offset=100000"));
-    }
-    paths
+/// The history routes of one host for each scope, as the reads of the
+/// history cases. Each read keeps the whole answer of its call.
+struct Routes<'a> {
+    default: &'a Http,
+    broken: &'a Http,
+    answers: Mutex<Vec<Answer>>,
 }
 
-/// The answers of each row, in the order of `ROWS`, on the host of
-/// `default` and then on the host of `broken`. A list follows the cursor
-/// of each page that has one.
+impl Reads for Routes<'_> {
+    fn read<'a>(
+        &'a self,
+        scope: &'a str,
+        operation: &'static str,
+        request: Value,
+    ) -> Pin<Box<dyn Future<Output = Value> + Send + 'a>> {
+        Box::pin(async move {
+            let http = if scope == "broken" {
+                self.broken
+            } else {
+                self.default
+            };
+            let path = path(operation, &request);
+            let answer = get(http, path).await;
+            let body = answer.json();
+            let page = json!({"result": {
+                "entries": body.pointer("/data/items"),
+                "next_cursor": body.pointer("/meta/next_cursor"),
+            }});
+            self.answers.lock().unwrap().push(answer);
+            page
+        })
+    }
+}
+
+/// The answers of each call of the history cases, in their order, on the
+/// host of `default` and on the host of `broken`.
 pub async fn run(default: &Http, broken: &Http) -> Vec<Answer> {
-    let mut answers = Vec::new();
-    for row in &ROWS {
-        let records = row.records.iter().map(|id| (default, *id));
-        for (http, id) in records.chain([(broken, row.broken)]) {
-            for path in paths(http, row, id).await {
-                let mut path = path;
-                loop {
-                    let answer = get(http, path.clone()).await;
-                    let next = answer
-                        .json()
-                        .pointer("/meta/next_cursor")
-                        .and_then(Value::as_str)
-                        .map(str::to_owned);
-                    answers.push(answer);
-                    let Some(next) = next else { break };
-                    let base = path.split('?').next().unwrap().to_owned();
-                    path = format!("{base}?limit=1&cursor={next}");
-                }
-            }
-        }
-    }
-    answers
+    let routes = Routes {
+        default,
+        broken,
+        answers: Mutex::default(),
+    };
+    history_cases::run(&routes, &CASES).await;
+    routes.answers.into_inner().unwrap()
 }

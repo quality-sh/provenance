@@ -35,6 +35,8 @@ async fn one_at_a_time() -> tokio::sync::MutexGuard<'static, ()> {
 }
 
 mod support {
+    #[path = "../../../provenance-store/tests/support/history_cases.rs"]
+    pub mod history_cases;
     #[path = "../../../provenance-store/tests/support/history_fixture.rs"]
     pub mod history_fixture;
     #[path = "../../../provenance-store/tests/support/history_folder.rs"]
