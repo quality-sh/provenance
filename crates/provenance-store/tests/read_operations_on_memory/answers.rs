@@ -30,7 +30,7 @@ const PINNED_PATH: &str = concat!(
 );
 
 /// One call of each read operation.
-pub(crate) fn reads() -> Vec<(&'static str, Value)> {
+pub fn reads() -> Vec<(&'static str, Value)> {
     let parent = json!({ "node_type": "requirement", "node_id": "req_expiry" });
     vec![
         ("page-sources", json!({})),

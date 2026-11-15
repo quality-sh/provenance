@@ -103,13 +103,13 @@ fn field(kind: &str) -> &'static str {
 
 /// Runs one history operation in a scope, and gives its answer: the
 /// success, or the status and body of the failure.
-pub trait Reads {
+pub trait Reads: Sync {
     fn read<'a>(
         &'a self,
         scope: &'a str,
         operation: &'static str,
         request: Value,
-    ) -> Pin<Box<dyn Future<Output = Value> + 'a>>;
+    ) -> Pin<Box<dyn Future<Output = Value> + Send + 'a>>;
 }
 
 /// Ids made from a counter, so each run makes the same ids.
@@ -154,13 +154,12 @@ async fn versions(reads: &dyn Reads, scope: &str, kind: &str, id: &str) -> Vec<S
     answer
         .pointer("/result/entries")
         .and_then(Value::as_array)
-        .map(|entries| {
+        .map_or_else(Vec::new, |entries| {
             entries
                 .iter()
                 .map(|entry| entry["id"].as_str().unwrap().to_owned())
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 /// The requests of one case for the record `id`.
@@ -271,7 +270,7 @@ impl Reads for MemoryReads {
         scope: &'a str,
         operation: &'static str,
         request: Value,
-    ) -> Pin<Box<dyn Future<Output = Value> + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = Value> + Send + 'a>> {
         let repository = if scope == "broken" {
             &self.broken
         } else {
@@ -384,7 +383,7 @@ mod folder {
             scope: &'a str,
             operation: &'static str,
             request: Value,
-        ) -> Pin<Box<dyn Future<Output = Value> + 'a>> {
+        ) -> Pin<Box<dyn Future<Output = Value> + Send + 'a>> {
             let binding = Arc::clone(if scope == "broken" {
                 &self.broken
             } else {
