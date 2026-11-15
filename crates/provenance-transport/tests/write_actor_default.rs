@@ -202,7 +202,7 @@ async fn an_api_reply_with_or_without_an_actor_stores_no_actor() {
             data["actor"] = json!(actor);
         }
         let header = format!("\"{version}\"");
-        let (status, replied) = call_with_headers(
+        let (status, answer) = call_with_headers(
             &host,
             "POST",
             &replies,
@@ -210,7 +210,7 @@ async fn an_api_reply_with_or_without_an_actor_stores_no_actor() {
             &[("if-match", &header)],
         )
         .await;
-        assert_eq!(status, 200, "{actor:?}: {replied}");
+        assert_eq!(status, 200, "{actor:?}: {answer}");
     }
     let discussions = discussion_rows(&repo);
     assert_eq!(discussions.len(), 1);
@@ -272,7 +272,7 @@ async fn a_null_actor_is_refused_on_each_write() {
     ];
     let mut answers = Vec::new();
     for (method, path, data, if_match) in writes {
-        let headers = if_match.map(|value| vec![("if-match", value)]).unwrap_or_default();
+        let headers = if_match.map_or_default(|value| vec![("if-match", value)]);
         let answer =
             call_with_headers(&host, method, &path, Some(json!({"data": data})), &headers).await;
         answers.push(answer);
