@@ -7,8 +7,10 @@
 
 #[path = "../support"]
 mod support {
+    pub mod import_reviews;
     pub mod record_review;
     pub mod review_paths;
+    pub mod state_files;
 }
 #[path = "../cli_approval_evidence.rs"]
 mod cli_approval_evidence;
@@ -40,6 +42,10 @@ mod cli_id_charset_conformance;
 mod cli_import_exact_replacement;
 #[path = "../cli_import_record_count.rs"]
 mod cli_import_record_count;
+#[path = "../cli_import_review_guard.rs"]
+mod cli_import_review_guard;
+#[path = "../cli_import_review_records.rs"]
+mod cli_import_review_records;
 #[path = "../cli_import_threads.rs"]
 mod cli_import_threads;
 #[path = "../cli_import_unknown_fields.rs"]
@@ -118,6 +124,8 @@ mod cli_typed_deletion_mixed_ids;
 mod cli_typed_deletion_month_shards;
 #[path = "../cli_typed_deletion_origins.rs"]
 mod cli_typed_deletion_origins;
+#[path = "../cli_typed_spec_review_plan.rs"]
+mod cli_typed_spec_review_plan;
 #[path = "../cli_unclassified_cause.rs"]
 mod cli_unclassified_cause;
 #[path = "../cli_unparsable_state.rs"]

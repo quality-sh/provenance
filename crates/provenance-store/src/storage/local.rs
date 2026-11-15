@@ -15,6 +15,8 @@ use std::collections::BTreeMap;
 #[cfg(all(test, unix))]
 mod directory_sync_tests;
 pub(crate) mod durability;
+#[cfg(all(test, unix))]
+mod durability_tests;
 #[cfg(any(unix, windows))]
 mod file_install;
 mod recovery;

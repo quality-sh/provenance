@@ -196,6 +196,8 @@ fn cli_create_commands_preserve_origin_thread_and_message() {
         .assert()
         .failure()
         .stderr(predicates::str::contains(
-            "review-bearing scopes require lossless import/export support",
+            "scope `default` holds a review submission, a Discussion or a withdrawal, which a \
+             scope export file cannot hold, so an import into this scope and an export of it are \
+             not possible",
         ));
 }

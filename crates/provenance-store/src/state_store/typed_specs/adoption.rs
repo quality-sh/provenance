@@ -209,6 +209,7 @@ impl OwnershipDecision {
             id: id.clone(),
             state: ReconcileState::Conflict,
             changes,
+            refusal: None,
         });
     }
 }

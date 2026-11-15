@@ -1,9 +1,9 @@
 //! Resource adapters for review history and addressed Discussions.
 use super::{shapes::graph_read_operation, ExecutionNeed};
 use crate::review;
+use provenance_core::review::{EvidencePage, EvidenceQuery, RecordVersion, ReviewHistoryQuery};
 pub use provenance_core::threads::DiscussionResultPage;
 use provenance_core::{
-    review::{EvidencePage, EvidenceQuery, RecordVersion, ReviewHistoryQuery},
     threads::{DiscussionGroup, DiscussionMessagesQuery, DiscussionQuery, DiscussionSelector},
     Message, StableId, ThreadParent,
 };

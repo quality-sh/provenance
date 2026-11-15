@@ -1,6 +1,6 @@
 //! The memory adapter of the file versions port, over a commit graph.
 
-use super::{Adapter, Commit};
+use super::{Adapter, Commit, Entry};
 use crate::review::history::versions::{BoxFuture, FileVersion, FileVersions};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -15,7 +15,7 @@ pub struct MemoryFileVersions {
 #[derive(Debug, Clone)]
 struct Stored {
     commit: Commit,
-    files: BTreeMap<String, String>,
+    files: BTreeMap<String, Entry>,
 }
 
 impl MemoryFileVersions {
@@ -36,9 +36,9 @@ impl MemoryFileVersions {
                     .files
                     .clone()
             });
-            for (path, text) in &commit.changes {
-                match text {
-                    Some(text) => files.insert(path.clone(), text.clone()),
+            for (path, entry) in &commit.changes {
+                match entry {
+                    Some(entry) => files.insert(path.clone(), entry.clone()),
                     None => files.remove(path),
                 };
             }
@@ -56,14 +56,14 @@ impl MemoryFileVersions {
             .position(|stored| stored.commit.name == name)
     }
 
-    fn text(&self, index: usize, path: &str) -> Option<&str> {
-        self.commits[index].files.get(path).map(String::as_str)
+    fn entry(&self, index: usize, path: &str) -> Option<&Entry> {
+        self.commits[index].files.get(path)
     }
 
     /// The nearest listed commits at or below `index`. A commit is listed
-    /// when its file differs from the file of each parent; a commit whose
-    /// file is the file of a parent goes on through the first such parent
-    /// only. `listed` gets each listed commit with its listed parents.
+    /// when its entry, with its mode, differs from the entry of each parent;
+    /// a commit whose entry is the entry of a parent goes on through the
+    /// first such parent only. `listed` gets each listed commit with its listed parents.
     fn nearest(
         &self,
         index: usize,
@@ -76,12 +76,12 @@ impl MemoryFileVersions {
             .iter()
             .filter_map(|parent| self.index(parent))
             .collect::<Vec<_>>();
-        if parents.is_empty() && self.text(index, path).is_none() {
+        if parents.is_empty() && self.entry(index, path).is_none() {
             return Vec::new();
         }
         if let Some(kept) = parents
             .iter()
-            .find(|parent| self.text(**parent, path) == self.text(index, path))
+            .find(|parent| self.entry(**parent, path) == self.entry(index, path))
         {
             return self.nearest(*kept, path, listed);
         }
@@ -131,7 +131,6 @@ impl MemoryFileVersions {
                         .collect(),
                     commit.author.clone(),
                     commit.committed_at,
-                    self.text(index, path).map(str::to_owned),
                 )
             })
             .collect()
@@ -146,20 +145,18 @@ impl FileVersions for MemoryFileVersions {
         Box::pin(std::future::ready(Ok(Arc::new(self.file_versions(path)))))
     }
 
-    fn texts<'a>(
+    fn text<'a>(
         &'a self,
         path: &'a str,
-        commits: &'a [String],
-    ) -> BoxFuture<'a, anyhow::Result<Vec<Option<String>>>> {
-        let texts = commits
-            .iter()
-            .map(|commit| {
-                self.index(commit)
-                    .and_then(|index| self.text(index, path))
-                    .map(str::to_owned)
-            })
-            .collect();
-        Box::pin(std::future::ready(Ok(texts)))
+        commit: &'a str,
+    ) -> BoxFuture<'a, anyhow::Result<Option<String>>> {
+        let text = self
+            .index(commit)
+            .and_then(|index| self.entry(index, path))
+            .map(|entry| String::from_utf8(entry.bytes.clone()))
+            .transpose()
+            .map_err(anyhow::Error::from);
+        Box::pin(std::future::ready(text))
     }
 }
 

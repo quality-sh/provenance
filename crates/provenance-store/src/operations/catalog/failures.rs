@@ -1,17 +1,18 @@
 //! Keep native error sources while publishing a closed safe projection.
+#[cfg(feature = "host")]
 use crate::cache::CompletionTimedOut;
+#[cfg(feature = "host")]
 use crate::operations::files::FileAccessRefusal;
 use crate::operations::reader::{CatchUpFailed, ReadRefusal};
+#[cfg(feature = "host")]
 use crate::stale::git::GitRefusal;
-use crate::state_store::readers::StateLineInvalid;
 use crate::write_error::{
     failure_cause, in_repository, native, SourceFailure, WriteError, WriteFailure,
 };
 use provenance_core::protocol::{
     failure::OperationFailure,
-    read_failure::{MovedUnit, ReadFailure},
+    read_failure::{MovedUnit, ReadFailure, UnparsableStateFile},
 };
-use provenance_macros::rule;
 
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
@@ -52,15 +53,7 @@ impl ReadError {
         if let Some(error) = self.common() {
             return error.status_code();
         }
-        match self.safe() {
-            ReadFailure::ResourceNotFound => 404,
-            ReadFailure::ReadFailed { .. } | ReadFailure::InvalidStateFile { .. } => 500,
-            ReadFailure::FileAccessDenied => 403,
-            ReadFailure::FileUnavailable
-            | ReadFailure::GitUnavailable
-            | ReadFailure::CacheCloseTimedOut { .. } => 503,
-            _ => 409,
-        }
+        self.safe().status_code()
     }
     /// A common refusal that a read handler raised itself, such as an input
     /// refusal; it keeps its own kind and status. A store refusal of a common
@@ -86,32 +79,58 @@ impl ReadError {
     /// catch-up, so that refusal is `DocumentCatchUpFailed`.
     fn safe(&self) -> ReadFailure {
         let error = native(&self.0);
-        if let Some(failed) = error.downcast_ref::<CatchUpFailed>() {
-            return catch_up_failure(self.classified(&failed.0));
+        match error.downcast_ref::<CatchUpFailed>() {
+            Some(failed) => self.catch_up_refusal(&failed.0),
+            None => self.classified(error, UnparsableStateFile::failure),
         }
-        self.classified(error)
     }
-    /// The closed failure for `error`, the native error or a cause in it.
-    fn classified(&self, error: &anyhow::Error) -> ReadFailure {
+    /// The refusal of a document read whose catch-up failed with `cause`: the
+    /// location and the message of a state line that does not parse, else
+    /// the cause as text.
+    fn catch_up_refusal(&self, cause: &anyhow::Error) -> ReadFailure {
+        let message = match self.classified(cause, UnparsableStateFile::catch_up_failure) {
+            failure @ ReadFailure::DocumentCatchUpFailed { .. } => return failure,
+            ReadFailure::ReadFailed { cause } => cause,
+            failure => failure.to_string(),
+        };
+        ReadFailure::DocumentCatchUpFailed {
+            location: None,
+            message,
+        }
+    }
+    /// The closed failure for `error`, the native error or a cause in it. A
+    /// state line that does not parse gives the failure of `state_line`.
+    fn classified(
+        &self,
+        error: &anyhow::Error,
+        state_line: fn(&UnparsableStateFile) -> ReadFailure,
+    ) -> ReadFailure {
         if let Some(error) = error.downcast_ref::<ReadFailure>() {
             return error.clone();
         }
-        if let Some(error) = error.downcast_ref::<GitRefusal>() {
-            return git_failure(error);
+        // Git, the working tree and the local cache close exist only with `host`.
+        #[cfg(feature = "host")]
+        if let Some(refusal) = error.downcast_ref::<GitRefusal>() {
+            return git_failure(refusal);
         }
+        #[cfg(feature = "host")]
         if let Some(refusal) = error.downcast_ref::<FileAccessRefusal>() {
             return file_failure(refusal).unwrap_or_else(|| self.read_failed(error));
         }
-        if let Some(error) = error.downcast_ref::<CompletionTimedOut>() {
-            return completion_failure(error);
+        #[cfg(feature = "host")]
+        if let Some(timed_out) = error.downcast_ref::<CompletionTimedOut>() {
+            return completion_failure(timed_out);
         }
-        if let Some(error) = error.downcast_ref::<ReadRefusal>() {
-            return refusal_failure(error);
+        if let Some(refusal) = error.downcast_ref::<ReadRefusal>() {
+            return refusal_failure(refusal);
         }
         if let Some(refusal) = error.downcast_ref::<SourceFailure>() {
             return store_refusal(&refusal.failure).unwrap_or_else(|| self.read_failed(error));
         }
-        StateLineInvalid::find(error).map_or_else(|| self.read_failed(error), state_line_failure)
+        match UnparsableStateFile::find(error.as_ref()) {
+            Some(unparsable) => state_line(unparsable),
+            None => self.read_failed(error),
+        }
     }
     /// The `ReadFailed` failure of `error`, the native error or a cause in it.
     fn read_failed(&self, error: &anyhow::Error) -> ReadFailure {
@@ -119,53 +138,23 @@ impl ReadError {
             cause: failure_cause(&self.0, error),
         }
     }
+    /// The native error, or the error of a failed catch-up in it.
+    fn cause(&self) -> &anyhow::Error {
+        let error = native(&self.0);
+        error
+            .downcast_ref::<CatchUpFailed>()
+            .map_or(error, |failed| &failed.0)
+    }
     /// The native cause chain of a failure of no known kind, with absolute
     /// paths, for the host log. The wire answer gives the cause with each
     /// path relative to the repository.
     pub fn unclassified_cause(&self) -> Option<String> {
+        let cause = self.cause();
         let unclassified = matches!(
-            self.safe(),
-            ReadFailure::ReadFailed { .. } | ReadFailure::DocumentCatchUpFailed { file: None, .. }
+            self.classified(cause, UnparsableStateFile::failure),
+            ReadFailure::ReadFailed { .. }
         );
-        (self.common().is_none() && unclassified).then(|| format!("{:#}", native(&self.0)))
-    }
-}
-
-/// The refusal of a document read whose catch-up failed with `cause`. A
-/// state line that does not parse gives its file, its line and its message;
-/// any other cause gives its text as the message.
-fn catch_up_failure(cause: ReadFailure) -> ReadFailure {
-    match cause {
-        ReadFailure::InvalidStateFile {
-            file,
-            line,
-            message,
-        } => ReadFailure::DocumentCatchUpFailed {
-            file: Some(file),
-            line: Some(line),
-            message,
-        },
-        ReadFailure::ReadFailed { cause } => ReadFailure::DocumentCatchUpFailed {
-            file: None,
-            line: None,
-            message: cause,
-        },
-        cause => ReadFailure::DocumentCatchUpFailed {
-            file: None,
-            line: None,
-            message: cause.to_string(),
-        },
-    }
-}
-
-/// The shard below the state directory, the line and the parse message of a
-/// state line that does not parse.
-#[rule("rule_state_parse_refusal_names_the_line")]
-fn state_line_failure(error: &StateLineInvalid) -> ReadFailure {
-    ReadFailure::InvalidStateFile {
-        file: error.file(),
-        line: error.line,
-        message: error.message.clone(),
+        (self.common().is_none() && unclassified).then(|| format!("{cause:#}"))
     }
 }
 
@@ -178,6 +167,7 @@ const fn store_refusal(failure: &WriteFailure) -> Option<ReadFailure> {
     }
 }
 
+#[cfg(feature = "host")]
 const fn git_failure(error: &GitRefusal) -> ReadFailure {
     match error {
         GitRefusal::Unavailable { .. } => ReadFailure::GitUnavailable,
@@ -185,6 +175,7 @@ const fn git_failure(error: &GitRefusal) -> ReadFailure {
     }
 }
 
+#[cfg(feature = "host")]
 /// The failure of a file refusal that has a kind; a missing or unreadable
 /// file has no kind of its own.
 const fn file_failure(error: &FileAccessRefusal) -> Option<ReadFailure> {
@@ -195,9 +186,10 @@ const fn file_failure(error: &FileAccessRefusal) -> Option<ReadFailure> {
     }
 }
 
+#[cfg(feature = "host")]
 /// The stage of a cache close that missed its deadline, without the lock
 /// path or the connection count.
-#[rule("rule_cache_completion_names_its_stage_at_the_deadline")]
+#[provenance_macros::rule("rule_cache_completion_names_its_stage_at_the_deadline")]
 const fn completion_failure(error: &CompletionTimedOut) -> ReadFailure {
     ReadFailure::CacheCloseTimedOut {
         stage: error.stage.public(),
@@ -253,5 +245,6 @@ impl schemars::JsonSchema for ReadError {
 }
 
 #[cfg(test)]
+#[cfg(feature = "host")]
 #[path = "failures_tests.rs"]
 mod tests;

@@ -31,6 +31,8 @@ mod support {
     #[cfg(feature = "test-fixture")]
     pub mod schema_check;
 }
+#[path = "../change_refusal_kinds.rs"]
+mod change_refusal_kinds;
 #[path = "../claim_holder.rs"]
 mod claim_holder;
 #[path = "../host_invocation.rs"]
@@ -45,6 +47,8 @@ mod mcp_document_catch_up_cause;
 mod mcp_error_envelopes;
 #[path = "../mcp_guidance.rs"]
 mod mcp_guidance;
+#[path = "../mcp_instructions.rs"]
+mod mcp_instructions;
 #[path = "../mcp_plumbing_names.rs"]
 mod mcp_plumbing_names;
 #[path = "../mcp_read_tools_do_not_write.rs"]
@@ -75,6 +79,8 @@ mod porcelain_check_statement;
 mod porcelain_contracts;
 #[path = "../porcelain_discussion.rs"]
 mod porcelain_discussion;
+#[path = "../porcelain_import_review_guard.rs"]
+mod porcelain_import_review_guard;
 #[path = "../porcelain_schema_variants.rs"]
 mod porcelain_schema_variants;
 #[path = "../porcelain_search.rs"]
@@ -93,5 +99,7 @@ mod resources_patches;
 mod review_write_transports;
 #[path = "../surface_names.rs"]
 mod surface_names;
+#[path = "../typed_plan_refusals.rs"]
+mod typed_plan_refusals;
 #[path = "../wire.rs"]
 mod wire;

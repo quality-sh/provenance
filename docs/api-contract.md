@@ -61,8 +61,8 @@ Subresources have parent-owned addresses:
 - `GET /rules/{id}/evidence` reads implementation, verification, and
   Requirement-change evidence. `implementations` and `verifications` have the
   names and item shape of `affected_rules[]` in the impact answer: the
-  `#[rule]` and `#[verifies]` attributes from the file scan and the typed
-  bindings. `implementation_bindings` and `verification_bindings` hold only the
+  binding sites from the file scan (`@provenance` comments, `#[rule]` and
+  `#[verifies]` attributes, and helper calls) and the typed bindings. `implementation_bindings` and `verification_bindings` hold only the
   typed records. The two site lists stop at `limit` and `has_more` says so;
   `scan_cut` says the scan stopped at the configured file count. The stamp
   gives `scanned_sites` as live.
@@ -112,7 +112,15 @@ These exceptions imply no new persistent plan records, no generic action
 dispatch, and no weaker authoring ownership checks.
 
 Typed-spec apply (`POST /authoring-changes`) records an occurrence for each
-changed enrolled record and refuses to delete an enrolled record. It continues
+changed enrolled record and refuses to delete an enrolled record. The plan
+(`POST /authoring-plans`) shows each deletion that apply refuses with the state
+`refused` and a `refusal`. Its `kind` is `review_submission` or `disposition`,
+and its `message` is the text of the apply refusal. The plan counts the entry
+in `refused`, not in `deleted`. A Disposition that names a record that the
+scope does not have fails the plan, the apply and each other read of the
+ideation records with `invalid_state_file` at the line that stores the
+Disposition: its line in the Disposition file, or the line of its landing.
+Apply continues
 to replace un-enrolled graph state without journal entries because those
 records have not entered review. When apply deletes a record, also by cascade,
 it deletes the Discussions of that record, active or resolved, with their

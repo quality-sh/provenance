@@ -4,7 +4,8 @@
 //! A scope unit is the keys below the scope's directory; the global unit is
 //! every other key. A catch-up hashes the view that its pass parses. A read
 //! with no lock hashes the files at the same keys, so a stray file under
-//! `state/` moves no digest. A unit digest frames each key and the digest
+//! `state/` moves no digest; over storage that is not a folder it hashes one
+//! view of the storage. A unit digest frames each key and the digest
 //! of its content bytes in key order, so two shards that share a basename
 //! cannot swap contents unnoticed. The stored digest frames each key and
 //! its exact bytes.
@@ -98,6 +99,24 @@ pub fn units_for(scopes: &[ScopeId]) -> Vec<Unit> {
     units
 }
 
+/// The stored digest of each unit of `view`, by unit name, in the order of
+/// [`units_for`]. The units are the ones that the manifest of `view` names.
+pub fn view_stored_digests(view: &StateView) -> anyhow::Result<Vec<(String, String)>> {
+    let manifest = crate::storage::StateKey::new("manifest.json")?;
+    let bytes = view
+        .get(&manifest)
+        .ok_or_else(|| crate::refusal::fault!("the canonical state has no manifest"))?;
+    let manifest: Manifest = serde_json::from_slice(bytes).context("parse the manifest")?;
+    let scopes: Vec<ScopeId> = manifest.scopes.into_iter().map(|scope| scope.id).collect();
+    Ok(units_for(&scopes)
+        .into_iter()
+        .map(|unit| {
+            let stored = UnitBytes::of_view(view, &unit).stored;
+            (unit.name(), stored)
+        })
+        .collect())
+}
+
 /// The digest of one unit's canonical bytes under `state_dir`, read from
 /// the files with no lock.
 pub fn unit_digest(state_dir: &Utf8Path, unit: &Unit) -> Result<String, UnitHashError> {
@@ -106,7 +125,7 @@ pub fn unit_digest(state_dir: &Utf8Path, unit: &Unit) -> Result<String, UnitHash
 
 /// The digest of the exact stored bytes in one unit, read from the files
 /// with no lock.
-#[cfg_attr(not(feature = "host"), allow(dead_code))]
+#[cfg(feature = "host")]
 pub fn unit_stored_digest(state_dir: &Utf8Path, unit: &Unit) -> Result<String, UnitHashError> {
     Ok(read_unit(state_dir, unit, |_, _| {})?.bytes().stored)
 }

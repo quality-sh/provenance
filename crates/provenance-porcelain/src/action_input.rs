@@ -8,6 +8,7 @@ use provenance_core::protocol::failure::InvalidInputReason;
 use serde_json::{json, Map, Value};
 
 /// The fields of one action.
+#[derive(Clone)]
 struct ActionFields {
     action: &'static str,
     properties: Map<String, Value>,
@@ -15,6 +16,7 @@ struct ActionFields {
 }
 
 /// The actions of one command and the fields of each action.
+#[derive(Clone)]
 pub struct ActionInput {
     actions: Vec<ActionFields>,
     definitions: Map<String, Value>,

@@ -450,9 +450,6 @@
       "dependencies": [
         "provenance-macros"
       ],
-      "host-dependencies": [
-        "fs2"
-      ],
       "dev-dependencies": [
         "jsonschema"
       ]
@@ -480,7 +477,10 @@
         "filetime",
         "fs_at",
         "jsonschema",
-        "tempfile"
+        "sqlx",
+        "tempfile",
+        "tokio",
+        "windows-sys"
       ]
     },
     "provenance-transport": {

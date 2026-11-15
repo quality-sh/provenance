@@ -15,12 +15,14 @@ use super::identity::{
 use super::reconcile::{ensure_acyclic, ensure_resolutions_exist, reconcile};
 use super::view::TypedSpecView;
 use super::{
-    adopted_rule_ids, all_resources, cascade, publication, reconcile_implementations, spec_result,
-    DesiredImplementations,
+    adopted_rule_ids, all_resources, cascade, publication, reconcile_implementations, refusals,
+    spec_result, DesiredImplementations,
 };
-use crate::state_store::{
-    ReconciledResource, StateStore, TypedDeclarationKind, TypedSpecInput, TypedSpecResult,
+#[cfg(feature = "host")]
+use crate::state_store::requirement_reviews::{
+    requirement_statement_changes, rules_citing, RequirementStatementChange,
 };
+use crate::state_store::{StateStore, TypedDeclarationKind, TypedSpecInput, TypedSpecResult};
 use crate::write_error::{SourceFailure, WriteFailure};
 
 pub(super) struct CurrentTypedState {
@@ -52,12 +54,40 @@ enum Outcome {
     Conflicts(OwnershipDecision),
     Replace {
         replacement: Box<publication::Replacement>,
-        requirement_resources: Vec<ReconciledResource>,
-        rule_resources: Vec<ReconciledResource>,
     },
 }
 
 impl TypedSpecDecision {
+    /// The decision of a spec that takes a declaration from another owner:
+    /// the plan shows the conflicts and the apply refuses them.
+    fn conflicts(declared_by: String, ownership: OwnershipDecision) -> Self {
+        Self {
+            result: spec_result(
+                declared_by,
+                ownership.conflicts().to_vec(),
+                Vec::new(),
+                Vec::new(),
+            ),
+            outcome: Outcome::Conflicts(ownership),
+        }
+    }
+
+    /// Each Requirement statement that the spec changes, with the Rules that cite the
+    /// Requirement after the reconciliation. A decision with conflicts changes no statement.
+    #[cfg(feature = "host")]
+    pub(crate) fn restatements(&self) -> Vec<(RequirementStatementChange, Vec<StableId>)> {
+        let Outcome::Replace { replacement } = &self.outcome else {
+            return Vec::new();
+        };
+        requirement_statement_changes(&self.result.resources)
+            .into_iter()
+            .map(|change| {
+                let rules = rules_citing(&replacement.rules, &change.requirement_id);
+                (change, rules)
+            })
+            .collect()
+    }
+
     /// Publishes the replacement, or refuses with the ownership conflicts.
     pub(super) fn publish(
         self,
@@ -69,18 +99,8 @@ impl TypedSpecDecision {
                 ownership.refuse()?;
                 unreachable!("ownership decision must reject reported conflicts");
             }
-            Outcome::Replace {
-                replacement,
-                requirement_resources,
-                rule_resources,
-            } => {
-                replacement.publish(
-                    store,
-                    scope_id,
-                    &self.result,
-                    &requirement_resources,
-                    &rule_resources,
-                )?;
+            Outcome::Replace { replacement } => {
+                replacement.publish(store, scope_id, &self.result)?;
                 Ok(self.result)
             }
         }
@@ -104,15 +124,7 @@ pub fn decide_typed_spec(
         .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidDeclaration, error))?;
     let ownership = adoption::decide(scope_id, &input, &current, &ids)?;
     if !ownership.conflicts().is_empty() {
-        return Ok(TypedSpecDecision {
-            result: spec_result(
-                input.declared_by,
-                ownership.conflicts().to_vec(),
-                Vec::new(),
-                Vec::new(),
-            ),
-            outcome: Outcome::Conflicts(ownership),
-        });
+        return Ok(TypedSpecDecision::conflicts(input.declared_by, ownership));
     }
     let adopted_rule_ids = adopted_rule_ids(&input);
     let rule_relationships = input.rules.clone();
@@ -150,6 +162,11 @@ pub fn decide_typed_spec(
         &mut requirements,
         &mut rules,
     );
+    let refused = refusals::refused_deletions(
+        view,
+        &cascade.survivors(&sources, &requirements, &rules),
+        cascade.deletions(),
+    );
     ensure_resolutions_exist(&view.resolutions, &requirements, &rules)?;
     ensure_acyclic(&requirements)?;
     let implementation_reconciliation = reconcile_implementations(
@@ -167,7 +184,8 @@ pub fn decide_typed_spec(
         &mut rule_resources,
     )?;
     let mut resources = all_resources(&source_resources, &requirement_resources, &rule_resources);
-    let cascade_resources = cascade.report(&mut resources);
+    let mut cascade_resources = cascade.report(&mut resources);
+    refusals::report(&refused, &mut resources, &mut cascade_resources);
     let mut result = spec_result(
         input.declared_by,
         resources,
@@ -189,9 +207,8 @@ pub fn decide_typed_spec(
                 rules,
                 implementations: implementation_reconciliation.records,
                 cascade,
+                refused: refused.into_iter().next(),
             }),
-            requirement_resources,
-            rule_resources,
         },
     })
 }

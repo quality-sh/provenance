@@ -1397,6 +1397,8 @@ jobs:
           target/debug/provenance api verification-bindings \
             --repo "$fixture_repo" --scope default --query "rule=$rule_id" --format json \
             | jq -e '.data.items | length == 1 and .[0].file == "dist/share-links.test.js"'
+      - name: Load the application from an install without development dependencies
+        run: npm run test:production --prefix examples/typescript-sdk
 
   # One job, six managers: each smoke is seconds long, and six matrix legs
   # cost six runners to save one check row.
@@ -1815,6 +1817,14 @@ jobs:
         env:
           TARGET: ${{ steps.kernel.outputs.target }}
         run: cargo check --locked -p provenance-store --target "$TARGET" --features test-fixture
+      - name: Test the read operations on memory without host
+        # Natively, over memory storage and an SQLite read database in memory
+        # behind the contract wrapper, which the test catches up as an
+        # embedder does. The history operations read the commits of the
+        # history contract's memory adapter.
+        run: >-
+          cargo test --locked -p provenance-store --features test-fixture
+          --test read_operations_on_memory
 
   # The one status the branch ruleset requires. Conditional jobs skip when a
   # pull request leaves their inputs untouched, and a skipped matrix job never

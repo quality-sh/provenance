@@ -91,11 +91,12 @@ fn scans_javascript_verifies_call_in_named_function() {
 }
 
 #[test]
-fn scans_typescript_sdk_rule_and_verifies_helpers() {
+fn scans_typescript_rule_and_verifies_helpers() {
     let scan = scan_file(
         Utf8Path::new("rules.ts"),
         Language::TypeScript,
-        r#"import { rule, verifies } from "@quality-sh/provenance/rules";
+        r#"import { rule } from "./rules.js";
+import { verifies } from "@quality-sh/provenance/rules";
 
 export const paysOvertime = rule("rule_overtime", (hours: number) => hours > 38);
 const overtimeProperty = () => {

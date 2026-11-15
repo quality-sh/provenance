@@ -1,9 +1,9 @@
 //! Source failures retain native diagnostics separately from the safe wire form.
-use crate::state_store::readers::StateLineInvalid;
 use crate::state_store::{
     ReconciledResource, StatementWriteError, TypedSpecDiagnostic, TypedSpecWriteError,
 };
 use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
+use provenance_core::protocol::read_failure::UnparsableStateFile;
 use serde::Serialize;
 
 mod cause;
@@ -64,6 +64,7 @@ pub enum WriteFailure {
     EnrolledRecordDeletionConflict {
         record_kind: provenance_core::NodeType,
         record_id: provenance_core::StableId,
+        message: String,
     },
     ClaimConflict {
         holder: String,
@@ -145,6 +146,18 @@ impl WriteFailure {
         Self::RecordOwnershipConflict {
             owner: owner.map(str::to_owned),
             message,
+        }
+    }
+}
+
+/// The `invalid_state_file` write failure has the data of the read failure of
+/// the same name.
+impl From<&UnparsableStateFile> for WriteFailure {
+    fn from(state: &UnparsableStateFile) -> Self {
+        Self::InvalidStateFile {
+            file: state.file().to_owned(),
+            line: state.line(),
+            message: state.message().to_owned(),
         }
     }
 }
@@ -280,14 +293,8 @@ impl WriteError {
                 _ => WriteFailure::FileUnavailable,
             };
         }
-        StateLineInvalid::find(error).map_or_else(
-            || self.write_failed(),
-            |error| WriteFailure::InvalidStateFile {
-                file: error.file(),
-                line: error.line,
-                message: error.message.clone(),
-            },
-        )
+        UnparsableStateFile::find(error.as_ref())
+            .map_or_else(|| self.write_failed(), WriteFailure::from)
     }
     fn write_failed(&self) -> WriteFailure {
         WriteFailure::WriteFailed {
