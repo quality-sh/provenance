@@ -7,7 +7,7 @@ use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::protocol::ResponseMeta;
 use provenance_store::operations::catalog::{
     ContextKind, ExecutionNeeds, GetReviewedResource, Operation, ReadDocument, RequestedContext,
-    ReviewDiscussionMessages, ReviewDiscussions,
+    ReviewDiscussionMessages, ReviewDiscussions, ReviewEvidence, ReviewHistory, ReviewHistoryEntry,
 };
 use provenance_store::operations::family_operations::{
     PageQuestions, PageRequirements, PageResolutions, PageRules, PageSources, PageTopics,
@@ -59,7 +59,7 @@ impl Checks {
 
 /// The checks of each operation in `READ_OPERATIONS`, in its order. They are made once, at the
 /// first call through a port.
-static CHECKS: LazyLock<[Checks; 10]> = LazyLock::new(|| {
+static CHECKS: LazyLock<[Checks; 13]> = LazyLock::new(|| {
     [
         Checks::of::<PageSources>(),
         Checks::of::<PageRequirements>(),
@@ -71,6 +71,9 @@ static CHECKS: LazyLock<[Checks; 10]> = LazyLock::new(|| {
         Checks::of::<ReadDocument>(),
         Checks::of::<ReviewDiscussions>(),
         Checks::of::<ReviewDiscussionMessages>(),
+        Checks::of::<ReviewHistory>(),
+        Checks::of::<ReviewHistoryEntry>(),
+        Checks::of::<ReviewEvidence>(),
     ]
 });
 

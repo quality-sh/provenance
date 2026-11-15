@@ -1,47 +1,36 @@
 //! Record history and change evidence, read from the committed versions of
 //! the record files and from the working copy.
 //!
-//! The committed versions come through the [`FileVersions`] port. The port
-//! and its contract build without `host`; the history reads need it.
+//! The committed versions come through the [`FileVersions`] port and the
+//! working copy through the storage of the store, so the history reads
+//! build without `host`. The git adapter of the port needs `host`.
 
 pub mod contract;
-#[cfg(feature = "host")]
 mod evidence;
-#[cfg(feature = "host")]
 mod found;
 #[cfg(feature = "host")]
 mod git;
-#[cfg(feature = "host")]
 mod origins;
-#[cfg(feature = "host")]
 mod texts;
 mod versions;
 
-#[cfg(feature = "host")]
 pub(super) use evidence::page as evidence_page;
 #[cfg(feature = "host")]
 pub use git::GitFileVersions;
+pub(crate) use versions::NoFileVersions;
 pub use versions::{BoxFuture, FileVersion, FileVersions};
 
-#[cfg(feature = "host")]
 use super::classifier;
-#[cfg(feature = "host")]
 use crate::{families::review_families, shards, state_store::StateStore};
-#[cfg(feature = "host")]
 use provenance_core::review::{RecordVersion, SaveOutcome};
-#[cfg(feature = "host")]
 use provenance_core::{NodeType, ScopeId, StableId};
-#[cfg(feature = "host")]
 use provenance_macros::rule;
-#[cfg(feature = "host")]
 use serde_json::Value;
 
 /// The version id of the saved working copy.
-#[cfg(feature = "host")]
 pub(super) const WORKING: &str = "working";
 
 /// One record version and the record JSON it holds.
-#[cfg(feature = "host")]
 #[derive(Clone)]
 pub(super) struct VersionedRecord {
     pub(super) version: RecordVersion,
@@ -49,7 +38,6 @@ pub(super) struct VersionedRecord {
 }
 
 /// Where one version comes from.
-#[cfg(feature = "host")]
 struct Source {
     id: StableId,
     commit: Option<String>,
@@ -57,8 +45,19 @@ struct Source {
     committed_at: Option<i64>,
 }
 
-#[cfg(feature = "host")]
 impl StateStore {
+    /// Lists the versions of one record and blocks until they are read, so
+    /// it runs where a blocking call is permitted.
+    #[cfg(feature = "host")]
+    pub(super) fn record_versions(
+        &self,
+        scope: &ScopeId,
+        kind: NodeType,
+        id: &StableId,
+    ) -> anyhow::Result<Vec<VersionedRecord>> {
+        tokio::runtime::Handle::current().block_on(self.read_record_versions(scope, kind, id))
+    }
+
     /// Lists the versions of one record, oldest first: each commit that
     /// changed it in its graph record file, then the saved working copy when
     /// it differs from the record at `HEAD`.
@@ -70,19 +69,9 @@ impl StateStore {
     /// one, after the version of its first parent. A commit whose shard text
     /// does not parse adds no version.
     ///
-    /// The committed versions come from the file versions of the store. The
-    /// call blocks on them, so it runs where a blocking call is permitted.
+    /// The committed versions come from the file versions of the store.
     #[rule("rule_record_history_reads_git")]
-    pub(super) fn record_versions(
-        &self,
-        scope: &ScopeId,
-        kind: NodeType,
-        id: &StableId,
-    ) -> anyhow::Result<Vec<VersionedRecord>> {
-        tokio::runtime::Handle::current().block_on(self.read_record_versions(scope, kind, id))
-    }
-
-    async fn read_record_versions(
+    pub(super) async fn read_record_versions(
         &self,
         scope: &ScopeId,
         kind: NodeType,
@@ -134,7 +123,6 @@ impl StateStore {
     }
 }
 
-#[cfg(feature = "host")]
 /// The indexes of the commits that changed the record at `HEAD`, oldest
 /// first. The walk starts at the newest commit and steps to a parent whose
 /// record the commit kept, or else to its first parent. A commit that holds
@@ -168,7 +156,6 @@ fn lineage(files: &[FileVersion], records: &[Option<Value>]) -> Vec<usize> {
     chain
 }
 
-#[cfg(feature = "host")]
 /// The record with `id` in the text of one JSONL record file. A line that is
 /// not a JSON record, such as a committed conflict marker, holds no record.
 fn find(text: &str, id: &StableId) -> Option<Value> {
@@ -177,7 +164,6 @@ fn find(text: &str, id: &StableId) -> Option<Value> {
         .find(|value| value.get("id").and_then(Value::as_str) == Some(id.as_str()))
 }
 
-#[cfg(feature = "host")]
 /// The record without its record stamps.
 fn content(record: &Value) -> Value {
     let mut value = record.clone();
@@ -189,7 +175,6 @@ fn content(record: &Value) -> Value {
     value
 }
 
-#[cfg(feature = "host")]
 /// Adds a version when the record differs from the previous version.
 fn push_version(
     versions: &mut Vec<VersionedRecord>,

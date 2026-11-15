@@ -1820,7 +1820,8 @@ jobs:
       - name: Test the read operations on memory without host
         # Natively, over memory storage and an SQLite read database in memory
         # behind the contract wrapper, which the test catches up as an
-        # embedder does.
+        # embedder does. The history operations read the commits of the
+        # history contract's memory adapter.
         run: >-
           cargo test --locked -p provenance-store --features test-fixture
           --test read_operations_on_memory
