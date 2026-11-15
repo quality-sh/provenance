@@ -128,19 +128,23 @@ pub enum Route<'a> {
 }
 
 impl Actions {
-    /// The change actions of the host.
+    /// The change actions of the host. A host that lists no change tool gets no notify
+    /// input.
     pub fn new(host: &StatementHost) -> Self {
         let porcelain = host.porcelain();
-        let unlisted = !porcelain.notify_is_available() && porcelain.get_is_available();
+        let listed = input(host);
+        let unlisted = listed.actions().next().is_some()
+            && !porcelain.notify_is_available()
+            && porcelain.get_is_available();
         let unlisted_notify = unlisted.then(|| {
-            let input = input(host).with_action(NOTIFY, notify_schema());
+            let input = listed.clone().with_action(NOTIFY, notify_schema());
             let tool = tool(host, &input).expect("a change tool with notify");
             let check = InputCheck::new(Value::Object((*tool.input_schema).clone()))
                 .unwrap_or_else(|error| panic!("the notify input schema compiles: {error}"));
             UnlistedNotify { input, check }
         });
         Self {
-            listed: input(host),
+            listed,
             unlisted_notify,
         }
     }

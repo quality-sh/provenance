@@ -107,7 +107,8 @@ async fn notify_without_a_notify_port_answers_as_the_shared_operation() {
 }
 
 /// No Rule binds this test: `rule_mcp_refusal_names_field` is verified on a host with a
-/// notify port. This test pins that a host with no notify port gives the same refusal.
+/// notify port. This test pins that a host with no notify port gives the same refusal,
+/// and that an unknown field wins over a missing required field.
 #[tokio::test]
 async fn notify_without_a_notify_port_names_the_refused_field() {
     let repository = Repository::new("The shared graph is readable.");
@@ -125,6 +126,15 @@ async fn notify_without_a_notify_port_names_the_refused_field() {
         (
             "thread",
             json!({"target": "req_shared", "notify": "codex", "thread": 5}),
+        ),
+        ("thread", json!({"target": "req_shared", "notify": "codex"})),
+        (
+            "extra",
+            json!({"target": "req_shared", "notify": "codex", "thread": "t", "extra": 1}),
+        ),
+        (
+            "extra",
+            json!({"target": "req_shared", "notify": "codex", "extra": 1}),
         ),
     ];
 

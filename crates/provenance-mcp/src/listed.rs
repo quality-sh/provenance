@@ -120,7 +120,8 @@ impl Listed {
 
     /// Runs one call. A request for another tool is refused first. Then the method
     /// of an api call is put in lower case, the action is selected and its fields are
-    /// checked, and the arguments are checked against the listed input schema.
+    /// checked, and the arguments are checked against the input schema of the selected
+    /// route.
     pub async fn call(
         &self,
         host: &StatementHost,
