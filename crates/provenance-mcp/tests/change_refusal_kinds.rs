@@ -1,6 +1,6 @@
 //! The change tool tells a write that the host cannot run from a write that the host
 //! access denies. A write that needs a repository binding or a notify port that the host
-//! does not bind answers unavailable_needs; a denied write answers access_denied.
+//! does not bind answers `unavailable_needs`; a denied write answers `access_denied`.
 //! No Rule binds these rows; the owner of the refusal kinds decides the Rule.
 #![cfg(feature = "test-fixture")]
 
