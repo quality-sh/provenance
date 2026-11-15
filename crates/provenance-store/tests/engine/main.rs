@@ -30,6 +30,8 @@ use discussion_support::base as review_support;
 mod history_git_failures;
 #[path = "../history_versions_contract.rs"]
 mod history_versions_contract;
+#[path = "../ideation_write_lock.rs"]
+mod ideation_write_lock;
 #[path = "../manifest_scope_ids.rs"]
 mod manifest_scope_ids;
 #[path = "../support/memory.rs"]

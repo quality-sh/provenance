@@ -13,42 +13,13 @@ use std::collections::BTreeSet;
 use std::convert::Infallible;
 
 impl StateStore {
-    /// Runs `operation` in the section of this store under the lifecycle
-    /// lock of `scope`. A staged section takes no lifecycle lock: the stage
-    /// lock already runs its sections one at a time, and no other process
-    /// sees the stage before it publishes.
-    pub(super) fn with_lifecycle_lock<R>(
-        &self,
-        scope: &ScopeId,
-        operation: impl FnOnce(&Self) -> anyhow::Result<R>,
-    ) -> anyhow::Result<R> {
-        self.with_repository_publication(|held| {
-            if held.stage().is_some() {
-                return operation(held);
-            }
-            #[cfg(feature = "host")]
-            return crate::jsonl::with_advisory_lock(
-                &held.layout.lifecycle_lock_path(scope),
-                || operation(held),
-            );
-            // With no lock files, the section alone runs the writes one at a time.
-            #[cfg(not(feature = "host"))]
-            {
-                let _ = scope;
-                operation(held)
-            }
-        })
-    }
-
     pub fn land_ideation_batch(
         &self,
         scope: &ScopeId,
         incoming: IdeationLandingBatch,
         replace: bool,
     ) -> anyhow::Result<()> {
-        self.with_lifecycle_lock(scope, |held| {
-            held.write_ideation_batch(scope, incoming, replace)
-        })
+        self.with_repository_publication(|held| held.write_ideation_batch(scope, incoming, replace))
     }
 
     /// Checks the records of `incoming` with the records of `scope`, and

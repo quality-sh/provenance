@@ -26,16 +26,14 @@ impl StateStore {
         &self,
         input: CreateContributionInput,
     ) -> anyhow::Result<Contribution> {
-        let scope = input.scope_id.clone();
-        self.with_lifecycle_lock(&scope, |held| held.write_contribution(input, false))
+        self.with_repository_publication(|held| held.write_contribution(input, false))
     }
 
     pub fn upsert_contribution(
         &self,
         input: CreateContributionInput,
     ) -> anyhow::Result<Contribution> {
-        let scope = input.scope_id.clone();
-        self.with_lifecycle_lock(&scope, |held| held.write_contribution(input, true))
+        self.with_repository_publication(|held| held.write_contribution(input, true))
     }
 
     pub fn update_contribution(
@@ -43,7 +41,7 @@ impl StateStore {
         input: UpdateContributionInput,
     ) -> anyhow::Result<Contribution> {
         let scope = input.scope_id.clone();
-        self.with_lifecycle_lock(&scope, |held| {
+        self.with_repository_publication(|held| {
             let existing = held
                 .list_contributions(&scope)?
                 .into_iter()
@@ -136,16 +134,14 @@ impl StateStore {
         &self,
         input: CreateSynthesisPacketInput,
     ) -> anyhow::Result<SynthesisPacket> {
-        let scope = input.scope_id.clone();
-        self.with_lifecycle_lock(&scope, |held| held.write_synthesis_packet(input, false))
+        self.with_repository_publication(|held| held.write_synthesis_packet(input, false))
     }
 
     pub fn upsert_synthesis_packet(
         &self,
         input: CreateSynthesisPacketInput,
     ) -> anyhow::Result<SynthesisPacket> {
-        let scope = input.scope_id.clone();
-        self.with_lifecycle_lock(&scope, |held| held.write_synthesis_packet(input, true))
+        self.with_repository_publication(|held| held.write_synthesis_packet(input, true))
     }
 
     pub fn update_synthesis_packet(
@@ -153,7 +149,7 @@ impl StateStore {
         input: UpdateSynthesisPacketInput,
     ) -> anyhow::Result<SynthesisPacket> {
         let scope = input.scope_id.clone();
-        self.with_lifecycle_lock(&scope, |held| {
+        self.with_repository_publication(|held| {
             let existing = held
                 .list_synthesis_packets(&scope)?
                 .into_iter()
