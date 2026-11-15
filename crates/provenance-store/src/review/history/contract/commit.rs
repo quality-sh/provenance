@@ -1,18 +1,37 @@
-//! One commit of a commit graph of the contract, and one file of a commit.
+//! One commit of a commit graph of the contract, and one entry of a commit.
 
-/// A file that one commit holds: its bytes and its mode.
+/// An entry that one commit holds at a path: a file with its bytes and its
+/// mode, or a gitlink.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Entry {
     pub bytes: Vec<u8>,
     /// The file has the executable mode.
     pub executable: bool,
+    /// The commit of a gitlink, the entry of a submodule: a commit name of
+    /// the graph, or a commit id that the graph does not hold. A gitlink has
+    /// no bytes and no text.
+    pub gitlink: Option<String>,
 }
 
 impl Entry {
     /// A file with `bytes`, executable when `executable` is set.
     pub const fn new(bytes: Vec<u8>, executable: bool) -> Self {
-        Self { bytes, executable }
+        Self {
+            bytes,
+            executable,
+            gitlink: None,
+        }
+    }
+
+    /// A gitlink to `commit`, a commit name of the graph or a commit id that
+    /// the graph does not hold.
+    pub fn gitlink(commit: &str) -> Self {
+        Self {
+            bytes: Vec::new(),
+            executable: false,
+            gitlink: Some(commit.to_owned()),
+        }
     }
 
     /// A file that is not executable, with `text` as its bytes.

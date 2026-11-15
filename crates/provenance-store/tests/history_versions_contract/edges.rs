@@ -4,6 +4,7 @@
 use super::git_harness::git_harness;
 use super::wrong::{self, Wrong};
 use super::Memory;
+use provenance_macros::verifies;
 use provenance_store::review::history::contract;
 
 #[tokio::test]
@@ -105,4 +106,24 @@ async fn the_contract_refuses_an_adapter_that_replaces_bytes_that_are_not_utf8()
 )]
 async fn the_contract_refuses_an_adapter_whose_text_fails_for_another_reason() {
     contract::a_text_that_is_not_utf8_is_an_error(&Wrong(wrong::failed_text)).await;
+}
+
+#[tokio::test]
+#[verifies("rule_record_history_gitlink_has_no_text", examples)]
+async fn git_a_gitlink_at_the_path_is_listed_with_no_text() {
+    contract::a_gitlink_at_the_path_is_listed_with_no_text(&git_harness()).await;
+}
+
+#[tokio::test]
+#[verifies("rule_record_history_gitlink_has_no_text", examples)]
+async fn memory_a_gitlink_at_the_path_is_listed_with_no_text() {
+    contract::a_gitlink_at_the_path_is_listed_with_no_text(&Memory).await;
+}
+
+#[tokio::test]
+#[should_panic(
+    expected = ".provenance/state/gitlink.jsonl: the listed commits, parents or texts are not the expected ones"
+)]
+async fn the_contract_refuses_an_adapter_that_gives_a_text_for_a_gitlink() {
+    contract::a_gitlink_at_the_path_is_listed_with_no_text(&Wrong(wrong::gitlink_text)).await;
 }

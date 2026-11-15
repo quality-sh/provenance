@@ -70,6 +70,15 @@ pub fn lossy_text(commits: &[Commit]) -> Arc<dyn FileVersions> {
     })))
 }
 
+/// An adapter that reads a gitlink as a file whose text is the commit of
+/// the gitlink.
+pub fn gitlink_text(commits: &[Commit]) -> Arc<dyn FileVersions> {
+    Arc::new(MemoryFileVersions::new(&changed(commits, |entry| {
+        let bytes = entry.gitlink.map_or(entry.bytes, String::into_bytes);
+        Entry::new(bytes, entry.executable)
+    })))
+}
+
 /// An adapter that lists the versions and gives an error for each text,
 /// which is not the error of a text that is not UTF-8.
 pub fn failed_text(commits: &[Commit]) -> Arc<dyn FileVersions> {

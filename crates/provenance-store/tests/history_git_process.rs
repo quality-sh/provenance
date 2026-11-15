@@ -1,23 +1,31 @@
 //! The `git cat-file` process of the git adapter, seen through a `git` that
 //! logs it.
 //!
-//! Implementation aid with no Rule binding: no Rule states when the git
-//! adapter starts a Git process. A `git` first on PATH writes its arguments
-//! to `.git/git-starts` of the repository, then runs the real Git. When
-//! `.git/cat-file-mode` holds `short`, it gives a `cat-file` answer that
-//! ends before its object. The real Git cannot give such an answer, and the
-//! process list cannot show a process that started and stopped between two
-//! looks. The script is a shell script, so the tests are Unix-only.
-//! `history_git_children` tests the life of the process on each platform.
+//! A `git` first on PATH writes its arguments to `.git/git-starts` of the
+//! repository, then runs the real Git. When `.git/cat-file-answer` is there,
+//! a `cat-file` process reads one request and gives that file as its answer.
+//! The process list cannot show a process that started and stopped between
+//! two looks, and one Git gives only one of the answers that Git versions
+//! give for a gitlink. The script is a shell script, so the tests are
+//! Unix-only. `history_git_children` tests the life of the process on each
+//! platform.
+//!
+//! No Rule states when the git adapter starts a Git process, or how it reads
+//! an answer that ends before its object, so those tests are implementation
+//! aids with no Rule binding.
 #![cfg(unix)]
 
 #[path = "history_git_support/repository.rs"]
 mod repository;
 
+use provenance_macros::verifies;
 use provenance_store::review::history::{FileVersions, GitFileVersions};
 use repository::repository;
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
+
+/// The commit of a gitlink that no repository of the tests holds.
+const GITLINK_COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
 
 /// Puts the logging `git` first on PATH, once for the test binary, before
 /// any test starts Git.
@@ -37,8 +45,8 @@ fn logging_git() {
             format!(
                 "#!/bin/sh\necho \"$*\" 2>/dev/null >> .git/git-starts\n\
                  case \" $* \" in *' cat-file '*)\n\
-                 if [ \"$(cat .git/cat-file-mode 2>/dev/null)\" = short ]; then\n\
-                 read -r name; printf 'x blob 10\\nabc'; exit 0; fi;;\n\
+                 if [ -f .git/cat-file-answer ]; then\n\
+                 read -r name; cat .git/cat-file-answer; exit 0; fi;;\n\
                  esac\nexec '{real}' \"$@\"\n"
             ),
         )
@@ -82,8 +90,36 @@ async fn an_answer_that_ends_before_its_object_is_refused() {
     logging_git();
     let temp = tempfile::tempdir().unwrap();
     let (root, commit) = repository(&temp, &[("good.jsonl", "good\n")]);
-    std::fs::write(temp.path().join(".git/cat-file-mode"), "short").unwrap();
+    std::fs::write(temp.path().join(".git/cat-file-answer"), "x blob 10\nabc").unwrap();
     let versions = GitFileVersions::new(root);
     let error = versions.text("good.jsonl", &commit).await.unwrap_err();
     assert_eq!(format!("{error:#}"), "git cat-file output ended early");
+}
+
+/// The text of `good.jsonl` when `cat-file` gives `answer`, made from the
+/// commit id, to the request.
+async fn text_for_answer(answer: fn(&str) -> String) -> anyhow::Result<Option<String>> {
+    logging_git();
+    let temp = tempfile::tempdir().unwrap();
+    let (root, commit) = repository(&temp, &[("good.jsonl", "good\n")]);
+    std::fs::write(temp.path().join(".git/cat-file-answer"), answer(&commit)).unwrap();
+    GitFileVersions::new(root).text("good.jsonl", &commit).await
+}
+
+/// Git 2.56 answers a gitlink whose commit the repository does not hold with
+/// that commit and `submodule`.
+#[tokio::test]
+#[verifies("rule_record_history_gitlink_has_no_text", examples)]
+async fn a_gitlink_that_git_answers_as_a_submodule_has_no_text() {
+    let text = text_for_answer(|_| format!("{GITLINK_COMMIT} submodule\n")).await;
+    assert_eq!(text.unwrap(), None);
+}
+
+/// Git 2.43 answers a gitlink whose commit the repository does not hold with
+/// the name of the request and `missing`.
+#[tokio::test]
+#[verifies("rule_record_history_gitlink_has_no_text", examples)]
+async fn a_gitlink_that_git_answers_as_missing_has_no_text() {
+    let text = text_for_answer(|commit| format!("{commit}:good.jsonl missing\n")).await;
+    assert_eq!(text.unwrap(), None);
 }

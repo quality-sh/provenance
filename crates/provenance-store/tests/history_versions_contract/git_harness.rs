@@ -60,10 +60,18 @@ impl Harness for Git {
                     git(root, &[], &["update-index", "--force-remove", &path], None);
                     continue;
                 };
-                let input = Some(entry.bytes.as_slice());
-                let blob = git(root, &[], &["hash-object", "-w", "--stdin"], input);
-                let mode = if entry.executable { "100755" } else { "100644" };
-                let entry = format!("{mode},{blob},{path}");
+                let entry = match &entry.gitlink {
+                    Some(commit) => {
+                        let commit = ids.get(commit).unwrap_or(commit);
+                        format!("160000,{commit},{path}")
+                    }
+                    None => {
+                        let input = Some(entry.bytes.as_slice());
+                        let blob = git(root, &[], &["hash-object", "-w", "--stdin"], input);
+                        let mode = if entry.executable { "100755" } else { "100644" };
+                        format!("{mode},{blob},{path}")
+                    }
+                };
                 git(
                     root,
                     &[],

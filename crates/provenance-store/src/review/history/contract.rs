@@ -8,6 +8,7 @@
 mod cases;
 mod commit;
 mod edges;
+mod gitlink;
 mod memory;
 
 pub use cases::{
@@ -21,6 +22,7 @@ pub use edges::{
     an_octopus_merge_goes_on_through_the_parent_with_its_file, edge_graph, MODE, OCTOPUS,
     TWO_LINES, UNKNOWN_COMMIT, UNREADABLE,
 };
+pub use gitlink::{a_gitlink_at_the_path_is_listed_with_no_text, gitlink_graph, GITLINK};
 pub use memory::{memory_adapter, MemoryFileVersions};
 
 use super::versions::FileVersions;

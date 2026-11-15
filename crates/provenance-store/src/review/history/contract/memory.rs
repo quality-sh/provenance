@@ -153,6 +153,7 @@ impl FileVersions for MemoryFileVersions {
         let text = self
             .index(commit)
             .and_then(|index| self.entry(index, path))
+            .filter(|entry| entry.gitlink.is_none())
             .map(|entry| String::from_utf8(entry.bytes.clone()))
             .transpose()
             .map_err(anyhow::Error::from);
