@@ -14,6 +14,7 @@ use provenance_core::{
     DispositionDecision, NodeType, Resolution, ResolutionStatus, ScopeId, StableId,
 };
 use provenance_macros::rule;
+use std::cell::OnceCell;
 use std::collections::HashMap;
 
 pub struct DocumentReviewState {
@@ -206,21 +207,52 @@ impl StateStore {
 }
 
 /// Whether a reviewer accepted the current revision of a Resolution of one
-/// scope. It reads the review rows of the scope at the first question, so a
-/// citation check that needs no acceptance reads no review rows.
-pub struct ResolutionAcceptance<'s> {
-    store: &'s StateStore,
-    scope: &'s ScopeId,
-    rows: Option<StoredRows>,
+/// scope, for one citation check. The first question reads the review rows
+/// of the scope, and each later question of the check uses that reading, so
+/// a citation check that needs no acceptance reads no review rows.
+pub struct ResolutionAcceptance<'r> {
+    store: &'r StateStore,
+    scope: &'r ScopeId,
+    rows: &'r OnceCell<StoredRows>,
+    facts: Option<CycleFacts<'r>>,
 }
 
-impl<'s> ResolutionAcceptance<'s> {
-    pub const fn new(store: &'s StateStore, scope: &'s ScopeId) -> Self {
-        Self {
+impl ResolutionAcceptance<'_> {
+    /// Gives `check` the acceptance of the Resolutions of `scope`. The
+    /// reading of the review rows lasts for the call of `check` only.
+    pub fn for_one_check<T>(
+        store: &StateStore,
+        scope: &ScopeId,
+        check: impl FnOnce(&mut ResolutionAcceptance<'_>) -> T,
+    ) -> T {
+        let rows = OnceCell::new();
+        check(&mut ResolutionAcceptance {
             store,
             scope,
-            rows: None,
-        }
+            rows: &rows,
+            facts: None,
+        })
+    }
+}
+
+impl<'r> ResolutionAcceptance<'r> {
+    /// The review state of the scope, read at the first question.
+    fn facts(&mut self) -> anyhow::Result<&CycleFacts<'r>> {
+        let facts = match self.facts.take() {
+            Some(facts) => facts,
+            None => {
+                let cell: &'r OnceCell<StoredRows> = self.rows;
+                let rows = match cell.get() {
+                    Some(rows) => rows,
+                    None => {
+                        let read = StoredRows::read(self.store, self.scope)?;
+                        cell.get_or_init(|| read)
+                    }
+                };
+                rows.facts()?
+            }
+        };
+        Ok(self.facts.insert(facts))
     }
 
     /// Whether `resolution` is a draft, review or proposed Resolution whose
@@ -236,13 +268,8 @@ impl<'s> ResolutionAcceptance<'s> {
         ) {
             return Ok(false);
         }
-        let rows = match self.rows.take() {
-            Some(rows) => rows,
-            None => StoredRows::read(self.store, self.scope)?,
-        };
-        let rows = self.rows.insert(rows);
         let record = ReviewRecord::Resolution(resolution.clone());
-        let state = StateStore::record_decision_state_from_parts(&record, &rows.facts()?)?;
+        let state = StateStore::record_decision_state_from_parts(&record, self.facts()?)?;
         Ok(state.current_acceptance.is_some())
     }
 }

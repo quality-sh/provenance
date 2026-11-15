@@ -19,7 +19,7 @@ use crate::{
     Withdrawal,
 };
 use provenance_macros::rule;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub use record_review::RecordReview;
 
@@ -146,7 +146,8 @@ pub fn review_cycle(proposal: &ProposalCard) -> Option<u64> {
         .and_then(|cycle| cycle.parse().ok())
 }
 
-/// The decisions and withdrawals that name one submission, as positions.
+/// The decisions and withdrawals that name one submission, as positions in
+/// line order.
 #[derive(Debug, Default)]
 struct SubmissionRows {
     decisions: Vec<usize>,
@@ -156,6 +157,9 @@ struct SubmissionRows {
 /// The rows of one record, as positions.
 #[derive(Debug, Default)]
 struct RecordRows {
+    /// Each review submission line that names the record, in line order. A
+    /// line of an ID on lines that disagree is one of them.
+    lines: Vec<usize>,
     /// The submissions that read as one row, in submission order.
     submissions: Vec<usize>,
     /// The decisions on other Proposals that name the record, each with the
@@ -183,11 +187,16 @@ pub struct ReviewReading<'a> {
     /// The review submission IDs, including an ID on two lines that
     /// disagree.
     submission_ids: HashMap<&'a str, Vec<usize>>,
-    /// The submissions that read as one row, by ID, with their rows.
+    /// The submissions that read as one row, by ID, with the rows that read
+    /// as one row and name them.
     submissions: HashMap<&'a str, (usize, SubmissionRows)>,
-    /// The rows of each submission whose ID is on lines that disagree, in
-    /// the line order of the first line of the ID.
-    disputed: Vec<(&'a str, SubmissionRows)>,
+    /// Each decision line and each withdrawal line that names a review
+    /// submission, by the submission ID. The checks of a submission read
+    /// these lines, so that an ID on lines that disagree hides no line.
+    naming: HashMap<&'a str, SubmissionRows>,
+    /// The submissions that a line of a decision ID or a withdrawal ID on
+    /// lines that disagree names.
+    named_by_disputed: HashSet<&'a str>,
     /// The rows of each record, by the name of its kind, then by its ID.
     records: HashMap<&'static str, HashMap<&'a str, RecordRows>>,
 }
@@ -224,13 +233,13 @@ pub fn read_review_rows(rows: StoredReviewRows<'_>) -> ReviewReading<'_> {
         scope_fault: None,
         submission_ids: HashMap::new(),
         submissions: HashMap::new(),
-        disputed: Vec::new(),
+        naming: HashMap::new(),
+        named_by_disputed: HashSet::new(),
         records: HashMap::new(),
     };
     reading.read_submissions();
     reading.read_decisions();
     reading.read_withdrawals();
-    reading.read_disputed_submissions();
     reading.read_records();
     reading
 }
@@ -288,14 +297,15 @@ impl ReviewReading<'_> {
         self.scope_fault.map(|fault| &self.faults[fault])
     }
 
-    /// Each fault, in the order of the reading: an ID on lines that
-    /// disagree (submissions, then decisions, then withdrawals, each in line
-    /// order) and a withdrawal that names no review submission; then for
-    /// each submission whose ID is on lines that disagree, in line order,
-    /// decisions with different results and an approval with a withdrawal;
-    /// then for each record in the line order of its first submission: each
-    /// review cycle that more than one submission has, then submission by
-    /// submission in line order, the same two faults.
+    /// Each fault, in the order of the reading. First the submissions, the
+    /// decisions and the withdrawals, family by family: each ID on lines
+    /// that disagree, in the line order of its first line, and each
+    /// withdrawal that names no review submission. Then each record in the
+    /// line order of its first submission line: each review cycle that more
+    /// than one submission has, then for each submission of the record in
+    /// line order that no earlier record gave, decisions with different
+    /// results and an approval with a withdrawal. Each line takes part in
+    /// each check, so one reading gives each fault.
     pub fn faults(&self) -> impl Iterator<Item = &ReviewRowFault> {
         self.faults.iter()
     }
@@ -309,20 +319,18 @@ impl ReviewReading<'_> {
         &self.once
     }
 
-    /// The result of the decisions on one submission when the rows of the
-    /// submission agree: the decisions have one result, and no withdrawal
+    /// The result of the decisions on one submission when each row that
+    /// names it agrees: the submission and each decision and withdrawal on
+    /// it read as one row, the decisions have one result, and no withdrawal
     /// names an approved submission.
     #[rule("rule_same_result_decisions_read_as_one")]
     pub fn agreed_decision(&self, submission: &StableId) -> Option<DispositionDecision> {
-        let (_, rows) = self.submissions.get(submission.as_str())?;
-        let mut results = rows
-            .decisions
-            .iter()
-            .map(|&position| self.rows.dispositions[position].decision);
-        let first = results.next()?;
-        let withdrawn = !rows.withdrawals.is_empty();
-        let agree = results.all(|result| result == first)
-            && !(first == DispositionDecision::Accepted && withdrawn);
-        agree.then_some(first)
+        let id = submission.as_str();
+        if !self.submissions.contains_key(id) || self.named_by_disputed.contains(id) {
+            return None;
+        }
+        let &first = self.naming.get(id)?.decisions.first()?;
+        let result = self.rows.dispositions[first].decision;
+        self.submission_faults(submission).is_empty().then_some(result)
     }
 }

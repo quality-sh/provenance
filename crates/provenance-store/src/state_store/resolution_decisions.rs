@@ -56,7 +56,8 @@ impl StateStore {
 
     /// Refuses an answered Question or an active Rule that cites a Resolution that is not
     /// approved, unless a reviewer accepted the current revision of that Resolution. Only the
-    /// citations that the check reads need the review rows of their Resolution.
+    /// citations that the check reads need the review rows of their Resolution, and the check
+    /// reads the review rows of the scope at most one time.
     fn ensure_cited_resolutions(
         &self,
         scope: &ScopeId,
@@ -64,13 +65,14 @@ impl StateStore {
         questions: &[Question],
         rules: &[Rule],
     ) -> anyhow::Result<()> {
-        let mut acceptance = crate::review::ResolutionAcceptance::new(self, scope);
-        ensure_resolution_decisions(
-            resolutions,
-            |resolution| acceptance.accepts(resolution),
-            questions,
-            rules,
-        )
+        crate::review::ResolutionAcceptance::for_one_check(self, scope, |acceptance| {
+            ensure_resolution_decisions(
+                resolutions,
+                |resolution| acceptance.accepts(resolution),
+                questions,
+                rules,
+            )
+        })
     }
 }
 
