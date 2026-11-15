@@ -192,10 +192,7 @@ impl StateStore {
             .with_repository_read(|held| held.list_ideation_landings(scope))
             .unwrap_or_default();
         let landing = landings.iter().rposition(|batch| {
-            batch
-                .dispositions
-                .iter()
-                .any(|disposition| disposition.id == *id)
+            batch.dispositions.iter().any(|disposition| disposition.id == *id)
         });
         match landing {
             Some(index) => crate::refusal::state_fault(
