@@ -241,19 +241,14 @@ impl ResolutionAcceptance<'_> {
 impl<'r> ResolutionAcceptance<'r> {
     /// The review state of the scope, read at the first question.
     fn facts(&mut self) -> anyhow::Result<&CycleFacts<'r>> {
-        let facts = if let Some(facts) = self.facts.take() {
-            facts
-        } else {
-            let cell: &'r OnceCell<StoredRows> = self.rows;
-            let rows = if let Some(rows) = cell.get() {
-                rows
-            } else {
+        match &mut self.facts {
+            Some(facts) => Ok(facts),
+            empty => {
                 let read = StoredRows::read(self.store, self.scope)?;
-                cell.get_or_init(|| read)
-            };
-            rows.facts()?
-        };
-        Ok(self.facts.insert(facts))
+                let rows: &'r StoredRows = self.rows.get_or_init(|| read);
+                Ok(empty.insert(rows.facts()?))
+            }
+        }
     }
 
     /// Whether `resolution` is a draft, review or proposed Resolution whose
