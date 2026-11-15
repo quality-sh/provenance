@@ -88,7 +88,9 @@ impl Graph {
     /// Adds a commit of `tree` by `author`, one minute after the last one.
     fn commit(&mut self, name: &str, parents: &[&str], author: &str, tree: Tree) {
         self.time += 60;
-        let base = parents.first().map_or_else(Tree::new, |first| self.tree(first));
+        let base = parents
+            .first()
+            .map_or_else(Tree::new, |first| self.tree(first));
         let mut commit = Commit::new(name, parents, author, self.time);
         for (path, bytes) in &tree {
             if base.get(path) != Some(bytes) {
@@ -121,10 +123,13 @@ fn repository(tree: &Tree, sources: &Sources) -> (Repository, Arc<MemoryStateSto
         })
         .collect();
     let storage = Arc::new(MemoryStateStorage::new(state));
-    let identity =
-        RepositoryIdentity::new(Utf8PathBuf::from("/history"), scope("default"), Settings::default())
-            .with_clock(Arc::clone(&sources.clock))
-            .with_ids(Arc::clone(&sources.ids));
+    let identity = RepositoryIdentity::new(
+        Utf8PathBuf::from("/history"),
+        scope("default"),
+        Settings::default(),
+    )
+    .with_clock(Arc::clone(&sources.clock))
+    .with_ids(Arc::clone(&sources.ids));
     let repository = Repository::with_storage(
         identity,
         storage.clone(),
@@ -240,7 +245,11 @@ fn source(id: &str, name: &str) -> CreateSourceInput {
 fn create(store: &StateStore) {
     let default = scope("default");
     store
-        .create_requirement(requirement("default", "req_a", "The system stores records."))
+        .create_requirement(requirement(
+            "default",
+            "req_a",
+            "The system stores records.",
+        ))
         .unwrap();
     store
         .create_requirement(requirement("broken", "req_b", "The system reads records."))
@@ -263,8 +272,12 @@ fn create(store: &StateStore) {
             origin_message: None,
         })
         .unwrap();
-    store.create_source(source("source_a", "Storage notes")).unwrap();
-    store.create_source(source("source_gone", "Old notes")).unwrap();
+    store
+        .create_source(source("source_a", "Storage notes"))
+        .unwrap();
+    store
+        .create_source(source("source_gone", "Old notes"))
+        .unwrap();
     store
         .create_topic(CreateTopicInput {
             scope_id: default.clone(),
@@ -371,19 +384,55 @@ pub fn history(sources: &Sources) -> History {
     graph.commit("mend", &["garble"], "Reviewer", started);
 
     let base = graph.tree("mend");
-    let alice = with_field(&base, "default", "req_a", "statement", "The system stores records for one year.");
-    let alice = with_field(&alice, "default", "question_a", "question", "Are records kept for one year?");
-    let alice = with_field(&alice, "default", "rule_a", "description", "Alice describes the rule.");
+    let alice = with_field(
+        &base,
+        "default",
+        "req_a",
+        "statement",
+        "The system stores records for one year.",
+    );
+    let alice = with_field(
+        &alice,
+        "default",
+        "question_a",
+        "question",
+        "Are records kept for one year?",
+    );
+    let alice = with_field(
+        &alice,
+        "default",
+        "rule_a",
+        "description",
+        "Alice describes the rule.",
+    );
     graph.commit("alice", &["mend"], "alice", alice.clone());
-    let bob = with_field(&base, "default", "rule_a", "statement", "Each record is stored once.");
-    let bob = with_field(&bob, "default", "resolution_a", "position", "Records are stored for one year.");
+    let bob = with_field(
+        &base,
+        "default",
+        "rule_a",
+        "statement",
+        "Each record is stored once.",
+    );
+    let bob = with_field(
+        &bob,
+        "default",
+        "resolution_a",
+        "position",
+        "Records are stored for one year.",
+    );
     graph.commit("bob", &["mend"], "bob", bob.clone());
     let mut merged = bob;
     for id in ["req_a", "question_a"] {
         let path = file_of(&alice, "default", id);
         merged.insert(path.clone(), alice[&path].clone());
     }
-    let merged = with_field(&merged, "default", "rule_a", "description", "Alice describes the rule.");
+    let merged = with_field(
+        &merged,
+        "default",
+        "rule_a",
+        "description",
+        "Alice describes the rule.",
+    );
     graph.commit("merge", &["bob", "alice"], "merger", merged.clone());
 
     let (repository_, storage) = repository(&merged, sources);

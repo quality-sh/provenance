@@ -105,7 +105,12 @@ pub fn folder(history: &History) -> Folder {
     }
     let head = &ids[history.commits.last().unwrap().name.as_str()];
     git(root, &[], &["update-ref", "refs/heads/main", head], None);
-    git(root, &[], &["symbolic-ref", "HEAD", "refs/heads/main"], None);
+    git(
+        root,
+        &[],
+        &["symbolic-ref", "HEAD", "refs/heads/main"],
+        None,
+    );
     git(root, &[], &["read-tree", "HEAD"], None);
     git(root, &[], &["checkout-index", "-a", "-f"], None);
     for (path, bytes) in &history.working {

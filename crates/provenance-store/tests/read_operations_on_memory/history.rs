@@ -31,8 +31,8 @@ use provenance_store::review::history::contract::MemoryFileVersions;
 use provenance_store::settings::Settings;
 use provenance_store::storage::memory::{MemorySectionLock, MemoryStateStorage};
 use provenance_store::storage::StateView;
-use std::collections::BTreeSet;
 use serde_json::{json, Value};
+use std::collections::BTreeSet;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -145,7 +145,11 @@ fn shown(mut answer: Value) -> Value {
 /// The version ids of `id` in `scope`, read with `reads`.
 async fn versions(reads: &dyn Reads, scope: &str, kind: &str, id: &str) -> Vec<String> {
     let answer = reads
-        .read(scope, LIST, json!({"record_kind": kind, "record_id": id, "limit": 200}))
+        .read(
+            scope,
+            LIST,
+            json!({"record_kind": kind, "record_id": id, "limit": 200}),
+        )
         .await;
     answer
         .pointer("/result/entries")
@@ -187,7 +191,9 @@ async fn requests(reads: &dyn Reads, case: &Case, scope: &str, id: &str) -> Vec<
                 json!({"entry_id": entry, "side": side, "field": field(case.kind)}),
             ));
         }
-        requests.push(with(json!({"entry_id": entry, "side": "after", "offset": 100_000})));
+        requests.push(with(
+            json!({"entry_id": entry, "side": "after", "offset": 100_000}),
+        ));
     }
     requests
 }
@@ -207,9 +213,13 @@ pub async fn run(reads: &dyn Reads) -> Vec<Value> {
                         .pointer("/result/next_cursor")
                         .and_then(Value::as_str)
                         .map(str::to_owned);
+                    let mut sent = request.clone();
+                    if sent.get("cursor").is_some() {
+                        sent["cursor"] = json!("<cursor>");
+                    }
                     answers.push(json!({
                         "call": format!("{} {scope}", case.operation),
-                        "request": request,
+                        "request": sent,
                         "answer": shown(answer),
                     }));
                     let Some(next) = next else { break };
@@ -249,8 +259,11 @@ pub fn assert_pinned(observed: &str) {
 }
 
 /// Runs each operation through the in-process port of a repository over
-/// memory storage.
-struct MemoryReads(Repository);
+/// memory storage, one for each scope: a binding serves one scope.
+struct MemoryReads {
+    default: Repository,
+    broken: Repository,
+}
 
 impl Reads for MemoryReads {
     fn read<'a>(
@@ -259,15 +272,20 @@ impl Reads for MemoryReads {
         operation: &'static str,
         request: Value,
     ) -> Pin<Box<dyn Future<Output = Value> + 'a>> {
+        let repository = if scope == "broken" {
+            &self.broken
+        } else {
+            &self.default
+        };
         let context = json!({"repository": "memory", "scope": scope});
-        Box::pin(read_in(&self.0, context, operation, request))
+        Box::pin(read_in(repository, context, operation, request))
     }
 }
 
-/// A repository over memory storage that holds the working copy of
-/// `history`, at a working tree that does not exist, with the memory
+/// A repository of `scope` over memory storage that holds the working copy
+/// of `history`, at a working tree that does not exist, with the memory
 /// adapter of its commits and a read database in memory, caught up.
-async fn memory_repository(history: &History) -> Repository {
+async fn memory_repository(history: &History, scope: &str) -> Repository {
     let storage = Arc::new(MemoryStateStorage::loaded(
         StateView::new(history.state()),
         Arc::new(Recorded::default()),
@@ -276,7 +294,7 @@ async fn memory_repository(history: &History) -> Repository {
     let root = camino::Utf8PathBuf::from_path_buf(missing.path().join("project")).unwrap();
     let identity = RepositoryIdentity::new(
         root,
-        provenance_core::ScopeId::new("default").unwrap(),
+        provenance_core::ScopeId::new(scope).unwrap(),
         Settings::default(),
     );
     let repository = Repository::with_storage(
@@ -293,8 +311,12 @@ async fn memory_repository(history: &History) -> Repository {
 
 #[tokio::test]
 async fn the_history_operations_over_memory_give_the_answers_of_the_folder() {
-    let repository = memory_repository(&fixture()).await;
-    let answers = run(&MemoryReads(repository)).await;
+    let history = fixture();
+    let reads = MemoryReads {
+        default: memory_repository(&history, "default").await,
+        broken: memory_repository(&history, "broken").await,
+    };
+    let answers = run(&reads).await;
     assert_pinned(&serde_json::to_string_pretty(&answers).unwrap());
 }
 
@@ -330,10 +352,17 @@ mod folder {
     use std::sync::Arc;
 
     /// Runs each operation on a folder repository as the contract dispatch
-    /// runs it on the host, with no port.
-    struct FolderReads(Arc<LocalRepository>);
+    /// runs it on the host, with no port, with one binding for each scope.
+    struct FolderReads {
+        default: Arc<LocalRepository>,
+        broken: Arc<LocalRepository>,
+    }
 
-    async fn direct<O: Operation>(binding: Arc<LocalRepository>, scope: &str, request: Value) -> Value {
+    async fn direct<O: Operation>(
+        binding: Arc<LocalRepository>,
+        scope: &str,
+        request: Value,
+    ) -> Value {
         let context: RepositoryContext =
             serde_json::from_value(json!({"repository": "memory", "scope": scope})).unwrap();
         let request: O::Request = serde_json::from_value(request).unwrap();
@@ -356,7 +385,11 @@ mod folder {
             operation: &'static str,
             request: Value,
         ) -> Pin<Box<dyn Future<Output = Value> + 'a>> {
-            let binding = Arc::clone(&self.0);
+            let binding = Arc::clone(if scope == "broken" {
+                &self.broken
+            } else {
+                &self.default
+            });
             match operation {
                 "review-history" => Box::pin(direct::<ReviewHistory>(binding, scope, request)),
                 "review-history-entry" => {
@@ -371,9 +404,15 @@ mod folder {
     #[tokio::test]
     async fn the_history_operations_over_a_folder_give_the_checked_answers() {
         let folder = folder(&fixture());
-        let repository = Repository::open(folder.root(), "default").unwrap();
-        let binding = Arc::new(LocalRepository::bind(repository, "memory").unwrap());
-        let answers = run(&FolderReads(binding)).await;
+        let bound = |scope| {
+            let repository = Repository::open(folder.root(), scope).unwrap();
+            Arc::new(LocalRepository::bind(repository, "memory").unwrap())
+        };
+        let reads = FolderReads {
+            default: bound("default"),
+            broken: bound("broken"),
+        };
+        let answers = run(&reads).await;
         let text = serde_json::to_string_pretty(&answers).unwrap();
         assert_pinned(&folder.named(&text));
     }
