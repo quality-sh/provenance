@@ -5,7 +5,8 @@
 //! history read asks for. The adapter counts its text calls, so these tests
 //! do not need a Git process and run on each platform. A history read keeps
 //! what it found for the last version list in the process, so these tests
-//! are in their own binary.
+//! are in their own binary, and the tests that read a history to its end
+//! take `ONE_READER` so that no other test changes what the process keeps.
 
 mod discussion_support;
 use camino::Utf8Path;
@@ -13,27 +14,34 @@ use discussion_support::*;
 use provenance_core::review::{ReviewHistoryPage, ReviewHistoryQuery};
 use provenance_core::{NodeType, StableId};
 use provenance_store::layout::ProvenanceLayout;
+use provenance_store::operations::read_operations::{InProcessReadOperations, ReadOperations};
 use provenance_store::operations::read_policy::ReadPolicy;
+use provenance_store::operations::LocalRepository;
 use provenance_store::repository::Repository;
 use provenance_store::review::history::contract::{Commit, Entry, MemoryFileVersions};
 use provenance_store::review::history::{BoxFuture, FileVersion, FileVersions};
 use provenance_store::review::read_history;
 use provenance_store::shards;
-use serde_json::json;
+use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-/// The memory adapter, with a count of its text calls. It gives the same
-/// version list, the same `Arc`, each time for a path. The text of a
-/// commit in `unavailable` is an error that is not a UTF-8 error.
+/// The memory adapter, with a count of its text calls. When `same` is
+/// true, it gives the same version list, the same `Arc`, each time for a
+/// path; else it gives a new list on each call. The text of a commit in
+/// `unavailable` is an error that is not a UTF-8 error.
 #[derive(Debug)]
 struct Counted {
     memory: MemoryFileVersions,
+    same: bool,
     lists: Mutex<BTreeMap<String, Arc<Vec<FileVersion>>>>,
     texts: AtomicUsize,
     unavailable: Vec<String>,
 }
+
+/// Taken by each test that reads a history to its end.
+static ONE_READER: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// The error of a text in `Counted::unavailable`.
 const UNAVAILABLE: &str = "text store is unavailable";
@@ -46,12 +54,24 @@ impl Counted {
     fn failing(commits: &[Commit], unavailable: &[&str]) -> Arc<Self> {
         Arc::new(Self {
             memory: MemoryFileVersions::new(commits),
+            same: true,
             lists: Mutex::default(),
             texts: AtomicUsize::new(0),
             unavailable: unavailable
                 .iter()
                 .map(|&commit| commit.to_owned())
                 .collect(),
+        })
+    }
+
+    /// An adapter that gives a new version list on each call.
+    fn new_lists(commits: &[Commit]) -> Arc<Self> {
+        Arc::new(Self {
+            memory: MemoryFileVersions::new(commits),
+            same: false,
+            lists: Mutex::default(),
+            texts: AtomicUsize::new(0),
+            unavailable: Vec::new(),
         })
     }
 
@@ -68,6 +88,9 @@ impl FileVersions for Counted {
     ) -> BoxFuture<'a, anyhow::Result<Arc<Vec<FileVersion>>>> {
         Box::pin(async move {
             let listed = self.memory.versions(path).await?;
+            if !self.same {
+                return Ok(listed);
+            }
             let mut lists = self.lists.lock().unwrap();
             Ok(lists.entry(path.to_owned()).or_insert(listed).clone())
         })
@@ -189,6 +212,7 @@ async fn the_first_text_that_is_not_utf8_wins_with_no_later_error() {
 /// record of the same file does not take the kept answer.
 #[tokio::test]
 async fn a_new_read_of_the_same_versions_reads_no_text() {
+    let _one = ONE_READER.lock().await;
     let (temp, store) = fixture();
     store
         .create_review_requirement(serde_json::from_value(json!({
@@ -218,4 +242,58 @@ async fn a_new_read_of_the_same_versions_reads_no_text() {
 
     let last = answer(history(&repository, "req_a").await.unwrap());
     assert_eq!(last, first);
+}
+
+/// `count` commits, each the child of the one before, that each give
+/// `req_a` in the saved records file a new statement.
+fn statement_edits(temp: &tempfile::TempDir, count: usize) -> Vec<Commit> {
+    let (relative, text) = records(temp);
+    let entries = (0..count)
+        .map(|index| {
+            let mut file = String::new();
+            for line in text.lines() {
+                let mut record: Value = serde_json::from_str(line).unwrap();
+                if record["id"] == json!("req_a") {
+                    record["statement"] = json!(format!("Edit {index} of the statement."));
+                }
+                file.push_str(&serde_json::to_string(&record).unwrap());
+                file.push('\n');
+            }
+            Entry::text(&file)
+        })
+        .collect();
+    chain(&relative, entries)
+}
+
+/// The answer of `review-history-entry` for the entry `entry` of `req_a`.
+async fn history_entry(repository: &Repository, entry: &str) -> Value {
+    let binding = LocalRepository::bind(repository.clone(), "folder").unwrap();
+    let request = json!({
+        "context": {"repository": "folder", "scope": "default"},
+        "request": {"record_kind": "requirement", "record_id": "req_a", "entry_id": entry},
+    });
+    InProcessReadOperations::new(&binding)
+        .run("review-history-entry", request)
+        .await
+        .unwrap()
+}
+
+/// The entry operation reads the history of the record once, also when the
+/// entry is after the first page of 200 versions and the adapter gives a
+/// new version list on each call: one text of the records file and one of
+/// the Discussions file for each committed version.
+#[tokio::test]
+async fn an_entry_read_reads_the_history_once() {
+    let _one = ONE_READER.lock().await;
+    let mut counts = Vec::new();
+    for committed in [205, 1_000] {
+        let (temp, _store) = fixture();
+        let versions = Counted::new_lists(&statement_edits(&temp, committed));
+        let root = Utf8Path::from_path(temp.path()).unwrap();
+        let repository = repository(root).with_file_versions(versions.clone());
+        let answer = history_entry(&repository, "working").await;
+        assert_eq!(answer["id"], json!("working"));
+        counts.push((committed, versions.calls()));
+    }
+    assert_eq!(counts, [(205, 410), (1_000, 2_000)]);
 }
